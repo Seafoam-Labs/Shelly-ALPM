@@ -29,7 +29,8 @@
         </None>
     </ItemGroup>
     <ItemGroup>
-      <PackageReference Include="GirCore.Gtk-4.0" Version="0.7.0" />
+        <PackageReference Include="GirCore.Gtk-4.0" Version="0.7.0"/>
+        <PackageReference Include="GirCore.GObject-2.0.Integration" Version="0.7.0"/>
     </ItemGroup>
     <ItemGroup>
         <Content Include="Assets\**">
@@ -37,14 +38,14 @@
         </Content>
     </ItemGroup>
     <ItemGroup>
-      <Reference Include="LiteDB">
-        <HintPath>..\..\..\.nuget\packages\litedb\6.0.0-prerelease.75\lib\net8.0\LiteDB.dll</HintPath>
-      </Reference>
-      <Reference Include="Microsoft.Extensions.DependencyInjection">
-        <HintPath>..\..\..\.nuget\packages\microsoft.extensions.dependencyinjection\10.0.1\lib\net10.0\Microsoft.Extensions.DependencyInjection.dll</HintPath>
-      </Reference>
-      <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions">
-        <HintPath>..\..\..\.nuget\packages\microsoft.extensions.dependencyinjection.abstractions\10.0.1\lib\net10.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath>
-      </Reference>
+        <Reference Include="LiteDB">
+            <HintPath>..\..\..\.nuget\packages\litedb\6.0.0-prerelease.75\lib\net8.0\LiteDB.dll</HintPath>
+        </Reference>
+        <Reference Include="Microsoft.Extensions.DependencyInjection">
+            <HintPath>..\..\..\.nuget\packages\microsoft.extensions.dependencyinjection\10.0.1\lib\net10.0\Microsoft.Extensions.DependencyInjection.dll</HintPath>
+        </Reference>
+        <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions">
+            <HintPath>..\..\..\.nuget\packages\microsoft.extensions.dependencyinjection.abstractions\10.0.1\lib\net10.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath>
+        </Reference>
     </ItemGroup>
 </Project>

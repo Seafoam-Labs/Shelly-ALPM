@@ -1,30 +1,96 @@
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using GObject.Internal;
 using Gtk;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
+using Shelly.Gtk.UiModels.PackageManagerObjects;
+using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
 
 namespace Shelly.Gtk.Windows;
 
 public class HomeWindow(
-    IPrivilegedOperationService privlegedOperationService,
+    IPrivilegedOperationService privilegedOperationService,
     IUnprivilegedOperationService unprivilegedOperationService) : IShellyWindow
 {
+    private List<AlpmPackageDto> _packages = [];
+
     public Box CreateWindow()
     {
         var builder = Builder.NewFromFile("UiFiles/HomeWindow.ui");
         var box = (Box)builder.GetObject("HomeWindow")!;
+
         var listBox = (ListBox)builder.GetObject("NewsListBox")!;
         listBox.OnRealize += (sender, args) => { _ = LoadFeedAsync(listBox); };
+
+        var columnView = (ColumnView)builder.GetObject("InstalledPackagesView")!;
+        columnView.OnRealize += (sender, args) => { _ = LoadPackagesAsync(columnView); };
         return box;
     }
 
+    private async Task LoadPackagesAsync(ColumnView columnView)
+    {
+        try
+        {
+            _packages = await privilegedOperationService.GetInstalledPackagesAsync();
+            GLib.Functions.IdleAdd(0, () =>
+            {
+                PopulateInstalledPackages(columnView, _packages);
+                return false;
+            });
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+    }
+
+    private static void PopulateInstalledPackages(ColumnView columnView, List<AlpmPackageDto> packages)
+    {
+        var store = Gio.ListStore.New(AlpmPackageGObject.GetGType());
+        foreach (var pkg in packages)
+        {
+            store.Append(new AlpmPackageGObject() { Package = pkg });
+        }
+
+        var viewModel = NoSelection.New(store);
+        columnView.SetModel(viewModel);
+        // Just append columns directly — no need to remove if none exist yet
+        columnView.AppendColumn(CreateColumn("Name", obj => obj.Package?.Name ?? ""));
+        columnView.AppendColumn(CreateColumn("Version", obj => obj.Package?.Version ?? ""));
+        columnView.AppendColumn(CreateColumn("Description", obj => obj.Package?.Description ?? ""));
+    }
+
+    private static ColumnViewColumn CreateColumn(string title, Func<AlpmPackageGObject, string> getText)
+    {
+        var factory = SignalListItemFactory.New();
+
+        factory.OnSetup += (_, args) =>
+        {
+            var listItem = (ListItem)args.Object;
+            var label = Label.New("");
+            label.Halign = Align.Start;
+            label.Ellipsize = Pango.EllipsizeMode.End;
+            listItem.SetChild(label);
+        };
+
+        factory.OnBind += (_, args) =>
+        {
+            var listItem = (ListItem)args.Object;
+            var item = (AlpmPackageGObject)listItem.GetItem()!;
+            var label = (Label)listItem.GetChild()!;
+            label.SetText(getText(item));
+        };
+
+        var column = ColumnViewColumn.New(title, factory);
+        column.SetResizable(true);
+        column.SetExpand(title == "Description"); // let Description expand
+        return column;
+    }
 
     private static async Task LoadFeedAsync(ListBox listBox)
     {
         var feedItems = new List<RssModel>();
-
-        //TODO: ADD CACHING BACK 
 
         // Fetch from network
         try

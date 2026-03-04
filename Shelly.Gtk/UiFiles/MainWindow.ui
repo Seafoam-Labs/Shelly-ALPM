@@ -15,6 +15,9 @@
             <child>
               <object class="GtkButton"/>
             </child>
+            <child>
+              <object class="GtkButton"/>
+            </child>
           </object>
         </child>
         <child>

@@ -61,26 +61,7 @@
                 <property name="has-frame">true</property>
                 <property name="vexpand">true</property>
                 <child>
-                  <object class="GtkColumnView" id="InstalledPackagesView">
-                    <child>
-                      <object class="GtkColumnViewColumn">
-                        <property name="resizable">True</property>
-                        <property name="title">Name</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkColumnViewColumn">
-                        <property name="resizable">True</property>
-                        <property name="title">Version</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkColumnViewColumn">
-                        <property name="resizable">True</property>
-                        <property name="title">Size</property>
-                      </object>
-                    </child>
-                  </object>
+                  <object class="GtkColumnView" id="InstalledPackagesView"/>
                 </child>
               </object>
             </child>

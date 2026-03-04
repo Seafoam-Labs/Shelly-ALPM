@@ -39,7 +39,7 @@ sealed class Program
             application.AddAction(aboutAction);
 
             var contentArea = (Box)mainBuilder.GetObject("ContentArea")!;
-
+            
 
             var homeWindow = serviceProvider.GetRequiredService<HomeWindow>();
             contentArea.Append(homeWindow.CreateWindow());
