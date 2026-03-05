@@ -1,30 +1,57 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <requires lib="gtk" version="4.0"/>
-  <object class="GtkWindow" id="FlatpakInstallWindow">
-    <property name="title">Install Flatpak</property>
-    <property name="default-width">600</property>
-    <property name="default-height">400</property>
+  <object class="GtkBox" id="FlatpakInstallWindow">
+    <property name="orientation">vertical</property>
+    <property name="margin-start">20</property>
+    <property name="margin-end">20</property>
+    <property name="margin-top">20</property>
+    <property name="margin-bottom">20</property>
+    <property name="spacing">15</property>
     <child>
       <object class="GtkBox">
-        <property name="orientation">vertical</property>
-        <property name="margin-start">10</property>
-        <property name="margin-end">10</property>
-        <property name="margin-top">10</property>
-        <property name="margin-bottom">10</property>
-        <property name="spacing">10</property>
+        <property name="orientation">horizontal</property>
+        <property name="spacing">8</property>
         <child>
-          <object class="GtkSearchEntry" id="flatpak_search">
-            <property name="placeholder-text">Search Flatpaks...</property>
+          <object class="GtkButton" id="install_button">
+            <property name="label">Install Selected</property>
+            <property name="halign">end</property>
+            <style>
+              <class name="suggested-action"/>
+            </style>
           </object>
         </child>
         <child>
-          <object class="GtkScrolledWindow">
-            <property name="vexpand">true</property>
-            <child>
-              <object class="GtkListView" id="flatpak_list"/>
-            </child>
+          <object class="GtkBox">
+            <property name="hexpand">true</property>
           </object>
+        </child>
+        <child>
+          <object class="GtkDropDown" id="category_dropdown">
+            <property name="valign">center</property>
+            <property name="width-request">150</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkSearchEntry" id="search_entry">
+            <property name="width-request">200</property>
+            <property name="placeholder-text">Search packages...</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="reload_button">
+            <property name="icon-name">view-refresh-symbolic</property>
+            <property name="tooltip-text">Reload</property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkScrolledWindow">
+        <property name="vexpand">true</property>
+        <property name="hexpand">true</property>
+        <child>
+          <object class="GtkListView" id="list_flatpaks"/>
         </child>
       </object>
     </child>

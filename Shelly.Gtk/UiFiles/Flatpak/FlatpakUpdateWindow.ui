@@ -1,31 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <requires lib="gtk" version="4.0"/>
-  <object class="GtkWindow" id="FlatpakUpdateWindow">
-    <property name="title">Update Flatpaks</property>
-    <property name="modal">true</property>
+  <object class="GtkBox" id="FlatpakUpdateWindow">
+    <property name="orientation">vertical</property>
+    <property name="margin-start">20</property>
+    <property name="margin-end">20</property>
+    <property name="margin-top">20</property>
+    <property name="margin-bottom">20</property>
+    <property name="spacing">15</property>
     <child>
       <object class="GtkBox">
-        <property name="orientation">vertical</property>
-        <property name="margin-start">20</property>
-        <property name="margin-end">20</property>
-        <property name="margin-top">20</property>
-        <property name="margin-bottom">20</property>
-        <property name="spacing">15</property>
-        <child>
-          <object class="GtkLabel">
-            <property name="label">Checking for Flatpak updates...</property>
-          </object>
-        </child>
-        <child>
-          <object class="GtkScrolledWindow">
-            <property name="vexpand">true</property>
-            <property name="min-content-height">200</property>
-            <child>
-              <object class="GtkListView" id="updateable_flatpaks"/>
-            </child>
-          </object>
-        </child>
+        <property name="orientation">horizontal</property>
+        <property name="spacing">8</property>
         <child>
           <object class="GtkButton" id="update_button">
             <property name="label">Update All</property>
@@ -34,6 +20,32 @@
               <class name="suggested-action"/>
             </style>
           </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="hexpand">true</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkSearchEntry" id="search_entry">
+            <property name="width-request">200</property>
+            <property name="placeholder-text">Search packages...</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="reload_button">
+            <property name="icon-name">view-refresh-symbolic</property>
+            <property name="tooltip-text">Reload</property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkScrolledWindow">
+        <property name="vexpand">true</property>
+        <property name="hexpand">true</property>
+        <child>
+          <object class="GtkListView" id="installed_flatpaks"/>
         </child>
       </object>
     </child>

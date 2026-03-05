@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.Windows;
+using Shelly.Gtk.Windows.Flatpak;
 
 namespace Shelly.Gtk;
 
@@ -39,12 +40,50 @@ sealed class Program
             application.AddAction(aboutAction);
 
             var contentArea = (Box)mainBuilder.GetObject("ContentArea")!;
-            
+            var homeButton = (Button)mainBuilder.GetObject("HomeButton")!;
+            var settingsButton = (Button)mainBuilder.GetObject("SettingsButton")!;
 
-            var homeWindow = serviceProvider.GetRequiredService<HomeWindow>();
-            contentArea.Append(homeWindow.CreateWindow());
+            void NavigateTo<T>() where T : IShellyWindow
+            {
+                while (contentArea.GetFirstChild() is { } child)
+                    contentArea.Remove(child);
+
+                var window = serviceProvider.GetRequiredService<T>();
+                contentArea.Append(window.CreateWindow());
+            }
+
+            homeButton.OnClicked += (_, _) => NavigateTo<HomeWindow>();
+            settingsButton.OnClicked += (_, _) => NavigateTo<FlatpakUpdate>(); 
+
+            AddAction("install-packages", NavigateTo<HomeWindow>); 
+            AddAction("update-packages", NavigateTo<HomeWindow>); // Placeholder
+            AddAction("manage-packages", NavigateTo<HomeWindow>); // Placeholder
+
+            // AUR Actions
+            AddAction("install-aur", NavigateTo<HomeWindow>); // Placeholder
+            AddAction("update-aur", NavigateTo<HomeWindow>); // Placeholder
+            AddAction("remove-aur", NavigateTo<HomeWindow>); // Placeholder
+
+            // Flatpak Actions
+            AddAction("install-flatpak", NavigateTo<FlatpakInstall>);
+            AddAction("update-flatpak", NavigateTo<FlatpakUpdate>);
+            AddAction("remove-flatpak", NavigateTo<FlatpakRemove>);
+
+            var initialHomeWindow = serviceProvider.GetRequiredService<HomeWindow>();
+            contentArea.Append(initialHomeWindow.CreateWindow());
 
             window.Show();
+            return;
+
+            void AddAction(string name, Action onActivate)
+            {
+                var action = Gio.SimpleAction.New(name, null);
+                action.OnActivate += (_, _) =>
+                {
+                    onActivate();
+                };
+                application.AddAction(action);
+            }
         };
 
         return application.Run(args);
@@ -58,6 +97,9 @@ sealed class Program
         collection.AddSingleton<IAlpmEventService, AlpmEventService>();
         collection.AddSingleton<IConfigService, ConfigService>();
         collection.AddTransient<HomeWindow>();
+        collection.AddTransient<FlatpakRemove>();
+        collection.AddTransient<FlatpakInstall>();
+        collection.AddTransient<FlatpakUpdate>();
         return collection.BuildServiceProvider();
     }
 }
