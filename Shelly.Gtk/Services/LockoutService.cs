@@ -6,16 +6,19 @@ public partial class LockoutService : ILockoutService
 {
     private static readonly Regex FlatpakProgressPattern =
         FlatpakRegex();
+    
+    private static readonly Regex AurProgressPattern =
+        AurRegex();
 
     public event EventHandler<ILockoutService.LockoutStatusEventArgs>? StatusChanged;
 
-    public bool IsLocked { get; private set; }
+    private bool IsLocked { get; set; }
 
-    public double Progress { get; private set; }
+    private double Progress { get; set; }
 
-    public bool IsIndeterminate { get; private set; } = true;
+    private bool IsIndeterminate { get; set; } = true;
 
-    public string? Description { get; private set; }
+    private string? Description { get; set; }
 
     public void Show(string description, double progress = 0, bool isIndeterminate = true)
     {
@@ -63,14 +66,21 @@ public partial class LockoutService : ILockoutService
         if (string.IsNullOrEmpty(logLine)) return;
 
         var match = FlatpakProgressPattern.Match(logLine);
+        var matchAur = AurProgressPattern.Match(logLine);
+
         if (match.Success)
         {
-            if (double.TryParse(match.Groups[1].Value, out var progress))
-            {
-                var description = match.Groups[2].Value;
-                Update(description, progress, false);
-            }
+            if (!double.TryParse(match.Groups[1].Value, out var progress)) return;
+            var description = match.Groups[2].Value;
+            Update(description, progress, false);
         }
+        if (matchAur.Success)
+        {
+            var progress = matchAur.Groups[1].Value;
+            var description = matchAur.Groups[2].Value;
+            Update(description, double.Parse(progress), false);
+        }
+      
     }
 
     private void NotifyChanged()
@@ -86,4 +96,6 @@ public partial class LockoutService : ILockoutService
 
     [GeneratedRegex(@"\[DEBUG_LOG\]\s*Progress:\s*(\d+)%\s*-\s*(.+)", RegexOptions.Compiled)]
     private static partial Regex FlatpakRegex();
+    [GeneratedRegex(@"Percent:\s*(\d+)%\s+Message:\s*(.+)", RegexOptions.Compiled)]
+    private static partial Regex AurRegex();
 }

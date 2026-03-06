@@ -57,3 +57,7 @@ columnview header:checked,
 columnview header > button:checked {
     background-color: alpha(currentColor, 0.2);
 }
+
+.spaced-search text {
+    padding-left: 4px;
+}

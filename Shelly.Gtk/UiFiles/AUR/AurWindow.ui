@@ -26,6 +26,9 @@
         <object class="GtkSearchEntry" id="search_entry">
           <property name="placeholder-text">Search packages...</property>
           <property name="width-request">200</property>
+          <style>
+            <class name="spaced-search"/>
+          </style>
         </object>
       </child>
       <child>
@@ -50,13 +53,7 @@
                 <property name="expand">true</property>
               </object>
             </child>
-            <child>
-              <object class="GtkColumnViewColumn" id="version_column">
-                <property name="title">Version</property>
-                <property name="expand">true</property>
-              </object>
-            </child>
-            <child>
+              <child>
               <object class="GtkColumnViewColumn" id="votes_column">
                 <property name="title">Votes</property>
               </object>
@@ -64,6 +61,13 @@
             <child>
               <object class="GtkColumnViewColumn" id="popularity_column">
                 <property name="title">Popularity</property>
+              </object>
+            </child>
+            
+            <child>
+              <object class="GtkColumnViewColumn" id="version_column">
+                <property name="title">Version</property>
+                <property name="expand">true</property>
               </object>
             </child>
             <child>

@@ -26,6 +26,7 @@ public class PackageManagement(IPrivilegedOperationService privilegedOperationSe
         var nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
         var sizeColumn = (ColumnViewColumn)builder.GetObject("size_column")!;
         var versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
+        var refreshButton = (Button)builder.GetObject("sync_button")!;
         var removeButton = (Button)builder.GetObject("remove_button")!;
 
         _listStore = Gio.ListStore.New(AlpmPackageGObject.GetGType());
@@ -52,7 +53,8 @@ public class PackageManagement(IPrivilegedOperationService privilegedOperationSe
             ApplyFilter();
         };
         removeButton.OnClicked += (_, _) => { _ = RemoveSelectedAsync(); };
-
+        refreshButton.OnClicked += (_, _) => { _ = LoadDataAsync(); };
+        
         return _box;
     }
 
