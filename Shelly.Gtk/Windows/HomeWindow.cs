@@ -15,6 +15,7 @@ public class HomeWindow(
     IUnprivilegedOperationService unprivilegedOperationService) : IShellyWindow
 {
     private Box _box = null!;
+    private readonly CancellationTokenSource _cts = new();
 
     public Widget CreateWindow()
     {
@@ -22,28 +23,28 @@ public class HomeWindow(
         _box = (Box)builder.GetObject("HomeWindow")!;
 
         var listBox = (ListBox)builder.GetObject("NewsListBox")!;
-        listBox.OnRealize += (sender, args) => { _ = LoadFeedAsync(listBox); };
+        listBox.OnRealize += (sender, args) => { _ = LoadFeedAsync(listBox, _cts.Token); };
 
         var listView = (ListView)builder.GetObject("InstalledPackagesView")!;
-        listView.OnRealize += (sender, args) => { _ = LoadPackagesAsync(listView); };
+        listView.OnRealize += (sender, args) => { _ = LoadPackagesAsync(listView, _cts.Token); };
 
         var totalAurLabel = (Label)builder.GetObject("TotalAurLabel")!;
-        totalAurLabel.OnRealize += (sender, args) => { _ = LoadAurTotalData(totalAurLabel); };
+        totalAurLabel.OnRealize += (sender, args) => { _ = LoadAurTotalData(totalAurLabel, _cts.Token); };
 
         var percentAurLabel = (Label)builder.GetObject("AurPercentLabel")!;
-        percentAurLabel.OnRealize += (sender, args) => { _ = LoadAurPercentData(percentAurLabel); };
+        percentAurLabel.OnRealize += (sender, args) => { _ = LoadAurPercentData(percentAurLabel, _cts.Token); };
 
         var totalPackageLabel = (Label)builder.GetObject("TotalPackagesLabel")!;
-        totalPackageLabel.OnRealize += (sender, args) => { _ = LoadTotalPackageData(totalPackageLabel); };
+        totalPackageLabel.OnRealize += (sender, args) => { _ = LoadTotalPackageData(totalPackageLabel, _cts.Token); };
 
         var packagePercentLabel = (Label)builder.GetObject("StandardPercent")!;
-        packagePercentLabel.OnRealize += (sender, args) => { _ = LoadTotalPackagePercentData(packagePercentLabel); };
+        packagePercentLabel.OnRealize += (sender, args) => { _ = LoadTotalPackagePercentData(packagePercentLabel, _cts.Token); };
 
         var totalFlatpakLabel = (Label)builder.GetObject("TotalFlatpakLabel")!;
-        totalFlatpakLabel.OnRealize += (sender, args) => { _ = LoadTotalFlatpak(totalFlatpakLabel); };
+        totalFlatpakLabel.OnRealize += (sender, args) => { _ = LoadTotalFlatpak(totalFlatpakLabel, _cts.Token); };
 
         var flatpakPercentLabel = (Label)builder.GetObject("FlatpakPercent")!;
-        flatpakPercentLabel.OnRealize += (sender, args) => { _ = LoadPercentFlatpak(flatpakPercentLabel); };
+        flatpakPercentLabel.OnRealize += (sender, args) => { _ = LoadPercentFlatpak(flatpakPercentLabel, _cts.Token); };
 
         var exportSyncButton = (Button)builder.GetObject("ExportSyncButton")!;
         exportSyncButton.OnClicked += (sender, args) => { _ = ExportSync(); };
@@ -78,10 +79,12 @@ public class HomeWindow(
         }
     }
 
-    private async Task LoadPercentFlatpak(Label label)
+    private async Task LoadPercentFlatpak(Label label, CancellationToken ct)
     {
         var packages = await unprivilegedOperationService.ListFlatpakPackages();
+        ct.ThrowIfCancellationRequested();
         var updates = await unprivilegedOperationService.CheckForApplicationUpdates();
+        ct.ThrowIfCancellationRequested();
         try
         {
             GLib.Functions.IdleAdd(0, () =>
@@ -98,9 +101,10 @@ public class HomeWindow(
         }
     }
 
-    private async Task LoadTotalFlatpak(Label label)
+    private async Task LoadTotalFlatpak(Label label, CancellationToken ct)
     {
         var packages = await unprivilegedOperationService.ListFlatpakPackages();
+        ct.ThrowIfCancellationRequested();
         try
         {
             GLib.Functions.IdleAdd(0, () =>
@@ -115,10 +119,12 @@ public class HomeWindow(
         }
     }
 
-    private async Task LoadTotalPackagePercentData(Label label)
+    private async Task LoadTotalPackagePercentData(Label label, CancellationToken ct)
     {
         var packages = await privilegedOperationService.GetInstalledPackagesAsync();
+        ct.ThrowIfCancellationRequested();
         var updates = await unprivilegedOperationService.CheckForApplicationUpdates();
+        ct.ThrowIfCancellationRequested();
         try
         {
             GLib.Functions.IdleAdd(0, () =>
@@ -135,9 +141,10 @@ public class HomeWindow(
         }
     }
 
-    private async Task LoadTotalPackageData(Label label)
+    private async Task LoadTotalPackageData(Label label, CancellationToken ct)
     {
         var packages = await privilegedOperationService.GetInstalledPackagesAsync();
+        ct.ThrowIfCancellationRequested();
         try
         {
             GLib.Functions.IdleAdd(0, () =>
@@ -157,10 +164,12 @@ public class HomeWindow(
         label.SetText(packages.Count.ToString());
     }
 
-    private async Task LoadAurPercentData(Label label)
+    private async Task LoadAurPercentData(Label label, CancellationToken ct)
     {
         var aurPackages = await privilegedOperationService.GetAurInstalledPackagesAsync();
+        ct.ThrowIfCancellationRequested();
         var updates = await unprivilegedOperationService.CheckForApplicationUpdates();
+        ct.ThrowIfCancellationRequested();
         try
         {
             GLib.Functions.IdleAdd(0, () =>
@@ -182,9 +191,10 @@ public class HomeWindow(
         label.SetText(labelText);
     }
 
-    private async Task LoadAurTotalData(Label label)
+    private async Task LoadAurTotalData(Label label, CancellationToken ct)
     {
         var aurPackages = await privilegedOperationService.GetAurInstalledPackagesAsync();
+        ct.ThrowIfCancellationRequested();
         try
         {
             GLib.Functions.IdleAdd(0, () =>
@@ -204,9 +214,10 @@ public class HomeWindow(
         label.SetText(packages.Count.ToString());
     }
 
-    private async Task LoadPackagesAsync(ListView listView)
+    private async Task LoadPackagesAsync(ListView listView, CancellationToken ct)
     {
         var packages = await privilegedOperationService.GetInstalledPackagesAsync();
+        ct.ThrowIfCancellationRequested();
         try
         {
             GLib.Functions.IdleAdd(0, () =>
@@ -307,14 +318,15 @@ public class HomeWindow(
         return grid;
     }
 
-    private static async Task LoadFeedAsync(ListBox listBox)
+    private static async Task LoadFeedAsync(ListBox listBox, CancellationToken ct)
     {
         var feedItems = new List<RssModel>();
 
         // Fetch from network
         try
         {
-            var feed = await GetRssFeedAsync("https://archlinux.org/feeds/news/");
+            var feed = await GetRssFeedAsync("https://archlinux.org/feeds/news/", ct);
+            ct.ThrowIfCancellationRequested();
             feedItems.AddRange(feed);
 
             // Marshal back to GTK main thread to update UI
@@ -375,11 +387,11 @@ public class HomeWindow(
     }
 
     // Port these from HomeViewModel or reference them from a shared service
-    private static async Task<List<RssModel>> GetRssFeedAsync(string url)
+    private static async Task<List<RssModel>> GetRssFeedAsync(string url, CancellationToken ct = default)
     {
         var items = new List<RssModel>();
         using var client = new HttpClient();
-        var xmlString = await client.GetStringAsync(url);
+        var xmlString = await client.GetStringAsync(url, ct);
         var xml = XDocument.Parse(xmlString);
 
         foreach (var item in xml.Descendants("item"))
@@ -394,5 +406,11 @@ public class HomeWindow(
         }
 
         return items;
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
     }
 }

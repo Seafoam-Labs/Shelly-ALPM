@@ -50,13 +50,21 @@ sealed class Program
             var homeButton = (Button)mainBuilder.GetObject("HomeButton")!;
             var settingsButton = (Button)mainBuilder.GetObject("SettingsButton")!;
 
+            IShellyWindow? currentPage = null;
+
             void NavigateTo<T>() where T : IShellyWindow
             {
+                currentPage?.Dispose();
+
                 while (contentArea.GetFirstChild() is { } child)
+                {
                     contentArea.Remove(child);
+                    child.Unparent();
+                }
 
                 var page = serviceProvider.GetRequiredService<T>();
                 contentArea.Append(page.CreateWindow());
+                currentPage = page;
             }
 
             homeButton.OnClicked += (_, _) => NavigateTo<HomeWindow>();
@@ -78,6 +86,7 @@ sealed class Program
 
             var initialHomeWindow = serviceProvider.GetRequiredService<HomeWindow>();
             contentArea.Append(initialHomeWindow.CreateWindow());
+            currentPage = initialHomeWindow;
 
             //Subscribing to credential required to trigger the password dialog
             var credentialManager = serviceProvider.GetRequiredService<ICredentialManager>();

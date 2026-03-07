@@ -7,6 +7,7 @@ namespace Shelly.Gtk.Windows.Flatpak;
 public class FlatpakRemove(IUnprivilegedOperationService unprivilegedOperationService, ILockoutService lockoutService) : IShellyWindow
 {
     private ListView? _listView;
+    private readonly CancellationTokenSource _cts = new();
     private Gio.ListStore? _listStore;
     private SingleSelection? _selectionModel;
     private List<FlatpakPackageDto> _allPackages = [];
@@ -31,7 +32,7 @@ public class FlatpakRemove(IUnprivilegedOperationService unprivilegedOperationSe
         factory.OnBind += OnBind;
         _listView.SetFactory(factory);
 
-        _listView.OnRealize += (_, _) => { _ = LoadDataAsync(); };
+        _listView.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
         removeButton.OnClicked += (_, _) => { _ = RemoveSelectedAsync(); };
         reloadButton.OnClicked += (_, _) => { _ = LoadDataAsync(); };
         searchEntry.OnSearchChanged += (_, _) =>
@@ -107,11 +108,18 @@ public class FlatpakRemove(IUnprivilegedOperationService unprivilegedOperationSe
         versionLabel.SetText(package.Version);
     }
 
-    private async Task LoadDataAsync()
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    private async Task LoadDataAsync(CancellationToken ct = default)
     {
         try
         {
             _allPackages = await unprivilegedOperationService.ListFlatpakPackages();
+            ct.ThrowIfCancellationRequested();
             
             GLib.Functions.IdleAdd(0, () =>
             {

@@ -9,12 +9,14 @@ namespace Shelly.Gtk.Windows.Packages;
 public class PackageInstall(IPrivilegedOperationService privilegedOperationService, ILockoutService lockoutService) : IShellyWindow
 {
     private Overlay _overlay = null!;
+    private readonly CancellationTokenSource _cts = new();
     private ColumnView _columnView = null!;
     private SingleSelection _selectionModel = null!;
     private Gio.ListStore _listStore = null!;
     private FilterListModel _filterListModel = null!;
     private CustomFilter _filter = null!;
     private string _searchText = string.Empty;
+    private List<AlpmPackageDto> _packages = [];
 
     public Widget CreateWindow()
     {
@@ -34,9 +36,9 @@ public class PackageInstall(IPrivilegedOperationService privilegedOperationServi
         _selectionModel = SingleSelection.New(_filterListModel);
         _selectionModel.CanUnselect = true;
         _columnView.SetModel(_selectionModel);
-        SetupColumns(checkColumn, nameColumn, sizeColumn, versionColumn,repositoryColumn);
+        SetupColumns(checkColumn, nameColumn, sizeColumn, versionColumn, repositoryColumn);
 
-        _columnView.OnRealize += (_, _) => { _ = LoadDataAsync(); };
+        _columnView.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
         _columnView.OnActivate += (_, _) =>
         {
             var item = _selectionModel.GetSelectedItem();
@@ -56,7 +58,7 @@ public class PackageInstall(IPrivilegedOperationService privilegedOperationServi
     }
 
     private static void SetupColumns(ColumnViewColumn checkColumn, ColumnViewColumn nameColumn,
-        ColumnViewColumn sizeColumn, ColumnViewColumn versionColumn,  ColumnViewColumn repositoryColumn)
+        ColumnViewColumn sizeColumn, ColumnViewColumn versionColumn, ColumnViewColumn repositoryColumn)
     {
         var checkFactory = SignalListItemFactory.New();
         checkFactory.OnSetup += (_, args) =>
@@ -91,6 +93,16 @@ public class PackageInstall(IPrivilegedOperationService privilegedOperationServi
                 {
                     checkButton.SetActive(pkgObj.IsSelected);
                 }
+            }
+        };
+
+        checkFactory.OnUnbind += (_, args) =>
+        {
+            var listItem = (ListItem)args.Object;
+            if (listItem.GetItem() is AlpmPackageGObject pkgObj)
+            {
+                //if (listItem.GetData<EventHandler>("toggle-handler") is { } handler)
+                    //pkgObj.OnSelectionToggled -= handler;
             }
         };
 
@@ -165,12 +177,21 @@ public class PackageInstall(IPrivilegedOperationService privilegedOperationServi
         };
     }
 
-    private async Task LoadDataAsync()
+    public void Dispose()
+    {
+        _listStore.RemoveAll();
+        _cts.Cancel();
+        _cts.Dispose();
+        _packages.Clear();
+    }
+
+    private async Task LoadDataAsync(CancellationToken ct = default)
     {
         try
         {
-            var packages = await privilegedOperationService.GetAvailablePackagesAsync();
-            var queue = new Queue<AlpmPackageDto>(packages);
+            _packages = await privilegedOperationService.GetAvailablePackagesAsync();
+            ct.ThrowIfCancellationRequested();
+            var queue = new Queue<AlpmPackageDto>(_packages);
 
             GLib.Functions.IdleAdd(0, () =>
             {
@@ -180,6 +201,11 @@ public class PackageInstall(IPrivilegedOperationService privilegedOperationServi
 
             GLib.Functions.IdleAdd(0, () =>
             {
+                if (ct.IsCancellationRequested)
+                {
+                    return false;
+                }
+
                 // This number might need to be adjusted based on cpu. This comment is just so we can find this later
                 // when we inevitably get a bug report about the package page being slow.
                 const int batchSize = 1000;
@@ -187,16 +213,17 @@ public class PackageInstall(IPrivilegedOperationService privilegedOperationServi
                 var batch = new List<AlpmPackageGObject>();
                 while (queue.Count > 0 && count < batchSize)
                 {
-                    batch.Add(new AlpmPackageGObject(){ Package = queue.Dequeue()});
+                    batch.Add(new AlpmPackageGObject() { Package = queue.Dequeue() });
                     count++;
                 }
-                
+
                 // ReSharper disable once CoVariantArrayConversion
-                _listStore.Splice(_listStore.GetNItems(), 0, batch.ToArray(),(uint)batch.Count);
-    
+                _listStore.Splice(_listStore.GetNItems(), 0, batch.ToArray(), (uint)batch.Count);
+
                 return queue.Count > 0;
             });
         }
+        catch (OperationCanceledException) { }
         catch (Exception e)
         {
             Console.WriteLine($"Failed to load packages: {e.Message}");
@@ -219,7 +246,7 @@ public class PackageInstall(IPrivilegedOperationService privilegedOperationServi
         return pkgObj.Package.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
                pkgObj.Package.Description.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
     }
-    
+
     private async Task InstallSelectedAsync()
     {
         var selectedPackages = new List<string>();

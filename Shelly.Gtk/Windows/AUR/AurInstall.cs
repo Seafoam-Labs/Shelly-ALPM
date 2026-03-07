@@ -10,6 +10,7 @@ public class AurInstall(
     ILockoutService lockoutService) : IShellyWindow
 {
     private Box _box = null!;
+    private readonly CancellationTokenSource _cts = new();
     private ColumnView _columnView = null!;
     private SingleSelection _selectionModel = null!;
     private Gio.ListStore _listStore = null!;
@@ -46,7 +47,7 @@ public class AurInstall(
             }
         };
         installButton.OnClicked += (_, _) => { _ = InstallSelectedAsync(); };
-        _searchEntry.OnActivate += (_, _) => { _ = SearchAsync(); };
+        _searchEntry.OnActivate += (_, _) => { _ = SearchAsync(_cts.Token); };
 
         return _box;
     }
@@ -161,13 +162,14 @@ public class AurInstall(
         versionColumn.SetFactory(versionFactory);
     }
 
-    private async Task SearchAsync()
+    private async Task SearchAsync(CancellationToken ct)
     {
         _searchText = _searchEntry.GetText();
 
         if (!string.IsNullOrWhiteSpace(_searchText))
         {
             var result = await privilegedOperationService.SearchAurPackagesAsync(_searchText);
+            ct.ThrowIfCancellationRequested();
 
             Console.WriteLine($"[DEBUG_LOG] Search result: {result.Count}");
 
@@ -188,6 +190,12 @@ public class AurInstall(
             
             
         }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
     }
 
     private async Task InstallSelectedAsync()

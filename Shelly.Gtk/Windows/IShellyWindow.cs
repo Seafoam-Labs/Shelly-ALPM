@@ -2,7 +2,7 @@ using Gtk;
 
 namespace Shelly.Gtk.Windows;
 
-public interface IShellyWindow
+public interface IShellyWindow : IDisposable
 {
     Widget CreateWindow();
 }

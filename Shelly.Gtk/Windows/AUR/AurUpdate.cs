@@ -7,6 +7,7 @@ namespace Shelly.Gtk.Windows.AUR;
 public class AurUpdate(IPrivilegedOperationService privilegedOperationService, ILockoutService lockoutService) : IShellyWindow
 {
      private Box _box = null!;
+    private readonly CancellationTokenSource _cts = new();
     private ColumnView _columnView = null!;
     private SingleSelection _selectionModel = null!;
     private Gio.ListStore _listStore = null!;
@@ -35,7 +36,7 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
 
         SetupColumns(checkColumn, nameColumn, versionColumn);
 
-        _columnView.OnRealize += (_, _) => { _ = LoadDataAsync(); };
+        _columnView.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
         _columnView.OnActivate += (_, _) =>
         {
             var item = _selectionModel.GetSelectedItem();
@@ -142,11 +143,18 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
         versionColumn.SetFactory(versionFactory);
     }
     
-    private async Task LoadDataAsync()
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    private async Task LoadDataAsync(CancellationToken ct = default)
     {
         try
         {
             var packages = await privilegedOperationService.GetAurUpdatePackagesAsync();
+            ct.ThrowIfCancellationRequested();
             Console.WriteLine($@"[DEBUG_LOG] {packages.Count} AUR packages for update.");
 
             GLib.Functions.IdleAdd(0, () =>

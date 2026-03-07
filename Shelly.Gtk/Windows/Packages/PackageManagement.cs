@@ -8,6 +8,7 @@ namespace Shelly.Gtk.Windows.Packages;
 public class PackageManagement(IPrivilegedOperationService privilegedOperationService, ILockoutService lockoutService) : IShellyWindow
 {
     private Box _box = null!;
+    private readonly CancellationTokenSource _cts = new();
     private ColumnView _columnView = null!;
     private SingleSelection _selectionModel = null!;
     private Gio.ListStore _listStore = null!;
@@ -38,7 +39,7 @@ public class PackageManagement(IPrivilegedOperationService privilegedOperationSe
 
         SetupColumns(checkColumn, nameColumn, sizeColumn, versionColumn);
 
-        _columnView.OnRealize += (_, _) => { _ = LoadDataAsync(); };
+        _columnView.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
         _columnView.OnActivate += (_, _) =>
         {
             var item = _selectionModel.GetSelectedItem();
@@ -162,11 +163,18 @@ public class PackageManagement(IPrivilegedOperationService privilegedOperationSe
                pkgObj.Package.Description.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task LoadDataAsync()
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    private async Task LoadDataAsync(CancellationToken ct = default)
     {
         try
         {
             var packages = await privilegedOperationService.GetInstalledPackagesAsync();
+            ct.ThrowIfCancellationRequested();
             GLib.Functions.IdleAdd(0, () =>
             {
                 _listStore.RemoveAll();

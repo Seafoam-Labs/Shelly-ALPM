@@ -8,6 +8,7 @@ namespace Shelly.Gtk.Windows.Flatpak;
 public class FlatpakInstall(IUnprivilegedOperationService unprivilegedOperationService, ILockoutService lockoutService) : IShellyWindow
 {
     private ListView? _listView;
+    private readonly CancellationTokenSource _cts = new();
     private Gio.ListStore? _listStore;
     private SingleSelection? _selectionModel;
     private DropDown? _categoryDropDown;
@@ -39,7 +40,7 @@ public class FlatpakInstall(IUnprivilegedOperationService unprivilegedOperationS
         factory.OnBind += OnBind;
         _listView.SetFactory(factory);
 
-        _listView.OnRealize += (_, _) => { _ = LoadDataAsync(); };
+        _listView.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
         removeButton.OnClicked += (_, _) => { _ = InstallSelectedAsync(); };
         reloadButton.OnClicked += (_, _) => { _ = LoadDataAsync(); };
         searchEntry.OnSearchChanged += (_, _) =>
@@ -122,13 +123,21 @@ public class FlatpakInstall(IUnprivilegedOperationService unprivilegedOperationS
         versionLabel.SetText(package.Version);
     }
 
-    private async Task LoadDataAsync()
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    private async Task LoadDataAsync(CancellationToken ct = default)
     {
         try
         {
             lockoutService.Show("Loading available Flatpak packages...", 0, false);
             await unprivilegedOperationService.FlatpakSyncRemoteAppstream();
+            ct.ThrowIfCancellationRequested();
             _allPackages = await unprivilegedOperationService.ListAppstreamFlatpak();
+            ct.ThrowIfCancellationRequested();
             GLib.Functions.IdleAdd(0, () =>
             {
                 ApplyFilter();
