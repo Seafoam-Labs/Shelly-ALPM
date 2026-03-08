@@ -63,7 +63,8 @@ columnview header > button:checked {
 }
 
 .dialog-overlay {
-    border: 1px solid;
+    background-color: @theme_bg_color;
+    border: 1px solid @borders;
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     padding: 24px;

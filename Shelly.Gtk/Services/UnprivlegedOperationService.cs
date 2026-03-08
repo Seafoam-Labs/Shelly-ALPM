@@ -240,12 +240,12 @@ public class UnprivilegedOperationService : IUnprivilegedOperationService
         try
         {
             var trimmedOutput = StripBom(result.Output.Trim());
-
+            
             if (trimmedOutput.StartsWith("{"))
             {
                 var response = System.Text.Json.JsonSerializer.Deserialize(trimmedOutput, 
                     ShellyGtkJsonContext.Default.FlathubSearchResponse);
-
+                    
                 if (response?.Hits == null) return [];
 
                 return response.Hits.Select(hit => new FlatpakPackageDto
@@ -257,7 +257,7 @@ public class UnprivilegedOperationService : IUnprivilegedOperationService
                     IconPath = hit.Icon
                 }).ToList();
             }
-
+            
             return [];
         }
         catch (Exception ex)

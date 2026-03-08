@@ -8,6 +8,7 @@ using Shelly.Gtk.Windows.Dialog;
 using Shelly.Gtk.Windows.Flatpak;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Windows.Packages;
+using Shelly.Gtk.UiModels;
 using Settings = Shelly.Gtk.Windows.Settings;
 
 namespace Shelly.Gtk;
@@ -130,6 +131,16 @@ sealed class Program
                 {
                     var dialog = serviceProvider.GetRequiredService<AlpmEventDialog>();
                     AlpmEventDialog.ShowAlpmEventDialog(mainOverlay, e);
+                    return false;
+                });
+            };
+
+            var genericQuestionService = serviceProvider.GetRequiredService<IGenericQuestionService>();
+            genericQuestionService.Question += (s, e) =>
+            {
+                GLib.Functions.IdleAdd(0, () =>
+                {
+                    GenericQuestionDialog.ShowGenericQuestionDialog(mainOverlay, e);
                     return false;
                 });
             };

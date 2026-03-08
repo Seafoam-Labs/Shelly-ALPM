@@ -17,6 +17,7 @@ public static class ServiceBuilder
         collection.AddSingleton<ICredentialManager, CredentialManager>();
         collection.AddSingleton<IAlpmEventService, AlpmEventService>();
         collection.AddSingleton<IConfigService, ConfigService>();
+        collection.AddSingleton<IGenericQuestionService, GenericQuestionService>();
         collection.AddSingleton<ILockoutService, LockoutService>();
         collection.AddScoped<IUpdateService, GitHubUpdateService>();
         collection.AddTransient<HomeWindow>();

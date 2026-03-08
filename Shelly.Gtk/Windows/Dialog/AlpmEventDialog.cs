@@ -7,6 +7,7 @@ public class AlpmEventDialog
 {
     public static void ShowAlpmEventDialog(Overlay parentOverlay, QuestionEventArgs e)
     {
+
         var box = Box.New(Orientation.Vertical, 12);
         box.SetHalign(Align.Center);
         box.SetValign(Align.Center);

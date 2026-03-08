@@ -15,7 +15,8 @@ public class PasswordDialog(ICredentialManager credentialManager)
         box.SetMarginBottom(20);
         box.SetMarginStart(20);
         box.SetMarginEnd(20);
-        
+        box.AddCssClass("dialog-overlay");
+
         var titleLabel = Label.New("Authentication Required");
         titleLabel.AddCssClass("title-4");
         box.Append(titleLabel);
