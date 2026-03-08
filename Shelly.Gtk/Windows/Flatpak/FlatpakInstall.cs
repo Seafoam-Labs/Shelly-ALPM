@@ -17,6 +17,7 @@ public class FlatpakInstall(IUnprivilegedOperationService unprivilegedOperationS
     private List<FlatpakPackageDto> _allPackages = [];
     private string _searchText = string.Empty;
     private FlatpakCategories _selectedCategory = FlatpakCategories.None;
+    private SignalListItemFactory? _factory;
 
     public Widget CreateWindow()
     {
@@ -37,10 +38,10 @@ public class FlatpakInstall(IUnprivilegedOperationService unprivilegedOperationS
         _selectionModel = SingleSelection.New(_listStore);
         _listView.SetModel(_selectionModel);
 
-        var factory = SignalListItemFactory.New();
-        factory.OnSetup += OnSetup;
-        factory.OnBind += OnBind;
-        _listView.SetFactory(factory);
+        _factory = SignalListItemFactory.New();
+        _factory.OnSetup += OnSetup;
+        _factory.OnBind += OnBind;
+        _listView.SetFactory(_factory);
 
         _listView.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
         removeButton.OnClicked += (_, _) => { _ = InstallSelectedAsync(); };
@@ -129,6 +130,37 @@ public class FlatpakInstall(IUnprivilegedOperationService unprivilegedOperationS
     {
         _cts.Cancel();
         _cts.Dispose();
+
+        // Disconnect the model from the view to break circular refs
+        _listView?.SetModel(null);
+
+        // Dispose all GObject items BEFORE removing them
+        if (_listStore != null)
+        {
+            for (uint i = 0; i < _listStore.GetNItems(); i++)
+            {
+                _listStore.GetObject(i)?.Dispose();
+            }
+
+            _listStore.RemoveAll();
+        }
+
+        _selectionModel?.Dispose();
+        _listStore?.Dispose();
+
+        _allPackages = null!;
+
+        _factory?.Dispose();
+        _factory = null!;
+
+        _listView = null!;
+        _listStore = null!;
+        _selectionModel = null!;
+        _categoryDropDown = null!;
+
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, true, true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, true, true);
     }
 
     private async Task LoadDataAsync(CancellationToken ct = default)
