@@ -59,8 +59,8 @@ public class MetaSearch(
 
         SetupColumns(_checkColumn, _nameColumn, _repoColumn, _versionColumn, _descriptionColumn);
 
-        ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.End);
         ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.End);
+        ColumnViewHelper.AlignColumnHeader(_columnView, 3, Align.End);
 
         _installButton.OnClicked += (_, _) => { _ = InstallSelectedAsync(); };
 
@@ -158,7 +158,7 @@ public class MetaSearch(
         {
             var listItem = (ListItem)args.Object;
             if (listItem.GetItem() is MetaPackageGObject { Package: { } pkg } && listItem.GetChild() is Label label)
-                label.SetText(pkg.Description);
+                label.SetText(pkg.Description.Substring(0, pkg.Description.Length > 100 ? 100 : pkg.Description.Length));
         };
         descriptionColumn.SetFactory(_descriptionFactory);
     }

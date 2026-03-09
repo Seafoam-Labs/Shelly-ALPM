@@ -33,7 +33,9 @@
               </object>
             </child>
             <child>
-              <object class="GtkColumnViewColumn" id="description_column"/>
+              <object class="GtkColumnViewColumn" id="description_column">
+               <property name="title">Description</property>
+              </object>
             </child>
             <child>
               <object class="GtkColumnViewColumn" id="version_column">
@@ -48,7 +50,6 @@
             <child>
               <object class="GtkColumnViewColumn" id="check_column">
                 <property name="expand">True</property>
-                <property name="title">Description</property>
               </object>
             </child>
           </object>
