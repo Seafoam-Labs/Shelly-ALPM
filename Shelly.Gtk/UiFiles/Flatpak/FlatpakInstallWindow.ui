@@ -8,6 +8,9 @@
         <property name="orientation">horizontal</property>
         <property name="spacing">5</property>
         <property name="margin-bottom">10</property>
+        <property name="margin-top">10</property>
+        <property name="margin-start">10</property>
+        <property name="margin-end">10</property>
         <property name="halign">baseline</property>
         <child>
           <object class="GtkButton" id="install_button">

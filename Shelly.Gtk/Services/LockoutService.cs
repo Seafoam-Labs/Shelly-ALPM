@@ -12,6 +12,8 @@ public partial class LockoutService : ILockoutService
 
     private static readonly Regex AlpmProgressPattern =
         AlpmRegex();
+    
+    private static readonly Regex RunningHooksPattern = HooksRegex();
 
     private readonly Lock _lock = new();
 
@@ -82,6 +84,7 @@ public partial class LockoutService : ILockoutService
         var matchFlatpak = FlatpakProgressPattern.Match(logLine);
         var matchAur = AurProgressPattern.Match(logLine);
         var matchAlpm = AlpmProgressPattern.Match(logLine);
+        var hooksMatch = RunningHooksPattern.Match(logLine);
 
         if (matchFlatpak.Success)
         {
@@ -103,6 +106,10 @@ public partial class LockoutService : ILockoutService
             {
                 Update($"{status} {pkg}", progress, false);
             }
+        }
+        else if (hooksMatch.Success)
+        {
+            Update("Running Hooks", 100, true);
         }
     }
 
@@ -139,4 +146,6 @@ public partial class LockoutService : ILockoutService
     [GeneratedRegex(@"ALPM Progress: (\w+), Pkg: ([^,]+), %: (\d+)(?:, bytesRead: (\d+), totalBytes: (\d+))?",
         RegexOptions.Compiled)]
     private static partial Regex AlpmRegex();
+    [GeneratedRegex(@"(?:\[.*?\]\s*)*Running hooks\.\.\.", RegexOptions.Compiled)]
+    private static partial Regex HooksRegex();
 }

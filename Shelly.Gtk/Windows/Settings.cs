@@ -41,10 +41,7 @@ public class Settings(
 
         var syncButton = (Button)builder.GetObject("sync_button")!;
         syncButton.OnClicked += (s, e) => { _ = ForceSyncAsync(); };
-
-        var checkUpdatesButton = (Button)builder.GetObject("check_updates_button")!;
-        checkUpdatesButton.OnClicked += (s, e) => { _ = CheckUpdatesAsync(); };
-
+        
         var saveButton = (Button)builder.GetObject("save_button")!;
         saveButton.OnClicked += (s, e) => { NavigationToHomeRequested?.Invoke(); };
 
@@ -150,11 +147,6 @@ public class Settings(
         {
             lockoutService.Hide();
         }
-    }
-
-    private async Task CheckUpdatesAsync()
-    {
-     
     }
 
     public void Dispose()

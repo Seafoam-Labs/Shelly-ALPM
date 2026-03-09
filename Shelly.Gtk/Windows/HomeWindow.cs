@@ -60,8 +60,7 @@ public class HomeWindow(
         exportSyncButton.OnClicked += (sender, args) => { _ = ExportSync(); };
         return _box;
     }
-
-
+            
     private async Task ExportSync()
     {
         try
