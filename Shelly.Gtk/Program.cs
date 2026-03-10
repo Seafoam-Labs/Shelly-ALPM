@@ -203,6 +203,15 @@ sealed class Program
                     return false;
                 });
             };
+            
+            genericQuestionService.ToastMessageRequested += (s, e) =>
+            {
+                GLib.Functions.IdleAdd(0, () =>
+                {
+                    ToastMessageDialog.ShowToastMessage(mainOverlay, e);
+                    return false;
+                });
+            };
 
 
             window.Show();

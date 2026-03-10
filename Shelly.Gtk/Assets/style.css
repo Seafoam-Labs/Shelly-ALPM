@@ -79,3 +79,12 @@ columnview header > button:checked {
 scrolledwindow > scrollbar {
     border: none;
 }
+
+.toast-message {
+    background-color: @theme_bg_color;
+    border: 1px solid @borders;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    padding: 10px 16px;
+    color: @theme_fg_color;
+}

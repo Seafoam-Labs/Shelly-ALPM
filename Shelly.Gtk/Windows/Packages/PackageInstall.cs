@@ -439,6 +439,11 @@ public class PackageInstall(
             finally
             {
                 lockoutService.Hide();
+                var args = new ToastMessageEventArgs(
+                    $"Installed {selectedPackages.Count} Package(s)"
+                );
+
+                genericQuestionService.RaiseToastMessage(args);
             }
         }
     }
