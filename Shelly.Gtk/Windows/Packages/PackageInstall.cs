@@ -30,7 +30,8 @@ public class PackageInstall(
     private SignalListItemFactory _sizeFactory = null!;
     private SignalListItemFactory _versionFactory = null!;
     private SignalListItemFactory _repositoryFactory = null!;
-
+    private readonly List<AlpmPackageGObject> _packageGObjectRefs = [];
+    private bool _disposed;
     private readonly List<GObject.Object> _childModelRefs = [];
 
     public Widget CreateWindow()
@@ -238,35 +239,25 @@ public class PackageInstall(
 
     public void Dispose()
     {
+        _disposed = true;
         _cts.Cancel();
         _cts.Dispose();
 
         // Disconnect the model from the view to break circular refs
         _columnView.SetModel(null);
-
-        // Dispose all GObject items BEFORE removing them
-        for (uint i = 0; i < _listStore.GetNItems(); i++)
-        {
-            if (_listStore.GetObject(i) is AlpmPackageGObject pkgObj)
-            {
-                pkgObj.Package = null;
-                pkgObj.Dispose();
-            }
-        }
-
-        _listStore.RemoveAll();
-
+        
         _selectionModel.Dispose();
         _filterListModel.Dispose();
         _filter.Dispose();
+        
         _treeListModel.Dispose();
         _listStore.Dispose();
+       
 
         _checkBinding.Clear();
         _checkBinding = null!;
 
         _packages = null!;
-
         _columnView = null!;
         _overlay = null!;
 
@@ -276,14 +267,14 @@ public class PackageInstall(
         _versionFactory.Dispose();
         _repositoryFactory.Dispose();
         _childModelRefs.Clear();
+        _packageGObjectRefs.Clear();
 
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, true, true);
-        GC.WaitForPendingFinalizers();
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, true, true);
     }
 
     private async Task LoadDataAsync(CancellationToken ct = default)
     {
+        _packageGObjectRefs.Clear();
+        _childModelRefs.Clear();
         try
         {
             _packages = await privilegedOperationService.GetAvailablePackagesAsync();
@@ -295,19 +286,14 @@ public class PackageInstall(
 
             GLib.Functions.IdleAdd(0, () =>
             {
+                if (_disposed) return false;
                 _listStore.RemoveAll();
                 return false;
             });
 
             GLib.Functions.IdleAdd(0, () =>
             {
-                _listStore.RemoveAll();
-                return false;
-            });
-
-            GLib.Functions.IdleAdd(0, () =>
-            {
-                if (ct.IsCancellationRequested)
+                if (ct.IsCancellationRequested || _disposed)
                 {
                     return false;
                 }
@@ -320,8 +306,10 @@ public class PackageInstall(
                 while (queue.Count > 0 && count < batchSize)
                 {
                     var dequeued = queue.Dequeue();
-                    batch.Add(new AlpmPackageGObject()
-                        { Package = dequeued, IsInstalled = installedNames.Contains(dequeued.Name) });
+                    var pkgObj = new AlpmPackageGObject()
+                        { Package = dequeued, IsInstalled = installedNames.Contains(dequeued.Name) };
+                    _packageGObjectRefs.Add(pkgObj); // prevent GC
+                    batch.Add(pkgObj);
                     count++;
                 }
 
