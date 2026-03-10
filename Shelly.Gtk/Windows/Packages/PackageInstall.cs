@@ -26,6 +26,7 @@ public class PackageInstall(
     private CustomFilter _filter = null!;
     private string _searchText = string.Empty;
     private List<AlpmPackageDto> _packages = [];
+    private List<string> _groups = [];
 
     private Dictionary<ColumnViewCell, (SignalHandler<CheckButton> OnToggled, EventHandler OnExternalToggle)>
         _checkBinding =
@@ -48,6 +49,7 @@ public class PackageInstall(
     private ColumnViewColumn _sizeColumn = null!;
     private ColumnViewColumn _versionColumn = null!;
     private ColumnViewColumn _repositoryColumn = null!;
+    private DropDown _groupDropDown = null!;
 
     private Revealer _detailRevealer = null!;
     private Box _detailBox = null!;
@@ -119,7 +121,6 @@ public class PackageInstall(
 
     private void ShowPackageDetails(AlpmPackageGObject pkgObj)
     {
-
         if (pkgObj.Package == null) return;
 
         _currentDetailPkg = pkgObj;

@@ -28,11 +28,11 @@
                 </style>
               </object>
             </child>
-            <child>
-              <object class="GtkComboBox" id="grouping_selection">
-                <property name="tooltip-text">Group Filter</property>
-              </object>
-            </child>
+          <child>
+            <object class="GtkDropDown" id="grouping_selection">
+              <property name="tooltip-text">Group Filter</property>
+            </object>
+          </child>
             <child>
               <object class="GtkButton" id="install_local_button">
                 <property name="tooltip-text">Install Local Packages</property>
