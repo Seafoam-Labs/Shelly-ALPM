@@ -1,0 +1,6 @@
+[Shelly/Commands/Utility.cs]
+resharper_unresolved_in_text_highlighting = none
+
+[*.cs]
+# Suppress "Cannot resolve symbol" for source-generated code
+dotnet_diagnostic.CS8795.severity = none

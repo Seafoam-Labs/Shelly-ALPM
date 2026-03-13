@@ -1,4 +1,5 @@
 ﻿using ConsoleAppFramework;
+
 using Shelly;
 
 
@@ -7,7 +8,7 @@ app.ConfigureGlobalOptions((ref builder) =>
 {
     var verbose = builder.AddGlobalOption<bool>("-v|--verbose");
     var uiMode = builder.AddGlobalOption<bool>("--ui-mode");
-    var sync = builder.AddGlobalOption<bool>("-y|--sync");
-    return new GlobalOptions(verbose, uiMode, sync);
+    return new GlobalOptions(verbose, uiMode);
 });
+
 await app.RunAsync(args);

@@ -1,22 +1,34 @@
+// ReSharper disable InconsistentNaming
+// ReSharper disable UnresolvedMemberInNamespace
+
+using System;
+using System.Diagnostics.CodeAnalysis;
+using System.IO;
+using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using ConsoleAppFramework;
 using PackageManager.Alpm;
 using PackageManager.Aur;
 using PackageManager.Flatpak;
 using Shelly.Models;
 
+// ReSharper disable InvalidXmlDocComment
+
 namespace Shelly.Commands;
 
 [RegisterCommands]
-public class Utility
+[SuppressMessage("GenerateConsoleAppFramework", "CAF007:Command name is duplicated.")]
+internal class Utility
 {
     /// <summary>
     /// Exports all installed packages. File will be named {yyyyMMddHHmmss}_shelly.sync with that date time being your
     /// local timezone.
     /// </summary>
-    /// <param name="destination">-d, destination  of file export. If unset will default to ~/{USER}/.cache/shelly</param>
-    public async Task Export(string? destination = null)
+    /// <param name="destination">-d, destination of file export. If unset will default to ~/{USER}/.cache/shelly</param>
+    public async Task Export(ConsoleAppContext context, string? destination = null)
     {
+        var globals = (GlobalOptions)context.GlobalOptions!;
         var username = Environment.GetEnvironmentVariable("USER");
         if (string.IsNullOrEmpty(username) || username == "root")
         {
@@ -60,5 +72,4 @@ public class Utility
         await File.WriteAllTextAsync(path, json);
         Console.WriteLine($"Sync file exported to: {path}");
     }
-    
 }
