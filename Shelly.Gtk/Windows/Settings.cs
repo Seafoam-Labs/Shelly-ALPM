@@ -16,6 +16,7 @@ public class Settings(
 {
     private Box _box = null!;
     private ShellyConfig _config = null!;
+    private readonly IPrivilegedOperationService _privilegedOperationService;
 
     public event Action? NavigationToHomeRequested;
 
@@ -46,7 +47,7 @@ public class Settings(
         saveButton.OnClicked += (s, e) => { NavigationToHomeRequested?.Invoke(); };
 
         var removeLockButton = (Button)builder.GetObject("rm_db_lock_button")!;
-        removeLockButton.OnClicked += (s, e) => { };
+        removeLockButton.OnClicked += (s, e) => { _ = RemoveDbLockAsync(); };
 
         var versionLabel = (Label)builder.GetObject("version_label")!;
         versionLabel.SetLabel(
@@ -242,6 +243,20 @@ public class Settings(
         }
     }
 
+    private async Task RemoveDbLockAsync()
+    {
+        var result = await _privilegedOperationService.RemoveDbLockAsync();
+
+        if (!result.Success)
+        {
+            Console.Error.WriteLine(result.Error);
+        }
+        else
+        {
+            Console.WriteLine("Pacman Database Lock Removed Successfully");
+        }
+    }    
+    
     public void Dispose()
     {
     }
