@@ -132,7 +132,9 @@ public class ListAvailableCommand : Command<ListSettings>
             // Apply filter if specified
             if (!string.IsNullOrWhiteSpace(settings.Filter))
             {
-                packages = packages.Where(p => p.Name.Contains(settings.Filter, StringComparison.OrdinalIgnoreCase)).ToList();
+                var nameRes = packages.Where(p => p.Name.Contains(settings.Filter, StringComparison.OrdinalIgnoreCase)).ToList();
+                var descRes= packages.Where(p => p.Description.Contains(settings.Filter, StringComparison.OrdinalIgnoreCase)).ToList();
+                packages = nameRes.Concat(descRes).DistinctBy(p => p.Name).ToList();
             }
 
             // Apply sorting based on settings
