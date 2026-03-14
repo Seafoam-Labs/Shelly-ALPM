@@ -23,7 +23,7 @@ internal class Standard
 
     private int SyncUiMode(bool verbose = false, bool force = false)
     {
-        var manager = new AlpmManager(verbose, true,Configuration.GetConfigurationFile());
+        var manager = new AlpmManager(verbose, true, Configuration.GetConfigurationFile());
         Console.WriteLine("Synchronizing package databases...");
         manager.Progress += (sender, args) => { Console.WriteLine($"{args.PackageName}: {args.Percent}%"); };
         manager.Sync(force);
@@ -33,7 +33,7 @@ internal class Standard
 
     private int SyncConsoleMode(bool verbose = false, bool force = false)
     {
-        var manager = new AlpmManager(verbose, false,Configuration.GetConfigurationFile());
+        var manager = new AlpmManager(verbose, false, Configuration.GetConfigurationFile());
         Console.WriteLine("Synchronizing package databases...");
         if (force)
         {
