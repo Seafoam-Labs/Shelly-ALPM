@@ -850,26 +850,85 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         }
     }
 
-    private async Task<OperationResult> ExecutePrivilegedSystemCommandAsync(string operationDescription,
-        params string[] args)
+private async Task<OperationResult> ExecutePrivilegedSystemCommandAsync( string operationDescription, params string[] args){
+    var hasCredentials = await _credentialManager.RequestCredentialsAsync(operationDescription);
+    if (!hasCredentials)
     {
-        var hasCredentials = await _credentialManager.RequestCredentialsAsync("Privileged Operation");
-        if (!hasCredentials)
+        return new OperationResult
         {
-            return new OperationResult
-            {
-                Success = false,
-                Output = string.Empty,
-                Error = "Authentication cancelled by user.",
-                ExitCode = -1
-            };
-        }
-    
-        var password = _credentialManager.GetPassword();
-        var isPasswordless = password == "NOPASSWORD67";
-
-
+            Success = false,
+            Output = string.Empty,
+            Error = "Authentication cancelled by user.",
+            ExitCode = -1
+        };
     }
+
+    var password = _credentialManager.GetPassword();
+    var isPasswordless = password == "NOPASSWORD67";
+
+    var arguments = string.Join(" ", args);
+
+    Console.WriteLine($"Executing privileged system command: sudo {arguments}");
+
+    var process = new Process
+    {
+        StartInfo = new ProcessStartInfo
+        {
+            FileName = "sudo",
+            Arguments = isPasswordless
+                ? $"-k {arguments}"
+                : $"-S -k {arguments}",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true,
+            CreateNoWindow = true
+        }
+    };
+
+    try
+    {
+        process.Start();
+
+        if (!isPasswordless)
+        {
+            await process.StandardInput.WriteLineAsync(password);
+            await process.StandardInput.FlushAsync();
+        }
+
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+
+        await Task.WhenAll(outputTask, errorTask);
+        await process.WaitForExitAsync();
+
+        var output = await outputTask;
+        var error = await errorTask;
+
+        if (!string.IsNullOrEmpty(error))
+        {
+            Console.Error.WriteLine(error);
+        }
+
+        return new OperationResult
+        {
+            Success = process.ExitCode == 0,
+            Output = output,
+            Error = error,
+            ExitCode = process.ExitCode
+        };
+    }
+    catch (Exception ex)
+    {
+        return new OperationResult
+        {
+            Success = false,
+            Output = string.Empty,
+            Error = ex.Message,
+            ExitCode = -1
+        };
+    }
+}
 
     /// <summary>
     /// Strips UTF-8 BOM (Byte Order Mark) from the beginning of a string if present.
