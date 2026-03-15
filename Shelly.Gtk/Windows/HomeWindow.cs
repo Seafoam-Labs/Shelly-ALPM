@@ -7,6 +7,7 @@ using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
+
 // ReSharper disable CollectionNeverQueried.Local
 
 namespace Shelly.Gtk.Windows;
@@ -65,7 +66,7 @@ public class HomeWindow(
         var config = configService.LoadConfig();
         var aurBox = (Box)builder.GetObject("AurBox")!;
         var flatpakBox = (Box)builder.GetObject("FlatpakBox")!;
-        
+
         aurBox.Visible = config.AurEnabled;
         flatpakBox.Visible = config.FlatPackEnabled;
 
@@ -81,7 +82,7 @@ public class HomeWindow(
 
         return _box;
     }
-            
+
     private async Task ExportSync()
     {
         try
@@ -134,6 +135,12 @@ public class HomeWindow(
         {
             GLib.Functions.IdleAdd(0, () =>
             {
+                if (packages.Count == 0)
+                {
+                    label.SetText("N/A");
+                    return false;
+                }
+
                 var ratio = (double)(packages.Count - updates.Flatpaks.Count) / packages.Count * 100;
                 var labelText = $"{ratio:F2} %";
                 label.SetText(labelText);
@@ -174,6 +181,12 @@ public class HomeWindow(
         {
             GLib.Functions.IdleAdd(0, () =>
             {
+                if (packages.Count == 0)
+                {
+                    label.SetText("N/A");
+                    return false;
+                }
+
                 var ratio = (double)(packages.Count - updates.Packages.Count) / packages.Count * 100;
                 var labelText = $"{ratio:F2} %";
                 label.SetText(labelText);
@@ -231,6 +244,12 @@ public class HomeWindow(
 
     private static void PopulateAurPercentLabel(Label label, List<AurPackageDto> packages, SyncModel syncModel)
     {
+        if (packages.Count == 0)
+        {
+            label.SetText("N/A");
+            return;
+        }
+
         var ratio = (double)(packages.Count - syncModel.Aur.Count) / packages.Count * 100;
         var labelText = $"{ratio:F2} %";
         label.SetText(labelText);
