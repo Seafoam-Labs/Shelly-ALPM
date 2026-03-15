@@ -8,16 +8,23 @@ public static class GenericQuestionDialog
 {
     public static void ShowGenericQuestionDialog(Overlay parentOverlay, GenericQuestionEventArgs e)
     {
+        var background = Box.New(Orientation.Vertical, 0);
+        background.AddCssClass("lockout-overlay");
+        background.SetHalign(Align.Fill);
+        background.SetValign(Align.Fill);
+
         var box = Box.New(Orientation.Vertical, 12);
         box.SetHalign(Align.Center);
         box.SetValign(Align.Center);
-        box.SetSizeRequest(760, -1);
         box.SetHexpand(true);
+        box.SetVexpand(true);
+        box.SetSizeRequest(e.UseMonospaceMessage ? 720 : 400, -1);
         box.SetMarginTop(20);
         box.SetMarginBottom(20);
         box.SetMarginStart(20);
         box.SetMarginEnd(20);
         box.AddCssClass("dialog-overlay");
+        background.Append(box);
 
         var titleLabel = Label.New(e.Title);
         titleLabel.AddCssClass("title-4");
@@ -57,7 +64,6 @@ public static class GenericQuestionDialog
 
         var scrolledWindow = new ScrolledWindow();
         scrolledWindow.SetPolicy(PolicyType.Never, PolicyType.Automatic);
-        scrolledWindow.SetMinContentWidth(700);
         scrolledWindow.SetMaxContentHeight(300);
         scrolledWindow.SetPropagateNaturalHeight(true);
         scrolledWindow.SetHexpand(true);
@@ -74,19 +80,19 @@ public static class GenericQuestionDialog
         noButton.OnClicked += (s, args) =>
         {
             e.SetResponse(false);
-            parentOverlay.RemoveOverlay(box);
+            parentOverlay.RemoveOverlay(background);
         };
 
         yesButton.OnClicked += (s, args) =>
         {
             e.SetResponse(true);
-            parentOverlay.RemoveOverlay(box);
+            parentOverlay.RemoveOverlay(background);
         };
 
         buttonBox.Append(yesButton);
         buttonBox.Append(noButton);
         box.Append(buttonBox);
 
-        parentOverlay.AddOverlay(box);
+        parentOverlay.AddOverlay(background);
     }
 }
