@@ -8,16 +8,16 @@ public static class GenericQuestionDialog
 {
     public static void ShowGenericQuestionDialog(Overlay parentOverlay, GenericQuestionEventArgs e)
     {
-        var background = Box.New(Orientation.Vertical, 0);
+        var background = Box.New(Orientation.Horizontal, 0);
         background.AddCssClass("lockout-overlay");
         background.SetHalign(Align.Fill);
         background.SetValign(Align.Fill);
+        background.SetHexpand(true);
+        background.SetVexpand(true);
 
         var box = Box.New(Orientation.Vertical, 12);
         box.SetHalign(Align.Center);
         box.SetValign(Align.Center);
-        box.SetHexpand(true);
-        box.SetVexpand(true);
         box.SetSizeRequest(e.UseMonospaceMessage ? 720 : 400, -1);
         box.SetMarginTop(20);
         box.SetMarginBottom(20);
