@@ -7,6 +7,7 @@ public static class GenericOverlay
 {
     public static void ShowGenericOverlay(Overlay parentOverlay, Widget content, GenericDialogEventArgs e)
     {
+        var dismissed = false;
         var backdrop = new Box();
         backdrop.SetOrientation(Orientation.Horizontal);
         backdrop.Hexpand = true;
@@ -43,7 +44,7 @@ public static class GenericOverlay
         baseBox.Append(grid);
 
         closeButton.OnClicked += (_, _) => Dismiss();
-        
+
         var gestureClick = GestureClick.New();
         gestureClick.OnReleased += (_,  args) =>
         {
@@ -51,7 +52,7 @@ public static class GenericOverlay
 
             var insideCard = x >= 0 && y >= 0
                            && x <= baseBox.GetAllocatedWidth()
-                           && x <= baseBox.GetAllocatedHeight();
+                           && y <= baseBox.GetAllocatedHeight();
 
             if (!insideCard)
                 Dismiss();
@@ -61,10 +62,25 @@ public static class GenericOverlay
         backdrop.Append(baseBox);
 
         parentOverlay.AddOverlay(backdrop);
+        _ = e.ResponseTask.ContinueWith(_ =>
+        {
+            GLib.Functions.IdleAdd(0, () =>
+            {
+                Dismiss();
+                return false;
+            });
+        });
         return;
 
         void Dismiss()
         {
+            if (dismissed)
+            {
+                return;
+            }
+
+            dismissed = true;
+            e.SetResponse(false);
             parentOverlay.RemoveOverlay(backdrop);
         }
     }
