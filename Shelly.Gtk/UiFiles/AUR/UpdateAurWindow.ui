@@ -69,6 +69,14 @@
             </child>
           </object>
         </child>
+        <child type="overlay">
+          <object class="GtkLabel" id="no_packages_label">
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <property name="opacity">0.5</property>
+            <property name="visible">false</property>
+          </object>
+        </child>
       </object>
     </child>
   </object>
