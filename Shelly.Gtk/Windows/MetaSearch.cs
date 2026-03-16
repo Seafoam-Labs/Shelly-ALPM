@@ -5,6 +5,7 @@ using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
 using Shelly.Gtk.Windows.Dialog;
+
 // ReSharper disable CollectionNeverQueried.Local
 
 namespace Shelly.Gtk.Windows;
@@ -48,6 +49,7 @@ public class MetaSearch(
         _box = (Box)builder.GetObject("MetaSearchWindow")!;
         _columnView = (ColumnView)builder.GetObject("package_grid")!;
         _installButton = (Button)builder.GetObject("install_button")!;
+        _installButton.SetSensitive(false);
 
         _checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
         _nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
@@ -96,6 +98,7 @@ public class MetaSearch(
             {
                 if (listItem.GetItem() is MetaPackageGObject pkgObj)
                     pkgObj.IsSelected = s.GetActive();
+                _installButton.SetSensitive(AnySelected());
             };
         };
         _checkFactory.OnBind += (_, args) =>
@@ -173,7 +176,8 @@ public class MetaSearch(
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is MetaPackageGObject { Package: { } pkg } && listItem.GetChild() is Label label)
-                label.SetText(pkg.Description.Substring(0, pkg.Description.Length > 100 ? 100 : pkg.Description.Length));
+                label.SetText(pkg.Description.Substring(0,
+                    pkg.Description.Length > 100 ? 100 : pkg.Description.Length));
         };
         descriptionColumn.SetFactory(_descriptionFactory);
     }
@@ -295,7 +299,7 @@ public class MetaSearch(
                 {
                     //TODO: This evnetually needs to work with everything else but this page only works with flathub atm
                     //This can be a future improvment we can make on this page...
-                   await unprivilegedOperationService.InstallFlatpakPackage(pkg,false,"flathub","stable");
+                    await unprivilegedOperationService.InstallFlatpakPackage(pkg, false, "flathub", "stable");
                 }
             }
         }
@@ -306,12 +310,24 @@ public class MetaSearch(
         finally
         {
             lockoutService.Hide();
-                
+
             var args = new ToastMessageEventArgs(
                 $"Updated {selected.Count} Package(s)"
             );
             genericQuestionService.RaiseToastMessage(args);
         }
+    }
+
+    private bool AnySelected()
+    {
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is MetaPackageGObject { IsSelected: true })
+                return true;
+        }
+
+        return false;
     }
 
     public void Dispose()

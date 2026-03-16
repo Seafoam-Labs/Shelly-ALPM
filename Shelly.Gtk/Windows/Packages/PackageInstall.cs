@@ -75,6 +75,7 @@ public class PackageInstall(
         _repositoryColumn = (ColumnViewColumn)_builder.GetObject("repository_column")!;
         _repositoryColumn.Resizable = true;
         _installButton = (Button)_builder.GetObject("install_button")!;
+        _installButton.SetSensitive(false);
         _localInstallButton = (Button)_builder.GetObject("install_local_button")!;
         _appImageButton = (Button)_builder.GetObject("install_appimage_button")!;
         _searchEntry = (SearchEntry)_builder.GetObject("search_entry")!;
@@ -258,6 +259,7 @@ public class PackageInstall(
             void OnToggled(CheckButton s, EventArgs e)
             {
                 pkgObj.IsSelected = s.GetActive();
+                _installButton.SetSensitive(AnySelected());
             }
 
             void OnExternalToggle(object? s, EventArgs e)
@@ -596,6 +598,18 @@ public class PackageInstall(
         }
     }
 
+    private bool AnySelected()
+    {
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is AlpmPackageGObject { IsSelected: true })
+                return true;
+        }
+
+        return false;
+    }
+    
     public void Dispose()
     {
         _cts.Cancel();

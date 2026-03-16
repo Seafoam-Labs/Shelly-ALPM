@@ -40,6 +40,7 @@ public class AurInstall(
     private ColumnViewColumn _votesColumn = null!;
     private ColumnViewColumn _popColumn = null!;
     private ColumnViewColumn _versionColumn = null!;
+    private Button _installButton = null!;
 
     public Widget CreateWindow()
     {
@@ -62,8 +63,8 @@ public class AurInstall(
 
         _versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
         _versionColumn.Resizable = true;
-        var installButton = (Button)builder.GetObject("install_button")!;
-
+        _installButton = (Button)builder.GetObject("install_button")!;
+        _installButton.SetSensitive(false);
         _listStore = Gio.ListStore.New(AurPackageGObject.GetGType());
         _selectionModel = SingleSelection.New(_listStore);
         _selectionModel.CanUnselect = true;
@@ -81,9 +82,10 @@ public class AurInstall(
             if (item is AurPackageGObject pkgObj)
             {
                 pkgObj.ToggleSelection();
+                _installButton.SetSensitive(AnySelected());
             }
         };
-        installButton.OnClicked += (_, _) => { _ = InstallSelectedAsync(); };
+        _installButton.OnClicked += (_, _) => { _ = InstallSelectedAsync(); };
         _searchEntry.OnActivate += (_, _) => { _ = SearchAsync(_cts.Token); };
 
         return _box;
@@ -434,6 +436,18 @@ public class AurInstall(
         }
 
         return $"{DateTime.Now:yyyyMMddHHmmss}_aur-install_{packageName}.log";
+    }
+
+    private bool AnySelected()
+    {
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is AurUpdateGObject { IsSelected: true })
+                return true;
+        }
+
+        return false;
     }
 
     public void Dispose()
