@@ -31,8 +31,8 @@ internal sealed class ConsoleProgressRenderer
                 case AlpmRetrieveStatus.Start:
                     FinishTableBorder();
                     Console.WriteLine(args.RetrieveType == AlpmRetrieveType.DatabaseRetrieve
-                        ? ":: Synchronizing package databases..."
-                        : ":: Retrieving packages...");
+                        ? "Synchronizing package databases..."
+                        : "Retrieving packages...");
                     _rowIndex.Clear();
                     _baseTop = -1;
                     break;
@@ -78,6 +78,9 @@ internal sealed class ConsoleProgressRenderer
 
                 var row = _rowIndex.Count;
                 _rowIndex[key] = row;
+                
+                Console.SetCursorPosition(0, _baseTop + row);
+                Console.WriteLine();
 
                 Console.SetCursorPosition(0, _baseTop + row);
                 WriteDataRow(displayName, bar, pct, status);
@@ -198,11 +201,9 @@ internal sealed class ConsoleProgressRenderer
     {
         if (_baseTop >= 0)
         {
-            // Move past data rows + bottom border line
             Console.SetCursorPosition(0, _baseTop + _rowIndex.Count);
             Console.Write("\x1b[2K");
             PrintBottomBorder();
-            Console.WriteLine();
         }
     }
 }

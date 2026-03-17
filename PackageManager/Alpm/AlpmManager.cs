@@ -2005,11 +2005,6 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                     {
                         Console.Error.WriteLine("[ALPM] Database retrieved.");
                     }
-                    else
-                    {
-                        Console.WriteLine();
-                        Console.Error.WriteLine("Databases retrieved.");
-                    }
 
                     Retrieve?.Invoke(this,
                         new AlpmRetrieveEventArgs(AlpmRetrieveType.DatabaseRetrieve, AlpmRetrieveStatus.Done));
