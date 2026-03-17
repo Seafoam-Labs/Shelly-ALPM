@@ -9,8 +9,6 @@ internal class StatusNotifierItemHandler : IPathMethodHandler
     
     public bool HandlesChildPaths => false; 
 
-    public bool RunMethodHandlerSynchronously(Message message) => true;
-
     public ValueTask HandleMethodAsync(MethodContext context)
     {
         var request = context.Request;

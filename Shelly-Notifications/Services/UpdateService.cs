@@ -1,10 +1,11 @@
 using System.Diagnostics;
 using System.Text;
+using Shelly_Notifications.DbusHandlers;
 using Shelly_Notifications.Models;
 
 namespace Shelly_Notifications.Services;
 
-public class UpdateService
+public class UpdateService(DBusMenuHandler? menuHandler = null)
 {
     public async Task<int> CheckForUpdates()
     {
@@ -20,13 +21,24 @@ public class UpdateService
                     var updates =
                         System.Text.Json.JsonSerializer.Deserialize(trimmedLine,
                             NotificationJsonContext.Default.SyncModel);
-                    if (updates != null) return updates.Aur.Count + updates.Flatpaks.Count + updates.Packages.Count;
+                    if (updates != null)
+                    {
+                        // Notify DBus clients that the Updates menu now has items to display
+                        menuHandler?.NotifyChildrenDisplayChanged(updates);
+                        return updates.Aur.Count + updates.Flatpaks.Count + updates.Packages.Count;
+                    }
                 }
             }
 
             var allUpdates = System.Text.Json.JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
                 NotificationJsonContext.Default.SyncModel);
-            if (allUpdates != null) return allUpdates.Aur.Count + allUpdates.Flatpaks.Count + allUpdates.Packages.Count;
+
+            if (allUpdates != null)
+            {
+                // Notify DBus clients that the Updates menu now has items to display
+                menuHandler?.NotifyChildrenDisplayChanged(allUpdates);
+                return allUpdates.Aur.Count + allUpdates.Flatpaks.Count + allUpdates.Packages.Count;
+            }
         }
         catch (Exception ex)
         {
