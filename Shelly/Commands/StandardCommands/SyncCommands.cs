@@ -23,72 +23,14 @@ internal static class SyncCommands
             Console.WriteLine("Forcing Synchronization");
         }
 
-        var rowIndex = new Dictionary<string, int>();
-        object renderLock = new();
-        var baseTop = -1;
+        var renderer = new ConsoleProgressRenderer();
 
-        manager.Retrieve += (_, args) =>
-        {
-            lock (renderLock)
-            {
-                switch (args.Status)
-                {
-                    case PackageManager.Alpm.AlpmRetrieveStatus.Start:
-                        if (baseTop >= 0)
-                            Console.SetCursorPosition(0, baseTop + rowIndex.Count);
-                        Console.WriteLine();
-                        Console.WriteLine(args.RetrieveType == PackageManager.Alpm.AlpmRetrieveType.DatabaseRetrieve
-                            ? "Synchronizing package databases..."
-                            : "Retrieving packages...");
-                        rowIndex.Clear();
-                        baseTop = -1;
-                        break;
-                    case PackageManager.Alpm.AlpmRetrieveStatus.Done:
-                        if (baseTop >= 0)
-                            Console.SetCursorPosition(0, baseTop + rowIndex.Count);
-                        Console.WriteLine();
-                        break;
-                    case PackageManager.Alpm.AlpmRetrieveStatus.Failed:
-                        if (baseTop >= 0)
-                            Console.SetCursorPosition(0, baseTop + rowIndex.Count);
-                        Console.WriteLine();
-                        Console.WriteLine(args.RetrieveType == PackageManager.Alpm.AlpmRetrieveType.DatabaseRetrieve
-                            ? "Failed to synchronize all databases"
-                            : "Failed to retrieve some files");
-                        break;
-                }
-            }
-        };
-
-        manager.Progress += (sender, args) =>
-        {
-            lock (renderLock)
-            {
-                var name = args.PackageName ?? "unknown";
-                var pct = args.Percent ?? 0;
-                var bar = new string('\u2588', pct / 5) + new string('\u2591', 20 - pct / 5);
-                var stage = args.ProgressType;
-
-                var line = $"  {name,-30} {bar} {pct,3}%  {stage}";
-
-                if (!rowIndex.TryGetValue(name, out var row))
-                {
-                    if (baseTop < 0) baseTop = Console.CursorTop;
-                    row = rowIndex.Count;
-                    rowIndex[name] = row;
-                }
-
-                Console.SetCursorPosition(0, baseTop + row);
-                Console.Write("\x1b[2K");
-                Console.Write(line);
-                Console.Out.Flush();
-            }
-        };
+        manager.Retrieve += renderer.HandleRetrieve;
+        manager.Progress += renderer.HandleProgress;
 
         manager.Sync(force);
-        if (baseTop >= 0)
-            Console.SetCursorPosition(0, baseTop + rowIndex.Count);
-        Console.WriteLine();
+        if (renderer.HasRows)
+            renderer.FinishTable();
         Console.WriteLine("Package databases synchronization completed");
         return 0;
     }
