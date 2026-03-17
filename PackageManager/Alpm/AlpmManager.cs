@@ -39,13 +39,15 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
     public event EventHandler<AlpmPackageOperationEventArgs>? PackageOperation;
     public event EventHandler<AlpmQuestionEventArgs>? Question;
     public event EventHandler<AlpmReplacesEventArgs>? Replaces;
+    public event EventHandler<AlpmRetrieveEventArgs>? Retrieve;
+
 
     public void InitializeWithSync()
     {
         Initialize(true);
         Sync();
     }
-    
+
 
     public void Initialize(bool root = false, bool useTempPath = false, string tempPath = "")
     {
@@ -641,7 +643,11 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
             {
                 var sigUrl = fullUrl + ".sig";
                 var sigLocalPath = localpath + ".sig";
-                Console.Error.WriteLine($"[DEBUG_LOG] Downloading corresponding signature file: {sigUrl}");
+                if (_verbose || _uiMode)
+                {
+                    Console.Error.WriteLine($"[DEBUG_LOG] Downloading corresponding signature file: {sigUrl}");
+                }
+
                 DownloadSignatureFile(sigUrl, sigLocalPath);
             }
 
@@ -703,7 +709,10 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
         string tempPath = sigLocalPath + ".part";
         try
         {
-            Console.Error.WriteLine($"[Shelly][DEBUG_LOG] Downloading signature {sigUrl}");
+            if (_uiMode || _verbose)
+            {
+                Console.Error.WriteLine($"[Shelly][DEBUG_LOG] Downloading signature {sigUrl}");
+            }
 
             using var response = HttpClient.GetAsync(sigUrl, HttpCompletionOption.ResponseContentRead)
                 .GetAwaiter()
@@ -712,7 +721,12 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
             if (!response.IsSuccessStatusCode)
             {
                 // Signature file may not exist on the server (optional), just log and continue
-                Console.Error.WriteLine($"[DEBUG_LOG] Signature file not available: {sigUrl} ({response.StatusCode})");
+                if (_uiMode || _verbose)
+                {
+                    Console.Error.WriteLine(
+                        $"[DEBUG_LOG] Signature file not available: {sigUrl} ({response.StatusCode})");
+                }
+
                 // Delete any existing stale signature file to prevent mismatch
                 try
                 {
@@ -735,7 +749,10 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
 
             // Move temp file to final destination
             File.Move(tempPath, sigLocalPath, overwrite: true);
-            Console.Error.WriteLine($"[DEBUG_LOG] Signature file downloaded successfully: {sigLocalPath}");
+            if (_uiMode || _verbose)
+            {
+                Console.Error.WriteLine($"[DEBUG_LOG] Signature file downloaded successfully: {sigLocalPath}");
+            }
         }
         catch (Exception ex)
         {
@@ -783,7 +800,10 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
 
             if (result == 0)
             {
-                Console.Error.WriteLine($"Updating Sync database");
+                if (_uiMode || _verbose)
+                {
+                    Console.Error.WriteLine($"Updating Sync database");
+                }
             }
         }
     }
@@ -1975,6 +1995,8 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Retrieving databases...");
                     }
 
+                    Retrieve?.Invoke(this,
+                        new AlpmRetrieveEventArgs(AlpmRetrieveType.DatabaseRetrieve, AlpmRetrieveStatus.Start));
                     break;
                 case AlpmEventType.DbRetrieveDone:
                     if (_verbose || _uiMode)
@@ -1987,6 +2009,8 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Databases retrieved.");
                     }
 
+                    Retrieve?.Invoke(this,
+                        new AlpmRetrieveEventArgs(AlpmRetrieveType.DatabaseRetrieve, AlpmRetrieveStatus.Done));
                     break;
                 case AlpmEventType.DbRetrieveFailed:
                     if (_verbose || _uiMode)
@@ -1998,6 +2022,8 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Database retrieval failed.");
                     }
 
+                    Retrieve?.Invoke(this,
+                        new AlpmRetrieveEventArgs(AlpmRetrieveType.DatabaseRetrieve, AlpmRetrieveStatus.Failed));
                     break;
 
                 // Package retrieval events
@@ -2011,6 +2037,8 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Retrieving packages...");
                     }
 
+                    Retrieve?.Invoke(this,
+                        new AlpmRetrieveEventArgs(AlpmRetrieveType.PackageRetrieve, AlpmRetrieveStatus.Start));
                     break;
                 case AlpmEventType.PkgRetrieveDone:
                     if (_verbose || _uiMode)
@@ -2022,6 +2050,8 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Packages retrieved.");
                     }
 
+                    Retrieve?.Invoke(this,
+                        new AlpmRetrieveEventArgs(AlpmRetrieveType.PackageRetrieve, AlpmRetrieveStatus.Done));
                     break;
                 case AlpmEventType.PkgRetrieveFailed:
                     if (_verbose || _uiMode)
@@ -2033,6 +2063,8 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Package retrieval failed.");
                     }
 
+                    Retrieve?.Invoke(this,
+                        new AlpmRetrieveEventArgs(AlpmRetrieveType.PackageRetrieve, AlpmRetrieveStatus.Failed));
                     break;
 
                 case AlpmEventType.DatabaseMissing:

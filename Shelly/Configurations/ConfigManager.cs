@@ -21,7 +21,7 @@ public static class ConfigManager
                new ShellyConfig();
     }
 
-    public static ShellyConfig CreateConfig()
+    private static ShellyConfig CreateConfig()
     {
         string configPath;
         if (Environment.GetEnvironmentVariable("USER") == "root")
@@ -35,19 +35,17 @@ public static class ConfigManager
                 "shelly", "config.json");
         }
 
-        if (!File.Exists(configPath))
+        if (File.Exists(configPath)) return ReadConfig();
+        var configDir = Path.GetDirectoryName(configPath);
+        if (!string.IsNullOrEmpty(configDir))
         {
-            var configDir = Path.GetDirectoryName(configPath);
-            if (!string.IsNullOrEmpty(configDir))
-            {
-                Directory.CreateDirectory(configDir);
-            }
-
-            var defaultConfig = new ShellyConfig();
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var json = JsonSerializer.Serialize(defaultConfig, typeof(ShellyConfig), new ShellyJsonContext(options));
-            File.WriteAllText(configPath, json);
+            Directory.CreateDirectory(configDir);
         }
+
+        var defaultConfig = new ShellyConfig();
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        var json = JsonSerializer.Serialize(defaultConfig, typeof(ShellyConfig), new ShellyJsonContext(options));
+        File.WriteAllText(configPath, json);
 
         return ReadConfig();
     }
