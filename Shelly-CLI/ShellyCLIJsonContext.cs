@@ -27,6 +27,8 @@ namespace Shelly_CLI;
 [JsonSerializable(typeof(ShellyConfig))]
 [JsonSerializable(typeof(List<FlatpakPackageDto>))]
 [JsonSerializable(typeof(FlatpakPackageDto))]
+[JsonSerializable(typeof(List<FlatpakRemoteDto>))]
+[JsonSerializable(typeof(FlatpakRemoteDto))]
 internal partial class ShellyCLIJsonContext : JsonSerializerContext
 {
 }

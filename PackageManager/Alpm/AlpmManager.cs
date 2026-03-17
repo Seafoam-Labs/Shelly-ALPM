@@ -801,6 +801,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
     {
         if (_handle == IntPtr.Zero) Initialize();
         var packages = new List<AlpmPackageDto>();
+        var seen = new HashSet<string>();
         var syncDbsPtr = GetSyncDbs(_handle);
 
         var currentPtr = syncDbsPtr;
@@ -819,7 +820,13 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
                 }
 
                 var dbPkgCachePtr = DbGetPkgCache(node.Data);
-                packages.AddRange(AlpmPackage.FromList(dbPkgCachePtr).Select(p => p.ToDto()));
+                foreach (var pkg in AlpmPackage.FromList(dbPkgCachePtr).Select(p => p.ToDto()))
+                {
+                    if (seen.Add(pkg.Name))
+                    {
+                        packages.Add(pkg);
+                    }
+                }
             }
 
             currentPtr = node.Next;
@@ -1866,5 +1873,11 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         }
 
         return dependencies;
+    }
+
+    public static List<string> GetRepositories(string configPath = "/etc/pacman.conf")
+    {
+        var config = PacmanConfParser.Parse(configPath);
+        return config.Repos.Select(r => r.Name).ToList();
     }
 }

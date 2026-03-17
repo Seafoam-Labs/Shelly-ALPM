@@ -197,5 +197,6 @@ public class FlatpakUpdate(IUnprivilegedOperationService unprivilegedOperationSe
         _cts.Dispose();
         _listStore?.RemoveAll();
         _stringObjectRefs.Clear();
+        _allPackages.Clear();
     }
 }

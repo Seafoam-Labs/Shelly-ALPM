@@ -112,6 +112,10 @@ public class Program
                 .WithDescription("List packages that need updates")
                 .WithExample("list-updates");
 
+            config.AddCommand<ListReposCommand>("list-repos")
+                .WithDescription("List configured repositories in order")
+                .WithExample("list-repos");
+
             config.AddCommand<PackageInformationCommand>("info")
                 .WithDescription("Display information about a package")
                 .WithExample("info", "firefox", "--installed")
@@ -333,8 +337,7 @@ public class Program
                     .WithDescription("Adds a flatpak remote");
 
                 flatpak.AddCommand<FlatpakRemoveRemote>("remove-remotes").WithDescription("Removes a flatpak remote");
-
-                flatpak.AddCommand<GetFromRemote>("get-from-remote").WithDescription("Get package(s) from remote");
+                
 
                 flatpak.AddCommand<GetAppRemoteInfo>("app-remote-info").WithDescription("Get app remote info");
             });

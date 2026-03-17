@@ -887,62 +887,6 @@ public class FlatpakManager : IDisposable
         }
     }
 
-    /// <summary>
-    /// Lists all configured remotes from both system and user installations.
-    /// </summary>
-    /// <returns>List of remote names in priority order</returns>
-    public List<string> ListRemotes()
-    {
-        var remotes = new List<string>();
-
-        if (!NativeResolver.IsLibraryAvailable(FlatpakReference.LibName))
-        {
-            return remotes;
-        }
-
-        var installationsPtr = FlatpakReference.GetSystemInstallations(IntPtr.Zero, out IntPtr error);
-        if (error == IntPtr.Zero && installationsPtr != IntPtr.Zero)
-        {
-            try
-            {
-                var dataPtr = Marshal.ReadIntPtr(installationsPtr);
-                var length = Marshal.ReadInt32(installationsPtr + IntPtr.Size);
-
-                for (var i = 0; i < length; i++)
-                {
-                    var installationPtr = Marshal.ReadIntPtr(dataPtr + i * IntPtr.Size);
-                    if (installationPtr != IntPtr.Zero)
-                    {
-                        AddRemotesFromInstallation(installationPtr, remotes);
-                    }
-                }
-            }
-            finally
-            {
-                FlatpakReference.GPtrArrayUnref(installationsPtr);
-            }
-        }
-
-        var userInstallationPtr = FlatpakReference.InstallationNewUser(IntPtr.Zero, out IntPtr userError);
-        if (userError != IntPtr.Zero)
-        {
-            FlatpakReference.GErrorFree(userError);
-        }
-        else if (userInstallationPtr != IntPtr.Zero)
-        {
-            try
-            {
-                AddRemotesFromInstallation(userInstallationPtr, remotes);
-            }
-            finally
-            {
-                FlatpakReference.GObjectUnref(userInstallationPtr);
-            }
-        }
-
-        return remotes;
-    }
-
     public List<FlatpakRemoteDto> ListRemotesWithDetails()
     {
         var remotesDto = new List<FlatpakRemoteDto>();
@@ -995,45 +939,6 @@ public class FlatpakManager : IDisposable
         return remotesDto;
     }
 
-
-    /// <summary>
-    /// Helper method to add remotes from an installation to the list
-    /// </summary>
-    private void AddRemotesFromInstallation(IntPtr installationPtr, List<string> remotes)
-    {
-        IntPtr remotesPtr = FlatpakReference.InstallationListRemotes(
-            installationPtr, IntPtr.Zero, out IntPtr error);
-
-        if (error != IntPtr.Zero || remotesPtr == IntPtr.Zero)
-        {
-            FlatpakReference.GErrorFree(error);
-            return;
-        }
-
-        try
-        {
-            var remotesDataPtr = Marshal.ReadIntPtr(remotesPtr);
-            var remotesLength = Marshal.ReadInt32(remotesPtr + IntPtr.Size);
-
-            for (var i = 0; i < remotesLength; i++)
-            {
-                IntPtr remotePtr = Marshal.ReadIntPtr(remotesDataPtr + i * IntPtr.Size);
-                if (remotePtr != IntPtr.Zero)
-                {
-                    var remoteName = PtrToStringSafe(FlatpakReference.RemoteGetName(remotePtr));
-                    if (!string.IsNullOrEmpty(remoteName) && !remotes.Contains(remoteName))
-                    {
-                        remotes.Add(remoteName);
-                    }
-                }
-            }
-        }
-        finally
-        {
-            FlatpakReference.GPtrArrayUnref(remotesPtr);
-        }
-    }
-
     /// <summary>
     /// Helper method to add remotes from an installation to the list
     /// </summary>
@@ -1058,11 +963,13 @@ public class FlatpakManager : IDisposable
                 var remotePtr = Marshal.ReadIntPtr(remotesDataPtr + i * IntPtr.Size);
                 if (remotePtr == IntPtr.Zero) continue;
                 var remoteName = PtrToStringSafe(FlatpakReference.RemoteGetName(remotePtr));
+                var remoteUrl = PtrToStringSafe(FlatpakReference.RemoteGetUrl(remotePtr));
 
                 remotes.Add(new FlatpakRemoteDto
                 {
                     Name = remoteName,
-                    Scope = type
+                    Scope = type,
+                    Url = remoteUrl
                 });
             }
         }

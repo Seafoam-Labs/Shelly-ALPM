@@ -19,7 +19,7 @@ sealed class Program
 {
     public static int Main(string[] args)
     {
-        GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
+        //GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
         ServiceCollection serviceCollection = new();
         var serviceProvider = ServiceBuilder.CreateDependencyInjection(serviceCollection);
 
@@ -292,10 +292,14 @@ sealed class Program
                 while (contentArea.GetFirstChild() is { } child)
                 {
                     contentArea.Remove(child);
+                    child.Unref();
                 }
+                
 
                 currentPage?.Dispose();
                 currentPage = null;
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
                 var page = serviceProvider.GetRequiredService<T>();
                 if (page is Settings settings)
                 {

@@ -2,6 +2,7 @@ using GObject;
 using Gtk;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
+using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
@@ -14,7 +15,8 @@ public class PackageInstall(
     IPrivilegedOperationService privilegedOperationService,
     ILockoutService lockoutService,
     IConfigService configService,
-    IGenericQuestionService genericQuestionService)
+    IGenericQuestionService genericQuestionService,
+    IIconResolverService iconResolverService)
     : IShellyWindow
 {
     private Overlay _overlay = null!;
@@ -73,6 +75,7 @@ public class PackageInstall(
         _repositoryColumn = (ColumnViewColumn)_builder.GetObject("repository_column")!;
         _repositoryColumn.Resizable = true;
         _installButton = (Button)_builder.GetObject("install_button")!;
+        _installButton.SetSensitive(false);
         _localInstallButton = (Button)_builder.GetObject("install_local_button")!;
         _appImageButton = (Button)_builder.GetObject("install_appimage_button")!;
         _searchEntry = (SearchEntry)_builder.GetObject("search_entry")!;
@@ -171,6 +174,19 @@ public class PackageInstall(
             _detailBox.Append(row);
         }
 
+        var iconImage = new Image { PixelSize = 64, Halign = Align.Center, MarginBottom = 8 };
+        var iconPath = iconResolverService.GetIconPath(pkg.Name);
+        if (!string.IsNullOrEmpty(iconPath) && iconPath != "Unavailable" && File.Exists(iconPath))
+        {
+            var texture = Gdk.Texture.NewFromFilename(iconPath);
+            iconImage.SetFromPaintable(texture);
+        }
+        else
+        {
+            iconImage.SetFromIconName("package-x-generic");
+        }
+        _detailBox.Append(iconImage);
+
         AddDetail("Name", pkg.Name);
         AddDetail("Description", pkg.Description);
         AddDetail("Version", pkg.Version);
@@ -243,6 +259,7 @@ public class PackageInstall(
             void OnToggled(CheckButton s, EventArgs e)
             {
                 pkgObj.IsSelected = s.GetActive();
+                _installButton.SetSensitive(AnySelected());
             }
 
             void OnExternalToggle(object? s, EventArgs e)
@@ -273,9 +290,11 @@ public class PackageInstall(
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var box = Box.New(Orientation.Horizontal, 6);
+            var packageIcon = new Image { PixelSize = 24 };
             var label = Label.New(string.Empty);
             var installedIcon = Image.NewFromIconName("object-select-symbolic");
 
+            box.Append(packageIcon);
             box.Append(label);
             box.Append(installedIcon);
             listItem.SetChild(box);
@@ -286,8 +305,22 @@ public class PackageInstall(
             if (listItem.GetItem() is not AlpmPackageGObject { Package: { } pkg } pkgObj ||
                 listItem.GetChild() is not Box box) return;
 
-            var label = (Label)box.GetFirstChild()!;
+            var packageIcon = (Image)box.GetFirstChild()!;
+            var label = (Label)packageIcon.GetNextSibling()!;
             var installedIcon = (Image)label.GetNextSibling()!;
+
+            var iconPath = iconResolverService.GetIconPath(pkg.Name);
+            if (!string.IsNullOrEmpty(iconPath) && iconPath != "Unavailable" && File.Exists(iconPath))
+            {
+                var texture = Gdk.Texture.NewFromFilename(iconPath);
+                packageIcon.SetFromPaintable(texture);
+                packageIcon.Visible = true;
+            }
+            else
+            {
+                packageIcon.SetFromIconName("package-x-generic");
+                packageIcon.Visible = true;
+            }
 
             label.SetText(pkg.Name);
             label.Halign = Align.Start;
@@ -565,6 +598,18 @@ public class PackageInstall(
         }
     }
 
+    private bool AnySelected()
+    {
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is AlpmPackageGObject { IsSelected: true })
+                return true;
+        }
+
+        return false;
+    }
+    
     public void Dispose()
     {
         _cts.Cancel();
@@ -572,5 +617,8 @@ public class PackageInstall(
         _listStore.RemoveAll();
         _packageGObjectRefs.Clear();
         _checkBinding.Clear();
+        _packages.Clear();
+        _groups.Clear();
+        _currentDetailPkg = null;
     }
 }

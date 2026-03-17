@@ -16,6 +16,8 @@ public interface IUnprivilegedOperationService
     Task<List<AppstreamApp>> ListAppstreamFlatpak();
 
     Task<UnprivilegedOperationResult> FlatpakUpgrade();
+    
+    Task<List<FlatpakRemoteDto>> FlatpakListRemotes();
 
     Task<UnprivilegedOperationResult> UpdateFlatpakPackage(string package);
 
@@ -25,6 +27,10 @@ public interface IUnprivilegedOperationService
         string remote, string branch);
 
     Task<UnprivilegedOperationResult> FlatpakSyncRemoteAppstream();
+    
+    Task<UnprivilegedOperationResult> FlatpakRemoveRemote(string remoteName, string scope);
+    
+    Task<UnprivilegedOperationResult> FlatpakAddRemote(string remoteName, string scope, string url);
 
     Task<SyncModel> CheckForApplicationUpdates();
 

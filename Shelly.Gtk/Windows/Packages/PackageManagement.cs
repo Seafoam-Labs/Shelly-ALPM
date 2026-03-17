@@ -70,6 +70,7 @@ public class PackageManagement(
 
         _refreshButton = (Button)builder.GetObject("sync_button")!;
         _removeButton = (Button)builder.GetObject("remove_button")!;
+        _removeButton.SetSensitive(false);
 
         _listStore = Gio.ListStore.New(AlpmPackageGObject.GetGType());
         _filter = CustomFilter.New(FilterPackage);
@@ -143,6 +144,7 @@ public class PackageManagement(
             void OnToggled(CheckButton s, EventArgs e)
             {
                 pkgObj.IsSelected = s.GetActive();
+                _removeButton.SetSensitive(AnySelected());
             }
 
             void OnExternalToggle(object? s, EventArgs e)
@@ -325,6 +327,18 @@ public class PackageManagement(
         }
     }
 
+    private bool AnySelected()
+    {
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is AlpmPackageGObject { IsSelected: true })
+                return true;
+        }
+
+        return false;
+    }
+
     public void Dispose()
     {
         _cts.Cancel();
@@ -333,5 +347,7 @@ public class PackageManagement(
         _listStore.RemoveAll();
         _packageGObjectRefs.Clear();
         _checkBinding.Clear();
+        _packages.Clear();
+        _groups.Clear();
     }
 }

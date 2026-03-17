@@ -119,27 +119,27 @@ public class FlathubSearchCommand : AsyncCommand<FlathubSearchSettings>
 
     private List<Apps> SearchAllRepos(FlatpakManager manager, string query = "")
     {
-        var remotes = manager.ListRemotes();
+        var remotes = manager.ListRemotesWithDetails();
         
         Console.WriteLine("Remotes: " + string.Join(", ", remotes));
         
         var appsList = new List<Apps>();
         foreach (var remote in remotes)
         {
-            var apps = manager.GetAvailableAppsFromAppstream(remote);
+            var apps = manager.GetAvailableAppsFromAppstream(remote.Name);
             if (apps is not [])
             {
                 apps = apps.Where(x => x.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                                        x.Id.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
-                appsList.AddRange(apps.Select(y => new Apps(y.Name, y.Id, y.Summary, remote)));
+                appsList.AddRange(apps.Select(y => new Apps(y.Name, y.Id, y.Summary, remote.Name)));
             }
             else
             {
-                var remoteApps = manager.GetAvailableAppsFromRemote(remote);
+                var remoteApps = manager.GetAvailableAppsFromRemote(remote.Name);
                 remoteApps = remoteApps.Where(x =>
                     x.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                     x.Name.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
-                appsList.AddRange(remoteApps.Select(y => new Apps(y.Name, y.Id, y.Summary, remote)));
+                appsList.AddRange(remoteApps.Select(y => new Apps(y.Name, y.Id, y.Summary, remote.Name)));
             }
         }
 

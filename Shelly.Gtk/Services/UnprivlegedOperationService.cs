@@ -195,9 +195,41 @@ public class UnprivilegedOperationService : IUnprivilegedOperationService
         return await ExecuteUnprivilegedCommandAsync("Upgrade flatpak", "flatpak upgrade");
     }
 
+    public async Task<List<FlatpakRemoteDto>> FlatpakListRemotes()
+    {
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak list remotes", "flatpak list-remotes", "-j");
+        var json = StripBom(result.Output.Trim());
+        return JsonSerializer.Deserialize<List<FlatpakRemoteDto>>(json,
+            ShellyGtkJsonContext.Default.ListFlatpakRemoteDto) ?? [];
+    }
+
     public async Task<UnprivilegedOperationResult> FlatpakSyncRemoteAppstream()
     {
         return await ExecuteUnprivilegedCommandAsync("Sync remote", "flatpak sync-remote-appstream");
+    }
+
+    public async Task<UnprivilegedOperationResult> FlatpakRemoveRemote(string remoteName, string scope)
+    {
+        if (scope == "user")
+        {
+            return await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak remove-remotes", remoteName,
+                "--system", "false");
+        }
+
+        return await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak remove-remotes", remoteName, "--system",
+            "true");
+    }
+
+    public async Task<UnprivilegedOperationResult> FlatpakAddRemote(string remoteName, string scope, string url)
+    {
+        if (scope == "user")
+        {
+            return await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak add-remotes", remoteName,
+                "--remote-url", url, "--system", "false");
+        }
+
+        return await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak add-remotes", remoteName, "--remote-url",
+            url, "--system", "true");
     }
 
     public async Task<ulong> GetFlatpakAppDataAsync(string remote, string app, string arch)

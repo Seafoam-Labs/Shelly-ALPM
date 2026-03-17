@@ -4,8 +4,9 @@ namespace Shelly.Gtk.UiModels;
 
 public class FlatpakRemoteDto
 {
-    [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
-    [JsonPropertyName("scope")]
+   
     public string Scope { get; set; } = string.Empty;
+    
+    public string Url { get; set; } = string.Empty;
 }

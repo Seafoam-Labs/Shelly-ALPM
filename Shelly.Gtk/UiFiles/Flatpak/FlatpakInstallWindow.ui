@@ -39,6 +39,7 @@
                                         <property name="margin-bottom">8</property>
                                         <property name="margin-start">8</property>
                                         <property name="margin-end">8</property>
+                                        <property name="margin-top">8</property>
                                         <property name="spacing">8</property>
                                         <child>
                                             <object class="GtkButton" id="overlay_back_button">
@@ -97,7 +98,6 @@
                                                                 <property name="valign">start</property>
                                                             </object>
                                                         </child>
-
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">vertical</property>
@@ -249,6 +249,204 @@
                                 </child>
                             </object>
                         </child>
+                        <child type="overlay">
+                            <object class="GtkBox" id="overlay_remote_ref">
+                                <property name="visible">false</property>
+                                <property name="orientation">vertical</property>
+                                <property name="halign">fill</property>
+                                <property name="valign">fill</property>
+                                <style>
+                                    <class name="background"/>
+                                </style>
+                                <child>
+                                    <object class="GtkBox">
+                                        <property name="orientation">horizontal</property>
+                                        <property name="margin-bottom">8</property>
+                                        <property name="margin-top">8</property>
+                                        <property name="margin-start">8</property>
+                                        <property name="margin-end">8</property>
+                                        <property name="spacing">8</property>
+                                        <child>
+                                            <object class="GtkButton" id="overlay_remote_back_button">
+                                                <property name="icon-name">go-previous-symbolic</property>
+                                                <property name="tooltip-text">Back</property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="hexpand">true</property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkButton" id="overlay_delete_remote_button">
+                                                <property name="label">Delete Selected Remote</property>
+                                                <style>
+                                                    <class name="destructive-action"/>
+                                                </style>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkButton" id="overlay_add_remote_button">
+                                                <property name="label">Add Remote</property>
+                                                <style>
+                                                    <class name="suggested-action"/>
+                                                </style>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkSeparator">
+                                        <property name="orientation">horizontal</property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkScrolledWindow">
+                                        <property name="overlay-scrolling">false</property>
+                                        <property name="vexpand">true</property>
+                                        <property name="hexpand">true</property>
+                                        <child>
+                                            <object class="GtkListView" id="list_remotes"/>
+                                        </child>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child type="overlay">
+                            <object class="GtkBox" id="overlay_add_remote">
+                                <property name="visible">false</property>
+                                <property name="orientation">vertical</property>
+                                <property name="halign">fill</property>
+                                <property name="valign">fill</property>
+                                <style>
+                                    <class name="background"/>
+                                </style>
+                                <child>
+                                    <object class="GtkBox">
+                                        <property name="orientation">horizontal</property>
+                                        <property name="margin-bottom">8</property>
+                                        <property name="margin-top">8</property>
+                                        <property name="margin-start">8</property>
+                                        <property name="margin-end">8</property>
+                                        <property name="spacing">8</property>
+                                        <child>
+                                            <object class="GtkButton" id="overlay_add_remote_back_button">
+                                                <property name="icon-name">go-previous-symbolic</property>
+                                                <property name="tooltip-text">Back</property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="hexpand">true</property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkLabel">
+                                                <property name="label">Add New Flatpak Remote</property>
+                                                <style>
+                                                    <class name="title-2"/>
+                                                </style>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="hexpand">true</property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkButton" id="overlay_add_remote_confirm_button">
+                                                <property name="label">Add</property>
+                                                <style>
+                                                    <class name="suggested-action"/>
+                                                </style>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkSeparator">
+                                        <property name="orientation">horizontal</property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkBox">
+                                        <property name="orientation">vertical</property>
+                                        <property name="spacing">16</property>
+                                        <property name="margin-top">48</property>
+                                        <property name="margin-bottom">48</property>
+                                        <property name="margin-start">128</property>
+                                        <property name="margin-end">128</property>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="orientation">vertical</property>
+                                                <property name="spacing">4</property>
+                                                <child>
+                                                    <object class="GtkLabel">
+                                                        <property name="label">Remote Name</property>
+                                                        <property name="halign">start</property>
+                                                        <style>
+                                                            <class name="bold"/>
+                                                        </style>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkEntry" id="overlay_add_remote_name_entry">
+                                                        <property name="placeholder-text">e.g., flathub</property>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="orientation">vertical</property>
+                                                <property name="spacing">4</property>
+                                                <child>
+                                                    <object class="GtkLabel">
+                                                        <property name="label">Remote URL</property>
+                                                        <property name="halign">start</property>
+                                                        <style>
+                                                            <class name="bold"/>
+                                                        </style>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkEntry" id="overlay_add_remote_url_entry">
+                                                        <property name="placeholder-text">e.g., https://flathub.org/repo/flathub.flatpakrepo</property>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="orientation">vertical</property>
+                                                <property name="spacing">4</property>
+                                                <child>
+                                                    <object class="GtkLabel">
+                                                        <property name="label">Scope</property>
+                                                        <property name="halign">start</property>
+                                                        <style>
+                                                            <class name="bold"/>
+                                                        </style>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkDropDown" id="overlay_add_remote_scope_dropdown">
+                                                        <property name="model">
+                                                            <object class="GtkStringList">
+                                                                <items>
+                                                                    <item>user</item>
+                                                                    <item>system</item>
+                                                                </items>
+                                                            </object>
+                                                        </property>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
                     </object>
                 </child>
                 <child>
@@ -256,9 +454,8 @@
                         <property name="orientation">vertical</property>
                         <property name="spacing">5</property>
                         <property name="margin-bottom">10</property>
-                        <property name="margin-start">10</property>
+                        <property name="margin-top">8</property>
                         <property name="margin-end">10</property>
-                        <property name="halign">baseline</property>
                         <child>
                             <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
@@ -285,13 +482,20 @@
                                 <child>
                                     <object class="GtkListBox" id="category_list">
                                         <property name="selection-mode">single</property>
+                                        <property name="width-request">160</property>
                                         <property name="vexpand">true</property>
-                                        <property name="halign">start</property>
                                         <style>
                                             <class name="navigation-sidebar"/>
                                         </style>
                                     </object>
                                 </child>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkButton" id="remote_ref_management">
+                                <property name="width-request">160</property>
+                                <property name="valign">end</property>
+                                <property name="label">Manage Remote References</property>
                             </object>
                         </child>
                     </object>

@@ -17,6 +17,7 @@ public class PackageUpdate(
     IConfigService configService,
     IGenericQuestionService genericQuestionService) : IShellyWindow
 {
+    private readonly CancellationTokenSource _cts = new();
     private Box _box = null!;
     private ColumnView _columnView = null!;
     private SingleSelection _selectionModel = null!;
@@ -360,6 +361,8 @@ public class PackageUpdate(
 
     public void Dispose()
     {
+        _cts.Cancel();
+        _cts.Dispose();
         _listStore.RemoveAll();
         _packageGObjectRefs.Clear();
         _checkBinding.Clear();

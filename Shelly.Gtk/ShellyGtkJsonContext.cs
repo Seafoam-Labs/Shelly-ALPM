@@ -38,6 +38,8 @@ namespace Shelly.Gtk;
 [JsonSerializable(typeof(Hit))]
 [JsonSerializable(typeof(List<Hit>))]
 [JsonSerializable(typeof(FlatpakRemoteRefInfo))]
+[JsonSerializable(typeof(List<FlatpakRemoteRefInfo>))]
+[JsonSerializable(typeof(FlatpakRemoteDto))]
 internal partial class ShellyGtkJsonContext : JsonSerializerContext
 {
     
