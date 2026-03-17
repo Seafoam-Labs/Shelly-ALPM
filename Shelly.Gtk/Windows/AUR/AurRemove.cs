@@ -4,11 +4,16 @@ using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.AUR.GObjects;
+
 // ReSharper disable CollectionNeverQueried.Local
 
 namespace Shelly.Gtk.Windows.AUR;
 
-public class AurRemove(IPrivilegedOperationService privilegedOperationService, ILockoutService lockoutService, IConfigService configService, IGenericQuestionService genericQuestionService)
+public class AurRemove(
+    IPrivilegedOperationService privilegedOperationService,
+    ILockoutService lockoutService,
+    IConfigService configService,
+    IGenericQuestionService genericQuestionService)
     : IShellyWindow
 {
     private Box _box = null!;
@@ -22,9 +27,16 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
     private SignalListItemFactory _checkFactory = null!;
     private SignalListItemFactory _nameFactory = null!;
     private SignalListItemFactory _versionFactory = null!;
-    private Dictionary<ColumnViewCell, (SignalHandler<CheckButton> OnToggled, EventHandler OnExternalToggle)> _checkBinding = [];
+
+    private Dictionary<ColumnViewCell, (SignalHandler<CheckButton> OnToggled, EventHandler OnExternalToggle)>
+        _checkBinding = [];
+
     private readonly List<AurPackageGObject> _packageGObjectRefs = [];
-   
+    private ColumnViewColumn _checkColumn = null!;
+    private ColumnViewColumn _nameColumn = null!;
+    private ColumnViewColumn _versionColumn = null!;
+    private Button _removeButton = null!;
+
 
     public Widget CreateWindow()
     {
@@ -33,11 +45,11 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
         _columnView = (ColumnView)builder.GetObject("package_grid")!;
         var searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
 
-        var checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
-        var nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
-        var versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
-        var removeButton = (Button)builder.GetObject("remove_button")!;
-
+        _checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
+        _nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
+        _versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
+        _removeButton = (Button)builder.GetObject("remove_button")!;
+        _removeButton.SetSensitive(false);
         _listStore = Gio.ListStore.New(AurPackageGObject.GetGType());
         _filter = CustomFilter.New(FilterPackage);
         _filterListModel = FilterListModel.New(_listStore, _filter);
@@ -45,10 +57,10 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
         _selectionModel.CanUnselect = true;
         _columnView.SetModel(_selectionModel);
 
-        SetupColumns(checkColumn, nameColumn, versionColumn);
+        SetupColumns(_checkColumn, _nameColumn, _versionColumn);
 
         ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.End);
-        
+
         _columnView.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
         _columnView.OnActivate += (_, _) =>
         {
@@ -63,8 +75,8 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
             _searchText = searchEntry.GetText();
             ApplyFilter();
         };
-        removeButton.OnClicked += (_, _) => { _ = RemovePackagesAsync(); };
-        
+        _removeButton.OnClicked += (_, _) => { _ = RemovePackagesAsync(); };
+
         return _box;
     }
 
@@ -73,14 +85,15 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
         if (obj is not AurPackageGObject pkgObj || pkgObj.Package == null)
             return false;
 
-        return string.IsNullOrWhiteSpace(_searchText) || pkgObj.Package.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
+        return string.IsNullOrWhiteSpace(_searchText) ||
+               pkgObj.Package.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
     }
-    
+
     private void ApplyFilter()
     {
         _filter.Changed(FilterChange.Different);
     }
-    
+
     private void SetupColumns(ColumnViewColumn checkColumn, ColumnViewColumn nameColumn, ColumnViewColumn versionColumn)
     {
         var checkFactory = _checkFactory = SignalListItemFactory.New();
@@ -108,6 +121,7 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
             void OnToggled(CheckButton s, EventArgs e)
             {
                 pkgObj.IsSelected = s.GetActive();
+                _removeButton.SetSensitive(AnySelected());
             }
 
             void OnExternalToggle(object? s, EventArgs e)
@@ -122,7 +136,8 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
         checkFactory.OnUnbind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
-            if (listItem.GetItem() is not AurPackageGObject pkgObj || listItem.GetChild() is not CheckButton checkButton) return;
+            if (listItem.GetItem() is not AurPackageGObject pkgObj ||
+                listItem.GetChild() is not CheckButton checkButton) return;
             if (_checkBinding.Remove(listItem, out var handlers))
             {
                 pkgObj.OnSelectionToggled -= handlers.OnExternalToggle;
@@ -131,7 +146,7 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
         };
 
         checkColumn.SetFactory(checkFactory);
-        
+
         var nameFactory = _nameFactory = SignalListItemFactory.New();
         nameFactory.OnSetup += (_, args) =>
         {
@@ -148,7 +163,7 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
             label.Halign = Align.Start;
         };
         nameColumn.SetFactory(nameFactory);
-        
+
         var versionFactory = _versionFactory = SignalListItemFactory.New();
         versionFactory.OnSetup += (_, args) =>
         {
@@ -166,6 +181,7 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
         };
         versionColumn.SetFactory(versionFactory);
     }
+
     private async Task LoadDataAsync(CancellationToken ct = default)
     {
         try
@@ -223,11 +239,11 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
                     return;
                 }
             }
-            
+
             try
             {
                 lockoutService.Show($"Installing...");
-                
+
                 try
                 {
                     //do work
@@ -242,7 +258,7 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
                 finally
                 {
                     lockoutService.Hide();
-                    
+
                     var args = new ToastMessageEventArgs(
                         $"Updated {selectedPackages.Count} Package(s)"
                     );
@@ -254,6 +270,18 @@ public class AurRemove(IPrivilegedOperationService privilegedOperationService, I
                 Console.WriteLine($"Failed to remove packages: {e.Message}");
             }
         }
+    }
+
+    private bool AnySelected()
+    {
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is AurUpdateGObject { IsSelected: true })
+                return true;
+        }
+
+        return false;
     }
 
     public void Dispose()

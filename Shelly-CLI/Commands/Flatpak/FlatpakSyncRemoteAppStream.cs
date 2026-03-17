@@ -5,7 +5,7 @@ using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Flatpak;
 
-public class FlatpakSyncRemoteAppStream  : Command
+public class FlatpakSyncRemoteAppStream : Command
 {
     public override int Execute([NotNull] CommandContext context)
     {

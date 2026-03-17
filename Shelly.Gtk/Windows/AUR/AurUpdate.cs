@@ -4,13 +4,18 @@ using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.AUR.GObjects;
+
 // ReSharper disable CollectionNeverQueried.Local
 
 namespace Shelly.Gtk.Windows.AUR;
 
-public class AurUpdate(IPrivilegedOperationService privilegedOperationService, ILockoutService lockoutService, IConfigService configService, IGenericQuestionService genericQuestionService) : IShellyWindow
+public class AurUpdate(
+    IPrivilegedOperationService privilegedOperationService,
+    ILockoutService lockoutService,
+    IConfigService configService,
+    IGenericQuestionService genericQuestionService) : IShellyWindow
 {
-     private Box _box = null!;
+    private Box _box = null!;
     private readonly CancellationTokenSource _cts = new();
     private ColumnView _columnView = null!;
     private SingleSelection _selectionModel = null!;
@@ -21,8 +26,15 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
     private SignalListItemFactory _checkFactory = null!;
     private SignalListItemFactory _nameFactory = null!;
     private SignalListItemFactory _versionFactory = null!;
-    private Dictionary<ColumnViewCell, (SignalHandler<CheckButton> OnToggled, EventHandler OnExternalToggle)> _checkBinding = [];
+
+    private Dictionary<ColumnViewCell, (SignalHandler<CheckButton> OnToggled, EventHandler OnExternalToggle)>
+        _checkBinding = [];
+
     private readonly List<AurUpdateGObject> _packageGObjectRefs = [];
+    private ColumnViewColumn _checkColumn = null!;
+    private ColumnViewColumn _nameColumn = null!;
+    private ColumnViewColumn _versionColumn = null!;
+    private Button _updateButton = null!;
 
     public Widget CreateWindow()
     {
@@ -31,10 +43,17 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
         _columnView = (ColumnView)builder.GetObject("package_grid")!;
         var searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
 
-        var checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
-        var nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
-        var versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
-        var updateButton = (Button)builder.GetObject("update_button")!;
+        _checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
+        _checkColumn.Resizable = true;
+
+        _nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
+        _nameColumn.Resizable = true;
+
+        _versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
+        _versionColumn.Resizable = true;
+
+        _updateButton = (Button)builder.GetObject("update_button")!;
+        _updateButton.SetSensitive(false);
 
         _listStore = Gio.ListStore.New(AurUpdateGObject.GetGType());
         _filter = CustomFilter.New(FilterPackage);
@@ -43,8 +62,8 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
         _selectionModel.CanUnselect = true;
         _columnView.SetModel(_selectionModel);
 
-        SetupColumns(checkColumn, nameColumn, versionColumn);
-        
+        SetupColumns(_checkColumn, _nameColumn, _versionColumn);
+
         ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.End);
 
         _columnView.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
@@ -61,8 +80,8 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
             _searchText = searchEntry.GetText();
             ApplyFilter();
         };
-        updateButton.OnClicked += (_, _) => { _ = RemovePackagesAsync(); };
-        
+        _updateButton.OnClicked += (_, _) => { _ = RemovePackagesAsync(); };
+
         return _box;
     }
 
@@ -71,14 +90,15 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
         if (obj is not AurUpdateGObject pkgObj || pkgObj.Package == null)
             return false;
 
-        return string.IsNullOrWhiteSpace(_searchText) || pkgObj.Package.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
+        return string.IsNullOrWhiteSpace(_searchText) ||
+               pkgObj.Package.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
     }
-    
+
     private void ApplyFilter()
     {
         _filter.Changed(FilterChange.Different);
     }
-    
+
     private void SetupColumns(ColumnViewColumn checkColumn, ColumnViewColumn nameColumn, ColumnViewColumn versionColumn)
     {
         var checkFactory = _checkFactory = SignalListItemFactory.New();
@@ -106,6 +126,7 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
             void OnToggled(CheckButton s, EventArgs e)
             {
                 pkgObj.IsSelected = s.GetActive();
+                _updateButton.SetSensitive(AnySelected());
             }
 
             void OnExternalToggle(object? s, EventArgs e)
@@ -120,7 +141,8 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
         checkFactory.OnUnbind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
-            if (listItem.GetItem() is not AurUpdateGObject pkgObj || listItem.GetChild() is not CheckButton checkButton) return;
+            if (listItem.GetItem() is not AurUpdateGObject pkgObj ||
+                listItem.GetChild() is not CheckButton checkButton) return;
             if (_checkBinding.Remove(listItem, out var handlers))
             {
                 pkgObj.OnSelectionToggled -= handlers.OnExternalToggle;
@@ -129,7 +151,7 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
         };
 
         checkColumn.SetFactory(checkFactory);
-        
+
         var nameFactory = _nameFactory = SignalListItemFactory.New();
         nameFactory.OnSetup += (_, args) =>
         {
@@ -146,7 +168,7 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
             label.Halign = Align.Start;
         };
         nameColumn.SetFactory(nameFactory);
-        
+
         var versionFactory = _versionFactory = SignalListItemFactory.New();
         versionFactory.OnSetup += (_, args) =>
         {
@@ -164,6 +186,7 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
         };
         versionColumn.SetFactory(versionFactory);
     }
+
     private async Task LoadDataAsync(CancellationToken ct = default)
     {
         try
@@ -221,11 +244,11 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
                     return;
                 }
             }
-            
+
             try
             {
                 lockoutService.Show($"Installing...");
-                
+
                 var packageBuilds = await privilegedOperationService.GetAurPackageBuild(selectedPackages);
 
                 if (packageBuilds.Count != 0)
@@ -233,17 +256,18 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
                     foreach (var pkgbuild in packageBuilds)
                     {
                         if (pkgbuild.PkgBuild == null) continue;
-                        
-                        var buildArgs = new PackageBuildEventArgs($"Displaying Package Build {pkgbuild.Name}", pkgbuild.PkgBuild);
+
+                        var buildArgs = new PackageBuildEventArgs($"Displaying Package Build {pkgbuild.Name}",
+                            pkgbuild.PkgBuild);
                         genericQuestionService.RaisePackageBuild(buildArgs);
-                        
+
                         if (!await buildArgs.ResponseTask)
                         {
                             return;
                         }
                     }
                 }
-                
+
                 try
                 {
                     //do work
@@ -258,11 +282,11 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
                 finally
                 {
                     lockoutService.Hide();
-                    
+
                     var args = new ToastMessageEventArgs(
                         $"Updated {selectedPackages.Count} Package(s)"
                     );
-                    genericQuestionService.RaiseToastMessage(args);     
+                    genericQuestionService.RaiseToastMessage(args);
                 }
             }
             catch (Exception e)
@@ -270,6 +294,18 @@ public class AurUpdate(IPrivilegedOperationService privilegedOperationService, I
                 Console.WriteLine($"Failed to remove packages: {e.Message}");
             }
         }
+    }
+
+    private bool AnySelected()
+    {
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is AurUpdateGObject { IsSelected: true })
+                return true;
+        }
+
+        return false;
     }
 
     public void Dispose()

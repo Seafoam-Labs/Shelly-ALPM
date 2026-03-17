@@ -45,6 +45,9 @@ public class Settings(
         var saveButton = (Button)builder.GetObject("save_button")!;
         saveButton.OnClicked += (s, e) => { NavigationToHomeRequested?.Invoke(); };
 
+        var removeLockButton = (Button)builder.GetObject("rm_db_lock_button")!;
+        removeLockButton.OnClicked += (s, e) => { _ = RemoveDbLockAsync(); };
+
         var versionLabel = (Label)builder.GetObject("version_label")!;
         versionLabel.SetLabel(
             $"v{System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "Unknown"}");
@@ -239,6 +242,20 @@ public class Settings(
         }
     }
 
+    private async Task RemoveDbLockAsync()
+    {
+        var result = await privilegedOperationService.RemoveDbLockAsync();
+
+        if (result.Success)
+        {
+            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Database lock removed"));
+        }
+        else
+        {
+            Console.Error.WriteLine($"Failed to remove database lock: {result.Error}");
+        }
+    }
+    
     public void Dispose()
     {
     }

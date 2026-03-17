@@ -44,6 +44,11 @@ public class PackageManagement(
     private DropDown _groupDropDown = null!;
     private string _selectedGroup = "Any";
 
+    private ColumnViewColumn _checkColumn = null!;
+    private ColumnViewColumn _nameColumn = null!;
+    private ColumnViewColumn _sizeColumn = null!;
+    private ColumnViewColumn _versionColumn = null!;
+
 
     public Widget CreateWindow()
     {
@@ -54,13 +59,18 @@ public class PackageManagement(
         _cascadeDeleteCheck = (CheckButton)builder.GetObject("cascade_delete_check")!;
         _removeConfigsCheck = (CheckButton)builder.GetObject("remove_configs_check")!;
 
-        var checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
-        var nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
-        var sizeColumn = (ColumnViewColumn)builder.GetObject("size_column")!;
-        var versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
+        _checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
+        _checkColumn.Resizable = true;
+        _nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
+        _nameColumn.Resizable = true;
+        _sizeColumn = (ColumnViewColumn)builder.GetObject("size_column")!;
+        _sizeColumn.Resizable = true;
+        _versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
+        _versionColumn.Resizable = true;
 
         _refreshButton = (Button)builder.GetObject("sync_button")!;
         _removeButton = (Button)builder.GetObject("remove_button")!;
+        _removeButton.SetSensitive(false);
 
         _listStore = Gio.ListStore.New(AlpmPackageGObject.GetGType());
         _filter = CustomFilter.New(FilterPackage);
@@ -71,7 +81,7 @@ public class PackageManagement(
         _groupDropDown = (DropDown)builder.GetObject("grouping_selection")!;
 
 
-        SetupColumns(checkColumn, nameColumn, sizeColumn, versionColumn);
+        SetupColumns(_checkColumn, _nameColumn, _sizeColumn, _versionColumn);
 
         ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.End);
         ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.End);
@@ -134,6 +144,7 @@ public class PackageManagement(
             void OnToggled(CheckButton s, EventArgs e)
             {
                 pkgObj.IsSelected = s.GetActive();
+                _removeButton.SetSensitive(AnySelected());
             }
 
             void OnExternalToggle(object? s, EventArgs e)
@@ -219,7 +230,7 @@ public class PackageManagement(
             {
                 return false;
             }
-            
+
             if (string.IsNullOrWhiteSpace(_searchText))
                 return true;
 
@@ -231,98 +242,112 @@ public class PackageManagement(
     }
 
     private async Task LoadDataAsync(CancellationToken ct = default)
+    {
+        try
         {
+            _packages = await privilegedOperationService.GetInstalledPackagesAsync();
+            _groups = _packages.SelectMany(x => x.Groups).Distinct().ToList();
+            _groups.Insert(0, "Any");
+            _groupsStringList = StringList.New(_groups.ToArray());
+            _groupDropDown.SetModel(_groupsStringList);
+            ct.ThrowIfCancellationRequested();
+            GLib.Functions.IdleAdd(0, () =>
+            {
+                _listStore.RemoveAll();
+                _packageGObjectRefs.Clear();
+                foreach (var package in _packages)
+                {
+                    var pkgObj = new AlpmPackageGObject { Package = package };
+                    _packageGObjectRefs.Add(pkgObj);
+                    _listStore.Append(pkgObj);
+                }
+
+                return false;
+            });
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Failed to load packages: {e.Message}");
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        _filter.Changed(FilterChange.Different);
+    }
+
+    private async Task RemoveSelectedAsync()
+    {
+        var selectedPackages = new List<string>();
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is AlpmPackageGObject { IsSelected: true, Package: not null } pkgObj)
+            {
+                selectedPackages.Add(pkgObj.Package.Name);
+            }
+        }
+
+        if (selectedPackages.Count != 0)
+        {
+            if (!configService.LoadConfig().NoConfirm)
+            {
+                var args = new GenericQuestionEventArgs(
+                    "Remove Packages?", string.Join("\n", selectedPackages)
+                );
+
+                genericQuestionService.RaiseQuestion(args);
+                if (!await args.ResponseTask)
+                {
+                    return;
+                }
+            }
+
             try
             {
-                _packages = await privilegedOperationService.GetInstalledPackagesAsync();
-                _groups = _packages.SelectMany(x => x.Groups).Distinct().ToList();
-                _groups.Insert(0, "Any");
-                _groupsStringList = StringList.New(_groups.ToArray());
-                _groupDropDown.SetModel(_groupsStringList);
-                ct.ThrowIfCancellationRequested();
-                GLib.Functions.IdleAdd(0, () =>
-                {
-                    _listStore.RemoveAll();
-                    _packageGObjectRefs.Clear();
-                    foreach (var package in _packages)
-                    {
-                        var pkgObj = new AlpmPackageGObject { Package = package };
-                        _packageGObjectRefs.Add(pkgObj);
-                        _listStore.Append(pkgObj);
-                    }
-
-                    return false;
-                });
+                lockoutService.Show($"Removing...");
+                await privilegedOperationService.RemovePackagesAsync(selectedPackages, _cascadeDeleteCheck.Active,
+                    _removeConfigsCheck.Active);
+                await LoadDataAsync();
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Failed to load packages: {e.Message}");
+                Console.WriteLine($"Failed to install packages: {e.Message}");
             }
-        }
-
-        private void ApplyFilter()
-        {
-            _filter.Changed(FilterChange.Different);
-        }
-
-        private async Task RemoveSelectedAsync()
-        {
-            var selectedPackages = new List<string>();
-            for (uint i = 0; i < _listStore.GetNItems(); i++)
+            finally
             {
-                var item = _listStore.GetObject(i);
-                if (item is AlpmPackageGObject { IsSelected: true, Package: not null } pkgObj)
-                {
-                    selectedPackages.Add(pkgObj.Package.Name);
-                }
+                lockoutService.Hide();
+
+                var args = new ToastMessageEventArgs(
+                    $"Removed {selectedPackages.Count} Package(s)"
+                );
+
+                genericQuestionService.RaiseToastMessage(args);
             }
-
-            if (selectedPackages.Count != 0)
-            {
-                if (!configService.LoadConfig().NoConfirm)
-                {
-                    var args = new GenericQuestionEventArgs(
-                        "Remove Packages?", string.Join("\n", selectedPackages)
-                    );
-
-                    genericQuestionService.RaiseQuestion(args);
-                    if (!await args.ResponseTask)
-                    {
-                        return;
-                    }
-                }
-
-                try
-                {
-                    lockoutService.Show($"Removing...");
-                    await privilegedOperationService.RemovePackagesAsync(selectedPackages, _cascadeDeleteCheck.Active,
-                        _removeConfigsCheck.Active);
-                    await LoadDataAsync();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"Failed to install packages: {e.Message}");
-                }
-                finally
-                {
-                    lockoutService.Hide();
-
-                    var args = new ToastMessageEventArgs(
-                        $"Removed {selectedPackages.Count} Package(s)"
-                    );
-
-                    genericQuestionService.RaiseToastMessage(args);
-                }
-            }
-        }
-
-        public void Dispose()
-        {
-            _cts.Cancel();
-            _cts.Dispose();
-
-            _listStore.RemoveAll();
-            _packageGObjectRefs.Clear();
-            _checkBinding.Clear();
         }
     }
+
+    private bool AnySelected()
+    {
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is AlpmPackageGObject { IsSelected: true })
+                return true;
+        }
+
+        return false;
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+
+        _listStore.RemoveAll();
+        _packageGObjectRefs.Clear();
+        _checkBinding.Clear();
+        _packages.Clear();
+        _groups.Clear();
+    }
+}

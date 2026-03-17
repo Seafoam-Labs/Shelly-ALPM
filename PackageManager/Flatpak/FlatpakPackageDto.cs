@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace PackageManager.Flatpak;
@@ -17,10 +15,12 @@ public class FlatpakPackageDto
     public int Kind { get; init; }
     public string? IconPath { get; set; }
     public string Description { get; set; } = string.Empty;
-
+    
     public List<AppstreamRelease> Releases { get; set; } = [];
     
     public List<string> Categories { get; set; } = [];
+    
+    public string remote { get; set; } = string.Empty;
 }
 
 [JsonSourceGenerationOptions(

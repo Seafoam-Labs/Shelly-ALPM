@@ -32,9 +32,14 @@ namespace Shelly.Gtk;
 [JsonSerializable(typeof(List<FlatpakPackageDto>))]
 [JsonSerializable(typeof(List<AppstreamRelease>))]
 [JsonSerializable(typeof(AppstreamRelease))]
+[JsonSerializable(typeof(List<AppstreamApp>))]
+[JsonSerializable(typeof(AppstreamApp))]
 [JsonSerializable(typeof(FlatpakApiResponse))]
 [JsonSerializable(typeof(Hit))]
 [JsonSerializable(typeof(List<Hit>))]
+[JsonSerializable(typeof(FlatpakRemoteRefInfo))]
+[JsonSerializable(typeof(List<FlatpakRemoteRefInfo>))]
+[JsonSerializable(typeof(FlatpakRemoteDto))]
 internal partial class ShellyGtkJsonContext : JsonSerializerContext
 {
     

@@ -1,5 +1,3 @@
-using System;
-
 namespace Shelly.Gtk.UiModels;
 
 public class RssModel

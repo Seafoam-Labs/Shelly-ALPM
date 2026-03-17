@@ -16,7 +16,7 @@ public class FlatpakRemoveCommand : Command<FlatpakPackageSettings>
         }
 
         var manager = new FlatpakManager();
-        var result = manager.UninstallApp(settings.Packages);
+        var result = manager.UninstallApp(settings.Packages, settings.RemoveUnused);
 
         AnsiConsole.MarkupLine("[yellow]" + result.EscapeMarkup() + "[/]");
         return 0;
@@ -25,7 +25,7 @@ public class FlatpakRemoveCommand : Command<FlatpakPackageSettings>
     private static int HandleUiModeRemove(FlatpakPackageSettings settings)
     {
         var manager = new FlatpakManager();
-        var result = manager.UninstallApp(settings.Packages);
+        var result = manager.UninstallApp(settings.Packages, settings.RemoveUnused);
 
         Console.Error.WriteLine(result);
         return 0;

@@ -15,6 +15,7 @@
             <Type Name="Shelly_CLI.Commands.Standard.ListInstalledCommand" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.ListAvailableCommand" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.ListUpdatesCommand" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.Standard.ListReposCommand" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.PackageInformationCommand" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.PackageInformationSettings" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.PackageSettings" Dynamic="Required All"/>

@@ -92,7 +92,7 @@ public class AppstreamParser
             ProjectLicense = component.Element("project_license")?.Value ?? string.Empty,
             DeveloperName = component.Element("developer_name")?.Value
                 ?? component.Element("developer")?.Element("name")?.Value
-                ?? string.Empty
+                ?? string.Empty,
         };
 
         // Parse description

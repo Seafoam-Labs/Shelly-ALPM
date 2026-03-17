@@ -79,5 +79,6 @@ public class PasswordDialog(ICredentialManager credentialManager)
         box.Append(buttonBox);
 
         parentOverlay.AddOverlay(background);
+        passwordEntry.GrabFocus();
     }
 }

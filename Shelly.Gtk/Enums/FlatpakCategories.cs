@@ -2,7 +2,7 @@ namespace Shelly.Gtk.Enums;
 
 public enum FlatpakCategories
 {
-    None,
+    AllApplications,
     AudioVideo,
     Development,
     Education,

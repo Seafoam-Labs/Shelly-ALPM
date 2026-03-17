@@ -17,9 +17,9 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Version>2.0.1</Version>
+        <Version>2.0.2</Version>
         <AssemblyName>shelly-ui</AssemblyName>
-        <AssemblyVersion>2.0.1</AssemblyVersion>
+        <AssemblyVersion>2.0.2</AssemblyVersion>
         <AssemblyTitle>Shelly GTK UI</AssemblyTitle>
         <Description>Shelly GTK is a arch linux package manager</Description>
         <Company>ZC Development</Company>
@@ -33,7 +33,6 @@
     <ItemGroup>
         <PackageReference Include="GirCore.Gtk-4.0" Version="0.7.0"/>
         <PackageReference Include="GirCore.GObject-2.0.Integration" Version="0.7.0"/>
-        <PackageReference Include="LiteDB" Version="6.0.0-prerelease.75" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.1" />
         <PackageReference Include="Tmds.DBus.Protocol" Version="0.90.3" />

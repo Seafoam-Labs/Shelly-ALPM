@@ -37,6 +37,7 @@ public class FlatpakListCommand : Command<DefaultSettings>
         table.AddColumn("Arch");
         table.AddColumn("Branch");
         table.AddColumn("Summary");
+        table.AddColumn("Remote");
 
         foreach (var pkg in packages.OrderBy(p => p.Id))
         {
@@ -46,7 +47,8 @@ public class FlatpakListCommand : Command<DefaultSettings>
                 pkg.Version,
                 pkg.Arch,
                 pkg.Version,
-                pkg.Summary.EscapeMarkup().Truncate(50)
+                pkg.Summary.EscapeMarkup().Truncate(50),
+                pkg.remote
             );
         }
 

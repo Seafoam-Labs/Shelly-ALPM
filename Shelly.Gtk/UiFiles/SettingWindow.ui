@@ -115,6 +115,15 @@
                 </style>
               </object>
             </child>
+            <child>
+              <object class="GtkButton" id="rm_db_lock_button">
+                <property name="label">Remove db.lock</property>
+                <property name="margin-top">10</property>
+                <style>
+                  <class name="suggested-action"/>
+                </style>
+              </object>
+            </child>
           </object>
         </child>
       </object>

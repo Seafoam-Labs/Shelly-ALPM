@@ -6,6 +6,7 @@ public class GenericQuestionService : IGenericQuestionService
 {
     public event EventHandler<GenericQuestionEventArgs>? Question;
     public event EventHandler<PackageBuildEventArgs>? PackageBuildRequested;
+    public event EventHandler<GenericDialogEventArgs>? Dialog;
     
     public event EventHandler<ToastMessageEventArgs>? ToastMessageRequested;
 
@@ -17,6 +18,11 @@ public class GenericQuestionService : IGenericQuestionService
     public void RaisePackageBuild(PackageBuildEventArgs args)
     {
         PackageBuildRequested?.Invoke(this, args);
+    }
+
+    public void RaiseDialog(GenericDialogEventArgs args)
+    {
+        Dialog?.Invoke(this, args);
     }
     
     public void RaiseToastMessage(ToastMessageEventArgs args)

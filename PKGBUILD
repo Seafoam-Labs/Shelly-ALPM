@@ -1,7 +1,7 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgname=shelly
-pkgver=2.0.1
+pkgver=2.0.2
 pkgrel=1
 pkgdesc="Shelly: A Modern Arch Package Manager"
 arch=('x86_64')
@@ -23,6 +23,7 @@ depends=(
 )
 optdepends=(
     'flatpak:  For supporting flatpak implementation.'
+    'archlinux-appstream-data: package icons and metadata'
 )
 makedepends=('dotnet-sdk-10.0')
 

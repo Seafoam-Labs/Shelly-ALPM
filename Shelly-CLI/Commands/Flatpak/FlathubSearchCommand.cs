@@ -8,7 +8,8 @@ namespace Shelly_CLI.Commands.Flatpak;
 
 public class FlathubSearchCommand : AsyncCommand<FlathubSearchSettings>
 {
-    public override async Task<int> ExecuteAsync([NotNull] CommandContext context, [NotNull] FlathubSearchSettings settings)
+    public override async Task<int> ExecuteAsync([NotNull] CommandContext context,
+        [NotNull] FlathubSearchSettings settings)
     {
         if (Program.IsUiMode)
         {
@@ -26,23 +27,10 @@ public class FlathubSearchCommand : AsyncCommand<FlathubSearchSettings>
             var manager = new FlatpakManager();
             if (settings.JsonOutput)
             {
-                var results = await manager.SearchFlathubJsonAsync(
-                        settings.Query, page: settings.Page,
-                        limit: settings.Limit, ct: CancellationToken.None);
-                await using var stdout = System.Console.OpenStandardOutput();
-                await using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-                await writer.WriteLineAsync(results);
-                await writer.FlushAsync();
-                return 0;
             }
             else
             {
-                var results = await manager.SearchFlathubAsync(
-                        settings.Query,
-                        page: settings.Page,
-                        limit: settings.Limit,
-                        ct: CancellationToken.None);
-
+                List<Apps> results = SearchAllRepos(manager, query: settings.Query);
                 Render(results, settings.Limit);
             }
 
@@ -55,31 +43,25 @@ public class FlathubSearchCommand : AsyncCommand<FlathubSearchSettings>
         }
     }
 
-    private static void Render(FlatpakApiResponse root, int limit)
+    private static void Render(List<Apps> root, int limit)
     {
         var table = new Table().Border(TableBorder.Rounded);
         table.AddColumn("Name");
         table.AddColumn("AppId");
         table.AddColumn("Summary");
+        table.AddColumn("Remote");
 
-        var count = 0;
-        if (root.hits is not null)
+        foreach (var item in root)
         {
-            foreach (var item in root.hits)
-            {
-                if (count++ >= limit) break;
-
-                table.AddRow(
-                    item.name.EscapeMarkup(),
-                    item.app_id.EscapeMarkup(),
-                    item.summary.EscapeMarkup().Truncate(70)
-                );
-            }
+            table.AddRow(
+                item.name.EscapeMarkup(),
+                item.app_id.EscapeMarkup(),
+                item.summary.EscapeMarkup().Truncate(70),
+                item.remote
+            );
         }
 
         AnsiConsole.Write(table);
-        AnsiConsole.MarkupLine(
-            $"[blue]Shown:[/] {Math.Min(limit, root?.hits?.Count ?? 0)} / [blue]Total Pages:[/] {root?.totalPages ?? 0} / [blue]Current Page:[/] {root?.page ?? 0} / [blue]Total hits:[/] {root?.totalHits ?? 0}");
     }
 
     private static async Task<int> HandleUiModeSearch(FlathubSearchSettings settings)
@@ -96,8 +78,8 @@ public class FlathubSearchCommand : AsyncCommand<FlathubSearchSettings>
             if (settings.JsonOutput)
             {
                 var results = await manager.SearchFlathubJsonAsync(
-                        settings.Query, page: settings.Page,
-                        limit: settings.Limit, ct: CancellationToken.None);
+                    settings.Query, page: settings.Page,
+                    limit: settings.Limit, ct: CancellationToken.None);
                 await using var stdout = System.Console.OpenStandardOutput();
                 await using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
                 await writer.WriteLineAsync(results);
@@ -107,10 +89,10 @@ public class FlathubSearchCommand : AsyncCommand<FlathubSearchSettings>
             else
             {
                 var results = await manager.SearchFlathubAsync(
-                        settings.Query,
-                        page: settings.Page,
-                        limit: settings.Limit,
-                        ct: CancellationToken.None);
+                    settings.Query,
+                    page: settings.Page,
+                    limit: settings.Limit,
+                    ct: CancellationToken.None);
 
                 var count = 0;
                 if (results.hits is not null)
@@ -134,4 +116,35 @@ public class FlathubSearchCommand : AsyncCommand<FlathubSearchSettings>
             return 1;
         }
     }
+
+    private List<Apps> SearchAllRepos(FlatpakManager manager, string query = "")
+    {
+        var remotes = manager.ListRemotesWithDetails();
+        
+        Console.WriteLine("Remotes: " + string.Join(", ", remotes));
+        
+        var appsList = new List<Apps>();
+        foreach (var remote in remotes)
+        {
+            var apps = manager.GetAvailableAppsFromAppstream(remote.Name);
+            if (apps is not [])
+            {
+                apps = apps.Where(x => x.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                                       x.Id.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+                appsList.AddRange(apps.Select(y => new Apps(y.Name, y.Id, y.Summary, remote.Name)));
+            }
+            else
+            {
+                var remoteApps = manager.GetAvailableAppsFromRemote(remote.Name);
+                remoteApps = remoteApps.Where(x =>
+                    x.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    x.Name.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+                appsList.AddRange(remoteApps.Select(y => new Apps(y.Name, y.Id, y.Summary, remote.Name)));
+            }
+        }
+
+        return appsList;
+    }
+
+    private record Apps(string name, string app_id, string summary, string remote);
 }

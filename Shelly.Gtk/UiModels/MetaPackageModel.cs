@@ -1,5 +1,3 @@
-
-
 namespace Shelly.Gtk.UiModels;
 
 public class MetaPackageModel(
