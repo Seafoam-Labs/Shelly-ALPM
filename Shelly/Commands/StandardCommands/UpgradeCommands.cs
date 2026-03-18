@@ -21,6 +21,15 @@ internal static class UpgradeCommands
             }
         };
 
+        manager.Question += (_, args) =>
+        {
+            lock (renderLock)
+            {
+                Console.Error.WriteLine();
+                QuestionHandler.HandleQuestion(args, true, noConfirm);
+            }
+        };
+
         manager.Progress += (_, args) =>
         {
             lock (renderLock)

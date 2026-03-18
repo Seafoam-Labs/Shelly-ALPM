@@ -38,13 +38,8 @@ public class QuestionHandler
 
         foreach (var replace in replaceArgs.Replaces)
         {
-            var response = ShowConfirmPrompt(
-                $"Replace {replace} with {replaceArgs.Repository}/{replaceArgs.PackageName}?",
-                defaultValue: true);
-            if (!response)
-            {
-                Console.WriteLine($"Skipping replacement of {replace}");
-            }
+            Console.WriteLine(
+                $"Replacement: {replaceArgs.Repository}/{replaceArgs.PackageName} replaces {replace}");
         }
     }
     public static void HandleQuestion(AlpmQuestionEventArgs question, bool uiMode = false, bool noConfirm = false)
@@ -65,11 +60,6 @@ public class QuestionHandler
         }
     }
     
-    /// <summary>
-    /// Displays an interactive selection prompt in the terminal.
-    /// Navigate with Up/Down arrow keys or type a number to jump directly.
-    /// Press Enter to confirm.
-    /// </summary>
     private static int ShowSelectionPrompt(string title, IList<string> choices)
     {
         int selected = 0;
@@ -154,70 +144,31 @@ public class QuestionHandler
         return selected;
     }
 
-    /// <summary>
-    /// Displays an interactive Yes/No confirmation prompt.
-    /// Navigate with Left/Right or Up/Down arrow keys, or type y/n.
-    /// Press Enter to confirm.
-    /// </summary>
+
     private static bool ShowConfirmPrompt(string title, bool defaultValue = true)
     {
-        bool value = defaultValue;
-        Console.CursorVisible = false;
-        Console.Write($"{title} ");
-
-        void Render()
-        {
-            int left = Console.CursorLeft;
-            if (value)
-            {
-                Console.ForegroundColor = ConsoleColor.Black;
-                Console.BackgroundColor = ConsoleColor.Green;
-                Console.Write(" Yes ");
-                Console.ResetColor();
-                Console.Write(" / No ");
-            }
-            else
-            {
-                Console.Write(" Yes / ");
-                Console.ForegroundColor = ConsoleColor.Black;
-                Console.BackgroundColor = ConsoleColor.Red;
-                Console.Write(" No ");
-                Console.ResetColor();
-            }
-
-            Console.Write("  ");
-        }
-
-        int lineStart = Console.CursorLeft;
-        Render();
+        string hint = defaultValue ? "[Y/n]" : "[y/N]";
+        Console.Write($"{title} {hint} ");
 
         while (true)
         {
             var key = Console.ReadKey(intercept: true);
-            switch (key.Key)
+            switch (key.KeyChar)
             {
-                case ConsoleKey.LeftArrow:
-                case ConsoleKey.UpArrow:
-                    value = true;
-                    break;
-                case ConsoleKey.RightArrow:
-                case ConsoleKey.DownArrow:
-                    value = false;
-                    break;
-                case ConsoleKey.Enter:
-                    Console.CursorVisible = true;
-                    Console.WriteLine();
-                    return value;
+                case 'y' or 'Y':
+                    Console.WriteLine("y");
+                    return true;
+                case 'n' or 'N':
+                    Console.WriteLine("n");
+                    return false;
                 default:
-                    if (key.KeyChar is 'y' or 'Y')
-                        value = true;
-                    else if (key.KeyChar is 'n' or 'N')
-                        value = false;
+                    if (key.Key == ConsoleKey.Enter)
+                    {
+                        Console.WriteLine(defaultValue ? "y" : "n");
+                        return defaultValue;
+                    }
                     break;
             }
-
-            Console.CursorLeft = lineStart;
-            Render();
         }
     }
 
