@@ -82,8 +82,7 @@ internal static class UpgradeCommands
 
         Console.WriteLine("Checking for system updates...");
         Console.WriteLine("Initializing and syncing repositories...");
-        manager.Initialize(true);
-        manager.Sync();
+        manager.InitializeWithSync();
         var packagesNeedingUpdate = manager.GetPackagesNeedingUpdate();
         if (packagesNeedingUpdate.Count == 0)
         {
