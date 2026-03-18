@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
-using Shelly_Notifications.Constants;
 using Shelly_Notifications.DbusHandlers;
+using Shelly_Notifications.Models;
 using Shelly_Notifications.Services;
 using Tmds.DBus.Protocol;
 using Tmds.DBus.SourceGenerator;
@@ -34,9 +34,42 @@ try
     var token = cts.Token;
 
 
+    var trayHandler = new StatusNotifierItemHandler();
+    connection.AddMethodHandler(trayHandler);
+
+    var menuHandler = new DBusMenuHandler(connection);
+    menuHandler.OnExitRequested += () =>
+    {
+        Console.WriteLine("Exit requested via tray menu.");
+        try
+        {
+            var appName = "shelly-ui";
+            var processes = Process.GetProcessesByName(appName);
+            foreach (var process in processes)
+            {
+                try
+                {
+                    process.Kill();
+                    process.WaitForExit(TimeSpan.FromSeconds(2));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to kill {appName} (PID: {process.Id}): {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error while trying to kill app: {ex.Message}");
+        }
+
+        Environment.Exit(0);
+    };
+    connection.AddMethodHandler(menuHandler);
+
     _ = Task.Run(async () =>
     {
-        var updates = new UpdateService();
+        var updates = new UpdateService(menuHandler);
         var update = await updates.CheckForUpdates();
         _ = new NotificationHandler().SendNotif(connection, $"Updates available: {update}");
         var time = DateTime.Now;
@@ -76,41 +109,6 @@ try
             }
         }
     }, token);
-
-
-    //Setup Status Notifier Item (Tray Icon)
-    var trayHandler = new StatusNotifierItemHandler();
-    connection.AddMethodHandler(trayHandler);
-
-    var menuHandler = new DBusMenuHandler(connection);
-    menuHandler.OnExitRequested += () =>
-    {
-        Console.WriteLine("Exit requested via tray menu.");
-        try
-        {
-            var appName = "shelly-ui";
-            var processes = Process.GetProcessesByName(appName);
-            foreach (var process in processes)
-            {
-                try
-                {
-                    process.Kill();
-                    process.WaitForExit(TimeSpan.FromSeconds(2));
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to kill {appName} (PID: {process.Id}): {ex.Message}");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error while trying to kill app: {ex.Message}");
-        }
-
-        Environment.Exit(0);
-    };
-    connection.AddMethodHandler(menuHandler);
 
     var trayServiceName = $"org.freedesktop.StatusNotifierItem-{Process.GetCurrentProcess().Id}-1";
     await connection.RequestNameAsync(trayServiceName);

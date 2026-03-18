@@ -68,6 +68,7 @@ sealed class Program
             application.AddAction(aboutAction);
 
             var contentArea = (Box)mainBuilder.GetObject("ContentArea")!;
+            var mainBox = (Box)mainBuilder.GetObject("MainBox")!;
             var homeButton = (Button)mainBuilder.GetObject("HomeButton")!;
             var settingsButton = (Button)mainBuilder.GetObject("SettingsButton")!;
             var mainSearchEntry = (SearchEntry)mainBuilder.GetObject("MainSearchEntry")!;
@@ -164,6 +165,18 @@ sealed class Program
             var lockoutOverlay = (Box)mainBuilder.GetObject("LockoutOverlay")!;
             var lockoutDescription = (Label)mainBuilder.GetObject("LockoutDescription")!;
             var lockoutProgressBar = (ProgressBar)mainBuilder.GetObject("LockoutProgressBar")!;
+
+            var keyController = EventControllerKey.New();
+            keyController.OnKeyPressed += (_, args) =>
+            {
+                if (!ShouldHandleNavigationShortcut())
+                {
+                    return false;
+                }
+
+                return TryHandleNavigationShortcut(args.Keyval, args.State);
+            };
+            window.AddController(keyController);
 
             //Subscribing to credential required to trigger the password dialog
             var credentialManager = serviceProvider.GetRequiredService<ICredentialManager>();
@@ -310,6 +323,110 @@ sealed class Program
                 var action = Gio.SimpleAction.New(name, null);
                 action.OnActivate += (_, _) => { onActivate(); };
                 application.AddAction(action);
+            }
+
+            bool ShouldHandleNavigationShortcut()
+            {
+                if (lockoutOverlay.Visible)
+                {
+                    return false;
+                }
+
+                if (HasBlockingOverlay())
+                {
+                    return false;
+                }
+
+                var focus = window.GetFocus();
+                if (focus == null)
+                {
+                    return true;
+                }
+
+                if (!IsDescendantOf(focus, mainBox))
+                {
+                    return false;
+                }
+
+                return !IsEditableWidget(focus);
+            }
+
+            bool HasBlockingOverlay()
+            {
+                for (Widget? child = mainOverlay.GetFirstChild(); child != null; child = child.GetNextSibling())
+                {
+                    if (child == mainBox || child == lockoutOverlay || !child.Visible)
+                    {
+                        continue;
+                    }
+
+                    if (child.HasCssClass("toast-message"))
+                    {
+                        continue;
+                    }
+
+                    return true;
+                }
+
+                return false;
+            }
+
+            bool TryHandleNavigationShortcut(uint keyval, Gdk.ModifierType state)
+            {
+                var relevantModifiers = state & (Gdk.ModifierType.ControlMask | Gdk.ModifierType.AltMask |
+                                                Gdk.ModifierType.ShiftMask | Gdk.ModifierType.SuperMask |
+                                                Gdk.ModifierType.MetaMask);
+                if (relevantModifiers != (Gdk.ModifierType.ControlMask | Gdk.ModifierType.AltMask))
+                {
+                    return false;
+                }
+
+                var key = char.ToLowerInvariant((char)keyval);
+                switch (key)
+                {
+                    case 'i':
+                        NavigateTo<PackageInstall>();
+                        return true;
+                    case 'u':
+                        NavigateTo<PackageUpdate>();
+                        return true;
+                    case 'm':
+                        NavigateTo<PackageManagement>();
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+
+            static bool IsEditableWidget(Widget? widget)
+            {
+                while (widget != null)
+                {
+                    if (widget is Entry or SearchEntry or PasswordEntry or TextView or SpinButton)
+                    {
+                        return true;
+                    }
+
+                    widget = widget.GetParent();
+                }
+
+                return false;
+            }
+
+            static bool IsDescendantOf(Widget widget, Widget ancestor)
+            {
+                Widget? current = widget;
+                while (current != null)
+                {
+                    if (current == ancestor)
+                    {
+                        return true;
+                    }
+
+                    current = current.GetParent();
+                }
+
+                return false;
             }
         };
 

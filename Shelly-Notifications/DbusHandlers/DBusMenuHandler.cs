@@ -1,25 +1,31 @@
+using Shelly_Notifications.Enums;
+using Shelly_Notifications.Models;
 using Shelly_Notifications.Services;
 using Tmds.DBus.Protocol;
 
 namespace Shelly_Notifications.DbusHandlers;
 
-internal class DBusMenuHandler(Connection connection) : IPathMethodHandler
+public class DBusMenuHandler(Connection connection) : IPathMethodHandler
 {
     public string Path => "/MenuBar";
     public bool HandlesChildPaths => false;
 
     public event Action? OnExitRequested;
 
-    private static readonly Dictionary<int, (string Label, string Type, bool Enabled, string icon)> Items = new()
-    {
-        [1] = ("Open Shelly", "standard", true, "shelly"),
-        [2] = ("Update Packages", "standard", true, ""),
-        [3] = ("Check for Updates", "standard", true, ""),
-        [4] = ("", "separator", false, ""),
-        [5] = ("Exit", "standard", true, ""),
-    };
+    private static readonly
+        Dictionary<int, (string Label, string Type, bool Enabled, string icon, string subMenu, MenuEnum action)> Items =
+            new()
+            {
+                [1] = ("Open Shelly", "standard", true, "shelly", "", MenuEnum.OpenShelly),
+                [2] = ("Update Packages", "standard", true, "", "", MenuEnum.UpdatePackages),
+                [3] = ("Check for Updates", "standard", true, "", "", MenuEnum.CheckForUpdates),
+                [4] = ("Last check: Never", "standard", false, "", "", MenuEnum.LastTime),
+                [5] = ("", "separator", false, "", "", MenuEnum.None),
+                [98] = ("", "separator", false, "", "", MenuEnum.None),
+                [99] = ("Exit", "standard", true, "", "", action: MenuEnum.Exit),
+            };
 
-    private static readonly int[] RootChildren = [1, 2, 3, 4, 5];
+    private static readonly Dictionary<MenuEnum, List<int>> UpdatesSubmenuChildren = new();
 
     public ValueTask HandleMethodAsync(MethodContext context)
     {
@@ -92,7 +98,8 @@ internal class DBusMenuHandler(Connection connection) : IPathMethodHandler
         return ValueTask.CompletedTask;
     }
 
-    private VariantValue BuildMenuItemVariant(int id, string label, string type, bool enabled, string icon)
+    private VariantValue BuildMenuItemVariant(int id, string label, string type, bool enabled, string icon,
+        string childrenDisplay)
     {
         Dict<string, VariantValue> props = new(new Dictionary<string, VariantValue>
         {
@@ -100,40 +107,76 @@ internal class DBusMenuHandler(Connection connection) : IPathMethodHandler
             { "type", type },
             { "enabled", enabled },
             { "visible", true },
-            {"icon-name", icon}
+            { "icon-name", icon },
+            { "children-display", childrenDisplay }
         });
+
+        VariantValue[] children = [];
+        var submenuMap = new Dictionary<MenuEnum, Func<bool>>
+        {
+            { MenuEnum.StandardUpdate, () => id == GetIndexByAction(MenuEnum.StandardUpdate) },
+            { MenuEnum.AurUpdate, () => id == GetIndexByAction(MenuEnum.AurUpdate) },
+            { MenuEnum.FlatpakUpdate, () => id == GetIndexByAction(MenuEnum.FlatpakUpdate) },
+        };
+
+        if (childrenDisplay != "submenu")
+            return VariantValue.Struct(
+                VariantValue.Int32(id),
+                props,
+                VariantValue.ArrayOfVariant(children)
+            );
+        var match = submenuMap.FirstOrDefault(kvp => kvp.Value());
+        if (match.Key != default)
+            children = GetSubmenuChildren(match.Key);
 
         return VariantValue.Struct(
             VariantValue.Int32(id),
             props,
-            VariantValue.ArrayOfVariant(Array.Empty<VariantValue>())
+            VariantValue.ArrayOfVariant(children)
         );
     }
 
     private ValueTask HandleGetLayout(MethodContext context)
     {
         var reader = context.Request.GetBodyReader();
-        reader.ReadInt32();
-        reader.ReadInt32();
-        var a = reader.ReadArrayStart(DBusType.String);
-        while (reader.HasNext(a)) reader.ReadString();
+        var parentId = reader.ReadInt32();
 
         using var w = context.CreateReplyWriter("u(ia{sv}av)");
         w.WriteUInt32(1);
 
         w.WriteStructureStart();
-        w.WriteInt32(0);
+        w.WriteInt32(parentId);
+
+        int[] childrenIds = [];
+        var childrenDisplayValue = "";
+
+        MenuEnum action;
+
+        if (parentId == 0)
+        {
+            childrenIds = Items.Keys.Where(k => k < 100).OrderBy(k => k).ToArray();
+            childrenDisplayValue = "submenu";
+        }
+        else
+        {
+            action = Items[parentId].action;
+            if (UpdatesSubmenuChildren.TryGetValue(action, out var children))
+            {
+                childrenIds = children.ToArray();
+                childrenDisplayValue = "submenu";
+            }
+        }
 
         var rootDict = w.WriteDictionaryStart();
         w.WriteDictionaryEntryStart();
         w.WriteString("children-display");
-        w.WriteVariantString("submenu");
+        w.WriteVariantString(childrenDisplayValue);
         w.WriteDictionaryEnd(rootDict);
 
         var av = w.WriteArrayStart(DBusType.Variant);
-        foreach (var id in RootChildren)
+        foreach (var id in childrenIds)
             if (Items.TryGetValue(id, out var item))
-                w.WriteVariant(BuildMenuItemVariant(id, item.Label, item.Type, item.Enabled, item.icon));
+                w.WriteVariant(BuildMenuItemVariant(id, item.Label, item.Type, item.Enabled, item.icon, item.subMenu));
         w.WriteArrayEnd(av);
 
         context.Reply(w.CreateMessage());
@@ -150,12 +193,34 @@ internal class DBusMenuHandler(Connection connection) : IPathMethodHandler
 
         if (event_ == "clicked")
         {
-            switch (id)
+            var action = Items[id].action;
+            switch (action)
             {
-                case 1: AppRunner.LaunchAppIfNotRunning(""); break;
-                case 2: AppRunner.LaunchAppIfNotRunning("--page UpdatePackage");  break;
-                case 3: new NotificationHandler().SendNotif(connection, $"Updates available: {await new UpdateService().CheckForUpdates()}"); break;
-                case 5: OnExitRequested?.Invoke(); break;
+                case MenuEnum.CheckForUpdates:
+                    new NotificationHandler().SendNotif(connection,
+                        $"Updates available: {await new UpdateService(this).CheckForUpdates()}");
+                    break;
+                case MenuEnum.OpenShelly:
+                    AppRunner.LaunchAppIfNotRunning("");
+
+                    break;
+                case MenuEnum.UpdatePackages:
+                    _ = Task.Run(async () =>
+                    {
+                        await AppRunner.SpawnTerminalWithCommandAsync("sudo shelly -a");
+                        await new UpdateService(this).CheckForUpdates();
+                    });
+                    break;
+                case MenuEnum.Exit:
+                    OnExitRequested?.Invoke();
+                    break;
+                case MenuEnum.None:
+                case MenuEnum.AurUpdate:
+                case MenuEnum.FlatpakUpdate:
+                case MenuEnum.StandardUpdate:
+                case MenuEnum.LastTime:
+                default:
+                    break;
             }
         }
 
@@ -193,6 +258,7 @@ internal class DBusMenuHandler(Connection connection) : IPathMethodHandler
                 props["type"] = item.Type;
                 props["enabled"] = true;
                 props["visible"] = true;
+                props["children-display"] = "submenu";
             }
 
             w.WriteDictionary(props);
@@ -219,6 +285,9 @@ internal class DBusMenuHandler(Connection connection) : IPathMethodHandler
             case "visible":
                 w.WriteVariantBool(true);
                 break;
+            case "children-display":
+                w.WriteVariantString("submenu");
+                break;
             default:
                 w.WriteVariantString("");
                 break;
@@ -227,4 +296,151 @@ internal class DBusMenuHandler(Connection connection) : IPathMethodHandler
         context.Reply(w.CreateMessage());
         return ValueTask.CompletedTask;
     }
+
+    private static uint _revision = 1;
+
+    public void NotifyChildrenDisplayChanged(SyncModel syncModel)
+    {
+        var startValue = 101;
+
+        try
+        {
+            //Remove the current index's so we can reinsert them if they exist now...
+            var existingParents = Items.Where(kvp => kvp.Value.action is MenuEnum.FlatpakUpdate or MenuEnum.AurUpdate or MenuEnum.StandardUpdate)
+                                       .Select(kvp => kvp.Key)
+                                       .ToList();
+            foreach (var key in existingParents)
+                Items.Remove(key);
+
+            UpdatesSubmenuChildren.Clear();
+
+            var flatpakIds = RegisterSubmenuItems(syncModel.Flatpaks, i => $"{i.Name} {i.Version}",
+                MenuEnum.FlatpakUpdate, ref startValue);
+            RegisterSubmenu(flatpakIds, MenuEnum.FlatpakUpdate, Items.Count + 1, "Flatpak");
+
+            var aurIds = RegisterSubmenuItems(syncModel.Aur, i => $"{i.Name} {i.OldVersion} -> {i.Version}",
+                MenuEnum.AurUpdate, ref startValue);
+            RegisterSubmenu(aurIds, MenuEnum.AurUpdate, Items.Count + 1, "AUR");
+
+            var packageIds = RegisterSubmenuItems(syncModel.Packages, i => $"{i.Name} {i.OldVersion} -> {i.Version}",
+                MenuEnum.StandardUpdate, ref startValue);
+            RegisterSubmenu(packageIds, MenuEnum.StandardUpdate, Items.Count + 1, "Standard");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Error updating DBus menu: " + e.Message);
+        }
+
+        var time = GetIndexByAction(MenuEnum.LastTime);
+        Items[time!.Value] = ($"Last check: {DateTime.Now:HH:mm MM/dd}", "standard", false, "", "", MenuEnum.LastTime);
+        
+        _revision++;
+
+        using var writer = connection.GetMessageWriter();
+
+        writer.WriteSignalHeader(
+            path: Path,
+            @interface: "com.canonical.dbusmenu",
+            member: "ItemsPropertiesUpdated",
+            signature: "a(ia{sv})a(ias)");
+
+        var updatedArr = writer.WriteArrayStart(DBusType.Struct);
+
+        WriteSubmenuEntry(writer, GetIndexByAction(MenuEnum.StandardUpdate) ?? -1, "Standard");
+        WriteSubmenuEntry(writer, GetIndexByAction(MenuEnum.AurUpdate) ?? -1, "Aur");
+        WriteSubmenuEntry(writer, GetIndexByAction(MenuEnum.FlatpakUpdate) ?? -1, "Flatpak");
+
+        writer.WriteStructureStart();
+        writer.WriteInt32(time!.Value);
+        writer.WriteDictionary(new Dictionary<string, VariantValue>
+        {
+            { "label", Items[time.Value].Label }
+        });
+
+        writer.WriteStructureStart();
+        writer.WriteInt32(0);
+        writer.WriteDictionary(new Dictionary<string, VariantValue>
+        {
+            { "children-display", "submenu" }
+        });
+
+        writer.WriteArrayEnd(updatedArr);
+
+        var removedArr = writer.WriteArrayStart(DBusType.Struct);
+        writer.WriteArrayEnd(removedArr);
+
+        connection.TrySendMessage(writer.CreateMessage());
+
+        using var layoutWriter = connection.GetMessageWriter();
+        layoutWriter.WriteSignalHeader(
+            path: Path,
+            @interface: "com.canonical.dbusmenu",
+            member: "LayoutUpdated",
+            signature: "ui");
+
+        layoutWriter.WriteUInt32(_revision);
+        layoutWriter.WriteInt32(0);
+        connection.TrySendMessage(layoutWriter.CreateMessage());
+        Console.WriteLine($"[DBusMenu] Sent LayoutUpdated signal with revision {_revision}");
+    }
+
+    #region Sub Menu Helpers
+
+    private static void WriteSubmenuEntry(MessageWriter writer, int id, string label)
+    {
+        writer.WriteStructureStart();
+        writer.WriteInt32(id);
+        writer.WriteDictionary(new Dictionary<string, VariantValue>
+        {
+            { "label", label },
+            { "type", "standard" },
+            { "enabled", true },
+            { "children-display", "submenu" }
+        });
+    }
+
+    private VariantValue[] GetSubmenuChildren(MenuEnum menuEnum)
+    {
+        return UpdatesSubmenuChildren[menuEnum]
+            .Select(childId => Items.TryGetValue(childId, out var childItem)
+                ? BuildMenuItemVariant(childId, childItem.Label, childItem.Type, childItem.Enabled, childItem.icon,
+                    childItem.subMenu)
+                : VariantValue.Struct(VariantValue.Int32(childId),
+                    new Dict<string, VariantValue>(new Dictionary<string, VariantValue>()),
+                    VariantValue.ArrayOfVariant(Array.Empty<VariantValue>())))
+            .ToArray();
+    }
+
+    private static List<int> RegisterSubmenuItems<T>(
+        IEnumerable<T> source,
+        Func<T, string> labelSelector,
+        MenuEnum menuEnum,
+        ref int startValue)
+    {
+        var ids = new List<int>();
+        foreach (var item in source)
+        {
+            Items.Remove(startValue);
+            Items.Add(startValue, (labelSelector(item), "standard", true, "", "", action: menuEnum));
+            ids.Add(startValue);
+            startValue++;
+        }
+
+        return ids;
+    }
+
+    private static void RegisterSubmenu(List<int> ids, MenuEnum menuEnum, int parentId, string parentLabel)
+    {
+        if (ids.Count <= 0) return;
+        UpdatesSubmenuChildren.Add(menuEnum, ids);
+        Items.Add(parentId, (parentLabel, "standard", true, "", "submenu", menuEnum));
+    }
+
+    private static int? GetIndexByAction(MenuEnum action)
+    {
+        var match = Items.FirstOrDefault(kvp => kvp.Value.action == action);
+        return match.Value != default ? match.Key : null;
+    }
+
+    #endregion
 }
