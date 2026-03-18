@@ -59,7 +59,7 @@ internal static class UpgradeCommands
         var manager = new AlpmManager(verbose, false, Configuration.GetConfigurationFilePath());
         var renderer = new ConsoleProgressRenderer();
 
-        manager.Replaces += (_, args) =>
+        EventHandler<AlpmReplacesEventArgs> replacesHandler = (_, args) =>
         {
             lock (renderer.RenderLock)
             {
@@ -67,8 +67,9 @@ internal static class UpgradeCommands
                 QuestionHandler.HandleReplacePkg(args, false, noConfirm);
             }
         };
+        manager.Replaces += replacesHandler;
 
-        manager.Question += (_, args) =>
+        EventHandler<AlpmQuestionEventArgs> questionHandler = (_, args) =>
         {
             lock (renderer.RenderLock)
             {
@@ -76,6 +77,7 @@ internal static class UpgradeCommands
                 QuestionHandler.HandleQuestion(args, false, noConfirm);
             }
         };
+        manager.Question += questionHandler;
 
         manager.Retrieve += renderer.HandleRetrieve;
         manager.Progress += renderer.HandleProgress;
@@ -107,6 +109,31 @@ internal static class UpgradeCommands
                 return 0;
             }
         }
+
+     
+        var freshRenderer = new ConsoleProgressRenderer();
+        manager.Retrieve -= renderer.HandleRetrieve;
+        manager.Progress -= renderer.HandleProgress;
+        manager.Replaces -= replacesHandler;
+        manager.Question -= questionHandler;
+        manager.Retrieve += freshRenderer.HandleRetrieve;
+        manager.Progress += freshRenderer.HandleProgress;
+        manager.Replaces += (_, args) =>
+        {
+            lock (freshRenderer.RenderLock)
+            {
+                Console.WriteLine();
+                QuestionHandler.HandleReplacePkg(args, false, noConfirm);
+            }
+        };
+        manager.Question += (_, args) =>
+        {
+            lock (freshRenderer.RenderLock)
+            {
+                Console.WriteLine();
+                QuestionHandler.HandleQuestion(args, false, noConfirm);
+            }
+        };
 
         manager.SyncSystemUpdate();
         Console.WriteLine("System Upgraded Successfully!");
