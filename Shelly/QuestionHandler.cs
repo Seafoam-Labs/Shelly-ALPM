@@ -36,10 +36,20 @@ public class QuestionHandler
             return;
         }
 
+        var toRemove = new List<string>();
         foreach (var replace in replaceArgs.Replaces)
         {
-            Console.WriteLine(
-                $"Replacement: {replaceArgs.Repository}/{replaceArgs.PackageName} replaces {replace}");
+            var accepted = ShowYesNoSelection(
+                $"Replace {replace} with {replaceArgs.Repository}/{replaceArgs.PackageName}?");
+            if (!accepted)
+            {
+                toRemove.Add(replace);
+            }
+        }
+
+        foreach (var replace in toRemove)
+        {
+            replaceArgs.Replaces.Remove(replace);
         }
     }
     public static void HandleQuestion(AlpmQuestionEventArgs question, bool uiMode = false, bool noConfirm = false)
@@ -143,6 +153,75 @@ public class QuestionHandler
         return selected;
     }
 
+
+    private static bool ShowYesNoSelection(string title, bool defaultValue = true)
+    {
+        bool selected = defaultValue;
+        bool done = false;
+
+        Console.CursorVisible = false;
+        Console.WriteLine(title);
+        int startRow = Console.CursorTop;
+
+        void Render()
+        {
+            Console.SetCursorPosition(0, startRow);
+
+            if (selected)
+            {
+                Console.ForegroundColor = ConsoleColor.Black;
+                Console.BackgroundColor = ConsoleColor.Cyan;
+                Console.Write(" > Yes");
+                Console.ResetColor();
+                Console.Write("   No");
+            }
+            else
+            {
+                Console.Write("   Yes");
+                Console.ForegroundColor = ConsoleColor.Black;
+                Console.BackgroundColor = ConsoleColor.Cyan;
+                Console.Write(" > No");
+                Console.ResetColor();
+            }
+
+            Console.Write(new string(' ', Math.Max(0, Console.WindowWidth - Console.CursorLeft)));
+            Console.SetCursorPosition(0, startRow);
+        }
+
+        Render();
+
+        while (!done)
+        {
+            var key = Console.ReadKey(intercept: true);
+
+            switch (key.Key)
+            {
+                case ConsoleKey.LeftArrow:
+                    selected = true;
+                    break;
+                case ConsoleKey.RightArrow:
+                    selected = false;
+                    break;
+                case ConsoleKey.Enter:
+                    done = true;
+                    break;
+                case ConsoleKey.Y:
+                    selected = true;
+                    done = true;
+                    break;
+                case ConsoleKey.N:
+                    selected = false;
+                    done = true;
+                    break;
+            }
+
+            Render();
+        }
+
+        Console.CursorVisible = true;
+        Console.WriteLine();
+        return selected;
+    }
 
     private static bool ShowConfirmPrompt(string title, bool defaultValue = true)
     {
