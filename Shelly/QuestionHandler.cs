@@ -4,6 +4,20 @@ namespace Shelly;
 
 public class QuestionHandler
 {
+    private static bool IsInteractiveTerminal()
+    {
+        try
+        {
+            return !Console.IsInputRedirected
+                && !Console.IsOutputRedirected
+                && Console.WindowWidth > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static void HandleReplacePkg(AlpmReplacesEventArgs replaceArgs, bool uiMode = false, bool noConfirm = false)
     {
         if (uiMode)
@@ -39,8 +53,9 @@ public class QuestionHandler
         var toRemove = new List<string>();
         foreach (var replace in replaceArgs.Replaces)
         {
-            var accepted = ShowYesNoSelection(
-                $"Replace {replace} with {replaceArgs.Repository}/{replaceArgs.PackageName}?");
+            var accepted = IsInteractiveTerminal()
+                ? ShowYesNoSelection($"Replace {replace} with {replaceArgs.Repository}/{replaceArgs.PackageName}?")
+                : ShowConfirmPrompt($"Replace {replace} with {replaceArgs.Repository}/{replaceArgs.PackageName}?");
             if (!accepted)
             {
                 toRemove.Add(replace);
@@ -286,7 +301,9 @@ public class QuestionHandler
             return;
         }
 
-        var selectedIndex = ShowSelectionPrompt(question.QuestionText ?? "Select a provider:", question.ProviderOptions!);
+        var selectedIndex = IsInteractiveTerminal()
+            ? ShowSelectionPrompt(question.QuestionText ?? "Select a provider:", question.ProviderOptions!)
+            : ShowSimpleSelectionPrompt(question.QuestionText ?? "Select a provider:", question.ProviderOptions!);
         question.SetResponse(selectedIndex);
     }
 
@@ -347,7 +364,29 @@ public class QuestionHandler
             return;
         }
 
-        var response = ShowConfirmPrompt(question.QuestionText ?? "Confirm?", defaultValue: true);
+        var response = IsInteractiveTerminal()
+            ? ShowYesNoSelection(question.QuestionText ?? "Confirm?", defaultValue: true)
+            : ShowConfirmPrompt(question.QuestionText ?? "Confirm?", defaultValue: true);
         question.SetResponse(response ? 1 : 0);
+    }
+
+    private static int ShowSimpleSelectionPrompt(string title, IList<string> choices)
+    {
+        Console.WriteLine(title);
+        for (int i = 0; i < choices.Count; i++)
+        {
+            Console.WriteLine($"  {i + 1}) {choices[i]}");
+        }
+
+        while (true)
+        {
+            Console.Write($"Enter a number (1-{choices.Count}): ");
+            var input = Console.ReadLine();
+            if (int.TryParse(input?.Trim(), out int num) && num >= 1 && num <= choices.Count)
+            {
+                return num - 1;
+            }
+            Console.WriteLine("Invalid selection, try again.");
+        }
     }
 }
