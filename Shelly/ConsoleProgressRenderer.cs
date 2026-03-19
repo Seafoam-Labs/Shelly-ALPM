@@ -78,14 +78,7 @@ internal sealed class ConsoleProgressRenderer
                 var row = _rowIndex.Count;
                 _rowIndex[key] = row;
                 
-                
 
-                // Move to where the bottom border currently sits (or where row 0 will go)
-                // and use WriteLine to ensure the terminal buffer extends by one line.
-                //Console.SetCursorPosition(0, _baseTop + row);
-                //Console.WriteLine(); // THIS creates the new line in the terminal buffer
-                
-                /// Extend buffer for the new data row
                 var cursorBefore = Console.CursorTop;
                 Console.SetCursorPosition(0, _baseTop + row);
                 Console.WriteLine();
@@ -93,7 +86,7 @@ internal sealed class ConsoleProgressRenderer
                 if (cursorAfter == cursorBefore && _baseTop + row + 1 > cursorAfter)
                     _baseTop--;
 
-// Extend buffer for the bottom border line
+
                 cursorBefore = Console.CursorTop;
                 Console.SetCursorPosition(0, _baseTop + row + 1);
                 Console.WriteLine();
@@ -101,11 +94,11 @@ internal sealed class ConsoleProgressRenderer
                 if (cursorAfter == cursorBefore && _baseTop + row + 2 > cursorAfter)
                     _baseTop--;
 
-// Now write the data row at its correct position
+
                 Console.SetCursorPosition(0, _baseTop + row);
                 WriteDataRow(displayName, bar, pct, status);
 
-// Write the bottom border one line below
+
                 Console.SetCursorPosition(0, _baseTop + row + 1);
                 Console.Write("\x1b[2K");
                 PrintBottomBorder();
