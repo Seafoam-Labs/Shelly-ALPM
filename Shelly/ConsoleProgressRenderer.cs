@@ -22,14 +22,32 @@ internal sealed class ConsoleProgressRenderer
 
     public object RenderLock => _renderLock;
 
+    private static bool IsInteractiveTerminal()
+    {
+        try
+        {
+            return !Console.IsInputRedirected
+                && !Console.IsOutputRedirected
+                && Console.WindowWidth > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public void ClearBottomBorder()
     {
         lock (_renderLock)
         {
             if (_baseTop >= 0)
             {
-                Console.SetCursorPosition(0, _baseTop + _rowIndex.Count);
-                Console.Write("\x1b[2K");
+                if (IsInteractiveTerminal())
+                {
+                    Console.SetCursorPosition(0, _baseTop + _rowIndex.Count);
+                    Console.Write("\x1b[2K");
+                }
+
                 _baseTop = -1;
                 _rowIndex.Clear();
             }
@@ -44,7 +62,7 @@ internal sealed class ConsoleProgressRenderer
             switch (args.Status)
             {
                 case AlpmRetrieveStatus.Start:
-                    FinishTableBorder();
+                    if (IsInteractiveTerminal()) FinishTableBorder();
                     Console.WriteLine(args.RetrieveType == AlpmRetrieveType.DatabaseRetrieve
                         ? "Synchronizing package databases..."
                         : "Retrieving packages...");
@@ -56,10 +74,10 @@ internal sealed class ConsoleProgressRenderer
 
                 case AlpmRetrieveStatus.Done:
                     Console.WriteLine();
-                    FinishTableBorder();
+                    if (IsInteractiveTerminal()) FinishTableBorder();
                     break;
                 case AlpmRetrieveStatus.Failed:
-                    FinishTableBorder();
+                    if (IsInteractiveTerminal()) FinishTableBorder();
                     Console.WriteLine(args.RetrieveType == AlpmRetrieveType.DatabaseRetrieve
                         ? "error: failed to synchronize all databases"
                         : "error: failed to retrieve some files");
@@ -73,6 +91,12 @@ internal sealed class ConsoleProgressRenderer
     {
         if (args.ProgressType is not (AlpmProgressType.PackageDownload or AlpmProgressType.DatabaseDownload))
             return;
+
+        if (!IsInteractiveTerminal())
+        {
+            HandleProgressSimple(args);
+            return;
+        }
 
         lock (_renderLock)
         {
@@ -140,10 +164,35 @@ internal sealed class ConsoleProgressRenderer
     }
 
 
+    private void HandleProgressSimple(AlpmProgressEventArgs args)
+    {
+        lock (_renderLock)
+        {
+            var key = args.PackageName ?? "unknown";
+            if (key.EndsWith(".sig")) return;
+            var pct = args.Percent ?? 0;
+            var status = pct >= 100 ? "Done" : "Downloading";
+
+            if (pct >= 100 || !_rowIndex.ContainsKey(key))
+            {
+                _rowIndex[key] = _rowIndex.Count;
+                if (_baseTop < 0) _baseTop = 0;
+                Console.WriteLine($"{key}: {status} ({pct}%)");
+            }
+        }
+    }
+
     public void FinishTable()
     {
         lock (_renderLock)
         {
+            if (!IsInteractiveTerminal())
+            {
+                _baseTop = -1;
+                _rowIndex.Clear();
+                return;
+            }
+
             FinishTableBorder();
             Console.WriteLine();
         }
