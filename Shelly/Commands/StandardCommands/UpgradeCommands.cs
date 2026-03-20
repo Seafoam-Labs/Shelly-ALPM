@@ -83,13 +83,23 @@ internal static class UpgradeCommands
 
         manager.Retrieve += renderer.HandleRetrieve;
         manager.Progress += renderer.HandleProgress;
+        manager.PackageOperation += (_, args) =>
+        {
+            lock (renderer.RenderLock)
+            {
+                renderer.ClearBottomBorder();
+                Console.WriteLine();
+            }
+        };
 
         Console.WriteLine("Checking for system updates...");
         Console.WriteLine("Initializing and syncing repositories...");
         manager.InitializeWithSync();
+        renderer.FinishTable();
         var packagesNeedingUpdate = manager.GetPackagesNeedingUpdate();
         if (packagesNeedingUpdate.Count == 0)
         {
+            Console.WriteLine();
             Console.WriteLine("System is up to date!");
             return 0;
         }
@@ -112,7 +122,7 @@ internal static class UpgradeCommands
             }
         }
 
-     
+
         var freshRenderer = new ConsoleProgressRenderer();
         manager.Retrieve -= renderer.HandleRetrieve;
         manager.Progress -= renderer.HandleProgress;
@@ -120,6 +130,14 @@ internal static class UpgradeCommands
         manager.Question -= questionHandler;
         manager.Retrieve += freshRenderer.HandleRetrieve;
         manager.Progress += freshRenderer.HandleProgress;
+        manager.PackageOperation += (_, args) =>
+        {
+            lock (freshRenderer.RenderLock)
+            {
+                freshRenderer.ClearBottomBorder();
+                Console.WriteLine();
+            }
+        };
         manager.Replaces += (_, args) =>
         {
             lock (freshRenderer.RenderLock)
@@ -140,6 +158,7 @@ internal static class UpgradeCommands
         };
 
         manager.SyncSystemUpdate();
+        freshRenderer.FinishTable();
         Console.WriteLine("System Upgraded Successfully!");
         manager.Dispose();
         return 0;

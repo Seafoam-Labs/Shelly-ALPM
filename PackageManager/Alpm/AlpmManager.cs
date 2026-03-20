@@ -1748,6 +1748,7 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Checking for file conflicts...");
                     }
 
+                    PackageOperation?.Invoke(this, new AlpmPackageOperationEventArgs(type, null));
                     break;
                 case AlpmEventType.FileConflictsDone:
                     if (_verbose || _uiMode)
@@ -1759,6 +1760,7 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("File conflict check finished");
                     }
 
+                    PackageOperation?.Invoke(this, new AlpmPackageOperationEventArgs(type, null));
                     break;
                 case AlpmEventType.ResolveDepsStart:
                     if (_verbose || _uiMode)
@@ -1770,6 +1772,7 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Resolving dependencies...");
                     }
 
+                    PackageOperation?.Invoke(this, new AlpmPackageOperationEventArgs(type, null));
                     break;
                 case AlpmEventType.ResolveDepsDone:
                     if (_verbose || _uiMode)
@@ -1781,6 +1784,7 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Dependency resolution finished.");
                     }
 
+                    PackageOperation?.Invoke(this, new AlpmPackageOperationEventArgs(type, null));
                     break;
                 case AlpmEventType.InterConflictsStart:
                     if (_verbose || _uiMode)
@@ -1792,6 +1796,7 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Checking for inter-conflicts...");
                     }
 
+                    PackageOperation?.Invoke(this, new AlpmPackageOperationEventArgs(type, null));
                     break;
                 case AlpmEventType.InterConflictsDone:
                     if (_verbose || _uiMode)
@@ -1803,6 +1808,7 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Inter-conflict check finished.");
                     }
 
+                    PackageOperation?.Invoke(this, new AlpmPackageOperationEventArgs(type, null));
                     break;
                 case AlpmEventType.TransactionStart:
                     if (_verbose || _uiMode)
@@ -1838,6 +1844,7 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Checking package integrity...");
                     }
 
+                    PackageOperation?.Invoke(this, new AlpmPackageOperationEventArgs(type, null));
                     break;
                 case AlpmEventType.IntegrityDone:
                     if (_uiMode || _verbose)
@@ -1849,6 +1856,7 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Integrity check finished.");
                     }
 
+                    PackageOperation?.Invoke(this, new AlpmPackageOperationEventArgs(type, null));
                     break;
                 case AlpmEventType.LoadStart:
                     if (_verbose || _uiMode)
@@ -1860,6 +1868,7 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Loading packages...");
                     }
 
+                    PackageOperation?.Invoke(this, new AlpmPackageOperationEventArgs(type, null));
                     break;
                 case AlpmEventType.LoadDone:
                     if (_verbose || _uiMode)
@@ -1871,6 +1880,7 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                         Console.Error.WriteLine("Packages loaded.");
                     }
 
+                    PackageOperation?.Invoke(this, new AlpmPackageOperationEventArgs(type, null));
                     break;
                 case AlpmEventType.DiskspaceStart:
                     if (_verbose || _uiMode)
@@ -2043,11 +2053,6 @@ public class AlpmManager(bool verbose = false, bool uiMode = false, string confi
                     {
                         Console.Error.WriteLine("[ALPM] Packages retrieved.");
                     }
-                    else
-                    {
-                        Console.Error.WriteLine("Packages retrieved.");
-                    }
-
                     Retrieve?.Invoke(this,
                         new AlpmRetrieveEventArgs(AlpmRetrieveType.PackageRetrieve, AlpmRetrieveStatus.Done));
                     break;

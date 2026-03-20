@@ -55,6 +55,7 @@ internal sealed class ConsoleProgressRenderer
                     break;
 
                 case AlpmRetrieveStatus.Done:
+                    Console.WriteLine();
                     FinishTableBorder();
                     break;
                 case AlpmRetrieveStatus.Failed:
@@ -116,6 +117,7 @@ internal sealed class ConsoleProgressRenderer
                         targetRow = _baseTop + row;
                         targetBorder = targetRow + 1;
                     }
+
                     bufferEnd = Console.CursorTop;
                 }
 
@@ -243,6 +245,9 @@ internal sealed class ConsoleProgressRenderer
             Console.SetCursorPosition(0, _baseTop + _rowIndex.Count);
             Console.Write("\x1b[2K");
             PrintBottomBorder();
+            Console.WriteLine();
+            _baseTop = -1;
+            _rowIndex.Clear();
         }
     }
 }
