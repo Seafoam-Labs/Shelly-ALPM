@@ -87,10 +87,27 @@ public static class PkgbuildParser
 
         var arrayContent = match.Groups[1].Value;
         
+        // Strip comments (from # to end of line), respecting quoted strings
+        var lines = arrayContent.Split('\n');
+        var cleanedContent = string.Join("\n", lines.Select(line =>
+        {
+            var inSingleQ = false;
+            var inDoubleQ = false;
+            for (var ci = 0; ci < line.Length; ci++)
+            {
+                var c = line[ci];
+                if (c == '"' && !inSingleQ) inDoubleQ = !inDoubleQ;
+                else if (c == '\'' && !inDoubleQ) inSingleQ = !inSingleQ;
+                else if (c == '#' && !inSingleQ && !inDoubleQ)
+                    return line.Substring(0, ci);
+            }
+            return line;
+        }));
+        
         // Extract quoted strings and unquoted words
         // Matches: "string" or 'string' or unquoted_word
         var itemPattern = @"""([^""]*)""|'([^']*)'|(\S+)";
-        var itemMatches = Regex.Matches(arrayContent, itemPattern);
+        var itemMatches = Regex.Matches(cleanedContent, itemPattern);
         
         foreach (Match itemMatch in itemMatches)
         {
@@ -98,9 +115,7 @@ public static class PkgbuildParser
                         itemMatch.Groups[2].Success ? itemMatch.Groups[2].Value :
                         itemMatch.Groups[3].Value;
             
-            // Skip comments
-            if (!value.StartsWith("#"))
-                result.Add(value);
+            result.Add(value);
         }
         
         return result;
