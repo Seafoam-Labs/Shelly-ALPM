@@ -10,12 +10,19 @@ public class WebWindow(string rootPackage, Dictionary<string, List<string>> depe
     private DrawingArea _canvas = null!;
 
     private double _zoom = 1.0;
-
+    
+    private string _rootPackage = rootPackage;
+    private Dictionary<string, List<string>> _dependencyMap = dependencyMap;
+    
     private double _panX, _panY;
     private double _panStartX, _panStartY;
     private int _canvasW, _canvasH;
 
     private Dictionary<string, (double x, double y)> _positions = new();
+    
+    private Stack<string> _visitedPackages = new();
+    
+    private Button _backButton = null!;
 
     public Widget CreateWindow()
     {
@@ -25,6 +32,11 @@ public class WebWindow(string rootPackage, Dictionary<string, List<string>> depe
         _box = (Box)builder.GetObject("WebWindow")!;
         _canvas = (DrawingArea)builder.GetObject("graph_canvas")!;
         _canvas.SetDrawFunc(Draw);
+        
+        _backButton = (Button)builder.GetObject("back_button")!;
+        _backButton.OnClicked += (_,_) => {
+            GoBack();
+        };
 
         var scroll = EventControllerScroll.New(EventControllerScrollFlags.Vertical);
         scroll.OnScroll += OnScroll;
@@ -80,9 +92,33 @@ public class WebWindow(string rootPackage, Dictionary<string, List<string>> depe
         }
     }
 
-    private static void OnNodeClicked(string packageName)
+    private void OnNodeClicked(string packageName)
     {
-        Console.WriteLine($"Clicked: {packageName}");
+        Console.WriteLine($"Nav: {packageName}");
+        _rootPackage = packageName;
+        //push to stack
+        _visitedPackages.Push(packageName);
+        
+        _dependencyMap.Clear();
+        _dependencyMap.TryAdd(_rootPackage, ["firefox", "chromium"]);
+        _dependencyMap.TryAdd("firefox", ["libalpm", "dbus"]);
+        _dependencyMap.TryAdd("chromium", ["dynamodb", "dbus"]);
+        _canvas.QueueDraw();
+    }
+
+    private void GoBack()
+    {
+        //pop from stack
+        if(!_visitedPackages.TryPop(out _rootPackage)) return;
+        
+        Console.WriteLine($"Back: {_rootPackage}");
+        
+        //popped packed is now root get depends and draw tree via queuedraw.
+        _dependencyMap.Clear();
+        _dependencyMap.TryAdd(_rootPackage, ["firefox", "chromium"]);
+        _dependencyMap.TryAdd("firefox", ["libalpm", "dbus"]);
+        _dependencyMap.TryAdd("chromium", ["dynamodb", "dbus"]);
+        _canvas.QueueDraw();
     }
 
     private void Draw(DrawingArea area, Context cr, int w, int h)
@@ -92,14 +128,14 @@ public class WebWindow(string rootPackage, Dictionary<string, List<string>> depe
         const double nodeSize = 60;
         const double ringStep = 140;
 
-        var levels = new Dictionary<string, int> { [rootPackage] = 0 };
+        var levels = new Dictionary<string, int> { [_rootPackage] = 0 };
         var queue = new Queue<string>();
-        queue.Enqueue(rootPackage);
+        queue.Enqueue(_rootPackage);
 
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();
-            if (!dependencyMap.TryGetValue(current, out var deps)) continue;
+            if (!_dependencyMap.TryGetValue(current, out var deps)) continue;
 
             foreach (var dep in deps.Where(dep => !levels.ContainsKey(dep)))
             {
@@ -110,7 +146,7 @@ public class WebWindow(string rootPackage, Dictionary<string, List<string>> depe
 
         _positions = new Dictionary<string, (double x, double y)>
         {
-            [rootPackage] = (0, 0)
+            [_rootPackage] = (0, 0)
         };
 
         var byLevel = levels
@@ -139,7 +175,7 @@ public class WebWindow(string rootPackage, Dictionary<string, List<string>> depe
         cr.SetSourceRgb(0.5, 0.5, 0.5);
         cr.LineWidth = 1.5 / _zoom;
 
-        foreach (var (package, deps) in dependencyMap)
+        foreach (var (package, deps) in _dependencyMap)
         {
             if (!_positions.TryGetValue(package, out var from)) continue;
             foreach (var dep in deps)

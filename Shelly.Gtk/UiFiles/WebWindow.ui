@@ -4,6 +4,12 @@
     <object class="GtkBox" id="WebWindow">
         <property name="orientation">vertical</property>
         <child>
+            <object class="GtkButton" id="back_button">
+                <property name="icon-name">go-previous-symbolic</property>
+                <property name="tooltip-text">Back</property>
+            </object>
+        </child>
+        <child>
             <object class="GtkDrawingArea" id="graph_canvas">
                 <property name="hexpand">true</property>
                 <property name="vexpand">true</property>
