@@ -127,6 +127,28 @@ public class HomeWindow(
             }
 
             lockoutService.Show("Upgrading all packages...");
+
+            var aurUpdates = await privilegedOperationService.GetAurUpdatePackagesAsync();
+            if (aurUpdates.Count != 0)
+            {
+                var aurPackageNames = aurUpdates.Select(p => p.Name).ToList();
+                var packageBuilds = await privilegedOperationService.GetAurPackageBuild(aurPackageNames);
+
+                foreach (var pkgbuild in packageBuilds)
+                {
+                    if (pkgbuild.PkgBuild == null) continue;
+
+                    var buildArgs = new PackageBuildEventArgs($"Displaying Package Build {pkgbuild.Name}",
+                        pkgbuild.PkgBuild);
+                    genericQuestionService.RaisePackageBuild(buildArgs);
+
+                    if (!await buildArgs.ResponseTask)
+                    {
+                        return;
+                    }
+                }
+            }
+
             await privilegedOperationService.UpgradeAllAsync();
         }
         catch (Exception e)
