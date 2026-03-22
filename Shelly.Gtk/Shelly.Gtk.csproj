@@ -17,14 +17,14 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Version>2.0.2</Version>
+        <Version>2.0.3</Version>
         <AssemblyName>shelly-ui</AssemblyName>
         <AssemblyVersion>2.0.2</AssemblyVersion>
         <AssemblyTitle>Shelly GTK UI</AssemblyTitle>
         <Description>Shelly GTK is a arch linux package manager</Description>
-        <Company>ZC Development</Company>
-        <Product>Shelly CLI by ZC Development</Product>
-        <Copyright>2026 ZC Development</Copyright>
+        <Company>Seafoam Labs</Company>
+        <Product>Shelly CLI by Seafoam Labs</Product>
+        <Copyright>2026 Seafoam Labs</Copyright>
     </PropertyGroup>
 
     <ItemGroup>

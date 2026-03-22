@@ -18,13 +18,13 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Version>2.0.2</Version>
-        <AssemblyVersion>2.0.2</AssemblyVersion>
+        <Version>2.0.3</Version>
+        <AssemblyVersion>2.0.3</AssemblyVersion>
         <AssemblyTitle>Shelly VALPM</AssemblyTitle>
         <Description>Shelly is a visual arch linux package manager</Description>
-        <Company>ZC Development</Company>
-        <Product>Shelly VALPM by ZC Development</Product>
-        <Copyright>2026 ZC Development</Copyright>
+        <Company>Seafoam Labs</Company>
+        <Product>Shelly VALPM by Seafoam Labs</Product>
+        <Copyright>2026 Seafoam Labs</Copyright>
     </PropertyGroup>
 
     <ItemGroup>
