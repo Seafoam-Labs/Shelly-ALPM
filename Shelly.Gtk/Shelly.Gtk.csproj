@@ -19,7 +19,7 @@
     <PropertyGroup>
         <Version>2.0.3</Version>
         <AssemblyName>shelly-ui</AssemblyName>
-        <AssemblyVersion>2.0.2</AssemblyVersion>
+        <AssemblyVersion>2.0.3</AssemblyVersion>
         <AssemblyTitle>Shelly GTK UI</AssemblyTitle>
         <Description>Shelly GTK is a arch linux package manager</Description>
         <Company>Seafoam Labs</Company>
