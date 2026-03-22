@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+    <requires lib="gtk" version="4.0"/>
+
+    <object class="GtkBox" id="WebWindow">
+        <property name="orientation">vertical</property>
+
+        <child>
+            <object class="GtkDrawingArea" id="graph_canvas">
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
+            </object>
+        </child>
+
+    </object>
+</interface>

@@ -36,6 +36,7 @@ public static class ServiceBuilder
         collection.AddTransient<Settings>();
         collection.AddTransient<PasswordDialog>();
         collection.AddTransient<AlpmEventDialog>();
+        collection.AddTransient<WebWindow>();
         return collection.BuildServiceProvider();
     }
 }

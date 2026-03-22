@@ -228,6 +228,26 @@ public class PackageInstall(
         if (pkg.Groups.Count > 0)
             AddDetail("Groups", string.Join(", ", pkg.Groups));
 
+        if (pkg.Depends.Count > 0)
+        {
+            var dictionary = new Dictionary<string, List<string>> { { pkg.Name, pkg.Depends } };
+
+            foreach (var dep in pkg.Depends)
+            {
+                for (uint i = 0; i < _listStore.GetNItems(); i++)
+                {
+                    var obj  = _listStore.GetObject(i);
+                    if (obj is not AlpmPackageGObject depObj || depObj.Package == null) continue;
+                    if (depObj.Package.Name.Contains(dep))
+                        dictionary.TryAdd(depObj.Package.Name, depObj.Package.Depends );
+                }
+               
+            }
+            
+            var window = new WebWindow(pkg.Name, dictionary);
+            _detailBox.Append(window.CreateWindow());
+        }
+        
         _detailRevealer.SetRevealChild(true);
     }
 
