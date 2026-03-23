@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using PackageManager.Alpm;
 using PackageManager.Aur.Models;
+using PackageManager.Flatpak;
 using Shelly.Commands.AurCommands;
 using Shelly.Commands.StandardCommands;
 using Shelly.Configurations;
@@ -19,6 +20,11 @@ namespace Shelly;
 [JsonSerializable(typeof(List<AurPackageDto>))]
 [JsonSerializable(typeof(List<AurUpdateDto>))]
 [JsonSerializable(typeof(List<AurSearchPackageBuildCommands.PackageBuild>))]
+[JsonSerializable(typeof(List<FlatpakPackageDto>))]
+[JsonSerializable(typeof(FlatpakPackageDto))]
+[JsonSerializable(typeof(List<FlatpakRemoteDto>))]
+[JsonSerializable(typeof(FlatpakRemoteDto))]
+[JsonSerializable(typeof(FlatpakRemoteRefInfo))]
 internal partial class ShellyJsonContext : JsonSerializerContext
 {
     
