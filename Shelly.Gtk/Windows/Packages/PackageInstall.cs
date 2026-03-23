@@ -154,8 +154,8 @@ public class PackageInstall(
         }
 
         var backButton = Button.New();
-        backButton.SetIconName("go-previous-symbolic");
-        backButton.Halign = Align.Start;
+        backButton.SetIconName("window-close-symbolic");
+        backButton.Halign = Align.End;
         backButton.AddCssClass("flat");
         backButton.TooltipText = "Close details";
         backButton.OnClicked += (_, _) =>
