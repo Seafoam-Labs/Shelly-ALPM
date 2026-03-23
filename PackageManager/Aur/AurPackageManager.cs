@@ -303,6 +303,7 @@ public class AurPackageManager(string? configPath = null, bool verbose = false, 
 
             // Build the package using makepkg
             var user = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
+            
             var home = $"/home/{user}";
             var tempPath = System.IO.Path.Combine(home, ".cache", "Shelly", packageName);
             PackageProgress?.Invoke(this, new PackageProgressEventArgs

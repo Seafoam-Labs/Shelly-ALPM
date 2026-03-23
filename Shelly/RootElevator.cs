@@ -6,8 +6,7 @@ public static class RootElevator
 {
     public static void EnsureRootExectuion()
     {
-        var user = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
-        if (user.Equals("root", StringComparison.OrdinalIgnoreCase))
+        if (Environment.UserName.Equals("root", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
