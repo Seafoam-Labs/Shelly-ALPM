@@ -14,7 +14,7 @@ public class InstallCommand : Command<InstallPackageSettings>
     {
         if (Program.IsUiMode)
         {
-            return HandleUiModeInstall(settings);
+            return HandleUiModeInstall(context,settings);
         }
 
         if (settings.Packages.Length == 0)
@@ -22,6 +22,7 @@ public class InstallCommand : Command<InstallPackageSettings>
             AnsiConsole.MarkupLine("[red]Error: No packages specified[/]");
             return 1;
         }
+
         RootElevator.EnsureRootExectuion();
 
         var packageList = settings.Packages.ToList();
@@ -48,7 +49,12 @@ public class InstallCommand : Command<InstallPackageSettings>
         };
 
         AnsiConsole.MarkupLine("[yellow]Initializing and syncing ALPM...[/]");
-        manager.IntializeWithSync();
+        manager.Initialize(true);
+        if (settings.Upgrade)
+        {
+            AnsiConsole.Markup("[yellow]Running system upgrade[/yellow]");
+            manager.SyncSystemUpdate();
+        }
 
         if (settings.BuildDepsOn)
         {
@@ -129,7 +135,7 @@ public class InstallCommand : Command<InstallPackageSettings>
         return 0;
     }
 
-    private static int HandleUiModeInstall(InstallPackageSettings settings)
+    private static int HandleUiModeInstall(CommandContext context, InstallPackageSettings settings)
     {
         if (settings.Packages.Length == 0)
         {
@@ -137,10 +143,20 @@ public class InstallCommand : Command<InstallPackageSettings>
             return 1;
         }
 
+        if (settings.Upgrade)
+        {
+            var command = new UpgradeCommand();
+            command.Execute(context, new UpgradeSettings()
+            {
+                JsonOutput = true,
+            });
+        }
+
         var manager = new AlpmManager();
         manager.Question += (sender, args) => { QuestionHandler.HandleQuestion(args, true, settings.NoConfirm); };
         Console.Error.WriteLine("Initializing and syncing ALPM...");
-        manager.IntializeWithSync();
+        manager.Initialize(true);
+
         if (settings.BuildDepsOn)
         {
             if (settings.Packages.Length > 1)

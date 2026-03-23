@@ -16,4 +16,8 @@ public class InstallPackageSettings : PackageSettings
     [CommandOption("-d | --no-deps")]
     [Description("Install package without checking/installing dependencies")]
     public bool NoDeps { get; set; }
+
+    [CommandOption("-u | --upgrade")]
+    [Description("Triggers full system upgrade with install")]
+    public bool Upgrade { get; set; }
 }

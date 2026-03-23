@@ -9,7 +9,7 @@ public interface IPrivilegedOperationService
 {
     Task<OperationResult> SyncDatabasesAsync();
     Task<List<AlpmPackageDto>> SearchPackagesAsync(string query);
-    Task<OperationResult> InstallPackagesAsync(IEnumerable<string> packages);
+    Task<OperationResult> InstallPackagesAsync(IEnumerable<string> packages, bool upgrade = false);
     Task<OperationResult> InstallLocalPackageAsync(string filePath);
     Task<OperationResult> InstallAppImageAsync(string filePath);
     Task<OperationResult> RemovePackagesAsync(IEnumerable<string> packages, bool isCascade, bool isCleanup);

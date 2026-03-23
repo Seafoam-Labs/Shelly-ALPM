@@ -218,7 +218,7 @@ public class UpgradeCommand : Command<UpgradeSettings>
         return 0;
     }
 
-    private string CalculateDownside(SizeDisplay size, long downloadSize)
+    private static string CalculateDownside(SizeDisplay size, long downloadSize)
     {
         return size switch
         {

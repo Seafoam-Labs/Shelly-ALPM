@@ -54,6 +54,7 @@ public class PackageInstall(
     private ColumnViewColumn _versionColumn = null!;
     private ColumnViewColumn _repositoryColumn = null!;
     private DropDown _groupDropDown = null!;
+    private CheckButton _upgradeCheck = null!;
 
     private Revealer _detailRevealer = null!;
     private Box _detailBox = null!;
@@ -82,6 +83,7 @@ public class PackageInstall(
         _detailRevealer = (Revealer)_builder.GetObject("detail_revealer")!;
         _detailBox = (Box)_builder.GetObject("detail_box")!;
         _groupDropDown = (DropDown)_builder.GetObject("grouping_selection")!;
+        _upgradeCheck = (CheckButton)_builder.GetObject("upgrade_check")!;
 
         _listStore = Gio.ListStore.New(AlpmPackageGObject.GetGType());
         _filter = CustomFilter.New(FilterPackage);
@@ -554,7 +556,8 @@ public class PackageInstall(
                 }
 
                 lockoutService.Show($"Installing...");
-                await privilegedOperationService.InstallPackagesAsync(selectedPackages);
+                var performUpgrade = _upgradeCheck.GetActive();
+                await privilegedOperationService.InstallPackagesAsync(selectedPackages, performUpgrade);
                 await LoadDataAsync();
             }
             catch (Exception e)

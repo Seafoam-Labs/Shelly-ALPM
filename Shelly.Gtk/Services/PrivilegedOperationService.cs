@@ -121,9 +121,13 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         }
     }
 
-    public async Task<OperationResult> InstallPackagesAsync(IEnumerable<string> packages)
+    public async Task<OperationResult> InstallPackagesAsync(IEnumerable<string> packages, bool upgrade = false)
     {
         var packageArgs = string.Join(" ", packages);
+        if (upgrade)
+        {
+            packageArgs += " -u";
+        }
         return await ExecutePrivilegedWithNoConfirmCheck("Install packages", "install", packageArgs);
     }
 

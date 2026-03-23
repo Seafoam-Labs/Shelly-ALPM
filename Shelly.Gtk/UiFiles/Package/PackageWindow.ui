@@ -79,15 +79,15 @@
               </object>
             </child>
             <child>
-              <object class="GtkSearchEntry" id="search_entry">
-                <property name="placeholder-text">Search packages...</property>
-                <property name="width-request">200</property>
+              <object class="GtkCheckButton" id="upgrade_check">
+                <property name="label">Perform Upgrade</property>
+                <property name="tooltip-text">Perform a full system upgrade with install (-u)</property>
               </object>
             </child>
             <child>
-              <object class="GtkButton" id="sync_button">
-                <property name="icon-name">view-refresh-symbolic</property>
-                <property name="tooltip-text">Sync</property>
+              <object class="GtkSearchEntry" id="search_entry">
+                <property name="placeholder-text">Search packages...</property>
+                <property name="width-request">200</property>
               </object>
             </child>
           </object>
