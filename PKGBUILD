@@ -2,7 +2,7 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgname=shelly
 pkgver=2.0.4
-pkgrel=1
+pkgrel=2
 pkgdesc="Shelly: A Modern Arch Package Manager"
 arch=('x86_64')
 url="https://github.com/ZoeyErinBauer/Shelly-ALPM"
@@ -25,7 +25,7 @@ optdepends=(
     'flatpak:  For supporting flatpak implementation.'
     'archlinux-appstream-data: package icons and metadata'
 )
-makedepends=('dotnet-sdk-10.0')
+makedepends=('dotnet-sdk-10.0' 'clang')
 
 # Source tarball from GitHub release
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/ZoeyErinBauer/Shelly-ALPM/archive/v${pkgver}.tar.gz")
