@@ -3,7 +3,7 @@ namespace Shelly.Commands.StandardCommands;
 
 internal static class RemoveCommands
 {
-    internal static int RemoveUiMode(string[] packages, bool verbose = false, bool noConfirm = false, bool cascade = false, bool removeConfig = false)
+    internal static int RemoveUiMode(string[] packages, bool verbose = false, bool noConfirm = false, bool cascade = true, bool removeConfig = false)
     {
         if (packages.Length == 0)
         {
@@ -17,7 +17,7 @@ internal static class RemoveCommands
             var packageList = packages.ToList();
             manager.Question += (_, args) => { QuestionHandler.HandleQuestion(args, true, noConfirm); };
             manager.Progress += (_, args) => { Console.Error.WriteLine($"{args.PackageName}: {args.Percent}%"); };
-            Console.Error.WriteLine("Initializing ALPM...");
+            Console.Error.WriteLine("Initializing...");
             manager.Initialize(true);
             Console.Error.WriteLine($"Removing packages: {string.Join(", ", packageList)}");
 

@@ -13,7 +13,7 @@ internal static class UpdateCommands
 
         using var manager = new AlpmManager(verbose, true, Configuration.GetConfigurationFilePath());
         manager.Question += (_, args) => { QuestionHandler.HandleQuestion(args, true); };
-        Console.Error.WriteLine("Initializing and syncing ALPM...");
+        Console.Error.WriteLine("Initializing and syncing...");
         manager.InitializeWithSync();
         Console.Error.WriteLine("Updating packages...");
         manager.Progress += (_, args) => { Console.Error.WriteLine($"{args.PackageName}: {args.Percent}%"); };
@@ -56,7 +56,7 @@ internal static class UpdateCommands
             }
         };
 
-        Console.WriteLine("Initializing and syncing ALPM...");
+        Console.WriteLine("Initializing and syncing...");
         manager.InitializeWithSync();
         Console.WriteLine("Updating packages...");
 

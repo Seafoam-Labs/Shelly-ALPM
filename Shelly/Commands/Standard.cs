@@ -162,7 +162,7 @@ internal class Standard
     /// <param name="installed">-i,search installed packages</param>
     /// <param name="repository">-r,search repository of available packages</param>
     /// <returns></returns>
-    public int PackageInfo(ConsoleAppContext context, string[] packages, bool installed = false, bool repository = false)
+    public int PackageInfo(ConsoleAppContext context, [Argument] string[] packages, bool installed = false, bool repository = false)
     {
         var globals = (GlobalOptions)context.GlobalOptions!;
         return globals.UiMode
@@ -178,7 +178,7 @@ internal class Standard
     /// <param name="oldest">-o,installs the oldest matched version</param>
     /// <param name="latest">-l,installs the newest matched version</param>
     /// <returns></returns>
-    public int Downgrade(ConsoleAppContext context, string[] packages, bool noConfirm = false, bool oldest = false, bool latest = false)
+    public int Downgrade(ConsoleAppContext context, [Argument] string[] packages, bool noConfirm = false, bool oldest = false, bool latest = false)
     {
         var globals = (GlobalOptions)context.GlobalOptions!;
         return globals.UiMode

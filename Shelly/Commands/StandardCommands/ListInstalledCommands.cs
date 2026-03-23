@@ -39,7 +39,7 @@ internal static class ListInstalledCommands
     internal static int ListInstalledConsoleMode(bool verbose, string? filter, string sort, string order, int page, int take, bool json)
     {
         using var manager = new AlpmManager(verbose, false, Configuration.GetConfigurationFilePath());
-        Console.WriteLine("Initializing ALPM...");
+        Console.WriteLine("Initializing...");
         manager.Initialize(true);
         var packages = manager.GetInstalledPackages();
 

@@ -14,7 +14,7 @@ internal static class InstallCommands
         var manager = new AlpmManager(verbose, true, Configuration.GetConfigurationFilePath());
         manager.Question += (_, args) => { QuestionHandler.HandleQuestion(args, true, noConfirm); };
         Console.Error.WriteLine("Initializing and syncing ALPM...");
-        manager.InitializeWithSync();
+        manager.Initialize(true);
 
         if (buildDeps)
         {
@@ -100,7 +100,7 @@ internal static class InstallCommands
             }
         };
 
-        Console.WriteLine("Initializing and syncing ALPM...");
+        Console.WriteLine("Initializing...");
         manager.Initialize(true);
 
         if (buildDeps)
