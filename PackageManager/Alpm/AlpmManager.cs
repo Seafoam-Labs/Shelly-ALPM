@@ -142,7 +142,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
 
 
         //Resolve 'auto' architecture to the actual system architecture
-        string resolvedArch = _config.Architecture;
+        string resolvedArch = _config.Architecture.Split(" ").FirstOrDefault() ?? "auto";
         if (resolvedArch.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
             resolvedArch = RuntimeInformation.ProcessArchitecture switch
