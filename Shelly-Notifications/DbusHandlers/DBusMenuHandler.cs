@@ -25,6 +25,8 @@ public class DBusMenuHandler(Connection connection) : IPathMethodHandler
                 [99] = ("Exit", "standard", true, "", "", action: MenuEnum.Exit),
             };
 
+    private const int SubmenuId = 6;
+
     private static readonly Dictionary<MenuEnum, List<int>> UpdatesSubmenuChildren = new();
 
     public ValueTask HandleMethodAsync(MethodContext context)
@@ -319,15 +321,15 @@ public class DBusMenuHandler(Connection connection) : IPathMethodHandler
 
             var flatpakIds = RegisterSubmenuItems(syncModel.Flatpaks, i => $"{i.Name} {i.Version}",
                 MenuEnum.FlatpakUpdate, ref startValue);
-            RegisterSubmenu(flatpakIds, MenuEnum.FlatpakUpdate, Items.Count + 1, "Flatpak");
+            RegisterSubmenu(flatpakIds, MenuEnum.FlatpakUpdate, SubmenuId + 1, "Flatpak");
 
             var aurIds = RegisterSubmenuItems(syncModel.Aur, i => $"{i.Name} {i.OldVersion} -> {i.Version}",
                 MenuEnum.AurUpdate, ref startValue);
-            RegisterSubmenu(aurIds, MenuEnum.AurUpdate, Items.Count + 1, "AUR");
+            RegisterSubmenu(aurIds, MenuEnum.AurUpdate, SubmenuId + 2, "AUR");
 
             var packageIds = RegisterSubmenuItems(syncModel.Packages, i => $"{i.Name} {i.OldVersion} -> {i.Version}",
                 MenuEnum.StandardUpdate, ref startValue);
-            RegisterSubmenu(packageIds, MenuEnum.StandardUpdate, Items.Count + 1, "Standard");
+            RegisterSubmenu(packageIds, MenuEnum.StandardUpdate, SubmenuId + 3, "Standard");
         }
         catch (Exception e)
         {

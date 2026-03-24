@@ -245,7 +245,7 @@ public class AurRemove(
             try
             {
                 lockoutService.Show($"Installing...");
-
+                
                 try
                 {
                     //do work
@@ -255,21 +255,15 @@ public class AurRemove(
                         Console.WriteLine($"Failed to remove packages: {result.Error}");
                     }
 
-                    await LoadDataAsync();
-                }
-                finally
-                {
-                    lockoutService.Hide();
-
-                    var args = new ToastMessageEventArgs(
-                        $"Updated {selectedPackages.Count} Package(s)"
-                    );
-                    genericQuestionService.RaiseToastMessage(args);
-                }
+                await LoadDataAsync();
             }
             catch (Exception e)
             {
                 Console.WriteLine($"Failed to remove packages: {e.Message}");
+            }
+            finally
+            {
+                lockoutService.Hide();
             }
         }
     }

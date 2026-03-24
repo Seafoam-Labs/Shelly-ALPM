@@ -4,6 +4,7 @@ using System.Xml.Linq;
 using Gtk;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
+using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
@@ -17,6 +18,7 @@ public class HomeWindow(
     IUnprivilegedOperationService unprivilegedOperationService,
     IConfigService configService,
     ILockoutService lockoutService,
+    IIconResolverService iconResolverService,
     IGenericQuestionService genericQuestionService,
     MetaSearch metaSearch) : IShellyWindow
 {
@@ -47,9 +49,9 @@ public class HomeWindow(
         {
             var query = homeSearchEntry.GetText();
             if (string.IsNullOrWhiteSpace(query)) return;
-            
+
             searchPromptOverlay.SetVisible(false);
-            
+
             while (metaSearchContainer.GetFirstChild() is { } child)
                 metaSearchContainer.Remove(child);
 
@@ -77,7 +79,10 @@ public class HomeWindow(
         _totalFlatpakLabel.OnRealize += (sender, args) => { _ = LoadTotalFlatpak(_totalFlatpakLabel, _cts.Token); };
 
         _flatpakPercentLabel = (Label)builder.GetObject("FlatpakPercent")!;
-        _flatpakPercentLabel.OnRealize += (sender, args) => { _ = LoadPercentFlatpak(_flatpakPercentLabel, _cts.Token); };
+        _flatpakPercentLabel.OnRealize += (sender, args) =>
+        {
+            _ = LoadPercentFlatpak(_flatpakPercentLabel, _cts.Token);
+        };
 
         var exportSyncButton = (Button)builder.GetObject("ExportSyncButton")!;
         exportSyncButton.OnClicked += (sender, args) => { _ = ExportSync(); };
@@ -309,6 +314,9 @@ public class HomeWindow(
     private async Task LoadTotalPackagePercentData(Label label, CancellationToken ct)
     {
         var packages = await privilegedOperationService.GetInstalledPackagesAsync();
+
+        PreLoadIcons(packages.Select(x => x.Name).ToList());
+        
         ct.ThrowIfCancellationRequested();
         var updates = await unprivilegedOperationService.CheckForApplicationUpdates();
         ct.ThrowIfCancellationRequested();
@@ -332,6 +340,15 @@ public class HomeWindow(
         {
             Console.WriteLine(e);
         }
+    }
+
+    private void PreLoadIcons(List<string> icons)
+    {
+        Task.Run(() =>
+        {
+            iconResolverService.PreloadIcons(icons);
+            return Task.CompletedTask;
+        });
     }
 
     private async Task LoadTotalPackageData(Label label, CancellationToken ct)

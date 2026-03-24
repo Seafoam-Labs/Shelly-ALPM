@@ -110,7 +110,7 @@ Remove Flatpak - List of all current installed packages and versions. Flatpaks m
 
 ### Advanced Features (Disabled by default)
 
-Webview visualization of depdencessy tree
+Webview visualization of depdency tree
 
 ![Screenshot_20260323_125905.png](Screenshot_20260323_125905.png)
 

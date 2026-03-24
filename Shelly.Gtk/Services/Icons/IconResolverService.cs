@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace Shelly.Gtk.Services.Icons;
 
 public class IconResolverService : IIconResolverService
@@ -11,16 +13,28 @@ public class IconResolverService : IIconResolverService
     private const string IconPath = "/usr/share/swcatalog";
     private const string LegacyIconPath = "/usr/share/app-info";
 
+    private readonly ConcurrentDictionary<string, string> _iconMap = [];
+
     //Commenting out extra methods and plan to add them back in after futher optimizations
     public string? GetIconPath(string packageName)
     {
+        if (_iconMap.TryGetValue(packageName, out var iconPath))
+        {
+            return iconPath;
+        }
+
         var swcatalogResult = GetSwcatalogIcon(packageName);
+        _iconMap.TryAdd(packageName, swcatalogResult ?? "");
         return swcatalogResult ??
-               // var themeResult = GetIconFromTheme(packageName);
-               // if (themeResult != null)
-               //     return themeResult;
                null;
-        //return GetPixmapIcon(packageName);
+    }
+
+    public void PreloadIcons(IEnumerable<string> packageNames)
+    {
+        foreach (var packageName in packageNames)
+        {
+            _ = GetIconPath(packageName);
+        }
     }
 
     private string? GetSwcatalogIcon(string packageName)

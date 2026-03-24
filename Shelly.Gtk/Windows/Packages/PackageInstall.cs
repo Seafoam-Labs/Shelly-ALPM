@@ -6,6 +6,7 @@ using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
+using Shelly.Gtk.Windows.Dialog;
 
 // ReSharper disable CollectionNeverQueried.Local
 
@@ -203,6 +204,7 @@ public class PackageInstall(
         {
             iconImage.SetFromIconName("package-x-generic");
         }
+
         _detailBox.Append(iconImage);
 
         AddDetail("Name", pkg.Name);
@@ -245,9 +247,11 @@ public class PackageInstall(
                 depLabel.Xalign = 0;
                 depBox.Append(depLabel);
             }
+
             expander.SetChild(depBox);
             _detailBox.Append(expander);
         }
+
         if (pkg.OptDepends.Count > 0)
         {
             var optExpander = new Expander { Label = $"Optional Deps ({pkg.OptDepends.Count})" };
@@ -260,9 +264,11 @@ public class PackageInstall(
                 depLabel.Xalign = 0;
                 optDepBox.Append(depLabel);
             }
+
             optExpander.SetChild(optDepBox);
             _detailBox.Append(optExpander);
         }
+
         if (pkg.Licenses.Count > 0)
             AddDetail("Licenses", string.Join(", ", pkg.Licenses));
         if (pkg.Provides.Count > 0)
@@ -510,21 +516,18 @@ public class PackageInstall(
 
     private bool FilterPackage(GObject.Object obj)
     {
-        if (obj is AlpmPackageGObject pkgObj && pkgObj.Package != null)
+        if (string.IsNullOrWhiteSpace(_searchText))
+            return true;
+
+        if (obj is not AlpmPackageGObject pkgObj || pkgObj.Package == null) return false;
+
+        if (_selectedGroup != "Any" && !pkgObj.Package.Groups.Contains(_selectedGroup))
         {
-            if (_selectedGroup != "Any" && !pkgObj.Package.Groups.Contains(_selectedGroup))
-            {
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(_searchText))
-                return true;
-
-            return pkgObj.Package.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
-                   pkgObj.Package.Description.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
+            return false;
         }
 
-        return false;
+        return pkgObj.Package.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+               pkgObj.Package.Description.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task InstallSelectedAsync()
@@ -541,6 +544,8 @@ public class PackageInstall(
 
         if (selectedPackages.Count != 0)
         {
+            OperationResult? result = null;
+
             try
             {
                 if (!configService.LoadConfig().NoConfirm)
@@ -572,7 +577,7 @@ public class PackageInstall(
 
                 lockoutService.Show($"Installing...");
                 var performUpgrade = _upgradeCheck.GetActive();
-                await privilegedOperationService.InstallPackagesAsync(selectedPackages, performUpgrade);
+                result = await privilegedOperationService.InstallPackagesAsync(selectedPackages, performUpgrade);
                 await LoadDataAsync();
             }
             catch (Exception e)
@@ -582,12 +587,75 @@ public class PackageInstall(
             finally
             {
                 lockoutService.Hide();
+            }
+
+            if (result == null)
+            {
+                return;
+            }
+
+            if (result.Success)
+            {
                 var args = new ToastMessageEventArgs(
                     $"Installed {selectedPackages.Count} Package(s)"
                 );
 
                 genericQuestionService.RaiseToastMessage(args);
+                return;
             }
+
+            ShowInstallFailureDialog(selectedPackages, result);
+        }
+    }
+
+    private void ShowInstallFailureDialog(IReadOnlyCollection<string> selectedPackages, OperationResult result)
+    {
+        var dialogArgs = StandardInstallFailureDialog.Create(
+            selectedPackages,
+            LogHelpers.BuildFailureSummary(result),
+            () => ExportInstallLogAsync(selectedPackages, result));
+
+        genericQuestionService.RaiseDialog(dialogArgs);
+    }
+
+    private async Task<bool> ExportInstallLogAsync(IReadOnlyCollection<string> selectedPackages, OperationResult result)
+    {
+        try
+        {
+            var dialog = FileDialog.New();
+            dialog.SetTitle("Export Shelly install log");
+            dialog.SetInitialName(LogHelpers.CreateSuggestedLogFileName(selectedPackages, "shelly"));
+
+            var filter = FileFilter.New();
+            filter.SetName("Log Files (*.log)");
+            filter.AddPattern("*.log");
+
+            var filters = Gio.ListStore.New(FileFilter.GetGType());
+            filters.Append(filter);
+            dialog.SetFilters(filters);
+
+            var file = await dialog.SaveAsync((Window)_overlay.GetRoot()!);
+            if (file is null)
+            {
+                return false;
+            }
+
+            var path = file.GetPath();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            await File.WriteAllTextAsync(path, LogHelpers.BuildInstallLog(selectedPackages, result, "aur"));
+
+            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Exported Shelly install log"));
+            return true;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Failed to export Shelly install log: {e.Message}");
+            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Failed to export Shelly install log"));
+            return false;
         }
     }
 

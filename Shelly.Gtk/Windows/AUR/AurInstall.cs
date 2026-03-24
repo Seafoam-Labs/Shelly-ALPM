@@ -343,7 +343,7 @@ public class AurInstall(
     {
         var dialogArgs = AurInstallFailureDialog.Create(
             selectedPackages,
-            BuildFailureSummary(result),
+            LogHelpers.BuildFailureSummary(result),
             () => ExportInstallLogAsync(selectedPackages, result));
 
         genericQuestionService.RaiseDialog(dialogArgs);
@@ -355,7 +355,7 @@ public class AurInstall(
         {
             var dialog = FileDialog.New();
             dialog.SetTitle("Export AUR install log");
-            dialog.SetInitialName(CreateSuggestedLogFileName(selectedPackages));
+            dialog.SetInitialName(LogHelpers.CreateSuggestedLogFileName(selectedPackages, "aur"));
 
             var filter = FileFilter.New();
             filter.SetName("Log Files (*.log)");
@@ -377,7 +377,7 @@ public class AurInstall(
                 return false;
             }
 
-            await File.WriteAllTextAsync(path, BuildInstallLog(selectedPackages, result));
+            await File.WriteAllTextAsync(path, LogHelpers.BuildInstallLog(selectedPackages, result, "aur"));
 
             genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Exported AUR install log"));
             return true;
@@ -390,53 +390,6 @@ public class AurInstall(
         }
     }
 
-    private static string BuildFailureSummary(OperationResult result)
-    {
-        var summarySource = !string.IsNullOrWhiteSpace(result.Error) ? result.Error : result.Output;
-        if (string.IsNullOrWhiteSpace(summarySource))
-        {
-            return string.Empty;
-        }
-
-        var lines = summarySource
-            .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .TakeLast(8);
-
-        return string.Join(Environment.NewLine, lines);
-    }
-
-    private static string BuildInstallLog(IReadOnlyCollection<string> selectedPackages, OperationResult result)
-    {
-        var stringBuilder = new StringBuilder();
-        stringBuilder.AppendLine("Shelly AUR install log");
-        stringBuilder.AppendLine($"Generated: {DateTimeOffset.Now:O}");
-        stringBuilder.AppendLine($"Packages: {string.Join(", ", selectedPackages)}");
-        stringBuilder.AppendLine($"Exit Code: {result.ExitCode}");
-        stringBuilder.AppendLine($"Success: {result.Success}");
-        stringBuilder.AppendLine();
-        stringBuilder.AppendLine("=== STDERR ===");
-        stringBuilder.AppendLine(string.IsNullOrWhiteSpace(result.Error) ? "<empty>" : result.Error.TrimEnd());
-        stringBuilder.AppendLine();
-        stringBuilder.AppendLine("=== STDOUT ===");
-        stringBuilder.AppendLine(string.IsNullOrWhiteSpace(result.Output) ? "<empty>" : result.Output.TrimEnd());
-        return stringBuilder.ToString();
-    }
-
-    private static string CreateSuggestedLogFileName(IReadOnlyCollection<string> selectedPackages)
-    {
-        var packageName = selectedPackages.FirstOrDefault() ?? "aur-package";
-        if (selectedPackages.Count > 1)
-        {
-            packageName = $"{packageName}-{selectedPackages.Count - 1}-more";
-        }
-
-        foreach (var invalidCharacter in Path.GetInvalidFileNameChars())
-        {
-            packageName = packageName.Replace(invalidCharacter, '-');
-        }
-
-        return $"{DateTime.Now:yyyyMMddHHmmss}_aur-install_{packageName}.log";
-    }
 
     private bool AnySelected()
     {

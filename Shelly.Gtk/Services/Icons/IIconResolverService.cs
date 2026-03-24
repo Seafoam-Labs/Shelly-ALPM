@@ -6,4 +6,6 @@ namespace Shelly.Gtk.Services.Icons;
 public interface IIconResolverService
 {
     public string? GetIconPath(string packageName);
+    
+    public void PreloadIcons(IEnumerable<string> packageNames);
 }
