@@ -89,7 +89,7 @@ public class HomeWindow(
 
         var upgradeAllButton = (Button)builder.GetObject("UpgradeAllButton")!;
         upgradeAllButton.OnClicked += (sender, args) => { _ = UpgradeAll(); };
-
+        
         var config = configService.LoadConfig();
         var aurBox = (Box)builder.GetObject("AurBox")!;
         var flatpakBox = (Box)builder.GetObject("FlatpakBox")!;
@@ -115,6 +115,15 @@ public class HomeWindow(
         try
         {
             var packagesNeedingUpdate = await unprivilegedOperationService.CheckForApplicationUpdates();
+
+            if (packagesNeedingUpdate.Aur.Count == 0 && packagesNeedingUpdate.Packages.Count == 0 &&
+                packagesNeedingUpdate.Flatpaks.Count == 0)
+            {
+                var toastArgs = new ToastMessageEventArgs("No packages need to be upgraded");
+                genericQuestionService.RaiseToastMessage(toastArgs);
+                return;
+            }
+            
             var standardPackagesNeedingUpdate = packagesNeedingUpdate.Packages;
             if (standardPackagesNeedingUpdate.Count == 0)
             {
