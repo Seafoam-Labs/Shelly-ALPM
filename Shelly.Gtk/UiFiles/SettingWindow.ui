@@ -295,6 +295,12 @@
                 <property name="uri">https://buymeacoffee.com/zoeyerinba3</property>
               </object>
             </child>
+            <child>
+              <object class="GtkLinkButton" id="changelog_button">
+                <property name="label">View Changelog</property>
+                <property name="uri">about:blank</property>
+              </object>
+            </child>
           </object>
         </child>
       </object>
