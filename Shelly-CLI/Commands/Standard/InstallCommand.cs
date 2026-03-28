@@ -36,7 +36,7 @@ public class InstallCommand : Command<InstallPackageSettings>
         }
 
 
-        var manager = new AlpmManager();
+        using var manager = new AlpmManager();
         object renderLock = new();
 
         manager.Question += (sender, args) =>
@@ -137,7 +137,6 @@ public class InstallCommand : Command<InstallPackageSettings>
         manager.InstallPackages(packageList);
         Console.WriteLine(); // Final newline after last package
 
-        manager.Dispose();
         AnsiConsole.MarkupLine("[green]Packages installed successfully![/]");
         return 0;
     }

@@ -130,10 +130,10 @@ public class UnprivilegedOperationService : IUnprivilegedOperationService
         return await ExecuteUnprivilegedCommandAsync("Remove packages", "flatpak remove", packageArgs);
     }
 
-    public async Task<List<AppstreamApp>> ListAppstreamFlatpak()
+    public async Task<List<AppstreamApp>> ListAppstreamFlatpak(CancellationToken ct = default)
     {
         var result =
-            await ExecuteUnprivilegedCommandAsync("Get local appstream", "flatpak get-remote-appstream", "all",
+            await ExecuteUnprivilegedCommandAsync("Get local appstream", ct, "flatpak get-remote-appstream", "all",
                 "--json");
 
         if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
@@ -141,29 +141,32 @@ public class UnprivilegedOperationService : IUnprivilegedOperationService
             return [];
         }
 
-        try
+        return await Task.Run(() =>
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
+            try
             {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
+                var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
                 {
-                    var updates = System.Text.Json.JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListAppstreamApp);
-                    return updates ?? [];
+                    var trimmedLine = StripBom(line.Trim());
+                    if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
+                    {
+                        var updates = System.Text.Json.JsonSerializer.Deserialize(trimmedLine,
+                            ShellyGtkJsonContext.Default.ListAppstreamApp);
+                        return updates ?? [];
+                    }
                 }
-            }
 
-            var allUpdates = System.Text.Json.JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
-                ShellyGtkJsonContext.Default.ListAppstreamApp);
-            return allUpdates ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse updates JSON: {ex.Message}");
-            return [];
-        }
+                var allUpdates = System.Text.Json.JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
+                    ShellyGtkJsonContext.Default.ListAppstreamApp);
+                return allUpdates ?? [];
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to parse updates JSON: {ex.Message}");
+                return [];
+            }
+        }, ct);
     }
 
 
@@ -380,6 +383,12 @@ public class UnprivilegedOperationService : IUnprivilegedOperationService
     private async Task<UnprivilegedOperationResult> ExecuteUnprivilegedCommandAsync(string operationDescription,
         params string[] args)
     {
+        return await ExecuteUnprivilegedCommandAsync(operationDescription, CancellationToken.None, args);
+    }
+
+    private async Task<UnprivilegedOperationResult> ExecuteUnprivilegedCommandAsync(string operationDescription,
+        CancellationToken ct, params string[] args)
+    {
         var arguments = string.Join(" ", args);
         var fullCommand = $"{_cliPath} {arguments}";
 
@@ -423,23 +432,7 @@ public class UnprivilegedOperationService : IUnprivilegedOperationService
                 {
                     var questionText = e.Data.Substring("[Shelly][ALPM_QUESTION]".Length);
                     Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
-
-                    // Show dialog on UI thread and get response
-                    //TODO: IMPLEMENT INTERACTION HERE 
-
-                    // var response = await Dispatcher.UIThread.InvokeAsync(async () =>
-                    // {
-                    //     if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-                    //         && desktop.MainWindow != null)
-                    //     {
-                    //         var dialog = new QuestionDialog(questionText);
-                    //         var result = await dialog.ShowDialog<bool>(desktop.MainWindow);
-                    //         return result;
-                    //     }
-                    //
-                    //     return true; // Default to yes if no window available
-                    // });
-
+                    
                     // Send response to CLI via stdin
                     if (stdinWriter != null)
                     {
@@ -463,10 +456,19 @@ public class UnprivilegedOperationService : IUnprivilegedOperationService
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            await process.WaitForExitAsync();
+            try
+            {
+                await process.WaitForExitAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                if (!process.HasExited)
+                    process.Kill(true);
+                throw;
+            }
 
             // Close stdin after process exits
-            stdinWriter.Close();
+            stdinWriter?.Close();
 
             var success = process.ExitCode == 0;
 

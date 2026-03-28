@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 
@@ -13,7 +11,7 @@ public interface IUnprivilegedOperationService
 
     Task<List<FlatpakPackageDto>> ListFlatpakUpdates();
 
-    Task<List<AppstreamApp>> ListAppstreamFlatpak();
+    Task<List<AppstreamApp>> ListAppstreamFlatpak(CancellationToken ct = default);
 
     Task<UnprivilegedOperationResult> FlatpakUpgrade();
     

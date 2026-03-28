@@ -17,14 +17,16 @@ public class PrivilegedOperationService : IPrivilegedOperationService
     private readonly ICredentialManager _credentialManager;
     private readonly IAlpmEventService _alpmEventService;
     private readonly IConfigService _configService;
+    private readonly ILockoutService _lockoutService;
     private bool _usedPassword = false;
 
     public PrivilegedOperationService(ICredentialManager credentialManager, IAlpmEventService alpmEventService,
-        IConfigService configService)
+        IConfigService configService, ILockoutService lockoutService)
     {
         _credentialManager = credentialManager;
         _alpmEventService = alpmEventService;
         _configService = configService;
+        _lockoutService = lockoutService;
         _cliPath = FindCliPath();
     }
 
@@ -765,7 +767,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                             var line = e.Data.Substring("[Shelly][ALPM_SCRIPTLET]".Length);
                             if (!string.IsNullOrEmpty(line))
                             {
-                                _alpmEventService.RaiseScriptletInfo(new ScriptletInfoEventArgs(line));
+                                _lockoutService.ParseLog($"[SCRIPTLET] {line}");
                             }
                         }
                         else if (e.Data.StartsWith("[Shelly][ALPM_HOOK]"))
@@ -773,7 +775,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                             var line = e.Data.Substring("[Shelly][ALPM_HOOK]".Length);
                             if (!string.IsNullOrEmpty(line))
                             {
-                                _alpmEventService.RaiseHookInfo(new HookInfoEventArgs(line));
+                                _lockoutService.ParseLog($"[HOOK] {line}");
                             }
                         }
                         // Check for generic ALPM question (yes/no)
@@ -795,6 +797,10 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                             {
                                 await SafeWriteAsync(args.Response == 1 ? "y" : "n");
                             }
+                        }
+                        else if (e.Data.StartsWith("[Shelly][DEBUG]"))
+                        {
+                            // Debug messages - skip, don't forward to lockout dialog
                         }
                         else
                         {

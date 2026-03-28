@@ -35,6 +35,7 @@ public static class ServiceBuilder
         collection.AddTransient<MetaSearch>();
         collection.AddTransient<Settings>();
         collection.AddTransient<PasswordDialog>();
+        collection.AddSingleton<LockoutDialog>();
         collection.AddTransient<AlpmEventDialog>();
         collection.AddTransient<WebWindow>();
         return collection.BuildServiceProvider();

@@ -3,6 +3,7 @@ namespace Shelly.Gtk.Services;
 public interface ILockoutService
 {
     event EventHandler<LockoutStatusEventArgs>? StatusChanged;
+    event EventHandler<string>? LogLineReceived;
 
     void Show(string description, double progress = 0, bool isIndeterminate = true);
     void Hide();

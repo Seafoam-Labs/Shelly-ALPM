@@ -152,9 +152,7 @@ sealed class Program
             currentPage = initialHomeWindow;
 
             var mainOverlay = (Overlay)mainBuilder.GetObject("MainOverlay")!;
-            var lockoutOverlay = (Box)mainBuilder.GetObject("LockoutOverlay")!;
-            var lockoutDescription = (Label)mainBuilder.GetObject("LockoutDescription")!;
-            var lockoutProgressBar = (ProgressBar)mainBuilder.GetObject("LockoutProgressBar")!;
+            var lockoutDialog = serviceProvider.GetRequiredService<LockoutDialog>();
 
             var keyController = EventControllerKey.New();
             keyController.OnKeyPressed += (_, args) =>
@@ -182,150 +180,6 @@ sealed class Program
 
             var alpmEventService = serviceProvider.GetRequiredService<IAlpmEventService>();
             
-            // Buffer scriptlet lines and show a single consolidated toast after output settles
-            var scriptletLines = new System.Collections.Generic.List<string>();
-            uint scriptletTimerId = 0;
-            
-            alpmEventService.ScriptletInfo += (s, e) =>
-            {
-                lock (scriptletLines)
-                {
-                    scriptletLines.Add(e.Line);
-                }
-
-                // Debounce: reset timer on each new line, show toast 500ms after last line
-                // Use IdleAdd to ensure GTK operations run on the main thread
-                GLib.Functions.IdleAdd(0, () =>
-                {
-                    if (scriptletTimerId != 0)
-                    {
-                        GLib.Functions.SourceRemove(scriptletTimerId);
-                        scriptletTimerId = 0;
-                    }
-
-                    scriptletTimerId = GLib.Functions.TimeoutAdd(0, 500, () =>
-                    {
-                        scriptletTimerId = 0;
-                        string message;
-                        lock (scriptletLines)
-                        {
-                            message = string.Join("\n", scriptletLines).Trim();
-                            scriptletLines.Clear();
-                        }
-
-                        if (!string.IsNullOrEmpty(message))
-                        {
-                            // Truncate if too long for a toast
-                            if (message.Length > 300)
-                            {
-                                message = message[..300] + "\n...";
-                            }
-                            var toastArgs = new UiModels.ToastMessageEventArgs(message);
-                            // Call toast creation directly instead of ShowToastMessage to avoid double IdleAdd
-                            var toastBox = Box.New(Orientation.Horizontal, 8);
-                            toastBox.AddCssClass("toast-message");
-                            toastBox.SetHalign(Align.Center);
-                            toastBox.SetValign(Align.End);
-                            toastBox.SetMarginBottom(40);
-
-                            var label = Label.New(toastArgs.Title);
-                            label.SetMarginTop(5);
-                            label.SetMarginBottom(5);
-                            label.SetMarginStart(5);
-                            label.SetMarginEnd(5);
-
-                            toastBox.Append(label);
-                            mainOverlay.AddOverlay(toastBox);
-
-                            GLib.Functions.TimeoutAdd(0, 3000, () =>
-                            {
-                                if (toastBox.GetParent() != null)
-                                {
-                                    mainOverlay.RemoveOverlay(toastBox);
-                                }
-                                return false;
-                            });
-                        }
-
-                        return false;
-                    });
-
-                    return false;
-                });
-            };
-
-            // Buffer hook lines and show a single consolidated toast after output settles
-            var hookLines = new System.Collections.Generic.List<string>();
-            uint hookTimerId = 0;
-            
-            alpmEventService.HookInfo += (s, e) =>
-            {
-                lock (hookLines)
-                {
-                    hookLines.Add(e.Line);
-                }
-
-                // Debounce: reset timer on each new line, show toast 500ms after last line
-                // Use IdleAdd to ensure GTK operations run on the main thread
-                GLib.Functions.IdleAdd(0, () =>
-                {
-                    if (hookTimerId != 0)
-                    {
-                        GLib.Functions.SourceRemove(hookTimerId);
-                        hookTimerId = 0;
-                    }
-
-                    hookTimerId = GLib.Functions.TimeoutAdd(0, 500, () =>
-                    {
-                        hookTimerId = 0;
-                        string message;
-                        lock (hookLines)
-                        {
-                            message = string.Join("\n", hookLines).Trim();
-                            hookLines.Clear();
-                        }
-
-                        if (!string.IsNullOrEmpty(message))
-                        {
-                            // Truncate if too long for a toast
-                            if (message.Length > 300)
-                            {
-                                message = message[..300] + "\n...";
-                            }
-                            var toastArgs = new UiModels.ToastMessageEventArgs(message);
-                            // Call toast creation directly instead of ShowToastMessage to avoid double IdleAdd
-                            var toastBox = Box.New(Orientation.Horizontal, 8);
-                            toastBox.AddCssClass("toast-message");
-                            toastBox.SetHalign(Align.Center);
-                            toastBox.SetValign(Align.End);
-                            toastBox.SetMarginBottom(40);
-
-                            var label = Label.New(toastArgs.Title);
-                            label.SetMarginTop(5);
-                            label.SetMarginBottom(5);
-                            label.SetMarginStart(5);
-                            label.SetMarginEnd(5);
-
-                            toastBox.Append(label);
-                            mainOverlay.AddOverlay(toastBox);
-
-                            GLib.Functions.TimeoutAdd(0, 3000, () =>
-                            {
-                                if (toastBox.GetParent() != null)
-                                {
-                                    mainOverlay.RemoveOverlay(toastBox);
-                                }
-                                return false;
-                            });
-                        }
-
-                        return false;
-                    });
-
-                    return false;
-                });
-            };
-
             alpmEventService.Question += (s, e) =>
             {
                 GLib.Functions.IdleAdd(0, () =>
@@ -403,15 +257,32 @@ sealed class Program
             {
                 GLib.Functions.IdleAdd(0, () =>
                 {
-                    lockoutOverlay.Visible = lockoutArgs.IsLocked;
-                    if (!lockoutArgs.IsLocked) return false;
-                    lockoutDescription.SetText(lockoutArgs.Description ?? "Processing...");
-                    lockoutProgressBar.Fraction = lockoutArgs.Progress / 100.0;
-                    if (lockoutArgs.IsIndeterminate)
+                    if (lockoutArgs.IsLocked)
                     {
-                        lockoutProgressBar.Pulse();
+                        if (!lockoutDialog.IsVisible)
+                        {
+                            lockoutDialog.Show(mainOverlay, lockoutArgs.Description ?? "Processing...",
+                                lockoutArgs.Progress, lockoutArgs.IsIndeterminate);
+                        }
+                        else
+                        {
+                            lockoutDialog.UpdateStatus(lockoutArgs.Description ?? "Processing...",
+                                lockoutArgs.Progress, lockoutArgs.IsIndeterminate);
+                        }
                     }
+                    else
+                    {
+                        lockoutDialog.ShowCloseButton();
+                    }
+                    return false;
+                });
+            };
 
+            lockoutService.LogLineReceived += (_, logLine) =>
+            {
+                GLib.Functions.IdleAdd(0, () =>
+                {
+                    lockoutDialog.AppendLogLine(logLine);
                     return false;
                 });
             };
@@ -463,7 +334,7 @@ sealed class Program
 
             bool ShouldHandleNavigationShortcut()
             {
-                if (lockoutOverlay.Visible)
+                if (lockoutDialog.IsVisible)
                 {
                     return false;
                 }
@@ -491,7 +362,7 @@ sealed class Program
             {
                 for (Widget? child = mainOverlay.GetFirstChild(); child != null; child = child.GetNextSibling())
                 {
-                    if (child == mainBox || child == lockoutOverlay || !child.Visible)
+                    if (child == mainBox || !child.Visible)
                     {
                         continue;
                     }

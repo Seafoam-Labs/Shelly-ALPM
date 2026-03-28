@@ -16,9 +16,9 @@ public class FlatpakInstall(
     IConfigService configService,
     IGenericQuestionService genericQuestionService) : IShellyWindow
 {
-    private GridView? _gridView = null!;
+    private GridView? _gridView;
     private readonly CancellationTokenSource _cts = new();
-    private Gio.ListStore? _listStore = null!;
+    private Gio.ListStore? _listStore;
     private FilterListModel _filterListModel = null!;
     private CustomFilter _filter = null!;
     private SingleSelection? _selectionModel;
@@ -30,6 +30,8 @@ public class FlatpakInstall(
     private FlatpakCategories _selectedCategory = FlatpakCategories.AllApplications;
     private SignalListItemFactory? _factory;
     private Box? _overlay;
+    private Box? _loadingOverlay;
+    private Spinner? _loadingSpinner;
     private Button _overlayCloseButton = null!;
     private Button _overlayInstallButton = null!;
     private Button _versionHistoryButton = null!;
@@ -87,6 +89,8 @@ public class FlatpakInstall(
         var searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
         _categoryListBox = (ListBox)builder.GetObject("category_list")!;
         _overlay = (Box)builder.GetObject("overlay_panel")!;
+        _loadingOverlay = (Box)builder.GetObject("loading_overlay")!;
+        _loadingSpinner = (Spinner)builder.GetObject("loading_spinner")!;
         _remoteRefOverlay = (Box)builder.GetObject("overlay_remote_ref")!;
         _addRemoteOverlay = (Box)builder.GetObject("overlay_add_remote")!;
         _overlayScreenshotsBox = (Box)builder.GetObject("overlay_screenshots_box")!;
@@ -134,7 +138,7 @@ public class FlatpakInstall(
         _factory.OnUnbind += OnUnbind;
         _gridView.SetFactory(_factory);
         
-        _installFromFlatpakRefDropDown.OnNotify += (sender, args) =>
+        _installFromFlatpakRefDropDown.OnNotify += (_, args) =>
         {
             if (args.Pspec.GetName() != "selected") return;
             var selectedIndex = _installFromFlatpakRefDropDown.GetSelected();
@@ -273,8 +277,8 @@ public class FlatpakInstall(
         
         _gridView.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
 
-        reloadButton.OnClicked += (_, _) => { _ = LoadDataAsync(); };
-        searchEntry.OnSearchChanged += (sender, _) =>
+        reloadButton.OnClicked += (_, _) => { _ = LoadDataAsync(_cts.Token); };
+        searchEntry.OnSearchChanged += (_, _) =>
         {
             _searchDebounce.Cancel();
             _searchDebounce = new CancellationTokenSource();
@@ -316,7 +320,6 @@ public class FlatpakInstall(
             _overlayCloseButton.OnClicked += (_, _) =>
             {
                 _overlay.SetVisible(false);
-                _overlay.Dispose();
             };
 
             _overlayIconImage = (Image)builder.GetObject("overlay_icon")!;
@@ -576,22 +579,48 @@ public class FlatpakInstall(
     {
         try
         {
-            lockoutService.Show("Loading available Flatpak packages...", 0, false);
+            GLib.Functions.IdleAdd(0, () =>
+            {
+                if (ct.IsCancellationRequested) return false;
+                _loadingOverlay?.SetVisible(true);
+                _loadingSpinner?.Start();
+                return false;
+            });
 
+            
             var syncTask = unprivilegedOperationService.FlatpakSyncRemoteAppstream();
             await Task.WhenAny(syncTask, Task.Delay(TimeSpan.FromSeconds(5), ct));
             
             ct.ThrowIfCancellationRequested();
-            _allPackages = await unprivilegedOperationService.ListAppstreamFlatpak();
+            _allPackages = await unprivilegedOperationService.ListAppstreamFlatpak(ct);
             ct.ThrowIfCancellationRequested();
+
             GLib.Functions.IdleAdd(0, () =>
             {
-                foreach (var pkg in _allPackages)
-                {
-                    _listStore.Append(new FlatpakGObject { Package = pkg });
-                }
+                if (ct.IsCancellationRequested) return false;
+                _listStore!.RemoveAll();
                 return false;
             });
+
+            const int batchSize = 100;
+            for (var i = 0; i < _allPackages.Count; i += batchSize)
+            {
+                var currentBatch = _allPackages.Skip(i).Take(batchSize).ToList();
+                GLib.Functions.IdleAdd(0, () =>
+                {
+                    if (ct.IsCancellationRequested) return false;
+                    foreach (var pkg in currentBatch)
+                    {
+                        _listStore!.Append(new FlatpakGObject { Package = pkg });
+                    }
+                    return false;
+                });
+                await Task.Delay(10, ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            
         }
         catch (Exception e)
         {
@@ -599,7 +628,13 @@ public class FlatpakInstall(
         }
         finally
         {
-            lockoutService.Hide();
+            GLib.Functions.IdleAdd(0, () =>
+            {
+                // We always try to hide it, but only if not disposed
+                _loadingOverlay?.SetVisible(false);
+                _loadingSpinner?.Stop();
+                return false;
+            });
         }
     }
 
@@ -1027,13 +1062,18 @@ public class FlatpakInstall(
     {
         if (_remoteListStore == null) return;
 
-        _remoteListStore.RemoveAll();
         var remotes = await unprivilegedOperationService.FlatpakListRemotes();
 
-        foreach (var obj in remotes.Select(remote => new FlatpakRemoteGObject { Remote = remote }))
+        GLib.Functions.IdleAdd(0, () =>
         {
-            _remoteListStore.Append(obj);
-        }
+            if (_cts.Token.IsCancellationRequested) return false;
+            _remoteListStore.RemoveAll();
+            foreach (var obj in remotes.Select(remote => new FlatpakRemoteGObject { Remote = remote }))
+            {
+                _remoteListStore.Append(obj);
+            }
+            return false;
+        });
     }
 
     private async Task BuildAndShowRemoteRef(Builder builder)
@@ -1065,6 +1105,9 @@ public class FlatpakInstall(
     {
         _cts.Cancel();
         _cts.Dispose();
+        _searchDebounce.Cancel();
+        _searchDebounce.Dispose();
+        _httpClient.Dispose();
         _remoteRefOverlay.Dispose();
         _addRemoteOverlay.Dispose();
         _overlay?.Dispose();

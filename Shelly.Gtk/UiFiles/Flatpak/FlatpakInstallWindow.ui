@@ -25,6 +25,41 @@
                             </object>
                         </child>
                         <child type="overlay">
+                            <object class="GtkBox" id="loading_overlay">
+                                <property name="visible">false</property>
+                                <property name="orientation">vertical</property>
+                                <property name="halign">fill</property>
+                                <property name="valign">fill</property>
+                                <style>
+                                    <class name="background"/>
+                                </style>
+                                <child>
+                                    <object class="GtkBox">
+                                        <property name="vexpand">true</property>
+                                        <property name="hexpand">true</property>
+                                        <property name="halign">center</property>
+                                        <property name="valign">center</property>
+                                        <property name="orientation">vertical</property>
+                                        <property name="spacing">12</property>
+                                        <child>
+                                            <object class="GtkSpinner" id="loading_spinner">
+                                                <property name="width-request">48</property>
+                                                <property name="height-request">48</property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkLabel">
+                                                <property name="label">Loading Flatpak Data...</property>
+                                                <style>
+                                                    <class name="title-4"/>
+                                                </style>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child type="overlay">
                             <object class="GtkBox" id="overlay_panel">
                                 <property name="visible">false</property>
                                 <property name="orientation">vertical</property>
