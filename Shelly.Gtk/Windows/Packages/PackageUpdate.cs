@@ -3,6 +3,7 @@ using GObject;
 using Gtk;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
+using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
@@ -16,7 +17,8 @@ public class PackageUpdate(
     IUnprivilegedOperationService unprivilegedOperationService,
     ILockoutService lockoutService,
     IConfigService configService,
-    IGenericQuestionService genericQuestionService) : IShellyWindow
+    IGenericQuestionService genericQuestionService,
+    IIconResolverService iconResolverService) : IShellyWindow
 {
     private readonly CancellationTokenSource _cts = new();
     private bool _suppressToggleConfirmation;
@@ -47,6 +49,10 @@ public class PackageUpdate(
     private Button _updateButton = null!;
     private Label _noPackagesLabel = null!;
 
+    private Revealer _detailRevealer = null!;
+    private Box _detailBox = null!;
+    private AlpmUpdateGObject? _currentDetailPkg;
+
 
     public Widget CreateWindow()
     {
@@ -70,6 +76,8 @@ public class PackageUpdate(
         _noPackagesLabel = (Label)builder.GetObject("no_packages_label")!;
         _noPackagesLabel.Label_ = "<span size='large'>System packages are up to date</span>";
         _noPackagesLabel.Visible = false;
+        _detailRevealer = (Revealer)builder.GetObject("detail_revealer")!;
+        _detailBox = (Box)builder.GetObject("detail_box")!;
         _listStore = Gio.ListStore.New(AlpmUpdateGObject.GetGType());
         _filter = CustomFilter.New(FilterPackage);
         _filterListModel = FilterListModel.New(_listStore, _filter);
@@ -104,10 +112,95 @@ public class PackageUpdate(
             _searchText = searchEntry.GetText();
             ApplyFilter();
         };
+        _selectionModel.OnSelectionChanged += (_, _) =>
+        {
+            var item = _selectionModel.GetSelectedItem();
+            if (item is AlpmUpdateGObject pkgObj)
+            {
+                ShowPackageDetails(pkgObj);
+            }
+            else
+            {
+                _detailRevealer.SetRevealChild(false);
+                _detailRevealer.SetVisible(false);
+                _currentDetailPkg = null;
+            }
+        };
         _updateButton.OnClicked += (_, _) => { _ = UpdateSelectedAsync(); };
         _refreshButton.OnClicked += (_, _) => { _ = LoadDataAsync(); };
 
         return _box;
+    }
+
+    private void ShowPackageDetails(AlpmUpdateGObject pkgObj)
+    {
+        if (pkgObj.Package == null) return;
+
+        _currentDetailPkg = pkgObj;
+        var pkg = pkgObj.Package;
+
+        while (_detailBox.GetFirstChild() is { } child)
+        {
+            _detailBox.Remove(child);
+        }
+
+        var backButton = Button.New();
+        backButton.SetIconName("go-previous-symbolic");
+        backButton.Halign = Align.Start;
+        backButton.AddCssClass("flat");
+        backButton.TooltipText = "Close details";
+        backButton.OnClicked += (_, _) =>
+        {
+            _currentDetailPkg = null;
+            _selectionModel.UnselectItem(_selectionModel.GetSelected());
+            _detailRevealer.SetRevealChild(false);
+            _detailRevealer.SetVisible(false);
+        };
+        _detailBox.Append(backButton);
+
+        void AddDetail(string label, string value)
+        {
+            var row = Box.New(Orientation.Horizontal, 4);
+            var labelWidget = Label.New(label + ":");
+            labelWidget.AddCssClass("dim-label");
+            labelWidget.Halign = Align.Start;
+            labelWidget.Valign = Align.Start;
+            labelWidget.WidthRequest = 70;
+
+            var valueWidget = Label.New(value);
+            valueWidget.Halign = Align.Start;
+            valueWidget.Wrap = true;
+            valueWidget.WrapMode = Pango.WrapMode.WordChar;
+            valueWidget.MaxWidthChars = 20;
+            valueWidget.Xalign = 0;
+
+            row.Append(labelWidget);
+            row.Append(valueWidget);
+            _detailBox.Append(row);
+        }
+
+        var iconImage = new Image { PixelSize = 64, Halign = Align.Center, MarginBottom = 8 };
+        var iconPath = iconResolverService.GetIconPath(pkg.Name);
+        if (!string.IsNullOrEmpty(iconPath) && iconPath != "Unavailable" && File.Exists(iconPath))
+        {
+            var texture = Gdk.Texture.NewFromFilename(iconPath);
+            iconImage.SetFromPaintable(texture);
+        }
+        else
+        {
+            iconImage.SetFromIconName("package-x-generic");
+        }
+
+        _detailBox.Append(iconImage);
+
+        AddDetail("Name", pkg.Name);
+        AddDetail("Current", pkg.CurrentVersion);
+        AddDetail("New", pkg.NewVersion);
+        AddDetail("Download", SizeHelpers.FormatSize(pkg.DownloadSize));
+        AddDetail("Size Diff", SizeHelpers.FormatSize(pkg.SizeDifference));
+
+        _detailRevealer.SetVisible(true);
+        _detailRevealer.SetRevealChild(true);
     }
 
     private void SetupColumns(ColumnViewColumn checkColumn, ColumnViewColumn nameColumn,
@@ -185,14 +278,36 @@ public class PackageUpdate(
         _nameFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
+            var box = Box.New(Orientation.Horizontal, 6);
+            var packageIcon = new Image { PixelSize = 24 };
             var label = Label.New(string.Empty);
-            listItem.SetChild(label);
+
+            box.Append(packageIcon);
+            box.Append(label);
+            listItem.SetChild(box);
         };
         _nameFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is not AlpmUpdateGObject { Package: { } pkg } ||
-                listItem.GetChild() is not Label label) return;
+                listItem.GetChild() is not Box box) return;
+
+            var packageIcon = (Image)box.GetFirstChild()!;
+            var label = (Label)packageIcon.GetNextSibling()!;
+
+            var iconPath = iconResolverService.GetIconPath(pkg.Name);
+            if (!string.IsNullOrEmpty(iconPath) && iconPath != "Unavailable" && File.Exists(iconPath))
+            {
+                var texture = Gdk.Texture.NewFromFilename(iconPath);
+                packageIcon.SetFromPaintable(texture);
+                packageIcon.Visible = true;
+            }
+            else
+            {
+                packageIcon.SetFromIconName("package-x-generic");
+                packageIcon.Visible = true;
+            }
+
             label.SetText(pkg.Name);
             label.Halign = Align.Start;
         };

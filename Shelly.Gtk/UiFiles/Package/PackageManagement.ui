@@ -58,32 +58,75 @@
     </object>
     </child>
     <child>
-      <object class="GtkScrolledWindow">
-        <property name="overlay-scrolling">false</property>
+      <object class="GtkBox" id="detail_hbox">
+        <property name="hexpand">true</property>
+        <property name="orientation">horizontal</property>
         <property name="vexpand">true</property>
         <child>
-          <object class="GtkColumnView" id="package_grid">
+          <object class="GtkScrolledWindow">
             <property name="hexpand">true</property>
+            <property name="overlay-scrolling">false</property>
             <property name="vexpand">true</property>
             <child>
-              <object class="GtkColumnViewColumn" id="name_column">
-                <property name="title">Package Name</property>
-                <property name="expand">true</property>
+              <object class="GtkColumnView" id="package_grid">
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
+                <child>
+                  <object class="GtkColumnViewColumn" id="name_column">
+                    <property name="title">Package Name</property>
+                    <property name="expand">true</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkColumnViewColumn" id="size_column">
+                    <property name="title">Size</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkColumnViewColumn" id="version_column">
+                    <property name="title">Version</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkColumnViewColumn" id="check_column">
+                    <property name="title"></property>
+                  </object>
+                </child>
               </object>
             </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkRevealer" id="detail_revealer">
+            <property name="reveal-child">false</property>
+            <property name="transition-type">slide-left</property>
             <child>
-              <object class="GtkColumnViewColumn" id="size_column">
-                <property name="title">Size</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkColumnViewColumn" id="version_column">
-                <property name="title">Version</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkColumnViewColumn" id="check_column">
-                <property name="title"></property>
+              <object class="GtkFrame">
+                <property name="margin-bottom">5</property>
+                <property name="margin-end">10</property>
+                <property name="margin-start">0</property>
+                <property name="margin-top">0</property>
+                <property name="width-request">250</property>
+                <child>
+                  <object class="GtkScrolledWindow">
+                    <property name="hscrollbar-policy">never</property>
+                    <property name="overlay-scrolling">false</property>
+                    <property name="propagate-natural-height">True</property>
+                    <property name="vexpand">true</property>
+                    <property name="width-request">250</property>
+                    <property name="window-placement">top-right</property>
+                    <child>
+                      <object class="GtkBox" id="detail_box">
+                        <property name="margin-bottom">4</property>
+                        <property name="margin-end">8</property>
+                        <property name="margin-start">8</property>
+                        <property name="margin-top">4</property>
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">1</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
               </object>
             </child>
           </object>
