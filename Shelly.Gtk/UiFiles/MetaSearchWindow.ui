@@ -22,6 +22,14 @@
             </style>
           </object>
         </child>
+        <child>
+          <object class="GtkButton" id="remove_button">
+            <property name="label">Remove Package(s)</property>
+            <style>
+              <class name="destructive-action"/>
+            </style>
+          </object>
+        </child>
       </object>
     </child>
     <child>

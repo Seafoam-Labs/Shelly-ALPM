@@ -23,6 +23,7 @@ public class MetaSearch(
     private Gio.ListStore _listStore = null!;
     private SingleSelection _selectionModel = null!;
     private Button _installButton = null!;
+    private Button _removeButton = null!;
     private string? _initialQuery;
 
     private SignalListItemFactory _checkFactory = null!;
@@ -51,6 +52,8 @@ public class MetaSearch(
         _columnView = (ColumnView)builder.GetObject("package_grid")!;
         _installButton = (Button)builder.GetObject("install_button")!;
         _installButton.SetSensitive(false);
+        _removeButton = (Button)builder.GetObject("remove_button")!;
+        _removeButton.SetSensitive(false);
 
         _checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
         _nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
@@ -69,6 +72,7 @@ public class MetaSearch(
         ColumnViewHelper.AlignColumnHeader(_columnView, 3, Align.End);
 
         _installButton.OnClicked += (_, _) => { _ = InstallSelectedAsync(); };
+        _removeButton.OnClicked += (_, _) => { _ = RemoveSelectedAsync(); };
 
         if (!string.IsNullOrEmpty(_initialQuery))
         {
@@ -99,7 +103,7 @@ public class MetaSearch(
             {
                 if (listItem.GetItem() is MetaPackageGObject pkgObj)
                     pkgObj.IsSelected = s.GetActive();
-                _installButton.SetSensitive(AnySelected());
+                UpdateButtonSensitivity();
             };
         };
         _checkFactory.OnBind += (_, args) =>
@@ -281,6 +285,9 @@ public class MetaSearch(
 
     private async Task InstallSelectedAsync()
     {
+        _installButton.SetSensitive(false);
+        _removeButton.SetSensitive(false);
+
         var selected = new List<MetaPackageModel>();
         for (uint i = 0; i < _listStore.GetNItems(); i++)
         {
@@ -325,19 +332,77 @@ public class MetaSearch(
                 $"Installed {selected.Count} Package(s)"
             );
             genericQuestionService.RaiseToastMessage(args);
+
+            UpdateButtonSensitivity();
         }
     }
 
-    private bool AnySelected()
+    private void UpdateButtonSensitivity()
     {
+        var anySelected = false;
+        var anyInstalledSelected = false;
+        var anyNotInstalledSelected = false;
         for (uint i = 0; i < _listStore.GetNItems(); i++)
         {
             var item = _listStore.GetObject(i);
-            if (item is MetaPackageGObject { IsSelected: true })
-                return true;
+            if (item is MetaPackageGObject { IsSelected: true, Package: not null } pkgObj)
+            {
+                anySelected = true;
+                if (pkgObj.Package.IsInstalled)
+                    anyInstalledSelected = true;
+                else
+                    anyNotInstalledSelected = true;
+            }
         }
 
-        return false;
+        _installButton.SetSensitive(anyNotInstalledSelected);
+        _removeButton.SetSensitive(anyInstalledSelected);
+    }
+
+    private async Task RemoveSelectedAsync()
+    {
+        _removeButton.SetSensitive(false);
+        _installButton.SetSensitive(false);
+
+        var selected = new List<MetaPackageModel>();
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is MetaPackageGObject { IsSelected: true, Package: { IsInstalled: true } } pkgObj)
+            {
+                selected.Add(pkgObj.Package);
+            }
+        }
+
+        if (selected.Count == 0) return;
+
+        try
+        {
+            lockoutService.Show("Removing...");
+
+            var standard = selected.Where(x => x.PackageType == PackageType.STANDARD).Select(x => x.Name).ToList();
+            var aur = selected.Where(x => x.PackageType == PackageType.AUR).Select(x => x.Name).ToList();
+            var flatpak = selected.Where(x => x.PackageType == PackageType.FLATPAK).Select(x => x.Id).ToList();
+
+            if (standard.Count > 0) await privilegedOperationService.RemovePackagesAsync(standard, false, false);
+            if (aur.Count > 0) await privilegedOperationService.RemoveAurPackagesAsync(aur);
+            if (flatpak.Count > 0) await unprivilegedOperationService.RemoveFlatpakPackage(flatpak);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Failed to remove packages: {e.Message}");
+        }
+        finally
+        {
+            lockoutService.Hide();
+
+            var args = new ToastMessageEventArgs(
+                $"Removed {selected.Count} Package(s)"
+            );
+            genericQuestionService.RaiseToastMessage(args);
+
+            UpdateButtonSensitivity();
+        }
     }
 
     public void Dispose()
