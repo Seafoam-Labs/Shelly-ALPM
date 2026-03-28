@@ -1,186 +1,221 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- Created with Cambalache 0.96.3 -->
 <interface>
-  <!-- interface-name PackageWindow.ui -->
-  <requires lib="gtk" version="4.0"/>
-  <object class="GtkOverlay" id="PackageWindow">
-    <child>
-      <object class="GtkBox">
-        <property name="hexpand">true</property>
-        <property name="orientation">vertical</property>
-        <property name="vexpand">true</property>
+    <!-- interface-name PackageWindow.ui -->
+    <requires lib="gtk" version="4.0"/>
+    <object class="GtkOverlay" id="PackageWindow">
         <child>
-          <object class="GtkBox">
-            <property name="halign">baseline</property>
-            <property name="margin-bottom">10</property>
-            <property name="margin-end">10</property>
-            <property name="margin-start">10</property>
-            <property name="margin-top">10</property>
-            <property name="orientation">horizontal</property>
-            <property name="spacing">5</property>
-            <property name="valign">baseline-center</property>
-            <child>
-              <object class="GtkButton" id="install_button">
-                <property name="halign">start</property>
-                <property name="label">Install Selected</property>
-                <style>
-                  <class name="suggested-action"/>
-                </style>
-              </object>
-            </child>
-          <child>
-            <object class="GtkDropDown" id="grouping_selection">
-              <property name="tooltip-text">Group Filter</property>
-            </object>
-          </child>
-            <child>
-              <object class="GtkButton" id="install_local_button">
-                <property name="tooltip-text">Install Local Packages</property>
-                <child>
-                  <object class="GtkBox">
-                    <property name="spacing">5</property>
-                    <child>
-                      <object class="GtkImage">
-                        <property name="icon-name">folder-open-symbolic</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLabel">
-                        <property name="label">Install Local</property>
-                      </object>
-                    </child>
-                  </object>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="install_appimage_button">
-                <property name="tooltip-text">Install App Image</property>
-                <child>
-                  <object class="GtkBox">
-                    <property name="spacing">5</property>
-                    <child>
-                      <object class="GtkImage">
-                        <property name="icon-name">folder-open-symbolic</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLabel">
-                        <property name="label">Install AppImage</property>
-                      </object>
-                    </child>
-                  </object>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkBox">
+            <object class="GtkBox">
                 <property name="hexpand">true</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkCheckButton" id="upgrade_check">
-                <property name="label">Perform Upgrade</property>
-                <property name="tooltip-text">Perform a full system upgrade with install (-u)</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkSearchEntry" id="search_entry">
-                <property name="placeholder-text">Search packages...</property>
-                <property name="width-request">200</property>
-              </object>
-            </child>
-          </object>
-        </child>
-        <child>
-          <object class="GtkBox" id="detail_hbox">
-            <property name="hexpand">true</property>
-            <property name="orientation">horizontal</property>
-            <property name="vexpand">true</property>
-            <child>
-              <object class="GtkScrolledWindow">
-                <property name="hexpand">true</property>
-                <property name="overlay-scrolling">false</property>
+                <property name="orientation">vertical</property>
                 <property name="vexpand">true</property>
                 <child>
-                  <object class="GtkColumnView" id="package_column_view">
-                    <property name="hexpand">true</property>
-                    <property name="show-column-separators">false</property>
-                    <property name="show-row-separators">false</property>
-                    <property name="vexpand">true</property>
-                    <child>
-                      <object class="GtkColumnViewColumn" id="name_column">
-                        <property name="expand">true</property>
-                        <property name="title">Name</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkColumnViewColumn" id="version_column">
-                        <property name="expand">true</property>
-                        <property name="title">Version</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkColumnViewColumn" id="size_column">
-                        <property name="expand">true</property>
-                        <property name="title">Size</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkColumnViewColumn" id="repository_column">
-                        <property name="expand">true</property>
-                        <property name="title">Repository</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkColumnViewColumn" id="check_column">
-                        <property name="title"/>
-                      </object>
-                    </child>
-                  </object>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkRevealer" id="detail_revealer">
-                <property name="reveal-child">false</property>
-                
-                <property name="transition-type">slide-left</property>
-                <child>
-                  <object class="GtkFrame">
-                    <property name="margin-bottom">5</property>
-                    <property name="margin-end">10</property>
-                    <property name="margin-start">0</property>
-                    <property name="margin-top">0</property>
-                    <property name="width-request">250</property>
-                    <child>
-                      <object class="GtkScrolledWindow">
-                        <property name="hscrollbar-policy">never</property>
-                        <property name="overlay-scrolling">false</property>
-                        <property name="propagate-natural-height">True</property>
-                        <property name="vexpand">true</property>
-                        <property name="width-request">250</property>
-                        <property name="window-placement">top-right</property>
+                    <object class="GtkBox">
+                        <property name="halign">baseline</property>
+                        <property name="margin-bottom">10</property>
+                        <property name="margin-end">10</property>
+                        <property name="margin-start">10</property>
+                        <property name="margin-top">10</property>
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">5</property>
+                        <property name="valign">baseline-center</property>
                         <child>
-                          <object class="GtkBox" id="detail_box">
-                            <property name="margin-bottom">4</property>
-                            <property name="margin-end">8</property>
-                            <property name="margin-start">8</property>
-                            <property name="margin-top">4</property>
-                            <property name="orientation">vertical</property>
-                            <property name="spacing">1</property>
-                          </object>
+                            <object class="GtkButton" id="install_button">
+                                <property name="halign">start</property>
+                                <property name="label">Install Selected</property>
+                                <style>
+                                    <class name="suggested-action"/>
+                                </style>
+                            </object>
                         </child>
-                      </object>
-                    </child>
-                  </object>
+                        <child>
+                            <object class="GtkDropDown" id="grouping_selection">
+                                <property name="tooltip-text">Group Filter</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkButton" id="install_local_button">
+                                <property name="tooltip-text">Install Local Packages</property>
+                                <child>
+                                    <object class="GtkBox">
+                                        <property name="spacing">5</property>
+                                        <child>
+                                            <object class="GtkImage">
+                                                <property name="icon-name">folder-open-symbolic</property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkLabel">
+                                                <property name="label">Install Local</property>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkButton" id="install_appimage_button">
+                                <property name="tooltip-text">Install App Image</property>
+                                <child>
+                                    <object class="GtkBox">
+                                        <property name="spacing">5</property>
+                                        <child>
+                                            <object class="GtkImage">
+                                                <property name="icon-name">folder-open-symbolic</property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkLabel">
+                                                <property name="label">Install AppImage</property>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkBox">
+                                <property name="hexpand">true</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkCheckButton" id="upgrade_check">
+                                <property name="label">Perform Upgrade</property>
+                                <property name="tooltip-text">Perform a full system upgrade with install (-u)</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkSearchEntry" id="search_entry">
+                                <property name="placeholder-text">Search packages...</property>
+                                <property name="width-request">200</property>
+                            </object>
+                        </child>
+                    </object>
                 </child>
-              </object>
-            </child>
-          </object>
+                <child>
+                    <object class="GtkBox" id="detail_hbox">
+                        <property name="hexpand">true</property>
+                        <property name="orientation">horizontal</property>
+                        <property name="vexpand">true</property>
+                        <child>
+                            <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <child>
+                                    <object class="GtkScrolledWindow">
+                                        <property name="hexpand">true</property>
+                                        <property name="overlay-scrolling">false</property>
+                                        <property name="vexpand">true</property>
+                                        <child>
+                                            <object class="GtkColumnView" id="package_column_view">
+                                                <property name="hexpand">true</property>
+                                                <property name="show-column-separators">false</property>
+                                                <property name="show-row-separators">false</property>
+                                                <property name="vexpand">true</property>
+                                                <child>
+                                                    <object class="GtkColumnViewColumn" id="name_column">
+                                                        <property name="expand">true</property>
+                                                        <property name="title">Name</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkColumnViewColumn" id="version_column">
+                                                        <property name="expand">true</property>
+                                                        <property name="title">Version</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkColumnViewColumn" id="size_column">
+                                                        <property name="expand">true</property>
+                                                        <property name="title">Size</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkColumnViewColumn" id="repository_column">
+                                                        <property name="expand">true</property>
+                                                        <property name="title">Repository</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkColumnViewColumn" id="check_column">
+                                                        <property name="title"/>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkRevealer" id="detail_revealer">
+                                <property name="reveal-child">false</property>
+
+                                <property name="transition-type">slide-left</property>
+                                <child>
+                                    <object class="GtkBox">
+                                        <property name="orientation">vertical</property>
+                                        <property name="width-request">250</property>
+                                        <child>
+                                            <object class="GtkFrame">
+                                                <property name="margin-bottom">5</property>
+                                                <property name="margin-end">10</property>
+                                                <property name="margin-start">0</property>
+                                                <property name="margin-top">0</property>
+                                                <property name="vexpand">true</property>
+                                                <child>
+                                                    <object class="GtkScrolledWindow">
+                                                        <property name="hscrollbar-policy">never</property>
+                                                        <property name="overlay-scrolling">false</property>
+                                                        <property name="propagate-natural-height">True</property>
+                                                        <property name="vexpand">true</property>
+                                                        <property name="width-request">250</property>
+                                                        <property name="window-placement">top-right</property>
+                                                        <child>
+                                                            <object class="GtkBox" id="detail_box">
+                                                                <property name="margin-bottom">4</property>
+                                                                <property name="margin-end">8</property>
+                                                                <property name="margin-start">8</property>
+                                                                <property name="margin-top">4</property>
+                                                                <property name="orientation">vertical</property>
+                                                                <property name="spacing">1</property>
+                                                            </object>
+                                                        </child>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkFrame">
+                                                <property name="label">Terminal Output</property>
+                                                <property name="margin-bottom">5</property>
+                                                <property name="margin-end">10</property>
+                                                <property name="margin-start">0</property>
+                                                <property name="margin-top">5</property>
+                                                <property name="vexpand">true</property>
+                                                <child>
+                                                    <object class="GtkScrolledWindow">
+                                                        <property name="hscrollbar-policy">automatic</property>
+                                                        <property name="min-content-height">150</property>
+                                                        <property name="vexpand">true</property>
+                                                        <child>
+                                                            <object class="GtkTextView" id="terminal_output">
+                                                                <property name="editable">false</property>
+                                                                <property name="monospace">true</property>
+                                                            </object>
+                                                        </child>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+            </object>
         </child>
-      </object>
-    </child>
-  </object>
-  <object class="GtkSingleSelection"/>
+    </object>
+    <object class="GtkSingleSelection"/>
 </interface>

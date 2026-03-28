@@ -18,7 +18,8 @@ public class PackageInstall(
     ILockoutService lockoutService,
     IConfigService configService,
     IGenericQuestionService genericQuestionService,
-    IIconResolverService iconResolverService)
+    IIconResolverService iconResolverService,
+    IAlpmEventService alpmEventService)
     : IShellyWindow
 {
     private Overlay _overlay = null!;
@@ -60,7 +61,13 @@ public class PackageInstall(
 
     private Revealer _detailRevealer = null!;
     private Box _detailBox = null!;
+    private TextView _terminalOutput = null!;
+    private TextBuffer _terminalBuffer = null!;
+    private TextMark _endMark = null!;
     private AlpmPackageGObject? _currentDetailPkg;
+
+    private EventHandler<string>? _stdoutHandler;
+    private EventHandler<string>? _stderrHandler;
 
     public Widget CreateWindow()
     {
@@ -84,6 +91,7 @@ public class PackageInstall(
         _searchEntry = (SearchEntry)_builder.GetObject("search_entry")!;
         _detailRevealer = (Revealer)_builder.GetObject("detail_revealer")!;
         _detailBox = (Box)_builder.GetObject("detail_box")!;
+        _terminalOutput = (TextView)_builder.GetObject("terminal_output")!;
         _groupDropDown = (DropDown)_builder.GetObject("grouping_selection")!;
         _upgradeCheck = (CheckButton)_builder.GetObject("upgrade_check")!;
 
@@ -132,6 +140,12 @@ public class PackageInstall(
         _localInstallButton.OnClicked += (_, _) => { _ = InstallLocalPackage(); };
         _appImageButton.OnClicked += (_, _) => { _ = InstallAppImage(); };
 
+        _stdoutHandler = (sender, message) => AppendTerminalOutput(message);
+        _stderrHandler = (sender, message) => AppendTerminalOutput(message);
+
+        alpmEventService.StdoutReceived += _stdoutHandler;
+        alpmEventService.StderrReceived += _stderrHandler;
+
         _groupDropDown.OnNotify += (sender, args) =>
         {
             if (args.Pspec.GetName() == "selected")
@@ -142,8 +156,45 @@ public class PackageInstall(
                 ApplyFilter();
             }
         };
+        
+        _terminalOutput.Monospace = true;
+        _terminalBuffer = _terminalOutput.Buffer;
+
+        _terminalBuffer.GetEndIter(out var endIter);
+        _endMark = _terminalBuffer.CreateMark(null, endIter, false);
+        
         return _overlay;
     }
+
+    private void AppendTerminalOutput(string? message)
+    {
+        
+        if (_terminalOutput == null!)
+            return;
+
+        if (string.IsNullOrEmpty(message))
+            return;
+
+        GLib.Functions.IdleAdd(0, () =>
+        {
+            if (_terminalOutput == null! || _terminalBuffer == null! || _endMark == null!)
+                return false;
+
+            try
+            {
+                _terminalBuffer.GetEndIter(out var endIter);
+                _terminalBuffer.Insert(endIter, message + "\n", -1);
+                
+                _terminalOutput.ScrollToMark(_endMark, 0, false, 0, 0);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DEBUG_LOG] Error updating terminal: {ex.Message}");
+            }
+            return false;
+        });
+    }
+
 
     private void ShowPackageDetails(AlpmPackageGObject pkgObj)
     {
@@ -576,6 +627,24 @@ public class PackageInstall(
                 }
 
                 lockoutService.Show($"Installing...");
+
+                // Clear terminal output before starting
+                GLib.Functions.IdleAdd(0, () =>
+                {
+                    if (_terminalBuffer != null!)
+                    {
+                        try
+                        {
+                            _terminalBuffer.SetText("", -1);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[DEBUG_LOG] Error clearing terminal: {ex.Message}");
+                        }
+                    }
+                    return false;
+                });
+
                 var performUpgrade = _upgradeCheck.GetActive();
                 result = await privilegedOperationService.InstallPackagesAsync(selectedPackages, performUpgrade);
                 await LoadDataAsync();
@@ -764,11 +833,18 @@ public class PackageInstall(
     {
         _cts.Cancel();
         _cts.Dispose();
+
         _listStore.RemoveAll();
         _packageGObjectRefs.Clear();
         _checkBinding.Clear();
         _packages.Clear();
         _groups.Clear();
         _currentDetailPkg = null;
+        _endMark = null!;
+
+        alpmEventService.StdoutReceived -= _stdoutHandler;
+        alpmEventService.StderrReceived -= _stderrHandler;
+        
+        GC.SuppressFinalize(this);
     }
 }

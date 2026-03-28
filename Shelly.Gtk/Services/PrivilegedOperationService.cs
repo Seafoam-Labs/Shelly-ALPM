@@ -606,6 +606,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
             {
                 outputBuilder.AppendLine(e.Data);
                 Console.WriteLine(e.Data);
+                _alpmEventService.RaiseStdoutReceived(e.Data);
             }
         };
 
@@ -613,6 +614,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         {
             if (e.Data != null)
             {
+                _alpmEventService.RaiseStderrReceived(e.Data);
                 // Filter out the password prompt from sudo
                 if (!e.Data.Contains("[sudo]") && !e.Data.Contains("password for"))
                 {
