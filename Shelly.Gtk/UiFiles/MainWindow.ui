@@ -1,223 +1,228 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <interface>
-  <requires lib="gtk" version="4.0"/>
-  <menu id="PackagesMenu">
-    <section>
-      <item>
-        <attribute name="label">Install Package(s)</attribute>
-        <attribute name="action">app.install-packages</attribute>
-      </item>
-      <item>
-        <attribute name="label">Update Package(s)</attribute>
-        <attribute name="action">app.update-packages</attribute>
-      </item>
-      <item>
-        <attribute name="label">Manage Package(s)</attribute>
-        <attribute name="action">app.manage-packages</attribute>
-      </item>
-    </section>
-  </menu>
-  <menu id="AurMenu">
-    <section>
-      <item>
-        <attribute name="label">Install AUR</attribute>
-        <attribute name="action">app.install-aur</attribute>
-      </item>
-      <item>
-        <attribute name="label">Update AUR</attribute>
-        <attribute name="action">app.update-aur</attribute>
-      </item>
-      <item>
-        <attribute name="label">Remove AUR</attribute>
-        <attribute name="action">app.remove-aur</attribute>
-      </item>
-    </section>
-  </menu>
-  <menu id="FlatpakMenu">
-    <section>
-      <item>
-        <attribute name="label">Install Flatpak</attribute>
-        <attribute name="action">app.install-flatpak</attribute>
-      </item>
-      <item>
-        <attribute name="label">Update Flatpak</attribute>
-        <attribute name="action">app.update-flatpak</attribute>
-      </item>
-      <item>
-        <attribute name="label">Remove Flatpak</attribute>
-        <attribute name="action">app.remove-flatpak</attribute>
-      </item>
-    </section>
-  </menu>
-  <object class="GtkApplicationWindow" id="MainWindow">
-    <property name="default-height">600</property>
-    <property name="default-width">800</property>
-    <property name="title">Shelly GTK</property>
-    <child>
-      <object class="GtkOverlay" id="MainOverlay">
-        <property name="child">
-          <object class="GtkBox" id="MainBox">
-            <property name="orientation">vertical</property>
-            <child>
-              <object class="GtkActionBar">
-                <child type="center">
-                  <object class="GtkBox" id="MenuBox">
-                    <property name="orientation">horizontal</property>
-                    <property name="spacing">4</property>
-                  
-                    <child>
-                      <object class="GtkMenuButton" id="PackagesMenuButton">
-                        <property name="menu-model">PackagesMenu</property>
-                        <property name="has-frame">false</property>
-                        <property name="always-show-arrow">False</property>
-                          <property name="direction">none</property>
-                       
-                      
+    <requires lib="gtk" version="4.0"/>
+    <menu id="PackagesMenu">
+        <section>
+            <item>
+                <attribute name="label">Install Package(s)</attribute>
+                <attribute name="action">app.install-packages</attribute>
+            </item>
+            <item>
+                <attribute name="label">Update Package(s)</attribute>
+                <attribute name="action">app.update-packages</attribute>
+            </item>
+            <item>
+                <attribute name="label">Manage Package(s)</attribute>
+                <attribute name="action">app.manage-packages</attribute>
+            </item>
+        </section>
+    </menu>
+    <menu id="AurMenu">
+        <section>
+            <item>
+                <attribute name="label">Install AUR</attribute>
+                <attribute name="action">app.install-aur</attribute>
+            </item>
+            <item>
+                <attribute name="label">Update AUR</attribute>
+                <attribute name="action">app.update-aur</attribute>
+            </item>
+            <item>
+                <attribute name="label">Remove AUR</attribute>
+                <attribute name="action">app.remove-aur</attribute>
+            </item>
+        </section>
+    </menu>
+    <menu id="FlatpakMenu">
+        <section>
+            <item>
+                <attribute name="label">Install Flatpak</attribute>
+                <attribute name="action">app.install-flatpak</attribute>
+            </item>
+            <item>
+                <attribute name="label">Update Flatpak</attribute>
+                <attribute name="action">app.update-flatpak</attribute>
+            </item>
+            <item>
+                <attribute name="label">Remove Flatpak</attribute>
+                <attribute name="action">app.remove-flatpak</attribute>
+            </item>
+        </section>
+    </menu>
+    <object class="GtkApplicationWindow" id="MainWindow">
+        <property name="default-height">600</property>
+        <property name="default-width">800</property>
+        <property name="title">Shelly GTK</property>
+        <child>
+            <object class="GtkOverlay" id="MainOverlay">
+                <property name="child">
+                    <object class="GtkBox" id="MainBox">
+                        <property name="orientation">vertical</property>
                         <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="spacing">8</property>
-                            <child>
-                              <object class="GtkImage">
-                                <property name="icon-name">package-x-generic-symbolic</property>
-                                 <property name="pixel-size">16</property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkLabel">
-                                <property name="label">Packages</property>
-                              </object>
-                            </child>
-                          </object>
+                            <object class="GtkActionBar">
+                                <child type="center">
+                                    <object class="GtkBox" id="MenuBox">
+                                        <property name="orientation">horizontal</property>
+                                        <property name="spacing">4</property>
+                                        <child>
+                                            <object class="GtkMenuButton" id="PackagesMenuButton">
+                                                <property name="menu-model">PackagesMenu</property>
+                                                <child>
+                                                    <object class="GtkBox">
+                                                        <property name="orientation">horizontal</property>
+                                                        <property name="spacing">8</property>
+                                                        <child>
+                                                            <object class="GtkImage">
+                                                                <property name="icon-name">package-x-generic-symbolic
+                                                                </property>
+                                                                <property name="pixel-size">16</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkLabel">
+                                                                <property name="label">Packages</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkImage">
+                                                                <property name="icon-name">pan-down-symbolic</property>
+                                                                <property name="pixel-size">12</property>
+                                                            </object>
+                                                        </child>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkMenuButton" id="AurMenuButton">
+                                                <property name="menu-model">AurMenu</property>
+                                                <style>
+                                                </style>
+                                                <child>
+                                                    <object class="GtkBox">
+                                                        <property name="orientation">horizontal</property>
+                                                        <property name="spacing">8</property>
+                                                        <child>
+                                                            <object class="GtkImage">
+                                                                <property name="icon-name">arch-symbolic</property>
+                                                                <property name="pixel-size">18</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkLabel">
+                                                                <property name="label">AUR</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkImage">
+                                                                <property name="icon-name">pan-down-symbolic</property>
+                                                                <property name="pixel-size">12</property>
+                                                            </object>
+                                                        </child>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkMenuButton" id="FlatpakMenuButton">
+                                                <property name="menu-model">FlatpakMenu</property>
+                                                <child>
+                                                    <object class="GtkBox">
+                                                        <property name="orientation">horizontal</property>
+                                                        <property name="spacing">8</property>
+                                                        <child>
+                                                            <object class="GtkImage">
+                                                                <property name="icon-name">flatpak-symbolic</property>
+                                                                <property name="pixel-size">16</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkLabel">
+                                                                <property name="label">Flatpak</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkImage">
+                                                                <property name="icon-name">pan-down-symbolic</property>
+                                                                <property name="pixel-size">12</property>
+                                                            </object>
+                                                        </child>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkButton" id="HomeButton">
+                                        <property name="icon-name">go-home-symbolic</property>
+
+                                    </object>
+                                </child>
+                                <child type="end">
+                                    <object class="GtkButton" id="SettingsButton">
+                                        <property name="icon-name">emblem-system-symbolic</property>
+
+                                    </object>
+                                </child>
+                            </object>
                         </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkMenuButton" id="AurMenuButton">
-                        <property name="menu-model">AurMenu</property>
-                        <property name="has-frame">false</property>
+                        <child>
+                            <!-- This is where different pages will be inserted -->
+                            <object class="GtkBox" id="ContentArea">
+                                <property name="hexpand">true</property>
+                                <property name="vexpand">true</property>
+                            </object>
+                        </child>
+                    </object>
+                </property>
+                <child type="overlay">
+                    <object class="GtkBox" id="LockoutOverlay">
+                        <property name="visible">false</property>
+                        <property name="hexpand">true</property>
+                        <property name="vexpand">true</property>
+                        <property name="valign">fill</property>
+                        <property name="halign">fill</property>
+                        <property name="orientation">vertical</property>
                         <style>
+                            <class name="lockout-overlay"/>
                         </style>
                         <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="spacing">8</property>
-                            <child>
-                              <object class="GtkImage">
-                                <property name="icon-name">arch-symbolic</property>
-                                <property name="pixel-size">18</property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkLabel">
-                                <property name="label">AUR</property>
-                              </object>
-                            </child>
-                          </object>
+                            <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">12</property>
+                                <property name="valign">center</property>
+                                <property name="halign">center</property>
+                                <property name="hexpand">true</property>
+                                <property name="vexpand">true</property>
+                                <property name="margin-start">40</property>
+                                <property name="margin-end">40</property>
+                                <property name="margin-top">40</property>
+                                <property name="margin-bottom">40</property>
+                                <child>
+                                    <object class="GtkLabel" id="LockoutDescription">
+                                        <property name="label">Processing...</property>
+                                        <property name="wrap">true</property>
+                                        <property name="justify">center</property>
+                                        <property name="halign">center</property>
+                                        <style>
+                                            <class name="lockout-description"/>
+                                        </style>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkProgressBar" id="LockoutProgressBar">
+                                        <property name="show-text">true</property>
+                                        <property name="fraction">0.0</property>
+                                        <property name="width-request">300</property>
+                                        <property name="halign">center</property>
+                                    </object>
+                                </child>
+                            </object>
                         </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkMenuButton" id="FlatpakMenuButton">
-                        <property name="menu-model">FlatpakMenu</property>
-                        <property name="has-frame">false</property>
-                        <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="spacing">8</property>
-                            <child>
-                              <object class="GtkImage">
-                                <property name="icon-name">flatpak-symbolic</property>
-                                <property name="pixel-size">16</property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkLabel">
-                                <property name="label">Flatpak</property>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                  </object>
+                    </object>
                 </child>
-                <child>
-                  <object class="GtkButton" id="HomeButton">
-                    <property name="icon-name">go-home-symbolic</property>
-                    <property name="has-frame">false</property>
-                    <style>
-                      <class name="nav-button"/>
-                    </style>
-                  </object>
-                </child>
-                <child type="end">
-                  <object class="GtkButton" id="SettingsButton">
-                    <property name="icon-name">emblem-system-symbolic</property>
-                    <property name="has-frame">false</property>
-                    <style>
-                      <class name="nav-button"/>
-                    </style>
-                  </object>
-                </child>
-              </object>
-            </child>
-            <child>
-              <!-- This is where different pages will be inserted -->
-              <object class="GtkBox" id="ContentArea">
-                <property name="hexpand">true</property>
-                <property name="vexpand">true</property>
-              </object>
-            </child>
-          </object>
-        </property>
-        <child type="overlay">
-          <object class="GtkBox" id="LockoutOverlay">
-            <property name="visible">false</property>
-            <property name="hexpand">true</property>
-            <property name="vexpand">true</property>
-            <property name="valign">fill</property>
-            <property name="halign">fill</property>
-            <property name="orientation">vertical</property>
-            <style>
-              <class name="lockout-overlay"/>
-            </style>
-            <child>
-              <object class="GtkBox">
-                <property name="orientation">vertical</property>
-                <property name="spacing">12</property>
-                <property name="valign">center</property>
-                <property name="halign">center</property>
-                <property name="hexpand">true</property>
-                <property name="vexpand">true</property>
-                <property name="margin-start">40</property>
-                <property name="margin-end">40</property>
-                <property name="margin-top">40</property>
-                <property name="margin-bottom">40</property>
-                <child>
-                  <object class="GtkLabel" id="LockoutDescription">
-                    <property name="label">Processing...</property>
-                    <property name="wrap">true</property>
-                    <property name="justify">center</property>
-                    <property name="halign">center</property>
-                    <style>
-                      <class name="lockout-description"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkProgressBar" id="LockoutProgressBar">
-                    <property name="show-text">true</property>
-                    <property name="fraction">0.0</property>
-                    <property name="width-request">300</property>
-                    <property name="halign">center</property>
-                  </object>
-                </child>
-              </object>
-            </child>
-          </object>
+            </object>
         </child>
-      </object>
-    </child>
-  </object>
+    </object>
 </interface>
