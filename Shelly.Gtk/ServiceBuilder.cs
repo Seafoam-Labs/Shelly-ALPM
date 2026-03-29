@@ -21,6 +21,7 @@ public static class ServiceBuilder
         collection.AddSingleton<IGenericQuestionService, GenericQuestionService>();
         collection.AddSingleton<ILockoutService, LockoutService>();
         collection.AddSingleton<IIconResolverService, IconResolverService>();
+        collection.AddSingleton<IArchNewsService, ArchNewsService>();
         collection.AddScoped<IUpdateService, GitHubUpdateService>();
         collection.AddTransient<HomeWindow>();
         collection.AddTransient<FlatpakRemove>();

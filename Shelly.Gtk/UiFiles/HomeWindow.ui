@@ -77,155 +77,229 @@
           </object>
         </child>
         <child>
-          <object class="GtkScrolledWindow">
-            <property name="overlay-scrolling">false</property>
-            <property name="has-frame">true</property>
-            <property name="hscrollbar-policy">never</property>
-            <property name="vscrollbar-policy">never</property>
+          <object class="GtkBox">
+            <property name="orientation">horizontal</property>
+            <property name="spacing">10</property>
             <property name="halign">center</property>
-            <style>
-              <class name="rounded-card"/>
-            </style>
             <child>
-              <object class="GtkBox">
+              <object class="GtkScrolledWindow">
+                <property name="overlay-scrolling">false</property>
+                <property name="has-frame">true</property>
+                <property name="hscrollbar-policy">never</property>
+                <property name="vscrollbar-policy">never</property>
                 <property name="halign">center</property>
-                <property name="margin-bottom">10</property>
-                <property name="margin-end">10</property>
-                <property name="margin-start">10</property>
-                <property name="margin-top">10</property>
-                <property name="orientation">vertical</property>
-                <property name="spacing">10</property>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Package Dashboard</property>
-                    <property name="xalign">0</property>
-                    <property name="halign">center</property>
-                    <style>
-                      <class name="title-2"/>
-                    </style>
-                  </object>
-                </child>
+                <style>
+                  <class name="rounded-card"/>
+                </style>
                 <child>
                   <object class="GtkBox">
-                    <property name="homogeneous">true</property>
-                    <property name="orientation">horizontal</property>
-                    <property name="spacing">20</property>
+                    <property name="halign">center</property>
+                    <property name="margin-bottom">10</property>
+                    <property name="margin-end">10</property>
+                    <property name="margin-start">10</property>
+                    <property name="margin-top">10</property>
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">10</property>
                     <child>
-                      <object class="GtkBox" id="AurBox">
-                        <property name="orientation">vertical</property>
+                      <object class="GtkLabel">
+                        <property name="label">Package Dashboard</property>
+                        <property name="xalign">0</property>
+                        <property name="halign">center</property>
+                        <style>
+                          <class name="title-2"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="homogeneous">true</property>
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">20</property>
                         <child>
-                          <object class="GtkLabel">
-                            <property name="label">Total Aur</property>
-                            <style>
-                              <class name="caption"/>
-                            </style>
+                          <object class="GtkBox" id="AurBox">
+                            <property name="orientation">vertical</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Total Aur</property>
+                                <style>
+                                  <class name="caption"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="TotalAurLabel">
+                                <property name="label">0</property>
+                                <style>
+                                  <class name="title-1"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="AurStatusLabel">
+                                <property name="label">Up to date</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="AurPercentLabel">
+                                <property name="justify">center</property>
+                                <property name="label">Calculating</property>
+                                <accessibility>
+                                  <property name="orientation">horizontal</property>
+                                  <property name="sort">other</property>
+                                </accessibility>
+                              </object>
+                            </child>
                           </object>
                         </child>
                         <child>
-                          <object class="GtkLabel" id="TotalAurLabel">
-                            <property name="label">0</property>
-                            <style>
-                              <class name="title-1"/>
-                            </style>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Total Packages</property>
+                                <style>
+                                  <class name="caption"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="TotalPackagesLabel">
+                                <property name="label">0</property>
+                                <style>
+                                  <class name="title-1"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="PackagesStatusLabel">
+                                <property name="label">Up to date</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="StandardPercent">
+                                <property name="justify">center</property>
+                                <property name="label">Calculating</property>
+                              </object>
+                            </child>
                           </object>
                         </child>
                         <child>
-                          <object class="GtkLabel" id="AurStatusLabel">
-                            <property name="label">Up to date</property>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkLabel" id="AurPercentLabel">
-                            <property name="justify">center</property>
-                            <property name="label">Calculating</property>
-                            <accessibility>
-                              <property name="orientation">horizontal</property>
-                              <property name="sort">other</property>
-                            </accessibility>
+                          <object class="GtkBox" id="FlatpakBox">
+                            <property name="orientation">vertical</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Total Flatpak</property>
+                                <style>
+                                  <class name="caption"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="TotalFlatpakLabel">
+                                <property name="label">0</property>
+                                <style>
+                                  <class name="title-1"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="FlatpakStatusLabel">
+                                <property name="label">Up to date</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="FlatpakPercent">
+                                <property name="justify">center</property>
+                                <property name="label">Calculating</property>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>
                     </child>
                     <child>
                       <object class="GtkBox">
-                        <property name="orientation">vertical</property>
+                        <property name="orientation">horizontal</property>
+                        <property name="halign">center</property>
+                        <property name="spacing">10</property>
+                        <property name="margin-top">10</property>
                         <child>
-                          <object class="GtkLabel">
-                            <property name="label">Total Packages</property>
-                            <style>
-                              <class name="caption"/>
-                            </style>
+                          <object class="GtkButton" id="ExportSyncButton">
+                            <property name="label">Export Sync file</property>
                           </object>
                         </child>
                         <child>
-                          <object class="GtkLabel" id="TotalPackagesLabel">
-                            <property name="label">0</property>
-                            <style>
-                              <class name="title-1"/>
-                            </style>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkLabel" id="PackagesStatusLabel">
-                            <property name="label">Up to date</property>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkLabel" id="StandardPercent">
-                            <property name="justify">center</property>
-                            <property name="label">Calculating</property>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkBox" id="FlatpakBox">
-                        <property name="orientation">vertical</property>
-                        <child>
-                          <object class="GtkLabel">
-                            <property name="label">Total Flatpak</property>
-                            <style>
-                              <class name="caption"/>
-                            </style>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkLabel" id="TotalFlatpakLabel">
-                            <property name="label">0</property>
-                            <style>
-                              <class name="title-1"/>
-                            </style>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkLabel" id="FlatpakStatusLabel">
-                            <property name="label">Up to date</property>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkLabel" id="FlatpakPercent">
-                            <property name="justify">center</property>
-                            <property name="label">Calculating</property>
+                          <object class="GtkButton" id="UpgradeAllButton">
+                            <property name="label">Upgrade All</property>
                           </object>
                         </child>
                       </object>
                     </child>
                   </object>
                 </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkFrame">
+                <property name="height-request">200</property>
+                <property name="width-request">200</property>
+                <property name="hexpand">false</property>
+                <style>
+                  <class name="rounded-card"/>
+                </style>
                 <child>
                   <object class="GtkBox">
-                    <property name="orientation">horizontal</property>
-                    <property name="halign">center</property>
-                    <property name="spacing">10</property>
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">5</property>
+                    <property name="width-request">200</property>
+                    <property name="margin-bottom">10</property>
+                    <property name="margin-end">10</property>
+                    <property name="margin-start">10</property>
                     <property name="margin-top">10</property>
                     <child>
-                      <object class="GtkButton" id="ExportSyncButton">
-                        <property name="label">Export Sync file</property>
+                      <object class="GtkLabel">
+                        <property name="label">Arch News</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="title-2"/>
+                        </style>
                       </object>
                     </child>
                     <child>
-                      <object class="GtkButton" id="UpgradeAllButton">
-                        <property name="label">Upgrade All</property>
+                      <object class="GtkBox" id="ArchNewsContentBox">
+                        <property name="orientation">vertical</property>
+                        <property name="vexpand">false</property>
+                        <property name="valign">center</property>
+                        <property name="spacing">8</property>
+                        <property name="width-request">200</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="halign">center</property>
+                        <property name="spacing">8</property>
+                        <property name="margin-top">8</property>
+                        <child>
+                          <object class="GtkButton" id="ArchNewsPrevButton">
+                            <property name="icon-name">go-previous-symbolic</property>
+                            <property name="sensitive">false</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="ArchNewsPageLabel">
+                            <property name="label">0 / 0</property>
+                            <style>
+                              <class name="dim-label"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="ArchNewsNextButton">
+                            <property name="icon-name">go-next-symbolic</property>
+                            <property name="sensitive">false</property>
+                          </object>
+                        </child>
                       </object>
                     </child>
                   </object>

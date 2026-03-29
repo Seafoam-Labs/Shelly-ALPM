@@ -18,12 +18,19 @@ public class HomeWindow(
     ILockoutService lockoutService,
     IIconResolverService iconResolverService,
     IGenericQuestionService genericQuestionService,
+    IArchNewsService archNewsService,
     MetaSearch metaSearch) : IShellyWindow
 {
     private Box _box = null!;
     private readonly CancellationTokenSource _cts = new();
     private Revealer? _updatesRevealer;
     private ListBox? _updatesListBox;
+    private Box? _archNewsContentBox;
+    private Label? _archNewsPageLabel;
+    private Button? _archNewsPrevButton;
+    private Button? _archNewsNextButton;
+    private List<RssModel> _archNewsItems = [];
+    private int _archNewsCurrentIndex;
     private Label? _totalAurLabel;
     private Label? _percentAurLabel;
     private Label? _totalPackageLabel;
@@ -119,6 +126,16 @@ public class HomeWindow(
                 return false;
             });
         };
+
+        _archNewsContentBox = (Box)builder.GetObject("ArchNewsContentBox")!;
+        _archNewsPageLabel = (Label)builder.GetObject("ArchNewsPageLabel")!;
+        _archNewsPrevButton = (Button)builder.GetObject("ArchNewsPrevButton")!;
+        _archNewsNextButton = (Button)builder.GetObject("ArchNewsNextButton")!;
+
+        _archNewsPrevButton.OnClicked += (_, _) => ShowArchNewsItem(_archNewsCurrentIndex - 1);
+        _archNewsNextButton.OnClicked += (_, _) => ShowArchNewsItem(_archNewsCurrentIndex + 1);
+
+        _ = LoadArchNews(_cts.Token);
 
         return overlay;
     }
@@ -531,6 +548,108 @@ public class HomeWindow(
         {
             Console.WriteLine(e);
         }
+    }
+
+    private async Task LoadArchNews(CancellationToken ct)
+    {
+        try
+        {
+            var items = await archNewsService.FetchNewsAsync(ct);
+            ct.ThrowIfCancellationRequested();
+
+            GLib.Functions.IdleAdd(0, () =>
+            {
+                _archNewsItems = items.Take(10).ToList();
+                _archNewsCurrentIndex = 0;
+
+                if (_archNewsItems.Count == 0)
+                {
+                    ShowArchNewsPlaceholder("Unable to load Arch News");
+                }
+                else
+                {
+                    ShowArchNewsItem(0);
+                }
+
+                return false;
+            });
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Failed to load Arch News: {e.Message}");
+        }
+    }
+
+    private void ShowArchNewsItem(int index)
+    {
+        if (_archNewsContentBox is null || _archNewsItems.Count == 0) return;
+
+        _archNewsCurrentIndex = Math.Clamp(index, 0, _archNewsItems.Count - 1);
+        var item = _archNewsItems[_archNewsCurrentIndex];
+
+        while (_archNewsContentBox.GetFirstChild() is { } child)
+            _archNewsContentBox.Remove(child);
+
+        var titleLabel = Label.New(item.Title);
+        titleLabel.AddCssClass("title-4");
+        titleLabel.SetXalign(0);
+        titleLabel.Wrap = true;
+        titleLabel.MaxWidthChars = 20;
+
+        var dateLabel = Label.New(item.PubDate ?? string.Empty);
+        dateLabel.AddCssClass("caption");
+        dateLabel.AddCssClass("dim-label");
+        dateLabel.SetXalign(0);
+        dateLabel.MaxWidthChars = 20;
+
+        _archNewsContentBox.Append(titleLabel);
+        _archNewsContentBox.Append(dateLabel);
+
+        if (!string.IsNullOrEmpty(item.Link))
+        {
+            var linkButton = new Button();
+            linkButton.SetLabel("Read more...");
+            linkButton.AddCssClass("flat");
+            linkButton.Halign = Align.Start;
+            var link = item.Link;
+            linkButton.OnClicked += (_, _) =>
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = link,
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to open link: {ex.Message}");
+                }
+            };
+            _archNewsContentBox.Append(linkButton);
+        }
+
+        _archNewsPrevButton!.Sensitive = _archNewsCurrentIndex > 0;
+        _archNewsNextButton!.Sensitive = _archNewsCurrentIndex < _archNewsItems.Count - 1;
+        _archNewsPageLabel!.SetText($"{_archNewsCurrentIndex + 1} / {_archNewsItems.Count}");
+    }
+
+    private void ShowArchNewsPlaceholder(string message)
+    {
+        if (_archNewsContentBox is null) return;
+
+        while (_archNewsContentBox.GetFirstChild() is { } child)
+            _archNewsContentBox.Remove(child);
+
+        var label = Label.New(message);
+        label.Halign = Align.Center;
+        label.AddCssClass("dim-label");
+        _archNewsContentBox.Append(label);
+
+        _archNewsPrevButton!.Sensitive = false;
+        _archNewsNextButton!.Sensitive = false;
+        _archNewsPageLabel!.SetText("0 / 0");
     }
 
     public void Dispose()
