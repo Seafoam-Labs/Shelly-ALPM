@@ -3,14 +3,8 @@
   <requires lib="gtk" version="4.0"/>
   <object class="GtkBox" id="SettingWindow">
     <property name="orientation">vertical</property>
-    <property name="margin-start">20</property>
-    <property name="margin-end">20</property>
-    <property name="margin-top">20</property>
-    <property name="margin-bottom">20</property>
-    <property name="spacing">15</property>
     <child>
-      <object class="GtkScrolledWindow">
-        <property name="hscrollbar-policy">never</property>
+      <object class="GtkOverlay" id="SettingsOverlay">
         <child>
           <object class="GtkBox">
             <property name="orientation">vertical</property>
@@ -18,186 +12,275 @@
             <property name="margin-end">20</property>
             <property name="margin-top">20</property>
             <property name="margin-bottom">20</property>
-            <property name="spacing">12</property>
-            <property name="hexpand">true</property>
-            <property name="vexpand">true</property>
+            <property name="spacing">15</property>
             <child>
-              <object class="GtkBox">
-                <property name="orientation">horizontal</property>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Enable AUR</property>
-                    <property name="hexpand">true</property>
-                    <property name="halign">start</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkSwitch" id="aur_switch"/>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkBox">
-                <property name="orientation">horizontal</property>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Enable Flatpak</property>
-                    <property name="hexpand">true</property>
-                    <property name="halign">start</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkSwitch" id="flatpak_switch"/>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkBox">
-                <property name="orientation">horizontal</property>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Enable Tray Icon</property>
-                    <property name="hexpand">true</property>
-                    <property name="halign">start</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkSwitch" id="tray_switch"/>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkBox" id="weekly_schedule_switch_box">
-                <property name="orientation">horizontal</property>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Use weekly schedule</property>
-                    <property name="hexpand">true</property>
-                    <property name="halign">start</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkSwitch" id="daily_schedule"/>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkBox" id="tray_interval_box">
-                <property name="orientation">horizontal</property>
-                <property name="spacing">12</property>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Tray Check Interval (Hours)</property>
-                    <property name="hexpand">true</property>
-                    <property name="halign">start</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkSpinButton" id="tray_interval_spin">
-                    <property name="adjustment">
-                      <object class="GtkAdjustment">
-                        <property name="lower">1</property>
-                        <property name="upper">96</property>
-                        <property name="step-increment">1</property>
-                        <property name="value">12</property>
-                      </object>
-                    </property>
-                  </object>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkBox" id="weekly_schedule_box">
-                <property name="orientation">vertical</property>
-                <property name="spacing">8</property>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Weekly Schedule</property>
-                    <property name="halign">start</property>
-                  </object>
-                </child>
+              <object class="GtkScrolledWindow">
+                <property name="hscrollbar-policy">never</property>
+                <property name="vexpand">true</property>
                 <child>
                   <object class="GtkBox">
-                    <property name="orientation">horizontal</property>
-                    <property name="spacing">8</property>
-                   
-                    <child>
-                      <object class="GtkCheckButton" id="day_sun_check">
-                        <property name="label">Sun</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkCheckButton" id="day_mon_check">
-                        <property name="label">Mon</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkCheckButton" id="day_tue_check">
-                        <property name="label">Tue</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkCheckButton" id="day_wed_check">
-                        <property name="label">Wed</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkCheckButton" id="day_thu_check">
-                        <property name="label">Thu</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkCheckButton" id="day_fri_check">
-                        <property name="label">Fri</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkCheckButton" id="day_sat_check">
-                        <property name="label">Sat</property>
-                      </object>
-                    </child>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkBox">
-                    <property name="orientation">horizontal</property>
+                    <property name="orientation">vertical</property>
+                    <property name="margin-start">20</property>
+                    <property name="margin-end">20</property>
+                    <property name="margin-top">20</property>
+                    <property name="margin-bottom">20</property>
                     <property name="spacing">12</property>
-                    <property name="margin-top">8</property>
+                    <property name="hexpand">true</property>
+                    <property name="vexpand">true</property>
                     <child>
-                      <object class="GtkLabel">
-                        <property name="label">Update Time (24h):</property>
-                        <property name="halign">start</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkSpinButton" id="update_hour_spin">
-                        <property name="adjustment">
-                          <object class="GtkAdjustment">
-                            <property name="lower">0</property>
-                            <property name="upper">23</property>
-                            <property name="step-increment">1</property>
-                            <property name="value">0</property>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Enable AUR</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
                           </object>
-                        </property>
-                        <property name="numeric">true</property>
+                        </child>
+                        <child>
+                          <object class="GtkSwitch" id="aur_switch"/>
+                        </child>
                       </object>
                     </child>
                     <child>
-                      <object class="GtkLabel">
-                        <property name="label">:</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkSpinButton" id="update_minute_spin">
-                        <property name="adjustment">
-                          <object class="GtkAdjustment">
-                            <property name="lower">0</property>
-                            <property name="upper">59</property>
-                            <property name="step-increment">1</property>
-                            <property name="value">0</property>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Enable Flatpak</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
                           </object>
-                        </property>
-                        <property name="numeric">true</property>
+                        </child>
+                        <child>
+                          <object class="GtkSwitch" id="flatpak_switch"/>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Enable Tray Icon</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkSwitch" id="tray_switch"/>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox" id="weekly_schedule_switch_box">
+                        <property name="orientation">horizontal</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Use weekly schedule</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkSwitch" id="daily_schedule"/>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox" id="tray_interval_box">
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">12</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Tray Check Interval (Hours)</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkSpinButton" id="tray_interval_spin">
+                            <property name="adjustment">
+                              <object class="GtkAdjustment">
+                                <property name="lower">1</property>
+                                <property name="upper">96</property>
+                                <property name="step-increment">1</property>
+                                <property name="value">12</property>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox" id="weekly_schedule_box">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">8</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Weekly Schedule</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">horizontal</property>
+                            <property name="spacing">8</property>
+                            <child>
+                              <object class="GtkCheckButton" id="day_sun_check">
+                                <property name="label">Sun</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkCheckButton" id="day_mon_check">
+                                <property name="label">Mon</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkCheckButton" id="day_tue_check">
+                                <property name="label">Tue</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkCheckButton" id="day_wed_check">
+                                <property name="label">Wed</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkCheckButton" id="day_thu_check">
+                                <property name="label">Thu</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkCheckButton" id="day_fri_check">
+                                <property name="label">Fri</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkCheckButton" id="day_sat_check">
+                                <property name="label">Sat</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">horizontal</property>
+                            <property name="spacing">12</property>
+                            <property name="margin-top">8</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Update Time (24h):</property>
+                                <property name="halign">start</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkSpinButton" id="update_hour_spin">
+                                <property name="adjustment">
+                                  <object class="GtkAdjustment">
+                                    <property name="lower">0</property>
+                                    <property name="upper">23</property>
+                                    <property name="step-increment">1</property>
+                                    <property name="value">0</property>
+                                  </object>
+                                </property>
+                                <property name="numeric">true</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">:</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkSpinButton" id="update_minute_spin">
+                                <property name="adjustment">
+                                  <object class="GtkAdjustment">
+                                    <property name="lower">0</property>
+                                    <property name="upper">59</property>
+                                    <property name="step-increment">1</property>
+                                    <property name="value">0</property>
+                                  </object>
+                                </property>
+                                <property name="numeric">true</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">No Confirm</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkSwitch" id="no_confirm_switch"/>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Enable Webview Visualization (experimental)</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkSwitch" id="webview_switch"/>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">12</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Parallel Downloads</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkSpinButton" id="parallel_downloads_spin">
+                            <property name="adjustment">
+                              <object class="GtkAdjustment">
+                                <property name="lower">1</property>
+                                <property name="upper">20</property>
+                                <property name="step-increment">1</property>
+                                <property name="value">10</property>
+                              </object>
+                            </property>
+                            <property name="numeric">true</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="sync_button">
+                        <property name="label">Force Database Update</property>
+                        <property name="margin-top">10</property>
+                        <style>
+                          <class name="suggested-action"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="rm_db_lock_button">
+                        <property name="label">Remove db.lock</property>
+                        <property name="margin-top">10</property>
+                        <style>
+                          <class name="suggested-action"/>
+                        </style>
                       </object>
                     </child>
                   </object>
@@ -207,123 +290,57 @@
             <child>
               <object class="GtkBox">
                 <property name="orientation">horizontal</property>
+                <property name="spacing">10</property>
                 <child>
-                  <object class="GtkLabel">
-                    <property name="label">No Confirm</property>
-                    <property name="hexpand">true</property>
+                  <object class="GtkButton" id="save_button">
+                    <property name="label">Save</property>
                     <property name="halign">start</property>
+                    <style>
+                      <class name="suggested-action"/>
+                    </style>
                   </object>
                 </child>
                 <child>
-                  <object class="GtkSwitch" id="no_confirm_switch"/>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkBox">
-                <property name="orientation">horizontal</property>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Enable Webview Visualization (experimental)</property>
-                    <property name="hexpand">true</property>
-                    <property name="halign">start</property>
+                  <object class="GtkButton" id="changelog_button">
+                    <property name="label">View Changelog</property>
+                    <style>
+                      <class name="suggested-action"/>
+                    </style>
                   </object>
                 </child>
                 <child>
-                  <object class="GtkSwitch" id="webview_switch"/>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkBox">
-                <property name="orientation">horizontal</property>
-                <property name="spacing">12</property>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Parallel Downloads</property>
+                  <object class="GtkBox">
+                    <property name="orientation">horizontal</property>
+                    <property name="spacing">10</property>
                     <property name="hexpand">true</property>
-                    <property name="halign">start</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkSpinButton" id="parallel_downloads_spin">
-                    <property name="adjustment">
-                      <object class="GtkAdjustment">
-                        <property name="lower">1</property>
-                        <property name="upper">20</property>
-                        <property name="step-increment">1</property>
-                        <property name="value">10</property>
+                    <property name="halign">end</property>
+                    <child>
+                      <object class="GtkLabel" id="version_label">
+                        <property name="label">v0.0.0</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
                       </object>
-                    </property>
-                    <property name="numeric">true</property>
+                    </child>
+                    <child>
+                      <object class="GtkLinkButton" id="github_link">
+                        <property name="label">GitHub</property>
+                        <property name="uri">https://github.com/ZoeyErinBauer/Shelly-ALPM</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLinkButton" id="sponsor_link">
+                        <property name="label">Sponsor</property>
+                        <property name="uri">https://buymeacoffee.com/zoeyerinba3</property>
+                      </object>
+                    </child>
                   </object>
                 </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="sync_button">
-                <property name="label">Force Database Update</property>
-                <property name="margin-top">10</property>
-                <style>
-                  <class name="suggested-action"/>
-                </style>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="rm_db_lock_button">
-                <property name="label">Remove db.lock</property>
-                <property name="margin-top">10</property>
-                <style>
-                  <class name="suggested-action"/>
-                </style>
               </object>
             </child>
           </object>
         </child>
       </object>
     </child>
-    <child>
-      <object class="GtkBox">
-        <property name="orientation">horizontal</property>
-        <property name="spacing">10</property>
-        <child>
-          <object class="GtkButton" id="save_button">
-            <property name="label">Save</property>
-            <property name="halign">start</property>
-            <style>
-              <class name="suggested-action"/>
-            </style>
-          </object>
-        </child>
-        <child>
-          <object class="GtkBox">
-            <property name="orientation">horizontal</property>
-            <property name="spacing">10</property>
-            <property name="hexpand">true</property>
-            <property name="halign">end</property>
-            <child>
-              <object class="GtkLabel" id="version_label">
-                <property name="label">v0.0.0</property>
-                <style>
-                  <class name="dim-label"/>
-                </style>
-              </object>
-            </child>
-            <child>
-              <object class="GtkLinkButton" id="github_link">
-                <property name="label">GitHub</property>
-                <property name="uri">https://github.com/ZoeyErinBauer/Shelly-ALPM</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkLinkButton" id="sponsor_link">
-                <property name="label">Sponsor</property>
-                <property name="uri">https://buymeacoffee.com/zoeyerinba3</property>
-              </object>
-            </child>
-          </object>
-        </child>
-      </object>
-    </child>
-    </object>
+  </object>
 </interface>

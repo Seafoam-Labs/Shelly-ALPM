@@ -3,6 +3,13 @@ using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.Services.TrayServices;
 using Shelly.Gtk.UiModels;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using GLib;
+using Shelly.Gtk.Windows.Dialog;
+using DateTime = System.DateTime;
+using TimeSpan = System.TimeSpan;
+
 
 namespace Shelly.Gtk.Windows;
 
@@ -14,7 +21,17 @@ public class Settings(
 {
     private Box _box = null!;
     private ShellyConfig _config = null!;
-
+    private Overlay? _parentOverlay;
+    private static List<ReleaseNotesDialog.ReleaseItem>? _cachedReleaseList = null!;
+    private static string? _cachedLatestVersion = null!;
+    private static DateTime _lastVersionCheck = DateTime.MinValue;
+    private static readonly TimeSpan VersionCheckInterval = TimeSpan.FromMinutes(5);
+    
+    private static readonly HttpClient HttpClient = new()
+    {
+        DefaultRequestHeaders = { UserAgent = { new("Shelly-ALPM", null) } }
+    };
+    
     public event Action? NavigationToHomeRequested;
 
     public Widget CreateWindow()
@@ -23,7 +40,8 @@ public class Settings(
         _box = (Box)builder.GetObject("SettingWindow")!;
 
         _config = configService.LoadConfig();
-
+        _parentOverlay = (Overlay)builder.GetObject("SettingsOverlay")!;
+        
         SetupAurSwitch("aur_switch", _config.AurEnabled, (v) => _config.AurEnabled = v, builder);
         SetupFlatpakSwitch("flatpak_switch", _config.FlatPackEnabled, (v) => _config.FlatPackEnabled = v, builder);
         SetupTraySwitch("tray_switch", _config.TrayEnabled, (v) => _config.TrayEnabled = v, builder);
@@ -84,6 +102,9 @@ public class Settings(
 
         var removeLockButton = (Button)builder.GetObject("rm_db_lock_button")!;
         removeLockButton.OnClicked += (s, e) => { _ = RemoveDbLockAsync(); };
+        
+        var viewChangelogButton = (Button)builder.GetObject("changelog_button")!;
+        viewChangelogButton.OnClicked += async (s, e) => { await ShowAppChangelogAsync(); };
 
         var versionLabel = (Label)builder.GetObject("version_label")!;
         versionLabel.SetLabel(
@@ -364,7 +385,107 @@ public class Settings(
         }
     }
     
+    private async Task ShowAppChangelogAsync()
+    {
+        if (_parentOverlay is null)
+        {
+            Console.WriteLine("Parent overlay is null");
+            genericQuestionService.RaiseToastMessage(
+                new ToastMessageEventArgs("Overlay not available"));
+            return;
+        }
+        
+        try
+        {
+            if (_cachedReleaseList is not null && 
+                DateTime.UtcNow - _lastVersionCheck < VersionCheckInterval)
+            {
+                Console.WriteLine("Cached releases used (skipping version check)");
+                ReleaseNotesDialog.ShowReleaseHistoryDialog(_parentOverlay, _cachedReleaseList);
+                return;
+            }
+            
+            HttpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM");
+
+            var url = "https://api.github.com/repos/Seafoam-Labs/Shelly-ALPM/releases";
+            var latestJson = await HttpClient.GetStringAsync($"{url}/latest");
+            _lastVersionCheck = DateTime.UtcNow;
+            using var latestDoc = JsonDocument.Parse(latestJson);
+            var latestTag = latestDoc.RootElement
+                .TryGetProperty("tag_name", out var tagProp)
+                ? tagProp.GetString()
+                : null;
+            
+            if (_cachedReleaseList is not null && latestTag == _cachedLatestVersion)
+            {
+                Console.WriteLine("Cached Releases used");
+                ReleaseNotesDialog.ShowReleaseHistoryDialog(_parentOverlay, _cachedReleaseList);
+                return;
+            }
+            
+            var json = await HttpClient.GetStringAsync(url);
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0)
+            {
+                genericQuestionService.RaiseToastMessage(
+                    new ToastMessageEventArgs("No changelog entries found"));
+                return;
+            }
+
+            var releases = new List<ReleaseNotesDialog.ReleaseItem>();
+
+            foreach (var release in root.EnumerateArray())
+            {
+                var version = release.TryGetProperty("tag_name", out var tagNameProp)
+                    ? tagNameProp.GetString() ?? "Unknown"
+                    : "Unknown";
+
+                var markdown = release.TryGetProperty("body", out var bodyProp)
+                    ? bodyProp.GetString() ?? "No details for this release"
+                    : "No details for this release";
+
+                var publishedAtRaw = release.TryGetProperty("published_at", out var publishedAtProp)
+                    ? publishedAtProp.GetString()
+                    : null;
+
+                var date = DateTimeOffset.TryParse(publishedAtRaw, out var published)
+                    ? published.ToString("yyyy-MM-dd")
+                    : "Unknown date";
+
+                releases.Add(new ReleaseNotesDialog.ReleaseItem
+                {
+                    Version = version,
+                    Date = date,
+                    Markdown = string.IsNullOrWhiteSpace(markdown)
+                        ? "No details for this release"
+                        : markdown
+                });
+            }
+
+            if (releases.Count == 0)
+            {
+                genericQuestionService.RaiseToastMessage(
+                    new ToastMessageEventArgs("No changelog entries found"));
+                return;
+            }
+
+            _cachedReleaseList = releases;
+            _cachedLatestVersion = latestTag;
+
+            ReleaseNotesDialog.ShowReleaseHistoryDialog(_parentOverlay, releases);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading changelog: {ex.Message}");
+            genericQuestionService.RaiseToastMessage(
+                new ToastMessageEventArgs("Failed to load changelog"));
+        }
+    }
+
     public void Dispose()
     {
     }
 }
+

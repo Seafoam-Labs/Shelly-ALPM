@@ -6,6 +6,14 @@ namespace Shelly.Gtk.Windows.Dialog;
 
 public static partial class ReleaseNotesDialog
 {
+
+    public class ReleaseItem
+    {
+        public string Version { get; set; } = string.Empty;
+        public string Date { get; set; } = string.Empty;
+        public string Markdown { get; set; } = string.Empty;    
+    }
+    
     public static void ShowReleaseNotesDialog(Overlay parentOverlay, string markdown)
     {
         var box = Box.New(Orientation.Vertical, 12);
@@ -53,6 +61,57 @@ public static partial class ReleaseNotesDialog
         parentOverlay.AddOverlay(box);
     }
 
+    public static void ShowReleaseHistoryDialog(Overlay parentOverlay, List<ReleaseItem> releases)
+    {
+        var box = Box.New(Orientation.Vertical, 12);
+        box.SetHalign(Align.Center);
+        box.SetValign(Align.Center);
+        box.SetSizeRequest(700, 550);
+        box.SetMarginTop(40);
+        box.SetMarginBottom(40);
+        box.SetMarginStart(40);
+        box.SetMarginEnd(40);
+        box.AddCssClass("dialog-overlay");
+        
+        var titleLabel = Label.New("Version History");
+        titleLabel.AddCssClass("title-2");
+        box.Append(titleLabel);
+        
+        var contentBox = Box.New(Orientation.Vertical, 12);
+        contentBox.SetMarginTop(10);
+        contentBox.SetMarginBottom(10);
+        contentBox.SetMarginStart(10);
+        contentBox.SetMarginEnd(10);
+
+        foreach (var release in releases)
+        {
+            contentBox.Append(BuildReleaseCard(release));
+        }
+
+        var scrolledWindow = new ScrolledWindow();
+        scrolledWindow.SetPolicy(PolicyType.Never, PolicyType.Automatic);
+        scrolledWindow.SetVexpand(true);
+        scrolledWindow.SetChild(contentBox);
+        box.Append(scrolledWindow);
+        
+        var buttonBox = Box.New(Orientation.Horizontal, 8);
+        buttonBox.SetHalign(Align.End);
+        buttonBox.SetMarginTop(10);
+        
+        var closeButton = Button.NewWithLabel("Close");
+        closeButton.AddCssClass("suggested-action");
+        closeButton.OnClicked += (s, args) =>
+        {
+            parentOverlay.RemoveOverlay(box);
+        };
+
+        buttonBox.Append(closeButton);
+        box.Append(buttonBox);
+
+        parentOverlay.AddOverlay(box);
+        
+    }
+    
     private static void ParseMarkdown(Box container, string markdown)
     {
         var lines = markdown.Split('\n');
@@ -95,6 +154,49 @@ public static partial class ReleaseNotesDialog
             }
         }
     }
+    
+    private static Box BuildReleaseCard(ReleaseItem release)
+    {
+        var card = Box.New(Orientation.Vertical, 8);
+        card.AddCssClass("card");
+        card.SetMarginBottom(6);
+        card.SetMarginStart(2);
+        card.SetMarginEnd(2);
+        card.SetMarginTop(2);
+
+        var header = Box.New(Orientation.Horizontal, 8);
+        header.SetMarginTop(8);
+        header.SetMarginBottom(4);
+        header.SetMarginStart(8);
+        header.SetMarginEnd(8);
+
+        var versionLabel = Label.New($"Version {release.Version}");
+        versionLabel.AddCssClass("heading");
+        versionLabel.SetHalign(Align.Start);
+        versionLabel.SetXalign(0);
+        versionLabel.SetHexpand(true);
+
+        var dateLabel = Label.New(release.Date);
+        dateLabel.AddCssClass("dim-label");
+        dateLabel.SetHalign(Align.End);
+        dateLabel.SetValign(Align.Center);
+
+        header.Append(versionLabel);
+        header.Append(dateLabel);
+        card.Append(header);
+
+        var markdownBox = Box.New(Orientation.Vertical, 6);
+        markdownBox.SetMarginBottom(8);
+        markdownBox.SetMarginStart(8);
+        markdownBox.SetMarginEnd(8);
+
+        ParseMarkdown(markdownBox, release.Markdown);
+
+        card.Append(markdownBox);
+
+        return card;
+    }
+    
 
     private static string ProcessInlineMarkdown(string text)
     {
