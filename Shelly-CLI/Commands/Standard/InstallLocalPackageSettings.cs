@@ -12,5 +12,8 @@ public class InstallLocalPackageSettings : CommandSettings
     [CommandOption("-n|--no-confirm")]
     [Description("Proceed without asking for user confirmation")]
     public bool NoConfirm { get; set; }
-    
+
+    [CommandOption("--singlepane")]
+    [Description("Use pacman-style single-stream output instead of the split-pane Live layout")]
+    public bool SinglePane { get; set; }
 }

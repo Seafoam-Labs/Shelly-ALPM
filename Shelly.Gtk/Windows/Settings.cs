@@ -56,7 +56,9 @@ public class Settings(
         SetupSwitch("shelly_icons_switch", _config.ShellyIconsEnabled, (v) => _config.ShellyIconsEnabled = v, builder);
         SetupSwitch("appimage_switch", _config.AppImageEnabled, (v) => _config.AppImageEnabled = v, builder);
         SetupSwitch("symbolic_tray_switch", _config.UseSymbolicTray, (v) => _config.UseSymbolicTray = v, builder);
-        SetupSwitch("shelly_search_switch", _config.ShellySearchEnabled, (v) => _config.ShellySearchEnabled = v, builder);
+        SetupSwitch("shelly_search_switch", _config.ShellySearchEnabled, (v) => _config.ShellySearchEnabled = v,
+            builder);
+        SetupSwitch("use_old_menu_switch", !_config.UseOldMenu, (v) => _config.UseOldMenu = !v, builder);
 
         var parallelDownloadsSpin = (SpinButton)builder.GetObject("parallel_downloads_spin")!;
         parallelDownloadsSpin.Value = _config.ParallelDownloadCount;
@@ -91,41 +93,41 @@ public class Settings(
             minuteSpin.Value = _config.Time.Value.Minute;
         }
 
-        hourSpin.OnValueChanged += (_,_) =>
+        hourSpin.OnValueChanged += (_, _) =>
         {
             _config.Time = new TimeOnly((int)hourSpin.Value, (int)minuteSpin.Value);
             SaveConfig();
         };
 
-        minuteSpin.OnValueChanged += (_,_) =>
+        minuteSpin.OnValueChanged += (_, _) =>
         {
             _config.Time = new TimeOnly((int)hourSpin.Value, (int)minuteSpin.Value);
             SaveConfig();
         };
 
         var syncButton = (Button)builder.GetObject("sync_button")!;
-        syncButton.OnClicked += (_,_) => { _ = ForceSyncAsync(); };
+        syncButton.OnClicked += (_, _) => { _ = ForceSyncAsync(); };
 
         var saveButton = (Button)builder.GetObject("save_button")!;
-        saveButton.OnClicked += (_,_) => { OnSaveClicked(); };
+        saveButton.OnClicked += (_, _) => { OnSaveClicked(); };
 
         var removeLockButton = (Button)builder.GetObject("rm_db_lock_button")!;
-        removeLockButton.OnClicked += (_,_) => { _ = RemoveDbLockAsync(); };
+        removeLockButton.OnClicked += (_, _) => { _ = RemoveDbLockAsync(); };
 
         _sub = DirtySubscription.Attach(dirtyService, this);
 
         var viewChangelogButton = (Button)builder.GetObject("changelog_button")!;
-        viewChangelogButton.OnClicked += async (_,_) => { await ShowAppChangelogAsync(); };
+        viewChangelogButton.OnClicked += async (_, _) => { await ShowAppChangelogAsync(); };
 
         var purifyCorruptionButton = (Button)builder.GetObject("purify_button")!;
         purifyCorruptionButton.TooltipText = "Remove corrupted packages";
-        purifyCorruptionButton.OnClicked += async (_,_) => { await PurifyCorruption(); };
+        purifyCorruptionButton.OnClicked += async (_, _) => { await PurifyCorruption(); };
 
         var fixPermissionsButton = (Button)builder.GetObject("fix_permissions_button")!;
         fixPermissionsButton.OnClicked += async (s, e) => { await FixXdgPermissionsAsync(); };
 
         var viewPacfilesButton = (Button)builder.GetObject("view_pacfiles_button")!;
-        viewPacfilesButton.OnClicked += async (_,_) => { await ViewPacfilesAsync(); };
+        viewPacfilesButton.OnClicked += async (_, _) => { await ViewPacfilesAsync(); };
 
         var versionLabel = (Label)builder.GetObject("version_label")!;
         versionLabel.SetLabel(
@@ -133,6 +135,50 @@ public class Settings(
 
         var defaultPageDropDown = (DropDown)builder.GetObject("default_page_drop")!;
         PopulateDefaultPageDropDown(defaultPageDropDown);
+
+        var trayIconButton = (Button)builder.GetObject("tray_icon_button")!;
+        if (!string.IsNullOrEmpty(_config.TrayIconPath))
+        {
+            trayIconButton.Label = Path.GetFileName(_config.TrayIconPath);
+        }
+
+        trayIconButton.OnClicked += async (_, _) =>
+        {
+            var results = await SetupFileSelector(trayIconButton);
+            if (string.IsNullOrEmpty(results)) return;
+            _config.TrayIconPath = results;
+            SaveConfig();
+        };
+
+        var trayIconClearButton = (Button)builder.GetObject("tray_icon_clear_button")!;
+        trayIconClearButton.OnClicked += (_, _) =>
+        {
+            _config.TrayIconPath = null;
+            trayIconButton.Label = "Select File";
+            SaveConfig();
+        };
+
+        var trayUpdatesIconButton = (Button)builder.GetObject("tray_updates_icon_button")!;
+        if (!string.IsNullOrEmpty(_config.TrayUpdatesIconPath))
+        {
+            trayUpdatesIconButton.Label = Path.GetFileName(_config.TrayUpdatesIconPath);
+        }
+
+        trayUpdatesIconButton.OnClicked += async (_, _) =>
+        {
+            var results = await SetupFileSelector(trayUpdatesIconButton);
+            if (string.IsNullOrEmpty(results)) return;
+            _config.TrayUpdatesIconPath = results;
+            SaveConfig();
+        };
+
+        var trayUpdatesIconClearButton = (Button)builder.GetObject("tray_updates_icon_clear_button")!;
+        trayUpdatesIconClearButton.OnClicked += (_, _) =>
+        {
+            _config.TrayUpdatesIconPath = null;
+            trayUpdatesIconButton.Label = "Select File";
+            SaveConfig();
+        };
 
         defaultPageDropDown.OnNotify += (_, args) =>
         {
@@ -148,16 +194,14 @@ public class Settings(
             }
         };
 
-        ConfigChanged += (config) =>
-        {
-            PopulateDefaultPageDropDown(defaultPageDropDown);
-        };
+        ConfigChanged += _ => { PopulateDefaultPageDropDown(defaultPageDropDown); };
 
         return _box;
     }
 
     private List<ShellyTabs> _availablePages = [];
     private bool _isPopulatingDropDown;
+
     private void PopulateDefaultPageDropDown(DropDown dropDown)
     {
         _isPopulatingDropDown = true;
@@ -212,18 +256,56 @@ public class Settings(
             _isPopulatingDropDown = false;
         }
     }
-    
+
     private void OnSaveClicked()
     {
         SaveConfig();
         NavigationToPackages?.Invoke();
     }
 
+    private static async Task<string?> SetupFileSelector(Button button)
+    {
+        var dialog = FileDialog.New();
+        dialog.Title = "Select Icon File";
+
+        var initialFolder = Gio.FileHelper.NewForPath("/usr/share/icons/hicolor/");
+        dialog.InitialFolder = initialFolder;
+
+        var filter = FileFilter.New();
+        filter.Name = "Image Files";
+        filter.AddPattern("*.png");
+        filter.AddPattern("*.svg");
+        filter.AddPattern("*.ico");
+
+        var listModel = Gio.ListStore.New(FileFilter.GetGType());
+        listModel.Append(filter);
+        dialog.Filters = listModel;
+
+        try
+        {
+            var file = await dialog.OpenAsync(null);
+            if (file == null) return null;
+
+            var path = file.GetPath();
+
+            if (string.IsNullOrEmpty(path)) return null;
+
+            button.Label = Path.GetFileName(path);
+            return path;
+        }
+        catch (Exception)
+        {
+            // Cancelled
+        }
+
+        return null;
+    }
+
     private void SetupSwitch(string id, bool initialValue, Action<bool> updateAction, Builder builder)
     {
         var sw = (Switch)builder.GetObject(id)!;
         sw.Active = initialValue;
-        sw.OnStateSet += (_,e) =>
+        sw.OnStateSet += (_, e) =>
         {
             updateAction(e.State);
             SaveConfig();
@@ -618,7 +700,7 @@ public class Settings(
                 genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Copied to clipboard"));
             };
             headerBox.Append(copyButton);
-            
+
             itemBox.Append(headerBox);
 
             var textView = TextView.NewWithProperties([]);
@@ -626,7 +708,7 @@ public class Settings(
             textView.CursorVisible = false;
             textView.WrapMode = WrapMode.None;
             textView.Monospace = true;
-          
+
             var buffer = textView.Buffer;
             if (buffer != null)
             {
@@ -636,6 +718,7 @@ public class Settings(
                 {
                     builder.AppendLine($"{(i + 1).ToString().PadLeft(3)} | {lines[i]}");
                 }
+
                 buffer.SetText(builder.ToString(), -1);
             }
 
@@ -644,7 +727,7 @@ public class Settings(
             textScroll.SetPolicy(PolicyType.Automatic, PolicyType.Automatic);
             textScroll.SetChild(textView);
             textScroll.AddCssClass("rounded-card");
-            
+
             itemBox.Append(textScroll);
             list.Append(itemBox);
         }
@@ -752,7 +835,7 @@ public class Settings(
                 new ToastMessageEventArgs("Failed to load changelog"));
         }
     }
-    
+
     public void Reload()
     {
         // Refresh internal config snapshot. Visible switches retain their current

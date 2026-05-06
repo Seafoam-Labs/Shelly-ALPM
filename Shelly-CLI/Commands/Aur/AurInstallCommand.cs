@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using PackageManager.Alpm;
 using PackageManager.Aur;
+using Shelly_CLI.Configuration;
 using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
 using Spectre.Console;
@@ -41,6 +42,16 @@ public class AurInstallCommand : AsyncCommand<AurInstallSettings>
             }
         }
 
+        var cfg = ConfigManager.ReadConfig();
+        var useSinglePane = settings.SinglePane
+            || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
+            || Console.IsOutputRedirected;
+
+        Func<AurPackageManager, Func<AurPackageManager, Task>, bool, Task<bool>> runOutput =
+            useSinglePane
+                ? (m, op, nc) => AurSinglePaneOutput.Output(m, op, nc)
+                : (m, op, nc) => AurSplitOutput.Output(m, op, nc);
+
         try
         {
             manager = new AurPackageManager();
@@ -57,7 +68,7 @@ public class AurInstallCommand : AsyncCommand<AurInstallSettings>
                 if (settings.MakeDepsOn)
                 {
                     AnsiConsole.MarkupLine("[yellow]Installing dependencies (including make dependencies)...[/]");
-                    var makeDepsResult = await AurSplitOutput.Output(manager, m => m.InstallDependenciesOnly(packageList.First(), true), settings.NoConfirm);
+                    var makeDepsResult = await runOutput(manager, m => m.InstallDependenciesOnly(packageList.First(), true), settings.NoConfirm);
                     if (!makeDepsResult)
                     {
                         AnsiConsole.MarkupLine("[red]Dependency installation failed. See errors above.[/]");
@@ -68,7 +79,7 @@ public class AurInstallCommand : AsyncCommand<AurInstallSettings>
                 }
 
                 AnsiConsole.MarkupLine("[yellow]Installing dependencies...[/]");
-                var depsResult = await AurSplitOutput.Output(manager, m => m.InstallDependenciesOnly(packageList.First(), false), settings.NoConfirm);
+                var depsResult = await runOutput(manager, m => m.InstallDependenciesOnly(packageList.First(), false), settings.NoConfirm);
                 if (!depsResult)
                 {
                     AnsiConsole.MarkupLine("[red]Dependency installation failed. See errors above.[/]");
@@ -79,7 +90,7 @@ public class AurInstallCommand : AsyncCommand<AurInstallSettings>
             }
 
             AnsiConsole.MarkupLine($"[yellow]Installing AUR packages: {string.Join(", ", settings.Packages.Select(p => p.EscapeMarkup()))}[/]");
-            var installResult = await AurSplitOutput.Output(manager, m => m.InstallPackages(packageList), settings.NoConfirm);
+            var installResult = await runOutput(manager, m => m.InstallPackages(packageList), settings.NoConfirm);
             if (!installResult)
             {
                 AnsiConsole.MarkupLine("[red]Installation failed. See errors above.[/]");

@@ -402,6 +402,15 @@ public class AurPackageManager(string? configPath = null)
                 TotalCount = totalCount,
                 Status = PackageProgressStatus.Downloading
             });
+            var newPkgbuild = await FetchPkgbuildAsync(packageName);
+            PkgbuildDiffRequest?.Invoke(this,new PkgbuildDiffRequestEventArgs()
+            {
+                PackageName = packageName,
+                OldPkgbuild = string.Empty,
+                NewPkgbuild = newPkgbuild,
+                ShowDiff = false,
+                ProceedWithUpdate = true
+            });
 
             var success = await DownloadPackage(packageName);
 
@@ -1698,6 +1707,8 @@ public class AurPackageManager(string? configPath = null)
             // Populate the store with current remote SHAs so next check can compare
             foreach (var entry in entries)
             {
+                if (string.IsNullOrEmpty(entry.Branch))
+                    continue;
                 var sha = await GetRemoteCommitSha(entry.Url, entry.Branch);
                 if (sha != null)
                     entry.CommitSha = sha;
@@ -1712,6 +1723,8 @@ public class AurPackageManager(string? configPath = null)
         foreach (var entry in storedEntries)
         {
             if (string.IsNullOrEmpty(entry.CommitSha))
+                continue;
+            if (string.IsNullOrEmpty(entry.Branch))
                 continue;
 
             var remoteSha = await GetRemoteCommitSha(entry.Url, entry.Branch);
@@ -1740,7 +1753,7 @@ public class AurPackageManager(string? configPath = null)
 
         var pkgbuildContent = await File.ReadAllTextAsync(pkgbuildPath);
         var pkgbuildInfo = PkgbuildParser.ParseContent(pkgbuildContent);
-        var entries = VcsSourceParser.ParseSources(pkgbuildInfo.Source);
+        var entries = VcsSourceParser.ParseSources(pkgbuildInfo.Source, pkgbuildInfo.Variables);
         return entries.Count > 0 ? entries : null;
     }
 
@@ -1749,6 +1762,9 @@ public class AurPackageManager(string? configPath = null)
     /// </summary>
     private static async Task<string?> GetRemoteCommitSha(string url, string branch, int timeoutSeconds = 15)
     {
+        if (string.IsNullOrEmpty(branch))
+            return null;
+
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
         try
         {
@@ -1757,7 +1773,7 @@ public class AurPackageManager(string? configPath = null)
                 StartInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "git",
-                    Arguments = $"ls-remote {url} {branch}",
+                    Arguments = $"ls-remote {url} {(string.IsNullOrEmpty(branch) ? "" : branch)}",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -1804,13 +1820,15 @@ public class AurPackageManager(string? configPath = null)
         {
             var pkgbuildContent = await File.ReadAllTextAsync(pkgbuildPath);
             var pkgbuildInfo = PkgbuildParser.ParseContent(pkgbuildContent);
-            var entries = VcsSourceParser.ParseSources(pkgbuildInfo.Source);
+            var entries = VcsSourceParser.ParseSources(pkgbuildInfo.Source, pkgbuildInfo.Variables);
 
             if (entries.Count == 0)
                 return;
 
             foreach (var entry in entries)
             {
+                if (string.IsNullOrEmpty(entry.Branch))
+                    continue;
                 var sha = await GetRemoteCommitSha(entry.Url, entry.Branch);
                 if (sha != null)
                     entry.CommitSha = sha;

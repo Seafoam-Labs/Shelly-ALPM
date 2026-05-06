@@ -198,6 +198,38 @@
                                         </child>
                                     </object>
                                 </child>
+                                <child>
+                                    <object class="GtkListBoxRow">
+                                        <property name="activatable">false</property>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="orientation">vertical</property>
+                                                <property name="margin-start">15</property>
+                                                <property name="margin-end">15</property>
+                                                <property name="margin-top">15</property>
+                                                <property name="margin-bottom">15</property>
+                                                <property name="spacing">5</property>
+                                                <child>
+                                                    <object class="GtkCheckButton" id="nav_check">
+                                                        <property name="label">Vertical Navigation</property>
+                                                        <property name="active">true</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkLabel">
+                                                        <property name="label">Change navigation style to vertical or horizontal style.</property>
+                                                        <property name="wrap">true</property>
+                                                        <property name="xalign">0</property>
+                                                        <style>
+                                                            <class name="body"/>
+                                                            <class name="dim-label"/>
+                                                        </style>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
                             </object>
                         </child>
                         <child>

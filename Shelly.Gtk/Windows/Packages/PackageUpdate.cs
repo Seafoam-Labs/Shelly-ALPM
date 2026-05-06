@@ -1,5 +1,7 @@
 using Gtk;
 using Shelly.Gtk.Helpers;
+using Shelly.Gtk.Enums;
+using static Shelly.Gtk.Helpers.PackageColumnViewSorter;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
@@ -45,6 +47,10 @@ public class PackageUpdate(
     private ColumnViewColumn _oldColumn = null!;
     private ColumnViewColumn _versionColumn = null!;
     private ColumnViewColumn _sizeDiffColumn = null!;
+    
+    private ColumnViewSorter _columnViewSorter = null!;
+
+    
     private Button _refreshButton = null!;
     private Button _updateButton = null!;
     private Label _noPackagesLabel = null!;
@@ -91,6 +97,37 @@ public class PackageUpdate(
 
         SetupColumns(_checkColumn, _nameColumn, _sizeDiffColumn, _oldColumn, _versionColumn);
 
+        
+        // Creating sorter
+        _nameColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((a, b) => 0);
+        
+        _columnViewSorter = (ColumnViewSorter)_columnView.GetSorter()!;
+
+        _columnViewSorter.OnChanged += (_, _) =>
+        {
+            var primaryColumn =
+                _columnViewSorter.GetPrimarySortColumn();
+            
+            if (primaryColumn is null)
+                return;
+            
+            var sortColumn = GetSortColumn(primaryColumn);
+            
+            var order =
+                _columnViewSorter.GetPrimarySortOrder();
+            
+            if (sortColumn is null)
+                return;
+
+            Sort(
+                _listStore,
+                _packageGObjectRefs,
+                sortColumn.Value,
+                order
+            );
+        };        
+
+        
         ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.Start);
         ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.End);
         ColumnViewHelper.AlignColumnHeader(_columnView, 3, Align.End);
@@ -143,6 +180,15 @@ public class PackageUpdate(
         _sub = DirtySubscription.Attach(dirtyService, this);
         return _box;
     }
+    
+    private PackageSortColumn? GetSortColumn(ColumnViewColumn column)
+    {
+        if (column == _nameColumn)
+            return PackageSortColumn.Name;
+        
+        return null;
+    }
+
 
     public void Reload()
     {
@@ -693,6 +739,15 @@ public class PackageUpdate(
                     genericQuestionService.RaiseQuestion(failArgs);
                     await failArgs.ResponseTask;
                 }
+
+                if (upgradeResult.Success)
+                {
+                    var args = new ToastMessageEventArgs(
+                        $"Updated {selectedPackages.Count} Package(s)"
+                    );
+                    genericQuestionService.RaiseToastMessage(args);
+                }
+
             }
             catch (Exception e)
             {
@@ -701,11 +756,6 @@ public class PackageUpdate(
             finally
             {
                 lockoutService.Hide();
-
-                var args = new ToastMessageEventArgs(
-                    $"Updated {selectedPackages.Count} Package(s)"
-                );
-                genericQuestionService.RaiseToastMessage(args);
             }
         }
     }

@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using PackageManager.Aur;
+using Shelly_CLI.Configuration;
 using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
 using Spectre.Console;
@@ -46,8 +47,15 @@ public class AurUpgradeCommand : AsyncCommand<AurUpgradeSettings>
                 }
             }
 
+            var cfg = ConfigManager.ReadConfig();
+            var useSinglePane = settings.SinglePane
+                || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
+                || Console.IsOutputRedirected;
+
             var packageNames = updates.Select(u => u.Name).ToList();
-            var result = await AurSplitOutput.Output(manager, m => m.UpdatePackages(packageNames), settings.NoConfirm);
+            var result = useSinglePane
+                ? await AurSinglePaneOutput.Output(manager, m => m.UpdatePackages(packageNames), settings.NoConfirm)
+                : await AurSplitOutput.Output(manager, m => m.UpdatePackages(packageNames), settings.NoConfirm);
             if (!result)
             {
                 AnsiConsole.MarkupLine("[red]Upgrade failed. See errors above.[/]");

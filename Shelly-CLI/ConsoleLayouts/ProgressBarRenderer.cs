@@ -12,6 +12,30 @@ public static class ProgressBarRenderer
 
     public static bool ShouldAnimate(ProgressBarStyleKind style) => style == ProgressBarStyleKind.Pacman;
 
+    /// <summary>Whether this style benefits from a periodic frame ticker (mouth animation).</summary>
+    public static bool NeedsFrameTicker(ProgressBarStyleKind style) => style == ProgressBarStyleKind.Pacman;
+
+    /// <summary>
+    /// Render a color-free, ASCII-only bar. Pacman style preserves its shape (mouth + pellets),
+    /// just stripped of Spectre markup tags. Blocks style falls back to '#'/'-' for non-UTF8 consoles.
+    /// </summary>
+    public static string RenderAscii(int pct, int frame, ProgressBarStyleKind style, int width)
+    {
+        pct = Math.Clamp(pct, 0, 100);
+        if (width <= 0) width = 24;
+        return style switch
+        {
+            ProgressBarStyleKind.Pacman => Spectre.Console.Markup.Remove(BuildPacmanBar(pct, frame, width)),
+            _ => BuildAsciiBlocksBar(pct, width)
+        };
+    }
+
+    private static string BuildAsciiBlocksBar(int pct, int width)
+    {
+        int filled = width * pct / 100;
+        return new string('#', filled) + new string('-', width - filled);
+    }
+
     public static ProgressBarStyleKind ParseStyle(string? value)
     {
         return Enum.TryParse<ProgressBarStyleKind>(value, true, out var s)

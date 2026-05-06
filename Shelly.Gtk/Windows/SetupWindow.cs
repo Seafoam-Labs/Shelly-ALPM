@@ -25,6 +25,7 @@ public class SetupWindow(
         var trayCheck = (CheckButton)builder.GetObject("tray_check")!;
         var finishButton = (Button)builder.GetObject("finish_button")!;
         var introImage = (Image)builder.GetObject("intro_image")!;
+        var navCheck = (CheckButton)builder.GetObject("nav_check")!;
 
         try
         {
@@ -46,6 +47,7 @@ public class SetupWindow(
         flatpakCheck.Active = currentConfig.FlatPackEnabled;
         appimageCheck.Active = currentConfig.AppImageEnabled;
         trayCheck.Active = currentConfig.TrayEnabled;
+        navCheck.Active = !currentConfig.UseOldMenu;
         
         finishButton.OnClicked += async (_, _) =>
         {
@@ -54,6 +56,7 @@ public class SetupWindow(
             config.FlatPackEnabled = flatpakCheck.Active;
             config.AppImageEnabled = appimageCheck.Active;
             config.TrayEnabled = trayCheck.Active;
+            config.UseOldMenu = !navCheck.Active;
             config.NewInstallInitSettings = true;
             config.NewInstall = false;
 

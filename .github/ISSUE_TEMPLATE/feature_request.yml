@@ -1,0 +1,57 @@
+name: "✨ Feature Request"
+description: Propose a new feature or improvement for Shelly
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-flight Checklist
+      options:
+        - label: I have searched existing issues and pull requests and this has not been requested before.
+          required: true
+        - label: I have/will fill this template with the required information to the best of my ability.
+          required: false
+        - label: I have read the Contributing Guidelines.
+          required: true
+  - type: checkboxes
+    id: type
+    attributes:
+      label: Request Type
+      description: What kind of change are you requesting? Check all that apply.
+      options:
+        - label: New feature or capability
+        - label: Performance improvement
+        - label: UI / app improvement
+        - label: Other
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A concise description of the feature or change you are requesting.
+      placeholder: What should be added or changed, and why?
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation / Use Case
+      description: Why is this useful? What problem does it solve or what benefit does it bring?
+    validations:
+      required: true
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference / Prior Art
+      description: Link to any relevant resources — community threads, documentation, similar implementations in other platforms, or existing GitHub issues/PRs.
+      placeholder: e.g. https://www.seafoam-labs.org/… or https://github.com/…
+  - type: textarea
+    id: testing
+    attributes:
+      label: Testing / Observations
+      description: Have you tested a workaround or similar approach? Share any results, logs, or observations that support this request.
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Anything else that might be relevant — device compatibility concerns, conflicts with existing features, dependencies, or edge cases to consider.

@@ -570,7 +570,7 @@ public class FlatpakInstall(
     {
         if (obj is not FlatpakGObject { Package: { } pkg }) return false;
 
-        var id = pkg.Id ?? string.Empty;
+        var id = pkg.Id;
         switch (_selectedCategory)
         {
             case FlatpakCategories.AllApplications:
@@ -601,8 +601,7 @@ public class FlatpakInstall(
             {
                 var categoryName = _selectedCategory.ToString();
                 var categories = pkg.Categories;
-                var result = categories is not null &&
-                             categories.Contains(categoryName, StringComparer.OrdinalIgnoreCase);
+                var result = categories.Contains(categoryName, StringComparer.OrdinalIgnoreCase);
                 if (!result) return false;
                 break;
             }

@@ -92,7 +92,13 @@ public class UpgradeCommand : AsyncCommand<UpgradeSettings>
             }
 
             AnsiConsole.MarkupLine("[yellow] Starting System Upgrade...[/]");
-            var upgradeResult = await SplitOutput.Output(manager, x => x.SyncSystemUpdate(), settings.NoConfirm);
+            var cfg = ConfigManager.ReadConfig();
+            var useSinglePane = settings.SinglePane
+                || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
+                || Console.IsOutputRedirected;
+            var upgradeResult = useSinglePane
+                ? await StandardSinglePaneOutput.Output(manager, x => x.SyncSystemUpdate(), settings.NoConfirm)
+                : await SplitOutput.Output(manager, x => x.SyncSystemUpdate(), settings.NoConfirm);
             manager.Dispose();
             if (!upgradeResult)
             {
@@ -103,7 +109,7 @@ public class UpgradeCommand : AsyncCommand<UpgradeSettings>
             AnsiConsole.MarkupLine("[green]System upgraded successfully![/]");
         }
 
-        if (settings.Aur || settings.All)
+        if ((settings.Aur || settings.All) && ConfigManager.ReadConfig().AurEnabled)
         {
             var aurCommand = new AurUpgradeCommand();
             var aurSettings = new AurUpgradeSettings()
@@ -117,7 +123,7 @@ public class UpgradeCommand : AsyncCommand<UpgradeSettings>
             }
         }
 
-        if (settings.Flatpak || settings.All)
+        if ((settings.Flatpak || settings.All) && ConfigManager.ReadConfig().FlatPackEnabled)
         {
             var flatpakResult = ExecuteFlatpakUpdate();
             AnsiConsole.MarkupLine($"[yellow]{flatpakResult.EscapeMarkup()}[/]");
@@ -222,7 +228,7 @@ public class UpgradeCommand : AsyncCommand<UpgradeSettings>
             }
         }
 
-        if (settings.Aur || settings.All)
+        if ((settings.Aur || settings.All) && ConfigManager.ReadConfig().AurEnabled)
         {
             var aurCommand = new AurUpgradeCommand();
             var aurSettings = new AurUpgradeSettings()
@@ -236,7 +242,7 @@ public class UpgradeCommand : AsyncCommand<UpgradeSettings>
             }
         }
 
-        if (settings.Flatpak || settings.All)
+        if ((settings.Flatpak || settings.All) && ConfigManager.ReadConfig().FlatPackEnabled)
         {
             var flatpakResult = ExecuteFlatpakUpdate();
             if (!string.IsNullOrEmpty(flatpakResult))

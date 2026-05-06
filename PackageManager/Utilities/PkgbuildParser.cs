@@ -20,9 +20,11 @@ public static class PkgbuildParser
     public static PkgbuildInfo ParseContent(string pkgbuildContent)
     {
         var vars = BuildVariableDictionary(pkgbuildContent);
+        ScanPrepareForLiteralAssignments(pkgbuildContent, vars);
 
         return new PkgbuildInfo
         {
+            Variables = new Dictionary<string, string>(vars),
             PkgName = ResolveOrParse(pkgbuildContent, vars, "pkgname"),
             PkgVer = ResolveOrParse(pkgbuildContent, vars, "pkgver"),
             PkgRel = ResolveOrParse(pkgbuildContent, vars, "pkgrel"),
@@ -45,6 +47,53 @@ public static class PkgbuildParser
         };
     }
 
+
+    private static void ScanPrepareForLiteralAssignments(string content, Dictionary<string, string> vars)
+    {
+        var prepareMatch = Regex.Match(content, @"prepare\s*\(\s*\)\s*\{", RegexOptions.Multiline);
+        if (!prepareMatch.Success)
+            return;
+
+        var start = prepareMatch.Index + prepareMatch.Length;
+        var depth = 1;
+        var i = start;
+        while (i < content.Length && depth > 0)
+        {
+            var c = content[i];
+            if (c == '{') depth++;
+            else if (c == '}') depth--;
+            i++;
+        }
+        var body = content.Substring(start, System.Math.Max(0, i - start - 1));
+
+        var pattern = @"^\s*(\w+)=(?:""([^""$`]*)""|'([^']*)'|([A-Za-z0-9_./:\-+]+))\s*$";
+        foreach (Match m in Regex.Matches(body, pattern, RegexOptions.Multiline))
+        {
+            var name = m.Groups[1].Value;
+            var value = m.Groups[2].Success ? m.Groups[2].Value :
+                        m.Groups[3].Success ? m.Groups[3].Value :
+                        m.Groups[4].Value;
+            if (string.IsNullOrEmpty(value)) continue;
+            if (value.Contains('$') || value.Contains('`')) continue;
+            vars.TryAdd(name, value);
+        }
+
+        for (var pass = 0; pass < 10; pass++)
+        {
+            var changed = false;
+            foreach (var key in vars.Keys.ToList())
+            {
+                var original = vars[key];
+                var resolved = ResolveString(original, vars);
+                if (resolved != original)
+                {
+                    vars[key] = resolved;
+                    changed = true;
+                }
+            }
+            if (!changed) break;
+        }
+    }
 
     private static Dictionary<string, string> BuildVariableDictionary(string content)
     {
@@ -356,6 +405,7 @@ public class PkgbuildInfo
     public List<string> Sha256Sums { get; set; } = new();
     public List<string> Sha512Sums { get; set; } = new();
     public List<string> Md5Sums { get; set; } = new();
+    public Dictionary<string, string> Variables { get; set; } = new();
 
     public List<ParsedDependency> ParsedDepends
     {

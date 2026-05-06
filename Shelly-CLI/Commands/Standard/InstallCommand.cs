@@ -1,4 +1,5 @@
 using PackageManager.Alpm;
+using Shelly_CLI.Configuration;
 using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
 using Spectre.Console;
@@ -40,10 +41,20 @@ public class InstallCommand : AsyncCommand<InstallPackageSettings>
         using var manager = new AlpmManager();
         AnsiConsole.MarkupLine("[yellow]Initializing ALPM...[/]");
         manager.Initialize(true);
+
+        var cfg = ConfigManager.ReadConfig();
+        var useSinglePane = settings.SinglePane
+            || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
+            || Console.IsOutputRedirected;
+        Func<IAlpmManager, Func<IAlpmManager, Task<bool>>, bool, Task<bool>> runOutput =
+            useSinglePane
+                ? (m, op, nc) => StandardSinglePaneOutput.Output(m, op, nc)
+                : (m, op, nc) => SplitOutput.Output(m, op, nc);
+
         if (settings.Upgrade)
         {
             AnsiConsole.Markup("[yellow]Running system upgrade[/yellow]");
-            var upgradeResult = await SplitOutput.Output(manager, x => x.SyncSystemUpdate(), settings.NoConfirm);
+            var upgradeResult = await runOutput(manager, x => x.SyncSystemUpdate(), settings.NoConfirm);
             if (!upgradeResult)
             {
                 AnsiConsole.MarkupLine("[red]System upgrade failed. See errors above.[/]");
@@ -62,7 +73,7 @@ public class InstallCommand : AsyncCommand<InstallPackageSettings>
             if (settings.MakeDepsOn)
             {
                 AnsiConsole.MarkupLine("[yellow]Installing packages...[/]");
-                var result = await SplitOutput.Output(manager,
+                var result = await runOutput(manager,
                     x => x.InstallDependenciesOnly(packageList.First(), true),
                     settings.NoConfirm);
                 if (!result)
@@ -75,7 +86,7 @@ public class InstallCommand : AsyncCommand<InstallPackageSettings>
             }
 
             AnsiConsole.MarkupLine("[yellow]Installing packages...[/]");
-            var depsResult = await SplitOutput.Output(manager, x => x.InstallDependenciesOnly(packageList.First()),
+            var depsResult = await runOutput(manager, x => x.InstallDependenciesOnly(packageList.First()),
                 settings.NoConfirm);
             if (!depsResult)
             {
@@ -91,7 +102,7 @@ public class InstallCommand : AsyncCommand<InstallPackageSettings>
         {
             AnsiConsole.MarkupLine("[yellow]Skipping dependency installation.[/]");
             AnsiConsole.MarkupLine("[yellow]Installing packages...[/]");
-            var noDepsResult = await SplitOutput.Output(manager,
+            var noDepsResult = await runOutput(manager,
                 x => x.InstallPackages(packageList, AlpmTransFlag.NoDeps),
                 settings.NoConfirm);
             if (!noDepsResult)
@@ -106,7 +117,7 @@ public class InstallCommand : AsyncCommand<InstallPackageSettings>
 
         AnsiConsole.MarkupLine("[yellow]Installing packages...[/]");
 
-        var installResult = await SplitOutput.Output(manager, x => x.InstallPackages(packageList), settings.NoConfirm);
+        var installResult = await runOutput(manager, x => x.InstallPackages(packageList), settings.NoConfirm);
         Console.WriteLine(); // Final newline after last package
 
         if (!installResult)

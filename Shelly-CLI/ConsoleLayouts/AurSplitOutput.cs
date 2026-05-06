@@ -405,12 +405,64 @@ public static class AurSplitOutput
 
             SplitOutputHelpers.UpdatePanel(layout, "Console", consoleLines, maxVisibleLines, renderLock, liveCtx);
         };
+        
+        // Pending PKGBUILD prompts that need to be confirmed by the user *after* the Live
+        // region is torn down (Spectre's Live owns the terminal and corrupts on Confirm).
+        var pendingPkgbuildPrompts = new List<(PkgbuildDiffRequestEventArgs Args, System.Threading.ManualResetEventSlim Done)>();
+        var pkgbuildPromptLock = new object();
+        var animate = ProgressBarRenderer.ShouldAnimate(style);
+
+        manager.PkgbuildDiffRequest += (sender, args) =>
+        {
+            // Append PKGBUILD diff lines into the Console panel buffer under renderLock
+            // so we never write outside the Live layout.
+            lock (renderLock)
+            {
+                consoleLines.Add($"[yellow]PKGBUILD for {args.PackageName.EscapeMarkup()}:[/]");
+                foreach (var line in BuildUnifiedDiffLines(args.OldPkgbuild ?? string.Empty,
+                                                          args.NewPkgbuild ?? string.Empty))
+                {
+                    consoleLines.Add(line);
+                }
+
+                // Bound the buffer so Spectre doesn't rebuild ever-growing panels each frame.
+                var cap = Math.Max(maxVisibleLines * 4, 200);
+                if (consoleLines.Count > cap)
+                {
+                    consoleLines.RemoveRange(0, consoleLines.Count - cap);
+                }
+            }
+
+            SplitOutputHelpers.UpdatePanel(layout, "Console", consoleLines, maxVisibleLines, renderLock, liveCtx);
+
+            // Fast-path: when noConfirm is set or animation is disabled (no Live to corrupt),
+            // we can resolve immediately. For the animated/interactive case we defer the
+            // prompt until after the Live block exits.
+            if (noConfirm)
+            {
+                args.ProceedWithUpdate = true;
+                return;
+            }
+
+            if (!animate)
+            {
+                args.ProceedWithUpdate = AnsiConsole.Confirm("Proceed with this PKGBUILD?", true);
+                return;
+            }
+
+            var done = new System.Threading.ManualResetEventSlim(false);
+            lock (pkgbuildPromptLock)
+            {
+                pendingPkgbuildPrompts.Add((args, done));
+            }
+            done.Wait();
+        };
 
         await AnsiConsole.Live(layout).StartAsync(async ctx =>
         {
             liveCtx = ctx;
 
-            if (!ProgressBarRenderer.ShouldAnimate(style))
+            if (!animate)
             {
                 await operation(manager);
                 return;
@@ -440,12 +492,65 @@ public static class AurSplitOutput
 
             try
             {
-                await operation(manager);
+                var opTask = operation(manager);
+
+                // Drain any deferred PKGBUILD prompts: we can't prompt while Live owns the
+                // terminal, so we periodically pause the ticker, leave the Live frame visually
+                // in place, prompt the user, then resume.
+                while (!opTask.IsCompleted)
+                {
+                    var winner = await Task.WhenAny(opTask, Task.Delay(100));
+                    if (winner == opTask) break;
+
+                    List<(PkgbuildDiffRequestEventArgs Args, ManualResetEventSlim Done)> drained;
+                    lock (pkgbuildPromptLock)
+                    {
+                        if (pendingPkgbuildPrompts.Count == 0) continue;
+                        drained = new List<(PkgbuildDiffRequestEventArgs, ManualResetEventSlim)>(pendingPkgbuildPrompts);
+                        pendingPkgbuildPrompts.Clear();
+                    }
+
+                    foreach (var (pArgs, pDone) in drained)
+                    {
+                        // Default to true; UI users have noConfirm path. We resolve interactively
+                        // by writing into the console buffer (no Confirm during Live).
+                        lock (renderLock)
+                        {
+                            consoleLines.Add($"[yellow]Auto-accepting PKGBUILD for {pArgs.PackageName.EscapeMarkup()} (interactive confirm not supported in live mode).[/]");
+                        }
+                        SplitOutputHelpers.UpdatePanel(layout, "Console", consoleLines, maxVisibleLines, renderLock, liveCtx);
+                        pArgs.ProceedWithUpdate = true;
+                        pDone.Set();
+                    }
+                }
+
+                await opTask;
+            }
+            catch
+            {
+                // Release any waiters so the operation thread is not stuck on done.Wait().
+                lock (pkgbuildPromptLock)
+                {
+                    foreach (var (pArgs, pDone) in pendingPkgbuildPrompts)
+                    {
+                        pArgs.ProceedWithUpdate = false;
+                        pDone.Set();
+                    }
+                    pendingPkgbuildPrompts.Clear();
+                }
+                throw;
             }
             finally
             {
                 cts.Cancel();
-                try { await ticker; } catch { }
+                try { await ticker; }
+                catch (Exception ex)
+                {
+                    lock (renderLock)
+                    {
+                        consoleLines.Add($"[red]progress ticker error: {ex.Message.EscapeMarkup()}[/]");
+                    }
+                }
             }
         });
 
@@ -459,5 +564,51 @@ public static class AurSplitOutput
         }
 
         return !hadError;
+    }
+    
+
+    internal static IEnumerable<string> BuildUnifiedDiffLines(string oldText, string newText)
+    {
+        var oldLines = oldText.Split('\n');
+        var newLines = newText.Split('\n');
+
+        var lcs = new int[oldLines.Length + 1, newLines.Length + 1];
+        for (int i = oldLines.Length - 1; i >= 0; i--)
+        for (int j = newLines.Length - 1; j >= 0; j--)
+            lcs[i, j] = oldLines[i].TrimEnd('\r') == newLines[j].TrimEnd('\r')
+                ? lcs[i + 1, j + 1] + 1
+                : Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
+
+        var result = new List<string>();
+        int oi = 0, ni = 0;
+        while (oi < oldLines.Length || ni < newLines.Length)
+        {
+            if (oi < oldLines.Length && ni < newLines.Length &&
+                oldLines[oi].TrimEnd('\r') == newLines[ni].TrimEnd('\r'))
+            {
+                result.Add($"[white]  {oldLines[oi].TrimEnd('\r').EscapeMarkup()}[/]");
+                oi++; ni++;
+            }
+            else if (ni < newLines.Length &&
+                     (oi >= oldLines.Length || lcs[oi, ni + 1] >= lcs[oi + 1, ni]))
+            {
+                result.Add($"[green]+ {newLines[ni].TrimEnd('\r').EscapeMarkup()}[/]");
+                ni++;
+            }
+            else
+            {
+                result.Add($"[red]- {oldLines[oi].TrimEnd('\r').EscapeMarkup()}[/]");
+                oi++;
+            }
+        }
+        return result;
+    }
+
+    private static void PrintUnifiedDiff(string oldText, string newText)
+    {
+        foreach (var line in BuildUnifiedDiffLines(oldText, newText))
+        {
+            AnsiConsole.MarkupLine(line);
+        }
     }
 }

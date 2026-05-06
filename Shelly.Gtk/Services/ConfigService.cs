@@ -61,6 +61,8 @@ public class ConfigService : IConfigService
         CallCliConfigSet(nameof(config.DefaultExecution), config.DefaultExecution);
         CallCliConfigSet(nameof(config.ParallelDownloadCount), config.ParallelDownloadCount.ToString());
         CallCliConfigSet(nameof(config.UseSymbolicTray), config.UseSymbolicTray.ToString());
+        CallCliConfigSet(nameof(config.TrayIconPath), config.TrayIconPath ?? "");
+        CallCliConfigSet(nameof(config.TrayUpdatesIconPath), config.TrayUpdatesIconPath ?? "");
         CallCliConfigSet(nameof(config.DefaultPageDropDown), config.DefaultPageDropDown.ToString());
 
         ConfigSaved?.Invoke(this, config);

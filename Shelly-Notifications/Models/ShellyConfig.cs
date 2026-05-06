@@ -14,6 +14,11 @@ public class ShellyConfig
 
     public TimeOnly? Time { get; set; } = null;
     public bool UseSymbolicTray { get; set; } = true;
+    
+    public string? TrayIconPath { get; set; }
+
+    public string? TrayUpdatesIconPath { get; set; }
+
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }

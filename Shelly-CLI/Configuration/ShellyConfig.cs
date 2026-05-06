@@ -38,10 +38,17 @@ public class ShellyConfig
     public bool AppImageEnabled { get; set; } = false;
     public bool NewInstallInitSettings { get; set; } = false;
     public bool UseSymbolicTray { get; set; } = true;
+
+    public string? TrayIconPath { get; set; }
+    public string? TrayUpdatesIconPath { get; set; }
     
     public ShellyTabs DefaultPageDropDown { get; set; } = ShellyTabs.Packages;
     
     public string ProgressBarStyle { get; set; } = nameof(ProgressBarStyleKind.Blocks);
     public int ProgressBarFps { get; set; } = 7;
     public int ProgressBarWidth { get; set; } = 24;
+    
+    public string OutputMode { get; set; } = "singlepane";
+    
+    public int SinglePaneMaxStickies { get; set; } = 6;
 }

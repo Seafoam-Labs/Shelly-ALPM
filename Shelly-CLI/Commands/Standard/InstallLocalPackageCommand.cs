@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using PackageManager.Alpm;
 using SharpCompress.Compressors.Xz;
+using Shelly_CLI.Configuration;
 using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
 using Spectre.Console;
@@ -232,7 +233,13 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
         var manager = new AlpmManager();
         AnsiConsole.MarkupLine("[yellow]Initializing ALPM...[/]");
         manager.Initialize();
-        var result = await SplitOutput.Output(manager, x => x.InstallLocalPackage(Path.GetFullPath(settings.PackageLocation!)));
+        var cfg = ConfigManager.ReadConfig();
+        var useSinglePane = settings.SinglePane
+            || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
+            || Console.IsOutputRedirected;
+        var result = useSinglePane
+            ? await StandardSinglePaneOutput.Output(manager, x => x.InstallLocalPackage(Path.GetFullPath(settings.PackageLocation!)), settings.NoConfirm)
+            : await SplitOutput.Output(manager, x => x.InstallLocalPackage(Path.GetFullPath(settings.PackageLocation!)), settings.NoConfirm);
         manager.Dispose();
         return result;
     }

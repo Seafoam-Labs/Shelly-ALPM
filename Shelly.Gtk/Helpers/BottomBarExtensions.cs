@@ -24,7 +24,7 @@ public static class BottomBarExtensions
         {
             while (historyListBox.GetFirstChild() is { } ch)
                 historyListBox.Remove(ch);
-            var loadingRow = new ListBoxRow();
+            var loadingRow = ListBoxRow.New();
             var loadingLabel = Label.New("Loading...");
             loadingLabel.Halign = Align.Center;
             loadingLabel.AddCssClass("dim-label");
@@ -48,7 +48,7 @@ public static class BottomBarExtensions
 
                     if (entries.Count == 0)
                     {
-                        var row = new ListBoxRow();
+                        var row = ListBoxRow.New();
                         var lbl = Label.New("No recent activity");
                         lbl.Halign = Align.Center;
                         lbl.AddCssClass("dim-label");
@@ -85,9 +85,7 @@ public static class BottomBarExtensions
                             GLib.Functions.IdleAdd(0, () =>
                             {
                                 var fullLogText = string.Join("\n", logLines);
-                                var logBox = new Box();
-                                logBox.SetOrientation(Orientation.Vertical);
-                                logBox.SetSpacing(10);
+                                var logBox = Box.New(Orientation.Vertical, 10);
                                 logBox.SetMarginTop(10);
                                 logBox.SetMarginBottom(10);
                                 logBox.SetMarginStart(10);
@@ -96,11 +94,11 @@ public static class BottomBarExtensions
                                 titleLabel.AddCssClass("title-1");
                                 titleLabel.Xalign = 0;
                                 logBox.Append(titleLabel);
-                                var textView = new TextView();
+                                var textView = TextView.New();
                                 textView.Editable = false;
                                 textView.WrapMode = WrapMode.WordChar;
                                 textView.Buffer?.SetText(fullLogText, -1);
-                                var scrolledWindow = new ScrolledWindow();
+                                var scrolledWindow = ScrolledWindow.New();
                                 scrolledWindow.SetVexpand(true);
                                 scrolledWindow.HscrollbarPolicy = PolicyType.Automatic;
                                 scrolledWindow.SetChild(textView);
@@ -124,43 +122,43 @@ public static class BottomBarExtensions
 
                     foreach (var entry in entries)
                     {
-                        var row = new ListBoxRow();
+                        var row = ListBoxRow.New();
                         row.SetActivatable(true);
 
-                        var hbox = Box.New(Orientation.Horizontal, 10);
-                        hbox.MarginStart = 5;
-                        hbox.MarginEnd = 5;
-                        hbox.MarginTop = 4;
-                        hbox.MarginBottom = 4;
+                        var horizontalBox = Box.New(Orientation.Horizontal, 10);
+                        horizontalBox.MarginStart = 5;
+                        horizontalBox.MarginEnd = 5;
+                        horizontalBox.MarginTop = 4;
+                        horizontalBox.MarginBottom = 4;
 
                         var icon = Image.NewFromIconName(GetHistoryIcon(entry.Command));
                         icon.SetPixelSize(16);
-                        hbox.Append(icon);
+                        horizontalBox.Append(icon);
 
                         var cmdLabel = Label.New(entry.Command);
                         cmdLabel.SetXalign(0);
                         cmdLabel.Hexpand = true;
                         cmdLabel.Ellipsize = Pango.EllipsizeMode.End;
-                        hbox.Append(cmdLabel);
+                        horizontalBox.Append(cmdLabel);
 
                         var timeLabel = Label.New(FormatHistoryTime(entry.Timestamp));
                         timeLabel.AddCssClass("dim-label");
                         timeLabel.AddCssClass("caption");
-                        hbox.Append(timeLabel);
+                        horizontalBox.Append(timeLabel);
 
                         if (entry.ExitCode.HasValue)
                         {
                             var statusIcon = Image.NewFromIconName(
                                 entry.ExitCode == 0 ? "emblem-ok-symbolic" : "dialog-error-symbolic");
                             statusIcon.SetPixelSize(16);
-                            hbox.Append(statusIcon);
+                            horizontalBox.Append(statusIcon);
                         }
                         else
                         {
-                            hbox.Append(Label.New("⏳"));
+                            horizontalBox.Append(Label.New("⏳"));
                         }
 
-                        row.SetChild(hbox);
+                        row.SetChild(horizontalBox);
                         historyListBox.Append(row);
                     }
 
@@ -204,7 +202,7 @@ public static class BottomBarExtensions
             {
                 while (updatesListBox.GetFirstChild() is { } ch)
                     updatesListBox.Remove(ch);
-                var loadingRow = new ListBoxRow();
+                var loadingRow = ListBoxRow.New();
                 var loadingLabel = Label.New("Loading...");
                 loadingLabel.Halign = Align.Center;
                 loadingLabel.AddCssClass("dim-label");
@@ -230,7 +228,7 @@ public static class BottomBarExtensions
 
                     foreach (var pkg in updates.Packages)
                     {
-                        var row = new ListBoxRow();
+                        var row = ListBoxRow.New();
                         var label = Label.New($"{pkg.Name}: {pkg.OldVersion} → {pkg.Version}");
                         label.Halign = Align.Start;
                         label.Wrap = true;
@@ -244,7 +242,7 @@ public static class BottomBarExtensions
 
                     foreach (var pkg in updates.Aur)
                     {
-                        var row = new ListBoxRow();
+                        var row = ListBoxRow.New();
                         var label = Label.New($"[AUR] {pkg.Name}: {pkg.OldVersion} → {pkg.Version}");
                         label.Halign = Align.Start;
                         label.Wrap = true;
@@ -258,7 +256,7 @@ public static class BottomBarExtensions
 
                     foreach (var pkg in updates.Flatpaks)
                     {
-                        var row = new ListBoxRow();
+                        var row = ListBoxRow.New();
                         var label = Label.New($"[Flatpak] {pkg.Name ?? pkg.Id}: {pkg.Version}");
                         label.Halign = Align.Start;
                         label.Wrap = true;
@@ -272,7 +270,7 @@ public static class BottomBarExtensions
 
                     if (count != 0) return false;
                     {
-                        var row = new ListBoxRow();
+                        var row = ListBoxRow.New();
                         var label = Label.New("All packages are up to date");
                         label.Halign = Align.Center;
                         label.AddCssClass("dim-label");

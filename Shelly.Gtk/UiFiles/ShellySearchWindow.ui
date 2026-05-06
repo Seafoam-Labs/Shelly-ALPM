@@ -73,6 +73,13 @@
               </object>
             </child>
             <child>
+              <object class="GtkColumnViewColumn" id="last_updated_column">
+                <property name="title">Last Updated</property>
+                <property name="fixed-width">120</property>
+                <property name="resizable">true</property>
+              </object>
+            </child>
+            <child>
               <object class="GtkColumnViewColumn" id="repo_column">
                 <property name="title">Repository</property>
               </object>

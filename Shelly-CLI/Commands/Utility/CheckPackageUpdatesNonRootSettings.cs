@@ -12,4 +12,8 @@ public class CheckPackageUpdatesNonRootSettings : ForceSettings
     [CommandOption("-l | --flatpak")]
     [Description("Pass this setting if flatpak should be checked.")]
     public bool CheckFlatpak { get; set; }
+    
+    [CommandOption("-c | --count")]
+    [Description("Returns the number of updates.")]
+    public bool Count { get; set; }
 }

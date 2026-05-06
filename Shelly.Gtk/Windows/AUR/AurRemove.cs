@@ -1,9 +1,12 @@
 using GObject;
 using Gtk;
 using Shelly.Gtk.Helpers;
+using Shelly.Gtk.Enums;
+using static Shelly.Gtk.Helpers.AurColumnViewSorter;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.AUR.GObjects;
+using Shelly.Gtk.UiModels.PackageManagerObjects;
 
 // ReSharper disable NotAccessedField.Local
 
@@ -33,14 +36,16 @@ public class AurRemove(
     private SignalListItemFactory _checkFactory = null!;
     private SignalListItemFactory _nameFactory = null!;
     private SignalListItemFactory _versionFactory = null!;
+    private ColumnViewSorter _columnViewSorter = null!;
     private Box _detailBox = null!;
-    private AurPackageGObject? _currentDetailPkg;
+    private AurPackageDto? _currentDetailPkg;
     private Revealer _detailRevealer = null!;
 
     private Dictionary<ColumnViewCell, (SignalHandler<CheckButton> OnToggled, EventHandler OnExternalToggle)>
         _checkBinding = [];
 
     private readonly List<AurPackageGObject> _packageGObjectRefs = [];
+    private readonly List<AurPackageDto> _aurPackages = [];
     private ColumnViewColumn _checkColumn = null!;
     private ColumnViewColumn _nameColumn = null!;
     private ColumnViewColumn _versionColumn = null!;
@@ -77,8 +82,40 @@ public class AurRemove(
         _columnView.SetModel(_selectionModel);
 
         SetupColumns(_checkColumn, _nameColumn, _versionColumn);
+        
+        // Creating sorter
+        _nameColumn.Sorter = CustomSorter.New<AurPackageGObject>((a, b) => 0);
+        _versionColumn.Sorter = CustomSorter.New<AurPackageGObject>((a, b) => 0);
+        
+        _columnViewSorter = (ColumnViewSorter)_columnView.GetSorter()!;
 
+        _columnViewSorter.OnChanged += (_, _) =>
+        {
+            var primaryColumn =
+                _columnViewSorter.GetPrimarySortColumn();
+            
+            if (primaryColumn is null)
+                return;
+            
+            var sortColumn = GetSortColumn(primaryColumn);
+            
+            var order =
+                _columnViewSorter.GetPrimarySortOrder();
+            
+            if (sortColumn is null)
+                return;
+
+            Sort(
+                _listStore,
+                _aurPackages,
+                _packageGObjectRefs,
+                sortColumn.Value,
+                order
+            );
+        };        
+        
         ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.Start);
+        ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.End);
 
         _columnView.OnRealize += (_, _) => { Reload(); };
         _columnView.OnActivate += (_, _) =>
@@ -104,7 +141,7 @@ public class AurRemove(
             _detailRevealer.SetTransitionType(RevealerTransitionType.SlideLeft);
             if (item is AurPackageGObject pkgObj)
             {
-                ShowPackageDetails(pkgObj);
+                ShowPackageDetails(_aurPackages[pkgObj.Index]);
             }
             else
             {
@@ -116,13 +153,25 @@ public class AurRemove(
 
         return _box;
     }
+    
+    private PackageSortColumn? GetSortColumn(ColumnViewColumn column)
+    {
+        if (column == _nameColumn)
+            return PackageSortColumn.Name;
+        
+        if (column == _versionColumn)
+            return PackageSortColumn.Version;
+
+        return null;
+    }
+
 
     private bool FilterPackage(GObject.Object obj)
     {
-        if (obj is not AurPackageGObject { Package: { } pkg })
+        if (obj is not AurPackageGObject { Index: { } pkg })
             return false;
 
-        return PackageSearch.MatchesName(pkg.Name, _searchText);
+        return PackageSearch.MatchesName(_aurPackages[pkg].Name, _searchText);
     }
 
     private void ApplyFilter()
@@ -195,9 +244,9 @@ public class AurRemove(
         nameFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
-            if (listItem.GetItem() is not AurPackageGObject { Package: { } pkg } ||
+            if (listItem.GetItem() is not AurPackageGObject { Index: { } pkg } ||
                 listItem.GetChild() is not Label label) return;
-            label.SetText(pkg.Name);
+            label.SetText(_aurPackages[pkg].Name);
             label.Halign = Align.Start;
         };
         nameColumn.SetFactory(nameFactory);
@@ -212,9 +261,9 @@ public class AurRemove(
         versionFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
-            if (listItem.GetItem() is not AurPackageGObject { Package: { } pkg } ||
+            if (listItem.GetItem() is not AurPackageGObject { Index: { } pkg } ||
                 listItem.GetChild() is not Label label) return;
-            label.SetText(pkg.Version);
+            label.SetText(_aurPackages[pkg].Version);
             label.Halign = Align.End;
         };
         versionColumn.SetFactory(versionFactory);
@@ -232,24 +281,19 @@ public class AurRemove(
             {
                 if (ct.IsCancellationRequested || _loadGeneration != generation) return false;
 
-                _filterListModel.SetFilter(null);
                 _listStore.RemoveAll();
-                foreach (var r in _packageGObjectRefs) r.Dispose();
                 _packageGObjectRefs.Clear();
-                _filterListModel.SetFilter(_filter);
-                _detailRevealer.SetRevealChild(false);
+                _aurPackages.Clear();
                 _currentDetailPkg = null;
-
-                foreach (var gobject in packages.Select(dto =>
-                         {
-                             var o = AurPackageGObject.NewWithProperties([]);
-                             o.Package = dto;
-                             o.IsSelected = false;
-                             return o;
-                         }))
+                var index = 0;
+                foreach (var pkg in packages)
                 {
-                    _packageGObjectRefs.Add(gobject);
-                    _listStore.Append(gobject);
+                    _aurPackages.Add(pkg);
+                    var pkgObj = AurPackageGObject.NewWithProperties([]);
+                    pkgObj.Index = index;
+                    _packageGObjectRefs.Add(pkgObj);
+                    _listStore.Append(pkgObj);
+                    index++;
                 }
 
                 return false;
@@ -267,9 +311,9 @@ public class AurRemove(
         for (uint i = 0; i < _listStore.GetNItems(); i++)
         {
             var item = _listStore.GetObject(i);
-            if (item is AurPackageGObject { IsSelected: true, Package: not null } pkgObj)
+            if (item is AurPackageGObject { IsSelected: true} pkgObj)
             {
-                selectedPackages.Add(pkgObj.Package.Name);
+                selectedPackages.Add(_aurPackages[pkgObj.Index].Name);
             }
         }
 
@@ -333,12 +377,9 @@ public class AurRemove(
         return false;
     }
 
-    private void ShowPackageDetails(AurPackageGObject pkgObj)
+    private void ShowPackageDetails(AurPackageDto pkgObj)
     {
-        if (pkgObj.Package == null) return;
-
         _currentDetailPkg = pkgObj;
-        var pkg = pkgObj.Package;
 
         while (_detailBox.GetFirstChild() is { } child)
         {
@@ -396,12 +437,12 @@ public class AurRemove(
 
         headerBox.Append(iconImage);
 
-        var nameLabel = Label.New(pkg.Name);
+        var nameLabel = Label.New(pkgObj.Name);
         nameLabel.AddCssClass("title-2");
         nameLabel.Halign = Align.Center;
         headerBox.Append(nameLabel);
 
-        var descLabel = Label.New(pkg.Description);
+        var descLabel = Label.New(pkgObj.Description);
         descLabel.AddCssClass("dim-label");
         descLabel.Halign = Align.Center;
         descLabel.Wrap = true;
@@ -415,20 +456,20 @@ public class AurRemove(
         separator.MarginBottom = 16;
         _detailBox.Append(separator);
 
-        AddDetail("Version", pkg.Version);
-        if (pkg.NumVotes > 0)
-            AddDetail("Votes", pkg.NumVotes.ToString());
-        if (pkg.Popularity > 0)
-            AddDetail("Popularity", pkg.Popularity.ToString("F2"));
-        if (pkg.OutOfDate != null)
+        AddDetail("Version", pkgObj.Version);
+        if (pkgObj.NumVotes > 0)
+            AddDetail("Votes", pkgObj.NumVotes.ToString());
+        if (pkgObj.Popularity > 0)
+            AddDetail("Popularity", pkgObj.Popularity.ToString("F2"));
+        if (pkgObj.OutOfDate != null)
             AddDetail("Out of Date",
-                DateTimeOffset.FromUnixTimeSeconds(pkg.OutOfDate.Value).ToString("yyyy-MM-dd"));
+                DateTimeOffset.FromUnixTimeSeconds(pkgObj.OutOfDate.Value).ToString("yyyy-MM-dd"));
 
-        AddDetail("Maintainer", pkg.Maintainer ?? "Orphaned");
-        AddDetail("Last Modified", DateTimeOffset.FromUnixTimeSeconds(pkg.LastModified).ToString("yyyy-MM-dd HH:mm"));
+        AddDetail("Maintainer", pkgObj.Maintainer ?? "Orphaned");
+        AddDetail("Last Modified", DateTimeOffset.FromUnixTimeSeconds(pkgObj.LastModified).ToString("yyyy-MM-dd HH:mm"));
         AddDetail("First Submitted",
-            DateTimeOffset.FromUnixTimeSeconds(pkg.FirstSubmitted).ToString("yyyy-MM-dd HH:mm"));
-        if (!string.IsNullOrEmpty(pkg.Url))
+            DateTimeOffset.FromUnixTimeSeconds(pkgObj.FirstSubmitted).ToString("yyyy-MM-dd HH:mm"));
+        if (!string.IsNullOrEmpty(pkgObj.Url))
         {
             var row = Box.New(Orientation.Horizontal, 12);
             row.MarginBottom = 4;
@@ -440,7 +481,7 @@ public class AurRemove(
             labelWidget.Xalign = 0;
 
             var valueWidget = Label.New(null);
-            var escaped = GLib.Functions.MarkupEscapeText(pkg.Url, -1);
+            var escaped = GLib.Functions.MarkupEscapeText(pkgObj.Url, -1);
             valueWidget.SetMarkup($"<a href=\"{escaped}\">{escaped}</a>");
             valueWidget.Halign = Align.Start;
             valueWidget.Wrap = true;
@@ -453,64 +494,65 @@ public class AurRemove(
             _detailBox.Append(row);
         }
 
-        if (pkg.Depends?.Count > 0)
+        if (pkgObj.Depends?.Count > 0)
         {
-            AddChipList("Depends", pkg.Depends);
+            AddChipList("Depends", pkgObj.Depends);
         }
 
-        if (pkg.MakeDepends?.Count > 0)
+        if (pkgObj.MakeDepends?.Count > 0)
         {
-            AddChipList("Make Depends", pkg.MakeDepends);
+            AddChipList("Make Depends", pkgObj.MakeDepends);
         }
 
-        if (pkg.CheckDepends?.Count > 0)
+        if (pkgObj.CheckDepends?.Count > 0)
         {
-            AddChipList("Check Depends", pkg.CheckDepends);
+            AddChipList("Check Depends", pkgObj.CheckDepends);
         }
 
-        if (pkg.OptDepends?.Count > 0)
+        if (pkgObj.OptDepends?.Count > 0)
         {
-            AddChipList("Optional Deps", pkg.OptDepends, true);
+            AddChipList("Optional Deps", pkgObj.OptDepends, true);
         }
 
-        if (pkg.License?.Count > 0)
+        if (pkgObj.License?.Count > 0)
         {
-            AddChipList("License", pkg.License);
+            AddChipList("License", pkgObj.License);
         }
 
-        if (pkg.Keywords?.Count > 0)
+        if (pkgObj.Keywords?.Count > 0)
         {
-            AddChipList("Keywords", pkg.Keywords);
+            AddChipList("Keywords", pkgObj.Keywords);
         }
 
 
-        if (pkg.Provides?.Count > 0)
-            AddChipList("Provides", pkg.Provides);
-        if (pkg.Conflicts?.Count > 0)
-            AddChipList("Conflicts", pkg.Conflicts);
-        if (pkg.Groups?.Count > 0)
-            AddChipList("Groups", pkg.Groups);
-        if (pkg.Replaces?.Count > 0)
-            AddChipList("Replaces", pkg.Replaces);
+        if (pkgObj.Provides?.Count > 0)
+            AddChipList("Provides", pkgObj.Provides);
+        if (pkgObj.Conflicts?.Count > 0)
+            AddChipList("Conflicts", pkgObj.Conflicts);
+        if (pkgObj.Groups?.Count > 0)
+            AddChipList("Groups", pkgObj.Groups);
+        if (pkgObj.Replaces?.Count > 0)
+            AddChipList("Replaces", pkgObj.Replaces);
 
         if (configService.LoadConfig().WebViewEnabled)
         {
-            if (pkg.Depends?.Count > 0)
+            if (pkgObj.Depends?.Count > 0)
             {
-                var dictionary = new Dictionary<string, List<string>> { { pkg.Name, pkg.Depends } };
+                var dictionary = new Dictionary<string, List<string>> { { pkgObj.Name, pkgObj.Depends } };
 
-                foreach (var dep in pkg.Depends)
+                foreach (var dep in pkgObj.Depends)
                 {
                     for (uint i = 0; i < _listStore.GetNItems(); i++)
                     {
                         var obj = _listStore.GetObject(i);
-                        if (obj is not AurPackageGObject depObj || depObj.Package == null) continue;
-                        if (depObj.Package.Name.Contains(dep))
-                            dictionary.TryAdd(depObj.Package.Name, depObj.Package.Depends ?? []);
+                        if (obj is not AurPackageGObject depObj) continue;
+                        if (_aurPackages[depObj.Index].Name.Contains(dep))
+                            dictionary.TryAdd(_aurPackages[depObj.Index].Name,
+                                _aurPackages[depObj.Index].Depends ?? []);
                     }
                 }
 
-                var window = new WebWindow(pkg.Name, dictionary);
+                var window = new WebWindow(pkgObj.Name, dictionary);
                 _detailBox.Append(window.CreateWindow());
             }
         }

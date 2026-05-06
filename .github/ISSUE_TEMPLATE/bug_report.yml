@@ -1,0 +1,86 @@
+name: "🐛 Bug Report"
+description: Report a bug to help us improve Shelly
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-flight Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched existing issues and this is not a duplicate.
+          required: true
+        - label: I have verified the issue is reproducible with the latest available Shelly version.
+          required: true
+        - label: I have/will fill this template with the required information to the best of my ability.
+          required: false
+        - label: I have checked whether the issue occurs across different network conditions or devices.
+          required: false
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+    validations:
+      required: false
+  - type: checkboxes
+    id: application
+    attributes:
+      label: Shelly Application
+      options:
+        - label: Shelly UI (GTK4)
+        - label: Shelly Tray Notification Service
+        - label: Shelly CLI
+  - type: textarea
+    id: device-info
+    attributes:
+      label: Device Information
+      description: Desktop (please complete the following information)
+      placeholder: |
+        - Distribution : [e.g. CachyOS, Garuda]
+        - Version [e.g. v1.2.8]
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps needed to trigger the issue.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Additional Output
+      description: Paste relevant logs here (app logs, MQTT messages, HTTP responses, Home Assistant logs, etc.). Wrap large outputs in a <details> block if needed.
+      render: shell
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Information
+      description: Any other relevant info — screenshots, videos, frequency of the issue, whether it affects multiple devices, etc.

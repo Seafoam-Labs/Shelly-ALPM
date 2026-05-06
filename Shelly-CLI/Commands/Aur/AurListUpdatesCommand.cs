@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using PackageManager.Aur;
+using PackageManager.Utilities;
 using Shelly_CLI.Utility;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -16,13 +17,15 @@ public class AurListUpdatesCommand : AsyncCommand<ListSettings>
             return await HandleUiModeListUpdates(settings);
         }
 
+        var dbPath = XdgPaths.ShellyCache("db");
+        XdgPaths.EnsureDirectory(dbPath);
         AurPackageManager? manager = null;
         try
         {
             manager = new AurPackageManager();
-            await manager.Initialize(showHiddenPackages: settings.ShowHidden);
+            await manager.Initialize(showHiddenPackages: settings.ShowHidden, tempPath:dbPath, useTempPath:true);
 
-            var updates = manager.GetPackagesNeedingUpdate().GetAwaiter().GetResult();
+            var updates = await manager.GetPackagesNeedingUpdate();
 
             // Apply filter if specified
             if (!string.IsNullOrWhiteSpace(settings.Filter))
@@ -100,13 +103,15 @@ public class AurListUpdatesCommand : AsyncCommand<ListSettings>
 
     private static async Task<int> HandleUiModeListUpdates(ListSettings settings)
     {
+        var dbPath = XdgPaths.ShellyCache("db");
+        XdgPaths.EnsureDirectory(dbPath);
         AurPackageManager? manager = null;
         try
         {
             manager = new AurPackageManager();
-            await manager.Initialize(showHiddenPackages: settings.ShowHidden);
+            await manager.Initialize(showHiddenPackages: settings.ShowHidden, tempPath:dbPath, useTempPath:true);
 
-            var updates = manager.GetPackagesNeedingUpdate().GetAwaiter().GetResult();
+            var updates = await manager.GetPackagesNeedingUpdate();
 
             // Apply filter if specified
             if (!string.IsNullOrWhiteSpace(settings.Filter))

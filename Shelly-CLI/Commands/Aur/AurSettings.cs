@@ -23,6 +23,10 @@ public class AurPackageSettings : CommandSettings
     [CommandOption("--check")]
     [Description("Run the check() function during AUR package builds (disabled by default)")]
     public bool Check { get; set; }
+
+    [CommandOption("--singlepane")]
+    [Description("Render output as a single pacman-style linear stream instead of the split two-pane layout")]
+    public bool SinglePane { get; set; }
 }
 
 public class AurInstallVersionSettings : CommandSettings
@@ -49,6 +53,10 @@ public class AurUpgradeSettings : CommandSettings
     [CommandOption("--check")]
     [Description("Run the check() function during AUR package builds (disabled by default)")]
     public bool Check { get; set; }
+
+    [CommandOption("--singlepane")]
+    [Description("Render output as a single pacman-style linear stream instead of the split two-pane layout")]
+    public bool SinglePane { get; set; }
 }
 
 public class AurRemovePackageSettings : AurPackageSettings

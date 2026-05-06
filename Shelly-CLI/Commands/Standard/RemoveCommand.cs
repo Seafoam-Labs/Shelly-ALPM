@@ -1,4 +1,5 @@
 using PackageManager.Alpm;
+using Shelly_CLI.Configuration;
 using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
 using Spectre.Console;
@@ -53,7 +54,14 @@ public class RemoveCommand : AsyncCommand<RemovePackageSettings>
             flags |= AlpmTransFlag.Cascade;
         }
 
-        var result = await SplitOutput.Output(manager, x => x.RemovePackages(packageList, flags), settings.NoConfirm);
+        var cfg = ConfigManager.ReadConfig();
+        var useSinglePane = settings.SinglePane
+            || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
+            || Console.IsOutputRedirected;
+
+        var result = useSinglePane
+            ? await StandardSinglePaneOutput.Output(manager, x => x.RemovePackages(packageList, flags), settings.NoConfirm)
+            : await SplitOutput.Output(manager, x => x.RemovePackages(packageList, flags), settings.NoConfirm);
 
         if (settings.RemoveConfig)
         {

@@ -31,12 +31,14 @@ public class ShellySearch(
     private SignalListItemFactory _repoFactory = null!;
     private SignalListItemFactory _versionFactory = null!;
     private SignalListItemFactory _descriptionFactory = null!;
+    private SignalListItemFactory _lastUpdatedFactory = null!;
 
     private ColumnViewColumn _checkColumn = null!;
     private ColumnViewColumn _nameColumn = null!;
     private ColumnViewColumn _repoColumn = null!;
     private ColumnViewColumn _versionColumn = null!;
     private ColumnViewColumn _descriptionColumn = null!;
+    private ColumnViewColumn _lastUpdatedColumn = null!;
 
     private Dictionary<ColumnViewCell, EventHandler> _checkBinding = [];
     private Dictionary<ColumnViewCell, EventHandler> _installedBinding = [];
@@ -65,6 +67,7 @@ public class ShellySearch(
         _repoColumn = (ColumnViewColumn)builder.GetObject("repo_column")!;
         _versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
         _descriptionColumn = (ColumnViewColumn)builder.GetObject("description_column")!;
+        _lastUpdatedColumn = (ColumnViewColumn)builder.GetObject("last_updated_column")!;
         _searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
 
         if (!string.IsNullOrEmpty(_initialQuery))
@@ -81,7 +84,7 @@ public class ShellySearch(
         _selectionModel.CanUnselect = true;
         _columnView.SetModel(_selectionModel);
 
-        SetupColumns(_checkColumn, _nameColumn, _repoColumn, _versionColumn, _descriptionColumn);
+        SetupColumns(_checkColumn, _nameColumn, _repoColumn, _versionColumn, _descriptionColumn, _lastUpdatedColumn);
 
         ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.Start);
         ColumnViewHelper.AlignColumnHeader(_columnView, 3, Align.End);
@@ -129,7 +132,7 @@ public class ShellySearch(
     }
 
     private void SetupColumns(ColumnViewColumn checkColumn, ColumnViewColumn nameColumn, ColumnViewColumn repoColumn,
-        ColumnViewColumn versionColumn, ColumnViewColumn descriptionColumn)
+        ColumnViewColumn versionColumn, ColumnViewColumn descriptionColumn, ColumnViewColumn lastUpdatedColumn)
     {
         _checkFactory = SignalListItemFactory.New();
         _checkFactory.OnSetup += (_, args) =>
@@ -274,6 +277,32 @@ public class ShellySearch(
                 label.SetText(pkg.Description);
         };
         descriptionColumn.SetFactory(_descriptionFactory);
+
+        _lastUpdatedFactory = SignalListItemFactory.New();
+        _lastUpdatedFactory.OnSetup += (_, args) =>
+        {
+            if (args.Object is not ColumnViewCell listItem) return;
+            var label = Label.New(null);
+            label.Halign = Align.Fill;
+            label.Hexpand = true;
+            label.MarginStart = 6;
+            label.Wrap = true;
+            label.WrapMode = Pango.WrapMode.WordChar;
+            label.NaturalWrapMode = NaturalWrapMode.Word;
+            label.MaxWidthChars = 1;
+            label.WidthChars = 0;
+            label.Xalign = 0;
+            label.WidthRequest = 1;
+            listItem.SetChild(label);
+        };
+        _lastUpdatedFactory.OnBind += (_, args) =>
+        {
+            if (args.Object is not ColumnViewCell listItem) return;
+            if (listItem.GetItem() is MetaPackageGObject { Package: { LastUpdated: not null } pkg } &&
+                listItem.GetChild() is Label label)
+                label.SetText(DateTimeOffset.FromUnixTimeSeconds((long)pkg.LastUpdated).ToString("yyyy-MM-dd HH:mm"));
+        };
+        lastUpdatedColumn.SetFactory(_lastUpdatedFactory);
     }
 
     private async Task LoadDataAsync()
@@ -340,8 +369,9 @@ public class ShellySearch(
                             PackageType.Flatpak,
                             app.Summary,
                             app.Remotes.FirstOrDefault()?.Name ?? "Flatpak",
-                            flatPakInstalled.Contains(app.Id)))
-                        .ToList();
+                            flatPakInstalled.Contains(app.Id),
+                            app.Releases.FirstOrDefault()?.Timestamp
+                        )).ToList();
 
                     return filtered;
                 });
@@ -354,12 +384,29 @@ public class ShellySearch(
                 {
                     var aurInstalled = await privilegedOperationService.GetAurInstalledPackagesAsync()
                         .ContinueWith(x =>
-                            x.Result.Select(y => new MetaPackageModel(y.Name, y.Name, y.Version, y.Description ?? "",
-                                PackageType.Aur, y.Url ?? "", "AUR", true)).ToList());
+                            x.Result.Select(y => new MetaPackageModel(
+                                y.Name,
+                                y.Name,
+                                y.Version,
+                                y.Description ?? "",
+                                PackageType.Aur,
+                                y.Url ?? "",
+                                "AUR",
+                                true,
+                                y.LastModified)
+                            ).ToList());
                     var aurAvailable = await privilegedOperationService.SearchAurPackagesAsync(_initialQuery)
-                        .ContinueWith(x => x.Result.Select(y =>
-                            new MetaPackageModel(y.Name, y.Name, y.Version, y.Description ?? "", PackageType.Aur,
-                                y.Url ?? "", "AUR", aurInstalled.Any(z => z.Name == y.Name))).ToList());
+                        .ContinueWith(x => x.Result.Select(y => new MetaPackageModel(
+                            y.Name,
+                            y.Name,
+                            y.Version,
+                            y.Description ?? "",
+                            PackageType.Aur,
+                            y.Url ?? "",
+                            "AUR",
+                            aurInstalled.Any(z => z.Name == y.Name),
+                            y.LastModified)
+                        ).ToList());
                     return aurAvailable;
                 });
                 groupList.Add(aurGroup);

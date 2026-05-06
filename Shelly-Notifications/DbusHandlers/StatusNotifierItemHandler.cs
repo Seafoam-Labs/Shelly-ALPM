@@ -3,56 +3,92 @@ using Tmds.DBus.Protocol;
 
 namespace Shelly_Notifications.DbusHandlers;
 
-internal class StatusNotifierItemHandler(Connection connection, ConfigReader configReader) : IPathMethodHandler
+internal class StatusNotifierItemHandler : IPathMethodHandler
 {
+    private readonly Connection _connection;
+    private readonly ConfigReader _configReader;
+    private string _iconName;
+
+    public StatusNotifierItemHandler(Connection connection, ConfigReader configReader)
+    {
+        _connection = connection;
+        _configReader = configReader;
+        _iconName = FigureIcon();
+    }
+
     public string Path => "/StatusNotifierItem";
     
     public bool HandlesChildPaths => false;
 
-    private string _iconName = configReader.LoadConfig().UseSymbolicTray ? "shelly-shell-symbolic" : "shelly-tray";
-
-    public async Task SetUpdatesPending(bool pending)
+    private string FigureIcon()
     {
-        var newIcon = pending ? "shelly-update" : "shelly-tray";
-        if (configReader.LoadConfig().UseSymbolicTray)
+        var config = _configReader.LoadConfig();
+        // we only use custom icons if both are set 
+        if (!string.IsNullOrEmpty(config.TrayIconPath) && !string.IsNullOrEmpty(config.TrayUpdatesIconPath))
         {
-            newIcon = pending ? "shelly-updates-symbolic" : "shelly-shell-symbolic";
+            return config.TrayIconPath;
         }
         
-        Console.WriteLine($"[DEBUG_LOG] SetUpdatesPending: pending={pending}, newIcon={newIcon}");
-        
-        if (_iconName != newIcon)
+        return config.UseSymbolicTray ? "shelly-shell-symbolic" : "shelly-tray";
+    }
+    
+    public async Task SetUpdatesPending(bool pending)
+    {
+        if (!string.IsNullOrEmpty(_configReader.LoadConfig().TrayIconPath) && !string.IsNullOrEmpty(_configReader.LoadConfig().TrayUpdatesIconPath))
         {
-            _iconName = newIcon;
-            await EmitNewIconAsync();
+            var newIcon = pending ? _configReader.LoadConfig().TrayUpdatesIconPath : _configReader.LoadConfig().TrayIconPath;
+
+            Console.WriteLine($"[DEBUG_LOG] SetUpdatesPending: pending={pending}, newIcon={newIcon}");
+
+            if (_iconName != newIcon)
+            {
+                _iconName = newIcon ?? "shelly-tray";
+                await EmitNewIconAsync();
+            }
+        }
+        else
+        {
+            var newIcon = pending ? "shelly-update" : "shelly-tray";
+            if (_configReader.LoadConfig().UseSymbolicTray)
+            {
+                newIcon = pending ? "shelly-updates-symbolic" : "shelly-shell-symbolic";
+            }
+
+            Console.WriteLine($"[DEBUG_LOG] SetUpdatesPending: pending={pending}, newIcon={newIcon}");
+
+            if (_iconName != newIcon)
+            {
+                _iconName = newIcon;
+                await EmitNewIconAsync();
+            }
         }
     }
 
     private async Task EmitNewIconAsync()
     {
-        var writer = connection.GetMessageWriter();
+        var writer = _connection.GetMessageWriter();
         writer.WriteSignalHeader(
             path: Path,
             @interface: "org.kde.StatusNotifierItem",
             member: "NewIcon"
         );
-        connection.TrySendMessage(writer.CreateMessage());
+        _connection.TrySendMessage(writer.CreateMessage());
 
-        writer = connection.GetMessageWriter();
+        writer = _connection.GetMessageWriter();
         writer.WriteSignalHeader(
             path: Path,
             @interface: "org.freedesktop.StatusNotifierItem",
             member: "NewIcon"
         );
-        connection.TrySendMessage(writer.CreateMessage());
+        _connection.TrySendMessage(writer.CreateMessage());
         
-        writer = connection.GetMessageWriter();
+        writer = _connection.GetMessageWriter();
         writer.WriteSignalHeader(
             path: Path,
             @interface: "org.freedesktop.StatusNotifierItem",
             member: "NewStatus"
         );
-        connection.TrySendMessage(writer.CreateMessage());
+        _connection.TrySendMessage(writer.CreateMessage());
     }
 
     public ValueTask HandleMethodAsync(MethodContext context)

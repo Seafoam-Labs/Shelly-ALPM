@@ -69,6 +69,10 @@ public static class QuestionHandler
         var selection = AnsiConsole.Prompt(
             new MultiSelectionPrompt<string>()
                 .Title($"[yellow]{question.QuestionText}[/]")
+                .NotRequired()                       // <-- allow zero selections
+                .InstructionsText(
+                    "[grey](Press [blue]<space>[/] to toggle, " +
+                    "[green]<enter>[/] to accept — leave empty to install none)[/]")
                 .AddChoices(question.ProviderOptions!));
         for (var i = 0; i < question.ProviderOptions.Count; i++)
         {

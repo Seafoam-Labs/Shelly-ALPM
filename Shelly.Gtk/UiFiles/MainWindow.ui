@@ -88,12 +88,180 @@
                     <object class="GtkBox" id="MainBox">
                         <property name="orientation">horizontal</property>
                         <child>
+                            <object class="GtkBox" id="SidebarBox">
+                                <property name="orientation">vertical</property>
+                                <property name="visible">false</property>
+                                <property name="width-request">48</property>
+                                <style>
+                                    <class name="sidebar-nav"/>
+                                </style>
+                                <child>
+                                    <object class="GtkToggleButton" id="SidebarToggleButton">
+                                        <property name="icon-name">go-next-symbolic</property>
+                                        <property name="has-frame">false</property>
+                                        <property name="margin-top">6</property>
+                                        <property name="margin-bottom">6</property>
+                                        <property name="margin-start">6</property>
+                                        <property name="margin-end">6</property>
+                                        <property name="tooltip-text">Toggle Sidebar</property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkToggleButton" id="SidebarPackagesButton">
+                                        <property name="has-frame">false</property>
+                                        <property name="margin-top">3</property>
+                                        <property name="margin-bottom">3</property>
+                                        <property name="margin-start">6</property>
+                                        <property name="margin-end">6</property>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="orientation">horizontal</property>
+                                                <property name="spacing">8</property>
+                                                <child>
+                                                    <object class="GtkImage">
+                                                        <property name="icon-name">package-x-generic-symbolic</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkLabel" id="SidebarPackagesLabel">
+                                                        <property name="label">Packages</property>
+                                                        <property name="visible">false</property>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkToggleButton" id="SidebarAurButton">
+                                        <property name="has-frame">false</property>
+                                        <property name="margin-top">3</property>
+                                        <property name="margin-bottom">3</property>
+                                        <property name="margin-start">6</property>
+                                        <property name="margin-end">6</property>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="orientation">horizontal</property>
+                                                <property name="spacing">8</property>
+                                                <child>
+                                                    <object class="GtkImage">
+                                                        <property name="icon-name">system-software-install-symbolic</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkLabel" id="SidebarAurLabel">
+                                                        <property name="label">AUR</property>
+                                                        <property name="visible">false</property>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkToggleButton" id="SidebarFlatpakButton">
+                                        <property name="has-frame">false</property>
+                                        <property name="margin-top">3</property>
+                                        <property name="margin-bottom">3</property>
+                                        <property name="margin-start">6</property>
+                                        <property name="margin-end">6</property>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="orientation">horizontal</property>
+                                                <property name="spacing">8</property>
+                                                <child>
+                                                    <object class="GtkImage">
+                                                        <property name="icon-name">application-x-flatpak-symbolic</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkLabel" id="SidebarFlatpakLabel">
+                                                        <property name="label">Flatpak</property>
+                                                        <property name="visible">false</property>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkToggleButton" id="SidebarAppImageButton">
+                                        <property name="has-frame">false</property>
+                                        <property name="margin-top">3</property>
+                                        <property name="margin-bottom">3</property>
+                                        <property name="margin-start">6</property>
+                                        <property name="margin-end">6</property>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="orientation">horizontal</property>
+                                                <property name="spacing">8</property>
+                                                <child>
+                                                    <object class="GtkImage">
+                                                        <property name="icon-name">application-x-executable-symbolic</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkLabel" id="SidebarAppImageLabel">
+                                                        <property name="label">AppImage</property>
+                                                        <property name="visible">false</property>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkToggleButton" id="SidebarSearchButton">
+                                        <property name="has-frame">false</property>
+                                        <property name="margin-top">3</property>
+                                        <property name="margin-bottom">3</property>
+                                        <property name="margin-start">6</property>
+                                        <property name="margin-end">6</property>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="orientation">horizontal</property>
+                                                <property name="spacing">8</property>
+                                                <child>
+                                                    <object class="GtkImage">
+                                                        <property name="icon-name">system-search-symbolic</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkLabel" id="SidebarSearchLabel">
+                                                        <property name="label">Shelly Search</property>
+                                                        <property name="visible">false</property>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkBox">
+                                        <property name="vexpand">true</property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkMenuButton" id="SidebarMenuButton">
+                                        <property name="icon-name">open-menu-symbolic</property>
+                                        <property name="menu-model">MainMenu</property>
+                                        <property name="direction">up</property>
+                                        <property name="has-frame">false</property>
+                                        <property name="margin-top">6</property>
+                                        <property name="margin-bottom">6</property>
+                                        <property name="margin-start">6</property>
+                                        <property name="margin-end">6</property>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child>
                             <object class="GtkBox" id="ContentWrapper">
                                 <property name="orientation">vertical</property>
                                 <property name="hexpand">true</property>
                                 <property name="vexpand">true</property>
                                 <child>
-                                    <object class="GtkHeaderBar">
+                                    <object class="GtkHeaderBar" id="TopHeaderBar">
                                         <property name="show-title-buttons">false</property>
                                         <child type="title">
                                             <object class="GtkStackSwitcher" id="MainStackSwitcher">
@@ -101,7 +269,7 @@
                                             </object>
                                         </child>
                                         <child type="end">
-                                            <object class="GtkMenuButton">
+                                            <object class="GtkMenuButton" id="TopMenuButton">
                                                 <property name="icon-name">open-menu-symbolic</property>
                                                 <property name="menu-model">MainMenu</property>
                                             </object>

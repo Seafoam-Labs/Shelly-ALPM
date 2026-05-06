@@ -8,7 +8,9 @@ public class MetaPackageModel(
     PackageType packageType,
     string summary,
     string repository,
-    bool isInstalled)
+    bool isInstalled,
+    long? lastUpdated = null
+)
 {
     public string Id { get; init; } = id;
 
@@ -25,4 +27,6 @@ public class MetaPackageModel(
     public string Repository { get; init; } = repository;
 
     public bool IsInstalled { get; set; } = isInstalled;
+
+    public long? LastUpdated { get; init; } = lastUpdated;
 }

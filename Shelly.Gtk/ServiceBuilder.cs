@@ -20,6 +20,7 @@ public static class ServiceBuilder
         collection.AddSingleton<ICredentialManager, CredentialManager>();
         collection.AddSingleton<IAlpmEventService, AlpmEventService>();
         collection.AddSingleton<IConfigService, ConfigService>();
+        collection.AddSingleton<IPkgBuildService, PkgBuildService>();
         collection.AddSingleton<IGenericQuestionService, GenericQuestionService>();
         collection.AddSingleton<IDirtyService, DirtyService>();
         collection.AddSingleton<ILockoutService, LockoutService>();

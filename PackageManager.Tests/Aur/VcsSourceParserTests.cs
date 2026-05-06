@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PackageManager.Aur;
 
 namespace PackageManager.Tests.Aur;
@@ -10,7 +11,7 @@ public class VcsSourceParserTests
         var result = VcsSourceParser.ParseSource("git+https://github.com/user/repo.git");
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Url, Is.EqualTo("https://github.com/user/repo.git"));
-        Assert.That(result.Branch, Is.EqualTo("HEAD"));
+        Assert.That(result.Branch, Is.EqualTo(string.Empty));
         Assert.That(result.Protocols, Does.Contain("https"));
         Assert.That(result.Protocols, Does.Not.Contain("git"));
     }
@@ -92,5 +93,160 @@ public class VcsSourceParserTests
         var result = VcsSourceParser.ParseSource("pkg-name::git+https://gitlab.com/org/project.git");
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Url, Is.EqualTo("https://gitlab.com/org/project.git"));
+    }
+
+    [Test]
+    public void ParseSource_NoFragment_BranchIsEmpty()
+    {
+        var result = VcsSourceParser.ParseSource("git+https://github.com/user/repo.git");
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Branch, Is.EqualTo(string.Empty));
+    }
+
+    [Test]
+    public void ParseSource_BranchWithBashBraceVariable_ReturnsNull()
+    {
+        var result = VcsSourceParser.ParseSource(
+            "zfs::git+https://github.com/openzfs/zfs.git#branch=${_staging_branch}");
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ParseSource_BranchWithBashCommandSubstitution_ReturnsNull()
+    {
+        var result = VcsSourceParser.ParseSource(
+            "git+https://github.com/user/repo.git#branch=$(echo main)");
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ParseSource_BranchWithBareDollarVariable_ReturnsNull()
+    {
+        var result = VcsSourceParser.ParseSource(
+            "git+https://github.com/user/repo.git#branch=$mybranch");
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ParseSource_EmptyBranchFragment_ReturnsNull()
+    {
+        var result = VcsSourceParser.ParseSource("git+https://github.com/user/repo.git#branch=");
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ParseSource_WhitespaceBranchFragment_ReturnsNull()
+    {
+        var result = VcsSourceParser.ParseSource("git+https://github.com/user/repo.git#branch=   ");
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ParseSource_ZfsDkmsStagingGit_StaticPkgbuildLine_IsNotTrackable()
+    {
+        var sources = new[]
+        {
+            "zfs::git+https://github.com/openzfs/zfs.git#branch=${_staging_branch}"
+        };
+
+        var results = VcsSourceParser.ParseSources(sources);
+        Assert.That(results, Is.Empty);
+    }
+
+    [Test]
+    public void ParseSource_BranchWithBraceVariable_ResolvesFromVarsMap()
+    {
+        var vars = new Dictionary<string, string> { ["_staging_branch"] = "zfs-2.3.6-staging" };
+        var result = VcsSourceParser.ParseSource(
+            "zfs::git+https://github.com/openzfs/zfs.git#branch=${_staging_branch}", vars);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Url, Is.EqualTo("https://github.com/openzfs/zfs.git"));
+        Assert.That(result.Branch, Is.EqualTo("zfs-2.3.6-staging"));
+    }
+
+    [Test]
+    public void ParseSource_BranchWithBareDollarVariable_ResolvesFromVarsMap()
+    {
+        var vars = new Dictionary<string, string> { ["_branch"] = "develop" };
+        var result = VcsSourceParser.ParseSource(
+            "git+https://github.com/user/repo.git#branch=$_branch", vars);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Branch, Is.EqualTo("develop"));
+    }
+
+    [Test]
+    public void ParseSource_NestedVariableExpansion_Resolves()
+    {
+        var vars = new Dictionary<string, string>
+        {
+            ["_prefix"] = "zfs-2.3.6",
+            ["_branch"] = "${_prefix}-staging"
+        };
+        var result = VcsSourceParser.ParseSource(
+            "git+https://github.com/openzfs/zfs.git#branch=${_branch}", vars);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Branch, Is.EqualTo("zfs-2.3.6-staging"));
+    }
+
+    [Test]
+    public void ParseSource_SelfReferentialVariable_DoesNotLoopAndReturnsNull()
+    {
+        var vars = new Dictionary<string, string> { ["_x"] = "${_x}" };
+        var result = VcsSourceParser.ParseSource(
+            "git+https://github.com/user/repo.git#branch=${_x}", vars);
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ParseSource_BranchVariableNotInMap_ReturnsNull()
+    {
+        var vars = new Dictionary<string, string> { ["_other"] = "main" };
+        var result = VcsSourceParser.ParseSource(
+            "git+https://github.com/user/repo.git#branch=${_missing}", vars);
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ParseSource_UrlWithVariable_ResolvesFromVarsMap()
+    {
+        var vars = new Dictionary<string, string>
+        {
+            ["_giturl"] = "git+https://github.com/user/repo.git",
+            ["_branch"] = "main"
+        };
+        var result = VcsSourceParser.ParseSource("$_giturl#branch=$_branch", vars);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Url, Is.EqualTo("https://github.com/user/repo.git"));
+        Assert.That(result.Branch, Is.EqualTo("main"));
+    }
+
+    [Test]
+    public void ParseSource_ZfsDkmsStagingGit_WithStagingVariable_ResolvesBranch()
+    {
+        var pkgbuild = "_staging_branch=zfs-2.3.6-staging\n" +
+                       "source=(\"zfs::git+https://github.com/openzfs/zfs.git#branch=${_staging_branch}\")\n";
+        var info = PackageManager.Utilities.PkgbuildParser.ParseContent(pkgbuild);
+        var entries = VcsSourceParser.ParseSources(info.Source, info.Variables);
+
+        Assert.That(entries, Has.Count.EqualTo(1));
+        Assert.That(entries[0].Url, Is.EqualTo("https://github.com/openzfs/zfs.git"));
+        Assert.That(entries[0].Branch, Is.EqualTo("zfs-2.3.6-staging"));
+    }
+
+    [Test]
+    public void ParseSource_ZfsDkmsStagingGit_WithPrepareAssignment_ResolvesBranch()
+    {
+        var pkgbuild = "pkgname=zfs-dkms-staging-git\n" +
+                       "source=(\"zfs::git+https://github.com/openzfs/zfs.git#branch=${_staging_branch}\")\n" +
+                       "prepare() {\n" +
+                       "  _staging_branch=zfs-2.3.6-staging\n" +
+                       "  echo \"-> Staging branch set to branch=${_staging_branch}\"\n" +
+                       "}\n";
+        var info = PackageManager.Utilities.PkgbuildParser.ParseContent(pkgbuild);
+        var entries = VcsSourceParser.ParseSources(info.Source, info.Variables);
+
+        Assert.That(entries, Has.Count.EqualTo(1));
+        Assert.That(entries[0].Url, Is.EqualTo("https://github.com/openzfs/zfs.git"));
+        Assert.That(entries[0].Branch, Is.EqualTo("zfs-2.3.6-staging"));
     }
 }

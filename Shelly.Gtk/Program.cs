@@ -9,6 +9,7 @@ using Shelly.Gtk.Windows.AUR;
 using Shelly.Gtk.Windows.Dialog;
 using Shelly.Gtk.Windows.Flatpak;
 using Shelly.Gtk.Helpers;
+using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.Windows.Packages;
 using Settings = Shelly.Gtk.Windows.Settings;
@@ -28,12 +29,12 @@ sealed class Program
         var uid = getuid();
 
         // 1. XDG_RUNTIME_DIR — required for the session bus socket path
-        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR")))
-        {
-            var runtime = $"/run/user/{uid}";
-            if (Directory.Exists(runtime))
-                Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", runtime);
-        }
+        // if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR")))
+        // {
+        //     var runtime = $"/run/user/{uid}";
+        //     if (Directory.Exists(runtime))
+        //         Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", runtime);
+        // }
 
         // 2. DBUS_SESSION_BUS_ADDRESS — dconf needs this to read GSettings
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS")))
@@ -56,9 +57,11 @@ sealed class Program
                 "/usr/local/share:/usr/share" + (string.IsNullOrEmpty(dataDirs) ? "" : ":" + dataDirs));
         }
 
-        // 4. XDG_CURRENT_DESKTOP — some theme bits key off this
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP")))
-            Environment.SetEnvironmentVariable("XDG_CURRENT_DESKTOP", "KDE");
+        {
+            Environment.SetEnvironmentVariable("XDG_CURRENT_DESKTOP", DesktopDetector.DetectDesktop());
+        }
+
 
         // 5. Make GIO use dconf instead of falling back to memory backend
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GSETTINGS_BACKEND")))
@@ -129,7 +132,12 @@ sealed class Program
     public static int Main(string[] args)
     {
         EnsureSessionEnvironment();
-        ApplyKdeGtkTheme();
+        if (DesktopDetector.DetectDesktop() == "KDE")
+        {
+            ApplyKdeGtkTheme();
+        }
+
+
         //GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
 
         // Parse --page argument
@@ -183,7 +191,12 @@ sealed class Program
             var menuBuilder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/MainMenu.ui"), -1);
             var appMenu = (Gio.Menu)menuBuilder.GetObject("AppMenu")!;
             application.Menubar = appMenu;
-            
+
+            Task.Run(async () =>
+            {
+                await serviceProvider.GetRequiredService<IIConDownloadService>().DownloadAndUnpackIcons();
+            });
+
             var settingsStack = (Stack)mainBuilder.GetObject("settings_stack")!;
             var packagesPageBox = (Box)mainBuilder.GetObject("packages_page_box")!;
             var aurPageBox = (Box)mainBuilder.GetObject("aur_page_box")!;
@@ -193,6 +206,21 @@ sealed class Program
             var settingsPageBox = (Box)mainBuilder.GetObject("settings_page_box")!;
 
             var mainOverlay = (Overlay)mainBuilder.GetObject("MainOverlay")!;
+
+            // Sidebar elements
+            var sidebarBox = (Box)mainBuilder.GetObject("SidebarBox")!;
+            var sidebarToggle = (ToggleButton)mainBuilder.GetObject("SidebarToggleButton")!;
+            var topHeaderBar = (HeaderBar)mainBuilder.GetObject("TopHeaderBar")!;
+            var sidebarPackagesBtn = (ToggleButton)mainBuilder.GetObject("SidebarPackagesButton")!;
+            var sidebarAurBtn = (ToggleButton)mainBuilder.GetObject("SidebarAurButton")!;
+            var sidebarFlatpakBtn = (ToggleButton)mainBuilder.GetObject("SidebarFlatpakButton")!;
+            var sidebarAppImageBtn = (ToggleButton)mainBuilder.GetObject("SidebarAppImageButton")!;
+            var sidebarSearchBtn = (ToggleButton)mainBuilder.GetObject("SidebarSearchButton")!;
+            var sidebarPackagesLabel = (Label)mainBuilder.GetObject("SidebarPackagesLabel")!;
+            var sidebarAurLabel = (Label)mainBuilder.GetObject("SidebarAurLabel")!;
+            var sidebarFlatpakLabel = (Label)mainBuilder.GetObject("SidebarFlatpakLabel")!;
+            var sidebarAppImageLabel = (Label)mainBuilder.GetObject("SidebarAppImageLabel")!;
+            var sidebarSearchLabel = (Label)mainBuilder.GetObject("SidebarSearchLabel")!;
 
             var quitAction = Gio.SimpleAction.New("quit", null);
             quitAction.OnActivate += (_, _) => application.Quit();
@@ -305,13 +333,100 @@ sealed class Program
             settingsStack.GetPage(appImagePageBox).Visible = initialConfig.AppImageEnabled;
             settingsStack.GetPage(shellySearchPageBox).Visible = initialConfig.ShellySearchEnabled;
 
+            // Sidebar setup - controlled by UseOldMenu config
+            void ApplyNavigationStyle(bool useOldMenu, ShellyConfig config)
+            {
+                sidebarBox.Visible = useOldMenu;
+                topHeaderBar.Visible = !useOldMenu;
+
+                if (!useOldMenu) return;
+                sidebarAurBtn.Visible = config.AurEnabled;
+                sidebarFlatpakBtn.Visible = config.FlatPackEnabled;
+                sidebarAppImageBtn.Visible = config.AppImageEnabled;
+                sidebarSearchBtn.Visible = config.ShellySearchEnabled;
+            }
+
+            ApplyNavigationStyle(!initialConfig.UseOldMenu, initialConfig);
+
+            var aurChild = sidebarAurBtn.GetChild();
+            if (aurChild != null)
+            {
+                var aurBox = (Box)aurChild;
+                var aurImage = (Image)aurBox.GetFirstChild()!;
+                aurImage.IconName = ImageHelper.GetIconWithFallback("arch-symbolic", "distributor-logo-arch",
+                    "distributor-logo-archlinux");
+            }
+
+            var flatpakChild = sidebarFlatpakBtn.GetChild();
+            if (flatpakChild != null)
+            {
+                var flatpakBox = (Box)flatpakChild;
+                var flatpakImage = (Image)flatpakBox.GetFirstChild()!;
+                flatpakImage.IconName = ImageHelper.GetIconWithFallback("flatpak-symbolic", "flatpak", "flatpak-logo",
+                    "folder-flatpak-symbolic", "application-vnd.flatpak");
+            }
+
+            sidebarToggle.OnToggled += (_, _) =>
+            {
+                var expanded = sidebarToggle.Active;
+                sidebarToggle.IconName = expanded ? "go-previous-symbolic" : "go-next-symbolic";
+                sidebarBox.WidthRequest = expanded ? 180 : 48;
+                sidebarPackagesLabel.Visible = expanded;
+                sidebarAurLabel.Visible = expanded;
+                sidebarFlatpakLabel.Visible = expanded;
+                sidebarAppImageLabel.Visible = expanded;
+                sidebarSearchLabel.Visible = expanded;
+            };
+
+            var sidebarButtons = new (ToggleButton btn, string page)[]
+            {
+                (sidebarPackagesBtn, "packages_page"),
+                (sidebarAurBtn, "aur_page"),
+                (sidebarFlatpakBtn, "flatpak_page"),
+                (sidebarAppImageBtn, "appimage_page"),
+                (sidebarSearchBtn, "shelly_search_page"),
+            };
+
+            var suppressSidebarToggle = false;
+
+            void SetActiveSidebarButton(string pageName)
+            {
+                suppressSidebarToggle = true;
+                foreach (var (btn, page) in sidebarButtons)
+                    btn.Active = page == pageName;
+                suppressSidebarToggle = false;
+            }
+
+            foreach (var (btn, page) in sidebarButtons)
+            {
+                var capturedPage = page;
+                btn.OnToggled += (_, _) =>
+                {
+                    if (suppressSidebarToggle) return;
+                    if (btn.Active)
+                    {
+                        settingsStack.SetVisibleChildName(capturedPage);
+                        SetActiveSidebarButton(capturedPage);
+                    }
+                    else
+                    {
+                        suppressSidebarToggle = true;
+                        btn.Active = true;
+                        suppressSidebarToggle = false;
+                    }
+                };
+            }
+
             var initialPageEnum = initialConfig.DefaultPageDropDown;
-            
+
             // Safeguard: if the saved default page is disabled, fall back to packages
             if (initialPageEnum == ShellyTabs.Aur && !initialConfig.AurEnabled) initialPageEnum = ShellyTabs.Packages;
-            if (initialPageEnum == ShellyTabs.Flatpak && !initialConfig.FlatPackEnabled) initialPageEnum = ShellyTabs.Packages;
-            if (initialPageEnum == ShellyTabs.AppImage && !initialConfig.AppImageEnabled) initialPageEnum = ShellyTabs.Packages;
-            if (initialPageEnum == ShellyTabs.ShellySearch && !initialConfig.ShellySearchEnabled) initialPageEnum = ShellyTabs.Packages;
+            if (initialPageEnum == ShellyTabs.Flatpak && !initialConfig.FlatPackEnabled)
+                initialPageEnum = ShellyTabs.Packages;
+            if (initialPageEnum == ShellyTabs.AppImage && !initialConfig.AppImageEnabled)
+                initialPageEnum = ShellyTabs.Packages;
+            if (initialPageEnum == ShellyTabs.ShellySearch && !initialConfig.ShellySearchEnabled)
+                initialPageEnum = ShellyTabs.Packages;
 
             string initialPageName;
             switch (initialPageEnum)
@@ -338,8 +453,13 @@ sealed class Program
                     initialPageName = "packages_page";
                     break;
             }
-            
+
             settingsStack.SetVisibleChildName(initialPageName);
+
+            if (initialConfig.UseOldMenu)
+            {
+                SetActiveSidebarButton(initialPageName);
+            }
 
             settingsWindow.ConfigChanged += (config) =>
             {
@@ -347,6 +467,11 @@ sealed class Program
                 settingsStack.GetPage(flatpakPageBox).Visible = config.FlatPackEnabled;
                 settingsStack.GetPage(appImagePageBox).Visible = config.AppImageEnabled;
                 settingsStack.GetPage(shellySearchPageBox).Visible = config.ShellySearchEnabled;
+                ApplyNavigationStyle(!config.UseOldMenu, config);
+                if (config.UseOldMenu)
+                {
+                    SetActiveSidebarButton(settingsStack.GetVisibleChildName()!);
+                }
             };
             settingsWindow.NavigationToPackages += () =>
             {
@@ -368,6 +493,12 @@ sealed class Program
                     settingsStack.GetPage(flatpakPageBox).Visible = c.FlatPackEnabled;
                     settingsStack.GetPage(appImagePageBox).Visible = c.AppImageEnabled;
                     settingsStack.GetPage(shellySearchPageBox).Visible = c.ShellySearchEnabled;
+                    ApplyNavigationStyle(!c.UseOldMenu, c);
+                    if (c.UseOldMenu)
+                    {
+                        SetActiveSidebarButton(settingsStack.GetVisibleChildName()!);
+                    }
+
                     dirtyService.Clear(DirtyScopes.Config);
                     return false;
                 });
@@ -518,7 +649,7 @@ sealed class Program
 
             window.Show();
 
-            if (initialConfig.NewInstall && !initialConfig.NewInstallInitSettings)
+            if (!initialConfig.NewInstallInitSettings)
             {
                 var setupWindow = serviceProvider.GetRequiredService<SetupWindow>();
                 var setupWidget = setupWindow.CreateWindow();

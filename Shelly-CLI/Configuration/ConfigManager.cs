@@ -404,7 +404,17 @@ public static class ConfigManager
             {
                 config.DefaultPageDropDown = (ShellyTabs)defaultPage.GetInt32();
             }
-
+            
+            if (root.TryGetProperty("TrayUpdatesIconPath", out var trayUpdatesIconPath))
+            {
+                config.TrayUpdatesIconPath =  trayUpdatesIconPath.GetString();
+            }
+            
+            if (root.TryGetProperty("TrayIconPath", out var trayIconPath))
+            {
+                config.TrayIconPath =  trayIconPath.GetString();
+            }
+            
             SaveConfig(config);
 
             // Rename old config to indicate migration
