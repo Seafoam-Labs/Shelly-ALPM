@@ -9,7 +9,7 @@ public class MetaPackageModel(
     string summary,
     string repository,
     bool isInstalled,
-    long? lastUpdated = null
+    long lastUpdated
 )
 {
     public string Id { get; init; } = id;
@@ -28,5 +28,5 @@ public class MetaPackageModel(
 
     public bool IsInstalled { get; set; } = isInstalled;
 
-    public long? LastUpdated { get; init; } = lastUpdated;
+    public long LastUpdated { get; init; } = lastUpdated;
 }

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Text;
 using PackageManager.Alpm.Package;
 
 namespace PackageManager.Alpm;
@@ -119,6 +118,8 @@ public class AlpmPackage(IntPtr pkgPtr)
     public string InstallReason =>
         Repository == "local" ? AlpmReference.GetPkgReason(PackagePtr).ToString() : "Not Installed";
 
+    public DateTime BuildDate => DateTimeOffset.FromUnixTimeSeconds(AlpmReference.GetPkgBuildDate(PackagePtr)).DateTime;
+
     public DateTime? InstallDate
     {
         get
@@ -136,7 +137,6 @@ public class AlpmPackage(IntPtr pkgPtr)
     public long DownloadSize => AlpmReference.GetPkgSize(PackagePtr);
 
     public long InstalledSize => AlpmReference.GetPkgISize(PackagePtr);
-    
 
     public List<string> OptionalFor
     {
@@ -183,7 +183,7 @@ public class AlpmPackage(IntPtr pkgPtr)
         return packages;
     }
 
-    public AlpmPackageDto ToDto() => new AlpmPackageDto
+    public AlpmPackageDto ToDto() => new()
     {
         //Todo: implement optionalfor and requiredby
         Name = Name,
@@ -198,6 +198,7 @@ public class AlpmPackage(IntPtr pkgPtr)
         DownloadSize = DownloadSize,
         Groups = Groups,
         InstallDate = InstallDate,
+        BuildDate = BuildDate,
         InstalledSize = InstalledSize,
         InstallReason = InstallReason,
         Licenses = Licenses,
@@ -236,7 +237,7 @@ public class AlpmPackage(IntPtr pkgPtr)
 
         return dependencies;
     }
-    
+
     private AlpmPackageTreeDto? _fileTree;
 
     public AlpmPackageTreeDto Files =>

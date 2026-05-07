@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Shelly.Gtk.Helpers;
 using Shelly.Gtk.UiModels;
 
 namespace Shelly.Gtk.Services;
@@ -108,7 +109,7 @@ public class ConfigService : IConfigService
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = FindCliPath(),
+                    FileName = CliPathResolver.FindCliPath(),
                     Arguments = $"config set {key} \"{value}\"",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -123,30 +124,5 @@ public class ConfigService : IConfigService
         {
             Console.Error.WriteLine($"Failed to set config via CLI: {key} = {value}: {ex.Message}");
         }
-    }
-
-    private static string FindCliPath()
-    {
-#if DEBUG
-        var home = Environment.GetEnvironmentVariable("HOME")
-                   ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var debugPath = Path.Combine(home, "RiderProjects/Shelly-ALPM/Shelly-CLI/bin/Debug/net10.0/linux-x64/shelly");
-        if (File.Exists(debugPath)) return debugPath;
-#endif
-
-        var possiblePaths = new[]
-        {
-            "/usr/bin/shelly",
-            "/usr/local/bin/shelly",
-            Path.Combine(AppContext.BaseDirectory, "shelly"),
-        };
-
-        foreach (var path in possiblePaths)
-        {
-            if (File.Exists(path))
-                return path;
-        }
-
-        return "shelly";
     }
 }

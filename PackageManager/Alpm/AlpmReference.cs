@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -37,7 +36,7 @@ namespace PackageManager.Alpm
         public static partial int SetProgressCallback(IntPtr handle, AlpmProgressCallback cb, IntPtr ctx);
 
         [LibraryImport("libalpm.so", EntryPoint = "alpm_option_get_lockfile")]
-        [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
         public static partial IntPtr GetLockFile(IntPtr handle);
         //
         // [LibraryImport("libc", EntryPoint = "__errno_location")]
@@ -702,7 +701,7 @@ namespace PackageManager.Alpm
         /// </summary>
         /// <param name="pkgList"></param>
         /// <param name="depstring"></param>
-        /// <returns>The first package that satifies the dependency</returns>
+        /// <returns>The first package that satisfies the dependency</returns>
         [LibraryImport(LibName, EntryPoint = "alpm_find_satisfier", StringMarshalling = StringMarshalling.Utf8)]
         public static partial IntPtr PkgFindSatisfier(IntPtr pkgList, string depstring);
 

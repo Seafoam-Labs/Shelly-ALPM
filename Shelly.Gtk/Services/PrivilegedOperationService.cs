@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using Shelly.Gtk.Enums;
+using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services.TrayServices;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
@@ -30,7 +31,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         _trayDbus = trayDbus;
         _packageUpdateNotifier = packageUpdateNotifier;
         _dirtyService = dirtyService;
-        _cliPath = FindCliPath();
+        _cliPath = CliPathResolver.FindCliPath();
     }
 
     private string[] AppendNoConfirmIfNeeded(params string[] args)
@@ -48,41 +49,6 @@ public class PrivilegedOperationService : IPrivilegedOperationService
     {
         var finalArgs = AppendNoConfirmIfNeeded(args);
         return ExecutePrivilegedCommandAsync(operationDescription, finalArgs);
-    }
-
-    private static string FindCliPath()
-    {
-#if DEBUG
-        var debugPath =
-            Path.Combine("/home", Environment.GetEnvironmentVariable("USER")!,
-                "RiderProjects/Shelly-ALPM/Shelly-CLI/bin/Debug/net10.0/linux-x64/shelly");
-        Console.Error.WriteLine($"Debug path: {debugPath}");
-#endif
-
-        // Check common installation paths
-        var possiblePaths = new[]
-        {
-#if DEBUG
-            debugPath,
-#endif
-            "/usr/bin/shelly",
-            "/usr/local/bin/shelly",
-            Path.Combine(AppContext.BaseDirectory, "shelly"),
-            Path.Combine(AppContext.BaseDirectory, "Shelly"),
-            // Development path - relative to UI executable
-            Path.Combine(Path.GetDirectoryName(AppContext.BaseDirectory) ?? "", "Shelly", "Shelly"),
-        };
-
-        foreach (var path in possiblePaths)
-        {
-            if (File.Exists(path))
-            {
-                return path;
-            }
-        }
-
-        // Fallback to assuming it's in PATH
-        return "shelly";
     }
 
     public async Task<OperationResult> SyncDatabasesAsync()
@@ -149,7 +115,8 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
     public async Task<OperationResult> InstallAppImageAsync(string filePath)
     {
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Install local package", "install-appimage", "--location",
+        var result = await ExecutePrivilegedWithNoConfirmCheck("Install local package", "install-appimage",
+            "--location",
             filePath);
         if (result.Success) _dirtyService.MarkDirty(DirtyScopes.AppImage);
         return result;
@@ -422,7 +389,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         var result = showHidden
             ? await ExecuteCommandAsync("aur list-updates", "--json", "--show-hidden")
             : await ExecuteCommandAsync("aur list-updates", "--json");
-        
+
         if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
         {
             return [];
@@ -512,13 +479,16 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         OperationResult result;
         if (updateUrl != "" && updateType != AppImageUpdateType.None)
         {
-            result = await ExecutePrivilegedCommandAsync("Install AppImage", "appimage", "install", "-l", $"\"{filePath}\"", "-u",
+            result = await ExecutePrivilegedCommandAsync("Install AppImage", "appimage", "install", "-l",
+                $"\"{filePath}\"", "-u",
                 updateUrl, "-t", updateType.ToString().ToLowerInvariant(), "-n");
         }
         else
         {
-            result = await ExecutePrivilegedCommandAsync("Install AppImage", "appimage", "install", "-l", $"\"{filePath}\"", "-n");
+            result = await ExecutePrivilegedCommandAsync("Install AppImage", "appimage", "install", "-l",
+                $"\"{filePath}\"", "-n");
         }
+
         if (result.Success) _dirtyService.MarkDirty(DirtyScopes.AppImage);
         return result;
     }
@@ -532,7 +502,8 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
     public async Task<OperationResult> AppImageRemoveAsync(string name)
     {
-        var result = await ExecutePrivilegedCommandAsync("Remove AppImage's", "appimage", "remove", $"\"{name}\"", "-n");
+        var result =
+            await ExecutePrivilegedCommandAsync("Remove AppImage's", "appimage", "remove", $"\"{name}\"", "-n");
         if (result.Success) _dirtyService.MarkDirty(DirtyScopes.AppImage);
         return result;
     }

@@ -23,10 +23,14 @@
                                 <property name="width-request">250</property>
                             </object>
                         </child>
-                      
                         <child>
                             <object class="GtkDropDown" id="grouping_selection">
-                                <property name="tooltip-text">Group Filter</property>
+                                <property name="tooltip-text">Package Group Filter</property>
+                                <property name="enable-search">true</property>
+                                <property name="search-match-mode">substring</property>
+                                <property name="expression">
+                                      <lookup name='string' type="GtkStringObject"></lookup>
+                                </property>
                             </object>
                         </child>
                         <child>

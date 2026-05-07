@@ -93,7 +93,6 @@ public class PackageInstall(
         _detailRevealer = (Revealer)_builder.GetObject("detail_revealer")!;
         _detailBox = (Box)_builder.GetObject("detail_box")!;
         _groupDropDown = (DropDown)_builder.GetObject("grouping_selection")!;
-        _groupDropDown.EnableSearch = false;
         _upgradeCheck = (CheckButton)_builder.GetObject("upgrade_check")!;
         _showHiddenCheck = (CheckButton)_builder.GetObject("show_hidden_check")!;
 

@@ -20,9 +20,9 @@ body:
   - type: input
     id: firmware
     attributes:
-      label: Firmware version
+      label: Shelly version
     validations:
-      required: false
+      required: true
   - type: checkboxes
     id: application
     attributes:

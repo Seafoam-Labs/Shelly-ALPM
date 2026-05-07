@@ -7,7 +7,9 @@ namespace PackageManager.Alpm;
 public record AlpmPackageDto
 {
     public string Name { get; init; } = string.Empty;
+
     public string Version { get; init; } = string.Empty;
+
     public long Size { get; init; }
 
     public string Description { get; init; } = string.Empty;
@@ -35,6 +37,8 @@ public record AlpmPackageDto
     public string InstallReason { get; init; } = string.Empty;
 
     public DateTime? InstallDate { get; init; } = null;
+
+    public DateTime BuildDate { get; init; } = DateTime.MinValue;
 
     public long DownloadSize { get; init; } = 0;
 

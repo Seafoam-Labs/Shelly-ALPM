@@ -2,55 +2,21 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Shelly.Gtk.Enums;
+using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services.TrayServices;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.AppImage;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
+
 // ReSharper disable UnusedParameter.Local
 // ReSharper disable AccessToModifiedClosure
 // ReSharper disable ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
-
 
 namespace Shelly.Gtk.Services;
 
 public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNotifier packageUpdateNotifier, IDirtyService dirtyService) : IUnprivilegedOperationService
 {
-    private readonly string _cliPath = FindCliPath();
-
-    private static string FindCliPath()
-    {
-#if DEBUG
-        var debugPath =
-            Path.Combine("/home", Environment.GetEnvironmentVariable("USER")!,
-                "RiderProjects/Shelly-ALPM/Shelly-CLI/bin/Debug/net10.0/linux-x64/shelly");
-        Console.Error.WriteLine($"Debug path: {debugPath}");
-#endif
-
-        // Check common installation paths
-        var possiblePaths = new[]
-        {
-#if DEBUG
-            debugPath,
-#endif
-            "/usr/bin/shelly",
-            "/usr/local/bin/shelly",
-            Path.Combine(AppContext.BaseDirectory, "shelly"),
-            Path.Combine(AppContext.BaseDirectory, "Shelly"),
-            // Development path - relative to UI executable
-            Path.Combine(Path.GetDirectoryName(AppContext.BaseDirectory) ?? "", "Shelly", "Shelly"),
-        };
-
-        foreach (var path in possiblePaths)
-        {
-            if (File.Exists(path))
-            {
-                return path;
-            }
-        }
-
-        // Fallback to assuming it's in PATH
-        return "shelly";
-    }
+    private readonly string _cliPath = CliPathResolver.FindCliPath();
 
     public async Task<List<FlatpakPackageDto>> ListFlatpakPackages()
     {

@@ -16,15 +16,16 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Version>2.2.3.1</Version>
+        <Version>2.2.3.2</Version>
         <AssemblyName>shelly-ui</AssemblyName>
-        <AssemblyVersion>2.2.3.1</AssemblyVersion>
+        <AssemblyVersion>2.2.3.2</AssemblyVersion>
         <AssemblyTitle>Shelly GTK UI</AssemblyTitle>
         <Description>Shelly GTK is a arch linux package manager</Description>
         <Company>Seafoam Labs</Company>
         <Product>Shelly CLI by Seafoam Labs</Product>
         <Copyright>2026 Seafoam Labs</Copyright>
     </PropertyGroup>
+    
 
     <ItemGroup>
         <EmbeddedResource Include="UiFiles\**\*.ui" />
@@ -35,6 +36,7 @@
         <InternalsVisibleTo Include="Shelly.Gtk.Tests" />
     </ItemGroup>
     <ItemGroup>
+        <PackageReference Include="GirCore.GLib-2.0" Version="0.8.0-preview.1" />
         <PackageReference Include="GirCore.Gtk-4.0" Version="0.8.0-preview.1" />
         <PackageReference Include="GirCore.GObject-2.0.Integration" Version="0.8.0-preview.1"/>
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.6" />
