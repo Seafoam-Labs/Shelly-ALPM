@@ -692,6 +692,10 @@ public class AppImageManager
                             }
                             patchedContent.AppendLine($"Exec=\"{filePath}\"{fieldCodes}");
                         }
+                        else if (line.StartsWith("TryExec="))
+                        {
+                            //do nothing 
+                        }
                         else if (line.StartsWith("Icon="))
                         {
                             patchedContent.AppendLine($"Icon={finalIconPath}");

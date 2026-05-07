@@ -12,7 +12,9 @@ using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.Windows.Packages;
+using Module = Gtk.Module;
 using Settings = Shelly.Gtk.Windows.Settings;
+using GtkSettings = Gtk.Settings;
 
 
 namespace Shelly.Gtk;
@@ -136,6 +138,27 @@ sealed class Program
         {
             ApplyKdeGtkTheme();
         }
+        var preferDark = false;
+        if (DesktopDetector.DetectDesktop() == "GNOME")
+        {
+          
+            Gio.Module.Initialize();
+            var s = Gio.Settings.New("org.gnome.desktop.interface");
+            var scheme = s.GetString("color-scheme");
+            preferDark = string.Equals(scheme, "prefer-dark", StringComparison.OrdinalIgnoreCase);
+
+            Environment.SetEnvironmentVariable(
+                "GTK_APPLICATION_PREFER_DARK_THEME", preferDark ? "1" : "0");
+        }
+
+        Module.Initialize();
+        if (preferDark)
+        {
+            var settings = GtkSettings.GetDefault();
+            settings?.GtkApplicationPreferDarkTheme = true;
+        }
+
+
 
 
         //GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
