@@ -187,11 +187,17 @@ public class FlatpakInstall(
         shortcutController.Scope = ShortcutScope.Global;
         shortcutController.PropagationPhase = PropagationPhase.Capture;
 
-        var triggers = new[] { "Return", "KP_Enter", "space" };
+        var triggers = new[] { "Return", "KP_Enter", "space", "<Control>f" };
         foreach (var triggerStr in triggers)
         {
+            
             var action = CallbackAction.New((_, _) =>
             {
+                if (triggerStr == "<Control>f")
+                {
+                    searchEntry.GrabFocus();
+                    return true;
+                }
                 if (!_overlay.GetVisible() || !_overlayInstallButton.GetSensitive()) return false;
                 if (OverlayHelper.HasActiveOverlay(box)) return false;
 

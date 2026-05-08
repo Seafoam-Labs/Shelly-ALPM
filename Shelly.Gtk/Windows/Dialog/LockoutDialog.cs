@@ -67,6 +67,7 @@ public class LockoutDialog
             _consoleOutput.SetEditable(false);
             _consoleOutput.SetCursorVisible(false);
             _consoleOutput.SetMonospace(true);
+            _consoleOutput.BottomMargin = 30;
             _consoleOutput.SetWrapMode(WrapMode.WordChar);
             scrolledWindow.SetChild(_consoleOutput);
 
