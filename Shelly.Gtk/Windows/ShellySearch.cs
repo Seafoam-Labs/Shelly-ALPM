@@ -64,10 +64,18 @@ public class ShellySearch(
 
         _checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
         _nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
+        _nameColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
+            string.Compare(a.Package?.Name, b.Package?.Name, StringComparison.OrdinalIgnoreCase)));
         _repoColumn = (ColumnViewColumn)builder.GetObject("repo_column")!;
+        _repoColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
+            string.Compare(a.Package?.Repository, b.Package?.Repository, StringComparison.OrdinalIgnoreCase)));
         _versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
+        _versionColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
+            string.Compare(a.Package?.Version, b.Package?.Version, StringComparison.OrdinalIgnoreCase)));
         _descriptionColumn = (ColumnViewColumn)builder.GetObject("description_column")!;
         _lastUpdatedColumn = (ColumnViewColumn)builder.GetObject("last_updated_column")!;
+        _lastUpdatedColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
+            a.Package == null || b.Package == null ? 0 : a.Package.LastUpdated.CompareTo(b.Package.LastUpdated)));
         _searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
 
         if (!string.IsNullOrEmpty(_initialQuery))
@@ -80,7 +88,8 @@ public class ShellySearch(
         };
 
         _listStore = Gio.ListStore.New(MetaPackageGObject.GetGType());
-        _selectionModel = SingleSelection.New(_listStore);
+        _selectionModel = SingleSelection.New(
+            SortListModel.New(_listStore, _columnView.GetSorter()));
         _selectionModel.CanUnselect = true;
         _columnView.SetModel(_selectionModel);
 
