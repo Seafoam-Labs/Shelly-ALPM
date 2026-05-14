@@ -292,12 +292,12 @@ public class AppImageManager
     {
         return appImage.UpdateType switch
         {
-            UpdateType.GitHub => await CheckGitHubUpdate(appImage.UpdateURl, appImage.Name, appImage.UpdateVersion),
-            UpdateType.GitLab => await CheckGitLabUpdate(appImage.UpdateURl, appImage.Name, appImage.UpdateVersion),
-            UpdateType.Codeberg => await CheckCodebergUpdate(appImage.UpdateURl, appImage.Name, appImage.UpdateVersion),
-            UpdateType.Forgejo => await CheckForgejoUpdate(appImage.UpdateURl, appImage.Name, appImage.UpdateVersion),
+            UpdateType.GitHub => await CheckGitHubUpdate(appImage.UpdateURl, appImage.Name, appImage.Version),
+            UpdateType.GitLab => await CheckGitLabUpdate(appImage.UpdateURl, appImage.Name, appImage.Version),
+            UpdateType.Codeberg => await CheckCodebergUpdate(appImage.UpdateURl, appImage.Name, appImage.Version),
+            UpdateType.Forgejo => await CheckForgejoUpdate(appImage.UpdateURl, appImage.Name, appImage.Version),
             UpdateType.StaticUrl => await CheckStaticUrlUpdate(appImage.UpdateURl, appImage.Name,
-                appImage.UpdateVersion),
+                appImage.Version),
             _ => null
         };
     }
@@ -335,7 +335,7 @@ public class AppImageManager
             var json = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            var latestVersion = root.GetProperty("tag_name").GetString() ?? "";
+            var latestVersion = root.GetProperty("tag_name").GetString().TrimStart('v') ?? "";
 
             string? downloadUrl = null;
             if (root.TryGetProperty("assets", out var assets))
@@ -397,7 +397,7 @@ public class AppImageManager
             var json = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            var latestVersion = root.GetProperty("tag_name").GetString() ?? "";
+            var latestVersion = root.GetProperty("tag_name").GetString().TrimStart('v') ?? "";
 
             string? downloadUrl = null;
             if (root.TryGetProperty("assets", out var assets))
@@ -462,7 +462,7 @@ public class AppImageManager
             var json = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            var latestVersion = root.GetProperty("tag_name").GetString() ?? "";
+            var latestVersion = root.GetProperty("tag_name").GetString().TrimStart('v') ?? "";
 
             string? downloadUrl = null;
             if (root.TryGetProperty("assets", out var assets))
@@ -702,8 +702,9 @@ public class AppImageManager
                         }
                         else if (line.StartsWith("X-AppImage-Version="))
                         {
-                            appImageVersion = line.Split('=')[1];
-                            patchedContent.AppendLine(line);
+                            var versionAmended = line.Replace("=v", "=");
+                            appImageVersion = versionAmended.Split('=')[1];
+                            patchedContent.AppendLine(versionAmended);
                         }
                         else if (line.StartsWith("Name="))
                         {
