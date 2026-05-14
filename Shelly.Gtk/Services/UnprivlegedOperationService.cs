@@ -374,7 +374,6 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
                     {
                         Name = u.Name,
                         Version = u.Version,
-                        UpdateVersion = u.Version,
                         UpdateURl = u.DownloadUrl,
                         UpdateType = AppImageUpdateType.StaticUrl // Default or map if possible
                     }).ToList() ?? [];

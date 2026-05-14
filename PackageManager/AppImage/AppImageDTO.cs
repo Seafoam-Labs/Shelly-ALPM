@@ -8,7 +8,6 @@ public record AppImageDto
     public string Name { get; set; } = string.Empty;
     public string DesktopName { get; set; } = string.Empty;
     public string Version { get; set; } = string.Empty;
-    public string UpdateVersion { get; set; } = string.Empty;
     public string IconName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public long SizeOnDisk { get; set; } = 0;

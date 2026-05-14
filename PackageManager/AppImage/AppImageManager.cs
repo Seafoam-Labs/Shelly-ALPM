@@ -239,7 +239,6 @@ public class AppImageManager
             }
 
             appImage.Version = update.Version;
-            appImage.UpdateVersion = update.Version;
             await AddAppImageToLocalDb(appImage);
 
             return 0;
@@ -283,7 +282,6 @@ public class AppImageManager
 
         appImage.UpdateURl = url;
         appImage.UpdateType = updateType;
-        appImage.UpdateVersion = await CheckUpdate(appImage).ContinueWith(t => t.Result?.Version) ?? "";
 
         return await AddAppImageToLocalDb(appImage);
     }
@@ -545,12 +543,8 @@ public class AppImageManager
                     {
                         appImageDto.RawUpdateInfo = existing.RawUpdateInfo;
                     }
-
-                    if (!string.IsNullOrEmpty(existing.UpdateVersion))
-                    {
-                        appImageDto.UpdateVersion = existing.UpdateVersion;
-                    }
                 }
+
                 else
                 {
                     if (!string.IsNullOrEmpty(appImageDto.RawUpdateInfo) && string.IsNullOrEmpty(appImageDto.UpdateURl))
