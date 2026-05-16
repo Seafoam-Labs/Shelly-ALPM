@@ -101,7 +101,8 @@ public class PackageUpdate(
 
         
         // Creating sorter
-        _nameColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((a, b) => 0);
+        _nameColumn.Sorter = CustomSorter.New<AlpmUpdateGObject>((a, b) => 0);
+        _sizeDiffColumn.Sorter = CustomSorter.New<AlpmUpdateGObject>((_, _) => 0);
         
         _columnViewSorter = (ColumnViewSorter)_columnView.GetSorter()!;
 
@@ -203,6 +204,9 @@ public class PackageUpdate(
     {
         if (column == _nameColumn)
             return PackageSortColumn.Name;
+
+        if (column == _sizeDiffColumn)
+            return PackageSortColumn.Size;
         
         return null;
     }

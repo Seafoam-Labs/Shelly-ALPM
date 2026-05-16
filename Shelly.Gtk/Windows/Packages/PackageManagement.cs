@@ -53,6 +53,7 @@ public sealed class PackageManagement(
 
     private ColumnViewColumn _nameColumn = null!;
     private ColumnViewColumn _versionColumn = null!;
+    private ColumnViewColumn _sizeColumn = null!;
 
     private ColumnViewSorter _columnViewSorter = null!;
 
@@ -76,8 +77,8 @@ public sealed class PackageManagement(
         checkColumn.Resizable = true;
         _nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
         _nameColumn.Resizable = true;
-        var sizeColumn = (ColumnViewColumn)builder.GetObject("size_column")!;
-        sizeColumn.Resizable = true;
+        _sizeColumn = (ColumnViewColumn)builder.GetObject("size_column")!;
+        _sizeColumn.Resizable = true;
         _versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
         _versionColumn.Resizable = true;
 
@@ -97,10 +98,11 @@ public sealed class PackageManagement(
         _detailRevealer = (Revealer)builder.GetObject("detail_revealer")!;
         _detailBox = (Box)builder.GetObject("detail_box")!;
 
-        SetupColumns(checkColumn, _nameColumn, sizeColumn, _versionColumn);
+        SetupColumns(checkColumn, _nameColumn, _sizeColumn, _versionColumn);
 
         _nameColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
         _versionColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
+        _sizeColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
 
         _columnViewSorter = (ColumnViewSorter)columnView.GetSorter()!;
 
@@ -665,6 +667,9 @@ public sealed class PackageManagement(
 
         if (column == _versionColumn)
             return PackageSortColumn.Version;
+
+        if (column == _sizeColumn)
+            return PackageSortColumn.Size;
 
         return null;
     }

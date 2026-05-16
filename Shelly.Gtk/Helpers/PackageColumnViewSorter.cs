@@ -36,6 +36,12 @@ public static class PackageColumnViewSorter
                         packageData[b.Index].Version
                     ),
 
+                PackageSortColumn.Size =>
+                    (a, b) => Compare(
+                        packageData[a.Index].InstalledSize,
+                        packageData[b.Index].InstalledSize
+                    ),
+
                 _ => (_, _) => 0
             };
 
@@ -70,6 +76,12 @@ public static class PackageColumnViewSorter
                     (a, b) => Compare(
                         a.Package?.Repository,
                         b.Package?.Repository
+                    ),
+
+                PackageSortColumn.Size =>
+                    (a, b) => Compare(
+                        a.Package?.SizeDifference ?? 0,
+                        b.Package?.SizeDifference ?? 0
                     ),
 
                 _ => (_, _) => 0
@@ -120,6 +132,11 @@ public static class PackageColumnViewSorter
             b,
             StringComparison.OrdinalIgnoreCase
         );
+    }
+
+    private static int Compare(long a, long b)
+    {
+        return a.CompareTo(b);
     }
 
     private static void SpliceReplace<T>(
