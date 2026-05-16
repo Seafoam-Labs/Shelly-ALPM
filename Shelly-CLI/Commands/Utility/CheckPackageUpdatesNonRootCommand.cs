@@ -228,7 +228,7 @@ public class CheckPackageUpdatesNonRootCommand : AsyncCommand<CheckPackageUpdate
                 syncModel.Flatpaks = flatpakPackageModels;
             }
 
-            MemPackFrame.WriteToStdout(syncModel);
+            JsonPackFrame.WriteToStdout(syncModel);
             return 0;
         }
 

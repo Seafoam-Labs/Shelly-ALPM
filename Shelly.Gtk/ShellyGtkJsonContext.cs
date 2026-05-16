@@ -5,6 +5,9 @@ using Shelly.Gtk.UiModels.PackageManagerObjects;
 
 namespace Shelly.Gtk;
 
+[JsonSourceGenerationOptions(
+    MaxDepth = 256,
+    GenerationMode = JsonSourceGenerationMode.Default)]
 [JsonSerializable(typeof(List<AppImageDto>))]
 [JsonSerializable(typeof(AppImageDto))]
 [JsonSerializable(typeof(List<AppImageUpdateDto>))]

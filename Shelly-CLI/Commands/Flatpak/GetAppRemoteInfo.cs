@@ -16,7 +16,7 @@ public class GetAppRemoteInfo : Command<FlatpakInstallSize>
         {
             if (Program.IsUiMode)
             {
-                MemPackFrame.WriteToStdout(result);
+                JsonPackFrame.WriteToStdout(result);
             }
             else
             {

@@ -136,7 +136,7 @@ public class AurListUpdatesCommand : AsyncCommand<AlpmListSettings>
             if (settings.JsonOutput)
             {
                 var sortedList = sortedUpdates.ToList();
-                MemPackFrame.WriteToStdout(sortedList);
+                JsonPackFrame.WriteToStdout(sortedList);
                 return 0;
             }
 

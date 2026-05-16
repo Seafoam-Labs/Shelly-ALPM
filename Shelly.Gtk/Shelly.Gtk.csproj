@@ -16,9 +16,9 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Version>2.3.0.0</Version>
+        <Version>2.3.0.1</Version>
         <AssemblyName>shelly-ui</AssemblyName>
-        <AssemblyVersion>2.3.0.0</AssemblyVersion>
+        <AssemblyVersion>2.3.0.1</AssemblyVersion>
         <AssemblyTitle>Shelly GTK UI</AssemblyTitle>
         <Description>Shelly GTK is a arch linux package manager</Description>
         <Company>Seafoam Labs</Company>
@@ -39,8 +39,6 @@
         <PackageReference Include="GirCore.GLib-2.0" Version="0.8.0-preview.1" />
         <PackageReference Include="GirCore.Gtk-4.0" Version="0.8.0-preview.1" />
         <PackageReference Include="GirCore.GObject-2.0.Integration" Version="0.8.0-preview.1"/>
-        <PackageReference Include="MemoryPack" Version="1.21.4" />
-        <PackageReference Include="MemoryPack.Streaming" Version="1.21.4" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.6" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.6" />
         <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />

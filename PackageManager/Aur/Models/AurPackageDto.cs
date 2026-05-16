@@ -1,9 +1,7 @@
 using System.Collections.Generic;
-using MemoryPack;
 
 namespace PackageManager.Aur.Models;
 
-[MemoryPackable]
 public partial class AurPackageDto
 {
     

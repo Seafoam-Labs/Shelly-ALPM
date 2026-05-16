@@ -1,8 +1,6 @@
-using MemoryPack;
 
 namespace Shelly.Gtk.UiModels.PackageManagerObjects;
 
-[MemoryPackable]
 public partial record AlpmPackageUpdateDto
 {
     public string Name { get; init; } = string.Empty;

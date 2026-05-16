@@ -14,7 +14,7 @@ public class FlathubGetRemote : Command<FlatpakListRemoteAppStreamSettings>
 
         if (Program.IsUiMode)
         {
-            MemPackFrame.WriteToStdout(result);
+            JsonPackFrame.WriteToStdout(result);
         }
         else
         {

@@ -1,8 +1,6 @@
-using MemoryPack;
 
 namespace PackageManager.AppImage;
 
-[MemoryPackable]
 public partial record AppImageUpdateDto
 {
     public string Name { get; set; } = string.Empty;

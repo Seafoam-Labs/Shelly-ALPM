@@ -1,8 +1,6 @@
-using MemoryPack;
 
 namespace PackageManager.Aur.Models;
 
-[MemoryPackable]
 public partial class AurUpdateDto
 {
     public string Name { get; set; } = string.Empty;

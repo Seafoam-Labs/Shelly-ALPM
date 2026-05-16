@@ -35,7 +35,7 @@ public class AppImageSearchCommand : AsyncCommand<AppImageSearchSettings>
         {
             if (Program.IsUiMode)
             {
-                MemPackFrame.WriteToStdout(results);
+                JsonPackFrame.WriteToStdout(results);
             }
             else
             {

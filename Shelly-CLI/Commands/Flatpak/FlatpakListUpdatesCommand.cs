@@ -19,7 +19,7 @@ public class FlatpakListUpdatesCommand : Command<DefaultSettings>
 
         if (settings.JsonOutput)
         {
-            var json = JsonSerializer.Serialize(packages, FlatpakDtoJsonContext.Default.ListFlatpakPackageDto);
+            var json = JsonSerializer.Serialize(packages, ShellyCLIJsonContext.Default.ListFlatpakPackageDto);
             using var stdout = Console.OpenStandardOutput();
             using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
             writer.WriteLine(json);
@@ -58,7 +58,7 @@ public class FlatpakListUpdatesCommand : Command<DefaultSettings>
 
         if (settings.JsonOutput)
         {
-            MemPackFrame.WriteToStdout(packages);
+            JsonPackFrame.WriteToStdout(packages);
             return 0;
         }
 

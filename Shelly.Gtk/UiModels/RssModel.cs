@@ -1,8 +1,6 @@
-using MemoryPack;
 
 namespace Shelly.Gtk.UiModels;
 
-[MemoryPackable]
 public partial class RssModel
 {
     public string? Title { get; set; }

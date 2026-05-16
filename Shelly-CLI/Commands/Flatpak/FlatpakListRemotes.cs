@@ -18,7 +18,7 @@ public class FlatpakListRemotes : Command<DefaultSettings>
         {
             if (Program.IsUiMode)
             {
-                MemPackFrame.WriteToStdout(remotes);
+                JsonPackFrame.WriteToStdout(remotes);
             }
             else
             {

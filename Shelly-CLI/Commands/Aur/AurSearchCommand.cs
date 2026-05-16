@@ -103,7 +103,7 @@ public class AurSearchCommand : AsyncCommand<AurSearchSettings>
 
             if (settings.JsonOutput)
             {
-                MemPackFrame.WriteToStdout(results);
+                JsonPackFrame.WriteToStdout(results);
                 return 0;
             }
 

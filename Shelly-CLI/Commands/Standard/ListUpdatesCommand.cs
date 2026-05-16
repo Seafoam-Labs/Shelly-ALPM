@@ -104,7 +104,7 @@ public class ListUpdatesCommand : Command<ListSettings>
 
         if (settings.JsonOutput)
         {
-            MemPackFrame.WriteToStdout(updates);
+            JsonPackFrame.WriteToStdout(updates);
             return 0;
         }
 

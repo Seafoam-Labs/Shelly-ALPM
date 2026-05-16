@@ -69,7 +69,7 @@ public class AurSearchPackageBuild : AsyncCommand<AurPackageSettings>
                 let pkgbuild = manager.FetchPkgbuildAsync(package).GetAwaiter().GetResult()
                 select new PackageBuild(package, pkgbuild)).ToList();
 
-            MemPackFrame.WriteToStdout(packageBuild);
+            JsonPackFrame.WriteToStdout(packageBuild);
             return 0;
         }
         catch (Exception ex)

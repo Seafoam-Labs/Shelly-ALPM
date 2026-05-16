@@ -1,8 +1,6 @@
-using MemoryPack;
 
 namespace Shelly.Gtk.UiModels;
 
-[MemoryPackable]
 public partial class FlatpakRemoteDto
 {
     public string Name { get; set; } = string.Empty;

@@ -71,7 +71,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         try
         {
-            MemPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
             return framed ?? throw new InvalidOperationException();
         }
         catch (Exception ex)
@@ -234,7 +234,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
             await ExecutePrivilegedWithNoConfirmCheck("Get Package Builds", "aur", "get-package-build", packageArgs);
 
         if (!result.Success) return [];
-        MemPackFrame.TryDecode<List<PackageBuild>>(result.Output, out var framed);
+        JsonPackFrame.TryDecode<List<PackageBuild>>(result.Output, out var framed);
         return framed ?? [];
     }
 
@@ -242,7 +242,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
     {
         var result = await ExecutePrivilegedCommandAsync("Check for Updates", "list-updates", "--json");
         if (!result.Success) return [];
-        MemPackFrame.TryDecode<List<AlpmPackageUpdateDto>>(result.Output, out var framed);
+        JsonPackFrame.TryDecode<List<AlpmPackageUpdateDto>>(result.Output, out var framed);
         return framed ?? [];
     }
 
@@ -253,7 +253,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
             : await ExecuteCommandAsync("list-available", "--json");
 
         if (!result.Success) return [];
-        MemPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
+        JsonPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
         return framed ?? [];
     }
 
@@ -270,7 +270,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         try
         {
-            MemPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
             return framed ?? throw new InvalidOperationException();
         }
         catch (Exception ex)
@@ -291,7 +291,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         try
         {
-            MemPackFrame.TryDecode<List<LocalPackageDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<LocalPackageDto>>(result.Output, out var framed);
             return framed ?? throw new InvalidOperationException();
         }
         catch (Exception ex)
@@ -314,7 +314,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         try
         {
-            MemPackFrame.TryDecode<List<AurPackageDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<AurPackageDto>>(result.Output, out var framed);
 
             return framed ?? throw new InvalidOperationException();
         }
@@ -338,7 +338,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         try
         {
-            MemPackFrame.TryDecode<List<AurUpdateDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<AurUpdateDto>>(result.Output, out var framed);
             return framed ?? throw new InvalidOperationException();
         }
         catch (Exception ex)
@@ -359,7 +359,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         try
         {
-            MemPackFrame.TryDecode<List<AurPackageDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<AurPackageDto>>(result.Output, out var framed);
             return framed ?? throw new InvalidOperationException();
         }
         catch (Exception ex)

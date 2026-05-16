@@ -1,8 +1,6 @@
-using MemoryPack;
 
 namespace Shelly_CLI.Commands.Standard.Models;
 
-[MemoryPackable]
 public partial record RssModel
 {
     public string? Title { get; init; }

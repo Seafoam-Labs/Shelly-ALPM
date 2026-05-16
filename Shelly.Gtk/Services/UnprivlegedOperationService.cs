@@ -32,7 +32,7 @@ public class UnprivilegedOperationService(
 
         try
         {
-            MemPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
             return framed ?? [];
         }
         catch (Exception ex)
@@ -53,7 +53,7 @@ public class UnprivilegedOperationService(
 
         try
         {
-            MemPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
             return framed ?? [];
         }
         catch (Exception ex)
@@ -85,7 +85,7 @@ public class UnprivilegedOperationService(
         {
             try
             {
-                MemPackFrame.TryDecode<List<AppstreamApp>>(result.Output, out var framed);
+                JsonPackFrame.TryDecode<List<AppstreamApp>>(result.Output, out var framed);
                 return framed ?? [];
             }
             catch (Exception ex)
@@ -152,7 +152,7 @@ public class UnprivilegedOperationService(
     {
         var result = await ExecuteUnprivilegedCommandAsync("flatpak list remotes", "flatpak list-remotes", "-j");
         if (!result.Success) return [];
-        MemPackFrame.TryDecode<List<FlatpakRemoteDto>>(result.Output, out var framed);
+        JsonPackFrame.TryDecode<List<FlatpakRemoteDto>>(result.Output, out var framed);
         return framed ?? [];
     }
 
@@ -225,7 +225,7 @@ public class UnprivilegedOperationService(
                 await ExecuteUnprivilegedCommandAsync("Sync remote", "flatpak app-remote-info", remote, app, arch,
                     "-j");
             if (!result.Success) return 0;
-            MemPackFrame.TryDecode<FlatpakRemoteRefInfo>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<FlatpakRemoteRefInfo>(result.Output, out var framed);
             return framed?.DownloadSize ?? 0;
         }
         catch (Exception ex)
@@ -242,7 +242,7 @@ public class UnprivilegedOperationService(
         try
         {
             if (!result.Success || string.IsNullOrEmpty(result.Output)) return [];
-            MemPackFrame.TryDecode<List<AppImageDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<AppImageDto>>(result.Output, out var framed);
             return framed ?? [];
         }
         catch (Exception ex)
@@ -263,7 +263,7 @@ public class UnprivilegedOperationService(
 
         try
         {
-            MemPackFrame.TryDecode<List<RssModel>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<RssModel>>(result.Output, out var framed);
             return framed ?? [];
         }
         catch (Exception ex)
@@ -284,7 +284,7 @@ public class UnprivilegedOperationService(
 
         try
         {
-            MemPackFrame.TryDecode<List<PacfileRecord>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<PacfileRecord>>(result.Output, out var framed);
             return framed ?? [];
         }
         catch (Exception ex)
@@ -301,7 +301,7 @@ public class UnprivilegedOperationService(
         var result = await ExecuteUnprivilegedCommandAsync("Get AppImage Updates", "appimage list-updates --json");
         try
         {
-            MemPackFrame.TryDecode<List<AppImageDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<AppImageDto>>(result.Output, out var framed);
             return framed ?? [];
         }
         catch (Exception ex)
@@ -318,7 +318,7 @@ public class UnprivilegedOperationService(
 
         try
         {
-            MemPackFrame.TryDecode<List<AlpmPackageUpdateDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<AlpmPackageUpdateDto>>(result.Output, out var framed);
             return framed ?? [];
         }
         catch (Exception ex)
@@ -346,7 +346,7 @@ public class UnprivilegedOperationService(
         try
         {
             if (!result.Success) return new SyncModel();
-            MemPackFrame.TryDecode<SyncModel>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<SyncModel>(result.Output, out var framed);
             return framed ?? new SyncModel();
         }
         catch (Exception ex)
@@ -369,7 +369,7 @@ public class UnprivilegedOperationService(
 
         try
         {
-            MemPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
+            JsonPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
             return framed ?? [];
         }
         catch (Exception ex)

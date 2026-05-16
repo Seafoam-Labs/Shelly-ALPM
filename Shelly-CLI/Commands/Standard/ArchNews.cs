@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
-using MemoryPack;
 using PackageManager.Utilities;
 using PackageManager.Wire;
 using Shelly_CLI.Commands.Standard.Models;
@@ -118,7 +117,7 @@ public class ArchNews : AsyncCommand<ArchNewsSettings>
     {
         if (Program.IsUiMode)
         {
-            MemPackFrame.WriteToStdout(feed);
+            JsonPackFrame.WriteToStdout(feed);
         }
         else
         {

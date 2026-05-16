@@ -1,10 +1,8 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using MemoryPack;
 
 namespace PackageManager.Flatpak;
 
-[MemoryPackable]
 public partial class FlatpakPackageDto
 {
     public string Id { get; set; } = string.Empty;
@@ -25,14 +23,4 @@ public partial class FlatpakPackageDto
     public string Remote { get; set; } = string.Empty;
 
     public List<string> Permissions { get; set; } = [];
-}
-
-[JsonSourceGenerationOptions(
-    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
-    NumberHandling = JsonNumberHandling.AllowReadingFromString,
-    WriteIndented = false)]
-[JsonSerializable(typeof(FlatpakPackageDto))]
-[JsonSerializable(typeof(List<FlatpakPackageDto>))]
-public partial class FlatpakDtoJsonContext : JsonSerializerContext
-{
 }

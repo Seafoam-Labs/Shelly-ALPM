@@ -98,7 +98,7 @@ public class ListLocalInstalledCommand : Command<ListSettings>
         if (settings.JsonOutput)
         {
             var sortedList = sortedPackages.ToList();
-            MemPackFrame.WriteToStdout(sortedList);
+            JsonPackFrame.WriteToStdout(sortedList);
             return 0;
         }
 

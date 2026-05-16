@@ -1,10 +1,8 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using MemoryPack;
 
 namespace PackageManager.AppImage;
 
-[MemoryPackable]
 public partial record AppImageDto
 {
     public string Name { get; set; } = string.Empty;

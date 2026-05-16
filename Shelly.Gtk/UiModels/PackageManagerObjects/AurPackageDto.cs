@@ -1,8 +1,6 @@
-using MemoryPack;
 
 namespace Shelly.Gtk.UiModels.PackageManagerObjects;
 
-[MemoryPackable]
 public partial record AurPackageDto
 {
     public int Id { get; set; }

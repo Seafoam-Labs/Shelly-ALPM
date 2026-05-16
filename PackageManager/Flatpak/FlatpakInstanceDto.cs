@@ -1,8 +1,6 @@
-using MemoryPack;
 
 namespace PackageManager.Flatpak;
 
-[MemoryPackable]
 public partial class FlatpakInstanceDto
 {
     public string Name { get; set; } = string.Empty;

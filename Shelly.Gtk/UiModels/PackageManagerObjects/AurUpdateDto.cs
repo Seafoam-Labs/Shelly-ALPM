@@ -1,8 +1,6 @@
-using MemoryPack;
 
 namespace Shelly.Gtk.UiModels.PackageManagerObjects;
 
-[MemoryPackable]
 public partial record AurUpdateDto
 {
     public string Name { get; set; } = string.Empty;

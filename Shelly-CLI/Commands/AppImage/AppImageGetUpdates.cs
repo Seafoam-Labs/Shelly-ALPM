@@ -20,7 +20,7 @@ public class AppImageGetUpdates : AsyncCommand<AppImageDefaultSettings>
         {
             if (Program.IsUiMode)
             {
-                MemPackFrame.WriteToStdout(result);
+                JsonPackFrame.WriteToStdout(result);
             }
             else
             {

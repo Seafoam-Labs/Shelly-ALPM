@@ -1,9 +1,7 @@
 using System.Text.Json.Serialization;
-using MemoryPack;
 
 namespace Shelly_CLI;
 
-[MemoryPackable]
 public partial class SyncModel
 {
     public SyncMetaData MetaData { get; set; } = new();
@@ -12,7 +10,6 @@ public partial class SyncModel
     public List<SyncFlatpakModel> Flatpaks { get; set; } = [];
 }
 
-[MemoryPackable]
 public partial class SyncPackageModel
 {
     public string Name { get; set; } = string.Empty;
@@ -26,7 +23,6 @@ public partial class SyncPackageModel
     public string? DownloadSize { get; set; }
 }
 
-[MemoryPackable]
 public partial class SyncAurModel
 {
     public string Name { get; set; } = string.Empty;
@@ -37,7 +33,6 @@ public partial class SyncAurModel
     public string? OldVersion { get; set; }
 }
 
-[MemoryPackable]
 public partial class SyncFlatpakModel
 {
     public string Id { get; set; } = string.Empty;
@@ -48,7 +43,6 @@ public partial class SyncFlatpakModel
     public string Version { get; set; } = string.Empty;
 }
 
-[MemoryPackable]
 public partial class SyncMetaData
 {
     public string Version { get; set; } ="v1";
