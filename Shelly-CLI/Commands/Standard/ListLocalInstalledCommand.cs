@@ -2,6 +2,7 @@ using System.Text.Json;
 using PackageManager.Local;
 using PackageManager.Wire;
 using Shelly_CLI.Utility;
+using Shelly.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -54,26 +55,12 @@ public class ListLocalInstalledCommand : Command<ListSettings>
 
         foreach (var pkg in displayPackages)
         {
-            table.AddRow(pkg.Name, FormatSize(pkg.Size));
+            table.AddRow(pkg.Name, SizeHelper.FormatSize(pkg.Size));
         }
 
         AnsiConsole.Write(table);
         AnsiConsole.MarkupLine($"[blue]Total: {displayPackages.Count} packages[/]");
         return 0;
-    }
-
-    private static string FormatSize(long bytes)
-    {
-        string[] sizes = ["B", "KB", "MB", "GB"];
-        var order = 0;
-        double size = bytes;
-        while (size >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            size /= 1024;
-        }
-
-        return $"{size:0.##} {sizes[order]}";
     }
 
     private static int HandleUiModeListInstalled(ListSettings settings)
@@ -107,7 +94,7 @@ public class ListLocalInstalledCommand : Command<ListSettings>
 
         foreach (var pkg in displayPackages)
         {
-            Console.WriteLine($"{pkg.Name} {FormatSize(pkg.Size)}");
+            Console.WriteLine($"{pkg.Name} {SizeHelper.FormatSize(pkg.Size)}");
         }
 
         Console.Error.WriteLine($"Total: {displayPackages.Count} packages");

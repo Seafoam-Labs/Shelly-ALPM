@@ -3,6 +3,7 @@ using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
+using Shelly.Utilities;
 using Functions = GLib.Functions;
 using ListStore = Gio.ListStore;
 
@@ -174,7 +175,7 @@ public sealed class RemoveLocal(
                 listItem.GetChild() is not Label label ||
                 pkgObj.Package is null) return;
 
-            label.SetText(SizeHelpers.FormatSize(pkgObj.Package.Size));
+            label.SetText(SizeHelper.FormatSize(pkgObj.Package.Size));
             label.Halign = Align.End;
         };
         sizeColumn.SetFactory(sizeFactory);
