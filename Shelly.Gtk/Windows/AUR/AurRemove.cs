@@ -116,7 +116,22 @@ public class AurRemove(
         
         ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.Start);
         ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.End);
+        
+        var shortcutController = ShortcutController.New();
+        shortcutController.Scope = ShortcutScope.Global;
+        shortcutController.PropagationPhase = PropagationPhase.Capture;
 
+        var searchTrigger = "<Control>f";
+
+        var action = CallbackAction.New((_, _) =>
+        {
+                searchEntry.GrabFocus();
+                return true;
+        });
+        
+        _box.AddController(shortcutController);
+        shortcutController.AddShortcut(Shortcut.New(ShortcutTrigger.ParseString(searchTrigger), action));
+        
         _columnView.OnRealize += (_, _) => { Reload(); };
         _columnView.OnActivate += (_, _) =>
         {
