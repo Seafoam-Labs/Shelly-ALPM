@@ -38,7 +38,7 @@ public class CheckPackageUpdatesNonRootCommand : AsyncCommand<CheckPackageUpdate
             List<SyncPackageModel> syncPackageModels = [];
             syncPackageModels.AddRange(alpmPackages.Select(pkg => new SyncPackageModel()
             {
-                Name = pkg.Name, DownloadSize = FormatSize(pkg.DownloadSize), OldVersion = pkg.CurrentVersion,
+                Name = pkg.Name, DownloadSize = SizeHelper.FormatSize(pkg.DownloadSize), OldVersion = pkg.CurrentVersion,
                 Version = pkg.NewVersion
             }));
 
