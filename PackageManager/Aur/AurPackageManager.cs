@@ -10,6 +10,7 @@ using PackageManager.Alpm;
 using PackageManager.Alpm.Events.EventArgs;
 using PackageManager.Aur.Models;
 using PackageManager.Utilities;
+using Shelly.Utilities;
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 

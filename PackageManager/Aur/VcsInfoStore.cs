@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using PackageManager.Aur.Models;
 using PackageManager.Utilities;
+using Shelly.Utilities;
 
 namespace PackageManager.Aur;
 

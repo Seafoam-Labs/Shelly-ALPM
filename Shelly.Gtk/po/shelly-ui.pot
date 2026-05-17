@@ -1198,7 +1198,7 @@ msgstr ""
 
 msgid ""
 "Access the Arch User Repository for a vast collection of community-"
-"maintained packages. AUR packages can contain malicous software, so please "
+"maintained packages. AUR packages can contain malicious software, so please "
 "use caution when using the AUR."
 msgstr ""
 

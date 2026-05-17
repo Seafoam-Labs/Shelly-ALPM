@@ -10,6 +10,7 @@ using Shelly_CLI.Commands.Utility;
 using PackageManager.Utilities;
 using Shelly_CLI.Configuration;
 using Shelly_CLI.Utility;
+using Shelly.Utilities;
 using Shelly.Writers;
 using Spectre.Console;
 using Spectre.Console.Cli;

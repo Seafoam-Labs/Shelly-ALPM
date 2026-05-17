@@ -1,9 +1,7 @@
-using System;
 using System.Diagnostics;
-using System.IO;
 using System.Runtime.InteropServices;
 
-namespace PackageManager.Utilities;
+namespace Shelly.Utilities;
 
 public static class XdgPaths
 {

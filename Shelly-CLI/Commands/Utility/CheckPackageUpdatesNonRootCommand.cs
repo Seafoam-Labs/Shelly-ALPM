@@ -5,6 +5,7 @@ using PackageManager.Utilities;
 using PackageManager.Aur.Models;
 using PackageManager.Flatpak;
 using PackageManager.Wire;
+using Shelly.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 

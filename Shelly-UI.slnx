@@ -2,8 +2,8 @@
   <Folder Name="/Solution Items/">
     <File Path="MANUAL_TESTING.md" />
     <File Path="PKGBUILD" />
-    <File Path="PKGBUILD-git"/>
-    <File Path="PKGBUILD-bin"/>
+    <File Path="PKGBUILD-git" />
+    <File Path="PKGBUILD-bin" />
   </Folder>
   <Project Path="PackageManager/PackageManager.csproj" />
   <Project Path="PackageManager.Tests/PackageManager.Tests.csproj" />
@@ -13,4 +13,5 @@
   <Project Path="Shelly.Gtk/Shelly.Gtk.csproj" />
   <Project Path="Shelly.Gtk.Tests/Shelly.Gtk.Tests.csproj" />
   <Project Path="Shelly.Keys/Shelly.Keys.csproj" />
+  <Project Path="Shelly.Utilities/Shelly.Utilities.csproj" />
 </Solution>

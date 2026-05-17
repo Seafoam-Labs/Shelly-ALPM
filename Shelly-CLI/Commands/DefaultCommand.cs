@@ -9,6 +9,7 @@ using Shelly_CLI.Commands.Aur;
 using Shelly_CLI.Commands.Flatpak;
 using Shelly_CLI.Commands.Standard;
 using Shelly_CLI.Configuration;
+using Shelly.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 

@@ -4,6 +4,7 @@ using System.Xml.Linq;
 using PackageManager.Utilities;
 using PackageManager.Wire;
 using Shelly_CLI.Commands.Standard.Models;
+using Shelly.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
