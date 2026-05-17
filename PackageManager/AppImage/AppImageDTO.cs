@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace PackageManager.AppImage;
 
-public record AppImageDto
+public partial record AppImageDto
 {
     public string Name { get; set; } = string.Empty;
     public string DesktopName { get; set; } = string.Empty;

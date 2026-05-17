@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<interface>
+<interface domain="shelly-ui">
     <requires lib="gtk" version="4.0"/>
     <object class="GtkBox" id="FlatpakInstallWindow">
         <property name="orientation">vertical</property>
@@ -25,14 +25,14 @@
                                 <child>
                                     <object class="GtkSearchEntry" id="search_entry">
                                         <property name="hexpand">true</property>
-                                        <property name="placeholder-text">Search packages...</property>
+                                        <property name="placeholder-text" translatable="yes">Search packages...</property>
                                     </object>
                                 </child>
                                 <child>
                                     <object class="GtkButton" id="reload_button">
                                         <property name="icon-name">view-refresh-symbolic</property>
                                         <property name="hexpand">false</property>
-                                        <property name="tooltip-text">Reload</property>
+                                        <property name="tooltip-text" translatable="yes">Reload</property>
                                     </object>
                                 </child>
                             </object>
@@ -55,7 +55,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Install</property>
+                                                        <property name="label" translatable="yes">Install</property>
                                                         <property name="halign">start</property>
                                                     </object>
                                                 </child>
@@ -77,7 +77,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Updates</property>
+                                                        <property name="label" translatable="yes">Updates</property>
                                                         <property name="halign">start</property>
                                                     </object>
                                                 </child>
@@ -99,7 +99,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Remove</property>
+                                                        <property name="label" translatable="yes">Remove</property>
                                                         <property name="halign">start</property>
                                                     </object>
                                                 </child>
@@ -121,7 +121,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Manage Remote Refs</property>
+                                                        <property name="label" translatable="yes">Manage Remote Refs</property>
                                                         <property name="halign">start</property>
                                                     </object>
                                                 </child>
@@ -162,7 +162,7 @@
                                         <property name="spacing">5</property>
                                         <child>
                                             <object class="GtkButton" id="install_from_flatpak_ref_button">
-                                                <property name="label">Install local flatpak</property>
+                                                <property name="label" translatable="yes">Install local flatpak</property>
                                             </object>
                                         </child>
                                         <child>
@@ -172,8 +172,8 @@
                                                 <property name="model">
                                                     <object class="GtkStringList">
                                                         <items>
-                                                            <item>system</item>
-                                                            <item>user</item>
+                                                            <item translatable="yes">system</item>
+                                                            <item translatable="yes">user</item>
                                                         </items>
                                                     </object>
                                                 </property>
@@ -240,7 +240,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Loading Flatpak Data...</property>
+                                                        <property name="label" translatable="yes">Loading Flatpak Data...</property>
                                                         <style>
                                                             <class name="title-4"/>
                                                         </style>
@@ -276,7 +276,7 @@
                                                 <child>
                                                     <object class="GtkButton" id="overlay_back_button">
                                                         <property name="icon-name">go-previous-symbolic</property>
-                                                        <property name="tooltip-text">Back</property>
+                                                        <property name="tooltip-text" translatable="yes">Back</property>
                                                     </object>
                                                 </child>
                                                 <child>
@@ -292,7 +292,7 @@
                                                         </style>
                                                         <child>
                                                             <object class="GtkButton" id="overlay_show_plugin_button">
-                                                                <property name="label">Addons</property>
+                                                                <property name="label" translatable="yes">Addons</property>
                                                                 <property name="visible">false</property>
                                                                 <style>
                                                                     <class name="suggested-action"/>
@@ -301,12 +301,12 @@
                                                         </child>
                                                         <child>
                                                             <object class="GtkDropDown" id="overlay_remote_selection">
-                                                                <property name="tooltip-text">Group Filter</property>
+                                                                <property name="tooltip-text" translatable="yes">Group Filter</property>
                                                             </object>
                                                         </child>
                                                         <child>
                                                             <object class="GtkButton" id="overlay_install_button">
-                                                                <property name="label">Install</property>
+                                                                <property name="label" translatable="yes">Install</property>
                                                                 <style>
                                                                     <class name="suggested-action"/>
                                                                 </style>
@@ -355,7 +355,7 @@
                                                                         <property name="hexpand">true</property>
                                                                         <child>
                                                                             <object class="GtkLabel" id="overlay_name_label">
-                                                                                <property name="label">App Name</property>
+                                                                                <property name="label" translatable="yes">App Name</property>
                                                                                 <property name="halign">start</property>
                                                                                 <property name="xalign">0</property>
                                                                                 <property name="wrap">true</property>
@@ -367,7 +367,7 @@
                                                                         </child>
                                                                         <child>
                                                                             <object class="GtkLabel" id="overlay_author_label">
-                                                                                <property name="label">Author</property>
+                                                                                <property name="label" translatable="yes">Author</property>
                                                                                 <property name="halign">start</property>
                                                                                 <property name="xalign">0</property>
                                                                                 <property name="wrap">true</property>
@@ -386,7 +386,7 @@
                                                                                 </style>
                                                                                 <child>
                                                                                     <object class="GtkLabel" id="overlay_version_label">
-                                                                                        <property name="label">Version: -</property>
+                                                                                        <property name="label" translatable="yes">Version: -</property>
                                                                                         <property name="halign">start</property>
                                                                                         <property name="xalign">0</property>
                                                                                         <property name="wrap">true</property>
@@ -395,7 +395,7 @@
                                                                                 </child>
                                                                                 <child>
                                                                                     <object class="GtkLabel" id="overlay_size_label">
-                                                                                        <property name="label">Size: -</property>
+                                                                                        <property name="label" translatable="yes">Size: -</property>
                                                                                         <property name="halign">start</property>
                                                                                         <property name="xalign">0</property>
                                                                                         <property name="wrap">true</property>
@@ -404,7 +404,7 @@
                                                                                 </child>
                                                                                 <child>
                                                                                     <object class="GtkLabel" id="overlay_license_label">
-                                                                                        <property name="label">License: -</property>
+                                                                                        <property name="label" translatable="yes">License: -</property>
                                                                                         <property name="halign">start</property>
                                                                                         <property name="xalign">0</property>
                                                                                         <property name="wrap">true</property>
@@ -445,7 +445,7 @@
                                                         </child>
                                                         <child>
                                                             <object class="GtkLabel" id="overlay_summary_label">
-                                                                <property name="label">Summary</property>
+                                                                <property name="label" translatable="yes">Summary</property>
                                                                 <property name="halign">start</property>
                                                                 <property name="xalign">0</property>
                                                                 <style>
@@ -455,7 +455,7 @@
                                                         </child>
                                                         <child>
                                                             <object class="GtkLabel" id="overlay_description_label">
-                                                                <property name="label">No description available.</property>
+                                                                <property name="label" translatable="yes">No description available.</property>
                                                                 <property name="halign">start</property>
                                                                 <property name="xalign">0</property>
                                                                 <property name="wrap">true</property>
@@ -500,7 +500,7 @@
                                                                     <object class="GtkButton" id="version_history_button">
                                                                         <property name="halign">end</property>
                                                                         <property name="valign">start</property>
-                                                                        <property name="label">Version History</property>
+                                                                        <property name="label" translatable="yes">Version History</property>
                                                                         <layout>
                                                                             <property name="column">2</property>
                                                                             <property name="row">0</property>
@@ -549,7 +549,7 @@
                                         <child>
                                             <object class="GtkButton" id="overlay_remote_back_button">
                                                 <property name="icon-name">go-previous-symbolic</property>
-                                                <property name="tooltip-text">Back</property>
+                                                <property name="tooltip-text" translatable="yes">Back</property>
                                             </object>
                                         </child>
                                         <child>
@@ -559,7 +559,7 @@
                                         </child>
                                         <child>
                                             <object class="GtkButton" id="overlay_delete_remote_button">
-                                                <property name="label">Delete Selected Remote</property>
+                                                <property name="label" translatable="yes">Delete Selected Remote</property>
                                                 <style>
                                                     <class name="destructive-action"/>
                                                 </style>
@@ -567,7 +567,7 @@
                                         </child>
                                         <child>
                                             <object class="GtkButton" id="overlay_add_remote_button">
-                                                <property name="label">Add Remote</property>
+                                                <property name="label" translatable="yes">Add Remote</property>
                                                 <style>
                                                     <class name="suggested-action"/>
                                                 </style>
@@ -608,7 +608,7 @@
                                         <child>
                                             <object class="GtkButton" id="overlay_add_remote_back_button">
                                                 <property name="icon-name">go-previous-symbolic</property>
-                                                <property name="tooltip-text">Back</property>
+                                                <property name="tooltip-text" translatable="yes">Back</property>
                                             </object>
                                         </child>
                                         <child>
@@ -618,7 +618,7 @@
                                         </child>
                                         <child>
                                             <object class="GtkLabel">
-                                                <property name="label">Add New Flatpak Remote</property>
+                                                <property name="label" translatable="yes">Add New Flatpak Remote</property>
                                                 <style>
                                                     <class name="title-2"/>
                                                 </style>
@@ -631,7 +631,7 @@
                                         </child>
                                         <child>
                                             <object class="GtkButton" id="overlay_add_remote_confirm_button">
-                                                <property name="label">Add</property>
+                                                <property name="label" translatable="yes">Add</property>
                                                 <style>
                                                     <class name="suggested-action"/>
                                                 </style>
@@ -658,7 +658,7 @@
                                                 <property name="spacing">4</property>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Remote Name</property>
+                                                        <property name="label" translatable="yes">Remote Name</property>
                                                         <property name="halign">start</property>
                                                         <style>
                                                             <class name="bold"/>
@@ -667,7 +667,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkEntry" id="overlay_add_remote_name_entry">
-                                                        <property name="placeholder-text">e.g., flathub</property>
+                                                        <property name="placeholder-text" translatable="yes">e.g., flathub</property>
                                                     </object>
                                                 </child>
                                             </object>
@@ -678,7 +678,7 @@
                                                 <property name="spacing">4</property>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Remote URL</property>
+                                                        <property name="label" translatable="yes">Remote URL</property>
                                                         <property name="halign">start</property>
                                                         <style>
                                                             <class name="bold"/>
@@ -687,7 +687,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkEntry" id="overlay_add_remote_url_entry">
-                                                        <property name="placeholder-text">e.g., https://flathub.org/repo/flathub.flatpakrepo</property>
+                                                        <property name="placeholder-text" translatable="yes">e.g., https://flathub.org/repo/flathub.flatpakrepo</property>
                                                     </object>
                                                 </child>
                                             </object>
@@ -698,7 +698,7 @@
                                                 <property name="spacing">4</property>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Scope</property>
+                                                        <property name="label" translatable="yes">Scope</property>
                                                         <property name="halign">start</property>
                                                         <style>
                                                             <class name="bold"/>
@@ -710,8 +710,8 @@
                                                         <property name="model">
                                                             <object class="GtkStringList">
                                                                 <items>
-                                                                    <item>user</item>
-                                                                    <item>system</item>
+                                                                    <item translatable="yes">user</item>
+                                                                    <item translatable="yes">system</item>
                                                                 </items>
                                                             </object>
                                                         </property>

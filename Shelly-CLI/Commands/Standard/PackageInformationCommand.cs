@@ -21,7 +21,7 @@ public class PackageInformationCommand : Command<PackageInformationSettings>
         }
 
         var manager = new AlpmManager();
-        AlpmPackageDto? package = null;
+        AlpmPackageDto? package;
         if (settings.SearchInstalled)
         {
             var installedPackages = manager.GetInstalledPackages();
@@ -45,7 +45,7 @@ public class PackageInformationCommand : Command<PackageInformationSettings>
         }
 
         WriteLeftAlignMarkup($"[green]Name: {package.Name.EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Version {package.Version.EscapeMarkup()}[/]");
+        WriteLeftAlignMarkup($"[blue]Version: {package.Version.EscapeMarkup()}[/]");
         WriteLeftAlignMarkup($"[blue]Description: {package.Description.EscapeMarkup()}[/]");
         WriteLeftAlignMarkup($"[blue]URL: {package.Url.EscapeMarkup()}[/]");
         WriteLeftAlignMarkup($"[blue]Licenses: {string.Join(',', package.Licenses).EscapeMarkup()}[/]");

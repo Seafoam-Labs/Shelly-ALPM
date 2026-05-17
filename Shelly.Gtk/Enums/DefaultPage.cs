@@ -6,5 +6,6 @@ public enum ShellyTabs
     Aur = 1,
     Flatpak = 2,
     AppImage = 3,
-    ShellySearch = 4
+    ShellySearch = 4,
+    Recommend = 5
 }

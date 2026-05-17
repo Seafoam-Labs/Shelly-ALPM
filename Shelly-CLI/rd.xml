@@ -24,7 +24,6 @@
             <Type Name="Shelly_CLI.Commands.Standard.InstallCommand" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.InstallLocalPackageCommand" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.InstallLocalPackageSettings" Dynamic="Required All"/>
-            <Type Name="Shelly_CLI.Commands.Standard.AppImageInstallCommand" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.InstallLocalPackageSettings" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.RemoveCommand" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.RemovePackageSettings" Dynamic="Required All"/>
@@ -77,6 +76,21 @@
             <Type Name="Shelly_CLI.Commands.Flatpak.FlatpakUpgrade" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Flatpak.FlatpakSyncRemoteAppStream" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Flatpak.FlathubGetRemote" Dynamic="Required All"/>
+            <!-- AppImage commands -->
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageDefaultSettings" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageSettings" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageRemoveSettings" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageConfigUpdatesSettings" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageSearchSettings" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageSyncMetaSettings" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageUpdateSettings" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageSearchCommand" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageInstallCommand" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageRemoveCommand" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageUpdateCommand" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageGetUpdates" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageSyncMeta" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.AppImage.AppImageConfigUpdates" Dynamic="Required All"/>
             <!-- Utility Commands -->
             <Type Name="Shelly_CLI.Commands.Utility.CheckPackageUpdatesNonRootCommand" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Utility.CheckPackageUpdatesNonRootSettings" Dynamic="Required All"/>

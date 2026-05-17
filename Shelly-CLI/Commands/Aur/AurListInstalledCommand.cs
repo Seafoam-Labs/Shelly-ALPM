@@ -1,20 +1,21 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using PackageManager.Aur;
-using Shelly_CLI.Utility;
+using PackageManager.Aur.Models;
+using PackageManager.Wire;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Aur;
 
-public class AurListInstalledCommand : AsyncCommand<ListSettings>
+public class AurListInstalledCommand : AsyncCommand<AlpmListSettings>
 {
-    public override async Task<int> ExecuteAsync([NotNull] CommandContext context, [NotNull] ListSettings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, AlpmListSettings settings)
     {
         if (Program.IsUiMode)
         {
             return await HandleUiModeListInstalled(settings);
         }
+
         AurPackageManager? manager = null;
         try
         {
@@ -26,7 +27,7 @@ public class AurListInstalledCommand : AsyncCommand<ListSettings>
             // Apply filter if specified
             if (!string.IsNullOrWhiteSpace(settings.Filter))
             {
-                packages = packages.Where(p => p.Name.Contains(settings.Filter, StringComparison.OrdinalIgnoreCase)).ToList();
+                packages = ApplyFilter(packages, settings.Filter);
             }
 
             // Apply sorting based on settings
@@ -48,10 +49,10 @@ public class AurListInstalledCommand : AsyncCommand<ListSettings>
             {
                 var sortedList = sortedPackages.ToList();
                 var json = JsonSerializer.Serialize(sortedList, ShellyCLIJsonContext.Default.ListAurPackageDto);
-                using var stdout = System.Console.OpenStandardOutput();
-                using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-                writer.WriteLine(json);
-                writer.Flush();
+                await using var stdout = Console.OpenStandardOutput();
+                await using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
+                await writer.WriteLineAsync(json);
+                await writer.FlushAsync();
                 return 0;
             }
 
@@ -59,7 +60,7 @@ public class AurListInstalledCommand : AsyncCommand<ListSettings>
             table.AddColumn("Name");
             table.AddColumn("Version");
             table.AddColumn("Description");
-            
+
             var skip = (settings.Page - 1) * settings.Take;
             var displayPackages = sortedPackages.Skip(skip).Take(settings.Take).ToList();
 
@@ -88,7 +89,7 @@ public class AurListInstalledCommand : AsyncCommand<ListSettings>
         }
     }
 
-    private static async Task<int> HandleUiModeListInstalled(ListSettings settings)
+    private static async Task<int> HandleUiModeListInstalled(AlpmListSettings settings)
     {
         AurPackageManager? manager = null;
         try
@@ -101,7 +102,7 @@ public class AurListInstalledCommand : AsyncCommand<ListSettings>
             // Apply filter if specified
             if (!string.IsNullOrWhiteSpace(settings.Filter))
             {
-                packages = packages.Where(p => p.Name.Contains(settings.Filter, StringComparison.OrdinalIgnoreCase)).ToList();
+                packages = ApplyFilter(packages, settings.Filter);
             }
 
             // Apply sorting based on settings
@@ -121,11 +122,7 @@ public class AurListInstalledCommand : AsyncCommand<ListSettings>
             if (settings.JsonOutput)
             {
                 var sortedList = sortedPackages.ToList();
-                var json = JsonSerializer.Serialize(sortedList, ShellyCLIJsonContext.Default.ListAurPackageDto);
-                using var stdout = Console.OpenStandardOutput();
-                using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-                writer.WriteLine(json);
-                writer.Flush();
+                JsonPackFrame.WriteToStdout(sortedList);
                 return 0;
             }
 
@@ -137,18 +134,27 @@ public class AurListInstalledCommand : AsyncCommand<ListSettings>
                 Console.WriteLine($"{pkg.Name} {pkg.Version} - {pkg.Description ?? ""}");
             }
 
-            Console.Error.WriteLine($"Total: {packages.Count} AUR packages installed");
+            await Console.Error.WriteLineAsync($"Total: {packages.Count} AUR packages installed");
 
             return 0;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Failed to list packages: {ex.Message}");
+            await Console.Error.WriteLineAsync($"Failed to list packages: {ex.Message}");
             return 1;
         }
         finally
         {
             manager?.Dispose();
         }
+    }
+
+    private static List<AurPackageDto> ApplyFilter(List<AurPackageDto> packages, string filter)
+    {
+        return packages
+            .Select(x => new { Package = x, Score = StringMatching.PartialRatio(filter, x.Name) })
+            .Where(x => x.Score >= 90)
+            .Select(x => x.Package)
+            .ToList();
     }
 }

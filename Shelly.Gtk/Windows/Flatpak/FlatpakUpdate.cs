@@ -1,5 +1,6 @@
 using Gtk;
 using Shelly.Gtk.Helpers;
+using Shelly.GTK.Resources;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
@@ -86,7 +87,7 @@ public class FlatpakUpdate(
         
         mainVbox.Append(hbox);
 
-        var permissionExpander = Expander.New("Permission Changes");
+        var permissionExpander = Expander.New(Translations.T("Permission Changes"));
         permissionExpander.MarginStart = 50;
         permissionExpander.MarginEnd = 10;
         permissionExpander.MarginBottom = 5;
@@ -229,7 +230,7 @@ public class FlatpakUpdate(
         if (!configService.LoadConfig().NoConfirm)
         {
             var args = new GenericQuestionEventArgs(
-                "Update Packages?", string.Join("\n", _allPackages.Select(x => x.Id))
+                Translations.T("Update Packages?"), string.Join("\n", _allPackages.Select(x => x.Id))
             );
 
             genericQuestionService.RaiseQuestion(args);
@@ -241,12 +242,12 @@ public class FlatpakUpdate(
 
         try
         {
-            lockoutService.Show("Updating Flatpak packages...");
+            lockoutService.Show(Translations.T("Updating Flatpak packages..."));
             var result = await unprivilegedOperationService.FlatpakUpgrade();
 
             if (!result.Success)
             {
-                Console.WriteLine($@"Failed to update packages: {result.Error}");
+                Console.WriteLine(Translations.T("Failed to update packages: {0}", result.Error));
             }
 
             await LoadDataAsync();
@@ -256,7 +257,7 @@ public class FlatpakUpdate(
             lockoutService.Hide();
 
             var args = new ToastMessageEventArgs(
-                $"Updated all Flatpak(s)"
+                Translations.T("Updated all Flatpak(s)")
             );
 
             genericQuestionService.RaiseToastMessage(args);

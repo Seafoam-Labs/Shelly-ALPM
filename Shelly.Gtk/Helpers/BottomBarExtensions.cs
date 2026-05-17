@@ -1,5 +1,6 @@
 using Gtk;
 using Microsoft.Extensions.DependencyInjection;
+using Shelly.GTK.Resources;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.Windows.Dialog;
@@ -25,7 +26,7 @@ public static class BottomBarExtensions
             while (historyListBox.GetFirstChild() is { } ch)
                 historyListBox.Remove(ch);
             var loadingRow = ListBoxRow.New();
-            var loadingLabel = Label.New("Loading...");
+            var loadingLabel = Label.New(Translations.T("Loading..."));
             loadingLabel.Halign = Align.Center;
             loadingLabel.AddCssClass("dim-label");
             loadingLabel.MarginTop = 8;
@@ -34,14 +35,14 @@ public static class BottomBarExtensions
             loadingRow.SetChild(loadingLabel);
             historyListBox.Append(loadingRow);
 
-            Task.Run((Func<Task>)(async () =>
+            Task.Run(async () =>
             {
                 var opLogService = serviceProvider.GetRequiredService<IOperationLogService>();
                 var entries = await opLogService.GetRecentOperationsAsync(8);
                 GLib.Functions.IdleAdd(0, () =>
                 {
-                    historyPopoverTitle.SetText("Recent Operations");
-                    historyMenuButton.SetLabel("History");
+                    historyPopoverTitle.SetText(Translations.T("Recent Operations"));
+                    historyMenuButton.SetLabel(Translations.T("History"));
 
                     while (historyListBox.GetFirstChild() is { } child)
                         historyListBox.Remove(child);
@@ -49,7 +50,7 @@ public static class BottomBarExtensions
                     if (entries.Count == 0)
                     {
                         var row = ListBoxRow.New();
-                        var lbl = Label.New("No recent activity");
+                        var lbl = Label.New(Translations.T("No recent activity"));
                         lbl.Halign = Align.Center;
                         lbl.AddCssClass("dim-label");
                         lbl.MarginTop = 8;
@@ -77,7 +78,7 @@ public static class BottomBarExtensions
                                 GLib.Functions.IdleAdd(0, () =>
                                 {
                                     genericQuestionService.RaiseToastMessage(
-                                        new ToastMessageEventArgs("Session log is too large to display"));
+                                        new ToastMessageEventArgs(Translations.T("Session log is too large to display")));
                                     return false;
                                 });
                                 return;
@@ -90,7 +91,7 @@ public static class BottomBarExtensions
                                 logBox.SetMarginBottom(10);
                                 logBox.SetMarginStart(10);
                                 logBox.SetMarginEnd(10);
-                                var titleLabel = Label.New("Session Log");
+                                var titleLabel = Label.New(Translations.T("Session Log"));
                                 titleLabel.AddCssClass("title-1");
                                 titleLabel.Xalign = 0;
                                 logBox.Append(titleLabel);
@@ -103,14 +104,14 @@ public static class BottomBarExtensions
                                 scrolledWindow.HscrollbarPolicy = PolicyType.Automatic;
                                 scrolledWindow.SetChild(textView);
                                 logBox.Append(scrolledWindow);
-                                var copyButton = Button.NewWithLabel("Copy Log");
+                                var copyButton = Button.NewWithLabel(Translations.T("Copy Log"));
                                 copyButton.Halign = Align.Start;
                                 copyButton.OnClicked += (_, _) =>
                                 {
                                     var clipboard = Gdk.Display.GetDefault()!.GetClipboard();
                                     clipboard.SetText(fullLogText);
                                     genericQuestionService.RaiseToastMessage(
-                                        new ToastMessageEventArgs("Log copied to clipboard"));
+                                        new ToastMessageEventArgs(Translations.T("Log copied to clipboard")));
                                 };
                                 logBox.Append(copyButton);
                                 var dialogArgs = new GenericDialogEventArgs(logBox);
@@ -164,7 +165,7 @@ public static class BottomBarExtensions
 
                     return false;
                 });
-            }));
+            });
         }
     }
 
@@ -203,7 +204,7 @@ public static class BottomBarExtensions
                 while (updatesListBox.GetFirstChild() is { } ch)
                     updatesListBox.Remove(ch);
                 var loadingRow = ListBoxRow.New();
-                var loadingLabel = Label.New("Loading...");
+                var loadingLabel = Label.New(Translations.T("Loading..."));
                 loadingLabel.Halign = Align.Center;
                 loadingLabel.AddCssClass("dim-label");
                 loadingLabel.MarginTop = 8;
@@ -220,8 +221,8 @@ public static class BottomBarExtensions
                 var count = updates.Packages.Count + updates.Aur.Count + updates.Flatpaks.Count;
                 GLib.Functions.IdleAdd(0, () =>
                 {
-                    updatesPopoverTitle.SetText($"Available Updates ({count})");
-                    updatesMenuButton.SetLabel($"Updates ({count})");
+                    updatesPopoverTitle.SetText(Translations.T("Available Updates ({0})", count));
+                    updatesMenuButton.SetLabel(Translations.T("Updates ({0})", count));
 
                     while (updatesListBox.GetFirstChild() is { } child)
                         updatesListBox.Remove(child);
@@ -271,7 +272,7 @@ public static class BottomBarExtensions
                     if (count != 0) return false;
                     {
                         var row = ListBoxRow.New();
-                        var label = Label.New("All packages are up to date");
+                        var label = Label.New(Translations.T("All packages are up to date"));
                         label.Halign = Align.Center;
                         label.AddCssClass("dim-label");
                         label.MarginTop = 8;
@@ -306,17 +307,17 @@ public static class BottomBarExtensions
         switch (diff.TotalMinutes)
         {
             case < 1:
-                return "just now";
+                return Translations.T("just now");
             case < 60:
-                return $"{(int)diff.TotalMinutes} min ago";
+                return Translations.T("{0} min ago", (int)diff.TotalMinutes);
         }
 
-        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalHours < 24) return Translations.T("{0}h ago", (int)diff.TotalHours);
         
         return diff.TotalDays switch
         {
-            < 2 => "yesterday",
-            < 30 => $"{(int)diff.TotalDays}d ago",
+            < 2 => Translations.T("yesterday"),
+            < 30 => Translations.T("{0}d ago", (int)diff.TotalDays),
             _ => timestamp.ToString("MMM d")
         };
     }

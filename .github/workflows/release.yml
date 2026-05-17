@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang zlib1g-dev libalpm-dev libgtk-4-dev zip
+        sudo apt-get install -y clang zlib1g-dev libalpm-dev libgtk-4-dev zip gettext
 
     - name: Publish Shelly-CLI
       run: |
@@ -42,11 +42,35 @@ jobs:
         # Also bundle the CLI binary for convenience
         cp publish/shelly-cli/shelly publish/shelly-ui/
 
+    - name: Compile and bundle translations
+      run: |
+        mkdir -p publish/shelly-ui/locale
+        for po_file in Shelly.Gtk/po/*.po; do
+          if [ -f "$po_file" ]; then
+            lang=$(basename "$po_file" .po)
+            mkdir -p "publish/shelly-ui/locale/$lang/LC_MESSAGES"
+            msgfmt "$po_file" -o "publish/shelly-ui/locale/$lang/LC_MESSAGES/shelly-ui.mo"
+          fi
+        done
+
     - name: Publish Shelly-Notifications
       run: |
         dotnet publish Shelly-Notifications/Shelly-Notifications.csproj -c Release -o publish/shelly-notifications -p:InstructionSet=x86-64
         # Bundle Notifications into the UI directory
         cp publish/shelly-notifications/Shelly-Notifications publish/shelly-ui/
+
+    - name: Publish Shelly.Keys
+      run: |
+        dotnet publish Shelly.Keys/Shelly.Keys.csproj -c Release -o publish/shelly-keys -p:InstructionSet=x86-64
+        # Bundle Keys into the UI directory so it ends up in Shelly-ALPM-linux-x64.tar.gz
+        cp publish/shelly-keys/shelly-keys publish/shelly-ui/
+
+    - name: Package Shelly.Keys standalone
+      run: |
+        cd publish/shelly-keys
+        rm -f *.dbg *.pdb
+        tar -czf ../Shelly-Keys-linux-x64.tar.gz .
+        cd ../..
 
     - name: Bundle Shelly-ALPM
       run: |
@@ -67,7 +91,7 @@ jobs:
         curl -sL "https://github.com/ZoeyErinBauer/Shelly-ALPM/archive/${VERSION}.tar.gz" -o "source-${VERSION}.tar.gz"
         sha256sum "source-${VERSION}.tar.gz" | sed "s/source-${VERSION}.tar.gz/${VERSION}.tar.gz/" > SHA256SUMS.txt
         # Add binary tarballs and completions checksums
-        sha256sum Shelly-ALPM-linux-x64.tar.gz Shelly-CLI-linux-x64.tar.gz shelly.fish >> SHA256SUMS.txt
+        sha256sum Shelly-ALPM-linux-x64.tar.gz Shelly-CLI-linux-x64.tar.gz Shelly-Keys-linux-x64.tar.gz shelly.fish >> SHA256SUMS.txt
         rm "source-${VERSION}.tar.gz"
         cat SHA256SUMS.txt
         
@@ -77,6 +101,7 @@ jobs:
         files: |
           publish/Shelly-ALPM-linux-x64.tar.gz
           publish/Shelly-CLI-linux-x64.tar.gz
+          publish/Shelly-Keys-linux-x64.tar.gz
           publish/shelly.fish
           publish/SHA256SUMS.txt
         draft: false

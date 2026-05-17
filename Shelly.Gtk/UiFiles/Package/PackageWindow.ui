@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<interface>
+<interface domain="shelly-ui">
     <requires lib="gtk" version="4.0"/>
     <object class="GtkOverlay" id="PackageWindow">
         <child>
@@ -19,13 +19,13 @@
                         <property name="valign">baseline-center</property>
                         <child>
                             <object class="GtkSearchEntry" id="search_entry">
-                                <property name="placeholder-text">Search packages...</property>
+                                <property name="placeholder-text" translatable="yes">Search packages...</property>
                                 <property name="width-request">250</property>
                             </object>
                         </child>
                         <child>
                             <object class="GtkDropDown" id="grouping_selection">
-                                <property name="tooltip-text">Package Group Filter</property>
+                                <property name="tooltip-text" translatable="yes">Package Group Filter</property>
                                 <property name="enable-search">true</property>
                                 <property name="search-match-mode">substring</property>
                                 <property name="expression">
@@ -35,7 +35,7 @@
                         </child>
                         <child>
                             <object class="GtkButton" id="install_local_button">
-                                <property name="tooltip-text">Install Local Packages</property>
+                                <property name="tooltip-text" translatable="yes">Install Local Packages</property>
                                 <child>
                                     <object class="GtkBox">
                                         <property name="spacing">5</property>
@@ -46,7 +46,7 @@
                                         </child>
                                         <child>
                                             <object class="GtkLabel">
-                                                <property name="label">Install Local</property>
+                                                <property name="label" translatable="yes">Install Local</property>
                                             </object>
                                         </child>
                                     </object>
@@ -60,22 +60,21 @@
                         </child>
                         <child>
                             <object class="GtkCheckButton" id="upgrade_check">
-                                <property name="label">Perform Upgrade</property>
-                                <property name="tooltip-text">Perform a full system upgrade with install (-u)</property>
+                                <property name="label" translatable="yes">Perform Upgrade</property>
+                                <property name="tooltip-text" translatable="yes">Perform a full system upgrade with install (-u)</property>
                             </object>
                         </child>
                         <child>
                             <object class="GtkCheckButton" id="show_hidden_check">
-                                <property name="label">Show Hidden</property>
-                                <property name="tooltip-text">Show packages in the IgnorePkg list from pacman.conf
-                                </property>
+                                <property name="label" translatable="yes">Show Hidden</property>
+                                <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
                                 <property name="active">false</property>
                             </object>
                         </child>
                         <child>
                             <object class="GtkButton" id="install_button">
                                 <property name="halign">start</property>
-                                <property name="label">Install Selected</property>
+                                <property name="label" translatable="yes">Install Selected</property>
                                 <style>
                                     <class name="suggested-action"/>
                                 </style>
@@ -110,25 +109,25 @@
                                         <child>
                                             <object class="GtkColumnViewColumn" id="name_column">
                                                 <property name="expand">true</property>
-                                                <property name="title">Name</property>
+                                                <property name="title" translatable="yes">Name</property>
                                             </object>
                                         </child>
                                         <child>
                                             <object class="GtkColumnViewColumn" id="version_column">
                                                 <property name="expand">true</property>
-                                                <property name="title">Version</property>
+                                                <property name="title" translatable="yes">Version</property>
                                             </object>
                                         </child>
                                         <child>
                                             <object class="GtkColumnViewColumn" id="size_column">
                                                 <property name="expand">true</property>
-                                                <property name="title">Size</property>
+                                                <property name="title" translatable="yes">Size</property>
                                             </object>
                                         </child>
                                         <child>
                                             <object class="GtkColumnViewColumn" id="repository_column">
                                                 <property name="expand">true</property>
-                                                <property name="title">Repository</property>
+                                                <property name="title" translatable="yes">Repository</property>
                                             </object>
                                         </child>
                                         

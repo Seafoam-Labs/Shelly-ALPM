@@ -1,6 +1,7 @@
+
 namespace Shelly.Gtk.UiModels;
 
-public class FlatpakRemoteRefInfo
+public partial class FlatpakRemoteRefInfo
 {
     public ulong DownloadSize { get; set; }
     public ulong InstalledSize { get; set; }

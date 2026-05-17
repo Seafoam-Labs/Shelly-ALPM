@@ -13,7 +13,7 @@
                 <property name="spacing">5</property>
                 <child>
                     <object class="GtkSearchEntry" id="search_entry">
-                        <property name="placeholder-text">Search packages...</property>
+                        <property name="placeholder-text" translatable="yes">Search packages...</property>
                         <property name="width-request">200</property>
                         <style>
                             <class name="spaced-search"/>
@@ -27,23 +27,23 @@
                 </child>
                 <child>
                     <object class="GtkCheckButton" id="run_checks_check">
-                        <property name="label">Run checks</property>
-                        <property name="tooltip-text">Run the --check function during package build (installs checkdepends)
+                        <property name="label" translatable="yes">Run checks</property>
+                        <property name="tooltip-text" translatable="yes">Run the --check function during package build (installs checkdepends)
                         </property>
                     </object>
                 </child>
                 <child>
                     <object class="GtkCheckButton" id="show_hidden_check">
                         <property name="halign">start</property>
-                        <property name="label">Show Hidden</property>
-                        <property name="tooltip-text">Show packages in the IgnorePkg list from pacman.conf</property>
+                        <property name="label" translatable="yes">Show Hidden</property>
+                        <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
                         <property name="active">false</property>
                     </object>
                 </child>
                 <child>
                     <object class="GtkButton" id="update_button">
                         <property name="halign">start</property>
-                        <property name="label">Update Aur Package(s)</property>
+                        <property name="label" translatable="yes">Update Aur Package(s)</property>
                         <style>
                             <class name="suggested-action"/>
                         </style>
@@ -80,13 +80,13 @@
                                         </child>
                                         <child>
                                             <object class="GtkColumnViewColumn" id="name_column">
-                                                <property name="title">Name</property>
+                                                <property name="title" translatable="yes">Name</property>
                                                 <property name="expand">true</property>
                                             </object>
                                         </child>
                                         <child>
                                             <object class="GtkColumnViewColumn" id="version_column">
-                                                <property name="title">Version</property>
+                                                <property name="title" translatable="yes">Version</property>
                                                 <property name="expand">true</property>
                                             </object>
                                         </child>

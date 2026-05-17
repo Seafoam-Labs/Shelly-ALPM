@@ -1,22 +1,20 @@
-using System;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Text.Json;
 using PackageManager.Alpm;
-using Shelly_CLI.Utility;
+using PackageManager.Wire;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Standard;
 
-public class ListAvailableCommand : Command<ListSettings>
+public class ListAvailableCommand : Command<AlpmListSettings>
 {
-    public override int Execute([NotNull] CommandContext context, [NotNull] ListSettings settings)
+    public override int Execute(CommandContext context, AlpmListSettings settings)
     {
         if (Program.IsUiMode)
         {
             return HandleUiModeListAvailable(settings);
         }
+
         try
         {
             using var manager = new AlpmManager();
@@ -27,13 +25,15 @@ public class ListAvailableCommand : Command<ListSettings>
                 {
                     AnsiConsole.Status()
                         .Spinner(Spinner.Known.Dots)
-                        .Start("Initializing and syncing ALPM...", ctx => { manager.IntializeWithSync(); });
+                        .Start("Initializing and syncing ALPM...",
+                            _ => { manager.IntializeWithSync(); });
                 }
                 else
                 {
                     AnsiConsole.Status()
                         .Spinner(Spinner.Known.Dots)
-                        .Start("Initializing ALPM...", ctx => { manager.Initialize(showHiddenPackages: settings.ShowHidden); });
+                        .Start("Initializing ALPM...",
+                            _ => { manager.Initialize(showHiddenPackages: settings.ShowHidden); });
                 }
             }
             else if (settings.Sync)
@@ -45,13 +45,12 @@ public class ListAvailableCommand : Command<ListSettings>
                 manager.Initialize(showHiddenPackages: settings.ShowHidden);
             }
 
-
             var packages = manager.GetAvailablePackages();
 
             // Apply filter if specified
             if (!string.IsNullOrWhiteSpace(settings.Filter))
             {
-                packages = packages.Where(p => p.Name.Contains(settings.Filter, StringComparison.OrdinalIgnoreCase)).ToList();
+                packages = ApplyFilter(packages, settings.Filter);
             }
 
             // Apply sorting based on settings
@@ -75,7 +74,7 @@ public class ListAvailableCommand : Command<ListSettings>
                 var json = JsonSerializer.Serialize(sortedList, ShellyCLIJsonContext.Default.ListAlpmPackageDto);
                 // Write directly to stdout stream to bypass Spectre.Console redirection
                 using var stdout = Console.OpenStandardOutput();
-                using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
+                using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
                 writer.WriteLine(json);
                 writer.Flush();
                 return 0;
@@ -86,7 +85,7 @@ public class ListAvailableCommand : Command<ListSettings>
             table.AddColumn("Version");
             table.AddColumn("Repository");
             table.AddColumn("Description");
-            
+
             var skip = (settings.Page - 1) * settings.Take;
             var displayPackages = sortedPackages.Skip(skip).Take(settings.Take).ToList();
 
@@ -112,7 +111,7 @@ public class ListAvailableCommand : Command<ListSettings>
         }
     }
 
-    private static int HandleUiModeListAvailable(ListSettings settings)
+    private static int HandleUiModeListAvailable(AlpmListSettings settings)
     {
         try
         {
@@ -132,9 +131,7 @@ public class ListAvailableCommand : Command<ListSettings>
             // Apply filter if specified
             if (!string.IsNullOrWhiteSpace(settings.Filter))
             {
-                var nameRes = packages.Where(p => p.Name.Contains(settings.Filter, StringComparison.OrdinalIgnoreCase)).ToList();
-                var descRes= packages.Where(p => p.Description.Contains(settings.Filter, StringComparison.OrdinalIgnoreCase)).ToList();
-                packages = nameRes.Concat(descRes).DistinctBy(p => p.Name).ToList();
+                packages = ApplyFilter(packages, settings.Filter);
             }
 
             // Apply sorting based on settings
@@ -154,11 +151,7 @@ public class ListAvailableCommand : Command<ListSettings>
             if (settings.JsonOutput)
             {
                 var sortedList = sortedPackages.ToList();
-                var json = JsonSerializer.Serialize(sortedList, ShellyCLIJsonContext.Default.ListAlpmPackageDto);
-                using var stdout = Console.OpenStandardOutput();
-                using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-                writer.WriteLine(json);
-                writer.Flush();
+                JsonPackFrame.WriteToStdout(sortedList);
                 return 0;
             }
 
@@ -179,5 +172,22 @@ public class ListAvailableCommand : Command<ListSettings>
             Console.Error.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
             return 1;
         }
+    }
+
+    private static List<AlpmPackageDto> ApplyFilter(List<AlpmPackageDto> packages, string filter)
+    {
+        return packages
+            .Select(x => new { Package = x, Score = MatchObject(filter, x.Name, x.Description) })
+            .Where(x => x.Score >= 75)
+            .Select(x => x.Package)
+            .ToList();
+    }
+
+    private static int MatchObject(string query, string name, string description)
+    {
+        var nameScore = StringMatching.PartialRatio(query, name);
+        var descScore = StringMatching.PartialRatio(query, description);
+
+        return (int)(nameScore * 0.7 + descScore * 0.3);
     }
 }

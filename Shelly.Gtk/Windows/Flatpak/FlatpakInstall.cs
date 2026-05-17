@@ -1,5 +1,6 @@
 using GObject;
 using Gtk;
+using Shelly.GTK.Resources;
 using Shelly.Gtk.Enums;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
@@ -280,13 +281,13 @@ public class FlatpakInstall(
 
             if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(url))
             {
-                genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Name and URL are required"));
+                genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(Translations.T("Name and URL are required")));
                 return;
             }
 
             if (!url.EndsWith(".flatpakrepo"))
             {
-                genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("URL must end with .flatpakrepo"));
+                genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(Translations.T("URL must end with .flatpakrepo")));
                 return;
             }
 
@@ -295,11 +296,11 @@ public class FlatpakInstall(
             if (!result.Success)
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"Failed to add remote: {result.Error}"));
+                    new ToastMessageEventArgs(Translations.T("Failed to add remote: {0}", result.Error)));
                 return;
             }
 
-            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs($"Added Remote: {name}"));
+            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(Translations.T("Added Remote: {0}", name)));
             _ = RefreshRemotesList();
             _ = LoadDataAsync();
             _mainContentStack?.SetVisibleChild(_remoteRefOverlay);
@@ -315,7 +316,7 @@ public class FlatpakInstall(
 
             if (!result.Success) return;
             var args = new ToastMessageEventArgs(
-                $"Removed Remote"
+                Translations.T("Removed Remote")
             );
             genericQuestionService.RaiseToastMessage(args);
             _ = RefreshRemotesList();
@@ -334,67 +335,77 @@ public class FlatpakInstall(
             switch (category)
             {
                 case "AllApplications":
-                    label.SetText("All Applications");
+                    label.SetText(Translations.T("All Applications"));
                     image.IconName = "applications-other";
                     gtkBox.Append(image);
                     break;
                 case "Recommended":
+                    label.SetText(Translations.T("Recommended"));
                     image.IconName = "emblem-favorite";
                     gtkBox.Append(image);
                     break;
                 case "MostWanted":
-                    label.SetText("Most Wanted");
+                    label.SetText(Translations.T("Most Wanted"));
                     image.IconName = "starred";
                     gtkBox.Append(image);
                     break;
                 case "RecentlyAdded":
-                    label.SetText("Recently Added");
+                    label.SetText(Translations.T("Recently Added"));
                     image.IconName = "document-new";
                     gtkBox.Append(image);
                     break;
                 case "RecentlyUpdated":
-                    label.SetText("Recently Updated");
+                    label.SetText(Translations.T("Recently Updated"));
                     image.IconName = "software-update-available";
                     gtkBox.Append(image);
                     break;
                 case "AudioVideo":
-                    label.SetText("Audio & Video");
+                    label.SetText(Translations.T("Audio & Video"));
                     image.IconName = "applications-multimedia";
                     gtkBox.Append(image);
                     break;
                 case "Development":
+                    label.SetText(Translations.T("Development"));
                     image.IconName = "applications-development";
                     gtkBox.Append(image);
                     break;
                 case "Education":
+                    label.SetText(Translations.T("Education"));
                     image.IconName = "applications-education";
                     gtkBox.Append(image);
                     break;
                 case "Game":
+                    label.SetText(Translations.T("Game"));
                     image.IconName = "applications-games";
                     gtkBox.Append(image);
                     break;
                 case "Graphics":
+                    label.SetText(Translations.T("Graphics"));
                     image.IconName = "applications-graphics";
                     gtkBox.Append(image);
                     break;
                 case "Network":
+                    label.SetText(Translations.T("Network"));
                     image.IconName = "applications-internet";
                     gtkBox.Append(image);
                     break;
                 case "Office":
+                    label.SetText(Translations.T("Office"));
                     image.IconName = "applications-office";
                     gtkBox.Append(image);
                     break;
                 case "Science":
+                    label.SetText(Translations.T("Science"));
                     image.IconName = "applications-science";
                     gtkBox.Append(image);
                     break;
                 case "System":
+                    label.SetText(Translations.T("System"));
                     image.IconName = "applications-system";
                     gtkBox.Append(image);
                     break;
                 case "Utility":
+                    label.SetText(Translations.T("Utility"));
                     image.IconName = "applications-utilities";
                     gtkBox.Append(image);
                     break;
@@ -475,9 +486,9 @@ public class FlatpakInstall(
 
             _overlayAuthorLabel.SetText(obj.DeveloperName);
             _overlayNameLabel.SetText(obj.Name);
-            _overlayVersionLabel.SetText("Version: " + obj.Releases.First().Version);
+            _overlayVersionLabel.SetText(Translations.T("Version: {0}", obj.Releases.First().Version));
 
-            _overlayLicenseLabel.SetText("License: " + obj.ProjectLicense);
+            _overlayLicenseLabel.SetText(Translations.T("License: {0}", obj.ProjectLicense));
             _overlaySummaryLabel.SetText(obj.Summary);
             _overlayDescriptionLabel.SetText(obj.Description);
 
@@ -489,15 +500,15 @@ public class FlatpakInstall(
             if (installed.Any(p => p.Id == obj.Id))
             {
                 _overlayInstallButton.SetSensitive(false);
-                _overlayInstallButton.Label = "Installed";
+                _overlayInstallButton.Label = Translations.T("Installed");
             }
             else
             {
                 _overlayInstallButton.SetSensitive(true);
-                _overlayInstallButton.Label = "Install";
+                _overlayInstallButton.Label = Translations.T("Install");
             }
 
-            _overlaySizeLabel.SetText("Size: " + SizeHelper.FormatSize((long)result));
+            _overlaySizeLabel.SetText(Translations.T("Size: {0}", SizeHelper.FormatSize((long)result)));
 
             SetUrlLinks(obj.Urls);
 
@@ -620,7 +631,7 @@ public class FlatpakInstall(
     {
         if (urls == null || urls.Count == 0)
         {
-            _overlayUrlLabel.SetText("No links available");
+            _overlayUrlLabel.SetText(Translations.T("No links available"));
             return;
         }
 
@@ -911,10 +922,10 @@ public class FlatpakInstall(
         try
         {
             var dialog = FileDialog.New();
-            dialog.SetTitle("Install Flatpak Ref");
+            dialog.SetTitle(Translations.T("Install Flatpak Ref"));
 
             var filter = FileFilter.New();
-            filter.SetName("Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\"");
+            filter.SetName(Translations.T("Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""));
             filter.AddPattern("*.FlatpakRef");
             filter.AddPattern("*.flatpak");
 
@@ -926,7 +937,7 @@ public class FlatpakInstall(
 
             if (file is not null)
             {
-                lockoutService.Show($"Installing selected local flatpak file...");
+                lockoutService.Show(Translations.T("Installing selected local flatpak file..."));
                 if (file.GetPath()!.EndsWith(".FlatpakRef", StringComparison.OrdinalIgnoreCase))
                 {
                     var result =
@@ -934,7 +945,7 @@ public class FlatpakInstall(
                     if (!result.Success)
                     {
                         var args = new ToastMessageEventArgs(
-                            $"Installing Flatpak failed"
+                            Translations.T("Installing Flatpak failed")
                         );
                         genericQuestionService.RaiseToastMessage(args);
                         Console.WriteLine($"Failed to install local package: {result.Error}");
@@ -944,7 +955,7 @@ public class FlatpakInstall(
                         _overlayInstallButton.SetSensitive(false);
 
                         var args = new ToastMessageEventArgs(
-                            $"Installed Flatpak"
+                            Translations.T("Installed Flatpak")
                         );
                         genericQuestionService.RaiseToastMessage(args);
                     }
@@ -965,7 +976,7 @@ public class FlatpakInstall(
                         if (!privResult.Success)
                         {
                             var args = new ToastMessageEventArgs(
-                                $"Installing Flatpak failed"
+                                Translations.T("Installing Flatpak failed")
                             );
                             genericQuestionService.RaiseToastMessage(args);
                             Console.WriteLine($"Failed to install local bundle: {privResult.Error}");
@@ -973,7 +984,7 @@ public class FlatpakInstall(
                         else
                         {
                             var args = new ToastMessageEventArgs(
-                                $"Installed Flatpak"
+                                Translations.T("Installed Flatpak")
                             );
                             genericQuestionService.RaiseToastMessage(args);
                         }
@@ -986,7 +997,7 @@ public class FlatpakInstall(
                         if (!unprivResult.Success)
                         {
                             var args = new ToastMessageEventArgs(
-                                $"Installing Flatpak failed"
+                                Translations.T("Installing Flatpak failed")
                             );
                             genericQuestionService.RaiseToastMessage(args);
                             Console.WriteLine($"Failed to install local bundle: {unprivResult.Error}");
@@ -994,7 +1005,7 @@ public class FlatpakInstall(
                         else
                         {
                             var args = new ToastMessageEventArgs(
-                                $"Installed Flatpak"
+                                Translations.T("Installed Flatpak")
                             );
                             genericQuestionService.RaiseToastMessage(args);
                         }
@@ -1013,7 +1024,7 @@ public class FlatpakInstall(
         if (!configService.LoadConfig().NoConfirm)
         {
             var args = new GenericQuestionEventArgs(
-                "Install Package?", _selectedPackage.Id
+                Translations.T("Install Package?"), _selectedPackage.Id
             );
 
             genericQuestionService.RaiseQuestion(args);
@@ -1026,7 +1037,7 @@ public class FlatpakInstall(
         try
         {
             UnprivilegedOperationResult result;
-            lockoutService.Show($"Installing {_selectedPackage.Id}...");
+            lockoutService.Show(Translations.T("Installing {0}...", _selectedPackage.Id));
             if (_selectedRemote.Contains("user"))
             {
                 result = await unprivilegedOperationService.InstallFlatpakPackage(_selectedPackage.Id,
@@ -1070,7 +1081,7 @@ public class FlatpakInstall(
         if (!configService.LoadConfig().NoConfirm)
         {
             var args = new GenericQuestionEventArgs(
-                "Install Package?", id
+                Translations.T("Install Package?"), id
             );
 
             genericQuestionService.RaiseQuestion(args);
@@ -1083,7 +1094,7 @@ public class FlatpakInstall(
         try
         {
             UnprivilegedOperationResult result;
-            lockoutService.Show($"Installing {id}...");
+            lockoutService.Show(Translations.T("Installing {0}...", id));
             if (_selectedRemote.Contains("user"))
             {
                 result = await unprivilegedOperationService.InstallFlatpakPackage(id,
@@ -1101,14 +1112,14 @@ public class FlatpakInstall(
             if (result.Success)
             {
                 var args = new ToastMessageEventArgs(
-                    $"Installed Flatpak addon"
+                    Translations.T("Installed Flatpak addon")
                 );
                 genericQuestionService.RaiseToastMessage(args);
             }
             else
             {
                 var args = new ToastMessageEventArgs(
-                    $"Installing Flatpak failed"
+                    Translations.T("Installing Flatpak failed")
                 );
                 genericQuestionService.RaiseToastMessage(args);
                 Console.WriteLine($"Failed to install addon {id}: {result.Error}");
@@ -1125,7 +1136,7 @@ public class FlatpakInstall(
         _overlayBoxRoot = Box.New(Orientation.Vertical, 12);
         _overlayBoxRoot.SetSizeRequest(500, -1);
 
-        var title = Label.New("Version History");
+        var title = Label.New(Translations.T("Version History"));
         title.AddCssClass("title-2");
         title.SetHalign(Align.Start);
         _overlayBoxRoot.Append(title);
@@ -1153,7 +1164,7 @@ public class FlatpakInstall(
         _overlayBoxRoot = Box.New(Orientation.Vertical, 12);
         _overlayBoxRoot.SetSizeRequest(500, -1);
 
-        var title = Label.New("Available Addons");
+        var title = Label.New(Translations.T("Available Addons"));
         title.AddCssClass("title-2");
         title.SetHalign(Align.Start);
         _overlayBoxRoot.Append(title);
@@ -1189,7 +1200,7 @@ public class FlatpakInstall(
         row.SetMarginStart(8);
         row.SetMarginEnd(8);
 
-        var versionLabel = Label.New($"Version {version}");
+        var versionLabel = Label.New(Translations.T("Version {0}", version));
         versionLabel.AddCssClass("heading");
         versionLabel.SetHalign(Align.Start);
         versionLabel.Hexpand = true;
@@ -1220,7 +1231,7 @@ public class FlatpakInstall(
         }
         else
         {
-            var noDetails = Label.New("No details available");
+            var noDetails = Label.New(Translations.T("No details available"));
             noDetails.AddCssClass("dim-label");
             noDetails.SetXalign(0);
             noDetails.SetMarginBottom(4);

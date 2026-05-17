@@ -2,7 +2,7 @@ using PackageManager.AppImage;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace Shelly_CLI.Commands.Standard;
+namespace Shelly_CLI.Commands.AppImage;
 
 public class AppImageRemoveCommand : AsyncCommand<AppImageRemoveSettings>
 {
@@ -73,15 +73,9 @@ public class AppImageRemoveCommand : AsyncCommand<AppImageRemoveSettings>
         }
 
         var manager = new AppImageManager();
-        manager.ErrorEvent += (_, args) =>
-        {
-            AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]");
-        };
+        manager.ErrorEvent += (_, args) => { AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]"); };
 
-        manager.MessageEvent += (_, args) =>
-        {
-            AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]");
-        };
+        manager.MessageEvent += (_, args) => { AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]"); };
 
         return await manager.RemoveAppImage(targetAppImage);
     }

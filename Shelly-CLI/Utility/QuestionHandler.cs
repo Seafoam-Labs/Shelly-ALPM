@@ -53,16 +53,10 @@ public static class QuestionHandler
             Console.Error.WriteLine("[ALPM_OPTDEPS_END]");
             Console.Error.Flush();
             var input = Console.ReadLine();
-            var splitInput = input?.Split(" ");
-            for (var i = 0; i < question.ProviderOptions.Count; i++)
-            {
-                if (splitInput.Contains(question.ProviderOptions[i]))
-                {
-                    bitmask |= (1 << i);
-                }
-            }
-
-            question.SetResponse(bitmask);
+            //Uncomment if debugging
+            //Console.WriteLine($"Received: {input}");
+            //Console.WriteLine($"Bitmask: {input}");
+            question.SetResponse(int.Parse(input!));
             return;
         }
 

@@ -9,13 +9,14 @@ using Shelly.Gtk.Windows.AUR;
 using Shelly.Gtk.Windows.Dialog;
 using Shelly.Gtk.Windows.Flatpak;
 using Shelly.Gtk.Helpers;
+using Shelly.GTK.Resources;
 using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.Windows.Packages;
 using Module = Gtk.Module;
 using Settings = Shelly.Gtk.Windows.Settings;
 using GtkSettings = Gtk.Settings;
-
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk;
 
@@ -138,10 +139,10 @@ sealed class Program
         {
             ApplyKdeGtkTheme();
         }
+
         var preferDark = false;
         if (DesktopDetector.DetectDesktop() == "GNOME")
         {
-          
             Gio.Module.Initialize();
             var s = Gio.Settings.New("org.gnome.desktop.interface");
             var scheme = s.GetString("color-scheme");
@@ -152,13 +153,12 @@ sealed class Program
         }
 
         Module.Initialize();
+        Translations.Init();
         if (preferDark)
         {
             var settings = GtkSettings.GetDefault();
             settings?.GtkApplicationPreferDarkTheme = true;
         }
-
-
 
 
         //GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
@@ -205,13 +205,17 @@ sealed class Program
             var iconTheme = IconTheme.GetForDisplay(Gdk.Display.GetDefault()!);
             iconTheme.AddSearchPath("Assets/svg");
 
-            var mainBuilder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/MainWindow.ui"), -1);
+            var mainBuilder = Builder.New();
+            mainBuilder.TranslationDomain = Domain;
+            mainBuilder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/MainWindow.ui"), -1);
             var window = (ApplicationWindow)mainBuilder.GetObject("MainWindow")!;
 
             window.SetIconName("shelly");
             window.Application = application;
 
-            var menuBuilder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/MainMenu.ui"), -1);
+            var menuBuilder = Builder.New();
+            menuBuilder.TranslationDomain = Domain;
+            menuBuilder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/MainMenu.ui"), -1);
             var appMenu = (Gio.Menu)menuBuilder.GetObject("AppMenu")!;
             application.Menubar = appMenu;
 
@@ -221,6 +225,7 @@ sealed class Program
             });
 
             var settingsStack = (Stack)mainBuilder.GetObject("settings_stack")!;
+            var recommendPageBox = (Box)mainBuilder.GetObject("recommend_page_box")!;
             var packagesPageBox = (Box)mainBuilder.GetObject("packages_page_box")!;
             var aurPageBox = (Box)mainBuilder.GetObject("aur_page_box")!;
             var flatpakPageBox = (Box)mainBuilder.GetObject("flatpak_page_box")!;
@@ -234,6 +239,7 @@ sealed class Program
             var sidebarBox = (Box)mainBuilder.GetObject("SidebarBox")!;
             var sidebarToggle = (ToggleButton)mainBuilder.GetObject("SidebarToggleButton")!;
             var topHeaderBar = (HeaderBar)mainBuilder.GetObject("TopHeaderBar")!;
+            var sidebarRecommendBtn = (ToggleButton)mainBuilder.GetObject("SidebarRecommendButton")!;
             var sidebarPackagesBtn = (ToggleButton)mainBuilder.GetObject("SidebarPackagesButton")!;
             var sidebarAurBtn = (ToggleButton)mainBuilder.GetObject("SidebarAurButton")!;
             var sidebarFlatpakBtn = (ToggleButton)mainBuilder.GetObject("SidebarFlatpakButton")!;
@@ -243,6 +249,7 @@ sealed class Program
             var sidebarAurLabel = (Label)mainBuilder.GetObject("SidebarAurLabel")!;
             var sidebarFlatpakLabel = (Label)mainBuilder.GetObject("SidebarFlatpakLabel")!;
             var sidebarAppImageLabel = (Label)mainBuilder.GetObject("SidebarAppImageLabel")!;
+            var sidebarRecommendLabel = (Label)mainBuilder.GetObject("SidebarRecommendLabel")!;
             var sidebarSearchLabel = (Label)mainBuilder.GetObject("SidebarSearchLabel")!;
 
             var quitAction = Gio.SimpleAction.New("quit", null);
@@ -271,7 +278,7 @@ sealed class Program
             application.AddAction(cacheCleaner);
 
             var aboutAction = Gio.SimpleAction.New("about", null);
-            aboutAction.OnActivate += (_, _) => Console.WriteLine("About clicked");
+            aboutAction.OnActivate += (_, _) => { new ShellyAboutDialog(mainOverlay).OpenAboutDialog(); };
             application.AddAction(aboutAction);
 
             var configService = serviceProvider.GetRequiredService<IConfigService>();
@@ -279,6 +286,7 @@ sealed class Program
 
             List<IShellyWindow> currentPackagesWindows = [];
             List<IShellyWindow> currentAurWindows = [];
+            IShellyWindow? currentRecommendWindow = null;
             IShellyWindow? currentFlatpakWindow = null;
             IShellyWindow? currentAppImageWindow = null;
             IShellyWindow? currentShellySearchWindow = null;
@@ -303,13 +311,20 @@ sealed class Program
                 nb.Hexpand = true;
                 nb.Vexpand = true;
                 var w1 = serviceProvider.GetRequiredService<PackageInstall>();
-                nb.AppendPage(w1.CreateWindow(), Label.New("Install"));
+                nb.AppendPage(w1.CreateWindow(), Label.New(T("Install")));
                 var w2 = serviceProvider.GetRequiredService<PackageUpdate>();
-                nb.AppendPage(w2.CreateWindow(), Label.New("Updates"));
+                nb.AppendPage(w2.CreateWindow(), Label.New(T("Updates")));
                 var w3 = serviceProvider.GetRequiredService<PackageManagement>();
-                nb.AppendPage(w3.CreateWindow(), Label.New("Manage"));
+                nb.AppendPage(w3.CreateWindow(), Label.New(T("Manage")));
                 packagesPageBox.Append(nb);
                 currentPackagesWindows = [w1, w2, w3];
+            }
+
+            void LoadRecommendPage()
+            {
+                var w = serviceProvider.GetRequiredService<Recommend>();
+                recommendPageBox.Append(w.CreateWindow());
+                currentRecommendWindow = w;
             }
 
             void LoadAurPage()
@@ -318,11 +333,11 @@ sealed class Program
                 nb.Hexpand = true;
                 nb.Vexpand = true;
                 var w1 = serviceProvider.GetRequiredService<AurInstall>();
-                nb.AppendPage(w1.CreateWindow(), Label.New("Install"));
+                nb.AppendPage(w1.CreateWindow(), Label.New(T("Install")));
                 var w2 = serviceProvider.GetRequiredService<AurUpdate>();
-                nb.AppendPage(w2.CreateWindow(), Label.New("Updates"));
+                nb.AppendPage(w2.CreateWindow(), Label.New(T("Updates")));
                 var w3 = serviceProvider.GetRequiredService<AurRemove>();
-                nb.AppendPage(w3.CreateWindow(), Label.New("Remove"));
+                nb.AppendPage(w3.CreateWindow(), Label.New(T("Remove")));
                 aurPageBox.Append(nb);
                 currentAurWindows = [w1, w2, w3];
             }
@@ -351,6 +366,7 @@ sealed class Program
             var settingsWindow = serviceProvider.GetRequiredService<Settings>();
             settingsPageBox.Append(settingsWindow.CreateWindow());
 
+            settingsStack.GetPage(recommendPageBox).Visible = initialConfig.RecommendedEnabled;
             settingsStack.GetPage(aurPageBox).Visible = initialConfig.AurEnabled;
             settingsStack.GetPage(flatpakPageBox).Visible = initialConfig.FlatPackEnabled;
             settingsStack.GetPage(appImagePageBox).Visible = initialConfig.AppImageEnabled;
@@ -363,6 +379,7 @@ sealed class Program
                 topHeaderBar.Visible = !useOldMenu;
 
                 if (!useOldMenu) return;
+                sidebarRecommendBtn.Visible = config.RecommendedEnabled;
                 sidebarAurBtn.Visible = config.AurEnabled;
                 sidebarFlatpakBtn.Visible = config.FlatPackEnabled;
                 sidebarAppImageBtn.Visible = config.AppImageEnabled;
@@ -394,6 +411,7 @@ sealed class Program
                 var expanded = sidebarToggle.Active;
                 sidebarToggle.IconName = expanded ? "go-previous-symbolic" : "go-next-symbolic";
                 sidebarBox.WidthRequest = expanded ? 180 : 48;
+                sidebarRecommendLabel.Visible = expanded;
                 sidebarPackagesLabel.Visible = expanded;
                 sidebarAurLabel.Visible = expanded;
                 sidebarFlatpakLabel.Visible = expanded;
@@ -403,6 +421,7 @@ sealed class Program
 
             var sidebarButtons = new (ToggleButton btn, string page)[]
             {
+                (sidebarRecommendBtn, "recommend_page"),
                 (sidebarPackagesBtn, "packages_page"),
                 (sidebarAurBtn, "aur_page"),
                 (sidebarFlatpakBtn, "flatpak_page"),
@@ -441,8 +460,9 @@ sealed class Program
             }
 
             var initialPageEnum = initialConfig.DefaultPageDropDown;
-
-            // Safeguard: if the saved default page is disabled, fall back to packages
+        
+            if (initialPageEnum == ShellyTabs.Recommend && !initialConfig.RecommendedEnabled)
+                initialPageEnum = ShellyTabs.Packages;
             if (initialPageEnum == ShellyTabs.Aur && !initialConfig.AurEnabled) initialPageEnum = ShellyTabs.Packages;
             if (initialPageEnum == ShellyTabs.Flatpak && !initialConfig.FlatPackEnabled)
                 initialPageEnum = ShellyTabs.Packages;
@@ -457,6 +477,10 @@ sealed class Program
                 case ShellyTabs.Aur:
                     LoadAurPage();
                     initialPageName = "aur_page";
+                    break;
+                case ShellyTabs.Recommend:
+                    LoadRecommendPage();
+                    initialPageName = "recommend_page";
                     break;
                 case ShellyTabs.Flatpak:
                     LoadFlatpakPage();
@@ -486,6 +510,7 @@ sealed class Program
 
             settingsWindow.ConfigChanged += (config) =>
             {
+                settingsStack.GetPage(recommendPageBox).Visible = config.RecommendedEnabled;
                 settingsStack.GetPage(aurPageBox).Visible = config.AurEnabled;
                 settingsStack.GetPage(flatpakPageBox).Visible = config.FlatPackEnabled;
                 settingsStack.GetPage(appImagePageBox).Visible = config.AppImageEnabled;
@@ -545,6 +570,14 @@ sealed class Program
                         UnloadPage(aurPageBox, currentAurWindows);
                         currentAurWindows = [];
                         break;
+                    case "recommend_page":
+                        if (currentRecommendWindow != null)
+                        {
+                            UnloadPage(recommendPageBox, [currentRecommendWindow]);
+                            currentRecommendWindow = null;
+                        }
+
+                        break;
                     case "flatpak_page":
                         if (currentFlatpakWindow != null)
                         {
@@ -573,6 +606,7 @@ sealed class Program
 
                 switch (currentPage)
                 {
+                    case "recommend_page": LoadRecommendPage(); break;
                     case "packages_page": LoadPackagesPage(); break;
                     case "aur_page": LoadAurPage(); break;
                     case "flatpak_page": LoadFlatpakPage(); break;
@@ -671,6 +705,8 @@ sealed class Program
 
 
             window.Show();
+
+            ShowFingerprintWarningBannerIfNeeded(serviceProvider, configService, mainOverlay, window);
 
             if (!initialConfig.NewInstallInitSettings)
             {
@@ -866,5 +902,85 @@ sealed class Program
         };
 
         return application.Run(args);
+    }
+
+    private static bool _fingerprintBannerShown;
+
+    private static void ShowFingerprintWarningBannerIfNeeded(IServiceProvider serviceProvider,
+        IConfigService configService, Overlay mainOverlay, Window parentWindow)
+    {
+        if (_fingerprintBannerShown) return;
+
+        Task.Run(() =>
+        {
+            try
+            {
+                var state = serviceProvider.GetRequiredService<IFingerprintAuthState>();
+                if (!state.ShouldWarn) return;
+
+                GLib.Functions.IdleAdd(0, () =>
+                {
+                    if (_fingerprintBannerShown) return false;
+                    _fingerprintBannerShown = true;
+
+                    var bannerFrame = Frame.New(null);
+                    bannerFrame.AddCssClass("background");
+                    bannerFrame.AddCssClass("toast-message");
+                    bannerFrame.SetOverflow(Overflow.Hidden);
+                    bannerFrame.SetHalign(Align.Center);
+                    bannerFrame.SetValign(Align.Start);
+                    bannerFrame.SetMarginTop(12);
+
+                    var box = Box.New(Orientation.Horizontal, 8);
+                    box.SetMarginTop(8);
+                    box.SetMarginBottom(8);
+                    box.SetMarginStart(12);
+                    box.SetMarginEnd(12);
+
+                    var label = Label.New(
+                        "Fingerprint authentication detected for sudo. This can interfere with privileged " +
+                        "operations (issue #728). Disable pam_fprintd in /etc/pam.d/sudo as a workaround.");
+                    label.SetWrap(true);
+                    label.SetXalign(0);
+                    box.Append(label);
+
+                    var showFix = Button.NewWithLabel("Show fix");
+                    showFix.OnClicked += (_, _) => FingerprintFixDialog.Show(parentWindow);
+                    box.Append(showFix);
+
+                    var dontShow = Button.NewWithLabel("Don't show again");
+                    dontShow.OnClicked += (_, _) =>
+                    {
+                        try
+                        {
+                            var cfg = configService.LoadConfig();
+                            cfg.SuppressFingerprintWarning = true;
+                            configService.SaveConfig(cfg);
+                        }
+                        catch
+                        {
+                        }
+
+                        if (bannerFrame.GetParent() != null) mainOverlay.RemoveOverlay(bannerFrame);
+                    };
+                    box.Append(dontShow);
+
+                    var dismiss = Button.NewWithLabel("Dismiss");
+                    dismiss.OnClicked += (_, _) =>
+                    {
+                        if (bannerFrame.GetParent() != null) mainOverlay.RemoveOverlay(bannerFrame);
+                    };
+                    box.Append(dismiss);
+
+                    bannerFrame.SetChild(box);
+                    mainOverlay.AddOverlay(bannerFrame);
+                    return false;
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ShowFingerprintWarningBannerIfNeeded failed: {ex}");
+            }
+        });
     }
 }

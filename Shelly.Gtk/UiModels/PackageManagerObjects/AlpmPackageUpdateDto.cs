@@ -1,6 +1,7 @@
+
 namespace Shelly.Gtk.UiModels.PackageManagerObjects;
 
-public record AlpmPackageUpdateDto
+public partial record AlpmPackageUpdateDto
 {
     public string Name { get; init; } = string.Empty;
     public string CurrentVersion { get; init; } = string.Empty;

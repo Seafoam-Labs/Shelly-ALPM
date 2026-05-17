@@ -57,6 +57,8 @@ public class ShellyConfig
     
     public bool NewInstallInitSettings { get; set; } = false;
     
+    public bool RecommendedEnabled { get; set; } = false;
+    
     public bool UseSymbolicTray { get; set; } = true;
 
     public string? TrayIconPath { get; set; }
@@ -64,6 +66,8 @@ public class ShellyConfig
     public string? TrayUpdatesIconPath { get; set; }
     
     public ShellyTabs DefaultPageDropDown { get; set; } = ShellyTabs.Packages;
+
+    public bool SuppressFingerprintWarning { get; set; } = false;
     
     // Existing CLI settings (included for unified config compatibility)
     public string FileSizeDisplay { get; set; } = "Bytes";

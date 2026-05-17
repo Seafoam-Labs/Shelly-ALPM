@@ -1,6 +1,7 @@
+
 namespace Shelly.Gtk.UiModels;
 
-public class FlatpakRemoteDto
+public partial class FlatpakRemoteDto
 {
     public string Name { get; set; } = string.Empty;
 

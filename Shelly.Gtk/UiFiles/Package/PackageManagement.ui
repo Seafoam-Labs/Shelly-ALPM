@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<interface>
+<interface domain="shelly-ui">
     <requires lib="gtk" version="4.0"/>
     <object class="GtkBox" id="PackageManagement">
         <property name="orientation">vertical</property>
@@ -13,20 +13,45 @@
                 <property name="spacing">5</property>
                 <child>
                     <object class="GtkSearchEntry" id="search_entry">
-                        <property name="placeholder-text">Search packages...</property>
+                                <property name="placeholder-text" translatable="yes">Search packages...</property>
                         <property name="width-request">200</property>
                     </object>
                 </child>
                 <child>
                     <object class="GtkButton" id="sync_button">
                         <property name="icon-name">view-refresh-symbolic</property>
-                        <property name="tooltip-text">Sync</property>
+                        <property name="tooltip-text" translatable="yes">Sync</property>
                     </object>
                 </child>
                 
                 <child>
                     <object class="GtkDropDown" id="grouping_selection">
-                        <property name="tooltip-text">Group Filter</property>
+                        <property name="tooltip-text" translatable="yes">Package Group Filter</property>
+                        <property name="enable-search">true</property>
+                        <property name="search-match-mode">substring</property>
+                        <property name="expression">
+                            <lookup name='string' type="GtkStringObject"></lookup>
+                        </property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkButton" id="remove_local_button">
+                        <property name="tooltip-text" translatable="yes">Remove Local Packages</property>
+                        <child>
+                            <object class="GtkBox">
+                                <property name="spacing">5</property>
+                                <child>
+                                    <object class="GtkImage">
+                                        <property name="icon-name">user-trash-symbolic</property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Remove Local</property>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
                     </object>
                 </child>
                 <child>
@@ -37,28 +62,35 @@
                 <child>
                     <object class="GtkCheckButton" id="cascade_delete_check">
                         <property name="active">true</property>
-                        <property name="label">Clean Uninstall</property>
+                        <property name="label" translatable="yes">Clean Uninstall</property>
                         <property name="valign">center</property>
                     </object>
                 </child>
                 <child>
                     <object class="GtkCheckButton" id="remove_configs_check">
-                        <property name="label">Remove Configs</property>
+                        <property name="label" translatable="yes">Remove Configs</property>
+                        <property name="valign">center</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="remove_optdeps_check">
+                        <property name="label" translatable="yes">Remove Optional Deps</property>
+                        <property name="tooltip-text" translatable="yes">Also remove orphaned optional dependencies installed with these packages.</property>
                         <property name="valign">center</property>
                     </object>
                 </child>
                 <child>
                     <object class="GtkCheckButton" id="show_hidden_check">
                         <property name="halign">start</property>
-                        <property name="label">Show Hidden</property>
-                        <property name="tooltip-text">Show packages in the IgnorePkg list from pacman.conf</property>
+                        <property name="label" translatable="yes">Show Hidden</property>
+                        <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
                         <property name="active">false</property>
                     </object>
                 </child>
                 <child>
                     <object class="GtkButton" id="remove_button">
                         <property name="halign">start</property>
-                        <property name="label">Remove Selected</property>
+                        <property name="label" translatable="yes">Remove Selected</property>
                         <style>
                             <class name="destructive-action"/>
                         </style>
@@ -90,18 +122,18 @@
                                 </child>
                                 <child>
                                     <object class="GtkColumnViewColumn" id="name_column">
-                                        <property name="title">Package Name</property>
+                                        <property name="title" translatable="yes">Package Name</property>
                                         <property name="expand">true</property>
                                     </object>
                                 </child>
                                 <child>
                                     <object class="GtkColumnViewColumn" id="size_column">
-                                        <property name="title">Size</property>
+                                        <property name="title" translatable="yes">Size</property>
                                     </object>
                                 </child>
                                 <child>
                                     <object class="GtkColumnViewColumn" id="version_column">
-                                        <property name="title">Version</property>
+                                        <property name="title" translatable="yes">Version</property>
                                     </object>
                                 </child>
                             </object>

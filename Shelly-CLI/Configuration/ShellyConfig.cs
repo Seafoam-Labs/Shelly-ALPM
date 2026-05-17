@@ -43,6 +43,10 @@ public class ShellyConfig
     public string? TrayUpdatesIconPath { get; set; }
     
     public ShellyTabs DefaultPageDropDown { get; set; } = ShellyTabs.Packages;
+
+    public bool SuppressFingerprintWarning { get; set; } = false;
+
+    public bool RecommendedEnabled { get; set; } = false;
     
     public string ProgressBarStyle { get; set; } = nameof(ProgressBarStyleKind.Blocks);
     public int ProgressBarFps { get; set; } = 7;

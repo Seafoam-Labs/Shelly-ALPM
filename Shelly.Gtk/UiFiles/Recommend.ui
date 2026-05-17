@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<interface>
+    <requires lib="gtk" version="4.0"/>
+    <object class="GtkBox" id="ShellyRecommend">
+        <property name="orientation">vertical</property>
+        <property name="margin-top">10</property>
+        <property name="margin-start">10</property>
+        <property name="margin-end">10</property>
+        <property name="margin-bottom">10</property>
+        <property name="spacing">5</property>
+        <child>
+            <object class="GtkBox">
+                <child>
+                    <object class="GtkBox">
+                        <property name="hexpand">true</property>
+                    </object>
+                </child>
+            </object>
+        </child>
+        <child>
+            <object class="GtkScrolledWindow" id="recommend_scrolled_window_widget">
+                <property name="overlay-scrolling">false</property>
+                <property name="vexpand">true</property>
+                <property name="hexpand">true</property>
+                <property name="hscrollbar-policy">never</property>
+                <property name="propagate-natural-width">false</property>
+                <child>
+                    <object class="GtkBox" id="recommend_scroll_window"/>
+                </child>
+            </object>
+        </child>
+    </object>
+</interface>

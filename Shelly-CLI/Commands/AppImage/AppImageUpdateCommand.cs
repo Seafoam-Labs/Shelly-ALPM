@@ -1,6 +1,4 @@
-using System.ComponentModel;
 using PackageManager.AppImage;
-using Shelly_CLI.Commands.Standard;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -11,15 +9,9 @@ public class AppImageUpdateCommand : AsyncCommand<AppImageUpdateSettings>
     public override async Task<int> ExecuteAsync(CommandContext context, AppImageUpdateSettings settings)
     {
         var manager = new AppImageManager();
-        manager.ErrorEvent += (_, args) =>
-        {
-            AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]");
-        };
+        manager.ErrorEvent += (_, args) => { AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]"); };
 
-        manager.MessageEvent += (_, args) =>
-        {
-            AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]");
-        };
+        manager.MessageEvent += (_, args) => { AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]"); };
 
         var updates = await manager.CheckForAppImageUpdates();
 
@@ -28,7 +20,7 @@ public class AppImageUpdateCommand : AsyncCommand<AppImageUpdateSettings>
             AnsiConsole.MarkupLine("[yellow]No updates available for any AppImage.[/]");
             return 0;
         }
-        
+
         RootElevator.EnsureRootExectuion();
 
         if (!string.IsNullOrEmpty(settings.Name))

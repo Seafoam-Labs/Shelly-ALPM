@@ -42,7 +42,7 @@
                                         <property name="valign">center</property>
                                         <child>
                                             <object class="GtkLabel">
-                                                <property name="label">Welcome to Shelly</property>
+                                                <property name="label" translatable="yes">Welcome to Shelly</property>
                                                 <property name="halign">start</property>
                                                 <style>
                                                     <class name="title-1"/>
@@ -51,7 +51,7 @@
                                         </child>
                                         <child>
                                             <object class="GtkLabel">
-                                                <property name="label">Let's get you set up with some basic configurations.</property>
+                                                <property name="label" translatable="yes">Let's get you set up with some basic configurations.</property>
                                                 <property name="wrap">true</property>
                                                 <property name="halign">start</property>
                                                 <style>
@@ -83,13 +83,13 @@
                                                 <property name="spacing">5</property>
                                                 <child>
                                                     <object class="GtkCheckButton" id="aur_check">
-                                                        <property name="label">Enable AUR Support</property>
+                                                        <property name="label" translatable="yes">Enable AUR Support</property>
                                                         <property name="active">false</property>
                                                     </object>
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Access the Arch User Repository for a vast collection of community-maintained packages. AUR packages can contain malicous software, so please use caution when using the AUR.</property>
+                                                        <property name="label" translatable="yes">Access the Arch User Repository for a vast collection of community-maintained packages. AUR packages can contain malicous software, so please use caution when using the AUR.</property>
                                                         <property name="wrap">true</property>
                                                         <property name="xalign">0</property>
                                                         <style>
@@ -115,13 +115,13 @@
                                                 <property name="spacing">5</property>
                                                 <child>
                                                     <object class="GtkCheckButton" id="flatpak_check">
-                                                        <property name="label">Enable Flatpak Support</property>
+                                                        <property name="label" translatable="yes">Enable Flatpak Support</property>
                                                         <property name="active">false</property>
                                                     </object>
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Enable support for Flatpak applications from Flathub and other remotes.</property>
+                                                        <property name="label" translatable="yes">Enable support for Flatpak applications from Flathub and other remotes.</property>
                                                         <property name="wrap">true</property>
                                                         <property name="xalign">0</property>
                                                         <style>
@@ -147,13 +147,13 @@
                                                 <property name="spacing">5</property>
                                                 <child>
                                                     <object class="GtkCheckButton" id="appimage_check">
-                                                        <property name="label">Enable AppImage Support</property>
+                                                        <property name="label" translatable="yes">Enable AppImage Support</property>
                                                         <property name="active">false</property>
                                                     </object>
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Manage and configure updates for AppImage applications easily.</property>
+                                                        <property name="label" translatable="yes">Manage and configure updates for AppImage applications easily.</property>
                                                         <property name="wrap">true</property>
                                                         <property name="xalign">0</property>
                                                         <style>
@@ -179,13 +179,13 @@
                                                 <property name="spacing">5</property>
                                                 <child>
                                                     <object class="GtkCheckButton" id="tray_check">
-                                                        <property name="label">Enable Tray Icon</property>
+                                                        <property name="label" translatable="yes">Enable Tray Icon</property>
                                                         <property name="active">true</property>
                                                     </object>
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Show a status icon in your system tray for quick access and notifications.</property>
+                                                        <property name="label" translatable="yes">Show a status icon in your system tray for quick access and notifications.</property>
                                                         <property name="wrap">true</property>
                                                         <property name="xalign">0</property>
                                                         <style>
@@ -211,13 +211,13 @@
                                                 <property name="spacing">5</property>
                                                 <child>
                                                     <object class="GtkCheckButton" id="nav_check">
-                                                        <property name="label">Vertical Navigation</property>
+                                                        <property name="label" translatable="yes">Vertical Navigation</property>
                                                         <property name="active">true</property>
                                                     </object>
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Change navigation style to vertical or horizontal style.</property>
+                                                        <property name="label" translatable="yes">Change navigation style to vertical or horizontal style.</property>
                                                         <property name="wrap">true</property>
                                                         <property name="xalign">0</property>
                                                         <style>
@@ -238,7 +238,7 @@
                                 <property name="spacing">15</property>
                                 <child>
                                     <object class="GtkButton" id="finish_button">
-                                        <property name="label">Finish Setup</property>
+                                        <property name="label" translatable="yes">Finish Setup</property>
                                         <property name="halign">center</property>
                                         <style>
                                             <class name="suggested-action"/>
@@ -247,7 +247,7 @@
                                 </child>
                                 <child>
                                     <object class="GtkLabel">
-                                        <property name="label">Any required installations will run after the Finish button has been accepted.</property>
+                                        <property name="label" translatable="yes">Any required installations will run after the Finish button has been accepted.</property>
                                         <property name="wrap">true</property>
                                         <property name="justify">center</property>
                                         <style>
@@ -258,7 +258,7 @@
                                 </child>
                                 <child>
                                     <object class="GtkLabel">
-                                        <property name="label">These options and others can be configured later in settings.</property>
+                                        <property name="label" translatable="yes">These options and others can be configured later in settings.</property>
                                         <property name="wrap">true</property>
                                         <property name="justify">center</property>
                                         <style>

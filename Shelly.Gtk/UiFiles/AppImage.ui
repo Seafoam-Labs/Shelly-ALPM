@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<interface>
+<interface domain="shelly-ui">
     <requires lib="gtk" version="4.0"/>
     <object class="GtkBox" id="AppImagePage">
         <property name="orientation">vertical</property>
@@ -14,7 +14,7 @@
                 <property name="spacing">12</property>
                 <child>
                     <object class="GtkSearchEntry" id="AppImageSearchEntry">
-                        <property name="placeholder-text">Search...</property>
+                        <property name="placeholder-text" translatable="yes">Search...</property>
                         <property name="width-request">200</property>
                         <property name="valign">center</property>
                     </object>
@@ -27,7 +27,7 @@
                 <child>
                     <object class="GtkButton" id="SyncAllButton">
                         <property name="valign">center</property>
-                        <property name="tooltip-text">Sync metadata for all AppImages. Useful if AppImage self updated.</property>
+                        <property name="tooltip-text" translatable="yes">Sync metadata for all AppImages. Useful if AppImage self updated.</property>
                         <child>
                             <object class="GtkBox">
                                 <property name="spacing">6</property>
@@ -38,7 +38,7 @@
                                 </child>
                                 <child>
                                     <object class="GtkLabel">
-                                        <property name="label">Sync All</property>
+                                        <property name="label" translatable="yes">Sync All</property>
                                     </object>
                                 </child>
                             </object>
@@ -48,7 +48,7 @@
                 <child>
                     <object class="GtkButton" id="UpgradeAllButton">
                         <property name="valign">center</property>
-                        <property name="tooltip-text">Upgrade all AppImages to their latest versions</property>
+                        <property name="tooltip-text" translatable="yes">Upgrade all AppImages to their latest versions</property>
                         <child>
                             <object class="GtkBox">
                                 <property name="spacing">6</property>
@@ -59,7 +59,7 @@
                                 </child>
                                 <child>
                                     <object class="GtkLabel">
-                                        <property name="label">Upgrade All</property>
+                                        <property name="label" translatable="yes">Upgrade All</property>
                                     </object>
                                 </child>
                             </object>
@@ -69,7 +69,7 @@
                 <child>
                     <object class="GtkButton" id="InstallAppImageButton">
                         <property name="valign">center</property>
-                        <property name="tooltip-text">Install a new AppImage from a file</property>
+                        <property name="tooltip-text" translatable="yes">Install a new AppImage from a file</property>
                         <style>
                             <class name="suggested-action"/>
                         </style>
@@ -83,7 +83,7 @@
                                 </child>
                                 <child>
                                     <object class="GtkLabel">
-                                        <property name="label">Install AppImage</property>
+                                        <property name="label" translatable="yes">Install AppImage</property>
                                     </object>
                                 </child>
                             </object>
@@ -156,7 +156,7 @@
                                         <property name="valign">center</property>
                                         <child>
                                             <object class="GtkLabel" id="DetailTitleLabel">
-                                                <property name="label">App Name</property>
+                                                <property name="label" translatable="yes">App Name</property>
                                                 <property name="xalign">0</property>
                                                 <style>
                                                     <class name="title-1"/>
@@ -168,7 +168,7 @@
                                                 <property name="spacing">8</property>
                                                 <child>
                                                     <object class="GtkLabel" id="DetailVersionLabel">
-                                                        <property name="label">Version</property>
+                                                        <property name="label" translatable="yes">Version</property>
                                                         <property name="xalign">0</property>
                                                         <style>
                                                             <class name="caption"/>
@@ -180,7 +180,7 @@
                                         </child>
                                         <child>
                                             <object class="GtkLabel" id="DetailDescriptionLabel">
-                                                <property name="label">Description goes here...</property>
+                                                <property name="label" translatable="yes">Description goes here...</property>
                                                 <property name="xalign">0</property>
                                                 <property name="wrap">true</property>
                                                 <property name="lines">3</property>
@@ -212,7 +212,7 @@
                                                 <property name="spacing">12</property>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Size on Disk</property>
+                                                        <property name="label" translatable="yes">Size on Disk</property>
                                                         <property name="hexpand">true</property>
                                                         <property name="xalign">0</property>
                                                     </object>
@@ -240,7 +240,7 @@
                                                 <property name="spacing">12</property>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Update Strategy</property>
+                                                        <property name="label" translatable="yes">Update Strategy</property>
                                                         <property name="hexpand">true</property>
                                                         <property name="xalign">0</property>
                                                     </object>
@@ -267,14 +267,13 @@
                                                 <property name="orientation">vertical</property>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Update URL / Repository Info</property>
+                                                        <property name="label" translatable="yes">Update URL / Repository Info</property>
                                                         <property name="xalign">0</property>
                                                     </object>
                                                 </child>
                                                 <child>
                                                     <object class="GtkEntry" id="UpdateUrlEntry">
-                                                        <property name="placeholder-text">e.g. repo or https://...
-                                                        </property>
+                                                        <property name="placeholder-text" translatable="yes">e.g. repo or https://...</property>
                                                     </object>
                                                 </child>
                                             </object>
@@ -293,7 +292,7 @@
                                                 <property name="orientation">vertical</property>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Installation Path</property>
+                                                        <property name="label" translatable="yes">Installation Path</property>
                                                         <property name="xalign">0</property>
                                                     </object>
                                                 </child>
@@ -332,7 +331,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Save</property>
+                                                        <property name="label" translatable="yes">Save</property>
                                                         <style>
                                                             <class name="bold"/>
                                                         </style>
@@ -345,7 +344,7 @@
                                 <child>
                                     <object class="GtkButton" id="SyncButton">
                                         <property name="valign">center</property>
-                                        <property name="tooltip-text">Sync metadata for all AppImages. Useful if AppImage self updated.</property>
+                                        <property name="tooltip-text" translatable="yes">Sync metadata for all AppImages. Useful if AppImage self updated.</property>
                                         <child>
                                             <object class="GtkBox">
                                                 <style>
@@ -359,7 +358,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Sync</property>
+                                                        <property name="label" translatable="yes">Sync</property>
                                                     </object>
                                                 </child>
                                             </object>
@@ -383,7 +382,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label">Remove</property>
+                                                        <property name="label" translatable="yes">Remove</property>
                                                         <style>
                                                             <class name="bold"/>
                                                         </style>

@@ -3,6 +3,7 @@ using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
+using static Shelly.GTK.Resources.Translations;
 
 // ReSharper disable RedundantAssignment
 
@@ -10,7 +11,7 @@ using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
 
 namespace Shelly.Gtk.Windows;
 
-public class ShellySearch(
+public sealed class ShellySearch(
     IPrivilegedOperationService privilegedOperationService,
     IUnprivilegedOperationService unprivilegedOperationService,
     IConfigService configService,
@@ -18,63 +19,44 @@ public class ShellySearch(
     ILockoutService lockoutService) : IShellyWindow
 {
     private readonly CancellationTokenSource _cts = new();
-    private Box _box = null!;
-    private ColumnView _columnView = null!;
     private Gio.ListStore _listStore = null!;
     private SingleSelection _selectionModel = null!;
     private Button _installButton = null!;
     private Button _removeButton = null!;
     private string? _initialQuery;
 
-    private SignalListItemFactory _checkFactory = null!;
-    private SignalListItemFactory _nameFactory = null!;
-    private SignalListItemFactory _repoFactory = null!;
-    private SignalListItemFactory _versionFactory = null!;
-    private SignalListItemFactory _descriptionFactory = null!;
-    private SignalListItemFactory _lastUpdatedFactory = null!;
+    private readonly Dictionary<ColumnViewCell, EventHandler> _checkBinding = [];
+    private readonly Dictionary<ColumnViewCell, EventHandler> _installedBinding = [];
 
-    private ColumnViewColumn _checkColumn = null!;
-    private ColumnViewColumn _nameColumn = null!;
-    private ColumnViewColumn _repoColumn = null!;
-    private ColumnViewColumn _versionColumn = null!;
-    private ColumnViewColumn _descriptionColumn = null!;
-    private ColumnViewColumn _lastUpdatedColumn = null!;
-
-    private Dictionary<ColumnViewCell, EventHandler> _checkBinding = [];
-    private Dictionary<ColumnViewCell, EventHandler> _installedBinding = [];
-    private readonly List<MetaPackageGObject> _packageGObjectRefs = [];
-
+    private const int MatchScore = 67;
     private Stack _searchStack = null!;
     private Spinner _searchSpinner = null!;
     private SearchEntry _searchEntry = null!;
 
-    public Widget CreateWindow() => CreateWindow(null);
-
-    public Widget CreateWindow(string? initialQuery)
+    public Widget CreateWindow()
     {
-        _initialQuery = initialQuery;
         var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/ShellySearchWindow.ui"), -1);
-
-        _box = (Box)builder.GetObject("ShellySearchWindow")!;
-        _columnView = (ColumnView)builder.GetObject("package_grid")!;
+        builder.TranslationDomain = Domain;
+        var box = (Box)builder.GetObject("ShellySearchWindow")!;
+        var columnView = (ColumnView)builder.GetObject("package_grid")!;
         _installButton = (Button)builder.GetObject("install_button")!;
         _installButton.SetSensitive(false);
         _removeButton = (Button)builder.GetObject("remove_button")!;
         _removeButton.SetSensitive(false);
 
-        _checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
-        _nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
-        _nameColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
+        var checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
+        var nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
+        nameColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
             string.Compare(a.Package?.Name, b.Package?.Name, StringComparison.OrdinalIgnoreCase)));
-        _repoColumn = (ColumnViewColumn)builder.GetObject("repo_column")!;
-        _repoColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
+        var repoColumn = (ColumnViewColumn)builder.GetObject("repo_column")!;
+        repoColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
             string.Compare(a.Package?.Repository, b.Package?.Repository, StringComparison.OrdinalIgnoreCase)));
-        _versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
-        _versionColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
+        var versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
+        versionColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
             string.Compare(a.Package?.Version, b.Package?.Version, StringComparison.OrdinalIgnoreCase)));
-        _descriptionColumn = (ColumnViewColumn)builder.GetObject("description_column")!;
-        _lastUpdatedColumn = (ColumnViewColumn)builder.GetObject("last_updated_column")!;
-        _lastUpdatedColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
+        var descriptionColumn = (ColumnViewColumn)builder.GetObject("description_column")!;
+        var lastUpdatedColumn = (ColumnViewColumn)builder.GetObject("last_updated_column")!;
+        lastUpdatedColumn.SetSorter(CustomSorter.New<MetaPackageGObject>((a, b) =>
             a.Package == null || b.Package == null ? 0 : a.Package.LastUpdated.CompareTo(b.Package.LastUpdated)));
         _searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
 
@@ -89,14 +71,14 @@ public class ShellySearch(
 
         _listStore = Gio.ListStore.New(MetaPackageGObject.GetGType());
         _selectionModel = SingleSelection.New(
-            SortListModel.New(_listStore, _columnView.GetSorter()));
+            SortListModel.New(_listStore, columnView.GetSorter()));
         _selectionModel.CanUnselect = true;
-        _columnView.SetModel(_selectionModel);
+        columnView.SetModel(_selectionModel);
 
-        SetupColumns(_checkColumn, _nameColumn, _repoColumn, _versionColumn, _descriptionColumn, _lastUpdatedColumn);
+        SetupColumns(checkColumn, nameColumn, repoColumn, versionColumn, descriptionColumn, lastUpdatedColumn);
 
-        ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.Start);
-        ColumnViewHelper.AlignColumnHeader(_columnView, 3, Align.End);
+        ColumnViewHelper.AlignColumnHeader(columnView, 2, Align.Start);
+        ColumnViewHelper.AlignColumnHeader(columnView, 3, Align.End);
 
         _installButton.OnClicked += (_, _) => { _ = InstallSelectedAsync(); };
         _removeButton.OnClicked += (_, _) => { _ = RemoveSelectedAsync(); };
@@ -108,7 +90,7 @@ public class ShellySearch(
         spinnerBox.SetVexpand(true);
         _searchSpinner = Spinner.New();
         _searchSpinner.SetSizeRequest(48, 48);
-        var searchingLabel = Label.New("Searching...");
+        var searchingLabel = Label.New(T("Searching..."));
         spinnerBox.Append(_searchSpinner);
         spinnerBox.Append(searchingLabel);
 
@@ -117,10 +99,10 @@ public class ShellySearch(
         _searchStack.AddNamed(spinnerBox, "loading");
 
         // Move the ScrolledWindow (parent of _columnView) into the stack
-        var scrolledWindow = _columnView.GetParent()!;
-        _box.Remove(scrolledWindow);
+        var scrolledWindow = columnView.GetParent()!;
+        box.Remove(scrolledWindow);
         _searchStack.AddNamed(scrolledWindow, "results");
-        _box.Append(_searchStack);
+        box.Append(_searchStack);
 
         _searchStack.SetVisibleChildName("results");
 
@@ -129,7 +111,7 @@ public class ShellySearch(
             _ = LoadDataAsync();
         }
 
-        _columnView.OnActivate += (_, _) =>
+        columnView.OnActivate += (_, _) =>
         {
             if (_selectionModel.GetSelectedItem() is MetaPackageGObject pkgObj)
             {
@@ -137,14 +119,14 @@ public class ShellySearch(
             }
         };
 
-        return _box;
+        return box;
     }
 
     private void SetupColumns(ColumnViewColumn checkColumn, ColumnViewColumn nameColumn, ColumnViewColumn repoColumn,
         ColumnViewColumn versionColumn, ColumnViewColumn descriptionColumn, ColumnViewColumn lastUpdatedColumn)
     {
-        _checkFactory = SignalListItemFactory.New();
-        _checkFactory.OnSetup += (_, args) =>
+        var checkFactory = SignalListItemFactory.New();
+        checkFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var check = CheckButton.New();
@@ -158,7 +140,7 @@ public class ShellySearch(
                 UpdateButtonSensitivity();
             };
         };
-        _checkFactory.OnBind += (_, args) =>
+        checkFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is not MetaPackageGObject pkgObj ||
@@ -173,16 +155,16 @@ public class ShellySearch(
                 if (listItem.GetItem() == pkgObj) check.SetActive(pkgObj.IsSelected);
             }
         };
-        _checkFactory.OnUnbind += (_, args) =>
+        checkFactory.OnUnbind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is not MetaPackageGObject pkgObj) return;
             if (_checkBinding.Remove(listItem, out var handler)) pkgObj.OnSelectionToggled -= handler;
         };
-        checkColumn.SetFactory(_checkFactory);
+        checkColumn.SetFactory(checkFactory);
 
-        _nameFactory = SignalListItemFactory.New();
-        _nameFactory.OnSetup += (_, args) =>
+        var nameFactory = SignalListItemFactory.New();
+        nameFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var box = Box.New(Orientation.Horizontal, 6);
@@ -196,7 +178,7 @@ public class ShellySearch(
             box.Append(installedIcon);
             listItem.SetChild(box);
         };
-        _nameFactory.OnBind += (_, args) =>
+        nameFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is not MetaPackageGObject { Package: { } pkg } pkgObj ||
@@ -205,7 +187,7 @@ public class ShellySearch(
             var installedIcon = (Image)label.GetNextSibling()!;
             label.SetText(pkg.Name);
             installedIcon.Visible = pkg.IsInstalled;
-            installedIcon.TooltipText = "Installed";
+            installedIcon.TooltipText = T("Installed");
 
             pkgObj.OnIsInstalledChanged += OnInstalledChanged;
             _installedBinding[listItem] = OnInstalledChanged;
@@ -216,35 +198,33 @@ public class ShellySearch(
                 installedIcon.Visible = pkgObj.IsInstalled;
             }
         };
-        _nameFactory.OnUnbind += (_, args) =>
+        nameFactory.OnUnbind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is not MetaPackageGObject pkgObj) return;
             if (_installedBinding.Remove(listItem, out var handler)) pkgObj.OnIsInstalledChanged -= handler;
         };
-        nameColumn.SetFactory(_nameFactory);
+        nameColumn.SetFactory(nameFactory);
 
-        _repoFactory = SignalListItemFactory.New();
-        _repoFactory.OnSetup += (_, args) =>
+        var repoFactory = SignalListItemFactory.New();
+        repoFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var label = Label.New(null);
             label.Halign = Align.End;
             label.MarginStart = 6;
-            //label.Wrap = true;
-            //label.WrapMode = Pango.WrapMode.WordChar;
             listItem.SetChild(label);
         };
-        _repoFactory.OnBind += (_, args) =>
+        repoFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is MetaPackageGObject { Package: { } pkg } && listItem.GetChild() is Label label)
                 label.SetText(pkg.Repository);
         };
-        repoColumn.SetFactory(_repoFactory);
+        repoColumn.SetFactory(repoFactory);
 
-        _versionFactory = SignalListItemFactory.New();
-        _versionFactory.OnSetup += (_, args) =>
+        var versionFactory = SignalListItemFactory.New();
+        versionFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var label = Label.New(null);
@@ -254,16 +234,16 @@ public class ShellySearch(
             label.Xalign = 1;
             listItem.SetChild(label);
         };
-        _versionFactory.OnBind += (_, args) =>
+        versionFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is MetaPackageGObject { Package: { } pkg } && listItem.GetChild() is Label label)
                 label.SetText(pkg.Version);
         };
-        versionColumn.SetFactory(_versionFactory);
+        versionColumn.SetFactory(versionFactory);
 
-        _descriptionFactory = SignalListItemFactory.New();
-        _descriptionFactory.OnSetup += (_, args) =>
+        var descriptionFactory = SignalListItemFactory.New();
+        descriptionFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var label = Label.New(null);
@@ -279,16 +259,16 @@ public class ShellySearch(
             label.WidthRequest = 1;
             listItem.SetChild(label);
         };
-        _descriptionFactory.OnBind += (_, args) =>
+        descriptionFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is MetaPackageGObject { Package: { } pkg } && listItem.GetChild() is Label label)
                 label.SetText(pkg.Description);
         };
-        descriptionColumn.SetFactory(_descriptionFactory);
+        descriptionColumn.SetFactory(descriptionFactory);
 
-        _lastUpdatedFactory = SignalListItemFactory.New();
-        _lastUpdatedFactory.OnSetup += (_, args) =>
+        var lastUpdatedFactory = SignalListItemFactory.New();
+        lastUpdatedFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var label = Label.New(null);
@@ -304,180 +284,180 @@ public class ShellySearch(
             label.WidthRequest = 1;
             listItem.SetChild(label);
         };
-        _lastUpdatedFactory.OnBind += (_, args) =>
+        lastUpdatedFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is MetaPackageGObject { Package: { } pkg } && listItem.GetChild() is Label label)
                 label.SetText(DateTimeOffset.FromUnixTimeSeconds(pkg.LastUpdated).ToString("yyyy-MM-dd HH:mm"));
         };
-        lastUpdatedColumn.SetFactory(_lastUpdatedFactory);
+        lastUpdatedColumn.SetFactory(lastUpdatedFactory);
     }
 
     private async Task LoadDataAsync()
     {
-        Console.WriteLine(_initialQuery);
-        if (string.IsNullOrWhiteSpace(_initialQuery))
+        var query = _initialQuery;
+
+        if (string.IsNullOrWhiteSpace(query))
         {
             _listStore.RemoveAll();
             return;
         }
 
-        GLib.Functions.IdleAdd(0, () =>
-        {
-            _searchSpinner.Start();
-            _searchStack.SetVisibleChildName("loading");
-            return false;
-        });
+        SetLoadingState(true);
 
         try
         {
-            List<Task<List<MetaPackageModel>>> groupList = [];
+            var ct = _cts.Token;
+            List<Task<List<MetaPackageModel>>> tasks = [LoadStandardPackagesAsync(query)];
 
-            var standardTask = Task.Run(async () =>
-            {
-                var standardInstalled = await privilegedOperationService.GetInstalledPackagesAsync().ContinueWith(x =>
-                    x.Result.Select(y => new MetaPackageModel(
-                        y.Name,
-                        y.Name,
-                        y.Version,
-                        y.Description,
-                        PackageType.Standard,
-                        y.Description,
-                        y.Repository,
-                        true,
-                        new DateTimeOffset(y.BuildDate).ToUnixTimeSeconds()
-                    )).ToList());
-                var standardAvailable = await privilegedOperationService.SearchPackagesAsync(_initialQuery)
-                    .ContinueWith(x =>
-                        x.Result.Select(y => new MetaPackageModel(
-                            y.Name,
-                            y.Name,
-                            y.Version,
-                            y.Description,
-                            PackageType.Standard,
-                            y.Description,
-                            y.Repository,
-                            standardInstalled.Any(z => z.Name == y.Name),
-                            new DateTimeOffset(y.BuildDate).ToUnixTimeSeconds()
-                        )).ToList());
-                return standardAvailable;
-            });
-            groupList.Add(standardTask);
-
-            if (configService.LoadConfig().FlatPackEnabled)
-            {
-                var flatpakGroup = Task.Run(async () =>
-                {
-                    // Sync appstream cache (with timeout so it doesn't block forever)
-                    var syncTask = unprivilegedOperationService.FlatpakSyncRemoteAppstream();
-                    await Task.WhenAny(syncTask, Task.Delay(TimeSpan.FromSeconds(5), _cts.Token));
-
-                    // Get installed list for marking installed status
-                    var flatPakInstalled = await unprivilegedOperationService.ListFlatpakPackages().ContinueWith(x =>
-                        x.Result.Select(y => y.Id).ToHashSet());
-
-                    // Load all appstream apps and filter by query
-                    var allApps = await unprivilegedOperationService.ListAppstreamFlatpak(_cts.Token);
-                    var query = _initialQuery!;
-                    var filtered = allApps
-                        .Where(app => app.Type != "addon")
-                        .Where(app =>
-                            app.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                            app.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                            app.Id.Contains(query, StringComparison.OrdinalIgnoreCase))
-                        .Take(100)
-                        .Select(app => new MetaPackageModel(
-                            app.Id,
-                            app.Name,
-                            app.Releases.FirstOrDefault()?.Version ?? string.Empty,
-                            app.Description,
-                            PackageType.Flatpak,
-                            app.Summary,
-                            app.Remotes.FirstOrDefault()?.Name ?? "Flatpak",
-                            flatPakInstalled.Contains(app.Id),
-                            app.Releases.FirstOrDefault()?.Timestamp ?? DateTimeOffset.MinValue.ToUnixTimeSeconds()
-                        )).ToList();
-
-                    return filtered;
-                });
-                groupList.Add(flatpakGroup);
-            }
-
-            if (configService.LoadConfig().AurEnabled)
-            {
-                var aurGroup = Task.Run(async () =>
-                {
-                    var aurInstalled = await privilegedOperationService.GetAurInstalledPackagesAsync()
-                        .ContinueWith(x =>
-                            x.Result.Select(y => new MetaPackageModel(
-                                y.Name,
-                                y.Name,
-                                y.Version,
-                                y.Description ?? "",
-                                PackageType.Aur,
-                                y.Url ?? "",
-                                "AUR",
-                                true,
-                                y.LastModified)
-                            ).ToList());
-                    var aurAvailable = await privilegedOperationService.SearchAurPackagesAsync(_initialQuery)
-                        .ContinueWith(x => x.Result.Select(y => new MetaPackageModel(
-                            y.Name,
-                            y.Name,
-                            y.Version,
-                            y.Description ?? "",
-                            PackageType.Aur,
-                            y.Url ?? "",
-                            "AUR",
-                            aurInstalled.Any(z => z.Name == y.Name),
-                            y.LastModified)
-                        ).ToList());
-                    return aurAvailable;
-                });
-                groupList.Add(aurGroup);
-            }
+            var config = configService.LoadConfig();
+            if (config.FlatPackEnabled)
+                tasks.Add(LoadFlatpakPackagesAsync(query, ct));
+            if (config.AurEnabled)
+                tasks.Add(LoadAurPackagesAsync(query));
 
             List<MetaPackageModel> models = [];
-            await foreach (var completedTask in Task.WhenEach(groupList))
+            await foreach (var task in Task.WhenEach(tasks).WithCancellation(ct))
             {
-                var metaEnumerable = await completedTask;
-                if (metaEnumerable.Count != 0)
-                {
-                    models.AddRange(metaEnumerable.ToList());
-                }
+                var results = await task;
+                models.AddRange(results);
             }
+
+            models = models
+                .Select(y => new { Package = y, Score = MatchObject(query, y.Name, y.Description) })
+                .Where(x => x.Score >= MatchScore)
+                .OrderByDescending(x => x.Package.IsInstalled)
+                .ThenByDescending(x => x.Score)
+                .Select(x => x.Package)
+                .ToList();
 
             GLib.Functions.IdleAdd(0, () =>
             {
                 _listStore.RemoveAll();
-                _packageGObjectRefs.Clear();
-                foreach (var pkgObj in models.Select(model =>
-                         {
-                             var o = MetaPackageGObject.NewWithProperties([]);
-                             o.Package = model;
-                             return o;
-                         }))
+                foreach (var model in models)
                 {
-                    _packageGObjectRefs.Add(pkgObj);
-                    _listStore.Append(pkgObj);
+                    var o = MetaPackageGObject.NewWithProperties([]);
+                    o.Package = model;
+                    _listStore.Append(o);
                 }
 
                 return false;
             });
         }
+        catch (OperationCanceledException)
+        {
+            // expected on dispose
+        }
         catch (Exception ex)
         {
-            Console.WriteLine($"Search error: {ex.Message}");
+            Console.WriteLine(T("Search error: {0}", ex.Message));
         }
         finally
         {
-            GLib.Functions.IdleAdd(0, () =>
+            SetLoadingState(false);
+        }
+    }
+
+    private void SetLoadingState(bool loading)
+    {
+        GLib.Functions.IdleAdd(0, () =>
+        {
+            if (loading)
+            {
+                _searchSpinner.Start();
+                _searchStack.SetVisibleChildName("loading");
+            }
+            else
             {
                 _searchSpinner.Stop();
                 _searchStack.SetVisibleChildName("results");
-                return false;
-            });
-        }
+            }
+
+            return false;
+        });
+    }
+
+    private async Task<List<MetaPackageModel>> LoadStandardPackagesAsync(string query)
+    {
+        var installed = await privilegedOperationService.GetInstalledPackagesAsync();
+        var installedNames = installed.Select(p => p.Name).ToHashSet();
+
+        var available = await privilegedOperationService.SearchPackagesAsync(query);
+        return available
+            .Select(y => new MetaPackageModel(
+                y.Name,
+                y.Name,
+                y.Version,
+                y.Description,
+                PackageType.Standard,
+                y.Description,
+                y.Repository,
+                installedNames.Contains(y.Name),
+                new DateTimeOffset(y.BuildDate).ToUnixTimeSeconds()
+            ))
+            .ToList();
+    }
+
+    private async Task<List<MetaPackageModel>> LoadAurPackagesAsync(string query)
+    {
+        var installed = await privilegedOperationService.GetAurInstalledPackagesAsync();
+        var installedNames = installed.Select(p => p.Name).ToHashSet();
+
+        var available = await privilegedOperationService.SearchAurPackagesAsync(query);
+        return available
+            .Select(y => new MetaPackageModel(
+                y.Name,
+                y.Name,
+                y.Version,
+                y.Description ?? "",
+                PackageType.Aur,
+                y.Url ?? "",
+                "AUR",
+                installedNames.Contains(y.Name),
+                y.LastModified
+            ))
+            .ToList();
+    }
+
+    private async Task<List<MetaPackageModel>> LoadFlatpakPackagesAsync(string query, CancellationToken ct)
+    {
+        var syncTask = unprivilegedOperationService.FlatpakSyncRemoteAppstream();
+        await Task.WhenAny(syncTask, Task.Delay(TimeSpan.FromSeconds(5), ct));
+
+        var installedIds = (await unprivilegedOperationService.ListFlatpakPackages())
+            .Select(y => y.Id).ToHashSet();
+
+        var allApps = await unprivilegedOperationService.ListAppstreamFlatpak(ct);
+        return allApps
+            .Where(app => app.Type != "addon")
+            .Select(app => new { Package = app, Score = MatchObject(query, app.Name, app.Description) })
+            .Where(x => x.Score >= MatchScore)
+            .OrderByDescending(x => x.Score)
+            .Select(x => x.Package)
+            .Take(100)
+            .Select(app => new MetaPackageModel(
+                app.Id,
+                app.Name,
+                app.Releases.FirstOrDefault()?.Version ??
+                string.Empty,
+                app.Description,
+                PackageType.Flatpak,
+                app.Summary,
+                app.Remotes.FirstOrDefault()?.Name ??
+                "Flatpak",
+                installedIds.Contains(app.Id),
+                app.Releases.FirstOrDefault()?.Timestamp ??
+                DateTimeOffset.MinValue.ToUnixTimeSeconds()
+            ))
+            .ToList();
+    }
+
+    private static int MatchObject(string query, string name, string description)
+    {
+        var nameScore = StringMatching.PartialRatio(query, name);
+        var descScore = StringMatching.PartialRatio(query, description);
+
+        return (int)(nameScore * 0.5 + descScore * 0.5);
     }
 
     private async Task InstallSelectedAsync()
@@ -501,7 +481,7 @@ public class ShellySearch(
 
         try
         {
-            lockoutService.Show($"Installing...");
+            lockoutService.Show(T($"Installing..."));
             var standard = selected.Where(x => x.PackageType == PackageType.Standard).Select(x => x.Name).ToList();
             var aur = selected.Where(x => x.PackageType == PackageType.Aur).Select(x => x.Name).ToList();
             var flatpak = selected.Where(x => x.PackageType == PackageType.Flatpak).Select(x => x.Id).ToList();
@@ -539,7 +519,7 @@ public class ShellySearch(
         }
         catch (Exception e)
         {
-            Console.WriteLine($"Failed to install packages: {e.Message}");
+            Console.WriteLine(T("Failed to install packages: {0}", e.Message));
         }
         finally
         {
@@ -548,13 +528,13 @@ public class ShellySearch(
             if (installFailed)
             {
                 args = new ToastMessageEventArgs(
-                    $"Install for {selected.Count} package(s) was unsuccessful."
+                    T("Install for {0} package(s) was unsuccessful.", selected.Count)
                 );
             }
             else
             {
                 args = new ToastMessageEventArgs(
-                    $"Installed {selected.Count} Package(s)"
+                    T("Installed {0} Package(s)", selected.Count)
                 );
             }
 
@@ -601,13 +581,13 @@ public class ShellySearch(
 
         try
         {
-            lockoutService.Show("Removing...");
+            lockoutService.Show(T("Removing..."));
 
             var standard = selected.Where(x => x.PackageType == PackageType.Standard).Select(x => x.Name).ToList();
             var aur = selected.Where(x => x.PackageType == PackageType.Aur).Select(x => x.Name).ToList();
             var flatpak = selected.Where(x => x.PackageType == PackageType.Flatpak).Select(x => x.Id).ToList();
 
-            if (standard.Count > 0) await privilegedOperationService.RemovePackagesAsync(standard, false, false);
+            if (standard.Count > 0) await privilegedOperationService.RemovePackagesAsync(standard, false, false, false);
             if (aur.Count > 0) await privilegedOperationService.RemoveAurPackagesAsync(aur);
             if (flatpak.Count > 0) await unprivilegedOperationService.RemoveFlatpakPackage(flatpak);
 
@@ -621,14 +601,14 @@ public class ShellySearch(
         }
         catch (Exception e)
         {
-            Console.WriteLine($"Failed to remove packages: {e.Message}");
+            Console.WriteLine(T("Failed to remove packages: {0}", e.Message));
         }
         finally
         {
             lockoutService.Hide();
 
             var args = new ToastMessageEventArgs(
-                $"Removed {selected.Count} Package(s)"
+                T("Removed {0} Package(s)", selected.Count)
             );
             genericQuestionService.RaiseToastMessage(args);
 
@@ -641,7 +621,6 @@ public class ShellySearch(
         _cts.Cancel();
         _cts.Dispose();
         _listStore.RemoveAll();
-        _packageGObjectRefs.Clear();
         _checkBinding.Clear();
         _installedBinding.Clear();
     }

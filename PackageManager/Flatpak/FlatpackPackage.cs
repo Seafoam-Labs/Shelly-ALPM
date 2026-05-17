@@ -53,7 +53,7 @@ public class FlatpackPackage(IntPtr pkgPtr)
         Version = Version,
         LatestCommit = LastCommit,
         Kind = Kind,
-        remote = Origin
+        Remote = Origin
     };
 
     public override string ToString()

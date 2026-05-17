@@ -1,3 +1,4 @@
+
 namespace Shelly.Gtk.UiModels;
 
-public record PacfileRecord(string Name,string Text);
+public partial record PacfileRecord(string Name,string Text);

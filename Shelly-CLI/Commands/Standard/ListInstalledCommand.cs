@@ -1,7 +1,6 @@
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Text.Json;
 using PackageManager.Alpm;
+using PackageManager.Wire;
 using Shelly_CLI.Utility;
 using Shelly.Utilities;
 using Spectre.Console;
@@ -9,21 +8,23 @@ using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Standard;
 
-public class ListInstalledCommand : Command<ListSettings>
+public class ListInstalledCommand : Command<AlpmListSettings>
 {
-    public override int Execute([NotNull] CommandContext context, [NotNull] ListSettings settings)
+    public override int Execute(CommandContext context, AlpmListSettings settings)
     {
         if (Program.IsUiMode)
         {
             return HandleUiModeListInstalled(settings);
         }
+
         using var manager = new AlpmManager();
 
         if (!settings.JsonOutput)
         {
             AnsiConsole.Status()
                 .Spinner(Spinner.Known.Dots)
-                .Start("Initializing ALPM...", ctx => { manager.Initialize(true, showHiddenPackages: settings.ShowHidden); });
+                .Start("Initializing ALPM...",
+                    _ => { manager.Initialize(true, showHiddenPackages: settings.ShowHidden); });
         }
         else
         {
@@ -35,8 +36,7 @@ public class ListInstalledCommand : Command<ListSettings>
         // Apply filter if specified
         if (!string.IsNullOrWhiteSpace(settings.Filter))
         {
-            packages = packages.Where(p => p.Name.Contains(settings.Filter, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            packages = ApplyFilter(packages, settings.Filter);
         }
 
         // Apply sorting based on settings
@@ -59,8 +59,8 @@ public class ListInstalledCommand : Command<ListSettings>
             var sortedList = sortedPackages.ToList();
             var json = JsonSerializer.Serialize(sortedList, ShellyCLIJsonContext.Default.ListAlpmPackageDto);
             // Write directly to stdout stream to bypass Spectre.Console redirection
-            using var stdout = System.Console.OpenStandardOutput();
-            using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
+            using var stdout = Console.OpenStandardOutput();
+            using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
             writer.WriteLine(json);
             writer.Flush();
             return 0;
@@ -90,7 +90,7 @@ public class ListInstalledCommand : Command<ListSettings>
         return 0;
     }
 
-    private static int HandleUiModeListInstalled(ListSettings settings)
+    private static int HandleUiModeListInstalled(AlpmListSettings settings)
     {
         using var manager = new AlpmManager();
         manager.Initialize(true, showHiddenPackages: settings.ShowHidden);
@@ -100,8 +100,7 @@ public class ListInstalledCommand : Command<ListSettings>
         // Apply filter if specified
         if (!string.IsNullOrWhiteSpace(settings.Filter))
         {
-            packages = packages.Where(p => p.Name.Contains(settings.Filter, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            packages = ApplyFilter(packages, settings.Filter);
         }
 
         // Apply sorting based on settings
@@ -121,11 +120,7 @@ public class ListInstalledCommand : Command<ListSettings>
         if (settings.JsonOutput)
         {
             var sortedList = sortedPackages.ToList();
-            var json = JsonSerializer.Serialize(sortedList, ShellyCLIJsonContext.Default.ListAlpmPackageDto);
-            using var stdout = Console.OpenStandardOutput();
-            using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-            writer.WriteLine(json);
-            writer.Flush();
+            JsonPackFrame.WriteToStdout(sortedList);
             return 0;
         }
 
@@ -139,5 +134,14 @@ public class ListInstalledCommand : Command<ListSettings>
 
         Console.Error.WriteLine($"Total: {displayPackages.Count} packages");
         return 0;
+    }
+
+    private static List<AlpmPackageDto> ApplyFilter(List<AlpmPackageDto> packages, string filter)
+    {
+        return packages
+            .Select(x => new { Package = x, Score = StringMatching.PartialRatio(filter, x.Name) })
+            .Where(x => x.Score >= 90)
+            .Select(x => x.Package)
+            .ToList();
     }
 }

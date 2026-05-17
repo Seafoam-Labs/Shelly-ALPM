@@ -4,16 +4,22 @@ using PackageManager.Alpm;
 using PackageManager.Alpm.Pacfile;
 using PackageManager.Aur.Models;
 using PackageManager.Flatpak;
-using Shelly_CLI.Commands.Aur;
-using Shelly_CLI.Commands.Standard;
+using PackageManager.Local;
+using Shelly_CLI.Commands.Aur.Models;
+using Shelly_CLI.Commands.Standard.Models;
 using Shelly_CLI.Configuration;
 
 namespace Shelly_CLI;
 
+[JsonSourceGenerationOptions(
+    MaxDepth = 256,
+    GenerationMode = JsonSourceGenerationMode.Default)]
 [JsonSerializable(typeof(List<AlpmPackageUpdateDto>))]
 [JsonSerializable(typeof(AlpmPackageUpdateDto))]
 [JsonSerializable(typeof(List<AlpmPackageDto>))]
 [JsonSerializable(typeof(AlpmPackageDto))]
+[JsonSerializable(typeof(List<LocalPackageDto>))]
+[JsonSerializable(typeof(LocalPackageDto))]
 [JsonSerializable(typeof(List<AurPackageDto>))]
 [JsonSerializable(typeof(AurPackageDto))]
 [JsonSerializable(typeof(List<AurUpdateDto>))]
@@ -22,10 +28,8 @@ namespace Shelly_CLI;
 [JsonSerializable(typeof(SyncPackageModel))]
 [JsonSerializable(typeof(SyncAurModel))]
 [JsonSerializable(typeof(SyncFlatpakModel))]
-[JsonSerializable(typeof(AurSearchPackageBuild.PackageBuild))]
-[JsonSerializable(typeof(List<AurSearchPackageBuild.PackageBuild>))]
-[JsonSerializable(typeof(ArchNews.RssModel))]
-[JsonSerializable(typeof(List<ArchNews.RssModel>))]
+[JsonSerializable(typeof(RssModel))]
+[JsonSerializable(typeof(List<RssModel>))]
 [JsonSerializable(typeof(List<AppImageDto>))]
 [JsonSerializable(typeof(AppImageDto))]
 [JsonSerializable(typeof(List<AppImageUpdateDto>))]
@@ -37,6 +41,18 @@ namespace Shelly_CLI;
 [JsonSerializable(typeof(FlatpakRemoteDto))]
 [JsonSerializable(typeof(List<PacfileRecord>))]
 [JsonSerializable(typeof(PacfileRecord))]
-internal partial class ShellyCLIJsonContext : JsonSerializerContext
-{
-}
+[JsonSerializable(typeof(PackageBuild))]
+[JsonSerializable(typeof(FlatpakRemoteRefInfo))]
+[JsonSerializable(typeof(List<AppstreamApp>))]
+[JsonSerializable(typeof(AppstreamApp))]
+[JsonSerializable(typeof(AppstreamIcon))]
+[JsonSerializable(typeof(List<AppstreamIcon>))]
+[JsonSerializable(typeof(AppstreamScreenshot))]
+[JsonSerializable(typeof(List<AppstreamScreenshot>))]
+[JsonSerializable(typeof(AppstreamImage))]
+[JsonSerializable(typeof(List<AppstreamImage>))]
+[JsonSerializable(typeof(AppstreamRelease))]
+[JsonSerializable(typeof(List<AppstreamRelease>))]
+[JsonSerializable(typeof(PackageBuild))]
+[JsonSerializable(typeof(List<PackageBuild>))]
+internal partial class ShellyCLIJsonContext : JsonSerializerContext;

@@ -66,7 +66,7 @@ notebook > header > tabs > tab:checked {
 }
 
 .lockout-overlay {
-    background-color: alpha(@theme_bg_color, 0.9);
+    background-color: alpha(black, 0.6);
 }
 
 .lockout-description {

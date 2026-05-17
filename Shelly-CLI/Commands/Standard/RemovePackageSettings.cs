@@ -9,6 +9,10 @@ public class RemovePackageSettings : PackageSettings
     [Description("Removes all things the removed package(s) are dependent on that have no other uses")]
     public bool Cascade { get; set; }
 
+    [CommandOption("-o | --opt-deps")]
+    [Description("Removes optional dependencies installed with the package, that don't depend on other packages")]
+    public bool OptDeps { get; set; }
+
     [CommandOption("-i | --ripple")]
     [Description("Removes packages that depend on the package being removed")]
     public bool Ripple { get; set; }

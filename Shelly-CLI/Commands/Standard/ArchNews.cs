@@ -1,10 +1,10 @@
-using System.Collections.ObjectModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
-using PackageManager.Alpm;
 using PackageManager.Utilities;
+using PackageManager.Wire;
+using Shelly_CLI.Commands.Standard.Models;
+using Shelly.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -12,25 +12,21 @@ namespace Shelly_CLI.Commands.Standard;
 
 public class ArchNews : AsyncCommand<ArchNewsSettings>
 {
-    private static readonly string FeedFolder = XdgPaths.ShellyCache("archNewsFeed");
+    private const string ArchlinuxFeed = "https://archlinux.org/feeds/news/";
 
+    private static readonly string FeedFolder = XdgPaths.ShellyCache("archNewsFeed");
     private static readonly string FeedPath = Path.Combine(FeedFolder, "Feed.json");
 
-    public override async Task<int> ExecuteAsync([NotNull] CommandContext context, [NotNull] ArchNewsSettings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, ArchNewsSettings settings)
     {
         if (settings.All)
         {
             try
             {
-                var feed = await GetRssFeedAsync("https://archlinux.org/feeds/news/");
+                var feed = await GetRssFeedAsync(ArchlinuxFeed);
                 if (settings.Json)
                 {
-                    var json = JsonSerializer.Serialize(feed, ShellyCLIJsonContext.Default.ListRssModel);
-                    await using var stdout = System.Console.OpenStandardOutput();
-                    await using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-                    await writer.WriteLineAsync(json);
-                    await writer.FlushAsync();
-                    CacheFeed(feed);
+                    await OutputFeed(feed);
                 }
                 else
                 {
@@ -41,9 +37,9 @@ public class ArchNews : AsyncCommand<ArchNewsSettings>
                         AnsiConsole.MarkupLine($"[blue]{item.Link.EscapeMarkup()}[/]");
                         AnsiConsole.MarkupLine($"[white]{item.Description.EscapeMarkup()}[/]");
                     }
-
-                    CacheFeed(feed);
                 }
+
+                CacheFeed(feed);
             }
             catch (Exception e)
             {
@@ -53,18 +49,13 @@ public class ArchNews : AsyncCommand<ArchNewsSettings>
         else
         {
             var cachedFeed = LoadCachedFeed();
-            var feed = await GetRssFeedAsync("https://archlinux.org/feeds/news/");
+            var feed = await GetRssFeedAsync(ArchlinuxFeed);
 
             var newFeed = feed.Except(cachedFeed).ToList();
 
-
             if (settings.Json)
             {
-                var json = JsonSerializer.Serialize(newFeed, ShellyCLIJsonContext.Default.ListRssModel);
-                await using var stdout = System.Console.OpenStandardOutput();
-                await using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-                await writer.WriteLineAsync(json);
-                await writer.FlushAsync();
+                await OutputFeed(newFeed);
                 if (newFeed.Count > 0) CacheFeed(feed);
                 return 0;
             }
@@ -123,11 +114,19 @@ public class ArchNews : AsyncCommand<ArchNewsSettings>
         }).Reverse().ToList();
     }
 
-    public record RssModel
+    private static async Task OutputFeed(List<RssModel> feed)
     {
-        public string? Title { get; init; }
-        public string? Link { get; init; }
-        public string? Description { get; init; }
-        public string? PubDate { get; init; }
+        if (Program.IsUiMode)
+        {
+            JsonPackFrame.WriteToStdout(feed);
+        }
+        else
+        {
+            var json = JsonSerializer.Serialize(feed, ShellyCLIJsonContext.Default.ListRssModel);
+            await using var stdout = Console.OpenStandardOutput();
+            await using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
+            await writer.WriteLineAsync(json);
+            await writer.FlushAsync();
+        }
     }
 }

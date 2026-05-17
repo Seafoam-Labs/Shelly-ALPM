@@ -12,5 +12,6 @@
   <Project Path="Shelly-Notifications/Shelly-Notifications.csproj" />
   <Project Path="Shelly.Gtk/Shelly.Gtk.csproj" />
   <Project Path="Shelly.Gtk.Tests/Shelly.Gtk.Tests.csproj" />
+  <Project Path="Shelly.Keys/Shelly.Keys.csproj" />
   <Project Path="Shelly.Utilities/Shelly.Utilities.csproj" />
 </Solution>

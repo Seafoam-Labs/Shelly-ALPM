@@ -3,12 +3,12 @@ using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Standard;
 
-public class InstallLocalPackageSettings : CommandSettings 
+public class InstallLocalPackageSettings : CommandSettings
 {
     [CommandOption("-l | --location")]
-    [Description("Location of the .pkg.tar.gz(xz) to be installed")]
-    public string? PackageLocation { get; set; }
-    
+    [Description("Location of the .pkg.tar.gz(zst) to be installed")]
+    public required string PackageLocation { get; init; }
+
     [CommandOption("-n|--no-confirm")]
     [Description("Proceed without asking for user confirmation")]
     public bool NoConfirm { get; set; }

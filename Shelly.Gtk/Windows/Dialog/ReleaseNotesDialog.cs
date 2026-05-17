@@ -1,5 +1,6 @@
 using Gtk;
 using System.Text.RegularExpressions;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -30,7 +31,7 @@ public static partial class ReleaseNotesDialog
         var box = Box.New(Orientation.Vertical, 12);
         baseFrame.SetChild(box);
 
-        var titleLabel = Label.New("What's New");
+        var titleLabel = Label.New(T("What's New"));
         titleLabel.AddCssClass("title-2");
         box.Append(titleLabel);
 
@@ -52,7 +53,7 @@ public static partial class ReleaseNotesDialog
         buttonBox.SetHalign(Align.End);
         buttonBox.SetMarginTop(10);
 
-        var closeButton = Button.NewWithLabel("Close");
+        var closeButton = Button.NewWithLabel(T("Close"));
         closeButton.AddCssClass("suggested-action");
         closeButton.OnClicked += (_, _) =>
         {
@@ -82,7 +83,7 @@ public static partial class ReleaseNotesDialog
         var box = Box.New(Orientation.Vertical, 12);
         baseFrame.SetChild(box);
         
-        var titleLabel = Label.New("Version History");
+        var titleLabel = Label.New(T("Version History"));
         titleLabel.AddCssClass("title-2");
         box.Append(titleLabel);
         
@@ -107,7 +108,7 @@ public static partial class ReleaseNotesDialog
         buttonBox.SetHalign(Align.End);
         buttonBox.SetMarginTop(10);
         
-        var closeButton = Button.NewWithLabel("Close");
+        var closeButton = Button.NewWithLabel(T("Close"));
         closeButton.AddCssClass("suggested-action");
         closeButton.OnClicked += (_,_) =>
         {
@@ -179,7 +180,7 @@ public static partial class ReleaseNotesDialog
         header.SetMarginStart(8);
         header.SetMarginEnd(8);
 
-        var versionLabel = Label.New($"Version {release.Version}");
+        var versionLabel = Label.New(T("Version {0}", release.Version));
         versionLabel.AddCssClass("heading");
         versionLabel.SetHalign(Align.Start);
         versionLabel.SetXalign(0);

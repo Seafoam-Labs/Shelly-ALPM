@@ -1,6 +1,7 @@
+
 namespace PackageManager.Flatpak;
 
-public class FlatpakRemoteDto
+public partial class FlatpakRemoteDto
 {
     public string Name { get; set; } = string.Empty;
  

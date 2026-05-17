@@ -1,6 +1,7 @@
+
 namespace PackageManager.Aur.Models;
 
-public class AurUpdateDto
+public partial class AurUpdateDto
 {
     public string Name { get; set; } = string.Empty;
     public string Version { get; set; } = string.Empty;

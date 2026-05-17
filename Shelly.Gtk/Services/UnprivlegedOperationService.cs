@@ -14,7 +14,10 @@ using Shelly.Gtk.UiModels.PackageManagerObjects;
 
 namespace Shelly.Gtk.Services;
 
-public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNotifier packageUpdateNotifier, IDirtyService dirtyService) : IUnprivilegedOperationService
+public class UnprivilegedOperationService(
+    ITrayDbus trayDbus,
+    IPackageUpdateNotifier packageUpdateNotifier,
+    IDirtyService dirtyService) : IUnprivilegedOperationService
 {
     private readonly string _cliPath = CliPathResolver.FindCliPath();
 
@@ -29,21 +32,8 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
 
         try
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    var updates = JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListFlatpakPackageDto);
-                    return updates ?? [];
-                }
-            }
-
-            var allUpdates = JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
-                ShellyGtkJsonContext.Default.ListFlatpakPackageDto);
-            return allUpdates ?? [];
+            JsonPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
+            return framed ?? [];
         }
         catch (Exception ex)
         {
@@ -63,21 +53,8 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
 
         try
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    var updates = JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListFlatpakPackageDto);
-                    return updates ?? [];
-                }
-            }
-
-            var allUpdates = JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
-                ShellyGtkJsonContext.Default.ListFlatpakPackageDto);
-            return allUpdates ?? [];
+            JsonPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
+            return framed ?? [];
         }
         catch (Exception ex)
         {
@@ -108,21 +85,8 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
         {
             try
             {
-                var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-                foreach (var line in lines)
-                {
-                    var trimmedLine = StripBom(line.Trim());
-                    if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                    {
-                        var updates = JsonSerializer.Deserialize(trimmedLine,
-                            ShellyGtkJsonContext.Default.ListAppstreamApp);
-                        return updates ?? [];
-                    }
-                }
-
-                var allUpdates = JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
-                    ShellyGtkJsonContext.Default.ListAppstreamApp);
-                return allUpdates ?? [];
+                JsonPackFrame.TryDecode<List<AppstreamApp>>(result.Output, out var framed);
+                return framed ?? [];
             }
             catch (Exception ex)
             {
@@ -151,6 +115,7 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
         {
             result = await ExecuteUnprivilegedCommandAsync("Remove package", "flatpak uninstall", package);
         }
+
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
     }
@@ -166,9 +131,11 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
         }
         else
         {
-            result = await ExecuteUnprivilegedCommandAsync("Install package", "flatpak install", package, "--remote", remote,
+            result = await ExecuteUnprivilegedCommandAsync("Install package", "flatpak install", package, "--remote",
+                remote,
                 "--branch", branch, isRuntime ? "--runtime" : "");
         }
+
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
     }
@@ -184,9 +151,9 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
     public async Task<List<FlatpakRemoteDto>> FlatpakListRemotes()
     {
         var result = await ExecuteUnprivilegedCommandAsync("flatpak list remotes", "flatpak list-remotes", "-j");
-        var json = StripBom(result.Output.Trim());
-        return JsonSerializer.Deserialize<List<FlatpakRemoteDto>>(json,
-            ShellyGtkJsonContext.Default.ListFlatpakRemoteDto) ?? [];
+        if (!result.Success) return [];
+        JsonPackFrame.TryDecode<List<FlatpakRemoteDto>>(result.Output, out var framed);
+        return framed ?? [];
     }
 
     public async Task<UnprivilegedOperationResult> FlatpakSyncRemoteAppstream()
@@ -215,9 +182,11 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
         }
         else
         {
-            result = await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak install-ref-file", path, "--system",
+            result = await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak install-ref-file", path,
+                "--system",
                 "true");
         }
+
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
     }
@@ -255,11 +224,9 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
             var result =
                 await ExecuteUnprivilegedCommandAsync("Sync remote", "flatpak app-remote-info", remote, app, arch,
                     "-j");
-            var json = StripBom(result.Output.Trim());
-            var remoteInfo =
-                JsonSerializer.Deserialize<FlatpakRemoteRefInfo>(json,
-                    ShellyGtkJsonContext.Default.FlatpakRemoteRefInfo);
-            return remoteInfo!.DownloadSize;
+            if (!result.Success) return 0;
+            JsonPackFrame.TryDecode<FlatpakRemoteRefInfo>(result.Output, out var framed);
+            return framed?.DownloadSize ?? 0;
         }
         catch (Exception ex)
         {
@@ -274,19 +241,9 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
         var result = await ExecuteUnprivilegedCommandAsync("Get Installed AppImages", "appimage list --json");
         try
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    var apps = JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListAppImageDto);
-                    return apps ?? [];
-                }
-            }
-
-            return [];
+            if (!result.Success || string.IsNullOrEmpty(result.Output)) return [];
+            JsonPackFrame.TryDecode<List<AppImageDto>>(result.Output, out var framed);
+            return framed ?? [];
         }
         catch (Exception ex)
         {
@@ -298,7 +255,7 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
     public async Task<List<RssModel>> GetArchNewsAsync(bool all = false)
     {
         var args = all ? "news" + " --json" + " --all" : "news" + " --json";
-        var result = await ExecuteUnprivilegedCommandAsync("Fetch Arch News", args, "--ui-mode");
+        var result = await ExecuteUnprivilegedCommandAsync("Fetch Arch News", args);
         if (!result.Success || string.IsNullOrEmpty(result.Output))
         {
             return [];
@@ -306,17 +263,8 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
 
         try
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    var apps = JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListRssModel);
-                    return apps ?? [];
-                }
-            }
+            JsonPackFrame.TryDecode<List<RssModel>>(result.Output, out var framed);
+            return framed ?? [];
         }
         catch (Exception ex)
         {
@@ -328,7 +276,7 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
 
     public async Task<List<PacfileRecord>> GetPacFiles()
     {
-         var result = await ExecuteUnprivilegedCommandAsync("Fetch Pac files", "pacfile --json");
+        var result = await ExecuteUnprivilegedCommandAsync("Fetch Pac files", "pacfile --json");
         if (!result.Success || string.IsNullOrEmpty(result.Output))
         {
             return [];
@@ -336,17 +284,8 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
 
         try
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    var pacFiles = JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListPacfileRecord);
-                    return pacFiles ?? [];
-                }
-            }
+            JsonPackFrame.TryDecode<List<PacfileRecord>>(result.Output, out var framed);
+            return framed ?? [];
         }
         catch (Exception ex)
         {
@@ -362,26 +301,8 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
         var result = await ExecuteUnprivilegedCommandAsync("Get AppImage Updates", "appimage list-updates --json");
         try
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    var updates = JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListAppImageUpdateDto);
-                    return updates?.Select(u => new AppImageDto
-                    {
-                        Name = u.Name,
-                        Version = u.Version,
-                        UpdateVersion = u.Version,
-                        UpdateURl = u.DownloadUrl,
-                        UpdateType = AppImageUpdateType.StaticUrl // Default or map if possible
-                    }).ToList() ?? [];
-                }
-            }
-
-            return [];
+            JsonPackFrame.TryDecode<List<AppImageDto>>(result.Output, out var framed);
+            return framed ?? [];
         }
         catch (Exception ex)
         {
@@ -397,22 +318,8 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
 
         try
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("{") && trimmedLine.EndsWith("}"))
-                {
-                    var updates =
-                        JsonSerializer.Deserialize(trimmedLine,
-                            ShellyGtkJsonContext.Default.ListAlpmPackageUpdateDto);
-                    return updates ?? [];
-                }
-            }
-
-            var allUpdates = JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
-                ShellyGtkJsonContext.Default.ListAlpmPackageUpdateDto);
-            return allUpdates ?? [];
+            JsonPackFrame.TryDecode<List<AlpmPackageUpdateDto>>(result.Output, out var framed);
+            return framed ?? [];
         }
         catch (Exception ex)
         {
@@ -433,26 +340,14 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
 
     public async Task<SyncModel> CheckForApplicationUpdates()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Get Available Updates", "utility updates -a -l --json");
+        var result =
+            await ExecuteUnprivilegedCommandAsync("Get Available Updates", "utility updates -a -l --json --ui-mode");
         //SendDbusMessage(result);
         try
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("{") && trimmedLine.EndsWith("}"))
-                {
-                    var updates =
-                        JsonSerializer.Deserialize(trimmedLine,
-                            ShellyGtkJsonContext.Default.SyncModel);
-                    return updates ?? new SyncModel();
-                }
-            }
-
-            var allUpdates = JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
-                ShellyGtkJsonContext.Default.SyncModel);
-            return allUpdates ?? new SyncModel();
+            if (!result.Success) return new SyncModel();
+            JsonPackFrame.TryDecode<SyncModel>(result.Output, out var framed);
+            return framed ?? new SyncModel();
         }
         catch (Exception ex)
         {
@@ -474,26 +369,8 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
 
         try
         {
-            var trimmedOutput = StripBom(result.Output.Trim());
-
-            if (trimmedOutput.StartsWith("{"))
-            {
-                var response = JsonSerializer.Deserialize(trimmedOutput,
-                    ShellyGtkJsonContext.Default.FlathubSearchResponse);
-
-                if (response?.Hits == null) return [];
-
-                return response.Hits.Select(hit => new FlatpakPackageDto
-                {
-                    Id = hit.AppId ?? hit.Id ?? string.Empty,
-                    Name = hit.Name ?? string.Empty,
-                    Summary = hit.Summary ?? string.Empty,
-                    Description = hit.Description ?? string.Empty,
-                    IconPath = hit.Icon
-                }).ToList();
-            }
-
-            return [];
+            JsonPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
+            return framed ?? [];
         }
         catch (Exception ex)
         {
@@ -512,9 +389,10 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
         CancellationToken ct, params string[] args)
     {
         var arguments = string.Join(" ", args);
+        arguments += " --ui-mode";
         var fullCommand = $"{_cliPath} {arguments}";
 
-        Console.WriteLine($"Executing privileged command: {fullCommand}");
+        Console.WriteLine($"Executing unprivileged command: {fullCommand}");
 
         var process = new Process
         {
@@ -538,7 +416,7 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
         {
             if (e.Data != null)
             {
-                outputBuilder.AppendLine(e.Data);
+                outputBuilder.Append(e.Data).Append('\n');
                 Console.WriteLine(e.Data);
             }
         };
@@ -612,15 +490,6 @@ public class UnprivilegedOperationService(ITrayDbus trayDbus, IPackageUpdateNoti
                 ExitCode = -1
             };
         }
-    }
-
-    private static string StripBom(string input)
-    {
-        if (string.IsNullOrEmpty(input))
-            return input;
-
-        // UTF-8 BOM is 0xEF 0xBB 0xBF which appears as \uFEFF in .NET strings
-        return input.TrimStart('\uFEFF');
     }
 
     private void SendDbusMessage(UnprivilegedOperationResult result)

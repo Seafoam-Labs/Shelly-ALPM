@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text.Json;
 using Shelly_CLI.Commands.AppImage;
 using Shelly_CLI.Commands.Aur;
 using Shelly_CLI.Commands.Config;
@@ -10,6 +9,8 @@ using Shelly_CLI.Commands.Standard.Pacfile;
 using Shelly_CLI.Commands.Utility;
 using PackageManager.Utilities;
 using Shelly_CLI.Configuration;
+using Shelly_CLI.Utility;
+using Shelly.Utilities;
 using Shelly.Writers;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -22,6 +23,8 @@ public class Program
 
     public static int Main(string[] args)
     {
+        Console.SetOut(new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true });
+        Console.SetError(new StreamWriter(Console.OpenStandardError())  { AutoFlush = true });
         // Ensure default configuration exists in ~/.config/shelly/config.json
         var configPath = XdgPaths.ShellyConfig("config.json");
 
@@ -101,6 +104,14 @@ public class Program
                 .WithExample("list-installed", "--sort", "size", "--order", "desc")
                 .WithExample("list-installed", "--filter", "linux");
 
+            config.AddCommand<ListLocalInstalledCommand>("list-local-installed")
+                .WithDescription("List all locally installed packages (.gz, .zst)")
+                .WithExample("list-local-installed")
+                .WithExample("list-local-installed", "--sort", "name")
+                .WithExample("list-local-installed", "--sort", "size")
+                .WithExample("list-local-installed", "--sort", "size", "--order", "desc")
+                .WithExample("list-local-installed", "--filter", "firefox");
+
             config.AddCommand<ListAvailableCommand>("list-available")
                 .WithDescription("List all available packages")
                 .WithExample("list-available")
@@ -139,17 +150,13 @@ public class Program
                 .WithExample("install", "firefox", "-d");
 
             config.AddCommand<InstallLocalPackageCommand>("install-local")
-                .WithDescription("Install a local package file (.xz, .gz, .zst)")
+                .WithDescription("Install a local package file (.gz, .zst)")
                 .WithExample("install-local", "--location", "/path/to/package.pkg.tar.zst")
                 .WithExample("install-local", "-l", "/path/to/package.pkg.tar.zst")
-                .WithExample("install-local", "--location", "/path/to/package.pkg.tar.xz")
-                .WithExample("install-local", "-l", "/path/to/package.pkg.tar.xz")
                 .WithExample("install-local", "--location", "/path/to/package.pkg.tar.gz")
                 .WithExample("install-local", "-l", "/path/to/package.pkg.tar.gz")
                 .WithExample("install-local", "--location", "/path/to/package.pkg.tar.zst", "--no-confirm")
                 .WithExample("install-local", "-l", "/path/to/package.pkg.tar.zst", "-n")
-                .WithExample("install-local", "--location", "/path/to/package.pkg.tar.xz", "--no-confirm")
-                .WithExample("install-local", "-l", "/path/to/package.pkg.tar.xz", "-n")
                 .WithExample("install-local", "--location", "/path/to/package.pkg.tar.gz", "--no-confirm")
                 .WithExample("install-local", "-l", "/path/to/package.pkg.tar.gz", "-n");
 
@@ -158,6 +165,11 @@ public class Program
                 .WithExample("remove", "firefox")
                 .WithExample("remove", "firefox", "vlc")
                 .WithExample("remove", "firefox", "--no-confirm");
+
+            config.AddCommand<RemoveLocalCommand>("remove-local")
+                .WithDescription("Remove a locally installed package file")
+                .WithExample("remove-local", Path.Combine(LocalManager.InstallDir, "vlc"))
+                .WithExample("remove-local", Path.Combine(LocalManager.InstallDir, "vlc"), "--no-confirm");
 
             config.AddCommand<UpdateCommand>("update")
                 .WithDescription("Update one or more packages")
@@ -440,8 +452,9 @@ public class Program
 
                 appImage.AddCommand<AppImageConfigUpdates>("configure-updates")
                     .WithDescription("Configure update settings for an AppImage")
-                    .WithExample("appimage", "configure-updates", "firefox", "--update-url", "https://github.com/mozilla/firefox-appimage", "--type", "GitHub");
-                
+                    .WithExample("appimage", "configure-updates", "firefox", "--update-url",
+                        "https://github.com/mozilla/firefox-appimage", "--type", "GitHub");
+
                 appImage.AddCommand<AppImageSyncMeta>("sync-meta")
                     .WithDescription("Syncs meta data for an AppImage")
                     .WithExample("appimage", "sync-meta", "firefox");

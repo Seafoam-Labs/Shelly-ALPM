@@ -1,6 +1,7 @@
 using Gtk;
 using Pango;
 using Shelly.Gtk.UiModels;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -78,8 +79,8 @@ public static class GenericQuestionDialog
         var buttonBox = Box.New(Orientation.Horizontal, 8);
         buttonBox.SetHalign(Align.End);
 
-        var noButton = Button.NewWithLabel("No");
-        var yesButton = Button.NewWithLabel("Yes");
+        var noButton = Button.NewWithLabel(T("No"));
+        var yesButton = Button.NewWithLabel(T("Yes"));
         yesButton.AddCssClass("suggested-action");
 
         noButton.OnClicked += (_,_) => CloseAndRespond(false);

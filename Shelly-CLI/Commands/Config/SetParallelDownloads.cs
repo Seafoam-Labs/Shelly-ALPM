@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using PackageManager.Utilities;
 using Shelly_CLI.Configuration;
+using Shelly.Utilities;
 using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Config;

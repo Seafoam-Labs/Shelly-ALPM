@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Gtk;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -18,7 +19,7 @@ public partial class CacheCleanerDialog(
             const string cacheDir = "/var/cache/pacman/pkg";
             if (!Directory.Exists(cacheDir))
             {
-                var toastArgs = new ToastMessageEventArgs("Cache directory does not exist");
+                var toastArgs = new ToastMessageEventArgs(T("Cache directory does not exist"));
                 genericQuestionService.RaiseToastMessage(toastArgs);
                 return;
             }
@@ -47,7 +48,7 @@ public partial class CacheCleanerDialog(
     {
         try
         {
-            lockoutService.Show("Cleaning package cache...");
+            lockoutService.Show(T("Cleaning package cache..."));
             var result = await privilegedOperationService.RunCacheCleanAsync(keep, uninstalledOnly);
 
             string message;
@@ -55,12 +56,12 @@ public partial class CacheCleanerDialog(
             {
                 var output = StripAnsiAndMarkup(result.Output);
                 message = string.IsNullOrWhiteSpace(output)
-                    ? "Package cache cleaned successfully"
+                    ? T("Package cache cleaned successfully")
                     : output;
             }
             else
             {
-                message = $"Cache clean failed: {result.Error}";
+                message = T("Cache clean failed: {0}", result.Error);
             }
 
             var toastArgs = new ToastMessageEventArgs(message);

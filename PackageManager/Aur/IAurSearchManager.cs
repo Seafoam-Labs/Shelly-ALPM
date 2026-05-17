@@ -25,4 +25,14 @@ public interface IAurSearchManager
     /// the package isn't a split package (i.e. <c>pkgbase == pkgname</c>).
     /// </summary>
     Task<string> GetPackageBaseAsync(string pkgname, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resolves an AUR-side dependency name to one or more provider package names.
+    /// If a real AUR package exists by <paramref name="name"/>, returns a single-element
+    /// list containing that name. Otherwise queries the AUR RPC
+    /// <c>type=search&amp;by=provides</c> endpoint and returns every AUR package whose
+    /// <c>provides=</c> list includes <paramref name="name"/>. Returns an empty list
+    /// when nothing matches (or on transport failure).
+    /// </summary>
+    Task<List<string>> FindProvidersAsync(string name, CancellationToken cancellationToken = default);
 }

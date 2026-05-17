@@ -2,6 +2,7 @@ using Gtk;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows;
 
@@ -39,7 +40,7 @@ public class SetupWindow(
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading intro image: {ex.Message}");
+            Console.WriteLine(T($"Error loading intro image: {ex.Message}"));
         }
         
         var currentConfig = configService.LoadConfig();
@@ -70,17 +71,17 @@ public class SetupWindow(
 
                 if (result) return;
 
-                lockoutService.Show("Installing flatpak...");
+                lockoutService.Show(T("Installing flatpak..."));
                 var instalResult = await privilegedOperationService.InstallPackagesAsync(["flatpak"]);
 
                 if (instalResult.Success)
                 {
                     genericQuestionService.RaiseToastMessage(
-                        new ToastMessageEventArgs("Reboot required after flatpak installation."));
+                        new ToastMessageEventArgs(T("Reboot required after flatpak installation.")));
                 }
                 else
                 {
-                    Console.WriteLine($"Failed to install flatpak");
+                    Console.WriteLine(T($"Failed to install flatpak"));
                     config.FlatPackEnabled = false;
                     configService.SaveConfig(config);
                 }
@@ -88,8 +89,8 @@ public class SetupWindow(
             catch (Exception ex)
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs("Reboot required after flatpak installation."));
-                Console.WriteLine($"Error installing flatpak: {ex.Message}");
+                    new ToastMessageEventArgs(T("Reboot required after flatpak installation.")));
+                Console.WriteLine(T($"Error installing flatpak: {ex.Message}"));
                 config.FlatPackEnabled = false;
                 configService.SaveConfig(config);
             }

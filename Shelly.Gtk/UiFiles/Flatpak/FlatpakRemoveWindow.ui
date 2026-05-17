@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<interface>
+<interface domain="shelly-ui">
   <requires lib="gtk" version="4.0"/>
   <object class="GtkBox" id="FlatpakRemoveWindow">
     <property name="orientation">vertical</property>
@@ -14,7 +14,7 @@
         <property name="halign">baseline</property>
         <child>
           <object class="GtkButton" id="remove_button">
-            <property name="label">Remove Selected</property>
+            <property name="label" translatable="yes">Remove Selected</property>
             <property name="halign">end</property>
             <style>
               <class name="destructive-action"/>

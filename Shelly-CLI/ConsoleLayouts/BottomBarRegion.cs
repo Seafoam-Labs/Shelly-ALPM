@@ -332,8 +332,11 @@ public sealed class BottomBarRegion : IDisposable
         DrawStickies();
         foreach (var key in _order)
         {
-            Console.Out.Write(RenderBarLine(_bars[key]));
-            Console.Out.Write("\n");
+            var line = RenderBarLine(_bars[key]);
+            if (_asciiOnly)
+                Console.Out.WriteLine(Markup.Remove(line));
+            else
+                AnsiConsole.MarkupLine(line);
             _barRowsDrawn++;
         }
 
