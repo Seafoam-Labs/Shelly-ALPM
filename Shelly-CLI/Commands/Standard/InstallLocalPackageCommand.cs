@@ -1,4 +1,5 @@
 using PackageManager.Alpm;
+using PackageManager.Local;
 using Shelly_CLI.Configuration;
 using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
@@ -14,13 +15,9 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
         if (string.IsNullOrWhiteSpace(settings.PackageLocation))
         {
             if (Program.IsUiMode)
-            {
                 await Console.Error.WriteLineAsync("Error: No package specified");
-            }
             else
-            {
                 AnsiConsole.MarkupLine("[red]Error: No package specified[/]");
-            }
 
             return 1;
         }
@@ -28,13 +25,9 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
         if (!File.Exists(settings.PackageLocation))
         {
             if (Program.IsUiMode)
-            {
                 await Console.Error.WriteLineAsync("Error: Specified file does not exist.");
-            }
             else
-            {
                 AnsiConsole.MarkupLine("[red]Error: Specified file does not exist.[/]");
-            }
 
             return 1;
         }
@@ -43,39 +36,26 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
 
         if (await LocalManager.IsArchPackage(settings.PackageLocation))
         {
-            if (Program.IsUiMode)
-            {
-                return await HandleUiModeInstall(settings);
-            }
+            if (Program.IsUiMode) return await HandleUiModeInstall(settings);
 
             var isSuccess = await InitializeAndInstallLocalAlpmPackage(settings);
-            if (!isSuccess)
-            {
-                AnsiConsole.MarkupLine("[red]Installation failed. See errors above.[/]");
-                return 1;
-            }
+            if (isSuccess) return 0;
 
-            return 0;
+            AnsiConsole.MarkupLine("[red]Installation failed. See errors above.[/]");
+            return 1;
         }
 
         if (await LocalManager.IsBinariesPackage(settings.PackageLocation))
         {
-            if (Program.IsUiMode)
-            {
-                return await HandleUiModeBinaryInstall(settings);
-            }
+            if (Program.IsUiMode) return await HandleUiModeBinaryInstall(settings);
 
             return await HandleConsoleBinaryInstall(settings);
         }
 
         if (Program.IsUiMode)
-        {
             await Console.Error.WriteLineAsync("Error: Unsupported local package format.");
-        }
         else
-        {
             AnsiConsole.MarkupLine("[red]Error: Unsupported local package format.[/]");
-        }
 
         return 1;
     }
@@ -130,36 +110,53 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
 
     private static async Task<int> HandleConsoleBinaryInstall(InstallLocalPackageSettings settings)
     {
-        AnsiConsole.MarkupLine($"[yellow]Installing local binary package: {settings.PackageLocation}[/]");
+        var localManager = new LocalManager();
 
-        var result = await LocalManager.InstallBinariesPackage(
-            Path.GetFullPath(settings.PackageLocation),
-            uiMode: false);
+        localManager.Message += (_, e) =>
+        {
+            switch (e.Level)
+            {
+                case LocalManagerMessageLevel.Info:
+                    AnsiConsole.MarkupLine($"[cyan]{e.Message.EscapeMarkup()}[/]");
+                    break;
+                case LocalManagerMessageLevel.Warning:
+                    AnsiConsole.MarkupLine($"[yellow]{e.Message.EscapeMarkup()}[/]");
+                    break;
+                case LocalManagerMessageLevel.Error:
+                    AnsiConsole.MarkupLine($"[red]{e.Message.EscapeMarkup()}[/]");
+                    break;
+                case LocalManagerMessageLevel.Success:
+                    AnsiConsole.MarkupLine($"[green]{e.Message.EscapeMarkup()}[/]");
+                    break;
+            }
+        };
 
-        AnsiConsole.MarkupLine(result == 0
-            ? "[green]Installation complete![/]"
-            : "[red]Installation failed.[/]");
-
-        return result;
+        var success = await localManager.InstallBinariesPackage(Path.GetFullPath(settings.PackageLocation));
+        return success ? 0 : 1;
     }
 
     private static async Task<int> HandleUiModeBinaryInstall(InstallLocalPackageSettings settings)
     {
-        await Console.Error.WriteLineAsync($"Installing local binary package: {settings.PackageLocation}");
+        var localManager = new LocalManager();
 
-        var result = await LocalManager.InstallBinariesPackage(
-            Path.GetFullPath(settings.PackageLocation),
-            uiMode: true);
-
-        if (result == 0)
+        localManager.Message += (_, e) =>
         {
-            await Console.Error.WriteLineAsync("Installation complete.");
-        }
-        else
-        {
-            await Console.Error.WriteLineAsync("Installation failed.");
-        }
+            switch (e.Level)
+            {
+                case LocalManagerMessageLevel.Info:
+                case LocalManagerMessageLevel.Success:
+                    Console.Error.WriteLine(e.Message);
+                    break;
+                case LocalManagerMessageLevel.Warning:
+                    Console.Error.WriteLine($"Warning: {e.Message}");
+                    break;
+                case LocalManagerMessageLevel.Error:
+                    Console.Error.WriteLine($"Error: {e.Message}");
+                    break;
+            }
+        };
 
-        return result;
+        var success = await localManager.InstallBinariesPackage(Path.GetFullPath(settings.PackageLocation));
+        return success ? 0 : 1;
     }
 }

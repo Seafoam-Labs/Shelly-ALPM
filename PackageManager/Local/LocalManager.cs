@@ -1,25 +1,31 @@
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Formats.Tar;
+using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using PackageManager.Local;
+using System.Threading.Tasks;
 using PackageManager.Zstd;
-using Spectre.Console;
 
-namespace Shelly_CLI.Utility;
+namespace PackageManager.Local;
 
-// TODO: Move to PackageManager #771
-public static partial class LocalManager
+public sealed partial class LocalManager
 {
     public const string InstallDir = "/opt/shelly";
     private const string DesktopDir = "/usr/share/applications";
 
+    public event EventHandler<LocalManagerMessageEventArgs>? Message;
+
     [GeneratedRegex(@"(\d+)x?\d*")]
     private static partial Regex ImageSizeRegex();
 
-    public static async Task<int> InstallBinariesPackage(string filePath, bool uiMode)
+    public async Task<bool> InstallBinariesPackage(string filePath)
     {
+        OnInfo($"Installing local binary package: {filePath}");
+
         try
         {
             var extension = Path.GetExtension(filePath);
@@ -71,15 +77,12 @@ public static partial class LocalManager
                             {
                                 var binaryName = Path.GetFileName(destPath);
                                 var linkPath = Path.Combine("/usr/bin", binaryName);
-                                if (File.Exists(linkPath))
-                                {
-                                    File.Delete(linkPath);
-                                }
+                                if (File.Exists(linkPath)) File.Delete(linkPath);
 
                                 File.CreateSymbolicLink(linkPath, destPath);
                                 installedBinaries.Add(binaryName);
 
-                                await WriteInfoAsync($"Installed binary symlink: {linkPath} -> {destPath}", uiMode);
+                                OnInfo($"Installed binary symlink: {linkPath} -> {destPath}");
                             }
 
                             break;
@@ -88,7 +91,7 @@ public static partial class LocalManager
                 }
             }
 
-            await WriteInfoAsync($"Extracted to {installDir}", uiMode);
+            OnInfo($"Extracted to {installDir}");
 
             foreach (var binaryName in installedBinaries)
             {
@@ -96,72 +99,38 @@ public static partial class LocalManager
 
                 if (!CleanInvalidNames(packageName)
                         .Contains(binaryName, StringComparison.OrdinalIgnoreCase))
-                {
                     continue;
-                }
 
                 if (foundIcons.Count > 0)
                 {
-                    var icon = foundIcons.FirstOrDefault();
-                    var installedIconName = await InstallIcon(icon.Value, binaryName, uiMode);
-                    if (string.IsNullOrWhiteSpace(installedIconName))
-                    {
-                        iconName = installedIconName;
-                    }
+                    var icon = foundIcons.First();
+                    var installedIconName = await InstallIcon(icon.Value, binaryName);
+
+                    if (!string.IsNullOrWhiteSpace(installedIconName)) iconName = installedIconName;
                 }
                 else
                 {
-                    await WriteWarningAsync($"No icon found for {binaryName}, using default", uiMode);
+                    OnWarning($"No icon found for {binaryName}, using default");
                 }
 
-                await WriteInfoAsync("Creating desktop entry...", uiMode);
+                OnInfo("Creating desktop entry...");
                 CreateDesktopEntry(
                     binaryName,
                     binaryName,
-                    uiMode,
                     $"{binaryName} - Installed from {packageName}",
-                    iconName,
-                    false,
-                    "Utility;"
-                );
+                    iconName);
             }
 
-            if (installedBinaries.Count == 0)
-            {
-                await WriteWarningAsync("No executable ELF binaries were found in the archive.", uiMode);
-            }
+            if (installedBinaries.Count == 0) OnWarning("No executable ELF binaries were found in the archive.");
 
-            return 0;
+            OnSuccess("Successfully installed binary package!");
+            return true;
         }
         catch (Exception ex)
         {
-            await WriteErrorAsync($"Failed to install binary package: {ex.Message}", uiMode);
-            return 1;
+            OnError($"Failed to install binary package: {ex.Message}");
+            return false;
         }
-    }
-
-    public static List<LocalPackageDto> GetInstalledBinaryPackages()
-    {
-        var dirs = ListDirectories(InstallDir);
-        return dirs
-            .Select(dir =>
-            {
-                var dirInfo = new DirectoryInfo(dir);
-                var size = dirInfo
-                    .EnumerateFiles("*", SearchOption.AllDirectories)
-                    .Sum(f => f.Length);
-
-                return new LocalPackageDto(dir, size);
-            })
-            .ToList();
-    }
-
-    private static List<string> ListDirectories(string path)
-    {
-        if (!Directory.Exists(path)) return [];
-        return Directory.GetDirectories(path)
-            .Select(Path.GetFullPath)
-            .ToList();
     }
 
     public static async Task<bool> IsArchPackage(string filePath)
@@ -174,12 +143,8 @@ public static partial class LocalManager
                 await using var zStdStream = new ZstdDecompressStream(fileStream);
                 await using var zstTarReader = new TarReader(zStdStream);
                 while (await zstTarReader.GetNextEntryAsync() is { } entry)
-                {
-                    if (entry.Name.Contains("PKGINFO", StringComparison.InvariantCultureIgnoreCase))
-                    {
+                    if (entry.Name.Contains("PKGINFO", StringComparison.OrdinalIgnoreCase))
                         return true;
-                    }
-                }
 
                 break;
             }
@@ -188,12 +153,8 @@ public static partial class LocalManager
                 await using var gzStream = new GZipStream(fileStream, CompressionMode.Decompress);
                 await using var gzTarReader = new TarReader(gzStream);
                 while (await gzTarReader.GetNextEntryAsync() is { } entry)
-                {
-                    if (entry.Name.Contains("PKGINFO", StringComparison.InvariantCultureIgnoreCase))
-                    {
+                    if (entry.Name.Contains("PKGINFO", StringComparison.OrdinalIgnoreCase))
                         return true;
-                    }
-                }
 
                 break;
             }
@@ -221,28 +182,55 @@ public static partial class LocalManager
         return false;
     }
 
-    public static async Task<bool> RemoveBinaryPackages(List<string> packageList, bool uiMode)
+    public static List<LocalPackageDto> GetInstalledBinaryPackages()
     {
+        var dirs = ListDirectories(InstallDir);
+        return dirs
+            .Select(dir =>
+            {
+                var dirInfo = new DirectoryInfo(dir);
+                var size = dirInfo
+                    .EnumerateFiles("*", SearchOption.AllDirectories)
+                    .Sum(f => f.Length);
+
+                return new LocalPackageDto(dir, size);
+            })
+            .ToList();
+    }
+
+    private static List<string> GetValidPackages(List<string> packages)
+    {
+        return packages
+            .Where(p => p.StartsWith(InstallDir, StringComparison.OrdinalIgnoreCase))
+            .Where(p => !p.TrimEnd('/').Equals(InstallDir, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    public async Task<bool> RemoveBinaryPackages(List<string> packages)
+    {
+        var pkgs = GetValidPackages(packages);
+        if (pkgs.Count == 0)
+        {
+            OnError($"No valid packages specified for removal: {packages}");
+            return false;
+        }
+
+        OnInfo($"Removing package(s): {string.Join(", ", pkgs)}");
         try
         {
-            var dirs = packageList
+            var dirs = pkgs
                 .Select(path => new DirectoryInfo(path))
                 .Where(dir => dir.FullName.StartsWith(InstallDir + '/') && dir.Exists);
 
             foreach (var dir in dirs)
             {
-                var pkgInfos = dir
-                    .EnumerateFiles("*", SearchOption.AllDirectories)
-                    .ToList();
-
+                var pkgInfos = dir.EnumerateFiles("*", SearchOption.AllDirectories).ToList();
                 List<FileInfo> pkgBins = [];
+
                 foreach (var info in pkgInfos)
                 {
                     await using var fs = File.OpenRead(info.FullName);
-                    if (await IsElfBinary(fs))
-                    {
-                        pkgBins.Add(info);
-                    }
+                    if (await IsElfBinary(fs)) pkgBins.Add(info);
                 }
 
                 List<string> desktopBins = [];
@@ -251,26 +239,21 @@ public static partial class LocalManager
                 {
                     var usrBin = new FileInfo(Path.Combine("/usr/bin", pkgBin.Name));
                     var canDelete = pkgBin.FullName.Equals(usrBin.LinkTarget);
-                    if (!canDelete)
-                    {
-                        continue;
-                    }
+                    if (!canDelete) continue;
 
-                    await WriteInfoAsync($"Removing {pkgBin.Name} from {usrBin.FullName}", uiMode);
+                    OnInfo($"Removing {pkgBin.Name} from {usrBin.FullName}");
                     File.Delete(usrBin.FullName);
 
                     if (!CleanInvalidNames(dir.Name)
                             .Contains(pkgBin.Name, StringComparison.InvariantCultureIgnoreCase))
-                    {
                         continue;
-                    }
 
                     var desktopFilePath =
                         Path.Combine(DesktopDir, $"{Path.GetFileNameWithoutExtension(pkgBin.Name)}.desktop");
 
                     if (File.Exists(desktopFilePath))
                     {
-                        await WriteInfoAsync($"Removing {desktopFilePath}", uiMode);
+                        OnInfo($"Removing {desktopFilePath}");
                         File.Delete(desktopFilePath);
                     }
 
@@ -283,44 +266,40 @@ public static partial class LocalManager
                     .ToList();
 
                 foreach (var desktopBin in desktopBins)
+                foreach (var icon in iconInfos)
                 {
-                    foreach (var icon in iconInfos)
+                    var extension = icon.Extension.ToLowerInvariant();
+                    string destDir;
+                    if (extension == ".svg")
                     {
-                        var extension = icon.Extension.ToLowerInvariant();
-                        string destDir;
-                        if (extension == ".svg")
-                        {
-                            destDir = "/usr/share/icons/hicolor/scalable/apps";
-                        }
-                        else
-                        {
-                            var sizeMatch = ImageSizeRegex().Match(icon.Name);
-                            var size = sizeMatch.Success && int.TryParse(sizeMatch.Groups[1].Value, out var s)
-                                ? s
-                                : 256;
-                            destDir = $"/usr/share/icons/hicolor/{size}x{size}/apps";
-                        }
-
-                        var destPath = Path.Combine(destDir, $"{desktopBin}{extension}");
-                        if (!File.Exists(destPath))
-                        {
-                            continue;
-                        }
-
-                        await WriteInfoAsync($"Removing icon {destPath}", uiMode);
-                        File.Delete(destPath);
+                        destDir = "/usr/share/icons/hicolor/scalable/apps";
                     }
+                    else
+                    {
+                        var sizeMatch = ImageSizeRegex().Match(icon.Name);
+                        var size = sizeMatch.Success && int.TryParse(sizeMatch.Groups[1].Value, out var s)
+                            ? s
+                            : 256;
+                        destDir = $"/usr/share/icons/hicolor/{size}x{size}/apps";
+                    }
+
+                    var destPath = Path.Combine(destDir, $"{desktopBin}{extension}");
+                    if (!File.Exists(destPath)) continue;
+
+                    OnInfo($"Removing icon {destPath}");
+                    File.Delete(destPath);
                 }
 
-                await WriteInfoAsync($"Removing package directory {dir.FullName}", uiMode);
+                OnInfo($"Removing package directory {dir.FullName}");
                 dir.Delete(true);
             }
 
+            OnSuccess("Package(s) removed successfully!");
             return true;
         }
         catch (Exception ex)
         {
-            await WriteErrorAsync($"Failed to remove binary package(s): {ex.Message}", uiMode);
+            OnError($"Failed to remove binary package(s): {ex.Message}");
             return false;
         }
     }
@@ -342,10 +321,17 @@ public static partial class LocalManager
                magic[2] == 0x4C && magic[3] == 0x46;
     }
 
-    private static void CreateDesktopEntry(
+    private static List<string> ListDirectories(string path)
+    {
+        if (!Directory.Exists(path)) return [];
+        return Directory.GetDirectories(path)
+            .Select(Path.GetFullPath)
+            .ToList();
+    }
+
+    private void CreateDesktopEntry(
         string appName,
         string executablePath,
-        bool uiMode,
         string? comment = null,
         string icon = "application-x-executable",
         bool terminal = false,
@@ -370,14 +356,14 @@ public static partial class LocalManager
         {
             Directory.CreateDirectory(DesktopDir);
             File.WriteAllText(desktopFilePath, content.ToString());
-            SetFilePermissions(desktopFilePath, "644", uiMode);
-            UpdateDesktopDatabase(DesktopDir, uiMode);
+            SetFilePermissions(desktopFilePath, "644");
+            UpdateDesktopDatabase(DesktopDir);
 
-            WriteInfo($"Desktop entry created: {desktopFilePath}", uiMode);
+            OnInfo($"Desktop entry created: {desktopFilePath}");
         }
         catch (Exception ex)
         {
-            WriteWarning($"Warning: Could not create desktop entry: {ex.Message}", uiMode);
+            OnWarning($"Could not create desktop entry: {ex.Message}");
         }
     }
 
@@ -389,7 +375,7 @@ public static partial class LocalManager
             .Replace("\\", "-");
     }
 
-    private static void SetFilePermissions(string filePath, string permissions, bool uiMode)
+    private void SetFilePermissions(string filePath, string permissions)
     {
         try
         {
@@ -406,11 +392,11 @@ public static partial class LocalManager
         }
         catch (Exception ex)
         {
-            WriteWarning($"Warning: Could not set file permissions: {ex.Message}", uiMode);
+            OnWarning($"Could not set file permissions: {ex.Message}");
         }
     }
 
-    private static void UpdateDesktopDatabase(string desktopDir, bool uiMode)
+    private void UpdateDesktopDatabase(string desktopDir)
     {
         try
         {
@@ -427,11 +413,11 @@ public static partial class LocalManager
         }
         catch (Exception ex)
         {
-            WriteWarning($"Warning: Could not set desktop database: {ex.Message}", uiMode);
+            OnWarning($"Could not update desktop database: {ex.Message}");
         }
     }
 
-    private static async Task<string> InstallIcon(string iconPath, string appName, bool uiMode)
+    private async Task<string> InstallIcon(string iconPath, string appName)
     {
         try
         {
@@ -455,7 +441,7 @@ public static partial class LocalManager
             var destPath = Path.Combine(destDir, iconName);
 
             File.Copy(iconPath, destPath, true);
-            await WriteInfoAsync($"Installed icon: {iconPath}", uiMode);
+            OnInfo($"Installed icon: {iconPath}");
 
             try
             {
@@ -475,81 +461,40 @@ public static partial class LocalManager
             }
             catch (Exception ex)
             {
-                await WriteWarningAsync($"Warning: Failed to update icon cache: {ex.Message}", uiMode);
+                OnWarning($"Failed to update icon cache: {ex.Message}");
             }
 
             return appName.ToLower();
         }
         catch (Exception ex)
         {
-            await WriteWarningAsync($"Warning: Could not install icon: {ex.Message}", uiMode);
+            OnWarning($"Could not install icon: {ex.Message}");
             return string.Empty;
         }
     }
 
-    private static async Task WriteInfoAsync(string message, bool uiMode)
+    private void OnMessage(LocalManagerMessageLevel level, string message)
     {
-        if (uiMode)
-        {
-            await Console.Error.WriteLineAsync(message);
-            return;
-        }
-
-        AnsiConsole.MarkupLine($"[cyan]{message.EscapeMarkup()}[/]");
+        Message?.Invoke(this, new LocalManagerMessageEventArgs(level, message));
     }
 
-    private static async Task WriteWarningAsync(string message, bool uiMode)
+    private void OnInfo(string message)
     {
-        if (uiMode)
-        {
-            await Console.Error.WriteLineAsync(message);
-            return;
-        }
-
-        AnsiConsole.MarkupLine($"[yellow]{message.EscapeMarkup()}[/]");
+        OnMessage(LocalManagerMessageLevel.Info, message);
     }
 
-    private static async Task WriteErrorAsync(string message, bool uiMode)
+    private void OnWarning(string message)
     {
-        if (uiMode)
-        {
-            await Console.Error.WriteLineAsync(message);
-            return;
-        }
-
-        AnsiConsole.MarkupLine($"[red]{message.EscapeMarkup()}[/]");
+        OnMessage(LocalManagerMessageLevel.Warning, message);
     }
 
-    private static async Task WriteSuccessAsync(string message, bool uiMode)
+    private void OnError(string message)
     {
-        if (uiMode)
-        {
-            await Console.Error.WriteLineAsync(message);
-            return;
-        }
-
-        AnsiConsole.MarkupLine($"[green]{message.EscapeMarkup()}[/]");
+        OnMessage(LocalManagerMessageLevel.Error, message);
     }
 
-    private static void WriteWarning(string message, bool uiMode)
+    private void OnSuccess(string message)
     {
-        if (uiMode)
-        {
-            Console.Error.WriteLine(message);
-            return;
-        }
-
-        AnsiConsole.MarkupLine($"[yellow]{message.EscapeMarkup()}[/]");
-    }
-
-    private static void WriteInfo(string message, bool uiMode)
-    {
-        if (uiMode)
-        {
-            Console.Error.WriteLine(message);
-            return;
-        }
-
-        AnsiConsole.MarkupLine($"[cyan]{message.EscapeMarkup()}[/]");
+        OnMessage(LocalManagerMessageLevel.Success, message);
     }
 }

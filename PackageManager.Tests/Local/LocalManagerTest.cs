@@ -1,15 +1,13 @@
 using System.Formats.Tar;
 using System.IO.Compression;
-using Shelly_CLI.Utility;
+using PackageManager.Local;
 
-namespace Shelly_CLI.Tests.Utility;
+namespace PackageManager.Tests.Local;
 
 [TestFixture]
 [TestOf(typeof(LocalManager))]
 public class LocalManagerTest
 {
-    private string _tempDir = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -24,7 +22,7 @@ public class LocalManagerTest
             Directory.Delete(_tempDir, true);
     }
 
-    #region IsArchPackage Tests
+    private string _tempDir = null!;
 
     [Test]
     public async Task IsArchPackage_GzWithPkginfo_ReturnsTrue()
@@ -50,10 +48,6 @@ public class LocalManagerTest
         var result = await LocalManager.IsArchPackage(filePath);
         Assert.That(result, Is.False);
     }
-
-    #endregion
-
-    #region IsBinariesPackage Tests
 
     [Test]
     public async Task HasBinaries_TarGzWithElfBinary_ReturnsTrue()
@@ -95,10 +89,6 @@ public class LocalManagerTest
         var result = await LocalManager.IsBinariesPackage(filePath);
         Assert.That(result, Is.False);
     }
-
-    #endregion
-
-    #region Helper Methods
 
     private static string CreateTarGzWithEntries(string dir, string fileName, string[] entryNames)
     {
@@ -148,6 +138,4 @@ public class LocalManagerTest
 
         return filePath;
     }
-
-    #endregion
 }
