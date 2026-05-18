@@ -2,7 +2,6 @@
     <Application>
         <Assembly Name="Spectre.Console" Dynamic="Required All"/>
         <Assembly Name="Spectre.Console.Cli" Dynamic="Required All"/>
-        <Assembly Name="ZstdSharp" Dynamic="Required All"/>
         <Assembly Name="shelly" Dynamic="Required All">
             <!-- Shared Settings -->
             <Type Name="Shelly_CLI.ListSettings" Dynamic="Required All"/>

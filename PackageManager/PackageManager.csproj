@@ -10,10 +10,14 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\Shelly.Utilities\Shelly.Utilities.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Shelly.Utilities\Shelly.Utilities.csproj" />
+      <None Update="Zstd\libzstd.so.1.5.7">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </None>
     </ItemGroup>
     
 </Project>

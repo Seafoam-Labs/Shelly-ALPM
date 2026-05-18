@@ -132,18 +132,38 @@ Exec=/usr/bin/shelly-ui
 Icon=shelly
 Type=Application
 Categories=System;Utility;
+Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
 Terminal=false
+Actions=FlatpakInstall;FlatpakUpdate;FlatpakRemove;
+
+[Desktop Action FlatpakInstall]
+Name=Flatpak Install
+Icon=flatpak-symbolic
+Exec=/usr/bin/shelly-ui --page flatpak-install
+
+[Desktop Action FlatpakUpdate]
+Name=Flatpak Update
+Icon=flatpak-symbolic
+Exec=/usr/bin/shelly-ui --page flatpak-update
+
+[Desktop Action FlatpakRemove]
+Name=Flatpak Remove
+Icon=flatpak-symbolic
+Exec=/usr/bin/shelly-ui --page flatpak-remove
 EOF
 
 echo "Creating notifications entry"
 cat <<EOF > /usr/share/applications/shelly-notifications.desktop
 [Desktop Entry]
-Name=Shelly-Notifications
+Name=Shelly Notifications
+Comment=Notification service for Shelly package manager
 Exec=/usr/bin/shelly-notifications
-Icon=shelly
+Icon=shelly-tray
 Type=Application
 Categories=System;Utility;
+Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
 Terminal=false
+NoDisplay=true
 EOF
 
 

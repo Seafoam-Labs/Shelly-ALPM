@@ -4,8 +4,8 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 using PackageManager.Local;
+using PackageManager.Zstd;
 using Spectre.Console;
-using ZstdSharp;
 
 namespace Shelly_CLI.Utility;
 
@@ -37,7 +37,7 @@ public static partial class LocalManager
             await using Stream decompressedStream = extension switch
             {
                 ".gz" => new GZipStream(fileStream, CompressionMode.Decompress),
-                ".zst" => new ZstdStream(fileStream, ZstdStreamMode.Decompress),
+                ".zst" => new ZstdDecompressStream(fileStream),
                 _ => throw new NotSupportedException($"Unsupported compression: {extension}")
             };
 
@@ -171,7 +171,7 @@ public static partial class LocalManager
         {
             case ".zst":
             {
-                await using var zStdStream = new ZstdStream(fileStream, ZstdStreamMode.Decompress);
+                await using var zStdStream = new ZstdDecompressStream(fileStream);
                 await using var zstTarReader = new TarReader(zStdStream);
                 while (await zstTarReader.GetNextEntryAsync() is { } entry)
                 {
@@ -208,7 +208,7 @@ public static partial class LocalManager
         await using Stream decompressedStream = Path.GetExtension(filePath) switch
         {
             ".gz" => new GZipStream(fileStream, CompressionMode.Decompress),
-            ".zst" => new ZstdStream(fileStream, ZstdStreamMode.Decompress),
+            ".zst" => new ZstdDecompressStream(fileStream),
             _ => throw new NotSupportedException("Unsupported file extension")
         };
         await using var tarReader = new TarReader(decompressedStream);

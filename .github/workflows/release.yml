@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang zlib1g-dev libalpm-dev libgtk-4-dev zip
+        sudo apt-get install -y clang zlib1g-dev libalpm-dev libgtk-4-dev zip gettext
 
     - name: Publish Shelly-CLI
       run: |

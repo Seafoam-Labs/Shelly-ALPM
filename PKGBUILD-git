@@ -1,7 +1,7 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgname=shelly-git
-pkgver=2.3.0.1
+pkgver=2.3.0.2
 pkgrel=1
 pkgdesc="Shelly: A Modern Arch Package Manager (git version)"
 arch=('x86_64')
@@ -111,6 +111,7 @@ Exec=/usr/bin/shelly-notifications
 Icon=shelly-tray
 Type=Application
 Categories=System;Utility;
+Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
 Terminal=false
 NoDisplay=true
 EOF

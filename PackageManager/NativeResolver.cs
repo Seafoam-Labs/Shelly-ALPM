@@ -50,6 +50,7 @@ public static class NativeResolver
             "glib-2.0" => ResolveGLib(assembly, searchPath),
             "gobject-2.0" => ResolveGObject(assembly, searchPath),
             "archive" => ResolveArchive(assembly, searchPath),
+            "libzstd" => ResolveZstd(assembly, searchPath),
             _ => IntPtr.Zero
         };
     }
@@ -87,11 +88,17 @@ public static class NativeResolver
         return TryLoad(versions, assembly, searchPath);
     }
 
+    private static IntPtr ResolveZstd(Assembly assembly, DllImportSearchPath? searchPath)
+    {
+        string[] versions = ["libzstd.so.1.5.7", "libzstd.so"];
+        return TryLoad(versions, assembly, searchPath);
+    }
+
     private static IntPtr TryLoad(string[] versions, Assembly assembly, DllImportSearchPath? searchPath)
     {
         foreach (var version in versions)
         {
-            if (NativeLibrary.TryLoad(version, assembly, searchPath, out IntPtr handle))
+            if (NativeLibrary.TryLoad(version, assembly, searchPath, out var handle))
                 return handle;
         }
 
