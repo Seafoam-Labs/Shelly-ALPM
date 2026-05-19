@@ -1,0 +1,1309 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: shelly-ui 2.2.4.1\n"
+"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
+"POT-Creation-Date: 2026-05-14 18:41-0400\n"
+"PO-Revision-Date: 2026-05-19 17:37+0200\n"
+"Last-Translator: juliazero <juliazero2@gmail.com>\n"
+"Language-Team: Polish\n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 "
+"|| n%100>=20) ? 1 : 2;\n"
+"X-Generator: Poedit 3.9\n"
+
+msgid "Any"
+msgstr "Wszystkie"
+
+msgid "Loading..."
+msgstr "Ładowanie..."
+
+msgid "Recent Operations"
+msgstr "Ostatnie operacje"
+
+msgid "History"
+msgstr "Historia"
+
+msgid "No recent activity"
+msgstr "Brak ostatniej aktywności"
+
+msgid "Session log is too large to display"
+msgstr "Dziennik sesji jest zbyt duży, aby go wyświetlić"
+
+msgid "Session Log"
+msgstr "Dziennik sesji"
+
+msgid "Copy Log"
+msgstr "Kopiuj dziennik"
+
+msgid "Log copied to clipboard"
+msgstr "Dziennik skopiowany do schowka"
+
+msgid "Available Updates ({0})"
+msgstr "Dostępne aktualizacje ({0})"
+
+msgid "Updates ({0})"
+msgstr "Aktualizacje ({0})"
+
+msgid "All packages are up to date"
+msgstr "Wszystkie pakiety są aktualne"
+
+msgid "just now"
+msgstr "przed chwilą"
+
+msgid "{0} min ago"
+msgstr "{0} min temu"
+
+msgid "{0}h ago"
+msgstr "{0} godz. temu"
+
+msgid "yesterday"
+msgstr "wczoraj"
+
+msgid "{0}d ago"
+msgstr "{0} dni temu"
+
+msgid "<span size='large'>Search for AUR packages</span>"
+msgstr "<span size='large'>Wyszukaj pakiety AUR</span>"
+
+msgid "Install Packages?"
+msgstr "Zainstalować pakiety?"
+
+msgid "Installing..."
+msgstr "Instalowanie..."
+
+msgid "No packages found."
+msgstr "Nie znaleziono pakietów."
+
+msgid "Displaying Package Build {0}"
+msgstr "Wyświetlanie kompilacji pakietu {0}"
+
+msgid "Installed {0} Package(s)"
+msgstr "Zainstalowano {0} pakiet(ów)"
+
+msgid "Export AUR install log"
+msgstr "Eksportuj dziennik instalacji AUR"
+
+msgid "Log Files (*.log)"
+msgstr "Pliki dziennika (*.log)"
+
+msgid "Exported AUR install log"
+msgstr "Wyeksportowany dziennik instalacji AUR"
+
+msgid "Failed to export AUR install log"
+msgstr "Nie udało się wyeksportować dziennika instalacji AUR"
+
+msgid "Package Build"
+msgstr "Budowa pakietu"
+
+msgid "Preview PKGBUILD"
+msgstr "Podgląd PKGBUILD"
+
+msgid "Displays Package Build"
+msgstr "Wyświetla przebieg kompilacji pakietu"
+
+msgid "Close details"
+msgstr "Zamknij szczegóły"
+
+msgid "Version"
+msgstr "Wersja"
+
+msgid "Votes"
+msgstr "Głosy"
+
+msgid "Popularity"
+msgstr "Popularność"
+
+msgid "Out of Date"
+msgstr "Nieaktualne"
+
+msgid "Maintainer"
+msgstr "Opiekun"
+
+msgid "Orphaned"
+msgstr "Osierocony"
+
+msgid "Last Modified"
+msgstr "Ostatnia modyfikacja"
+
+msgid "First Submitted"
+msgstr "Pierwsze przesłanie"
+
+msgid "URL:"
+msgstr "Adres URL:"
+
+msgid "AUR:"
+msgstr "AUR:"
+
+msgid "Depends"
+msgstr "Zależności"
+
+msgid "Make Depends"
+msgstr "Zależności Make"
+
+msgid "Check Depends"
+msgstr "Sprawdź zależności"
+
+msgid "Optional Deps"
+msgstr "Opcjonalne zależności"
+
+msgid "Licenses"
+msgstr "Licencje"
+
+msgid "Keywords"
+msgstr "Słowa kluczowe"
+
+msgid "Provides"
+msgstr "Dostarcza"
+
+msgid "Conflicts"
+msgstr "Konflikty"
+
+msgid "Groups"
+msgstr "Grupy"
+
+msgid "Replaces"
+msgstr "Zastępuje"
+
+msgid "Remove Packages?"
+msgstr "Usunąć pakiety?"
+
+msgid "Removing..."
+msgstr "Usuwanie..."
+
+msgid "Removed {0} Package(s)"
+msgstr "Usunięto {0} pakiet(ów)"
+
+msgid "<span size='large'>AUR packages are up to date</span>"
+msgstr "<span size='large'>Pakiety AUR są aktualne</span>"
+
+msgid "Update Packages?"
+msgstr "Zaktualizować pakiety?"
+
+msgid "Updated {0} Package(s)"
+msgstr "Zaktualizowano {0} pakiet(ów)"
+
+msgid "Shelly is an Arch Linux package manager"
+msgstr "Shelly jest menedżerem pakietów Arch Linux"
+
+msgid "Seafoam Labs Website"
+msgstr "Strona internetowa Seafoam Labs"
+
+msgid "Project Leads"
+msgstr "Liderzy projektu"
+
+msgid "Maintainers"
+msgstr "Opiekunowie"
+
+msgid "Select"
+msgstr "Wybierz"
+
+msgid "Select All"
+msgstr "Zaznacz wszystko"
+
+msgid "Confirm"
+msgstr "Potwierdź"
+
+msgid "No"
+msgstr "Nie"
+
+msgid "Yes"
+msgstr "Tak"
+
+msgid "Install Ignored Package?"
+msgstr "Zainstalować zignorowany pakiet?"
+
+msgid "Replace Package?"
+msgstr "Zastąpić pakiet?"
+
+msgid "Package Conflict Detected"
+msgstr "Wykryto konflikt pakietów"
+
+msgid "Corrupted Package Found"
+msgstr "Znaleziono uszkodzony pakiet"
+
+msgid "Import PGP Key?"
+msgstr "Zaimportować klucz PGP?"
+
+msgid "Select Provider"
+msgstr "Wybierz dostawcę"
+
+msgid "Select Optional Dependencies"
+msgstr "Wybierz opcjonalne zależności"
+
+msgid "System Question"
+msgstr "Pytanie systemowe"
+
+msgid "Arch Linux News"
+msgstr "Wiadomości Arch Linux"
+
+msgid "No news available"
+msgstr "Brak dostępnych wiadomości"
+
+msgid "package"
+msgstr "pakiet"
+
+msgid "packages"
+msgstr "pakiety"
+
+msgid "AUR installation failed"
+msgstr "Instalacja AUR nie powiodła się"
+
+msgid ""
+"Shelly couldn't finish building or installing the selected AUR {0}. Export "
+"the logs and attach them to your report so the team can check whether the "
+"issue came from the PKGBUILD or from Shelly."
+msgstr ""
+"Shelly nie mógł ukończyć budowania ani instalacji wybranego pakietu AUR {0}. "
+"Wyeksportuj dzienniki i dołącz je do zgłoszenia, aby zespół mógł sprawdzić, "
+"czy problem wynika z PKGBUILD-a czy z Shelly."
+
+msgid "Packages"
+msgstr "Pakiety"
+
+msgid "Recent output"
+msgstr "Ostatni wynik"
+
+msgid "Close"
+msgstr "Zamknij"
+
+msgid "Export Logs"
+msgstr "Eksportuj dzienniki"
+
+msgid "Cache directory does not exist"
+msgstr "Katalog pamięci podręcznej nie istnieje"
+
+msgid "Cleaning package cache..."
+msgstr "Czyszczenie pamięci podręcznej pakietów..."
+
+msgid "Package cache cleaned successfully"
+msgstr "Pamięć podręczna pakietów została pomyślnie wyczyszczona"
+
+msgid "Cache clean failed: {0}"
+msgstr "Nie udało się wyczyścić pamięci podręcznej: {0}"
+
+msgid "Fingerprint Disable Instructions"
+msgstr "Instrukcje wyłączania odcisku palca"
+
+msgid "Disable fingerprint authentication for sudo"
+msgstr "Wyłącz uwierzytelnianie odciskiem palca dla sudo"
+
+msgid "1. Inspect"
+msgstr "1. Przegląd"
+
+msgid "2. Disable for sudo"
+msgstr "2. Wyłącz dla sudo"
+
+msgid "3. Re-enable later"
+msgstr "3. Włącz ponownie później"
+
+msgid "Copy"
+msgstr "Kopiuj"
+
+msgid "Operation Complete"
+msgstr "Operacja ukończona"
+
+msgid "Cancel"
+msgstr "Anuluj"
+
+msgid "Authentication Required"
+msgstr "Wymagane uwierzytelnienie"
+
+msgid "Password needed to execute: {0}."
+msgstr "Do wykonania wymagane jest hasło: {0}."
+
+msgid "Authenticate"
+msgstr "Uwierzytelnij"
+
+msgid "Incorrect password. Try again."
+msgstr "Nieprawidłowe hasło. Spróbuj ponownie."
+
+msgid "What's New"
+msgstr "Co nowego"
+
+msgid "Version History"
+msgstr "Historia wersji"
+
+msgid "Version {0}"
+msgstr "Wersja {0}"
+
+msgid "Package installation failed"
+msgstr "Instalacja pakietu nie powiodła się"
+
+msgid ""
+"Shelly couldn't finish building or installing the selected {0}. Export the "
+"logs and attach them to your report so the team can check whether the issue "
+"came from the PKGBUILD or from Shelly."
+msgstr ""
+"Shelly nie mógł ukończyć budowania ani instalacji wybranego pakietu {0}. "
+"Wyeksportuj dzienniki i dołącz je do zgłoszenia, aby zespół mógł sprawdzić, "
+"czy problem wynika z PKGBUILD-a czy z Shelly."
+
+msgid "Cache Cleaner"
+msgstr "Czyszczenie cache"
+
+msgid ""
+"Cache directory: {0}\n"
+"Total cached files: {1} ({2})"
+msgstr ""
+"Katalog pamięci podręcznej: {0}\n"
+"Łączna liczba plików w pamięci podręcznej: {1} ({2})"
+
+msgid "Keep versions:"
+msgstr "Zachowaj wersje:"
+
+msgid "Uninstalled only"
+msgstr "Tylko odinstalowane"
+
+msgid "Clean"
+msgstr "Wyczyść"
+
+msgid "No candidates for removal."
+msgstr "Brak kandydatów do usunięcia."
+
+msgid "{0} files, {1} would be freed"
+msgstr "{0} plików, {1} zostanie zwolnionych"
+
+msgid "Name and URL are required"
+msgstr "Nazwa i adres URL są wymagane"
+
+msgid "URL must end with .flatpakrepo"
+msgstr "Adres URL musi kończyć się rozszerzeniem .flatpakrepo"
+
+msgid "Failed to add remote: {0}"
+msgstr "Nie udało się dodać zdalnego repo: {0}"
+
+msgid "Added Remote: {0}"
+msgstr "Dodano zdalne repo: {0}"
+
+msgid "Removed Remote"
+msgstr "Usunięto zdalne repo"
+
+msgid "All Applications"
+msgstr "Wszystkie aplikacje"
+
+msgid "Recommended"
+msgstr "Rekomendowane"
+
+msgid "Most Wanted"
+msgstr "Najczęściej poszukiwane"
+
+msgid "Recently Added"
+msgstr "Ostatnio dodane"
+
+msgid "Recently Updated"
+msgstr "Ostatnio zaktualizowane"
+
+msgid "Audio & Video"
+msgstr "Dźwięk i wideo"
+
+msgid "Development"
+msgstr "Programowanie"
+
+msgid "Education"
+msgstr "Edukacja"
+
+msgid "Game"
+msgstr "Gry"
+
+msgid "Graphics"
+msgstr "Grafika"
+
+msgid "Network"
+msgstr "Sieć"
+
+msgid "Office"
+msgstr "Biuro"
+
+msgid "Science"
+msgstr "Nauka"
+
+msgid "System"
+msgstr "System"
+
+msgid "Utility"
+msgstr "Narzędzia"
+
+msgid "Version: {0}"
+msgstr "Wersja: {0}"
+
+msgid "License: {0}"
+msgstr "Licencja: {0}"
+
+msgid "Installed"
+msgstr "Zainstalowano"
+
+msgid "Install"
+msgstr "Zainstaluj"
+
+msgid "Size: {0}"
+msgstr "Rozmiar {0}"
+
+msgid "No links available"
+msgstr "Brak dostępnych linków"
+
+msgid "Install Flatpak Ref"
+msgstr "Zainstaluj aplikację Flatpak"
+
+msgid "Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""
+msgstr "Lokalne pliki Flatpak („*.FlatpakRef”, „*.flatpak)”"
+
+msgid "Installing selected local flatpak file..."
+msgstr "Instalowanie wybranego lokalnego pliku flatpak..."
+
+msgid "Installing Flatpak failed"
+msgstr "Instalacja Flatpak nie powiodła się"
+
+msgid "Installed Flatpak"
+msgstr "Zainstalowano Flatpak"
+
+msgid "Install Package?"
+msgstr "Zainstalować pakiet?"
+
+msgid "Installing {0}..."
+msgstr "Instalowanie {0}..."
+
+msgid "Installed Flatpak addon"
+msgstr "Zainstalowano dodatek Flatpak"
+
+msgid "Available Addons"
+msgstr "Dostępne dodatki"
+
+msgid "No details available"
+msgstr "Brak szczegółów"
+
+msgid "Keep Config"
+msgstr "Zachowaj konfigurację"
+
+msgid "Keep user data and configuration"
+msgstr "Zachowaj dane użytkownika i konfigurację"
+
+msgid "Delete Config"
+msgstr "Usuń konfigurację"
+
+msgid "Delete user data and configuration"
+msgstr "Usuń dane użytkownika i konfigurację"
+
+msgid "Keep Config?"
+msgstr "Zachować konfigurację?"
+
+msgid "Removing {0}..."
+msgstr "Usuwanie {0}..."
+
+msgid "Failed to remove package {0}: {1}"
+msgstr "Nie udało się usunąć pakietu {0}: {1}"
+
+msgid "Removed Package(s)"
+msgstr "Usunięte pakiety"
+
+msgid "Permission Changes"
+msgstr "Zmiany uprawnień"
+
+msgid "Updating Flatpak packages..."
+msgstr "Aktualizowanie pakietów Flatpak..."
+
+msgid "Failed to update packages: {0}"
+msgstr "Nie udało się zaktualizować pakietów: {0}"
+
+msgid "Updated all Flatpak(s)"
+msgstr "Zaktualizowano wszystkie pakiety Flatpak"
+
+msgid "<span size='large'>System packages are up to date</span>"
+msgstr "<span size='large'>Pakiety systemowe są aktualne</span>"
+
+msgid "Current"
+msgstr "Aktualna"
+
+msgid "New"
+msgstr "Nowa"
+
+msgid "Download"
+msgstr "Do pobrania"
+
+msgid "Size Diff"
+msgstr "Różnica rozmiaru"
+
+msgid "Repository"
+msgstr "Repozytorium"
+
+msgid "Size"
+msgstr "Rozmiar"
+
+msgid "Partial Update Warning"
+msgstr "Ostrzeżenie o częściowej aktualizacji"
+
+msgid ""
+"It is not advised you do partial system updates. Are you sure you want to "
+"continue?"
+msgstr ""
+"Nie zaleca się przeprowadzania częściowych aktualizacji systemu. Czy na "
+"pewno chcesz kontynuować?"
+
+msgid ""
+"It is unadvised to not update all packages at once. Are you sure you want to "
+"continue?"
+msgstr ""
+"Nie zaleca się aktualizacji wszystkich pakietów jednocześnie. Czy na pewno "
+"chcesz kontynuować?"
+
+msgid "Updating..."
+msgstr "Aktualizowanie..."
+
+msgid "Reboot Required"
+msgstr "Wymagane ponowne uruchomienie"
+
+msgid ""
+"A full system reboot is required for updates to take effect.\n"
+"\n"
+"Would you like to reboot now?"
+msgstr ""
+"Aby aktualizacje zaczęły obowiązywać, konieczne jest ponowne uruchomienie "
+"systemu.\n"
+"\n"
+"Czy chcesz teraz ponownie uruchomić system?"
+
+msgid "Service Restart Failures"
+msgstr "Błędy podczas ponownego uruchamiania usługi"
+
+msgid ""
+"The following services failed to restart automatically:\n"
+"{0}"
+msgstr ""
+"Nie udało się automatycznie uruchomić ponownie następujących usług:\n"
+"{0}"
+
+msgid "--- Packages to Upgrade ---"
+msgstr "--- Pakiety do uaktualnienia ---"
+
+msgid "Export Shelly install log"
+msgstr "Eksportuj dziennik instalacji Shelly"
+
+msgid "Exported Shelly install log"
+msgstr "Wyeksportowano dziennik instalacji Shelly"
+
+msgid "Failed to export Shelly install log"
+msgstr "Nie udało się wyeksportować dziennika instalacji Shelly"
+
+msgid "Install Local Package"
+msgstr "Zainstaluj pakiet lokalny"
+
+msgid "Local package files (\"*.gz\", \"*.zst\")"
+msgstr "Pliki pakietów lokalnych („*.gz”, „*.zst”)"
+
+msgid "Installing local package..."
+msgstr "Instalowanie pakietu lokalnego..."
+
+msgid "Installed local package"
+msgstr "Zainstalowano pakiet lokalny"
+
+msgid "Package Files ({0})"
+msgstr "Pliki pakietu ({0})"
+
+msgid "Remove corrupted packages"
+msgstr "Usuń uszkodzone pakiety"
+
+msgid "Select File"
+msgstr "Wybierz plik"
+
+msgid "Recommend"
+msgstr "Polecane"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "AppImage"
+msgstr "AppImage"
+
+msgid "Shelly Search"
+msgstr "Wyszukiwarka Shelly"
+
+msgid "Select Icon File"
+msgstr "Wybierz plik ikony"
+
+msgid "Image Files"
+msgstr "Pliki obrazów"
+
+msgid "Enable AUR?"
+msgstr "Włączyć AUR?"
+
+msgid ""
+"The Arch User Repository (AUR) is a community-driven repository. Packages "
+"are user-produced and may contain risks. Do you want to enable it?"
+msgstr ""
+"Repozytorium użytkowników Arch (AUR) to repozytorium tworzone przez "
+"społeczność. Pakiety są tworzone przez użytkowników i mogą wiązać się z "
+"ryzykiem. Czy chcesz je włączyć?"
+
+msgid "Missing Flatpak"
+msgstr "Brakuje pakietu Flatpak"
+
+msgid "Would you like to install this this now?"
+msgstr "Czy chcesz to teraz zainstalować?"
+
+msgid "Installing flatpak..."
+msgstr "Instalowanie flatpak..."
+
+msgid "Reboot required to complete installation."
+msgstr "Do zakończenia instalacji wymagane jest ponowne uruchomienie."
+
+msgid "Synchronizing databases..."
+msgstr "Synchronizacja baz danych..."
+
+msgid "Database lock removed"
+msgstr "Usunięto blokadę bazy danych"
+
+msgid "Shelly folder ownership restored"
+msgstr "Przywrócono własność folderu Shelly"
+
+msgid "Failed to fix folder permissions"
+msgstr "Nie udało się naprawić uprawnień folderu"
+
+msgid "Error fixing folder permissions"
+msgstr "Błąd podczas naprawiania uprawnień do folderu"
+
+msgid "Purified Corruption"
+msgstr "Oczyszczono uszkodzenie"
+
+msgid "No corrupted packages found"
+msgstr "Nie znaleziono uszkodzonych pakietów"
+
+msgid "No pacfiles found"
+msgstr "Nie znaleziono plików pac"
+
+msgid "Pacfiles Found"
+msgstr "Znaleziono pliki pac"
+
+msgid "Copy content"
+msgstr "Kopiuj treść"
+
+msgid "Copied to clipboard"
+msgstr "Skopiowano do schowka"
+
+msgid "Overlay not available"
+msgstr "Nakładka niedostępna"
+
+msgid "No changelog entries found"
+msgstr "Nie znaleziono wpisów w dzienniku zmian"
+
+msgid "Unknown"
+msgstr "Nieznany"
+
+msgid "No details for this release"
+msgstr "Brak szczegółów dotyczących tego wydania"
+
+msgid "Unknown date"
+msgstr "Nieznana data"
+
+msgid "Failed to load changelog"
+msgstr "Nie udało się załadować dziennika zmian"
+
+msgid "None"
+msgstr "Brak"
+
+msgid "StaticUrl"
+msgstr "Statyczny URL"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+msgid "Select AppImage to Install"
+msgstr "Wybierz AppImage, aby zainstalować"
+
+msgid "AppImage Files"
+msgstr "Pliki AppImage"
+
+msgid "Installing AppImage..."
+msgstr "Instalacja AppImage..."
+
+msgid "{0} installed successfully!"
+msgstr "{0} zainstalowano pomyślnie!"
+
+msgid "Failed to install {0}: {1}"
+msgstr "Nie udało się zainstalować {0}: {1}"
+
+msgid "No AppImages need to be upgraded"
+msgstr "Pakiety AppImage są aktualne"
+
+msgid "Running updates..."
+msgstr "Trwają aktualizacje..."
+
+msgid "Updating AppImages..."
+msgstr "Aktualizowanie pakietów AppImage..."
+
+msgid "All AppImages updated successfully!"
+msgstr "Zaktualizowano wszystkie pakiety AppImage!"
+
+msgid "Failed to update AppImages: {0}"
+msgstr "Nie udało się zaktualizować pakietów AppImage: {0}"
+
+msgid "Configuration saved for {0}"
+msgstr "Konfiguracja zapisana dla {0}"
+
+msgid "Failed to save configuration: {0}"
+msgstr "Nie udało się zapisać konfiguracji: {0}"
+
+msgid "Syncing {0}..."
+msgstr "Synchronizacja {0}..."
+
+msgid "Synced {0}"
+msgstr "Zsynchronizowano {0}"
+
+msgid "Failed to sync: {0}"
+msgstr "Nie udało się zsynchronizować: {0}"
+
+msgid "Syncing all AppImages ..."
+msgstr "Synchronizacja wszystkich pakietów AppImage..."
+
+msgid "Synced"
+msgstr "Zsynchronizowano"
+
+msgid "{0} removed successfully!"
+msgstr "{0} usunięto pomyślnie!"
+
+msgid "Failed to remove {0}: {1}"
+msgstr "Nie udało się usunąć {0}: {1}"
+
+msgid ""
+"No recommendations found. Please check your internet connection and try "
+"again."
+msgstr ""
+"Nie znaleziono rekomendacji. Sprawdź połączenie internetowe i spróbuj "
+"ponownie."
+
+msgid "Already installed"
+msgstr "Już zainstalowano"
+
+msgid "Install "
+msgstr "Instaluj "
+
+msgid "Package is already installed"
+msgstr "Pakiet jest już zainstalowany"
+
+msgid "Installing package..."
+msgstr "Instalowanie pakietu..."
+
+msgid "Package installed successfully"
+msgstr "Pakiet został pomyślnie zainstalowany"
+
+msgid "Reboot required after flatpak installation."
+msgstr "Po instalacji Flatpak wymagane jest ponowne uruchomienie."
+
+msgid "Failed to install flatpak"
+msgstr "Nie udało się zainstalować flatpak"
+
+msgid "Searching..."
+msgstr "Wyszukiwanie..."
+
+msgid "Search error: {0}"
+msgstr "Błąd wyszukiwania: {0}"
+
+msgid "Failed to install packages: {0}"
+msgstr "Nie udało się zainstalować pakietów: {0}"
+
+msgid "Install for {0} package(s) was unsuccessful."
+msgstr "Instalacja {0} pakiet(ów) nie powiodła się."
+
+msgid "Failed to remove packages: {0}"
+msgstr "Nie udało się usunąć pakietów: {0}"
+
+msgid "color-scheme"
+msgstr "schemat kolorów"
+
+msgid "Updates"
+msgstr "Aktualizacje"
+
+msgid "Manage"
+msgstr "Zarządzaj"
+
+msgid "Remove"
+msgstr "Usuń"
+
+msgid "Search packages..."
+msgstr "Wyszukaj pakiety..."
+
+msgid "Use chroot"
+msgstr "Użyj chroot"
+
+msgid "Build packages in a clean chroot environment"
+msgstr "Zbuduj pakiety w czystym środowisku chroot"
+
+msgid "Run checks"
+msgstr "Przeprowadź kontrole"
+
+msgid "Run the --check function during package build (installs checkdepends)"
+msgstr ""
+"Uruchom funkcję --check podczas kompilacji pakietu (instaluje checkdepends)"
+
+msgid "Install Aur Package(s)"
+msgstr "Zainstaluj pakiet(y) AUR"
+
+msgid "Name"
+msgstr "Nazwa"
+
+msgid "refresh"
+msgstr "odśwież"
+
+msgid "Clean Uninstall"
+msgstr "Czysta deinstalacja"
+
+msgid "Show Hidden"
+msgstr "Pokaż ukryte"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "Pokaż pakiety na liście IgnorePkg z pacman.conf"
+
+msgid "Remove Aur Package(s)"
+msgstr "Usuń pakiet(y) AUR"
+
+msgid ""
+"Run the --check function during package build (installs checkdepends)\n"
+"                        "
+msgstr ""
+"Uruchom funkcję --check podczas kompilacji pakietu (instaluje checkdepends)\n"
+"                        "
+
+msgid "Update Aur Package(s)"
+msgstr "Zaktualizuj pakiet(y) AUR"
+
+msgid "Please wait while we update your system."
+msgstr "Proszę poczekać, aż system się zaktualizuje."
+
+msgid "Reload"
+msgstr "Przeładuj"
+
+msgid "Manage Remote Refs"
+msgstr "Zarządzaj zdalnymi repozytoriami"
+
+msgid "Install local flatpak"
+msgstr "Zainstaluj lokalny flatpak"
+
+msgid "system"
+msgstr "system"
+
+msgid "user"
+msgstr "użytkownik"
+
+msgid "Loading Flatpak Data..."
+msgstr "Ładowanie danych Flatpak..."
+
+msgid "Back"
+msgstr "Wstecz"
+
+msgid "Addons"
+msgstr "Dodaki"
+
+msgid "Group Filter"
+msgstr "Filtr grupowy"
+
+msgid "App Name"
+msgstr "Nazwa aplikacji"
+
+msgid "Author"
+msgstr "Autor"
+
+msgid "Version: -"
+msgstr "Wersja: -"
+
+msgid "Size: -"
+msgstr "Rozmiar: -"
+
+msgid "License: -"
+msgstr "Licencja: -"
+
+msgid "Summary"
+msgstr "Podsumowanie"
+
+msgid "No description available."
+msgstr "Brak opisu."
+
+msgid "Delete Selected Remote"
+msgstr "Usuń wybrane zdalne repozytorium"
+
+msgid "Add Remote"
+msgstr "Dodaj zdalne repo"
+
+msgid "Add New Flatpak Remote"
+msgstr "Dodaj nowe zdalne repo Flatpack"
+
+msgid "Add"
+msgstr "Dodaj"
+
+msgid "Remote Name"
+msgstr "Nazwa zdalnego repo"
+
+msgid "e.g., flathub"
+msgstr "np. flathub"
+
+msgid "Remote URL"
+msgstr "Adres URL zdalnego repo"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "np. https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "Zakres"
+
+msgid "Remove Selected"
+msgstr "Usuń wybrane"
+
+msgid "Update All"
+msgstr "Aktualizuj wszystko"
+
+msgid "Package Group Filter"
+msgstr "Filtr grupy pakietów"
+
+msgid "Install Local Packages"
+msgstr "Zainstaluj pakiety lokalne"
+
+msgid "Install Local"
+msgstr "Zainstaluj lokalnie"
+
+msgid "Perform Upgrade"
+msgstr "Wykonaj aktualizację"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "Przeprowadź pełną aktualizację systemu z instalacją (-u)"
+
+msgid "Install Selected"
+msgstr "Zainstaluj wybrane"
+
+msgid "Sync"
+msgstr "Synchronizacja"
+
+msgid "Update Selected"
+msgstr "Aktualizuj wybrane"
+
+msgid "Package Name"
+msgstr "Nazwa pakietu"
+
+msgid "Size Difference"
+msgstr "Różnica rozmiaru"
+
+msgid "Old Version"
+msgstr "Starsza wersja"
+
+msgid "Remove Local Packages"
+msgstr "Usuń lokalne pakiety"
+
+msgid "Remove Local"
+msgstr "Usuń lokalne"
+
+msgid "Remove Configs"
+msgstr "Usuń konfiguracje"
+
+msgid "General"
+msgstr "Ogólne"
+
+msgid "Enable AUR"
+msgstr "Włącz AUR"
+
+msgid "Enable Flatpak"
+msgstr "Włącz Flatpak"
+
+msgid "Enable Recommended Page"
+msgstr "Włącz stronę Polecane"
+
+msgid "Enable AppImage"
+msgstr "Włącz AppImage"
+
+msgid "Enable Tray Icon"
+msgstr "Włącz ikonę zasobnika"
+
+msgid "Use weekly schedule"
+msgstr "Użyj tygodniowego harmonogramu"
+
+msgid "Tray Check Interval (Hours)"
+msgstr "Częstotliwość sprawdzania aktualizacji przez zasobnik (godz.)"
+
+msgid "Weekly Schedule"
+msgstr "Tygodniowy harmonogram"
+
+msgid "Sun"
+msgstr "Niedz."
+
+msgid "Mon"
+msgstr "Pon."
+
+msgid "Tue"
+msgstr "Wt."
+
+msgid "Wed"
+msgstr "Śr."
+
+msgid "Thu"
+msgstr "Czw."
+
+msgid "Fri"
+msgstr "Pt."
+
+msgid "Sat"
+msgstr "Sob."
+
+msgid "Update Time (24h):"
+msgstr "Czas aktualizacji (24 godz.):"
+
+msgid "Look & Feel"
+msgstr "Wygląd i styl"
+
+msgid "Icons Enabled"
+msgstr "Ikony pakietów"
+
+msgid "Use Symbolic Tray Icon"
+msgstr "Użyj symbolicznej ikony w zasobniku systemowym"
+
+msgid ""
+"Both tray icons must be set for use, if not it will default to standard "
+"shelly icons. Changing tray icons requires a restart of shelly-notifications."
+msgstr ""
+"Obie ikony w zasobniku muszą być ustawione, w przeciwnym razie zostaną użyte "
+"domyślne ikony Shelly. Zmiana ikon w zasobniku wymaga ponownego uruchomienia "
+"shelly-notifications."
+
+msgid "Tray Icon"
+msgstr "Ikona w zasobniku"
+
+msgid "Clear"
+msgstr "Wyczyść"
+
+msgid "Tray Updates Icon"
+msgstr "Ikona aktualizacji w zasobniku"
+
+msgid "Default page"
+msgstr "Domyślna strona"
+
+msgid "Use Sidebar Navigation"
+msgstr "Użyj bocznej nawigacji"
+
+msgid "Advanced"
+msgstr "Zaawansowane"
+
+msgid "No Confirm"
+msgstr "Brak potwierdzenia"
+
+msgid "Enable Shelly Search"
+msgstr "Włącz wyszukiwarkę Shelly"
+
+msgid "Enable Webview Visualization (experimental)"
+msgstr "Włącz wizualizację Webview (eksperymentalne)"
+
+msgid "Parallel Downloads"
+msgstr "Pobieranie równoległe"
+
+msgid "Force Database Update"
+msgstr "Wymuś aktualizację bazy danych"
+
+msgid "Remove db.lock"
+msgstr "Usuń db.lock"
+
+msgid "View Pacfiles"
+msgstr "Wyświetl pliki pac"
+
+msgid "Fix Permissions"
+msgstr "Napraw uprawnienia"
+
+msgid ""
+"Restores correct user ownership of Shelly configuration and cache folders if "
+"they were accidentally created by root."
+msgstr ""
+"Przywraca prawidłowe prawa własności użytkownika do folderów konfiguracji i "
+"pamięci podręcznej Shelly, jeśli zostały one przypadkowo utworzone przez "
+"użytkownika root."
+
+msgid "Purify Packages"
+msgstr "Oczyść pakiety"
+
+msgid "Save"
+msgstr "Zapisz"
+
+msgid "View Changelog"
+msgstr "Zobacz dziennik zmian"
+
+msgid "Community fluxer"
+msgstr "Fluxer społecznościowy"
+
+msgid "Sponsor"
+msgstr "Sponsor"
+
+msgid "Search..."
+msgstr "Szukaj..."
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr ""
+"Zsynchronizuj metadane wszystkich pakietów AppImage. Przydatne w przypadku, "
+"gdy pakiet AppImage zaktualizował się samodzielnie."
+
+msgid "Sync All"
+msgstr "Synchronizuj wszystkie"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "Zaktualizuj wszystkie pakiety AppImage do najnowszych wersji"
+
+msgid "Upgrade All"
+msgstr "Zaktualizuj wszystkie"
+
+msgid "Install a new AppImage from a file"
+msgstr "Zainstaluj nowy pakiet AppImage z pliku"
+
+msgid "Install AppImage"
+msgstr "Instaluj AppImage"
+
+msgid "Description goes here..."
+msgstr "Opis znajduje się tutaj..."
+
+msgid "Size on Disk"
+msgstr "Rozmiar na dysku"
+
+msgid "Update Strategy"
+msgstr "Strategia aktualizacji"
+
+msgid "Update URL / Repository Info"
+msgstr "Adres aktualizacji / info o repo"
+
+msgid "e.g. repo or https://..."
+msgstr "np. repo lub https://..."
+
+msgid "Installation Path"
+msgstr "Ścieżka instalacji"
+
+msgid "Install Package(s)"
+msgstr "Zainstaluj pakiet(y)"
+
+msgid "Update Package(s)"
+msgstr "Zaktualizuj pakiet(y)"
+
+msgid "Manage Package(s)"
+msgstr "Zarządzaj pakietami"
+
+msgid "Install AUR"
+msgstr "Zainstaluj AUR"
+
+msgid "Update AUR"
+msgstr "Zaktualizuj AUR"
+
+msgid "Remove AUR"
+msgstr "Usuń AUR"
+
+msgid "Install Flatpak"
+msgstr "Zainstaluj Flatpak"
+
+msgid "Update Flatpak"
+msgstr "Zaktualizuj Flatpak"
+
+msgid "Remove Flatpak"
+msgstr "Usuń Flatpak"
+
+msgid "Manage AppImage(s)"
+msgstr "Zarządzaj pakietami AppImage"
+
+msgid "Arch News"
+msgstr "Wiadomości Arch"
+
+msgid "Settings"
+msgstr "Ustawienia"
+
+msgid "About"
+msgstr "O aplikacji"
+
+msgid "Toggle Sidebar"
+msgstr "Przełącz pasek boczny"
+
+msgid "Available Updates"
+msgstr "Dostępne aktualizacje"
+
+msgid "Welcome to Shelly"
+msgstr "Witaj w Shelly"
+
+msgid "Let's get you set up with some basic configurations."
+msgstr "Dostosuj podstawowe ustawienia."
+
+msgid "Enable AUR Support"
+msgstr "Włącz obsługę AUR"
+
+msgid ""
+"Access the Arch User Repository for a vast collection of community-"
+"maintained packages. AUR packages can contain malicious software, so please "
+"use caution when using the AUR."
+msgstr ""
+"Uzyskaj dostęp do repozytorium użytkowników Arch, gdzie znajdziesz bogatą "
+"kolekcję pakietów zarządzanych przez społeczność. Pakiety AUR mogą zawierać "
+"złośliwe oprogramowanie, dlatego zachowaj ostrożność podczas korzystania z "
+"AUR."
+
+msgid "Enable Flatpak Support"
+msgstr "Włącz obsługę Flatpak"
+
+msgid "Enable support for Flatpak applications from Flathub and other remotes."
+msgstr ""
+"Włącz obsługę aplikacji Flatpak z Flathub i innych zdalnych repozytoriów."
+
+msgid "Enable AppImage Support"
+msgstr "Włącz obsługę AppImage"
+
+msgid "Manage and configure updates for AppImage applications easily."
+msgstr "Łatwe zarządzanie i konfigurowanie aktualizacji pakietów AppImage."
+
+msgid ""
+"Show a status icon in your system tray for quick access and notifications."
+msgstr ""
+"Wyświetl ikonę stanu w zasobniku systemowym, aby zapewnić szybki dostęp i "
+"powiadomienia."
+
+msgid "Vertical Navigation"
+msgstr "Pionowa nawigacja"
+
+msgid "Change navigation style to vertical or horizontal style."
+msgstr "Zmień styl nawigacji na pionowy lub poziomy."
+
+msgid "Finish Setup"
+msgstr "Zakończ"
+
+msgid ""
+"Any required installations will run after the Finish button has been "
+"accepted."
+msgstr ""
+"Wszelkie wymagane instalacje zostaną uruchomione po kliknięciu przycisku "
+"„Zakończ”."
+
+msgid "These options and others can be configured later in settings."
+msgstr "Te i inne opcje można skonfigurować później w ustawieniach."
+
+msgid "Remove Package(s)"
+msgstr "Usuń pakiet(y)"
+
+msgid "Description"
+msgstr "Opis"
+
+msgid "Last Updated"
+msgstr "Ostatnio zaktualizowano"
+
+msgid "Remove Optional Deps"
+msgstr "Usuń opcjonalne zależności"
+
+msgid ""
+"Also remove orphaned optional dependencies installed with these packages."
+msgstr ""
+"Usuń również porzucone opcjonalne zależności zainstalowane wraz z tymi "
+"pakietami."
+
+msgid "Add Tray To Auto Start"
+msgstr "Dodaj zasobnik do autostartu"
+
+msgid "Systemd startup service added."
+msgstr "Dodano usługę startową Systemd."
+
+msgid "Systemd startup service removed."
+msgstr "Usunięto usługę startową Systemd."

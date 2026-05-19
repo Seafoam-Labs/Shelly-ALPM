@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.AppImage;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
+using Shelly.Utilities;
 
 namespace Shelly.Gtk;
 

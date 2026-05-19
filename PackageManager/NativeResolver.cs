@@ -90,7 +90,7 @@ public static class NativeResolver
 
     private static IntPtr ResolveZstd(Assembly assembly, DllImportSearchPath? searchPath)
     {
-        string[] versions = ["libzstd.so.1.5.7", "libzstd.so"];
+        string[] versions = ["libzstd.so.1", "libzstd.so"];
         return TryLoad(versions, assembly, searchPath);
     }
 

@@ -13,6 +13,8 @@ using Shelly.GTK.Resources;
 using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.Windows.Packages;
+using Shelly.Utilities;
+using Shelly.Utilities.Enums;
 using Module = Gtk.Module;
 using Settings = Shelly.Gtk.Windows.Settings;
 using GtkSettings = Gtk.Settings;

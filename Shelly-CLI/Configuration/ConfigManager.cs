@@ -1,9 +1,8 @@
-using Shelly_CLI.Enums;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
-using PackageManager.Utilities;
 using Shelly.Utilities;
+using Shelly.Utilities.Enums;
 
 namespace Shelly_CLI.Configuration;
 

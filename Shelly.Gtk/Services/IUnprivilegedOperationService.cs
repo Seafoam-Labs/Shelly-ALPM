@@ -54,6 +54,10 @@ public interface IUnprivilegedOperationService
     Task<List<RssModel>> GetArchNewsAsync(bool all = false);
     
     Task<List<PacfileRecord>> GetPacFiles();
+    
+    Task<OperationResult> AddSystemdServiceTray(string serviceContent, string service);
+    Task<OperationResult> RemoveSystemdServiceTray(string service);
+    
 }
 
 public class UnprivilegedOperationResult

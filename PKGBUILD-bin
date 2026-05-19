@@ -23,6 +23,7 @@ depends=(
     'libarchive'
     'dconf'
     'gnupg'
+    'zstd'
 )
 optdepends=(
     'flatpak: For supporting flatpak implementation.'

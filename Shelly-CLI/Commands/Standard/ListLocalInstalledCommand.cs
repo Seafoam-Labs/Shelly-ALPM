@@ -1,7 +1,7 @@
+using System.Text;
 using System.Text.Json;
 using PackageManager.Local;
 using PackageManager.Wire;
-using Shelly_CLI.Utility;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -11,17 +11,11 @@ public class ListLocalInstalledCommand : Command<ListSettings>
 {
     public override int Execute(CommandContext context, ListSettings settings)
     {
-        if (Program.IsUiMode)
-        {
-            return HandleUiModeListInstalled(settings);
-        }
+        if (Program.IsUiMode) return HandleUiModeListInstalled(settings);
 
         var packages = LocalManager.GetInstalledBinaryPackages();
 
-        if (!string.IsNullOrWhiteSpace(settings.Filter))
-        {
-            packages = ApplyFilter(packages, settings.Filter);
-        }
+        if (!string.IsNullOrWhiteSpace(settings.Filter)) packages = ApplyFilter(packages, settings.Filter);
 
         var sortedPackages = settings.Sort switch
         {
@@ -39,7 +33,7 @@ public class ListLocalInstalledCommand : Command<ListSettings>
             var json = JsonSerializer.Serialize(sortedList, ShellyCLIJsonContext.Default.ListLocalPackageDto);
             // Write directly to stdout stream to bypass Spectre.Console redirection
             using var stdout = Console.OpenStandardOutput();
-            using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
+            using var writer = new StreamWriter(stdout, Encoding.UTF8);
             writer.WriteLine(json);
             writer.Flush();
             return 0;
@@ -52,10 +46,7 @@ public class ListLocalInstalledCommand : Command<ListSettings>
         var skip = (settings.Page - 1) * settings.Take;
         var displayPackages = sortedPackages.Skip(skip).Take(settings.Take).ToList();
 
-        foreach (var pkg in displayPackages)
-        {
-            table.AddRow(pkg.Name, FormatSize(pkg.Size));
-        }
+        foreach (var pkg in displayPackages) table.AddRow(pkg.Name, FormatSize(pkg.Size));
 
         AnsiConsole.Write(table);
         AnsiConsole.MarkupLine($"[blue]Total: {displayPackages.Count} packages[/]");
@@ -80,10 +71,7 @@ public class ListLocalInstalledCommand : Command<ListSettings>
     {
         var packages = LocalManager.GetInstalledBinaryPackages();
 
-        if (!string.IsNullOrWhiteSpace(settings.Filter))
-        {
-            packages = ApplyFilter(packages, settings.Filter);
-        }
+        if (!string.IsNullOrWhiteSpace(settings.Filter)) packages = ApplyFilter(packages, settings.Filter);
 
         var sortedPackages = settings.Sort switch
         {
@@ -105,10 +93,7 @@ public class ListLocalInstalledCommand : Command<ListSettings>
         var skip = (settings.Page - 1) * settings.Take;
         var displayPackages = sortedPackages.Skip(skip).Take(settings.Take).ToList();
 
-        foreach (var pkg in displayPackages)
-        {
-            Console.WriteLine($"{pkg.Name} {FormatSize(pkg.Size)}");
-        }
+        foreach (var pkg in displayPackages) Console.WriteLine($"{pkg.Name} {FormatSize(pkg.Size)}");
 
         Console.Error.WriteLine($"Total: {displayPackages.Count} packages");
         return 0;

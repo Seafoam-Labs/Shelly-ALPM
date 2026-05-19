@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.UiModels;
+using Shelly.Utilities;
 
 namespace Shelly.Gtk.Services;
 
@@ -67,7 +68,7 @@ public class ConfigService : IConfigService
         CallCliConfigSet(nameof(config.TrayUpdatesIconPath), config.TrayUpdatesIconPath ?? "");
         CallCliConfigSet(nameof(config.DefaultPageDropDown), config.DefaultPageDropDown.ToString());
         CallCliConfigSet(nameof(config.SuppressFingerprintWarning), config.SuppressFingerprintWarning.ToString());
-
+        CallCliConfigSet(nameof(config.RemoveCache), config.RemoveCache.ToString());
         ConfigSaved?.Invoke(this, config);
         _suppressInvalidate = true;
         try { dirtyService.MarkDirty(DirtyScopes.Config); }

@@ -1,4 +1,5 @@
 using System.Reflection;
+using PackageManager.Local;
 using Shelly_CLI.Commands.AppImage;
 using Shelly_CLI.Commands.Aur;
 using Shelly_CLI.Commands.Config;
@@ -7,9 +8,7 @@ using Shelly_CLI.Commands.Keyring;
 using Shelly_CLI.Commands.Standard;
 using Shelly_CLI.Commands.Standard.Pacfile;
 using Shelly_CLI.Commands.Utility;
-using PackageManager.Utilities;
 using Shelly_CLI.Configuration;
-using Shelly_CLI.Utility;
 using Shelly.Utilities;
 using Shelly.Writers;
 using Spectre.Console;
@@ -415,7 +414,8 @@ public class Program
                     .WithExample("utility", "cache-clean", "-r")
                     .WithExample("utility", "cache-clean", "-r", "-k", "2")
                     .WithExample("utility", "cache-clean", "-r", "--uninstalled")
-                    .WithExample("utility", "cache-clean", "-r", "-c", "/var/cache/pacman/pkg");
+                    .WithExample("utility", "cache-clean", "-r", "-c", "/var/cache/pacman/pkg")
+                    .WithExample("utility", "cache-clean", "-t", "vivaldi");
             });
 
             config.AddBranch("config", configure =>

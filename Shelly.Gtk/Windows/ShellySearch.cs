@@ -24,6 +24,8 @@ public sealed class ShellySearch(
     private Button _installButton = null!;
     private Button _removeButton = null!;
     private string? _initialQuery;
+    private readonly bool _deletePackageCache = configService.LoadConfig().RemoveCache;
+
 
     private readonly Dictionary<ColumnViewCell, EventHandler> _checkBinding = [];
     private readonly Dictionary<ColumnViewCell, EventHandler> _installedBinding = [];
@@ -587,7 +589,7 @@ public sealed class ShellySearch(
             var aur = selected.Where(x => x.PackageType == PackageType.Aur).Select(x => x.Name).ToList();
             var flatpak = selected.Where(x => x.PackageType == PackageType.Flatpak).Select(x => x.Id).ToList();
 
-            if (standard.Count > 0) await privilegedOperationService.RemovePackagesAsync(standard, false, false, false);
+            if (standard.Count > 0) await privilegedOperationService.RemovePackagesAsync(standard, false, false, false, _deletePackageCache);
             if (aur.Count > 0) await privilegedOperationService.RemoveAurPackagesAsync(aur);
             if (flatpak.Count > 0) await unprivilegedOperationService.RemoveFlatpakPackage(flatpak);
 

@@ -1059,6 +1059,9 @@ msgstr ""
 msgid "Advanced"
 msgstr ""
 
+msgid "Remove Cache on Uninstall"
+msgstr ""
+
 msgid "No Confirm"
 msgstr ""
 
@@ -1248,4 +1251,13 @@ msgid "Remove Optional Deps"
 msgstr ""
 
 msgid "Also remove orphaned optional dependencies installed with these packages."
+msgstr ""
+
+msgid "Add Tray To Auto Start"
+msgstr ""
+
+msgid "Systemd startup service added."
+msgstr ""
+
+msgid "Systemd startup service removed."
 msgstr ""

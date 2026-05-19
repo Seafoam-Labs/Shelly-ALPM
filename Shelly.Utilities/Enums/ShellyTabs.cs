@@ -1,4 +1,4 @@
-namespace Shelly.Gtk.Enums;
+namespace Shelly.Utilities.Enums;
 
 public enum ShellyTabs
 {

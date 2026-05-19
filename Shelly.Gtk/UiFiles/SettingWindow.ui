@@ -69,7 +69,7 @@
                                                                     <object class="GtkSwitch" id="flatpak_switch"/>
                                                                 </child>
                                                             </object>
-                                                        </child>
+                                                        </child> 
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
@@ -114,6 +114,21 @@
                                                                     <object class="GtkSwitch" id="tray_switch"/>
                                                                 </child>
                                                             </object>
+                                                        </child>
+                                                        <child>
+                                                        <object class="GtkBox">
+                                                            <property name="orientation">horizontal</property>
+                                                            <child>
+                                                                <object class="GtkLabel">
+                                                                    <property name="label" translatable="yes">Add Tray To Auto Start</property>
+                                                                    <property name="hexpand">true</property>
+                                                                    <property name="halign">start</property>
+                                                                </object>
+                                                            </child>
+                                                            <child>
+                                                                <object class="GtkSwitch" id="tray_auto_switch"/>
+                                                            </child>
+                                                        </object>
                                                         </child>
                                                         <child>
                                                             <object class="GtkBox" id="weekly_schedule_switch_box">
@@ -432,6 +447,21 @@
                                                         <property name="spacing">12</property>
                                                         <property name="hexpand">true</property>
                                                         <property name="vexpand">true</property>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">Remove Cache on Uninstall</property>
+                                                                        <property name="hexpand">true</property>
+                                                                        <property name="halign">start</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="remove_cache_switch"/>
+                                                                </child>
+                                                            </object>
+                                                        </child>
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>

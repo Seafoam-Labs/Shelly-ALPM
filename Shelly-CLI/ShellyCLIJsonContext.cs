@@ -8,6 +8,7 @@ using PackageManager.Local;
 using Shelly_CLI.Commands.Aur.Models;
 using Shelly_CLI.Commands.Standard.Models;
 using Shelly_CLI.Configuration;
+using Shelly.Utilities;
 
 namespace Shelly_CLI;
 

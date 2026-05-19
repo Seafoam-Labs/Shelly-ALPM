@@ -1,4 +1,3 @@
-using Shelly.Gtk.Enums;
 using Gtk;
 using Shelly.Gtk.Helpers;
 using Shelly.GTK.Resources;
@@ -7,6 +6,8 @@ using Shelly.Gtk.Services.TrayServices;
 using Shelly.Gtk.UiModels;
 using System.Text.Json;
 using Shelly.Gtk.Windows.Dialog;
+using Shelly.Utilities;
+using Shelly.Utilities.Enums;
 using DateTime = System.DateTime;
 using TimeSpan = System.TimeSpan;
 
@@ -53,6 +54,7 @@ public class Settings(
         SetupWeeklyScheduleSwitch("daily_schedule", _config.UseWeeklySchedule, (v) => _config.UseWeeklySchedule = v,
             builder);
         SetupSwitch("no_confirm_switch", _config.NoConfirm, (v) => _config.NoConfirm = v, builder);
+        SetupSwitch("remove_cache_switch", _config.RemoveCache, (v) => _config.RemoveCache = v, builder);
         SetupSwitch("webview_switch", _config.WebViewEnabled, (v) => _config.WebViewEnabled = v, builder);
         SetupSwitch("shelly_icons_switch", _config.ShellyIconsEnabled, (v) => _config.ShellyIconsEnabled = v, builder);
         SetupSwitch("recommended_switch", _config.RecommendedEnabled, (v) => _config.RecommendedEnabled = v, builder);
@@ -61,6 +63,7 @@ public class Settings(
         SetupSwitch("shelly_search_switch", _config.ShellySearchEnabled, (v) => _config.ShellySearchEnabled = v,
             builder);
         SetupSwitch("use_old_menu_switch", !_config.UseOldMenu, (v) => _config.UseOldMenu = !v, builder);
+        SetupTrayAutoStart("tray_auto_switch", _config.TrayAutoStart, (v) => _config.TrayAutoStart = v, builder);
 
         var parallelDownloadsSpin = (SpinButton)builder.GetObject("parallel_downloads_spin")!;
         parallelDownloadsSpin.Value = _config.ParallelDownloadCount;
@@ -331,6 +334,46 @@ public class Settings(
             {
                 _ = HandleAurConfirmationAsync(sw, updateAction);
                 return true;
+            }
+
+            updateAction(e.State);
+            SaveConfig();
+            return false;
+        };
+    }
+    
+    private void SetupTrayAutoStart(string id, bool initialValue, Action<bool> updateAction, Builder builder)
+    {
+        var sw = (Switch)builder.GetObject(id)!;
+        sw.Active = initialValue;
+        sw.OnStateSet += (s, e) =>
+        {
+            if (e.State)
+            {
+                const string serviceContent = $"""
+                                               [Unit]
+                                               Description=Shelly Notifications tray service
+                                               PartOf=default.target
+
+                                               [Service]
+                                               Type=simple
+                                               ExecStart=/usr/bin/shelly-notifications
+                                               Restart=on-failure
+                                               RestartSec=5s
+
+                                               [Install]
+                                               WantedBy=default.target
+                                               """;
+                
+                unprivilegedOperationService.AddSystemdServiceTray(serviceContent, "shelly-notifications");
+                genericQuestionService.RaiseToastMessage(
+                    new ToastMessageEventArgs(Translations.T("Systemd startup service added.")));
+            }
+            else
+            {
+                unprivilegedOperationService.RemoveSystemdServiceTray("shelly-notifications");
+                genericQuestionService.RaiseToastMessage(
+                    new ToastMessageEventArgs(Translations.T("Systemd startup service removed.")));
             }
 
             updateAction(e.State);
