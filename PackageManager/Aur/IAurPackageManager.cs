@@ -21,5 +21,5 @@ public interface IAurPackageManager : IDisposable
 
     Task InstallPackages(List<string> packageNames);
 
-    Task RemovePackages(List<string> packageNames, AlpmTransFlag flags = AlpmTransFlag.None);
+    Task RemovePackages(List<string> packageNames, AlpmTransFlag flags = AlpmTransFlag.None, bool removeOptionalDeps = false);
 }

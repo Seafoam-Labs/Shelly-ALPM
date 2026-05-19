@@ -1,11 +1,13 @@
-using Shelly.Gtk.Enums;
 using Gtk;
 using Shelly.Gtk.Helpers;
+using Shelly.GTK.Resources;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.Services.TrayServices;
 using Shelly.Gtk.UiModels;
 using System.Text.Json;
 using Shelly.Gtk.Windows.Dialog;
+using Shelly.Utilities;
+using Shelly.Utilities.Enums;
 using DateTime = System.DateTime;
 using TimeSpan = System.TimeSpan;
 
@@ -60,6 +62,7 @@ public class Settings(
         SetupSwitch("shelly_search_switch", _config.ShellySearchEnabled, (v) => _config.ShellySearchEnabled = v,
             builder);
         SetupSwitch("use_old_menu_switch", !_config.UseOldMenu, (v) => _config.UseOldMenu = !v, builder);
+        SetupTrayAutoStart("tray_auto_switch", _config.TrayAutoStart, (v) => _config.TrayAutoStart = v, builder);
 
         var parallelDownloadsSpin = (SpinButton)builder.GetObject("parallel_downloads_spin")!;
         parallelDownloadsSpin.Value = _config.ParallelDownloadCount;
@@ -121,7 +124,7 @@ public class Settings(
         viewChangelogButton.OnClicked += async (_, _) => { await ShowAppChangelogAsync(); };
 
         var purifyCorruptionButton = (Button)builder.GetObject("purify_button")!;
-        purifyCorruptionButton.TooltipText = "Remove corrupted packages";
+        purifyCorruptionButton.TooltipText = Translations.T("Remove corrupted packages");
         purifyCorruptionButton.OnClicked += async (_, _) => { await PurifyCorruption(); };
 
         var fixPermissionsButton = (Button)builder.GetObject("fix_permissions_button")!;
@@ -155,7 +158,7 @@ public class Settings(
         trayIconClearButton.OnClicked += (_, _) =>
         {
             _config.TrayIconPath = null;
-            trayIconButton.Label = "Select File";
+            trayIconButton.Label = Translations.T("Select File");
             SaveConfig();
         };
 
@@ -177,7 +180,7 @@ public class Settings(
         trayUpdatesIconClearButton.OnClicked += (_, _) =>
         {
             _config.TrayUpdatesIconPath = null;
-            trayUpdatesIconButton.Label = "Select File";
+            trayUpdatesIconButton.Label = Translations.T("Select File");
             SaveConfig();
         };
 
@@ -211,36 +214,36 @@ public class Settings(
             var pages = new List<string>();
             _availablePages = [];
 
-            pages.Add("Packages");
+            pages.Add(Translations.T("Packages"));
             _availablePages.Add(ShellyTabs.Packages);
 
             if (_config.RecommendedEnabled)
             {
-                pages.Add("Recommend");
+                pages.Add(Translations.T("Recommend"));
                 _availablePages.Add(ShellyTabs.Recommend);
             }
 
             if (_config.AurEnabled)
             {
-                pages.Add("AUR");
+                pages.Add(Translations.T("AUR"));
                 _availablePages.Add(ShellyTabs.Aur);
             }
 
             if (_config.FlatPackEnabled)
             {
-                pages.Add("Flatpak");
+                pages.Add(Translations.T("Flatpak"));
                 _availablePages.Add(ShellyTabs.Flatpak);
             }
 
             if (_config.AppImageEnabled)
             {
-                pages.Add("AppImage");
+                pages.Add(Translations.T("AppImage"));
                 _availablePages.Add(ShellyTabs.AppImage);
             }
 
             if (_config.ShellySearchEnabled)
             {
-                pages.Add("Shelly Search");
+                pages.Add(Translations.T("Shelly Search"));
                 _availablePages.Add(ShellyTabs.ShellySearch);
             }
 
@@ -273,13 +276,13 @@ public class Settings(
     private static async Task<string?> SetupFileSelector(Button button)
     {
         var dialog = FileDialog.New();
-        dialog.Title = "Select Icon File";
+        dialog.Title = Translations.T("Select Icon File");
 
         var initialFolder = Gio.FileHelper.NewForPath("/usr/share/icons/hicolor/");
         dialog.InitialFolder = initialFolder;
 
         var filter = FileFilter.New();
-        filter.Name = "Image Files";
+        filter.Name = Translations.T("Image Files");
         filter.AddPattern("*.png");
         filter.AddPattern("*.svg");
         filter.AddPattern("*.ico");
@@ -330,6 +333,46 @@ public class Settings(
             {
                 _ = HandleAurConfirmationAsync(sw, updateAction);
                 return true;
+            }
+
+            updateAction(e.State);
+            SaveConfig();
+            return false;
+        };
+    }
+    
+    private void SetupTrayAutoStart(string id, bool initialValue, Action<bool> updateAction, Builder builder)
+    {
+        var sw = (Switch)builder.GetObject(id)!;
+        sw.Active = initialValue;
+        sw.OnStateSet += (s, e) =>
+        {
+            if (e.State)
+            {
+                const string serviceContent = $"""
+                                               [Unit]
+                                               Description=Shelly Notifications tray service
+                                               PartOf=default.target
+
+                                               [Service]
+                                               Type=simple
+                                               ExecStart=/usr/bin/shelly-notifications
+                                               Restart=on-failure
+                                               RestartSec=5s
+
+                                               [Install]
+                                               WantedBy=default.target
+                                               """;
+                
+                unprivilegedOperationService.AddSystemdServiceTray(serviceContent, "shelly-notifications");
+                genericQuestionService.RaiseToastMessage(
+                    new ToastMessageEventArgs(Translations.T("Systemd startup service added.")));
+            }
+            else
+            {
+                unprivilegedOperationService.RemoveSystemdServiceTray("shelly-notifications");
+                genericQuestionService.RaiseToastMessage(
+                    new ToastMessageEventArgs(Translations.T("Systemd startup service removed.")));
             }
 
             updateAction(e.State);
@@ -453,9 +496,9 @@ public class Settings(
     private async Task HandleAurConfirmationAsync(Switch sw, Action<bool> updateAction)
     {
         var args = new GenericQuestionEventArgs(
-            "Enable AUR?",
-            "The Arch User Repository (AUR) is a community-driven repository. " +
-            "Packages are user-produced and may contain risks. Do you want to enable it?"
+            Translations.T("Enable AUR?"),
+            Translations.T("The Arch User Repository (AUR) is a community-driven repository. " +
+            "Packages are user-produced and may contain risks. Do you want to enable it?")
         );
 
         genericQuestionService.RaiseQuestion(args);
@@ -488,8 +531,8 @@ public class Settings(
         if (!result)
         {
             var args = new GenericQuestionEventArgs(
-                "Missing Flatpak",
-                "Would you like to install this this now?"
+                Translations.T("Missing Flatpak"),
+                Translations.T("Would you like to install this this now?")
             );
 
             genericQuestionService.RaiseQuestion(args);
@@ -499,7 +542,7 @@ public class Settings(
             {
                 try
                 {
-                    lockoutService.Show("Installing flatpak...");
+                    lockoutService.Show(Translations.T("Installing flatpak..."));
                     await privilegedOperationService.InstallPackagesAsync(["flatpak"]);
                     GLib.Functions.IdleAdd(0, () =>
                     {
@@ -524,7 +567,7 @@ public class Settings(
                 {
                     lockoutService.Hide();
                     genericQuestionService.RaiseToastMessage(
-                        new ToastMessageEventArgs("Reboot required to complete installation."));
+                        new ToastMessageEventArgs(Translations.T("Reboot required to complete installation.")));
                 }
             }
             else
@@ -560,7 +603,7 @@ public class Settings(
     {
         try
         {
-            lockoutService.Show("Synchronizing databases...");
+            lockoutService.Show(Translations.T("Synchronizing databases..."));
             await privilegedOperationService.SyncDatabasesAsync();
         }
         catch (Exception ex)
@@ -579,7 +622,7 @@ public class Settings(
 
         if (result.Success)
         {
-            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Database lock removed"));
+            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(Translations.T("Database lock removed")));
         }
         else
         {
@@ -596,20 +639,20 @@ public class Settings(
             if (result.Success)
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs("Shelly folder ownership restored"));
+                    new ToastMessageEventArgs(Translations.T("Shelly folder ownership restored")));
             }
             else
             {
                 Console.Error.WriteLine($"Failed to fix Shelly folder ownership: {result.Error}");
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs("Failed to fix folder permissions"));
+                    new ToastMessageEventArgs(Translations.T("Failed to fix folder permissions")));
             }
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Error fixing Shelly folder permissions: {ex.Message}");
             genericQuestionService.RaiseToastMessage(
-                new ToastMessageEventArgs("Error fixing folder permissions"));
+                new ToastMessageEventArgs(Translations.T("Error fixing folder permissions")));
         }
     }
 
@@ -623,7 +666,7 @@ public class Settings(
             purifyBox.SetSpacing(12);
             purifyBox.SetSizeRequest(500, -1);
             var title = Label.NewWithProperties([]);
-            title.SetText("Purified Corruption");
+            title.SetText(Translations.T("Purified Corruption"));
             title.AddCssClass("title-2");
             title.SetHalign(Align.Center);
             purifyBox.Append(title);
@@ -635,7 +678,7 @@ public class Settings(
             var list = Box.NewWithProperties([]);
             list.SetOrientation(Orientation.Vertical);
             list.SetSpacing(8);
-            var output = result.Output != "\n" ? result.Output.Split(",").ToList() : ["No corrupted packages found"];
+            var output = result.Output != "\n" ? result.Output.Split(",").ToList() : [Translations.T("No corrupted packages found")];
             foreach (var pkg in output)
             {
                 var text = Label.NewWithProperties([]);
@@ -655,7 +698,7 @@ public class Settings(
         var pacfiles = await unprivilegedOperationService.GetPacFiles();
         if (pacfiles.Count == 0)
         {
-            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("No pacfiles found"));
+            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(Translations.T("No pacfiles found")));
             return;
         }
 
@@ -665,7 +708,7 @@ public class Settings(
         pacfileBox.SetSizeRequest(600, -1);
 
         var title = Label.NewWithProperties([]);
-        title.SetText("Pacfiles Found");
+        title.SetText(Translations.T("Pacfiles Found"));
         title.AddCssClass("title-2");
         title.SetHalign(Align.Center);
         pacfileBox.Append(title);
@@ -698,13 +741,13 @@ public class Settings(
             headerBox.Append(nameLabel);
 
             var copyButton = Button.NewFromIconName("edit-copy-symbolic");
-            copyButton.SetTooltipText("Copy content");
+            copyButton.SetTooltipText(Translations.T("Copy content"));
             copyButton.AddCssClass("flat");
             copyButton.OnClicked += (_, _) =>
             {
                 var clipboard = Gdk.Display.GetDefault()!.GetClipboard();
                 clipboard.SetText(pacfile.Text);
-                genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Copied to clipboard"));
+                genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(Translations.T("Copied to clipboard")));
             };
             headerBox.Append(copyButton);
 
@@ -750,7 +793,7 @@ public class Settings(
         {
             Console.WriteLine("Parent overlay is null");
             genericQuestionService.RaiseToastMessage(
-                new ToastMessageEventArgs("Overlay not available"));
+                new ToastMessageEventArgs(Translations.T("Overlay not available")));
             return;
         }
 
@@ -789,7 +832,7 @@ public class Settings(
             if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0)
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs("No changelog entries found"));
+                    new ToastMessageEventArgs(Translations.T("No changelog entries found")));
                 return;
             }
 
@@ -798,12 +841,12 @@ public class Settings(
             foreach (var release in root.EnumerateArray())
             {
                 var version = release.TryGetProperty("tag_name", out var tagNameProp)
-                    ? tagNameProp.GetString() ?? "Unknown"
-                    : "Unknown";
+                    ? tagNameProp.GetString() ?? Translations.T("Unknown")
+                    : Translations.T("Unknown");
 
                 var markdown = release.TryGetProperty("body", out var bodyProp)
-                    ? bodyProp.GetString() ?? "No details for this release"
-                    : "No details for this release";
+                    ? bodyProp.GetString() ?? Translations.T("No details for this release")
+                    : Translations.T("No details for this release");
 
                 var publishedAtRaw = release.TryGetProperty("published_at", out var publishedAtProp)
                     ? publishedAtProp.GetString()
@@ -811,14 +854,14 @@ public class Settings(
 
                 var date = DateTimeOffset.TryParse(publishedAtRaw, out var published)
                     ? published.ToString("yyyy-MM-dd")
-                    : "Unknown date";
+                    : Translations.T("Unknown date");
 
                 releases.Add(new ReleaseNotesDialog.ReleaseItem
                 {
                     Version = version,
                     Date = date,
                     Markdown = string.IsNullOrWhiteSpace(markdown)
-                        ? "No details for this release"
+                        ? Translations.T("No details for this release")
                         : markdown
                 });
             }
@@ -826,7 +869,7 @@ public class Settings(
             if (releases.Count == 0)
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs("No changelog entries found"));
+                    new ToastMessageEventArgs(Translations.T("No changelog entries found")));
                 return;
             }
 
@@ -839,7 +882,7 @@ public class Settings(
         {
             Console.WriteLine($"Error loading changelog: {ex.Message}");
             genericQuestionService.RaiseToastMessage(
-                new ToastMessageEventArgs("Failed to load changelog"));
+                new ToastMessageEventArgs(Translations.T("Failed to load changelog")));
         }
     }
 

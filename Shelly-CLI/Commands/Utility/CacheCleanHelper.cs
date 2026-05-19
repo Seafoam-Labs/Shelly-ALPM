@@ -4,7 +4,8 @@ public record CacheEntry(string Name, string Version, string Arch, string FullPa
 
 public static class CacheCleanHelper
 {
-    private static readonly string[] Suffixes = [".pkg.tar.zst", ".pkg.tar.xz", ".pkg.tar.gz", ".pkg.tar.bz2", ".pkg.tar"];
+    private static readonly string[] Suffixes =
+        [".pkg.tar.zst", ".pkg.tar.xz", ".pkg.tar.gz", ".pkg.tar.bz2", ".pkg.tar"];
 
     public static CacheEntry? ParsePackageFilename(string filePath)
     {

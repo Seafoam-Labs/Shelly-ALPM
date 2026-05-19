@@ -1,14 +1,15 @@
 using System.Text.Json;
 using PackageManager.Aur;
 using PackageManager.Aur.Models;
+using PackageManager.Wire;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Aur;
 
-public class AurListInstalledCommand : AsyncCommand<ListSettings>
+public class AurListInstalledCommand : AsyncCommand<AlpmListSettings>
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, ListSettings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, AlpmListSettings settings)
     {
         if (Program.IsUiMode)
         {
@@ -88,7 +89,7 @@ public class AurListInstalledCommand : AsyncCommand<ListSettings>
         }
     }
 
-    private static async Task<int> HandleUiModeListInstalled(ListSettings settings)
+    private static async Task<int> HandleUiModeListInstalled(AlpmListSettings settings)
     {
         AurPackageManager? manager = null;
         try
@@ -121,11 +122,7 @@ public class AurListInstalledCommand : AsyncCommand<ListSettings>
             if (settings.JsonOutput)
             {
                 var sortedList = sortedPackages.ToList();
-                var json = JsonSerializer.Serialize(sortedList, ShellyCLIJsonContext.Default.ListAurPackageDto);
-                await using var stdout = Console.OpenStandardOutput();
-                await using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
-                await writer.WriteLineAsync(json);
-                await writer.FlushAsync();
+                JsonPackFrame.WriteToStdout(sortedList);
                 return 0;
             }
 

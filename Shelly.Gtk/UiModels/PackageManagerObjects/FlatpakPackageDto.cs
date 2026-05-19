@@ -2,33 +2,20 @@ using System.Text.Json.Serialization;
 
 namespace Shelly.Gtk.UiModels.PackageManagerObjects;
 
-public record FlatpakPackageDto
+public partial class FlatpakPackageDto
 {
-    [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
-
-    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
-
-    [JsonPropertyName("version")] public string Version { get; set; } = string.Empty;
-
-    [JsonPropertyName("arch")] public string Arch { get; set; } = string.Empty;
-
-    [JsonPropertyName("branch")] public string Branch { get; set; } = string.Empty;
-
-    [JsonPropertyName("latest_commit")] public string LatestCommit { get; set; } = string.Empty;
-
-    [JsonPropertyName("summary")] public string Summary { get; set; } = string.Empty;
-
-    [JsonPropertyName("kind")] public int Kind { get; init; }
-
-    [JsonPropertyName("icon_path")] public string? IconPath { get; set; }
-
-    [JsonPropertyName("description")] public string Description { get; set; } = string.Empty;
-
-    [JsonPropertyName("remote")] public string Remote { get; set; } = string.Empty;
-
-    [JsonPropertyName("releases")] public List<AppstreamRelease> Releases { get; set; } = [];
-
-    [JsonPropertyName("categories")] public List<string> Categories { get; set; } = [];
-
-    [JsonPropertyName("permissions")] public List<string> Permissions { get; set; } = [];
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Version { get; set; } = string.Empty;
+    public string Arch { get; set; } = string.Empty;
+    public string Branch { get; set; } = string.Empty;
+    public string LatestCommit { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public int Kind { get; init; }
+    public string? IconPath { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public List<AppstreamRelease> Releases { get; set; } = [];
+    public List<string> Categories { get; set; } = [];
+    public string Remote { get; set; } = string.Empty;
+    public List<string> Permissions { get; set; } = [];
 }

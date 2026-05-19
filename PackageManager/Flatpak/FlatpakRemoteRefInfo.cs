@@ -1,6 +1,7 @@
+
 namespace PackageManager.Flatpak;
 
-public class FlatpakRemoteRefInfo
+public partial record FlatpakRemoteRefInfo
 {
     public ulong DownloadSize { get; set; }
     public ulong InstalledSize { get; set; }

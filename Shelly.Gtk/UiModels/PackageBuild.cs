@@ -1,8 +1,4 @@
+
 namespace Shelly.Gtk.UiModels;
 
-public class PackageBuild
-{
-    public string? Name { get; set; }
-    
-    public string? PkgBuild { get; set; }
-}
+public partial record PackageBuild(string Name, string? PkgBuild);

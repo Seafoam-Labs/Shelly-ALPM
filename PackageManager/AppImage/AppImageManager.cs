@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using PackageManager.AppImage.Events.EventArgs;
 using PackageManager.Utilities;
+using Shelly.Utilities;
 
 namespace PackageManager.AppImage;
 

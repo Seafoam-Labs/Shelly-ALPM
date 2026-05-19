@@ -1,6 +1,7 @@
 using Gtk;
 using Shelly.Gtk.Enums;
 using Shelly.Gtk.Helpers;
+using Shelly.GTK.Resources;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
@@ -185,8 +186,8 @@ public class FlatpakRemove(
         listBox.SelectionMode = SelectionMode.None;
         listBox.AddCssClass("boxed-list");
 
-        var firstRadio = MakeRow(keepRadio, "Keep Config", "Keep user data and configuration");
-        var secondRadio = MakeRow(deleteRadio, "Delete Config", "Delete user data and configuration");
+        var firstRadio = MakeRow(keepRadio, Translations.T("Keep Config"), Translations.T("Keep user data and configuration"));
+        var secondRadio = MakeRow(deleteRadio, Translations.T("Delete Config"), Translations.T("Delete user data and configuration"));
         listBox.Append(firstRadio);
         listBox.Append(secondRadio);
 
@@ -198,7 +199,7 @@ public class FlatpakRemove(
         gestureRemove.OnReleased += (_, _) => deleteRadio.Active = true;
         secondRadio.AddController(gestureRemove);
 
-        var keepLabel = Label.New("Keep Config?");
+        var keepLabel = Label.New(Translations.T("Keep Config?"));
         keepLabel.AddCssClass("heading");
 
         var box = Box.New(Orientation.Vertical, 12);
@@ -209,10 +210,10 @@ public class FlatpakRemove(
 
         var dialogArgs = new GenericDialogEventArgs<FlatpakRemoveEnum>(box);
 
-        var closeButton = Button.NewWithLabel("Close");
+        var closeButton = Button.NewWithLabel(Translations.T("Close"));
         closeButton.OnClicked += (_, _) => dialogArgs.SetResponse(FlatpakRemoveEnum.Cancel);
 
-        var removeButton = Button.NewWithLabel("Confirm");
+        var removeButton = Button.NewWithLabel(Translations.T("Confirm"));
         removeButton.AddCssClass("suggested-action");
         removeButton.OnClicked += (_, _) =>
         {
@@ -296,12 +297,12 @@ public class FlatpakRemove(
 
         try
         {
-            lockoutService.Show($"Removing {packageId}...");
+            lockoutService.Show(Translations.T("Removing {0}...", packageId));
             var result = await unprivilegedOperationService.RemoveFlatpakPackage(packageId, removeConfig);
 
             if (!result.Success)
             {
-                Console.WriteLine($"Failed to remove package {packageId}: {result.Error}");
+                Console.WriteLine(Translations.T("Failed to remove package {0}: {1}", packageId, result.Error));
             }
             else
             {
@@ -312,7 +313,7 @@ public class FlatpakRemove(
         {
             lockoutService.Hide();
             genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(
-                $"Removed Package(s)"
+                Translations.T("Removed Package(s)")
             ));
         }
     }

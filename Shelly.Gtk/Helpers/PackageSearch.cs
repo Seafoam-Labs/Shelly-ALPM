@@ -1,5 +1,6 @@
 using GObject;
 using Gtk;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Helpers;
 
@@ -29,7 +30,7 @@ internal static class PackageSearch
 
     public static bool MatchesGroup(IEnumerable<string>? groups, string? selectedGroup)
     {
-        if (string.IsNullOrEmpty(selectedGroup) || selectedGroup == "Any")
+        if (string.IsNullOrEmpty(selectedGroup) || selectedGroup == "Any" || selectedGroup == T("Any"))
             return true;
 
         return groups is not null && groups.Contains(selectedGroup);

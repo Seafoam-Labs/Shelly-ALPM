@@ -7,15 +7,14 @@ using Shelly.Gtk.Services;
 using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.Recommend;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows;
 
 public class Recommend(
     IPrivilegedOperationService privilegedOperationService,
-    IUnprivilegedOperationService unprivilegedOperationService,
     IGenericQuestionService genericQuestionService,
     ILockoutService lockoutService,
-    IDirtyService dirtyService,
     IIconResolverService iconResolverService) : IShellyWindow, IReloadable
 {
     private static readonly HttpClient Client = new();
@@ -49,7 +48,7 @@ public class Recommend(
         var noResultsIcon = Image.NewFromIconName("search-none-symbolic");
         noResultsIcon.SetPixelSize(64);
         
-        var noResultsLabel = Label.New("No recommendations found. Please check your internet connection and try again.");
+        var noResultsLabel = Label.New(T("No recommendations found. Please check your internet connection and try again."));
         noResultsLabel.AddCssClass("title-2");
 
         _noResultsOverlay.Append(noResultsIcon);
@@ -120,7 +119,7 @@ public class Recommend(
 
                 var sectionBox = Box.New(Orientation.Vertical, 6);
 
-                var label = Label.New(category.GetDescription());
+                var label = Label.New(T(category.GetDescription()));
                 label.SetHalign(Align.Start);
                 label.AddCssClass("title-4");
 
@@ -210,19 +209,19 @@ public class Recommend(
         var downloadButton = Button.NewFromIconName("folder-download-symbolic");
         downloadButton.AddCssClass("suggested-action");
         downloadButton.SetValign(Align.Center);
-        downloadButton.SetTooltipText(item.IsInstalled ? "Already installed" : "Install " + item.Package);
+        downloadButton.SetTooltipText(item.IsInstalled ? T("Already installed") : T("Install ") + item.Package);
         downloadButton.OnClicked += async (_, _) =>
         {
             if (item.IsInstalled)
             {
-                genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Package is already installed"));
+                genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(T("Package is already installed")));
                 return;
             }
             
             var result = new OperationResult();
             try
             {
-                lockoutService.Show("Installing package...");
+                lockoutService.Show(T("Installing package..."));
                 result = await privilegedOperationService.InstallPackagesAsync([item.Package]);
             }
             catch (Exception e)
@@ -233,7 +232,7 @@ public class Recommend(
             {
                 if (result.Success)
                 {
-                    genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Package installed successfully"));
+                    genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(T("Package installed successfully")));
                     installedCheck.SetVisible(true);
                 }
                 lockoutService.Hide();

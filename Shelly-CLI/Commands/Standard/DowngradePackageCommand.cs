@@ -1,7 +1,6 @@
 using System.Text.RegularExpressions;
 using PackageManager.Alpm;
 using Shelly_CLI.Utility;
-using SharpCompress.Compressors.Xz;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -178,7 +177,7 @@ public class DowngradePackageCommand : Command<DowngradePackageCommandSettings>
     {
         var htmlRegex =
             new Regex(
-                $"<a href=\"(?<filename>{Regex.Escape(packageName)}-[a-zA-Z0-9._+]+-[0-9]+-[a-zA-Z0-9_]+\\.pkg\\.tar\\.(?:zst|xz))\">",
+                $"<a href=\"(?<filename>{Regex.Escape(packageName)}-[a-zA-Z0-9._+]+-[0-9]+-[a-zA-Z0-9_]+\\.pkg\\.tar\\.(?:zst|gz))\">",
                 RegexOptions.Multiline);
 
         var handler = new SocketsHttpHandler()

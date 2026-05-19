@@ -2,7 +2,7 @@ using PackageManager.AppImage;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace Shelly_CLI.Commands.Standard;
+namespace Shelly_CLI.Commands.AppImage;
 
 public class AppImageSyncMeta : AsyncCommand<AppImageSyncMetaSettings>
 {
@@ -18,15 +18,9 @@ public class AppImageSyncMeta : AsyncCommand<AppImageSyncMetaSettings>
         }
 
         var manager = new AppImageManager();
-        manager.ErrorEvent += (_, args) =>
-        {
-            AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]");
-        };
+        manager.ErrorEvent += (_, args) => { AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]"); };
 
-        manager.MessageEvent += (_, args) =>
-        {
-            AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]");
-        };
+        manager.MessageEvent += (_, args) => { AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]"); };
         if (!string.IsNullOrEmpty(settings.Query))
         {
             var appImages = Directory.GetFiles(installDir, "*.AppImage", SearchOption.TopDirectoryOnly);
@@ -39,7 +33,7 @@ public class AppImageSyncMeta : AsyncCommand<AppImageSyncMetaSettings>
                 AnsiConsole.MarkupLine($"[yellow]No AppImage matching \"{settings.Query}\" found in {installDir}[/]");
                 return 0;
             }
-            
+
             string targetAppImage;
             if (matches.Count == 1)
             {

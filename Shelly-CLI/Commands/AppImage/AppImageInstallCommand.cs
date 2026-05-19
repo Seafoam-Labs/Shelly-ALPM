@@ -1,10 +1,8 @@
-using System.Diagnostics;
-using System.Text;
 using PackageManager.AppImage;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace Shelly_CLI.Commands.Standard;
+namespace Shelly_CLI.Commands.AppImage;
 
 public class AppImageInstallCommand : AsyncCommand<AppImageSettings>
 {
@@ -42,15 +40,9 @@ public class AppImageInstallCommand : AsyncCommand<AppImageSettings>
         if (await AppImageManager.IsAppImage(settings.PackageLocation))
         {
             var manager = new AppImageManager();
-            manager.ErrorEvent += (_, args) =>
-            {
-                AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]");
-            };
+            manager.ErrorEvent += (_, args) => { AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]"); };
 
-            manager.MessageEvent += (_, args) =>
-            {
-                AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]");
-            };
+            manager.MessageEvent += (_, args) => { AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]"); };
 
             var result = await manager.InstallAppImage(settings.PackageLocation, settings.UpdateUrl);
 

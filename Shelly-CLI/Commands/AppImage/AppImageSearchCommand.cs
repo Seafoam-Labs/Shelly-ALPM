@@ -1,5 +1,5 @@
 using PackageManager.AppImage;
-using Shelly_CLI.Commands.Standard;
+using PackageManager.Wire;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -33,11 +33,19 @@ public class AppImageSearchCommand : AsyncCommand<AppImageSearchSettings>
 
         if (settings.Json)
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(results, ShellyCLIJsonContext.Default.ListAppImageDto);
-            await using var stdout = System.Console.OpenStandardOutput();
-            await using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-            await writer.WriteLineAsync(json);
-            await writer.FlushAsync();
+            if (Program.IsUiMode)
+            {
+                JsonPackFrame.WriteToStdout(results);
+            }
+            else
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(results,
+                    ShellyCLIJsonContext.Default.ListAppImageDto);
+                await using var stdout = Console.OpenStandardOutput();
+                await using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
+                await writer.WriteLineAsync(json);
+                await writer.FlushAsync();
+            }
         }
         else
         {

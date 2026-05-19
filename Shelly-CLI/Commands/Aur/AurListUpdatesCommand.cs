@@ -2,14 +2,16 @@ using System.Text.Json;
 using PackageManager.Aur;
 using PackageManager.Aur.Models;
 using PackageManager.Utilities;
+using PackageManager.Wire;
+using Shelly.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Aur;
 
-public class AurListUpdatesCommand : AsyncCommand<ListSettings>
+public class AurListUpdatesCommand : AsyncCommand<AlpmListSettings>
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, ListSettings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, AlpmListSettings settings)
     {
         if (Program.IsUiMode)
         {
@@ -100,7 +102,7 @@ public class AurListUpdatesCommand : AsyncCommand<ListSettings>
         }
     }
 
-    private static async Task<int> HandleUiModeListUpdates(ListSettings settings)
+    private static async Task<int> HandleUiModeListUpdates(AlpmListSettings settings)
     {
         var dbPath = XdgPaths.ShellyCache("db");
         XdgPaths.EnsureDirectory(dbPath);
@@ -135,11 +137,7 @@ public class AurListUpdatesCommand : AsyncCommand<ListSettings>
             if (settings.JsonOutput)
             {
                 var sortedList = sortedUpdates.ToList();
-                var json = JsonSerializer.Serialize(sortedList, ShellyCLIJsonContext.Default.ListAurUpdateDto);
-                await using var stdout = Console.OpenStandardOutput();
-                await using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
-                await writer.WriteLineAsync(json);
-                await writer.FlushAsync();
+                JsonPackFrame.WriteToStdout(sortedList);
                 return 0;
             }
 

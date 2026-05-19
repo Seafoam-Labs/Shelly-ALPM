@@ -4,15 +4,15 @@
     <menu id="PackagesMenu">
         <section>
             <item>
-                <attribute name="label">Install Package(s)</attribute>
+                <attribute name="label" translatable="yes">Install Package(s)</attribute>
                 <attribute name="action">app.install-packages</attribute>
             </item>
             <item>
-                <attribute name="label">Update Package(s)</attribute>
+                <attribute name="label" translatable="yes">Update Package(s)</attribute>
                 <attribute name="action">app.update-packages</attribute>
             </item>
             <item>
-                <attribute name="label">Manage Package(s)</attribute>
+                <attribute name="label" translatable="yes">Manage Package(s)</attribute>
                 <attribute name="action">app.manage-packages</attribute>
             </item>
         </section>
@@ -20,15 +20,15 @@
     <menu id="AurMenu">
         <section>
             <item>
-                <attribute name="label">Install AUR</attribute>
+                <attribute name="label" translatable="yes">Install AUR</attribute>
                 <attribute name="action">app.install-aur</attribute>
             </item>
             <item>
-                <attribute name="label">Update AUR</attribute>
+                <attribute name="label" translatable="yes">Update AUR</attribute>
                 <attribute name="action">app.update-aur</attribute>
             </item>
             <item>
-                <attribute name="label">Remove AUR</attribute>
+                <attribute name="label" translatable="yes">Remove AUR</attribute>
                 <attribute name="action">app.remove-aur</attribute>
             </item>
         </section>
@@ -36,15 +36,15 @@
     <menu id="FlatpakMenu">
         <section>
             <item>
-                <attribute name="label">Install Flatpak</attribute>
+                <attribute name="label" translatable="yes">Install Flatpak</attribute>
                 <attribute name="action">app.install-flatpak</attribute>
             </item>
             <item>
-                <attribute name="label">Update Flatpak</attribute>
+                <attribute name="label" translatable="yes">Update Flatpak</attribute>
                 <attribute name="action">app.update-flatpak</attribute>
             </item>
             <item>
-                <attribute name="label">Remove Flatpak</attribute>
+                <attribute name="label" translatable="yes">Remove Flatpak</attribute>
                 <attribute name="action">app.remove-flatpak</attribute>
             </item>
         </section>
@@ -52,7 +52,7 @@
     <menu id="AppImageMenu">
         <section>
             <item>
-                <attribute name="label">Manage AppImage(s)</attribute>
+                <attribute name="label" translatable="yes">Manage AppImage(s)</attribute>
                 <attribute name="action">app.manage-appimage</attribute>
             </item>
         </section>
@@ -60,19 +60,19 @@
     <menu id="MainMenu">
         <section>
             <item>
-                <attribute name="label">Cache Cleaner</attribute>
+                <attribute name="label" translatable="yes">Cache Cleaner</attribute>
                 <attribute name="action">app.cacheclean</attribute>
             </item>
             <item>
-                <attribute name="label">Arch News</attribute>
+                <attribute name="label" translatable="yes">Arch News</attribute>
                 <attribute name="action">app.news</attribute>
             </item>
             <item>
-                <attribute name="label">Settings</attribute>
+                <attribute name="label" translatable="yes">Settings</attribute>
                 <attribute name="action">app.preferences</attribute>
             </item>
             <item>
-                <attribute name="label">About</attribute>
+                <attribute name="label" translatable="yes">About</attribute>
                 <attribute name="action">app.about</attribute>
             </item>
         </section>
@@ -103,7 +103,7 @@
                                         <property name="margin-bottom">6</property>
                                         <property name="margin-start">6</property>
                                         <property name="margin-end">6</property>
-                                        <property name="tooltip-text">Toggle Sidebar</property>
+                                        <property name="tooltip-text" translatable="yes">Toggle Sidebar</property>
                                     </object>
                                 </child>
                                 <child>
@@ -124,7 +124,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel" id="SidebarRecommendLabel">
-                                                        <property name="label">Recommend</property>
+                                                        <property name="label" translatable="yes">Recommend</property>
                                                         <property name="visible">false</property>
                                                     </object>
                                                 </child>
@@ -150,7 +150,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel" id="SidebarPackagesLabel">
-                                                        <property name="label">Packages</property>
+                                                        <property name="label" translatable="yes">Packages</property>
                                                         <property name="visible">false</property>
                                                     </object>
                                                 </child>
@@ -176,7 +176,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel" id="SidebarAurLabel">
-                                                        <property name="label">AUR</property>
+                                                        <property name="label" translatable="yes">AUR</property>
                                                         <property name="visible">false</property>
                                                     </object>
                                                 </child>
@@ -202,7 +202,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel" id="SidebarFlatpakLabel">
-                                                        <property name="label">Flatpak</property>
+                                                        <property name="label" translatable="yes">Flatpak</property>
                                                         <property name="visible">false</property>
                                                     </object>
                                                 </child>
@@ -228,7 +228,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel" id="SidebarAppImageLabel">
-                                                        <property name="label">AppImage</property>
+                                                        <property name="label" translatable="yes">AppImage</property>
                                                         <property name="visible">false</property>
                                                     </object>
                                                 </child>
@@ -254,7 +254,7 @@
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel" id="SidebarSearchLabel">
-                                                        <property name="label">Shelly Search</property>
+                                                        <property name="label" translatable="yes">Shelly Search</property>
                                                         <property name="visible">false</property>
                                                     </object>
                                                 </child>
@@ -309,7 +309,7 @@
                                         <child>
                                             <object class="GtkStackPage">
                                                 <property name="name">recommend_page</property>
-                                                <property name="title">Recommend</property>
+                                                <property name="title" translatable="yes">Recommend</property>
                                                 <property name="child">
                                                     <object class="GtkBox" id="recommend_page_box">
                                                         <property name="orientation">vertical</property>
@@ -322,7 +322,7 @@
                                         <child>
                                             <object class="GtkStackPage">
                                                 <property name="name">packages_page</property>
-                                                <property name="title">Packages</property>
+                                                <property name="title" translatable="yes">Packages</property>
                                                 <property name="child">
                                                     <object class="GtkBox" id="packages_page_box">
                                                         <property name="orientation">vertical</property>
@@ -335,7 +335,7 @@
                                         <child>
                                             <object class="GtkStackPage">
                                                 <property name="name">aur_page</property>
-                                                <property name="title">AUR</property>
+                                                <property name="title" translatable="yes">AUR</property>
                                                 <property name="child">
                                                     <object class="GtkBox" id="aur_page_box">
                                                         <property name="orientation">vertical</property>
@@ -348,7 +348,7 @@
                                         <child>
                                             <object class="GtkStackPage">
                                                 <property name="name">flatpak_page</property>
-                                                <property name="title">Flatpak</property>
+                                                <property name="title" translatable="yes">Flatpak</property>
                                                 <property name="child">
                                                     <object class="GtkBox" id="flatpak_page_box" />
                                                 </property>
@@ -357,7 +357,7 @@
                                         <child>
                                             <object class="GtkStackPage">
                                                 <property name="name">appimage_page</property>
-                                                <property name="title">AppImage</property>
+                                                <property name="title" translatable="yes">AppImage</property>
                                                 <property name="child">
                                                     <object class="GtkBox" id="appimage_page_box" />
                                                 </property>
@@ -366,7 +366,7 @@
                                         <child>
                                             <object class="GtkStackPage">
                                                 <property name="name">shelly_search_page</property>
-                                                <property name="title">Shelly Search</property>
+                                                <property name="title" translatable="yes">Shelly Search</property>
                                                 <property name="child">
                                                     <object class="GtkBox" id="shelly_search_page_box">
                                                         <property name="orientation">vertical</property>
@@ -379,7 +379,7 @@
                                         <child>
                                             <object class="GtkStackPage">
                                                 <property name="name">settings_page</property>
-                                                <property name="title">Settings</property>
+                                                <property name="title" translatable="yes">Settings</property>
                                                 <property name="visible">false</property>
                                                 <property name="child">
                                                     <object class="GtkBox" id="settings_page_box" />
@@ -399,7 +399,7 @@
                                         <property name="margin-top">10</property>
                                         <child>
                                             <object class="GtkMenuButton" id="history_menu_button">
-                                                <property name="label">History</property>
+                                                <property name="label" translatable="yes">History</property>
                                                 <property name="icon-name">document-open-recent-symbolic</property>
                                                 <property name="always-show-arrow">true</property>
                                                 <property name="popover">
@@ -412,7 +412,7 @@
                                                                 <property name="width-request">320</property>
                                                                 <child>
                                                                     <object class="GtkLabel" id="history_popover_title">
-                                                                        <property name="label">Recent Operations</property>
+                                                                        <property name="label" translatable="yes">Recent Operations</property>
                                                                         <property name="margin-top">10</property>
                                                                         <property name="margin-bottom">6</property>
                                                                         <property name="margin-start">10</property>
@@ -444,7 +444,7 @@
                                         </child>
                                         <child>
                                             <object class="GtkMenuButton" id="updates_menu_button">
-                                                <property name="label">Updates</property>
+                                                                                <property name="label" translatable="yes">Updates</property>
                                                 <property name="icon-name">software-update-available-symbolic</property>
                                                 <property name="always-show-arrow">true</property>
                                                 <property name="direction">up</property>
@@ -459,7 +459,7 @@
                                                                 <property name="width-request">320</property>
                                                                 <child>
                                                                     <object class="GtkLabel" id="updates_popover_title">
-                                                                        <property name="label">Available Updates</property>
+                                                                        <property name="label" translatable="yes">Available Updates</property>
                                                                         <property name="margin-top">10</property>
                                                                         <property name="margin-bottom">6</property>
                                                                         <property name="margin-start">10</property>
@@ -491,7 +491,7 @@
                                         </child>
                                         <child>
                                             <object class="GtkButton" id="upgrade_all_button">
-                                                <property name="label">Upgrade All</property>
+                                                <property name="label" translatable="yes">Upgrade All</property>
                                                 <style>
                                                     <class name="suggested-action"/>
                                                 </style>

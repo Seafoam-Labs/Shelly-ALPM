@@ -1,8 +1,9 @@
 using PackageManager.AppImage;
+using PackageManager.Wire;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-namespace Shelly_CLI.Commands.Standard;
+namespace Shelly_CLI.Commands.AppImage;
 
 public class AppImageGetUpdates : AsyncCommand<AppImageDefaultSettings>
 {
@@ -17,12 +18,19 @@ public class AppImageGetUpdates : AsyncCommand<AppImageDefaultSettings>
 
         if (settings.Json)
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(result,
-                ShellyCLIJsonContext.Default.ListAppImageUpdateDto);
-            await using var stdout = System.Console.OpenStandardOutput();
-            await using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-            await writer.WriteLineAsync(json);
-            await writer.FlushAsync();
+            if (Program.IsUiMode)
+            {
+                JsonPackFrame.WriteToStdout(result);
+            }
+            else
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(result,
+                    ShellyCLIJsonContext.Default.ListAppImageUpdateDto);
+                await using var stdout = Console.OpenStandardOutput();
+                await using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
+                await writer.WriteLineAsync(json);
+                await writer.FlushAsync();
+            }
         }
         else
         {

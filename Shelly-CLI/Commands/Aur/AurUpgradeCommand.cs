@@ -106,6 +106,33 @@ public class AurUpgradeCommand : AsyncCommand<AurUpgradeSettings>
                 hadError = true;
             };
 
+            manager.Replaces += (_, args) =>
+            {
+                foreach (var replace in args.Replaces)
+                {
+                    Console.Error.WriteLine(
+                        $"Replacement: {args.Repository}/{args.PackageName} replaces {replace}");
+                }
+            };
+
+            manager.Question += (_, args) =>
+            {
+                Console.Error.WriteLine();
+                QuestionHandler.HandleQuestion(args, Program.IsUiMode, settings.NoConfirm);
+            };
+
+            manager.Progress += (_, args) =>
+            {
+                var name = args.PackageName ?? "unknown";
+                var pct = args.Percent ?? 0;
+                var actionType = args.ProgressType;
+                Console.Error.WriteLine($"{name}: {pct}% - {actionType}");
+            };
+
+            manager.HookRun += (_, args) => Console.Error.WriteLine($"[ALPM_HOOK]{args.Description}");
+
+            manager.ScriptletInfo += (_, args) => Console.Error.WriteLine($"[Shelly][ALPM_SCRIPTLET]{args.Line}");
+
             manager.PackageProgress += (sender, args) =>
             {
                 Console.Error.WriteLine($"[{args.CurrentIndex}/{args.TotalCount}] {args.PackageName}: {args.Status}" +

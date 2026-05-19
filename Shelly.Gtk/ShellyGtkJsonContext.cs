@@ -2,9 +2,13 @@ using System.Text.Json.Serialization;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.AppImage;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
+using Shelly.Utilities;
 
 namespace Shelly.Gtk;
 
+[JsonSourceGenerationOptions(
+    MaxDepth = 256,
+    GenerationMode = JsonSourceGenerationMode.Default)]
 [JsonSerializable(typeof(List<AppImageDto>))]
 [JsonSerializable(typeof(AppImageDto))]
 [JsonSerializable(typeof(List<AppImageUpdateDto>))]
@@ -22,6 +26,8 @@ namespace Shelly.Gtk;
 [JsonSerializable(typeof(AlpmPackageDto))]
 [JsonSerializable(typeof(AlpmPackageTreeDto))]
 [JsonSerializable(typeof(List<AlpmPackageTreeDto>))]
+[JsonSerializable(typeof(List<LocalPackageDto>))]
+[JsonSerializable(typeof(LocalPackageDto))]
 [JsonSerializable(typeof(List<AurPackageDto>))]
 [JsonSerializable(typeof(AurPackageDto))]
 [JsonSerializable(typeof(List<AurUpdateDto>))]
@@ -50,7 +56,4 @@ namespace Shelly.Gtk;
 [JsonSerializable(typeof(Dictionary<string, List<string>>))]
 [JsonSerializable(typeof(List<PacfileRecord>))]
 [JsonSerializable(typeof(PacfileRecord))]
-internal partial class ShellyGtkJsonContext : JsonSerializerContext
-{
-    
-}
+internal partial class ShellyGtkJsonContext : JsonSerializerContext;

@@ -1,5 +1,6 @@
 using Gtk;
 using Shelly.Gtk.UiModels;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -48,7 +49,7 @@ public class AlpmEventDialog
             combo.SetActive(0);
             box.Append(combo);
 
-            var selectButton = Button.NewWithLabel("Select");
+            var selectButton = Button.NewWithLabel(T("Select"));
             selectButton.OnClicked += (_,_) =>
             {
                 e.SetResponse(combo.GetActive());
@@ -61,7 +62,7 @@ public class AlpmEventDialog
             var checkButtons = new List<CheckButton>();
 
             // "Select All" toggle
-            var selectAllCheck = CheckButton.NewWithLabel("Select All");
+            var selectAllCheck = CheckButton.NewWithLabel(T("Select All"));
             box.Append(selectAllCheck);
 
             // Scrollable container for many options
@@ -92,7 +93,7 @@ public class AlpmEventDialog
                 }
             };
 
-            var confirmButton = Button.NewWithLabel("Confirm");
+            var confirmButton = Button.NewWithLabel(T("Confirm"));
             confirmButton.SetCssClasses(["suggested-action"]);
             confirmButton.OnClicked += (_,_) =>
             {
@@ -111,14 +112,14 @@ public class AlpmEventDialog
         }
         else
         {
-            var noButton = Button.NewWithLabel("No");
+            var noButton = Button.NewWithLabel(T("No"));
             noButton.OnClicked += (_,_) =>
             {
                 e.SetResponse(0); 
                 parentOverlay.RemoveOverlay(baseFrame);
             };
 
-            var yesButton = Button.NewWithLabel("Yes");
+            var yesButton = Button.NewWithLabel(T("Yes"));
             yesButton.SetCssClasses(["suggested-action"]);
             yesButton.OnClicked += (_,_) =>
             {
@@ -137,14 +138,14 @@ public class AlpmEventDialog
 
     private static string GetQuestionTitle(QuestionType type) => type switch
     {
-        QuestionType.InstallIgnorePkg => "Install Ignored Package?",
-        QuestionType.ReplacePkg => "Replace Package?",
-        QuestionType.ConflictPkg => "Package Conflict Detected",
-        QuestionType.CorruptedPkg => "Corrupted Package Found",
-        QuestionType.ImportKey => "Import PGP Key?",
-        QuestionType.SelectProvider => "Select Provider",
-        QuestionType.RemovePkgs => "Remove Packages?",
-        QuestionType.SelectOptionalDeps => "Select Optional Dependencies",
-        _ => "System Question"
+        QuestionType.InstallIgnorePkg => T("Install Ignored Package?"),
+        QuestionType.ReplacePkg => T("Replace Package?"),
+        QuestionType.ConflictPkg => T("Package Conflict Detected"),
+        QuestionType.CorruptedPkg => T("Corrupted Package Found"),
+        QuestionType.ImportKey => T("Import PGP Key?"),
+        QuestionType.SelectProvider => T("Select Provider"),
+        QuestionType.RemovePkgs => T("Remove Packages?"),
+        QuestionType.SelectOptionalDeps => T("Select Optional Dependencies"),
+        _ => T("System Question")
     };
 }

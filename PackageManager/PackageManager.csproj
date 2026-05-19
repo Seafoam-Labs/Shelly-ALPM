@@ -8,5 +8,9 @@
         <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
         <Nullable>enable</Nullable>
     </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Shelly.Utilities\Shelly.Utilities.csproj" />
+    </ItemGroup>
     
 </Project>

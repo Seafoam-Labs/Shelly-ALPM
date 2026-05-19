@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using PackageManager.Aur;
-using Shelly_CLI.Utility;
+using PackageManager.Wire;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -9,7 +9,7 @@ namespace Shelly_CLI.Commands.Aur;
 
 public class AurSearchCommand : AsyncCommand<AurSearchSettings>
 {
-    public override async Task<int> ExecuteAsync([NotNull] CommandContext context, [NotNull] AurSearchSettings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, AurSearchSettings settings)
     {
         var query = string.Join(" ", settings.Query);
         if (Program.IsUiMode)
@@ -22,7 +22,7 @@ public class AurSearchCommand : AsyncCommand<AurSearchSettings>
             AnsiConsole.MarkupLine("[red]Query cannot be empty.[/]");
             return 1;
         }
-        
+
         if (query.Length < 2)
         {
             AnsiConsole.MarkupLine("[red]Error: Query must be at least 2 characters long[/]");
@@ -41,8 +41,8 @@ public class AurSearchCommand : AsyncCommand<AurSearchSettings>
             if (settings.JsonOutput)
             {
                 var json = JsonSerializer.Serialize(results, ShellyCLIJsonContext.Default.ListAurPackageDto);
-                await using var stdout = System.Console.OpenStandardOutput();
-                await using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
+                await using var stdout = Console.OpenStandardOutput();
+                await using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
                 await writer.WriteLineAsync(json);
                 await writer.FlushAsync();
                 return 0;
@@ -83,13 +83,13 @@ public class AurSearchCommand : AsyncCommand<AurSearchSettings>
         var query = string.Join(" ", settings.Query);
         if (string.IsNullOrWhiteSpace(query))
         {
-            Console.Error.WriteLine("Error: Query cannot be empty.");
+            await Console.Error.WriteLineAsync("Error: Query cannot be empty.");
             return 1;
         }
 
         if (query.Length < 2)
         {
-            Console.Error.WriteLine("Error: Query must be at least 2 characters long");
+            await Console.Error.WriteLineAsync("Error: Query must be at least 2 characters long");
             return 1;
         }
 
@@ -103,11 +103,7 @@ public class AurSearchCommand : AsyncCommand<AurSearchSettings>
 
             if (settings.JsonOutput)
             {
-                var json = JsonSerializer.Serialize(results, ShellyCLIJsonContext.Default.ListAurPackageDto);
-                await using var stdout = Console.OpenStandardOutput();
-                await using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-                await writer.WriteLineAsync(json);
-                await writer.FlushAsync();
+                JsonPackFrame.WriteToStdout(results);
                 return 0;
             }
 
@@ -116,13 +112,13 @@ public class AurSearchCommand : AsyncCommand<AurSearchSettings>
                 Console.WriteLine($"{pkg.Name} {pkg.Version} - {pkg.Description ?? ""}");
             }
 
-            Console.Error.WriteLine($"Total results: {results.Count}");
+            await Console.Error.WriteLineAsync($"Total results: {results.Count}");
 
             return 0;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Search failed: {ex.Message}");
+            await Console.Error.WriteLineAsync($"Search failed: {ex.Message}");
             return 1;
         }
         finally

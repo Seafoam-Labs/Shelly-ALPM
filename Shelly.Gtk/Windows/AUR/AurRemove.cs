@@ -2,6 +2,7 @@ using GObject;
 using Gtk;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Enums;
+using static Shelly.GTK.Resources.Translations;
 using static Shelly.Gtk.Helpers.AurColumnViewSorter;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
@@ -56,7 +57,9 @@ public class AurRemove(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/AUR/RemoveAurWindow.ui"), -1);
+        var builder = Builder.New();
+        builder.TranslationDomain = Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/AUR/RemoveAurWindow.ui"), -1);
         _box = (Box)builder.GetObject("RemoveAurWindow")!;
         _columnView = (ColumnView)builder.GetObject("package_grid")!;
         var searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
@@ -348,7 +351,7 @@ public class AurRemove(
             if (!configService.LoadConfig().NoConfirm)
             {
                 var args = new GenericQuestionEventArgs(
-                    "Remove Packages?", string.Join("\n", selectedPackages)
+                    T("Remove Packages?"), string.Join("\n", selectedPackages)
                 );
 
                 genericQuestionService.RaiseQuestion(args);
@@ -361,7 +364,7 @@ public class AurRemove(
 
             try
             {
-                lockoutService.Show($"Removing...");
+                lockoutService.Show(T("Removing..."));
                 //do work
                 var result =
                     await privilegedOperationService.RemoveAurPackagesAsync(selectedPackages,
@@ -373,7 +376,7 @@ public class AurRemove(
                 else
                 {
                     var args = new ToastMessageEventArgs(
-                        $"Removed {selectedPackages.Count} Package(s)"
+                        T("Removed {0} Package(s)", selectedPackages.Count)
                     );
                     genericQuestionService.RaiseToastMessage(args);
                 }
@@ -416,7 +419,7 @@ public class AurRemove(
         backButton.SetIconName("go-next-symbolic");
         backButton.Halign = Align.Start;
         backButton.AddCssClass("flat");
-        backButton.TooltipText = "Close details";
+        backButton.TooltipText = T("Close details");
         backButton.OnClicked += (_, _) =>
         {
             _currentDetailPkg = null;
@@ -482,24 +485,24 @@ public class AurRemove(
         separator.MarginBottom = 16;
         _detailBox.Append(separator);
 
-        AddDetail("Version", pkgObj.Version);
+        AddDetail(T("Version"), pkgObj.Version);
         if (pkgObj.NumVotes > 0)
-            AddDetail("Votes", pkgObj.NumVotes.ToString());
+            AddDetail(T("Votes"), pkgObj.NumVotes.ToString());
         if (pkgObj.Popularity > 0)
-            AddDetail("Popularity", pkgObj.Popularity.ToString("F2"));
+            AddDetail(T("Popularity"), pkgObj.Popularity.ToString("F2"));
         if (pkgObj.OutOfDate != null)
-            AddDetail("Out of Date",
+            AddDetail(T("Out of Date"),
                 DateTimeOffset.FromUnixTimeSeconds(pkgObj.OutOfDate.Value).ToString("yyyy-MM-dd"));
 
-        AddDetail("Maintainer", pkgObj.Maintainer ?? "Orphaned");
-        AddDetail("Last Modified", DateTimeOffset.FromUnixTimeSeconds(pkgObj.LastModified).ToString("yyyy-MM-dd HH:mm"));
-        AddDetail("First Submitted",
+        AddDetail(T("Maintainer"), pkgObj.Maintainer ?? T("Orphaned"));
+        AddDetail(T("Last Modified"), DateTimeOffset.FromUnixTimeSeconds(pkgObj.LastModified).ToString("yyyy-MM-dd HH:mm"));
+        AddDetail(T("First Submitted"),
             DateTimeOffset.FromUnixTimeSeconds(pkgObj.FirstSubmitted).ToString("yyyy-MM-dd HH:mm"));
         if (!string.IsNullOrEmpty(pkgObj.Url))
         {
             var row = Box.New(Orientation.Horizontal, 12);
             row.MarginBottom = 4;
-            var labelWidget = Label.New("URL:");
+            var labelWidget = Label.New(T("URL:"));
             labelWidget.AddCssClass("dim-label");
             labelWidget.Halign = Align.Start;
             labelWidget.Valign = Align.Start;
@@ -522,43 +525,43 @@ public class AurRemove(
 
         if (pkgObj.Depends?.Count > 0)
         {
-            AddChipList("Depends", pkgObj.Depends);
+            AddChipList(T("Depends"), pkgObj.Depends);
         }
 
         if (pkgObj.MakeDepends?.Count > 0)
         {
-            AddChipList("Make Depends", pkgObj.MakeDepends);
+            AddChipList(T("Make Depends"), pkgObj.MakeDepends);
         }
 
         if (pkgObj.CheckDepends?.Count > 0)
         {
-            AddChipList("Check Depends", pkgObj.CheckDepends);
+            AddChipList(T("Check Depends"), pkgObj.CheckDepends);
         }
 
         if (pkgObj.OptDepends?.Count > 0)
         {
-            AddChipList("Optional Deps", pkgObj.OptDepends, true);
+            AddChipList(T("Optional Deps"), pkgObj.OptDepends, true);
         }
 
         if (pkgObj.License?.Count > 0)
         {
-            AddChipList("License", pkgObj.License);
+            AddChipList(T("Licenses"), pkgObj.License);
         }
 
         if (pkgObj.Keywords?.Count > 0)
         {
-            AddChipList("Keywords", pkgObj.Keywords);
+            AddChipList(T("Keywords"), pkgObj.Keywords);
         }
 
 
         if (pkgObj.Provides?.Count > 0)
-            AddChipList("Provides", pkgObj.Provides);
+            AddChipList(T("Provides"), pkgObj.Provides);
         if (pkgObj.Conflicts?.Count > 0)
-            AddChipList("Conflicts", pkgObj.Conflicts);
+            AddChipList(T("Conflicts"), pkgObj.Conflicts);
         if (pkgObj.Groups?.Count > 0)
-            AddChipList("Groups", pkgObj.Groups);
+            AddChipList(T("Groups"), pkgObj.Groups);
         if (pkgObj.Replaces?.Count > 0)
-            AddChipList("Replaces", pkgObj.Replaces);
+            AddChipList(T("Replaces"), pkgObj.Replaces);
 
         if (configService.LoadConfig().WebViewEnabled)
         {

@@ -9,13 +9,16 @@ using Shelly.Gtk.Windows.AUR;
 using Shelly.Gtk.Windows.Dialog;
 using Shelly.Gtk.Windows.Flatpak;
 using Shelly.Gtk.Helpers;
+using Shelly.GTK.Resources;
 using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.Windows.Packages;
+using Shelly.Utilities;
+using Shelly.Utilities.Enums;
 using Module = Gtk.Module;
 using Settings = Shelly.Gtk.Windows.Settings;
 using GtkSettings = Gtk.Settings;
-
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk;
 
@@ -152,6 +155,7 @@ sealed class Program
         }
 
         Module.Initialize();
+        Translations.Init();
         if (preferDark)
         {
             var settings = GtkSettings.GetDefault();
@@ -203,13 +207,17 @@ sealed class Program
             var iconTheme = IconTheme.GetForDisplay(Gdk.Display.GetDefault()!);
             iconTheme.AddSearchPath("Assets/svg");
 
-            var mainBuilder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/MainWindow.ui"), -1);
+            var mainBuilder = Builder.New();
+            mainBuilder.TranslationDomain = Domain;
+            mainBuilder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/MainWindow.ui"), -1);
             var window = (ApplicationWindow)mainBuilder.GetObject("MainWindow")!;
 
             window.SetIconName("shelly");
             window.Application = application;
 
-            var menuBuilder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/MainMenu.ui"), -1);
+            var menuBuilder = Builder.New();
+            menuBuilder.TranslationDomain = Domain;
+            menuBuilder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/MainMenu.ui"), -1);
             var appMenu = (Gio.Menu)menuBuilder.GetObject("AppMenu")!;
             application.Menubar = appMenu;
 
@@ -305,11 +313,11 @@ sealed class Program
                 nb.Hexpand = true;
                 nb.Vexpand = true;
                 var w1 = serviceProvider.GetRequiredService<PackageInstall>();
-                nb.AppendPage(w1.CreateWindow(), Label.New("Install"));
+                nb.AppendPage(w1.CreateWindow(), Label.New(T("Install")));
                 var w2 = serviceProvider.GetRequiredService<PackageUpdate>();
-                nb.AppendPage(w2.CreateWindow(), Label.New("Updates"));
+                nb.AppendPage(w2.CreateWindow(), Label.New(T("Updates")));
                 var w3 = serviceProvider.GetRequiredService<PackageManagement>();
-                nb.AppendPage(w3.CreateWindow(), Label.New("Manage"));
+                nb.AppendPage(w3.CreateWindow(), Label.New(T("Manage")));
                 packagesPageBox.Append(nb);
                 currentPackagesWindows = [w1, w2, w3];
             }
@@ -327,11 +335,11 @@ sealed class Program
                 nb.Hexpand = true;
                 nb.Vexpand = true;
                 var w1 = serviceProvider.GetRequiredService<AurInstall>();
-                nb.AppendPage(w1.CreateWindow(), Label.New("Install"));
+                nb.AppendPage(w1.CreateWindow(), Label.New(T("Install")));
                 var w2 = serviceProvider.GetRequiredService<AurUpdate>();
-                nb.AppendPage(w2.CreateWindow(), Label.New("Updates"));
+                nb.AppendPage(w2.CreateWindow(), Label.New(T("Updates")));
                 var w3 = serviceProvider.GetRequiredService<AurRemove>();
-                nb.AppendPage(w3.CreateWindow(), Label.New("Remove"));
+                nb.AppendPage(w3.CreateWindow(), Label.New(T("Remove")));
                 aurPageBox.Append(nb);
                 currentAurWindows = [w1, w2, w3];
             }

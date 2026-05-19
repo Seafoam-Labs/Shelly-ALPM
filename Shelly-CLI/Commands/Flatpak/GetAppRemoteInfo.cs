@@ -1,29 +1,37 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using PackageManager.Flatpak;
-using Spectre.Console;
+using PackageManager.Wire;
 using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Flatpak;
 
 public class GetAppRemoteInfo : Command<FlatpakInstallSize>
 {
-    public override int Execute([NotNull] CommandContext context, [NotNull] FlatpakInstallSize settings)
+    public override int Execute(CommandContext context, FlatpakInstallSize settings)
     {
         var manager = new FlatpakManager();
         var result = manager.GetRemoteSize(settings.Remote, settings.Name, "", settings.Branch);
 
         if (settings.Json)
         {
-            var json = JsonSerializer.Serialize(result, AppstreamJsonContext.Default.FlatpakRemoteRefInfo);
-            using var stdout = Console.OpenStandardOutput();
-            using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-            writer.WriteLine(json);
-            writer.Flush();
+            if (Program.IsUiMode)
+            {
+                JsonPackFrame.WriteToStdout(result);
+            }
+            else
+            {
+                var json = JsonSerializer.Serialize(result, AppstreamJsonContext.Default.FlatpakRemoteRefInfo);
+                using var stdout = Console.OpenStandardOutput();
+                using var writer = new StreamWriter(stdout, System.Text.Encoding.UTF8);
+                writer.WriteLine(json);
+                writer.Flush();
+            }
         }
         else
+        {
             Console.Write("Download Size:" + FormatSize(result.DownloadSize) +
                           " Install Size:" + FormatSize(result.InstalledSize));
+        }
 
         return 0;
     }

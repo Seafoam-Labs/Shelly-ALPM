@@ -4,6 +4,7 @@ using GObject;
 using Gtk;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Enums;
+using static Shelly.GTK.Resources.Translations;
 using static Shelly.Gtk.Helpers.AurColumnViewSorter;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
@@ -65,7 +66,9 @@ public class AurInstall(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/AUR/AurWindow.ui"), -1);
+        var builder = Builder.New();
+        builder.TranslationDomain = Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/AUR/AurWindow.ui"), -1);
         var rootOverlay = (Overlay)builder.GetObject("main_overlay")!;
         _mainOverlay = rootOverlay;
         _box = (Box)builder.GetObject("AurInstallWindow")!;
@@ -101,7 +104,7 @@ public class AurInstall(
         _selectionModel.Autoselect = false;
         _columnView.SetModel(_selectionModel);
         _searchForPackageLabel = (Label)builder.GetObject("search_overlay")!;
-        _searchForPackageLabel.Label_ = "<span size='large'>Search for AUR packages</span>";
+        _searchForPackageLabel.Label_ = T("<span size='large'>Search for AUR packages</span>");
         _searchForPackageLabel.Visible = true;
 
         SetupColumns(_checkColumn, _nameColumn, _votesColumn, _popColumn, _versionColumn);
@@ -411,7 +414,7 @@ public class AurInstall(
                 if (!configService.LoadConfig().NoConfirm)
                 {
                     var args = new GenericQuestionEventArgs(
-                        "Install Packages?", string.Join("\n", selectedPackages)
+                        T("Install Packages?"), string.Join("\n", selectedPackages)
                     );
 
                     genericQuestionService.RaiseQuestion(args);
@@ -421,13 +424,13 @@ public class AurInstall(
                     }
                 }
 
-                lockoutService.Show($"Installing...");
+                lockoutService.Show(T("Installing..."));
 
                 var packageBuilds = await privilegedOperationService.GetAurPackageBuild(selectedPackages);
 
                 if (packageBuilds.Count == 0)
                 {
-                    Console.WriteLine("No packages found.");
+                    Console.WriteLine(T("No packages found."));
                     return;
                 }
 
@@ -436,7 +439,7 @@ public class AurInstall(
                     if (pkgbuild.PkgBuild == null) continue;
 
                     var buildArgs =
-                        new PackageBuildEventArgs($"Displaying Package Build {pkgbuild.Name}", pkgbuild.PkgBuild);
+                        new PackageBuildEventArgs(T("Displaying Package Build {0}", pkgbuild.Name), pkgbuild.PkgBuild);
                     genericQuestionService.RaisePackageBuild(buildArgs);
 
                     if (!await buildArgs.ResponseTask)
@@ -470,7 +473,7 @@ public class AurInstall(
             if (result.Success)
             {
                 var args = new ToastMessageEventArgs(
-                    $"Installed {selectedPackages.Count} Package(s)"
+                    T("Installed {0} Package(s)", selectedPackages.Count)
                 );
 
                 genericQuestionService.RaiseToastMessage(args);
@@ -496,11 +499,11 @@ public class AurInstall(
         try
         {
             var dialog = FileDialog.New();
-            dialog.SetTitle("Export AUR install log");
+            dialog.SetTitle(T("Export AUR install log"));
             dialog.SetInitialName(LogHelpers.CreateSuggestedLogFileName(selectedPackages, "aur"));
 
             var filter = FileFilter.New();
-            filter.SetName("Log Files (*.log)");
+            filter.SetName(T("Log Files (*.log)"));
             filter.AddPattern("*.log");
 
             var filters = Gio.ListStore.New(FileFilter.GetGType());
@@ -521,13 +524,13 @@ public class AurInstall(
 
             await File.WriteAllTextAsync(path, LogHelpers.BuildInstallLog(selectedPackages, result, "aur"));
 
-            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Exported AUR install log"));
+            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(T("Exported AUR install log")));
             return true;
         }
         catch (Exception e)
         {
             Console.WriteLine($"Failed to export AUR install log: {e.Message}");
-            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Failed to export AUR install log"));
+            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(T("Failed to export AUR install log")));
             return false;
         }
     }
@@ -555,8 +558,8 @@ public class AurInstall(
 
         // pkgbuild preview button
         var pkgBuildButton = Button.New();
-        pkgBuildButton.SetName("Package Build");
-        pkgBuildButton.SetLabel("Preview PKGBUILD");
+        pkgBuildButton.SetName(T("Package Build"));
+        pkgBuildButton.SetLabel(T("Preview PKGBUILD"));
         pkgBuildButton.Halign = Align.Fill;
         if (pkgBuildButton.Child is Label label)
         {
@@ -565,14 +568,14 @@ public class AurInstall(
 
         pkgBuildButton.Valign = Align.Start;
         pkgBuildButton.AddCssClass("package-detail-expander");
-        pkgBuildButton.TooltipText = "Displays Package Build";
+        pkgBuildButton.TooltipText = T("Displays Package Build");
         pkgBuildButton.OnClicked += OnPkgBuildClicked;
 
         var backButton = Button.New();
         backButton.SetIconName("go-next-symbolic");
         backButton.Halign = Align.Start;
         backButton.AddCssClass("flat");
-        backButton.TooltipText = "Close details";
+        backButton.TooltipText = T("Close details");
         backButton.OnClicked += (_, _) =>
         {
             _currentDetailPkg = null;
@@ -662,65 +665,65 @@ public class AurInstall(
         separator.MarginBottom = 16;
         _detailBox.Append(separator);
 
-        AddDetail("Version", pkgObj.Version);
+        AddDetail(T("Version"), pkgObj.Version);
         if (pkgObj.NumVotes > 0)
-            AddDetail("Votes", pkgObj.NumVotes.ToString());
+            AddDetail(T("Votes"), pkgObj.NumVotes.ToString());
         if (pkgObj.Popularity > 0)
-            AddDetail("Popularity", pkgObj.Popularity.ToString("F2"));
+            AddDetail(T("Popularity"), pkgObj.Popularity.ToString("F2"));
         if (pkgObj.OutOfDate != null)
-            AddDetail("Out of Date", DateTimeOffset.FromUnixTimeSeconds(pkgObj.OutOfDate.Value).ToString("yyyy-MM-dd"));
+            AddDetail(T("Out of Date"), DateTimeOffset.FromUnixTimeSeconds(pkgObj.OutOfDate.Value).ToString("yyyy-MM-dd"));
 
-        AddDetail("Maintainer", pkgObj.Maintainer ?? "Orphaned");
-        AddDetail("Last Modified",
+        AddDetail(T("Maintainer"), pkgObj.Maintainer ?? T("Orphaned"));
+        AddDetail(T("Last Modified"),
             DateTimeOffset.FromUnixTimeSeconds(pkgObj.LastModified).ToString("yyyy-MM-dd HH:mm"));
-        AddDetail("First Submitted",
+        AddDetail(T("First Submitted"),
             DateTimeOffset.FromUnixTimeSeconds(pkgObj.FirstSubmitted).ToString("yyyy-MM-dd HH:mm"));
         if (!string.IsNullOrEmpty(pkgObj.Url))
         {
-            AddUrl("Url:", pkgObj.Url);
+            AddUrl(T("URL:"), pkgObj.Url);
         }
-        AddUrl("AUR:", $"https://aur.archlinux.org/packages/{pkgObj.Name}/");
+        AddUrl(T("AUR:"), $"https://aur.archlinux.org/packages/{pkgObj.Name}/");
         
         _detailBox.Append(pkgBuildButton);
 
         if (pkgObj.Depends?.Count > 0)
         {
-            AddChipList("Depends", pkgObj.Depends);
+            AddChipList(T("Depends"), pkgObj.Depends);
         }
 
         if (pkgObj.MakeDepends?.Count > 0)
         {
-            AddChipList("Make Depends", pkgObj.MakeDepends);
+            AddChipList(T("Make Depends"), pkgObj.MakeDepends);
         }
 
         if (pkgObj.CheckDepends?.Count > 0)
         {
-            AddChipList("Check Depends", pkgObj.CheckDepends);
+            AddChipList(T("Check Depends"), pkgObj.CheckDepends);
         }
 
         if (pkgObj.OptDepends?.Count > 0)
         {
-            AddChipList("Optional Deps", pkgObj.OptDepends, true);
+            AddChipList(T("Optional Deps"), pkgObj.OptDepends, true);
         }
 
         if (pkgObj.License?.Count > 0)
         {
-            AddChipList("License", pkgObj.License);
+            AddChipList(T("Licenses"), pkgObj.License);
         }
 
         if (pkgObj.Keywords?.Count > 0)
         {
-            AddChipList("Keywords", pkgObj.Keywords);
+            AddChipList(T("Keywords"), pkgObj.Keywords);
         }
         
         if (pkgObj.Provides?.Count > 0)
-            AddChipList("Provides", pkgObj.Provides);
+            AddChipList(T("Provides"), pkgObj.Provides);
         if (pkgObj.Conflicts?.Count > 0)
-            AddChipList("Conflicts", pkgObj.Conflicts);
+            AddChipList(T("Conflicts"), pkgObj.Conflicts);
         if (pkgObj.Groups?.Count > 0)
-            AddChipList("Groups", pkgObj.Groups);
+            AddChipList(T("Groups"), pkgObj.Groups);
         if (pkgObj.Replaces?.Count > 0)
-            AddChipList("Replaces", pkgObj.Replaces);
+            AddChipList(T("Replaces"), pkgObj.Replaces);
 
         if (configService.LoadConfig().WebViewEnabled)
         {

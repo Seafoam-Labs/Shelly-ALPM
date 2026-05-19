@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang zlib1g-dev libalpm-dev libgtk-4-dev zip
+        sudo apt-get install -y clang zlib1g-dev libalpm-dev libgtk-4-dev zip gettext
 
     - name: Publish Shelly-CLI
       run: |
@@ -41,6 +41,17 @@ jobs:
         cp Shelly.Gtk/Assets/shellylogo-update.png publish/shelly-ui/
         # Also bundle the CLI binary for convenience
         cp publish/shelly-cli/shelly publish/shelly-ui/
+
+    - name: Compile and bundle translations
+      run: |
+        mkdir -p publish/shelly-ui/locale
+        for po_file in Shelly.Gtk/po/*.po; do
+          if [ -f "$po_file" ]; then
+            lang=$(basename "$po_file" .po)
+            mkdir -p "publish/shelly-ui/locale/$lang/LC_MESSAGES"
+            msgfmt "$po_file" -o "publish/shelly-ui/locale/$lang/LC_MESSAGES/shelly-ui.mo"
+          fi
+        done
 
     - name: Publish Shelly-Notifications
       run: |

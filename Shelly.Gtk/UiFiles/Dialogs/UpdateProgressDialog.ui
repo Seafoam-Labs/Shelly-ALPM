@@ -2,7 +2,7 @@
 <interface>
   <requires lib="gtk" version="4.0"/>
   <object class="GtkWindow" id="UpdateProgressDialog">
-    <property name="title">Updating...</property>
+    <property name="title" translatable="yes">Updating...</property>
     <property name="modal">true</property>
     <child>
       <object class="GtkBox">
@@ -14,7 +14,7 @@
         <property name="spacing">15</property>
         <child>
           <object class="GtkLabel" id="status_label">
-            <property name="label">Please wait while we update your system.</property>
+            <property name="label" translatable="yes">Please wait while we update your system.</property>
           </object>
         </child>
         <child>

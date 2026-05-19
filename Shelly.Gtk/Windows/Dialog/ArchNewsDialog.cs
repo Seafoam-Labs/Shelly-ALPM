@@ -1,6 +1,7 @@
 using Gtk;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -23,7 +24,7 @@ public class ArchNewsDialog(IArchNewsService archNewsService, Overlay overlay)
             container.SetMarginStart(10);
             container.SetMarginTop(10);
 
-            var titleLabel = Label.New("Arch Linux News");
+            var titleLabel = Label.New(T("Arch Linux News"));
             titleLabel.AddCssClass("title-1");
             titleLabel.Xalign = 0;
             container.Append(titleLabel);
@@ -43,7 +44,7 @@ public class ArchNewsDialog(IArchNewsService archNewsService, Overlay overlay)
 
             if (_archNewsItems.Count == 0)
             {
-                var placeholder = Label.New("No news available");
+                var placeholder = Label.New(T("No news available"));
                 placeholder.AddCssClass("dim-label");
                 placeholder.Halign = Align.Center;
                 placeholder.MarginTop = 20;

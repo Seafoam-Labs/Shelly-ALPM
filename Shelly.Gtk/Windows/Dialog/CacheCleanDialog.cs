@@ -1,4 +1,5 @@
 using Gtk;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -18,7 +19,7 @@ public static class CacheCleanDialog
         container.SetMarginStart(10);
         container.SetMarginTop(10);
 
-        var titleLabel = Label.New("Cache Cleaner");
+        var titleLabel = Label.New(T("Cache Cleaner"));
         titleLabel.AddCssClass("title-2");
         titleLabel.Xalign = 0;
         container.Append(titleLabel);
@@ -26,7 +27,9 @@ public static class CacheCleanDialog
         var entries = ScanCache(cacheDir);
         var totalCacheSize = entries.Sum(e => e.FileSize);
 
-        var infoLabel = Label.New($"Cache directory: {cacheDir}\nTotal cached files: {entries.Count} ({FormatSize(totalCacheSize)})");
+        var infoLabel =
+            Label.New(
+                T("Cache directory: {0}\nTotal cached files: {1} ({2})", cacheDir, entries.Count, FormatSize(totalCacheSize)));
         infoLabel.Xalign = 0;
         infoLabel.Wrap = true;
         container.Append(infoLabel);
@@ -34,14 +37,14 @@ public static class CacheCleanDialog
         var controlsBox = Box.New(Orientation.Horizontal, 10);
         controlsBox.SetValign(Align.Center);
 
-        var keepLabel = Label.New("Keep versions:");
+        var keepLabel = Label.New(T("Keep versions:"));
         controlsBox.Append(keepLabel);
 
         var keepSpin = SpinButton.NewWithRange(0, 10, 1);
         keepSpin.Value = 3;
         controlsBox.Append(keepSpin);
 
-        var uninstalledCheck = CheckButton.NewWithLabel("Uninstalled only");
+        var uninstalledCheck = CheckButton.NewWithLabel(T("Uninstalled only"));
         controlsBox.Append(uninstalledCheck);
 
         container.Append(controlsBox);
@@ -66,22 +69,24 @@ public static class CacheCleanDialog
 
         keepSpin.OnValueChanged += (_, _) =>
         {
-            RefreshCandidates(entries, (int)keepSpin.Value, uninstalledCheck.Active, candidateListBox, summaryLabel);
+            RefreshCandidates(entries, (int)keepSpin.Value, uninstalledCheck.Active, candidateListBox,
+                summaryLabel);
         };
 
         uninstalledCheck.OnToggled += (_, _) =>
         {
-            RefreshCandidates(entries, (int)keepSpin.Value, uninstalledCheck.Active, candidateListBox, summaryLabel);
+            RefreshCandidates(entries, (int)keepSpin.Value, uninstalledCheck.Active, candidateListBox,
+                summaryLabel);
         };
 
         var buttonBox = Box.New(Orientation.Horizontal, 10);
         buttonBox.SetHalign(Align.End);
 
-        var cancelButton = Button.NewWithLabel("Cancel");
+        var cancelButton = Button.NewWithLabel(T("Cancel"));
         cancelButton.OnClicked += (_, _) => onCancel();
         buttonBox.Append(cancelButton);
 
-        var cleanButton = Button.NewWithLabel("Clean");
+        var cleanButton = Button.NewWithLabel(T("Clean"));
         cleanButton.AddCssClass("destructive-action");
         cleanButton.OnClicked += (_, _) => onClean((int)keepSpin.Value, uninstalledCheck.Active);
         buttonBox.Append(cleanButton);
@@ -105,7 +110,7 @@ public static class CacheCleanDialog
 
         if (candidates.Count == 0)
         {
-            summaryLabel.SetText("No candidates for removal.");
+            summaryLabel.SetText(T("No candidates for removal."));
             return;
         }
 
@@ -133,7 +138,7 @@ public static class CacheCleanDialog
         }
 
         var totalSize = candidates.Sum(c => c.FileSize);
-        summaryLabel.SetText($"{candidates.Count} files, {FormatSize(totalSize)} would be freed");
+        summaryLabel.SetText(T("{0} files, {1} would be freed", candidates.Count, FormatSize(totalSize)));
     }
 
     private static List<CacheFileEntry> ComputeCandidates(

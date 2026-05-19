@@ -1,4 +1,5 @@
 using Shelly_CLI.Configuration;
+using Shelly.Utilities;
 using Spectre.Console;
 
 namespace Shelly_CLI.ConsoleLayouts;

@@ -2,6 +2,7 @@ using GObject;
 using Gtk;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Enums;
+using static Shelly.GTK.Resources.Translations;
 using static Shelly.Gtk.Helpers.AurColumnViewSorter;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
@@ -52,7 +53,9 @@ public class AurUpdate(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/AUR/UpdateAurWindow.ui"), -1);
+        var builder = Builder.New();
+        builder.TranslationDomain = Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/AUR/UpdateAurWindow.ui"), -1);
         _box = (Box)builder.GetObject("AurUpdateWindow")!;
         _columnView = (ColumnView)builder.GetObject("package_grid")!;
         var searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
@@ -73,7 +76,7 @@ public class AurUpdate(
         _runChecksCheck = (CheckButton)builder.GetObject("run_checks_check")!;
         _showHiddenCheck = (CheckButton)builder.GetObject("show_hidden_check")!;
         _noPackagesLabel = (Label)builder.GetObject("no_packages_label")!;
-        _noPackagesLabel.Label_ = "<span size='large'>AUR packages are up to date</span>";
+        _noPackagesLabel.Label_ = T("<span size='large'>AUR packages are up to date</span>");
         _noPackagesLabel.Visible = false;
         _updateButton.SetSensitive(false);
 
@@ -358,7 +361,7 @@ public class AurUpdate(
             if (!configService.LoadConfig().NoConfirm)
             {
                 var args = new GenericQuestionEventArgs(
-                    "Update Packages?", string.Join("\n", selectedPackages)
+                    T("Update Packages?"), string.Join("\n", selectedPackages)
                 );
 
                 genericQuestionService.RaiseQuestion(args);
@@ -370,7 +373,7 @@ public class AurUpdate(
 
             try
             {
-                lockoutService.Show($"Installing...");
+                lockoutService.Show(T("Installing..."));
 
                 var packageBuilds = await privilegedOperationService.GetAurPackageBuild(selectedPackages);
 
@@ -380,7 +383,7 @@ public class AurUpdate(
                     {
                         if (pkgbuild.PkgBuild == null) continue;
 
-                        var buildArgs = new PackageBuildEventArgs($"Displaying Package Build {pkgbuild.Name}",
+                        var buildArgs = new PackageBuildEventArgs(T("Displaying Package Build {0}", pkgbuild.Name),
                             pkgbuild.PkgBuild);
                         genericQuestionService.RaisePackageBuild(buildArgs);
 
@@ -397,7 +400,7 @@ public class AurUpdate(
 
                 if (result.Success)
                     genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(
-                        $"Updated {selectedPackages.Count} Package(s)"));
+                        T("Updated {0} Package(s)", selectedPackages.Count)));
                 else
                     Console.WriteLine($"Failed to remove packages: {result.Error}");
 
@@ -442,7 +445,7 @@ public class AurUpdate(
         backButton.SetIconName("go-next-symbolic");
         backButton.Halign = Align.Start;
         backButton.AddCssClass("flat");
-        backButton.TooltipText = "Close details";
+        backButton.TooltipText = T("Close details");
         backButton.OnClicked += (_, _) =>
         {
             _currentDetailPkg = null;
@@ -508,13 +511,13 @@ public class AurUpdate(
         separator.MarginBottom = 16;
         _detailBox.Append(separator);
 
-        AddDetail("Version", pkg.Version);
+        AddDetail(T("Version"), pkg.Version);
 
         if (!string.IsNullOrEmpty(pkg.Url))
         {
             var row = Box.New(Orientation.Horizontal, 12);
             row.MarginBottom = 4;
-            var labelWidget = Label.New("URL:");
+            var labelWidget = Label.New(T("URL:"));
             labelWidget.AddCssClass("dim-label");
             labelWidget.Halign = Align.Start;
             labelWidget.Valign = Align.Start;

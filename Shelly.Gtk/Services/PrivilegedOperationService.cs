@@ -38,46 +38,6 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         _cliPath = CliPathResolver.FindCliPath();
     }
 
-    private List<T> TryDeserializeJsonLine<T>(string output, System.Text.Json.Serialization.Metadata.JsonTypeInfo<List<T>> typeInfo, string opLabel)
-    {
-        if (string.IsNullOrWhiteSpace(output)) return [];
-
-        foreach (var raw in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var line = StripBom(raw.Trim());
-            if ((line.StartsWith('[') && line.EndsWith(']')) || (line.StartsWith('{') && line.EndsWith('}')))
-            {
-                try
-                {
-                    var parsed = System.Text.Json.JsonSerializer.Deserialize(line, typeInfo);
-                    if (parsed != null) return parsed;
-                }
-                catch (System.Text.Json.JsonException)
-                {
-                }
-            }
-        }
-
-        var hint = string.Empty;
-        try
-        {
-            if (_fingerprintAuthState.ShouldWarn)
-            {
-                if (!_lastHintShown.TryGetValue(opLabel, out var last) || (DateTime.UtcNow - last) > TimeSpan.FromSeconds(30))
-                {
-                    _lastHintShown[opLabel] = DateTime.UtcNow;
-                    hint = " " + _fingerprintAuthState.GetHintMessage();
-                }
-            }
-        }
-        catch
-        {
-        }
-
-        Console.WriteLine($"{opLabel}: no JSON line found in output:{Environment.NewLine}{output}{hint}");
-        return [];
-    }
-
     private string[] AppendNoConfirmIfNeeded(params string[] args)
     {
         var config = _configService.LoadConfig();
@@ -111,23 +71,8 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         try
         {
-            // The output may contain multiple lines, find the JSON line
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    var packages = System.Text.Json.JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListAlpmPackageDto);
-                    return packages ?? [];
-                }
-            }
-
-            // If no JSON array found, try parsing the whole output
-            var allPackages = System.Text.Json.JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
-                ShellyGtkJsonContext.Default.ListAlpmPackageDto);
-            return allPackages ?? [];
+            JsonPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
+            return framed ?? throw new InvalidOperationException();
         }
         catch (Exception ex)
         {
@@ -152,7 +97,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
     public async Task<OperationResult> InstallLocalPackageAsync(string filePath)
     {
         var result = await ExecutePrivilegedWithNoConfirmCheck("Install local package", "install-local", "--location",
-            filePath);
+            $"\"{filePath}\"");
         if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
     }
@@ -166,7 +111,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         return result;
     }
 
-    public async Task<OperationResult> RemovePackagesAsync(IEnumerable<string> packages, bool isCascade, bool isCleanup)
+    public async Task<OperationResult> RemovePackagesAsync(IEnumerable<string> packages, bool isCascade, bool isCleanup, bool removeOptionalDeps)
     {
         var packageArgs = string.Join(" ", packages);
         if (isCascade)
@@ -179,7 +124,20 @@ public class PrivilegedOperationService : IPrivilegedOperationService
             packageArgs += " -r";
         }
 
+        if (removeOptionalDeps)
+        {
+            packageArgs += " -o";
+        }
+
         var result = await ExecutePrivilegedWithNoConfirmCheck("Remove packages", "remove", packageArgs);
+        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Native);
+        return result;
+    }
+
+    public async Task<OperationResult> RemoveLocalPackagesAsync(IEnumerable<string> packages)
+    {
+        var packageArgs = string.Join(" ", packages.Select(p => $"\"{p}\""));
+        var result = await ExecutePrivilegedWithNoConfirmCheck("Remove local packages", "remove-local", packageArgs);
         if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
     }
@@ -276,14 +234,16 @@ public class PrivilegedOperationService : IPrivilegedOperationService
             await ExecutePrivilegedWithNoConfirmCheck("Get Package Builds", "aur", "get-package-build", packageArgs);
 
         if (!result.Success) return [];
-        return TryDeserializeJsonLine(result.Output, ShellyGtkJsonContext.Default.ListPackageBuild, "GetAurPackageBuild");
+        JsonPackFrame.TryDecode<List<PackageBuild>>(result.Output, out var framed);
+        return framed ?? [];
     }
 
     public async Task<List<AlpmPackageUpdateDto>> GetPackagesNeedingUpdateAsync()
     {
         var result = await ExecutePrivilegedCommandAsync("Check for Updates", "list-updates", "--json");
         if (!result.Success) return [];
-        return TryDeserializeJsonLine(result.Output, ShellyGtkJsonContext.Default.ListAlpmPackageUpdateDto, "GetPackagesNeedingUpdateAsync");
+        JsonPackFrame.TryDecode<List<AlpmPackageUpdateDto>>(result.Output, out var framed);
+        return framed ?? [];
     }
 
     public async Task<List<AlpmPackageDto>> GetAvailablePackagesAsync(bool showHidden = false)
@@ -293,7 +253,8 @@ public class PrivilegedOperationService : IPrivilegedOperationService
             : await ExecuteCommandAsync("list-available", "--json");
 
         if (!result.Success) return [];
-        return TryDeserializeJsonLine(result.Output, ShellyGtkJsonContext.Default.ListAlpmPackageDto, "GetAvailablePackagesAsync");
+        JsonPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
+        return framed ?? [];
     }
 
     public async Task<List<AlpmPackageDto>> GetInstalledPackagesAsync(bool showHidden = false)
@@ -309,27 +270,33 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         try
         {
-            // The output may contain multiple lines, find the JSON line
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    var packages = System.Text.Json.JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListAlpmPackageDto);
-                    return packages ?? [];
-                }
-            }
-
-            // If no JSON array found, try parsing the whole output
-            var allPackages = System.Text.Json.JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
-                ShellyGtkJsonContext.Default.ListAlpmPackageDto);
-            return allPackages ?? [];
+            JsonPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
+            return framed ?? throw new InvalidOperationException();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to parse installed packages JSON: {ex.Message}");
+            return [];
+        }
+    }
+
+    public async Task<List<LocalPackageDto>> GetLocalInstalledPackagesAsync()
+    {
+        var result = await ExecuteCommandAsync("list-local-installed", "--json");
+
+        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
+        {
+            return [];
+        }
+
+        try
+        {
+            JsonPackFrame.TryDecode<List<LocalPackageDto>>(result.Output, out var framed);
+            return framed ?? throw new InvalidOperationException();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to parse local installed packages JSON: {ex.Message}");
             return [];
         }
     }
@@ -347,22 +314,9 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         try
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    var packages = System.Text.Json.JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListAurPackageDto);
-                    return packages ?? [];
-                }
-            }
+            JsonPackFrame.TryDecode<List<AurPackageDto>>(result.Output, out var framed);
 
-            // If no JSON array found, try parsing the whole output
-            var allPackages = System.Text.Json.JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
-                ShellyGtkJsonContext.Default.ListAurPackageDto);
-            return allPackages ?? [];
+            return framed ?? throw new InvalidOperationException();
         }
         catch (Exception ex)
         {
@@ -384,22 +338,8 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         try
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    var packages = System.Text.Json.JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListAurUpdateDto);
-                    return packages ?? [];
-                }
-            }
-
-            // If no JSON array found, try parsing the whole output
-            var allPackages = System.Text.Json.JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
-                ShellyGtkJsonContext.Default.ListAurUpdateDto);
-            return allPackages ?? [];
+            JsonPackFrame.TryDecode<List<AurUpdateDto>>(result.Output, out var framed);
+            return framed ?? throw new InvalidOperationException();
         }
         catch (Exception ex)
         {
@@ -419,22 +359,8 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         try
         {
-            var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                {
-                    var packages = System.Text.Json.JsonSerializer.Deserialize(trimmedLine,
-                        ShellyGtkJsonContext.Default.ListAurPackageDto);
-                    return packages ?? [];
-                }
-            }
-
-            // If no JSON array found, try parsing the whole output
-            var allPackages = System.Text.Json.JsonSerializer.Deserialize(StripBom(result.Output.Trim()),
-                ShellyGtkJsonContext.Default.ListAurPackageDto);
-            return allPackages ?? [];
+            JsonPackFrame.TryDecode<List<AurPackageDto>>(result.Output, out var framed);
+            return framed ?? throw new InvalidOperationException();
         }
         catch (Exception ex)
         {
@@ -809,10 +735,10 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                                     if ((args.Response & (1 << i)) != 0)
                                         selected.Add(optDepsOptions[i]);
                                 }
-
-                                await SafeWriteAsync(string.Join(" ", selected));
+                                var response = string.Join(" ", selected);
+                               
                             }
-
+                            await SafeWriteAsync(args.Response.ToString());
                             awaitingOptDepsSelection = false;
                             optDepsQuestion = null;
                             optDepsOptions.Clear();
@@ -1140,17 +1066,5 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                 ExitCode = -1
             };
         }
-    }
-
-    /// <summary>
-    /// Strips UTF-8 BOM (Byte Order Mark) from the beginning of a string if present.
-    /// </summary>
-    private static string StripBom(string input)
-    {
-        if (string.IsNullOrEmpty(input))
-            return input;
-
-        // UTF-8 BOM is 0xEF 0xBB 0xBF which appears as \uFEFF in .NET strings
-        return input.TrimStart('\uFEFF');
     }
 }

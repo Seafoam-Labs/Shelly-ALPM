@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace PackageManager.Flatpak;
 
-public class FlatpakPackageDto
+public partial class FlatpakPackageDto
 {
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
@@ -20,17 +20,7 @@ public class FlatpakPackageDto
     
     public List<string> Categories { get; set; } = [];
     
-    public string remote { get; set; } = string.Empty;
+    public string Remote { get; set; } = string.Empty;
 
     public List<string> Permissions { get; set; } = [];
-}
-
-[JsonSourceGenerationOptions(
-    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
-    NumberHandling = JsonNumberHandling.AllowReadingFromString,
-    WriteIndented = false)]
-[JsonSerializable(typeof(FlatpakPackageDto))]
-[JsonSerializable(typeof(List<FlatpakPackageDto>))]
-public partial class FlatpakDtoJsonContext : JsonSerializerContext
-{
 }

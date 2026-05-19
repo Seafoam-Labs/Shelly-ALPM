@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.UiModels;
+using Shelly.Utilities;
 
 namespace Shelly.Gtk.Services;
 

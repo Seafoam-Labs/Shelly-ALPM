@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+    <requires lib="gtk" version="4.0"/>
+    <object class="GtkBox" id="RemoveLocalWindow">
+        <property name="orientation">vertical</property>
+        <child>
+            <object class="GtkBox">
+                <property name="halign">baseline</property>
+                <property name="margin-top">10</property>
+                <property name="margin-start">10</property>
+                <property name="margin-end">10</property>
+                <property name="margin-bottom">10</property>
+                <property name="spacing">5</property>
+                <child>
+                    <object class="GtkButton" id="remove_button">
+                        <property name="halign">start</property>
+                        <property name="label">Remove Selected</property>
+                        <style>
+                            <class name="destructive-action"/>
+                        </style>
+                    </object>
+                </child>
+            </object>
+        </child>
+        <child>
+            <object class="GtkSeparator"/>
+        </child>
+        <child>
+            <object class="GtkBox" id="detail_hbox">
+                <property name="hexpand">true</property>
+                <property name="orientation">horizontal</property>
+                <property name="vexpand">true</property>
+                <child>
+                    <object class="GtkScrolledWindow">
+                        <property name="hexpand">true</property>
+                        <property name="overlay-scrolling">false</property>
+                        <property name="vexpand">true</property>
+                        <child>
+                            <object class="GtkColumnView" id="package_grid">
+                                <property name="hexpand">true</property>
+                                <property name="vexpand">true</property>
+                                <child>
+                                    <object class="GtkColumnViewColumn" id="check_column">
+                                        <property name="title"/>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkColumnViewColumn" id="name_column">
+                                        <property name="title">Package Name</property>
+                                        <property name="expand">true</property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkColumnViewColumn" id="size_column">
+                                        <property name="title">Size</property>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+            </object>
+        </child>
+    </object>
+</interface>

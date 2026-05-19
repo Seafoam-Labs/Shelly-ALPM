@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Shelly_CLI;
 
-public class SyncModel
+public partial class SyncModel
 {
     public SyncMetaData MetaData { get; set; } = new();
     public List<SyncPackageModel> Packages { get; set; } = [];
@@ -10,7 +10,7 @@ public class SyncModel
     public List<SyncFlatpakModel> Flatpaks { get; set; } = [];
 }
 
-public class SyncPackageModel
+public partial class SyncPackageModel
 {
     public string Name { get; set; } = string.Empty;
 
@@ -23,7 +23,7 @@ public class SyncPackageModel
     public string? DownloadSize { get; set; }
 }
 
-public class SyncAurModel
+public partial class SyncAurModel
 {
     public string Name { get; set; } = string.Empty;
 
@@ -33,7 +33,7 @@ public class SyncAurModel
     public string? OldVersion { get; set; }
 }
 
-public class SyncFlatpakModel
+public partial class SyncFlatpakModel
 {
     public string Id { get; set; } = string.Empty;
 
@@ -43,7 +43,7 @@ public class SyncFlatpakModel
     public string Version { get; set; } = string.Empty;
 }
 
-public class SyncMetaData
+public partial class SyncMetaData
 {
     public string Version { get; set; } ="v1";
     

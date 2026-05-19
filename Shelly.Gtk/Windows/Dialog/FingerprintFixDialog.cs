@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Gtk;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -8,7 +9,7 @@ public static class FingerprintFixDialog
     public static void Show(Window parent)
     {
         var dialog = Window.New();
-        dialog.SetTitle("Fingerprint Disable Instructions");
+        dialog.SetTitle(T("Fingerprint Disable Instructions"));
         dialog.SetTransientFor(parent);
         dialog.SetModal(true);
         dialog.SetDefaultSize(720, 620);
@@ -19,27 +20,27 @@ public static class FingerprintFixDialog
         outer.SetMarginStart(16);
         outer.SetMarginEnd(16);
 
-        var heading = Label.New("Disable fingerprint authentication for sudo");
+        var heading = Label.New(T("Disable fingerprint authentication for sudo"));
         heading.SetXalign(0);
         heading.AddCssClass("title-3");
         outer.Append(heading);
         
-        outer.Append(MakeSnippet("1. Inspect",
+        outer.Append(MakeSnippet(T("1. Inspect"),
             "grep -n pam_fprintd /etc/pam.d/sudo /etc/pam.d/sudo-i 2>/dev/null"));
 
-        outer.Append(MakeSnippet("2. Disable for sudo",
+        outer.Append(MakeSnippet(T("2. Disable for sudo"),
             "sudo cp /etc/pam.d/sudo /etc/pam.d/sudo.bak\n" +
             "sudo sed -i 's|^\\s*\\(auth.*pam_fprintd\\.so.*\\)$|# \\1|' /etc/pam.d/sudo\n" +
             "sudo -k\n" +
             "sudo -v"));
 
-        outer.Append(MakeSnippet("3. Re-enable later",
+        outer.Append(MakeSnippet(T("3. Re-enable later"),
             "sudo mv /etc/pam.d/sudo.bak /etc/pam.d/sudo"));
 
         var buttonBox = Box.New(Orientation.Horizontal, 8);
         buttonBox.SetHalign(Align.End);
 
-        var close = Button.NewWithLabel("Close");
+        var close = Button.NewWithLabel(T("Close"));
         close.OnClicked += (_, _) => dialog.Close();
         buttonBox.Append(close);
 
@@ -72,7 +73,7 @@ public static class FingerprintFixDialog
         frame.SetChild(view);
         box.Append(frame);
 
-        var copy = Button.NewWithLabel("Copy");
+        var copy = Button.NewWithLabel(T("Copy"));
         copy.SetHalign(Align.End);
         copy.OnClicked += (_, _) =>
         {

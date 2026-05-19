@@ -13,7 +13,8 @@ public interface IPrivilegedOperationService
     Task<OperationResult> InstallPackagesAsync(IEnumerable<string> packages, bool upgrade = false);
     Task<OperationResult> InstallLocalPackageAsync(string filePath);
     Task<OperationResult> InstallAppImageAsync(string filePath);
-    Task<OperationResult> RemovePackagesAsync(IEnumerable<string> packages, bool isCascade, bool isCleanup);
+    Task<OperationResult> RemovePackagesAsync(IEnumerable<string> packages, bool isCascade, bool isCleanup, bool removeOptionalDeps);
+    Task<OperationResult> RemoveLocalPackagesAsync(IEnumerable<string> packages);
     Task<OperationResult> UpdatePackagesAsync(IEnumerable<string> packages);
     Task<OperationResult> UpgradeSystemAsync();
     Task<OperationResult> UpgradeAllAsync();
@@ -27,6 +28,7 @@ public interface IPrivilegedOperationService
     Task<List<AlpmPackageUpdateDto>> GetPackagesNeedingUpdateAsync();
     Task<List<AlpmPackageDto>> GetAvailablePackagesAsync(bool showHidden = false);
     Task<List<AlpmPackageDto>> GetInstalledPackagesAsync(bool showHidden = false);
+    Task<List<LocalPackageDto>> GetLocalInstalledPackagesAsync();
     Task<List<AurPackageDto>> GetAurInstalledPackagesAsync(bool showHidden = false);
     Task<List<AurUpdateDto>> GetAurUpdatePackagesAsync(bool showHidden = false);
     Task<List<AurPackageDto>> SearchAurPackagesAsync(string query);

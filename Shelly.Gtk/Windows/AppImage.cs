@@ -1,9 +1,11 @@
 using Gtk;
+using Shelly.GTK.Resources;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels.AppImage;
 using Shelly.Gtk.Enums;
 using Shelly.Gtk.UiModels;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows;
 
@@ -44,6 +46,7 @@ public class AppImage(
     public Widget CreateWindow()
     {
         var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/AppImage.ui"), -1);
+        builder.TranslationDomain = Domain;
         _listPage = (Box)builder.GetObject("AppImagePage")!;
         _detailPage = (ScrolledWindow)builder.GetObject("AppImageDetailView")!;
         _appListBox = (ListBox)builder.GetObject("AppImageListBox")!;
@@ -71,7 +74,14 @@ public class AppImage(
         _detailPage.SetVisible(false);
         _mainBox.Append(_detailPage);
 
-        var model = StringList.New(["None", "StaticUrl", "GitHub", "GitLab", "Codeberg", "Forgejo"]);
+        var model = StringList.New([
+           T("None"),
+            T("StaticUrl"),
+            T("GitHub"),
+            T("GitLab"),
+            T("Codeberg"),
+            T("Forgejo")
+        ]);
         _updateTypeDropDown.Model = model;
 
         _searchEntry.OnSearchChanged += (_, _) => FilterList();
@@ -228,10 +238,10 @@ public class AppImage(
     private async void InstallAppImage()
     {
         var fileChooser = FileDialog.New();
-        fileChooser.Title = "Select AppImage to Install";
+        fileChooser.Title = Translations.T("Select AppImage to Install");
 
         var filter = FileFilter.New();
-        filter.Name = "AppImage Files";
+        filter.Name = Translations.T("AppImage Files");
         filter.AddPattern("*.AppImage");
         filter.AddPattern("*.appimage");
 
@@ -246,20 +256,20 @@ public class AppImage(
             var filePath = file.GetPath();
             if (string.IsNullOrEmpty(filePath)) return;
 
-            lockoutService.Show("Installing AppImage...");
+            lockoutService.Show(T("Installing AppImage..."));
 
             var result = await privilegedOperationService.AppImageInstallAsync(filePath);
 
             if (result.Success)
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"{file.GetBasename()} installed successfully!"));
+                    new ToastMessageEventArgs(T("{0} installed successfully!", file.GetBasename())));
                 await LoadDataAsync();
             }
             else
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"Failed to install {file.GetBasename()}: {result.Error}"));
+                    new ToastMessageEventArgs(T("Failed to install {0}: {1}", file.GetBasename(), result.Error)));
             }
         }
         catch (Exception)
@@ -281,25 +291,25 @@ public class AppImage(
             if (resultUnpriv.Count == 0)
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs("No AppImages need to be upgraded"));
+                    new ToastMessageEventArgs(T("No AppImages need to be upgraded")));
                 return;
             }
 
-            lockoutService.Show("Running updates...");
+            lockoutService.Show(T("Running updates..."));
 
-            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs("Updating AppImages..."));
+            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(T("Updating AppImages...")));
             var result = await privilegedOperationService.AppImageUpgradeAsync();
 
             if (result.Success)
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs("All AppImages updated successfully!"));
+                    new ToastMessageEventArgs(T("All AppImages updated successfully!")));
                 await LoadDataAsync();
             }
             else
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"Failed to update AppImages: {result.Error}"));
+                    new ToastMessageEventArgs(T("Failed to update AppImages: {0}", result.Error)));
             }
         }
         catch (Exception ex)
@@ -322,7 +332,7 @@ public class AppImage(
     {
         _selectedApp = app;
         _detailTitleLabel.SetText(app.DesktopName);
-        _detailVersionLabel.SetText($"Version {app.Version}");
+        _detailVersionLabel.SetText(string.Format(T("Version {0}"), app.Version));
         _detailDescriptionLabel.SetText(app.Description);
         _detailSizeLabel.SetText(SizeHelpers.FormatSize(app.SizeOnDisk));
         var detailIconFilePath = ResolveIconFilePath(app.IconName);
@@ -372,14 +382,14 @@ public class AppImage(
                 _selectedApp.UpdateType = updateType;
                 _selectedApp.UpdateURl = updateUrl;
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"Configuration saved for {_selectedApp.Name}"));
+                    new ToastMessageEventArgs(T("Configuration saved for {0}", _selectedApp.Name)));
                 ShowListPage();
                 await LoadDataAsync();
             }
             else
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"Failed to save configuration: {result.Error}"));
+                    new ToastMessageEventArgs(T("Failed to save configuration: {0}", result.Error)));
             }
         }
         catch (Exception ex)
@@ -394,7 +404,7 @@ public class AppImage(
         {
             if (_selectedApp == null) return;
 
-            lockoutService.Show($"Syncing {_selectedApp.Name}...");
+            lockoutService.Show(string.Format(T("Syncing {0}..."), _selectedApp.Name));
 
             var result =
                 await privilegedOperationService.AppImageSyncApp(_selectedApp.Name);
@@ -402,13 +412,13 @@ public class AppImage(
             if (result.Success)
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"Synced {_selectedApp.Name}"));
+                    new ToastMessageEventArgs(T("Synced {0}", _selectedApp.Name)));
                 await LoadDataAsync();
             }
             else
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"Failed to sync: {result.Error}"));
+                    new ToastMessageEventArgs(T("Failed to sync: {0}", result.Error)));
             }
         }
         catch (Exception ex)
@@ -425,7 +435,7 @@ public class AppImage(
     {
         try
         {
-            lockoutService.Show($"Syncing all AppImages ...");
+            lockoutService.Show(T("Syncing all AppImages ..."));
 
             var result =
                 await privilegedOperationService.AppImageSyncAll();
@@ -433,13 +443,13 @@ public class AppImage(
             if (result.Success)
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"Synced"));
+                    new ToastMessageEventArgs(T("Synced")));
                 await LoadDataAsync();
             }
             else
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"Failed to sync: {result.Error}"));
+                    new ToastMessageEventArgs(T("Failed to sync: {0}", result.Error)));
             }
         }
         catch (Exception ex)
@@ -458,21 +468,21 @@ public class AppImage(
         {
             if (_selectedApp == null) return;
 
-            lockoutService.Show($"Removing {_selectedApp.Name}...");
+            lockoutService.Show(string.Format(T("Removing {0}..."), _selectedApp.Name));
 
             var result = await privilegedOperationService.AppImageRemoveAsync(_selectedApp.Name);
 
             if (result.Success)
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"{_selectedApp.Name} removed successfully!"));
+                    new ToastMessageEventArgs(T("{0} removed successfully!", _selectedApp.Name)));
                 await LoadDataAsync();
                 ShowListPage();
             }
             else
             {
                 genericQuestionService.RaiseToastMessage(
-                    new ToastMessageEventArgs($"Failed to remove {_selectedApp.Name}: {result.Error}"));
+                    new ToastMessageEventArgs(T("Failed to remove {0}: {1}", _selectedApp.Name, result.Error)));
             }
         }
         catch (Exception ex)

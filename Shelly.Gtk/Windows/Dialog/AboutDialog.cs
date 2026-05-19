@@ -1,6 +1,7 @@
 using System.Reflection;
 using Gtk;
 using Shelly.Gtk.UiModels;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -14,17 +15,17 @@ public class ShellyAboutDialog(Overlay overlay)
 
             dialog.ProgramName = "Shelly";
             dialog.Version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
-            dialog.Comments = "Shelly is an Arch Linux package manager";
+            dialog.Comments = T("Shelly is an Arch Linux package manager");
             dialog.Copyright = $"© {DateTime.Now.Year} Seafoam Labs";
 
             dialog.LicenseType = License.Gpl30;
             dialog.WrapLicense = true;
 
             dialog.Website = "https://www.seafoam-labs.org/";
-            dialog.WebsiteLabel = "Seafoam Labs Website";
+            dialog.WebsiteLabel = T("Seafoam Labs Website");
             
-            dialog.AddCreditSection("Project Leads", ["Zoey Bauer", "Caroline Snyder"]);
-            dialog.AddCreditSection("Maintainers", [
+            dialog.AddCreditSection(T("Project Leads"), ["Zoey Bauer", "Caroline Snyder"]);
+            dialog.AddCreditSection(T("Maintainers"), [
                 "Vinícius Fonseca",
                 "Anton Ždanov"
             ]);
@@ -43,7 +44,7 @@ public class ShellyAboutDialog(Overlay overlay)
         }
         catch (Exception e)
         {
-            Console.WriteLine($"Failed to load arch news {e}");
+            Console.WriteLine($"Failed to load about dialog {e}");
         }
     }
 }

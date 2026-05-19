@@ -1,6 +1,7 @@
 using Gtk;
 using Pango;
 using Shelly.Gtk.UiModels;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -53,8 +54,8 @@ public static class PackageBuildDialog
         var buttonBox = Box.New(Orientation.Horizontal, 8);
         buttonBox.SetHalign(Align.End);
 
-        var cancelButton = Button.NewWithLabel("Cancel");
-        var confirmButton = Button.NewWithLabel("Confirm");
+        var cancelButton = Button.NewWithLabel(T("Cancel"));
+        var confirmButton = Button.NewWithLabel(T("Confirm"));
         confirmButton.AddCssClass("suggested-action");
 
         cancelButton.OnClicked += (_, _) =>

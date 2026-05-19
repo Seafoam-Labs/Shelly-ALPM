@@ -163,6 +163,49 @@ public class AurSearchManager : IAurSearchManager, IDisposable
         return pkgname;
     }
 
+    public async Task<List<string>> FindProvidersAsync(string name, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return new List<string>();
+        }
+
+        
+        try
+        {
+            var info = await GetInfoAsync([name], cancellationToken);
+            var direct = info.Results?.FirstOrDefault();
+            if (direct is not null && !string.IsNullOrEmpty(direct.Name))
+            {
+                return new List<string> { direct.Name };
+            }
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync(
+                $"AUR RPC info lookup failed for '{name}': {ex.Message}");
+        }
+
+        
+        var url = $"{BaseUrl}?v=5&type=search&by=provides&arg={Uri.EscapeDataString(name)}";
+        try
+        {
+            var response = await _httpClient.GetFromJsonAsync(
+                url, AurJsonContext.Default.AurResponseAurPackageDto, cancellationToken);
+            return response?.Results?
+                .Select(r => r.Name)
+                .Where(n => !string.IsNullOrEmpty(n))
+                .Distinct()
+                .ToList() ?? new List<string>();
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync(
+                $"AUR RPC provides search failed for '{name}': {ex.Message}");
+            return new List<string>();
+        }
+    }
+
     public void Dispose()
     {
         _httpClient.Dispose();

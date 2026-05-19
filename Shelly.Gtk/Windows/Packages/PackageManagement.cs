@@ -4,6 +4,7 @@ using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.Enums;
+using static Shelly.GTK.Resources.Translations;
 using static Shelly.Gtk.Helpers.PackageColumnViewSorter;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
@@ -11,84 +12,77 @@ using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
 
 // ReSharper disable NotAccessedField.Local
 // ReSharper disable CollectionNeverUpdated.Local
-
 // ReSharper disable CollectionNeverQueried.Local
 
 namespace Shelly.Gtk.Windows.Packages;
 
-public class PackageManagement(
+public sealed class PackageManagement(
     IPrivilegedOperationService privilegedOperationService,
     ILockoutService lockoutService,
     IConfigService configService,
     IGenericQuestionService genericQuestionService,
     IIconResolverService iconResolverService,
-    IDirtyService dirtyService) : IShellyWindow, IReloadable
+    IDirtyService dirtyService
+) : IShellyWindow, IReloadable
 {
     private DirtySubscription? _sub;
     public string[] ListensTo => [DirtyScopes.Native, DirtyScopes.NativeInstalled];
-    private Box _box = null!;
     private CancellationTokenSource _cts = new();
     private int _loadGeneration;
-    private ColumnView _columnView = null!;
     private SingleSelection _selectionModel = null!;
     private Gio.ListStore _listStore = null!;
     private FilterListModel _filterListModel = null!;
     private CustomFilter _filter = null!;
     private string _searchText = string.Empty;
 
-    private Dictionary<ColumnViewCell, (SignalHandler<CheckButton> OnToggled, EventHandler OnExternalToggle)>
+    private readonly Dictionary<ColumnViewCell, (SignalHandler<CheckButton> OnToggled, EventHandler OnExternalToggle)>
         _checkBinding = [];
 
-    private SignalListItemFactory _checkFactory = null!;
-    private SignalListItemFactory _nameFactory = null!;
-    private SignalListItemFactory _sizeFactory = null!;
-    private SignalListItemFactory _versionFactory = null!;
+    private Box _box = null!;
     private SearchEntry _searchEntry = null!;
     private CheckButton _cascadeDeleteCheck = null!;
     private CheckButton _removeConfigsCheck = null!;
+    private CheckButton _removeOptDepsCheck = null!;
     private CheckButton _showHiddenCheck = null!;
-    private Button _refreshButton = null!;
     private Button _removeButton = null!;
     private readonly List<AlpmPackageGObject> _packageGObjectRefs = [];
-    private List<AlpmPackageDto> _packageData = [];
+    private readonly List<AlpmPackageDto> _packageData = [];
     private List<string> _groups = [];
-    private StringList _groupsStringList = null!;
     private DropDown _groupDropDown = null!;
-    private string _selectedGroup = "Any";
+    private string _selectedGroup = T("Any");
 
-    private ColumnViewColumn _checkColumn = null!;
     private ColumnViewColumn _nameColumn = null!;
-    private ColumnViewColumn _sizeColumn = null!;
     private ColumnViewColumn _versionColumn = null!;
 
     private ColumnViewSorter _columnViewSorter = null!;
 
-
     private Revealer _detailRevealer = null!;
     private Box _detailBox = null!;
-    private AlpmPackageGObject? _currentDetailPkg;
     private HashSet<string> _installedPackageNames = [];
 
     public Widget CreateWindow()
     {
         var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/Package/PackageManagement.ui"), -1);
+        builder.TranslationDomain = Domain;
         _box = (Box)builder.GetObject("PackageManagement")!;
-        _columnView = (ColumnView)builder.GetObject("package_grid")!;
+        var columnView = (ColumnView)builder.GetObject("package_grid")!;
         _searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
         _cascadeDeleteCheck = (CheckButton)builder.GetObject("cascade_delete_check")!;
         _removeConfigsCheck = (CheckButton)builder.GetObject("remove_configs_check")!;
+        _removeOptDepsCheck = (CheckButton)builder.GetObject("remove_optdeps_check")!;
         _showHiddenCheck = (CheckButton)builder.GetObject("show_hidden_check")!;
 
-        _checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
-        _checkColumn.Resizable = true;
+        var checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
+        checkColumn.Resizable = true;
         _nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
         _nameColumn.Resizable = true;
-        _sizeColumn = (ColumnViewColumn)builder.GetObject("size_column")!;
-        _sizeColumn.Resizable = true;
+        var sizeColumn = (ColumnViewColumn)builder.GetObject("size_column")!;
+        sizeColumn.Resizable = true;
         _versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
         _versionColumn.Resizable = true;
 
-        _refreshButton = (Button)builder.GetObject("sync_button")!;
+        var refreshButton = (Button)builder.GetObject("sync_button")!;
+        var localRemoveButton = (Button)builder.GetObject("remove_local_button")!;
         _removeButton = (Button)builder.GetObject("remove_button")!;
         _removeButton.SetSensitive(false);
 
@@ -98,18 +92,17 @@ public class PackageManagement(
         _selectionModel = SingleSelection.New(_filterListModel);
         _selectionModel.CanUnselect = true;
         _selectionModel.Autoselect = false;
-        _columnView.SetModel(_selectionModel);
+        columnView.SetModel(_selectionModel);
         _groupDropDown = (DropDown)builder.GetObject("grouping_selection")!;
         _detailRevealer = (Revealer)builder.GetObject("detail_revealer")!;
         _detailBox = (Box)builder.GetObject("detail_box")!;
 
-        SetupColumns(_checkColumn, _nameColumn, _sizeColumn, _versionColumn);
+        SetupColumns(checkColumn, _nameColumn, sizeColumn, _versionColumn);
 
-        // Creating sorter
-        _nameColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((a, b) => 0);
-        _versionColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((a, b) => 0);
+        _nameColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
+        _versionColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
 
-        _columnViewSorter = (ColumnViewSorter)_columnView.GetSorter()!;
+        _columnViewSorter = (ColumnViewSorter)columnView.GetSorter()!;
 
         _columnViewSorter.OnChanged += (_, _) =>
         {
@@ -136,29 +129,25 @@ public class PackageManagement(
             );
         };
 
+        ColumnViewHelper.AlignColumnHeader(columnView, 1, Align.Start);
+        ColumnViewHelper.AlignColumnHeader(columnView, 2, Align.End);
+        ColumnViewHelper.AlignColumnHeader(columnView, 3, Align.End);
 
-        ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.Start);
-        ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.End);
-        ColumnViewHelper.AlignColumnHeader(_columnView, 3, Align.End);
-        
         var shortcutController = ShortcutController.New();
         shortcutController.Scope = ShortcutScope.Global;
         shortcutController.PropagationPhase = PropagationPhase.Capture;
-
-        var searchTrigger = "<Control>f";
 
         var action = CallbackAction.New((_, _) =>
         {
             _searchEntry.GrabFocus();
             return true;
         });
-        
+
         _box.AddController(shortcutController);
-        shortcutController.AddShortcut(Shortcut.New(ShortcutTrigger.ParseString(searchTrigger), action));
+        shortcutController.AddShortcut(Shortcut.New(ShortcutTrigger.ParseString("<Control>f"), action));
 
-
-        _columnView.OnRealize += (_, _) => { Reload(); };
-        _columnView.OnActivate += (_, _) =>
+        columnView.OnRealize += (_, _) => { Reload(); };
+        columnView.OnActivate += (_, _) =>
         {
             var item = _selectionModel.GetSelectedItem();
             if (item is AlpmPackageGObject pkgObj)
@@ -177,7 +166,6 @@ public class PackageManagement(
             else
             {
                 _detailRevealer.SetRevealChild(false);
-                _currentDetailPkg = null;
             }
         };
         _searchEntry.OnSearchChanged += (_, _) =>
@@ -186,21 +174,38 @@ public class PackageManagement(
             ApplyFilter();
         };
         _removeButton.OnClicked += (_, _) => { _ = RemoveSelectedAsync(); };
-        _refreshButton.OnClicked += (_, _) => { Reload(); };
+        refreshButton.OnClicked += (_, _) => { Reload(); };
+        localRemoveButton.OnClicked += async (_, _) => { await OpenRemoveLocal(); };
         _showHiddenCheck.OnToggled += (_, _) => { Reload(); };
         _groupDropDown.OnNotify += (_, args) =>
         {
-            if (args.Pspec.GetName() == "selected")
-            {
-                var idx = _groupDropDown.GetSelected();
-                var item = (StringObject)_groupDropDown.GetModel()!.GetObject(idx)!;
-                _selectedGroup = item.GetString();
-                ApplyFilter();
-            }
+            if (args.Pspec.GetName() != "selected") return;
+            var idx = _groupDropDown.GetSelected();
+            var item = (StringObject)_groupDropDown.GetModel()!.GetObject(idx)!;
+            _selectedGroup = item.GetString();
+            ApplyFilter();
         };
 
         _sub = DirtySubscription.Attach(dirtyService, this);
         return _box;
+    }
+
+    private async Task OpenRemoveLocal()
+    {
+        using var removeLocal = new RemoveLocal(
+            privilegedOperationService,
+            lockoutService,
+            configService,
+            genericQuestionService,
+            dirtyService
+        );
+        using var removeLocalWindow = (Box)removeLocal.CreateWindow();
+        var width = (int)Math.Max(_box.GetWidth() * 0.5, 700);
+        var height = (int)Math.Min(_box.GetHeight() * 0.5, 400);
+        removeLocalWindow.SetSizeRequest(width, height);
+        var eventArgs = new GenericDialogEventArgs(removeLocalWindow);
+        genericQuestionService.RaiseDialog(eventArgs);
+        await eventArgs.ResponseTask;
     }
 
     public void Reload()
@@ -209,14 +214,13 @@ public class PackageManagement(
         old.Cancel();
         old.Dispose();
         Interlocked.Increment(ref _loadGeneration);
-        _ = LoadDataAsync(_cts.Token, _loadGeneration);
+        _ = LoadDataAsync(_loadGeneration, _cts.Token);
     }
 
     private void ShowPackageDetails(AlpmPackageGObject pkgObj)
     {
         if (pkgObj.Index < 0 || pkgObj.Index >= _packageData.Count) return;
 
-        _currentDetailPkg = pkgObj;
         var pkg = _packageData[pkgObj.Index];
 
         while (_detailBox.GetFirstChild() is { } child)
@@ -228,39 +232,14 @@ public class PackageManagement(
         backButton.SetIconName("go-next-symbolic");
         backButton.Halign = Align.Start;
         backButton.AddCssClass("flat");
-        backButton.TooltipText = "Close details";
+        backButton.TooltipText = T("Close details");
         backButton.OnClicked += (_, _) =>
         {
-            _currentDetailPkg = null;
             _selectionModel.UnselectItem(_selectionModel.GetSelected());
             _detailRevealer.SetTransitionType(RevealerTransitionType.SlideRight);
             _detailRevealer.SetRevealChild(false);
         };
         _detailBox.Append(backButton);
-
-        void AddDetail(string label, string value)
-        {
-            var row = Box.New(Orientation.Horizontal, 12);
-            row.MarginBottom = 4;
-            var labelWidget = Label.New(label + ":");
-            labelWidget.AddCssClass("dim-label");
-            labelWidget.Halign = Align.Start;
-            labelWidget.Valign = Align.Start;
-            labelWidget.WidthRequest = 80;
-            labelWidget.Xalign = 0;
-
-            var valueWidget = Label.New(value);
-            valueWidget.Halign = Align.Start;
-            valueWidget.Wrap = true;
-            valueWidget.WrapMode = Pango.WrapMode.WordChar;
-            valueWidget.MaxWidthChars = 30;
-            valueWidget.Xalign = 0;
-            valueWidget.Selectable = true;
-
-            row.Append(labelWidget);
-            row.Append(valueWidget);
-            _detailBox.Append(row);
-        }
 
         var headerBox = Box.New(Orientation.Vertical, 4);
         headerBox.MarginBottom = 16;
@@ -302,13 +281,13 @@ public class PackageManagement(
         separator.MarginBottom = 16;
         _detailBox.Append(separator);
 
-        AddDetail("Version", pkg.Version);
-        AddDetail("Size", SizeHelpers.FormatSize(pkg.InstalledSize));
+        AddDetail(T("Version"), pkg.Version);
+        AddDetail(T("Size"), SizeHelpers.FormatSize(pkg.InstalledSize));
         if (!string.IsNullOrEmpty(pkg.Url))
         {
             var row = Box.New(Orientation.Horizontal, 12);
             row.MarginBottom = 4;
-            var labelWidget = Label.New("URL:");
+            var labelWidget = Label.New(T("URL:"));
             labelWidget.AddCssClass("dim-label");
             labelWidget.Halign = Align.Start;
             labelWidget.Valign = Align.Start;
@@ -331,27 +310,26 @@ public class PackageManagement(
 
         if (pkg.Depends.Count > 0)
         {
-            AddChipList("Depends", pkg.Depends);
+            AddChipList(T("Depends"), pkg.Depends);
         }
 
         if (pkg.OptDepends.Count > 0)
         {
-            AddChipList("Optional Deps", pkg.OptDepends, true);
+            AddChipList(T("Optional Deps"), pkg.OptDepends, true);
         }
 
         if (pkg.Licenses.Count > 0)
-            AddDetail("Licenses", string.Join(", ", pkg.Licenses));
+            AddDetail(T("Licenses"), string.Join(", ", pkg.Licenses));
         if (pkg.Provides.Count > 0)
-            AddDetail("Provides", string.Join(", ", pkg.Provides));
+            AddDetail(T("Provides"), string.Join(", ", pkg.Provides));
         if (pkg.Conflicts.Count > 0)
-            AddDetail("Conflicts", string.Join(", ", pkg.Conflicts));
+            AddDetail(T("Conflicts"), string.Join(", ", pkg.Conflicts));
         if (pkg.Groups.Count > 0)
-            AddDetail("Groups", string.Join(", ", pkg.Groups));
-
+            AddDetail(T("Groups"), string.Join(", ", pkg.Groups));
 
         if (pkg.PackageFile is { Files.Count: > 0 })
         {
-            var fileExpander = Expander.New($"Package Files ({CountFiles(pkg.PackageFile)})");
+            var fileExpander = Expander.New(T("Package Files ({0})", CountFiles(pkg.PackageFile)));
             fileExpander.AddCssClass("package-detail-expander");
             fileExpander.Hexpand = false;
 
@@ -375,32 +353,53 @@ public class PackageManagement(
             _detailBox.Append(fileExpander);
         }
 
-        if (configService.LoadConfig().WebViewEnabled)
+        if (configService.LoadConfig().WebViewEnabled && pkg.Depends.Count > 0)
         {
-            if (pkg.Depends.Count > 0)
+            var dictionary = new Dictionary<string, List<string>> { { pkg.Name, pkg.Depends } };
+
+            foreach (var dep in pkg.Depends)
             {
-                var dictionary = new Dictionary<string, List<string>> { { pkg.Name, pkg.Depends } };
-
-                foreach (var dep in pkg.Depends)
+                for (uint i = 0; i < _listStore.GetNItems(); i++)
                 {
-                    for (uint i = 0; i < _listStore.GetNItems(); i++)
-                    {
-                        var obj = _listStore.GetObject(i);
-                        if (obj is not AlpmPackageGObject depObj) continue;
-                        if (depObj.Index < 0 || depObj.Index >= _packageData.Count) continue;
-                        var depPkg = _packageData[depObj.Index];
-                        if (depPkg.Name.Contains(dep))
-                            dictionary.TryAdd(depPkg.Name, depPkg.Depends);
-                    }
+                    var obj = _listStore.GetObject(i);
+                    if (obj is not AlpmPackageGObject depObj) continue;
+                    if (depObj.Index < 0 || depObj.Index >= _packageData.Count) continue;
+                    var depPkg = _packageData[depObj.Index];
+                    if (depPkg.Name.Contains(dep))
+                        dictionary.TryAdd(depPkg.Name, depPkg.Depends);
                 }
-
-                var window = new WebWindow(pkg.Name, dictionary);
-                _detailBox.Append(window.CreateWindow());
             }
+
+            var window = new WebWindow(pkg.Name, dictionary);
+            _detailBox.Append(window.CreateWindow());
         }
 
         _detailRevealer.SetRevealChild(true);
         return;
+
+        void AddDetail(string label, string value)
+        {
+            var row = Box.New(Orientation.Horizontal, 12);
+            row.MarginBottom = 4;
+            var labelWidget = Label.New(label + ":");
+            labelWidget.AddCssClass("dim-label");
+            labelWidget.Halign = Align.Start;
+            labelWidget.Valign = Align.Start;
+            labelWidget.WidthRequest = 80;
+            labelWidget.Xalign = 0;
+
+            var valueWidget = Label.New(value);
+            valueWidget.Halign = Align.Start;
+            valueWidget.Wrap = true;
+            valueWidget.WrapMode = Pango.WrapMode.WordChar;
+            valueWidget.MaxWidthChars = 30;
+            valueWidget.Xalign = 0;
+            valueWidget.Selectable = true;
+
+            row.Append(labelWidget);
+            row.Append(valueWidget);
+            _detailBox.Append(row);
+        }
 
         int CountFiles(AlpmPackageTreeDto node)
         {
@@ -460,7 +459,6 @@ public class PackageManagement(
             }
         }
 
-
         void AddChipList(string label, IReadOnlyList<string> items, bool isOptional = false)
         {
             var expander = Expander.New($"{label} ({items.Count})");
@@ -480,12 +478,11 @@ public class PackageManagement(
             flowBox.MaxChildrenPerLine = isOptional ? 1u : 10u;
             flowBox.MinChildrenPerLine = 1;
 
-
             foreach (var item in items)
             {
                 if (isOptional)
                 {
-                    var optDepName = item.Split(':').First().Trim();
+                    var optDepName = item.Split(':')[0].Trim();
                     var isInstalled = _installedPackageNames.Contains(optDepName);
 
                     var escapedItem = GLib.Functions.MarkupEscapeText(item, -1);
@@ -530,8 +527,8 @@ public class PackageManagement(
     private void SetupColumns(ColumnViewColumn checkColumn, ColumnViewColumn nameColumn, ColumnViewColumn sizeColumn,
         ColumnViewColumn versionColumn)
     {
-        _checkFactory = SignalListItemFactory.New();
-        _checkFactory.OnSetup += (_, args) =>
+        var checkFactory = SignalListItemFactory.New();
+        checkFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var check = CheckButton.New();
@@ -547,7 +544,7 @@ public class PackageManagement(
             };
         };
 
-        _checkFactory.OnBind += (_, args) =>
+        checkFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is not AlpmPackageGObject pkgObj ||
@@ -568,19 +565,19 @@ public class PackageManagement(
             }
         };
 
-        _checkFactory.OnUnbind += (_, _) => { };
+        checkFactory.OnUnbind += (_, _) => { };
 
-        _checkFactory.OnTeardown += (_, args) =>
+        checkFactory.OnTeardown += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is not AlpmPackageGObject ||
                 listItem.GetChild() is not CheckButton) return;
             listItem.SetChild(null);
         };
-        checkColumn.SetFactory(_checkFactory);
+        checkColumn.SetFactory(checkFactory);
 
-        _nameFactory = SignalListItemFactory.New();
-        _nameFactory.OnSetup += (_, args) =>
+        var nameFactory = SignalListItemFactory.New();
+        nameFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var box = Box.New(Orientation.Horizontal, 6);
@@ -588,13 +585,13 @@ public class PackageManagement(
             var packageIcon = Image.New();
             packageIcon.PixelSize = 24;
             var label = Label.New(string.Empty);
-            
+
             box.Append(packageIcon);
             box.Append(label);
 
             listItem.SetChild(box);
         };
-        _nameFactory.OnBind += (_, args) =>
+        nameFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is not AlpmPackageGObject pkgObj ||
@@ -604,7 +601,7 @@ public class PackageManagement(
 
             var packageIcon = (Image)box.GetFirstChild()!;
             var label = (Label)packageIcon.GetNextSibling()!;
-            
+
             var iconPath = iconResolverService.GetIconPath(pkg.Name);
             if (!string.IsNullOrEmpty(iconPath) && iconPath != "Unavailable" && File.Exists(iconPath))
             {
@@ -620,16 +617,16 @@ public class PackageManagement(
             label.SetText(pkg.Name);
             label.Halign = Align.Start;
         };
-        nameColumn.SetFactory(_nameFactory);
+        nameColumn.SetFactory(nameFactory);
 
-        _sizeFactory = SignalListItemFactory.New();
-        _sizeFactory.OnSetup += (_, args) =>
+        var sizeFactory = SignalListItemFactory.New();
+        sizeFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var label = Label.New(string.Empty);
             listItem.SetChild(label);
         };
-        _sizeFactory.OnBind += (_, args) =>
+        sizeFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is not AlpmPackageGObject pkgObj ||
@@ -638,16 +635,16 @@ public class PackageManagement(
             label.SetText(SizeHelpers.FormatSize(_packageData[pkgObj.Index].InstalledSize));
             label.Halign = Align.End;
         };
-        sizeColumn.SetFactory(_sizeFactory);
+        sizeColumn.SetFactory(sizeFactory);
 
-        _versionFactory = SignalListItemFactory.New();
-        _versionFactory.OnSetup += (_, args) =>
+        var versionFactory = SignalListItemFactory.New();
+        versionFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var label = Label.New(string.Empty);
             listItem.SetChild(label);
         };
-        _versionFactory.OnBind += (_, args) =>
+        versionFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is not AlpmPackageGObject pkgObj ||
@@ -658,7 +655,7 @@ public class PackageManagement(
             label.SetMarginEnd(10);
         };
 
-        versionColumn.SetFactory(_versionFactory);
+        versionColumn.SetFactory(versionFactory);
     }
 
     private PackageSortColumn? GetSortColumn(ColumnViewColumn column)
@@ -679,19 +676,17 @@ public class PackageManagement(
         if (pkgObj.Index < 0 || pkgObj.Index >= _packageData.Count) return false;
         var pkg = _packageData[pkgObj.Index];
 
-        if (!PackageSearch.MatchesGroup(pkg.Groups, _selectedGroup))
-            return false;
-
-        return PackageSearch.MatchesNameOrDescription(pkg.Name, pkg.Description, _searchText);
+        return PackageSearch.MatchesGroup(pkg.Groups, _selectedGroup) &&
+               PackageSearch.MatchesNameOrDescription(pkg.Name, pkg.Description, _searchText);
     }
 
-    private async Task LoadDataAsync(CancellationToken ct = default, int generation = 0)
+    private async Task LoadDataAsync(int generation = 0, CancellationToken ct = default)
     {
         try
         {
             var packages = await privilegedOperationService.GetInstalledPackagesAsync(_showHiddenCheck.Active);
             _groups = packages.SelectMany(x => x.Groups).Distinct().ToList();
-            _groups.Insert(0, "Any");
+            _groups.Insert(0, T("Any"));
             _installedPackageNames = new HashSet<string>(packages.Select(x => x.Name));
             ct.ThrowIfCancellationRequested();
             GLib.Functions.IdleAdd(0, () =>
@@ -711,10 +706,9 @@ public class PackageManagement(
                 _packageData.TrimExcess();
                 _filterListModel.SetFilter(_filter);
                 _detailRevealer.SetRevealChild(false);
-                _currentDetailPkg = null;
 
-                _groupsStringList = StringList.New(_groups.ToArray());
-                _groupDropDown.SetModel(_groupsStringList);
+                var groupsStringList = StringList.New(_groups.ToArray());
+                _groupDropDown.SetModel(groupsStringList);
 
                 for (var i = 0; i < packages.Count; i++)
                 {
@@ -726,7 +720,7 @@ public class PackageManagement(
                     _packageGObjectRefs.Add(pkgObj);
                     _listStore.Append(pkgObj);
                 }
-                
+
                 if (_listStore.GetNItems() > 0)
                 {
                     _selectionModel.SetSelected(0);
@@ -759,8 +753,8 @@ public class PackageManagement(
         for (uint i = 0; i < _listStore.GetNItems(); i++)
         {
             var item = _listStore.GetObject(i);
-            if (item is AlpmPackageGObject { IsSelected: true } pkgObj &&
-                pkgObj.Index >= 0 && pkgObj.Index < _packageData.Count)
+            if (item is AlpmPackageGObject { IsSelected: true, Index: >= 0 } pkgObj &&
+                pkgObj.Index < _packageData.Count)
             {
                 selectedPackages.Add(_packageData[pkgObj.Index].Name);
             }
@@ -771,7 +765,7 @@ public class PackageManagement(
             if (!configService.LoadConfig().NoConfirm)
             {
                 var args = new GenericQuestionEventArgs(
-                    "Remove Packages?", string.Join("\n", selectedPackages)
+                    T("Remove Packages?"), string.Join("\n", selectedPackages)
                 );
 
                 genericQuestionService.RaiseQuestion(args);
@@ -783,14 +777,15 @@ public class PackageManagement(
 
             try
             {
-                lockoutService.Show($"Removing...");
+                lockoutService.Show(T("Removing..."));
                 var result = await privilegedOperationService.RemovePackagesAsync(selectedPackages,
-                    _cascadeDeleteCheck.Active,
-                    _removeConfigsCheck.Active);
+                    isCascade: _cascadeDeleteCheck.Active,
+                    isCleanup: _removeConfigsCheck.Active,
+                    removeOptionalDeps: _removeOptDepsCheck.Active);
                 if (result.Success)
                 {
                     var args = new ToastMessageEventArgs(
-                        $"Removed {selectedPackages.Count} Package(s)"
+                        T("Removed {0} Package(s)", selectedPackages.Count)
                     );
                     genericQuestionService.RaiseToastMessage(args);
                 }

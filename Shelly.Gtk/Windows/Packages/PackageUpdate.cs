@@ -1,6 +1,7 @@
 using Gtk;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Enums;
+using static Shelly.GTK.Resources.Translations;
 using static Shelly.Gtk.Helpers.PackageColumnViewSorter;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.Services.Icons;
@@ -63,7 +64,9 @@ public class PackageUpdate(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/Package/UpdateWindow.ui"), -1);
+        var builder = Builder.New();
+        builder.TranslationDomain = Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/Package/UpdateWindow.ui"), -1);
         _box = (Box)builder.GetObject("UpdateWindow")!;
         _columnView = (ColumnView)builder.GetObject("package_grid")!;
         var searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
@@ -82,7 +85,7 @@ public class PackageUpdate(
         _updateButton = (Button)builder.GetObject("update_button")!;
         _showHiddenCheck = (CheckButton)builder.GetObject("show_hidden_check")!;
         _noPackagesLabel = (Label)builder.GetObject("no_packages_label")!;
-        _noPackagesLabel.Label_ = "<span size='large'>System packages are up to date</span>";
+        _noPackagesLabel.Label_ = T("<span size='large'>System packages are up to date</span>");
         _noPackagesLabel.Visible = false;
         _detailRevealer = (Revealer)builder.GetObject("detail_revealer")!;
         _detailBox = (Box)builder.GetObject("detail_box")!;
@@ -230,7 +233,7 @@ public class PackageUpdate(
         backButton.SetIconName("go-next-symbolic");
         backButton.Halign = Align.Start;
         backButton.AddCssClass("flat");
-        backButton.TooltipText = "Close details";
+        backButton.TooltipText = T("Close details");
         backButton.OnClicked += (_, _) =>
         {
             _currentDetailPkg = null;
@@ -304,17 +307,17 @@ public class PackageUpdate(
         separator.MarginBottom = 16;
         _detailBox.Append(separator);
 
-        AddDetail("Current", pkg.CurrentVersion);
-        AddDetail("New", pkg.NewVersion);
-        AddDetail("Download", SizeHelpers.FormatSize(pkg.DownloadSize));
-        AddDetail("Size Diff", SizeHelpers.FormatSize(pkg.SizeDifference));
-        AddDetail("Repository", pkg.Repository);
-        AddDetail("Size", SizeHelpers.FormatSize(pkg.InstalledSize));
+        AddDetail(T("Current"), pkg.CurrentVersion);
+        AddDetail(T("New"), pkg.NewVersion);
+        AddDetail(T("Download"), SizeHelpers.FormatSize(pkg.DownloadSize));
+        AddDetail(T("Size Diff"), SizeHelpers.FormatSize(pkg.SizeDifference));
+        AddDetail(T("Repository"), pkg.Repository);
+        AddDetail(T("Size"), SizeHelpers.FormatSize(pkg.InstalledSize));
         if (!string.IsNullOrEmpty(pkg.Url))
         {
             var row = Box.New(Orientation.Horizontal, 12);
             row.MarginBottom = 4;
-            var labelWidget = Label.New("URL:");
+            var labelWidget = Label.New(T("URL:"));
             labelWidget.AddCssClass("dim-label");
             labelWidget.Halign = Align.Start;
             labelWidget.Valign = Align.Start;
@@ -337,22 +340,22 @@ public class PackageUpdate(
 
         if (pkg.Depends.Count > 0)
         {
-            AddChipList("Depends", pkg.Depends);
+            AddChipList(T("Depends"), pkg.Depends);
         }
 
         if (pkg.OptDepends.Count > 0)
         {
-            AddChipList("Optional Deps", pkg.OptDepends, true);
+            AddChipList(T("Optional Deps"), pkg.OptDepends, true);
         }
 
         if (pkg.Licenses.Count > 0)
-            AddDetail("Licenses", string.Join(", ", pkg.Licenses));
+            AddDetail(T("Licenses"), string.Join(", ", pkg.Licenses));
         if (pkg.Provides.Count > 0)
-            AddDetail("Provides", string.Join(", ", pkg.Provides));
+            AddDetail(T("Provides"), string.Join(", ", pkg.Provides));
         if (pkg.Conflicts.Count > 0)
-            AddDetail("Conflicts", string.Join(", ", pkg.Conflicts));
+            AddDetail(T("Conflicts"), string.Join(", ", pkg.Conflicts));
         if (pkg.Groups.Count > 0)
-            AddDetail("Groups", string.Join(", ", pkg.Groups));
+            AddDetail(T("Groups"), string.Join(", ", pkg.Groups));
 
         if (configService.LoadConfig().WebViewEnabled)
         {
@@ -669,8 +672,8 @@ public class PackageUpdate(
     private async Task ConfirmPartialUpdateAsync(Action onConfirmed)
     {
         var args = new GenericQuestionEventArgs(
-            "Partial Update Warning",
-            "It is not advised you do partial system updates. Are you sure you want to continue?"
+            T("Partial Update Warning"),
+            T("It is not advised you do partial system updates. Are you sure you want to continue?")
         );
 
         genericQuestionService.RaiseQuestion(args);
@@ -702,8 +705,8 @@ public class PackageUpdate(
         if (selectedPackages.Count != _listStore.GetNItems())
         {
             var args = new GenericQuestionEventArgs(
-                "Update Packages?",
-                "It is unadvised to not update all packages at once. Are you sure you want to continue?"
+                T("Update Packages?"),
+                T("It is unadvised to not update all packages at once. Are you sure you want to continue?")
             );
 
             genericQuestionService.RaiseQuestion(args);
@@ -718,7 +721,7 @@ public class PackageUpdate(
             if (!configService.LoadConfig().NoConfirm)
             {
                 var args = new GenericQuestionEventArgs(
-                    "Update Packages?",
+                    T("Update Packages?"),
                     BuildUpdateConfirmationMessage(selectedPackageUpdates),
                     true
                 );
@@ -733,7 +736,7 @@ public class PackageUpdate(
             var isFullUpgrade = selectedPackages.Count == _listStore.GetNItems();
             try
             {
-                lockoutService.Show($"Updating...");
+                lockoutService.Show(T("Updating..."));
                 OperationResult upgradeResult;
                 if (isFullUpgrade)
                     upgradeResult = await privilegedOperationService.UpgradeSystemAsync();
@@ -745,8 +748,8 @@ public class PackageUpdate(
                 if (upgradeResult.NeedsReboot)
                 {
                     var rebootArgs = new GenericQuestionEventArgs(
-                        "Reboot Required",
-                        "A full system reboot is required for updates to take effect.\n\nWould you like to reboot now?",
+                        T("Reboot Required"),
+                        T("A full system reboot is required for updates to take effect.\n\nWould you like to reboot now?"),
                         true
                     );
                     genericQuestionService.RaiseQuestion(rebootArgs);
@@ -760,8 +763,8 @@ public class PackageUpdate(
                     var failureList = string.Join("\n", upgradeResult.FailedServiceRestarts
                         .Select(f => $"  • {f.Service}: {f.Error}"));
                     var failArgs = new GenericQuestionEventArgs(
-                        "Service Restart Failures",
-                        $"The following services failed to restart automatically:\n{failureList}");
+                        T("Service Restart Failures"),
+                        T("The following services failed to restart automatically:\n{0}", failureList));
                     genericQuestionService.RaiseQuestion(failArgs);
                     await failArgs.ResponseTask;
                 }
@@ -769,7 +772,7 @@ public class PackageUpdate(
                 if (upgradeResult.Success)
                 {
                     var args = new ToastMessageEventArgs(
-                        $"Updated {selectedPackages.Count} Package(s)"
+                        T("Updated {0} Package(s)", selectedPackages.Count)
                     );
                     genericQuestionService.RaiseToastMessage(args);
                 }

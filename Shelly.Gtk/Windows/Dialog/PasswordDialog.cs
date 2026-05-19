@@ -1,5 +1,6 @@
 using Shelly.Gtk.Services;
 using Gtk;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -30,11 +31,11 @@ public class PasswordDialog(ICredentialManager credentialManager)
         var box = Box.New(Orientation.Vertical, 12);
         baseFrame.SetChild(box);
 
-        var titleLabel = Label.New("Authentication Required");
+        var titleLabel = Label.New(T("Authentication Required"));
         titleLabel.AddCssClass("title-4");
         box.Append(titleLabel);
 
-        var label = Label.New($"Password needed to execute: {reason}.");
+        var label = Label.New(T("Password needed to execute: {0}.", reason));
         label.SetWrap(true);
         box.Append(label);
 
@@ -49,8 +50,8 @@ public class PasswordDialog(ICredentialManager credentialManager)
         var buttonBox = Box.New(Orientation.Horizontal, 8);
         buttonBox.SetHalign(Align.End);
 
-        var cancelButton = Button.NewWithLabel("Cancel");
-        var submitButton = Button.NewWithLabel("Authenticate");
+        var cancelButton = Button.NewWithLabel(T("Cancel"));
+        var submitButton = Button.NewWithLabel(T("Authenticate"));
         submitButton.AddCssClass("suggested-action");
 
         cancelButton.OnClicked += async (_,_) =>
@@ -71,7 +72,7 @@ public class PasswordDialog(ICredentialManager credentialManager)
             }
             else
             {
-                errorLabel.SetText("Incorrect password. Try again.");
+                errorLabel.SetText(T("Incorrect password. Try again."));
                 passwordEntry.SetText("");
             }
         };

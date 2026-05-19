@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,18 +5,14 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using PackageManager.Aur.Models;
 using PackageManager.Utilities;
+using Shelly.Utilities;
 
 namespace PackageManager.Aur;
 
 public class VcsInfoStore
 {
-    private readonly string _storePath;
+    private readonly string _storePath = XdgPaths.ShellyData("vcs.json");
     private Dictionary<string, List<VcsSourceEntry>> _entries = new();
-
-    public VcsInfoStore()
-    {
-        _storePath = XdgPaths.ShellyData("vcs.json");
-    }
 
     public async Task Load()
     {
@@ -47,8 +42,8 @@ public class VcsInfoStore
         );
     }
 
-    public List<VcsSourceEntry>? GetEntries(string packageName)
-        => _entries.TryGetValue(packageName, out var entries) ? entries : null;
+    public List<VcsSourceEntry> GetEntries(string packageName)
+        => _entries.GetValueOrDefault(packageName) ?? [];
 
     public void SetEntries(string packageName, List<VcsSourceEntry> entries)
         => _entries[packageName] = entries;

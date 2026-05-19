@@ -122,7 +122,7 @@ public class AurRemoveCommand : AsyncCommand<AurRemovePackageSettings>
                             ctx.Refresh();
                         }
                     };
-                    await manager.RemovePackages(settings.Packages.ToList(),flags);
+                    await manager.RemovePackages(settings.Packages.ToList(), flags, settings.OptDeps);
                 });
 
             if (hadError)
@@ -192,7 +192,7 @@ public class AurRemoveCommand : AsyncCommand<AurRemovePackageSettings>
             };
 
             Console.Error.WriteLine($"Removing AUR packages: {string.Join(", ", packageList)}");
-            await manager.RemovePackages(packageList,flags);
+            await manager.RemovePackages(packageList, flags, settings.OptDeps);
             if (hadError)
             {
                 Console.Error.WriteLine("Removal failed.");

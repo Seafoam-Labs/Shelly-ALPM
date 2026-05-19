@@ -1,4 +1,5 @@
 using Gtk;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -73,7 +74,7 @@ public class LockoutDialog
 
             box.Append(scrolledWindow);
 
-            _closeButton = Button.NewWithLabel("Close");
+            _closeButton = Button.NewWithLabel(T("Close"));
             _closeButton.SetHalign(Align.Center);
             _closeButton.SetVisible(false);
             _closeButton.OnClicked += (_, _) => Hide();
@@ -141,7 +142,7 @@ public class LockoutDialog
     {
         _operationComplete = true;
         _closeButton?.SetVisible(true);
-        _descriptionLabel?.SetText("Operation Complete");
+        _descriptionLabel?.SetText(T("Operation Complete"));
         _progressBar?.SetFraction(1.0);
     }
 
