@@ -1,26 +1,20 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using PackageManager.Zstd;
 
 namespace PackageManager.Local;
 
-public sealed partial class LocalManager
+public sealed class LocalManager
 {
     public const string InstallDir = "/opt/shelly";
-    private const string DesktopDir = "/usr/share/applications";
 
     public event EventHandler<LocalManagerMessageEventArgs>? Message;
 
-    [GeneratedRegex(@"(\d+)x?\d*")]
-    private static partial Regex ImageSizeRegex();
 
     public async Task<bool> InstallBinariesPackage(string filePath)
     {
@@ -66,14 +60,15 @@ public sealed partial class LocalManager
                             await entry.ExtractToFileAsync(destPath, true);
 
                             var ext = Path.GetExtension(destPath).ToLowerInvariant();
-                            if (IsIcon(ext))
+                            if (FileInspector.IsIcon(ext))
                             {
                                 var iconFileName = Path.GetFileNameWithoutExtension(destPath).ToLowerInvariant();
                                 foundIcons[iconFileName] = destPath;
                             }
 
                             await using var fs = File.OpenRead(destPath);
-                            if (string.IsNullOrWhiteSpace(Path.GetExtension(destPath)) && await IsElfBinary(fs))
+                            if (string.IsNullOrWhiteSpace(Path.GetExtension(destPath)) &&
+                                await FileInspector.IsElfBinary(fs))
                             {
                                 var binaryName = Path.GetFileName(destPath);
                                 var linkPath = Path.Combine("/usr/bin", binaryName);
@@ -104,9 +99,15 @@ public sealed partial class LocalManager
                 if (foundIcons.Count > 0)
                 {
                     var icon = foundIcons.First();
-                    var installedIconName = await InstallIcon(icon.Value, binaryName);
-
-                    if (!string.IsNullOrWhiteSpace(installedIconName)) iconName = installedIconName;
+                    try
+                    {
+                        iconName = await XdgIntegration.InstallIcon(icon.Value, binaryName);
+                        OnInfo($"Installed icon: {icon.Value} as {iconName}");
+                    }
+                    catch (Exception ex)
+                    {
+                        OnWarning($"Could not install icon: {ex.Message}");
+                    }
                 }
                 else
                 {
@@ -114,11 +115,21 @@ public sealed partial class LocalManager
                 }
 
                 OnInfo("Creating desktop entry...");
-                CreateDesktopEntry(
-                    binaryName,
-                    binaryName,
-                    $"{binaryName} - Installed from {packageName}",
-                    iconName);
+                try
+                {
+                    var desktopFileName = CleanInvalidNames(binaryName);
+                    await XdgIntegration.CreateDesktopEntry(
+                        binaryName,
+                        desktopFileName,
+                        binaryName,
+                        $"{binaryName} - Installed from {packageName}",
+                        iconName);
+                    OnInfo($"Desktop entry created: {desktopFileName}");
+                }
+                catch (Exception ex)
+                {
+                    OnWarning($"Could not create desktop entry: {ex.Message}");
+                }
             }
 
             if (installedBinaries.Count == 0) OnWarning("No executable ELF binaries were found in the archive.");
@@ -131,55 +142,6 @@ public sealed partial class LocalManager
             OnError($"Failed to install binary package: {ex.Message}");
             return false;
         }
-    }
-
-    public static async Task<bool> IsArchPackage(string filePath)
-    {
-        await using var fileStream = File.OpenRead(filePath);
-        switch (Path.GetExtension(filePath))
-        {
-            case ".zst":
-            {
-                await using var zStdStream = new ZstdDecompressStream(fileStream);
-                await using var zstTarReader = new TarReader(zStdStream);
-                while (await zstTarReader.GetNextEntryAsync() is { } entry)
-                    if (entry.Name.Contains("PKGINFO", StringComparison.OrdinalIgnoreCase))
-                        return true;
-
-                break;
-            }
-            case ".gz":
-            {
-                await using var gzStream = new GZipStream(fileStream, CompressionMode.Decompress);
-                await using var gzTarReader = new TarReader(gzStream);
-                while (await gzTarReader.GetNextEntryAsync() is { } entry)
-                    if (entry.Name.Contains("PKGINFO", StringComparison.OrdinalIgnoreCase))
-                        return true;
-
-                break;
-            }
-        }
-
-        return false;
-    }
-
-    public static async Task<bool> IsBinariesPackage(string filePath)
-    {
-        await using var fileStream = File.OpenRead(filePath);
-        await using Stream decompressedStream = Path.GetExtension(filePath) switch
-        {
-            ".gz" => new GZipStream(fileStream, CompressionMode.Decompress),
-            ".zst" => new ZstdDecompressStream(fileStream),
-            _ => throw new NotSupportedException("Unsupported file extension")
-        };
-        await using var tarReader = new TarReader(decompressedStream);
-        while (await tarReader.GetNextEntryAsync() is { } entry)
-        {
-            if (entry.EntryType != TarEntryType.RegularFile || entry.DataStream is null) continue;
-            if (await IsElfBinary(entry.DataStream)) return true;
-        }
-
-        return false;
     }
 
     public static List<LocalPackageDto> GetInstalledBinaryPackages()
@@ -225,70 +187,7 @@ public sealed partial class LocalManager
             foreach (var dir in dirs)
             {
                 var pkgInfos = dir.EnumerateFiles("*", SearchOption.AllDirectories).ToList();
-                List<FileInfo> pkgBins = [];
-
-                foreach (var info in pkgInfos)
-                {
-                    await using var fs = File.OpenRead(info.FullName);
-                    if (await IsElfBinary(fs)) pkgBins.Add(info);
-                }
-
-                List<string> desktopBins = [];
-
-                foreach (var pkgBin in pkgBins)
-                {
-                    var usrBin = new FileInfo(Path.Combine("/usr/bin", pkgBin.Name));
-                    var canDelete = pkgBin.FullName.Equals(usrBin.LinkTarget);
-                    if (!canDelete) continue;
-
-                    OnInfo($"Removing {pkgBin.Name} from {usrBin.FullName}");
-                    File.Delete(usrBin.FullName);
-
-                    if (!CleanInvalidNames(dir.Name)
-                            .Contains(pkgBin.Name, StringComparison.InvariantCultureIgnoreCase))
-                        continue;
-
-                    var desktopFilePath =
-                        Path.Combine(DesktopDir, $"{Path.GetFileNameWithoutExtension(pkgBin.Name)}.desktop");
-
-                    if (File.Exists(desktopFilePath))
-                    {
-                        OnInfo($"Removing {desktopFilePath}");
-                        File.Delete(desktopFilePath);
-                    }
-
-                    desktopBins.Add(pkgBin.Name);
-                }
-
-                var iconInfos = pkgInfos
-                    .Where(info => IsIcon(info.Extension.ToLowerInvariant()))
-                    .OrderBy(info => info.Name)
-                    .ToList();
-
-                foreach (var desktopBin in desktopBins)
-                foreach (var icon in iconInfos)
-                {
-                    var extension = icon.Extension.ToLowerInvariant();
-                    string destDir;
-                    if (extension == ".svg")
-                    {
-                        destDir = "/usr/share/icons/hicolor/scalable/apps";
-                    }
-                    else
-                    {
-                        var sizeMatch = ImageSizeRegex().Match(icon.Name);
-                        var size = sizeMatch.Success && int.TryParse(sizeMatch.Groups[1].Value, out var s)
-                            ? s
-                            : 256;
-                        destDir = $"/usr/share/icons/hicolor/{size}x{size}/apps";
-                    }
-
-                    var destPath = Path.Combine(destDir, $"{desktopBin}{extension}");
-                    if (!File.Exists(destPath)) continue;
-
-                    OnInfo($"Removing icon {destPath}");
-                    File.Delete(destPath);
-                }
+                await RemoveBinaryPackageAssets(dir, pkgInfos);
 
                 OnInfo($"Removing package directory {dir.FullName}");
                 dir.Delete(true);
@@ -304,21 +203,36 @@ public sealed partial class LocalManager
         }
     }
 
-    private static bool IsIcon(string i)
+    private async Task RemoveBinaryPackageAssets(DirectoryInfo dir, List<FileInfo> pkgInfos)
     {
-        return i is ".png" or ".svg";
-    }
+        var pkgBins = await FileInspector.FindElfBinaries(pkgInfos);
+        var desktopBins = new List<string>();
 
-    private static async Task<bool> IsElfBinary(Stream stream)
-    {
-        if (stream.CanSeek) stream.Seek(0, SeekOrigin.Begin);
+        foreach (var pkgBin in pkgBins)
+        {
+            var usrBin = new FileInfo(Path.Combine("/usr/bin", pkgBin.Name));
+            if (!pkgBin.FullName.Equals(usrBin.LinkTarget)) continue;
 
-        var magic = new byte[4];
-        var bytesRead = await stream.ReadAsync(magic);
+            OnInfo($"Removing {pkgBin.Name} from {usrBin.FullName}");
+            File.Delete(usrBin.FullName);
 
-        return bytesRead >= 4 &&
-               magic[0] == 0x7F && magic[1] == 0x45 &&
-               magic[2] == 0x4C && magic[3] == 0x46;
+            if (!CleanInvalidNames(dir.Name).Contains(pkgBin.Name, StringComparison.InvariantCultureIgnoreCase))
+                continue;
+
+            if (XdgIntegration.RemoveDesktopEntry(pkgBin.Name))
+                OnInfo($"Removed desktop entry for {pkgBin.Name}");
+            desktopBins.Add(pkgBin.Name);
+        }
+
+        var iconInfos = pkgInfos
+            .Where(info => FileInspector.IsIcon(info.Extension.ToLowerInvariant()))
+            .OrderBy(info => info.Name)
+            .ToList();
+
+        foreach (var desktopBin in desktopBins)
+        foreach (var icon in iconInfos)
+            if (XdgIntegration.RemoveIcon(desktopBin, icon))
+                OnInfo($"Removed icon for {desktopBin}: {icon.Name}");
     }
 
     private static List<string> ListDirectories(string path)
@@ -329,148 +243,12 @@ public sealed partial class LocalManager
             .ToList();
     }
 
-    private void CreateDesktopEntry(
-        string appName,
-        string executablePath,
-        string? comment = null,
-        string icon = "application-x-executable",
-        bool terminal = false,
-        string categories = "Utility;")
-    {
-        var cleanName = CleanInvalidNames(appName);
-        var desktopFilePath = Path.Combine(DesktopDir, $"{cleanName}.desktop");
-
-        var content = new StringBuilder();
-        content.AppendLine("[Desktop Entry]");
-        content.AppendLine("Version=1.0");
-        content.AppendLine("Type=Application");
-        content.AppendLine($"Name={appName}");
-        content.AppendLine($"Comment={comment ?? $"{appName} application"}");
-        content.AppendLine($"Exec={executablePath}");
-        content.AppendLine($"Icon={icon}");
-        content.AppendLine($"Terminal={terminal.ToString().ToLower()}");
-        content.AppendLine($"Categories={categories}");
-        content.AppendLine("StartupNotify=true");
-
-        try
-        {
-            Directory.CreateDirectory(DesktopDir);
-            File.WriteAllText(desktopFilePath, content.ToString());
-            SetFilePermissions(desktopFilePath, "644");
-            UpdateDesktopDatabase(DesktopDir);
-
-            OnInfo($"Desktop entry created: {desktopFilePath}");
-        }
-        catch (Exception ex)
-        {
-            OnWarning($"Could not create desktop entry: {ex.Message}");
-        }
-    }
-
     private static string CleanInvalidNames(string name)
     {
         return name.ToLower()
             .Replace(" ", "-")
             .Replace("/", "-")
             .Replace("\\", "-");
-    }
-
-    private void SetFilePermissions(string filePath, string permissions)
-    {
-        try
-        {
-            var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = "chmod",
-                Arguments = $"{permissions} \"{filePath}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
-            process?.WaitForExit();
-        }
-        catch (Exception ex)
-        {
-            OnWarning($"Could not set file permissions: {ex.Message}");
-        }
-    }
-
-    private void UpdateDesktopDatabase(string desktopDir)
-    {
-        try
-        {
-            var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = "update-desktop-database",
-                Arguments = $"\"{desktopDir}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
-            process?.WaitForExit();
-        }
-        catch (Exception ex)
-        {
-            OnWarning($"Could not update desktop database: {ex.Message}");
-        }
-    }
-
-    private async Task<string> InstallIcon(string iconPath, string appName)
-    {
-        try
-        {
-            var extension = Path.GetExtension(iconPath);
-            var iconName = $"{appName.ToLower()}{extension}";
-            string destDir;
-            if (extension == ".svg")
-            {
-                destDir = "/usr/share/icons/hicolor/scalable/apps";
-            }
-            else
-            {
-                var sizeMatch = ImageSizeRegex().Match(Path.GetFileName(iconPath));
-                var size = sizeMatch.Success && int.TryParse(sizeMatch.Groups[1].Value, out var s)
-                    ? s
-                    : 256;
-                destDir = $"/usr/share/icons/hicolor/{size}x{size}/apps";
-            }
-
-            Directory.CreateDirectory(destDir);
-            var destPath = Path.Combine(destDir, iconName);
-
-            File.Copy(iconPath, destPath, true);
-            OnInfo($"Installed icon: {iconPath}");
-
-            try
-            {
-                var process = Process.Start(new ProcessStartInfo
-                {
-                    FileName = "gtk-update-icon-cache",
-                    Arguments = "-f -t /usr/share/icons/hicolor",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                });
-                if (process == null)
-                    throw new InvalidOperationException("Unable to start gtk-update-icon-cache process.");
-
-                await process.WaitForExitAsync();
-            }
-            catch (Exception ex)
-            {
-                OnWarning($"Failed to update icon cache: {ex.Message}");
-            }
-
-            return appName.ToLower();
-        }
-        catch (Exception ex)
-        {
-            OnWarning($"Could not install icon: {ex.Message}");
-            return string.Empty;
-        }
     }
 
     private void OnMessage(LocalManagerMessageLevel level, string message)

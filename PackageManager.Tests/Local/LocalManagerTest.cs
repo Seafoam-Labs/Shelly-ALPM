@@ -28,7 +28,7 @@ public class LocalManagerTest
     public async Task IsArchPackage_GzWithPkginfo_ReturnsTrue()
     {
         var filePath = CreateTarGzWithEntries(_tempDir, "test.tar.gz", [".PKGINFO"]);
-        var result = await LocalManager.IsArchPackage(filePath);
+        var result = await FileInspector.IsArchPackage(filePath);
         Assert.That(result, Is.True);
     }
 
@@ -36,7 +36,7 @@ public class LocalManagerTest
     public async Task IsArchPackage_GzWithoutPkginfo_ReturnsFalse()
     {
         var filePath = CreateTarGzWithEntries(_tempDir, "test.tar.gz", ["readme.txt"]);
-        var result = await LocalManager.IsArchPackage(filePath);
+        var result = await FileInspector.IsArchPackage(filePath);
         Assert.That(result, Is.False);
     }
 
@@ -45,7 +45,7 @@ public class LocalManagerTest
     {
         var filePath = Path.Combine(_tempDir, "test.tar.bz2");
         await File.WriteAllBytesAsync(filePath, [0x00]);
-        var result = await LocalManager.IsArchPackage(filePath);
+        var result = await FileInspector.IsArchPackage(filePath);
         Assert.That(result, Is.False);
     }
 
@@ -53,7 +53,7 @@ public class LocalManagerTest
     public async Task HasBinaries_TarGzWithElfBinary_ReturnsTrue()
     {
         var filePath = CreateTarGzWithBinaryEntry(_tempDir, "test.tar.gz", "mybin", [0x7F, 0x45, 0x4C, 0x46, 0x00]);
-        var result = await LocalManager.IsBinariesPackage(filePath);
+        var result = await FileInspector.IsBinariesPackage(filePath);
         Assert.That(result, Is.True);
     }
 
@@ -61,7 +61,7 @@ public class LocalManagerTest
     public async Task HasBinaries_TarGzWithoutElfBinary_ReturnsFalse()
     {
         var filePath = CreateTarGzWithBinaryEntry(_tempDir, "test.tar.gz", "readme.txt", "hello world"u8.ToArray());
-        var result = await LocalManager.IsBinariesPackage(filePath);
+        var result = await FileInspector.IsBinariesPackage(filePath);
         Assert.That(result, Is.False);
     }
 
@@ -71,14 +71,14 @@ public class LocalManagerTest
         var filePath = Path.Combine(_tempDir, "test.tar.bz2");
         File.WriteAllBytes(filePath, [0x00]);
         Assert.ThrowsAsync<NotSupportedException>(async () =>
-            await LocalManager.IsBinariesPackage(filePath));
+            await FileInspector.IsBinariesPackage(filePath));
     }
 
     [Test]
     public async Task HasBinaries_TarGzWithSmallFile_ReturnsFalse()
     {
         var filePath = CreateTarGzWithBinaryEntry(_tempDir, "test.tar.gz", "tiny", [0x7F, 0x45]);
-        var result = await LocalManager.IsBinariesPackage(filePath);
+        var result = await FileInspector.IsBinariesPackage(filePath);
         Assert.That(result, Is.False);
     }
 
@@ -86,7 +86,7 @@ public class LocalManagerTest
     public async Task HasBinaries_TarGzWithDirectoryOnly_ReturnsFalse()
     {
         var filePath = CreateTarGzWithDirectoryOnly(_tempDir, "test.tar.gz", "somedir/");
-        var result = await LocalManager.IsBinariesPackage(filePath);
+        var result = await FileInspector.IsBinariesPackage(filePath);
         Assert.That(result, Is.False);
     }
 

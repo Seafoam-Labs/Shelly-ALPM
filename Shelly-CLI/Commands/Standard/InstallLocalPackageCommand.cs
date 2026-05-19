@@ -34,7 +34,7 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
 
         RootElevator.EnsureRootExectuion();
 
-        if (await LocalManager.IsArchPackage(settings.PackageLocation))
+        if (await FileInspector.IsArchPackage(settings.PackageLocation))
         {
             if (Program.IsUiMode) return await HandleUiModeInstall(settings);
 
@@ -45,7 +45,7 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
             return 1;
         }
 
-        if (await LocalManager.IsBinariesPackage(settings.PackageLocation))
+        if (await FileInspector.IsBinariesPackage(settings.PackageLocation))
         {
             if (Program.IsUiMode) return await HandleUiModeBinaryInstall(settings);
 
