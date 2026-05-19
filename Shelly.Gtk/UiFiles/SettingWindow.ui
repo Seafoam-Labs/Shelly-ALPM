@@ -452,6 +452,21 @@
                                                                 <property name="orientation">horizontal</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">Remove Cache on Uninstall</property>
+                                                                        <property name="hexpand">true</property>
+                                                                        <property name="halign">start</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="remove_cache_switch"/>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">No Confirm</property>
                                                                         <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>

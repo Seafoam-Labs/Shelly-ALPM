@@ -1086,6 +1086,9 @@ msgstr "Avançado"
 msgid "No Confirm"
 msgstr "Sem confirmação"
 
+msgid "Remove Cache on Uninstall"
+msgstr "Remover cache ao desinstalar"
+
 msgid "Enable Shelly Search"
 msgstr "Habilitar pesquisa Shelly"
 

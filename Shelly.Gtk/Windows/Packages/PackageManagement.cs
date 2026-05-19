@@ -38,6 +38,7 @@ public sealed class PackageManagement(
     private readonly Dictionary<ColumnViewCell, (SignalHandler<CheckButton> OnToggled, EventHandler OnExternalToggle)>
         _checkBinding = [];
 
+    private readonly bool _deletePackageCache = configService.LoadConfig().RemoveCache;
     private Box _box = null!;
     private SearchEntry _searchEntry = null!;
     private CheckButton _cascadeDeleteCheck = null!;
@@ -781,7 +782,8 @@ public sealed class PackageManagement(
                 var result = await privilegedOperationService.RemovePackagesAsync(selectedPackages,
                     isCascade: _cascadeDeleteCheck.Active,
                     isCleanup: _removeConfigsCheck.Active,
-                    removeOptionalDeps: _removeOptDepsCheck.Active);
+                    removeOptionalDeps: _removeOptDepsCheck.Active,
+                    _deletePackageCache);
                 if (result.Success)
                 {
                     var args = new ToastMessageEventArgs(

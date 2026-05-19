@@ -8,7 +8,7 @@ public class CacheClean : AsyncCommand<CacheCleanSettings>
 {
     public override Task<int> ExecuteAsync(CommandContext context, CacheCleanSettings settings)
     {
-
+        
         var cacheDir = settings.CacheDir ?? "/var/cache/pacman/pkg";
 
         if (!Directory.Exists(cacheDir))
@@ -28,7 +28,7 @@ public class CacheClean : AsyncCommand<CacheCleanSettings>
             AnsiConsole.MarkupLine("[yellow]No package files found in cache directory.[/]");
             return Task.FromResult(0);
         }
-
+        
         var grouped = entries.GroupBy(e => e.Name).ToDictionary(g => g.Key, g => g.ToList());
 
         var candidates = new List<CacheEntry>();
@@ -64,7 +64,95 @@ public class CacheClean : AsyncCommand<CacheCleanSettings>
             AnsiConsole.MarkupLine($"\n[blue]Total: {candidates.Count} files, {CacheCleanHelper.FormatSize(totalSize)}[/]");
             return Task.FromResult(0);
         }
+        
+        if (settings.Packages.Length > 0)
+        {
+            RootElevator.EnsureRootExectuion();
+            
+            var matchedEntries = entries
+                .Where(entry =>
+                    settings.Packages.Any(package =>
+                        entry.Name.StartsWith(
+                            package,
+                            StringComparison.Ordinal)))
+                .ToList();
+            
+            var matchedSize = matchedEntries.Sum(x => x.FileSize);
+            
+            if (matchedEntries.Count == 0)
+            {
+                AnsiConsole.MarkupLine(
+                    "[yellow]No matching cache entries found.[/]");
 
+                return Task.FromResult(0);
+            }
+            
+            AnsiConsole.MarkupLine(
+                $"[blue]The following cache entries will be removed " +
+                $"({CacheCleanHelper.FormatSize(matchedSize)}):[/]");
+            
+            foreach (var entry in matchedEntries)
+            {
+                AnsiConsole.MarkupLine(
+                    $"  {Markup.Escape(entry.FullPath)} [dim]({CacheCleanHelper.FormatSize(entry.FileSize)})[/]");
+                
+                var sigPath = $"{entry.FullPath}.sig";
+
+                if (File.Exists(sigPath))
+                {
+                    AnsiConsole.MarkupLine(
+                        $"  {Markup.Escape(sigPath)} [dim](signature)[/]");
+                }
+
+            }
+            
+            if (!settings.NoConfirm)
+            {
+                var confirmed = AnsiConsole.Confirm(
+                    "[yellow]Do you want to continue?[/]");
+
+                if (!confirmed)
+                {
+                    AnsiConsole.MarkupLine(
+                        "[grey]Operation cancelled.[/]");
+
+                    return Task.FromResult(0);
+                }
+
+            }
+            
+            foreach (var entry in matchedEntries)
+            {
+                try
+                {
+                    File.Delete(entry.FullPath);
+
+                    AnsiConsole.MarkupLine(
+                        $"[green]Removed:[/] {Markup.Escape(entry.FullPath)}");
+
+                    var sigPath = $"{entry.FullPath}.sig";
+
+                    if (File.Exists(sigPath))
+                    {
+                        File.Delete(sigPath);
+                        AnsiConsole.MarkupLine(
+                            $"[green]Removed:[/] {Markup.Escape(sigPath)}");
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                    AnsiConsole.MarkupLine(
+                        $"[red]Failed:[/] {Markup.Escape(entry.FullPath)}");
+
+                    AnsiConsole.MarkupLine(
+                        $"[grey]{Markup.Escape(ex.Message)}[/]");
+                }
+            }
+
+            return Task.FromResult(0);
+        }
+        
         if (settings.Remove)
         {
             RootElevator.EnsureRootExectuion();

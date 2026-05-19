@@ -27,6 +27,11 @@ public class CacheCleanSettings : CommandSettings
     [Description("Path to the cache directory")]
     public string? CacheDir { get; set; } = "/var/cache/pacman/pkg";
 
+    [CommandOption("-t | --target <packages>")]
+    [Description("Removes all cached entries related to the selected package")]
+    public string[] Packages { get; set; } = [];
 
-
+    [CommandOption("--no-confirm")]
+    [Description("Skips confirmation checks if true")]
+    public bool NoConfirm { get; set; }
 }

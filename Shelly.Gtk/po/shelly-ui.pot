@@ -1059,6 +1059,9 @@ msgstr ""
 msgid "Advanced"
 msgstr ""
 
+msgid "Remove Cache on Uninstall"
+msgstr ""
+
 msgid "No Confirm"
 msgstr ""
 

@@ -414,7 +414,8 @@ public class Program
                     .WithExample("utility", "cache-clean", "-r")
                     .WithExample("utility", "cache-clean", "-r", "-k", "2")
                     .WithExample("utility", "cache-clean", "-r", "--uninstalled")
-                    .WithExample("utility", "cache-clean", "-r", "-c", "/var/cache/pacman/pkg");
+                    .WithExample("utility", "cache-clean", "-r", "-c", "/var/cache/pacman/pkg")
+                    .WithExample("utility", "cache-clean", "-t", "vivaldi");
             });
 
             config.AddBranch("config", configure =>

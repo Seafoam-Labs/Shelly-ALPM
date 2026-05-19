@@ -37,6 +37,7 @@ public class ShellyConfig
     public bool AppImageEnabled { get; set; } = false;
     public bool NewInstallInitSettings { get; set; } = false;
     public bool UseSymbolicTray { get; set; } = true;
+    public bool RemoveCache { get; set; } = false;
 
     public string? TrayIconPath { get; set; }
     public string? TrayUpdatesIconPath { get; set; }

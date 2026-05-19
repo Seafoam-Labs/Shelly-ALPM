@@ -13,7 +13,7 @@ public interface IPrivilegedOperationService
     Task<OperationResult> InstallPackagesAsync(IEnumerable<string> packages, bool upgrade = false);
     Task<OperationResult> InstallLocalPackageAsync(string filePath);
     Task<OperationResult> InstallAppImageAsync(string filePath);
-    Task<OperationResult> RemovePackagesAsync(IEnumerable<string> packages, bool isCascade, bool isCleanup, bool removeOptionalDeps);
+    Task<OperationResult> RemovePackagesAsync(IEnumerable<string> packages, bool isCascade, bool isCleanup, bool removeOptionalDeps, bool removePackageFromCache = false);
     Task<OperationResult> RemoveLocalPackagesAsync(IEnumerable<string> packages);
     Task<OperationResult> UpdatePackagesAsync(IEnumerable<string> packages);
     Task<OperationResult> UpgradeSystemAsync();
