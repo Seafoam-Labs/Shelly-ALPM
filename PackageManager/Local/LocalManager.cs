@@ -114,7 +114,6 @@ public sealed class LocalManager
                     OnWarning($"No icon found for {binaryName}, using default");
                 }
 
-                OnInfo("Creating desktop entry...");
                 try
                 {
                     var desktopFileName = CleanInvalidNames(binaryName);
