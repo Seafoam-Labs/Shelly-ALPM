@@ -160,7 +160,7 @@ CLI provides the same core functionality as the UI but in a scriptable, terminal
 
 ### CLI Commands
 
-Can be viewed in the [Shelly CLI Help](./wiki/cli_help.md) dedicated document.
+Full documentation can be viewed on the [Shelly CLI Reference](https://www.seafoam-labs.org/shelly-alpm/docs/cli-reference/) page.
 
 ### CLI Configuration
 
@@ -171,19 +171,7 @@ default configuration file at:
 
 #### Configuration Options
 
-| Option             | Description                                                                                                                                                                                                                                                    |
-|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `FileSizeDisplay`  | Controls how file sizes are displayed. <br> Possible values: "Bytes", "Megabytes", "Gigabytes". <br> Default: "Bytes"                                                                                                                                          |
-| `DefaultExecution` | Determines which command is executed when `shelly` is run without any arguments (the default command). <br> Possible values: "UpgradeStandard", "UpgradeFlatpak", "UpgradeAur", "UpgradeAll", "Sync", "SyncForce", "ListInstalled". <br> Default: "UpgradeAll" |
-
-#### Example `config.json`
-
-```json
-{
-  "FileSizeDisplay": "Bytes",
-  "DefaultExecution": "UpgradeAll"
-}
-```
+These are listed on the [Shelly Configuration](https://www.seafoam-labs.org/shelly-alpm/docs/config/) page.
 
 ## Development
 
