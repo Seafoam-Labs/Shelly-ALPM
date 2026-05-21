@@ -1,0 +1,1274 @@
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: shelly-ui 2.2.4.1\n"
+"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
+"POT-Creation-Date: 2026-05-21 09:42+0200\n"
+"PO-Revision-Date: 2026-05-21 10:36+0200\n"
+"Last-Translator: Dušan Kazik <prescott66@gmail.com>\n"
+"Language-Team: csnyder@seafoamlabs.org\n"
+"Language: sk\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.8\n"
+
+msgid "Any"
+msgstr "Akákoľvek"
+
+msgid "Loading..."
+msgstr "Načítava sa..."
+
+msgid "Recent Operations"
+msgstr "Nedávne operácie"
+
+msgid "History"
+msgstr "História"
+
+msgid "No recent activity"
+msgstr "Žiadna nedávna aktivita"
+
+msgid "Session log is too large to display"
+msgstr "Záznam relácie je príliš veľký na zobrazenie"
+
+msgid "Session Log"
+msgstr "Záznam relácie"
+
+msgid "Copy Log"
+msgstr "Skopírovať záznam"
+
+msgid "Log copied to clipboard"
+msgstr "Záznam bol skopírovaný do schránky"
+
+msgid "Available Updates ({0})"
+msgstr "Dostupné aktualizácie ({0})"
+
+msgid "Updates ({0})"
+msgstr "Aktualizácie ({0})"
+
+msgid "All packages are up to date"
+msgstr ""
+
+msgid "just now"
+msgstr ""
+
+msgid "{0} min ago"
+msgstr ""
+
+msgid "{0}h ago"
+msgstr ""
+
+msgid "yesterday"
+msgstr ""
+
+msgid "{0}d ago"
+msgstr ""
+
+msgid "<span size='large'>Search for AUR packages</span>"
+msgstr ""
+
+msgid "Install Packages?"
+msgstr ""
+
+msgid "Installing..."
+msgstr ""
+
+msgid "No packages found."
+msgstr ""
+
+msgid "Displaying Package Build {0}"
+msgstr ""
+
+msgid "Installed {0} Package(s)"
+msgstr ""
+
+msgid "Export AUR install log"
+msgstr ""
+
+msgid "Log Files (*.log)"
+msgstr ""
+
+msgid "Exported AUR install log"
+msgstr ""
+
+msgid "Failed to export AUR install log"
+msgstr ""
+
+msgid "Package Build"
+msgstr ""
+
+msgid "Preview PKGBUILD"
+msgstr ""
+
+msgid "Displays Package Build"
+msgstr ""
+
+msgid "Close details"
+msgstr ""
+
+msgid "Version"
+msgstr ""
+
+msgid "Votes"
+msgstr ""
+
+msgid "Popularity"
+msgstr ""
+
+msgid "Out of Date"
+msgstr ""
+
+msgid "Maintainer"
+msgstr ""
+
+msgid "Orphaned"
+msgstr ""
+
+msgid "Last Modified"
+msgstr ""
+
+msgid "First Submitted"
+msgstr ""
+
+msgid "URL:"
+msgstr ""
+
+msgid "AUR:"
+msgstr ""
+
+msgid "Depends"
+msgstr ""
+
+msgid "Make Depends"
+msgstr ""
+
+msgid "Check Depends"
+msgstr ""
+
+msgid "Optional Deps"
+msgstr ""
+
+msgid "Licenses"
+msgstr ""
+
+msgid "Keywords"
+msgstr ""
+
+msgid "Provides"
+msgstr ""
+
+msgid "Conflicts"
+msgstr ""
+
+msgid "Groups"
+msgstr ""
+
+msgid "Replaces"
+msgstr ""
+
+msgid "Remove Packages?"
+msgstr ""
+
+msgid "Removing..."
+msgstr ""
+
+msgid "Removed {0} Package(s)"
+msgstr ""
+
+msgid "<span size='large'>AUR packages are up to date</span>"
+msgstr ""
+
+msgid "Update Packages?"
+msgstr ""
+
+msgid "Updated {0} Package(s)"
+msgstr ""
+
+msgid "Shelly is an Arch Linux package manager"
+msgstr ""
+
+msgid "Seafoam Labs Website"
+msgstr ""
+
+msgid "Project Leads"
+msgstr ""
+
+msgid "Maintainers"
+msgstr ""
+
+msgid "Select"
+msgstr ""
+
+msgid "Select All"
+msgstr ""
+
+msgid "Confirm"
+msgstr ""
+
+msgid "No"
+msgstr ""
+
+msgid "Yes"
+msgstr ""
+
+msgid "Install Ignored Package?"
+msgstr ""
+
+msgid "Replace Package?"
+msgstr ""
+
+msgid "Package Conflict Detected"
+msgstr ""
+
+msgid "Corrupted Package Found"
+msgstr ""
+
+msgid "Import PGP Key?"
+msgstr ""
+
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select Optional Dependencies"
+msgstr ""
+
+msgid "System Question"
+msgstr ""
+
+msgid "Arch Linux News"
+msgstr ""
+
+msgid "No news available"
+msgstr ""
+
+msgid "package"
+msgstr ""
+
+msgid "packages"
+msgstr ""
+
+msgid "AUR installation failed"
+msgstr ""
+
+msgid ""
+"Shelly couldn't finish building or installing the selected AUR {0}. Export "
+"the logs and attach them to your report so the team can check whether the "
+"issue came from the PKGBUILD or from Shelly."
+msgstr ""
+
+msgid "Packages"
+msgstr "Balíky"
+
+msgid "Recent output"
+msgstr "Nedávny výstup"
+
+msgid "Close"
+msgstr "Zavrieť"
+
+msgid "Export Logs"
+msgstr "Exportovať záznamy"
+
+msgid "Cache directory does not exist"
+msgstr "Adresár vyrovnávacej pamäte neexistuje"
+
+msgid "Cleaning package cache..."
+msgstr ""
+
+msgid "Package cache cleaned successfully"
+msgstr ""
+
+msgid "Cache clean failed: {0}"
+msgstr ""
+
+msgid "Fingerprint Disable Instructions"
+msgstr ""
+
+msgid "Disable fingerprint authentication for sudo"
+msgstr ""
+
+msgid "1. Inspect"
+msgstr ""
+
+msgid "2. Disable for sudo"
+msgstr ""
+
+msgid "3. Re-enable later"
+msgstr ""
+
+msgid "Copy"
+msgstr "Skopírovať"
+
+msgid "Operation Complete"
+msgstr "Operácia dokončená"
+
+msgid "Cancel"
+msgstr "Zrušiť"
+
+msgid "Authentication Required"
+msgstr "Požadované overenie totožnosti"
+
+msgid "Password needed to execute: {0}."
+msgstr "Vyžaduje sa heslo na vykonanie akcie: {0}."
+
+msgid "Authenticate"
+msgstr "Overiť totožnosť"
+
+msgid "Incorrect password. Try again."
+msgstr "Nesprávne heslo. Skúste to znovu."
+
+msgid "What's New"
+msgstr "Čo je nové"
+
+msgid "Version History"
+msgstr "História verzií"
+
+msgid "Version {0}"
+msgstr "Verzia {0}"
+
+msgid "Package installation failed"
+msgstr "Inštalácia balíka zlyhala"
+
+msgid ""
+"Shelly couldn't finish building or installing the selected {0}. Export the "
+"logs and attach them to your report so the team can check whether the issue "
+"came from the PKGBUILD or from Shelly."
+msgstr ""
+
+msgid "Cache Cleaner"
+msgstr ""
+
+msgid ""
+"Cache directory: {0}\n"
+"Total cached files: {1} ({2})"
+msgstr ""
+"Adresár vyrovnávacej pamäte: {0}\n"
+"Celkovo súborov vo vyrovnávacej pamäti: {1} ({2})"
+
+msgid "Keep versions:"
+msgstr "Ponechať verzie:"
+
+msgid "Uninstalled only"
+msgstr "Iba odinštalované"
+
+msgid "Clean"
+msgstr "Vyčistiť"
+
+msgid "No candidates for removal."
+msgstr "Žiadny kandidáti na odstránenie."
+
+msgid "{0} files, {1} would be freed"
+msgstr "Súborov: {0}, bude uvoľnených: {1}"
+
+msgid "Name and URL are required"
+msgstr "Vyžaduje sa názov a URL"
+
+msgid "URL must end with .flatpakrepo"
+msgstr "Odkaz URL musí končiť s .flatpakrepo"
+
+msgid "Failed to add remote: {0}"
+msgstr ""
+
+msgid "Added Remote: {0}"
+msgstr ""
+
+msgid "Removed Remote"
+msgstr ""
+
+msgid "All Applications"
+msgstr ""
+
+msgid "Recommended"
+msgstr ""
+
+msgid "Most Wanted"
+msgstr ""
+
+msgid "Recently Added"
+msgstr ""
+
+msgid "Recently Updated"
+msgstr ""
+
+msgid "Audio & Video"
+msgstr ""
+
+msgid "Development"
+msgstr ""
+
+msgid "Education"
+msgstr ""
+
+msgid "Game"
+msgstr ""
+
+msgid "Graphics"
+msgstr ""
+
+msgid "Network"
+msgstr ""
+
+msgid "Office"
+msgstr ""
+
+msgid "Science"
+msgstr ""
+
+msgid "System"
+msgstr ""
+
+msgid "Utility"
+msgstr ""
+
+msgid "Version: {0}"
+msgstr ""
+
+msgid "License: {0}"
+msgstr ""
+
+msgid "Installed"
+msgstr ""
+
+msgid "Install"
+msgstr ""
+
+msgid "Size: {0}"
+msgstr ""
+
+msgid "No links available"
+msgstr ""
+
+msgid "Install Flatpak Ref"
+msgstr ""
+
+msgid "Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""
+msgstr ""
+
+msgid "Installing selected local flatpak file..."
+msgstr ""
+
+msgid "Installing Flatpak failed"
+msgstr ""
+
+msgid "Installed Flatpak"
+msgstr ""
+
+msgid "Install Package?"
+msgstr ""
+
+msgid "Installing {0}..."
+msgstr ""
+
+msgid "Installed Flatpak addon"
+msgstr ""
+
+msgid "Available Addons"
+msgstr ""
+
+msgid "No details available"
+msgstr ""
+
+msgid "Keep Config"
+msgstr ""
+
+msgid "Keep user data and configuration"
+msgstr ""
+
+msgid "Delete Config"
+msgstr ""
+
+msgid "Delete user data and configuration"
+msgstr ""
+
+msgid "Keep Config?"
+msgstr ""
+
+msgid "Removing {0}..."
+msgstr ""
+
+msgid "Failed to remove package {0}: {1}"
+msgstr ""
+
+msgid "Removed Package(s)"
+msgstr ""
+
+msgid "Permission Changes"
+msgstr ""
+
+msgid "Updating Flatpak packages..."
+msgstr ""
+
+msgid "Failed to update packages: {0}"
+msgstr ""
+
+msgid "Updated all Flatpak(s)"
+msgstr ""
+
+msgid "<span size='large'>System packages are up to date</span>"
+msgstr ""
+
+msgid "Current"
+msgstr ""
+
+msgid "New"
+msgstr ""
+
+msgid "Download"
+msgstr ""
+
+msgid "Size Diff"
+msgstr ""
+
+msgid "Repository"
+msgstr ""
+
+msgid "Size"
+msgstr ""
+
+msgid "Partial Update Warning"
+msgstr ""
+
+msgid ""
+"It is not advised you do partial system updates. Are you sure you want to "
+"continue?"
+msgstr ""
+
+msgid ""
+"It is unadvised to not update all packages at once. Are you sure you want to "
+"continue?"
+msgstr ""
+
+msgid "Updating..."
+msgstr ""
+
+msgid "Reboot Required"
+msgstr ""
+
+msgid ""
+"A full system reboot is required for updates to take effect.\n"
+"\n"
+"Would you like to reboot now?"
+msgstr ""
+
+msgid "Service Restart Failures"
+msgstr ""
+
+msgid ""
+"The following services failed to restart automatically:\n"
+"{0}"
+msgstr ""
+
+msgid "--- Packages to Upgrade ---"
+msgstr ""
+
+msgid "Export Shelly install log"
+msgstr ""
+
+msgid "Exported Shelly install log"
+msgstr ""
+
+msgid "Failed to export Shelly install log"
+msgstr ""
+
+msgid "Install Local Package"
+msgstr ""
+
+msgid "Local package files (\"*.gz\", \"*.zst\")"
+msgstr ""
+
+msgid "Installing local package..."
+msgstr ""
+
+msgid "Installed local package"
+msgstr ""
+
+msgid "Package Files ({0})"
+msgstr ""
+
+msgid "Remove corrupted packages"
+msgstr ""
+
+msgid "Select File"
+msgstr ""
+
+msgid "Recommend"
+msgstr ""
+
+msgid "AUR"
+msgstr ""
+
+msgid "Flatpak"
+msgstr ""
+
+msgid "AppImage"
+msgstr ""
+
+msgid "Shelly Search"
+msgstr ""
+
+msgid "Select Icon File"
+msgstr ""
+
+msgid "Image Files"
+msgstr ""
+
+msgid "Enable AUR?"
+msgstr ""
+
+msgid ""
+"The Arch User Repository (AUR) is a community-driven repository. Packages "
+"are user-produced and may contain risks. Do you want to enable it?"
+msgstr ""
+
+msgid "Missing Flatpak"
+msgstr ""
+
+msgid "Would you like to install this this now?"
+msgstr ""
+
+msgid "Installing flatpak..."
+msgstr ""
+
+msgid "Reboot required to complete installation."
+msgstr ""
+
+msgid "Synchronizing databases..."
+msgstr ""
+
+msgid "Database lock removed"
+msgstr ""
+
+msgid "Shelly folder ownership restored"
+msgstr "Vlastníctvo priečinka Shelly bolo obnovené"
+
+msgid "Failed to fix folder permissions"
+msgstr "Zlyhala oprava oprávnení priečinka"
+
+msgid "Error fixing folder permissions"
+msgstr "Chyba počas opravy oprávnení priečinka"
+
+msgid "Purified Corruption"
+msgstr ""
+
+msgid "No corrupted packages found"
+msgstr ""
+
+msgid "No pacfiles found"
+msgstr ""
+
+msgid "Pacfiles Found"
+msgstr ""
+
+msgid "Copy content"
+msgstr ""
+
+msgid "Copied to clipboard"
+msgstr "Skopírované do schránky"
+
+msgid "Overlay not available"
+msgstr ""
+
+msgid "No changelog entries found"
+msgstr "Nenašli sa žiadne záznamy zoznamu zmien"
+
+msgid "Unknown"
+msgstr "Neznáme"
+
+msgid "No details for this release"
+msgstr "Pre toto vydanie nie sú dostupné žiadne podrobnosti"
+
+msgid "Unknown date"
+msgstr "Neznámy dátum"
+
+msgid "Failed to load changelog"
+msgstr "Zlyhalo načítanie zoznamu zmien"
+
+msgid "None"
+msgstr ""
+
+msgid "StaticUrl"
+msgstr ""
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr ""
+
+msgid "Select AppImage to Install"
+msgstr ""
+
+msgid "AppImage Files"
+msgstr "Súbory balíkov AppImage"
+
+msgid "Installing AppImage..."
+msgstr "Inštaluje sa balík AppImage..."
+
+msgid "{0} installed successfully!"
+msgstr ""
+
+msgid "Failed to install {0}: {1}"
+msgstr ""
+
+msgid "No AppImages need to be upgraded"
+msgstr ""
+
+msgid "Running updates..."
+msgstr ""
+
+msgid "Updating AppImages..."
+msgstr ""
+
+msgid "All AppImages updated successfully!"
+msgstr ""
+
+msgid "Failed to update AppImages: {0}"
+msgstr ""
+
+msgid "Configuration saved for {0}"
+msgstr ""
+
+msgid "Failed to save configuration: {0}"
+msgstr ""
+
+msgid "Syncing {0}..."
+msgstr ""
+
+msgid "Synced {0}"
+msgstr ""
+
+msgid "Failed to sync: {0}"
+msgstr ""
+
+msgid "Syncing all AppImages ..."
+msgstr ""
+
+msgid "Synced"
+msgstr ""
+
+msgid "{0} removed successfully!"
+msgstr ""
+
+msgid "Failed to remove {0}: {1}"
+msgstr ""
+
+msgid ""
+"No recommendations found. Please check your internet connection and try "
+"again."
+msgstr ""
+
+msgid "Already installed"
+msgstr ""
+
+msgid "Install "
+msgstr ""
+
+msgid "Package is already installed"
+msgstr ""
+
+msgid "Installing package..."
+msgstr ""
+
+msgid "Package installed successfully"
+msgstr ""
+
+msgid "Reboot required after flatpak installation."
+msgstr ""
+
+msgid "Failed to install flatpak"
+msgstr ""
+
+msgid "Searching..."
+msgstr ""
+
+msgid "Search error: {0}"
+msgstr ""
+
+msgid "Failed to install packages: {0}"
+msgstr ""
+
+msgid "Install for {0} package(s) was unsuccessful."
+msgstr ""
+
+msgid "Failed to remove packages: {0}"
+msgstr ""
+
+msgid "color-scheme"
+msgstr ""
+
+msgid "Updates"
+msgstr ""
+
+msgid "Manage"
+msgstr ""
+
+msgid "Remove"
+msgstr ""
+
+msgid "Search packages..."
+msgstr ""
+
+msgid "Use chroot"
+msgstr ""
+
+msgid "Build packages in a clean chroot environment"
+msgstr ""
+
+msgid "Run checks"
+msgstr "Spustiť kontroly"
+
+msgid "Run the --check function during package build (installs checkdepends)"
+msgstr ""
+
+msgid "Install Aur Package(s)"
+msgstr ""
+
+msgid "Name"
+msgstr "Názov"
+
+msgid "refresh"
+msgstr ""
+
+msgid "Clean Uninstall"
+msgstr "Čisté odinštalovanie"
+
+msgid "Show Hidden"
+msgstr "Zobraziť skryté"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr ""
+
+msgid "Remove Aur Package(s)"
+msgstr ""
+
+msgid ""
+"Run the --check function during package build (installs checkdepends)\n"
+"                        "
+msgstr ""
+
+msgid "Update Aur Package(s)"
+msgstr ""
+
+msgid "Please wait while we update your system."
+msgstr ""
+
+msgid "Reload"
+msgstr "Znovu načítať"
+
+msgid "Manage Remote Refs"
+msgstr ""
+
+msgid "Install local flatpak"
+msgstr ""
+
+msgid "system"
+msgstr "Systém"
+
+msgid "user"
+msgstr "Používateľ"
+
+msgid "Loading Flatpak Data..."
+msgstr "Načítavajú sa údaje repozitára Flatpak..."
+
+msgid "Back"
+msgstr "Späť"
+
+msgid "Addons"
+msgstr "Doplnky"
+
+msgid "Group Filter"
+msgstr "Filter skupiny"
+
+msgid "App Name"
+msgstr "Názov aplikácie"
+
+msgid "Author"
+msgstr "Autor"
+
+msgid "Version: -"
+msgstr "Verzia: -"
+
+msgid "Size: -"
+msgstr "Veľkosť: -"
+
+msgid "License: -"
+msgstr "Licencia: -"
+
+msgid "Summary"
+msgstr "Súhrn"
+
+msgid "No description available."
+msgstr "Nie je dostupný žiadny popis."
+
+msgid "Delete Selected Remote"
+msgstr "Odstrániť vybraný vzdialený"
+
+msgid "Add Remote"
+msgstr "Pridať vzdialený"
+
+msgid "Add New Flatpak Remote"
+msgstr "Pridať nový vzdialený balík Flatpak"
+
+msgid "Add"
+msgstr "Pridať"
+
+msgid "Remote Name"
+msgstr "Vzdialený názov"
+
+msgid "e.g., flathub"
+msgstr "napr. flathub"
+
+msgid "Remote URL"
+msgstr "Vzdialený odkaz URL"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "napr. https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr ""
+
+msgid "Remove Selected"
+msgstr "Odstrániť vybrané"
+
+msgid "Update All"
+msgstr "Aktualizovať všetko"
+
+msgid "Package Group Filter"
+msgstr "Filter skupiny balíkov"
+
+msgid "Install Local Packages"
+msgstr "Nainštaluje miestne balíky"
+
+msgid "Install Local"
+msgstr "Inštalovať miestne"
+
+msgid "Perform Upgrade"
+msgstr "Vykonať aktualizáciu"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "Vykonať aktualizáciu celého systému s inštaláciou (-u)"
+
+msgid "Install Selected"
+msgstr "Inštalovať vybrané"
+
+msgid "Sync"
+msgstr "Zosynchronizuje"
+
+msgid "Update Selected"
+msgstr "Aktualizovať vybrané"
+
+msgid "Package Name"
+msgstr "Názov balíka"
+
+msgid "Size Difference"
+msgstr "Rozdiel vo veľkosti"
+
+msgid "Old Version"
+msgstr "Stará verzia"
+
+msgid "Remove Local Packages"
+msgstr "Odstráni miestne balíky"
+
+msgid "Remove Local"
+msgstr "Odstrániť miestne"
+
+msgid "Remove Configs"
+msgstr "Odstrániť konfigurácie"
+
+msgid "General"
+msgstr "Všeobecné"
+
+msgid "Enable AUR"
+msgstr "Povoliť repozitár AUR"
+
+msgid "Enable Flatpak"
+msgstr "Povoliť repozitár Flatpak"
+
+msgid "Enable Recommended Page"
+msgstr "Povoliť stránku s odporúčaniami"
+
+msgid "Enable AppImage"
+msgstr "Povoliť AppImage"
+
+msgid "Enable Tray Icon"
+msgstr "Povoliť ikonu v lište"
+
+msgid "Use weekly schedule"
+msgstr "Použiť týždenný plán"
+
+msgid "Tray Check Interval (Hours)"
+msgstr "Interval kontroly v režime lišty (v hodinách)"
+
+msgid "Weekly Schedule"
+msgstr "Týždenný plán"
+
+msgid "Sun"
+msgstr "Ned"
+
+msgid "Mon"
+msgstr "Pon"
+
+msgid "Tue"
+msgstr "Ut"
+
+msgid "Wed"
+msgstr "Str"
+
+msgid "Thu"
+msgstr "Štv"
+
+msgid "Fri"
+msgstr "Pia"
+
+msgid "Sat"
+msgstr "Sob"
+
+msgid "Update Time (24h):"
+msgstr "Čas aktualizácie (24h):"
+
+msgid "Look & Feel"
+msgstr "Vzhľad a pocit"
+
+msgid "Icons Enabled"
+msgstr "Ikony povolené"
+
+msgid "Use Symbolic Tray Icon"
+msgstr "Použiť symbolickú ikonu v lište"
+
+msgid ""
+"Both tray icons must be set for use, if not it will default to standard "
+"shelly icons. Changing tray icons requires a restart of shelly-notifications."
+msgstr ""
+
+msgid "Tray Icon"
+msgstr "Ikona v lište"
+
+msgid "Clear"
+msgstr "Vymazať"
+
+msgid "Tray Updates Icon"
+msgstr "Ikona aktualizácií v lište"
+
+msgid "Default page"
+msgstr "Predvolená stránka"
+
+msgid "Use Sidebar Navigation"
+msgstr "Použiť navigáciu pomocou postrannej lišty"
+
+msgid "Advanced"
+msgstr "Pokročilé"
+
+msgid "Remove Cache on Uninstall"
+msgstr "Odstrániť vyrovnávaciu pamäť po odinštalovaní"
+
+msgid "No Confirm"
+msgstr "Bez potvrdenia"
+
+msgid "Enable Shelly Search"
+msgstr "Povoliť vyhľadávanie aplikácie Shelly"
+
+msgid "Enable Webview Visualization (experimental)"
+msgstr ""
+
+msgid "Parallel Downloads"
+msgstr "Súčasné preberania"
+
+msgid "Force Database Update"
+msgstr "Vynútiť aktualizáciu databázy"
+
+msgid "Remove db.lock"
+msgstr "Odstrániť zámok db.lock"
+
+msgid "View Pacfiles"
+msgstr ""
+
+msgid "Fix Permissions"
+msgstr "Opraviť oprávnenia"
+
+msgid ""
+"Restores correct user ownership of Shelly configuration and cache folders if "
+"they were accidentally created by root."
+msgstr ""
+
+msgid "Purify Packages"
+msgstr "Vyčistiť balíky"
+
+msgid "Save"
+msgstr "Uložiť"
+
+msgid "View Changelog"
+msgstr "Zobraziť zoznam zmien"
+
+msgid "Community fluxer"
+msgstr ""
+
+msgid "Sponsor"
+msgstr "Sponzor"
+
+msgid "Search..."
+msgstr ""
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr ""
+
+msgid "Sync All"
+msgstr ""
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr ""
+
+msgid "Upgrade All"
+msgstr ""
+
+msgid "Install a new AppImage from a file"
+msgstr ""
+
+msgid "Install AppImage"
+msgstr ""
+
+msgid "Description goes here..."
+msgstr ""
+
+msgid "Size on Disk"
+msgstr "Veľkosť na disku"
+
+msgid "Update Strategy"
+msgstr "Stratégia aktualizácie"
+
+msgid "Update URL / Repository Info"
+msgstr ""
+
+msgid "e.g. repo or https://..."
+msgstr "napr. repozitár alebo https://..."
+
+msgid "Installation Path"
+msgstr "Cesta inštalácie"
+
+msgid "Install Package(s)"
+msgstr "Inštalovať balík(y)"
+
+msgid "Update Package(s)"
+msgstr "Aktualizovať balík(y)"
+
+msgid "Manage Package(s)"
+msgstr "Spravovať balík(y)"
+
+msgid "Install AUR"
+msgstr ""
+
+msgid "Update AUR"
+msgstr ""
+
+msgid "Remove AUR"
+msgstr ""
+
+msgid "Install Flatpak"
+msgstr ""
+
+msgid "Update Flatpak"
+msgstr ""
+
+msgid "Remove Flatpak"
+msgstr ""
+
+msgid "Manage AppImage(s)"
+msgstr ""
+
+msgid "Arch News"
+msgstr "Novinky distribúcie Arch"
+
+msgid "Settings"
+msgstr "Nastavenia"
+
+msgid "About"
+msgstr "O aplikácii"
+
+msgid "Toggle Sidebar"
+msgstr "Prepne postrannú lištu"
+
+msgid "Available Updates"
+msgstr "Dostupné aktualizácie"
+
+msgid "Welcome to Shelly"
+msgstr "Vitajte v aplikácii Shelly"
+
+msgid "Let's get you set up with some basic configurations."
+msgstr "Začnime s nastavením niektorých základných nastavení."
+
+msgid "Enable AUR Support"
+msgstr "Povoliť podporu repozitára AUR"
+
+msgid ""
+"Access the Arch User Repository for a vast collection of community-"
+"maintained packages. AUR packages can contain malicious software, so please "
+"use caution when using the AUR."
+msgstr ""
+
+msgid "Enable Flatpak Support"
+msgstr "Povoliť podporu repozitára Flatpak"
+
+msgid "Enable support for Flatpak applications from Flathub and other remotes."
+msgstr ""
+
+msgid "Enable AppImage Support"
+msgstr "Povoliť podporu balíkov AppImage"
+
+msgid "Manage and configure updates for AppImage applications easily."
+msgstr ""
+
+msgid ""
+"Show a status icon in your system tray for quick access and notifications."
+msgstr ""
+
+msgid "Vertical Navigation"
+msgstr "Zvislá navigácia"
+
+msgid "Change navigation style to vertical or horizontal style."
+msgstr ""
+
+msgid "Finish Setup"
+msgstr "Dokončiť nastavenie"
+
+msgid ""
+"Any required installations will run after the Finish button has been "
+"accepted."
+msgstr "Všetky potrebné inštalácie sa vykonajú po stlačení tlačidla Dokončiť."
+
+msgid "These options and others can be configured later in settings."
+msgstr "Tieto a ostatné voľby môžu byť nastavené neskôr v nastaveniach."
+
+msgid "Remove Package(s)"
+msgstr ""
+
+msgid "Description"
+msgstr "Popis"
+
+msgid "Last Updated"
+msgstr "Naposledy aktualizované"
+
+msgid "Remove Optional Deps"
+msgstr "Odstrániť voliteľné závislosti"
+
+msgid ""
+"Also remove orphaned optional dependencies installed with these packages."
+msgstr ""
+
+msgid "Add Tray To Auto Start"
+msgstr ""
+
+msgid "Systemd startup service added."
+msgstr ""
+
+msgid "Systemd startup service removed."
+msgstr ""
+
+msgid "Tray Icon Autostart"
+msgstr ""
+
+msgid "Allow the tray service to autostart."
+msgstr ""
