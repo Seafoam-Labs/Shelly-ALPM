@@ -259,6 +259,7 @@ public sealed class AurPackageManager(string? configPath = null)
 
         if (packagesToUpdate.Count > 0)
         {
+            Console.WriteLine("Updating the following packages:");
             await InstallPackages(packagesToUpdate);
         }
     }

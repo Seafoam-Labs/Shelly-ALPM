@@ -302,9 +302,11 @@ public class UnprivilegedOperationService(
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, $"{service}.service"), serviceContent);
 
-        _ = ExecuteUnprivilegedCommandAsync("Systemctl", "systemctl", "--user daemon-reload");
-        _ = ExecuteUnprivilegedCommandAsync("Systemctl", "systemctl", $"--user stop {service}");
-        
+        _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
+            "--user daemon-reload");
+        _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
+            $"--user stop {service}");
+
         return Task.FromResult(new OperationResult());
     }
 
@@ -312,9 +314,11 @@ public class UnprivilegedOperationService(
     {
         var dir = XdgPaths.ConfigHome() + "/systemd/user";
         File.Delete($"{dir}/{service}.service");
-        
-        _ = ExecuteUnprivilegedCommandAsync("Systemctl", "systemctl", "--user daemon-reload");
-        _ = ExecuteUnprivilegedCommandAsync("Systemctl", "systemctl", $"--user stop {service}");
+
+        _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
+            "--user daemon-reload");
+        _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
+            $"--user stop {service}");
 
         return Task.FromResult(new OperationResult());
     }
@@ -501,6 +505,64 @@ public class UnprivilegedOperationService(
                 Success = success,
                 Output = outputBuilder.ToString(),
                 Error = errorBuilder.ToString(),
+                ExitCode = process.ExitCode
+            };
+        }
+        catch (Exception ex)
+        {
+            return new UnprivilegedOperationResult
+            {
+                Success = false,
+                Output = string.Empty,
+                Error = ex.Message,
+                ExitCode = -1
+            };
+        }
+    }
+
+    private async Task<UnprivilegedOperationResult> ExecuteNonShellyUnprivilegedCommandAsync(
+        string operationDescription, string command,
+        CancellationToken ct, params string[] args)
+    {
+        var arguments = string.Join(" ", args);
+
+        Console.WriteLine($"Executing unprivileged command: {command}");
+
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = command,
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                RedirectStandardInput = true,
+                CreateNoWindow = true
+            }
+        };
+
+
+        try
+        {
+            process.Start();
+            try
+            {
+                await process.WaitForExitAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                if (!process.HasExited)
+                    process.Kill(true);
+                throw;
+            }
+            var success = process.ExitCode == 0;
+
+            return new UnprivilegedOperationResult
+            {
+                Success = success,
+                Output = "",
+                Error = "",
                 ExitCode = process.ExitCode
             };
         }

@@ -20,8 +20,15 @@ public static class ConfigManager
         }
 
         var json = File.ReadAllText(configPath);
-        return JsonSerializer.Deserialize(json, ShellyCLIJsonContext.Default.ShellyConfig) ??
-               new ShellyConfig();
+        var result = JsonSerializer.Deserialize(json, ShellyCLIJsonContext.Default.ShellyConfig) ??
+                     new ShellyConfig();
+        //TODO: REMOVE THIS OVERRIDE WHEN SPLITPANE IS FIXED
+        if (result.OutputMode != "singlepane")
+        {
+            result.OutputMode = "singlepane";
+        }
+
+        return result;
     }
 
     public static ShellyConfig CreateConfig()
@@ -154,6 +161,7 @@ public static class ConfigManager
                     {
                         return false;
                     }
+
                     convertedValue = parsed.ToString();
                 }
                 else if (property.Name == nameof(ShellyConfig.FileSizeDisplay))
@@ -162,6 +170,7 @@ public static class ConfigManager
                     {
                         return false;
                     }
+
                     convertedValue = parsed.ToString();
                 }
                 else if (property.Name == nameof(ShellyConfig.DefaultExecution))
@@ -403,17 +412,17 @@ public static class ConfigManager
             {
                 config.DefaultPageDropDown = (ShellyTabs)defaultPage.GetInt32();
             }
-            
+
             if (root.TryGetProperty("TrayUpdatesIconPath", out var trayUpdatesIconPath))
             {
-                config.TrayUpdatesIconPath =  trayUpdatesIconPath.GetString();
+                config.TrayUpdatesIconPath = trayUpdatesIconPath.GetString();
             }
-            
+
             if (root.TryGetProperty("TrayIconPath", out var trayIconPath))
             {
-                config.TrayIconPath =  trayIconPath.GetString();
+                config.TrayIconPath = trayIconPath.GetString();
             }
-            
+
             SaveConfig(config);
 
             // Rename old config to indicate migration

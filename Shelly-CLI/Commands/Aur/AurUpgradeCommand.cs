@@ -17,6 +17,7 @@ public class AurUpgradeCommand : AsyncCommand<AurUpgradeSettings>
         {
             return await HandleUiModeUpgrade(settings);
         }
+
         AurPackageManager? manager = null;
         try
         {
@@ -35,7 +36,8 @@ public class AurUpgradeCommand : AsyncCommand<AurUpgradeSettings>
             AnsiConsole.MarkupLine($"[yellow]{updates.Count} AUR packages need updates:[/]");
             foreach (var pkg in updates)
             {
-                AnsiConsole.MarkupLine($"  {pkg.Name.EscapeMarkup()}: {pkg.Version.EscapeMarkup()} -> {pkg.NewVersion.EscapeMarkup()}");
+                AnsiConsole.MarkupLine(
+                    $"  {pkg.Name.EscapeMarkup()}: {pkg.Version.EscapeMarkup()} -> {pkg.NewVersion.EscapeMarkup()}");
             }
 
             if (!settings.NoConfirm)
@@ -49,8 +51,8 @@ public class AurUpgradeCommand : AsyncCommand<AurUpgradeSettings>
 
             var cfg = ConfigManager.ReadConfig();
             var useSinglePane = settings.SinglePane
-                || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
-                || Console.IsOutputRedirected;
+                                || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
+                                || Console.IsOutputRedirected;
 
             var packageNames = updates.Select(u => u.Name).ToList();
             var result = useSinglePane
@@ -61,9 +63,8 @@ public class AurUpgradeCommand : AsyncCommand<AurUpgradeSettings>
                 AnsiConsole.MarkupLine("[red]Upgrade failed. See errors above.[/]");
                 return 1;
             }
-            AnsiConsole.MarkupLine("[green]Upgrade complete.[/]");
 
-          
+            AnsiConsole.MarkupLine("[green]Upgrade complete.[/]");
         }
         catch (Exception ex)
         {
@@ -74,6 +75,7 @@ public class AurUpgradeCommand : AsyncCommand<AurUpgradeSettings>
         {
             manager?.Dispose();
         }
+
         return 0;
     }
 
@@ -136,7 +138,7 @@ public class AurUpgradeCommand : AsyncCommand<AurUpgradeSettings>
             manager.PackageProgress += (sender, args) =>
             {
                 Console.Error.WriteLine($"[{args.CurrentIndex}/{args.TotalCount}] {args.PackageName}: {args.Status}" +
-                    (args.Message != null ? $" - {args.Message}" : ""));
+                                        (args.Message != null ? $" - {args.Message}" : ""));
             };
 
             manager.BuildOutput += (sender, e) =>
@@ -163,11 +165,7 @@ public class AurUpgradeCommand : AsyncCommand<AurUpgradeSettings>
                     return;
                 }
 
-                Console.Error.WriteLine($"PKGBUILD changed for {args.PackageName}.");
-                Console.Error.WriteLine("--- Old PKGBUILD ---");
-                Console.Error.WriteLine(args.OldPkgbuild);
-                Console.Error.WriteLine("--- New PKGBUILD ---");
-                Console.Error.WriteLine(args.NewPkgbuild);
+                PackageBuilderDiffGenerator.PrintUnifiedDiff(args.OldPkgbuild, args.NewPkgbuild, Program.IsUiMode);
                 args.ProceedWithUpdate = true;
             };
 
@@ -175,59 +173,23 @@ public class AurUpgradeCommand : AsyncCommand<AurUpgradeSettings>
             await manager.UpdatePackages(packageNames);
             if (hadError)
             {
-                Console.Error.WriteLine("Upgrade failed.");
+                await Console.Error.WriteLineAsync("Upgrade failed.");
                 return 1;
             }
-            Console.Error.WriteLine("Upgrade complete.");
 
-         
+            await Console.Error.WriteLineAsync("Upgrade complete.");
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Upgrade failed: {ex.Message}");
+            await  Console.Error.WriteLineAsync($"Upgrade failed: {ex.Message}");
             return 1;
         }
         finally
         {
             manager?.Dispose();
         }
+
         return 0;
     }
     
-    private static void PrintUnifiedDiff(string oldText, string newText)
-    {
-        var oldLines = oldText.Split('\n');
-        var newLines = newText.Split('\n');
-
-        // Build LCS table
-        var lcs = new int[oldLines.Length + 1, newLines.Length + 1];
-        for (int i = oldLines.Length - 1; i >= 0; i--)
-        for (int j = newLines.Length - 1; j >= 0; j--)
-            lcs[i, j] = oldLines[i].TrimEnd('\r') == newLines[j].TrimEnd('\r')
-                ? lcs[i + 1, j + 1] + 1
-                : Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
-
-        // Walk the table to produce diff output
-        int oi = 0, ni = 0;
-        while (oi < oldLines.Length || ni < newLines.Length)
-        {
-            if (oi < oldLines.Length && ni < newLines.Length &&
-                oldLines[oi].TrimEnd('\r') == newLines[ni].TrimEnd('\r'))
-            {
-                AnsiConsole.MarkupLine($"[white]  {oldLines[oi].TrimEnd('\r').EscapeMarkup()}[/]");
-                oi++; ni++;
-            }
-            else if (ni < newLines.Length &&
-                     (oi >= oldLines.Length || lcs[oi, ni + 1] >= lcs[oi + 1, ni]))
-            {
-                AnsiConsole.MarkupLine($"[green]+ {newLines[ni].TrimEnd('\r').EscapeMarkup()}[/]");
-                ni++;
-            }
-            else
-            {
-                AnsiConsole.MarkupLine($"[red]- {oldLines[oi].TrimEnd('\r').EscapeMarkup()}[/]");
-                oi++;
-            }
-        }
-    }
 }
