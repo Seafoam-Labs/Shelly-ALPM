@@ -40,108 +40,131 @@
                                                         <property name="spacing">12</property>
                                                         <property name="hexpand">true</property>
                                                         <property name="vexpand">true</property>
+                                                        <property name="halign">center</property>
+                                                        <property name="width-request">450</property>
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Enable AUR</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
-                                                                    <object class="GtkSwitch" id="aur_switch"/>
+                                                                    <object class="GtkSwitch" id="aur_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
                                                                 </child>
                                                             </object>
                                                         </child>
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Enable Flatpak</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
-                                                                    <object class="GtkSwitch" id="flatpak_switch"/>
+                                                                    <object class="GtkSwitch" id="flatpak_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
                                                                 </child>
                                                             </object>
                                                         </child> 
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Enable Recommended Page</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
-                                                                    <object class="GtkSwitch" id="recommended_switch"/>
+                                                                    <object class="GtkSwitch" id="recommended_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
                                                                 </child>
                                                             </object>
                                                         </child>
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Enable AppImage</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
-                                                                    <object class="GtkSwitch" id="appimage_switch"/>
+                                                                    <object class="GtkSwitch" id="appimage_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
                                                                 </child>
                                                             </object>
                                                         </child>
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Enable Tray Icon</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
-                                                                    <object class="GtkSwitch" id="tray_switch"/>
+                                                                    <object class="GtkSwitch" id="tray_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
                                                                 </child>
                                                             </object>
                                                         </child>
                                                         <child>
                                                         <object class="GtkBox">
                                                             <property name="orientation">horizontal</property>
+                                                            <property name="spacing">12</property>
                                                             <child>
                                                                 <object class="GtkLabel">
                                                                     <property name="label" translatable="yes">Add Tray To Auto Start</property>
-                                                                    <property name="hexpand">true</property>
                                                                     <property name="halign">start</property>
+                                                                    <property name="hexpand">true</property>
                                                                 </object>
                                                             </child>
                                                             <child>
-                                                                <object class="GtkSwitch" id="tray_auto_switch"/>
+                                                                <object class="GtkSwitch" id="tray_auto_switch">
+                                                                    <property name="halign">end</property>
+                                                                </object>
                                                             </child>
                                                         </object>
                                                         </child>
                                                         <child>
                                                             <object class="GtkBox" id="weekly_schedule_switch_box">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Use weekly schedule</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
-                                                                    <object class="GtkSwitch" id="daily_schedule"/>
+                                                                    <object class="GtkSwitch" id="daily_schedule">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
                                                                 </child>
                                                             </object>
                                                         </child>
@@ -152,13 +175,14 @@
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Tray Check Interval (Hours)</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
                                                                     <object class="GtkSpinButton"
                                                                             id="tray_interval_spin">
+                                                                        <property name="halign">end</property>
                                                                         <property name="adjustment">
                                                                             <object class="GtkAdjustment">
                                                                                 <property name="lower">1</property>
@@ -186,6 +210,7 @@
                                                                     <object class="GtkBox">
                                                                         <property name="orientation">horizontal</property>
                                                                         <property name="spacing">8</property>
+                                                                        <property name="halign">start</property>
                                                                         <child>
                                                                             <object class="GtkCheckButton"
                                                                                     id="day_sun_check">
@@ -239,11 +264,13 @@
                                                                             <object class="GtkLabel">
                                                                                 <property name="label" translatable="yes">Update Time (24h):</property>
                                                                                 <property name="halign">start</property>
+                                                                                <property name="hexpand">true</property>
                                                                             </object>
                                                                         </child>
                                                                         <child>
                                                                             <object class="GtkSpinButton"
                                                                                     id="update_hour_spin">
+                                                                                <property name="halign">end</property>
                                                                                 <property name="adjustment">
                                                                                     <object class="GtkAdjustment">
                                                                                         <property name="lower">0</property>
@@ -302,45 +329,59 @@
                                                         <property name="spacing">12</property>
                                                         <property name="hexpand">true</property>
                                                         <property name="vexpand">true</property>
+                                                        <property name="halign">center</property>
+                                                        <property name="width-request">450</property>
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Icons Enabled</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
-                                                                    <object class="GtkSwitch" id="shelly_icons_switch"/>
+                                                                    <object class="GtkSwitch" id="shelly_icons_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">Use Sidebar Navigation</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="use_old_menu_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
                                                                 </child>
                                                             </object>
                                                         </child>
                                                         <child>
                                                             <object class="GtkBox" id="symbolic_tray_box">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Use Symbolic Tray Icon</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
                                                                     <object class="GtkSwitch"
-                                                                            id="symbolic_tray_switch"/>
-                                                                </child>
-                                                            </object>
-                                                        </child>
-                                                        <child>
-                                                            <object class="GtkBox">
-                                                                <property name="orientation">horizontal</property>
-                                                                <child>
-                                                                    <object class="GtkLabel">
-                                                                        <property name="label" translatable="yes">Both tray icons must be set for use, if not it will default to standard shelly icons. Changing tray icons requires a restart of shelly-notifications.</property>
-                                                                        <property name="hexpand">true</property>
-                                                                        <property name="halign">start</property>
+                                                                            id="symbolic_tray_switch">
+                                                                        <property name="halign">end</property>
                                                                     </object>
                                                                 </child>
                                                             </object>
@@ -348,23 +389,25 @@
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
-                                                                
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Tray Icon</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
                                                                     <object class="GtkButton" id="tray_icon_button">
                                                                         <property name="label" translatable="yes">Select File</property>
+                                                                        <property name="halign">end</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
                                                                     <object class="GtkButton" id="tray_icon_clear_button">
                                                                         <property name="label" translatable="yes">Clear</property>
                                                                         <property name="margin-start">5</property>    
+                                                                        <property name="halign">end</property>
                                                                     </object>
                                                                 </child>
                                                             </object>
@@ -372,22 +415,25 @@
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Tray Updates Icon</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
                                                                     <object class="GtkButton" id="tray_updates_icon_button">
                                                                         <property name="label" translatable="yes">Select File</property>
+                                                                        <property name="halign">end</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
                                                                     <object class="GtkButton" id="tray_updates_icon_clear_button">
                                                                         <property name="label" translatable="yes">Clear</property>
                                                                         <property name="margin-start">5</property>
+                                                                        <property name="halign">end</property>
                                                                     </object>
                                                                 </child>
                                                             </object>
@@ -395,31 +441,19 @@
                                                         <child>
                                                             <object class="GtkBox" id="default_page_box">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Default page</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
                                                                     <object class="GtkDropDown"
-                                                                            id="default_page_drop"/>
-                                                                </child>
-                                                            </object>
-                                                        </child>
-                                                        <child>
-                                                            <object class="GtkBox">
-                                                                <property name="orientation">horizontal</property>
-                                                                <child>
-                                                                    <object class="GtkLabel">
-                                                                        <property name="label" translatable="yes">Use Sidebar Navigation</property>
-                                                                        <property name="hexpand">true</property>
-                                                                        <property name="halign">start</property>
+                                                                            id="default_page_drop">
+                                                                        <property name="halign">end</property>
                                                                     </object>
-                                                                </child>
-                                                                <child>
-                                                                    <object class="GtkSwitch" id="use_old_menu_switch"/>
                                                                 </child>
                                                             </object>
                                                         </child>
@@ -447,9 +481,12 @@
                                                         <property name="spacing">12</property>
                                                         <property name="hexpand">true</property>
                                                         <property name="vexpand">true</property>
+                                                        <property name="halign">center</property>
+                                                        <property name="width-request">450</property>
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Remove Cache on Uninstall</property>
@@ -468,43 +505,51 @@
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">No Confirm</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
-                                                                    <object class="GtkSwitch" id="no_confirm_switch"/>
+                                                                    <object class="GtkSwitch" id="no_confirm_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
                                                                 </child>
                                                             </object>
                                                         </child>
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Enable Shelly Search</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
                                                                     <object class="GtkSwitch"
-                                                                            id="shelly_search_switch"/>
+                                                                            id="shelly_search_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
                                                                 </child>
                                                             </object>
                                                         </child>
                                                         <child>
                                                             <object class="GtkBox">
                                                                 <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Enable Webview Visualization (experimental)</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
-                                                                    <object class="GtkSwitch" id="webview_switch"/>
+                                                                    <object class="GtkSwitch" id="webview_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
                                                                 </child>
                                                             </object>
                                                         </child>
@@ -515,13 +560,14 @@
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Parallel Downloads</property>
-                                                                        <property name="hexpand">true</property>
                                                                         <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
                                                                     <object class="GtkSpinButton"
                                                                             id="parallel_downloads_spin">
+                                                                        <property name="halign">end</property>
                                                                         <property name="adjustment">
                                                                             <object class="GtkAdjustment">
                                                                                 <property name="lower">1</property>

@@ -12,6 +12,7 @@
         <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
         <IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
         <OptimizationPreference>Speed</OptimizationPreference>
+        <AssemblyVersion>2.3.0.2</AssemblyVersion>
     </PropertyGroup>
 
 </Project>

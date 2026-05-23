@@ -99,4 +99,39 @@ public static class PackageListBuilder
 
         return pkgPtrs;
     }
+
+    public static bool IsAvailableInSyncDbs(nint handle, string packageName)
+    {
+        var currentPtr = GetSyncDbs(handle);
+        while (currentPtr != IntPtr.Zero)
+        {
+            var node = Marshal.PtrToStructure<AlpmList>(currentPtr);
+            if (node.Data != IntPtr.Zero)
+            {
+                if (DbGetPkg(node.Data, packageName) != IntPtr.Zero) return true;
+
+                var groupNode = DbGetGroupCache(node.Data);
+                while (groupNode != IntPtr.Zero)
+                {
+                    var groupListNode = Marshal.PtrToStructure<AlpmList>(groupNode);
+                    if (groupListNode.Data != IntPtr.Zero)
+                    {
+                        var group = Marshal.PtrToStructure<AlpmPackageGroup>(groupListNode.Data);
+                        var groupName = Marshal.PtrToStringUTF8(group.Name);
+                        if (groupName != null &&
+                            groupName.Equals(packageName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
+                    }
+                    groupNode = groupListNode.Next;
+                }
+
+                if (PkgFindSatisfier(DbGetPkgCache(node.Data), packageName) != IntPtr.Zero)
+                    return true;
+            }
+            currentPtr = node.Next;
+        }
+        return false;
+    }
 }

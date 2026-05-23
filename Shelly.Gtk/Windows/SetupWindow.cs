@@ -9,6 +9,7 @@ namespace Shelly.Gtk.Windows;
 public class SetupWindow(
     IConfigService configService,
     IPrivilegedOperationService privilegedOperationService,
+    IUnprivilegedOperationService unPrivilegedOperationService,
     ILockoutService lockoutService,
     IGenericQuestionService genericQuestionService) : IShellyWindow
 {
@@ -24,9 +25,11 @@ public class SetupWindow(
         var flatpakCheck = (CheckButton)builder.GetObject("flatpak_check")!;
         var appimageCheck = (CheckButton)builder.GetObject("appimage_check")!;
         var trayCheck = (CheckButton)builder.GetObject("tray_check")!;
+        var trayAutoCheck = (CheckButton)builder.GetObject("tray_autostart_check")!;
         var finishButton = (Button)builder.GetObject("finish_button")!;
         var introImage = (Image)builder.GetObject("intro_image")!;
         var navCheck = (CheckButton)builder.GetObject("nav_check")!;
+        var autoStartBox = (ListBoxRow)builder.GetObject("tray_autostart_box")!;
 
         try
         {
@@ -42,14 +45,17 @@ public class SetupWindow(
         {
             Console.WriteLine(T($"Error loading intro image: {ex.Message}"));
         }
-        
+
         var currentConfig = configService.LoadConfig();
         aurCheck.Active = currentConfig.AurEnabled;
         flatpakCheck.Active = currentConfig.FlatPackEnabled;
         appimageCheck.Active = currentConfig.AppImageEnabled;
         trayCheck.Active = currentConfig.TrayEnabled;
         navCheck.Active = !currentConfig.UseOldMenu;
-        
+        trayAutoCheck.Active = true;
+
+        trayCheck.OnToggled += (_, _) => { autoStartBox.SetVisible(trayCheck.Active); };
+
         finishButton.OnClicked += async (_, _) =>
         {
             var config = configService.LoadConfig();
@@ -60,9 +66,38 @@ public class SetupWindow(
             config.UseOldMenu = !navCheck.Active;
             config.NewInstallInitSettings = true;
             config.NewInstall = false;
+            config.TrayAutoStart = trayAutoCheck.Active;
 
             configService.SaveConfig(config);
             SetupFinished?.Invoke(this, EventArgs.Empty);
+
+            if (trayAutoCheck.Active)
+            {
+                try
+                {
+                    const string serviceContent = $"""
+                                                   [Unit]
+                                                   Description=Shelly Notifications tray service
+                                                   PartOf=default.target
+
+                                                   [Service]
+                                                   Type=simple
+                                                   ExecStart=/usr/bin/shelly-notifications
+                                                   Restart=on-failure
+                                                   RestartSec=5s
+
+                                                   [Install]
+                                                   WantedBy=default.target
+                                                   """;
+
+                    _ = unPrivilegedOperationService.AddSystemdServiceTray(serviceContent, "shelly-notifications");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(T($"Error adding systemd service: {ex.Message}"));
+                }
+            }
+
 
             if (!flatpakCheck.Active) return;
             try

@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using PackageManager.Alpm;
 using PackageManager.Aur;
+using Shelly_CLI.Configuration;
 using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
 using Spectre.Console;
@@ -17,30 +18,47 @@ public class AurUpdateCommand : AsyncCommand<AurPackageSettings>
         {
             return await HandleUiModeUpdate(settings);
         }
-        
+
         if (settings.Packages.Length == 0)
         {
             AnsiConsole.MarkupLine("[red]No packages specified.[/]");
             return 1;
         }
 
+
         RootElevator.EnsureRootExectuion();
+        
+        if (!settings.NoConfirm)
+        {
+            if (!AnsiConsole.Confirm($"[yellow]Proceed with update for {string.Join(",", settings.Packages)} ?[/]",
+                    defaultValue: true))
+            {
+                AnsiConsole.MarkupLine("[yellow]Upgrade cancelled.[/]");
+                return 0;
+            }
+        }
+
         AurPackageManager? manager = null;
         try
         {
             manager = new AurPackageManager();
-            await manager.Initialize(root: true, noCheck: !settings.Check);
-
-            AnsiConsole.MarkupLine($"[yellow]Updating AUR packages: {string.Join(", ", settings.Packages.Select(p => p.EscapeMarkup()))}[/]");
-            var result = await AurSplitOutput.Output(manager, m => m.UpdatePackages(settings.Packages.ToList()), settings.NoConfirm);
+            await manager.Initialize(true, noCheck: !settings.Check);
+            var cfg = ConfigManager.ReadConfig();
+            var useSinglePane = settings.SinglePane ||
+                                string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase) ||
+                                Console.IsOutputRedirected;
+            var result = useSinglePane
+                ? await AurSinglePaneOutput.Output(manager, m => m.UpdatePackages(settings.Packages.ToList()),
+                    settings.NoConfirm)
+                : await AurSplitOutput.Output(manager, m => m.UpdatePackages(settings.Packages.ToList()),
+                    settings.NoConfirm);
             if (!result)
             {
                 AnsiConsole.MarkupLine("[red]Update failed. See errors above.[/]");
                 return 1;
             }
-            AnsiConsole.MarkupLine("[green]Update complete.[/]");
 
-         
+            AnsiConsole.MarkupLine("[green]Update complete.[/]");
         }
         catch (Exception ex)
         {
@@ -51,6 +69,7 @@ public class AurUpdateCommand : AsyncCommand<AurPackageSettings>
         {
             manager?.Dispose();
         }
+
         return 0;
     }
 
@@ -69,6 +88,7 @@ public class AurUpdateCommand : AsyncCommand<AurPackageSettings>
             manager = new AurPackageManager();
             await manager.Initialize(root: true, noCheck: !settings.Check);
 
+            manager.HookRun += (_, args) => Console.Error.WriteLine($"[ALPM_HOOK]{args.Description}");
             manager.ErrorEvent += (_, e) =>
             {
                 Console.Error.WriteLine($"[ALPM_ERROR]{e.Error}");
@@ -78,18 +98,12 @@ public class AurUpdateCommand : AsyncCommand<AurPackageSettings>
             manager.PackageProgress += (sender, args) =>
             {
                 Console.Error.WriteLine($"[{args.CurrentIndex}/{args.TotalCount}] {args.PackageName}: {args.Status}" +
-                    (args.Message != null ? $" - {args.Message}" : ""));
+                                        (args.Message != null ? $" - {args.Message}" : ""));
             };
 
-            manager.Progress += (sender, args) =>
-            {
-                Console.Error.WriteLine($"{args.PackageName}: {args.Percent}%");
-            };
+            manager.Progress += (sender, args) => { Console.Error.WriteLine($"{args.PackageName}: {args.Percent}%"); };
 
-            manager.Question += (sender, args) =>
-            {
-                QuestionHandler.HandleQuestion(args, true, settings.NoConfirm);
-            };
+            manager.Question += (sender, args) => { QuestionHandler.HandleQuestion(args, true, settings.NoConfirm); };
 
             manager.BuildOutput += (sender, e) =>
             {
@@ -109,11 +123,7 @@ public class AurUpdateCommand : AsyncCommand<AurPackageSettings>
                     return;
                 }
 
-                Console.Error.WriteLine($"PKGBUILD changed for {args.PackageName}.");
-                Console.Error.WriteLine("--- Old PKGBUILD ---");
-                Console.Error.WriteLine(args.OldPkgbuild);
-                Console.Error.WriteLine("--- New PKGBUILD ---");
-                Console.Error.WriteLine(args.NewPkgbuild);
+                PackageBuilderDiffGenerator.PrintUnifiedDiff(args.OldPkgbuild, args.NewPkgbuild, Program.IsUiMode);
                 args.ProceedWithUpdate = true;
             };
 
@@ -124,9 +134,8 @@ public class AurUpdateCommand : AsyncCommand<AurPackageSettings>
                 Console.Error.WriteLine("Update failed.");
                 return 1;
             }
-            Console.Error.WriteLine("Update complete.");
 
-        
+            Console.Error.WriteLine("Update complete.");
         }
         catch (Exception ex)
         {
@@ -137,6 +146,7 @@ public class AurUpdateCommand : AsyncCommand<AurPackageSettings>
         {
             manager?.Dispose();
         }
+
         return 0;
     }
 }

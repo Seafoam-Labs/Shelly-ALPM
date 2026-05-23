@@ -84,7 +84,7 @@ static void WriteSummary(StringBuilder sb, List<XElement> commands)
 
     if (rootCmds.Count > 0)
     {
-        sb.AppendLine("#### Package Management");
+        sb.AppendLine("### Package Management");
         sb.AppendLine();
         WriteCommandTable(sb, rootCmds, "");
     }

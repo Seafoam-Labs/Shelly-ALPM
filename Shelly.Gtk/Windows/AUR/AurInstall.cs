@@ -282,16 +282,29 @@ public class AurInstall(
         nameFactory.OnSetup += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
+            var box = Box.New(Orientation.Horizontal, 6);
             var label = Label.New(string.Empty);
-            listItem.SetChild(label);
+            var installedIcon = Image.NewFromIconName("object-select-symbolic");
+            installedIcon.TooltipText = T("Installed");
+            installedIcon.Visible = false;
+
+            box.Append(label);
+            box.Append(installedIcon);
+            listItem.SetChild(box);
         };
         nameFactory.OnBind += (_, args) =>
         {
             if (args.Object is not ColumnViewCell listItem) return;
-            if (listItem.GetItem() is not AurPackageGObject { Index: { } pkg } ||
-                listItem.GetChild() is not Label label) return;
+            if (listItem.GetItem() is not AurPackageGObject { Index: { } pkg } pkgObj ||
+                listItem.GetChild() is not Box box) return;
+
+            var label = (Label)box.GetFirstChild()!;
+            var installedIcon = (Image)label.GetNextSibling()!;
+
             label.SetText(_aurPackages[pkg].Name);
             label.Halign = Align.Start;
+
+            installedIcon.Visible = pkgObj.IsInstalled;
         };
         nameColumn.SetFactory(nameFactory);
 
@@ -359,6 +372,11 @@ public class AurInstall(
 
             Console.WriteLine($"[DEBUG_LOG] Search result: {result.Count}");
 
+            var installedPackages = await privilegedOperationService.GetInstalledPackagesAsync();
+            var installedNames = new HashSet<string>(installedPackages.Select(p => p.Name));
+            installedPackages.Clear();
+            installedPackages.TrimExcess();
+
             result = result.OrderByDescending(x => x.NumVotes).ToList();
             GLib.Functions.IdleAdd(0, () =>
             {
@@ -373,6 +391,7 @@ public class AurInstall(
                     _aurPackages.Add(pkg);
                     var pkgObj = AurPackageGObject.NewWithProperties([]);
                     pkgObj.Index = index;
+                    pkgObj.IsInstalled = installedNames.Contains(pkg.Name);
                     _packageGObjectRefs.Add(pkgObj);
                     _listStore.Append(pkgObj);
                     index++;

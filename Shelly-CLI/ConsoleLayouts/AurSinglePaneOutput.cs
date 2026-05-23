@@ -86,6 +86,7 @@ public static class AurSinglePaneOutput
                 {
                     region.FinalizeSticky(key);
                 }
+
                 return;
             }
 
@@ -199,8 +200,11 @@ public static class AurSinglePaneOutput
                     AnsiConsole.MarkupLine(line);
                 }
 
-                args.ProceedWithUpdate = noConfirm
-                    || AnsiConsole.Confirm(":: Proceed with this PKGBUILD?", true);
+                var pkgBuildConfirm = noConfirm
+                                      || AnsiConsole.Confirm(":: Proceed with this PKGBUILD?", true);
+                args.ProceedWithUpdate = pkgBuildConfirm;
+                if (!pkgBuildConfirm)
+                    region.WriteLine($"[yellow] Cancelled because of pkgbuild diff.[/]");
             }
             finally
             {

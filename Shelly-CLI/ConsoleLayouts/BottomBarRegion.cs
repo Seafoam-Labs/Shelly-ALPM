@@ -31,6 +31,7 @@ public sealed class BottomBarRegion : IDisposable
     private int _barRowsDrawn;
     private int _stickyDrawnCount;
     private int _frame;
+    private bool _suspended;
 
     private readonly ProgressBarStyleKind _style;
     private readonly int _barWidth;
@@ -67,6 +68,7 @@ public sealed class BottomBarRegion : IDisposable
                         await Task.Delay(120, _frameCts.Token);
                         lock (_ioLock)
                         {
+                            if (_suspended) continue;
                             _frame++;
                             if (_bars.Count > 0)
                             {
@@ -283,6 +285,8 @@ public sealed class BottomBarRegion : IDisposable
         {
             FinalizeAllStickies();
             ClearBars();
+            _suspended = true;
+            Console.Out.Flush();
         }
     }
 
@@ -290,8 +294,23 @@ public sealed class BottomBarRegion : IDisposable
     {
         lock (_ioLock)
         {
+            _suspended = false;
             DrawBars();
         }
+    }
+
+    public T RunInteractive<T>(Func<T> prompt)
+    {
+        SuspendForPrompt();
+        try { return prompt(); }
+        finally { Resume(); }
+    }
+
+    public void RunInteractive(Action prompt)
+    {
+        SuspendForPrompt();
+        try { prompt(); }
+        finally { Resume(); }
     }
 
     public void Dispose()
@@ -329,7 +348,7 @@ public sealed class BottomBarRegion : IDisposable
 
     private void DrawBars()
     {
-        if (!_animate) return;
+        if (!_animate || _suspended) return;
         DrawStickies();
         foreach (var key in _order)
         {
@@ -346,7 +365,7 @@ public sealed class BottomBarRegion : IDisposable
 
     private void ClearBars()
     {
-        if (!_animate) return;
+        if (!_animate || _suspended) return;
         if (_barRowsDrawn > 0)
         {
             for (var i = 0; i < _barRowsDrawn; i++)

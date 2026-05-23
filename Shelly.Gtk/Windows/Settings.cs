@@ -34,7 +34,7 @@ public class Settings(
 
     private static readonly HttpClient HttpClient = new()
     {
-        DefaultRequestHeaders = { UserAgent = { new("Shelly-ALPM", null) } }
+        DefaultRequestHeaders = { UserAgent = { Http.UserAgent } }
     };
 
     public event Action? NavigationToPackages;
@@ -808,7 +808,7 @@ public class Settings(
                 return;
             }
 
-            HttpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM");
+            HttpClient.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
 
             var url = "https://api.github.com/repos/Seafoam-Labs/Shelly-ALPM/releases";
             var latestJson = await HttpClient.GetStringAsync($"{url}/latest");

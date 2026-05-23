@@ -444,8 +444,8 @@ msgstr "Няма налични връзки"
 msgid "Install Flatpak Ref"
 msgstr "Инсталиране на Flatpak Ref"
 
-msgid "Local Flatpak files (".FlatpakRef", ".flatpak)""
-msgstr "Локални Flatpak файлове (".FlatpakRef", ".flatpak")"
+msgid "Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""
+msgstr "Локални Flatpak файлове (\".FlatpakRef\", \".flatpak\")"
 
 msgid "Installing selected local flatpak file..."
 msgstr "Инсталиране на избрания локален flatpak файл..."
@@ -585,8 +585,8 @@ msgstr "Неуспешно експортиране на инсталацион�
 msgid "Install Local Package"
 msgstr "Инсталиране на локален пакет"
 
-msgid "Local package files (".gz", ".zst")"
-msgstr "Локални пакетни файлове (".gz", ".zst")"
+msgid "Local package files (\"*.gz\", \"*.zst\")"
+msgstr "Локални пакетни файлове (\".gz\", \".zst\")"
 
 msgid "Installing local package..."
 msgstr "Инсталиране на локален пакет..."

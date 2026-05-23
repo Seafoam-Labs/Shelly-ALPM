@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-05-14 18:41-0400\n"
-"PO-Revision-Date: 2026-05-19 17:37+0200\n"
+"PO-Revision-Date: 2026-05-21 20:04+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: Polish\n"
 "Language: pl\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 "
 "|| n%100>=20) ? 1 : 2;\n"
-"X-Generator: Poedit 3.9\n"
+"X-Generator: Weblate 5.16.2\n"
 
 msgid "Any"
 msgstr "Wszystkie"
@@ -1091,6 +1091,9 @@ msgstr "Użyj bocznej nawigacji"
 msgid "Advanced"
 msgstr "Zaawansowane"
 
+msgid "Remove Cache on Uninstall"
+msgstr "Usuń pamięć podręczną podczas odinstalowywania"
+
 msgid "No Confirm"
 msgstr "Brak potwierdzenia"
 
@@ -1307,3 +1310,9 @@ msgstr "Dodano usługę startową Systemd."
 
 msgid "Systemd startup service removed."
 msgstr "Usunięto usługę startową Systemd."
+
+msgid "Tray Icon Autostart"
+msgstr "Autostart ikony zasobnika"
+
+msgid "Allow the tray service to autostart."
+msgstr "Zezwól na automatyczne uruchamianie usługi zasobnika."

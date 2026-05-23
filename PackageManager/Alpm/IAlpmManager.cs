@@ -99,5 +99,12 @@ public interface IAlpmManager
     /// <returns>Names of corrupted pkgs removed</returns>
     List<string> RemoveCorruptedPackages(bool dryRun = false);
     
+    /// <summary>
+    /// Checks if a package is installed
+    /// </summary>
+    /// <param name="packageName"></param>
+    /// <returns></returns>
+    bool IsPackageInstalled(string packageName);
+    
     
 }

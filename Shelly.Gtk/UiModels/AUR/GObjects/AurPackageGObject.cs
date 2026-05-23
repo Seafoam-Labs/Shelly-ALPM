@@ -8,6 +8,7 @@ public partial class AurPackageGObject
 {
     public int Index { get; set; } = -1;
     public bool IsSelected { get; set; }
+    public bool IsInstalled { get; set; }
 
     public event EventHandler? OnSelectionToggled;
 

@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using PackageManager.Alpm;
 using Shelly_CLI.Utility;
+using Shelly.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -57,7 +58,7 @@ public class DowngradePackageCommand : Command<DowngradePackageCommandSettings>
         };
         var client = new HttpClient(handler);
         client.Timeout = TimeSpan.FromMinutes(15);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM/1.0 (compatible)");
+        client.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
 
         var fileName = $"{selection}-x86_64.pkg.tar.zst";
         var url = $"{archRepo}{package[0]}/{package}/{fileName}";
@@ -189,7 +190,7 @@ public class DowngradePackageCommand : Command<DowngradePackageCommandSettings>
         };
         var client = new HttpClient(handler);
         client.Timeout = TimeSpan.FromMinutes(15);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM/1.0 (compatible)");
+        client.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
         var result = client.GetAsync($"{archRepo}{packageName[0]}/{packageName}/").Result;
         var content = result.Content.ReadAsStringAsync().Result;
 

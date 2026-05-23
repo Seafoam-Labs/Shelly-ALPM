@@ -1261,3 +1261,9 @@ msgstr ""
 
 msgid "Systemd startup service removed."
 msgstr ""
+
+msgid "Tray Icon Autostart"
+msgstr ""
+
+msgid "Allow the tray service to autostart."
+msgstr ""

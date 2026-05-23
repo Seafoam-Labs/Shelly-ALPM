@@ -2,6 +2,7 @@ using System.Formats.Tar;
 using System.IO.Compression;
 using System.Net.Http.Json;
 using Shelly.Gtk.UiModels;
+using Shelly.Utilities;
 
 namespace Shelly.Gtk.Services.Icons;
 
@@ -12,7 +13,7 @@ public class IconDownloadService : IIConDownloadService
 
     public IconDownloadService()
     {
-        _client.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM/1.0");
+        _client.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
     }
 
     public async Task<bool> DownloadAndUnpackIcons()
