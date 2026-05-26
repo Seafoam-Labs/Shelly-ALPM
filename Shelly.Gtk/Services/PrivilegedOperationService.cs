@@ -630,12 +630,12 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         }
 
         // State for provider selection handling
-        var providerOptions = new List<string>();
+        var providerOptions = new List<ProviderOptionUiModel>();
         string? providerQuestion = null;
         var awaitingProviderSelection = false;
 
         // State for optional dependency selection handling
-        var optDepsOptions = new List<string>();
+        var optDepsOptions = new List<ProviderOptionUiModel>();
         string? optDepsQuestion = null;
         var awaitingOptDepsSelection = false;
 
@@ -682,17 +682,11 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         {
                             Console.Error.WriteLine($"[Shelly]Provider option received: {e.Data}");
                             var payload = e.Data.Substring("[Shelly][ALPM_PROVIDER_OPTION]".Length);
-                            var parts = payload.Split(':', 2);
-                            if (parts.Length == 2 && int.TryParse(parts[0], out var idx))
-                            {
-                                // Ensure list size
-                                while (providerOptions.Count <= idx) providerOptions.Add(string.Empty);
-                                providerOptions[idx] = parts[1];
-                            }
+                            var option = AlpmMarkerParser.ParseOptionPayload(payload, out var idx);
+                            if (idx >= 0)
+                                AlpmMarkerParser.PlaceAt(providerOptions, idx, option);
                             else
-                            {
-                                providerOptions.Add(payload);
-                            }
+                                providerOptions.Add(option);
                         }
                         else if (e.Data.StartsWith("[Shelly][ALPM_PROVIDER_END]"))
                         {
@@ -700,7 +694,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                             var args = new QuestionEventArgs(
                                 QuestionType.SelectProvider,
                                 providerQuestion ?? "Select provider",
-                                new List<string>(providerOptions),
+                                new List<ProviderOptionUiModel>(providerOptions),
                                 providerQuestion);
 
                             _alpmEventService.RaiseQuestion(args);
@@ -729,16 +723,11 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         else if (e.Data.StartsWith("[Shelly][ALPM_OPTDEPS_OPTION]"))
                         {
                             var payload = e.Data.Substring("[Shelly][ALPM_OPTDEPS_OPTION]".Length);
-                            var parts = payload.Split(':', 2);
-                            if (parts.Length == 2 && int.TryParse(parts[0], out var idx))
-                            {
-                                while (optDepsOptions.Count <= idx) optDepsOptions.Add(string.Empty);
-                                optDepsOptions[idx] = parts[1];
-                            }
+                            var option = AlpmMarkerParser.ParseOptionPayload(payload, out var idx);
+                            if (idx >= 0)
+                                AlpmMarkerParser.PlaceAt(optDepsOptions, idx, option);
                             else
-                            {
-                                optDepsOptions.Add(payload);
-                            }
+                                optDepsOptions.Add(option);
                         }
                         else if (e.Data.StartsWith("[Shelly][ALPM_OPTDEPS_END]"))
                         {
@@ -746,24 +735,16 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                             var args = new QuestionEventArgs(
                                 QuestionType.SelectOptionalDeps,
                                 optDepsQuestion ?? "Select optional dependencies",
-                                new List<string>(optDepsOptions),
+                                new List<ProviderOptionUiModel>(optDepsOptions),
                                 optDepsQuestion);
 
                             _alpmEventService.RaiseQuestion(args);
                             await args.WaitForResponseAsync();
 
-                            if (args.Response != -1)
-                            {
-                                var selected = new List<string>();
-                                for (int i = 0; i < optDepsOptions.Count; i++)
-                                {
-                                    if ((args.Response & (1 << i)) != 0)
-                                        selected.Add(optDepsOptions[i]);
-                                }
-                                var response = string.Join(" ", selected);
-                               
-                            }
-                            await SafeWriteAsync(args.Response.ToString());
+                            var indices = args.SelectedIndices ?? [];
+                            var json = System.Text.Json.JsonSerializer.Serialize(
+                                indices, ShellyGtkJsonContext.Default.Int32Array);
+                            await SafeWriteAsync(json);
                             awaitingOptDepsSelection = false;
                             optDepsQuestion = null;
                             optDepsOptions.Clear();

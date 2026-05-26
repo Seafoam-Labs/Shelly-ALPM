@@ -1,4 +1,5 @@
 using PackageManager.Alpm;
+using PackageManager.Alpm.Questions;
 using Spectre.Console;
 
 namespace Shelly_CLI.ConsoleLayouts;
@@ -40,7 +41,7 @@ public static class SplitOutputHelpers
                     UpdatePanelUnlocked(layout, "Console", consoleLines, maxVisibleLines, ctx);
                 }
 
-                e.SetResponse(1);
+                e.SetResponse(new QuestionResponse(1,null));
                 break;
             }
 
@@ -52,7 +53,7 @@ public static class SplitOutputHelpers
                     UpdatePanelUnlocked(layout, "Console", consoleLines, maxVisibleLines, ctx);
                 }
 
-                e.SetResponse(0);
+                e.SetResponse(new QuestionResponse(0,null));
                 break;
             }
         }
@@ -65,7 +66,7 @@ public static class SplitOutputHelpers
         {
             return;
         }
-
+        
         var selectedIndex = 0;
         consoleLines.Add($"[yellow bold]{question.QuestionText.EscapeMarkup()}[/]");
         var optionStartIndex = consoleLines.Count;
@@ -88,8 +89,8 @@ public static class SplitOutputHelpers
                 case ConsoleKey.Enter:
                     consoleLines.RemoveRange(optionStartIndex, consoleLines.Count - optionStartIndex);
                     consoleLines.Add(
-                        $"[green]Selected: {question.ProviderOptions[selectedIndex].EscapeMarkup()}[/]");
-                    question.SetResponse(selectedIndex);
+                        $"[green]Selected: {question.ProviderOptions[selectedIndex].Name.EscapeMarkup()}[/]");
+                    question.SetResponse(new QuestionResponse(selectedIndex, question.ProviderOptions));
 
                     lock (renderLock)
                     {
@@ -111,7 +112,7 @@ public static class SplitOutputHelpers
             {
                 var prefix = i == selectedIndex ? "[green]> [/]" : "  ";
                 var style = i == selectedIndex ? "[bold green]" : "[dim]";
-                consoleLines.Add($"{prefix}{style}{question.ProviderOptions[i].EscapeMarkup()}[/]");
+                consoleLines.Add($"{prefix}{style}{question.ProviderOptions[i].Name.EscapeMarkup()}[/]");
             }
 
             lock (renderLock)
@@ -126,7 +127,21 @@ public static class SplitOutputHelpers
     {
         if (question.ProviderOptions is null || question.ProviderOptions.Count == 0)
         {
-            question.SetResponse(0);
+            question.SetResponse(new QuestionResponse(0, null));
+            return;
+        }
+
+        var visible = question.ProviderOptions
+            .Select((o, i) => (Option: o, OriginalIndex: i))
+            .Where(t => !t.Option.IsInstalled)
+            .ToList();
+
+        if (visible.Count == 0)
+        {
+            var none = question.ProviderOptions
+                .Select(o => o with { IsSelected = false })
+                .ToList();
+            question.SetResponse(new QuestionResponse(0, none));
             return;
         }
 
@@ -149,7 +164,7 @@ public static class SplitOutputHelpers
                     break;
 
                 case ConsoleKey.DownArrow:
-                    selectedIndex = Math.Min(question.ProviderOptions.Count - 1, selectedIndex + 1);
+                    selectedIndex = Math.Min(visible.Count - 1, selectedIndex + 1);
                     RenderSelection();
                     break;
 
@@ -162,7 +177,7 @@ public static class SplitOutputHelpers
                     RenderSelection();
                     break;
                 case ConsoleKey.A:
-                    for (var i = 0; i < question.ProviderOptions.Count; i++)
+                    for (var i = 0; i < visible.Count; i++)
                     {
                         selected.Add(i);
                     }
@@ -176,8 +191,6 @@ public static class SplitOutputHelpers
                     break;
 
                 case ConsoleKey.Enter:
-                    var bitmask = selected.Aggregate(0, (current, idx) => current | (1 << idx));
-
                     consoleLines.RemoveRange(optionStartIndex, consoleLines.Count - optionStartIndex);
                     if (selected.Count == 0)
                     {
@@ -187,13 +200,17 @@ public static class SplitOutputHelpers
                     {
                         var names = selected
                             .OrderBy(i => i)
-                            .Select(i => question.ProviderOptions[i])
+                            .Select(i => visible[i].Option)
                             .ToList();
                         consoleLines.Add(
-                            $"[green]Selected: {string.Join(", ", names.Select(n => n.EscapeMarkup()))}[/]");
+                            $"[green]Selected: {string.Join(", ", names.Select(n => n.Name.EscapeMarkup()))}[/]");
                     }
 
-                    question.SetResponse(bitmask);
+                    var selectedOriginal = selected.Select(v => visible[v].OriginalIndex).ToHashSet();
+                    var selectedOptions = question.ProviderOptions
+                        .Select((o, i) => o with { IsSelected = selectedOriginal.Contains(i) })
+                        .ToList();
+                    question.SetResponse(new QuestionResponse(0, selectedOptions));
 
                     lock (renderLock)
                     {
@@ -209,13 +226,13 @@ public static class SplitOutputHelpers
             if (consoleLines.Count > optionStartIndex)
                 consoleLines.RemoveRange(optionStartIndex, consoleLines.Count - optionStartIndex);
 
-            for (int i = 0; i < question.ProviderOptions.Count; i++)
+            for (int i = 0; i < visible.Count; i++)
             {
                 var cursor = i == selectedIndex ? ">" : " ";
                 var check = selected.Contains(i) ? "[green]✓[/]" : "[dim]○[/]";
                 var style = i == selectedIndex ? "[bold green]" : "[white]";
                 consoleLines.Add(
-                    $" {cursor} {check} {style}{question.ProviderOptions[i].EscapeMarkup()}[/]");
+                    $" {cursor} {check} {style}{visible[i].Option.Name.EscapeMarkup()}[/]");
             }
 
             lock (renderLock)

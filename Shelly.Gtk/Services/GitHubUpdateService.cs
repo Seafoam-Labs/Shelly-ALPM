@@ -1,6 +1,7 @@
 
 using System.Net.Http.Json;
 using Shelly.Gtk.UiModels;
+using Shelly.Utilities;
 
 namespace Shelly.Gtk.Services;
 
@@ -15,7 +16,7 @@ public class GitHubUpdateService : IUpdateService
 
     public GitHubUpdateService()
     {
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "Shelly-ALPM-Updater");
+        _httpClient.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
     }
 
 

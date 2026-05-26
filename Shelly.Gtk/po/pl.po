@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-05-14 18:41-0400\n"
-"PO-Revision-Date: 2026-05-21 20:04+0000\n"
+"PO-Revision-Date: 2026-05-23 18:22+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: Polish\n"
 "Language: pl\n"
@@ -385,10 +385,10 @@ msgid "All Applications"
 msgstr "Wszystkie aplikacje"
 
 msgid "Recommended"
-msgstr "Rekomendowane"
+msgstr "Polecane"
 
 msgid "Most Wanted"
-msgstr "Najczęściej poszukiwane"
+msgstr "Najbardziej poszukiwane"
 
 msgid "Recently Added"
 msgstr "Ostatnio dodane"
@@ -496,7 +496,7 @@ msgid "Failed to remove package {0}: {1}"
 msgstr "Nie udało się usunąć pakietu {0}: {1}"
 
 msgid "Removed Package(s)"
-msgstr "Usunięte pakiety"
+msgstr "Usunięto pakiet(y)"
 
 msgid "Permission Changes"
 msgstr "Zmiany uprawnień"
@@ -970,7 +970,7 @@ msgid "Install Local Packages"
 msgstr "Zainstaluj pakiety lokalne"
 
 msgid "Install Local"
-msgstr "Zainstaluj lokalnie"
+msgstr "Zainstaluj lokalne pakiety"
 
 msgid "Perform Upgrade"
 msgstr "Wykonaj aktualizację"
@@ -1000,7 +1000,7 @@ msgid "Remove Local Packages"
 msgstr "Usuń lokalne pakiety"
 
 msgid "Remove Local"
-msgstr "Usuń lokalne"
+msgstr "Usuń lokalne pakiety"
 
 msgid "Remove Configs"
 msgstr "Usuń konfiguracje"
@@ -1162,7 +1162,7 @@ msgid "Install a new AppImage from a file"
 msgstr "Zainstaluj nowy pakiet AppImage z pliku"
 
 msgid "Install AppImage"
-msgstr "Instaluj AppImage"
+msgstr "Zainstaluj AppImage"
 
 msgid "Description goes here..."
 msgstr "Opis znajduje się tutaj..."
@@ -1219,7 +1219,7 @@ msgid "Settings"
 msgstr "Ustawienia"
 
 msgid "About"
-msgstr "O aplikacji"
+msgstr "O programie"
 
 msgid "Toggle Sidebar"
 msgstr "Przełącz pasek boczny"

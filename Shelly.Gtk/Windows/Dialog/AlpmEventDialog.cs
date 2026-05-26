@@ -44,9 +44,24 @@ public class AlpmEventDialog
             var combo = ComboBoxText.New();
             foreach (var option in e.ProviderOptions)
             {
-                combo.AppendText(option);
+                var label = option.IsInstalled
+                    ? $"{option.Name}  ({T("installed")})"
+                    : option.Name;
+                combo.AppendText(label);
             }
-            combo.SetActive(0);
+
+            var preselect = e.ProviderOptions.FindIndex(o => o.IsSelected);
+            combo.SetActive(preselect >= 0 ? preselect : 0);
+
+            void UpdateTooltip()
+            {
+                var idx = combo.GetActive();
+                if (idx >= 0 && idx < e.ProviderOptions.Count)
+                    combo.SetTooltipText(e.ProviderOptions[idx].Description ?? string.Empty);
+            }
+            UpdateTooltip();
+            combo.OnChanged += (_, _) => UpdateTooltip();
+
             box.Append(combo);
 
             var selectButton = Button.NewWithLabel(T("Select"));
@@ -60,52 +75,71 @@ public class AlpmEventDialog
         else if (e is { QuestionType: QuestionType.SelectOptionalDeps, ProviderOptions: not null })
         {
             var checkButtons = new List<CheckButton>();
+            var originalIndices = new List<int>();
 
-            // "Select All" toggle
             var selectAllCheck = CheckButton.NewWithLabel(T("Select All"));
-            box.Append(selectAllCheck);
 
-            // Scrollable container for many options
             var scrolled = ScrolledWindow.New();
             scrolled.SetMinContentHeight(150);
             scrolled.SetMaxContentHeight(300);
             scrolled.SetPolicy(PolicyType.Never, PolicyType.Automatic);
 
             var optionsBox = Box.New(Orientation.Vertical, 4);
-            foreach (var option in e.ProviderOptions)
+            for (var i = 0; i < e.ProviderOptions.Count; i++)
             {
-                var check = CheckButton.NewWithLabel(option);
-                check.SetActive(true); // default all selected
+                var option = e.ProviderOptions[i];
+
+                if (option.IsInstalled)
+                {
+                    var row = Box.New(Orientation.Horizontal, 6);
+                    row.Append(Image.NewFromIconName("emblem-ok-symbolic"));   // or "object-select-symbolic"
+                    row.Append(Label.New($"{option.Name}  ({T("already installed")})"));
+                    if (!string.IsNullOrEmpty(option.Description))
+                        row.SetTooltipText(option.Description);
+                    optionsBox.Append(row);
+                    continue;
+                }
+
+                var check = CheckButton.NewWithLabel(option.Name);
+                check.SetActive(option.IsSelected);
+                if (!string.IsNullOrEmpty(option.Description))
+                    check.SetTooltipText(option.Description);
+
                 checkButtons.Add(check);
+                originalIndices.Add(i);
                 optionsBox.Append(check);
             }
+
+            if (checkButtons.Count == 0)
+            {
+                e.SetResponse(Array.Empty<int>());
+                return;
+            }
+
+            box.Append(selectAllCheck);
             scrolled.SetChild(optionsBox);
             box.Append(scrolled);
 
-            // Wire up "Select All" toggle
-            selectAllCheck.SetActive(true);
+            selectAllCheck.SetActive(false);
             selectAllCheck.OnToggled += (_,_) =>
             {
                 var active = selectAllCheck.GetActive();
-                foreach (var cb in checkButtons)
-                {
-                    cb.SetActive(active);
-                }
+                foreach (var cb in checkButtons) cb.SetActive(active);
             };
 
             var confirmButton = Button.NewWithLabel(T("Confirm"));
             confirmButton.SetCssClasses(["suggested-action"]);
             confirmButton.OnClicked += (_,_) =>
             {
-                int bitmask = 0;
-                for (int i = 0; i < checkButtons.Count; i++)
+                var selectedIndices = new List<int>();
+                for (int v = 0; v < checkButtons.Count; v++)
                 {
-                    if (checkButtons[i].GetActive())
+                    if (checkButtons[v].GetActive())
                     {
-                        bitmask |= (1 << i);
+                        selectedIndices.Add(originalIndices[v]);
                     }
                 }
-                e.SetResponse(bitmask);
+                e.SetResponse(selectedIndices.ToArray());
                 parentOverlay.RemoveOverlay(baseFrame);
             };
             buttonBox.Append(confirmButton);

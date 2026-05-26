@@ -42,8 +42,8 @@ public class ListInstalledCommand : Command<AlpmListSettings>
         var sortedPackages = settings.Sort switch
         {
             SortOption.Size => settings.Order == SortDirection.Ascending
-                ? packages.OrderBy(p => p.Size)
-                : packages.OrderByDescending(p => p.Size),
+                ? packages.OrderBy(p => p.InstalledSize)
+                : packages.OrderByDescending(p => p.InstalledSize),
             SortOption.Popularity => settings.Order == SortDirection.Ascending
                 ? packages.OrderBy(p => p.Name)
                 : packages.OrderByDescending(p => p.Name),
@@ -78,7 +78,7 @@ public class ListInstalledCommand : Command<AlpmListSettings>
             table.AddRow(
                 pkg.Name,
                 pkg.Version,
-                FormatSize(pkg.Size),
+                FormatSize(pkg.InstalledSize),
                 pkg.Description.EscapeMarkup().Truncate(50)
             );
         }
@@ -119,8 +119,8 @@ public class ListInstalledCommand : Command<AlpmListSettings>
         var sortedPackages = settings.Sort switch
         {
             SortOption.Size => settings.Order == SortDirection.Ascending
-                ? packages.OrderBy(p => p.Size)
-                : packages.OrderByDescending(p => p.Size),
+                ? packages.OrderBy(p => p.InstalledSize)
+                : packages.OrderByDescending(p => p.InstalledSize),
             SortOption.Popularity => settings.Order == SortDirection.Ascending
                 ? packages.OrderBy(p => p.Name)
                 : packages.OrderByDescending(p => p.Name),
@@ -141,7 +141,7 @@ public class ListInstalledCommand : Command<AlpmListSettings>
 
         foreach (var pkg in displayPackages)
         {
-            Console.WriteLine($"{pkg.Name} {pkg.Version} {FormatSize(pkg.Size)} - {pkg.Description}");
+            Console.WriteLine($"{pkg.Name} {pkg.Version} {FormatSize(pkg.InstalledSize)} - {pkg.Description}");
         }
 
         Console.Error.WriteLine($"Total: {displayPackages.Count} packages");

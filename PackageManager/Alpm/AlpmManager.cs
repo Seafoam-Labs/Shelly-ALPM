@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
@@ -16,6 +15,7 @@ using PackageManager.Alpm.Questions;
 using PackageManager.Alpm.TransactionErrors;
 using PackageManager.Alpm.Utilities;
 using PackageManager.Utilities;
+using Shelly.Utilities;
 using static PackageManager.Alpm.AlpmReference;
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
@@ -29,7 +29,6 @@ namespace PackageManager.Alpm;
     "CS8618:Non-nullable field must contain a non-null value when exiting constructor. Consider adding the \'required\' modifier or declaring as nullable.")]
 public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, IAlpmManager
 {
-    private string _configPath = configPath;
     private PacmanConf _config;
     private IntPtr _handle = IntPtr.Zero;
 
@@ -49,10 +48,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
     private static readonly HttpClient DownloadClient = new(_socketsHttpHandler, disposeHandler: false)
     {
         Timeout = TimeSpan.FromMinutes(5),
-        DefaultRequestHeaders =
-        {
-            { "User-Agent", "Shelly/2.0 (compatible)" }
-        },
+        DefaultRequestHeaders = { UserAgent = { Http.UserAgent } }
     };
 
     private HashSet<string> _preDownloadedFiles = new();
@@ -93,7 +89,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
             _handle = IntPtr.Zero;
         }
 
-        _config = PacmanConfParser.Parse(_configPath);
+        _config = PacmanConfParser.Parse(configPath);
         //Checks to see if the temp path is being used to run in
         //non-root mode for update checking.
         if (useTempPath)
@@ -291,7 +287,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
 
         string? packageName = null;
         string? questionText = null;
-        List<string>? conflictOptions = null;
+        List<ProviderOption>? conflictOptions = null;
 
         switch (questionType)
         {
@@ -364,15 +360,19 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
                 packageName =
                     $"{incomingPkg?.Name ?? "unknown"} - {incomingPkg?.Version ?? "unknown"} conflicts with {installedPkg?.Name ?? "unknown"} - {installedPkg?.Version ?? "unknown"}";
                 questionText = $"{packageName}. Remove {installedPkg?.Name ?? "unknown"}?";
-                conflictOptions = new List<string>();
+                conflictOptions = new List<ProviderOption>();
                 if (!string.IsNullOrEmpty(packageOne?.Name))
                 {
-                    conflictOptions.Add(packageOne.Name);
+                    var isInstalled = PackageUtilities.IsPackageInstalled(_handle, packageOne.Name);
+                    conflictOptions.Add(new ProviderOption(packageOne.Name,
+                        packageOne.Description ?? "No description available", isInstalled));
                 }
 
                 if (!string.IsNullOrEmpty(packageTwo?.Name))
                 {
-                    conflictOptions.Add(packageTwo.Name);
+                    var isInstalled = PackageUtilities.IsPackageInstalled(_handle, packageTwo.Name);
+                    conflictOptions.Add(new ProviderOption(packageTwo.Name,
+                        packageTwo.Description ?? "No Description available", isInstalled));
                 }
 
                 break;
@@ -409,7 +409,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         Console.Error.WriteLine($"[ALPM_RESPONSE] {questionText} (Answering {args.Response})");
 
         // Write the response back to the answer field.
-        question.Answer = args.Response;
+        question.Answer = args.Response.Response;
         Marshal.StructureToPtr(question, questionPtr, false);
     }
 
@@ -431,7 +431,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         }
 
         // Extract the list of provider package names
-        var providerOptions = new List<string>();
+        var providerOptions = new List<ProviderOption>();
         var currentPtr = selectQuestion.Providers;
         while (currentPtr != IntPtr.Zero)
         {
@@ -445,7 +445,9 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
                     var pkgName = Marshal.PtrToStringUTF8(pkgNamePtr);
                     if (!string.IsNullOrEmpty(pkgName))
                     {
-                        providerOptions.Add(pkgName);
+                        var isPackageInstalled = PackageUtilities.IsPackageInstalled(_handle, pkgName);
+                        providerOptions.Add(new ProviderOption(pkgName, "No description available",
+                            isPackageInstalled));
                     }
                 }
             }
@@ -468,7 +470,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
             dependencyName);
 
         // Default to first provider (index 0) if no handler responds
-        args.Response = 0;
+        args.Response = new QuestionResponse(0, null);
 
         Question?.Invoke(this, args);
 
@@ -476,7 +478,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         args.WaitForResponse();
 
         // Write the response back to the UseIndex field
-        selectQuestion.UseIndex = args.Response;
+        selectQuestion.UseIndex = args.Response.Response;
         Marshal.StructureToPtr(selectQuestion, questionPtr, false);
     }
 
@@ -878,6 +880,20 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         return packages;
     }
 
+    public AlpmPackageDto? GetInstalledPackage(string name)
+    {
+        if (_handle == IntPtr.Zero) Initialize();
+        var dbPtr = GetLocalDb(_handle);
+        var pkgPtr = DbGetPkg(dbPtr, name);
+
+        if (pkgPtr == 0 || (!_showHiddenPackages && _config.IgnorePkg.Contains(name)))
+        {
+            return null;
+        }
+
+        return new AlpmPackage(pkgPtr).ToDto();
+    }
+
     public List<AlpmPackageDto> GetForeignPackages()
     {
         if (_handle == IntPtr.Zero) Initialize();
@@ -1169,13 +1185,20 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
                      AlpmTransFlag.NoCheckSpace;
         }
 
-        List<string> optDependList = [];
+        List<ProviderOption> optDependList = [];
         foreach (var pkgPtr in pkgPtrs)
         {
             var pkg = new AlpmPackage(pkgPtr);
-            if (pkg != null)
+            foreach (var raw in pkg.OptDepends)
             {
-                optDependList.AddRange(pkg.OptDepends);
+                var parts = raw.Split(':', 2);
+                var name = parts[0].Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                if (!PackageListBuilder.IsAvailableInSyncDbs(_handle, name)) continue;
+                var description = parts.Length > 1 ? parts[1].Trim() : "No description found";
+                if (string.IsNullOrEmpty(description)) description = "No description found";
+                var isInstalled = PackageUtilities.IsPackageInstalled(_handle, name);
+                optDependList.Add(new ProviderOption(name, description, isInstalled));
             }
         }
 
@@ -1187,11 +1210,9 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
                 optDependList);
             Question?.Invoke(this, args);
             args.WaitForResponse();
-            optDepNames = optDependList
-                .Where((dep, index) => (args.Response & (1 << index)) != 0)
-                .Select(dep => dep.Split(':', 2)[0].Trim())
-                .Where(name => !string.IsNullOrEmpty(name))
-                .ToList();
+            var responseOptions = args.Response.ProviderOptions ?? [];
+            optDepNames = responseOptions
+                .Where(x => x is { IsSelected: true, IsInstalled: false }).Select(x => x.Name).ToList();
             var result = PackageListBuilder.Build(_handle, optDepNames);
             pkgPtrs.AddRange(result);
         }
@@ -1265,6 +1286,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
                         $"[ALPM_WARN] Failed to set reason for {name}: {GetErrorMessage(err)}");
                     // don't abort — install already succeeded
                 }
+
                 Console.Error.WriteLine($"[DEBUG] Installed optional dependency: {name}");
             }
         }
@@ -1289,14 +1311,14 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
                 null,
                 null);
 
-            args.Response = 0;
+            args.Response = new QuestionResponse(0, null);
 
             Question?.Invoke(this, args);
 
             // Block until the GUI user responds
             args.WaitForResponse();
 
-            if (args.Response == 0)
+            if (args.Response.Response == 0)
             {
                 ErrorEvent?.Invoke(this, new AlpmErrorEventArgs("Held Package removal cancelled."));
                 return Task.FromResult(false);
@@ -1400,14 +1422,25 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
             foreach (var name in optDepCandidates)
             {
                 var lp = DbGetPkg(localDb, name);
-                if (lp == IntPtr.Zero) { Console.Error.WriteLine($"[DEBUG] {name}: not installed"); continue; }
+                if (lp == IntPtr.Zero)
+                {
+                    Console.Error.WriteLine($"[DEBUG] {name}: not installed");
+                    continue;
+                }
+
                 var reason = GetPkgReason(lp);
-                if (reason != AlpmPkgReason.Depend) { Console.Error.WriteLine($"[DEBUG] {name}: reason={reason}, skip"); continue; }
+                if (reason != AlpmPkgReason.Depend)
+                {
+                    Console.Error.WriteLine($"[DEBUG] {name}: reason={reason}, skip");
+                    continue;
+                }
+
                 if (PackageChecker.IsStillNeededByOther(lp, removedSet))
                 {
                     Console.Error.WriteLine($"[DEBUG] {name}: still required/optional-for another package, skip");
                     continue;
                 }
+
                 Console.Error.WriteLine($"[DEBUG] {name}: queued for removal");
                 toAlsoRemove.Add(lp);
             }
@@ -1594,6 +1627,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
             Console.Error.WriteLine($"[ALPM_WARN] Failed to set reason for {packageName}: {GetErrorMessage(err)}");
             return false;
         }
+
         return true;
     }
 
@@ -2433,6 +2467,16 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         }
 
         return corruptedPackages;
+    }
+
+    public bool IsPackageInstalled(string packageName)
+    {
+        return PackageUtilities.IsPackageInstalled(_handle, packageName);
+    }
+
+    public void IgnorePackage(string packageName)
+    {
+        PacmanConfWriter.AddIgnorePkg(_config, packageName, configPath);
     }
 
     private void HandleErrorMessage(IntPtr dataPtr, AlpmErrno error)

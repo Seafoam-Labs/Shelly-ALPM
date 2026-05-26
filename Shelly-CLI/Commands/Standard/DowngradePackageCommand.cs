@@ -1,163 +1,238 @@
+using System.Globalization;
+using System.Net;
 using System.Text.RegularExpressions;
 using PackageManager.Alpm;
-using Shelly_CLI.Utility;
+using Shelly_CLI.Configuration;
+using Shelly_CLI.ConsoleLayouts;
+using Shelly.Utilities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Standard;
 
-public class DowngradePackageCommand : Command<DowngradePackageCommandSettings>
+public partial class DowngradePackageCommand : AsyncCommand<DowngradePackageCommandSettings>
 {
-    private const string cachyRepo = "https://archive.cachyos.org/repo/";
-    private const string archRepo = "https://archive.archlinux.org/packages/";
-    private const string pacmanCache = "/var/cache/pacman/pkg/";
+    private const string ArchRepo = "https://archive.archlinux.org/packages/";
+    private const string PacmanCache = "/var/cache/pacman/pkg/";
 
-    //TODO: IMPLEMENT TO HANDLE ADDITIONAL REPOS OTHER THAN JUST ARCH AND LOCAL PACKAGES
-    public override int Execute(CommandContext context, DowngradePackageCommandSettings settings)
+    [GeneratedRegex("[a-zA-Z0-9.]+")]
+    private static partial Regex VersionRegex();
+
+    [GeneratedRegex("([0-9]+(\\.[0-9]+)?|[a-z0-9]{6,})")]
+    private static partial Regex ReleaseOrHashRegex();
+
+    public override async Task<int> ExecuteAsync(CommandContext context, DowngradePackageCommandSettings settings)
     {
-        if (Program.IsUiMode)
+        if (Program.IsUiMode) return HandleUiModeDowngrade(settings);
+
+        if (settings is { UseNewest: true, UseOldest: true })
         {
-            return HandleUiModeDowngrade(settings);
+            AnsiConsole.MarkupLine("[red]Error: Cannot use both --use-newest and --use-oldest.[/]");
+            return 1;
         }
 
+        // TODO: Add support for downgrading multiple packages at once
         if (settings.Packages.Length is 0 or > 1)
         {
             AnsiConsole.MarkupLine("[red]Error: No packages specified or more than one package specified.[/]");
             return 1;
         }
 
+        AnsiConsole.MarkupLine($"[yellow]Looking for downgrade options for:[/] {settings.Packages[0].EscapeMarkup()}");
+
         RootElevator.EnsureRootExectuion();
-        var package = settings.Packages[0];
-        AnsiConsole.MarkupLine($"[yellow]Looking for downgrade options for:[/]: {package.EscapeMarkup()}");
 
-        var manager = new AlpmManager();
-        manager.Initialize(true);
-        var packages = SearchArchArchive(package);
-        string selection;
-        if (!settings.NoConfirm)
+        using var manager = new AlpmManager();
+        manager.Initialize(true, showHiddenPackages: true);
+
+        // TODO: Add version matching: downgrade 'foo=1.0.0-1' 'bar>=1.2.1-1' 'baz=~^1.2',
+        //  which allows the use of the following operators:
+        //  =,  ==,  =~, <=, >=, < and >.
+        //  Note that =~ represents a regex match operator and = and == are aliases.
+
+        var package = manager.GetInstalledPackage(settings.Packages[0]);
+        if (package == null)
         {
-            selection = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title($"[yellow]Select Version[/]")
-                    .AddChoices(packages));
-            AnsiConsole.WriteLine(selection);
-        }
-        else
-        {
-            selection = packages.First();
+            AnsiConsole.MarkupLine("[red]Error: Package must be installed to downgrade.[/]");
+            return 1;
         }
 
-        //"-x86_64.pkg.tar.zst";
-        var handler = new SocketsHttpHandler()
+        var packages = await SearchArchArchive(package);
+        var localPackages = SearchLocalCache(package);
+        packages.AddRange(localPackages);
+
+        if (packages.Count == 0)
         {
-            AllowAutoRedirect = true,
-            AutomaticDecompression = System.Net.DecompressionMethods.All,
-            MaxAutomaticRedirections = 10,
-            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-        };
-        var client = new HttpClient(handler);
-        client.Timeout = TimeSpan.FromMinutes(15);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM/1.0 (compatible)");
-
-        var fileName = $"{selection}-x86_64.pkg.tar.zst";
-        var url = $"{archRepo}{package[0]}/{package}/{fileName}";
-
-        var filePath = Path.Combine(Path.GetTempPath(), fileName);
-
-        AnsiConsole.Status()
-            .Start($"[yellow]Downloading {fileName.EscapeMarkup()}...[/]", ctx =>
-            {
-                using var response = client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).Result;
-                response.EnsureSuccessStatusCode();
-
-                using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                response.Content.ReadAsStream().CopyTo(fs);
-            });
-
-        AnsiConsole.MarkupLine($"[green]Downloaded to {filePath.EscapeMarkup()}[/]");
-
-        if (!settings.NoConfirm)
-        {
-            if (!AnsiConsole.Confirm("Do you want to proceed with the installation?"))
-            {
-                AnsiConsole.MarkupLine("[yellow]Operation cancelled.[/]");
-                return 0;
-            }
+            AnsiConsole.MarkupLine("[red]Error: No downgrade options found.[/]");
+            return 1;
         }
 
-        var renderLock = new object();
-        manager.Question += (sender, args) =>
+        packages = SortDowngradeOptions(packages);
+
+        var selection = SelectPackageVersion(settings, packages);
+
+        AnsiConsole.MarkupLine($"Selected: {selection.Filename.EscapeMarkup()}");
+
+        var filePath = selection.Location switch
         {
-            lock (renderLock)
-            {
-                AnsiConsole.WriteLine();
-                QuestionHandler.HandleQuestion(args, Program.IsUiMode, settings.NoConfirm);
-            }
-        };
-        int currentPkgIndex = 0;
-        int totalPkgs = 1;
-        string? lastPackageName = null;
-        int lastPercent = 0;
-        manager.Progress += (sender, args) =>
-        {
-            lock (renderLock)
-            {
-                var name = args.PackageName ?? "unknown";
-                var pct = args.Percent ?? 0;
-                var bar = string.Join("", Enumerable.Repeat("🐚 ", pct * 2 / 5)) + new string('░', 20 - pct / 5);
-                var actionType = args.ProgressType;
-
-                // Detect package change
-                if (name != lastPackageName)
-                {
-                    // If this isn't the first package, complete the previous line
-                    if (lastPackageName != null)
-                    {
-                        Console.WriteLine(); // Move to new line
-                        currentPkgIndex++;
-                    }
-
-                    lastPackageName = name;
-                    lastPercent = 0;
-                }
-
-                // Update current line with carriage return
-                Console.Write(
-                    $"\r({currentPkgIndex + 1}/{totalPkgs}) installing {name,-40}  [{bar}] {pct,3}% - {actionType,-20}");
-
-                lastPercent = pct;
-            }
+            Location.Local => Path.Combine(PacmanCache, selection.Filename),
+            Location.Remote => await DownloadRemoteCli(selection),
+            _ => throw new InvalidOperationException()
         };
 
-        bool hadError = false;
-        manager.ErrorEvent += (_, e) =>
+        if (!settings.NoConfirm && !AnsiConsole.Confirm("Do you want to proceed with the installation?"))
         {
-            lock (renderLock)
-            {
-                AnsiConsole.MarkupLine($"[red]ERROR: {e.Error.EscapeMarkup()}[/]");
-            }
-
-            hadError = true;
-        };
+            AnsiConsole.MarkupLine("[yellow]Operation cancelled.[/]");
+            return 0;
+        }
 
         AnsiConsole.MarkupLine("[yellow]Installing package...[/]");
-        var result = manager.InstallLocalPackage(filePath).Result;
 
-        if (File.Exists(filePath))
-        {
-            File.Delete(filePath);
-        }
+        var cfg = ConfigManager.ReadConfig();
+        var useSinglePane = settings.SinglePane
+                            || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
+                            || Console.IsOutputRedirected;
+        var isSuccess = useSinglePane
+            ? await StandardSinglePaneOutput.Output(manager, m => m.InstallLocalPackage(filePath), settings.NoConfirm)
+            : await SplitOutput.Output(manager, m => m.InstallLocalPackage(filePath), settings.NoConfirm);
 
-        manager.Dispose();
+        if (selection.Location == Location.Remote && File.Exists(filePath)) File.Delete(filePath);
 
-        if (!result || hadError)
+        if (!isSuccess)
         {
             AnsiConsole.MarkupLine("[red]Downgrade failed. See errors above.[/]");
             return 1;
         }
 
+        if (ShouldIgnorePackage(settings))
+            try
+            {
+                manager.IgnorePackage(selection.Name);
+                AnsiConsole.WriteLine("Package added to IgnorePkg list.");
+            }
+            catch (Exception e)
+            {
+                AnsiConsole.MarkupLine($"[red]Error: {e.Message.EscapeMarkup()}[/]");
+                return 1;
+            }
+
         AnsiConsole.MarkupLine("[green]Package downgraded successfully![/]");
         return 0;
+
+        static bool ShouldIgnorePackage(DowngradePackageCommandSettings settings)
+        {
+            return settings is { NoConfirm: true, AddIgnore: true }
+                   || settings.AddIgnore
+                   || AnsiConsole.Confirm("Do you want to add package to IgnorePkg list?");
+        }
+
+        PackageInfo SelectPackageVersion(DowngradePackageCommandSettings downgradePackageCommandSettings,
+            List<PackageInfo> packageInfos)
+        {
+            var isAutoSelect = downgradePackageCommandSettings.NoConfirm || downgradePackageCommandSettings.UseNewest ||
+                               downgradePackageCommandSettings.UseOldest;
+            var preSelectedPackage = downgradePackageCommandSettings.UseOldest ? packageInfos[^1] : packageInfos[0];
+
+            return isAutoSelect
+                ? preSelectedPackage
+                : AnsiConsole.Prompt(
+                    new SelectionPrompt<PackageInfo>()
+                        .Title("[yellow]Select Version[/]")
+                        .UseConverter(info =>
+                            $"{info.Filename.EscapeMarkup()} ({info.Location}){(info.IsInstalled ? " [green]Installed[/]" : "")}")
+                        .EnableSearch()
+                        .AddChoices(packageInfos));
+        }
+    }
+
+    private static List<PackageInfo> SortDowngradeOptions(List<PackageInfo> packages)
+    {
+        var naturalComparer = StringComparer.Create(CultureInfo.InvariantCulture, CompareOptions.NumericOrdering);
+        return packages.OrderByDescending(info => info.Filename, naturalComparer)
+            .ThenByDescending(info => info.IsInstalled)
+            .ThenByDescending(info => info.Location)
+            .ToList();
+    }
+
+    private static async Task<List<PackageInfo>> SearchArchArchive(AlpmPackageDto package)
+    {
+        using var client = CreateHttpClient();
+        using var result = await client.GetAsync($"{ArchRepo}{package.Name[0]}/{package.Name}/");
+        result.EnsureSuccessStatusCode();
+
+        var content = await result.Content.ReadAsStringAsync();
+
+        var archiveLinkRegex = new Regex($"""<a href="(?<filename>{CreatePackageRegex(package.Name)})">""",
+            RegexOptions.Multiline);
+
+        return archiveLinkRegex.Matches(content)
+            .Select(match => match.Groups["filename"].Value)
+            .Where(filename => !filename.EndsWith(".sig"))
+            .Select(filename => new PackageInfo(package.Name, filename, Location.Remote,
+                filename.StartsWith($"{package.Name}-{package.Version}")))
+            .ToList();
+    }
+
+    private static async Task<string> DownloadRemoteCli(PackageInfo packageInfo)
+    {
+        var path = await AnsiConsole.Status()
+            .StartAsync($"[yellow]Downloading {$"{packageInfo.Filename}".EscapeMarkup()}...[/]",
+                async _ => await DownloadRemote(packageInfo));
+
+        AnsiConsole.MarkupLine($"[green]Downloaded to {path.EscapeMarkup()}[/]");
+        return path;
+    }
+
+    private static List<PackageInfo> SearchLocalCache(AlpmPackageDto package)
+    {
+        if (!Directory.Exists(PacmanCache)) return [];
+
+        var packageRegex = new Regex($"^{CreatePackageRegex(package.Name)}$");
+
+        return Directory.GetFiles(PacmanCache)
+            .Where(filePath => !filePath.EndsWith(".sig"))
+            .Select(filePath => Path.GetFileName(filePath))
+            .Where(filename => packageRegex.IsMatch(filename))
+            .Select(filename =>
+                new PackageInfo(package.Name, filename, Location.Local,
+                    filename.StartsWith($"{package.Name}-{package.Version}")))
+            .ToList();
+    }
+
+    private static async Task<string> DownloadRemote(PackageInfo packageInfo)
+    {
+        using var client = CreateHttpClient();
+        var url = $"{ArchRepo}{packageInfo.Name[0]}/{packageInfo.Name}/{packageInfo.Filename}";
+
+        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+        response.EnsureSuccessStatusCode();
+
+        var path = Path.Combine(Path.GetTempPath(), $"{packageInfo.Filename}");
+        await using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        await response.Content.CopyToAsync(fs);
+
+        return path;
+    }
+
+    private static HttpClient CreateHttpClient()
+    {
+        var handler = new SocketsHttpHandler
+        {
+            AllowAutoRedirect = true,
+            AutomaticDecompression = DecompressionMethods.All,
+            MaxAutomaticRedirections = 10,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2)
+        };
+
+        var client = new HttpClient(handler);
+        client.Timeout = TimeSpan.FromMinutes(15);
+        client.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
+        return client;
+    }
+
+    private static string CreatePackageRegex(string packageName)
+    {
+        return $@"{Regex.Escape(packageName)}-{VersionRegex()}-{ReleaseOrHashRegex()}-.*\.pkg\.tar\..*";
     }
 
     private static int HandleUiModeDowngrade(DowngradePackageCommandSettings settings)
@@ -166,60 +241,11 @@ public class DowngradePackageCommand : Command<DowngradePackageCommandSettings>
         return 1;
     }
 
-    private string GetOperatingSystem()
+    private record struct PackageInfo(string Name, string Filename, Location Location, bool IsInstalled);
+
+    private enum Location
     {
-        var lines = File.ReadAllLines("/etc/os-release");
-        var osDictionary = lines.Select(x => x.Split('=')).ToDictionary(y => y[0], y => y[1]);
-        return osDictionary.GetValueOrDefault("PRETTY_NAME", "ArchLinux");
-    }
-
-    private List<string> SearchArchArchive(string packageName)
-    {
-        var htmlRegex =
-            new Regex(
-                $"<a href=\"(?<filename>{Regex.Escape(packageName)}-[a-zA-Z0-9._+]+-[0-9]+-[a-zA-Z0-9_]+\\.pkg\\.tar\\.(?:zst|gz))\">",
-                RegexOptions.Multiline);
-
-        var handler = new SocketsHttpHandler()
-        {
-            AllowAutoRedirect = true,
-            AutomaticDecompression = System.Net.DecompressionMethods.All,
-            MaxAutomaticRedirections = 10,
-            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-        };
-        var client = new HttpClient(handler);
-        client.Timeout = TimeSpan.FromMinutes(15);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM/1.0 (compatible)");
-        var result = client.GetAsync($"{archRepo}{packageName[0]}/{packageName}/").Result;
-        var content = result.Content.ReadAsStringAsync().Result;
-
-        var matches = htmlRegex.Matches(content);
-        var results = new List<string>();
-        foreach (Match match in matches)
-        {
-            var filename = match.Groups["filename"].Value;
-            results.Add(Regex.Replace(filename, "-x86.*", ""));
-        }
-
-        client.Dispose();
-        return results;
-    }
-
-    private string SearchCachyArchive(string packageName)
-    {
-        return string.Empty;
-    }
-
-    private List<string> SearchLocalCache(string packageName)
-    {
-        var versionRegex = new Regex("[a-zA-Z0-9.]+");
-        var hashOrMinor = new Regex("([0-9]+|[a-z0-9]{6,})");
-        var files = Directory.GetFiles(pacmanCache)
-            .Where(x => Regex.IsMatch(Path.GetFileName(x),
-                $"^{Regex.Escape(packageName)}-{versionRegex.ToString()}-{hashOrMinor.ToString()}-.*\\.pkg\\.tar\\..*"))
-            .Select(x => Regex.Replace(Path.GetFileName(x), "-x86.*", ""))
-            .ToList();
-
-        return files;
+        Remote,
+        Local
     }
 }

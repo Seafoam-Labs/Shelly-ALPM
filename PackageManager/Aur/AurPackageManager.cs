@@ -8,6 +8,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using PackageManager.Alpm;
 using PackageManager.Alpm.Events.EventArgs;
+using PackageManager.Alpm.Questions;
+using PackageManager.Alpm.Utilities;
 using PackageManager.Aur.Models;
 using PackageManager.Utilities;
 using Shelly.Utilities;
@@ -69,7 +71,7 @@ public sealed class AurPackageManager(string? configPath = null)
         {
             Timeout = TimeSpan.FromSeconds(20),
         };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly/1.0 (+https://github.com/zoe-codez/Shelly-ALPM)");
+        client.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
         return client;
     }
 
@@ -419,7 +421,7 @@ public sealed class AurPackageManager(string? configPath = null)
                 NewPkgbuild = newPkgbuild ?? string.Empty,
                 ProceedWithUpdate = true
             };
-            PkgbuildDiffRequest?.Invoke(this,args);
+            PkgbuildDiffRequest?.Invoke(this, args);
 
             if (!args.ProceedWithUpdate)
             {
@@ -461,10 +463,46 @@ public sealed class AurPackageManager(string? configPath = null)
             // fallback install triggered by an earlier opt-deps selection.
             if (!_skipOptDepsPrompt)
             {
-                var selectedOptDeps = PromptAurOptionalDeps(packageName, pkgbuildInfo.OptDepends);
-                if (selectedOptDeps.Count > 0)
+                List<ProviderOption> optDepends = [];
+                foreach (var pkg in pkgbuildInfo.OptDepends)
                 {
-                    selectedOptDepsByPkg[packageName] = selectedOptDeps;
+                    var name = StripDepDecorations(pkg);
+                    if (string.IsNullOrEmpty(name)) continue;
+                    // PKGBUILD optdepends are typically "name: description" — preserve the
+                    // description for the UI tooltip/label while keeping Name to the bare
+                    // package name so downstream installers can resolve it.
+                    var colonIdx = pkg.IndexOf(':');
+                    var description = colonIdx >= 0 && colonIdx + 1 < pkg.Length
+                        ? pkg[(colonIdx + 1)..].Trim()
+                        : string.Empty;
+                    if (string.IsNullOrEmpty(description)) description = "No description found";
+                    var isPackageInstalled = _alpm.IsPackageInstalled(name);
+                    optDepends.Add(new ProviderOption(name, description, isPackageInstalled));
+                }
+
+                if (optDepends.Count > 0)
+                {
+                    var optQuestion = new AlpmQuestionEventArgs(
+                        AlpmQuestionType.SelectOptionalDeps,
+                        $"Select optional dependencies for {pkgbuildInfo.PkgName}",
+                        optDepends);
+                    _alpm.RaiseQuestion(optQuestion);
+                    optQuestion.WaitForResponse();
+                    if (optQuestion.Response.ProviderOptions is not null)
+                    {
+                        foreach (var optDep in optQuestion.Response.ProviderOptions)
+                        {
+                            if (optDep is not { IsSelected: true, IsInstalled: false }) continue;
+                            if (selectedOptDepsByPkg.ContainsKey(pkgbuildInfo.PkgName!))
+                            {
+                                selectedOptDepsByPkg[pkgbuildInfo.PkgName!].Add(optDep.Name);
+                            }
+                            else
+                            {
+                                selectedOptDepsByPkg.Add(pkgbuildInfo.PkgName!, [optDep.Name]);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -739,30 +777,6 @@ public sealed class AurPackageManager(string? configPath = null)
         }
     }
 
-    /// <summary>
-    /// Raises a SelectOptionalDeps question through _alpm so the existing CLI prompt and Gtk
-    /// dialog pipelines react identically to a sync-path prompt. Returns the bare optdep names
-    /// (the part before the first ':') that the user selected.
-    /// </summary>
-    private List<string> PromptAurOptionalDeps(string pkgName, List<string> optDepends)
-    {
-        if (optDepends == null || optDepends.Count == 0)
-            return new List<string>();
-
-        var args = new AlpmQuestionEventArgs(
-            AlpmQuestionType.SelectOptionalDeps,
-            $"Select optional dependencies for {pkgName}",
-            optDepends);
-        _alpm.RaiseQuestion(args);
-        args.WaitForResponse();
-
-        return optDepends
-            .Where((_, i) => (args.Response & (1L << i)) != 0)
-            .Select(StripDepDecorations)
-            .Where(n => !string.IsNullOrEmpty(n))
-            .ToList();
-    }
-
     private static readonly char[] _depVersionOps = ['>', '<', '='];
 
     /// <summary>
@@ -799,6 +813,7 @@ public sealed class AurPackageManager(string? configPath = null)
                 aur.Add(name);
             }
         }
+
         return (repo, aur);
     }
 
@@ -873,21 +888,34 @@ public sealed class AurPackageManager(string? configPath = null)
                             $"Optional dependency '{name}' not found in sync DBs or AUR (no provider)."));
                         continue;
                     }
+
                     if (providers.Count == 1)
                     {
                         chosen = providers[0];
                     }
                     else
                     {
+                        List<ProviderOption> availableProviders = [];
+                        foreach (var provider in providers)
+                        {
+                            var isInstalled = _alpm.IsPackageInstalled(provider);
+                            availableProviders.Add(new ProviderOption(provider, "No Description", isInstalled));
+                        }
                         var qArgs = new AlpmQuestionEventArgs(
                             AlpmQuestionType.SelectProvider,
                             $"Multiple AUR providers for '{name}'",
-                            providers,
+                            availableProviders,
                             name);
                         _alpm.RaiseQuestion(qArgs);
                         qArgs.WaitForResponse();
                         var idx = qArgs.Response;
-                        chosen = idx >= 0 && idx < providers.Count ? providers[idx] : providers[0];
+                        chosen = idx.ProviderOptions?.Where(x => x is { IsInstalled: true, IsSelected: true }).Select(x => x.Name).FirstOrDefault() ?? null;
+                        if (chosen is null)
+                        {
+                            ErrorEvent?.Invoke(this, new AlpmErrorEventArgs(
+                                $"Optional dependency '{name}' not found in sync DBs or AUR (no provider selected)."));
+                            continue;
+                        }
                     }
 
                     BuildOutput?.Invoke(this, new BuildOutputEventArgs
@@ -901,7 +929,7 @@ public sealed class AurPackageManager(string? configPath = null)
                     try
                     {
                         await InstallPackages(new List<string> { chosen });
-                        MarkAsDepend(new[] { chosen });
+                        MarkAsDepend([chosen]);
                     }
                     catch (Exception ex)
                     {
@@ -917,7 +945,8 @@ public sealed class AurPackageManager(string? configPath = null)
         }
     }
 
-    public async Task RemovePackages(List<string> packageNames, AlpmTransFlag flags = AlpmTransFlag.None, bool removeOptionalDeps = false)
+    public async Task RemovePackages(List<string> packageNames, AlpmTransFlag flags = AlpmTransFlag.None,
+        bool removeOptionalDeps = false)
     {
         await _alpm.RemovePackages(packageNames, flags, removeOptionalDeps);
         foreach (var packageName in packageNames)

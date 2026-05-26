@@ -25,10 +25,9 @@ public class InitializeCommand : AsyncCommand<Settings>
     private const uint GpgmeCreateNopasswd = 128;
     private const uint GpgmeCreateNoexpire = 256;
     private const UnixFileMode DirPrivate = UserRead | UserWrite | UserExecute; // 0700
+    private const UnixFileMode DirPublic = UserRead | UserWrite | UserExecute | GroupRead | GroupExecute | OtherRead | OtherExecute; // 0755
     private const UnixFileMode FileSecret = UserRead | UserWrite; // 0600
     private const UnixFileMode FilePublic = UserRead | UserWrite | GroupRead | OtherRead; // 0644
-
-    private const UnixFileMode FilePermissions = UserRead | UserWrite | GroupRead | OtherRead;
 
     private static readonly List<string> urlStart = ["hkp", "hkps", "hkpms", "ldap", "finger", "kdns"];
 
@@ -194,7 +193,7 @@ public class InitializeCommand : AsyncCommand<Settings>
 
     private void ValidateFilePermissions(string directory)
     {
-        EnsureMode(new DirectoryInfo(directory), DirPrivate);
+        EnsureMode(new DirectoryInfo(directory), DirPublic);
 
 
         var priv = new DirectoryInfo(Path.Combine(directory, "private-keys-v1.d"));
@@ -207,10 +206,22 @@ public class InitializeCommand : AsyncCommand<Settings>
         var revocs = new DirectoryInfo(Path.Combine(directory, "openpgp-revocs.d"));
         if (revocs.Exists) EnsureMode(revocs, DirPrivate);
 
+        var crls = new DirectoryInfo(Path.Combine(directory, "crls.d"));
+        if (crls.Exists) EnsureMode(crls, DirPrivate);
+
 
         foreach (var pattern in new[] { "*.gpg", "*.kbx" })
         foreach (var f in new DirectoryInfo(directory).EnumerateFiles(pattern))
+        {
+            if (string.Equals(f.Name, "secring.gpg", StringComparison.Ordinal)) continue;
             EnsureMode(f, FilePublic);
+        }
+
+        foreach (var name in new[] { "trustdb.gpg", "tofu.db", ".gpg-v21-migrated" })
+        {
+            var fi = new FileInfo(Path.Combine(directory, name));
+            if (fi.Exists) EnsureMode(fi, FilePublic);
+        }
 
 
         var secring = new FileInfo(Path.Combine(directory, "secring.gpg"));
@@ -234,16 +245,16 @@ public class InitializeCommand : AsyncCommand<Settings>
 
     private static void EnsureDirectoryPermissions(string directory)
     {
-        //Creation with mode 0700
-        var info = Directory.CreateDirectory(directory, FilePermissions | UserExecute);
+        //Creation with mode 0755
+        var info = Directory.CreateDirectory(directory, DirPublic);
 
         //Validate directory perms
-        if (info.UnixFileMode == (FilePermissions | UserExecute))
+        if (info.UnixFileMode == DirPublic)
         {
             return;
         }
 
-        info.UnixFileMode = FilePermissions | UserExecute;
+        info.UnixFileMode = DirPublic;
         info.Refresh();
     }
 
@@ -274,16 +285,16 @@ public class InitializeCommand : AsyncCommand<Settings>
             await gpgConfiguration.Create().DisposeAsync();
         }
 
-        if (gpgConfiguration.UnixFileMode != FilePermissions)
+        if (gpgConfiguration.UnixFileMode != FilePublic)
         {
-            gpgConfiguration.UnixFileMode = FilePermissions;
+            gpgConfiguration.UnixFileMode = FilePublic;
             gpgConfiguration.Refresh();
         }
 
         if (gpgConfiguration.Length == 0)
         {
             await File.WriteAllTextAsync(gpgConfiguration.FullName, GpgConf);
-            File.SetUnixFileMode(gpgConfiguration.FullName, FilePermissions);
+            File.SetUnixFileMode(gpgConfiguration.FullName, FilePublic);
         }
         else
         {
@@ -359,13 +370,13 @@ public class InitializeCommand : AsyncCommand<Settings>
             var fileStream = gpgAgentConf.CreateText();
             await fileStream.WriteLineAsync("disable-scdaemon");
             fileStream.Close();
-            File.SetUnixFileMode(gpgAgentConf.FullName, UserRead | UserWrite);
+            File.SetUnixFileMode(gpgAgentConf.FullName, FilePublic);
         }
         else
         {
-            if (gpgAgentConf.UnixFileMode != (UserRead | UserWrite))
+            if (gpgAgentConf.UnixFileMode != FilePublic)
             {
-                File.SetUnixFileMode(gpgAgentConf.FullName, UserRead | UserWrite);
+                File.SetUnixFileMode(gpgAgentConf.FullName, FilePublic);
                 gpgAgentConf.Refresh();
             }
 

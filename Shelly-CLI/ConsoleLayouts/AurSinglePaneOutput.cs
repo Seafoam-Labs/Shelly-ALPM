@@ -203,8 +203,8 @@ public static class AurSinglePaneOutput
                 var pkgBuildConfirm = noConfirm
                                       || AnsiConsole.Confirm(":: Proceed with this PKGBUILD?", true);
                 args.ProceedWithUpdate = pkgBuildConfirm;
-                region.WriteLine($"[yellow] Cancelled because of pkgbuild diff.[/]");
-                
+                if (!pkgBuildConfirm)
+                    region.WriteLine($"[yellow] Cancelled because of pkgbuild diff.[/]");
             }
             finally
             {

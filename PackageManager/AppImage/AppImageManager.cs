@@ -215,7 +215,7 @@ public class AppImageManager
             LogMessage($"Downloading update for {update.Name}...");
             using (var client = new HttpClient())
             {
-                client.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM");
+                client.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
                 var response = await client.GetAsync(update.DownloadUrl);
                 response.EnsureSuccessStatusCode();
                 await using var fs = new FileStream(downloadPath, FileMode.Create, FileAccess.Write, FileShare.None);
@@ -329,7 +329,7 @@ public class AppImageManager
         {
             var url = GithubToReleasesApi(repo);
             using var client = new HttpClient();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM");
+            client.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
             var response = await client.GetAsync(url + "/latest");
             if (!response.IsSuccessStatusCode) return null;
 
@@ -391,7 +391,7 @@ public class AppImageManager
         {
             var url = GitLabToReleasesApi(repo);
             using var client = new HttpClient();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM");
+            client.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
             var response = await client.GetAsync(url);
             if (!response.IsSuccessStatusCode) return null;
 
@@ -456,7 +456,7 @@ public class AppImageManager
         {
             var url = GiteaToReleasesApi(repo, domain);
             using var client = new HttpClient();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM");
+            client.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
             var response = await client.GetAsync(url);
             if (!response.IsSuccessStatusCode) return null;
 
@@ -791,7 +791,7 @@ public class AppImageManager
         try
         {
             using var client = new HttpClient();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Shelly-ALPM");
+            client.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
             var request = new HttpRequestMessage(HttpMethod.Head, url);
             var response = await client.SendAsync(request);
             if (!response.IsSuccessStatusCode) return null;

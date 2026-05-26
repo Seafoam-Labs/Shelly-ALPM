@@ -1,4 +1,6 @@
+using System.Text.Json;
 using PackageManager.Alpm;
+using PackageManager.Alpm.Questions;
 using Spectre.Console;
 
 namespace Shelly_CLI.Utility;
@@ -29,54 +31,92 @@ public static class QuestionHandler
     private static void HandleOptionalDependencySelection(AlpmQuestionEventArgs question, bool uiMode = false,
         bool noConfirm = false)
     {
-        var bitmask = 0;
         if (question.ProviderOptions is null)
         {
             throw new ArgumentNullException(nameof(question.ProviderOptions),
                 "Cannot have a selection while provider options is null!");
         }
 
+        var visible = question.ProviderOptions
+            .Select((o, i) => (Option: o, OriginalIndex: i))
+            .Where(t => !t.Option.IsInstalled)
+            .ToList();
+
+        if (visible.Count == 0)
+        {
+            var none = question.ProviderOptions
+                .Select(o => o with { IsSelected = false })
+                .ToList();
+            question.SetResponse(new QuestionResponse(0, none));
+            return;
+        }
+
         if (uiMode)
         {
             if (noConfirm)
             {
-                question.SetResponse((int)((1L << 31) - 1));
+                var noneSelected = question.ProviderOptions
+                    .Select(o => o with { IsSelected = false })
+                    .ToList();
+                question.SetResponse(new QuestionResponse(0, noneSelected));
                 return;
             }
 
             Console.Error.WriteLine($"[ALPM_SELECT_OPTDEPS]{question.DependencyName}");
             for (var i = 0; i < question.ProviderOptions.Count; i++)
             {
-                Console.Error.WriteLine($"[ALPM_OPTDEPS_OPTION]{i}:{question.ProviderOptions[i]}");
+                var o = question.ProviderOptions[i];
+                var desc = o.Description ?? string.Empty;
+                var installed = o.IsInstalled ? "1" : "0";
+                var selected = o.IsSelected ? "1" : "0";
+                Console.Error.WriteLine($"[ALPM_OPTDEPS_OPTION]{i}\u001F{o.Name}\u001F{desc}\u001F{installed}\u001F{selected}");
             }
 
             Console.Error.WriteLine("[ALPM_OPTDEPS_END]");
             Console.Error.Flush();
             var input = Console.ReadLine();
-            //Uncomment if debugging
-            //Console.WriteLine($"Received: {input}");
-            //Console.WriteLine($"Bitmask: {input}");
-            question.SetResponse(int.Parse(input!));
+            var selectedIndices = ParseSelectedIndices(input);
+            var uiSelected = question.ProviderOptions
+                .Select((o, i) => o with { IsSelected = selectedIndices.Contains(i) && !o.IsInstalled })
+                .ToList();
+            question.SetResponse(new QuestionResponse(0, uiSelected));
             return;
         }
 
+        var choices = visible.Select(t => t.Option.Name).ToList();
         var selection = AnsiConsole.Prompt(
             new MultiSelectionPrompt<string>()
                 .Title($"[yellow]{question.QuestionText}[/]")
-                .NotRequired()                       // <-- allow zero selections
+                .NotRequired()
                 .InstructionsText(
                     "[grey](Press [blue]<space>[/] to toggle, " +
                     "[green]<enter>[/] to accept — leave empty to install none)[/]")
-                .AddChoices(question.ProviderOptions!));
-        for (var i = 0; i < question.ProviderOptions.Count; i++)
-        {
-            if (selection.Contains(question.ProviderOptions[i]))
-            {
-                bitmask |= (1 << i);
-            }
-        }
+                .AddChoices(choices));
 
-        question.SetResponse(bitmask);
+        var selectedNames = new HashSet<string>(selection);
+        var selectedOriginal = visible
+            .Where(t => selectedNames.Contains(t.Option.Name))
+            .Select(t => t.OriginalIndex)
+            .ToHashSet();
+        var selectedOptions = question.ProviderOptions
+            .Select((o, i) => o with { IsSelected = selectedOriginal.Contains(i) })
+            .ToList();
+
+        question.SetResponse(new QuestionResponse(0, selectedOptions));
+    }
+
+    private static HashSet<int> ParseSelectedIndices(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return [];
+        try
+        {
+            var arr = JsonSerializer.Deserialize(input!, ShellyCLIJsonContext.Default.Int32Array);
+            return arr is null ? new HashSet<int>() : new HashSet<int>(arr);
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     private static void HandleProviderSelection(AlpmQuestionEventArgs question, bool uiMode = false,
@@ -89,14 +129,14 @@ public static class QuestionHandler
         {
             if (noConfirm)
             {
-                question.SetResponse(0);
+                question.SetResponse(new QuestionResponse(0, question.ProviderOptions));
                 return;
             }
 
             Console.Error.WriteLine($"[ALPM_SELECT_PROVIDER]{question.DependencyName}");
             for (int i = 0; i < question.ProviderOptions.Count; i++)
             {
-                Console.Error.WriteLine($"[ALPM_PROVIDER_OPTION]{i}:{question.ProviderOptions[i]}");
+                Console.Error.WriteLine($"[ALPM_PROVIDER_OPTION]{i}\u001F{question.ProviderOptions[i].Name}");
             }
 
             Console.Error.WriteLine("[ALPM_PROVIDER_END]");
@@ -104,7 +144,7 @@ public static class QuestionHandler
             var input = Console.ReadLine();
             if (int.TryParse(input?.Trim(), out var idx))
             {
-                question.SetResponse(idx);
+                question.SetResponse(new QuestionResponse(idx, question.ProviderOptions));
             }
             else
             {
@@ -117,11 +157,12 @@ public static class QuestionHandler
             return;
         }
 
+        var providerNames = question.ProviderOptions.Select(o => o.Name).ToList();
         var selection = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
                 .Title($"[yellow]{question.QuestionText}[/]")
-                .AddChoices(question.ProviderOptions!));
-        question.SetResponse(question.ProviderOptions!.IndexOf(selection));
+                .AddChoices(providerNames));
+        question.SetResponse(new QuestionResponse(providerNames.IndexOf(selection), question.ProviderOptions));
     }
 
 
@@ -132,7 +173,7 @@ public static class QuestionHandler
         {
             if (noConfirm)
             {
-                question.SetResponse(1);
+                question.SetResponse(new QuestionResponse(1, null));
                 return;
             }
 
@@ -166,11 +207,11 @@ public static class QuestionHandler
             Console.WriteLine($"Received: {input}");
             if (input is "y" or "Y")
             {
-                question.SetResponse(1);
+                question.SetResponse(new QuestionResponse(1, null));
             }
             else if (input is "n" or "N")
             {
-                question.SetResponse(0);
+                question.SetResponse(new QuestionResponse(0, null));
             }
 
             return;
@@ -178,11 +219,11 @@ public static class QuestionHandler
 
         if (noConfirm)
         {
-            question.SetResponse(1);
+            question.SetResponse(new QuestionResponse(1, null));
             return;
         }
 
         var response = AnsiConsole.Confirm($"[yellow]{question.QuestionText}[/]", defaultValue: true);
-        question.SetResponse(response ? 1 : 0);
+        question.SetResponse(new QuestionResponse(response ? 1 : 0, null));
     }
 }

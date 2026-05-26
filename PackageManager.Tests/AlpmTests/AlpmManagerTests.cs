@@ -2,6 +2,7 @@ using System.Diagnostics;
 using PackageManager.Alpm;
 using System.IO;
 using System.Runtime.InteropServices;
+using PackageManager.Alpm.Questions;
 
 namespace PackageManager.Tests.AlpmTests;
 
@@ -72,7 +73,7 @@ public class AlpmManagerTests
         {
             questionTriggered = true;
             capturedType = args.QuestionType;
-            args.SetResponse(0); // Answer No
+            args.SetResponse(new QuestionResponse(0,null)); // Answer No
         };
 
         // Create a fake question struct

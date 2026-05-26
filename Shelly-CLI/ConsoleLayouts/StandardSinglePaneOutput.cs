@@ -54,7 +54,7 @@ public static class StandardSinglePaneOutput
 
         manager.ScriptletInfo += (_, e) =>
         {
-            var line = e.Line ?? string.Empty;
+            var line = e.Line.TrimEnd();
             region.WriteLine(string.IsNullOrEmpty(line)
                 ? "[dim]Running scriptlet...[/]"
                 : $"[dim]Scriptlet: {line.EscapeMarkup()}[/]");

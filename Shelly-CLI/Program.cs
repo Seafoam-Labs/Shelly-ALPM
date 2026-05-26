@@ -185,7 +185,8 @@ public class Program
                 .WithDescription("Downgrade a package")
                 .WithExample("downgrade", "firefox")
                 .WithExample("downgrade", "firefox", "--oldest")
-                .WithExample("downgrade", "firefox", "--latest");
+                .WithExample("downgrade", "firefox", "--latest")
+                .WithExample("downgrade", "firefox", "--ignore");
 
             config.AddCommand<ArchNews>("news")
                 .WithDescription("Shows Arch news you haven't seen before")
