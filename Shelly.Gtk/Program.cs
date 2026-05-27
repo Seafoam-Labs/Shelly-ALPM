@@ -240,10 +240,6 @@ sealed class Program
             var sidebarRecommendLabel = (Label)mainBuilder.GetObject("SidebarRecommendLabel")!;
             var sidebarSearchLabel = (Label)mainBuilder.GetObject("SidebarSearchLabel")!;
 
-            var quitAction = SimpleAction.New("quit", null);
-            quitAction.OnActivate += (_, _) => application.Quit();
-            application.AddAction(quitAction);
-
             var preferencesAction = SimpleAction.New("preferences", null);
             preferencesAction.OnActivate += (_, _) => settingsStack.SetVisibleChildName("settings_page");
             application.AddAction(preferencesAction);
