@@ -83,7 +83,7 @@ public class Program
         app.Configure(config =>
         {
             config.SetApplicationName("shelly");
-            config.SetApplicationVersion(Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown");
+            config.SetApplicationVersion(Assembly.GetExecutingAssembly().GetName().Version?.ToString(4) ?? "unknown");
 
             config.AddCommand<VersionCommand>("version")
                 .WithDescription("Display the application version")

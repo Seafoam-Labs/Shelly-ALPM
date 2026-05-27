@@ -136,7 +136,7 @@ public class Settings(
 
         var versionLabel = (Label)builder.GetObject("version_label")!;
         versionLabel.SetLabel(
-            $"v{System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "Unknown"}");
+            $"v{System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString(4) ?? "Unknown"}");
 
         var defaultPageDropDown = (DropDown)builder.GetObject("default_page_drop")!;
         PopulateDefaultPageDropDown(defaultPageDropDown);

@@ -1,4 +1,3 @@
-using Shelly.Gtk.Enums;
 using System.Reflection;
 using Gio;
 using Gtk;
@@ -10,7 +9,6 @@ using Shelly.Gtk.Windows.AUR;
 using Shelly.Gtk.Windows.Dialog;
 using Shelly.Gtk.Windows.Flatpak;
 using Shelly.Gtk.Helpers;
-using Shelly.GTK.Resources;
 using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.Windows.Packages;
@@ -28,24 +26,9 @@ namespace Shelly.Gtk;
 
 sealed class Program
 {
-    private static string? _requestedPage;
-
-    [System.Runtime.InteropServices.DllImport("libc")]
-    private static extern int getuid();
-
     private static void EnsureSessionEnvironment()
     {
-        var uid = getuid();
-
-        // 1. XDG_RUNTIME_DIR — required for the session bus socket path
-        // if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR")))
-        // {
-        //     var runtime = $"/run/user/{uid}";
-        //     if (Directory.Exists(runtime))
-        //         Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", runtime);
-        // }
-
-        // 2. DBUS_SESSION_BUS_ADDRESS — dconf needs this to read GSettings
+        // DBUS_SESSION_BUS_ADDRESS — dconf needs this to read GSettings
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS")))
         {
             var rd = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
@@ -57,7 +40,7 @@ sealed class Program
             }
         }
 
-        // 3. XDG_DATA_DIRS — needed so GIO finds compiled GSettings schemas + themes
+        // XDG_DATA_DIRS — needed so GIO finds compiled GSettings schemas + themes
         var dataDirs = Environment.GetEnvironmentVariable("XDG_DATA_DIRS");
         if (string.IsNullOrEmpty(dataDirs) || !dataDirs.Contains("/usr/share"))
         {
@@ -71,8 +54,7 @@ sealed class Program
             Environment.SetEnvironmentVariable("XDG_CURRENT_DESKTOP", DesktopDetector.DetectDesktop());
         }
 
-
-        // 5. Make GIO use dconf instead of falling back to memory backend
+        // Make GIO use dconf instead of falling back to memory backend
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GSETTINGS_BACKEND")))
             Environment.SetEnvironmentVariable("GSETTINGS_BACKEND", "dconf");
     }
@@ -85,9 +67,9 @@ sealed class Program
 
         var home = Environment.GetEnvironmentVariable("HOME") ?? "/root";
         string? themeName = null;
-        bool preferDark = false;
+        var preferDark = false;
 
-        // 1. Preferred source: ~/.config/gtk-4.0/settings.ini (written by kde-gtk-config)
+        // Preferred source: ~/.config/gtk-4.0/settings.ini (written by kde-gtk-config)
         var gtk4Ini = Path.Combine(home, ".config", "gtk-4.0", "settings.ini");
         if (File.Exists(gtk4Ini))
         {
@@ -104,7 +86,7 @@ sealed class Program
             }
         }
 
-        // 2. Fallback: detect dark from kdeglobals ColorScheme
+        // Fallback: detect dark from kdeglobals ColorScheme
         if (!preferDark)
         {
             var kdeGlobals = Path.Combine(home, ".config", "kdeglobals");
@@ -159,22 +141,18 @@ sealed class Program
         }
 
         Module.Initialize();
-        Translations.Init();
+        Init();
         if (preferDark)
         {
             var settings = GtkSettings.GetDefault();
             settings?.GtkApplicationPreferDarkTheme = true;
         }
 
-
-        //GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
-
         // Parse --page argument
-        for (int i = 0; i < args.Length; i++)
+        for (var i = 0; i < args.Length; i++)
         {
             if (args[i] == "--page" && i + 1 < args.Length)
             {
-                _requestedPage = args[i + 1];
                 break;
             }
         }
@@ -183,9 +161,9 @@ sealed class Program
         var serviceProvider = ServiceBuilder.CreateDependencyInjection(serviceCollection);
 
         var application = Application.New(ShellyConstants.Service,
-            Gio.ApplicationFlags.DefaultFlags | Gio.ApplicationFlags.HandlesCommandLine);
+            ApplicationFlags.DefaultFlags | ApplicationFlags.HandlesCommandLine);
 
-        application.OnCommandLine += (sender, e) =>
+        application.OnCommandLine += (_, _) =>
         {
             application.Activate();
             return 0;
@@ -196,7 +174,7 @@ sealed class Program
         application.AddAction(quitAction);
         application.SetAccelsForAction("app.quit", ["<Ctrl>Q"]);
 
-        application.OnActivate += (sender, _) =>
+        application.OnActivate += (_, _) =>
         {
             if (serviceProvider!.GetService<IConfigService>()!.LoadConfig().TrayEnabled)
                 TrayStartService.Start();
@@ -226,7 +204,7 @@ sealed class Program
             var menuBuilder = Builder.New();
             menuBuilder.TranslationDomain = Domain;
             menuBuilder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/MainMenu.ui"), -1);
-            var appMenu = (Gio.Menu)menuBuilder.GetObject("AppMenu")!;
+            var appMenu = (Menu)menuBuilder.GetObject("AppMenu")!;
             application.Menubar = appMenu;
 
             Task.Run(async () =>
@@ -262,15 +240,15 @@ sealed class Program
             var sidebarRecommendLabel = (Label)mainBuilder.GetObject("SidebarRecommendLabel")!;
             var sidebarSearchLabel = (Label)mainBuilder.GetObject("SidebarSearchLabel")!;
 
-            var quitAction = Gio.SimpleAction.New("quit", null);
+            var quitAction = SimpleAction.New("quit", null);
             quitAction.OnActivate += (_, _) => application.Quit();
             application.AddAction(quitAction);
 
-            var preferencesAction = Gio.SimpleAction.New("preferences", null);
+            var preferencesAction = SimpleAction.New("preferences", null);
             preferencesAction.OnActivate += (_, _) => settingsStack.SetVisibleChildName("settings_page");
             application.AddAction(preferencesAction);
 
-            var archNews = Gio.SimpleAction.New("news", null);
+            var archNews = SimpleAction.New("news", null);
             archNews.OnActivate += (_, _) =>
             {
                 new ArchNewsDialog(serviceProvider.GetRequiredService<IArchNewsService>(), mainOverlay)
@@ -278,7 +256,7 @@ sealed class Program
             };
             application.AddAction(archNews);
 
-            var cacheCleaner = Gio.SimpleAction.New("cacheclean", null);
+            var cacheCleaner = SimpleAction.New("cacheclean", null);
             cacheCleaner.OnActivate += (_, _) =>
             {
                 new CacheCleanerDialog(serviceProvider.GetRequiredService<IGenericQuestionService>(),
@@ -287,7 +265,7 @@ sealed class Program
             };
             application.AddAction(cacheCleaner);
 
-            var aboutAction = Gio.SimpleAction.New("about", null);
+            var aboutAction = SimpleAction.New("about", null);
             aboutAction.OnActivate += (_, _) => { new ShellyAboutDialog(mainOverlay).OpenAboutDialog(); };
             application.AddAction(aboutAction);
 
@@ -654,7 +632,7 @@ sealed class Program
 
             //Subscribing to credential required to trigger the password dialog
             var credentialManager = serviceProvider.GetRequiredService<ICredentialManager>();
-            credentialManager.CredentialRequested += (s, e) =>
+            credentialManager.CredentialRequested += (_, e) =>
             {
                 GLib.Functions.IdleAdd(0, () =>
                 {
@@ -666,18 +644,17 @@ sealed class Program
 
             var alpmEventService = serviceProvider.GetRequiredService<IAlpmEventService>();
 
-            alpmEventService.Question += (s, e) =>
+            alpmEventService.Question += (_, e) =>
             {
                 GLib.Functions.IdleAdd(0, () =>
                 {
-                    var dialog = serviceProvider.GetRequiredService<AlpmEventDialog>();
                     AlpmEventDialog.ShowAlpmEventDialog(mainOverlay, e);
                     return false;
                 });
             };
 
             var genericQuestionService = serviceProvider.GetRequiredService<IGenericQuestionService>();
-            genericQuestionService.Question += (s, e) =>
+            genericQuestionService.Question += (_, e) =>
             {
                 GLib.Functions.IdleAdd(0, () =>
                 {
@@ -686,7 +663,7 @@ sealed class Program
                 });
             };
 
-            genericQuestionService.PackageBuildRequested += (s, e) =>
+            genericQuestionService.PackageBuildRequested += (_, e) =>
             {
                 GLib.Functions.IdleAdd(0, () =>
                 {
@@ -695,7 +672,7 @@ sealed class Program
                 });
             };
 
-            genericQuestionService.ToastMessageRequested += (s, e) =>
+            genericQuestionService.ToastMessageRequested += (_, e) =>
             {
                 GLib.Functions.IdleAdd(0, () =>
                 {
@@ -704,7 +681,7 @@ sealed class Program
                 });
             };
 
-            genericQuestionService.Dialog += (s, e) =>
+            genericQuestionService.Dialog += (_, e) =>
             {
                 GLib.Functions.IdleAdd(0, () =>
                 {
@@ -736,7 +713,7 @@ sealed class Program
                 };
             }
 
-            var assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+            var assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(4) ?? "0.0.0.0";
             if (assemblyVersion != configService.LoadConfig().CurrentVersion)
             {
                 if (!configService.LoadConfig().NewInstall)
@@ -969,6 +946,7 @@ sealed class Program
                         }
                         catch
                         {
+                            // ignored
                         }
 
                         if (bannerFrame.GetParent() != null) mainOverlay.RemoveOverlay(bannerFrame);

@@ -15,14 +15,14 @@ public class VersionCommand : Command
             return HandleUiModeVersion();
         }
 
-        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown";
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(4) ?? "unknown";
         AnsiConsole.MarkupLine($"[bold]shelly[/] version [green]{version}[/]");
         return 0;
     }
 
     private static int HandleUiModeVersion()
     {
-        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown";
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(4) ?? "unknown";
         Console.WriteLine($"shelly version {version}");
         return 0;
     }

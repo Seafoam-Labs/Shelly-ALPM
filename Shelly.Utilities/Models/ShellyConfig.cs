@@ -28,7 +28,7 @@ public class ShellyConfig
     public int TrayCheckIntervalHours { get; set; } = 12;
     public bool NoConfirm { get; set; } = false;
     public bool NewInstall { get; set; } = true;
-    public string CurrentVersion { get; set; } = "0.0.0";
+    public string CurrentVersion { get; set; } = "0.0.0.0";
     public bool UseWeeklySchedule { get; set; } = false;
     public List<DayOfWeek> DaysOfWeek { get; set; } = [];
     public TimeOnly? Time { get; set; } = null;

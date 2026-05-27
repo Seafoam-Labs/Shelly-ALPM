@@ -14,7 +14,7 @@ public class ShellyAboutDialog(Overlay overlay)
             var dialog = AboutDialog.New();
 
             dialog.ProgramName = "Shelly";
-            dialog.Version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+            dialog.Version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(4) ?? "0.0.0.0";
             dialog.Comments = T("Shelly is an Arch Linux package manager");
             dialog.Copyright = $"© {DateTime.Now.Year} Seafoam Labs";
 

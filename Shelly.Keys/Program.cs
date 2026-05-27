@@ -14,7 +14,7 @@ internal class Program
         app.Configure(config =>
         {
             config.SetApplicationName("shelly-keys");
-            config.SetApplicationVersion(Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown");
+            config.SetApplicationVersion(Assembly.GetExecutingAssembly().GetName().Version?.ToString(4) ?? "unknown");
 
             config.AddCommand<InitializeCommand>("initialize")
                 .WithDescription("Initialize gpg keys")
