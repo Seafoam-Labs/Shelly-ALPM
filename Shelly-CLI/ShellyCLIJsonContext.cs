@@ -7,6 +7,7 @@ using PackageManager.Aur.Models;
 using PackageManager.Flatpak;
 using PackageManager.Local;
 using Shelly_CLI.Commands.Aur.Models;
+using Shelly_CLI.Commands.Standard;
 using Shelly_CLI.Commands.Standard.Models;
 using Shelly.Utilities;
 
@@ -61,4 +62,8 @@ namespace Shelly_CLI;
 [JsonSerializable(typeof(QuestionResponse))]
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(int[]))]
+[JsonSerializable(typeof(DowngradeOptionDto))]
+[JsonSerializable(typeof(List<DowngradeOptionDto>))]
+[JsonSerializable(typeof(DowngradePackageCommand.PackageInfo))]
+[JsonSerializable(typeof(List<DowngradePackageCommand.PackageInfo>))]
 internal partial class ShellyCLIJsonContext : JsonSerializerContext;

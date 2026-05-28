@@ -18,14 +18,10 @@ public class PrivilegedOperationService : IPrivilegedOperationService
     private readonly ITrayDbus _trayDbus;
     private readonly IPackageUpdateNotifier _packageUpdateNotifier;
     private readonly IDirtyService _dirtyService;
-    private readonly IFingerprintAuthState _fingerprintAuthState;
-    private readonly Dictionary<string, DateTime> _lastHintShown = new();
-    private bool _usedPassword = false;
 
     public PrivilegedOperationService(ICredentialManager credentialManager, IAlpmEventService alpmEventService,
         IConfigService configService, ILockoutService lockoutService, ITrayDbus trayDbus,
-        IPackageUpdateNotifier packageUpdateNotifier, IDirtyService dirtyService,
-        IFingerprintAuthState fingerprintAuthState)
+        IPackageUpdateNotifier packageUpdateNotifier, IDirtyService dirtyService)
     {
         _credentialManager = credentialManager;
         _alpmEventService = alpmEventService;
@@ -34,7 +30,6 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         _trayDbus = trayDbus;
         _packageUpdateNotifier = packageUpdateNotifier;
         _dirtyService = dirtyService;
-        _fingerprintAuthState = fingerprintAuthState;
         _cliPath = CliPathResolver.FindCliPath();
     }
 
@@ -43,7 +38,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         var config = _configService.LoadConfig();
         if (config.NoConfirm)
         {
-            return [..args, "--no-confirm"];
+            return [.. args, "--no-confirm"];
         }
 
         return args;
@@ -117,9 +112,9 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         var targetArgs = packages
             .SelectMany(x => new[] { "-t", x })
             .ToArray();
-        
-        Console.Error.Write("Removing package cache...");
-        
+
+        await Console.Error.WriteAsync("Removing package cache...");
+
         return await ExecutePrivilegedCommandAsync(
             "Removing package from cache",
             [
@@ -129,8 +124,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                 ..targetArgs
             ]);
     }
-    
-    
+
     public async Task<OperationResult> RemovePackagesAsync(IEnumerable<string> packages, bool isCascade, bool isCleanup, bool removeOptionalDeps, bool removePackageFromCache)
     {
         var packageArgs = string.Join(" ", packages);
@@ -152,10 +146,10 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         var result = await ExecutePrivilegedWithNoConfirmCheck("Remove packages", "remove", packageArgs);
         if (result.Success && removePackageFromCache)
         {
-            var cacheResult = await RemovePackageCacheAsync(packages);
-        } 
+            _ = await RemovePackageCacheAsync(packages);
+        }
         if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Native);
-        
+
         return result;
     }
 
@@ -396,9 +390,6 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
     public async Task<bool> IsPackageInstalledOnMachine(string packageName)
     {
-        //var aurPackages = await GetAurInstalledPackagesAsync();
-
-        //Enable below statement if moved to standard package.
         var standardPackages = await GetInstalledPackagesAsync();
         return standardPackages.Any(x => x.Name.Contains(packageName));
     }
@@ -481,6 +472,23 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         return result;
     }
 
+    public async Task<List<DowngradeOptionDto>> GetDowngradeOptionsAsync(string packageName)
+    {
+        var result = await ExecuteCommandAsync("downgrade", packageName, "--list-options");
+        if (!result.Success || string.IsNullOrWhiteSpace(result.Output)) return [];
+        JsonPackFrame.TryDecode<List<DowngradeOptionDto>>(result.Output, out var framed);
+        return framed ?? throw new InvalidOperationException();
+    }
+
+    public async Task<OperationResult> DowngradePackageAsync(string packageName, string filename, bool addIgnore)
+    {
+        var args = new List<string> { "downgrade", packageName, "--target", $"\"{filename}\"", "--no-confirm" };
+        if (addIgnore) args.Add("--ignore");
+        var result = await ExecutePrivilegedCommandAsync("Downgrade package", args.ToArray());
+        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.NativeInstalled);
+        return result;
+    }
+
     private void SendDbusMessage(OperationResult result)
     {
         if (result.Success)
@@ -528,7 +536,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
             // Log stderr for debugging
             if (!string.IsNullOrEmpty(error))
             {
-                Console.Error.WriteLine(error);
+                await Console.Error.WriteLineAsync(error);
             }
 
             return new OperationResult
@@ -604,8 +612,8 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
         // Semaphore + counter to prevent stdin from closing before async callbacks complete
         var stdinLock = new SemaphoreSlim(1, 1);
-        bool stdinClosed = false;
-        int pendingCallbacks = 0;
+        var stdinClosed = false;
+        var pendingCallbacks = 0;
         var allCallbacksDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // Helper to safely write to stdin
@@ -622,6 +630,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
             }
             catch (ObjectDisposedException)
             {
+                // ignored
             }
             finally
             {
@@ -672,15 +681,15 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         if (e.Data.StartsWith("[Shelly][ALPM_SELECT_PROVIDER]"))
                         {
                             Console.WriteLine("Provider question received");
-                            Console.Error.WriteLine($"[Shelly]Select provider for: {e.Data}");
+                            await Console.Error.WriteLineAsync($"[Shelly]Select provider for: {e.Data}");
                             awaitingProviderSelection = true;
                             providerOptions.Clear();
                             providerQuestion = e.Data.Substring("[Shelly][ALPM_SELECT_PROVIDER]".Length);
-                            Console.Error.WriteLine($"[Shelly]Select provider for: {providerQuestion}");
+                            await Console.Error.WriteLineAsync($"[Shelly]Select provider for: {providerQuestion}");
                         }
                         else if (e.Data.StartsWith("[Shelly][ALPM_PROVIDER_OPTION]"))
                         {
-                            Console.Error.WriteLine($"[Shelly]Provider option received: {e.Data}");
+                            await Console.Error.WriteLineAsync($"[Shelly]Provider option received: {e.Data}");
                             var payload = e.Data.Substring("[Shelly][ALPM_PROVIDER_OPTION]".Length);
                             var option = AlpmMarkerParser.ParseOptionPayload(payload, out var idx);
                             if (idx >= 0)
@@ -690,7 +699,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         }
                         else if (e.Data.StartsWith("[Shelly][ALPM_PROVIDER_END]"))
                         {
-                            Console.Error.WriteLine($"[Shelly]Provider selection received");
+                            await Console.Error.WriteLineAsync($"[Shelly]Provider selection received");
                             var args = new QuestionEventArgs(
                                 QuestionType.SelectProvider,
                                 providerQuestion ?? "Select provider",
@@ -706,7 +715,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                                 await SafeWriteAsync(args.Response.ToString());
                             }
 
-                            Console.Error.WriteLine($"[Shelly]Wrote selection {args.Response}");
+                            await Console.Error.WriteLineAsync($"[Shelly]Wrote selection {args.Response}");
 
                             awaitingProviderSelection = false;
                             providerQuestion = null;
@@ -718,7 +727,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                             awaitingOptDepsSelection = true;
                             optDepsOptions.Clear();
                             optDepsQuestion = e.Data.Substring("[Shelly][ALPM_SELECT_OPTDEPS]".Length);
-                            Console.Error.WriteLine($"[Shelly]Select optional deps for: {optDepsQuestion}");
+                            await Console.Error.WriteLineAsync($"[Shelly]Select optional deps for: {optDepsQuestion}");
                         }
                         else if (e.Data.StartsWith("[Shelly][ALPM_OPTDEPS_OPTION]"))
                         {
@@ -731,7 +740,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         }
                         else if (e.Data.StartsWith("[Shelly][ALPM_OPTDEPS_END]"))
                         {
-                            Console.Error.WriteLine("[Shelly]Optional deps selection end");
+                            await Console.Error.WriteLineAsync("[Shelly]Optional deps selection end");
                             var args = new QuestionEventArgs(
                                 QuestionType.SelectOptionalDeps,
                                 optDepsQuestion ?? "Select optional dependencies",
@@ -753,7 +762,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         {
                             Console.WriteLine("Conflict question found");
                             var questionText = e.Data.Substring("[Shelly][ALPM_QUESTION_CONFLICT]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
+                            await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
 
                             var args = new QuestionEventArgs(
                                 QuestionType.ConflictPkg,
@@ -772,7 +781,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         {
                             Console.WriteLine("Found Remove Package Question");
                             var questionText = e.Data.Substring("[Shelly][ALPM_QUESTION_REMOVEPKG]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
+                            await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
 
                             var args = new QuestionEventArgs(
                                 QuestionType.RemovePkgs,
@@ -791,7 +800,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         {
                             Console.WriteLine("Corrupted package question found");
                             var questionText = e.Data.Substring("[Shelly][ALPM_QUESTION_CORRUPTEDPKG]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
+                            await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
 
                             var args = new QuestionEventArgs(
                                 QuestionType.CorruptedPkg,
@@ -810,7 +819,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         {
                             Console.WriteLine("Inmport key question found");
                             var questionText = e.Data.Substring("[Shelly][ALPM_QUESTION_IMPORTKEY]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
+                            await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
 
                             var args = new QuestionEventArgs(
                                 QuestionType.ImportKey,
@@ -829,7 +838,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         {
                             Console.WriteLine("Replace Question Found");
                             var questionText = e.Data.Substring("[Shelly][ALPM_QUESTION_REPLACEPKG]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
+                            await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
                             var args = new QuestionEventArgs(QuestionType.ReplacePkg, questionText);
                             _alpmEventService.RaiseQuestion(args);
                             await args.WaitForResponseAsync();
@@ -860,7 +869,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         {
                             Console.WriteLine("Generic question found");
                             var questionText = e.Data.Substring("[Shelly][ALPM_QUESTION]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
+                            await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
 
                             var args = new QuestionEventArgs(
                                 QuestionType.InstallIgnorePkg,
@@ -900,12 +909,12 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                         else
                         {
                             errorBuilder.AppendLine(e.Data);
-                            Console.Error.WriteLine(e.Data);
+                            await Console.Error.WriteLineAsync(e.Data);
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.Error.WriteLine($"Error processing stderr: {ex.Message}");
+                        await Console.Error.WriteLineAsync($"Error processing stderr: {ex.Message}");
                         errorBuilder.AppendLine(e.Data);
                     }
                     finally
@@ -1051,7 +1060,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
             if (!string.IsNullOrEmpty(error))
             {
-                Console.Error.WriteLine(error);
+                await Console.Error.WriteLineAsync(error);
             }
 
             return new OperationResult

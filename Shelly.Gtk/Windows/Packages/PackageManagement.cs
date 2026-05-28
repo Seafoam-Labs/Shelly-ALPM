@@ -9,6 +9,7 @@ using static Shelly.Gtk.Helpers.PackageColumnViewSorter;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
+using Shelly.Gtk.Windows.Dialog;
 
 // ReSharper disable NotAccessedField.Local
 // ReSharper disable CollectionNeverUpdated.Local
@@ -46,6 +47,7 @@ public sealed class PackageManagement(
     private CheckButton _removeOptDepsCheck = null!;
     private CheckButton _showHiddenCheck = null!;
     private Button _removeButton = null!;
+    private Button _downgradeButton = null!;
     private readonly List<AlpmPackageGObject> _packageGObjectRefs = [];
     private readonly List<AlpmPackageDto> _packageData = [];
     private List<string> _groups = [];
@@ -86,6 +88,8 @@ public sealed class PackageManagement(
         var localRemoveButton = (Button)builder.GetObject("remove_local_button")!;
         _removeButton = (Button)builder.GetObject("remove_button")!;
         _removeButton.SetSensitive(false);
+        _downgradeButton = (Button)builder.GetObject("downgrade_button")!;
+        _downgradeButton.SetSensitive(false);
 
         _listStore = Gio.ListStore.New(AlpmPackageGObject.GetGType());
         _filter = PackageSearch.CreateSafeFilter(FilterPackage);
@@ -175,6 +179,7 @@ public sealed class PackageManagement(
             ApplyFilter();
         };
         _removeButton.OnClicked += (_, _) => { _ = RemoveSelectedAsync(); };
+        _downgradeButton.OnClicked += (_, _) => { _ = DowngradeSelectedAsync(); };
         refreshButton.OnClicked += (_, _) => { Reload(); };
         localRemoveButton.OnClicked += async (_, _) => { await OpenRemoveLocal(); };
         _showHiddenCheck.OnToggled += (_, _) => { Reload(); };
@@ -541,7 +546,9 @@ public sealed class PackageManagement(
             {
                 if (listItem.GetItem() is not AlpmPackageGObject current) return;
                 current.IsSelected = s.GetActive();
-                _removeButton.SetSensitive(AnySelected());
+                var anySelected = AnySelected();
+                _removeButton.SetSensitive(anySelected);
+                _downgradeButton.SetSensitive(anySelected);
             };
         };
 
@@ -750,16 +757,7 @@ public sealed class PackageManagement(
 
     private async Task RemoveSelectedAsync()
     {
-        var selectedPackages = new List<string>();
-        for (uint i = 0; i < _listStore.GetNItems(); i++)
-        {
-            var item = _listStore.GetObject(i);
-            if (item is AlpmPackageGObject { IsSelected: true, Index: >= 0 } pkgObj &&
-                pkgObj.Index < _packageData.Count)
-            {
-                selectedPackages.Add(_packageData[pkgObj.Index].Name);
-            }
-        }
+        var selectedPackages = GetSelectedPackages(); 
 
         if (selectedPackages.Count != 0)
         {
@@ -815,6 +813,94 @@ public sealed class PackageManagement(
         }
 
         return false;
+    }
+
+    private List<string> GetSelectedPackages()
+    {
+        var selectedPackages = new List<string>();
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is AlpmPackageGObject { IsSelected: true, Index: >= 0 } pkgObj &&
+                pkgObj.Index < _packageData.Count)
+            {
+                selectedPackages.Add(_packageData[pkgObj.Index].Name);
+            }
+        }
+
+        return selectedPackages;
+    }
+
+    private async Task DowngradeSelectedAsync()
+    {
+        var selectedPackages = GetSelectedPackages();
+
+        if (selectedPackages.Count == 0) return;
+
+        var successCount = 0;
+
+        foreach (var packageName in selectedPackages)
+        {
+            List<DowngradeOptionDto> options;
+            try
+            {
+                lockoutService.Show(T("Fetching downgrade options for {0}...", packageName));
+                options = await privilegedOperationService.GetDowngradeOptionsAsync(packageName);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Failed to fetch downgrade options for {packageName}: {e.Message}");
+                options = [];
+            }
+            finally
+            {
+                lockoutService.Hide();
+            }
+
+            if (options.Count == 0)
+            {
+                genericQuestionService.RaiseToastMessage(
+                    new ToastMessageEventArgs(T("No downgrade options found for {0}", packageName)));
+                continue;
+            }
+
+            var dialogArgs = DowngradeDialog.BuildDowngradeDialog(packageName, options);
+            genericQuestionService.RaiseDialog(dialogArgs);
+            var userResponse = await dialogArgs.ResponseTask;
+
+            if (userResponse.Filename is null) continue;
+
+            try
+            {
+                lockoutService.Show(T("Downgrading {0}...", packageName));
+                var downgradeResult = await privilegedOperationService.DowngradePackageAsync(
+                    packageName, userResponse.Filename, userResponse.AddIgnore);
+
+                if (downgradeResult.Success)
+                {
+                    successCount++;
+                }
+                else
+                {
+                    Console.WriteLine($"Downgrade failed for {packageName}: {downgradeResult.Error}");
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Failed to downgrade {packageName}: {e.Message}");
+            }
+            finally
+            {
+                lockoutService.Hide();
+            }
+        }
+
+        if (successCount > 0)
+        {
+            genericQuestionService.RaiseToastMessage(
+                new ToastMessageEventArgs(T("Downgraded {0} Package(s)", successCount)));
+            Reload();
+        }
     }
 
     public void Dispose()

@@ -60,10 +60,32 @@
                     </object>
                 </child>
                 <child>
-                    <object class="GtkMenuButton" id="options_menu">
-                        <property name="icon-name">emblem-system-symbolic</property>
-                        <property name="tooltip-text" translatable="yes">Additional Options</property>
-                        <property name="popover">options_popover</property>
+                    <object class="GtkCheckButton" id="cascade_delete_check">
+                        <property name="active">true</property>
+                        <property name="label" translatable="yes">Clean Uninstall</property>
+                        <property name="valign">center</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="remove_configs_check">
+                        <property name="label" translatable="yes">Remove Configs</property>
+                        <property name="valign">center</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="remove_optdeps_check">
+                        <property name="active">true</property>
+                        <property name="label" translatable="yes">Remove Optional Deps</property>
+                        <property name="tooltip-text" translatable="yes">Also remove orphaned optional dependencies installed with these packages.</property>
+                        <property name="valign">center</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="show_hidden_check">
+                        <property name="halign">start</property>
+                        <property name="label" translatable="yes">Show Hidden</property>
+                        <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
+                        <property name="active">false</property>
                     </object>
                 </child>
                 <child>
@@ -73,6 +95,13 @@
                         <style>
                             <class name="destructive-action"/>
                         </style>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkButton" id="downgrade_button">
+                        <property name="halign">start</property>
+                        <property name="label" translatable="yes">Downgrade Selected</property>
+                        <property name="tooltip-text" translatable="yes">Downgrade selected packages one by one</property>
                     </object>
                 </child>
             </object>
@@ -158,42 +187,5 @@
                 </child>
             </object>
         </child>
-    </object>
-    <object class="GtkPopover" id="options_popover">
-        <property name="child">
-            <object class="GtkBox">
-                <property name="orientation">vertical</property>
-                <property name="spacing">8</property>
-                <property name="margin-top">8</property>
-                <property name="margin-bottom">8</property>
-                <property name="margin-start">12</property>
-                <property name="margin-end">12</property>
-                <child>
-                    <object class="GtkCheckButton" id="cascade_delete_check">
-                        <property name="active">true</property>
-                        <property name="label" translatable="yes">Clean Uninstall</property>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkCheckButton" id="remove_configs_check">
-                        <property name="label" translatable="yes">Remove Configs</property>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkCheckButton" id="remove_optdeps_check">
-                        <property name="active">true</property>
-                        <property name="label" translatable="yes">Remove Optional Deps</property>
-                        <property name="tooltip-text" translatable="yes">Also remove orphaned optional dependencies installed with these packages.</property>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkCheckButton" id="show_hidden_check">
-                        <property name="label" translatable="yes">Show Hidden</property>
-                        <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
-                        <property name="active">false</property>
-                    </object>
-                </child>
-            </object>
-        </property>
     </object>
 </interface>
