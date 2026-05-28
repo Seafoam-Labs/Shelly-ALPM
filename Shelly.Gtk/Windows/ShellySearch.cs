@@ -589,7 +589,7 @@ public sealed class ShellySearch(
             var aur = selected.Where(x => x.PackageType == PackageType.Aur).Select(x => x.Name).ToList();
             var flatpak = selected.Where(x => x.PackageType == PackageType.Flatpak).Select(x => x.Id).ToList();
 
-            if (standard.Count > 0) await privilegedOperationService.RemovePackagesAsync(standard, false, false, false, _deletePackageCache);
+            if (standard.Count > 0) await privilegedOperationService.RemovePackagesAsync(standard, true, false, true, _deletePackageCache);
             if (aur.Count > 0) await privilegedOperationService.RemoveAurPackagesAsync(aur);
             if (flatpak.Count > 0) await unprivilegedOperationService.RemoveFlatpakPackage(flatpak);
 

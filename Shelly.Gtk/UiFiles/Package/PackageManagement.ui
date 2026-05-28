@@ -74,6 +74,7 @@
                 </child>
                 <child>
                     <object class="GtkCheckButton" id="remove_optdeps_check">
+                        <property name="active">true</property>
                         <property name="label" translatable="yes">Remove Optional Deps</property>
                         <property name="tooltip-text" translatable="yes">Also remove orphaned optional dependencies installed with these packages.</property>
                         <property name="valign">center</property>
