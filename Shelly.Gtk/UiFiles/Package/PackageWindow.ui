@@ -59,16 +59,10 @@
                             </object>
                         </child>
                         <child>
-                            <object class="GtkCheckButton" id="upgrade_check">
-                                <property name="label" translatable="yes">Perform Upgrade</property>
-                                <property name="tooltip-text" translatable="yes">Perform a full system upgrade with install (-u)</property>
-                            </object>
-                        </child>
-                        <child>
-                            <object class="GtkCheckButton" id="show_hidden_check">
-                                <property name="label" translatable="yes">Show Hidden</property>
-                                <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
-                                <property name="active">false</property>
+                            <object class="GtkMenuButton" id="options_menu">
+                                <property name="icon-name">view-more-symbolic</property>
+                                <property name="tooltip-text" translatable="yes">Additional Options</property>
+                                <property name="popover">options_popover</property>
                             </object>
                         </child>
                         <child>
@@ -207,6 +201,31 @@
                 </child>
             </object>
         </child>
+    </object>
+    <object class="GtkPopover" id="options_popover">
+        <property name="child">
+            <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">8</property>
+                <property name="margin-top">8</property>
+                <property name="margin-bottom">8</property>
+                <property name="margin-start">12</property>
+                <property name="margin-end">12</property>
+                <child>
+                    <object class="GtkCheckButton" id="upgrade_check">
+                        <property name="label" translatable="yes">Perform Upgrade</property>
+                        <property name="tooltip-text" translatable="yes">Perform a full system upgrade with install (-u)</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="show_hidden_check">
+                        <property name="label" translatable="yes">Show Hidden</property>
+                        <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
+                        <property name="active">false</property>
+                    </object>
+                </child>
+            </object>
+        </property>
     </object>
     <object class="GtkSingleSelection"/>
 </interface>
