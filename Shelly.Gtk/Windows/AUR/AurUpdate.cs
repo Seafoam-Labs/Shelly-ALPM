@@ -7,8 +7,8 @@ using static Shelly.Gtk.Helpers.AurColumnViewSorter;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.AUR.GObjects;
-// ReSharper disable NotAccessedField.Local
 
+// ReSharper disable NotAccessedField.Local
 // ReSharper disable CollectionNeverQueried.Local
 
 namespace Shelly.Gtk.Windows.AUR;
@@ -76,6 +76,9 @@ public class AurUpdate(
         _runChecksCheck = (CheckButton)builder.GetObject("run_checks_check")!;
         _showHiddenCheck = (CheckButton)builder.GetObject("show_hidden_check")!;
         _noPackagesLabel = (Label)builder.GetObject("no_packages_label")!;
+        var config = configService.LoadConfig();
+        _runChecksCheck.Active = config.AurUpdateRunChecks;
+        _showHiddenCheck.Active = config.AurUpdateShowHidden;
         _noPackagesLabel.Label_ = T("<span size='large'>AUR packages are up to date</span>");
         _noPackagesLabel.Visible = false;
         _updateButton.SetSensitive(false);
@@ -89,26 +92,26 @@ public class AurUpdate(
         _columnView.SetModel(_selectionModel);
 
         SetupColumns(_checkColumn, _nameColumn, _versionColumn);
-        
+
         // Creating sorter
         _nameColumn.Sorter = CustomSorter.New<AurPackageGObject>((a, b) => 0);
         _versionColumn.Sorter = CustomSorter.New<AurPackageGObject>((a, b) => 0);
-        
+
         _columnViewSorter = (ColumnViewSorter)_columnView.GetSorter()!;
 
         _columnViewSorter.OnChanged += (_, _) =>
         {
             var primaryColumn =
                 _columnViewSorter.GetPrimarySortColumn();
-            
+
             if (primaryColumn is null)
                 return;
-            
+
             var sortColumn = GetSortColumn(primaryColumn);
-            
+
             var order =
                 _columnViewSorter.GetPrimarySortOrder();
-            
+
             if (sortColumn is null)
                 return;
 
@@ -118,7 +121,7 @@ public class AurUpdate(
                 sortColumn.Value,
                 order
             );
-        };        
+        };
 
         var shortcutController = ShortcutController.New();
         shortcutController.Scope = ShortcutScope.Global;
@@ -131,14 +134,14 @@ public class AurUpdate(
             searchEntry.GrabFocus();
             return true;
         });
-        
+
         _box.AddController(shortcutController);
         shortcutController.AddShortcut(Shortcut.New(ShortcutTrigger.ParseString(searchTrigger), action));
-        
+
         ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.Start);
         ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.End);
 
-        
+
         _columnView.OnRealize += (_, _) => { Reload(); };
         _columnView.OnActivate += (_, _) =>
         {
@@ -154,7 +157,19 @@ public class AurUpdate(
             ApplyFilter();
         };
         _updateButton.OnClicked += (_, _) => { _ = RemovePackagesAsync(); };
-        _showHiddenCheck.OnToggled += (_, _) => { Reload(); };
+        _runChecksCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.AurUpdateRunChecks = _runChecksCheck.Active;
+            configService.SaveConfig(updatedConfig);
+        };
+        _showHiddenCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.AurUpdateShowHidden = _showHiddenCheck.Active;
+            configService.SaveConfig(updatedConfig);
+            Reload();
+        };
         _sub = DirtySubscription.Attach(dirtyService, this);
 
         _selectionModel.OnSelectionChanged += (_, _) =>
@@ -175,12 +190,12 @@ public class AurUpdate(
 
         return _box;
     }
-    
+
     private PackageSortColumn? GetSortColumn(ColumnViewColumn column)
     {
         if (column == _nameColumn)
             return PackageSortColumn.Name;
-        
+
         if (column == _versionColumn)
             return PackageSortColumn.Version;
 
@@ -322,7 +337,7 @@ public class AurUpdate(
                     _packageGObjectRefs.Add(gobject);
                     _listStore.Append(gobject);
                 }
-                
+
                 if (_listStore.GetNItems() > 0)
                 {
                     _selectionModel.SetSelected(0);
@@ -487,7 +502,7 @@ public class AurUpdate(
         iconImage.PixelSize = 64;
         iconImage.Halign = Align.Center;
         iconImage.MarginBottom = 8;
-        
+
         iconImage.SetFromIconName("package-x-generic");
 
         headerBox.Append(iconImage);

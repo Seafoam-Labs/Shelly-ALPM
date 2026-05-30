@@ -88,6 +88,12 @@ public sealed class PackageManagement(
         _loadingSpinner = (Spinner)builder.GetObject("loading_spinner")!;
         _errorLabel = (Label)builder.GetObject("error_label")!;
 
+        var config = configService.LoadConfig();
+        _cascadeDeleteCheck.Active = config.PackageManagementCascadeDelete;
+        _removeConfigsCheck.Active = config.PackageManagementRemoveConfigs;
+        _removeOptDepsCheck.Active = config.PackageManagementRemoveOptionalDeps;
+        _showHiddenCheck.Active = config.PackageManagementShowHidden;
+
         var checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
         checkColumn.Resizable = true;
         _nameColumn = (ColumnViewColumn)builder.GetObject("name_column")!;
@@ -200,7 +206,31 @@ public sealed class PackageManagement(
         _downgradeButton.OnClicked += (_, _) => { _ = DowngradeSelectedAsync(); };
         refreshButton.OnClicked += (_, _) => { Reload(); };
         localRemoveButton.OnClicked += async (_, _) => { await OpenRemoveLocal(); };
-        _showHiddenCheck.OnToggled += (_, _) => { Reload(); };
+        _cascadeDeleteCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageManagementCascadeDelete = _cascadeDeleteCheck.Active;
+            configService.SaveConfig(updatedConfig);
+        };
+        _removeConfigsCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageManagementRemoveConfigs = _removeConfigsCheck.Active;
+            configService.SaveConfig(updatedConfig);
+        };
+        _removeOptDepsCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageManagementRemoveOptionalDeps = _removeOptDepsCheck.Active;
+            configService.SaveConfig(updatedConfig);
+        };
+        _showHiddenCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageManagementShowHidden = _showHiddenCheck.Active;
+            configService.SaveConfig(updatedConfig);
+            Reload();
+        };
         _groupDropDown.OnNotify += (_, args) =>
         {
             if (args.Pspec.GetName() != "selected") return;
@@ -834,7 +864,7 @@ public sealed class PackageManagement(
 
     private async Task RemoveSelectedAsync()
     {
-        var selectedPackages = GetSelectedPackages(); 
+        var selectedPackages = GetSelectedPackages();
 
         if (selectedPackages.Count != 0)
         {

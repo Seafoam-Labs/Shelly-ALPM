@@ -10,7 +10,6 @@ using Shelly.Gtk.UiModels.AUR.GObjects;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 
 // ReSharper disable NotAccessedField.Local
-
 // ReSharper disable CollectionNeverQueried.Local
 
 namespace Shelly.Gtk.Windows.AUR;
@@ -54,7 +53,6 @@ public class AurRemove(
     private CheckButton _cascadeDeleteCheck = null!;
     private CheckButton _showHiddenCheck = null!;
 
-
     public Widget CreateWindow()
     {
         var builder = Builder.New();
@@ -76,6 +74,9 @@ public class AurRemove(
         _removeButton.SetSensitive(false);
         _cascadeDeleteCheck = (CheckButton)builder.GetObject("cascade_delete_check")!;
         _showHiddenCheck = (CheckButton)builder.GetObject("show_hidden_check")!;
+        var config = configService.LoadConfig();
+        _cascadeDeleteCheck.Active = config.AurRemoveCascadeDelete;
+        _showHiddenCheck.Active = config.AurRemoveShowHidden;
         _listStore = Gio.ListStore.New(AurPackageGObject.GetGType());
         _filter = PackageSearch.CreateSafeFilter(FilterPackage);
         _filterListModel = FilterListModel.New(_listStore, _filter);
@@ -85,26 +86,26 @@ public class AurRemove(
         _columnView.SetModel(_selectionModel);
 
         SetupColumns(_checkColumn, _nameColumn, _versionColumn);
-        
+
         // Creating sorter
         _nameColumn.Sorter = CustomSorter.New<AurPackageGObject>((a, b) => 0);
         _versionColumn.Sorter = CustomSorter.New<AurPackageGObject>((a, b) => 0);
-        
+
         _columnViewSorter = (ColumnViewSorter)_columnView.GetSorter()!;
 
         _columnViewSorter.OnChanged += (_, _) =>
         {
             var primaryColumn =
                 _columnViewSorter.GetPrimarySortColumn();
-            
+
             if (primaryColumn is null)
                 return;
-            
+
             var sortColumn = GetSortColumn(primaryColumn);
-            
+
             var order =
                 _columnViewSorter.GetPrimarySortOrder();
-            
+
             if (sortColumn is null)
                 return;
 
@@ -115,11 +116,11 @@ public class AurRemove(
                 sortColumn.Value,
                 order
             );
-        };        
-        
+        };
+
         ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.Start);
         ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.End);
-        
+
         var shortcutController = ShortcutController.New();
         shortcutController.Scope = ShortcutScope.Global;
         shortcutController.PropagationPhase = PropagationPhase.Capture;
@@ -128,13 +129,13 @@ public class AurRemove(
 
         var action = CallbackAction.New((_, _) =>
         {
-                searchEntry.GrabFocus();
-                return true;
+            searchEntry.GrabFocus();
+            return true;
         });
-        
+
         _box.AddController(shortcutController);
         shortcutController.AddShortcut(Shortcut.New(ShortcutTrigger.ParseString(searchTrigger), action));
-        
+
         _columnView.OnRealize += (_, _) => { Reload(); };
         _columnView.OnActivate += (_, _) =>
         {
@@ -150,7 +151,19 @@ public class AurRemove(
             ApplyFilter();
         };
         _removeButton.OnClicked += (_, _) => { _ = RemovePackagesAsync(); };
-        _showHiddenCheck.OnToggled += (_, _) => { Reload(); };
+        _cascadeDeleteCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.AurRemoveCascadeDelete = _cascadeDeleteCheck.Active;
+            configService.SaveConfig(updatedConfig);
+        };
+        _showHiddenCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.AurRemoveShowHidden = _showHiddenCheck.Active;
+            configService.SaveConfig(updatedConfig);
+            Reload();
+        };
         _sub = DirtySubscription.Attach(dirtyService, this);
 
         _selectionModel.OnSelectionChanged += (_, _) =>
@@ -171,12 +184,12 @@ public class AurRemove(
 
         return _box;
     }
-    
+
     private PackageSortColumn? GetSortColumn(ColumnViewColumn column)
     {
         if (column == _nameColumn)
             return PackageSortColumn.Name;
-        
+
         if (column == _versionColumn)
             return PackageSortColumn.Version;
 
@@ -313,7 +326,7 @@ public class AurRemove(
                     _listStore.Append(pkgObj);
                     index++;
                 }
-                
+
                 if (_listStore.GetNItems() > 0)
                 {
                     _selectionModel.SetSelected(0);
@@ -340,7 +353,7 @@ public class AurRemove(
         for (uint i = 0; i < _listStore.GetNItems(); i++)
         {
             var item = _listStore.GetObject(i);
-            if (item is AurPackageGObject { IsSelected: true} pkgObj)
+            if (item is AurPackageGObject { IsSelected: true } pkgObj)
             {
                 selectedPackages.Add(_aurPackages[pkgObj.Index].Name);
             }

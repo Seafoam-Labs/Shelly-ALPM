@@ -94,6 +94,10 @@ public sealed class PackageInstall(
         _upgradeCheck = (CheckButton)builder.GetObject("upgrade_check")!;
         _showHiddenCheck = (CheckButton)builder.GetObject("show_hidden_check")!;
 
+        var config = configService.LoadConfig();
+        _upgradeCheck.Active = config.PackageInstallUpgrade;
+        _showHiddenCheck.Active = config.PackageInstallShowHidden;
+
         _loadingOverlay = (Box)builder.GetObject("loading_overlay")!;
         _loadingSpinner = (Spinner)builder.GetObject("loading_spinner")!;
         _errorLabel = (Label)builder.GetObject("error_label")!;
@@ -206,7 +210,19 @@ public sealed class PackageInstall(
         _overlay.AddController(shortcutController);
 
         localInstallButton.OnClicked += (_, _) => { _ = InstallLocalPackage(); };
-        _showHiddenCheck.OnToggled += (_, _) => { Reload(); };
+        _upgradeCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageInstallUpgrade = _upgradeCheck.Active;
+            configService.SaveConfig(updatedConfig);
+        };
+        _showHiddenCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageInstallShowHidden = _showHiddenCheck.Active;
+            configService.SaveConfig(updatedConfig);
+            Reload();
+        };
 
         _groupDropDown.OnNotify += (_, args) =>
         {
@@ -782,7 +798,7 @@ public sealed class PackageInstall(
                     }
                 }
                 return false;
-                
+
             });
         }
         catch (OperationCanceledException)

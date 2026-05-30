@@ -1,7 +1,7 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using Shelly.Gtk.Helpers;
-using Shelly.Gtk.UiModels;
 using Shelly.Utilities;
 
 namespace Shelly.Gtk.Services;
@@ -14,13 +14,13 @@ public class ConfigService : IConfigService
 
     private static readonly string ConfigPath = Path.Combine(ConfigFolder, "config.json");
 
-    private ShellyConfig? _config = null;
-    private readonly IDirtyService dirtyService;
+    private ShellyConfig? _config;
+    private readonly IDirtyService _dirtyService;
     private bool _suppressInvalidate;
 
     public ConfigService(IDirtyService dirtyService)
     {
-        this.dirtyService = dirtyService;
+        _dirtyService = dirtyService;
         dirtyService.Dirtied += (_, e) =>
         {
             if (_suppressInvalidate) return;
@@ -43,8 +43,8 @@ public class ConfigService : IConfigService
         CallCliConfigSet(nameof(config.FlatPackEnabled), config.FlatPackEnabled.ToString());
         CallCliConfigSet(nameof(config.AppImageEnabled), config.AppImageEnabled.ToString());
         CallCliConfigSet(nameof(config.ConsoleEnabled), config.ConsoleEnabled.ToString());
-        CallCliConfigSet(nameof(config.WindowWidth), config.WindowWidth.ToString());
-        CallCliConfigSet(nameof(config.WindowHeight), config.WindowHeight.ToString());
+        CallCliConfigSet(nameof(config.WindowWidth), config.WindowWidth.ToString(CultureInfo.InvariantCulture));
+        CallCliConfigSet(nameof(config.WindowHeight), config.WindowHeight.ToString(CultureInfo.InvariantCulture));
         CallCliConfigSet(nameof(config.DefaultView), config.DefaultView);
         CallCliConfigSet(nameof(config.UseKdeTheme), config.UseKdeTheme.ToString());
         CallCliConfigSet(nameof(config.UseOldMenu), config.UseOldMenu.ToString());
@@ -69,9 +69,22 @@ public class ConfigService : IConfigService
         CallCliConfigSet(nameof(config.DefaultPageDropDown), config.DefaultPageDropDown.ToString());
         CallCliConfigSet(nameof(config.SuppressFingerprintWarning), config.SuppressFingerprintWarning.ToString());
         CallCliConfigSet(nameof(config.RemoveCache), config.RemoveCache.ToString());
+        CallCliConfigSet(nameof(config.PackageManagementCascadeDelete), config.PackageManagementCascadeDelete.ToString());
+        CallCliConfigSet(nameof(config.PackageManagementRemoveConfigs), config.PackageManagementRemoveConfigs.ToString());
+        CallCliConfigSet(nameof(config.PackageManagementRemoveOptionalDeps), config.PackageManagementRemoveOptionalDeps.ToString());
+        CallCliConfigSet(nameof(config.PackageManagementShowHidden), config.PackageManagementShowHidden.ToString());
+        CallCliConfigSet(nameof(config.PackageInstallUpgrade), config.PackageInstallUpgrade.ToString());
+        CallCliConfigSet(nameof(config.PackageInstallShowHidden), config.PackageInstallShowHidden.ToString());
+        CallCliConfigSet(nameof(config.PackageUpdateShowHidden), config.PackageUpdateShowHidden.ToString());
+        CallCliConfigSet(nameof(config.AurInstallUseChroot), config.AurInstallUseChroot.ToString());
+        CallCliConfigSet(nameof(config.AurInstallRunChecks), config.AurInstallRunChecks.ToString());
+        CallCliConfigSet(nameof(config.AurRemoveCascadeDelete), config.AurRemoveCascadeDelete.ToString());
+        CallCliConfigSet(nameof(config.AurRemoveShowHidden), config.AurRemoveShowHidden.ToString());
+        CallCliConfigSet(nameof(config.AurUpdateRunChecks), config.AurUpdateRunChecks.ToString());
+        CallCliConfigSet(nameof(config.AurUpdateShowHidden), config.AurUpdateShowHidden.ToString());
         ConfigSaved?.Invoke(this, config);
         _suppressInvalidate = true;
-        try { dirtyService.MarkDirty(DirtyScopes.Config); }
+        try { _dirtyService.MarkDirty(DirtyScopes.Config); }
         finally { _suppressInvalidate = false; }
     }
 
@@ -91,9 +104,9 @@ public class ConfigService : IConfigService
             _config = JsonSerializer.Deserialize(json, ShellyGtkJsonContext.Default.ShellyConfig) ?? new ShellyConfig();
 
             // Safeguard: if DefaultView is ShellySearch but ShellySearch is disabled, fall back to packages.
-            if (_config.DefaultView == nameof(Shelly.Gtk.Enums.DefaultViewEnum.ShellySearch) && !_config.ShellySearchEnabled)
+            if (_config.DefaultView == nameof(Enums.DefaultViewEnum.ShellySearch) && !_config.ShellySearchEnabled)
             {
-                _config.DefaultView = nameof(Shelly.Gtk.Enums.DefaultViewEnum.HomeScreen);
+                _config.DefaultView = nameof(Enums.DefaultViewEnum.HomeScreen);
             }
 
             return _config;

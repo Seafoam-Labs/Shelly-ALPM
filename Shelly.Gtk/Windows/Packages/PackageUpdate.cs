@@ -47,10 +47,9 @@ public class PackageUpdate(
     private ColumnViewColumn _oldColumn = null!;
     private ColumnViewColumn _versionColumn = null!;
     private ColumnViewColumn _sizeDiffColumn = null!;
-    
+
     private ColumnViewSorter _columnViewSorter = null!;
 
-    
     private Button _refreshButton = null!;
     private Button _updateButton = null!;
     private Label _noPackagesLabel = null!;
@@ -61,9 +60,7 @@ public class PackageUpdate(
     private Box _loadingOverlay = null!;
     private Spinner _loadingSpinner = null!;
     private Label _errorLabel = null!;
-    private AlpmUpdateGObject? _currentDetailPkg;
     private HashSet<string> _installedPackageNames = [];
-
 
     public Widget CreateWindow()
     {
@@ -88,6 +85,8 @@ public class PackageUpdate(
         _updateButton = (Button)builder.GetObject("update_button")!;
         _showHiddenCheck = (CheckButton)builder.GetObject("show_hidden_check")!;
         _noPackagesLabel = (Label)builder.GetObject("no_packages_label")!;
+        var config = configService.LoadConfig();
+        _showHiddenCheck.Active = config.PackageUpdateShowHidden;
         _noPackagesLabel.Label_ = T("<span size='large'>System packages are up to date</span>");
         _noPackagesLabel.Visible = false;
         _detailRevealer = (Revealer)builder.GetObject("detail_revealer")!;
@@ -105,25 +104,24 @@ public class PackageUpdate(
 
         SetupColumns(_checkColumn, _nameColumn, _sizeDiffColumn, _oldColumn, _versionColumn);
 
-        
         // Creating sorter
         _nameColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((a, b) => 0);
-        
+
         _columnViewSorter = (ColumnViewSorter)_columnView.GetSorter()!;
 
         _columnViewSorter.OnChanged += (_, _) =>
         {
             var primaryColumn =
                 _columnViewSorter.GetPrimarySortColumn();
-            
+
             if (primaryColumn is null)
                 return;
-            
+
             var sortColumn = GetSortColumn(primaryColumn);
-            
+
             var order =
                 _columnViewSorter.GetPrimarySortOrder();
-            
+
             if (sortColumn is null)
                 return;
 
@@ -133,14 +131,14 @@ public class PackageUpdate(
                 sortColumn.Value,
                 order
             );
-        };        
+        };
 
-        
+
         ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.Start);
         ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.End);
         ColumnViewHelper.AlignColumnHeader(_columnView, 3, Align.End);
         ColumnViewHelper.AlignColumnHeader(_columnView, 4, Align.End);
-        
+
         var shortcutController = ShortcutController.New();
         shortcutController.Scope = ShortcutScope.Global;
         shortcutController.PropagationPhase = PropagationPhase.Capture;
@@ -152,7 +150,7 @@ public class PackageUpdate(
             searchEntry.GrabFocus();
             return true;
         });
-        
+
         _box.AddController(shortcutController);
         shortcutController.AddShortcut(Shortcut.New(ShortcutTrigger.ParseString(searchTrigger), action));
 
@@ -194,22 +192,27 @@ public class PackageUpdate(
             else
             {
                 _detailRevealer.SetRevealChild(false);
-                _currentDetailPkg = null;
             }
         };
         _updateButton.OnClicked += (_, _) => { _ = UpdateSelectedAsync(); };
         _refreshButton.OnClicked += (_, _) => { Reload(); };
-        _showHiddenCheck.OnToggled += (_, _) => { Reload(); };
+        _showHiddenCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageUpdateShowHidden = _showHiddenCheck.Active;
+            configService.SaveConfig(updatedConfig);
+            Reload();
+        };
 
         _sub = DirtySubscription.Attach(dirtyService, this);
         return _box;
     }
-    
+
     private PackageSortColumn? GetSortColumn(ColumnViewColumn column)
     {
         if (column == _nameColumn)
             return PackageSortColumn.Name;
-        
+
         return null;
     }
 
@@ -227,7 +230,6 @@ public class PackageUpdate(
     {
         if (pkgObj.Package == null) return;
 
-        _currentDetailPkg = pkgObj;
         var pkg = pkgObj.Package;
 
         while (_detailBox.GetFirstChild() is { } child)
@@ -242,7 +244,6 @@ public class PackageUpdate(
         backButton.TooltipText = T("Close details");
         backButton.OnClicked += (_, _) =>
         {
-            _currentDetailPkg = null;
             _selectionModel.UnselectItem(_selectionModel.GetSelected());
             _detailRevealer.SetTransitionType(RevealerTransitionType.SlideLeft);
             _detailRevealer.SetRevealChild(false);
@@ -645,7 +646,6 @@ public class PackageUpdate(
                 _packageGObjectRefs.Clear();
                 _filterListModel.SetFilter(_filter);
                 _detailRevealer.SetRevealChild(false);
-                _currentDetailPkg = null;
 
                 foreach (var package in packages)
                 {
@@ -667,7 +667,7 @@ public class PackageUpdate(
                         ShowPackageDetails(pkgObj);
                     }
                 }
-                
+
                 return false;
             });
         }

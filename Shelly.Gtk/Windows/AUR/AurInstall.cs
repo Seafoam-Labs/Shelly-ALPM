@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Xml;
 using GObject;
 using Gtk;
 using Shelly.Gtk.Helpers;
@@ -13,7 +12,6 @@ using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Gtk.Windows.Dialog;
 
 // ReSharper disable NotAccessedField.Local
-
 // ReSharper disable CollectionNeverQueried.Local
 
 namespace Shelly.Gtk.Windows.AUR;
@@ -45,7 +43,7 @@ public class AurInstall(
     private Box _detailBox = null!;
     private AurPackageDto? _currentDetailPkg;
     private Revealer _detailRevealer = null!;
-    private Overlay? _mainOverlay = null!;
+    private Overlay? _mainOverlay;
 
     private Dictionary<ColumnViewCell, (SignalHandler<CheckButton> OnToggled, EventHandler OnExternalToggle)>
         // ReSharper disable once FieldCanBeMadeReadOnly.Local
@@ -98,6 +96,9 @@ public class AurInstall(
         _installButton.SetSensitive(false);
         _chrootCheck = (CheckButton)builder.GetObject("chroot_check")!;
         _runChecksCheck = (CheckButton)builder.GetObject("run_checks_check")!;
+        var config = configService.LoadConfig();
+        _chrootCheck.Active = config.AurInstallUseChroot;
+        _runChecksCheck.Active = config.AurInstallRunChecks;
         _listStore = Gio.ListStore.New(AurPackageGObject.GetGType());
         _selectionModel = SingleSelection.New(_listStore);
         _selectionModel.CanUnselect = true;
@@ -144,7 +145,7 @@ public class AurInstall(
         ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.End);
         ColumnViewHelper.AlignColumnHeader(_columnView, 3, Align.End);
         ColumnViewHelper.AlignColumnHeader(_columnView, 4, Align.End);
-        
+
         _columnView.OnActivate += (_, _) =>
         {
             var item = _selectionModel.GetSelectedItem();
@@ -162,7 +163,7 @@ public class AurInstall(
         shortcutController.Scope = ShortcutScope.Global;
         shortcutController.PropagationPhase = PropagationPhase.Capture;
 
-        var triggers = new[] { "Return", "KP_Enter", "space", "<Control>f"};
+        var triggers = new[] { "Return", "KP_Enter", "space", "<Control>f" };
         foreach (var triggerStr in triggers)
         {
             var action = CallbackAction.New((_, _) =>
@@ -172,10 +173,22 @@ public class AurInstall(
                     _searchEntry.GrabFocus();
                     return true;
                 }
-                
+
+                _chrootCheck.OnToggled += (_, _) =>
+                {
+                    var updatedConfig = configService.LoadConfig();
+                    updatedConfig.AurInstallUseChroot = _chrootCheck.Active;
+                    configService.SaveConfig(updatedConfig);
+                };
+                _runChecksCheck.OnToggled += (_, _) =>
+                {
+                    var updatedConfig = configService.LoadConfig();
+                    updatedConfig.AurInstallRunChecks = _runChecksCheck.Active;
+                    configService.SaveConfig(updatedConfig);
+                };
                 if (!_installButton.GetSensitive()) return false;
                 if (OverlayHelper.HasActiveOverlay(_box)) return false;
-                
+
                 Task.Run(async () => await InstallSelectedAsync());
                 return true;
             });
@@ -396,7 +409,7 @@ public class AurInstall(
                     _listStore.Append(pkgObj);
                     index++;
                 }
-                
+
                 if (_listStore.GetNItems() > 0)
                 {
                     _selectionModel.SetSelected(0);
@@ -406,7 +419,7 @@ public class AurInstall(
                         ShowPackageDetails(_aurPackages[pkgObj.Index]);
                     }
                 }
-                
+
                 return false;
             });
         }
@@ -627,7 +640,7 @@ public class AurInstall(
             row.Append(valueWidget);
             _detailBox.Append(row);
         }
-        
+
         void AddUrl(string labelUrl, string value)
         {
             var row = Box.New(Orientation.Horizontal, 12);
@@ -702,7 +715,7 @@ public class AurInstall(
             AddUrl(T("URL:"), pkgObj.Url);
         }
         AddUrl(T("AUR:"), $"https://aur.archlinux.org/packages/{pkgObj.Name}/");
-        
+
         _detailBox.Append(pkgBuildButton);
 
         if (pkgObj.Depends?.Count > 0)
@@ -734,7 +747,7 @@ public class AurInstall(
         {
             AddChipList(T("Keywords"), pkgObj.Keywords);
         }
-        
+
         if (pkgObj.Provides?.Count > 0)
             AddChipList(T("Provides"), pkgObj.Provides);
         if (pkgObj.Conflicts?.Count > 0)
