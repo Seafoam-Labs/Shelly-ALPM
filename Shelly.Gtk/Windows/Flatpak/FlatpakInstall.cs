@@ -110,7 +110,9 @@ public class FlatpakInstall(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/Flatpak/FlatpakInstallWindow.ui"), -1);
+        var builder = Builder.New();
+        builder.TranslationDomain = Translations.Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/Flatpak/FlatpakInstallWindow.ui"), -1);
         var box = (Box)builder.GetObject("FlatpakInstallWindow")!;
         FlatpakRefHandler.InstallRequested += OnInstallRequested;
 
@@ -857,9 +859,9 @@ public class FlatpakInstall(
         verifiedIcon.Halign = Align.Start;
         verifiedIcon.Hexpand = false;
         verifiedIcon.Vexpand = false;
-        verifiedIcon.TooltipText = "Verified";
+        verifiedIcon.TooltipText = Translations.T("Verified");
         titleGrid.Attach(verifiedIcon, 1, 0, 1, 1);
-        
+
         rightBox.Append(titleGrid);
 
         var idLabel = Label.New(string.Empty);

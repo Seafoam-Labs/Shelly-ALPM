@@ -3,23 +3,23 @@
   <menu id="AppMenu">
     <section>
       <submenu>
-        <attribute name="label">_File</attribute>
+        <attribute name="label" translatable="yes">_File</attribute>
         <item>
-          <attribute name="label">_Quit</attribute>
+          <attribute name="label" translatable="yes">_Quit</attribute>
           <attribute name="action">app.quit</attribute>
         </item>
       </submenu>
       <submenu>
-        <attribute name="label">_Edit</attribute>
+        <attribute name="label" translatable="yes">_Edit</attribute>
         <item>
-          <attribute name="label">_Preferences</attribute>
+          <attribute name="label" translatable="yes">_Preferences</attribute>
           <attribute name="action">app.preferences</attribute>
         </item>
       </submenu>
       <submenu>
-        <attribute name="label">_Help</attribute>
+        <attribute name="label" translatable="yes">_Help</attribute>
         <item>
-          <attribute name="label">_About</attribute>
+          <attribute name="label" translatable="yes">_About</attribute>
           <attribute name="action">app.about</attribute>
         </item>
       </submenu>

@@ -67,8 +67,9 @@ public sealed class AppImage(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/AppImage.ui"), -1);
+        var builder = Builder.New();
         builder.TranslationDomain = Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/AppImage.ui"), -1);
         _listPage = (Box)builder.GetObject("AppImagePage")!;
         _detailPage = (ScrolledWindow)builder.GetObject("AppImageDetailView")!;
         _appListBox = (ListBox)builder.GetObject("AppImageListBox")!;

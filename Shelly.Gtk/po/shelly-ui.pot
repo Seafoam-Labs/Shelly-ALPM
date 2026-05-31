@@ -1496,12 +1496,6 @@ msgstr ""
 msgid "Failed to remove packages: {0}"
 msgstr ""
 
-msgid "Changes"
-msgstr ""
-
-msgid "Review Changes"
-msgstr ""
-
 msgid "Package Statistics"
 msgstr ""
 
@@ -1518,4 +1512,51 @@ msgid "Up to date"
 msgstr ""
 
 msgid "Calculating"
+msgstr ""
+
+msgid "No packages need to be upgraded"
+msgstr ""
+
+msgid "Upgrade All Packages?"
+msgstr ""
+
+msgid "Upgrading all packages..."
+msgstr ""
+
+#, csharp-format
+msgid "PKGBUILD for '{0}' not found."
+msgstr ""
+
+msgid "The PKGBUILD is empty."
+msgstr ""
+
+#, csharp-format
+msgid "PKGBUILD: {0}"
+msgstr ""
+
+msgid "Verified"
+msgstr ""
+
+msgid "_File"
+msgstr ""
+
+msgid "_Quit"
+msgstr ""
+
+msgid "_Edit"
+msgstr ""
+
+msgid "_Preferences"
+msgstr ""
+
+msgid "_Help"
+msgstr ""
+
+msgid "_About"
+msgstr ""
+
+msgid "Confirm Action"
+msgstr ""
+
+msgid "Are you sure?"
 msgstr ""

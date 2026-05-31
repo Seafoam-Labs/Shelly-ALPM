@@ -851,7 +851,7 @@ sealed class Program
                     if (packagesNeedingUpdate.Aur.Count == 0 && packagesNeedingUpdate.Packages.Count == 0 &&
                         packagesNeedingUpdate.Flatpak.Count == 0)
                     {
-                        var toastArgs = new ToastMessageEventArgs("No packages need to be upgraded");
+                        var toastArgs = new ToastMessageEventArgs(T("No packages need to be upgraded"));
                         genericQuestionService.RaiseToastMessage(toastArgs);
                         return;
                     }
@@ -859,7 +859,7 @@ sealed class Program
                     if (!configService.LoadConfig().NoConfirm)
                     {
                         var confirmArgs = new GenericQuestionEventArgs(
-                            "Upgrade All Packages?",
+                            T("Upgrade All Packages?"),
                             BottomBarExtensions.BuildUpgradeConfirmationMessage(packagesNeedingUpdate),
                             true
                         );
@@ -871,7 +871,7 @@ sealed class Program
                         }
                     }
 
-                    lockoutService.Show("Upgrading all packages...");
+                    lockoutService.Show(T("Upgrading all packages..."));
 
                     // The PKGBUILD review/diff is now surfaced through the unified
                     // wire-based PkgbuildReviewDialog during the operation, so the
@@ -880,8 +880,8 @@ sealed class Program
                     if (upgradeResult.NeedsReboot)
                     {
                         var rebootArgs = new GenericQuestionEventArgs(
-                            "Reboot Required",
-                            "A full system reboot is required for updates to take effect.\n\nWould you like to reboot now?",
+                            T("Reboot Required"),
+                            T("A full system reboot is required for updates to take effect.\n\nWould you like to reboot now?"),
                             true
                         );
                         genericQuestionService.RaiseQuestion(rebootArgs);
@@ -895,8 +895,8 @@ sealed class Program
                         var failureList = string.Join("\n", upgradeResult.FailedServiceRestarts
                             .Select(f => $"  • {f.Service}: {f.Error}"));
                         var failArgs = new GenericQuestionEventArgs(
-                            "Service Restart Failures",
-                            $"The following services failed to restart automatically:\n{failureList}",
+                            T("Service Restart Failures"),
+                            T("The following services failed to restart automatically:\n{0}", failureList),
                             false
                         );
                         genericQuestionService.RaiseQuestion(failArgs);

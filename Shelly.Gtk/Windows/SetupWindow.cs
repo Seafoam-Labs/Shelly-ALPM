@@ -23,7 +23,9 @@ public sealed class SetupWindow(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/SetupWindow.ui"), -1);
+        var builder = Builder.New();
+        builder.TranslationDomain = Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/SetupWindow.ui"), -1);
         _box = (Box)builder.GetObject("SetupWindow")!;
 
         var aurCheck = (CheckButton)builder.GetObject("aur_check")!;

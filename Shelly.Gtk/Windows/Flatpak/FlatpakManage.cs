@@ -32,7 +32,9 @@ public class FlatpakManage(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/Flatpak/FlatpakRemoveWindow.ui"), -1);
+        var builder = Builder.New();
+        builder.TranslationDomain = Translations.Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/Flatpak/FlatpakRemoveWindow.ui"), -1);
         var box = (Box)builder.GetObject("FlatpakRemoveWindow")!;
 
         _listView = (ListView)builder.GetObject("installed_flatpaks")!;
@@ -159,7 +161,7 @@ public class FlatpakManage(
         catch (OperationCanceledException)
         {
             genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(
-                Translations.T($"Failed to repair Flatpak installation")));
+                Translations.T("Failed to repair Flatpak installation")));
         }
         finally
         {

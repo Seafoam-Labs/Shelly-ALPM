@@ -73,8 +73,9 @@ public sealed class PackageInstall(
     
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/Package/PackageWindow.ui"), -1);
+        var builder = Builder.New();
         builder.TranslationDomain = Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/Package/PackageWindow.ui"), -1);
         _overlay = (Overlay)builder.GetObject("PackageWindow")!;
         var columnView = (ColumnView)builder.GetObject("package_column_view")!;
         _scroller = (ScrolledWindow)columnView.GetParent()!;
@@ -893,7 +894,7 @@ public sealed class PackageInstall(
             label.SetText(pkg.Name);
             label.Halign = Align.Start;
             installedIcon.Visible = pkgObj.IsInstalled;
-            installedIcon.TooltipText = "Installed";
+            installedIcon.TooltipText = T("Installed");
         };
         nameColumn.SetFactory(nameFactory);
 

@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Gtk;
 using Shelly.Gtk.Windows.Dialog;
 using Shelly.Gtk.UiModels;
+using static Shelly.GTK.Resources.Translations;
 
 namespace Shelly.Gtk.Services;
 
@@ -23,7 +24,7 @@ public class PkgBuildService : IPkgBuildService
             if (!response.IsSuccessStatusCode)
             {
                 GLib.Functions.IdleAdd(0, () => {
-                    questionService.RaiseToastMessage(new ToastMessageEventArgs($"PKGBUILD for '{packageName}' not found."));
+                    questionService.RaiseToastMessage(new ToastMessageEventArgs(T("PKGBUILD for '{0}' not found.", packageName)));
                     return false;
                 });      
                 return;
@@ -34,7 +35,7 @@ public class PkgBuildService : IPkgBuildService
             if (string.IsNullOrWhiteSpace(content))
             {
                 GLib.Functions.IdleAdd(0, () => {
-                    questionService.RaiseToastMessage(new ToastMessageEventArgs("The PKGBUILD is empty."));
+                    questionService.RaiseToastMessage(new ToastMessageEventArgs(T("The PKGBUILD is empty.")));
                     return false;
                 });                
                 return;
@@ -44,7 +45,7 @@ public class PkgBuildService : IPkgBuildService
 
             GLib.Functions.IdleAdd(0, () => 
             {
-                var args = new PackageBuildEventArgs($"PKGBUILD: {packageName}", content, sourceFiles);
+                var args = new PackageBuildEventArgs(T("PKGBUILD: {0}", packageName), content, sourceFiles);
             
                 var parent = (Gio.Application.GetDefault() as Application)?.GetActiveWindow();
                 PkgbuildPreview.ShowPackageBuildPreview(parent, args);
