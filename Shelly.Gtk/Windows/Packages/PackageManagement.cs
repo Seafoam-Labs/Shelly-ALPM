@@ -72,8 +72,9 @@ public sealed class PackageManagement(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/Package/PackageManagement.ui"), -1);
+        var builder = Builder.New();
         builder.TranslationDomain = Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/Package/PackageManagement.ui"), -1);
         _box = (Overlay)builder.GetObject("PackageManagement")!;
         _columnView = (ColumnView)builder.GetObject("package_grid")!;
         var columnView = _columnView;

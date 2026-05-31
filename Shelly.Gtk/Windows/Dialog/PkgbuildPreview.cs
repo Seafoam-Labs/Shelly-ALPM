@@ -2,6 +2,7 @@ using Gtk;
 using Pango;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
+using static Shelly.GTK.Resources.Translations;
 using WrapMode = Gtk.WrapMode;
 
 namespace Shelly.Gtk.Windows.Dialog;
@@ -39,17 +40,17 @@ public static class PkgbuildPreview
 
         var closeButton = Button.New();
         closeButton.SetIconName("window-close-symbolic");
-        closeButton.TooltipText = "Close Preview";
+        closeButton.TooltipText = T("Close Preview");
         closeButton.OnClicked += (_, _) => Close();
         
         var copyButton = Button.New();
         copyButton.SetIconName("edit-copy-symbolic"); 
-        copyButton.TooltipText = "Copy PKGBUILD to clipboard";
+        copyButton.TooltipText = T("Copy PKGBUILD to clipboard");
         copyButton.OnClicked += (_, _) =>
         {
             var clipboard = copyButton.GetClipboard();
             clipboard.SetText(e.PkgBuild);
-            questionService.RaiseToastMessage(new ToastMessageEventArgs("PKGBUILD copied to clipboard"));
+            questionService.RaiseToastMessage(new ToastMessageEventArgs(T("PKGBUILD copied to clipboard")));
         };
 
         var titleLabel = Label.New(e.Title);

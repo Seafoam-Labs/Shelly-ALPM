@@ -14,7 +14,7 @@
                 <child>
                     <object class="GtkButton" id="remove_button">
                         <property name="halign">start</property>
-                        <property name="label">Remove Selected</property>
+                        <property name="label" translatable="yes">Remove Selected</property>
                         <style>
                             <class name="destructive-action"/>
                         </style>
@@ -46,13 +46,13 @@
                                 </child>
                                 <child>
                                     <object class="GtkColumnViewColumn" id="name_column">
-                                        <property name="title">Package Name</property>
+                                        <property name="title" translatable="yes">Package Name</property>
                                         <property name="expand">true</property>
                                     </object>
                                 </child>
                                 <child>
                                     <object class="GtkColumnViewColumn" id="size_column">
-                                        <property name="title">Size</property>
+                                        <property name="title" translatable="yes">Size</property>
                                     </object>
                                 </child>
                             </object>

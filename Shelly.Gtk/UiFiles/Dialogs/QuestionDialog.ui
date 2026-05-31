@@ -2,7 +2,7 @@
 <interface>
   <requires lib="gtk" version="4.0"/>
   <object class="GtkWindow" id="QuestionDialog">
-    <property name="title">Confirm Action</property>
+    <property name="title" translatable="yes">Confirm Action</property>
     <property name="modal">true</property>
     <child>
       <object class="GtkBox">
@@ -14,7 +14,7 @@
         <property name="spacing">15</property>
         <child>
           <object class="GtkLabel" id="question_label">
-            <property name="label">Are you sure?</property>
+            <property name="label" translatable="yes">Are you sure?</property>
           </object>
         </child>
         <child>
@@ -23,12 +23,12 @@
             <property name="spacing">10</property>
             <child>
               <object class="GtkButton" id="no_button">
-                <property name="label">No</property>
+                <property name="label" translatable="yes">No</property>
               </object>
             </child>
             <child>
               <object class="GtkButton" id="yes_button">
-                <property name="label">Yes</property>
+                <property name="label" translatable="yes">Yes</property>
                 <style>
                   <class name="suggested-action"/>
                 </style>

@@ -3,6 +3,7 @@ using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
+using static Shelly.GTK.Resources.Translations;
 using Functions = GLib.Functions;
 using ListStore = Gio.ListStore;
 
@@ -25,7 +26,9 @@ public sealed class RemoveLocal(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/Package/RemoveLocalWindow.ui"), -1);
+        var builder = Builder.New();
+        builder.TranslationDomain = Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/Package/RemoveLocalWindow.ui"), -1);
         var box = (Box)builder.GetObject("RemoveLocalWindow")!;
         var columnView = (ColumnView)builder.GetObject("package_grid")!;
 
@@ -226,7 +229,7 @@ public sealed class RemoveLocal(
             if (!configService.LoadConfig().NoConfirm)
             {
                 var args = new GenericQuestionEventArgs(
-                    "Remove Packages?", string.Join("\n", selectedPackages)
+                    T("Remove Packages?"), string.Join("\n", selectedPackages)
                 );
 
                 genericQuestionService.RaiseQuestion(args);
@@ -238,12 +241,12 @@ public sealed class RemoveLocal(
 
             try
             {
-                lockoutService.Show("Removing...");
+                lockoutService.Show(T("Removing..."));
                 var result = await privilegedOperationService.RemoveLocalPackagesAsync(selectedPackages);
                 if (result.Success)
                 {
                     var args = new ToastMessageEventArgs(
-                        $"Removed {selectedPackages.Count} Package(s)"
+                        T("Removed {0} Package(s)", selectedPackages.Count)
                     );
                     genericQuestionService.RaiseToastMessage(args);
                 }

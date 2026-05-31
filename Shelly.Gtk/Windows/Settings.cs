@@ -41,7 +41,9 @@ public class Settings(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/SettingWindow.ui"), -1);
+        var builder = Builder.New();
+        builder.TranslationDomain = Translations.Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/SettingWindow.ui"), -1);
         _box = (Box)builder.GetObject("SettingWindow")!;
 
         _config = configService.LoadConfig();

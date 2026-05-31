@@ -37,8 +37,9 @@ public sealed class ShellySearch(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/ShellySearchWindow.ui"), -1);
+        var builder = Builder.New();
         builder.TranslationDomain = Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/ShellySearchWindow.ui"), -1);
         var box = (Box)builder.GetObject("ShellySearchWindow")!;
         var columnView = (ColumnView)builder.GetObject("package_grid")!;
         _installButton = (Button)builder.GetObject("install_button")!;
@@ -485,7 +486,7 @@ public sealed class ShellySearch(
 
         try
         {
-            lockoutService.Show(T($"Installing..."));
+            lockoutService.Show(T("Installing..."));
             var standard = selected.Where(x => x.PackageType == PackageType.Standard).Select(x => x.Name).ToList();
             var aur = selected.Where(x => x.PackageType == PackageType.Aur).Select(x => x.Name).ToList();
             var flatpak = selected.Where(x => x.PackageType == PackageType.Flatpak).Select(x => x.Id).ToList();

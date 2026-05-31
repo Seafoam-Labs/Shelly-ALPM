@@ -809,7 +809,7 @@ sealed class Program
                     if (packagesNeedingUpdate.Aur.Count == 0 && packagesNeedingUpdate.Packages.Count == 0 &&
                         packagesNeedingUpdate.Flatpaks.Count == 0)
                     {
-                        var toastArgs = new ToastMessageEventArgs("No packages need to be upgraded");
+                        var toastArgs = new ToastMessageEventArgs(T("No packages need to be upgraded"));
                         genericQuestionService.RaiseToastMessage(toastArgs);
                         return;
                     }
@@ -817,7 +817,7 @@ sealed class Program
                     if (!configService.LoadConfig().NoConfirm)
                     {
                         var confirmArgs = new GenericQuestionEventArgs(
-                            "Upgrade All Packages?",
+                            T("Upgrade All Packages?"),
                             BottomBarExtensions.BuildUpgradeConfirmationMessage(packagesNeedingUpdate),
                             true
                         );
@@ -829,7 +829,7 @@ sealed class Program
                         }
                     }
 
-                    lockoutService.Show("Upgrading all packages...");
+                    lockoutService.Show(T("Upgrading all packages..."));
                     var aurUpdates = packagesNeedingUpdate.Aur;
                     if (aurUpdates.Count != 0)
                     {
@@ -838,7 +838,7 @@ sealed class Program
                         foreach (var pkgbuild in packageBuilds)
                         {
                             if (pkgbuild.PkgBuild == null) continue;
-                            var buildArgs = new PackageBuildEventArgs($"Displaying Package Build {pkgbuild.Name}",
+                            var buildArgs = new PackageBuildEventArgs(T("Displaying Package Build {0}", pkgbuild.Name),
                                 pkgbuild.PkgBuild);
                             genericQuestionService.RaisePackageBuild(buildArgs);
                             if (!await buildArgs.ResponseTask)
@@ -852,8 +852,8 @@ sealed class Program
                     if (upgradeResult.NeedsReboot)
                     {
                         var rebootArgs = new GenericQuestionEventArgs(
-                            "Reboot Required",
-                            "A full system reboot is required for updates to take effect.\n\nWould you like to reboot now?",
+                            T("Reboot Required"),
+                            T("A full system reboot is required for updates to take effect.\n\nWould you like to reboot now?"),
                             true
                         );
                         genericQuestionService.RaiseQuestion(rebootArgs);
@@ -867,8 +867,8 @@ sealed class Program
                         var failureList = string.Join("\n", upgradeResult.FailedServiceRestarts
                             .Select(f => $"  • {f.Service}: {f.Error}"));
                         var failArgs = new GenericQuestionEventArgs(
-                            "Service Restart Failures",
-                            $"The following services failed to restart automatically:\n{failureList}",
+                            T("Service Restart Failures"),
+                            T("The following services failed to restart automatically:\n{0}", failureList),
                             false
                         );
                         genericQuestionService.RaiseQuestion(failArgs);
@@ -961,18 +961,18 @@ sealed class Program
                     box.SetMarginStart(12);
                     box.SetMarginEnd(12);
 
-                    var label = Label.New(
+                    var label = Label.New(T(
                         "Fingerprint authentication detected for sudo. This can interfere with privileged " +
-                        "operations (issue #728). Disable pam_fprintd in /etc/pam.d/sudo as a workaround.");
+                        "operations (issue #728). Disable pam_fprintd in /etc/pam.d/sudo as a workaround."));
                     label.SetWrap(true);
                     label.SetXalign(0);
                     box.Append(label);
 
-                    var showFix = Button.NewWithLabel("Show fix");
+                    var showFix = Button.NewWithLabel(T("Show fix"));
                     showFix.OnClicked += (_, _) => FingerprintFixDialog.Show(parentWindow);
                     box.Append(showFix);
 
-                    var dontShow = Button.NewWithLabel("Don't show again");
+                    var dontShow = Button.NewWithLabel(T("Don't show again"));
                     dontShow.OnClicked += (_, _) =>
                     {
                         try
@@ -990,7 +990,7 @@ sealed class Program
                     };
                     box.Append(dontShow);
 
-                    var dismiss = Button.NewWithLabel("Dismiss");
+                    var dismiss = Button.NewWithLabel(T("Dismiss"));
                     dismiss.OnClicked += (_, _) =>
                     {
                         if (bannerFrame.GetParent() != null) mainOverlay.RemoveOverlay(bannerFrame);

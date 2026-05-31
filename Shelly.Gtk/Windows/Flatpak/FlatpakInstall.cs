@@ -98,7 +98,9 @@ public class FlatpakInstall(
 
     public Widget CreateWindow()
     {
-        var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/Flatpak/FlatpakInstallWindow.ui"), -1);
+        var builder = Builder.New();
+        builder.TranslationDomain = Translations.Domain;
+        builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/Flatpak/FlatpakInstallWindow.ui"), -1);
         var box = (Box)builder.GetObject("FlatpakInstallWindow")!;
 
         _gridView = (GridView)builder.GetObject("list_flatpaks")!;
@@ -730,7 +732,7 @@ public class FlatpakInstall(
         var verifiedIcon = Image.NewFromIconName("security-high-symbolic");
         verifiedIcon.PixelSize = 14;
         verifiedIcon.Valign = Align.Center;
-        verifiedIcon.TooltipText = "Verified";
+        verifiedIcon.TooltipText = Translations.T("Verified");
         nameBox.Append(verifiedIcon);
 
         var idLabel = Label.New(string.Empty);
