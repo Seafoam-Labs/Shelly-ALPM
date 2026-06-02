@@ -884,7 +884,7 @@ sealed class Program
             }
         };
 
-        return application.Run(args);
+        return application.RunWithSynchronizationContext(args);
     }
 
     private static bool _fingerprintBannerShown;
