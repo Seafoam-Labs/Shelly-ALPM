@@ -705,9 +705,7 @@ public sealed class PackageInstall(
                 }
 
                 _packageGObjectRefs.Clear();
-                _packageGObjectRefs.TrimExcess();
                 _packageData.Clear();
-                _packageData.TrimExcess();
                 while (_detailBox.GetFirstChild() is { } child) _detailBox.Remove(child);
                 cleared.TrySetResult();
                 if (_listStore.GetNItems() > 0)
@@ -723,9 +721,6 @@ public sealed class PackageInstall(
                 return false;
             });
             await cleared.Task;
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
 
             ct.ThrowIfCancellationRequested();
 
@@ -737,7 +732,6 @@ public sealed class PackageInstall(
             var installedPackages = await privilegedOperationService.GetInstalledPackagesAsync();
             _installedPackageNames = new HashSet<string>(installedPackages.Select(x => x.Name));
             installedPackages.Clear();
-            installedPackages.TrimExcess();
             var index = 0;
 
             GLib.Functions.IdleAdd(0, () =>
@@ -749,7 +743,6 @@ public sealed class PackageInstall(
                         OverlayHelper.HideLoading(_loadingOverlay, _loadingSpinner);
                     }
                     packages.Clear();
-                    packages.TrimExcess();
                     return false;
                 }
 
@@ -783,7 +776,6 @@ public sealed class PackageInstall(
                 if (index < packages.Count) return true;
                 var count = packages.Count;
                 packages.Clear();
-                packages.TrimExcess();
 
                 if (_loadGeneration == generation)
                 {
