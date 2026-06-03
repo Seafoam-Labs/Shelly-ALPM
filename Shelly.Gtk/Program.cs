@@ -1,5 +1,4 @@
 using System.Reflection;
-using Gdk;
 using Gio;
 using Gtk;
 using Microsoft.Extensions.DependencyInjection;
@@ -201,8 +200,6 @@ sealed class Program
 
             window.SetIconName("shelly");
             window.Application = application;
-
-            SetupChelflagButton(mainBuilder, serviceProvider.GetRequiredService<IGenericQuestionService>());
 
             var menuBuilder = Builder.New();
             menuBuilder.TranslationDomain = Domain;
@@ -888,44 +885,6 @@ sealed class Program
         };
 
         return application.Run(args);
-    }
-
-    private static void SetupChelflagButton(Builder mainBuilder, IGenericQuestionService genericQuestionService)
-    {
-        using var stream = ResourceHelper.GetResourceStream("Assets/chelflag.png");
-        using var ms = new MemoryStream();
-        stream.CopyTo(ms);
-        var gioStream = MemoryInputStream.NewFromBytes(GLib.Bytes.New(ms.ToArray()));
-        var pixbuf = GdkPixbuf.Pixbuf.NewFromStream(gioStream, null)!;
-        var texture = Texture.NewForPixbuf(pixbuf);
-        var image = Image.NewFromPaintable(texture);
-        image.PixelSize = 20;
-        var button = (Button)mainBuilder.GetObject("chel_button")!;
-        button.SetChild(image);
-
-        button.OnClicked += (_, _) =>
-        {
-            var dialogBox = Box.New(Orientation.Vertical, 12);
-            dialogBox.SetSizeRequest(460, -1);
-
-            var title = Label.New(T("Happy pride month!"));
-            title.AddCssClass("title-2");
-            title.SetHalign(Align.Center);
-            dialogBox.Append(title);
-
-            var dialogImage = Image.NewFromPaintable(texture);
-            dialogImage.PixelSize = 192;
-            dialogImage.SetHalign(Align.Center);
-            dialogBox.Append(dialogImage);
-
-            var description = Label.New(T("You found Chel's hidden page."));
-            description.SetWrap(true);
-            description.SetJustify(Justification.Center);
-            description.SetHalign(Align.Center);
-            dialogBox.Append(description);
-
-            genericQuestionService.RaiseDialog(new GenericDialogEventArgs(dialogBox));
-        };
     }
 
     private static bool _fingerprintBannerShown;
