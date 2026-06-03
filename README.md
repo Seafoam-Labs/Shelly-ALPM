@@ -202,6 +202,12 @@ dotnet build
 dotnet test
 ```
 
+### Generate CLI References
+
+```bash
+dotnet run --file help_compiler.cs
+```
+
 ## License
 
 This project is licensed under the GPL-3.0 License – see the [LICENSE](LICENSE) file for details.

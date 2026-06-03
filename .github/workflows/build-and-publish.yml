@@ -7,9 +7,6 @@ on:
     branches: [ master, development ]
   workflow_dispatch:
 
-permissions:
-  contents: write
-  
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,12 +16,13 @@ jobs:
       image: archlinux:latest
 
     steps:
-      - uses: actions/checkout@v6
-
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm dotnet-sdk base-devel gtk4 clang glibc
+          pacman -S --noconfirm dotnet-sdk base-devel gtk4 clang glibc git
+
+      # Checkout only after git is installed
+      - uses: actions/checkout@v6
 
       - name: Restore dependencies
         run: dotnet restore
@@ -37,46 +35,3 @@ jobs:
 
       - name: AOT publish Shelly.Keys (smoke)
         run: dotnet publish Shelly.Keys/Shelly.Keys.csproj -c Release -r linux-x64 --nologo -p:InstructionSet=x86-64
-
-  docs:
-    needs: build
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    container:
-      image: archlinux:latest
-
-    steps:
-      - name: Install dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm dotnet-sdk base-devel gtk4 clang glibc git
-
-      - uses: actions/checkout@v6
-
-      - name: Mark workspace as safe for Git
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Publish Shelly-CLI
-        run: dotnet publish Shelly-CLI/Shelly-CLI.csproj -c Release -o publish/shelly-cli --no-restore --nologo -p:InstructionSet=x86-64
-
-      - name: Generate CLI help docs
-        run: PATH="$GITHUB_WORKSPACE/publish/shelly-cli:$PATH" dotnet run help_compiler.cs
-
-      # https://github.com/actions/checkout#push-a-commit-using-the-built-in-token
-      - name: Commit CLI help docs
-        run: |
-          if git diff --quiet -- wiki/cli_help.md; then
-            echo "No CLI help updates to commit."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add wiki/cli_help.md
-          git commit -m "Generate CLI help reference [skip ci]"
-          git push
