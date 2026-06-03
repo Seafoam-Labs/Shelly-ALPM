@@ -1,11 +1,17 @@
 using Gtk;
 using Shelly.Gtk.UiModels;
+using Functions = GLib.Functions;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
 public static class GenericOverlay
 {
-    public static void ShowGenericOverlay(Overlay parentOverlay, Widget content, GenericDialogEventArgs e, int width = 400, int height = -1)
+    public static void ShowGenericOverlay(
+        Overlay parentOverlay,
+        Widget content,
+        GenericDialogEventArgs e,
+        int width = 400,
+        int height = -1)
     {
         var backdrop = Box.New(Orientation.Horizontal, 0);
         backdrop.Hexpand = true;
@@ -16,43 +22,36 @@ public static class GenericOverlay
         baseFrame.SetHalign(Align.Center);
         baseFrame.SetValign(Align.Center);
         baseFrame.SetSizeRequest(width, height);
-        baseFrame.SetMarginTop(20);
-        baseFrame.SetMarginBottom(20);
-        baseFrame.SetMarginStart(20);
-        baseFrame.SetMarginEnd(20);
         baseFrame.AddCssClass("background");
         baseFrame.AddCssClass("dialog-overlay");
         baseFrame.SetOverflow(Overflow.Hidden);
 
-        var baseBox = Box.New(Orientation.Vertical, 12);
+        var baseBox = Box.New(Orientation.Vertical, 0);
         baseFrame.SetChild(baseBox);
 
-        var grid = Grid.New();
-        grid.Hexpand = true;
-
-        var spacer = Box.NewWithProperties([]);
-        spacer.Hexpand = true;
+        var contentOverlay = Overlay.New();
+        contentOverlay.Hexpand = true;
 
         var closeButton = Button.New();
         closeButton.SetHalign(Align.End);
+        closeButton.SetValign(Align.Start);
         closeButton.SetIconName("window-close-symbolic");
+        closeButton.SetCssClasses(["circular"]);
 
-        grid.Attach(spacer,      0, 0, 1, 1);
-        grid.Attach(closeButton, 1, 0, 1, 1);
-        grid.Attach(content,     0, 1, 2, 1);
+        contentOverlay.SetChild(content);
+        contentOverlay.AddOverlay(closeButton);
 
-        baseBox.Append(grid);
+        baseBox.Append(contentOverlay);
 
         closeButton.OnClicked += (_, _) => Dismiss();
 
         var gestureClick = GestureClick.New();
-        gestureClick.OnReleased += (_,  args) =>
+        gestureClick.OnReleased += (_, args) =>
         {
             backdrop.TranslateCoordinates(baseFrame, args.X, args.Y, out var x, out var y);
 
-            var insideCard = x >= 0 && y >= 0
-                           && x <= baseFrame.GetAllocatedWidth()
-                           && y <= baseFrame.GetAllocatedHeight();
+            var insideCard =
+                x >= 0 && y >= 0 && x <= baseFrame.GetAllocatedWidth() && y <= baseFrame.GetAllocatedHeight();
 
             if (!insideCard)
                 Dismiss();
@@ -64,7 +63,7 @@ public static class GenericOverlay
         parentOverlay.AddOverlay(backdrop);
         _ = e.ResponseTask.ContinueWith(_ =>
         {
-            GLib.Functions.IdleAdd(0, () =>
+            Functions.IdleAdd(0, () =>
             {
                 Dismiss();
                 return false;
@@ -76,18 +75,13 @@ public static class GenericOverlay
         {
             if (e.ResponseTask.IsCompleted)
             {
-                if (backdrop.Parent != null)
-                {
-                    parentOverlay.RemoveOverlay(backdrop);
-                }
+                if (backdrop.Parent != null) parentOverlay.RemoveOverlay(backdrop);
+
                 return;
             }
 
             e.SetResponse(false);
-            if (backdrop.Parent != null)
-            {
-                parentOverlay.RemoveOverlay(backdrop);
-            }
+            if (backdrop.Parent != null) parentOverlay.RemoveOverlay(backdrop);
         }
     }
 }
