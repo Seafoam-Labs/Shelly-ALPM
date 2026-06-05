@@ -1265,7 +1265,8 @@ msgstr ""
 msgid "Remove Optional Deps"
 msgstr ""
 
-msgid "Also remove orphaned optional dependencies installed with these packages."
+msgid ""
+"Also remove orphaned optional dependencies installed with these packages."
 msgstr ""
 
 msgid "Add Tray To Auto Start"
@@ -1314,4 +1315,73 @@ msgid "Downgrade"
 msgstr ""
 
 msgid "Enable Package Downgrade"
+msgstr ""
+
+msgid "No packages need to be upgraded"
+msgstr ""
+
+msgid "Upgrade All Packages?"
+msgstr ""
+
+msgid "Happy pride month!"
+msgstr ""
+
+msgid "You found Chel's hidden page."
+msgstr ""
+
+msgid "Show Recommended"
+msgstr ""
+
+msgid "Show Packages"
+msgstr ""
+
+msgid "Show AUR"
+msgstr ""
+
+msgid "Show Flat"
+msgstr ""
+
+msgid "Show AppImage"
+msgstr ""
+
+msgid "Show Shelly Searchs"
+msgstr ""
+
+msgid ""
+"Access the Arch User Repository for a vast collection of community-"
+"maintained packages. AUR packages can contain malicous software, so please "
+"use caution when using the AUR."
+msgstr ""
+
+msgid "installed"
+msgstr ""
+
+msgid "already installed"
+msgstr ""
+
+msgid "Repaired Flatpak installation"
+msgstr ""
+
+msgid "Failed to repair Flatpak installation"
+msgstr ""
+
+msgid "Installed Size"
+msgstr ""
+
+msgid "Build Date"
+msgstr ""
+
+msgid "Required By"
+msgstr ""
+
+msgid "Failed to load packages."
+msgstr ""
+
+msgid "Install As"
+msgstr ""
+
+msgid "Additional Options"
+msgstr ""
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
