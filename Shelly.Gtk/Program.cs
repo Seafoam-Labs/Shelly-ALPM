@@ -809,7 +809,7 @@ sealed class Program
                     if (packagesNeedingUpdate.Aur.Count == 0 && packagesNeedingUpdate.Packages.Count == 0 &&
                         packagesNeedingUpdate.Flatpaks.Count == 0)
                     {
-                        var toastArgs = new ToastMessageEventArgs("No packages need to be upgraded");
+                        var toastArgs = new ToastMessageEventArgs(T("No packages need to be upgraded"));
                         genericQuestionService.RaiseToastMessage(toastArgs);
                         return;
                     }
@@ -817,7 +817,7 @@ sealed class Program
                     if (!configService.LoadConfig().NoConfirm)
                     {
                         var confirmArgs = new GenericQuestionEventArgs(
-                            "Upgrade All Packages?",
+                            T("Upgrade All Packages?"),
                             BottomBarExtensions.BuildUpgradeConfirmationMessage(packagesNeedingUpdate),
                             true
                         );
