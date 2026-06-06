@@ -52,9 +52,7 @@ public partial class DowngradePackageCommand : AsyncCommand<DowngradePackageComm
 
         AnsiConsole.MarkupLine($"[yellow]Looking for downgrade options for:[/] {settings.Packages[0].EscapeMarkup()}");
 
-        var packages = await GatherDowngradeOptions(manager, installedPackage,
-            error => AnsiConsole.MarkupLine(
-                $"[yellow]Warning: Failed to fetch remote options: {error.EscapeMarkup()}[/]"));
+        var packages = await GatherDowngradeOptions(manager, installedPackage);
 
         if (settings.ListOptions) return ListOptionsCli(packages, settings.JsonOutput);
 
@@ -76,8 +74,15 @@ public partial class DowngradePackageCommand : AsyncCommand<DowngradePackageComm
         var isSuccess = await StandardSinglePaneOutput.Output(manager,
             m => m.InstallLocalPackage(filePath), settings.NoConfirm);
 
-        RemoveDownloadedPackage(selection, filePath,
-            e => AnsiConsole.MarkupLine($"[yellow]Failed to remove downloaded tmp package: {e}.[/]"));
+        if (selection.Location == Location.Remote && File.Exists(filePath))
+            try
+            {
+                File.Delete(filePath);
+            }
+            catch (Exception e)
+            {
+                AnsiConsole.MarkupLine($"[red]Error: Failed to delete temporary file: {e.Message.EscapeMarkup()}[/]");
+            }
 
         if (!isSuccess)
         {
@@ -123,13 +128,10 @@ public partial class DowngradePackageCommand : AsyncCommand<DowngradePackageComm
         return true;
     }
 
-    private static async Task<List<PackageInfo>> GatherDowngradeOptions(
-        AlpmManager manager,
-        AlpmPackageDto package,
-        Action<string> onError)
+    private static async Task<List<PackageInfo>> GatherDowngradeOptions(AlpmManager manager, AlpmPackageDto package)
     {
         var packages = SearchLocalCache(package);
-        var archivedPackages = await SearchArchives(manager, package, onError);
+        var archivedPackages = await SearchArchives(manager, package);
         packages.AddRange(archivedPackages);
         return SortDowngradeOptions(packages);
     }
@@ -219,6 +221,23 @@ public partial class DowngradePackageCommand : AsyncCommand<DowngradePackageComm
                (!settings.NoConfirm && AnsiConsole.Confirm("Do you want to add package to IgnorePkg list?"));
     }
 
+    private static PackageInfo PromptPackageVersion(
+        DowngradePackageCommandSettings settings,
+        List<PackageInfo> packageInfos)
+    {
+        var isAutoSelect = settings.NoConfirm || settings.UseOldest;
+        var preSelectedPackage = settings.UseOldest ? packageInfos[^1] : packageInfos[0];
+
+        return isAutoSelect
+            ? preSelectedPackage
+            : AnsiConsole.Prompt(new SelectionPrompt<PackageInfo>()
+                .Title("[yellow]Select Version[/]")
+                .UseConverter(info =>
+                    $"{info.Filename.EscapeMarkup()} ({info.Location}){(info.IsInstalled ? " [green]Installed[/]" : "")}")
+                .EnableSearch()
+                .AddChoices(packageInfos));
+    }
+
     private static async Task<int> HandleUiModeDowngradeAsync(DowngradePackageCommandSettings settings)
     {
         if (settings.Packages.Length != 1)
@@ -237,8 +256,7 @@ public partial class DowngradePackageCommand : AsyncCommand<DowngradePackageComm
             return 1;
         }
 
-        var packages = await GatherDowngradeOptions(manager, package,
-            e => UiFrames.Error($"Failed to fetch package version options: {e}"));
+        var packages = await GatherDowngradeOptions(manager, package);
 
         if (settings.ListOptions)
         {
@@ -292,39 +310,28 @@ public partial class DowngradePackageCommand : AsyncCommand<DowngradePackageComm
             return 1;
         }
 
-        RemoveDownloadedPackage(selection, filePath,
-            e => UiFrames.Error($"Failed to remove downloaded tmp package: {e}"));
+        if (selection.Location == Location.Remote && File.Exists(filePath))
+            try
+            {
+                File.Delete(filePath);
+            }
+            catch
+            {
+                // TODO: Add debug logging
+            }
 
         if (settings.AddIgnore)
             try
             {
-                UiFrames.Info($"Adding {selection.Name} to IgnorePkg list.");
                 manager.IgnorePackage(selection.Name);
             }
-            catch (Exception ex)
+            catch
             {
-                UiFrames.Error($"Failed to add package to IgnorePkg list: {ex.Message}");
+                // TODO: Add debug logging
             }
 
         UiFrames.TxDone("Package downgraded successfully!");
         return 0;
-    }
-
-    private static PackageInfo PromptPackageVersion(
-        DowngradePackageCommandSettings settings,
-        List<PackageInfo> packageInfos)
-    {
-        var isAutoSelect = settings.NoConfirm || settings.UseOldest;
-        var preSelectedPackage = settings.UseOldest ? packageInfos[^1] : packageInfos[0];
-
-        return isAutoSelect
-            ? preSelectedPackage
-            : AnsiConsole.Prompt(new SelectionPrompt<PackageInfo>()
-                .Title("[yellow]Select Version[/]")
-                .UseConverter(info =>
-                    $"{info.Filename.EscapeMarkup()} ({info.Location}){(info.IsInstalled ? " [green]Installed[/]" : "")}")
-                .EnableSearch()
-                .AddChoices(packageInfos));
     }
 
     private static PackageInfo MatchPackageToTargetVersion(
@@ -333,17 +340,18 @@ public partial class DowngradePackageCommand : AsyncCommand<DowngradePackageComm
         string target)
     {
         return target.Contains(".pkg.tar.", StringComparison.Ordinal)
-            ? ResolveLocalPackage(package, target)
+            ? ResolveLocalPackage(packages, package, target)
             : ResolveRemotePackage(packages, target);
     }
 
-    private static PackageInfo ResolveLocalPackage(AlpmPackageDto package, string target)
+    private static PackageInfo ResolveLocalPackage(List<PackageInfo> packages, AlpmPackageDto package, string target)
     {
         var localPath = Path.Combine(PacmanCache, target);
         var location = File.Exists(localPath) ? Location.Local : Location.Remote;
         var isInstalled = target.StartsWith($"{package.Name}-{package.Version}", StringComparison.Ordinal);
+        var uri = packages.Find(p => p.Filename == target)?.Uri;
 
-        return new PackageInfo(package.Name, target, location, isInstalled);
+        return new PackageInfo(package.Name, target, location, isInstalled, uri);
     }
 
     private static PackageInfo ResolveRemotePackage(List<PackageInfo> packages, string target)
@@ -372,10 +380,7 @@ public partial class DowngradePackageCommand : AsyncCommand<DowngradePackageComm
         return archSeparatorIndex > 0 ? versionAndArch[..archSeparatorIndex] : null;
     }
 
-    private static async Task<List<PackageInfo>> SearchArchives(
-        AlpmManager alpmManager,
-        AlpmPackageDto package,
-        Action<string> onError)
+    private static async Task<List<PackageInfo>> SearchArchives(AlpmManager alpmManager, AlpmPackageDto package)
     {
         using var client = CreateHttpClient();
 
@@ -394,22 +399,18 @@ public partial class DowngradePackageCommand : AsyncCommand<DowngradePackageComm
             {
                 try
                 {
-                    using var result = await client.GetAsync(url);
-                    result.EnsureSuccessStatusCode();
-                    var content = await result.Content.ReadAsStringAsync();
-                    return (content, url, error: (string?)null);
+                    var content = await client.GetStringAsync(url);
+                    return (content, url);
                 }
-                catch (Exception ex)
+                catch
                 {
-                    return (content: null, url, error: ex.Message);
+                    // TODO: Add debug logging
+                    return (null, url);
                 }
             })
             .ToList();
 
         var results = await Task.WhenAll(tasks);
-
-        foreach (var (_, url, error) in results.Where(r => r.error is not null))
-            onError($"[{url}] {error}");
 
         var archiveLinkRegex = new Regex($"""<a href="(?<filename>{CreatePackageRegex(package.Name)})".*>""",
             RegexOptions.Multiline);
@@ -489,19 +490,6 @@ public partial class DowngradePackageCommand : AsyncCommand<DowngradePackageComm
     private static string CreatePackageRegex(string packageName)
     {
         return $"""{Regex.Escape(packageName)}-{VersionRegex()}-{ReleaseOrHashRegex()}-[^"]+\.pkg\.tar\.[^"]+""";
-    }
-
-    private static void RemoveDownloadedPackage(PackageInfo selection, string filePath, Action<string> onError)
-    {
-        if (selection.Location != Location.Remote || !File.Exists(filePath)) return;
-        try
-        {
-            File.Delete(filePath);
-        }
-        catch (Exception e)
-        {
-            onError(e.Message);
-        }
     }
 
     public record PackageInfo(
