@@ -87,7 +87,7 @@ public class ArchNews : AsyncCommand<ArchNewsSettings>
 
     private static async Task<List<RssModel>> LoadCachedFeed()
     {
-        if (File.Exists(FeedPath)) return [];
+        if (!File.Exists(FeedPath)) return [];
 
         try
         {
