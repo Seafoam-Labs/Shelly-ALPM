@@ -1,1317 +1,462 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: shelly-ui 2.2.4.1\n"
-"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-05-14 18:41-0400\n"
-"PO-Revision-Date: 2026-06-01 05:03+EST\n"
-"Last-Translator: csnyder@seafoamlabs.org\n"
-"Language-Team: csnyder@seafoamlabs.org\n"
-"Language: en\n"
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-06-09 20:20+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-msgid "Any"
-msgstr ""
-
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:29
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:207
 msgid "Loading..."
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:44
 msgid "Recent Operations"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:45
 msgid "History"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:53
 msgid "No recent activity"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:81
 msgid "Session log is too large to display"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:94
 msgid "Session Log"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:107
 msgid "Copy Log"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:114
 msgid "Log copied to clipboard"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:224
+#, python-brace-format
 msgid "Available Updates ({0})"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:225
+#, python-brace-format
 msgid "Updates ({0})"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:275
 msgid "All packages are up to date"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:310
 msgid "just now"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:312
+#, python-brace-format
 msgid "{0} min ago"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:315
+#, python-brace-format
 msgid "{0}h ago"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:319
 msgid "yesterday"
 msgstr ""
 
+#: Shelly.Gtk/Helpers/BottomBarExtensions.cs:320
+#, python-brace-format
 msgid "{0}d ago"
 msgstr ""
 
-msgid "<span size='large'>Search for AUR packages</span>"
+#: Shelly.Gtk/Helpers/PackageSearch.cs:65
+msgid "Any"
 msgstr ""
 
-msgid "Install Packages?"
-msgstr ""
-
-msgid "Installing..."
-msgstr ""
-
-msgid "No packages found."
-msgstr ""
-
-msgid "Displaying Package Build {0}"
-msgstr ""
-
-msgid "Installed {0} Package(s)"
-msgstr ""
-
-msgid "Export AUR install log"
-msgstr ""
-
-msgid "Log Files (*.log)"
-msgstr ""
-
-msgid "Exported AUR install log"
-msgstr ""
-
-msgid "Failed to export AUR install log"
-msgstr ""
-
-msgid "Package Build"
-msgstr ""
-
-msgid "Preview PKGBUILD"
-msgstr ""
-
-msgid "Displays Package Build"
-msgstr ""
-
-msgid "Close details"
-msgstr ""
-
-msgid "Version"
-msgstr ""
-
-msgid "Votes"
-msgstr ""
-
-msgid "Popularity"
-msgstr ""
-
-msgid "Out of Date"
-msgstr ""
-
-msgid "Maintainer"
-msgstr ""
-
-msgid "Orphaned"
-msgstr ""
-
-msgid "Last Modified"
-msgstr ""
-
-msgid "First Submitted"
-msgstr ""
-
-msgid "URL:"
-msgstr ""
-
-msgid "AUR:"
-msgstr ""
-
-msgid "Depends"
-msgstr ""
-
-msgid "Make Depends"
-msgstr ""
-
-msgid "Check Depends"
-msgstr ""
-
-msgid "Optional Deps"
-msgstr ""
-
-msgid "Licenses"
-msgstr ""
-
-msgid "Keywords"
-msgstr ""
-
-msgid "Provides"
-msgstr ""
-
-msgid "Conflicts"
-msgstr ""
-
-msgid "Groups"
-msgstr ""
-
-msgid "Replaces"
-msgstr ""
-
-msgid "Remove Packages?"
-msgstr ""
-
-msgid "Removing..."
-msgstr ""
-
-msgid "Removed {0} Package(s)"
-msgstr ""
-
-msgid "<span size='large'>AUR packages are up to date</span>"
-msgstr ""
-
-msgid "Update Packages?"
-msgstr ""
-
-msgid "Updated {0} Package(s)"
-msgstr ""
-
-msgid "Shelly is an Arch Linux package manager"
-msgstr ""
-
-msgid "Seafoam Labs Website"
-msgstr ""
-
-msgid "Project Leads"
-msgstr ""
-
-msgid "Maintainers"
-msgstr ""
-
-msgid "Select"
-msgstr ""
-
-msgid "Select All"
-msgstr ""
-
-msgid "Confirm"
-msgstr ""
-
-msgid "No"
-msgstr ""
-
-msgid "Yes"
-msgstr ""
-
-msgid "Install Ignored Package?"
-msgstr ""
-
-msgid "Replace Package?"
-msgstr ""
-
-msgid "Package Conflict Detected"
-msgstr ""
-
-msgid "Corrupted Package Found"
-msgstr ""
-
-msgid "Import PGP Key?"
-msgstr ""
-
-msgid "Select Provider"
-msgstr ""
-
-msgid "Select Optional Dependencies"
-msgstr ""
-
-msgid "System Question"
-msgstr ""
-
-msgid "Arch Linux News"
-msgstr ""
-
-msgid "No news available"
-msgstr ""
-
-msgid "package"
-msgstr ""
-
-msgid "packages"
-msgstr ""
-
-msgid "AUR installation failed"
-msgstr ""
-
-msgid ""
-"Shelly couldn't finish building or installing the selected AUR {0}. Export "
-"the logs and attach them to your report so the team can check whether the "
-"issue came from the PKGBUILD or from Shelly."
-msgstr ""
-
-msgid "Packages"
-msgstr ""
-
-msgid "Recent output"
-msgstr ""
-
-msgid "Close"
-msgstr ""
-
-msgid "Export Logs"
-msgstr ""
-
-msgid "Cache directory does not exist"
-msgstr ""
-
-msgid "Cleaning package cache..."
-msgstr ""
-
-msgid "Package cache cleaned successfully"
-msgstr ""
-
-msgid "Cache clean failed: {0}"
-msgstr ""
-
-msgid "Fingerprint Disable Instructions"
-msgstr ""
-
-msgid "Disable fingerprint authentication for sudo"
-msgstr ""
-
-msgid "1. Inspect"
-msgstr ""
-
-msgid "2. Disable for sudo"
-msgstr ""
-
-msgid "3. Re-enable later"
-msgstr ""
-
-msgid "Copy"
-msgstr ""
-
-msgid "Operation Complete"
-msgstr ""
-
-msgid "Cancel"
-msgstr ""
-
-msgid "Authentication Required"
-msgstr ""
-
-msgid "Password needed to execute: {0}."
-msgstr ""
-
-msgid "Authenticate"
-msgstr ""
-
-msgid "Incorrect password. Try again."
-msgstr ""
-
-msgid "What's New"
-msgstr ""
-
-msgid "Version History"
-msgstr ""
-
-msgid "Version {0}"
-msgstr ""
-
-msgid "Package installation failed"
-msgstr ""
-
-msgid ""
-"Shelly couldn't finish building or installing the selected {0}. Export the "
-"logs and attach them to your report so the team can check whether the issue "
-"came from the PKGBUILD or from Shelly."
-msgstr ""
-
-msgid "Cache Cleaner"
-msgstr ""
-
-msgid ""
-"Cache directory: {0}\n"
-"Total cached files: {1} ({2})"
-msgstr ""
-
-msgid "Keep versions:"
-msgstr ""
-
-msgid "Uninstalled only"
-msgstr ""
-
-msgid "Clean"
-msgstr ""
-
-msgid "No candidates for removal."
-msgstr ""
-
-msgid "{0} files, {1} would be freed"
-msgstr ""
-
-msgid "Name and URL are required"
-msgstr ""
-
-msgid "URL must end with .flatpakrepo"
-msgstr ""
-
-msgid "Failed to add remote: {0}"
-msgstr ""
-
-msgid "Added Remote: {0}"
-msgstr ""
-
-msgid "Removed Remote"
-msgstr ""
-
-msgid "All Applications"
-msgstr ""
-
-msgid "Recommended"
-msgstr ""
-
-msgid "Most Wanted"
-msgstr ""
-
-msgid "Recently Added"
-msgstr ""
-
-msgid "Recently Updated"
-msgstr ""
-
-msgid "Audio & Video"
-msgstr ""
-
-msgid "Development"
-msgstr ""
-
-msgid "Education"
-msgstr ""
-
-msgid "Game"
-msgstr ""
-
-msgid "Graphics"
-msgstr ""
-
-msgid "Network"
-msgstr ""
-
-msgid "Office"
-msgstr ""
-
-msgid "Science"
-msgstr ""
-
-msgid "System"
-msgstr ""
-
-msgid "Utility"
-msgstr ""
-
-msgid "Version: {0}"
-msgstr ""
-
-msgid "License: {0}"
-msgstr ""
-
-msgid "Installed"
-msgstr ""
-
-msgid "Install"
-msgstr ""
-
-msgid "Size: {0}"
-msgstr ""
-
-msgid "No links available"
-msgstr ""
-
-msgid "Install Flatpak Ref"
-msgstr ""
-
-msgid "Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""
-msgstr ""
-
-msgid "Installing selected local flatpak file..."
-msgstr ""
-
-msgid "Installing Flatpak failed"
-msgstr ""
-
-msgid "Installed Flatpak"
-msgstr ""
-
-msgid "Install Package?"
-msgstr ""
-
-msgid "Installing {0}..."
-msgstr ""
-
-msgid "Installed Flatpak addon"
-msgstr ""
-
-msgid "Available Addons"
-msgstr ""
-
-msgid "No details available"
-msgstr ""
-
-msgid "Keep Config"
-msgstr ""
-
-msgid "Keep user data and configuration"
-msgstr ""
-
-msgid "Delete Config"
-msgstr ""
-
-msgid "Delete user data and configuration"
-msgstr ""
-
-msgid "Keep Config?"
-msgstr ""
-
-msgid "Removing {0}..."
-msgstr ""
-
-msgid "Failed to remove package {0}: {1}"
-msgstr ""
-
-msgid "Removed Package(s)"
-msgstr ""
-
-msgid "Permission Changes"
-msgstr ""
-
-msgid "Updating Flatpak packages..."
-msgstr ""
-
-msgid "Failed to update packages: {0}"
-msgstr ""
-
-msgid "Updated all Flatpak(s)"
-msgstr ""
-
-msgid "<span size='large'>System packages are up to date</span>"
-msgstr ""
-
-msgid "Current"
-msgstr ""
-
-msgid "New"
-msgstr ""
-
-msgid "Download"
-msgstr ""
-
-msgid "Size Diff"
-msgstr ""
-
-msgid "Repository"
-msgstr ""
-
-msgid "Size"
-msgstr ""
-
-msgid "Partial Update Warning"
-msgstr ""
-
-msgid ""
-"It is not advised you do partial system updates. Are you sure you want to "
-"continue?"
-msgstr ""
-
-msgid ""
-"It is unadvised to not update all packages at once. Are you sure you want to "
-"continue?"
-msgstr ""
-
-msgid "Updating..."
-msgstr ""
-
-msgid "Reboot Required"
-msgstr ""
-
-msgid ""
-"A full system reboot is required for updates to take effect.\n"
-"\n"
-"Would you like to reboot now?"
-msgstr ""
-
-msgid "Service Restart Failures"
-msgstr ""
-
-msgid ""
-"The following services failed to restart automatically:\n"
-"{0}"
-msgstr ""
-
-msgid "--- Packages to Upgrade ---"
-msgstr ""
-
-msgid "Export Shelly install log"
-msgstr ""
-
-msgid "Exported Shelly install log"
-msgstr ""
-
-msgid "Failed to export Shelly install log"
-msgstr ""
-
-msgid "Install Local Package"
-msgstr ""
-
-msgid "Local package files (\"*.gz\", \"*.zst\")"
-msgstr ""
-
-msgid "Installing local package..."
-msgstr ""
-
-msgid "Installed local package"
-msgstr ""
-
-msgid "Package Files ({0})"
-msgstr ""
-
-msgid "Remove corrupted packages"
-msgstr ""
-
-msgid "Select File"
-msgstr ""
-
-msgid "Recommend"
-msgstr ""
-
-msgid "AUR"
-msgstr ""
-
-msgid "Flatpak"
-msgstr ""
-
-msgid "AppImage"
-msgstr ""
-
-msgid "Shelly Search"
-msgstr ""
-
-msgid "Select Icon File"
-msgstr ""
-
-msgid "Image Files"
-msgstr ""
-
-msgid "Enable AUR?"
-msgstr ""
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-
-msgid "Missing Flatpak"
-msgstr ""
-
-msgid "Would you like to install this this now?"
-msgstr ""
-
-msgid "Installing flatpak..."
-msgstr ""
-
-msgid "Reboot required to complete installation."
-msgstr ""
-
-msgid "Synchronizing databases..."
-msgstr ""
-
-msgid "Database lock removed"
-msgstr ""
-
-msgid "Shelly folder ownership restored"
-msgstr ""
-
-msgid "Failed to fix folder permissions"
-msgstr ""
-
-msgid "Error fixing folder permissions"
-msgstr ""
-
-msgid "Purified Corruption"
-msgstr ""
-
-msgid "No corrupted packages found"
-msgstr ""
-
-msgid "No pacfiles found"
-msgstr ""
-
-msgid "Pacfiles Found"
-msgstr ""
-
-msgid "Copy content"
-msgstr ""
-
-msgid "Copied to clipboard"
-msgstr ""
-
-msgid "Overlay not available"
-msgstr ""
-
-msgid "No changelog entries found"
-msgstr ""
-
-msgid "Unknown"
-msgstr ""
-
-msgid "No details for this release"
-msgstr ""
-
-msgid "Unknown date"
-msgstr ""
-
-msgid "Failed to load changelog"
-msgstr ""
-
+#: Shelly.Gtk/Windows/AppImage.cs:88
 msgid "None"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:89
 msgid "StaticUrl"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:90
 msgid "GitHub"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:91
 msgid "GitLab"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:92
 msgid "Codeberg"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:93
 msgid "Forgejo"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:251
 msgid "Select AppImage to Install"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:254
 msgid "AppImage Files"
 msgstr ""
 
-msgid "Installing AppImage..."
-msgstr ""
-
-msgid "{0} installed successfully!"
-msgstr ""
-
-msgid "Failed to install {0}: {1}"
-msgstr ""
-
+#: Shelly.Gtk/Windows/AppImage.cs:286
 msgid "No AppImages need to be upgraded"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:290
 msgid "Running updates..."
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:292
 msgid "Updating AppImages..."
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:298
 msgid "All AppImages updated successfully!"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:304
+#, python-brace-format
 msgid "Failed to update AppImages: {0}"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:327
+#, python-brace-format
+msgid "Version {0}"
+msgstr ""
+
+#: Shelly.Gtk/Windows/AppImage.cs:373
+#, python-brace-format
 msgid "Configuration saved for {0}"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:380
+#, python-brace-format
 msgid "Failed to save configuration: {0}"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:395
+#, python-brace-format
 msgid "Syncing {0}..."
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:403
+#, python-brace-format
 msgid "Synced {0}"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:409 Shelly.Gtk/Windows/AppImage.cs:440
+#, python-brace-format
 msgid "Failed to sync: {0}"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:426
 msgid "Syncing all AppImages ..."
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:434
 msgid "Synced"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:459
+#, python-brace-format
+msgid "Removing {0}..."
+msgstr ""
+
+#: Shelly.Gtk/Windows/AppImage.cs:466
+#, python-brace-format
 msgid "{0} removed successfully!"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:473
+#, python-brace-format
 msgid "Failed to remove {0}: {1}"
 msgstr ""
 
+#: Shelly.Gtk/Windows/AppImage.cs:512
+msgid "Only AppImage files are supported"
+msgstr ""
+
+#: Shelly.Gtk/Windows/AppImage.cs:525
+msgid "Installing AppImage..."
+msgstr ""
+
+#: Shelly.Gtk/Windows/AppImage.cs:533
+#, python-brace-format
+msgid "{0} installed successfully!"
+msgstr ""
+
+#: Shelly.Gtk/Windows/AppImage.cs:540
+#, python-brace-format
+msgid "Failed to install {0}: {1}"
+msgstr ""
+
+#: Shelly.Gtk/Windows/Recommend.cs:75
 msgid ""
 "No recommendations found. Please check your internet connection and try "
 "again."
 msgstr ""
 
-msgid "Already installed"
-msgstr ""
-
-msgid "Install "
-msgstr ""
-
+#: Shelly.Gtk/Windows/Recommend.cs:245
 msgid "Package is already installed"
 msgstr ""
 
-msgid "Installing package..."
-msgstr ""
-
-msgid "Package installed successfully"
-msgstr ""
-
+#: Shelly.Gtk/Windows/Recommend.cs:272
 msgid "Remove "
 msgstr ""
 
+#: Shelly.Gtk/Windows/Recommend.cs:278
 msgid "Removing package..."
 msgstr ""
 
+#: Shelly.Gtk/Windows/Recommend.cs:291
 msgid "Package removed successfully"
 msgstr ""
 
-msgid "Reboot required after flatpak installation."
+#: Shelly.Gtk/Windows/Recommend.cs:304
+msgid "Install "
 msgstr ""
 
-msgid "Failed to install flatpak"
+#: Shelly.Gtk/Windows/Recommend.cs:310
+msgid "Installing package..."
 msgstr ""
 
-msgid "Searching..."
+#: Shelly.Gtk/Windows/Recommend.cs:322
+msgid "Package installed successfully"
 msgstr ""
 
-msgid "Search error: {0}"
+#: Shelly.Gtk/Windows/Settings.cs:129
+msgid "Remove corrupted packages"
 msgstr ""
 
-msgid "Failed to install packages: {0}"
+#: Shelly.Gtk/Windows/Settings.cs:163 Shelly.Gtk/Windows/Settings.cs:185
+msgid "Select File"
 msgstr ""
 
-msgid "Install for {0} package(s) was unsuccessful."
+#: Shelly.Gtk/Windows/Settings.cs:228
+msgid "Packages"
 msgstr ""
 
-msgid "Failed to remove packages: {0}"
+#: Shelly.Gtk/Windows/Settings.cs:233
+msgid "Recommend"
 msgstr ""
 
-msgid "color-scheme"
+#: Shelly.Gtk/Windows/Settings.cs:239
+msgid "AUR"
 msgstr ""
 
-msgid "Updates"
+#: Shelly.Gtk/Windows/Settings.cs:245
+msgid "Flatpak"
 msgstr ""
 
-msgid "Manage"
+#: Shelly.Gtk/Windows/Settings.cs:251
+msgid "AppImage"
 msgstr ""
 
-msgid "Remove"
+#: Shelly.Gtk/Windows/Settings.cs:257
+msgid "Shelly Search"
 msgstr ""
 
-msgid "Search packages..."
+#: Shelly.Gtk/Windows/Settings.cs:290
+msgid "Select Icon File"
 msgstr ""
 
-msgid "Use chroot"
+#: Shelly.Gtk/Windows/Settings.cs:296
+msgid "Image Files"
 msgstr ""
 
-msgid "Build packages in a clean chroot environment"
-msgstr ""
-
-msgid "Run checks"
-msgstr ""
-
-msgid "Run the --check function during package build (installs checkdepends)"
-msgstr ""
-
-msgid "Install Aur Package(s)"
-msgstr ""
-
-msgid "Name"
-msgstr ""
-
-msgid "refresh"
-msgstr ""
-
-msgid "Clean Uninstall"
-msgstr ""
-
-msgid "Show Hidden"
-msgstr ""
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr ""
-
-msgid "Remove Aur Package(s)"
-msgstr ""
-
-msgid ""
-"Run the --check function during package build (installs checkdepends)\n"
-"                        "
-msgstr ""
-
-msgid "Update Aur Package(s)"
-msgstr ""
-
-msgid "Please wait while we update your system."
-msgstr ""
-
-msgid "Reload"
-msgstr ""
-
-msgid "Manage Remote Refs"
-msgstr ""
-
-msgid "Install local flatpak"
-msgstr ""
-
-msgid "system"
-msgstr ""
-
-msgid "user"
-msgstr ""
-
-msgid "Loading Flatpak Data..."
-msgstr ""
-
-msgid "Back"
-msgstr ""
-
-msgid "Addons"
-msgstr ""
-
-msgid "Group Filter"
-msgstr ""
-
-msgid "App Name"
-msgstr ""
-
-msgid "Author"
-msgstr ""
-
-msgid "Version: -"
-msgstr ""
-
-msgid "Size: -"
-msgstr ""
-
-msgid "License: -"
-msgstr ""
-
-msgid "Summary"
-msgstr ""
-
-msgid "No description available."
-msgstr ""
-
-msgid "Delete Selected Remote"
-msgstr ""
-
-msgid "Add Remote"
-msgstr ""
-
-msgid "Add New Flatpak Remote"
-msgstr ""
-
-msgid "Add"
-msgstr ""
-
-msgid "Remote Name"
-msgstr ""
-
-msgid "e.g., flathub"
-msgstr ""
-
-msgid "Remote URL"
-msgstr ""
-
-msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr ""
-
-msgid "Scope"
-msgstr ""
-
-msgid "Remove Selected"
-msgstr ""
-
-msgid "Flatpak Repair"
-msgstr ""
-
-msgid "Repairs Flatpak Installation (Experimental)"
-msgstr ""
-
-msgid "Update All"
-msgstr ""
-
-msgid "Package Group Filter"
-msgstr ""
-
-msgid "Install Local Packages"
-msgstr ""
-
-msgid "Install Local"
-msgstr ""
-
-msgid "Perform Upgrade"
-msgstr ""
-
-msgid "Perform a full system upgrade with install (-u)"
-msgstr ""
-
-msgid "Install Selected"
-msgstr ""
-
-msgid "Sync"
-msgstr ""
-
-msgid "Update Selected"
-msgstr ""
-
-msgid "Package Name"
-msgstr ""
-
-msgid "Size Difference"
-msgstr ""
-
-msgid "Old Version"
-msgstr ""
-
-msgid "Remove Local Packages"
-msgstr ""
-
-msgid "Remove Local"
-msgstr ""
-
-msgid "Remove Configs"
-msgstr ""
-
-msgid "General"
-msgstr ""
-
-msgid "Enable AUR"
-msgstr ""
-
-msgid "Enable Flatpak"
-msgstr ""
-
-msgid "Enable Recommended Page"
-msgstr ""
-
-msgid "Enable AppImage"
-msgstr ""
-
-msgid "Enable Tray Icon"
-msgstr ""
-
-msgid "Use weekly schedule"
-msgstr ""
-
-msgid "Tray Check Interval (Hours)"
-msgstr ""
-
-msgid "Weekly Schedule"
-msgstr ""
-
-msgid "Sun"
-msgstr ""
-
-msgid "Mon"
-msgstr ""
-
-msgid "Tue"
-msgstr ""
-
-msgid "Wed"
-msgstr ""
-
-msgid "Thu"
-msgstr ""
-
-msgid "Fri"
-msgstr ""
-
-msgid "Sat"
-msgstr ""
-
-msgid "Update Time (24h):"
-msgstr ""
-
-msgid "Look & Feel"
-msgstr ""
-
-msgid "Icons Enabled"
-msgstr ""
-
-msgid "Use Symbolic Tray Icon"
-msgstr ""
-
-msgid ""
-"Both tray icons must be set for use, if not it will default to standard "
-"shelly icons. Changing tray icons requires a restart of shelly-notifications."
-msgstr ""
-
-msgid "Tray Icon"
-msgstr ""
-
-msgid "Clear"
-msgstr ""
-
-msgid "Tray Updates Icon"
-msgstr ""
-
-msgid "Default page"
-msgstr ""
-
-msgid "Use Sidebar Navigation"
-msgstr ""
-
-msgid "Advanced"
-msgstr ""
-
-msgid "Remove Cache on Uninstall"
-msgstr ""
-
-msgid "No Confirm"
-msgstr ""
-
-msgid "Enable Shelly Search"
-msgstr ""
-
-msgid "Enable Webview Visualization (experimental)"
-msgstr ""
-
-msgid "Parallel Downloads"
-msgstr ""
-
-msgid "Force Database Update"
-msgstr ""
-
-msgid "Remove db.lck"
-msgstr ""
-
-msgid "View Pacfiles"
-msgstr ""
-
-msgid "Fix Permissions"
-msgstr ""
-
-msgid ""
-"Restores correct user ownership of Shelly configuration and cache folders if "
-"they were accidentally created by root."
-msgstr ""
-
-msgid "Purify Packages"
-msgstr ""
-
-msgid "Save"
-msgstr ""
-
-msgid "View Changelog"
-msgstr ""
-
-msgid "Community fluxer"
-msgstr ""
-
-msgid "Sponsor"
-msgstr ""
-
-msgid "Search..."
-msgstr ""
-
-msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr ""
-
-msgid "Sync All"
-msgstr ""
-
-msgid "Upgrade all AppImages to their latest versions"
-msgstr ""
-
-msgid "Upgrade All"
-msgstr ""
-
-msgid "Install a new AppImage from a file"
-msgstr ""
-
-msgid "Install AppImage"
-msgstr ""
-
-msgid "Description goes here..."
-msgstr ""
-
-msgid "Size on Disk"
-msgstr ""
-
-msgid "Update Strategy"
-msgstr ""
-
-msgid "Update URL / Repository Info"
-msgstr ""
-
-msgid "e.g. repo or https://..."
-msgstr ""
-
-msgid "Installation Path"
-msgstr ""
-
-msgid "Install Package(s)"
-msgstr ""
-
-msgid "Update Package(s)"
-msgstr ""
-
-msgid "Manage Package(s)"
-msgstr ""
-
-msgid "Install AUR"
-msgstr ""
-
-msgid "Update AUR"
-msgstr ""
-
-msgid "Remove AUR"
-msgstr ""
-
-msgid "Install Flatpak"
-msgstr ""
-
-msgid "Update Flatpak"
-msgstr ""
-
-msgid "Remove Flatpak"
-msgstr ""
-
-msgid "Manage AppImage(s)"
-msgstr ""
-
-msgid "Arch News"
-msgstr ""
-
-msgid "Settings"
-msgstr ""
-
-msgid "About"
-msgstr ""
-
-msgid "Toggle Sidebar"
-msgstr ""
-
-msgid "Available Updates"
-msgstr ""
-
-msgid "Welcome to Shelly"
-msgstr ""
-
-msgid "Let's get you set up with some basic configurations."
-msgstr ""
-
-msgid "Enable AUR Support"
-msgstr ""
-
-msgid ""
-"Access the Arch User Repository for a vast collection of community-"
-"maintained packages. AUR packages can contain malicious software, so please "
-"use caution when using the AUR."
-msgstr ""
-
-msgid "Enable Flatpak Support"
-msgstr ""
-
-msgid "Enable support for Flatpak applications from Flathub and other remotes."
-msgstr ""
-
-msgid "Enable AppImage Support"
-msgstr ""
-
-msgid "Manage and configure updates for AppImage applications easily."
-msgstr ""
-
-msgid ""
-"Show a status icon in your system tray for quick access and notifications."
-msgstr ""
-
-msgid "Vertical Navigation"
-msgstr ""
-
-msgid "Change navigation style to vertical or horizontal style."
-msgstr ""
-
-msgid "Finish Setup"
-msgstr ""
-
-msgid ""
-"Any required installations will run after the Finish button has been "
-"accepted."
-msgstr ""
-
-msgid "These options and others can be configured later in settings."
-msgstr ""
-
-msgid "Remove Package(s)"
-msgstr ""
-
-msgid "Description"
-msgstr ""
-
-msgid "Last Updated"
-msgstr ""
-
-msgid "Remove Optional Deps"
-msgstr ""
-
-msgid "Also remove orphaned optional dependencies installed with these packages."
-msgstr ""
-
-msgid "Add Tray To Auto Start"
-msgstr ""
-
+#: Shelly.Gtk/Windows/Settings.cs:380
 msgid "Systemd startup service added."
 msgstr ""
 
+#: Shelly.Gtk/Windows/Settings.cs:386
 msgid "Systemd startup service removed."
 msgstr ""
 
-msgid "Tray Icon Autostart"
+#: Shelly.Gtk/Windows/Settings.cs:510
+msgid "Enable AUR?"
 msgstr ""
 
-msgid "Allow the tray service to autostart."
+#: Shelly.Gtk/Windows/Settings.cs:511
+msgid ""
+"The Arch User Repository (AUR) is a community-driven repository. Packages "
+"are user-produced and may contain risks. Do you want to enable it?"
 msgstr ""
 
-msgid "Unable to load package data. You may have a db.lck."
+#: Shelly.Gtk/Windows/Settings.cs:545
+msgid "Missing Flatpak"
 msgstr ""
 
-msgid "Downgrade Selected"
+#: Shelly.Gtk/Windows/Settings.cs:546
+msgid "Would you like to install this this now?"
 msgstr ""
 
-msgid "Downgrade selected packages one by one"
+#: Shelly.Gtk/Windows/Settings.cs:556 Shelly.Gtk/Windows/SetupWindow.cs:109
+msgid "Installing flatpak..."
 msgstr ""
 
-msgid "No downgrade options found for {0}"
+#: Shelly.Gtk/Windows/Settings.cs:581
+msgid "Reboot required to complete installation."
 msgstr ""
 
-msgid "Downgrading {0}..."
+#: Shelly.Gtk/Windows/Settings.cs:617
+msgid "Synchronizing databases..."
 msgstr ""
 
-msgid "Downgraded {0} Package(s)"
+#: Shelly.Gtk/Windows/Settings.cs:636
+msgid "Database lock removed"
 msgstr ""
 
-msgid "Downgrade: {0}"
+#: Shelly.Gtk/Windows/Settings.cs:653
+msgid "Shelly folder ownership restored"
 msgstr ""
 
-msgid "Select version:"
+#: Shelly.Gtk/Windows/Settings.cs:659
+msgid "Failed to fix folder permissions"
 msgstr ""
 
-msgid "Add to IgnorePkg list"
+#: Shelly.Gtk/Windows/Settings.cs:666
+msgid "Error fixing folder permissions"
 msgstr ""
 
-msgid "Downgrade"
+#: Shelly.Gtk/Windows/Settings.cs:680
+msgid "Purified Corruption"
 msgstr ""
 
-msgid "Enable Package Downgrade"
+#: Shelly.Gtk/Windows/Settings.cs:692
+msgid "No corrupted packages found"
+msgstr ""
+
+#: Shelly.Gtk/Windows/Settings.cs:712
+msgid "No pacfiles found"
+msgstr ""
+
+#: Shelly.Gtk/Windows/Settings.cs:722
+msgid "Pacfiles Found"
+msgstr ""
+
+#: Shelly.Gtk/Windows/Settings.cs:755
+msgid "Copy content"
+msgstr ""
+
+#: Shelly.Gtk/Windows/Settings.cs:761
+msgid "Copied to clipboard"
+msgstr ""
+
+#: Shelly.Gtk/Windows/Settings.cs:807
+msgid "Overlay not available"
+msgstr ""
+
+#: Shelly.Gtk/Windows/Settings.cs:846 Shelly.Gtk/Windows/Settings.cs:883
+msgid "No changelog entries found"
+msgstr ""
+
+#: Shelly.Gtk/Windows/Settings.cs:855 Shelly.Gtk/Windows/Settings.cs:856
+msgid "Unknown"
+msgstr ""
+
+#: Shelly.Gtk/Windows/Settings.cs:859 Shelly.Gtk/Windows/Settings.cs:860
+#: Shelly.Gtk/Windows/Settings.cs:875
+msgid "No details for this release"
+msgstr ""
+
+#: Shelly.Gtk/Windows/Settings.cs:868
+msgid "Unknown date"
+msgstr ""
+
+#: Shelly.Gtk/Windows/Settings.cs:896
+msgid "Failed to load changelog"
+msgstr ""
+
+#: Shelly.Gtk/Windows/SetupWindow.cs:46
+#, python-brace-format
+msgid "Error loading intro image: {ex.Message}"
+msgstr ""
+
+#: Shelly.Gtk/Windows/SetupWindow.cs:97
+#, python-brace-format
+msgid "Error adding systemd service: {ex.Message}"
+msgstr ""
+
+#: Shelly.Gtk/Windows/SetupWindow.cs:115 Shelly.Gtk/Windows/SetupWindow.cs:127
+msgid "Reboot required after flatpak installation."
+msgstr ""
+
+#: Shelly.Gtk/Windows/SetupWindow.cs:119
+msgid "Failed to install flatpak"
+msgstr ""
+
+#: Shelly.Gtk/Windows/SetupWindow.cs:128
+#, python-brace-format
+msgid "Error installing flatpak: {ex.Message}"
+msgstr ""
+
+#: Shelly.Gtk/Windows/ShellySearch.cs:95
+msgid "Searching..."
+msgstr ""
+
+#: Shelly.Gtk/Windows/ShellySearch.cs:192
+msgid "Installed"
+msgstr ""
+
+#: Shelly.Gtk/Windows/ShellySearch.cs:356
+#, python-brace-format
+msgid "Search error: {0}"
+msgstr ""
+
+#: Shelly.Gtk/Windows/ShellySearch.cs:488
+msgid "Installing..."
+msgstr ""
+
+#: Shelly.Gtk/Windows/ShellySearch.cs:526
+#, python-brace-format
+msgid "Failed to install packages: {0}"
+msgstr ""
+
+#: Shelly.Gtk/Windows/ShellySearch.cs:535
+#, python-brace-format
+msgid "Install for {0} package(s) was unsuccessful."
+msgstr ""
+
+#: Shelly.Gtk/Windows/ShellySearch.cs:541
+#, python-brace-format
+msgid "Installed {0} Package(s)"
+msgstr ""
+
+#: Shelly.Gtk/Windows/ShellySearch.cs:588
+msgid "Removing..."
+msgstr ""
+
+#: Shelly.Gtk/Windows/ShellySearch.cs:608
+#, python-brace-format
+msgid "Failed to remove packages: {0}"
+msgstr ""
+
+#: Shelly.Gtk/Windows/ShellySearch.cs:615
+#, python-brace-format
+msgid "Removed {0} Package(s)"
 msgstr ""

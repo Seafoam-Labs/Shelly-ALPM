@@ -1,9 +1,9 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: shelly-notifications 2.3.0.2\n"
-"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-05-20 12:32-0400\n"
-"PO-Revision-Date: 2026-05-29 18:55+0000\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-06-09 20:22+0000\n"
+"PO-Revision-Date: 2026-06-09 20:17+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: none\n"
 "Language: pl\n"
@@ -12,53 +12,74 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 "
 "|| n%100>=20) ? 1 : 2;\n"
-"X-Generator: Weblate 5.16.2\n"
+"X-Generator: Weblate 2026.6.1\n"
 
-msgid "Updates available: {0}"
-msgstr "Dostępne aktualizacje: {0}"
-
-msgid "Shelly Notifications started. Press Ctrl+C to exit."
-msgstr "Uruchomiono powiadomienia Shelly. Naciśnij Ctrl+C, aby wyjść."
-
-msgid "Warning: No StatusNotifierWatcher found. The tray icon will not be visible."
-msgstr ""
-"Ostrzeżenie: Nie znaleziono StatusNotifierWatcher. Ikona w zasobniku nie "
-"będzie widoczna."
-
-msgid "Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension installed."
-msgstr ""
-"Wskazówka: Jeśli używasz środowiska GNOME, upewnij się, że masz "
-"zainstalowane rozszerzenie „AppIndicator”."
-
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:22
 msgid "Open Shelly"
 msgstr "Otwórz Shelly"
 
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:23
 msgid "Update Packages"
 msgstr "Zaktualizuj pakiety"
 
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:24
 msgid "Check for Updates"
 msgstr "Sprawdź aktualizacje"
 
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:25
 msgid "Last check: Never"
 msgstr "Ostatnio sprawdzono: Nigdy"
 
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:28
 msgid "Exit"
 msgstr "Wyjdź"
 
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:262
+#, python-brace-format
+msgid "Updates available: {0}"
+msgstr "Dostępne aktualizacje: {0}"
+
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:262
 msgid "No updates available."
 msgstr "Brak dostępnych aktualizacji."
 
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:401
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:437
 msgid "Flatpak"
 msgstr "Flatpak"
 
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:405
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:436
 msgid "AUR"
 msgstr "AUR"
 
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:409
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:435
 msgid "Standard"
 msgstr "Standardowe"
 
+#: Shelly-Notifications/DbusHandlers/DBusMenuHandler.cs:423
+#, python-brace-format
 msgid "Last check: {0}"
 msgstr "Ostatnio sprawdzono: {0}"
 
+#: Shelly-Notifications/DbusHandlers/StatusNotifierItemHandler.cs:133
 msgid "Shelly Notifications"
 msgstr "Powiadomienia Shelly"
+
+#~ msgid "Shelly Notifications started. Press Ctrl+C to exit."
+#~ msgstr "Uruchomiono powiadomienia Shelly. Naciśnij Ctrl+C, aby wyjść."
+
+#~ msgid ""
+#~ "Warning: No StatusNotifierWatcher found. The tray icon will not be "
+#~ "visible."
+#~ msgstr ""
+#~ "Ostrzeżenie: Nie znaleziono StatusNotifierWatcher. Ikona w zasobniku nie "
+#~ "będzie widoczna."
+
+#~ msgid ""
+#~ "Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
+#~ "installed."
+#~ msgstr ""
+#~ "Wskazówka: Jeśli używasz środowiska GNOME, upewnij się, że masz "
+#~ "zainstalowane rozszerzenie „AppIndicator”."
