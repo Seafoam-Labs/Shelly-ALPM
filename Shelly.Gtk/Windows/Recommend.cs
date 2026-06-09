@@ -187,6 +187,7 @@ public sealed class Recommend(
                 flox.SetSelectionMode(SelectionMode.None);
                 flox.SetColumnSpacing(8);
                 flox.SetRowSpacing(8);
+                flox.Homogeneous = true;
                 flox.MinChildrenPerLine = 1;
                 flox.MaxChildrenPerLine = 6;
 
