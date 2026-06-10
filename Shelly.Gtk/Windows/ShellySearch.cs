@@ -30,7 +30,7 @@ public sealed class ShellySearch(
     private readonly Dictionary<ColumnViewCell, EventHandler> _checkBinding = [];
     private readonly Dictionary<ColumnViewCell, EventHandler> _installedBinding = [];
 
-    private const int MatchScore = 67;
+    private const int MatchScore = 1;
     private Stack _searchStack = null!;
     private Spinner _searchSpinner = null!;
     private SearchEntry _searchEntry = null!;
@@ -265,7 +265,7 @@ public sealed class ShellySearch(
         {
             if (args.Object is not ColumnViewCell listItem) return;
             if (listItem.GetItem() is MetaPackageGObject { Package: { } pkg } && listItem.GetChild() is Label label)
-                label.SetText(pkg.Description);
+                label.SetText(pkg.Summary);
         };
         descriptionColumn.SetFactory(descriptionFactory);
 
@@ -326,10 +326,11 @@ public sealed class ShellySearch(
             }
 
             models = models
-                .Select(y => new { Package = y, Score = MatchObject(query, y.Name, y.Description) })
+                .Select(y => new { Package = y, Score = MatchObject(query, y.Name, y.Summary) })
                 .Where(x => x.Score >= MatchScore)
-                .OrderByDescending(x => x.Package.IsInstalled)
-                .ThenByDescending(x => x.Score)
+                .OrderByDescending(x => x.Score)
+                .ThenByDescending(x => x.Package.IsInstalled)
+                .ThenBy(x => x.Package.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(x => x.Package)
                 .ToList();
 
@@ -413,7 +414,7 @@ public sealed class ShellySearch(
                 y.Version,
                 y.Description ?? "",
                 PackageType.Aur,
-                y.Url ?? "",
+                y.Description ?? "",
                 "AUR",
                 installedNames.Contains(y.Name),
                 y.LastModified
@@ -432,7 +433,7 @@ public sealed class ShellySearch(
         var allApps = await unprivilegedOperationService.ListAppstreamFlatpak(ct);
         return allApps
             .Where(app => app.Type != "addon")
-            .Select(app => new { Package = app, Score = MatchObject(query, app.Name, app.Description) })
+            .Select(app => new { Package = app, Score = MatchObject(query, app.Name, app.Summary) })
             .Where(x => x.Score >= MatchScore)
             .OrderByDescending(x => x.Score)
             .Select(x => x.Package)
@@ -456,10 +457,11 @@ public sealed class ShellySearch(
 
     private static int MatchObject(string query, string name, string description)
     {
-        var nameScore = StringMatching.PartialRatio(query, name);
-        var descScore = StringMatching.PartialRatio(query, description);
-
-        return (int)(nameScore * 0.5 + descScore * 0.5);
+        var tier = PackageSearch.Score(name, description, query);
+        if (tier == 0) return 0;
+        var fuzz = (int)(StringMatching.PartialRatio(query, name) * 0.7
+                       + StringMatching.PartialRatio(query, description) * 0.3);
+        return tier * 1000 + fuzz;
     }
 
     private async Task InstallSelectedAsync()
@@ -589,7 +591,7 @@ public sealed class ShellySearch(
             var aur = selected.Where(x => x.PackageType == PackageType.Aur).Select(x => x.Name).ToList();
             var flatpak = selected.Where(x => x.PackageType == PackageType.Flatpak).Select(x => x.Id).ToList();
 
-            if (standard.Count > 0) await privilegedOperationService.RemovePackagesAsync(standard, false, false, false, _deletePackageCache);
+            if (standard.Count > 0) await privilegedOperationService.RemovePackagesAsync(standard, true, false, true, _deletePackageCache);
             if (aur.Count > 0) await privilegedOperationService.RemoveAurPackagesAsync(aur);
             if (flatpak.Count > 0) await unprivilegedOperationService.RemoveFlatpakPackage(flatpak);
 

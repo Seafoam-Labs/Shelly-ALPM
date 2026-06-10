@@ -1,4 +1,5 @@
 using PackageManager.AppImage;
+using Shelly_CLI.Utility;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -11,13 +12,9 @@ public class AppImageRemoveCommand : AsyncCommand<AppImageRemoveSettings>
         if (string.IsNullOrWhiteSpace(settings.Name))
         {
             if (Program.IsUiMode)
-            {
-                await Console.Error.WriteLineAsync("Error: No AppImage name specified");
-            }
+                UiFrames.Error("No AppImage name specified");
             else
-            {
                 AnsiConsole.MarkupLine("[red]Error: No AppImage name specified[/]");
-            }
 
             return 1;
         }
@@ -73,10 +70,21 @@ public class AppImageRemoveCommand : AsyncCommand<AppImageRemoveSettings>
         }
 
         var manager = new AppImageManager();
-        manager.ErrorEvent += (_, args) => { AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]"); };
+        if (Program.IsUiMode)
+        {
+            manager.ErrorEvent += (_, args) => UiFrames.Error(args.Error);
+            manager.MessageEvent += (_, args) => UiFrames.Info(args.Message);
+            UiFrames.Info("Removing AppImage...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
+        }
+        else
+        {
+            manager.ErrorEvent += (_, args) => AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]");
+            manager.MessageEvent += (_, args) => AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]");
+        }
 
-        manager.MessageEvent += (_, args) => { AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]"); };
-
-        return await manager.RemoveAppImage(targetAppImage);
+        var result = await manager.RemoveAppImage(targetAppImage);
+        if (Program.IsUiMode)
+            UiFrames.TxFinish(result == 0, "AppImage removed.", "Failed to remove AppImage.");
+        return result;
     }
 }

@@ -3,6 +3,7 @@ using System.Text.Json;
 using PackageManager.Aur;
 using PackageManager.Wire;
 using Shelly_CLI.Commands.Aur.Models;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -55,7 +56,7 @@ public class AurSearchPackageBuild : AsyncCommand<AurPackageSettings>
     {
         if (settings.Packages.Length == 0)
         {
-            await Console.Error.WriteLineAsync("Error: No packages specified");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, "No packages specified"));
             return 1;
         }
 
@@ -74,7 +75,7 @@ public class AurSearchPackageBuild : AsyncCommand<AurPackageSettings>
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync($"Installation failed: {ex.Message}");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, $"Failed to fetch pkgbuild: {ex.Message}"));
             return 1;
         }
         finally

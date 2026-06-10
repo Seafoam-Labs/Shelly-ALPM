@@ -1,0 +1,65 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: shelly-notifications 2.3.0.2\n"
+"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
+"POT-Creation-Date: 2026-05-20 12:32-0400\n"
+"PO-Revision-Date: 2026-06-04 11:17+0200\n"
+"Last-Translator: Daniel Talens <dtalens@dtalens.com>\n"
+"Language-Team: \n"
+"Language: ca\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.9\n"
+
+msgid "Updates available: {0}"
+msgstr "Actualitzacions disponibles: {0}"
+
+msgid "Shelly Notifications started. Press Ctrl+C to exit."
+msgstr "S'ha iniciat notifications de Shelly. Premeu Ctrl+C per a sortir."
+
+msgid ""
+"Warning: No StatusNotifierWatcher found. The tray icon will not be visible."
+msgstr ""
+"Avís: no s'ha trobat cap StatusNotifierWatcher. La icona de la safata no "
+"serà visible."
+
+msgid ""
+"Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
+"installed."
+msgstr ""
+"Consell: si utilitzeu GNOME, assegureu-vos que teniu instal·lada "
+"l'extensió «AppIndicator»."
+
+msgid "Open Shelly"
+msgstr "Obre Shelly"
+
+msgid "Update Packages"
+msgstr "Actualitza els paquets"
+
+msgid "Check for Updates"
+msgstr "Comprova si hi ha actualitzacions"
+
+msgid "Last check: Never"
+msgstr "Última comprovació: mai"
+
+msgid "Exit"
+msgstr "Surt"
+
+msgid "No updates available."
+msgstr "No hi ha actualitzacions disponibles."
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Standard"
+msgstr "Estàndard"
+
+msgid "Last check: {0}"
+msgstr "Última comprovació: {0}"
+
+msgid "Shelly Notifications"
+msgstr "Notificacions de Shelly"

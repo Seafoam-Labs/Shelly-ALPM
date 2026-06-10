@@ -27,7 +27,7 @@ public class PackageUpdate(
     private CancellationTokenSource _cts = new();
     private int _loadGeneration;
     private bool _suppressToggleConfirmation;
-    private Box _box = null!;
+    private Overlay _box = null!;
     private ColumnView _columnView = null!;
     private SingleSelection _selectionModel = null!;
     private Gio.ListStore _listStore = null!;
@@ -47,10 +47,9 @@ public class PackageUpdate(
     private ColumnViewColumn _oldColumn = null!;
     private ColumnViewColumn _versionColumn = null!;
     private ColumnViewColumn _sizeDiffColumn = null!;
-    
+
     private ColumnViewSorter _columnViewSorter = null!;
 
-    
     private Button _refreshButton = null!;
     private Button _updateButton = null!;
     private Label _noPackagesLabel = null!;
@@ -58,16 +57,17 @@ public class PackageUpdate(
 
     private Revealer _detailRevealer = null!;
     private Box _detailBox = null!;
-    private AlpmUpdateGObject? _currentDetailPkg;
+    private Box _loadingOverlay = null!;
+    private Spinner _loadingSpinner = null!;
+    private Label _errorLabel = null!;
     private HashSet<string> _installedPackageNames = [];
-
 
     public Widget CreateWindow()
     {
         var builder = Builder.New();
         builder.TranslationDomain = Domain;
         builder.AddFromString(ResourceHelper.LoadUiFile("UiFiles/Package/UpdateWindow.ui"), -1);
-        _box = (Box)builder.GetObject("UpdateWindow")!;
+        _box = (Overlay)builder.GetObject("UpdateWindow")!;
         _columnView = (ColumnView)builder.GetObject("package_grid")!;
         var searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
 
@@ -85,10 +85,15 @@ public class PackageUpdate(
         _updateButton = (Button)builder.GetObject("update_button")!;
         _showHiddenCheck = (CheckButton)builder.GetObject("show_hidden_check")!;
         _noPackagesLabel = (Label)builder.GetObject("no_packages_label")!;
+        var config = configService.LoadConfig();
+        _showHiddenCheck.Active = config.PackageUpdateShowHidden;
         _noPackagesLabel.Label_ = T("<span size='large'>System packages are up to date</span>");
         _noPackagesLabel.Visible = false;
         _detailRevealer = (Revealer)builder.GetObject("detail_revealer")!;
         _detailBox = (Box)builder.GetObject("detail_box")!;
+        _loadingOverlay = (Box)builder.GetObject("loading_overlay")!;
+        _loadingSpinner = (Spinner)builder.GetObject("loading_spinner")!;
+        _errorLabel = (Label)builder.GetObject("error_label")!;
         _listStore = Gio.ListStore.New(AlpmUpdateGObject.GetGType());
         _filter = PackageSearch.CreateSafeFilter(FilterPackage);
         _filterListModel = FilterListModel.New(_listStore, _filter);
@@ -99,26 +104,25 @@ public class PackageUpdate(
 
         SetupColumns(_checkColumn, _nameColumn, _sizeDiffColumn, _oldColumn, _versionColumn);
 
-        
         // Creating sorter
-        _nameColumn.Sorter = CustomSorter.New<AlpmUpdateGObject>((a, b) => 0);
-        _sizeDiffColumn.Sorter = CustomSorter.New<AlpmUpdateGObject>((_, _) => 0);
-        
+        _nameColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
+        _sizeDiffColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
+
         _columnViewSorter = (ColumnViewSorter)_columnView.GetSorter()!;
 
         _columnViewSorter.OnChanged += (_, _) =>
         {
             var primaryColumn =
                 _columnViewSorter.GetPrimarySortColumn();
-            
+
             if (primaryColumn is null)
                 return;
-            
+
             var sortColumn = GetSortColumn(primaryColumn);
-            
+
             var order =
                 _columnViewSorter.GetPrimarySortOrder();
-            
+
             if (sortColumn is null)
                 return;
 
@@ -128,14 +132,14 @@ public class PackageUpdate(
                 sortColumn.Value,
                 order
             );
-        };        
+        };
 
-        
+
         ColumnViewHelper.AlignColumnHeader(_columnView, 1, Align.Start);
         ColumnViewHelper.AlignColumnHeader(_columnView, 2, Align.End);
         ColumnViewHelper.AlignColumnHeader(_columnView, 3, Align.End);
         ColumnViewHelper.AlignColumnHeader(_columnView, 4, Align.End);
-        
+
         var shortcutController = ShortcutController.New();
         shortcutController.Scope = ShortcutScope.Global;
         shortcutController.PropagationPhase = PropagationPhase.Capture;
@@ -147,7 +151,7 @@ public class PackageUpdate(
             searchEntry.GrabFocus();
             return true;
         });
-        
+
         _box.AddController(shortcutController);
         shortcutController.AddShortcut(Shortcut.New(ShortcutTrigger.ParseString(searchTrigger), action));
 
@@ -189,17 +193,22 @@ public class PackageUpdate(
             else
             {
                 _detailRevealer.SetRevealChild(false);
-                _currentDetailPkg = null;
             }
         };
         _updateButton.OnClicked += (_, _) => { _ = UpdateSelectedAsync(); };
         _refreshButton.OnClicked += (_, _) => { Reload(); };
-        _showHiddenCheck.OnToggled += (_, _) => { Reload(); };
+        _showHiddenCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageUpdateShowHidden = _showHiddenCheck.Active;
+            configService.SaveConfig(updatedConfig);
+            Reload();
+        };
 
         _sub = DirtySubscription.Attach(dirtyService, this);
         return _box;
     }
-    
+
     private PackageSortColumn? GetSortColumn(ColumnViewColumn column)
     {
         if (column == _nameColumn)
@@ -208,6 +217,9 @@ public class PackageUpdate(
         if (column == _sizeDiffColumn)
             return PackageSortColumn.Size;
         
+        if (column == _sizeDiffColumn)
+            return PackageSortColumn.Size;
+
         return null;
     }
 
@@ -225,7 +237,6 @@ public class PackageUpdate(
     {
         if (pkgObj.Package == null) return;
 
-        _currentDetailPkg = pkgObj;
         var pkg = pkgObj.Package;
 
         while (_detailBox.GetFirstChild() is { } child)
@@ -240,7 +251,6 @@ public class PackageUpdate(
         backButton.TooltipText = T("Close details");
         backButton.OnClicked += (_, _) =>
         {
-            _currentDetailPkg = null;
             _selectionModel.UnselectItem(_selectionModel.GetSelected());
             _detailRevealer.SetTransitionType(RevealerTransitionType.SlideLeft);
             _detailRevealer.SetRevealChild(false);
@@ -394,9 +404,11 @@ public class PackageUpdate(
 
             var flowBox = FlowBox.New();
             flowBox.SelectionMode = SelectionMode.None;
+            flowBox.MarginTop = 8;
+            flowBox.MarginBottom = 2;
             flowBox.ColumnSpacing = 6;
             flowBox.RowSpacing = 6;
-            flowBox.Halign = Align.Start;
+            flowBox.Halign = Align.Fill;
             flowBox.Valign = Align.Start;
             flowBox.MaxChildrenPerLine = isOptional ? 1u : 10u;
             flowBox.MinChildrenPerLine = 1;
@@ -622,6 +634,9 @@ public class PackageUpdate(
 
     private async Task LoadDataAsync(CancellationToken ct = default, int generation = 0)
     {
+        if (ct.IsCancellationRequested || _loadGeneration != generation) return;
+        OverlayHelper.ShowLoading(_loadingOverlay, _loadingSpinner, _errorLabel);
+
         try
         {
             var packages =
@@ -633,12 +648,13 @@ public class PackageUpdate(
             {
                 if (ct.IsCancellationRequested || _loadGeneration != generation) return false;
 
+                OverlayHelper.HideLoading(_loadingOverlay, _loadingSpinner);
+
                 _filterListModel.SetFilter(null);
                 _listStore.RemoveAll();
                 _packageGObjectRefs.Clear();
                 _filterListModel.SetFilter(_filter);
                 _detailRevealer.SetRevealChild(false);
-                _currentDetailPkg = null;
 
                 foreach (var package in packages)
                 {
@@ -660,7 +676,7 @@ public class PackageUpdate(
                         ShowPackageDetails(pkgObj);
                     }
                 }
-                
+
                 return false;
             });
         }
@@ -670,6 +686,11 @@ public class PackageUpdate(
         catch (Exception e)
         {
             Console.WriteLine($"Failed to load packages: {e.Message}");
+            if (!ct.IsCancellationRequested && _loadGeneration == generation)
+            {
+                OverlayHelper.HideLoading(_loadingOverlay, _loadingSpinner);
+                _errorLabel.Visible = true;
+            }
         }
     }
 
@@ -740,6 +761,8 @@ public class PackageUpdate(
             var isFullUpgrade = selectedPackages.Count == _listStore.GetNItems();
             try
             {
+                OverlayHelper.ShowLoading(_loadingOverlay, _loadingSpinner, _errorLabel);
+
                 lockoutService.Show(T("Updating..."));
                 OperationResult upgradeResult;
                 if (isFullUpgrade)
@@ -788,6 +811,7 @@ public class PackageUpdate(
             }
             finally
             {
+                OverlayHelper.HideLoading(_loadingOverlay, _loadingSpinner);
                 lockoutService.Hide();
             }
         }

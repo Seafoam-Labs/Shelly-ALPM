@@ -16,9 +16,13 @@ public class FlatpakRemoveCommand : Command<FlatpakRemoveSettings>
         }
 
         var manager = new FlatpakManager();
+        manager.FlatpakEvent += (sender, args) =>
+        {
+            AnsiConsole.MarkupLine($"[yellow]{args.Message.EscapeMarkup()}[/]");
+        };
         var dto = manager.FindAppByNameOrId(settings.Packages);
-        var result = manager.UninstallApp(settings.Packages, settings.RemoveUnused);
-     
+        manager.UninstallApp(settings.Packages, settings.RemoveUnused);
+
         if (settings.RemoveConfig)
         {
             AnsiConsole.MarkupLine(RemoveConfig(dto.Id) == 0
@@ -26,16 +30,16 @@ public class FlatpakRemoveCommand : Command<FlatpakRemoveSettings>
                 : "[yellow]Failed to remove local flatpak config[/]");
         }
 
-        AnsiConsole.MarkupLine("[yellow]" + result.EscapeMarkup() + "[/]");
         return 0;
     }
 
     private static int HandleUiModeRemove(FlatpakRemoveSettings settings)
     {
+        UiFrames.Info("Removing flatpak app...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
         var manager = new FlatpakManager();
-        var result = manager.UninstallApp(settings.Packages, settings.RemoveUnused);
-
-        Console.Error.WriteLine(result);
+        manager.FlatpakEvent += (sender, args) => UiFrames.Info(args.Message);
+        manager.UninstallApp(settings.Packages, settings.RemoveUnused);
+        UiFrames.TxFinish(true, "Flatpak removal complete.", "Flatpak removal failed.");
         return 0;
     }
 
@@ -46,15 +50,15 @@ public class FlatpakRemoveCommand : Command<FlatpakRemoveSettings>
         {
             return 1;
         }
-        
+
         var path = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".var", "app", appId
         );
-        
+
         if (Directory.Exists(path))
             Directory.Delete(path, recursive: true);
-        
+
         return 0;
     }
 }

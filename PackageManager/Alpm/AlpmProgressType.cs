@@ -12,5 +12,8 @@ public enum AlpmProgressType
     IntegrityStart,
     LoadStart,
     KeyringStart,
-    PackageDownload = 100
+    PackageDownload = 100,
+    MakepkgBuild = 200,
+    MakepkgPackage = 201,
+    AurDownload = 202
 }

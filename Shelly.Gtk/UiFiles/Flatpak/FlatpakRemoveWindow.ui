@@ -21,6 +21,16 @@
             </style>
           </object>
         </child>
+        <child>
+          <object class="GtkButton" id="flatpak_repair_button">
+            <property name="label" translatable="yes">Flatpak Repair</property>
+            <property name="tooltip-text" translatable="yes">Repairs Flatpak Installation (Experimental)</property>
+            <property name="halign">end</property>
+            <style>
+              <class name="suggested-action"/>
+            </style>
+          </object>
+        </child>
       </object>
     </child>
     <child>

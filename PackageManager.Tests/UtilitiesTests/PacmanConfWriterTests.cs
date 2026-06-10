@@ -100,6 +100,23 @@ public class PacmanConfWriterTests
         Assert.That(content, Does.Contain("IgnorePkg = git vim"));
     }
 
+    [Test]
+    public void AddIgnorePkg_AddsMultiplePackagesAndSkipsDuplicates()
+    {
+        WriteConfig("[options]\nIgnorePkg = git\n");
+        var conf = new PacmanConf { IgnorePkg = ["git"] };
+
+        PacmanConfWriter.AddIgnorePkg(conf, ["vim", "nano", "vim", " "], _tempPath);
+
+        var content = ReadConfig();
+        Assert.Multiple(() =>
+        {
+            Assert.That(new Regex("IgnorePkg =").Matches(content), Has.Count.EqualTo(1));
+            Assert.That(content, Does.Contain("IgnorePkg = git vim nano"));
+            Assert.That(conf.IgnorePkg, Is.EqualTo(["git", "vim", "nano"]));
+        });
+    }
+
     [TestCase("  ")]
     [TestCase("")]
     public void AddIgnorePkg_ThrowsOnNullOrWhiteSpace(string packageName)
@@ -122,6 +139,23 @@ public class PacmanConfWriterTests
         var content = ReadConfig();
         Assert.That(content, Does.Contain("IgnorePkg = git curl"));
         Assert.That(content, Does.Not.Contain("vim"));
+    }
+
+    [Test]
+    public void RemoveIgnorePkg_RemovesMultiplePackagesInSingleRewrite()
+    {
+        WriteConfig("[options]\nIgnorePkg = git vim nano curl\n");
+        var conf = new PacmanConf { IgnorePkg = ["git", "vim", "nano", "curl"] };
+
+        PacmanConfWriter.RemoveIgnorePkg(conf, ["nano", "git", "git"], _tempPath);
+
+        var content = ReadConfig();
+        Assert.Multiple(() =>
+        {
+            Assert.That(new Regex("IgnorePkg =").Matches(content), Has.Count.EqualTo(1));
+            Assert.That(content, Does.Contain("IgnorePkg = vim curl"));
+            Assert.That(conf.IgnorePkg, Is.EqualTo(["vim", "curl"]));
+        });
     }
 
     [Test]

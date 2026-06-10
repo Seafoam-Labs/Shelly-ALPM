@@ -98,56 +98,24 @@ public class PacfileCommand : AsyncCommand<PacfileSettings>
         {
             if (settings.Delete)
             {
-                //See above
                 return 0;
             }
 
             var result = await manager.GetPacfiles();
-            if (settings.Json)
-            {
-                var serializedResult = JsonSerializer.Serialize(result, ShellyCLIJsonContext.Default.ListPacfileRecord);
-                Console.WriteLine(serializedResult);
-                return 0;
-            }
-
-            foreach (var pacfile in result)
-            {
-                Console.WriteLine($"{pacfile.Name}");
-                Console.WriteLine(pacfile.Text);
-            }
-
+            Shelly_CLI.Utility.UiFrames.Frame(result);
+            Shelly_CLI.Utility.UiFrames.Info($"Pacfiles: {result.Count}");
             return 0;
         }
 
-        if (!settings.Json)
-        {
-            foreach (var file in settings.Pacfiles)
-            {
-                var result = await manager.GetPacfile(settings.Pacfiles[0]);
-
-                if (result is not null)
-                {
-                    Console.WriteLine($"{result!.Name}");
-                    Console.WriteLine(result!.Text);
-                }
-                else
-                {
-                    Console.WriteLine("Pacfile not found.");
-                }
-            }
-        }
-
-        List<PacfileRecord?> records = [];
+        List<PacfileRecord> records = [];
         foreach (var file in settings.Pacfiles)
         {
-            records.Add(await manager.GetPacfile(file));
+            var record = await manager.GetPacfile(file);
+            if (record is not null) records.Add(record);
         }
 
-        var json = JsonSerializer.Serialize(records, ShellyCLIJsonContext.Default.ListPacfileRecord);
-        await using var stdout = Console.OpenStandardOutput();
-        await using var writer = new System.IO.StreamWriter(stdout, System.Text.Encoding.UTF8);
-        await writer.WriteLineAsync(json);
-        await writer.FlushAsync();
+        Shelly_CLI.Utility.UiFrames.Frame(records);
+        Shelly_CLI.Utility.UiFrames.Info($"Pacfiles found: {records.Count} of {settings.Pacfiles.Length}");
         return 0;
     }
 }

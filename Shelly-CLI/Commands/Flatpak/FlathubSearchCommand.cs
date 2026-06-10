@@ -68,7 +68,7 @@ public class FlathubSearchCommand : AsyncCommand<FlathubSearchSettings>
     {
         if (string.IsNullOrWhiteSpace(settings.Query))
         {
-            Console.Error.WriteLine("Error: Query cannot be empty.");
+            UiFrames.Error("Query cannot be empty.");
             return 1;
         }
 
@@ -86,33 +86,21 @@ public class FlathubSearchCommand : AsyncCommand<FlathubSearchSettings>
                 await writer.FlushAsync();
                 return 0;
             }
-            else
-            {
-                var results = await manager.SearchFlathubAsync(
-                    settings.Query,
-                    page: settings.Page,
-                    limit: settings.Limit,
-                    ct: CancellationToken.None);
 
-                var count = 0;
-                if (results.hits is not null)
-                {
-                    foreach (var item in results.hits)
-                    {
-                        if (count++ >= settings.Limit) break;
-                        Console.WriteLine($"{item.name} {item.app_id} - {item.summary}");
-                    }
-                }
+            var search = await manager.SearchFlathubAsync(
+                settings.Query,
+                page: settings.Page,
+                limit: settings.Limit,
+                ct: CancellationToken.None);
 
-                Console.Error.WriteLine(
-                    $"Shown: {Math.Min(settings.Limit, results?.hits?.Count ?? 0)} / Total Pages: {results?.totalPages ?? 0} / Current Page: {results?.page ?? 0} / Total hits: {results?.totalHits ?? 0}");
-            }
+            UiFrames.Info(
+                $"Shown: {Math.Min(settings.Limit, search?.hits?.Count ?? 0)} / Total Pages: {search?.totalPages ?? 0} / Current Page: {search?.page ?? 0} / Total hits: {search?.totalHits ?? 0}");
 
             return 0;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Search failed: {ex.Message}");
+            UiFrames.Error($"Search failed: {ex.Message}");
             return 1;
         }
     }

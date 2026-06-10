@@ -31,17 +31,9 @@ public class KeyringRefreshCommand : Command
 
     private static int HandleUiModeRefresh()
     {
-        Console.Error.WriteLine("Refreshing keys from keyserver...");
+        UiFrames.Info("Refreshing keys from keyserver...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
         var result = PacmanKeyRunner.Run("--refresh-keys");
-        if (result == 0)
-        {
-            Console.Error.WriteLine("Keys refreshed successfully!");
-        }
-        else
-        {
-            Console.Error.WriteLine("Failed to refresh keys.");
-        }
-
+        UiFrames.TxFinish(result == 0, "Keys refreshed successfully!", "Failed to refresh keys.");
         return result;
     }
 }

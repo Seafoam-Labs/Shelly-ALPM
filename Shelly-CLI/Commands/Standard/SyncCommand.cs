@@ -1,7 +1,9 @@
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using PackageManager.Alpm;
+using PackageManager.Wire;
 using Shelly_CLI.ConsoleLayouts;
+using Shelly_CLI.Utility;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -70,10 +72,24 @@ public class SyncCommand : Command<SyncSettings>
     private static int HandleUiMode(SyncSettings settings)
     {
         using var manager = new AlpmManager();
-        Console.WriteLine("Synchronizing package databases...");
-        manager.Progress += (sender, args) => { Console.WriteLine($"{args.PackageName}: {args.Percent}%"); };
+        manager.Progress += (_, args) =>
+        {
+            JsonPackFrame.WriteToStdout<Event>(new AlpmPackageProgressEvent(
+                args.PackageName ?? "Unknown Package",
+                args.Current ?? 0,
+                args.HowMany ?? 0,
+                args.ProgressType.ToProgressType(),
+                args.Percent ?? 0,
+                args.Message));
+        };
+        manager.ErrorEvent += (_, e) =>
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, e.Error));
+
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            AlpmEvents.TransactionStart, "Synchronizing package databases..."));
         manager.Sync(settings.Force);
-        Console.WriteLine("Package databases synchronized successfully");
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            AlpmEvents.TransactionDone, "Package databases synchronized successfully"));
         return 0;
     }
 }

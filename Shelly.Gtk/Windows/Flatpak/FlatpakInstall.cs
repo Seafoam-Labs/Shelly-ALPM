@@ -28,6 +28,7 @@ public class FlatpakInstall(
     private DirtySubscription? _sub;
     public string[] ListensTo => [DirtyScopes.FlatpakInstalled, DirtyScopes.Config];
     private GridView? _gridView;
+    private ScrolledWindow? _scroller;
     private readonly CancellationTokenSource _cts = new();
     private Gio.ListStore? _listStore;
     private FilterListModel _filterListModel = null!;
@@ -101,6 +102,7 @@ public class FlatpakInstall(
         var box = (Box)builder.GetObject("FlatpakInstallWindow")!;
 
         _gridView = (GridView)builder.GetObject("list_flatpaks")!;
+        _scroller = _gridView.GetParent() as ScrolledWindow;
         _gridView.SetMaxColumns(4);
         _gridView.SetMinColumns(1);
 
@@ -442,6 +444,8 @@ public class FlatpakInstall(
                     {
                         _searchText = text;
                         ApplyFilter();
+                        _selectionModel.SetSelected(uint.MaxValue);
+                        ScrollToTop();
                     }
 
                     return false;
@@ -623,7 +627,7 @@ public class FlatpakInstall(
             }
         }
 
-        return PackageSearch.MatchesNameOrDescription(pkg.Name, pkg.Description, _searchText);
+        return PackageSearch.Matches(pkg.Name, pkg.Description, _searchText);
     }
 
     private void SetUrlLinks(Dictionary<string, string>? urls)
@@ -903,6 +907,26 @@ public class FlatpakInstall(
         icon.Clear();
     }
 
+
+    private void ScrollToTop()
+    {
+        if (_scroller is null) return;
+        GLib.Functions.IdleAdd(0, () =>
+        {
+            if (_scroller is null) return false;
+            var frames = 0;
+            _scroller.AddTickCallback((_, _) =>
+            {
+                if (_scroller is null) return false;
+                var vadj = _scroller.GetVadjustment();
+                if (vadj is not null) vadj.SetValue(vadj.GetLower());
+                var hadj = _scroller.GetHadjustment();
+                if (hadj is not null) hadj.SetValue(hadj.GetLower());
+                return ++frames < 3;
+            });
+            return false;
+        });
+    }
 
     private void ApplyFilter()
     {

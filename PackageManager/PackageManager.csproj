@@ -12,5 +12,9 @@
     <ItemGroup>
         <ProjectReference Include="..\Shelly.Utilities\Shelly.Utilities.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Emitter\" />
+    </ItemGroup>
     
 </Project>

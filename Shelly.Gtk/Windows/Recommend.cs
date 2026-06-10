@@ -1,5 +1,5 @@
+using System.Net;
 using System.Text.Json;
-using System.Net.Http;
 using Gtk;
 using Shelly.Gtk.Enums;
 using Shelly.Gtk.Helpers;
@@ -7,38 +7,61 @@ using Shelly.Gtk.Services;
 using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.Recommend;
+using Shelly.Utilities;
 using static Shelly.GTK.Resources.Translations;
+using Functions = GLib.Functions;
+using WrapMode = Pango.WrapMode;
 
 namespace Shelly.Gtk.Windows;
 
-public class Recommend(
+public sealed class Recommend(
     IPrivilegedOperationService privilegedOperationService,
     IGenericQuestionService genericQuestionService,
     ILockoutService lockoutService,
     IIconResolverService iconResolverService) : IShellyWindow, IReloadable
 {
-    private static readonly HttpClient Client = new();
-    private Box? _scrolledWindow;
-    private Overlay? _overlay;
-    private Box? _noResultsOverlay;
-    private readonly List<FlatRecommendModel> _packages = [];
+    private static readonly HttpClient Client = new(new SocketsHttpHandler
+    {
+        AutomaticDecompression = DecompressionMethods.All,
+        AllowAutoRedirect = true,
+        MaxAutomaticRedirections = 10,
+        ConnectTimeout = TimeSpan.FromSeconds(30),
+        EnableMultipleHttp2Connections = true,
+        EnableMultipleHttp3Connections = true
+    })
+    {
+        Timeout = TimeSpan.FromMinutes(1),
+        DefaultRequestHeaders = { UserAgent = { Http.UserAgent } },
+        DefaultRequestVersion = HttpVersion.Version11,
+        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher
+    };
+
     private readonly CancellationTokenSource _cts = new();
+    private readonly List<FlatRecommendModel> _packages = [];
+    private Box? _loadingOverlay;
+    private Spinner? _loadingSpinner;
+    private Box? _noResultsOverlay;
+    private Box? _scrolledWindow;
+
+    public string[] ListensTo { get; } = [];
+
+    public void Reload()
+    {
+        // Never needs to reload logic here, since the data is static and the page handles the refreshing its state itself.
+    }
 
     public Widget CreateWindow()
     {
         var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/Recommend.ui"), -1);
-        var box = (Box)builder.GetObject("ShellyRecommend")!;
+        var overlay = (Overlay)builder.GetObject("ShellyRecommend")!;
 
         _scrolledWindow = (Box)builder.GetObject("recommend_scroll_window")!;
         _scrolledWindow.SetOrientation(Orientation.Vertical);
         _scrolledWindow.SetSpacing(10);
 
-        _overlay = Overlay.New();
-        var scrolledWindow = (ScrolledWindow)builder.GetObject("recommend_scrolled_window_widget")!;
-        
-        box.Remove(scrolledWindow);
-        _overlay.SetChild(scrolledWindow);
-        
+        _loadingOverlay = (Box)builder.GetObject("loading_overlay")!;
+        _loadingSpinner = (Spinner)builder.GetObject("loading_spinner")!;
+
         _noResultsOverlay = Box.New(Orientation.Vertical, 12);
         _noResultsOverlay.SetValign(Align.Center);
         _noResultsOverlay.SetHalign(Align.Center);
@@ -47,46 +70,58 @@ public class Recommend(
 
         var noResultsIcon = Image.NewFromIconName("search-none-symbolic");
         noResultsIcon.SetPixelSize(64);
-        
-        var noResultsLabel = Label.New(T("No recommendations found. Please check your internet connection and try again."));
+
+        var noResultsLabel =
+            Label.New(T("No recommendations found. Please check your internet connection and try again."));
         noResultsLabel.AddCssClass("title-2");
 
         _noResultsOverlay.Append(noResultsIcon);
         _noResultsOverlay.Append(noResultsLabel);
-        
-        _overlay.AddOverlay(_noResultsOverlay);
-        box.Append(_overlay);
+
+        overlay.AddOverlay(_noResultsOverlay);
 
         _scrolledWindow.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
 
-        return box;
+        return overlay;
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+        _packages.Clear();
+        _noResultsOverlay?.Dispose();
+        _scrolledWindow?.Dispose();
     }
 
     private async Task LoadDataAsync(CancellationToken ct)
     {
         try
         {
+            Functions.IdleAdd(0, () =>
+            {
+                if (ct.IsCancellationRequested) return false;
+                _loadingOverlay?.SetVisible(true);
+                _loadingSpinner?.Start();
+                return false;
+            });
+
             var alpmPackages = await privilegedOperationService.GetAvailablePackagesAsync();
             var installedPackages = await privilegedOperationService.GetInstalledPackagesAsync();
 
-            var values = await Client.GetStringAsync("https://www.seafoam-labs.org/recommend.json", ct);
-            
-            var result = JsonSerializer.Deserialize(values, RecommendJsonContext.Default.ListRecommendModel) ?? [];
-            
-            if (result.Count < 1)
-            {
-                _noResultsOverlay?.SetVisible(true);
-                return;
-            }
+            var response = await Client.GetAsync("https://www.seafoam-labs.org/recommend.json", ct);
+            response.EnsureSuccessStatusCode();
+            var values = await response.Content.ReadAsStringAsync(ct);
 
-            _noResultsOverlay?.SetVisible(false);
-            _packages.Clear();
+            var result = JsonSerializer.Deserialize(values, RecommendJsonContext.Default.ListRecommendModel) ?? [];
+
+            // Build package list on background thread (no GTK calls)
+            var packages = new List<FlatRecommendModel>();
             foreach (var item in result)
             {
                 if (!Enum.TryParse<RecommendCategory>(item.Name, out var category)) continue;
                 foreach (var pkgName in item.Packages.Where(pkgName => alpmPackages.Any(x => x.Name == pkgName)))
-                {
-                    _packages.Add(new FlatRecommendModel
+                    packages.Add(new FlatRecommendModel
                     {
                         Category = category,
                         Package = pkgName,
@@ -95,14 +130,39 @@ public class Recommend(
                         Version = alpmPackages.FirstOrDefault(x => x.Name == pkgName)?.Version ?? "",
                         Repository = alpmPackages.FirstOrDefault(x => x.Name == pkgName)?.Repository ?? ""
                     });
-                }
             }
 
-            await FlowChartBuilder();
+            // All GTK widget operations must run on the main thread via IdleAdd
+            Functions.IdleAdd(0, () =>
+            {
+                if (ct.IsCancellationRequested) return false;
+
+                if (packages.Count < 1)
+                {
+                    _noResultsOverlay?.SetVisible(true);
+                    return false;
+                }
+
+                _noResultsOverlay?.SetVisible(false);
+                _packages.Clear();
+                _packages.AddRange(packages);
+                FlowChartBuilder();
+                return false;
+            });
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
+        }
+        finally
+        {
+            Functions.IdleAdd(0, () =>
+            {
+                // We always try to hide it, but only if not disposed
+                _loadingOverlay?.SetVisible(false);
+                _loadingSpinner?.Stop();
+                return false;
+            });
         }
     }
 
@@ -131,10 +191,7 @@ public class Recommend(
                 flox.MinChildrenPerLine = 1;
                 flox.MaxChildrenPerLine = 6;
 
-                foreach (var item in categoryPackages)
-                {
-                    AddFlowBoxItem(flox, item, sizeGroup);
-                }
+                foreach (var item in categoryPackages) AddFlowBoxItem(flox, item, sizeGroup);
 
                 sectionBox.Append(label);
                 sectionBox.Append(flox);
@@ -160,14 +217,12 @@ public class Recommend(
         contentBox.SetHexpand(true);
 
         var iconPath = iconResolverService.GetIconPath(item.Package);
-        if (!string.IsNullOrEmpty(iconPath))
-        {
-            var image = Image.NewFromFile(iconPath);
-            image.SetPixelSize(48);
-            image.SetValign(Align.Center);
-            image.AddCssClass("icon-dropshadow");
-            contentBox.Append(image);
-        }
+
+        var image = Image.NewFromFile(string.IsNullOrWhiteSpace(iconPath) ? "package-x-generic" : iconPath);
+        image.SetPixelSize(48);
+        image.SetValign(Align.Center);
+        image.AddCssClass("icon-dropshadow");
+        contentBox.Append(image);
 
         var textContainer = Box.New(Orientation.Vertical, 0);
         textContainer.SetValign(Align.Center);
@@ -178,7 +233,7 @@ public class Recommend(
         var titleLabel = Label.New(item.Package);
         titleLabel.SetHalign(Align.Start);
         titleLabel.AddCssClass("title-4");
-        
+
         var versionLabel = Label.New(item.Version);
         versionLabel.SetHalign(Align.Start);
         versionLabel.SetValign(Align.Center);
@@ -187,6 +242,7 @@ public class Recommend(
         var installedCheck = Image.NewFromIconName("object-select-symbolic");
         installedCheck.SetVisible(item.IsInstalled);
         installedCheck.SetValign(Align.Center);
+        installedCheck.SetTooltipText(T("Package is already installed"));
 
         titleContainer.Append(titleLabel);
         titleContainer.Append(versionLabel);
@@ -194,30 +250,60 @@ public class Recommend(
 
         var descLabel = Label.New(item.Description);
         descLabel.SetHalign(Align.Start);
+        descLabel.SetValign(Align.Start);
         descLabel.AddCssClass("dim-label");
         descLabel.SetWrap(true);
-        descLabel.SetWrapMode(Pango.WrapMode.WordChar);
+        descLabel.SetWrapMode(WrapMode.WordChar);
         descLabel.SetLines(2);
         descLabel.MaxWidthChars = 40;
         descLabel.NaturalWrapMode = NaturalWrapMode.None;
 
         textContainer.Append(titleContainer);
         textContainer.Append(descLabel);
-        
+
         contentBox.Append(textContainer);
 
+        var removeButton = Button.NewFromIconName("edit-delete-symbolic");
         var downloadButton = Button.NewFromIconName("folder-download-symbolic");
+
+        removeButton.SetVisible(item.IsInstalled);
+        removeButton.AddCssClass("destructive-action");
+        removeButton.SetValign(Align.Center);
+        removeButton.SetTooltipText(T("Remove ") + item.Package);
+        removeButton.OnClicked += async (_, _) =>
+        {
+            var result = new OperationResult();
+            try
+            {
+                lockoutService.Show(T("Removing package..."));
+                result = await privilegedOperationService.RemovePackagesAsync([item.Package],
+                    true, false, true);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+            finally
+            {
+                if (result.Success)
+                {
+                    genericQuestionService.RaiseToastMessage(
+                        new ToastMessageEventArgs(T("Package removed successfully")));
+                    installedCheck.SetVisible(false);
+                    downloadButton.SetVisible(true);
+                    removeButton.SetVisible(false);
+                }
+
+                lockoutService.Hide();
+            }
+        };
+
+        downloadButton.SetVisible(!item.IsInstalled);
         downloadButton.AddCssClass("suggested-action");
         downloadButton.SetValign(Align.Center);
-        downloadButton.SetTooltipText(item.IsInstalled ? T("Already installed") : T("Install ") + item.Package);
+        downloadButton.SetTooltipText(T("Install ") + item.Package);
         downloadButton.OnClicked += async (_, _) =>
         {
-            if (item.IsInstalled)
-            {
-                genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(T("Package is already installed")));
-                return;
-            }
-            
             var result = new OperationResult();
             try
             {
@@ -232,13 +318,18 @@ public class Recommend(
             {
                 if (result.Success)
                 {
-                    genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(T("Package installed successfully")));
+                    genericQuestionService.RaiseToastMessage(
+                        new ToastMessageEventArgs(T("Package installed successfully")));
                     installedCheck.SetVisible(true);
+                    downloadButton.SetVisible(false);
+                    removeButton.SetVisible(true);
                 }
+
                 lockoutService.Hide();
             }
         };
 
+        contentBox.Append(removeButton);
         contentBox.Append(downloadButton);
 
         var frame = Frame.New(null);
@@ -249,22 +340,5 @@ public class Recommend(
 
         sizeGroup.AddWidget(frame);
         flowBox.Append(frame);
-    }
-
-    public string[] ListensTo { get; } = [];
-
-    public void Reload()
-    {
-        // Never needs to reload logic here, since the data is static and the page handles the refreshing its state itself.
-    }
-
-    public void Dispose()
-    {
-        _cts.Cancel();
-        _cts.Dispose();
-        _packages.Clear();
-        _noResultsOverlay?.Dispose();
-        _overlay?.Dispose();
-        _scrolledWindow?.Dispose();
     }
 }

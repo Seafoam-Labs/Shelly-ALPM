@@ -1,14 +1,67 @@
 using System.Text.Json;
 using PackageManager.Alpm;
 using PackageManager.Alpm.Questions;
+using PackageManager.Aur;
+using PackageManager.Wire;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 
 namespace Shelly_CLI.Utility;
 
 public static class QuestionHandler
 {
+    /// <summary>
+    /// Overload allowing every command to wire <c>manager.PkgbuildDiffRequest</c> through
+    /// the same single entry point as the ALPM <c>Question</c> event.
+    /// </summary>
+    public static void HandleQuestion(PkgbuildDiffRequestEventArgs args, bool uiMode = false, bool noConfirm = false)
+        => HandlePkgbuildDiff(args, uiMode, noConfirm);
+
+    public static void HandlePkgbuildDiff(PkgbuildDiffRequestEventArgs args, bool uiMode, bool noConfirm)
+    {
+        if (noConfirm)
+        {
+            args.ProceedWithUpdate = true;
+            return;
+        }
+
+        if (!uiMode)
+        {
+            PackageBuilderDiffGenerator.PrintUnifiedDiff(args.OldPkgbuild, args.NewPkgbuild, isUiMode: false);
+            args.ProceedWithUpdate = AnsiConsole.Confirm(
+                $"[yellow]Proceed with update to {args.PackageName.EscapeMarkup()}?[/]",
+                defaultValue: true);
+            return;
+        }
+
+        // UiMode: emit a framed PkgbuildDiffQuestionDto on stdout, block on the matching answer.
+        var id = Guid.NewGuid().ToString("N");
+        JsonPackFrame.WriteToStdout<QuestionRequest>(new PkgbuildDiffQuestionDto(
+            id, args.PackageName, args.OldPkgbuild, args.NewPkgbuild));
+
+        var resp = ReadAnswer<PkgbuildDiffAnswer>(id);
+        args.ProceedWithUpdate = resp.ProceedWithUpdate;
+    }
+
+    /// <summary>
+    /// Blocking loop on stdin — discards frames whose <c>QuestionId</c> does not match,
+    /// returning the first matching answer of the expected type.
+    /// </summary>
+    private static T ReadAnswer<T>(string id) where T : QuestionResponseDto
+    {
+        while (true)
+        {
+            var resp = JsonPackFrame.ReadFromStdin<QuestionResponseDto>();
+            if (resp is T t && t.QuestionId == id) return t;
+            // Stale or unknown answer — ignore and keep reading.
+        }
+    }
+
     public static void HandleQuestion(AlpmQuestionEventArgs question, bool uiMode = false, bool noConfirm = false)
     {
+        //This makes questions work for now till we can convert over to standard eventing.
+        //There is something broken in the log priming on one of the sides that prevents this from working well
+        Console.WriteLine($"Handling question.");
         switch (question.QuestionType)
         {
             case AlpmQuestionType.SelectProvider:
@@ -69,7 +122,8 @@ public static class QuestionHandler
                 var desc = o.Description ?? string.Empty;
                 var installed = o.IsInstalled ? "1" : "0";
                 var selected = o.IsSelected ? "1" : "0";
-                Console.Error.WriteLine($"[ALPM_OPTDEPS_OPTION]{i}\u001F{o.Name}\u001F{desc}\u001F{installed}\u001F{selected}");
+                Console.Error.WriteLine(
+                    $"[ALPM_OPTDEPS_OPTION]{i}\u001F{o.Name}\u001F{desc}\u001F{installed}\u001F{selected}");
             }
 
             Console.Error.WriteLine("[ALPM_OPTDEPS_END]");
@@ -80,6 +134,15 @@ public static class QuestionHandler
                 .Select((o, i) => o with { IsSelected = selectedIndices.Contains(i) && !o.IsInstalled })
                 .ToList();
             question.SetResponse(new QuestionResponse(0, uiSelected));
+            return;
+        }
+
+        if (noConfirm)
+        {
+            var noneSelected = question.ProviderOptions
+                .Select(o => o with { IsSelected = false })
+                .ToList();
+            question.SetResponse(new QuestionResponse(0, noneSelected));
             return;
         }
 
@@ -154,6 +217,12 @@ public static class QuestionHandler
                 // For safety, we could set a default if needed, but the UI shouldn't send empty input
             }
 
+            return;
+        }
+
+        if (noConfirm)
+        {
+            question.SetResponse(new QuestionResponse(0, question.ProviderOptions));
             return;
         }
 

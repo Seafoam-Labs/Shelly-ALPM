@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-05-14 18:41-0400\n"
-"PO-Revision-Date: 2026-05-23 18:22+0000\n"
+"PO-Revision-Date: 2026-06-02 16:54+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: Polish\n"
 "Language: pl\n"
@@ -799,6 +799,15 @@ msgstr "Instalowanie pakietu..."
 msgid "Package installed successfully"
 msgstr "Pakiet został pomyślnie zainstalowany"
 
+msgid "Remove "
+msgstr "Usuń "
+
+msgid "Removing package..."
+msgstr "Usuwanie pakietu..."
+
+msgid "Package removed successfully"
+msgstr "Pakiet został usunięty"
+
 msgid "Reboot required after flatpak installation."
 msgstr "Po instalacji Flatpak wymagane jest ponowne uruchomienie."
 
@@ -960,6 +969,12 @@ msgstr "Zakres"
 msgid "Remove Selected"
 msgstr "Usuń wybrane"
 
+msgid "Flatpak Repair"
+msgstr "Naprawa Flatpak"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Naprawa instalacji Flatpak (eksperymentalne)"
+
 msgid "Update All"
 msgstr "Aktualizuj wszystko"
 
@@ -1109,8 +1124,8 @@ msgstr "Pobieranie równoległe"
 msgid "Force Database Update"
 msgstr "Wymuś aktualizację bazy danych"
 
-msgid "Remove db.lock"
-msgstr "Usuń db.lock"
+msgid "Remove db.lck"
+msgstr "Usuń db.lck"
 
 msgid "View Pacfiles"
 msgstr "Wyświetl pliki pac"
@@ -1316,3 +1331,36 @@ msgstr "Autostart ikony zasobnika"
 
 msgid "Allow the tray service to autostart."
 msgstr "Zezwól na automatyczne uruchamianie usługi zasobnika."
+
+msgid "Unable to load package data. You may have a db.lck."
+msgstr "Nie można załadować danych pakietu. Możliwe, że masz plik db.lck."
+
+msgid "Downgrade Selected"
+msgstr "Obniż wybrane"
+
+msgid "Downgrade selected packages one by one"
+msgstr "Obniżaj wybrane pakiety jeden po drugim"
+
+msgid "No downgrade options found for {0}"
+msgstr "Nie znaleziono opcji obniżenia wersji dla {0}"
+
+msgid "Downgrading {0}..."
+msgstr "Obniżanie wersji {0}..."
+
+msgid "Downgraded {0} Package(s)"
+msgstr "Obniżono wersję dla {0} pakiet(ów)"
+
+msgid "Downgrade: {0}"
+msgstr "Obniżanie wersji: {0}"
+
+msgid "Select version:"
+msgstr "Wybierz wersję:"
+
+msgid "Add to IgnorePkg list"
+msgstr "Dodaj do listy IgnorePkg"
+
+msgid "Downgrade"
+msgstr "Obniż wersję"
+
+msgid "Enable Package Downgrade"
+msgstr "Włącz obniżanie wersji pakietu"

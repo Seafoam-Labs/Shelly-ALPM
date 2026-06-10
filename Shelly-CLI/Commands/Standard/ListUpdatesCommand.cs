@@ -4,6 +4,7 @@ using PackageManager.Utilities;
 using PackageManager.Wire;
 using Shelly_CLI.Configuration;
 using Shelly.Utilities;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -103,24 +104,10 @@ public class ListUpdatesCommand : Command<ListSettings>
         manager.Sync();
         var updates = manager.GetPackagesNeedingUpdate();
 
-        if (settings.JsonOutput)
-        {
-            JsonPackFrame.WriteToStdout(updates);
-            return 0;
-        }
-
-        if (updates.Count == 0)
-        {
-            Console.Error.WriteLine("All packages are up to date!");
-            return 0;
-        }
-
-        foreach (var pkg in updates.OrderBy(p => p.Name))
-        {
-            Console.WriteLine($"{pkg.Name} {pkg.CurrentVersion} -> {pkg.NewVersion} ({FormatSize(pkg.DownloadSize)})");
-        }
-
-        Console.Error.WriteLine($"{updates.Count} packages can be updated");
+        JsonPackFrame.WriteToStdout(updates);
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            AlpmEvents.InformationalOutput,
+            updates.Count == 0 ? "All packages are up to date!" : $"{updates.Count} packages can be updated"));
         return 0;
     }
 }

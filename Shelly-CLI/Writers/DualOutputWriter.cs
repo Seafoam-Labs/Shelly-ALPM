@@ -6,7 +6,7 @@ public class DualOutputWriter : TextWriter
 {
     private readonly TextWriter _primary;
     private readonly TextWriter _stderr;
-    private const string ShellyPrefix = "[Shelly]";
+    private const string ShellyPrefix = "";
 
     public DualOutputWriter(TextWriter primary, TextWriter stderr)
     {
@@ -19,6 +19,7 @@ public class DualOutputWriter : TextWriter
         _primary.WriteLine(value);
         // Also write to stderr with prefix for UI capture
         _stderr.WriteLine($"{ShellyPrefix}{value}");
+        _stderr.Flush();
     }
 
     public override void Write(string? value)

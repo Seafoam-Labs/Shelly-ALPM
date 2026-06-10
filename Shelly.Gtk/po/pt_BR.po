@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-05-14 18:41-0400\n"
-"PO-Revision-Date: 2026-05-16 14:46-0300\n"
+"PO-Revision-Date: 2026-06-01 07:03-0300\n"
 "Last-Translator: Vinícius Fonseca <viniqf@proton.me>\n"
 "Language-Team: Portuguese (Brazil) <viniqf@proton.me>\n"
 "Language: pt_BR\n"
@@ -952,6 +952,12 @@ msgstr "Escopo"
 msgid "Remove Selected"
 msgstr "Remover Itens Selecionados"
 
+msgid "Flatpak Repair"
+msgstr "Reparo Flatpak"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Repara a instalação Flatpak atual (experimental)"
+
 msgid "Update All"
 msgstr "Atualizar Tudo"
 
@@ -1101,8 +1107,8 @@ msgstr "Downloads em paralelo"
 msgid "Force Database Update"
 msgstr "Forçar atualização de base de dados"
 
-msgid "Remove db.lock"
-msgstr "Remover db.lock"
+msgid "Remove db.lck"
+msgstr "Remover db.lck"
 
 msgid "View Pacfiles"
 msgstr "Visualizar pacfiles"
@@ -1287,3 +1293,52 @@ msgid "Also remove orphaned optional dependencies installed with these packages.
 msgstr ""
 "Remover também as dependências opcionais órfãs instaladas com estes "
 "pacotes."
+
+msgid "Add Tray To Auto Start"
+msgstr "Adicionar bandeja à inicialização automática"
+
+msgid "Systemd startup service added."
+msgstr "Serviço de inicialização Systemd adicionado"
+
+msgid "Systemd startup service removed."
+msgstr "Serviço de atualização Systemd removido"
+
+msgid "Tray Icon Autostart"
+msgstr "Inicialização automática do ícone da bandeja"
+
+msgid "Allow the tray service to autostart."
+msgstr "Permitir que o serviço de bandeja inicialize automaticamente"
+
+msgid "Unable to load package data. You may have a db.lck."
+msgstr "Não foi possível carregar dados de pacotes. Você pode ter um db.lck ativo"
+
+msgid "Downgrade Selected"
+msgstr "Fazer downgrade nos pacotes selecionados"
+
+msgid "Downgrade selected packages one by one"
+msgstr "Fazer downgrade dos pacotes selecionados um por um"
+
+msgid "No downgrade options found for {0}"
+msgstr "Nenhuma opção de downgrade encontrada para {0}"
+
+msgid "Downgrading {0}..."
+msgstr "Fazendo downgrade {0}..."
+
+msgid "Downgraded {0} Package(s)"
+msgstr "{0} pacote(s) sofreram downgrade"
+
+msgid "Downgrade: {0}"
+msgstr "Downgrade: {0}"
+
+msgid "Select version:"
+msgstr "Selecione a versão:"
+
+msgid "Add to IgnorePkg list"
+msgstr "Adicionar à lista IgnorePkg"
+
+msgid "Downgrade"
+msgstr "Fazer downgrade"
+
+msgid "Enable Package Downgrade"
+msgstr "Habilitar downgrade de pacotes"
+

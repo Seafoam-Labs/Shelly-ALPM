@@ -20,6 +20,6 @@ public enum RecommendCategory
     Other,
     Video,
     Virtualization,
-    [Description("Shelly Team")]
+    [Description("Shelly Team Picks")]
     ShellyTeam
 }

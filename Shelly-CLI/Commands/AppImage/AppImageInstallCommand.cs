@@ -1,4 +1,5 @@
 using PackageManager.AppImage;
+using Shelly_CLI.Utility;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -11,13 +12,9 @@ public class AppImageInstallCommand : AsyncCommand<AppImageSettings>
         if (settings.PackageLocation == null)
         {
             if (Program.IsUiMode)
-            {
-                await Console.Error.WriteLineAsync("Error: No package specified");
-            }
+                UiFrames.Error("No package specified");
             else
-            {
                 AnsiConsole.MarkupLine("[red]Error: No package specified[/]");
-            }
 
             return 1;
         }
@@ -25,13 +22,9 @@ public class AppImageInstallCommand : AsyncCommand<AppImageSettings>
         if (!File.Exists(settings.PackageLocation))
         {
             if (Program.IsUiMode)
-            {
-                await Console.Error.WriteLineAsync("Error: Specified file does not exist.");
-            }
+                UiFrames.Error("Specified file does not exist.");
             else
-            {
                 AnsiConsole.MarkupLine("[red]Error: Specified file does not exist.[/]");
-            }
 
             return 1;
         }
@@ -40,9 +33,17 @@ public class AppImageInstallCommand : AsyncCommand<AppImageSettings>
         if (await AppImageManager.IsAppImage(settings.PackageLocation))
         {
             var manager = new AppImageManager();
-            manager.ErrorEvent += (_, args) => { AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]"); };
-
-            manager.MessageEvent += (_, args) => { AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]"); };
+            if (Program.IsUiMode)
+            {
+                manager.ErrorEvent += (_, args) => UiFrames.Error(args.Error);
+                manager.MessageEvent += (_, args) => UiFrames.Info(args.Message);
+                UiFrames.Info("Installing AppImage...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
+            }
+            else
+            {
+                manager.ErrorEvent += (_, args) => AnsiConsole.MarkupLine($"[red]{args.Error.EscapeMarkup()}[/]");
+                manager.MessageEvent += (_, args) => AnsiConsole.MarkupLine($"[blue]{args.Message.EscapeMarkup()}[/]");
+            }
 
             var result = await manager.InstallAppImage(settings.PackageLocation, settings.UpdateUrl);
 
@@ -57,9 +58,12 @@ public class AppImageInstallCommand : AsyncCommand<AppImageSettings>
                 }
             }
 
-            AnsiConsole.MarkupLine(result == 0
-                ? "[green]Successfully installed appimage.[/]"
-                : "[red]Failled to install appimage.[/]");
+            if (Program.IsUiMode)
+                UiFrames.TxFinish(result == 0, "Successfully installed appimage.", "Failed to install appimage.");
+            else
+                AnsiConsole.MarkupLine(result == 0
+                    ? "[green]Successfully installed appimage.[/]"
+                    : "[red]Failled to install appimage.[/]");
 
             return result;
         }

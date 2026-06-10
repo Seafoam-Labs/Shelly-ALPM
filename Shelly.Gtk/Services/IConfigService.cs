@@ -1,4 +1,3 @@
-using Shelly.Gtk.UiModels;
 using Shelly.Utilities;
 
 namespace Shelly.Gtk.Services;

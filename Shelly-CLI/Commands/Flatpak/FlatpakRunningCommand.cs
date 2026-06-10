@@ -42,19 +42,9 @@ public class FlatpakRunningCommand : Command
 
     private static int HandleUiModeRunning()
     {
-        Console.Error.WriteLine("Currently running flatpack instances on machine...");
         var result = new FlatpakManager().GetRunningInstances();
-
-        if (result.Count > 0)
-        {
-            foreach (var pkg in result.OrderBy(pkg => pkg.Pid))
-            {
-                Console.WriteLine($"{pkg.AppId} {pkg.Pid}");
-            }
-            return 0;
-        }
-
-        Console.Error.WriteLine("No instances running");
+        UiFrames.Frame(result.OrderBy(pkg => pkg.Pid).ToList());
+        UiFrames.Info($"Running instances: {result.Count}");
         return 0;
     }
 }

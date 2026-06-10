@@ -4,7 +4,7 @@ using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Flatpak;
 
-public sealed class FlathubSearchSettings : CommandSettings
+public sealed class FlathubSearchSettings : JsonSettings
 {
     [CommandArgument(0, "<query>")]
     [Description("Search term to find Flatpak applications on Flathub")]
@@ -19,10 +19,6 @@ public sealed class FlathubSearchSettings : CommandSettings
     [Description("Page number for paginated results (starts at 1)")]
     [DefaultValue(1)]
     public int Page { get; init; } = 1;
-
-    [CommandOption("-j|--json")]
-    [Description("Output results in JSON format for UI integration and scripting")]
-    public bool JsonOutput { get; set; } = false;
 }
 
 public class FlatpakPackageSettings : CommandSettings
@@ -122,4 +118,5 @@ public class FlatpakBundleInstallSettings : CommandSettings
     [CommandOption("-s|--system <true|false>")]
     public bool SystemWide { get; set; } = true;
 }
+
 

@@ -1,7 +1,9 @@
 using PackageManager.Alpm;
+using PackageManager.Wire;
 using Shelly_CLI.Configuration;
 using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -53,15 +55,8 @@ public class RemoveCommand : AsyncCommand<RemovePackageSettings>
         {
             flags |= AlpmTransFlag.Cascade;
         }
-
-        var cfg = ConfigManager.ReadConfig();
-        var useSinglePane = settings.SinglePane
-            || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
-            || Console.IsOutputRedirected;
-
-        var result = useSinglePane
-            ? await StandardSinglePaneOutput.Output(manager, x => x.RemovePackages(packageList, flags,settings.OptDeps), settings.NoConfirm)
-            : await SplitOutput.Output(manager, x => x.RemovePackages(packageList, flags,settings.OptDeps), settings.NoConfirm);
+        
+        var result = await StandardSinglePaneOutput.Output(manager, x => x.RemovePackages(packageList, flags,settings.OptDeps), settings.NoConfirm);
 
         if (settings.RemoveConfig)
         {
@@ -99,53 +94,34 @@ public class RemoveCommand : AsyncCommand<RemovePackageSettings>
     {
         if (settings.Packages.Length == 0)
         {
-            Console.Error.WriteLine("Error: No packages specified");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, "No packages specified"));
             return 1;
         }
 
-        using var manager = new AlpmManager();
-        bool hadError = false;
-        var packageList = settings.Packages.ToList();
-
-        // Handle questions
-        manager.Question += (sender, args) => { QuestionHandler.HandleQuestion(args, true, settings.NoConfirm); };
-
-        // Handle progress events
-        manager.Progress += (sender, args) => { Console.Error.WriteLine($"{args.PackageName}: {args.Percent}%"); };
-
-        manager.HookRun += (sender, args) => { Console.Error.WriteLine($"[ALPM_HOOK]{args.Description}"); };
-        manager.ErrorEvent += (_, e) =>
-        {
-            Console.Error.WriteLine($"[ALPM_ERROR]{e.Error}");
-            hadError = true;
-        };
-
-        Console.Error.WriteLine("Initializing ALPM...");
-        manager.Initialize(true);
-
-        Console.Error.WriteLine($"Removing packages: {string.Join(", ", packageList)}");
         var flags = AlpmTransFlag.None;
         if (settings.Cascade)
-        {
             flags |= AlpmTransFlag.NoSave | AlpmTransFlag.Recurse;
-        }
         else if (settings.Ripple)
-        {
             flags |= AlpmTransFlag.Cascade;
-        }
 
-        var result = await manager.RemovePackages(packageList, flags, settings.OptDeps);
+        using var manager = new AlpmManager();
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, settings.NoConfirm);
+        manager.Initialize(true);
+
+        var packageList = settings.Packages.ToList();
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            AlpmEvents.TransactionStart,
+            $"Removing packages: {string.Join(", ", packageList)}"));
+
+        var ok = await UiModeOutput.Run(manager,
+            m => m.RemovePackages(packageList, flags, settings.OptDeps));
+
         if (settings.RemoveConfig)
-        {
             HandleConfigRemoval(settings.Packages);
-        }
 
-        if (!result || hadError)
-        {
-            Console.Error.WriteLine("Removal failed.");
-            return 1;
-        }
-        Console.Error.WriteLine("Packages removed successfully!");
-        return 0;
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            ok ? AlpmEvents.TransactionDone : AlpmEvents.TransactionFailed,
+            ok ? "Packages removed successfully!" : "Removal failed."));
+        return ok ? 0 : 1;
     }
 }

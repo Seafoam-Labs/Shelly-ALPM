@@ -1,19 +1,21 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using PackageManager.Alpm;
+using PackageManager.Wire;
 using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace Shelly_CLI.Commands.Standard;
 
-public class UpdateCommand : Command<PackageSettings>
+public class UpdateCommand : AsyncCommand<PackageSettings>
 {
-    public override int Execute([NotNull] CommandContext context, [NotNull] PackageSettings settings)
+    public override async Task<int> ExecuteAsync([NotNull] CommandContext context, [NotNull] PackageSettings settings)
     {
+        if (Program.IsUiMode)
+            return await HandleUiModeUpdate(settings);
+
         if (settings.Packages.Length == 0)
         {
             AnsiConsole.MarkupLine("[red]Error: No packages specified[/]");
@@ -26,37 +28,31 @@ public class UpdateCommand : Command<PackageSettings>
         AnsiConsole.MarkupLine(
             $"[yellow]Packages to update:[/] {string.Join(", ", packageList.Select(p => p.EscapeMarkup()))}");
 
-        if (!Program.IsUiMode)
+        if (!settings.NoConfirm)
         {
-            if (!settings.NoConfirm)
+            if (!AnsiConsole.Confirm("Do you want to proceed?"))
             {
-                if (!AnsiConsole.Confirm("Do you want to proceed?"))
-                {
-                    AnsiConsole.MarkupLine("[yellow]Operation cancelled.[/]");
-                    return 0;
-                }
+                AnsiConsole.MarkupLine("[yellow]Operation cancelled.[/]");
+                return 0;
             }
         }
 
         using var manager = new AlpmManager();
         object renderLock = new();
-        bool hadError = false;
+        var hadError = false;
 
         manager.ErrorEvent += (_, e) =>
         {
-            if (Program.IsUiMode)
-                Console.Error.WriteLine($"[ALPM_ERROR]{e.Error}");
-            else
-                AnsiConsole.MarkupLine($"[red]ERROR: {e.Error.EscapeMarkup()}[/]");
+            AnsiConsole.MarkupLine($"[red]ERROR: {e.Error.EscapeMarkup()}[/]");
             hadError = true;
         };
 
-        manager.Question += (sender, args) =>
+        manager.Question += (_, args) =>
         {
             lock (renderLock)
             {
                 AnsiConsole.WriteLine();
-                QuestionHandler.HandleQuestion(args, Program.IsUiMode, settings.NoConfirm);
+                QuestionHandler.HandleQuestion(args, false, settings.NoConfirm);
             }
         };
 
@@ -70,7 +66,7 @@ public class UpdateCommand : Command<PackageSettings>
             {
                 var rowIndex = new Dictionary<string, int>();
 
-                manager.Progress += (sender, args) =>
+                manager.Progress += (_, args) =>
                 {
                     lock (renderLock)
                     {
@@ -110,5 +106,30 @@ public class UpdateCommand : Command<PackageSettings>
 
         AnsiConsole.MarkupLine("[green]Packages updated successfully![/]");
         return 0;
+    }
+
+    private static async Task<int> HandleUiModeUpdate(PackageSettings settings)
+    {
+        if (settings.Packages.Length == 0)
+        {
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, "No packages specified"));
+            return 1;
+        }
+
+        using var manager = new AlpmManager();
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, settings.NoConfirm);
+        manager.IntializeWithSync();
+
+        var packageList = settings.Packages.ToList();
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            AlpmEvents.TransactionStart,
+            $"Updating packages: {string.Join(", ", packageList)}"));
+
+        var ok = await UiModeOutput.Run(manager, m => m.UpdatePackages(packageList));
+
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            ok ? AlpmEvents.TransactionDone : AlpmEvents.TransactionFailed,
+            ok ? "Packages updated successfully!" : "Update failed."));
+        return ok ? 0 : 1;
     }
 }

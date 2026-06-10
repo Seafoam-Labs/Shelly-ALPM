@@ -1,0 +1,88 @@
+namespace Shelly.Utilities.Eventing;
+
+public enum EventSource
+{
+    Alpm,
+    Aur,
+    AppImage,
+    Flatpak
+}
+
+public enum AlpmEvents
+{
+    CheckDepsStart = 1,
+    CheckDepsDone = 2,
+    FileConflictsStart = 3,
+    FileConflictsDone = 4,
+    ResolveDepsStart = 5,
+    ResolveDepsDone = 6,
+    InterConflictsStart = 7,
+    InterConflictsDone = 8,
+    TransactionStart = 9,
+    TransactionDone = 10,
+    PackageOperationStart = 11,
+    PackageOperationDone = 12,
+    IntegrityStart = 13,
+    IntegrityDone = 14,
+    LoadStart = 15,
+    LoadDone = 16,
+    ScriptletInfo = 17,
+    DbRetrieveStart = 18,
+    DbRetrieveDone = 19,
+    DbRetrieveFailed = 20,
+    PkgRetrieveStart = 21,
+    PkgRetrieveDone = 22,
+    PkgRetrieveFailed = 23,
+    DiskspaceStart = 24,
+    DiskspaceDone = 25,
+    OptdepRemoval = 26,
+    DatabaseMissing = 27,
+    KeyringStart = 28,
+    KeyringDone = 29,
+    KeyDownloadStart = 30,
+    KeyDownloadDone = 31,
+    PacnewCreated = 32,
+    PacsaveCreated = 33,
+    HookStart = 34,
+    HookDone = 35,
+    HookRunStart = 36,
+    HookRunDone = 37,
+    
+    //Custom event types
+    InformationalOutput = 256,
+    DebugOutput = 257,
+    TraceOutput = 258,
+    TransactionFailed = 259,
+
+    //AUR orchestration event types
+    AurDownloadStart = 512,
+    AurDownloadDone = 513,
+    AurBuildStart = 514,
+    AurBuildDone = 515,
+    AurInstallStart = 516,
+    AurInstallDone = 517,
+    AurCleanupStart = 518,
+    AurCleanupDone = 519,
+    AurPackageFailed = 520,
+    AurPackageCompleted = 521,
+    AurBuildOutput = 522,
+    AurBuildError = 523,
+}
+
+public enum ProgressType
+{
+    AddStart = 0,
+    UpgradeStart,
+    DowngradeStart,
+    ReinstallStart,
+    RemoveStart,
+    ConflictsStart,
+    DiskspaceStart,
+    IntegrityStart,
+    LoadStart,
+    KeyringStart,
+    PackageDownload = 100,
+    MakepkgBuild = 200,
+    MakepkgPackage = 201,
+    AurDownload = 202
+}

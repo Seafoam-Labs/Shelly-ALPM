@@ -1,6 +1,7 @@
 using System.Text.Json;
 using PackageManager.Alpm;
 using PackageManager.Wire;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -148,28 +149,15 @@ public class ListAvailableCommand : Command<AlpmListSettings>
                     : packages.OrderByDescending(p => p.Name)
             };
 
-            if (settings.JsonOutput)
-            {
-                var sortedList = sortedPackages.ToList();
-                JsonPackFrame.WriteToStdout(sortedList);
-                return 0;
-            }
-
-            var skip = (settings.Page - 1) * settings.Take;
-            var displayPackages = sortedPackages.Skip(skip).Take(settings.Take).ToList();
-
-            foreach (var pkg in displayPackages)
-            {
-                Console.WriteLine($"{pkg.Name} {pkg.Version} {pkg.Repository} - {pkg.Description}");
-            }
-
-            Console.Error.WriteLine($"Showing {settings.Take} of {packages.Count} available packages");
+            var sortedList = sortedPackages.ToList();
+            JsonPackFrame.WriteToStdout(sortedList);
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                AlpmEvents.InformationalOutput, $"Showing {sortedList.Count} of {packages.Count} available packages"));
             return 0;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[ERROR] Exception: {ex.Message}");
-            Console.Error.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, ex.Message));
             return 1;
         }
     }

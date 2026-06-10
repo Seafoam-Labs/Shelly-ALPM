@@ -541,6 +541,25 @@
                                                                 <property name="spacing">12</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">Enable Package Downgrade</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch"
+                                                                            id="package_downgrade_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <property name="spacing">12</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Enable Webview Visualization (experimental)</property>
                                                                         <property name="halign">start</property>
                                                                         <property name="hexpand">true</property>
@@ -593,7 +612,7 @@
                                                         </child>
                                                         <child>
                                                             <object class="GtkButton" id="rm_db_lock_button">
-                                                                <property name="label" translatable="yes">Remove db.lock</property>
+                                                                <property name="label" translatable="yes">Remove db.lck</property>
                                                                 <property name="margin-top">10</property>
                                                                 <style>
                                                                     <class name="suggested-action"/>

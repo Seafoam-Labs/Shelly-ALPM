@@ -1,6 +1,7 @@
 using System.Text.Json;
 using PackageManager.Alpm;
 using PackageManager.Wire;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -69,6 +70,7 @@ public class ListInstalledCommand : Command<AlpmListSettings>
         table.AddColumn("Version");
         table.AddColumn("Size");
         table.AddColumn("Description");
+        table.AddColumn("Installed as");
 
         var skip = (settings.Page - 1) * settings.Take;
         var displayPackages = sortedPackages.Skip(skip).Take(settings.Take).ToList();
@@ -79,7 +81,8 @@ public class ListInstalledCommand : Command<AlpmListSettings>
                 pkg.Name,
                 pkg.Version,
                 FormatSize(pkg.InstalledSize),
-                pkg.Description.EscapeMarkup().Truncate(50)
+                pkg.Description.EscapeMarkup().Truncate(50),
+                pkg.InstallReason
             );
         }
 
@@ -129,22 +132,10 @@ public class ListInstalledCommand : Command<AlpmListSettings>
                 : packages.OrderByDescending(p => p.Name)
         };
 
-        if (settings.JsonOutput)
-        {
-            var sortedList = sortedPackages.ToList();
-            JsonPackFrame.WriteToStdout(sortedList);
-            return 0;
-        }
-
-        var skip = (settings.Page - 1) * settings.Take;
-        var displayPackages = sortedPackages.Skip(skip).Take(settings.Take).ToList();
-
-        foreach (var pkg in displayPackages)
-        {
-            Console.WriteLine($"{pkg.Name} {pkg.Version} {FormatSize(pkg.InstalledSize)} - {pkg.Description}");
-        }
-
-        Console.Error.WriteLine($"Total: {displayPackages.Count} packages");
+        var sortedList = sortedPackages.ToList();
+        JsonPackFrame.WriteToStdout(sortedList);
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            AlpmEvents.InformationalOutput, $"Total: {sortedList.Count} packages"));
         return 0;
     }
 

@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using PackageManager.Aur;
 using PackageManager.Wire;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -83,13 +84,13 @@ public class AurSearchCommand : AsyncCommand<AurSearchSettings>
         var query = string.Join(" ", settings.Query);
         if (string.IsNullOrWhiteSpace(query))
         {
-            await Console.Error.WriteLineAsync("Error: Query cannot be empty.");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, "Query cannot be empty."));
             return 1;
         }
 
         if (query.Length < 2)
         {
-            await Console.Error.WriteLineAsync("Error: Query must be at least 2 characters long");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, "Query must be at least 2 characters long"));
             return 1;
         }
 
@@ -99,26 +100,16 @@ public class AurSearchCommand : AsyncCommand<AurSearchSettings>
             manager = new AurPackageManager();
             await manager.Initialize();
 
-            var results = manager.SearchPackages(query).GetAwaiter().GetResult();
+            var results = await manager.SearchPackages(query);
 
-            if (settings.JsonOutput)
-            {
-                JsonPackFrame.WriteToStdout(results);
-                return 0;
-            }
-
-            foreach (var pkg in results.Take(25))
-            {
-                Console.WriteLine($"{pkg.Name} {pkg.Version} - {pkg.Description ?? ""}");
-            }
-
-            await Console.Error.WriteLineAsync($"Total results: {results.Count}");
-
+            JsonPackFrame.WriteToStdout(results);
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                AlpmEvents.InformationalOutput, $"Total results: {results.Count}"));
             return 0;
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync($"Search failed: {ex.Message}");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, $"Search failed: {ex.Message}"));
             return 1;
         }
         finally

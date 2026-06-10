@@ -4,11 +4,13 @@ using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.Enums;
+using Shelly.Gtk.Services.PackageTraversal;
 using static Shelly.GTK.Resources.Translations;
 using static Shelly.Gtk.Helpers.PackageColumnViewSorter;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
+using Shelly.Gtk.Windows.Dialog;
 
 // ReSharper disable NotAccessedField.Local
 // ReSharper disable CollectionNeverUpdated.Local
@@ -39,20 +41,28 @@ public sealed class PackageManagement(
         _checkBinding = [];
 
     private readonly bool _deletePackageCache = configService.LoadConfig().RemoveCache;
-    private Box _box = null!;
+    private Overlay _box = null!;
+    private ScrolledWindow _scroller = null!;
+    private ColumnView _columnView = null!;
     private SearchEntry _searchEntry = null!;
     private CheckButton _cascadeDeleteCheck = null!;
     private CheckButton _removeConfigsCheck = null!;
     private CheckButton _removeOptDepsCheck = null!;
     private CheckButton _showHiddenCheck = null!;
     private Button _removeButton = null!;
+    private Button _downgradeButton = null!;
     private readonly List<AlpmPackageGObject> _packageGObjectRefs = [];
     private readonly List<AlpmPackageDto> _packageData = [];
     private List<string> _groups = [];
     private DropDown _groupDropDown = null!;
     private string _selectedGroup = T("Any");
 
+    private Box _loadingOverlay = null!;
+    private Spinner _loadingSpinner = null!;
+    private Label _errorLabel = null!;
+
     private ColumnViewColumn _nameColumn = null!;
+    private ColumnViewColumn _sizeColumn = null!;
     private ColumnViewColumn _versionColumn = null!;
     private ColumnViewColumn _sizeColumn = null!;
 
@@ -66,13 +76,25 @@ public sealed class PackageManagement(
     {
         var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/Package/PackageManagement.ui"), -1);
         builder.TranslationDomain = Domain;
-        _box = (Box)builder.GetObject("PackageManagement")!;
-        var columnView = (ColumnView)builder.GetObject("package_grid")!;
+        _box = (Overlay)builder.GetObject("PackageManagement")!;
+        _columnView = (ColumnView)builder.GetObject("package_grid")!;
+        var columnView = _columnView;
+        _scroller = (ScrolledWindow)columnView.GetParent()!;
         _searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
         _cascadeDeleteCheck = (CheckButton)builder.GetObject("cascade_delete_check")!;
         _removeConfigsCheck = (CheckButton)builder.GetObject("remove_configs_check")!;
         _removeOptDepsCheck = (CheckButton)builder.GetObject("remove_optdeps_check")!;
         _showHiddenCheck = (CheckButton)builder.GetObject("show_hidden_check")!;
+
+        _loadingOverlay = (Box)builder.GetObject("loading_overlay")!;
+        _loadingSpinner = (Spinner)builder.GetObject("loading_spinner")!;
+        _errorLabel = (Label)builder.GetObject("error_label")!;
+
+        var config = configService.LoadConfig();
+        _cascadeDeleteCheck.Active = config.PackageManagementCascadeDelete;
+        _removeConfigsCheck.Active = config.PackageManagementRemoveConfigs;
+        _removeOptDepsCheck.Active = config.PackageManagementRemoveOptionalDeps;
+        _showHiddenCheck.Active = config.PackageManagementShowHidden;
 
         var checkColumn = (ColumnViewColumn)builder.GetObject("check_column")!;
         checkColumn.Resizable = true;
@@ -87,6 +109,9 @@ public sealed class PackageManagement(
         var localRemoveButton = (Button)builder.GetObject("remove_local_button")!;
         _removeButton = (Button)builder.GetObject("remove_button")!;
         _removeButton.SetSensitive(false);
+        _downgradeButton = (Button)builder.GetObject("downgrade_button")!;
+        _downgradeButton.SetSensitive(false);
+        _downgradeButton.SetVisible(configService.LoadConfig().PackageDowngradeEnabled);
 
         _listStore = Gio.ListStore.New(AlpmPackageGObject.GetGType());
         _filter = PackageSearch.CreateSafeFilter(FilterPackage);
@@ -102,6 +127,7 @@ public sealed class PackageManagement(
         SetupColumns(checkColumn, _nameColumn, _sizeColumn, _versionColumn);
 
         _nameColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
+        _sizeColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
         _versionColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
         _sizeColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
 
@@ -128,7 +154,8 @@ public sealed class PackageManagement(
                 _packageData,
                 _packageGObjectRefs,
                 sortColumn.Value,
-                order
+                order,
+                _searchText
             );
         };
 
@@ -175,11 +202,39 @@ public sealed class PackageManagement(
         {
             _searchText = _searchEntry.GetText();
             ApplyFilter();
+            ReapplySort();
+            _selectionModel.SetSelected(uint.MaxValue);
+            ScrollToTop();
         };
         _removeButton.OnClicked += (_, _) => { _ = RemoveSelectedAsync(); };
+        _downgradeButton.OnClicked += (_, _) => { _ = DowngradeSelectedAsync(); };
         refreshButton.OnClicked += (_, _) => { Reload(); };
         localRemoveButton.OnClicked += async (_, _) => { await OpenRemoveLocal(); };
-        _showHiddenCheck.OnToggled += (_, _) => { Reload(); };
+        _cascadeDeleteCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageManagementCascadeDelete = _cascadeDeleteCheck.Active;
+            configService.SaveConfig(updatedConfig);
+        };
+        _removeConfigsCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageManagementRemoveConfigs = _removeConfigsCheck.Active;
+            configService.SaveConfig(updatedConfig);
+        };
+        _removeOptDepsCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageManagementRemoveOptionalDeps = _removeOptDepsCheck.Active;
+            configService.SaveConfig(updatedConfig);
+        };
+        _showHiddenCheck.OnToggled += (_, _) =>
+        {
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageManagementShowHidden = _showHiddenCheck.Active;
+            configService.SaveConfig(updatedConfig);
+            Reload();
+        };
         _groupDropDown.OnNotify += (_, args) =>
         {
             if (args.Pspec.GetName() != "selected") return;
@@ -187,6 +242,8 @@ public sealed class PackageManagement(
             var item = (StringObject)_groupDropDown.GetModel()!.GetObject(idx)!;
             _selectedGroup = item.GetString();
             ApplyFilter();
+            _selectionModel.SetSelected(uint.MaxValue);
+            ScrollToTop();
         };
 
         _sub = DirtySubscription.Attach(dirtyService, this);
@@ -320,6 +377,12 @@ public sealed class PackageManagement(
         {
             AddChipList(T("Optional Deps"), pkg.OptDepends, true);
         }
+        
+        var names = PackageTraversalService.FetchInverseFullDependencyPackageInformation(pkg.Name, _packageData);
+        if (names.Count > 0)
+        {
+            AddChipList(T("Required By"), names);
+        }
 
         if (pkg.Licenses.Count > 0)
             AddDetail(T("Licenses"), string.Join(", ", pkg.Licenses));
@@ -329,6 +392,8 @@ public sealed class PackageManagement(
             AddDetail(T("Conflicts"), string.Join(", ", pkg.Conflicts));
         if (pkg.Groups.Count > 0)
             AddDetail(T("Groups"), string.Join(", ", pkg.Groups));
+        AddDetail(T("Build Date"), pkg.BuildDate.ToString("yyyy-MM-dd HH:mm:ss"));
+        AddDetail(T("Install As"), pkg.InstallReason);
 
         if (pkg.PackageFile is { Files.Count: > 0 })
         {
@@ -469,14 +534,12 @@ public sealed class PackageManagement(
             expander.Hexpand = false;
 
             var flowBox = FlowBox.New();
-            flowBox.MarginStart = 0;
-            flowBox.MarginTop = 0;
-            flowBox.MarginBottom = 0;
-            flowBox.MarginEnd = 0;
+            flowBox.MarginTop = 8;
+            flowBox.MarginBottom = 2;
             flowBox.SelectionMode = SelectionMode.None;
             flowBox.ColumnSpacing = 6;
             flowBox.RowSpacing = 6;
-            flowBox.Halign = Align.Start;
+            flowBox.Halign = Align.Fill;
             flowBox.Valign = Align.Start;
             flowBox.MaxChildrenPerLine = isOptional ? 1u : 10u;
             flowBox.MinChildrenPerLine = 1;
@@ -543,7 +606,9 @@ public sealed class PackageManagement(
             {
                 if (listItem.GetItem() is not AlpmPackageGObject current) return;
                 current.IsSelected = s.GetActive();
-                _removeButton.SetSensitive(AnySelected());
+                var anySelected = AnySelected();
+                _removeButton.SetSensitive(anySelected);
+                _downgradeButton.SetSensitive(anySelected);
             };
         };
 
@@ -683,11 +748,14 @@ public sealed class PackageManagement(
         var pkg = _packageData[pkgObj.Index];
 
         return PackageSearch.MatchesGroup(pkg.Groups, _selectedGroup) &&
-               PackageSearch.MatchesNameOrDescription(pkg.Name, pkg.Description, _searchText);
+               PackageSearch.Matches(pkg.Name, pkg.Description, _searchText);
     }
 
     private async Task LoadDataAsync(int generation = 0, CancellationToken ct = default)
     {
+        if (_loadGeneration != generation) return;
+        OverlayHelper.ShowLoading(_loadingOverlay, _loadingSpinner, _errorLabel);
+
         try
         {
             var packages = await privilegedOperationService.GetInstalledPackagesAsync(_showHiddenCheck.Active);
@@ -697,7 +765,14 @@ public sealed class PackageManagement(
             ct.ThrowIfCancellationRequested();
             GLib.Functions.IdleAdd(0, () =>
             {
-                if (ct.IsCancellationRequested || _loadGeneration != generation) return false;
+                if (ct.IsCancellationRequested || _loadGeneration != generation)
+                {
+                    if (_loadGeneration == generation)
+                    {
+                        OverlayHelper.HideLoading(_loadingOverlay, _loadingSpinner);
+                    }
+                    return false;
+                }
 
                 _filterListModel.SetFilter(null);
                 _listStore.RemoveAll();
@@ -737,6 +812,8 @@ public sealed class PackageManagement(
                     }
                 }
 
+                OverlayHelper.HideLoading(_loadingOverlay, _loadingSpinner);
+
                 packages.Clear();
                 packages.TrimExcess();
                 return false;
@@ -744,6 +821,11 @@ public sealed class PackageManagement(
         }
         catch (Exception e)
         {
+            if (_loadGeneration == generation)
+            {
+                OverlayHelper.HideLoading(_loadingOverlay, _loadingSpinner);
+                _errorLabel.SetVisible(true);
+            }
             Console.WriteLine($"Failed to load packages: {e.Message}");
         }
     }
@@ -753,18 +835,41 @@ public sealed class PackageManagement(
         _filter.Changed(FilterChange.Different);
     }
 
+    private void ScrollToTop()
+    {
+        GLib.Functions.IdleAdd(0, () =>
+        {
+            var frames = 0;
+            _scroller.AddTickCallback((_, _) =>
+            {
+                var vadj = _scroller.GetVadjustment();
+                if (vadj is not null) vadj.SetValue(vadj.GetLower());
+                var hadj = _scroller.GetHadjustment();
+                if (hadj is not null) hadj.SetValue(hadj.GetLower());
+                return ++frames < 3;
+            });
+            return false;
+        });
+    }
+
+    private void ReapplySort()
+    {
+        var primaryColumn = _columnViewSorter.GetPrimarySortColumn();
+        var sortColumn = primaryColumn is null ? null : GetSortColumn(primaryColumn);
+        var order = _columnViewSorter.GetPrimarySortOrder();
+        Sort(
+            _listStore,
+            _packageData,
+            _packageGObjectRefs,
+            sortColumn ?? PackageSortColumn.Name,
+            order,
+            _searchText
+        );
+    }
+
     private async Task RemoveSelectedAsync()
     {
-        var selectedPackages = new List<string>();
-        for (uint i = 0; i < _listStore.GetNItems(); i++)
-        {
-            var item = _listStore.GetObject(i);
-            if (item is AlpmPackageGObject { IsSelected: true, Index: >= 0 } pkgObj &&
-                pkgObj.Index < _packageData.Count)
-            {
-                selectedPackages.Add(_packageData[pkgObj.Index].Name);
-            }
-        }
+        var selectedPackages = GetSelectedPackages();
 
         if (selectedPackages.Count != 0)
         {
@@ -783,6 +888,8 @@ public sealed class PackageManagement(
 
             try
             {
+                OverlayHelper.ShowLoading(_loadingOverlay, _loadingSpinner, _errorLabel);
+
                 lockoutService.Show(T("Removing..."));
                 var result = await privilegedOperationService.RemovePackagesAsync(selectedPackages,
                     isCascade: _cascadeDeleteCheck.Active,
@@ -801,7 +908,8 @@ public sealed class PackageManagement(
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Failed to install packages: {e.Message}");
+                OverlayHelper.HideLoading(_loadingOverlay, _loadingSpinner);
+                Console.WriteLine($"Failed to remove packages: {e.Message}");
             }
             finally
             {
@@ -820,6 +928,89 @@ public sealed class PackageManagement(
         }
 
         return false;
+    }
+
+    private List<string> GetSelectedPackages()
+    {
+        var selectedPackages = new List<string>();
+        for (uint i = 0; i < _listStore.GetNItems(); i++)
+        {
+            var item = _listStore.GetObject(i);
+            if (item is AlpmPackageGObject { IsSelected: true, Index: >= 0 } pkgObj &&
+                pkgObj.Index < _packageData.Count)
+            {
+                selectedPackages.Add(_packageData[pkgObj.Index].Name);
+            }
+        }
+
+        return selectedPackages;
+    }
+
+    private async Task DowngradeSelectedAsync()
+    {
+        var selectedPackages = GetSelectedPackages();
+
+        if (selectedPackages.Count == 0) return;
+
+        var successCount = 0;
+
+        foreach (var packageName in selectedPackages)
+        {
+            List<DowngradeOptionDto> options;
+            try
+            {
+                options = await privilegedOperationService.GetDowngradeOptionsAsync(packageName);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Failed to fetch downgrade options for {packageName}: {e.Message}");
+                options = [];
+            }
+
+            if (options.Count == 0)
+            {
+                genericQuestionService.RaiseToastMessage(
+                    new ToastMessageEventArgs(T("No downgrade options found for {0}", packageName)));
+                continue;
+            }
+
+            var dialogArgs = DowngradeDialog.BuildDowngradeDialog(packageName, options);
+            genericQuestionService.RaiseDialog(dialogArgs);
+            var userResponse = await dialogArgs.ResponseTask;
+
+            if (userResponse.Filename is null) continue;
+
+            try
+            {
+                lockoutService.Show(T("Downgrading {0}...", packageName));
+                var downgradeResult = await privilegedOperationService.DowngradePackageAsync(
+                    packageName, userResponse.Filename, userResponse.AddIgnore);
+
+                if (downgradeResult.Success)
+                {
+                    successCount++;
+                }
+                else
+                {
+                    Console.WriteLine($"Downgrade failed for {packageName}: {downgradeResult.Error}");
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Failed to downgrade {packageName}: {e.Message}");
+            }
+            finally
+            {
+                lockoutService.Hide();
+            }
+        }
+
+        if (successCount > 0)
+        {
+            genericQuestionService.RaiseToastMessage(
+                new ToastMessageEventArgs(T("Downgraded {0} Package(s)", successCount)));
+            Reload();
+        }
     }
 
     public void Dispose()

@@ -54,7 +54,6 @@ public sealed class BottomBarRegion : IDisposable
         var caps = AnsiConsole.Profile.Capabilities;
         var supportsColor = caps.Ansi && caps.ColorSystem != ColorSystem.NoColors;
         _asciiOnly = !supportsColor || noColor || Console.IsOutputRedirected;
-                     // TODO: Needed? || !Equals(Console.OutputEncoding, System.Text.Encoding.UTF8);
 
         if (_animate && ProgressBarRenderer.NeedsFrameTicker(_style))
         {
@@ -301,15 +300,27 @@ public sealed class BottomBarRegion : IDisposable
     public T RunInteractive<T>(Func<T> prompt)
     {
         SuspendForPrompt();
-        try { return prompt(); }
-        finally { Resume(); }
+        try
+        {
+            return prompt();
+        }
+        finally
+        {
+            Resume();
+        }
     }
 
     public void RunInteractive(Action prompt)
     {
         SuspendForPrompt();
-        try { prompt(); }
-        finally { Resume(); }
+        try
+        {
+            prompt();
+        }
+        finally
+        {
+            Resume();
+        }
     }
 
     public void Dispose()
@@ -359,8 +370,15 @@ public sealed class BottomBarRegion : IDisposable
             _barRowsDrawn++;
         }
 
-        Console.Out.Flush();
+        if (_asciiOnly)
+        {
+            Console.Out.Flush();
+            return;
+        }
+
+        AnsiConsole.Console.Profile.Out.Writer.Flush();
     }
+
 
     private void ClearBars()
     {

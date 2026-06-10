@@ -28,15 +28,10 @@
                             </object>
                         </child>
                         <child>
-                            <object class="GtkCheckButton" id="chroot_check">
-                                <property name="label" translatable="yes">Use chroot</property>
-                                <property name="tooltip-text" translatable="yes">Build packages in a clean chroot environment</property>
-                            </object>
-                        </child>
-                        <child>
-                            <object class="GtkCheckButton" id="run_checks_check">
-                                <property name="label" translatable="yes">Run checks</property>
-                                <property name="tooltip-text" translatable="yes">Run the --check function during package build (installs checkdepends)</property>
+                            <object class="GtkMenuButton" id="options_menu">
+                                <property name="icon-name">view-more-symbolic</property>
+                                <property name="tooltip-text" translatable="yes">Additional Options</property>
+                                <property name="popover">options_popover</property>
                             </object>
                         </child>
                         <child>
@@ -149,5 +144,29 @@
                 <property name="use-markup">true</property>
             </object>
         </child>
+    </object>
+    <object class="GtkPopover" id="options_popover">
+        <property name="child">
+            <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">8</property>
+                <property name="margin-top">8</property>
+                <property name="margin-bottom">8</property>
+                <property name="margin-start">12</property>
+                <property name="margin-end">12</property>
+                <child>
+                    <object class="GtkCheckButton" id="chroot_check">
+                        <property name="label" translatable="yes">Use chroot</property>
+                        <property name="tooltip-text" translatable="yes">Build packages in a clean chroot environment</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="run_checks_check">
+                        <property name="label" translatable="yes">Run checks</property>
+                        <property name="tooltip-text" translatable="yes">Run the --check function during package build (installs checkdepends)</property>
+                    </object>
+                </child>
+            </object>
+        </property>
     </object>
 </interface>

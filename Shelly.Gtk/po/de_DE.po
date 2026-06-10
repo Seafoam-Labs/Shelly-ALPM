@@ -605,7 +605,7 @@ msgid "Remove corrupted packages"
 msgstr "Beschädigte Pakete entfernen"
 
 msgid "Select File"
-msgstr "Ausgewählte Dateien"
+msgstr "Ausgewählte Datei"
 
 msgid "Recommend"
 msgstr "Empfehlen"

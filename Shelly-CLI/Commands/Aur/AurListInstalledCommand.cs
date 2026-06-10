@@ -2,6 +2,7 @@ using System.Text.Json;
 using PackageManager.Aur;
 using PackageManager.Aur.Models;
 using PackageManager.Wire;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -119,28 +120,15 @@ public class AurListInstalledCommand : AsyncCommand<AlpmListSettings>
                     : packages.OrderByDescending(p => p.Name)
             };
 
-            if (settings.JsonOutput)
-            {
-                var sortedList = sortedPackages.ToList();
-                JsonPackFrame.WriteToStdout(sortedList);
-                return 0;
-            }
-
-            var skip = (settings.Page - 1) * settings.Take;
-            var displayPackages = sortedPackages.Skip(skip).Take(settings.Take).ToList();
-
-            foreach (var pkg in displayPackages)
-            {
-                Console.WriteLine($"{pkg.Name} {pkg.Version} - {pkg.Description ?? ""}");
-            }
-
-            await Console.Error.WriteLineAsync($"Total: {packages.Count} AUR packages installed");
-
+            var sortedList = sortedPackages.ToList();
+            JsonPackFrame.WriteToStdout(sortedList);
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                AlpmEvents.InformationalOutput, $"Total: {packages.Count} AUR packages installed"));
             return 0;
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync($"Failed to list packages: {ex.Message}");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, $"Failed to list packages: {ex.Message}"));
             return 1;
         }
         finally

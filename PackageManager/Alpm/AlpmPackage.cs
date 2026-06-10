@@ -34,7 +34,7 @@ public class AlpmPackage(IntPtr pkgPtr)
     }
 
     public long Size => AlpmReference.GetPkgSize(PackagePtr);
-    public string Description => Marshal.PtrToStringUTF8(AlpmReference.GetPkgDesc(PackagePtr))!;
+    public string? Description => Marshal.PtrToStringUTF8(AlpmReference.GetPkgDesc(PackagePtr))!;
 
     public string Url => Marshal.PtrToStringUTF8(AlpmReference.GetPkgUrl(PackagePtr))!;
 

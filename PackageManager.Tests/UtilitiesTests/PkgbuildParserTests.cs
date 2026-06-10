@@ -196,4 +196,71 @@ public class PkgbuildParserTests
         Assert.That(result.Depends[2], Is.EqualTo("dav1d>=1.3.0"));
         Assert.That(result.Depends[3], Is.EqualTo("alsa-lib"));
     }
+
+    [Test]
+    public void ParseContent_OptDepends_PreservesLiteralParenInsideQuotes()
+    {
+        // Regression test for proton-ge-custom-bin: a quoted optdepends entry that
+        // contains a literal ')' inside its description (e.g. a URL) must not
+        // truncate the array. Previously the regex `[^)]*` stopped at the first
+        // ')' character, causing description fragments to leak as bogus package
+        // names ("needed", "by", "protonfixes", "(https://github.com/...", etc.).
+        var pkgbuild = """
+                       pkgname=proton-ge-custom-bin
+                       optdepends=(
+                         'zenity: needed by protonfixes for the gui'
+                         'python-kivy: needed by protonfixes for the gui (https://github.com/kivy/kivy)'
+                         'winetricks: variety of fixes for games'
+                       )
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.OptDepends, Has.Count.EqualTo(3));
+        Assert.That(result.OptDepends[0], Is.EqualTo("zenity: needed by protonfixes for the gui"));
+        Assert.That(result.OptDepends[1], Is.EqualTo("python-kivy: needed by protonfixes for the gui (https://github.com/kivy/kivy)"));
+        Assert.That(result.OptDepends[2], Is.EqualTo("winetricks: variety of fixes for games"));
+    }
+
+    [Test]
+    public void ParseContent_OptDepends_HandlesMixedQuotesWithParen()
+    {
+        var pkgbuild = """
+                       optdepends=(
+                         "bar: paren ) inside double quotes"
+                         'baz: paren ) inside single quotes'
+                       )
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.OptDepends, Has.Count.EqualTo(2));
+        Assert.That(result.OptDepends[0], Is.EqualTo("bar: paren ) inside double quotes"));
+        Assert.That(result.OptDepends[1], Is.EqualTo("baz: paren ) inside single quotes"));
+    }
+
+    [Test]
+    public void ParseContent_OptDepends_HandlesAppendForm()
+    {
+        var pkgbuild = """
+                       optdepends=('a: first')
+                       optdepends+=('b: second (with paren)')
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.OptDepends, Has.Count.EqualTo(2));
+        Assert.That(result.OptDepends[0], Is.EqualTo("a: first"));
+        Assert.That(result.OptDepends[1], Is.EqualTo("b: second (with paren)"));
+    }
+
+    [Test]
+    public void ParseContent_Array_UnterminatedDoesNotThrow()
+    {
+        // Malformed PKGBUILD missing closing ')': must not throw, should capture
+        // whatever it found.
+        var pkgbuild = "optdepends=(\n  'a: ok'\n  'b: also ok'\n";
+
+        Assert.DoesNotThrow(() => PkgbuildParser.ParseContent(pkgbuild));
+    }
 }

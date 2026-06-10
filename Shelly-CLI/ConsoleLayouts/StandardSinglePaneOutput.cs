@@ -38,19 +38,7 @@ public static class StandardSinglePaneOutput
 
             region.UpdateBar(name, e.Current ?? 0, e.HowMany ?? 0, pct, actionType);
         };
-
-        manager.PackageOperation += (_, e) =>
-        {
-            if (!emittedProcessing)
-            {
-                emittedProcessing = true;
-                region.WriteLine("[bold]::[/] Processing package changes...");
-            }
-
-            region.WriteLine(string.IsNullOrWhiteSpace(e.PackageName)
-                ? $":: {e.EventType}".EscapeMarkup()
-                : $":: {e.EventType} for {e.PackageName}".EscapeMarkup());
-        };
+        
 
         manager.ScriptletInfo += (_, e) =>
         {

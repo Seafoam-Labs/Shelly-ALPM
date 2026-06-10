@@ -1,0 +1,66 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: shelly-notifications 2.3.0.2\n"
+"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
+"POT-Creation-Date: 2026-05-20 12:32-0400\n"
+"PO-Revision-Date: 2026-06-02 15:24+0900\n"
+"Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
+"Language-Team: \n"
+"Language: ja_JP\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.9\n"
+
+msgid "Updates available: {0}"
+msgstr "利用可能なアップデート: {0}"
+
+msgid "Shelly Notifications started. Press Ctrl+C to exit."
+msgstr ""
+"Shelly 通知アプリを開始しました。終了するには Ctrl+C を押してください。"
+
+msgid ""
+"Warning: No StatusNotifierWatcher found. The tray icon will not be visible."
+msgstr ""
+"警告: StatusNotifierWatcher が見つかりませんでした。トレイアイコンは表示され"
+"ません。"
+
+msgid ""
+"Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
+"installed."
+msgstr ""
+"ヒント: GNOME を使用している場合は「AppIndicator」拡張機能がインストールされ"
+"ていることを確認してください。"
+
+msgid "Open Shelly"
+msgstr "Shelly を開く"
+
+msgid "Update Packages"
+msgstr "パッケージをアップデート"
+
+msgid "Check for Updates"
+msgstr "アップデートを確認"
+
+msgid "Last check: Never"
+msgstr "最終確認: なし"
+
+msgid "Exit"
+msgstr "終了"
+
+msgid "No updates available."
+msgstr "アップデートがありません。"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Standard"
+msgstr "標準"
+
+msgid "Last check: {0}"
+msgstr "最終確認: {0}"
+
+msgid "Shelly Notifications"
+msgstr "Shelly 通知アプリ"

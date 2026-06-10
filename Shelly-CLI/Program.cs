@@ -23,7 +23,7 @@ public class Program
     public static int Main(string[] args)
     {
         Console.SetOut(new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true });
-        Console.SetError(new StreamWriter(Console.OpenStandardError())  { AutoFlush = true });
+        Console.SetError(new StreamWriter(Console.OpenStandardError()) { AutoFlush = true });
         // Ensure default configuration exists in ~/.config/shelly/config.json
         var configPath = XdgPaths.ShellyConfig("config.json");
 
@@ -83,7 +83,7 @@ public class Program
         app.Configure(config =>
         {
             config.SetApplicationName("shelly");
-            config.SetApplicationVersion(Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown");
+            config.SetApplicationVersion(Assembly.GetExecutingAssembly().GetName().Version?.ToString(4) ?? "unknown");
 
             config.AddCommand<VersionCommand>("version")
                 .WithDescription("Display the application version")
@@ -185,8 +185,28 @@ public class Program
                 .WithDescription("Downgrade a package")
                 .WithExample("downgrade", "firefox")
                 .WithExample("downgrade", "firefox", "--oldest")
-                .WithExample("downgrade", "firefox", "--latest")
+                .WithExample("downgrade", "firefox", "--exact", "67.0.4-2")
+                .WithExample("downgrade", "firefox", "--list-options")
                 .WithExample("downgrade", "firefox", "--ignore");
+
+            config.AddBranch("ignore", ignore =>
+            {
+                ignore.SetDescription("Manage IgnorePkg entries in pacman.conf");
+
+                ignore.AddCommand<IgnoreListCommand>("list")
+                    .WithDescription("List all IgnorePkg packages")
+                    .WithExample("ignore", "list");
+
+                ignore.AddCommand<IgnoreAddCommand>("add")
+                    .WithDescription("Add one or more packages to IgnorePkg list")
+                    .WithExample("ignore", "add", "firefox")
+                    .WithExample("ignore", "add", "firefox", "vlc");
+
+                ignore.AddCommand<IgnoreRemoveCommand>("remove")
+                    .WithDescription("Remove one or more packages from IgnorePkg list")
+                    .WithExample("ignore", "remove", "firefox")
+                    .WithExample("ignore", "remove", "firefox", "vlc");
+            });
 
             config.AddCommand<ArchNews>("news")
                 .WithDescription("Shows Arch news you haven't seen before")
@@ -324,6 +344,10 @@ public class Program
                 flatpak.AddCommand<FlatpakRunningCommand>("running")
                     .WithDescription("List running flatpak apps")
                     .WithExample("flatpak", "running");
+                
+                flatpak.AddCommand<FlatpakRepair>("repair")
+                    .WithDescription("Repairs Flatpak Installation")
+                    .WithExample("flatpak", "repair");
 
                 flatpak.AddCommand<FlatpakRemoveCommand>("uninstall")
                     .WithDescription("Remove flatpak app")

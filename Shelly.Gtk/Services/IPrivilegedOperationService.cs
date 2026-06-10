@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Shelly.Gtk.Enums;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
@@ -44,6 +42,8 @@ public interface IPrivilegedOperationService
     Task<OperationResult> PurifyCorruptionAsync();
     Task<OperationResult> FixXdgPermissionsAsync();
     Task<OperationResult> FlatpakInstallFromBundle(string path);
+    Task<List<DowngradeOptionDto>> GetDowngradeOptionsAsync(string packageName);
+    Task<OperationResult> DowngradePackageAsync(string packageName, string filename, bool addIgnore);
 }
 
 public class OperationResult

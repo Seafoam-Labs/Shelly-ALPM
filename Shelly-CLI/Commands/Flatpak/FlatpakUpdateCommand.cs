@@ -26,12 +26,11 @@ public class FlatpakUpdateCommand : Command<FlatpakPackageSettings>
 
     private static int HandleUiModeUpdate(FlatpakPackageSettings settings)
     {
-        Console.Error.WriteLine("Updating flatpak app...");
+        UiFrames.Info("Updating flatpak app...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
         var manager = new FlatpakManager();
         var result = manager.UpdateApp(settings.Packages);
-
-        Console.Error.WriteLine(result);
-
+        UiFrames.Info(result);
+        UiFrames.TxFinish(true, "Flatpak update complete.", "Flatpak update failed.");
         return 0;
     }
 }

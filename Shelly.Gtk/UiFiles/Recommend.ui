@@ -1,31 +1,76 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <interface>
     <requires lib="gtk" version="4.0"/>
-    <object class="GtkBox" id="ShellyRecommend">
-        <property name="orientation">vertical</property>
-        <property name="margin-top">10</property>
-        <property name="margin-start">10</property>
-        <property name="margin-end">10</property>
-        <property name="margin-bottom">10</property>
-        <property name="spacing">5</property>
+    <object class="GtkOverlay" id="ShellyRecommend">
         <child>
             <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="margin-top">10</property>
+                <property name="margin-start">10</property>
+                <property name="margin-end">10</property>
+                <property name="margin-bottom">10</property>
+                <property name="spacing">5</property>
                 <child>
                     <object class="GtkBox">
+                        <child>
+                            <object class="GtkBox">
+                                <property name="hexpand">true</property>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkScrolledWindow" id="recommend_scrolled_window_widget">
+                        <property name="overlay-scrolling">false</property>
+                        <property name="vexpand">true</property>
                         <property name="hexpand">true</property>
+                        <property name="hscrollbar-policy">never</property>
+                        <property name="propagate-natural-width">false</property>
+                        <child>
+                            <object class="GtkBox" id="recommend_scroll_window"/>
+                        </child>
                     </object>
                 </child>
             </object>
         </child>
-        <child>
-            <object class="GtkScrolledWindow" id="recommend_scrolled_window_widget">
-                <property name="overlay-scrolling">false</property>
-                <property name="vexpand">true</property>
-                <property name="hexpand">true</property>
-                <property name="hscrollbar-policy">never</property>
-                <property name="propagate-natural-width">false</property>
+        <child type="overlay">
+            <object class="GtkBox" id="loading_overlay">
+                <property name="visible">false</property>
+                <property name="width-request">500</property>
+                <property name="height-request">400</property>
+                <property name="orientation">vertical</property>
+                <property name="halign">fill</property>
+                <property name="valign">fill</property>
+                <layout>
+                    <property name="measure">True</property>
+                    <property name="clip-overlay">False</property>
+                </layout>
+                <style>
+                    <class name="background"/>
+                </style>
                 <child>
-                    <object class="GtkBox" id="recommend_scroll_window"/>
+                    <object class="GtkBox">
+                        <property name="vexpand">true</property>
+                        <property name="hexpand">true</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">12</property>
+                        <child>
+                            <object class="GtkSpinner" id="loading_spinner">
+                                <property name="width-request">48</property>
+                                <property name="height-request">48</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkLabel">
+                                <property name="label" translatable="yes">Loading Recommended Packages...</property>
+                                <style>
+                                    <class name="title-4"/>
+                                </style>
+                            </object>
+                        </child>
+                    </object>
                 </child>
             </object>
         </child>

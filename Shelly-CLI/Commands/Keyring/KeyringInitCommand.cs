@@ -31,17 +31,9 @@ public class KeyringInitCommand : Command
 
     private static int HandleUiModeInit()
     {
-        Console.Error.WriteLine("Initializing pacman keyring...");
+        UiFrames.Info("Initializing pacman keyring...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
         var result = PacmanKeyRunner.Run("--init");
-        if (result == 0)
-        {
-            Console.Error.WriteLine("Keyring initialized successfully!");
-        }
-        else
-        {
-            Console.Error.WriteLine("Failed to initialize keyring.");
-        }
-
+        UiFrames.TxFinish(result == 0, "Keyring initialized successfully!", "Failed to initialize keyring.");
         return result;
     }
 }

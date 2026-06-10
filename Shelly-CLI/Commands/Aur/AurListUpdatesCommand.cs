@@ -4,6 +4,7 @@ using PackageManager.Aur.Models;
 using PackageManager.Utilities;
 using PackageManager.Wire;
 using Shelly.Utilities;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -134,36 +135,18 @@ public class AurListUpdatesCommand : AsyncCommand<AlpmListSettings>
                     : updates.OrderByDescending(p => p.Name)
             };
 
-            if (settings.JsonOutput)
-            {
-                var sortedList = sortedUpdates.ToList();
-                JsonPackFrame.WriteToStdout(sortedList);
-                return 0;
-            }
-
-            if (updates.Count == 0)
-            {
-                await Console.Error.WriteLineAsync("All AUR packages are up to date.");
-                return 0;
-            }
-
-            var skip = (settings.Page - 1) * settings.Take;
-            var displayPackages = sortedUpdates.Skip(skip).Take(settings.Take).ToList();
-
-            foreach (var pkg in displayPackages)
-            {
-                Console.WriteLine(
-                    $"{pkg.Name} {pkg.Version} -> {pkg.NewVersion} - {GetDefaultDescription(pkg.Description)}"
-                );
-            }
-
-            await Console.Error.WriteLineAsync($"Total: {displayPackages.Count} packages need updates");
-
+            var sortedList = sortedUpdates.ToList();
+            JsonPackFrame.WriteToStdout(sortedList);
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                AlpmEvents.InformationalOutput,
+                updates.Count == 0
+                    ? "All AUR packages are up to date."
+                    : $"Total: {sortedList.Count} packages need updates"));
             return 0;
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync($"Failed to check updates: {ex.Message}");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, $"Failed to check updates: {ex.Message}"));
             return 1;
         }
         finally

@@ -3,12 +3,8 @@ using Spectre.Console.Cli;
 
 namespace Shelly_CLI;
 
-public class DefaultSettings : CommandSettings
+public class DefaultSettings : JsonSettings
 {
-    [CommandOption("-j|--json")]
-    [Description("Output results in JSON format for UI integration and scripting")]
-    public bool JsonOutput { get; set; }
-
     [CommandOption("-y|--sync")]
     [Description("Synchronize package databases before performing the operation")]
     public bool Sync { get; set; }

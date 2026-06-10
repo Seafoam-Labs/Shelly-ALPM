@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using Shelly_Notifications.DbusHandlers;
+using Shelly_Notifications.Resources;
 using Shelly_Notifications.Models;
 using Shelly_Notifications.Services;
 using Tmds.DBus.Protocol;
@@ -7,6 +8,7 @@ using Tmds.DBus.SourceGenerator;
 
 try
 {
+    Translations.Init();
     CancellationTokenSource? delayCts = null;
     var forceCheck = false;
     var configReader = new ConfigReader();
@@ -98,7 +100,7 @@ try
         await trayHandler.SetUpdatesPending(update > 0);
         if (update > 0)
         {
-            _ = new NotificationHandler().SendNotif(connection, $"Updates available: {update}");
+            _ = new NotificationHandler().SendNotif(connection, Translations.T("Updates available: {0}", update));
         }
 
         var time = DateTime.Now;
@@ -113,7 +115,7 @@ try
                     await trayHandler.SetUpdatesPending(update > 0);
                     if (update > 0)
                     {
-                        _ = new NotificationHandler().SendNotif(connection, $"Updates available: {update}");
+                        _ = new NotificationHandler().SendNotif(connection, Translations.T("Updates available: {0}", update));
                     }
 
                     time = DateTime.Now;
@@ -159,7 +161,7 @@ try
     // 3 Try Registering the Tray Icon
     await TryRegisterTrayIconAsync(connection, trayServiceName);
 
-    Console.WriteLine("Shelly Notifications started. Press Ctrl+C to exit.");
+    Console.WriteLine(Translations.T("Shelly Notifications started. Press Ctrl+C to exit."));
     await Task.Delay(-1);
 }
 catch (Exception ex)
@@ -208,7 +210,7 @@ async Task TryRegisterTrayIconAsync(Connection connection, string serviceName)
 
     if (!registered)
     {
-        Console.WriteLine("Warning: No StatusNotifierWatcher found. The tray icon will not be visible.");
-        Console.WriteLine("Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension installed.");
+        Console.WriteLine(Translations.T("Warning: No StatusNotifierWatcher found. The tray icon will not be visible."));
+        Console.WriteLine(Translations.T("Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension installed."));
     }
 }

@@ -25,12 +25,14 @@ public class FilteringTextWriter : TextWriter
         }
 
         _inner.WriteLine(value);
+        _inner.Flush();
     }
 
     public override void Write(string? value)
     {
         // For Write (without newline), pass through as-is since we filter on complete lines
         _inner.Write(value);
+        _inner.Flush();
     }
 
     public override void Write(char value)

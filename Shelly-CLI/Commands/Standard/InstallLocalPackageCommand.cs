@@ -1,8 +1,10 @@
 using PackageManager.Alpm;
 using PackageManager.Local;
+using PackageManager.Wire;
 using Shelly_CLI.Configuration;
 using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -15,7 +17,7 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
         if (string.IsNullOrWhiteSpace(settings.PackageLocation))
         {
             if (Program.IsUiMode)
-                await Console.Error.WriteLineAsync("Error: No package specified");
+                JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, "No package specified"));
             else
                 AnsiConsole.MarkupLine("[red]Error: No package specified[/]");
 
@@ -25,7 +27,7 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
         if (!File.Exists(settings.PackageLocation))
         {
             if (Program.IsUiMode)
-                await Console.Error.WriteLineAsync("Error: Specified file does not exist.");
+                JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, "Specified file does not exist."));
             else
                 AnsiConsole.MarkupLine("[red]Error: Specified file does not exist.[/]");
 
@@ -53,7 +55,7 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
         }
 
         if (Program.IsUiMode)
-            await Console.Error.WriteLineAsync("Error: Unsupported local package format.");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, "Unsupported local package format."));
         else
             AnsiConsole.MarkupLine("[red]Error: Unsupported local package format.[/]");
 
@@ -65,15 +67,8 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
         var manager = new AlpmManager();
         AnsiConsole.MarkupLine("[yellow]Initializing ALPM...[/]");
         manager.Initialize();
-        var cfg = ConfigManager.ReadConfig();
-        var useSinglePane = settings.SinglePane
-                            || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
-                            || Console.IsOutputRedirected;
-        var result = useSinglePane
-            ? await StandardSinglePaneOutput.Output(manager,
-                x => x.InstallLocalPackage(Path.GetFullPath(settings.PackageLocation)), settings.NoConfirm)
-            : await SplitOutput.Output(manager, x => x.InstallLocalPackage(Path.GetFullPath(settings.PackageLocation)),
-                settings.NoConfirm);
+        var result = await StandardSinglePaneOutput.Output(manager,
+                x => x.InstallLocalPackage(Path.GetFullPath(settings.PackageLocation)), settings.NoConfirm);
         manager.Dispose();
         return result;
     }
@@ -81,31 +76,20 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
     private static async Task<int> HandleUiModeInstall(InstallLocalPackageSettings settings)
     {
         using var manager = new AlpmManager();
-        var hadError = false;
-
-        manager.Question += (_, args) => { QuestionHandler.HandleQuestion(args, true, settings.NoConfirm); };
-
-        manager.Progress += (_, args) => { Console.Error.WriteLine($"{args.PackageName}: {args.Percent}%"); };
-
-        manager.ErrorEvent += (_, e) =>
-        {
-            Console.Error.WriteLine($"[ALPM_ERROR]{e.Error}");
-            hadError = true;
-        };
-
-        await Console.Error.WriteLineAsync("Initializing ALPM...");
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, settings.NoConfirm);
         manager.Initialize();
 
-        await Console.Error.WriteLineAsync($"Installing local package: {settings.PackageLocation}");
-        var result = await manager.InstallLocalPackage(Path.GetFullPath(settings.PackageLocation));
-        if (!result || hadError)
-        {
-            await Console.Error.WriteLineAsync("Installation failed.");
-            return 1;
-        }
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            AlpmEvents.TransactionStart,
+            $"Installing local package: {settings.PackageLocation}"));
 
-        await Console.Error.WriteLineAsync("Installation complete.");
-        return 0;
+        var ok = await UiModeOutput.Run(manager,
+            m => m.InstallLocalPackage(Path.GetFullPath(settings.PackageLocation)));
+
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            ok ? AlpmEvents.TransactionDone : AlpmEvents.TransactionFailed,
+            ok ? "Installation complete." : "Installation failed."));
+        return ok ? 0 : 1;
     }
 
     private static async Task<int> HandleConsoleBinaryInstall(InstallLocalPackageSettings settings)
@@ -145,13 +129,15 @@ public class InstallLocalPackageCommand : AsyncCommand<InstallLocalPackageSettin
             {
                 case LocalManagerMessageLevel.Info:
                 case LocalManagerMessageLevel.Success:
-                    Console.Error.WriteLine(e.Message);
+                    JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                        AlpmEvents.InformationalOutput, e.Message));
                     break;
                 case LocalManagerMessageLevel.Warning:
-                    Console.Error.WriteLine($"Warning: {e.Message}");
+                    JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                        AlpmEvents.InformationalOutput, $"Warning: {e.Message}"));
                     break;
                 case LocalManagerMessageLevel.Error:
-                    Console.Error.WriteLine($"Error: {e.Message}");
+                    JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, e.Message));
                     break;
             }
         };

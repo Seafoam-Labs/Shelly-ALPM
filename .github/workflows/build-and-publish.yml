@@ -4,31 +4,34 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branches: [ master , development ]
+    branches: [ master, development ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     container:
       image: archlinux:latest
 
     steps:
-    - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm dotnet-sdk base-devel gtk4 clang glibc git
 
-    - name: Install dependencies
-      run: |
-        pacman -Syu --noconfirm
-        pacman -S --noconfirm dotnet-sdk base-devel gtk4 clang glibc
+      # Checkout only after git is installed
+      - uses: actions/checkout@v6
 
-    - name: Restore dependencies
-      run: dotnet restore
+      - name: Restore dependencies
+        run: dotnet restore
 
-    - name: Build
-      run: dotnet build --no-restore
+      - name: Build
+        run: dotnet build --no-restore
 
-    - name: Test
-      run: dotnet test --no-build --verbosity normal
+      - name: Test
+        run: dotnet test --no-build --verbosity normal
 
-    - name: AOT publish Shelly.Keys (smoke)
-      run: dotnet publish Shelly.Keys/Shelly.Keys.csproj -c Release -r linux-x64 --nologo -p:InstructionSet=x86-64
+      - name: AOT publish Shelly.Keys (smoke)
+        run: dotnet publish Shelly.Keys/Shelly.Keys.csproj -c Release -r linux-x64 --nologo -p:InstructionSet=x86-64

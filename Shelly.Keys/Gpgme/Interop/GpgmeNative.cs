@@ -91,5 +91,24 @@ public static class GpgmeNative
         public IntPtr seckey;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct GpgmeImportResult
+    {
+        public int considered;
+        public int no_user_id;
+        public int imported;
+        public int imported_rsa;
+        public int unchanged;
+        public int new_user_ids;
+        public int new_sub_keys;
+        public int new_signatures;
+        public int new_revocations;
+        public int secret_read;
+        public int secret_imported;
+        public int secret_unchanged;
+        public int not_imported;
+        public IntPtr imports;        // gpgme_import_status_t (linked list head)
+        public int skipped_v3_keys;
+    }
 
 }

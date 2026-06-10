@@ -1,6 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using PackageManager.Alpm;
+using PackageManager.Wire;
 using Shelly_CLI.Utility;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 namespace Shelly_CLI.Commands.Standard;
@@ -11,10 +13,9 @@ public class ListReposCommand : Command
         var repos = AlpmManager.GetRepositories();
         if (Program.IsUiMode)
         {
-            foreach (var repo in repos)
-            {
-                Console.WriteLine(repo);
-            }
+            JsonPackFrame.WriteToStdout(repos);
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                AlpmEvents.InformationalOutput, $"Total: {repos.Count} repositories"));
             return 0;
         }
         var table = new Table();

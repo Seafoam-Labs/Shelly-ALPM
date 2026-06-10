@@ -1,3 +1,4 @@
+using Shelly_Notifications.Resources;
 using Shelly_Notifications.Services;
 using Tmds.DBus.Protocol;
 
@@ -129,7 +130,7 @@ internal class StatusNotifierItemHandler : IPathMethodHandler
                             {
                                 { "Category", (VariantValue)"ApplicationStatus" },
                                 { "Id", (VariantValue)"Shelly" },
-                                { "Title", (VariantValue)"Shelly Notifications" },
+                                { "Title", (VariantValue)Translations.T("Shelly Notifications") },
                                 { "Status", (VariantValue)"Active" },
                                 { "IconName", (VariantValue)_iconName },
                                 { "IconThemePath", (VariantValue)string.Empty },

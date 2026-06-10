@@ -87,4 +87,14 @@ internal static partial class GpgmeImports
     
     [LibraryImport(LibraryName)]
     public static partial uint gpgme_engine_check_version(GpgmeNative.gpgme_protocol_t proto);
+
+    #region Import Keys
+
+    [LibraryImport(LibraryName)]
+    public static partial uint gpgme_op_import(GpgmeContextHandle ctx, GpgmeDataHandle keydata);
+
+    [LibraryImport(LibraryName)]
+    public static partial IntPtr gpgme_op_import_result(GpgmeContextHandle ctx);
+
+    #endregion
 }

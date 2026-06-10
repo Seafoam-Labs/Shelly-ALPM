@@ -45,7 +45,7 @@ public class KeyringRecvCommand : Command<KeyringSettings>
     {
         if (settings.Keys == null || settings.Keys.Length == 0)
         {
-            Console.Error.WriteLine("Error: No key IDs specified");
+            UiFrames.Error("No key IDs specified");
             return 1;
         }
 
@@ -55,17 +55,9 @@ public class KeyringRecvCommand : Command<KeyringSettings>
             args += $" --keyserver {settings.Keyserver}";
         }
 
-        Console.Error.WriteLine($"Receiving keys: {string.Join(", ", settings.Keys)}...");
+        UiFrames.Info($"Receiving keys: {string.Join(", ", settings.Keys)}...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
         var result = PacmanKeyRunner.Run(args);
-        if (result == 0)
-        {
-            Console.Error.WriteLine("Keys received successfully!");
-        }
-        else
-        {
-            Console.Error.WriteLine("Failed to receive keys.");
-        }
-
+        UiFrames.TxFinish(result == 0, "Keys received successfully!", "Failed to receive keys.");
         return result;
     }
 }

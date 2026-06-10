@@ -15,40 +15,72 @@ internal static partial class PacmanConfWriter
     [GeneratedRegex(@"^\s*#?\s*IgnorePkg\s*=\s*(?<value>.*)$")]
     private static partial Regex IgnorePkgRegex();
 
-    internal static void AddIgnorePkg(PacmanConf conf, string packageName, string path = "/etc/pacman.conf")
+    internal static void AddIgnorePkg(PacmanConf conf, string packageName, string configPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(configPath);
 
         if (conf.IgnorePkg.Contains(packageName, StringComparer.Ordinal)) return;
 
         conf.IgnorePkg.Add(packageName);
-        RewriteIgnorePkg(path, conf);
+        RewriteIgnorePkg(configPath, conf);
     }
 
-    internal static void RemoveIgnorePkg(PacmanConf conf, string packageName, string path = "/etc/pacman.conf")
+    internal static void RemoveIgnorePkg(PacmanConf conf, string packageName, string configPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(configPath);
 
         if (!conf.IgnorePkg.Contains(packageName, StringComparer.Ordinal)) return;
 
         conf.IgnorePkg.RemoveAll(x => string.Equals(x, packageName, StringComparison.Ordinal));
-        RewriteIgnorePkg(path, conf);
+        RewriteIgnorePkg(configPath, conf);
+    }
+
+    public static void AddIgnorePkg(PacmanConf config, IEnumerable<string> packageNames, string configPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(configPath);
+
+        var packagesToAdd = NormalizePackageNames(packageNames)
+            .Where(name => !config.IgnorePkg.Contains(name))
+            .ToList();
+        if (packagesToAdd.Count == 0) return;
+
+        config.IgnorePkg.AddRange(packagesToAdd);
+
+        RewriteIgnorePkg(configPath, config);
+    }
+
+    public static void RemoveIgnorePkg(PacmanConf config, IEnumerable<string> packageNames, string configPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(configPath);
+
+        var normalizedPackageNames = NormalizePackageNames(packageNames);
+        if (normalizedPackageNames.Count == 0) return;
+
+        var removed = config.IgnorePkg.RemoveAll(normalizedPackageNames.Contains);
+
+        if (removed > 0) RewriteIgnorePkg(configPath, config);
+    }
+
+    internal static List<string> NormalizePackageNames(IEnumerable<string> packageNames)
+    {
+        return packageNames
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
     }
 
     private static void RewriteIgnorePkg(string path, PacmanConf conf)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(path);
-        
-        var normalized = conf.IgnorePkg
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x.Trim())
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
 
-        if (normalized.Count == 0) return;
-
-        var ignorePkgLine = $"IgnorePkg = {string.Join(' ', normalized)}";
+        var normalized = NormalizePackageNames(conf.IgnorePkg);
+        var ignorePkgLine = normalized.Count == 0
+            ? "#IgnorePkg ="
+            : $"IgnorePkg = {string.Join(' ', normalized)}";
 
         var configLines = File.Exists(path)
             ? File.ReadAllLines(path).ToList()

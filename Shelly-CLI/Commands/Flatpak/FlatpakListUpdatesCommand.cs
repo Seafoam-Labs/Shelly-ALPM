@@ -1,6 +1,7 @@
 using System.Text.Json;
 using PackageManager.Flatpak;
 using PackageManager.Wire;
+using Shelly_CLI.Utility;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -54,20 +55,9 @@ public class FlatpakListUpdatesCommand : Command<DefaultSettings>
 
     private static int HandleUiModeListUpdates(DefaultSettings settings)
     {
-        var packages = FlatpakManager.GetPackagesWithUpdates(true);
-
-        if (settings.JsonOutput)
-        {
-            JsonPackFrame.WriteToStdout(packages);
-            return 0;
-        }
-
-        foreach (var pkg in packages.OrderBy(p => p.Id))
-        {
-            Console.WriteLine($"{pkg.Name} {pkg.Id} {pkg.Version}");
-        }
-
-        Console.Error.WriteLine("Total: packages");
+        var packages = FlatpakManager.GetPackagesWithUpdates(true).OrderBy(p => p.Id).ToList();
+        UiFrames.Frame(packages);
+        UiFrames.Info($"Total: {packages.Count} packages");
         return 0;
     }
 }

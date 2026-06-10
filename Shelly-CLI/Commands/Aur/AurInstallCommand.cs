@@ -4,9 +4,11 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using PackageManager.Alpm;
 using PackageManager.Aur;
+using PackageManager.Wire;
 using Shelly_CLI.Configuration;
 using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -28,10 +30,12 @@ public class AurInstallCommand : AsyncCommand<AurInstallSettings>
             AnsiConsole.MarkupLine("[red]No packages specified.[/]");
             return 1;
         }
+
         RootElevator.EnsureRootExectuion();
         var packageList = settings.Packages.ToList();
 
-        AnsiConsole.MarkupLine($"[yellow]AUR packages to install:[/] {string.Join(", ", packageList.Select(p => p.EscapeMarkup()))}");
+        AnsiConsole.MarkupLine(
+            $"[yellow]AUR packages to install:[/] {string.Join(", ", packageList.Select(p => p.EscapeMarkup()))}");
 
         if (!settings.NoConfirm)
         {
@@ -44,13 +48,12 @@ public class AurInstallCommand : AsyncCommand<AurInstallSettings>
 
         var cfg = ConfigManager.ReadConfig();
         var useSinglePane = settings.SinglePane
-            || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
-            || Console.IsOutputRedirected;
+                            || string.Equals(cfg.OutputMode, "singlepane", StringComparison.OrdinalIgnoreCase)
+                            || Console.IsOutputRedirected;
 
-        Func<AurPackageManager, Func<AurPackageManager, Task>, bool, Task<bool>> runOutput =
-            useSinglePane
-                ? (m, op, nc) => AurSinglePaneOutput.Output(m, op, nc)
-                : (m, op, nc) => AurSplitOutput.Output(m, op, nc);
+        Task<bool> RunOutput(AurPackageManager m, Func<AurPackageManager, Task> op, bool nc) =>
+            AurSinglePaneOutput.Output(m, op, nc);
+
 
         try
         {
@@ -68,36 +71,39 @@ public class AurInstallCommand : AsyncCommand<AurInstallSettings>
                 if (settings.MakeDepsOn)
                 {
                     AnsiConsole.MarkupLine("[yellow]Installing dependencies (including make dependencies)...[/]");
-                    var makeDepsResult = await runOutput(manager, m => m.InstallDependenciesOnly(packageList.First(), true), settings.NoConfirm);
+                    var makeDepsResult = await RunOutput(manager,
+                        m => m.InstallDependenciesOnly(packageList.First(), true), settings.NoConfirm);
                     if (!makeDepsResult)
                     {
                         AnsiConsole.MarkupLine("[red]Dependency installation failed. See errors above.[/]");
                         return 1;
                     }
+
                     AnsiConsole.MarkupLine("[green]Dependencies installed successfully![/]");
                     return 0;
                 }
 
                 AnsiConsole.MarkupLine("[yellow]Installing dependencies...[/]");
-                var depsResult = await runOutput(manager, m => m.InstallDependenciesOnly(packageList.First(), false), settings.NoConfirm);
+                var depsResult = await RunOutput(manager, m => m.InstallDependenciesOnly(packageList.First(), false),
+                    settings.NoConfirm);
                 if (!depsResult)
                 {
                     AnsiConsole.MarkupLine("[red]Dependency installation failed. See errors above.[/]");
                     return 1;
                 }
+
                 AnsiConsole.MarkupLine("[green]Dependencies installed successfully![/]");
                 return 0;
             }
 
-            AnsiConsole.MarkupLine($"[yellow]Installing AUR packages: {string.Join(", ", settings.Packages.Select(p => p.EscapeMarkup()))}[/]");
-            var installResult = await runOutput(manager, m => m.InstallPackages(packageList), settings.NoConfirm);
+            AnsiConsole.MarkupLine(
+                $"[yellow]Installing AUR packages: {string.Join(", ", settings.Packages.Select(p => p.EscapeMarkup()))}[/]");
+            var installResult = await RunOutput(manager, m => m.InstallPackages(packageList), settings.NoConfirm);
             if (!installResult)
             {
                 AnsiConsole.MarkupLine("[red]Installation failed. See errors above.[/]");
                 return 1;
             }
-
-
         }
         catch (Exception ex)
         {
@@ -108,7 +114,7 @@ public class AurInstallCommand : AsyncCommand<AurInstallSettings>
         {
             manager?.Dispose();
         }
-        
+
         AnsiConsole.MarkupLine("[green]Installation complete.[/]");
 
         return 0;
@@ -118,102 +124,59 @@ public class AurInstallCommand : AsyncCommand<AurInstallSettings>
     {
         if (settings.Packages.Length == 0)
         {
-            Console.Error.WriteLine("Error: No packages specified");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, "No packages specified"));
             return 1;
         }
 
         AurPackageManager? manager = null;
-        bool hadError = false;
         try
         {
             manager = new AurPackageManager();
             await manager.Initialize(root: true, useChroot: settings.UseChroot, noCheck: !settings.Check);
 
-            var packageList = settings.Packages.ToList();
-
-            // Handle package progress events
-            manager.PackageProgress += (sender, args) =>
-            {
-                Console.Error.WriteLine($"[{args.CurrentIndex}/{args.TotalCount}] {args.PackageName}: {args.Status}" +
-                                        (args.Message != null ? $" - {args.Message}" : ""));
-            };
-
-            // Handle progress events
-            manager.Progress += (sender, args) => { Console.Error.WriteLine($"{args.PackageName}: {args.Percent}%"); };
-
             // Handle questions
             manager.Question += (sender, args) => { QuestionHandler.HandleQuestion(args, true, settings.NoConfirm); };
 
-            // Handle build output
-            manager.BuildOutput += (sender, e) =>
-            {
-                if (e.IsError)
-                    Console.Error.WriteLine($"[Shelly] makepkg error: {e.Line}");
-                else if (e.Percent.HasValue)
-                    Console.Error.WriteLine($"[AUR_PROGRESS]Percent: {e.Percent}% Message: {e.ProgressMessage}");
-                else
-                    Console.Error.WriteLine($"[Shelly] makepkg: {e.Line}");
-            };
+            manager.PkgbuildDiffRequest += (_, args) =>
+                QuestionHandler.HandleQuestion(args, Program.IsUiMode, settings.NoConfirm);
 
-            manager.ErrorEvent += (_, e) =>
-            {
-                Console.Error.WriteLine($"[ALPM_ERROR]{e.Error}");
-                hadError = true;
-            };
+            var packageList = settings.Packages.ToList();
+
 
             // Handle build dependencies only mode
             if (settings.BuildDepsOn)
             {
                 if (settings.Packages.Length > 1)
                 {
-                    Console.Error.WriteLine("Cannot build dependencies for multiple packages at once.");
+                    JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error,
+                        "Cannot build dependencies for multiple packages at once."));
                     return 1;
                 }
 
-                if (settings.MakeDepsOn)
-                {
-                    Console.Error.WriteLine("Installing dependencies (including make dependencies)...");
-                    await manager.InstallDependenciesOnly(packageList.First(), true);
-                    if (hadError) return 1;
-                    Console.Error.WriteLine("Dependencies installed successfully!");
-                    return 0;
-                }
-
-                Console.Error.WriteLine("Installing dependencies...");
-                await manager.InstallDependenciesOnly(packageList.First(), false);
-                if (hadError) return 1;
-                Console.Error.WriteLine("Dependencies installed successfully!");
+                var includeMake = settings.MakeDepsOn;
+                JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(AlpmEvents.InformationalOutput,
+                    "Installing dependencies (including make dependencies)..."));
+                var depsResult = await UiModeOutput.Run(manager,
+                    m => m.InstallDependenciesOnly(packageList.First(), includeMake));
+                if (!depsResult) return 1;
+                JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(AlpmEvents.InformationalOutput,
+                    "Dependencies installed successfully!"));
                 return 0;
             }
 
-            Console.Error.WriteLine($"Installing AUR packages: {string.Join(", ", packageList)}");
-            await manager.InstallPackages(packageList);
-            if (hadError) return 1;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Installation failed: {ex.Message}");
-            return 1;
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                AlpmEvents.AurDownloadStart,
+                $"Installing AUR packages: {string.Join(", ", packageList)}"));
+            
+            var ok = await UiModeOutput.Run(manager, m => m.InstallPackages(packageList));
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                ok ? AlpmEvents.AurPackageCompleted : AlpmEvents.AurPackageFailed,
+                ok ? "Installation complete." : "Installation failed."));
+            return ok ? 0 : 1;
         }
         finally
         {
             manager?.Dispose();
         }
-        
-        Console.Error.WriteLine("Installation complete.");
-
-        return 0;
-    }
-    
-    private static async Task<List<string>> GetMissingPackages(AurPackageManager manager, List<string> packageList)
-    {
-        var installedPackages = await manager.GetInstalledPackages();
-        var installedPackageNames = installedPackages
-            .Select(package => package.Name)
-            .ToHashSet(StringComparer.Ordinal);
-
-        return packageList
-            .Where(packageName => !installedPackageNames.Contains(packageName))
-            .ToList();
     }
 }

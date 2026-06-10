@@ -21,7 +21,9 @@ public class KeyringListCommand : Command
 
     private static int HandleUiModeList()
     {
-        Console.Error.WriteLine("Listing keys in keyring...");
-        return PacmanKeyRunner.Run("--list-keys");
+        UiFrames.Info("Listing keys in keyring...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
+        var result = PacmanKeyRunner.Run("--list-keys");
+        UiFrames.TxFinish(result == 0, "Keys listed.", "Failed to list keys.");
+        return result;
     }
 }

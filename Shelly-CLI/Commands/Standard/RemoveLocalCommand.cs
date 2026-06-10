@@ -1,4 +1,6 @@
 using PackageManager.Local;
+using PackageManager.Wire;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -56,13 +58,15 @@ public class RemoveLocalCommand : AsyncCommand<PackageSettings>
             {
                 case LocalManagerMessageLevel.Info:
                 case LocalManagerMessageLevel.Success:
-                    Console.Error.WriteLine(e.Message);
+                    JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                        AlpmEvents.InformationalOutput, e.Message));
                     break;
                 case LocalManagerMessageLevel.Warning:
-                    Console.Error.WriteLine($"Warning: {e.Message}");
+                    JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                        AlpmEvents.InformationalOutput, $"Warning: {e.Message}"));
                     break;
                 case LocalManagerMessageLevel.Error:
-                    Console.Error.WriteLine($"Error: {e.Message}");
+                    JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, e.Message));
                     break;
             }
         };

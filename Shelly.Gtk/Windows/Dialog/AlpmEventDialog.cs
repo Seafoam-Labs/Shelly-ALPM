@@ -92,8 +92,11 @@ public class AlpmEventDialog
                 if (option.IsInstalled)
                 {
                     var row = Box.New(Orientation.Horizontal, 6);
-                    row.Append(Image.NewFromIconName("emblem-ok-symbolic"));   // or "object-select-symbolic"
-                    row.Append(Label.New($"{option.Name}  ({T("already installed")})"));
+                    row.SetMarginStart(6);
+                    row.SetMarginTop(4);
+                    row.SetMarginBottom(4);
+                    row.Append(Image.NewFromIconName("object-select-symbolic"));
+                    row.Append(Label.New($"{option.Name} ({T("already installed")})"));
                     if (!string.IsNullOrEmpty(option.Description))
                         row.SetTooltipText(option.Description);
                     optionsBox.Append(row);

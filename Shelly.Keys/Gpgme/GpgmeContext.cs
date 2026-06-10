@@ -15,6 +15,7 @@ public sealed class GpgmeContext : IDisposable
     {
         GpgmeImports.gpgme_check_version(null);
     }
+
     public GpgmeContext()
     {
         uint err = GpgmeImports.gpgme_new(out _handle);
@@ -28,7 +29,7 @@ public sealed class GpgmeContext : IDisposable
         try
         {
             filePtr = fileName is null ? IntPtr.Zero : Marshal.StringToCoTaskMemUTF8(fileName);
-            homePtr = homeDir  is null ? IntPtr.Zero : Marshal.StringToCoTaskMemUTF8(homeDir);
+            homePtr = homeDir is null ? IntPtr.Zero : Marshal.StringToCoTaskMemUTF8(homeDir);
 
             var err = GpgmeImports.gpgme_ctx_set_engine_info(_handle, proto, filePtr, homePtr);
             GpgmeHelpers.ThrowIfErrorString(err);
@@ -39,11 +40,12 @@ public sealed class GpgmeContext : IDisposable
             if (homePtr != IntPtr.Zero) Marshal.FreeCoTaskMem(homePtr);
         }
     }
-    
+
     // Crypto operations
     public void Verify(GpgmeData sig, GpgmeData signedText, GpgmeData plain)
     {
-        var err = GpgmeImports.gpgme_op_verify(_handle, sig.Handle, signedText.Handle, plain?.Handle ?? new GpgmeDataHandle());
+        var err = GpgmeImports.gpgme_op_verify(_handle, sig.Handle, signedText.Handle,
+            plain?.Handle ?? new GpgmeDataHandle());
         GpgmeHelpers.ThrowIfErrorString(err);
     }
 
@@ -58,7 +60,7 @@ public sealed class GpgmeContext : IDisposable
         var versionResp = GpgmeImports.gpgme_check_version(version);
         return GpgmeHelpers.PtrToStringUTF8(versionResp) ?? "Unknown Version";
     }
-    
+
     // gpg-error code for "end of list"
     private const uint GPG_ERR_EOF = 16383;
 
@@ -91,6 +93,29 @@ public sealed class GpgmeContext : IDisposable
         }
     }
 
+    public ImportResult ImportKey(GpgmeData keyData)
+    {
+        var err = GpgmeImports.gpgme_op_import(_handle, keyData.Handle);
+        GpgmeHelpers.ThrowIfErrorString(err);
+        return GetImportKeyResults();
+    }
+
+    private ImportResult GetImportKeyResults()
+    {
+        var ptr = GpgmeImports.gpgme_op_import_result(_handle);
+        if (ptr == IntPtr.Zero)
+        {
+            throw new InvalidOperationException(
+                "gpgme_op_import_result returned null (no imports were performed on this context).");
+        }
+
+        var result = Marshal.PtrToStructure<GpgmeNative.GpgmeImportResult>(ptr);
+        return new ImportResult(result.considered, result.imported, result.unchanged, result.new_signatures,
+            result.new_sub_keys, result.new_user_ids, result.new_revocations,
+            result.secret_imported, result.secret_unchanged, result.not_imported, result.imports,
+            result.skipped_v3_keys);
+    }
+
     private void Dispose(bool disposing)
     {
         if (!_disposed)
@@ -99,6 +124,7 @@ public sealed class GpgmeContext : IDisposable
             {
                 _handle?.Dispose();
             }
+
             _disposed = true;
         }
     }

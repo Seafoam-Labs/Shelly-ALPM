@@ -41,23 +41,24 @@ public class KeyringLsignCommand : Command<KeyringSettings>
     {
         if (settings.Keys == null || settings.Keys.Length == 0)
         {
-            Console.Error.WriteLine("Error: No key IDs specified");
+            UiFrames.Error("No key IDs specified");
             return 1;
         }
 
-        Console.Error.WriteLine($"Locally signing keys: {string.Join(", ", settings.Keys)}...");
+        UiFrames.Info($"Locally signing keys: {string.Join(", ", settings.Keys)}...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
 
         foreach (var key in settings.Keys)
         {
             var result = PacmanKeyRunner.Run($"--lsign-key {key}");
             if (result != 0)
             {
-                Console.Error.WriteLine($"Failed to sign key: {key}");
+                UiFrames.Error($"Failed to sign key: {key}");
+                UiFrames.TxFinish(false, "Keys signed successfully!", "Failed to sign keys.");
                 return result;
             }
         }
 
-        Console.Error.WriteLine("Keys signed successfully!");
+        UiFrames.TxFinish(true, "Keys signed successfully!", "Failed to sign keys.");
         return 0;
     }
 }

@@ -33,5 +33,6 @@ public record ParsedDependency(string Name, string? Operator, string? Version)
         };
     }
 
-    public override string ToString() => $"{Name}{Operator}{Version}";
+    public override string ToString() =>
+        Operator is null || Version is null ? Name : $"{Name}{Operator}{Version}";
 }

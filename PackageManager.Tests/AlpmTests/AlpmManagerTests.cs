@@ -198,71 +198,7 @@ public class AlpmManagerTests
 
         Assert.That(capturedPkgName, Is.EqualTo(testPkgName));
     }
-
-    [Test]
-    public void PackageOperationEvent_IsTriggered()
-    {
-        _manager.Initialize();
-        AlpmEventType? capturedType = null;
-        string? capturedPkgName = null;
-        _manager.PackageOperation += (sender, args) =>
-        {
-            capturedType = args.EventType;
-            capturedPkgName = args.PackageName;
-        };
-
-        var method = typeof(AlpmManager).GetMethod("HandleEvent", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        Assert.That(method, Is.Not.Null, "HandleEvent method not found via reflection");
-
-        // Simulate PackageOperationStart event
-        // struct alpm_event_package_operation_t { alpm_event_type_t type; int operation; alpm_pkg_t *oldpkg; alpm_pkg_t *newpkg; }
-        // We need to mock the eventPtr.
-        // alpm_event_type_t is 4 bytes.
-        // PackageOperationStart is 7.
-        
-        int eventSize = 32; // Enough for the struct
-        IntPtr eventPtr = Marshal.AllocHGlobal(eventSize);
-        IntPtr pkgPtr = Marshal.AllocHGlobal(8); // Dummy pkg pointer
-        
-        try
-        {
-            // Clear memory
-            byte[] zeros = new byte[eventSize];
-            Marshal.Copy(zeros, 0, eventPtr, eventSize);
-            
-            // Set type
-            Marshal.WriteInt32(eventPtr, (int)AlpmEventType.PackageOperationStart);
-            // Set newpkg ptr at offset 8 (assuming 64-bit, offset might differ but AlpmManager uses 8)
-            // Wait, AlpmManager uses GetPkgName(Marshal.ReadIntPtr(eventPtr, 8))
-            // I should mock GetPkgName too or just ensure it returns something.
-            // Actually, in tests AlpmManager is real, so it will call native alpm_pkg_get_name.
-            // That might crash if I pass a random pointer.
-            
-            // Let's use a simpler approach if possible, but I want to verify HandleEvent.
-            // Since I can't easily mock the native GetPkgName, I'll just check if it triggers with null if I fail.
-            
-            // Actually, I can use the same trick as in HandleProgress_ParsesPackageNameCorrectly if I can find where it gets the name.
-            // HandleEvent uses GetPkgName(pkgPtr).
-            
-            method.Invoke(_manager, new object[] { eventPtr });
-        }
-        catch (Exception ex)
-        {
-            // It might fail because of GetPkgName(pkgPtr) being a garbage pointer, 
-            // but we want to see if PackageOperation was invoked before that or if we can get past it.
-            Console.WriteLine($"[TEST_LOG] HandleEvent invocation failed as expected: {ex.Message}");
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(eventPtr);
-            Marshal.FreeHGlobal(pkgPtr);
-        }
-
-        // Even if it fails, we want to know if we can test this.
-        // Given the complexity of mocking native calls, maybe I should just trust the manual review of HandleEvent code.
-        // But wait, I already added HandleProgress_ParsesPackageNameCorrectly which worked.
-    }
-
+    
     [Test]
     public void Dispose_SetsHandleToZero()
     {

@@ -11,7 +11,6 @@ using Shelly.Utilities.Enums;
 using DateTime = System.DateTime;
 using TimeSpan = System.TimeSpan;
 
-
 namespace Shelly.Gtk.Windows;
 
 public class Settings(
@@ -61,6 +60,8 @@ public class Settings(
         SetupSwitch("appimage_switch", _config.AppImageEnabled, (v) => _config.AppImageEnabled = v, builder);
         SetupSwitch("symbolic_tray_switch", _config.UseSymbolicTray, (v) => _config.UseSymbolicTray = v, builder);
         SetupSwitch("shelly_search_switch", _config.ShellySearchEnabled, (v) => _config.ShellySearchEnabled = v,
+            builder);
+        SetupSwitch("package_downgrade_switch", _config.PackageDowngradeEnabled, (v) => _config.PackageDowngradeEnabled = v,
             builder);
         SetupSwitch("use_old_menu_switch", !_config.UseOldMenu, (v) => _config.UseOldMenu = !v, builder);
         SetupTrayAutoStart("tray_auto_switch", _config.TrayAutoStart, (v) => _config.TrayAutoStart = v, builder);
@@ -136,7 +137,7 @@ public class Settings(
 
         var versionLabel = (Label)builder.GetObject("version_label")!;
         versionLabel.SetLabel(
-            $"v{System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "Unknown"}");
+            $"v{System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString(4) ?? "Unknown"}");
 
         var defaultPageDropDown = (DropDown)builder.GetObject("default_page_drop")!;
         PopulateDefaultPageDropDown(defaultPageDropDown);
@@ -362,7 +363,7 @@ public class Settings(
                 const string serviceContent = $"""
                                                [Unit]
                                                Description=Shelly Notifications tray service
-                                               PartOf=default.target
+                                               After=graphical-session.target
 
                                                [Service]
                                                Type=simple
@@ -371,7 +372,7 @@ public class Settings(
                                                RestartSec=5s
 
                                                [Install]
-                                               WantedBy=default.target
+                                               WantedBy=graphical-session.target
                                                """;
                 
                 unprivilegedOperationService.AddSystemdServiceTray(serviceContent, "shelly-notifications");

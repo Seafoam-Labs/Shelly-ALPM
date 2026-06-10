@@ -2,6 +2,7 @@ using Gtk;
 using Pango;
 using Shelly.Gtk.UiModels;
 using static Shelly.GTK.Resources.Translations;
+using WrapMode = Gtk.WrapMode;
 
 namespace Shelly.Gtk.Windows.Dialog;
 
@@ -40,28 +41,23 @@ public static class GenericQuestionDialog
 
         if (e.UseMonospaceMessage)
         {
-            var messageBox = Box.New(Orientation.Vertical, 2);
-            messageBox.SetHalign(Align.Fill);
-            messageBox.SetHexpand(true);
-
-            foreach (var line in e.Message.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries))
-            {
-                var lineLabel = Label.New(string.Empty);
-                lineLabel.SetHalign(Align.Fill);
-                lineLabel.SetHexpand(true);
-                lineLabel.SetXalign(0);
-                lineLabel.SetJustify(Justification.Left);
-                lineLabel.SetEllipsize(EllipsizeMode.End);
-                lineLabel.SetMarkup($"<tt>{GLib.Markup.EscapeText(line)}</tt>");
-                messageBox.Append(lineLabel);
-            }
-
-            messageWidget = messageBox;
+            var label = Label.New(null);
+            label.SetSelectable(true);
+            label.SetHalign(Align.Fill);
+            label.SetJustify(Justification.Left);
+            label.SetWrap(true);
+            label.SetXalign(0);
+            label.SetUseMarkup(true);
+            label.SetMarkup(
+                $"<tt>{GLib.Markup.EscapeText(e.Message)}</tt>"
+            );
+            messageWidget = label;
         }
         else
         {
             var messageLabel = Label.New(e.Message);
-            messageLabel.SetHalign(Align.Start);
+            messageLabel.SetSelectable(true);
+            messageLabel.SetHalign(Align.Fill);
             messageLabel.SetXalign(0);
             messageLabel.SetJustify(Justification.Left);
             messageLabel.SetWrap(true);

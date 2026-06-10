@@ -41,5 +41,25 @@ public enum AlpmEventType
     HookStart = 34,
     HookDone = 35,
     HookRunStart = 36,
-    HookRunDone = 37
+    HookRunDone = 37,
+    
+    //Custom event types
+    InformationalOutput = 256,
+    DebugOutput = 257,
+    TraceOutput = 258,
+    TransactionFailed = 259,
+
+    //AUR orchestration event types
+    AurDownloadStart = 512,
+    AurDownloadDone = 513,
+    AurBuildStart = 514,
+    AurBuildDone = 515,
+    AurInstallStart = 516,
+    AurInstallDone = 517,
+    AurCleanupStart = 518,
+    AurCleanupDone = 519,
+    AurPackageFailed = 520,
+    AurPackageCompleted = 521,
+    AurBuildOutput = 522,
+    AurBuildError = 523,
 }

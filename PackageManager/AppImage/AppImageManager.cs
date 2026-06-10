@@ -22,19 +22,16 @@ public class AppImageManager
 
     private void LogMessage(string message)
     {
-        //Console.WriteLine(message);
         MessageEvent?.Invoke(this, new AppImageMessageEventArgs(message));
     }
 
     private void LogError(string error)
     {
-        //Console.Error.WriteLine($"Error: {error}");
         ErrorEvent?.Invoke(this, new AppImageErrorEventArgs(error));
     }
 
     private void LogWarning(string message)
     {
-        //Console.WriteLine($"Warning: {message}");
         MessageEvent?.Invoke(this, new AppImageMessageEventArgs($"Warning: {message}"));
     }
 
@@ -800,7 +797,6 @@ public class AppImageManager
             var etag = response.Headers.ETag?.Tag ?? "";
             var version = !string.IsNullOrEmpty(etag) ? etag : lastModified;
             version = version.Replace("\"", "");
-            //Console.WriteLine($"Version: {version}, Current: {currentVersion}, App: {appName}, URL: {url}");
 
             return new AppImageUpdateDto
             {

@@ -1,5 +1,9 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
+using PackageManager.Wire;
+using Shelly.Utilities.Eventing;
 
 namespace Shelly.Writers;
 
@@ -85,6 +89,12 @@ public class ShellyFileLogger : TextWriter
             if (clean.StartsWith('├')) return;
 
             _tuiFrameBuffer.Add(clean);
+            return;
+        }
+        
+        if (TryRenderWireFrame(clean, out var readable))
+        {
+            WriteToLog(readable);
             return;
         }
 
@@ -208,6 +218,41 @@ public class ShellyFileLogger : TextWriter
         catch
         {
             // Best effort — if rotation fails, continue logging to the existing file
+        }
+    }
+    
+    private static bool TryRenderWireFrame(string line, out string readable)
+    {
+        readable = "";
+        var start = line.IndexOf(JsonPackFrame.Prefix, StringComparison.Ordinal);  
+        if (start < 0) return false;
+        start += JsonPackFrame.Prefix.Length;
+        var end = line.IndexOf(JsonPackFrame.Suffix, start, StringComparison.Ordinal); 
+        if (end < 0) return false;
+
+        try
+        {
+            var b64  = line.Substring(start, end - start);
+            var json = Encoding.UTF8.GetString(Convert.FromBase64String(b64));
+            var info = (JsonTypeInfo<Event>)EventingJsonContext.Default.GetTypeInfo(typeof(Event))!;
+            var ev   = JsonSerializer.Deserialize(json, info);
+
+            readable = ev switch
+            {
+                AlpmErrorEvent e            => $"error: {e.ErrorMessage}",
+                AlpmHookEvent e             => $"hook: {e.Description}",
+                AlpmScriptletEvent e        => $"scriptlet: {e.Line}",
+                AlpmReplaceEvent e          => $":: {e.Repository}/{e.PackageName} replaces {string.Join(",", e.Replaces)}",
+                AlpmPackageProgressEvent e  => $"{e.PackageName} {e.ProgressType} {e.Percent}% {e.Message}".TrimEnd(),
+                AlpmInformationalEvent e    => $"{e.EventType}: {e.Message} {e.PackageName}".TrimEnd(),
+                AlpmStatusEvent e           => e.Status,
+                _                           => json   // fallback: at least log decoded JSON, not base64
+            };
+            return true;
+        }
+        catch
+        {
+            return false;  
         }
     }
 }

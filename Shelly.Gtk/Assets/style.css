@@ -181,3 +181,15 @@ flowboxchild:hover {
 .sidebar-nav button:hover {
     background: alpha( @theme_fg_color, 0.06);
 }
+
+.drop-zone {
+    border: 3px dashed @insensitive_fg_color;
+    border-radius: 16px;
+    padding: 40px 60px;
+    transition: border-color 200ms, background-color 200ms;
+}
+
+.drop-zone.drag-hover {
+    border-color: @accent_color;
+    background-color: alpha(@accent_color, 0.1);
+}

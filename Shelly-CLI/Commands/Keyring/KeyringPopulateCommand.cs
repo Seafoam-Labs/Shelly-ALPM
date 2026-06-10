@@ -45,23 +45,15 @@ public class KeyringPopulateCommand : Command<KeyringSettings>
         if (settings.Keys?.Length > 0)
         {
             args += " " + string.Join(" ", settings.Keys);
-            Console.Error.WriteLine($"Populating keyring with: {string.Join(", ", settings.Keys)}...");
+            UiFrames.Info($"Populating keyring with: {string.Join(", ", settings.Keys)}...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
         }
         else
         {
-            Console.Error.WriteLine("Populating keyring with default keys...");
+            UiFrames.Info("Populating keyring with default keys...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
         }
 
         var result = PacmanKeyRunner.Run(args);
-        if (result == 0)
-        {
-            Console.Error.WriteLine("Keyring populated successfully!");
-        }
-        else
-        {
-            Console.Error.WriteLine("Failed to populate keyring.");
-        }
-
+        UiFrames.TxFinish(result == 0, "Keyring populated successfully!", "Failed to populate keyring.");
         return result;
     }
 }

@@ -28,6 +28,14 @@
 | `fix-permissions`         | Restore user ownership of Shelly XDG directories (config/cache/data) |
 | `pacfile [pacfiles]`      | Manage stored pacfiles                                               |
 
+### Manage IgnorePkg entries in pacman.conf (`ignore`)
+
+| Command                    | Description                                     |
+|----------------------------|-------------------------------------------------|
+| `ignore list`              | List all IgnorePkg packages                     |
+| `ignore add <packages>`    | Add one or more packages to IgnorePkg list      |
+| `ignore remove <packages>` | Remove one or more packages from IgnorePkg list |
+
 ### Manage pacman keyring (`keyring`)
 
 | Command                   | Description                                             |
@@ -62,6 +70,7 @@
 | `flatpak list`                                   | List installed flatpak apps           |
 | `flatpak list-updates`                           | List installed flatpak apps           |
 | `flatpak running`                                | List running flatpak apps             |
+| `flatpak repair`                                 | Repairs Flatpak Installation          |
 | `flatpak uninstall <package>`                    | Remove flatpak app                    |
 | `flatpak run <package>`                          | Run flatpak app                       |
 | `flatpak kill <package>`                         | Kill running flatpak app              |
@@ -360,8 +369,8 @@ Remove one or more packages
 - `-j, --json` — Output results in JSON format for UI integration and scripting
 - `-n, --no-confirm` — Proceed without asking for user confirmation
 - `-o, --opt-deps` — Removes optional dependencies installed with the package, that don't depend on other packages
-- `-r, --remove-config` — Removes any files in your ~/.config that can be tied exclusively to the removed package(s). This is 
-EXPERIMENTAL and has no guarantees of working
+- `-r, --remove-config` — Removes any files in your ~/.config that can be tied exclusively to the removed package(s). This is EXPERIMENTAL and has 
+no guarantees of working
 - `-i, --ripple` — Removes packages that depend on the package being removed
 - `--singlepane` — Use pacman-style single-stream output instead of the split-pane Live layout
 - `-y, --sync` — Synchronize package databases before performing the operation
@@ -450,19 +459,80 @@ Downgrade a package
 
 **Options:**
 
+- `-i, --ignore` — Add to IgnorePkg list
 - `-j, --json` — Output results in JSON format for UI integration and scripting
-- `-l, --latest` — Installs the newest matched version
+- `--list-options` — List available downgrade versions
 - `-n, --no-confirm` — Proceed without asking for user confirmation
-- `-o, --oldest` — Installs the oldest matched version
+- `-o, --oldest` — Installs the oldest matched version (default newest)
 - `--singlepane` — Use pacman-style single-stream output instead of the split-pane Live layout
 - `-y, --sync` — Synchronize package databases before performing the operation
+- `-t, --target` — Install a specific downgrade target by exact version or package filename
 
 **Examples:**
 
 ```sh
 shelly downgrade firefox
 shelly downgrade firefox --oldest
-shelly downgrade firefox --latest
+shelly downgrade firefox --exact 67.0.4-2
+shelly downgrade firefox --list-options
+shelly downgrade firefox --ignore
+```
+
+### `shelly ignore`
+
+Manage IgnorePkg entries in pacman.conf
+
+*Branch command — use one of the subcommands below.*
+
+**Subcommands:**
+
+- `shelly ignore list` — List all IgnorePkg packages
+- `shelly ignore add` — Add one or more packages to IgnorePkg list
+- `shelly ignore remove` — Remove one or more packages from IgnorePkg list
+
+
+### `shelly ignore list`
+
+List all IgnorePkg packages
+
+**Options:**
+
+- `-j, --json` — Output results in JSON format for UI integration and scripting
+
+**Examples:**
+
+```sh
+shelly ignore list
+```
+
+### `shelly ignore add`
+
+Add one or more packages to IgnorePkg list
+
+**Arguments:**
+
+- `<packages>` *(required)* — One or more package names to add to IgnorePkg (space-separated)
+
+**Examples:**
+
+```sh
+shelly ignore add firefox
+shelly ignore add firefox vlc
+```
+
+### `shelly ignore remove`
+
+Remove one or more packages from IgnorePkg list
+
+**Arguments:**
+
+- `<packages>` *(required)* — One or more package names to remove from IgnorePkg (space-separated)
+
+**Examples:**
+
+```sh
+shelly ignore remove firefox
+shelly ignore remove firefox vlc
 ```
 
 ### `shelly news`
@@ -824,8 +894,7 @@ Remove AUR packages
 - `-c, --cascade` — Removes all things the removed package(s) are dependent on that have no other uses
 - `--check` — Run the check() function during AUR package builds (disabled by default)
 - `--no-confirm` — Proceed without asking for user confirmation
-- `-o, --opt-deps` — Removes optional dependencies installed with the package, that don't depend on other 
-packages
+- `-o, --opt-deps` — Removes optional dependencies installed with the package, that don't depend on other packages
 - `-i, --ripple` — Removes packages that depend on the package being removed
 - `--singlepane` — Render output as a single pacman-style linear stream instead of the split two-pane layout
 
@@ -870,6 +939,7 @@ Manage flatpak
 - `shelly flatpak list` — List installed flatpak apps
 - `shelly flatpak list-updates` — List installed flatpak apps
 - `shelly flatpak running` — List running flatpak apps
+- `shelly flatpak repair` — Repairs Flatpak Installation
 - `shelly flatpak uninstall` — Remove flatpak app
 - `shelly flatpak run` — Run flatpak app
 - `shelly flatpak kill` — Kill running flatpak app
@@ -969,6 +1039,16 @@ List running flatpak apps
 
 ```sh
 shelly flatpak running
+```
+
+### `shelly flatpak repair`
+
+Repairs Flatpak Installation
+
+**Examples:**
+
+```sh
+shelly flatpak repair
 ```
 
 ### `shelly flatpak uninstall`
@@ -1294,7 +1374,9 @@ Cleans the cache of all downloaded packages
 - `-c, --cache-dir` — Path to the cache directory
 - `-d, --dry-run` — Show what would be removed
 - `-k, --keep` — Number of versions to keep
+- `--no-confirm` — Skips confirmation checks if true
 - `-r, --remove` — Removes all candidate entries
+- `-t, --target` — Removes all cached entries related to the selected package
 - `-u, --uninstalled` — target uninstalled packages
 
 **Examples:**
@@ -1306,6 +1388,7 @@ shelly utility cache-clean -r
 shelly utility cache-clean -r -k 2
 shelly utility cache-clean -r --uninstalled
 shelly utility cache-clean -r -c /var/cache/pacman/pkg
+shelly utility cache-clean -t vivaldi
 ```
 
 ### `shelly config`

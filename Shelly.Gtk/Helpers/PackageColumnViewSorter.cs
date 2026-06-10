@@ -1,5 +1,4 @@
 using Gtk;
-using Gio;
 using Shelly.Gtk.Enums;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
@@ -13,9 +12,10 @@ public static class PackageColumnViewSorter
         List<AlpmPackageDto> packageData,
         List<AlpmPackageGObject> items,
         PackageSortColumn column,
-        SortType order)
+        SortType order,
+        string? searchText = null)
     {
-        Comparison<AlpmPackageGObject> comparison =
+        Comparison<AlpmPackageGObject> baseComparison =
             column switch
             {
                 PackageSortColumn.Name =>
@@ -45,11 +45,33 @@ public static class PackageColumnViewSorter
                 _ => (_, _) => 0
             };
 
-        SortInternal(
+        if (order == SortType.Descending)
+        {
+            var b0 = baseComparison;
+            baseComparison = (a, b) => -b0(a, b);
+        }
+
+        Comparison<AlpmPackageGObject> comparison;
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var s = searchText;
+            comparison = (a, b) =>
+            {
+                var sa = PackageSearch.Score(packageData[a.Index].Name, packageData[a.Index].Description, s);
+                var sb = PackageSearch.Score(packageData[b.Index].Name, packageData[b.Index].Description, s);
+                if (sa != sb) return sb - sa;
+                return baseComparison(a, b);
+            };
+        }
+        else
+        {
+            comparison = baseComparison;
+        }
+
+        SortInternalOriented(
             listStore,
             items,
-            comparison,
-            order
+            comparison
         );
     }
 
@@ -76,6 +98,12 @@ public static class PackageColumnViewSorter
                     (a, b) => Compare(
                         a.Package?.Repository,
                         b.Package?.Repository
+                    ),
+                
+                PackageSortColumn.Size =>
+                    (a, b) => Compare(
+                        a.Package?.SizeDifference,
+                        b.Package?.SizeDifference
                     ),
 
                 PackageSortColumn.Size =>
@@ -122,7 +150,22 @@ public static class PackageColumnViewSorter
             items
         );
     }
-    
+
+    private static void SortInternalOriented<T>(
+        Gio.ListStore listStore,
+        List<T> items,
+        Comparison<T> comparison)
+        where T : GObject.Object
+    {
+        items.Sort(comparison);
+        SpliceReplace(listStore, items);
+    }
+
+    private static int Compare(long? a, long? b)
+    {
+        return Nullable.Compare(a, b);
+    }
+
     private static int Compare(
         string? a,
         string? b)

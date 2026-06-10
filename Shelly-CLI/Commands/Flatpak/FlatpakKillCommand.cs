@@ -16,20 +16,23 @@ public class FlatpakKillCommand : Command<FlatpakPackageSettings>
         }
 
         AnsiConsole.MarkupLine("[yellow]Killing selected flatpak app...[/]");
-        var result = new FlatpakManager().KillApp(settings.Packages);
-
-        AnsiConsole.MarkupLine("[red]" + result.EscapeMarkup() + "[/]");
+        var flatpakManager = new FlatpakManager();
+        flatpakManager.FlatpakEvent += (sender, args) =>
+        {
+            AnsiConsole.MarkupLine($"[yellow]{args.Message.EscapeMarkup()}[/]");
+        };
+        flatpakManager.KillApp(settings.Packages);
 
         return 0;
     }
 
     private static int HandleUiModeKill(FlatpakPackageSettings settings)
     {
-        Console.Error.WriteLine("Killing selected flatpak app...");
-        var result = new FlatpakManager().KillApp(settings.Packages);
-
-        Console.Error.WriteLine(result);
-
+        UiFrames.Info("Killing selected flatpak app...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
+        var manager = new FlatpakManager();
+        manager.FlatpakEvent += (sender, args) => UiFrames.Info(args.Message);
+        manager.KillApp(settings.Packages);
+        UiFrames.TxFinish(true, "Flatpak app killed.", "Failed to kill flatpak app.");
         return 0;
     }
 }

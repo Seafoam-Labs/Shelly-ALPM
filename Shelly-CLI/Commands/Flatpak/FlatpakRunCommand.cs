@@ -30,16 +30,9 @@ public class FlatpakRunCommand : Command<FlatpakPackageSettings>
 
     private static int HandleUiModeRun(FlatpakPackageSettings settings)
     {
-        Console.Error.WriteLine("Running selected flatpak app...");
+        UiFrames.Info("Running selected flatpak app...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
         var result = new FlatpakManager().LaunchApp(settings.Packages);
-
-        if (result)
-        {
-            Console.Error.WriteLine("App launched successfully");
-            return 0;
-        }
-
-        Console.Error.WriteLine("Failed to launch app");
-        return 1;
+        UiFrames.TxFinish(result, "App launched successfully", "Failed to launch app");
+        return result ? 0 : 1;
     }
 }

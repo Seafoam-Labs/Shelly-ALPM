@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using PackageManager.Local;
 using PackageManager.Wire;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -83,19 +84,10 @@ public class ListLocalInstalledCommand : Command<ListSettings>
                 : packages.OrderByDescending(p => p.Name)
         };
 
-        if (settings.JsonOutput)
-        {
-            var sortedList = sortedPackages.ToList();
-            JsonPackFrame.WriteToStdout(sortedList);
-            return 0;
-        }
-
-        var skip = (settings.Page - 1) * settings.Take;
-        var displayPackages = sortedPackages.Skip(skip).Take(settings.Take).ToList();
-
-        foreach (var pkg in displayPackages) Console.WriteLine($"{pkg.Name} {FormatSize(pkg.Size)}");
-
-        Console.Error.WriteLine($"Total: {displayPackages.Count} packages");
+        var sortedList = sortedPackages.ToList();
+        JsonPackFrame.WriteToStdout(sortedList);
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            AlpmEvents.InformationalOutput, $"Total: {sortedList.Count} packages"));
         return 0;
     }
 

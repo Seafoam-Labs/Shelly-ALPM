@@ -59,16 +59,10 @@
                             </object>
                         </child>
                         <child>
-                            <object class="GtkCheckButton" id="upgrade_check">
-                                <property name="label" translatable="yes">Perform Upgrade</property>
-                                <property name="tooltip-text" translatable="yes">Perform a full system upgrade with install (-u)</property>
-                            </object>
-                        </child>
-                        <child>
-                            <object class="GtkCheckButton" id="show_hidden_check">
-                                <property name="label" translatable="yes">Show Hidden</property>
-                                <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
-                                <property name="active">false</property>
+                            <object class="GtkMenuButton" id="options_menu">
+                                <property name="icon-name">view-more-symbolic</property>
+                                <property name="tooltip-text" translatable="yes">Additional Options</property>
+                                <property name="popover">options_popover</property>
                             </object>
                         </child>
                         <child>
@@ -84,7 +78,7 @@
                 </child>
                 <child>
                     <object class="GtkSeparator"/>
-                </child>
+                </child>     
                 <child>
                     <object class="GtkBox" id="detail_hbox">
                         <property name="hexpand">true</property>
@@ -153,7 +147,7 @@
                                         <child>
                                             <object class="GtkScrolledWindow">
                                                 <property name="hscrollbar-policy">never</property>
-                                                <property name="overlay-scrolling">false</property>
+                                                <property name="overlay-scrolling">true</property>
                                                 <property name="propagate-natural-height">True</property>
                                                 <property name="propagate-natural-width">False</property>
                                                 <property name="vexpand">true</property>
@@ -177,6 +171,61 @@
                 </child>
             </object>
         </child>
+        <child type="overlay">
+            <object class="GtkBox" id="loading_overlay">
+                <property name="visible">false</property>
+                <property name="halign">center</property>
+                <property name="valign">center</property>
+                <property name="orientation">vertical</property>
+                <property name="spacing">10</property>
+                <child>
+                    <object class="GtkSpinner" id="loading_spinner">
+                        <property name="spinning">true</property>
+                        <property name="width-request">32</property>
+                        <property name="height-request">32</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkLabel" id="error_label">
+                        <property name="visible">false</property>
+                        <property name="label" translatable="yes">Had an issue loading your packages. Check if you have a db lock.</property>
+                        <property name="wrap">true</property>
+                        <property name="justify">center</property>
+                        <property name="max-width-chars">40</property>
+                        <style>
+                            <class name="error"/>
+                        </style>
+                    </object>
+                </child>
+            </object>
+        </child>
+    </object>
+    <object class="GtkPopover" id="options_popover">
+        <property name="child">
+            <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">8</property>
+                <property name="margin-top">8</property>
+                <property name="margin-bottom">8</property>
+                <property name="margin-start">12</property>
+                <property name="margin-end">12</property>
+                <child>
+                    <object class="GtkCheckButton" id="upgrade_check">
+                        <property name="label" translatable="yes">Perform Upgrade</property>
+                        <property name="tooltip-text" translatable="yes">Perform a full system upgrade with install (-u)</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="show_hidden_check">
+                        <property name="label" translatable="yes">Show Hidden</property>
+                        <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
+                        <property name="active">false</property>
+                    </object>
+                </child>
+            </object>
+        </property>
     </object>
     <object class="GtkSingleSelection"/>
 </interface>

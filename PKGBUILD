@@ -1,7 +1,7 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgname=shelly
-pkgver=2.3.1.0
+pkgver=2.3.2.3
 pkgrel=1
 pkgdesc="Shelly: A Modern Arch Package Manager"
 arch=('x86_64')
@@ -27,7 +27,6 @@ depends=(
 )
 optdepends=(
     'flatpak: For supporting flatpak implementation.'
-    'archlinux-appstream-data: package icons and metadata'
     'fish: Fish shell completions'
 )
 makedepends=('dotnet-sdk-10.0' 'clang' 'gettext')
@@ -35,7 +34,7 @@ makedepends=('dotnet-sdk-10.0' 'clang' 'gettext')
 # Source tarball from GitHub release
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/archive/v${pkgver}.tar.gz")
 
-sha256sums=('50dcfa9644fe4ab3111b401fafb98930d2bd115cc277f22534a91e8b65b5e0b2')
+sha256sums=('5ee0f766be084f50d8967cb2f1e0fee0d1d8d652bae98a0bf38bcdc38305b8b5')
 
 build() {
   cd "$srcdir/Shelly-ALPM-${pkgver}"
@@ -52,6 +51,14 @@ build() {
       msgfmt "$po_file" -o "shelly-ui-${lang}.mo"
     fi
   done
+  
+  # Compile tray service translations
+    for po_file in Shelly-Notifications/po/*.po; do
+      if [ -f "$po_file" ]; then
+        lang=$(basename "$po_file" .po)
+        msgfmt "$po_file" -o "shelly-notifications-${lang}.mo"
+      fi
+    done
 }
 
 package() {
@@ -131,6 +138,14 @@ EOF
       install -Dm644 "$mo_file" "$pkgdir/usr/share/locale/$lang/LC_MESSAGES/shelly-ui.mo"
     fi
   done
+  
+  # Install tray service translations
+    for mo_file in shelly-notifications-*.mo; do
+      if [ -f "$mo_file" ]; then
+        lang=$(echo "$mo_file" | sed 's/shelly-notifications-\(.*\)\.mo/\1/')
+        install -Dm644 "$mo_file" "$pkgdir/usr/share/locale/$lang/LC_MESSAGES/shelly-notifications.mo"
+      fi
+    done
 
   # Install Flatpak integration script
   cat <<'SCRIPT' | install -Dm755 /dev/stdin "$pkgdir/usr/bin/shelly-flatpak-integrate"

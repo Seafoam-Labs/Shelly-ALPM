@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace PackageManager.Utilities;
@@ -275,15 +276,15 @@ public static class PkgbuildParser
     }
 
 
+    
     private static List<string> ParseArray(string content, string variableName)
     {
         var result = new List<string>();
 
-        // Match both: varname=(...) and varname+=(...)
-        var pattern = $@"^{Regex.Escape(variableName)}\+?=\(([^)]*)\)";
-        var matches = Regex.Matches(content, pattern, RegexOptions.Multiline | RegexOptions.Singleline);
+        var startPattern = $@"^{Regex.Escape(variableName)}\+?=\(";
+        var starts = Regex.Matches(content, startPattern, RegexOptions.Multiline);
 
-        foreach (Match match in matches)
+        foreach (Match match in starts)
         {
             // Check if this match is inside a conditional block
             if (IsInsideConditionalBlock(content, match.Index))
@@ -293,12 +294,26 @@ public static class PkgbuildParser
                 continue;
             }
 
-            var arrayContent = match.Groups[1].Value;
+            var i = match.Index + match.Length;
+            bool inS = false, inD = false;
+            var sb = new StringBuilder();
+            for (; i < content.Length; i++)
+            {
+                var c = content[i];
+                if (c == '\\' && i + 1 < content.Length)
+                {
+                    sb.Append(c).Append(content[++i]);
+                    continue;
+                }
+                if (c == '\'' && !inD) { inS = !inS; sb.Append(c); continue; }
+                if (c == '"' && !inS) { inD = !inD; sb.Append(c); continue; }
+                if (c == ')' && !inS && !inD) break;
+                sb.Append(c);
+            }
 
-
+            var arrayContent = sb.ToString();
             var lines = arrayContent.Split('\n');
             var cleanedContent = string.Join("\n", lines.Select(StripComment));
-
 
             var itemPattern = @"""([^""]*)""" + @"|'([^']*)'|(\S+)";
             var itemMatches = Regex.Matches(cleanedContent, itemPattern);

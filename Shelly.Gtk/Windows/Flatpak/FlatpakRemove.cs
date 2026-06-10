@@ -35,7 +35,8 @@ public class FlatpakRemove(
 
         _listView = (ListView)builder.GetObject("installed_flatpaks")!;
         var removeButton = (Button)builder.GetObject("remove_button")!;
-
+        
+        var flatpakRepairButton = (Button)builder.GetObject("flatpak_repair_button")!;
         _listStore = Gio.ListStore.New(StringObject.GetGType());
         _selectionModel = SingleSelection.New(_listStore);
         _listView.SetModel(_selectionModel);
@@ -47,10 +48,12 @@ public class FlatpakRemove(
 
         _listView.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
         removeButton.OnClicked += (_, _) => { _ = RemoveSelectedAsync(); };
+        flatpakRepairButton.OnClicked += (_, _) => { _ = FlatpakRepairAsync(); };
 
         _sub = DirtySubscription.Attach(dirtyService, this);
         return box;
     }
+
 
     public void Reload() => _ = LoadDataAsync(_cts.Token);
 
@@ -125,6 +128,25 @@ public class FlatpakRemove(
         idLabel.SetText(package.Id);
         versionLabel.SetText(package.Version);
     }
+    
+    private async Task FlatpakRepairAsync()
+    {
+        try
+        {
+            lockoutService.Show(Translations.T("Repaired Flatpak installation"));
+            var exec = await unprivilegedOperationService.FlatpakRepair();
+        }
+        catch (OperationCanceledException)
+        {
+            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(
+                Translations.T($"Failed to repair Flatpak installation")));
+        }
+        finally
+        {
+            lockoutService.Hide();
+        }
+    }
+
 
     private async Task LoadDataAsync(CancellationToken ct = default)
     {

@@ -17,21 +17,22 @@ public class FlatpakInstallCommand : Command<FlatpakPackageSettings>
 
         AnsiConsole.MarkupLine("[yellow]Installing flatpak app...[/]");
         var manager = new FlatpakManager();
-        var result = manager.InstallApp(settings.Packages, settings.Remote, settings.IsUser, settings.Branch ?? "stable", settings.IsRuntime);
-
-        AnsiConsole.MarkupLine("[yellow]Installed: " + result.EscapeMarkup() + "[/]");
-
+        manager.FlatpakEvent += (sender, args) =>
+        {
+            AnsiConsole.MarkupLine($"[yellow]{args.Message.EscapeMarkup()}[/]");
+        };
+        manager.InstallApp(settings.Packages, settings.Remote, settings.IsUser, settings.Branch ?? "stable",
+            settings.IsRuntime);
         return 0;
     }
 
     private static int HandleUiModeInstall(FlatpakPackageSettings settings)
     {
-        Console.Error.WriteLine("Installing flatpak app...");
+        UiFrames.Info("Installing flatpak app...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
         var manager = new FlatpakManager();
-        var result = manager.InstallApp(settings.Packages, settings.Remote, settings.IsUser);
-
-        Console.Error.WriteLine("Installed: " + result);
-
+        manager.FlatpakEvent += (sender, args) => UiFrames.Info(args.Message);
+        manager.InstallApp(settings.Packages, settings.Remote, settings.IsUser);
+        UiFrames.TxFinish(true, "Flatpak install complete.", "Flatpak install failed.");
         return 0;
     }
 }

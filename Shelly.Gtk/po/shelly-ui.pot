@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-05-14 18:41-0400\n"
-"PO-Revision-Date: 2026-05-15 08:45+EST\n"
+"PO-Revision-Date: 2026-06-01 05:03+EST\n"
 "Last-Translator: csnyder@seafoamlabs.org\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
 "Language: en\n"
@@ -773,6 +773,15 @@ msgstr ""
 msgid "Package installed successfully"
 msgstr ""
 
+msgid "Remove "
+msgstr ""
+
+msgid "Removing package..."
+msgstr ""
+
+msgid "Package removed successfully"
+msgstr ""
+
 msgid "Reboot required after flatpak installation."
 msgstr ""
 
@@ -931,6 +940,12 @@ msgstr ""
 msgid "Remove Selected"
 msgstr ""
 
+msgid "Flatpak Repair"
+msgstr ""
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr ""
+
 msgid "Update All"
 msgstr ""
 
@@ -1077,7 +1092,7 @@ msgstr ""
 msgid "Force Database Update"
 msgstr ""
 
-msgid "Remove db.lock"
+msgid "Remove db.lck"
 msgstr ""
 
 msgid "View Pacfiles"
@@ -1266,4 +1281,37 @@ msgid "Tray Icon Autostart"
 msgstr ""
 
 msgid "Allow the tray service to autostart."
+msgstr ""
+
+msgid "Unable to load package data. You may have a db.lck."
+msgstr ""
+
+msgid "Downgrade Selected"
+msgstr ""
+
+msgid "Downgrade selected packages one by one"
+msgstr ""
+
+msgid "No downgrade options found for {0}"
+msgstr ""
+
+msgid "Downgrading {0}..."
+msgstr ""
+
+msgid "Downgraded {0} Package(s)"
+msgstr ""
+
+msgid "Downgrade: {0}"
+msgstr ""
+
+msgid "Select version:"
+msgstr ""
+
+msgid "Add to IgnorePkg list"
+msgstr ""
+
+msgid "Downgrade"
+msgstr ""
+
+msgid "Enable Package Downgrade"
 msgstr ""

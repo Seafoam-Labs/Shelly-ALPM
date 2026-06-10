@@ -113,6 +113,7 @@
                                         <property name="margin-bottom">3</property>
                                         <property name="margin-start">6</property>
                                         <property name="margin-end">6</property>
+                                        <property name="tooltip-text" translatable="yes">Show Recommended</property>
                                         <child>
                                             <object class="GtkBox">
                                                 <property name="orientation">horizontal</property>
@@ -139,6 +140,7 @@
                                         <property name="margin-bottom">3</property>
                                         <property name="margin-start">6</property>
                                         <property name="margin-end">6</property>
+                                        <property name="tooltip-text" translatable="yes">Show Packages</property>
                                         <child>
                                             <object class="GtkBox">
                                                 <property name="orientation">horizontal</property>
@@ -165,6 +167,7 @@
                                         <property name="margin-bottom">3</property>
                                         <property name="margin-start">6</property>
                                         <property name="margin-end">6</property>
+                                        <property name="tooltip-text" translatable="yes">Show AUR</property>
                                         <child>
                                             <object class="GtkBox">
                                                 <property name="orientation">horizontal</property>
@@ -191,6 +194,7 @@
                                         <property name="margin-bottom">3</property>
                                         <property name="margin-start">6</property>
                                         <property name="margin-end">6</property>
+                                        <property name="tooltip-text" translatable="yes">Show Flat</property>
                                         <child>
                                             <object class="GtkBox">
                                                 <property name="orientation">horizontal</property>
@@ -217,6 +221,7 @@
                                         <property name="margin-bottom">3</property>
                                         <property name="margin-start">6</property>
                                         <property name="margin-end">6</property>
+                                        <property name="tooltip-text" translatable="yes">Show AppImage</property>
                                         <child>
                                             <object class="GtkBox">
                                                 <property name="orientation">horizontal</property>
@@ -243,6 +248,7 @@
                                         <property name="margin-bottom">3</property>
                                         <property name="margin-start">6</property>
                                         <property name="margin-end">6</property>
+                                        <property name="tooltip-text" translatable="yes">Show Shelly Searchs</property>
                                         <child>
                                             <object class="GtkBox">
                                                 <property name="orientation">horizontal</property>
@@ -397,6 +403,11 @@
                                         <property name="margin-end">10</property>
                                         <property name="margin-start">10</property>
                                         <property name="margin-top">10</property>
+                                        <child>
+                                            <object class="GtkButton" id="chel_button">
+                                                <property name="tooltip-text">Chel's Flag</property>
+                                            </object>
+                                        </child>
                                         <child>
                                             <object class="GtkMenuButton" id="history_menu_button">
                                                 <property name="label" translatable="yes">History</property>

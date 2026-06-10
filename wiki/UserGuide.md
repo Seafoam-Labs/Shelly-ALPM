@@ -52,7 +52,7 @@ No confirmation - Shelly will accept all requests for packages and will not ask 
 
 Force Database Update - Forces shelly to sync with all of your databases and will grab a fresh list of all available packages
 
-Remove db.lock - If a transaction fails and you are locked from doing more installs clicking remove db.lock it will bypass the failure allowing you to proceed
+Remove db.lck - If a transaction fails and you are locked from doing more installs clicking remove db.lck it will bypass the failure allowing you to proceed
 
 Once you have made your selections click save in the bottom left to lock all choices.
 

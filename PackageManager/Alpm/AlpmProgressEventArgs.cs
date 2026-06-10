@@ -7,7 +7,8 @@ public class AlpmProgressEventArgs(
     string? packageName,
     int? percent,
     ulong? howMany,
-    ulong? current)
+    ulong? current,
+    string? message = null)
     : EventArgs
 {
     public AlpmProgressType ProgressType { get; } = progressType;
@@ -15,4 +16,5 @@ public class AlpmProgressEventArgs(
     public int? Percent { get; } = percent;
     public ulong? HowMany { get; } = howMany;
     public ulong? Current { get; } = current;
+    public string? Message { get; } = message;
 }

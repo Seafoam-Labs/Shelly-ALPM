@@ -1,6 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
+using PackageManager.Alpm;
 using PackageManager.Aur;
+using PackageManager.Wire;
+using Shelly_CLI.ConsoleLayouts;
 using Shelly_CLI.Utility;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -8,7 +12,8 @@ namespace Shelly_CLI.Commands.Aur;
 
 public class AurInstallVersionCommand : AsyncCommand<AurInstallVersionSettings>
 {
-    public override async Task<int> ExecuteAsync([NotNull] CommandContext context, [NotNull] AurInstallVersionSettings settings)
+    public override async Task<int> ExecuteAsync([NotNull] CommandContext context,
+        [NotNull] AurInstallVersionSettings settings)
     {
         if (Program.IsUiMode)
         {
@@ -34,21 +39,22 @@ public class AurInstallVersionCommand : AsyncCommand<AurInstallVersionSettings>
             manager = new AurPackageManager();
             await manager.Initialize(root: true, noCheck: !settings.Check);
 
-            manager.PackageProgress += (sender, args) =>
+            manager.InformationalEvent += (_, args) =>
             {
-                var statusColor = args.Status switch
+                var statusColor = args.EventType switch
                 {
-                    PackageProgressStatus.Downloading => "yellow",
-                    PackageProgressStatus.Building => "blue",
-                    PackageProgressStatus.Installing => "cyan",
-                    PackageProgressStatus.Completed => "green",
-                    PackageProgressStatus.Failed => "red",
-                    _ => "white"
+                    AlpmEventType.AurDownloadStart => "yellow",
+                    AlpmEventType.AurBuildStart => "blue",
+                    AlpmEventType.AurInstallStart => "cyan",
+                    AlpmEventType.AurPackageCompleted => "green",
+                    AlpmEventType.AurPackageFailed => "red",
+                    _ => null
                 };
+                if (statusColor == null) return;
 
                 AnsiConsole.MarkupLine(
-                    $"[{statusColor}][[{args.CurrentIndex}/{args.TotalCount}]] {args.PackageName.EscapeMarkup()}: {args.Status}[/]" +
-                    (args.Message != null ? $" - {args.Message.EscapeMarkup()}" : ""));
+                    $"[{statusColor}][[{args.CurrentIndex}/{args.TotalCount}]] {(args.PackageName ?? "").EscapeMarkup()}: {args.EventType}[/]" +
+                    (!string.IsNullOrEmpty(args.Message) ? $" - {args.Message.EscapeMarkup()}" : ""));
             };
 
             AnsiConsole.MarkupLine(
@@ -74,13 +80,13 @@ public class AurInstallVersionCommand : AsyncCommand<AurInstallVersionSettings>
         AurPackageManager? manager = null;
         if (string.IsNullOrWhiteSpace(settings.Package))
         {
-            Console.Error.WriteLine("Error: No package specified.");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, "No package specified"));
             return 1;
         }
 
         if (string.IsNullOrWhiteSpace(settings.Commit))
         {
-            Console.Error.WriteLine("Error: No commit specified.");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, "No commit specified"));
             return 1;
         }
 
@@ -88,23 +94,20 @@ public class AurInstallVersionCommand : AsyncCommand<AurInstallVersionSettings>
         {
             manager = new AurPackageManager();
             await manager.Initialize(root: true, noCheck: !settings.Check);
+            // Handle questions
+            manager.Question += (sender, args) => { QuestionHandler.HandleQuestion(args, true, false); };
 
-            manager.PackageProgress += (sender, args) =>
-            {
-                Console.Error.WriteLine($"[{args.CurrentIndex}/{args.TotalCount}] {args.PackageName}: {args.Status}" +
-                    (args.Message != null ? $" - {args.Message}" : ""));
-            };
+            manager.PkgbuildDiffRequest += (_, args) =>
+                QuestionHandler.HandleQuestion(args, Program.IsUiMode, false);
 
-            Console.Error.WriteLine($"Installing AUR package {settings.Package} at commit {settings.Commit}");
-            await manager.InstallPackageVersion(settings.Package, settings.Commit);
-            Console.Error.WriteLine("Installation complete.");
-
-            return 0;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Installation failed: {ex.Message}");
-            return 1;
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(AlpmEvents.InformationalOutput,
+                $"Installing AUR package {settings.Package} at commit {settings.Commit}"));
+            var ok =
+                await UiModeOutput.Run(manager, m => m.InstallPackageVersion(settings.Package, settings.Commit));
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                ok ? AlpmEvents.AurPackageCompleted : AlpmEvents.AurPackageFailed,
+                ok ? "Installation complete." : "Installation failed."));
+            return ok ? 0 : 1;
         }
         finally
         {

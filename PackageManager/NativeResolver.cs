@@ -51,6 +51,7 @@ public static class NativeResolver
             "gobject-2.0" => ResolveGObject(assembly, searchPath),
             "archive" => ResolveArchive(assembly, searchPath),
             "libzstd" => ResolveZstd(assembly, searchPath),
+            "ostree-1" => ResolveOstree(assembly, searchPath),
             _ => IntPtr.Zero
         };
     }
@@ -91,6 +92,16 @@ public static class NativeResolver
     private static IntPtr ResolveZstd(Assembly assembly, DllImportSearchPath? searchPath)
     {
         string[] versions = ["libzstd.so.1", "libzstd.so"];
+        return TryLoad(versions, assembly, searchPath);
+    }
+
+    private static IntPtr ResolveOstree(Assembly assembly, DllImportSearchPath? searchPath)
+    {
+        string[] versions =
+        [
+            "libostree-1.so.1", "libostree-1.so", "libostree.so.0", "libostree.so"
+        ];
+
         return TryLoad(versions, assembly, searchPath);
     }
 

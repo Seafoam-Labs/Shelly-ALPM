@@ -7,7 +7,7 @@ public static class SizeHelpers
         string[] suffixes = ["B", "KB", "MB", "GB", "TB"];
         var i = 0;
         double dblSByte = bytes;
-        while (i < suffixes.Length && bytes >= 1024)
+        while (i < suffixes.Length - 1 && Math.Abs(bytes) >= 1024)
         {
             dblSByte = bytes / 1024.0;
             i++;

@@ -11,5 +11,6 @@ public enum AlpmQuestionType
     RemovePkgs = 64,
 
     //Custom question types
-    SelectOptionalDeps = 256
+    SelectOptionalDeps = 256,
+    UpdateNotice = 512
 }

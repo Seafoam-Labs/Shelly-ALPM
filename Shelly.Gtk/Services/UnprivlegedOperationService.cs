@@ -4,6 +4,7 @@ using System.Text.Json;
 using Shelly.Gtk.Enums;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services.TrayServices;
+using Shelly.Gtk.Services.Wire;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.AppImage;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
@@ -146,6 +147,12 @@ public class UnprivilegedOperationService(
         var result = await ExecuteUnprivilegedCommandAsync("Upgrade flatpak", "flatpak upgrade");
         SendDbusMessage(result);
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
+        return result;
+    }
+
+    public async Task<UnprivilegedOperationResult> FlatpakRepair()
+    {
+        var result = await ExecuteUnprivilegedCommandAsync("Flatpak repair", "flatpak repair");
         return result;
     }
 
@@ -305,7 +312,7 @@ public class UnprivilegedOperationService(
         _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
             "--user daemon-reload");
         _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
-            $"--user stop {service}");
+            $"--user enable --now {service}");
 
         return Task.FromResult(new OperationResult());
     }
@@ -313,12 +320,14 @@ public class UnprivilegedOperationService(
     public Task<OperationResult> RemoveSystemdServiceTray(string service)
     {
         var dir = XdgPaths.ConfigHome() + "/systemd/user";
+
+        _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
+            $"--user disable --now {service}");
+
         File.Delete($"{dir}/{service}.service");
 
         _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
             "--user daemon-reload");
-        _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
-            $"--user stop {service}");
 
         return Task.FromResult(new OperationResult());
     }
@@ -440,13 +449,35 @@ public class UnprivilegedOperationService(
         var errorBuilder = new StringBuilder();
         StreamWriter? stdinWriter = null;
 
-        process.OutputDataReceived += (sender, e) =>
+        var eventRouter = new EventRouter();
+
+        process.OutputDataReceived += async (sender, e) =>
         {
-            if (e.Data != null)
+            if (e.Data == null) return;
+            outputBuilder.Append(e.Data).Append('\n');
+
+            if (JsonPackFrame.TryExtractPayload(e.Data, out var b64))
             {
-                outputBuilder.Append(e.Data).Append('\n');
-                Console.WriteLine(e.Data);
+                if (eventRouter.TryDispatch(b64)) return;
+                try
+                {
+                    await QuestionRouter.TryDispatchAsync(b64, async value =>
+                    {
+                        if (stdinWriter != null)
+                        {
+                            await stdinWriter.WriteLineAsync(value);
+                            await stdinWriter.FlushAsync();
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"QuestionRouter error: {ex.Message}");
+                }
+                return;
             }
+
+            Console.WriteLine(e.Data);
         };
 
         process.ErrorDataReceived += async (sender, e) =>
@@ -456,9 +487,9 @@ public class UnprivilegedOperationService(
                 // Filter out the password prompt from sudo
 
                 // Check for ALPM question (with Shelly prefix)
-                if (e.Data.StartsWith("[Shelly][ALPM_QUESTION]"))
+                if (e.Data.StartsWith("[ALPM_QUESTION]"))
                 {
-                    var questionText = e.Data.Substring("[Shelly][ALPM_QUESTION]".Length);
+                    var questionText = e.Data.Substring("[ALPM_QUESTION]".Length);
                     Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
 
                     // Send response to CLI via stdin

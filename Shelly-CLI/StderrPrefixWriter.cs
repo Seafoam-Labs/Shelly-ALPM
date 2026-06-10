@@ -6,7 +6,7 @@ namespace Shelly_CLI;
 public class StderrPrefixWriter : TextWriter
 {
     private readonly TextWriter _stderr;
-    private const string ShellyPrefix = "[Shelly]";
+    private const string ShellyPrefix = "";
 
     public StderrPrefixWriter(TextWriter stderr)
     {
@@ -16,11 +16,13 @@ public class StderrPrefixWriter : TextWriter
     public override void WriteLine(string? value)
     {
         _stderr.WriteLine($"{ShellyPrefix}{value}");
+        _stderr.Flush();
     }
 
     public override void Write(string? value)
     {
         _stderr.Write(value);
+        _stderr.Flush();
     }
 
     public override void Write(char value)

@@ -1,174 +1,164 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface domain="shelly-ui">
     <requires lib="gtk" version="4.0"/>
-    <object class="GtkBox" id="PackageManagement">
-        <property name="orientation">vertical</property>
+    <object class="GtkOverlay" id="PackageManagement">
         <child>
             <object class="GtkBox">
-                <property name="halign">baseline</property>
-                <property name="margin-top">10</property>
-                <property name="margin-start">10</property>
-                <property name="margin-end">10</property>
-                <property name="margin-bottom">10</property>
-                <property name="spacing">5</property>
-                <child>
-                    <object class="GtkSearchEntry" id="search_entry">
-                                <property name="placeholder-text" translatable="yes">Search packages...</property>
-                        <property name="width-request">200</property>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkButton" id="sync_button">
-                        <property name="icon-name">view-refresh-symbolic</property>
-                        <property name="tooltip-text" translatable="yes">Sync</property>
-                    </object>
-                </child>
-                
-                <child>
-                    <object class="GtkDropDown" id="grouping_selection">
-                        <property name="tooltip-text" translatable="yes">Package Group Filter</property>
-                        <property name="enable-search">true</property>
-                        <property name="search-match-mode">substring</property>
-                        <property name="expression">
-                            <lookup name='string' type="GtkStringObject"></lookup>
-                        </property>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkButton" id="remove_local_button">
-                        <property name="tooltip-text" translatable="yes">Remove Local Packages</property>
-                        <child>
-                            <object class="GtkBox">
-                                <property name="spacing">5</property>
-                                <child>
-                                    <object class="GtkImage">
-                                        <property name="icon-name">user-trash-symbolic</property>
-                                    </object>
-                                </child>
-                                <child>
-                                    <object class="GtkLabel">
-                                        <property name="label" translatable="yes">Remove Local</property>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-                    </object>
-                </child>
+                <property name="orientation">vertical</property>
                 <child>
                     <object class="GtkBox">
-                        <property name="hexpand">true</property>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkCheckButton" id="cascade_delete_check">
-                        <property name="active">true</property>
-                        <property name="label" translatable="yes">Clean Uninstall</property>
-                        <property name="valign">center</property>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkCheckButton" id="remove_configs_check">
-                        <property name="label" translatable="yes">Remove Configs</property>
-                        <property name="valign">center</property>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkCheckButton" id="remove_optdeps_check">
-                        <property name="label" translatable="yes">Remove Optional Deps</property>
-                        <property name="tooltip-text" translatable="yes">Also remove orphaned optional dependencies installed with these packages.</property>
-                        <property name="valign">center</property>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkCheckButton" id="show_hidden_check">
-                        <property name="halign">start</property>
-                        <property name="label" translatable="yes">Show Hidden</property>
-                        <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
-                        <property name="active">false</property>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkButton" id="remove_button">
-                        <property name="halign">start</property>
-                        <property name="label" translatable="yes">Remove Selected</property>
-                        <style>
-                            <class name="destructive-action"/>
-                        </style>
-                    </object>
-                </child>
-            </object>
-        </child>
-        <child>
-            <object class="GtkSeparator"/>
-        </child>
-        <child>
-            <object class="GtkBox" id="detail_hbox">
-                <property name="hexpand">true</property>
-                <property name="orientation">horizontal</property>
-                <property name="vexpand">true</property>
-                <child>
-                    <object class="GtkScrolledWindow">
-                        <property name="hexpand">true</property>
-                        <property name="overlay-scrolling">false</property>
-                        <property name="vexpand">true</property>
+                        <property name="halign">baseline</property>
+                        <property name="margin-top">10</property>
+                        <property name="margin-start">10</property>
+                        <property name="margin-end">10</property>
+                        <property name="margin-bottom">10</property>
+                        <property name="spacing">5</property>
                         <child>
-                            <object class="GtkColumnView" id="package_grid">
+                            <object class="GtkSearchEntry" id="search_entry">
+                                        <property name="placeholder-text" translatable="yes">Search packages...</property>
+                                <property name="width-request">200</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkButton" id="sync_button">
+                                <property name="icon-name">view-refresh-symbolic</property>
+                                <property name="tooltip-text" translatable="yes">Sync</property>
+                            </object>
+                        </child>
+                        
+                        <child>
+                            <object class="GtkDropDown" id="grouping_selection">
+                                <property name="tooltip-text" translatable="yes">Package Group Filter</property>
+                                <property name="enable-search">true</property>
+                                <property name="search-match-mode">substring</property>
+                                <property name="expression">
+                                    <lookup name='string' type="GtkStringObject"></lookup>
+                                </property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkButton" id="remove_local_button">
+                                <property name="tooltip-text" translatable="yes">Remove Local Packages</property>
+                                <child>
+                                    <object class="GtkBox">
+                                        <property name="spacing">5</property>
+                                        <child>
+                                            <object class="GtkImage">
+                                                <property name="icon-name">user-trash-symbolic</property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Remove Local</property>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkBox">
                                 <property name="hexpand">true</property>
-                                <property name="vexpand">true</property>
-                                <child>
-                                    <object class="GtkColumnViewColumn" id="check_column">
-                                        <property name="title"></property>
-                                    </object>
-                                </child>
-                                <child>
-                                    <object class="GtkColumnViewColumn" id="name_column">
-                                        <property name="title" translatable="yes">Package Name</property>
-                                        <property name="expand">true</property>
-                                    </object>
-                                </child>
-                                <child>
-                                    <object class="GtkColumnViewColumn" id="size_column">
-                                        <property name="title" translatable="yes">Size</property>
-                                    </object>
-                                </child>
-                                <child>
-                                    <object class="GtkColumnViewColumn" id="version_column">
-                                        <property name="title" translatable="yes">Version</property>
-                                    </object>
-                                </child>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkMenuButton" id="options_menu">
+                                <property name="icon-name">view-more-symbolic</property>
+                                <property name="tooltip-text" translatable="yes">Additional Options</property>
+                                <property name="popover">options_popover</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkButton" id="downgrade_button">
+                                <property name="halign">start</property>
+                                <property name="label" translatable="yes">Downgrade Selected</property>
+                                <property name="tooltip-text" translatable="yes">Downgrade selected packages one by one</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkButton" id="remove_button">
+                                <property name="halign">start</property>
+                                <property name="label" translatable="yes">Remove Selected</property>
+                                <style>
+                                    <class name="destructive-action"/>
+                                </style>
                             </object>
                         </child>
                     </object>
                 </child>
                 <child>
-                    <object class="GtkRevealer" id="detail_revealer">
-                        <property name="reveal-child">false</property>
-                        <property name="transition-type">slide-left</property>
+                    <object class="GtkSeparator"/>
+                </child>
+                <child>
+                    <object class="GtkBox" id="detail_hbox">
+                        <property name="hexpand">true</property>
+                        <property name="orientation">horizontal</property>
+                        <property name="vexpand">true</property>
                         <child>
-                            <object class="GtkFrame">
-                                <property name="width-request">300</property>
-                                <property name="margin-start">10</property>
-                                <property name="margin-top">10</property>
-                                <property name="margin-end">10</property>
-                                <property name="margin-bottom">10</property>
-                                <style>
-                                    <class name="rounded-card"/>
-                                </style>
+                            <object class="GtkScrolledWindow">
+                                <property name="hexpand">true</property>
+                                <property name="overlay-scrolling">false</property>
+                                <property name="vexpand">true</property>
                                 <child>
-                                    <object class="GtkScrolledWindow">
-                                        <property name="hscrollbar-policy">never</property>
-                                        <property name="overlay-scrolling">true</property>
-                                        <property name="propagate-natural-height">True</property>
-                                        <property name="propagate-natural-width">False</property>
+                                    <object class="GtkColumnView" id="package_grid">
+                                        <property name="hexpand">true</property>
                                         <property name="vexpand">true</property>
                                         <child>
-                                            <object class="GtkBox" id="detail_box">
-                                                <property name="margin-bottom">10</property>
-                                                <property name="margin-end">10</property>
-                                                <property name="margin-start">10</property>
-                                                <property name="margin-top">10</property>
-                                                <property name="orientation">vertical</property>
-                                                <property name="spacing">8</property>
+                                            <object class="GtkColumnViewColumn" id="check_column">
+                                                <property name="title"></property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkColumnViewColumn" id="name_column">
+                                                <property name="title" translatable="yes">Package Name</property>
+                                                <property name="expand">true</property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkColumnViewColumn" id="size_column">
+                                                <property name="title" translatable="yes">Size</property>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkColumnViewColumn" id="version_column">
+                                                <property name="title" translatable="yes">Version</property>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkRevealer" id="detail_revealer">
+                                <property name="reveal-child">false</property>
+                                <property name="transition-type">slide-left</property>
+                                <child>
+                                    <object class="GtkFrame">
+                                        <property name="width-request">300</property>
+                                        <property name="margin-start">10</property>
+                                        <property name="margin-top">10</property>
+                                        <property name="margin-end">10</property>
+                                        <property name="margin-bottom">10</property>
+                                        <style>
+                                            <class name="rounded-card"/>
+                                        </style>
+                                        <child>
+                                            <object class="GtkScrolledWindow">
+                                                <property name="hscrollbar-policy">never</property>
+                                                <property name="overlay-scrolling">true</property>
+                                                <property name="propagate-natural-height">True</property>
+                                                <property name="propagate-natural-width">False</property>
+                                                <property name="vexpand">true</property>
+                                                <child>
+                                                    <object class="GtkBox" id="detail_box">
+                                                        <property name="margin-bottom">10</property>
+                                                        <property name="margin-end">10</property>
+                                                        <property name="margin-start">10</property>
+                                                        <property name="margin-top">10</property>
+                                                        <property name="orientation">vertical</property>
+                                                        <property name="spacing">8</property>
+                                                    </object>
+                                                </child>
                                             </object>
                                         </child>
                                     </object>
@@ -179,5 +169,72 @@
                 </child>
             </object>
         </child>
+        <child type="overlay">
+            <object class="GtkBox" id="loading_overlay">
+                <property name="visible">false</property>
+                <property name="halign">center</property>
+                <property name="valign">center</property>
+                <property name="orientation">vertical</property>
+                <property name="spacing">10</property>
+                <child>
+                    <object class="GtkSpinner" id="loading_spinner">
+                        <property name="spinning">true</property>
+                        <property name="width-request">32</property>
+                        <property name="height-request">32</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkLabel" id="error_label">
+                        <property name="visible">false</property>
+                        <property name="label" translatable="yes">Had an issue loading your packages. Check if you have a db lock.</property>
+                        <property name="wrap">true</property>
+                        <property name="justify">center</property>
+                        <property name="max-width-chars">40</property>
+                        <style>
+                            <class name="error"/>
+                        </style>
+                    </object>
+                </child>
+            </object>
+        </child>
+    </object>
+    <object class="GtkPopover" id="options_popover">
+        <property name="child">
+            <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">8</property>
+                <property name="margin-top">8</property>
+                <property name="margin-bottom">8</property>
+                <property name="margin-start">12</property>
+                <property name="margin-end">12</property>
+                <child>
+                    <object class="GtkCheckButton" id="cascade_delete_check">
+                        <property name="active">true</property>
+                        <property name="label" translatable="yes">Clean Uninstall</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="remove_configs_check">
+                        <property name="label" translatable="yes">Remove Configs</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="remove_optdeps_check">
+                        <property name="active">true</property>
+                        <property name="label" translatable="yes">Remove Optional Deps</property>
+                        <property name="tooltip-text" translatable="yes">Also remove orphaned optional dependencies installed with these packages.</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="show_hidden_check">
+                        <property name="label" translatable="yes">Show Hidden</property>
+                        <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
+                        <property name="active">false</property>
+                    </object>
+                </child>
+            </object>
+        </property>
     </object>
 </interface>

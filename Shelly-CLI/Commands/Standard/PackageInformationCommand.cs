@@ -1,4 +1,6 @@
 using PackageManager.Alpm;
+using PackageManager.Wire;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -10,8 +12,9 @@ public class PackageInformationCommand : Command<PackageInformationSettings>
     {
         if (Program.IsUiMode || settings.JsonOutput)
         {
-            Console.WriteLine("Not supported for ui methods yet");
-            return 0;
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(
+                EventLevel.Error, "Package information is not supported in UI mode yet"));
+            return 1;
         }
 
         if (settings.Packages.Length > 1)
@@ -44,30 +47,25 @@ public class PackageInformationCommand : Command<PackageInformationSettings>
             return 0;
         }
 
-        WriteLeftAlignMarkup($"[green]Name: {package.Name.EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Version: {package.Version.EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Description: {package.Description.EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]URL: {package.Url.EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Licenses: {string.Join(',', package.Licenses).EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Groups: {string.Join(',', package.Groups).EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Provides: {string.Join(',', package.Provides).EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Depends On: {string.Join(',', package.Depends).EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Optional Depends: {string.Join(',', package.OptDepends).EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Required By: {string.Join(',', package.RequiredBy).EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Conflicts With: {string.Join(',', package.Conflicts).EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Replaces: {string.Join(',', package.Replaces).EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Installed Size: {package.InstalledSize} bytes[/]");
-        WriteLeftAlignMarkup($"[blue]Build Date: {package.BuildDate.ToLongDateString().EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[green]Name: {package.Name.EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Version: {package.Version.EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Description: {package.Description.EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]URL: {package.Url.EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Licenses: {string.Join(',', package.Licenses).EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Groups: {string.Join(',', package.Groups).EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Provides: {string.Join(',', package.Provides).EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Depends On: {string.Join(',', package.Depends).EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Optional Depends: {string.Join(',', package.OptDepends).EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Required By: {string.Join(',', package.RequiredBy).EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Conflicts With: {string.Join(',', package.Conflicts).EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Replaces: {string.Join(',', package.Replaces).EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Installed Size: {package.InstalledSize} bytes[/]");
+        AnsiConsole.MarkupLine($"[blue]Build Date: {package.BuildDate.ToLongDateString().EscapeMarkup()}[/]");
         var installDate = package.InstallDate.HasValue
             ? package.InstallDate.Value.ToLongDateString()
             : "Not Installed";
-        WriteLeftAlignMarkup($"[blue]Install Date: {installDate.EscapeMarkup()}[/]");
-        WriteLeftAlignMarkup($"[blue]Install Reason: {package.InstallReason}[/]");
+        AnsiConsole.MarkupLine($"[blue]Install Date: {installDate.EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[blue]Install Reason: {package.InstallReason}[/]");
         return 0;
-    }
-
-    private static void WriteLeftAlignMarkup(string value)
-    {
-        AnsiConsole.Write(new Align(new Markup(value), HorizontalAlignment.Left));
     }
 }

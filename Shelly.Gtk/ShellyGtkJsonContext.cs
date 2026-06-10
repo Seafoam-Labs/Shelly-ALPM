@@ -57,4 +57,6 @@ namespace Shelly.Gtk;
 [JsonSerializable(typeof(List<PacfileRecord>))]
 [JsonSerializable(typeof(PacfileRecord))]
 [JsonSerializable(typeof(int[]))]
+[JsonSerializable(typeof(DowngradeOptionDto))]
+[JsonSerializable(typeof(List<DowngradeOptionDto>))]
 internal partial class ShellyGtkJsonContext : JsonSerializerContext;

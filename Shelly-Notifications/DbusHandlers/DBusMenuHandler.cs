@@ -1,3 +1,4 @@
+using Shelly_Notifications.Resources;
 using Shelly_Notifications.Enums;
 using Shelly_Notifications.Models;
 using Shelly_Notifications.Services;
@@ -18,13 +19,13 @@ public class DBusMenuHandler(Connection connection) : IPathMethodHandler
         Dictionary<int, (string Label, string Type, bool Enabled, string icon, string subMenu, MenuEnum action, bool visible)> Items =
             new()
             {
-                [1] = ("Open Shelly", "standard", true, "shelly", "", MenuEnum.OpenShelly, true),
-                [2] = ("Update Packages", "standard", true, "", "", MenuEnum.UpdatePackages, true),
-                [3] = ("Check for Updates", "standard", true, "", "", MenuEnum.CheckForUpdates, true),
-                [4] = ("Last check: Never", "standard", false, "", "", MenuEnum.LastTime, true),
+                [1] = (Translations.T("Open Shelly"), "standard", true, "shelly", "", MenuEnum.OpenShelly, true),
+                [2] = (Translations.T("Update Packages"), "standard", true, "", "", MenuEnum.UpdatePackages, true),
+                [3] = (Translations.T("Check for Updates"), "standard", true, "", "", MenuEnum.CheckForUpdates, true),
+                [4] = (Translations.T("Last check: Never"), "standard", false, "", "", MenuEnum.LastTime, true),
                 [5] = ("", "separator", false, "", "", MenuEnum.None, true),
                 [98] = ("", "separator", false, "", "", MenuEnum.None, true),
-                [99] = ("Exit", "standard", true, "", "", action: MenuEnum.Exit, true),
+                [99] = (Translations.T("Exit"), "standard", true, "", "", action: MenuEnum.Exit, true),
             };
 
     private const int SubmenuId = 6;
@@ -258,7 +259,7 @@ public class DBusMenuHandler(Connection connection) : IPathMethodHandler
             case MenuEnum.CheckForUpdates:
                 var updates = await new UpdateService(this).CheckForUpdates();
                 new NotificationHandler().SendNotif(connection,
-                    updates > 0 ? $"Updates available: {updates}" : "No updates available.");
+                    updates > 0 ? Translations.T("Updates available: {0}", updates) : Translations.T("No updates available."));
                 if (OnUpdateStatusChanged != null)
                 {
                     await OnUpdateStatusChanged(updates > 0);
@@ -397,15 +398,15 @@ public class DBusMenuHandler(Connection connection) : IPathMethodHandler
 
             var flatpakIds = RegisterSubmenuItems(syncModel.Flatpaks, i => $"{i.Name} {i.Version}",
                 MenuEnum.FlatpakUpdate, ref startValue);
-            RegisterSubmenu(flatpakIds, MenuEnum.FlatpakUpdate, SubmenuId + 1, "Flatpak");
+            RegisterSubmenu(flatpakIds, MenuEnum.FlatpakUpdate, SubmenuId + 1, Translations.T("Flatpak"));
 
             var aurIds = RegisterSubmenuItems(syncModel.Aur, i => $"{i.Name} {i.OldVersion} -> {i.Version}",
                 MenuEnum.AurUpdate, ref startValue);
-            RegisterSubmenu(aurIds, MenuEnum.AurUpdate, SubmenuId + 2, "AUR");
+            RegisterSubmenu(aurIds, MenuEnum.AurUpdate, SubmenuId + 2, Translations.T("AUR"));
 
             var packageIds = RegisterSubmenuItems(syncModel.Packages, i => $"{i.Name} {i.OldVersion} -> {i.Version}",
                 MenuEnum.StandardUpdate, ref startValue);
-            RegisterSubmenu(packageIds, MenuEnum.StandardUpdate, SubmenuId + 3, "Standard");
+            RegisterSubmenu(packageIds, MenuEnum.StandardUpdate, SubmenuId + 3, Translations.T("Standard"));
 
             var totalUpdates = flatpakIds.Count + aurIds.Count + packageIds.Count;
             if (Items.TryGetValue(98, out var separator))
@@ -419,7 +420,7 @@ public class DBusMenuHandler(Connection connection) : IPathMethodHandler
         }
 
         var time = GetIndexByAction(MenuEnum.LastTime);
-        Items[time!.Value] = ($"Last check: {DateTime.Now:HH:mm MM/dd}", "standard", false, "", "", MenuEnum.LastTime, true);
+        Items[time!.Value] = (Translations.T("Last check: {0}", DateTime.Now.ToString("HH:mm MM/dd")), "standard", false, "", "", MenuEnum.LastTime, true);
 
         using var writer = connection.GetMessageWriter();
 
@@ -431,9 +432,9 @@ public class DBusMenuHandler(Connection connection) : IPathMethodHandler
 
         var updatedArr = writer.WriteArrayStart(DBusType.Struct);
 
-        WriteSubmenuEntry(writer, GetIndexByAction(MenuEnum.StandardUpdate) ?? -1, "Standard");
-        WriteSubmenuEntry(writer, GetIndexByAction(MenuEnum.AurUpdate) ?? -1, "Aur");
-        WriteSubmenuEntry(writer, GetIndexByAction(MenuEnum.FlatpakUpdate) ?? -1, "Flatpak");
+        WriteSubmenuEntry(writer, GetIndexByAction(MenuEnum.StandardUpdate) ?? -1, Translations.T("Standard"));
+        WriteSubmenuEntry(writer, GetIndexByAction(MenuEnum.AurUpdate) ?? -1, Translations.T("AUR"));
+        WriteSubmenuEntry(writer, GetIndexByAction(MenuEnum.FlatpakUpdate) ?? -1, Translations.T("Flatpak"));
 
         if (Items.TryGetValue(98, out var bottomSep))
         {

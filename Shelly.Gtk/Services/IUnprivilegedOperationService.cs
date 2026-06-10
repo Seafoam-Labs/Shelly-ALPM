@@ -15,7 +15,9 @@ public interface IUnprivilegedOperationService
     Task<List<AppstreamApp>> ListAppstreamFlatpak(CancellationToken ct = default);
 
     Task<UnprivilegedOperationResult> FlatpakUpgrade();
-
+    
+    Task<UnprivilegedOperationResult> FlatpakRepair();
+    
     Task<List<FlatpakRemoteDto>> FlatpakListRemotes();
 
     Task<UnprivilegedOperationResult> UpdateFlatpakPackage(string package);
@@ -42,6 +44,7 @@ public interface IUnprivilegedOperationService
     Task<List<AlpmPackageUpdateDto>> CheckForStandardApplicationUpdates(bool showHidden = false);
 
     Task<UnprivilegedOperationResult> ExportSyncFile(string filePath, string name);
+
 
     Task<List<FlatpakPackageDto>> SearchFlathubAsync(string query);
 

@@ -78,7 +78,7 @@ public class SetupWindow(
                     const string serviceContent = $"""
                                                    [Unit]
                                                    Description=Shelly Notifications tray service
-                                                   PartOf=default.target
+                                                   After=graphical-session.target
 
                                                    [Service]
                                                    Type=simple
@@ -87,7 +87,7 @@ public class SetupWindow(
                                                    RestartSec=5s
 
                                                    [Install]
-                                                   WantedBy=default.target
+                                                   WantedBy=graphical-session.target
                                                    """;
 
                     _ = unPrivilegedOperationService.AddSystemdServiceTray(serviceContent, "shelly-notifications");

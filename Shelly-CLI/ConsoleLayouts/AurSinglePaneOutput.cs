@@ -3,14 +3,13 @@ using PackageManager.Aur;
 using Shelly_CLI.Configuration;
 using Shelly_CLI.Utility;
 using Spectre.Console;
-using LineKey = Shelly_CLI.ConsoleLayouts.BottomBarRegion.LineKey;
 
 namespace Shelly_CLI.ConsoleLayouts;
 
 /// <summary>
-/// pacman/makepkg-style single-stream renderer for AUR install/upgrade flows.
-/// Top-to-bottom log, in-place progress bars pinned to the bottom line(s),
-/// section banners ("::", "==&gt;"), no Live panels.
+///     pacman/makepkg-style single-stream renderer for AUR install/upgrade flows.
+///     Top-to-bottom log, in-place progress bars pinned to the bottom line(s),
+///     section banners ("::", "==&gt;"), no Live panels.
 /// </summary>
 public static class AurSinglePaneOutput
 {
@@ -26,81 +25,55 @@ public static class AurSinglePaneOutput
         var pendingPacfiles = new List<PendingPacfile>();
         var pacfileLock = new object();
 
-        manager.PackageProgress += (_, args) =>
+        manager.InformationalEvent += (_, args) =>
         {
-            var statusColor = args.Status switch
+            // Discrete labeled stages (formerly PackageProgress)
+            var stage = args.EventType switch
             {
-                PackageProgressStatus.Downloading => "yellow",
-                PackageProgressStatus.Building => "blue",
-                PackageProgressStatus.Installing => "cyan",
-                PackageProgressStatus.Completed => "green",
-                PackageProgressStatus.Failed => "red",
-                _ => "white"
+                AlpmEventType.AurDownloadStart => ("downloading", "yellow", false),
+                AlpmEventType.AurBuildStart => ("building", "blue", false),
+                AlpmEventType.AurInstallStart => ("installing", "cyan", false),
+                AlpmEventType.AurCleanupStart => ("cleaning", "magenta", false),
+                AlpmEventType.AurPackageCompleted => ("completed", "green", true),
+                AlpmEventType.AurPackageFailed => ("failed", "red", true),
+                _ => (null, null, false)
             };
 
-            var msg = args.Message != null ? $" - {args.Message.EscapeMarkup()}" : "";
-            var line =
-                $"[bold]::[/] [{statusColor}]({args.CurrentIndex}/{args.TotalCount}) " +
-                $"{args.Status.ToString().ToLowerInvariant()} {args.PackageName.EscapeMarkup()}[/]{msg}";
-
-            if (args.Status == PackageProgressStatus.Completed
-                || args.Status == PackageProgressStatus.Failed)
+            if (stage.Item1 != null)
             {
-                region.FinalizeStickiesWhere(k => k.Source == "progress" && k.Package == args.PackageName);
-                region.WriteLine(line);
-                region.PromoteBar(args.PackageName);
-            }
-            else
-            {
-                region.WriteEvent(
-                    new LineKey("progress", args.PackageName, args.Status.ToString()),
-                    line);
+                var pkg = args.PackageName ?? "";
+                var idx = args.CurrentIndex ?? 0;
+                var total = args.TotalCount ?? 0;
+                var msg = !string.IsNullOrEmpty(args.Message) ? $" - {args.Message.EscapeMarkup()}" : "";
+                var line =
+                    $"[bold]::[/] [{stage.Item2}]({idx}/{total}) " +
+                    $"{stage.Item1} {pkg.EscapeMarkup()}[/]{msg}";
 
-                if (args.Status == PackageProgressStatus.Building)
+                if (stage.Item3)
                 {
-                    region.WriteLine($"[bold]==>[/] Making package: [bold]{args.PackageName.EscapeMarkup()}[/]");
+                    region.FinalizeStickiesWhere(k => k.Source == "progress" && k.Package == pkg);
+                    region.WriteLine(line);
+                    region.PromoteBar(pkg);
                 }
-            }
-        };
-
-        manager.Progress += (_, e) =>
-        {
-            var name = e.PackageName ?? "unknown";
-            var pct = e.Percent ?? 0;
-            region.UpdateBar(name, e.Current ?? 0, e.HowMany ?? 0, pct, e.ProgressType.ToString());
-        };
-
-        manager.BuildOutput += (_, e) =>
-        {
-            if (e.Percent.HasValue)
-            {
-                var bar = ProgressBarRenderer.RenderStatic(e.Percent.Value, 20);
-                var msgPart = (e.ProgressMessage ?? "").EscapeMarkup();
-                var rendered =
-                    $"[bold]{e.PackageName.EscapeMarkup()}[/] [yellow]{bar} {e.Percent.Value,3}%[/] {msgPart}";
-                var action = string.IsNullOrEmpty(e.ProgressMessage) ? "build" : e.ProgressMessage!;
-                var key = new LineKey("build", e.PackageName ?? "", action);
-                region.WriteEvent(key, rendered);
-
-                if (e.Percent.Value >= 100)
+                else
                 {
-                    region.FinalizeSticky(key);
+                    region.WriteEvent(new BottomBarRegion.LineKey("progress", pkg, stage.Item1), line);
+                    if (args.EventType == AlpmEventType.AurBuildStart)
+                        region.WriteLine($"[bold]==>[/] Making package: [bold]{pkg.EscapeMarkup()}[/]");
                 }
 
                 return;
             }
 
-            var pkg = e.PackageName ?? "";
-            region.FinalizeStickiesWhere(k => k.Source == "build" && k.Package == pkg);
-
-            var line = e.Line ?? string.Empty;
-            if (e.IsError)
+            // Raw makepkg log lines (formerly BuildOutput w/o percent)
+            if (args.EventType is AlpmEventType.AurBuildOutput or AlpmEventType.AurBuildError)
             {
-                region.WriteLine($"[red]{line.EscapeMarkup()}[/]");
-            }
-            else
-            {
-                if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
+                var pkg = args.PackageName ?? "";
+                region.FinalizeStickiesWhere(k => k.Source == "build" && k.Package == pkg);
+                var line = args.Message;
+                if (args.EventType == AlpmEventType.AurBuildError)
+                    region.WriteLine($"[red]{line.EscapeMarkup()}[/]");
+                else if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
                     region.WriteLine($"[red]{line.EscapeMarkup()}[/]");
                 else if (line.StartsWith("warning:", StringComparison.OrdinalIgnoreCase))
                     region.WriteLine($"[yellow]{line.EscapeMarkup()}[/]");
@@ -113,16 +86,30 @@ public static class AurSinglePaneOutput
             }
         };
 
-        manager.PackageOperation += (_, e) =>
+        manager.Progress += (_, e) =>
         {
-            region.WriteLine(string.IsNullOrWhiteSpace(e.PackageName)
-                ? $":: {e.EventType}".EscapeMarkup()
-                : $":: {e.EventType} for {e.PackageName}".EscapeMarkup());
+            var name = e.PackageName ?? "unknown";
+            var pct = e.Percent ?? 0;
+
+            // Makepkg progress (formerly BuildOutput w/ percent) — render its own bar
+            if (e.ProgressType == AlpmProgressType.MakepkgBuild)
+            {
+                var bar = ProgressBarRenderer.RenderStatic(pct, 20);
+                var msgPart = (e.Message ?? "").EscapeMarkup();
+                var rendered = $"[bold]{name.EscapeMarkup()}[/] [yellow]{bar} {pct,3}%[/] {msgPart}";
+                var action = string.IsNullOrEmpty(e.Message) ? "build" : e.Message!;
+                var key = new BottomBarRegion.LineKey("build", name, action);
+                region.WriteEvent(key, rendered);
+                if (pct >= 100) region.FinalizeSticky(key);
+                return;
+            }
+
+            region.UpdateBar(name, e.Current ?? 0, e.HowMany ?? 0, pct, e.ProgressType.ToString());
         };
 
         manager.ScriptletInfo += (_, e) =>
         {
-            var line = e.Line ?? string.Empty;
+            var line = e.Line;
             region.WriteLine(string.IsNullOrEmpty(line)
                 ? "[dim]Running scriptlet...[/]"
                 : $"[dim]Scriptlet: {line.EscapeMarkup()}[/]");
@@ -130,7 +117,7 @@ public static class AurSinglePaneOutput
 
         manager.HookRun += (_, e) =>
         {
-            var line = e.Description ?? string.Empty;
+            var line = e.Description;
             region.WriteLine(string.IsNullOrEmpty(line)
                 ? "[dim]Running hook...[/]"
                 : $"[dim]Hook: {line.EscapeMarkup()}[/]");
@@ -172,14 +159,14 @@ public static class AurSinglePaneOutput
         {
             if (noConfirm)
             {
-                QuestionHandler.HandleQuestion(e, uiMode: false, noConfirm: true);
+                QuestionHandler.HandleQuestion(e, false, true);
                 return;
             }
 
             region.SuspendForPrompt();
             try
             {
-                QuestionHandler.HandleQuestion(e, uiMode: false, noConfirm: false);
+                QuestionHandler.HandleQuestion(e);
             }
             finally
             {
@@ -192,19 +179,9 @@ public static class AurSinglePaneOutput
             region.SuspendForPrompt();
             try
             {
-                AnsiConsole.MarkupLine($"[bold]:: PKGBUILD for {args.PackageName.EscapeMarkup()}:[/]");
-                foreach (var line in AurSplitOutput.BuildUnifiedDiffLines(
-                             args.OldPkgbuild ?? string.Empty,
-                             args.NewPkgbuild ?? string.Empty))
-                {
-                    AnsiConsole.MarkupLine(line);
-                }
-
-                var pkgBuildConfirm = noConfirm
-                                      || AnsiConsole.Confirm(":: Proceed with this PKGBUILD?", true);
-                args.ProceedWithUpdate = pkgBuildConfirm;
-                if (!pkgBuildConfirm)
-                    region.WriteLine($"[yellow] Cancelled because of pkgbuild diff.[/]");
+                QuestionHandler.HandleQuestion(args, false, noConfirm);
+                if (!args.ProceedWithUpdate)
+                    region.WriteLine("[yellow] Cancelled because of pkgbuild diff.[/]");
             }
             finally
             {

@@ -6,6 +6,7 @@ using PackageManager.Aur.Models;
 using PackageManager.Flatpak;
 using PackageManager.Wire;
 using Shelly.Utilities;
+using Shelly.Utilities.Eventing;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -233,45 +234,52 @@ public class CheckPackageUpdatesNonRootCommand : AsyncCommand<CheckPackageUpdate
             return 0;
         }
 
-        await Console.Error.WriteLineAsync("Initializing and syncing ALPM updates");
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            AlpmEvents.InformationalOutput, "Initializing and syncing ALPM updates"));
         alpmManager.Initialize(useTempPath: true, tempPath: dbPath);
         alpmManager.Sync();
         alpmPackages = alpmManager.GetPackagesNeedingUpdate();
         alpmManager.Dispose();
-        await Console.Error.WriteLineAsync("Finished checking Standard");
+        JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+            AlpmEvents.InformationalOutput, "Finished checking Standard"));
 
         if (settings.CheckAur)
         {
-            await Console.Error.WriteLineAsync("Initializing AUR packages");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                AlpmEvents.InformationalOutput, "Initializing AUR packages"));
             await aurManager.Initialize(false, true, tempPath: dbPath);
             aurPackages = await aurManager.GetPackagesNeedingUpdate();
             aurManager.Dispose();
-            await Console.Error.WriteLineAsync("Finished checking AUR");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                AlpmEvents.InformationalOutput, "Finished checking AUR"));
         }
 
         if (settings.CheckFlatpak)
         {
-            await Console.Error.WriteLineAsync("Initializing and syncing Flatpak packages");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                AlpmEvents.InformationalOutput, "Initializing and syncing Flatpak packages"));
             flatpakPackages = FlatpakManager.GetPackagesWithUpdates();
-            await Console.Error.WriteLineAsync("Finished checking Flatpak");
+            JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
+                AlpmEvents.InformationalOutput, "Finished checking Flatpak"));
         }
 
-        foreach (var alpm in alpmPackages)
+        var result = new SyncModel
         {
-            Console.WriteLine(
-                $"{alpm.Name} Standard {alpm.NewVersion} {alpm.CurrentVersion} {FormatSize(alpm.DownloadSize)}");
-        }
-
-        foreach (var pkg in aurPackages)
-        {
-            Console.WriteLine($"{pkg.Name} AUR {pkg.NewVersion} {pkg.Version} {FormatSize(pkg.DownloadSize)}");
-        }
-
-        foreach (var pkg in flatpakPackages)
-        {
-            Console.WriteLine($"{pkg.Name} Flatpak {pkg.Version}");
-        }
-
+            Packages = alpmPackages.Select(pkg => new SyncPackageModel
+            {
+                Name = pkg.Name, DownloadSize = FormatSize(pkg.DownloadSize),
+                OldVersion = pkg.CurrentVersion, Version = pkg.NewVersion
+            }).ToList(),
+            Aur = aurPackages.Select(pkg => new SyncAurModel
+            {
+                Name = pkg.Name, OldVersion = pkg.Version, Version = pkg.NewVersion
+            }).ToList(),
+            Flatpaks = flatpakPackages.Select(pkg => new SyncFlatpakModel
+            {
+                Id = pkg.Id, Name = pkg.Name, Version = pkg.Version
+            }).ToList()
+        };
+        JsonPackFrame.WriteToStdout(result);
         return 0;
     }
 }
