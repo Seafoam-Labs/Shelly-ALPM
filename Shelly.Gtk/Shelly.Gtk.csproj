@@ -30,7 +30,6 @@
     <ItemGroup>
         <EmbeddedResource Include="UiFiles\**\*.ui" />
         <EmbeddedResource Include="Assets\chel-intro.png" />
-        <EmbeddedResource Include="Assets\chelflag.png" />
     </ItemGroup>
 
     <ItemGroup>
