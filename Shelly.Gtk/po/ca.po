@@ -1285,3 +1285,66 @@ msgstr "Inici automàtic de la icona de la safata"
 
 msgid "Allow the tray service to autostart."
 msgstr "Permet que el servei de la safata s'iniciï automàticament."
+
+msgid "Applications"
+msgstr "Aplicacions"
+
+msgid "Search AppImages..."
+msgstr "Cerca AppImages..."
+
+msgid "Reload catalog"
+msgstr "Recarrega el catàleg"
+
+msgid "Loading AppImage catalog..."
+msgstr "S'està carregant el catàleg d'AppImage..."
+
+msgid "No AppImages found"
+msgstr "No s'han trobat AppImages"
+
+msgid "Authors"
+msgstr "Autors"
+
+msgid "Categories"
+msgstr "Categories"
+
+msgid "License"
+msgstr "Llicència"
+
+msgid "No downloadable release found for {0}"
+msgstr "No s'ha trobat cap versió descarregable per a {0}"
+
+msgid "Resolving latest release for {0}..."
+msgstr "S'està resolent l'última versió per a {0}..."
+
+msgid "Downloading {0}..."
+msgstr "S'està descarregant {0}..."
+
+msgid "Installation failed: {0}"
+msgstr "Ha fallat la instal·lació: {0}"
+
+msgid "Multimedia"
+msgstr "Multimèdia"
+
+msgid "Video"
+msgstr "Vídeo"
+
+msgid "Audio"
+msgstr "Àudio"
+
+msgid "Qt"
+msgstr "Qt"
+
+msgid "GTK"
+msgstr "GTK"
+
+msgid "Others"
+msgstr "Altres"
+
+msgid "Finance"
+msgstr "Finances"
+
+msgid "Emulator"
+msgstr "Emulador"
+
+msgid "Web Development"
+msgstr "Desenvolupament Web"

@@ -1351,4 +1351,65 @@ msgstr "Revise as mudanças no PKGBUILD antes de continuar"
 msgid "Accept Changes"
 msgstr "Aceitar Mudanças"
 
+msgid "Applications"
+msgstr "Aplicativos"
 
+msgid "Search AppImages..."
+msgstr "Pesquisar AppImages..."
+
+msgid "Reload catalog"
+msgstr "Recarregar catálogo"
+
+msgid "Loading AppImage catalog..."
+msgstr "Carregando catálogo de AppImages..."
+
+msgid "No AppImages found"
+msgstr "Nenhum AppImage encontrado"
+
+msgid "Authors"
+msgstr "Autores"
+
+msgid "Categories"
+msgstr "Categorias"
+
+msgid "License"
+msgstr "Licença"
+
+msgid "No downloadable release found for {0}"
+msgstr "Nenhuma versão disponível para download de {0}"
+
+msgid "Resolving latest release for {0}..."
+msgstr "Resolvendo última versão para {0}..."
+
+msgid "Downloading {0}..."
+msgstr "Baixando {0}..."
+
+msgid "Installation failed: {0}"
+msgstr "Falha na instalação: {0}"
+
+msgid "Multimedia"
+msgstr "Multimídia"
+
+msgid "Video"
+msgstr "Vídeo"
+
+msgid "Audio"
+msgstr "Áudio"
+
+msgid "Qt"
+msgstr "Qt"
+
+msgid "GTK"
+msgstr "GTK"
+
+msgid "Others"
+msgstr "Outros"
+
+msgid "Finance"
+msgstr "Finanças"
+
+msgid "Emulator"
+msgstr "Emulador"
+
+msgid "Web Development"
+msgstr "Desenvolvimento Web"

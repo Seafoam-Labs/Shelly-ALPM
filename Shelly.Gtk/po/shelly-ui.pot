@@ -1148,6 +1148,33 @@ msgstr ""
 msgid "Audio & Video"
 msgstr ""
 
+msgid "Multimedia"
+msgstr ""
+
+msgid "Video"
+msgstr ""
+
+msgid "Audio"
+msgstr ""
+
+msgid "Qt"
+msgstr ""
+
+msgid "GTK"
+msgstr ""
+
+msgid "Others"
+msgstr ""
+
+msgid "Finance"
+msgstr ""
+
+msgid "Emulator"
+msgstr ""
+
+msgid "Web Development"
+msgstr ""
+
 msgid "Development"
 msgstr ""
 
@@ -1497,3 +1524,38 @@ msgstr ""
 msgid "Update Available: {0}"
 msgstr ""
 
+msgid "Applications"
+msgstr ""
+
+msgid "Search AppImages..."
+msgstr ""
+
+msgid "Reload catalog"
+msgstr ""
+
+msgid "Loading AppImage catalog..."
+msgstr ""
+
+msgid "No AppImages found"
+msgstr ""
+
+msgid "Authors"
+msgstr ""
+
+msgid "Categories"
+msgstr ""
+
+msgid "License"
+msgstr ""
+
+msgid "No downloadable release found for {0}"
+msgstr ""
+
+msgid "Resolving latest release for {0}..."
+msgstr ""
+
+msgid "Downloading {0}..."
+msgstr ""
+
+msgid "Installation failed: {0}"
+msgstr ""

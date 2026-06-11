@@ -1338,3 +1338,66 @@ msgstr "Migráció most"
 
 msgid "To continue managing your AppImages with shelly a confirmation is required to switch to the new v2 implementation."
 msgstr "Ahhoz, hogy továbbra is a shelly segítségével kezelhesse AppImage-it, meg kell erősítenie az új, v2-es verzióra való áttérést."
+
+msgid "Applications"
+msgstr "Alkalmazások"
+
+msgid "Search AppImages..."
+msgstr "AppImages keresése..."
+
+msgid "Reload catalog"
+msgstr "Katalógus újratöltése"
+
+msgid "Loading AppImage catalog..."
+msgstr "AppImage katalógus betöltése..."
+
+msgid "No AppImages found"
+msgstr "Nem található AppImage"
+
+msgid "Authors"
+msgstr "Szerzők"
+
+msgid "Categories"
+msgstr "Kategóriák"
+
+msgid "License"
+msgstr "Licenc"
+
+msgid "No downloadable release found for {0}"
+msgstr "Nem található letölthető kiadás ehhez: {0}"
+
+msgid "Resolving latest release for {0}..."
+msgstr "Legújabb kiadás keresése ehhez: {0}..."
+
+msgid "Downloading {0}..."
+msgstr "{0} letöltése..."
+
+msgid "Installation failed: {0}"
+msgstr "A telepítés sikertelen: {0}"
+
+msgid "Multimedia"
+msgstr "Multimédia"
+
+msgid "Video"
+msgstr "Videó"
+
+msgid "Audio"
+msgstr "Hang"
+
+msgid "Qt"
+msgstr "Qt"
+
+msgid "GTK"
+msgstr "GTK"
+
+msgid "Others"
+msgstr "Egyéb"
+
+msgid "Finance"
+msgstr "Pénzügyek"
+
+msgid "Emulator"
+msgstr "Emulátor"
+
+msgid "Web Development"
+msgstr "Webfejlesztés"

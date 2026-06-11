@@ -1571,3 +1571,67 @@ msgstr "Nie udało się usunąć pakietów: {0}"
 
 #~ msgid "Unable to load package data. You may have a db.lck."
 #~ msgstr "Nie można załadować danych pakietu. Możliwe, że masz plik db.lck."
+
+
+msgid "Applications"
+msgstr "Aplikacje"
+
+msgid "Search AppImages..."
+msgstr "Szukaj AppImages..."
+
+msgid "Reload catalog"
+msgstr "Przeładuj katalog"
+
+msgid "Loading AppImage catalog..."
+msgstr "Ładowanie katalogu AppImage..."
+
+msgid "No AppImages found"
+msgstr "Nie znaleziono AppImages"
+
+msgid "Authors"
+msgstr "Autorzy"
+
+msgid "Categories"
+msgstr "Kategorie"
+
+msgid "License"
+msgstr "Licencja"
+
+msgid "No downloadable release found for {0}"
+msgstr "Nie znaleziono pobieralnej wersji dla {0}"
+
+msgid "Resolving latest release for {0}..."
+msgstr "Pobieranie najnowszej wersji dla {0}..."
+
+msgid "Downloading {0}..."
+msgstr "Pobieranie {0}..."
+
+msgid "Installation failed: {0}"
+msgstr "Instalacja nie powiodła się: {0}"
+
+msgid "Multimedia"
+msgstr "Multimedia"
+
+msgid "Video"
+msgstr "Wideo"
+
+msgid "Audio"
+msgstr "Audio"
+
+msgid "Qt"
+msgstr "Qt"
+
+msgid "GTK"
+msgstr "GTK"
+
+msgid "Others"
+msgstr "Inne"
+
+msgid "Finance"
+msgstr "Finanse"
+
+msgid "Emulator"
+msgstr "Emulator"
+
+msgid "Web Development"
+msgstr "Tworzenie stron"

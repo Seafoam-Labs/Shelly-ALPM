@@ -1295,3 +1295,66 @@ msgid ""
 msgstr ""
 "Также удалить осиротевшие опциональные зависимости, установленные с этими "
 "пакетами."
+
+msgid "Applications"
+msgstr "Приложения"
+
+msgid "Search AppImages..."
+msgstr "Поиск AppImages..."
+
+msgid "Reload catalog"
+msgstr "Обновить каталог"
+
+msgid "Loading AppImage catalog..."
+msgstr "Загрузка каталога AppImage..."
+
+msgid "No AppImages found"
+msgstr "AppImages не найдены"
+
+msgid "Authors"
+msgstr "Авторы"
+
+msgid "Categories"
+msgstr "Категории"
+
+msgid "License"
+msgstr "Лицензия"
+
+msgid "No downloadable release found for {0}"
+msgstr "Для {0} не найден загружаемый релиз"
+
+msgid "Resolving latest release for {0}..."
+msgstr "Получение последней версии {0}..."
+
+msgid "Downloading {0}..."
+msgstr "Загрузка {0}..."
+
+msgid "Installation failed: {0}"
+msgstr "Ошибка установки: {0}"
+
+msgid "Multimedia"
+msgstr "Мультимедиа"
+
+msgid "Video"
+msgstr "Видео"
+
+msgid "Audio"
+msgstr "Аудио"
+
+msgid "Qt"
+msgstr "Qt"
+
+msgid "GTK"
+msgstr "GTK"
+
+msgid "Others"
+msgstr "Прочее"
+
+msgid "Finance"
+msgstr "Финансы"
+
+msgid "Emulator"
+msgstr "Эмулятор"
+
+msgid "Web Development"
+msgstr "Веб-разработка"

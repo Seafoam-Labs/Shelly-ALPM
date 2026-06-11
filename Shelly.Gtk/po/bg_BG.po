@@ -1279,3 +1279,66 @@ msgstr "Премахване на незадължителни зависимо�
 
 msgid "Also remove orphaned optional dependencies installed with these packages."
 msgstr "Също така премахване на осиротели незадължителни зависимости, инсталирани с тези пакети."
+
+msgid "Applications"
+msgstr "Приложения"
+
+msgid "Search AppImages..."
+msgstr "Търсене на AppImages..."
+
+msgid "Reload catalog"
+msgstr "Презареди каталога"
+
+msgid "Loading AppImage catalog..."
+msgstr "Зареждане на каталога AppImage..."
+
+msgid "No AppImages found"
+msgstr "Не са намерени AppImages"
+
+msgid "Authors"
+msgstr "Автори"
+
+msgid "Categories"
+msgstr "Категории"
+
+msgid "License"
+msgstr "Лиценз"
+
+msgid "No downloadable release found for {0}"
+msgstr "Не е намерена версия за изтегляне за {0}"
+
+msgid "Resolving latest release for {0}..."
+msgstr "Разрешаване на последната версия за {0}..."
+
+msgid "Downloading {0}..."
+msgstr "Изтегляне на {0}..."
+
+msgid "Installation failed: {0}"
+msgstr "Инсталацията е неуспешна: {0}"
+
+msgid "Multimedia"
+msgstr "Мултимедия"
+
+msgid "Video"
+msgstr "Видео"
+
+msgid "Audio"
+msgstr "Аудио"
+
+msgid "Qt"
+msgstr "Qt"
+
+msgid "GTK"
+msgstr "GTK"
+
+msgid "Others"
+msgstr "Други"
+
+msgid "Finance"
+msgstr "Финанси"
+
+msgid "Emulator"
+msgstr "Емулатор"
+
+msgid "Web Development"
+msgstr "Уеб разработка"

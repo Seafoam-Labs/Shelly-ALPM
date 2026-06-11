@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Shelly.Gtk.Services;
+using Shelly.Gtk.Services.AppImageHub;
 using Shelly.Gtk.Services.FlatHub;
 using Shelly.Gtk.Services.Icons;
 using Shelly.Gtk.Services.TrayServices;
@@ -35,6 +36,7 @@ public static class ServiceBuilder
         collection.AddScoped<IUpdateService, GitHubUpdateService>();
         collection.AddScoped<ITrayDbus, TrayDBus>();
         collection.AddScoped<IFlatHubApiService, FlatHubApiService>();
+        collection.AddSingleton<IAppImageHubService, AppImageHubService>();
         collection.AddTransient<FlatpakManage>();
         collection.AddTransient<AurInstall>();
         collection.AddTransient<AurUpdate>();
@@ -49,6 +51,7 @@ public static class ServiceBuilder
         collection.AddTransient<PasswordDialog>();
         collection.AddSingleton<LockoutDialog>();
         collection.AddTransient<AlpmEventDialog>();
+        collection.AddTransient<AppImageBrowse>();
         collection.AddTransient<AppImage>();
         collection.AddTransient<Recommend>();
         collection.AddTransient<WebWindow>();

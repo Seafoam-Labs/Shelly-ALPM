@@ -1274,3 +1274,65 @@ msgstr "IgnorePkg listesine ekle"
 
 msgid "Downgrade"
 msgstr "Eski Sürüme Düşür"
+msgid "Applications"
+msgstr "Uygulamalar"
+
+msgid "Search AppImages..."
+msgstr "AppImages ara..."
+
+msgid "Reload catalog"
+msgstr "Kataloğu yenile"
+
+msgid "Loading AppImage catalog..."
+msgstr "AppImage kataloğu yükleniyor..."
+
+msgid "No AppImages found"
+msgstr "AppImage bulunamadı"
+
+msgid "Authors"
+msgstr "Yazarlar"
+
+msgid "Categories"
+msgstr "Kategoriler"
+
+msgid "License"
+msgstr "Lisans"
+
+msgid "No downloadable release found for {0}"
+msgstr "{0} için indirilebilir sürüm bulunamadı"
+
+msgid "Resolving latest release for {0}..."
+msgstr "{0} için en son sürüm çözümleniyor..."
+
+msgid "Downloading {0}..."
+msgstr "{0} indiriliyor..."
+
+msgid "Installation failed: {0}"
+msgstr "Kurulum başarısız: {0}"
+
+msgid "Multimedia"
+msgstr "Multimedya"
+
+msgid "Video"
+msgstr "Video"
+
+msgid "Audio"
+msgstr "Ses"
+
+msgid "Qt"
+msgstr "Qt"
+
+msgid "GTK"
+msgstr "GTK"
+
+msgid "Others"
+msgstr "Diğerleri"
+
+msgid "Finance"
+msgstr "Finans"
+
+msgid "Emulator"
+msgstr "Emülatör"
+
+msgid "Web Development"
+msgstr "Web Geliştirme"

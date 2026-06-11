@@ -1359,3 +1359,66 @@ msgstr "ダウングレード"
 
 msgid "Enable Package Downgrade"
 msgstr "パッケージのダウングレードを有効にする"
+
+msgid "Applications"
+msgstr "アプリケーション"
+
+msgid "Search AppImages..."
+msgstr "AppImagesを検索..."
+
+msgid "Reload catalog"
+msgstr "カタログを更新"
+
+msgid "Loading AppImage catalog..."
+msgstr "AppImageカタログを読み込み中..."
+
+msgid "No AppImages found"
+msgstr "AppImageが見つかりません"
+
+msgid "Authors"
+msgstr "作者"
+
+msgid "Categories"
+msgstr "カテゴリ"
+
+msgid "License"
+msgstr "ライセンス"
+
+msgid "No downloadable release found for {0}"
+msgstr "{0}のダウンロード可能なリリースが見つかりません"
+
+msgid "Resolving latest release for {0}..."
+msgstr "{0}の最新リリースを解決中..."
+
+msgid "Downloading {0}..."
+msgstr "{0}をダウンロード中..."
+
+msgid "Installation failed: {0}"
+msgstr "インストール失敗: {0}"
+
+msgid "Multimedia"
+msgstr "マルチメディア"
+
+msgid "Video"
+msgstr "動画"
+
+msgid "Audio"
+msgstr "音楽"
+
+msgid "Qt"
+msgstr "Qt"
+
+msgid "GTK"
+msgstr "GTK"
+
+msgid "Others"
+msgstr "その他"
+
+msgid "Finance"
+msgstr "ファイナンス"
+
+msgid "Emulator"
+msgstr "エミュレーター"
+
+msgid "Web Development"
+msgstr "Web開発"

@@ -22,7 +22,8 @@ public sealed class AppImage(
     IUnprivilegedOperationService unprivilegedOperationService,
     IGenericQuestionService genericQuestionService,
     ILockoutService lockoutService,
-    IDirtyService dirtyService) : IShellyWindow, IReloadable
+    IDirtyService dirtyService,
+    AppImageBrowse appImageBrowse) : IShellyWindow, IReloadable
 {
     private List<AppImageDto> _appImages = [];
     private ListBox _appListBox = null!;
@@ -143,7 +144,13 @@ public sealed class AppImage(
         _ = LoadDataAsync();
         _sub = DirtySubscription.Attach(dirtyService, this);
 
-        return overlay;
+        var nb = Notebook.New();
+        nb.Hexpand = true;
+        nb.Vexpand = true;
+        nb.AppendPage(overlay, Label.New(T("Installed")));
+        nb.AppendPage(appImageBrowse.CreateWindow(), Label.New(T("Applications")));
+
+        return nb;
     }
 
     public void Dispose()
@@ -151,6 +158,7 @@ public sealed class AppImage(
         _sub?.Dispose();
         _appListBox.RemoveAll();
         _fileDropTarget.Unref();
+        appImageBrowse.Dispose();
     }
 
     private async Task LoadDataAsync()

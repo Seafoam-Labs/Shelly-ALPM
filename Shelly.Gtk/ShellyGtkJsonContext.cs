@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.AppImage;
+using Shelly.Gtk.UiModels.AppImageHub;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Utilities;
 using Shelly.Utilities.Eventing;
@@ -19,6 +20,7 @@ namespace Shelly.Gtk;
 [JsonSerializable(typeof(RssModel))]
 [JsonSerializable(typeof(List<RssModel>))]
 [JsonSerializable(typeof(GitHubRelease))]
+[JsonSerializable(typeof(List<GitHubRelease>))]
 [JsonSerializable(typeof(GitHubAsset))]
 [JsonSerializable(typeof(GitHubAsset[]))]
 [JsonSerializable(typeof(List<AlpmPackageUpdateDto>))]
@@ -61,5 +63,9 @@ namespace Shelly.Gtk;
 [JsonSerializable(typeof(DowngradeOptionDto))]
 [JsonSerializable(typeof(List<DowngradeOptionDto>))]
 [JsonSerializable(typeof(PkgbuildDiffQuestionDto))]
-
+[JsonSerializable(typeof(AppImageHubFeed))]
+[JsonSerializable(typeof(AppImageHubItem))]
+[JsonSerializable(typeof(List<AppImageHubItem>))]
+[JsonSerializable(typeof(AppImageHubLink))]
+[JsonSerializable(typeof(AppImageHubAuthor))]
 internal partial class ShellyGtkJsonContext : JsonSerializerContext;

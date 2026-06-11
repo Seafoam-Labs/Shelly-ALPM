@@ -1374,3 +1374,65 @@ msgstr "Trotzdem installieren"
 msgid "{0} used in {1}"
 msgstr "{0} verwendet in {1}"
 
+msgid "Applications"
+msgstr "Anwendungen"
+
+msgid "Search AppImages..."
+msgstr "AppImages suchen..."
+
+msgid "Reload catalog"
+msgstr "Katalog neu laden"
+
+msgid "Loading AppImage catalog..."
+msgstr "AppImage-Katalog wird geladen..."
+
+msgid "No AppImages found"
+msgstr "Keine AppImages gefunden"
+
+msgid "Authors"
+msgstr "Autoren"
+
+msgid "Categories"
+msgstr "Kategorien"
+
+msgid "License"
+msgstr "Lizenz"
+
+msgid "No downloadable release found for {0}"
+msgstr "Kein herunterladbares Release für {0} gefunden"
+
+msgid "Resolving latest release for {0}..."
+msgstr "Neueste Version für {0} wird ermittelt..."
+
+msgid "Downloading {0}..."
+msgstr "{0} wird heruntergeladen..."
+
+msgid "Installation failed: {0}"
+msgstr "Installation fehlgeschlagen: {0}"
+
+msgid "Multimedia"
+msgstr "Multimedia"
+
+msgid "Video"
+msgstr "Video"
+
+msgid "Audio"
+msgstr "Audio"
+
+msgid "Qt"
+msgstr "Qt"
+
+msgid "GTK"
+msgstr "GTK"
+
+msgid "Others"
+msgstr "Sonstige"
+
+msgid "Finance"
+msgstr "Finanzen"
+
+msgid "Emulator"
+msgstr "Emulator"
+
+msgid "Web Development"
+msgstr "Webentwicklung"

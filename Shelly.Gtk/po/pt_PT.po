@@ -1318,3 +1318,66 @@ msgstr "Arranque Automático do Ícone"
 
 msgid "Allow the tray service to autostart."
 msgstr "Permitir o arranque automático do serviço da área de notificação."
+
+msgid "Applications"
+msgstr "Aplicações"
+
+msgid "Search AppImages..."
+msgstr "Pesquisar AppImages..."
+
+msgid "Reload catalog"
+msgstr "Recarregar catálogo"
+
+msgid "Loading AppImage catalog..."
+msgstr "A carregar catálogo de AppImages..."
+
+msgid "No AppImages found"
+msgstr "Nenhum AppImage encontrado"
+
+msgid "Authors"
+msgstr "Autores"
+
+msgid "Categories"
+msgstr "Categorias"
+
+msgid "License"
+msgstr "Licença"
+
+msgid "No downloadable release found for {0}"
+msgstr "Nenhuma versão disponível para transferência de {0}"
+
+msgid "Resolving latest release for {0}..."
+msgstr "A resolver a última versão para {0}..."
+
+msgid "Downloading {0}..."
+msgstr "A transferir {0}..."
+
+msgid "Installation failed: {0}"
+msgstr "Falha na instalação: {0}"
+
+msgid "Multimedia"
+msgstr "Multimédia"
+
+msgid "Video"
+msgstr "Vídeo"
+
+msgid "Audio"
+msgstr "Áudio"
+
+msgid "Qt"
+msgstr "Qt"
+
+msgid "GTK"
+msgstr "GTK"
+
+msgid "Others"
+msgstr "Outros"
+
+msgid "Finance"
+msgstr "Finanças"
+
+msgid "Emulator"
+msgstr "Emulador"
+
+msgid "Web Development"
+msgstr "Desenvolvimento Web"
