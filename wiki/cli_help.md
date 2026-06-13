@@ -119,6 +119,7 @@
 | `appimage upgrade [Name]`           | Update an appimage file                   |
 | `appimage configure-updates <Name>` | Configure update settings for an AppImage |
 | `appimage sync-meta [QUERY]`        | Syncs meta data for an AppImage           |
+| `appimage migrate-manager`          | Migrate AppImage manager version          |
 
 
 ---
@@ -1429,6 +1430,7 @@ shelly parallel 10
 - `shelly appimage upgrade` — Update an appimage file
 - `shelly appimage configure-updates` — Configure update settings for an AppImage
 - `shelly appimage sync-meta` — Syncs meta data for an AppImage
+- `shelly appimage migrate-manager` — Migrate AppImage manager version
 
 
 ### `shelly appimage list`
@@ -1457,6 +1459,7 @@ Install an appimage file
 
 - `-l, --location` — Location of the .AppImage to be installed
 - `-n, --no-confirm` — Proceed without asking for user confirmation
+- `-p, --prerelease` — Allow pre-releases
 - `-t, --type` — Set the update type (None, StaticUrl, GitHub, GitLab, Codeberg, Forgejo)
 - `-u, --update-url` — Set the release URL for update checking (e.g., https://github.com/owner/repo/releases)
 
@@ -1477,6 +1480,7 @@ Remove an appimage file
 **Options:**
 
 - `-n, --no-confirm` — Proceed without asking for user confirmation
+- `-c, --remove-config` — Also remove config, data, cache and state directories created by the AppImage
 
 **Examples:**
 
@@ -1522,6 +1526,7 @@ Configure update settings for an AppImage
 
 **Options:**
 
+- `-p, --prerelease` — Allow pre-releases
 - `-t, --type` — Set the update type (None, StaticUrl, GitHub, GitLab, Codeberg, Forgejo)
 - `-u, --update-url` — Set the update URL (e.g., https://github.com/owner/repo)
 
@@ -1549,3 +1554,8 @@ Syncs meta data for an AppImage
 ```sh
 shelly appimage sync-meta firefox
 ```
+
+### `shelly appimage migrate-manager`
+
+Migrate AppImage manager version
+
