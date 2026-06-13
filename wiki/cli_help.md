@@ -6,27 +6,28 @@
 
 ### Package Management
 
-| Command                   | Description                                                          |
-|---------------------------|----------------------------------------------------------------------|
-| `version`                 | Display the application version                                      |
-| `sync`                    | Synchronize package databases                                        |
-| `list-installed`          | List all installed packages                                          |
-| `list-local-installed`    | List all locally installed packages (.gz, .zst)                      |
-| `list-available`          | List all available packages                                          |
-| `list-updates`            | List packages that need updates                                      |
-| `list-repos`              | List configured repositories in order                                |
-| `info <packages>`         | Display information about a package                                  |
-| `install <packages>`      | Install one or more packages                                         |
-| `install-local`           | Install a local package file (.gz, .zst)                             |
-| `remove <packages>`       | Remove one or more packages                                          |
-| `remove-local <packages>` | Remove a locally installed package file                              |
-| `update <packages>`       | Update one or more packages                                          |
-| `upgrade`                 | Perform a full system upgrade                                        |
-| `downgrade <packages>`    | Downgrade a package                                                  |
-| `news`                    | Shows Arch news you haven't seen before                              |
-| `purify`                  | Find and remove corrupted packages                                   |
-| `fix-permissions`         | Restore user ownership of Shelly XDG directories (config/cache/data) |
-| `pacfile [pacfiles]`      | Manage stored pacfiles                                               |
+| Command                   | Description                                                             |
+|---------------------------|-------------------------------------------------------------------------|
+| `version`                 | Display the application version                                         |
+| `sync`                    | Synchronize package databases                                           |
+| `list-installed`          | List all installed packages                                             |
+| `list-local-installed`    | List all locally installed packages (.gz, .zst)                         |
+| `list-available`          | List all available packages                                             |
+| `list-updates`            | List packages that need updates                                         |
+| `list-repos`              | List configured repositories in order                                   |
+| `info <packages>`         | Display information about a package                                     |
+| `install <packages>`      | Install one or more packages                                            |
+| `install-local`           | Install a local package file (.gz, .zst)                                |
+| `remove <packages>`       | Remove one or more packages                                             |
+| `remove-local <packages>` | Remove a locally installed package file                                 |
+| `update <packages>`       | Update one or more packages                                             |
+| `upgrade`                 | Perform a full system upgrade                                           |
+| `mark <packages>`         | Mark installed packages as explicit or dependency-installed             |
+| `downgrade <packages>`    | Downgrade a package                                                     |
+| `news`                    | Shows Arch news you haven't seen before                                 |
+| `purify`                  | Find and remove corrupted packages; optionally remove orphaned packages |
+| `fix-permissions`         | Restore user ownership of Shelly XDG directories (config/cache/data)    |
+| `pacfile [pacfiles]`      | Manage stored pacfiles                                                  |
 
 ### Manage IgnorePkg entries in pacman.conf (`ignore`)
 
@@ -370,8 +371,7 @@ Remove one or more packages
 - `-j, --json` — Output results in JSON format for UI integration and scripting
 - `-n, --no-confirm` — Proceed without asking for user confirmation
 - `-o, --opt-deps` — Removes optional dependencies installed with the package, that don't depend on other packages
-- `-r, --remove-config` — Removes any files in your ~/.config that can be tied exclusively to the removed package(s). This is EXPERIMENTAL and has 
-no guarantees of working
+- `-r, --remove-config` — Removes any files in your ~/.config that can be tied exclusively to the removed package(s). This is EXPERIMENTAL and has no guarantees of working
 - `-i, --ripple` — Removes packages that depend on the package being removed
 - `--singlepane` — Use pacman-style single-stream output instead of the split-pane Live layout
 - `-y, --sync` — Synchronize package databases before performing the operation
@@ -448,6 +448,31 @@ Perform a full system upgrade
 ```sh
 shelly upgrade
 shelly upgrade --no-confirm
+```
+
+### `shelly mark`
+
+Mark installed packages as explicit or dependency-installed
+
+**Arguments:**
+
+- `<packages>` *(required)* — One or more package names to operate on (space-separated)
+
+**Options:**
+
+- `-d, --depends` — Mark the specified packages as installed as dependencies
+- `-e, --explicit` — Mark the specified packages as explicitly installed
+- `-j, --json` — Output results in JSON format for UI integration and scripting
+- `-n, --no-confirm` — Proceed without asking for user confirmation
+- `--singlepane` — Use pacman-style single-stream output instead of the split-pane Live layout
+- `-y, --sync` — Synchronize package databases before performing the operation
+
+**Examples:**
+
+```sh
+shelly mark firefox --explicit
+shelly mark firefox vlc --depends
+shelly mark firefox --depends --no-confirm
 ```
 
 ### `shelly downgrade`
@@ -553,17 +578,19 @@ shelly news --all
 
 ### `shelly purify`
 
-Find and remove corrupted packages
+Find and remove corrupted packages; optionally remove orphaned packages
 
 **Options:**
 
 - `-d, --dry-run` — 
 - `-n, --no-confirm` — 
+- `-o, --orphans` — 
 
 **Examples:**
 
 ```sh
 shelly purify
+shelly purify --orphans
 shelly purify --dry-run
 shelly purify --no-confirm
 ```
