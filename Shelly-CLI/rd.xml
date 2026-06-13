@@ -34,8 +34,8 @@
             <Type Name="Shelly_CLI.Commands.Standard.ArchNewsSettings" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.DowngradePackageCommand" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.DowngradePackageCommandSettings" Dynamic="Required All"/>
-            <Type Name="Shelly_CLI.Commands.Standard.CorruptedPackages" Dynamic="Required All"/>
-            <Type Name="Shelly_CLI.Commands.Standard.CorruptedPackagesSettings" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.Standard.PurifyPackages" Dynamic="Required All"/>
+            <Type Name="Shelly_CLI.Commands.Standard.PurifyPackagesSettings" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.Pacfile.PacfileCommand" Dynamic="Required All"/>
             <Type Name="Shelly_CLI.Commands.Standard.Pacfile.PacfileSettings" Dynamic="Required All"/>
             <!-- Keyring commands -->
