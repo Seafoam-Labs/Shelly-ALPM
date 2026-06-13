@@ -181,6 +181,12 @@ public class Program
                 .WithExample("upgrade")
                 .WithExample("upgrade", "--no-confirm");
 
+            config.AddCommand<MarkCommand>("mark")
+                .WithDescription("Mark installed packages as explicit or dependency-installed")
+                .WithExample("mark", "firefox", "--explicit")
+                .WithExample("mark", "firefox", "vlc", "--depends")
+                .WithExample("mark", "firefox", "--depends", "--no-confirm");
+
             config.AddCommand<DowngradePackageCommand>("downgrade")
                 .WithDescription("Downgrade a package")
                 .WithExample("downgrade", "firefox")

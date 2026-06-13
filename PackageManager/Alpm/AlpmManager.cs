@@ -1709,27 +1709,29 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         Question?.Invoke(this, args);
     }
 
-    /// <summary>
-    /// Marks an installed package in the local DB with the Depend install reason. Used by
-    /// the AUR layer to flag user-selected optional dependencies after they are installed
-    /// in a separate transaction. Returns true when the reason was successfully set.
-    /// </summary>
     public bool MarkPackageAsDepend(string packageName)
+    {
+        return MarkPackageReason(packageName, AlpmPkgReason.Depend);
+    }
+
+    public bool MarkPackageAsExplicit(string packageName)
+    {
+        return MarkPackageReason(packageName, AlpmPkgReason.Explicit);
+    }
+
+    private bool MarkPackageReason(string packageName, AlpmPkgReason reason)
     {
         if (_handle == IntPtr.Zero) Initialize();
         var localDb = GetLocalDb(_handle);
         if (localDb == IntPtr.Zero) return false;
         var localPkg = DbGetPkg(localDb, packageName);
         if (localPkg == IntPtr.Zero) return false;
-        if (PkgSetReason(localPkg, AlpmPkgReason.Depend) != 0)
-        {
-            var err = ErrorNumber(_handle);
-            InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.TraceOutput,
-                $"Failed to set reason for package: {packageName} with error: {GetErrorMessage(err)}"));
-            return false;
-        }
+        if (PkgSetReason(localPkg, reason) == 0) return true;
 
-        return true;
+        var err = ErrorNumber(_handle);
+        InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.TraceOutput,
+            $"Failed to set reason for package: {packageName} with error: {GetErrorMessage(err)}"));
+        return false;
     }
 
     public Task<bool> InstallLocalPackage(string path, AlpmTransFlag flags = AlpmTransFlag.None)
