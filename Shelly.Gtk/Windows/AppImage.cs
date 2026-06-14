@@ -156,7 +156,7 @@ public sealed class AppImage(
         const string legacyInstallDir = "/opt/shelly";
         var legacyLocalDbDir = XdgPaths.ShellyCache("appimage-local-meta-store", "appimage-metadata.db");
 
-        var needsMigration = Directory.GetFiles(legacyInstallDir).Length != 0 || File.Exists(legacyLocalDbDir);
+        var needsMigration = NeedsMigration(legacyInstallDir, legacyLocalDbDir);
 
         if (needsMigration)
         {
@@ -172,6 +172,7 @@ public sealed class AppImage(
         {
             Functions.IdleAdd(0, () =>
             {
+                _appListBox.SetVisible(true);
                 _migrationOverlay.SetVisible(false);
                 SetButtonsSensitive(true);
                 return false;
@@ -191,6 +192,12 @@ public sealed class AppImage(
 
             return false;
         });
+    }
+
+    internal static bool NeedsMigration(string legacyInstallDir, string legacyLocalDbPath)
+    {
+        return File.Exists(legacyLocalDbPath) ||
+               Directory.Exists(legacyInstallDir) && Directory.EnumerateFiles(legacyInstallDir).Any();
     }
 
     private void SetButtonsSensitive(bool sensitive)
