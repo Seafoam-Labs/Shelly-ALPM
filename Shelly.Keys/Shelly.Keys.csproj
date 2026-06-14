@@ -14,9 +14,9 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Version>2.3.3.2</Version>
+        <Version>2.3.3.3</Version>
         <AssemblyName>shelly-keys</AssemblyName>
-        <AssemblyVersion>2.3.3.2</AssemblyVersion>
+        <AssemblyVersion>2.3.3.3</AssemblyVersion>
         <AssemblyTitle>Shelly Keys</AssemblyTitle>
         <Description>Shelly CLI is a arch linux package manager</Description>
         <Company>Seafoam Labs</Company>

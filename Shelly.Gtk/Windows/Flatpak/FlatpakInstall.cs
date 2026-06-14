@@ -963,8 +963,8 @@ public class FlatpakInstall(
 
             var filter = FileFilter.New();
             filter.SetName(Translations.T("Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""));
-            filter.AddPattern("*.FlatpakRef");
-            filter.AddPattern("*.flatpak");
+            filter.AddSuffix("FlatpakRef");
+            filter.AddSuffix("flatpak");
 
             var filters = Gio.ListStore.New(FileFilter.GetGType());
             filters.Append(filter);

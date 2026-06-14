@@ -23,6 +23,7 @@ public class AppImageManagerV2(string installDirectory = "")
 
     public event EventHandler<AppImageErrorEventArgs>? ErrorEvent;
     public event EventHandler<AppImageMessageEventArgs>? MessageEvent;
+    public event EventHandler<AppImageProgressEventArgs>? ProgressEvent;
 
     private void LogMessage(string message)
     {
@@ -37,6 +38,12 @@ public class AppImageManagerV2(string installDirectory = "")
     private void LogWarning(string message)
     {
         MessageEvent?.Invoke(this, new AppImageMessageEventArgs($"Warning: {message}"));
+    }
+
+    private void LogProgress(string appName, long? totalBytes, long downloadedBytes)
+    {
+        double? percentage = totalBytes.HasValue ? (double)downloadedBytes / totalBytes.Value * 100 : null;
+        ProgressEvent?.Invoke(this, new AppImageProgressEventArgs(appName, totalBytes, downloadedBytes, percentage));
     }
 
     public async Task<int> InstallAppImage(string location)
@@ -972,11 +979,38 @@ public class AppImageManagerV2(string installDirectory = "")
             LogMessage($"Downloading update for {update.Name}...");
             using (var client = new HttpClient())
             {
+                client.Timeout = TimeSpan.FromMinutes(5);
                 client.DefaultRequestHeaders.UserAgent.Add(Http.UserAgent);
-                var response = await client.GetAsync(update.DownloadUrl);
+                
+                using var response = await client.GetAsync(update.DownloadUrl, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
+
+                var totalBytes = response.Content.Headers.ContentLength;
                 await using var fs = new FileStream(downloadPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                await response.Content.CopyToAsync(fs);
+                await using var contentStream = await response.Content.ReadAsStreamAsync();
+
+                var buffer = new byte[81920];
+                long totalDownloadedBytes = 0;
+                int bytesRead;
+                var lastReportedProgress = -1;
+
+                while ((bytesRead = await contentStream.ReadAsync(buffer)) != 0)
+                {
+                    await fs.WriteAsync(buffer.AsMemory(0, bytesRead));
+                    totalDownloadedBytes += bytesRead;
+
+                    if (totalBytes.HasValue)
+                    {
+                        var currentProgress = (int)((double)totalDownloadedBytes / totalBytes.Value * 100);
+                        if (currentProgress <= lastReportedProgress) continue;
+                        LogProgress(update.Name, totalBytes, totalDownloadedBytes);
+                        lastReportedProgress = currentProgress;
+                    }
+                    else
+                    {
+                        LogProgress(update.Name, totalBytes, totalDownloadedBytes);
+                    }
+                }
             }
 
             SetFilePermissions(downloadPath, "a+x");

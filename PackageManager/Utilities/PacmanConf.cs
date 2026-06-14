@@ -10,7 +10,7 @@ internal record PacmanConf
     public string CacheDir { get; set; } = "/var/cache/pacman/pkg";
     public string LogFile { get; set; } = "/var/log/pacman.log";
     public string GpgDir { get; set; } = "/etc/pacman.d/gnupg";
-    public string HookDir { get; set; } = "/etc/pacman.d/hooks";
+    public List<string> HookDir { get; set; } = ["/etc/pacman.d/hooks"];
     public List<string> HoldPkg { get; set; } = ["pacman", "glibc"];
     public string TransferCommand { get; set; } = "/usr/bin/curl -L -C - -f -o %o %u";
     public string TransferCommandTwo { get; set; } = "/usr/bin/wget --passive-ftp -c -O %o %u";

@@ -82,7 +82,7 @@ internal static class PacmanConfParser
             case "cachedir": conf.CacheDir = value; break;
             case "logfile": conf.LogFile = value; break;
             case "gpgdir": conf.GpgDir = value; break;
-            case "hookdir": conf.HookDir = value; break;
+            case "hookdir": conf.HookDir = value.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList(); break;
             case "holdpkg": conf.HoldPkg = value.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList(); break;
             case "xfercommand":
                 if (string.IsNullOrEmpty(conf.TransferCommand)) conf.TransferCommand = value;

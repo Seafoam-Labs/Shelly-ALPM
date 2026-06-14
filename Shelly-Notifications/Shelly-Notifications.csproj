@@ -19,8 +19,8 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Version>2.3.3.2</Version>
-        <AssemblyVersion>2.3.3.2</AssemblyVersion>
+        <Version>2.3.3.3</Version>
+        <AssemblyVersion>2.3.3.3</AssemblyVersion>
         <AssemblyKeyProviderName>shelly-notifications</AssemblyKeyProviderName>
         <AssemblyTitle>Shelly VALPM</AssemblyTitle>
         <Description>Shelly is a visual arch linux package manager</Description>

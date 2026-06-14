@@ -156,7 +156,7 @@ public sealed class AppImage(
         const string legacyInstallDir = "/opt/shelly";
         var legacyLocalDbDir = XdgPaths.ShellyCache("appimage-local-meta-store", "appimage-metadata.db");
 
-        var needsMigration = Directory.GetFiles(legacyInstallDir).Length != 0 || File.Exists(legacyLocalDbDir);
+        var needsMigration =  File.Exists(legacyLocalDbDir);
 
         if (needsMigration)
         {

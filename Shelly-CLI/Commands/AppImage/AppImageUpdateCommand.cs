@@ -17,13 +17,25 @@ public class AppImageUpdateCommand : AsyncCommand<AppImageUpdateSettings>
 
         if (Program.IsUiMode)
         {
+            var config = ConfigManager.ReadConfig();
             manager.MessageEvent += (_, e) => UiFrames.Info(e.Message);
             manager.ErrorEvent += (_, e) => UiFrames.Error(e.Error);
+            manager.ProgressEvent += (sender, e) =>
+            {
+                var sizeDisplay = Enum.TryParse<SizeDisplay>(config.FileSizeDisplay, true, out var parsed) ? parsed : SizeDisplay.Bytes;
+
+                var totalStr = e.TotalBytes.HasValue ? FormatSize(sizeDisplay, e.TotalBytes.Value) : "unknown";
+                var downloadedStr = FormatSize(sizeDisplay, e.DownloadedBytes);
+                var progressStr = e.ProgressPercentage.HasValue ? $"{e.ProgressPercentage.Value:F0}%" : "N/A";
+
+                UiFrames.Info($"Updating {e.AppName}: {progressStr} ({downloadedStr}/{totalStr})");
+            };
         }
         else
         {
             manager.MessageEvent += (_, e) => AnsiConsole.MarkupLine($"[blue][[INFO]][/] {e.Message.EscapeMarkup()}");
             manager.ErrorEvent += (_, e) => AnsiConsole.MarkupLine($"[red][[ERROR]][/] {e.Error.EscapeMarkup()}");
+            //not sub to progress events because cli rewrite.
         }
 
         var updates = await manager.CheckForAppImageUpdates();
@@ -68,5 +80,16 @@ public class AppImageUpdateCommand : AsyncCommand<AppImageUpdateSettings>
     private static async Task<int> PerformUpdate(AppImageManagerV2 managerV2, AppImageUpdateDto update)
     {
         return await managerV2.RunUpdate(update);
+    }
+    
+    private static  string FormatSize(SizeDisplay size, double bytes)
+    {
+        return size switch
+        {
+            SizeDisplay.Bytes => $"{bytes:0} B",
+            SizeDisplay.Megabytes => $"{bytes / 1048576.0:F2} MiB",
+            SizeDisplay.Gigabytes => $"{bytes / 1073741824.0:F2} GiB",
+            _ => $"{bytes:0} B"
+        };
     }
 }

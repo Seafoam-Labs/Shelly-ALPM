@@ -150,6 +150,11 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
             AddIgnorePkg(_handle, ignorePkg);
         }
 
+        foreach (var hookDir in _config.HookDir)
+        {
+            AddHookDir(_handle, hookDir);
+        }
+
         if (!string.IsNullOrEmpty(_config.GpgDir) && root)
         {
             SetGpgDir(_handle, _config.GpgDir);
