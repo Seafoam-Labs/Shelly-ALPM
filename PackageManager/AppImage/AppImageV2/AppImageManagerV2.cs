@@ -15,6 +15,8 @@ namespace PackageManager.AppImage.AppImageV2;
 
 public class AppImageManagerV2(string installDirectory = "")
 {
+    private const string AppImageLauncherDisableVariable = "APPIMAGELAUNCHER_DISABLE";
+
     private readonly string _installDirectory =
         string.IsNullOrEmpty(installDirectory) ? XdgPaths.BinHome() : installDirectory;
 
@@ -41,35 +43,51 @@ public class AppImageManagerV2(string installDirectory = "")
 
     public async Task<int> InstallAppImage(string location)
     {
-        var filePath = Path.GetFullPath(location);
-        var appName = Path.GetFileNameWithoutExtension(filePath);
-        var destAppImagePath = Path.Combine(_installDirectory, $"{appName}.AppImage");
-
-        if (!Directory.Exists(_installDirectory))
-            Directory.CreateDirectory(_installDirectory);
-
-        var existingAppImages = await GetAppImagesFromLocalDb();
-        if (existingAppImages.Any(a => string.Equals(a.Name, appName, StringComparison.OrdinalIgnoreCase)) ||
-            File.Exists(destAppImagePath))
+        try
         {
-            LogWarning($"AppImage {appName} already exists. Overwriting...");
+            var filePath = Path.GetFullPath(location);
+            if (!File.Exists(filePath))
+            {
+                LogError($"AppImage not found at {filePath}.");
+                return 1;
+            }
+
+            var appName = Path.GetFileNameWithoutExtension(filePath);
+            var destAppImagePath = Path.Combine(_installDirectory, $"{appName}.AppImage");
+
+            if (!Directory.Exists(_installDirectory))
+                Directory.CreateDirectory(_installDirectory);
+
+            var existingAppImages = await GetAppImagesFromLocalDb();
+            if (existingAppImages.Any(a => string.Equals(a.Name, appName, StringComparison.OrdinalIgnoreCase)) ||
+                File.Exists(destAppImagePath))
+            {
+                LogWarning($"AppImage {appName} already exists. Overwriting...");
+            }
+
+            LogMessage($"Installing AppImage {appName}...");
+            if (!string.Equals(filePath, destAppImagePath, StringComparison.Ordinal))
+                File.Copy(filePath, destAppImagePath, true);
+            XdgPaths.FixOwnershipIfRoot(destAppImagePath);
+            SetFilePermissions(destAppImagePath, "a+x");
+
+            var appImageDto = await ExtractMetadata(destAppImagePath);
+            if (appImageDto == null)
+            {
+                LogError("Failed to extract metadata during installation.");
+                return 1;
+            }
+
+            if (!await AddAppImageToLocalDb(appImageDto))
+                return 1;
+
+            return 0;
         }
-
-        LogMessage($"Installing AppImage {appName}...");
-        File.Copy(filePath, destAppImagePath, true);
-        XdgPaths.FixOwnershipIfRoot(destAppImagePath);
-        SetFilePermissions(destAppImagePath, "a+x");
-
-        var appImageDto = await ExtractMetadata(destAppImagePath);
-        if (appImageDto == null)
+        catch (Exception ex)
         {
-            LogError("Failed to extract metadata during installation.");
+            LogError($"Error installing AppImage: {ex.Message}");
             return 1;
         }
-
-        await AddAppImageToLocalDb(appImageDto);
-
-        return 0;
     }
 
     public async Task<bool> AppImageConfigureUpdates(string updateInfo, string name, UpdateType updateType,
@@ -412,17 +430,25 @@ public class AppImageManagerV2(string installDirectory = "")
 
             try
             {
-                var extractProcess = Process.Start(new ProcessStartInfo
+                var startInfo = CreateAppImageProcessStartInfo(filePath, "--appimage-extract", workingDir);
+                using var extractProcess = Process.Start(startInfo);
+                if (extractProcess == null)
                 {
-                    FileName = filePath,
-                    Arguments = "--appimage-extract",
-                    WorkingDirectory = workingDir,
-                    RedirectStandardOutput = false,
-                    RedirectStandardError = false,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                });
-                await extractProcess!.WaitForExitAsync();
+                    LogWarning("Could not start AppImage metadata extraction.");
+                    return null;
+                }
+
+                var outputTask = extractProcess.StandardOutput.ReadToEndAsync();
+                var errorTask = extractProcess.StandardError.ReadToEndAsync();
+                await extractProcess.WaitForExitAsync();
+                await outputTask;
+                var extractionError = await errorTask;
+
+                if (extractProcess.ExitCode != 0 || !Directory.Exists(squashfsRoot))
+                {
+                    LogWarning($"AppImage metadata extraction failed: {extractionError.Trim()}");
+                    return null;
+                }
             }
             catch (Exception ex)
             {
@@ -509,7 +535,7 @@ public class AppImageManagerV2(string installDirectory = "")
                                 break;
                             }
 
-                            patchedContent.AppendLine($"Exec=\"{filePath}\"{fieldCodes}");
+                            patchedContent.AppendLine(CreateDesktopExec(filePath, fieldCodes));
                         }
                         else if (line.StartsWith("TryExec="))
                         {
@@ -742,7 +768,7 @@ public class AppImageManagerV2(string installDirectory = "")
         content.AppendLine("Type=Application");
         content.AppendLine($"Name={appName}");
         content.AppendLine($"Comment={comment ?? $"{appName} application"}");
-        content.AppendLine($"Exec=\"{executablePath}\"");
+        content.AppendLine(CreateDesktopExec(executablePath));
         content.AppendLine($"Icon={icon}");
         content.AppendLine($"Terminal={terminal.ToString().ToLower()}");
         content.AppendLine($"Categories={categories}");
@@ -770,17 +796,9 @@ public class AppImageManagerV2(string installDirectory = "")
     {
         try
         {
-            var process = new Process
+            using var process = new Process
             {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = appImagePath,
-                    Arguments = "--appimage-updateinfo",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                }
+                StartInfo = CreateAppImageProcessStartInfo(appImagePath, "--appimage-updateinfo")
             };
 
             process.Start();
@@ -801,6 +819,28 @@ public class AppImageManagerV2(string installDirectory = "")
             LogError($"Could not get update info for {appImagePath}: {ex.Message}");
             return string.Empty;
         }
+    }
+
+    private static ProcessStartInfo CreateAppImageProcessStartInfo(string filePath, string arguments,
+        string? workingDirectory = null)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = filePath,
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory ?? string.Empty,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.Environment[AppImageLauncherDisableVariable] = "1";
+        return startInfo;
+    }
+
+    private static string CreateDesktopExec(string executablePath, string arguments = "")
+    {
+        return $"Exec=env {AppImageLauncherDisableVariable}=1 \"{executablePath}\"{arguments}";
     }
 
 
@@ -1284,7 +1324,7 @@ public class AppImageManagerV2(string installDirectory = "")
                         break;
                     }
 
-                    lines[i] = $"Exec=\"{newExecPath}\"{fieldCodes}";
+                    lines[i] = CreateDesktopExec(newExecPath, fieldCodes);
                     updated = true;
                 }
 
