@@ -20,8 +20,11 @@
                                 <child>
                                     <object class="GtkSearchEntry" id="AppImageSearchEntry">
                                         <property name="placeholder-text" translatable="yes">Search...</property>
-                                        <property name="width-request">200</property>
+                                        <property name="width-request">250</property>
                                         <property name="valign">center</property>
+                                        <style>
+                                            <class name="spaced-search"/>
+                                        </style>
                                     </object>
                                 </child>
                                 <child>
