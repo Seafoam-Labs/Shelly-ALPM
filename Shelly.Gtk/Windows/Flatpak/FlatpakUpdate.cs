@@ -25,6 +25,7 @@ public class FlatpakUpdate(
     private List<FlatpakPackageDto> _allPackages = [];
     private string _searchText = string.Empty;
     private SignalListItemFactory? _factory;
+    private Label? _noUpdatesLabel;
     private readonly List<StringObject> _stringObjectRefs = [];
     private bool _userOnly;
 
@@ -44,6 +45,7 @@ public class FlatpakUpdate(
         _factory.OnSetup += OnSetup;
         _factory.OnBind += OnBind;
         _listView.SetFactory(_factory);
+        _noUpdatesLabel = (Label)builder.GetObject("no_updates_label")!;
 
         _listView.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
         removeButton.OnClicked += (_, _) => { _ = UpdateAllCommand(); };
@@ -223,6 +225,11 @@ public class FlatpakUpdate(
             _stringObjectRefs.Add(strObj);
             _listStore.Append(strObj);
         }
+
+        if (_listStore.GetNItems() != 0) return;
+        _noUpdatesLabel!.Label_ = (Translations.T("<span size='large'>Flatpaks are up to date</span>"));
+        _noUpdatesLabel.Visible = true;
+
     }
 
     private async Task UpdateAllCommand()

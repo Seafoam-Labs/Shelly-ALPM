@@ -24,12 +24,29 @@
       </object>
     </child>
     <child>
-      <object class="GtkScrolledWindow">
-        <property name="overlay-scrolling">false</property>
+      <object class="GtkOverlay">
         <property name="vexpand">true</property>
         <property name="hexpand">true</property>
         <child>
-          <object class="GtkListView" id="installed_flatpaks"/>
+          <object class="GtkScrolledWindow">
+            <property name="overlay-scrolling">false</property>
+            <property name="vexpand">true</property>
+            <property name="hexpand">true</property>
+            <child>
+              <object class="GtkListView" id="installed_flatpaks"/>
+            </child>
+          </object>
+        </child>
+        <child type="overlay">
+          <object class="GtkLabel" id="no_updates_label">
+            <property name="visible">false</property>
+            <property name="use-markup">true</property>
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <style>
+              <class name="dim-label"/>
+            </style>
+          </object>
         </child>
       </object>
     </child>

@@ -13,7 +13,6 @@
                         <property name="orientation">vertical</property>
                         <property name="spacing">5</property>
                         <property name="margin-top">8</property>
-                        <property name="margin-start">10</property>
                         <property name="margin-end">10</property>
                         <property name="hexpand">false</property>
                         <property name="width-request">120</property>
@@ -93,13 +92,13 @@
                                                 <property name="spacing">8</property>
                                                 <child>
                                                     <object class="GtkImage">
-                                                        <property name="icon-name">edit-delete-symbolic</property>
+                                                        <property name="icon-name">applications-system-symbolic</property>
                                                         <property name="pixel-size">16</property>
                                                     </object>
                                                 </child>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label" translatable="yes">Remove</property>
+                                                        <property name="label" translatable="yes">Manage</property>
                                                         <property name="halign">start</property>
                                                     </object>
                                                 </child>

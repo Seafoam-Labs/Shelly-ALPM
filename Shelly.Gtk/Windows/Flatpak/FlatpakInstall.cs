@@ -22,7 +22,7 @@ public class FlatpakInstall(
     IGenericQuestionService genericQuestionService,
     IFlatHubApiService flatHubApiService,
     FlatpakUpdate flatpakUpdate,
-    FlatpakRemove flatpakRemove,
+    FlatpakManage flatpakManage,
     IDirtyService dirtyService) : IShellyWindow, IReloadable
 {
     private DirtySubscription? _sub;
@@ -150,7 +150,7 @@ public class FlatpakInstall(
         var updatePageBox = (Box)builder.GetObject("update_page_box")!;
         var removePageBox = (Box)builder.GetObject("remove_page_box")!;
         updatePageBox.Append(flatpakUpdate.CreateWindow());
-        removePageBox.Append(flatpakRemove.CreateWindow());
+        removePageBox.Append(flatpakManage.CreateWindow());
 
         var sectionNavList = (ListBox)builder.GetObject("section_nav_list")!;
         var navInstallRow = (ListBoxRow)builder.GetObject("nav_install_row")!;
@@ -441,7 +441,7 @@ public class FlatpakInstall(
                     }
                     else if (_activePage == "remove")
                     {
-                        flatpakRemove.SetSearch(text);
+                        flatpakManage.SetSearch(text);
                     }
                     else
                     {

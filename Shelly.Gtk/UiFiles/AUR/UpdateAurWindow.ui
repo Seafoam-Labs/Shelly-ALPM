@@ -77,12 +77,15 @@
                                             </object>
                                         </child>
                                         <child>
-                                            <object class="GtkColumnViewColumn" id="version_column">
-                                                <property name="title" translatable="yes">Version</property>
-                                                <property name="expand">true</property>
+                                            <object class="GtkColumnViewColumn" id="old_column">
+                                                <property name="title" translatable="yes">Old Version</property>
                                             </object>
                                         </child>
-                                       
+                                        <child>
+                                            <object class="GtkColumnViewColumn" id="version_column">
+                                                <property name="title" translatable="yes">Version</property>
+                                            </object>
+                                        </child>
                                     </object>
                                 </child>
                             </object>

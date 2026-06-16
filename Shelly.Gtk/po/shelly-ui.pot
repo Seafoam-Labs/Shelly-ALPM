@@ -1490,3 +1490,6 @@ msgstr ""
 
 msgid "App Permissions"
 msgstr ""
+
+msgid "<span size='large'>Flatpaks are up to date</span>"
+msgstr ""

@@ -9,7 +9,6 @@
                     <object class="GtkBox" id="AppImagePage">
                         <property name="orientation">vertical</property>
                         <property name="spacing">12</property>
-                        <property name="margin-start">20</property>
                         <property name="margin-end">20</property>
                         <property name="margin-top">20</property>
                         <property name="margin-bottom">20</property>

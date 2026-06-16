@@ -98,16 +98,19 @@
                                 <child>
                                     <object class="GtkToggleButton" id="SidebarToggleButton">
                                         <property name="icon-name">go-next-symbolic</property>
+                                        <property name="halign">start</property>
                                         <property name="has-frame">false</property>
-                                        <property name="margin-top">6</property>
-                                        <property name="margin-bottom">6</property>
-                                        <property name="margin-start">6</property>
-                                        <property name="margin-end">6</property>
+                                        <property name="margin-top">3</property>
+                                       <property name="margin-bottom">3</property>
+                                       <property name="margin-start">6</property>
+                                       <property name="margin-end">6</property>
+                                     
                                         <property name="tooltip-text" translatable="yes">Toggle Sidebar</property>
                                     </object>
                                 </child>
                                 <child>
                                     <object class="GtkToggleButton" id="SidebarRecommendButton">
+                                        <property name="halign">start</property>
                                         <property name="has-frame">false</property>
                                         <property name="margin-top">3</property>
                                         <property name="margin-bottom">3</property>
@@ -116,10 +119,13 @@
                                         <property name="tooltip-text" translatable="yes">Show Recommended</property>
                                         <child>
                                             <object class="GtkBox">
+                                                <property name="halign">start</property>
                                                 <property name="orientation">horizontal</property>
                                                 <property name="spacing">8</property>
                                                 <child>
                                                     <object class="GtkImage">
+                                                    <property name="halign">start</property>
+                                                    <property name="valign">center</property>
                                                         <property name="icon-name">emblem-favorite-symbolic</property>
                                                     </object>
                                                 </child>
@@ -135,6 +141,7 @@
                                 </child>
                                 <child>
                                     <object class="GtkToggleButton" id="SidebarPackagesButton">
+                                        <property name="halign">start</property>
                                         <property name="has-frame">false</property>
                                         <property name="margin-top">3</property>
                                         <property name="margin-bottom">3</property>
@@ -143,10 +150,13 @@
                                         <property name="tooltip-text" translatable="yes">Show Packages</property>
                                         <child>
                                             <object class="GtkBox">
+                                                <property name="halign">start</property>
                                                 <property name="orientation">horizontal</property>
                                                 <property name="spacing">8</property>
                                                 <child>
                                                     <object class="GtkImage">
+                                                       <property name="halign">start</property>
+                                                        <property name="valign">center</property>
                                                         <property name="icon-name">package-x-generic-symbolic</property>
                                                     </object>
                                                 </child>
@@ -162,6 +172,7 @@
                                 </child>
                                 <child>
                                     <object class="GtkToggleButton" id="SidebarAurButton">
+                                        <property name="halign">start</property>
                                         <property name="has-frame">false</property>
                                         <property name="margin-top">3</property>
                                         <property name="margin-bottom">3</property>
@@ -170,10 +181,13 @@
                                         <property name="tooltip-text" translatable="yes">Show AUR</property>
                                         <child>
                                             <object class="GtkBox">
+                                                <property name="halign">start</property>
                                                 <property name="orientation">horizontal</property>
                                                 <property name="spacing">8</property>
                                                 <child>
                                                     <object class="GtkImage">
+                                                    <property name="halign">start</property>
+                                                    <property name="valign">center</property>
                                                         <property name="icon-name">system-software-install-symbolic</property>
                                                     </object>
                                                 </child>
@@ -189,6 +203,7 @@
                                 </child>
                                 <child>
                                     <object class="GtkToggleButton" id="SidebarFlatpakButton">
+                                        <property name="halign">start</property>
                                         <property name="has-frame">false</property>
                                         <property name="margin-top">3</property>
                                         <property name="margin-bottom">3</property>
@@ -197,10 +212,13 @@
                                         <property name="tooltip-text" translatable="yes">Show Flat</property>
                                         <child>
                                             <object class="GtkBox">
+                                                <property name="halign">start</property>
                                                 <property name="orientation">horizontal</property>
                                                 <property name="spacing">8</property>
                                                 <child>
                                                     <object class="GtkImage">
+                                                    <property name="halign">start</property>
+                                                    <property name="valign">center</property>
                                                         <property name="icon-name">application-x-flatpak-symbolic</property>
                                                     </object>
                                                 </child>
@@ -216,6 +234,7 @@
                                 </child>
                                 <child>
                                     <object class="GtkToggleButton" id="SidebarAppImageButton">
+                                        <property name="halign">start</property>
                                         <property name="has-frame">false</property>
                                         <property name="margin-top">3</property>
                                         <property name="margin-bottom">3</property>
@@ -224,10 +243,13 @@
                                         <property name="tooltip-text" translatable="yes">Show AppImage</property>
                                         <child>
                                             <object class="GtkBox">
+                                                <property name="halign">start</property>
                                                 <property name="orientation">horizontal</property>
                                                 <property name="spacing">8</property>
                                                 <child>
                                                     <object class="GtkImage">
+                                                           <property name="halign">start</property>
+                                                            <property name="valign">center</property>
                                                         <property name="icon-name">application-x-executable-symbolic</property>
                                                     </object>
                                                 </child>
@@ -243,6 +265,7 @@
                                 </child>
                                 <child>
                                     <object class="GtkToggleButton" id="SidebarSearchButton">
+                                        <property name="halign">start</property>
                                         <property name="has-frame">false</property>
                                         <property name="margin-top">3</property>
                                         <property name="margin-bottom">3</property>
@@ -251,10 +274,13 @@
                                         <property name="tooltip-text" translatable="yes">Show Shelly Searchs</property>
                                         <child>
                                             <object class="GtkBox">
+                                                <property name="halign">start</property>
                                                 <property name="orientation">horizontal</property>
                                                 <property name="spacing">8</property>
                                                 <child>
                                                     <object class="GtkImage">
+                                                        <property name="halign">start</property>
+                                                        <property name="valign">center</property>
                                                         <property name="icon-name">system-search-symbolic</property>
                                                     </object>
                                                 </child>
@@ -275,12 +301,13 @@
                                 </child>
                                 <child>
                                     <object class="GtkMenuButton" id="SidebarMenuButton">
+                                        <property name="halign">start</property>
                                         <property name="icon-name">open-menu-symbolic</property>
                                         <property name="menu-model">MainMenu</property>
                                         <property name="direction">up</property>
                                         <property name="has-frame">false</property>
-                                        <property name="margin-top">6</property>
-                                        <property name="margin-bottom">6</property>
+                                        <property name="margin-top">3</property>
+                                        <property name="margin-bottom">3</property>
                                         <property name="margin-start">6</property>
                                         <property name="margin-end">6</property>
                                     </object>

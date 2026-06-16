@@ -34,7 +34,7 @@ public static class ServiceBuilder
         collection.AddScoped<IUpdateService, GitHubUpdateService>();
         collection.AddScoped<ITrayDbus, TrayDBus>();
         collection.AddScoped<IFlatHubApiService, FlatHubApiService>();
-        collection.AddTransient<FlatpakRemove>();
+        collection.AddTransient<FlatpakManage>();
         collection.AddTransient<AurInstall>();
         collection.AddTransient<AurUpdate>();
         collection.AddTransient<AurRemove>();

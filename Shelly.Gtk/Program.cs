@@ -404,6 +404,15 @@ sealed class Program
                 sidebarFlatpakLabel.Visible = expanded;
                 sidebarAppImageLabel.Visible = expanded;
                 sidebarSearchLabel.Visible = expanded;
+                
+                var align = expanded ? Align.Fill : Align.Center;
+                sidebarRecommendBtn.Halign = align;
+                sidebarPackagesBtn.Halign = align;
+                sidebarAurBtn.Halign = align;
+                sidebarFlatpakBtn.Halign = align;
+                sidebarAppImageBtn.Halign = align;
+                sidebarSearchBtn.Halign = align;
+                sidebarToggle.Halign = align;
             };
 
             var sidebarButtons = new (ToggleButton btn, string page)[]

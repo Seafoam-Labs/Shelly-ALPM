@@ -11,7 +11,7 @@ using Shelly.Gtk.Windows.Dialog;
 
 namespace Shelly.Gtk.Windows.Flatpak;
 
-public class FlatpakRemove(
+public class FlatpakManage(
     IUnprivilegedOperationService unprivilegedOperationService,
     ILockoutService lockoutService,
     IGenericQuestionService genericQuestionService,
