@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-06-12 11:40+0000\n"
-"PO-Revision-Date: 2026-06-15 07:40+0900\n"
+"PO-Revision-Date: 2026-06-16 15:57+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
 "Language: ja_JP\n"
@@ -134,7 +134,7 @@ msgid "Clean Uninstall"
 msgstr "クリーンアンインストール"
 
 msgid "Show Hidden"
-msgstr "非表示を表示"
+msgstr "隠しパッケージを表示"
 
 msgid "Show packages in the IgnorePkg list from pacman.conf"
 msgstr "pacman.conf の IgnorePkg リストにあるパッケージを表示する"
@@ -437,13 +437,12 @@ msgid "Remove Configs"
 msgstr "設定を削除"
 
 msgid "Remove Optional Deps"
-msgstr "オプションの依存関係を削除"
+msgstr "オプションパッケージを削除"
 
 msgid ""
 "Also remove orphaned optional dependencies installed with these packages."
 msgstr ""
-"これらのパッケージと一緒にインストールした、オプションの孤立した依存関係も削"
-"除する。"
+"これらと一緒にインストールした、孤立するオプションパッケージも削除する。"
 
 msgid "Install Local Packages"
 msgstr "ローカルパッケージをインストールする"
@@ -750,16 +749,16 @@ msgid "AUR:"
 msgstr "AUR:"
 
 msgid "Depends"
-msgstr "依存関係"
+msgstr "必要"
 
 msgid "Make Depends"
 msgstr "ビルドに必要"
 
 msgid "Check Depends"
-msgstr "依存関係を確認"
+msgstr "必要パッケージを確認"
 
 msgid "Optional Deps"
-msgstr "オプションの依存関係"
+msgstr "オプションで必要"
 
 msgid "Licenses"
 msgstr "ライセンス"
@@ -957,7 +956,7 @@ msgid "Select Provider"
 msgstr "プロバイダーを選択"
 
 msgid "Select Optional Dependencies"
-msgstr "オプションの依存関係を選択"
+msgstr "オプションパッケージを選択"
 
 msgid "System Question"
 msgstr "システムの質問"
