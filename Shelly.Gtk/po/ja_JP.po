@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-06-12 11:40+0000\n"
-"PO-Revision-Date: 2026-06-16 16:43+0900\n"
+"PO-Revision-Date: 2026-06-16 18:46+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
 "Language: ja_JP\n"
@@ -1318,7 +1318,7 @@ msgstr "次としてインストール"
 
 #, csharp-format
 msgid "Package Files ({0})"
-msgstr "パッケージファイル ({0})"
+msgstr "パッケージ内のファイル ({0})"
 
 #, csharp-format
 msgid "No downgrade options found for {0}"
