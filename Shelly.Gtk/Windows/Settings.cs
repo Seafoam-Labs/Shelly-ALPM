@@ -13,7 +13,7 @@ using TimeSpan = System.TimeSpan;
 
 namespace Shelly.Gtk.Windows;
 
-public class Settings(
+public sealed class Settings(
     IConfigService configService,
     IPrivilegedOperationService privilegedOperationService,
     IUnprivilegedOperationService unprivilegedOperationService,
@@ -21,6 +21,22 @@ public class Settings(
     IGenericQuestionService genericQuestionService,
     IDirtyService dirtyService) : IShellyWindow, IReloadable
 {
+    public const string TrayServiceContent =
+        """
+        [Unit]
+        Description=Shelly Notifications tray service
+        After=graphical-session.target
+
+        [Service]
+        Type=simple
+        ExecStart=/usr/bin/shelly-notifications
+        Restart=on-failure
+        RestartSec=5s
+
+        [Install]
+        WantedBy=graphical-session.target
+        """;
+
     private Box _box = null!;
     private ShellyConfig _config = null!;
     private DirtySubscription? _sub;
@@ -390,23 +406,7 @@ public class Settings(
         {
             if (e.State)
             {
-                const string serviceContent =
-                    """
-                    [Unit]
-                    Description=Shelly Notifications tray service
-                    After=graphical-session.target
-
-                    [Service]
-                    Type=simple
-                    ExecStart=/usr/bin/shelly-notifications
-                    Restart=on-failure
-                    RestartSec=5s
-
-                    [Install]
-                    WantedBy=graphical-session.target
-                    """;
-                
-                unprivilegedOperationService.AddSystemdServiceTray(serviceContent, "shelly-notifications");
+                unprivilegedOperationService.AddSystemdServiceTray(TrayServiceContent, "shelly-notifications");
                 genericQuestionService.RaiseToastMessage(
                     new ToastMessageEventArgs(Translations.T("Systemd startup service added.")));
             }
@@ -671,7 +671,7 @@ public class Settings(
         }
         else
         {
-            Console.Error.WriteLine($"Failed to remove database lock: {result.Error}");
+            await Console.Error.WriteLineAsync($"Failed to remove database lock: {result.Error}");
         }
     }
 
@@ -688,14 +688,14 @@ public class Settings(
             }
             else
             {
-                Console.Error.WriteLine($"Failed to fix Shelly folder ownership: {result.Error}");
+                await Console.Error.WriteLineAsync($"Failed to fix Shelly folder ownership: {result.Error}");
                 genericQuestionService.RaiseToastMessage(
                     new ToastMessageEventArgs(Translations.T("Failed to fix folder permissions")));
             }
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Error fixing Shelly folder permissions: {ex.Message}");
+            await Console.Error.WriteLineAsync($"Error fixing Shelly folder permissions: {ex.Message}");
             genericQuestionService.RaiseToastMessage(
                 new ToastMessageEventArgs(Translations.T("Error fixing folder permissions")));
         }
@@ -935,6 +935,7 @@ public class Settings(
     {
         // Refresh internal config snapshot. Visible switches retain their current
         // state to avoid re-entrant SaveConfig loops; navigating away/back rebuilds the page.
+        // TODO: Find a way to sync setting switches after setup?
         _config = configService.LoadConfig();
     }
 

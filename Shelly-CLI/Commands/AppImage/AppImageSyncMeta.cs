@@ -34,43 +34,12 @@ public class AppImageSyncMeta : AsyncCommand<AppImageSyncMetaSettings>
 
         if (!string.IsNullOrEmpty(settings.Query))
         {
-            var appImages = Directory.GetFiles(installDir, "*.AppImage", SearchOption.TopDirectoryOnly);
-            var matches = appImages
-                .Where(f => Path.GetFileName(f).Contains(settings.Query, StringComparison.OrdinalIgnoreCase))
+            var appImages = await manager.GetAppImagesFromLocalDb();
+            var matches = appImages.Select(x => x.Name)
+                .Where(f => f.Contains(settings.Query, StringComparison.OrdinalIgnoreCase))
                 .ToList();
-
-            if (matches.Count == 0)
-            {
-                AnsiConsole.MarkupLine($"[yellow]No AppImage matching \"{settings.Query}\" found in {installDir}[/]");
-                return 0;
-            }
-
-            string targetAppImage;
-            if (matches.Count == 1)
-            {
-                targetAppImage = matches[0];
-            }
-            else
-            {
-                if (settings.NoConfirm)
-                {
-                    targetAppImage = matches[0];
-                    AnsiConsole.MarkupLine(
-                        $"[yellow]Multiple matches found, picking first one due to --no-confirm: {Path.GetFileName(targetAppImage)}[/]");
-                }
-                else
-                {
-                    targetAppImage = AnsiConsole.Prompt(
-                        new SelectionPrompt<string>()
-                            .Title("Multiple AppImages matched. Which one do you want to [green]sync[/]?")
-                            .AddChoices(matches.Select(Path.GetFileName).Cast<string>())
-                    );
-                    targetAppImage = matches.First(m => Path.GetFileName(m) == targetAppImage);
-                }
-            }
-
-            var package = new List<string> { Path.GetFileNameWithoutExtension(targetAppImage) };
-            await manager.SyncAppImageMeta(package);
+            
+            await manager.SyncAppImageMeta(matches);
         }
         else
         {

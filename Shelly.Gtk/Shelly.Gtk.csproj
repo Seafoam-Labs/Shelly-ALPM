@@ -16,9 +16,9 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Version>2.3.3.3</Version>
+        <Version>2.3.3.4</Version>
         <AssemblyName>shelly-ui</AssemblyName>
-        <AssemblyVersion>2.3.3.3</AssemblyVersion>
+        <AssemblyVersion>2.3.3.4</AssemblyVersion>
         <AssemblyTitle>Shelly GTK UI</AssemblyTitle>
         <Description>Shelly GTK is a arch linux package manager</Description>
         <Company>Seafoam Labs</Company>
