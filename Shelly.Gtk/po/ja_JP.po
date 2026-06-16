@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-06-12 11:40+0000\n"
-"PO-Revision-Date: 2026-06-16 15:57+0900\n"
+"PO-Revision-Date: 2026-06-16 16:43+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
 "Language: ja_JP\n"
@@ -146,8 +146,7 @@ msgid ""
 "Run the --check function during package build (installs checkdepends)\n"
 "                        "
 msgstr ""
-"パッケージビルド中に --check 機能を実行します (checkdepends をインストールし"
-"ます)\n"
+"パッケージビルド中に --check 機能を実行します (checkdepends をインストール)\n"
 "                        "
 
 msgid "Search..."
@@ -685,7 +684,7 @@ msgid "Description"
 msgstr "説明"
 
 msgid "Last Updated"
-msgstr "最終更新日"
+msgstr "最終更新日時"
 
 msgid "<span size='large'>Search for AUR packages</span>"
 msgstr "<span size='large'>AUR パッケージを検索</span>"
@@ -728,7 +727,7 @@ msgid "Close details"
 msgstr "詳細を閉じる"
 
 msgid "Out of Date"
-msgstr "古いと報告された日"
+msgstr "期限切れした日時"
 
 msgid "Maintainer"
 msgstr "メンテナー"
@@ -737,10 +736,10 @@ msgid "Orphaned"
 msgstr "孤立"
 
 msgid "Last Modified"
-msgstr "最終更新日"
+msgstr "最終更新日時"
 
 msgid "First Submitted"
-msgstr "初回登録日"
+msgstr "初回登録日時"
 
 msgid "URL:"
 msgstr "URL:"
@@ -749,13 +748,13 @@ msgid "AUR:"
 msgstr "AUR:"
 
 msgid "Depends"
-msgstr "必要"
+msgstr "次が必要"
 
 msgid "Make Depends"
 msgstr "ビルドに必要"
 
 msgid "Check Depends"
-msgstr "必要パッケージを確認"
+msgstr "必要なものを確認"
 
 msgid "Optional Deps"
 msgstr "オプションで必要"
@@ -767,16 +766,16 @@ msgid "Keywords"
 msgstr "キーワード"
 
 msgid "Provides"
-msgstr "提供"
+msgstr "次を提供"
 
 msgid "Conflicts"
-msgstr "競合"
+msgstr "次と競合"
 
 msgid "Groups"
 msgstr "グループ"
 
 msgid "Replaces"
-msgstr "置換"
+msgstr "次を置換"
 
 msgid "Remove Packages?"
 msgstr "パッケージを削除しますか？"
@@ -1501,7 +1500,7 @@ msgid "No details for this release"
 msgstr "このリリースの詳細情報はありません"
 
 msgid "Unknown date"
-msgstr "日付不明"
+msgstr "日時不明"
 
 msgid "Failed to load changelog"
 msgstr "変更履歴の読み込みに失敗しました"
