@@ -546,7 +546,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         var fullCommand = $"{_cliPath} {arguments}";
 
         Console.WriteLine($"Executing privileged command: sudo {fullCommand}");
-        var isPasswordless = password == "NOPASSWORD67";
+        var isPasswordless = password == CredentialManager.NoPassword;
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -996,7 +996,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         }
 
         var password = _credentialManager.GetPassword();
-        var isPasswordless = password == "NOPASSWORD67";
+        var isPasswordless = password == CredentialManager.NoPassword;
 
         var arguments = string.Join(" ", args);
 

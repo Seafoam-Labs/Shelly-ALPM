@@ -1,18 +1,16 @@
-using System;
-using System.Security;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace Shelly.Gtk.Services;
 
 public class CredentialManager : ICredentialManager
 {
-    private string? _storedPassword;
+    public const string NoPassword = "NOPASSWORD67";
+    private const double TimeToLive = 9;
+    private readonly Lock _lock = new();
     private bool _isValidated;
     private TaskCompletionSource<bool>? _pendingRequest;
-    private readonly object _lock = new();
+    private string? _storedPassword;
     private DateTime _storedTime;
-    private const double TimeToLive = 9;
 
     public bool HasStoredCredentials
     {
@@ -40,7 +38,7 @@ public class CredentialManager : ICredentialManager
     {
         lock (_lock)
         {
-            if (!((DateTime.Now - _storedTime).TotalMinutes > TimeToLive)) return false;
+            if (!((DateTime.UtcNow - _storedTime).TotalMinutes > TimeToLive)) return false;
             _storedPassword = "";
             _isValidated = false;
             return true;
@@ -53,7 +51,7 @@ public class CredentialManager : ICredentialManager
         {
             _storedPassword = password;
             _isValidated = false;
-            _storedTime = DateTime.Now;
+            _storedTime = DateTime.UtcNow;
         }
     }
 
@@ -75,6 +73,7 @@ public class CredentialManager : ICredentialManager
                 var length = _storedPassword.Length;
                 _storedPassword = new string('\0', length);
             }
+
             _storedPassword = null;
             _isValidated = false;
         }
@@ -99,6 +98,7 @@ public class CredentialManager : ICredentialManager
                 var length = _storedPassword.Length;
                 _storedPassword = new string('\0', length);
             }
+
             _storedPassword = null;
         }
     }
@@ -108,20 +108,17 @@ public class CredentialManager : ICredentialManager
     public async Task<bool> RequestCredentialsAsync(string reason)
     {
         TaskCompletionSource<bool> tcs;
-        bool shouldRaiseEvent = false;
+        var shouldRaiseEvent = false;
 
         lock (_lock)
         {
             // If we already have validated credentials, return immediately
-            if (HasStoredCredentials)
-            {
-                return true;
-            }
+            if (HasStoredCredentials) return true;
 
             if (IsAccountPasswordless(Environment.UserName) || IsSudoPasswordless() || IsYubiKeyConfigured())
             {
                 _isValidated = true;
-                _storedPassword = "NOPASSWORD67";
+                _storedPassword = NoPassword;
                 return true;
             }
 
@@ -139,11 +136,9 @@ public class CredentialManager : ICredentialManager
             }
         }
 
+        // Raise the event to request credentials from the UI
         if (shouldRaiseEvent)
-        {
-            // Raise the event to request credentials from the UI
             CredentialRequested?.Invoke(this, new CredentialRequestEventArgs(reason));
-        }
 
         // Wait for the UI to complete the request
         return await tcs.Task;
@@ -167,6 +162,7 @@ public class CredentialManager : ICredentialManager
                 {
                     _pendingRequest = null;
                 }
+
                 tcs?.TrySetResult(true);
             }
         }
@@ -176,6 +172,7 @@ public class CredentialManager : ICredentialManager
             {
                 _pendingRequest = null;
             }
+
             tcs?.TrySetResult(false);
         }
     }
@@ -185,8 +182,8 @@ public class CredentialManager : ICredentialManager
         var password = GetPassword();
         var username = Environment.UserName;
 
-        using var process = new System.Diagnostics.Process();
-        process.StartInfo = new System.Diagnostics.ProcessStartInfo
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
         {
             FileName = "su",
             Arguments = $"-c true {username}",
@@ -214,31 +211,29 @@ public class CredentialManager : ICredentialManager
                 MarkAsValidated();
                 return true;
             }
-            else
-            {
-                Console.Error.WriteLine("Authentication failed via su. Clearing credentials.");
-                MarkAsInvalid();
-                return false;
-            }
+
+            await Console.Error.WriteLineAsync("Authentication failed via su. Clearing credentials.");
+            MarkAsInvalid();
+            return false;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Error during authentication check: {ex.Message}");
+            await Console.Error.WriteLineAsync($"Error during authentication check: {ex.Message}");
         }
 
         return false;
     }
 
     /// <summary>
-    /// Verifies sudo execution can  work without needing to validate the password 
+    ///     Verifies sudo execution can  work without needing to validate the password
     /// </summary>
     /// <returns>If sudo is passwordless</returns>
-    private bool IsSudoPasswordless()
+    private static bool IsSudoPasswordless()
     {
         try
         {
-            using var process = new System.Diagnostics.Process();
-            process.StartInfo = new System.Diagnostics.ProcessStartInfo
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo
             {
                 FileName = "sudo",
                 Arguments = "-n true", // -n is 'non-interactive'
@@ -249,29 +244,37 @@ public class CredentialManager : ICredentialManager
             process.WaitForExit();
             return process.ExitCode == 0;
         }
-        catch { return false; }
+        catch
+        {
+            return false;
+        }
     }
-    private bool IsYubiKeyConfigured()
+
+    private static bool IsYubiKeyConfigured()
     {
         try
         {
-            var pamSudoPath = "/etc/pam.d/sudo";
-            if (System.IO.File.Exists(pamSudoPath))
+            const string pamSudoPath = "/etc/pam.d/sudo";
+            if (File.Exists(pamSudoPath))
             {
-                var content = System.IO.File.ReadAllText(pamSudoPath);
+                var content = File.ReadAllText(pamSudoPath);
                 return content.Contains("pam_u2f.so");
             }
         }
-        catch { /* ignore */ }
+        catch
+        {
+            /* ignore */
+        }
+
         return false;
     }
 
-    private bool IsAccountPasswordless(string username)
+    private static bool IsAccountPasswordless(string username)
     {
         try
         {
-            using var process = new System.Diagnostics.Process();
-            process.StartInfo = new System.Diagnostics.ProcessStartInfo
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo
             {
                 FileName = "passwd",
                 Arguments = $"--status {username}",
@@ -285,12 +288,15 @@ public class CredentialManager : ICredentialManager
 
             // Output format: "username NP ..." where NP = No Password
             // "P" = has password, "L" = locked, "NP" = no password
-            var parts = output.Split(' ', '\t');
-            if (parts.Length >= 2 && parts[1] == "NP")
+            var parts = output.Split(' ', '\t', StringSplitOptions.None);
+            if (parts is [_, "NP", ..])
                 return true;
         }
-        catch { /* ignore */ }
+        catch
+        {
+            /* ignore */
+        }
+
         return false;
     }
-    
 }
