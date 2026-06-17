@@ -2,35 +2,37 @@ using Tmds.DBus.Protocol;
 
 namespace Shelly.Gtk.Services.TrayServices;
 
-public class TrayDBus : ITrayDbus
+public sealed class TrayDBus : ITrayDbus, IDisposable
 {
-    private readonly DBusConnection _connection = new(DBusAddress.Session!);
-    
+    private readonly DBusConnection _sessionConnection = new(DBusAddress.Session!);
+
+    public void Dispose()
+    {
+        _sessionConnection.Dispose();
+    }
+
     public async Task RefreshSettingsAsync()
     {
-        await _connection.ConnectAsync();
-        await CallAsync("RefreshSettings");
+        await _sessionConnection.ConnectAsync();
+        await CallTrayAsync("RefreshSettings");
     }
 
     public async Task UpdatesMadeInUiAsync()
     {
-        await _connection.ConnectAsync();
-        await CallAsync("UpdatesMadeInUi");
+        await _sessionConnection.ConnectAsync();
+        await CallTrayAsync("UpdatesMadeInUi");
     }
 
-    private Task CallAsync(string method)
+    private Task CallTrayAsync(string method)
     {
-        var writer = _connection.GetMessageWriter();
+        var writer = _sessionConnection.GetMessageWriter();
 
         writer.WriteMethodCallHeader(
-            destination: ShellyConstants.TrayService,
-            path: ShellyConstants.TrayPath,
-            @interface: ShellyConstants.TrayInterface,
-            member: method,
-            signature: null);
+            ShellyConstants.TrayService,
+            ShellyConstants.TrayPath,
+            ShellyConstants.TrayInterface,
+            method);
 
-        return _connection.CallMethodAsync(writer.CreateMessage());
+        return _sessionConnection.CallMethodAsync(writer.CreateMessage());
     }
-
-    public void Dispose() => _connection.Dispose();
 }

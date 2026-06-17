@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Text;
-using Shelly.Gtk.Enums;
+using System.Text.Json;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services.TrayServices;
 using Shelly.Gtk.Services.Wire;
@@ -9,180 +9,104 @@ using Shelly.Gtk.UiModels.PackageManagerObjects;
 
 namespace Shelly.Gtk.Services;
 
-public class PrivilegedOperationService : IPrivilegedOperationService
+public class PrivilegedOperationService(
+    ProcessExecutor processExecutor,
+    ICredentialManager credentialManager,
+    IAlpmEventService alpmEventService,
+    IConfigService configService,
+    ILockoutService lockoutService,
+    ITrayDbus trayDbus,
+    IPackageUpdateNotifier packageUpdateNotifier,
+    IDirtyService dirtyService,
+    IGenericQuestionService genericQuestionService)
+    : IPrivilegedOperationService
 {
-    private readonly string _cliPath;
-    private readonly ICredentialManager _credentialManager;
-    private readonly IAlpmEventService _alpmEventService;
-    private readonly IConfigService _configService;
-    private readonly ILockoutService _lockoutService;
-    private readonly ITrayDbus _trayDbus;
-    private readonly IPackageUpdateNotifier _packageUpdateNotifier;
-    private readonly IDirtyService _dirtyService;
-    private readonly IGenericQuestionService _genericQuestionService;
-
-    public PrivilegedOperationService(ICredentialManager credentialManager, IAlpmEventService alpmEventService,
-        IConfigService configService, ILockoutService lockoutService, ITrayDbus trayDbus,
-        IPackageUpdateNotifier packageUpdateNotifier, IDirtyService dirtyService, IGenericQuestionService genericQuestionService)
-    {
-        _credentialManager = credentialManager;
-        _alpmEventService = alpmEventService;
-        _configService = configService;
-        _lockoutService = lockoutService;
-        _trayDbus = trayDbus;
-        _packageUpdateNotifier = packageUpdateNotifier;
-        _dirtyService = dirtyService;
-        _cliPath = CliPathResolver.FindCliPath();
-        _genericQuestionService = genericQuestionService;
-    }
-
-    private string[] AppendNoConfirmIfNeeded(params string[] args)
-    {
-        var config = _configService.LoadConfig();
-        if (config.NoConfirm)
-        {
-            return [.. args, "--no-confirm"];
-        }
-
-        return args;
-    }
-
-    private Task<OperationResult> ExecutePrivilegedWithNoConfirmCheck(string operationDescription, params string[] args)
-    {
-        var finalArgs = AppendNoConfirmIfNeeded(args);
-        return ExecutePrivilegedCommandAsync(operationDescription, finalArgs);
-    }
+    private readonly string _cliPath = CliPathResolver.FindCliPath();
+    private readonly bool _noConfirm = configService.LoadConfig().NoConfirm;
 
     public async Task<OperationResult> SyncDatabasesAsync()
     {
         return await ExecutePrivilegedCommandAsync("Synchronize package databases", "sync");
     }
 
-    public async Task<List<AlpmPackageDto>> SearchPackagesAsync(string query)
-    {
-        var result = await ExecuteCommandAsync("explore", "--available", $"\"{query}\"",
-            "--no-confirm", "--json");
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
-        {
-            return [];
-        }
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
-            return framed ?? throw new InvalidOperationException();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse available packages JSON: {ex.Message}");
-            return [];
-        }
-    }
-
     public async Task<OperationResult> InstallPackagesAsync(IEnumerable<string> packages, bool upgrade = false)
     {
-        var packageArgs = string.Join(" ", packages);
-        if (upgrade)
-        {
-            packageArgs += " -u";
-        }
+        var args = new List<string> { "install" };
+        args.AddRange(packages);
+        if (upgrade) args.Add("-u");
+        if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Install packages", "install", packageArgs);
-        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Native);
+        var result = await ExecutePrivilegedCommandAsync("Install packages", args.ToArray());
+        if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
     }
 
     public async Task<OperationResult> InstallLocalPackageAsync(string filePath)
     {
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Install local package", "install",
-            $"\"{filePath}\"");
-        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Native);
+        var args = new List<string> { "install", $"\"{filePath}\"" };
+        if (_noConfirm) args.Add("--no-confirm");
+
+        var result = await ExecutePrivilegedCommandAsync("Install local package", args.ToArray());
+        if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
     }
 
-
-    private async Task<OperationResult> RemovePackageCacheAsync(
-        IEnumerable<string> packages)
-    {
-        var targetArgs = packages
-            .SelectMany(x => new[] { "-t", x })
-            .ToArray();
-
-        await Console.Error.WriteAsync("Removing package cache...");
-
-        return await ExecutePrivilegedCommandAsync(
-            "Removing package from cache",
-            [
-                "cache-clean",
-                "--no-confirm",
-                ..targetArgs
-            ]);
-    }
-
     public async Task<OperationResult> RemovePackagesAsync(IEnumerable<string> packages, bool isCascade, bool isCleanup,
-        bool removeOptionalDeps, bool removePackageFromCache)
+        bool removeOptionalDeps, bool removePackageFromCache = false)
     {
-        var packageArgs = string.Join(" ", packages);
-        if (isCascade)
-        {
-            packageArgs += " -c";
-        }
+        var args = new List<string> { "remove" };
+        args.AddRange(packages);
+        if (isCascade) args.Add("-c");
+        if (isCleanup) args.Add("-r");
+        if (removeOptionalDeps) args.Add("-o");
+        if (_noConfirm) args.Add("--no-confirm");
 
-        if (isCleanup)
-        {
-            packageArgs += " -r";
-        }
-
-        if (removeOptionalDeps)
-        {
-            packageArgs += " -o";
-        }
-
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Remove packages", "remove", packageArgs);
-        if (result.Success && removePackageFromCache)
-        {
-            _ = await RemovePackageCacheAsync(packages);
-        }
-
-        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Native);
-
+        var result = await ExecutePrivilegedCommandAsync("Remove packages", args.ToArray());
+        if (result.Success && removePackageFromCache) _ = await RemovePackageCacheAsync(packages);
+        if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
     }
 
     public async Task<OperationResult> RemoveLocalPackagesAsync(IEnumerable<string> packages)
     {
-        var packageArgs = string.Join(" ", packages.Select(p => $"\"{p}\""));
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Remove local packages", "remove", packageArgs);
-        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Native);
+        var args = new List<string> { "remove" };
+        args.AddRange(packages.Select(p => $"\"{p}\""));
+        if (_noConfirm) args.Add("--no-confirm");
+
+        var result = await ExecutePrivilegedCommandAsync("Remove local packages", args.ToArray());
+        if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
     }
 
     public async Task<OperationResult> UpdatePackagesAsync(IEnumerable<string> packages)
     {
-        var packageArgs = string.Join(" ", packages);
+        var args = new List<string> { "update" };
+        args.AddRange(packages);
+        if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Update packages", "update", packageArgs);
+        var result = await ExecutePrivilegedCommandAsync("Update packages", args.ToArray());
         SendDbusMessage(result);
-        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Native);
+        if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
     }
 
     public async Task<OperationResult> UpgradeSystemAsync()
     {
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Upgrade system", "upgrade");
+        var args = new List<string> { "upgrade" };
+        if (_noConfirm) args.Add("--no-confirm");
+
+        var result = await ExecutePrivilegedCommandAsync("Upgrade system", args.ToArray());
         SendDbusMessage(result);
         return result;
     }
 
     public async Task<OperationResult> UpgradeAllAsync()
     {
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Upgrade all", "upgrade-all");
-        
-        if(!result.Success)
-        {
-            _ = Task.Run(() => _trayDbus.UpdatesMadeInUiAsync());
-        }
-        
+        var args = new List<string> { "upgrade-all" };
+        if (_noConfirm) args.Add("--no-confirm");
+
+        var result = await ExecutePrivilegedCommandAsync("Upgrade all", args.ToArray());
+        if (!result.Success) _ = Task.Run(trayDbus.UpdatesMadeInUiAsync);
         SendDbusMessage(result);
         return result;
     }
@@ -194,200 +118,135 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
     public async Task<OperationResult> RemoveDbLockAsync()
     {
-        return await ExecutePrivilegedSystemCommandAsync(
-            "Removing database lock",
-            "rm",
-            "-f",
-            "/var/lib/pacman/db.lck"
-        );
+        return await processExecutor.RunPrivilegedSystemCommandAsync(
+            "Removing database lock", ["rm", "-f", "/var/lib/pacman/db.lck"]);
     }
 
     public async Task<OperationResult> InstallAurPackagesAsync(IEnumerable<string> packages, bool useChroot = false,
         bool runChecks = false)
     {
-        var packageArgs = string.Join(" ", packages);
-        if (useChroot)
-        {
-            packageArgs += " -c";
-        }
+        var args = new List<string> { "aur", "install" };
+        args.AddRange(packages);
+        if (useChroot) args.Add("-c");
+        if (runChecks) args.Add("--check");
+        if (_noConfirm) args.Add("--no-confirm");
 
-        if (runChecks)
-        {
-            packageArgs += " --check";
-        }
-
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Install AUR packages", "aur", "install", packageArgs);
-        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Aur);
+        var result = await ExecutePrivilegedCommandAsync("Install AUR packages", args.ToArray());
+        if (result.Success) dirtyService.MarkDirty(DirtyScopes.Aur);
         return result;
     }
 
     public async Task<OperationResult> RemoveAurPackagesAsync(IEnumerable<string> packages, bool isCascade = false)
     {
-        var packageArgs = string.Join(" ", packages);
-        if (isCascade)
-        {
-            packageArgs += " -c";
-        }
+        var args = new List<string> { "aur", "remove" };
+        args.AddRange(packages);
+        if (isCascade) args.Add("-c");
+        if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Remove AUR packages", "aur", "remove", packageArgs);
-        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Aur);
+        var result = await ExecutePrivilegedCommandAsync("Remove AUR packages", args.ToArray());
+        if (result.Success) dirtyService.MarkDirty(DirtyScopes.Aur);
         return result;
     }
 
     public async Task<OperationResult> UpdateAurPackagesAsync(IEnumerable<string> packages, bool runChecks = false)
     {
-        var packageArgs = string.Join(" ", packages);
-        if (runChecks)
-        {
-            packageArgs += " --check";
-        }
+        var args = new List<string> { "aur", "update" };
+        args.AddRange(packages);
+        if (runChecks) args.Add("--check");
+        if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Update AUR packages", "aur", "update", packageArgs);
+        var result = await ExecutePrivilegedCommandAsync("Update AUR packages", args.ToArray());
         SendDbusMessage(result);
-        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Aur);
+        if (result.Success) dirtyService.MarkDirty(DirtyScopes.Aur);
         return result;
+    }
+
+    public async Task<List<AlpmPackageDto>> SearchPackagesAsync(string query)
+    {
+        return await ExecuteJsonCommandAsync<AlpmPackageDto>("search packages",
+            () => processExecutor.RunShellyCliCommandAsync(["explore", "--available", $"\"{query}\"", "--no-confirm", "--json"]));
     }
 
     public async Task<List<PackageBuild>> GetAurPackageBuild(IEnumerable<string> packages)
     {
-        var packageArgs = string.Join(" ", packages);
-        var result =
-            await ExecutePrivilegedWithNoConfirmCheck("Get Package Builds", "aur", "search-pkgbuild", packageArgs);
+        var args = new List<string> { "aur", "search-pkgbuild" };
+        args.AddRange(packages);
+        if (_noConfirm) args.Add("--no-confirm");
 
-        if (!result.Success) return [];
-        JsonPackFrame.TryDecode<List<PackageBuild>>(result.Output, out var framed);
-        return framed ?? [];
+        return await ExecuteJsonCommandAsync<PackageBuild>("AUR package builds",
+            () => ExecutePrivilegedCommandAsync("Get Package Builds", args.ToArray()));
     }
 
     public async Task<List<AlpmPackageUpdateDto>> GetPackagesNeedingUpdateAsync()
     {
-        var result = await ExecutePrivilegedCommandAsync("Check for Updates", "list-updates", "--json");
-        if (!result.Success) return [];
-        JsonPackFrame.TryDecode<List<AlpmPackageUpdateDto>>(result.Output, out var framed);
-        return framed ?? [];
+        return await ExecuteJsonCommandAsync<AlpmPackageUpdateDto>("updates",
+            () => ExecutePrivilegedCommandAsync("Check for Updates", "list-updates", "--json"));
     }
 
     public async Task<List<AlpmPackageDto>> GetAvailablePackagesAsync(bool showHidden = false)
     {
-        var result = showHidden
-            ? await ExecuteCommandAsync("explore", "--available", "--json", "--show-hidden")
-            : await ExecuteCommandAsync("explore", "--available", "--json");
+        var args = new List<string> { "explore", "--available", "--json" };
+        if (showHidden) args.Add("--show-hidden");
 
-        if (!result.Success) return [];
-        JsonPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
-        return framed ?? [];
+        return await ExecuteJsonCommandAsync<AlpmPackageDto>("available packages",
+            () => processExecutor.RunShellyCliCommandAsync(args.ToArray()));
     }
 
     public async Task<List<AlpmPackageDto>> GetInstalledPackagesAsync(bool showHidden = false)
     {
-        var result = showHidden
-            ? await ExecuteCommandAsync("explore", "--installed", "--json", "--show-hidden")
-            : await ExecuteCommandAsync("explore", "--installed", "--json");
+        var args = new List<string> { "explore", "--installed", "--json" };
+        if (showHidden) args.Add("--show-hidden");
 
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
-        {
-            return [];
-        }
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
-            return framed ?? throw new InvalidOperationException();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse installed packages JSON: {ex.Message}");
-            return [];
-        }
+        return await ExecuteJsonCommandAsync<AlpmPackageDto>("installed packages",
+            () => processExecutor.RunShellyCliCommandAsync(args.ToArray()));
     }
 
     public async Task<List<LocalPackageDto>> GetLocalInstalledPackagesAsync()
     {
-        var result = await ExecuteCommandAsync("explore", "--local", "--json");
-
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
-        {
-            return [];
-        }
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<LocalPackageDto>>(result.Output, out var framed);
-            return framed ?? throw new InvalidOperationException();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse local installed packages JSON: {ex.Message}");
-            return [];
-        }
+        return await ExecuteJsonCommandAsync<LocalPackageDto>("local installed packages",
+            () => processExecutor.RunShellyCliCommandAsync(["explore", "--local", "--json"]));
     }
 
     public async Task<List<AurPackageDto>> GetAurInstalledPackagesAsync(bool showHidden = false)
     {
-        var result = showHidden
-            ? await ExecuteCommandAsync("aur list", "--json", "--show-hidden")
-            : await ExecuteCommandAsync("aur list", "--json");
+        var args = new List<string> { "aur", "list", "--json" };
+        if (showHidden) args.Add("--show-hidden");
 
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
-        {
-            return [];
-        }
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<AurPackageDto>>(result.Output, out var framed);
-
-            return framed ?? throw new InvalidOperationException();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse installed packages JSON: {ex.Message}");
-            return [];
-        }
+        return await ExecuteJsonCommandAsync<AurPackageDto>("AUR installed packages",
+            () => processExecutor.RunShellyCliCommandAsync(args.ToArray()));
     }
 
     public async Task<List<AurUpdateDto>> GetAurUpdatePackagesAsync(bool showHidden = false)
     {
-        var result = showHidden
-            ? await ExecuteCommandAsync("aur list-updates", "--json", "--show-hidden")
-            : await ExecuteCommandAsync("aur list-updates", "--json");
+        var args = new List<string> { "aur", "list-updates", "--json" };
+        if (showHidden) args.Add("--show-hidden");
 
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
-        {
-            return [];
-        }
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<AurUpdateDto>>(result.Output, out var framed);
-            return framed ?? throw new InvalidOperationException();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse installed packages JSON: {ex.Message}");
-            return [];
-        }
+        return await ExecuteJsonCommandAsync<AurUpdateDto>("AUR updates",
+            () => processExecutor.RunShellyCliCommandAsync(args.ToArray()));
     }
 
     public async Task<List<AurPackageDto>> SearchAurPackagesAsync(string query)
     {
-        var result = await ExecuteCommandAsync("aur search", query, "--json");
+        return await ExecuteJsonCommandAsync<AurPackageDto>("AUR search",
+            () => processExecutor.RunShellyCliCommandAsync(["aur", "search", query, "--json"]));
+    }
 
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
-        {
-            return [];
-        }
+    public async Task<List<DowngradeOptionDto>> GetDowngradeOptionsAsync(string packageName)
+    {
+        return await ExecuteJsonCommandAsync<DowngradeOptionDto>("downgrade options",
+            () => processExecutor.RunShellyCliCommandAsync(["downgrade", packageName, "--list-options"]));
+    }
 
-        try
-        {
-            JsonPackFrame.TryDecode<List<AurPackageDto>>(result.Output, out var framed);
-            return framed ?? throw new InvalidOperationException();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse installed packages JSON: {ex.Message}");
-            return [];
-        }
+    private static async Task<List<T>> ExecuteJsonCommandAsync<T>(string operationName, Func<Task<OperationResult>> executeCommand)
+    {
+        var result = await executeCommand();
+        if (!result.Success) return [];
+
+        if (JsonPackFrame.TryDecode<List<T>>(result.Output, out var framed) && framed is not null)
+            return framed;
+
+        Console.WriteLine($"Failed to decode {operationName}");
+        return [];
     }
 
     public async Task<bool> IsPackageInstalledOnMachine(string packageName)
@@ -399,8 +258,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
     public async Task<OperationResult> RunCacheCleanAsync(int keep, bool uninstalledOnly)
     {
         var args = new List<string> { "cache-clean", "-k", keep.ToString() };
-        if (uninstalledOnly)
-            args.Add("-i");
+        if (uninstalledOnly) args.Add("-i");
         return await ExecutePrivilegedCommandAsync("Clean package cache", args.ToArray());
     }
 
@@ -417,110 +275,49 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
     public async Task<OperationResult> FlatpakInstallFromBundle(string path)
     {
-        var result = await ExecutePrivilegedCommandAsync("Install Flatpak Bundle", "flatpak", "install-bundle", path,
-            "--system", "true");
-        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Flatpak);
+        var result = await ExecutePrivilegedCommandAsync("Install Flatpak Bundle",
+            "flatpak", "install-bundle", path, "--system", "true");
+        if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
-    }
-
-    public async Task<List<DowngradeOptionDto>> GetDowngradeOptionsAsync(string packageName)
-    {
-        var result = await ExecuteCommandAsync("downgrade", packageName, "--list-options");
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Output)) return [];
-        JsonPackFrame.TryDecode<List<DowngradeOptionDto>>(result.Output, out var framed);
-        return framed ?? throw new InvalidOperationException();
     }
 
     public async Task<OperationResult> DowngradePackageAsync(string packageName, string filename, bool addIgnore)
     {
         var args = new List<string> { "downgrade", packageName, "--target", $"\"{filename}\"", "--no-confirm" };
         if (addIgnore) args.Add("--ignore");
+
         var result = await ExecutePrivilegedCommandAsync("Downgrade package", args.ToArray());
-        if (result.Success) _dirtyService.MarkDirty(DirtyScopes.NativeInstalled);
+        if (result.Success) dirtyService.MarkDirty(DirtyScopes.NativeInstalled);
         return result;
     }
 
-    public async Task<OperationResult>MigrateAppImagesAsync()
+    public async Task<OperationResult> MigrateAppImagesAsync()
     {
         return await ExecutePrivilegedCommandAsync("Migrate AppImages", "appimage", "migrate-manager");
     }
 
-    private void SendDbusMessage(OperationResult result)
+    private async Task<OperationResult> RemovePackageCacheAsync(IEnumerable<string> packages)
     {
-        if (result.Success)
-        {
-            _ = Task.Run(() => _trayDbus.UpdatesMadeInUiAsync());
-            _packageUpdateNotifier.NotifyPackagesUpdated();
-        }
+        var targetArgs = packages
+            .SelectMany(x => new[] { "-t", x })
+            .ToArray();
+
+        return await ExecutePrivilegedCommandAsync("Removing package from cache",
+            ["cache-clean", "--no-confirm", ..targetArgs]);
     }
 
-    private async Task<OperationResult> ExecuteCommandAsync(params string[] args)
+    private void SendDbusMessage(OperationResult result)
     {
-        var arguments = string.Join(" ", args);
-        var fullCommand = $"{_cliPath} {arguments}";
-
-        Console.WriteLine($"Executing command: {fullCommand} --ui-mode");
-
-        var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = _cliPath,
-                Arguments = string.IsNullOrWhiteSpace(arguments) ? "--ui-mode" : arguments + " --ui-mode",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            }
-        };
-
-        try
-        {
-            process.Start();
-
-            // Read output and error streams synchronously to avoid race conditions
-            // Use Task.WhenAll to read both streams concurrently
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            var errorTask = process.StandardError.ReadToEndAsync();
-
-            await Task.WhenAll(outputTask, errorTask);
-            await process.WaitForExitAsync();
-
-            var output = await outputTask;
-            var error = await errorTask;
-
-            // Log stderr for debugging
-            if (!string.IsNullOrEmpty(error))
-            {
-                await Console.Error.WriteLineAsync(error);
-            }
-
-            return new OperationResult
-            {
-                Success = process.ExitCode == 0,
-                Output = output,
-                Error = error,
-                ExitCode = process.ExitCode
-            };
-        }
-        catch (Exception ex)
-        {
-            return new OperationResult
-            {
-                Success = false,
-                Output = string.Empty,
-                Error = ex.Message,
-                ExitCode = -1
-            };
-        }
+        if (!result.Success) return;
+        _ = Task.Run(trayDbus.UpdatesMadeInUiAsync);
+        packageUpdateNotifier.NotifyPackagesUpdated();
     }
 
     private async Task<OperationResult> ExecutePrivilegedCommandAsync(string operationDescription, params string[] args)
     {
         // Request credentials if not already available
-        var hasCredentials = await _credentialManager.RequestCredentialsAsync(operationDescription);
+        var hasCredentials = await credentialManager.RequestCredentialsAsync(operationDescription);
         if (!hasCredentials)
-        {
             return new OperationResult
             {
                 Success = false,
@@ -528,11 +325,9 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                 Error = "Authentication cancelled by user.",
                 ExitCode = -1
             };
-        }
 
-        var password = _credentialManager.GetPassword();
+        var password = credentialManager.GetPassword();
         if (string.IsNullOrEmpty(password))
-        {
             return new OperationResult
             {
                 Success = false,
@@ -540,26 +335,22 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                 Error = "No password available.",
                 ExitCode = -1
             };
-        }
 
         var arguments = string.Join(" ", args);
         var fullCommand = $"{_cliPath} {arguments}";
 
         Console.WriteLine($"Executing privileged command: sudo {fullCommand}");
         var isPasswordless = password == CredentialManager.NoPassword;
-        var process = new Process
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "sudo",
-                //removing -k from sudo as a test
-                Arguments = isPasswordless ? $"-k {fullCommand} --ui-mode" : $"-S -k {fullCommand} --ui-mode",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                RedirectStandardInput = true,
-                CreateNoWindow = true
-            }
+            FileName = "sudo",
+            Arguments = isPasswordless ? $"-k {fullCommand} --ui-mode" : $"-S -k {fullCommand} --ui-mode",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true,
+            CreateNoWindow = true
         };
 
         var outputBuilder = new StringBuilder();
@@ -597,25 +388,18 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         // State for provider selection handling
         var providerOptions = new List<ProviderOptionUiModel>();
         string? providerQuestion = null;
-        var awaitingProviderSelection = false;
 
         // State for optional dependency selection handling
         var optDepsOptions = new List<ProviderOptionUiModel>();
         string? optDepsQuestion = null;
-        var awaitingOptDepsSelection = false;
-
-        // State for conflict selection handling
-        var conflictOptions = new List<string>();
-        string? conflictQuestion = null;
-        var awaitingConflictSelection = false;
 
         // State for restart check results
         var restartNeedsReboot = false;
         var restartFailures = new List<(string Service, string Error)>();
 
-        var eventRouter = new EventRouter(_alpmEventService, _lockoutService);
+        var eventRouter = new EventRouter(alpmEventService, lockoutService);
 
-        process.OutputDataReceived += async (sender, e) =>
+        process.OutputDataReceived += async (_, e) =>
         {
             if (e.Data == null) return;
             outputBuilder.AppendLine(e.Data);
@@ -626,11 +410,11 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                 Interlocked.Increment(ref pendingCallbacks);
                 try
                 {
-                    await QuestionRouter.TryDispatchAsync(b64, SafeWriteAsync, _genericQuestionService);
+                    await QuestionRouter.TryDispatchAsync(b64, SafeWriteAsync, genericQuestionService);
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"QuestionRouter error: {ex.Message}");
+                    await Console.Error.WriteLineAsync($"QuestionRouter error: {ex.Message}");
                 }
                 finally
                 {
@@ -644,263 +428,222 @@ public class PrivilegedOperationService : IPrivilegedOperationService
             Console.WriteLine(e.Data);
         };
 
-        process.ErrorDataReceived += async (sender, e) =>
+        process.ErrorDataReceived += async (_, e) =>
         {
-            if (e.Data != null)
+            if (e.Data == null) return;
+
+            // Filter out the password prompt from sudo
+            if (e.Data.Contains("[sudo]") || e.Data.Contains("password for")) return;
+
+            Interlocked.Increment(ref pendingCallbacks);
+            try
             {
-                // Filter out the password prompt from sudo
-                if (!e.Data.Contains("[sudo]") && !e.Data.Contains("password for"))
+                Console.WriteLine(e.Data);
+                // Handle provider selection protocol
+                if (e.Data.StartsWith("[ALPM_SELECT_PROVIDER]"))
                 {
-                    Interlocked.Increment(ref pendingCallbacks);
-                    try
-                    {
-                        Console.WriteLine(e.Data);
-                        // Handle provider selection protocol
-                        if (e.Data.StartsWith("[ALPM_SELECT_PROVIDER]"))
-                        {
-                            Console.WriteLine("Provider question received");
-                            Console.Error.WriteLine($"[Shelly]Select provider for: {e.Data}");
-                            awaitingProviderSelection = true;
-                            providerOptions.Clear();
-                            providerQuestion = e.Data.Substring("[ALPM_SELECT_PROVIDER]".Length);
-                            Console.Error.WriteLine($"[Shelly]Select provider for: {providerQuestion}");
-                        }
-                        else if (e.Data.StartsWith("[ALPM_PROVIDER_OPTION]"))
-                        {
-                            Console.Error.WriteLine($"[Shelly]Provider option received: {e.Data}");
-                            var payload = e.Data.Substring("[ALPM_PROVIDER_OPTION]".Length);
-                            var option = AlpmMarkerParser.ParseOptionPayload(payload, out var idx);
-                            if (idx >= 0)
-                                AlpmMarkerParser.PlaceAt(providerOptions, idx, option);
-                            else
-                                providerOptions.Add(option);
-                        }
-                        else if (e.Data.StartsWith("[ALPM_PROVIDER_END]"))
-                        {
-                            Console.Error.WriteLine($"[Shelly]Provider selection received");
-                            var args = new QuestionEventArgs(
-                                QuestionType.SelectProvider,
-                                providerQuestion ?? "Select provider",
-                                new List<ProviderOptionUiModel>(providerOptions),
-                                providerQuestion);
-
-                            _alpmEventService.RaiseQuestion(args);
-
-                            await args.WaitForResponseAsync();
-
-                            if (args.Response != -1)
-                            {
-                                await SafeWriteAsync(args.Response.ToString());
-                            }
-
-                            await Console.Error.WriteLineAsync($"[Shelly]Wrote selection {args.Response}");
-
-                            awaitingProviderSelection = false;
-                            providerQuestion = null;
-                            providerOptions.Clear();
-                        }
-                        else if (e.Data.StartsWith("[ALPM_SELECT_OPTDEPS]"))
-                        {
-                            Console.WriteLine("Optional dependency selection received");
-                            awaitingOptDepsSelection = true;
-                            optDepsOptions.Clear();
-                            optDepsQuestion = e.Data.Substring("[ALPM_SELECT_OPTDEPS]".Length);
-                            Console.Error.WriteLine($"[Shelly]Select optional deps for: {optDepsQuestion}");
-                        }
-                        else if (e.Data.StartsWith("[ALPM_OPTDEPS_OPTION]"))
-                        {
-                            var payload = e.Data.Substring("[ALPM_OPTDEPS_OPTION]".Length);
-                            var option = AlpmMarkerParser.ParseOptionPayload(payload, out var idx);
-                            if (idx >= 0)
-                                AlpmMarkerParser.PlaceAt(optDepsOptions, idx, option);
-                            else
-                                optDepsOptions.Add(option);
-                        }
-                        else if (e.Data.StartsWith("[ALPM_OPTDEPS_END]"))
-                        {
-                            Console.Error.WriteLine("[Shelly]Optional deps selection end");
-                            var args = new QuestionEventArgs(
-                                QuestionType.SelectOptionalDeps,
-                                optDepsQuestion ?? "Select optional dependencies",
-                                new List<ProviderOptionUiModel>(optDepsOptions),
-                                optDepsQuestion);
-
-                            _alpmEventService.RaiseQuestion(args);
-                            await args.WaitForResponseAsync();
-
-                            var indices = args.SelectedIndices ?? [];
-                            var json = System.Text.Json.JsonSerializer.Serialize(
-                                indices, ShellyGtkJsonContext.Default.Int32Array);
-                            await SafeWriteAsync(json);
-                            awaitingOptDepsSelection = false;
-                            optDepsQuestion = null;
-                            optDepsOptions.Clear();
-                        }
-                        else if (e.Data.StartsWith("[ALPM_QUESTION_CONFLICT]"))
-                        {
-                            Console.WriteLine("Conflict question found");
-                            var questionText = e.Data.Substring("[ALPM_QUESTION_CONFLICT]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
-
-                            var args = new QuestionEventArgs(
-                                QuestionType.ConflictPkg,
-                                questionText);
-
-                            _alpmEventService.RaiseQuestion(args);
-
-                            await args.WaitForResponseAsync();
-
-                            if (args.Response != -1)
-                            {
-                                await SafeWriteAsync(args.Response == 1 ? "y" : "n");
-                            }
-                        }
-                        else if (e.Data.StartsWith("[ALPM_QUESTION_REMOVEPKG]"))
-                        {
-                            Console.WriteLine("Found Remove Package Question");
-                            var questionText = e.Data.Substring("[ALPM_QUESTION_REMOVEPKG]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
-
-                            var args = new QuestionEventArgs(
-                                QuestionType.RemovePkgs,
-                                questionText);
-
-                            _alpmEventService.RaiseQuestion(args);
-
-                            await args.WaitForResponseAsync();
-
-                            if (args.Response != -1)
-                            {
-                                await SafeWriteAsync(args.Response == 1 ? "y" : "n");
-                            }
-                        }
-                        else if (e.Data.StartsWith("[ALPM_QUESTION_CORRUPTEDPKG]"))
-                        {
-                            Console.WriteLine("Corrupted package question found");
-                            var questionText = e.Data.Substring("[ALPM_QUESTION_CORRUPTEDPKG]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
-
-                            var args = new QuestionEventArgs(
-                                QuestionType.CorruptedPkg,
-                                questionText);
-
-                            _alpmEventService.RaiseQuestion(args);
-
-                            await args.WaitForResponseAsync();
-
-                            if (args.Response != -1)
-                            {
-                                await SafeWriteAsync(args.Response == 1 ? "y" : "n");
-                            }
-                        }
-                        else if (e.Data.StartsWith("[ALPM_QUESTION_IMPORTKEY]"))
-                        {
-                            Console.WriteLine("Inmport key question found");
-                            var questionText = e.Data.Substring("[ALPM_QUESTION_IMPORTKEY]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
-
-                            var args = new QuestionEventArgs(
-                                QuestionType.ImportKey,
-                                questionText);
-
-                            _alpmEventService.RaiseQuestion(args);
-
-                            await args.WaitForResponseAsync();
-
-                            if (args.Response != -1)
-                            {
-                                await SafeWriteAsync(args.Response == 1 ? "y" : "n");
-                            }
-                        }
-                        else if (e.Data.StartsWith("[ALPM_QUESTION_REPLACEPKG]"))
-                        {
-                            Console.WriteLine("Replace Question Found");
-                            var questionText = e.Data.Substring("[ALPM_QUESTION_REPLACEPKG]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
-                            var args = new QuestionEventArgs(QuestionType.ReplacePkg, questionText);
-                            _alpmEventService.RaiseQuestion(args);
-                            await args.WaitForResponseAsync();
-
-                            if (args.Response != -1)
-                            {
-                                await SafeWriteAsync(args.Response == 1 ? "y" : "n");
-                            }
-                        }
-                        else if (e.Data.StartsWith("[ALPM_SCRIPTLET]"))
-                        {
-                            var line = e.Data.Substring("[ALPM_SCRIPTLET]".Length);
-                            if (!string.IsNullOrEmpty(line))
-                            {
-                                _lockoutService.ParseLog($"[SCRIPTLET] {line}");
-                            }
-                        }
-                        else if (e.Data.StartsWith("[ALPM_HOOK]"))
-                        {
-                            var line = e.Data.Substring("[ALPM_HOOK]".Length);
-                            if (!string.IsNullOrEmpty(line))
-                            {
-                                _lockoutService.ParseLog($"[HOOK] {line}");
-                            }
-                        }
-                        // Check for generic ALPM question (yes/no)
-                        else if (e.Data.StartsWith("[ALPM_QUESTION]"))
-                        {
-                            Console.WriteLine("Generic question found");
-                            var questionText = e.Data.Substring("[ALPM_QUESTION]".Length);
-                            Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
-
-                            var args = new QuestionEventArgs(
-                                QuestionType.InstallIgnorePkg,
-                                questionText);
-
-                            _alpmEventService.RaiseQuestion(args);
-
-                            await args.WaitForResponseAsync();
-
-                            if (args.Response != -1)
-                            {
-                                await SafeWriteAsync(args.Response == 1 ? "y" : "n");
-                            }
-                        }
-                        else if (e.Data.StartsWith("[Shelly][RESTART_REQUIRED]"))
-                        {
-                            var payload = e.Data.Substring("[Shelly][RESTART_REQUIRED]".Length);
-                            if (payload == "reboot")
-                                restartNeedsReboot = true;
-                        }
-                        else if (e.Data.StartsWith("[Shelly][RESTART_FAILED]"))
-                        {
-                            var payload = e.Data.Substring("[Shelly][RESTART_FAILED]".Length);
-                            if (payload.StartsWith("service:"))
-                            {
-                                var rest = payload.Substring("service:".Length);
-                                var parts = rest.Split('|', 2);
-                                var svcName = parts[0];
-                                var svcError = parts.Length > 1 ? parts[1] : "Unknown error";
-                                restartFailures.Add((svcName, svcError));
-                            }
-                        }
-                        else if (e.Data.StartsWith("[Shelly][DEBUG]"))
-                        {
-                            // Debug messages - skip, don't forward to lockout dialog
-                        }
-                        else
-                        {
-                            errorBuilder.AppendLine(e.Data);
-                            await Console.Error.WriteLineAsync(e.Data);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        await Console.Error.WriteLineAsync($"Error processing stderr: {ex.Message}");
-                        errorBuilder.AppendLine(e.Data);
-                    }
-                    finally
-                    {
-                        if (Interlocked.Decrement(ref pendingCallbacks) == 0)
-                            allCallbacksDone.TrySetResult();
-                    }
+                    Console.WriteLine("Provider question received");
+                    await Console.Error.WriteLineAsync($"[Shelly]Select provider for: {e.Data}");
+                    providerOptions.Clear();
+                    providerQuestion = e.Data["[ALPM_SELECT_PROVIDER]".Length..];
+                    await Console.Error.WriteLineAsync($"[Shelly]Select provider for: {providerQuestion}");
                 }
+                else if (e.Data.StartsWith("[ALPM_PROVIDER_OPTION]"))
+                {
+                    await Console.Error.WriteLineAsync($"[Shelly]Provider option received: {e.Data}");
+                    var payload = e.Data["[ALPM_PROVIDER_OPTION]".Length..];
+                    var option = AlpmMarkerParser.ParseOptionPayload(payload, out var idx);
+                    if (idx >= 0)
+                        AlpmMarkerParser.PlaceAt(providerOptions, idx, option);
+                    else
+                        providerOptions.Add(option);
+                }
+                else if (e.Data.StartsWith("[ALPM_PROVIDER_END]"))
+                {
+                    await Console.Error.WriteLineAsync("[Shelly]Provider selection received");
+                    var providerArgs = new QuestionEventArgs(
+                        QuestionType.SelectProvider,
+                        providerQuestion ?? "Select provider",
+                        [..providerOptions],
+                        providerQuestion);
+
+                    alpmEventService.RaiseQuestion(providerArgs);
+
+                    await providerArgs.WaitForResponseAsync();
+
+                    if (providerArgs.Response != -1) await SafeWriteAsync(providerArgs.Response.ToString());
+
+                    await Console.Error.WriteLineAsync($"[Shelly]Wrote selection {providerArgs.Response}");
+
+                    providerQuestion = null;
+                    providerOptions.Clear();
+                }
+                else if (e.Data.StartsWith("[ALPM_SELECT_OPTDEPS]"))
+                {
+                    Console.WriteLine("Optional dependency selection received");
+                    optDepsOptions.Clear();
+                    optDepsQuestion = e.Data["[ALPM_SELECT_OPTDEPS]".Length..];
+                    await Console.Error.WriteLineAsync($"[Shelly]Select optional deps for: {optDepsQuestion}");
+                }
+                else if (e.Data.StartsWith("[ALPM_OPTDEPS_OPTION]"))
+                {
+                    var payload = e.Data["[ALPM_OPTDEPS_OPTION]".Length..];
+                    var option = AlpmMarkerParser.ParseOptionPayload(payload, out var idx);
+                    if (idx >= 0)
+                        AlpmMarkerParser.PlaceAt(optDepsOptions, idx, option);
+                    else
+                        optDepsOptions.Add(option);
+                }
+                else if (e.Data.StartsWith("[ALPM_OPTDEPS_END]"))
+                {
+                    await Console.Error.WriteLineAsync("[Shelly]Optional deps selection end");
+                    var optionalArgs = new QuestionEventArgs(
+                        QuestionType.SelectOptionalDeps,
+                        optDepsQuestion ?? "Select optional dependencies",
+                        [..optDepsOptions],
+                        optDepsQuestion);
+
+                    alpmEventService.RaiseQuestion(optionalArgs);
+                    await optionalArgs.WaitForResponseAsync();
+
+                    var indices = optionalArgs.SelectedIndices ?? [];
+                    var json = JsonSerializer.Serialize(indices, ShellyGtkJsonContext.Default.Int32Array);
+                    await SafeWriteAsync(json);
+                    optDepsQuestion = null;
+                    optDepsOptions.Clear();
+                }
+                else if (e.Data.StartsWith("[ALPM_QUESTION_CONFLICT]"))
+                {
+                    Console.WriteLine("Conflict question found");
+                    var questionText = e.Data["[ALPM_QUESTION_CONFLICT]".Length..];
+                    await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
+
+                    var conflictArgs = new QuestionEventArgs(
+                        QuestionType.ConflictPkg,
+                        questionText);
+
+                    alpmEventService.RaiseQuestion(conflictArgs);
+
+                    await conflictArgs.WaitForResponseAsync();
+
+                    if (conflictArgs.Response != -1) await SafeWriteAsync(conflictArgs.Response == 1 ? "y" : "n");
+                }
+                else if (e.Data.StartsWith("[ALPM_QUESTION_REMOVEPKG]"))
+                {
+                    Console.WriteLine("Found Remove Package Question");
+                    var questionText = e.Data["[ALPM_QUESTION_REMOVEPKG]".Length..];
+                    await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
+
+                    var removeArgs = new QuestionEventArgs(QuestionType.RemovePkgs, questionText);
+
+                    alpmEventService.RaiseQuestion(removeArgs);
+
+                    await removeArgs.WaitForResponseAsync();
+
+                    if (removeArgs.Response != -1) await SafeWriteAsync(removeArgs.Response == 1 ? "y" : "n");
+                }
+                else if (e.Data.StartsWith("[ALPM_QUESTION_CORRUPTEDPKG]"))
+                {
+                    Console.WriteLine("Corrupted package question found");
+                    var questionText = e.Data["[ALPM_QUESTION_CORRUPTEDPKG]".Length..];
+                    await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
+
+                    var corruptedArgs = new QuestionEventArgs(QuestionType.CorruptedPkg, questionText);
+
+                    alpmEventService.RaiseQuestion(corruptedArgs);
+
+                    await corruptedArgs.WaitForResponseAsync();
+
+                    if (corruptedArgs.Response != -1) await SafeWriteAsync(corruptedArgs.Response == 1 ? "y" : "n");
+                }
+                else if (e.Data.StartsWith("[ALPM_QUESTION_IMPORTKEY]"))
+                {
+                    Console.WriteLine("Import key question found");
+                    var questionText = e.Data["[ALPM_QUESTION_IMPORTKEY]".Length..];
+                    await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
+
+                    var importArgs = new QuestionEventArgs(QuestionType.ImportKey, questionText);
+
+                    alpmEventService.RaiseQuestion(importArgs);
+
+                    await importArgs.WaitForResponseAsync();
+
+                    if (importArgs.Response != -1) await SafeWriteAsync(importArgs.Response == 1 ? "y" : "n");
+                }
+                else if (e.Data.StartsWith("[ALPM_QUESTION_REPLACEPKG]"))
+                {
+                    Console.WriteLine("Replace Question Found");
+                    var questionText = e.Data["[ALPM_QUESTION_REPLACEPKG]".Length..];
+                    await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
+
+                    var replaceArgs = new QuestionEventArgs(QuestionType.ReplacePkg, questionText);
+
+                    alpmEventService.RaiseQuestion(replaceArgs);
+
+                    await replaceArgs.WaitForResponseAsync();
+
+                    if (replaceArgs.Response != -1) await SafeWriteAsync(replaceArgs.Response == 1 ? "y" : "n");
+                }
+                else if (e.Data.StartsWith("[ALPM_SCRIPTLET]"))
+                {
+                    var line = e.Data["[ALPM_SCRIPTLET]".Length..];
+                    if (!string.IsNullOrEmpty(line)) lockoutService.ParseLog($"[SCRIPTLET] {line}");
+                }
+                else if (e.Data.StartsWith("[ALPM_HOOK]"))
+                {
+                    var line = e.Data["[ALPM_HOOK]".Length..];
+                    if (!string.IsNullOrEmpty(line)) lockoutService.ParseLog($"[HOOK] {line}");
+                }
+                else if (e.Data.StartsWith("[ALPM_QUESTION]"))
+                {
+                    Console.WriteLine("Generic question found");
+                    var questionText = e.Data["[ALPM_QUESTION]".Length..];
+                    await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
+
+                    var genericArgs = new QuestionEventArgs(QuestionType.InstallIgnorePkg, questionText);
+
+                    alpmEventService.RaiseQuestion(genericArgs);
+
+                    await genericArgs.WaitForResponseAsync();
+
+                    if (genericArgs.Response != -1) await SafeWriteAsync(genericArgs.Response == 1 ? "y" : "n");
+                }
+                else if (e.Data.StartsWith("[Shelly][RESTART_REQUIRED]"))
+                {
+                    var payload = e.Data["[Shelly][RESTART_REQUIRED]".Length..];
+                    if (payload == "reboot")
+                        restartNeedsReboot = true;
+                }
+                else if (e.Data.StartsWith("[Shelly][RESTART_FAILED]"))
+                {
+                    var payload = e.Data["[Shelly][RESTART_FAILED]".Length..];
+                    if (!payload.StartsWith("service:")) return;
+
+                    var rest = payload["service:".Length..];
+                    var parts = rest.Split('|', 2);
+                    var svcName = parts[0];
+                    var svcError = parts.Length > 1 ? parts[1] : "Unknown error";
+                    restartFailures.Add((svcName, svcError));
+                }
+                else if (e.Data.StartsWith("[Shelly][DEBUG]"))
+                {
+                    // Debug messages - skip, don't forward to lockout dialog
+                }
+                else
+                {
+                    errorBuilder.AppendLine(e.Data);
+                    await Console.Error.WriteLineAsync(e.Data);
+                }
+            }
+            catch (Exception ex)
+            {
+                await Console.Error.WriteLineAsync($"Error processing stderr: {ex.Message}");
+                errorBuilder.AppendLine(e.Data);
+            }
+            finally
+            {
+                if (Interlocked.Decrement(ref pendingCallbacks) == 0)
+                    allCallbacksDone.TrySetResult();
             }
         };
 
@@ -922,16 +665,13 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
             // Wait for any in-flight async callbacks to finish writing
             if (Volatile.Read(ref pendingCallbacks) > 0)
-            {
                 await Task.WhenAny(allCallbacksDone.Task, Task.Delay(TimeSpan.FromMinutes(2)));
-            }
-
 
             await stdinLock.WaitAsync();
             try
             {
                 stdinClosed = true;
-                stdinWriter?.Close();
+                stdinWriter.Close();
             }
             finally
             {
@@ -943,7 +683,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
             // Update credential validation status based on result
             if (success)
             {
-                _credentialManager.MarkAsValidated();
+                credentialManager.MarkAsValidated();
             }
             else
             {
@@ -952,10 +692,8 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                 if (errorOutput.Contains("incorrect password") ||
                     errorOutput.Contains("Sorry, try again") ||
                     errorOutput.Contains("Authentication failure") ||
-                    process.ExitCode == 1 && errorOutput.Contains("sudo"))
-                {
-                    _credentialManager.MarkAsInvalid();
-                }
+                    (process.ExitCode == 1 && errorOutput.Contains("sudo")))
+                    credentialManager.MarkAsInvalid();
             }
 
             return new OperationResult
@@ -966,87 +704,6 @@ public class PrivilegedOperationService : IPrivilegedOperationService
                 ExitCode = process.ExitCode,
                 NeedsReboot = restartNeedsReboot,
                 FailedServiceRestarts = restartFailures
-            };
-        }
-        catch (Exception ex)
-        {
-            return new OperationResult
-            {
-                Success = false,
-                Output = string.Empty,
-                Error = ex.Message,
-                ExitCode = -1
-            };
-        }
-    }
-
-    private async Task<OperationResult> ExecutePrivilegedSystemCommandAsync(string operationDescription,
-        params string[] args)
-    {
-        var hasCredentials = await _credentialManager.RequestCredentialsAsync(operationDescription);
-        if (!hasCredentials)
-        {
-            return new OperationResult
-            {
-                Success = false,
-                Output = string.Empty,
-                Error = "Authentication cancelled by user.",
-                ExitCode = -1
-            };
-        }
-
-        var password = _credentialManager.GetPassword();
-        var isPasswordless = password == CredentialManager.NoPassword;
-
-        var arguments = string.Join(" ", args);
-
-        Console.WriteLine($"Executing privileged system command: sudo {arguments}");
-
-        var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "sudo",
-                Arguments = $"-S -k {arguments}",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                RedirectStandardInput = true,
-                CreateNoWindow = true
-            }
-        };
-
-        try
-        {
-            process.Start();
-
-            if (!isPasswordless)
-            {
-                await process.StandardInput.WriteLineAsync(password);
-                await process.StandardInput.FlushAsync();
-                process.StandardInput.Close();
-            }
-
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            var errorTask = process.StandardError.ReadToEndAsync();
-
-            await Task.WhenAll(outputTask, errorTask);
-            await process.WaitForExitAsync();
-
-            var output = await outputTask;
-            var error = await errorTask;
-
-            if (!string.IsNullOrEmpty(error))
-            {
-                await Console.Error.WriteLineAsync(error);
-            }
-
-            return new OperationResult
-            {
-                Success = process.ExitCode == 0,
-                Output = output,
-                Error = error,
-                ExitCode = process.ExitCode
             };
         }
         catch (Exception ex)
