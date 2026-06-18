@@ -1387,6 +1387,13 @@ msgstr "Baixando {0}..."
 msgid "Installation failed: {0}"
 msgstr "Falha na instalação: {0}"
 
+msgid "Failed to load AppImage catalog"
+msgstr ""
+
+msgid "Retry"
+msgstr ""
+
+
 msgid "Multimedia"
 msgstr "Multimídia"
 

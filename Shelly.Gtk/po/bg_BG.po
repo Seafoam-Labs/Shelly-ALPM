@@ -1316,6 +1316,13 @@ msgstr "Изтегляне на {0}..."
 msgid "Installation failed: {0}"
 msgstr "Инсталацията е неуспешна: {0}"
 
+msgid "Failed to load AppImage catalog"
+msgstr ""
+
+msgid "Retry"
+msgstr ""
+
+
 msgid "Multimedia"
 msgstr "Мултимедия"
 

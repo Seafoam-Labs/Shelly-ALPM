@@ -1322,6 +1322,13 @@ msgstr "S'està descarregant {0}..."
 msgid "Installation failed: {0}"
 msgstr "Ha fallat la instal·lació: {0}"
 
+msgid "Failed to load AppImage catalog"
+msgstr ""
+
+msgid "Retry"
+msgstr ""
+
+
 msgid "Multimedia"
 msgstr "Multimèdia"
 

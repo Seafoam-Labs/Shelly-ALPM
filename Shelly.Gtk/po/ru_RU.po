@@ -1332,6 +1332,12 @@ msgstr "Загрузка {0}..."
 msgid "Installation failed: {0}"
 msgstr "Ошибка установки: {0}"
 
+msgid "Failed to load AppImage catalog"
+msgstr "Не удалось загрузить каталог AppImage"
+
+msgid "Retry"
+msgstr "Повторить"
+
 msgid "Multimedia"
 msgstr "Мультимедиа"
 

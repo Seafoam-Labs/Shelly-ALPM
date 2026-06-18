@@ -1310,6 +1310,13 @@ msgstr "{0} indiriliyor..."
 msgid "Installation failed: {0}"
 msgstr "Kurulum başarısız: {0}"
 
+msgid "Failed to load AppImage catalog"
+msgstr ""
+
+msgid "Retry"
+msgstr ""
+
+
 msgid "Multimedia"
 msgstr "Multimedya"
 

@@ -1396,6 +1396,13 @@ msgstr "{0}をダウンロード中..."
 msgid "Installation failed: {0}"
 msgstr "インストール失敗: {0}"
 
+msgid "Failed to load AppImage catalog"
+msgstr ""
+
+msgid "Retry"
+msgstr ""
+
+
 msgid "Multimedia"
 msgstr "マルチメディア"
 

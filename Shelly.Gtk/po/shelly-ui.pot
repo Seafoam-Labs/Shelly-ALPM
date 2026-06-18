@@ -1559,3 +1559,9 @@ msgstr ""
 
 msgid "Installation failed: {0}"
 msgstr ""
+
+msgid "Failed to load AppImage catalog"
+msgstr ""
+
+msgid "Retry"
+msgstr ""

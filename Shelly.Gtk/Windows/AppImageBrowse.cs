@@ -58,6 +58,8 @@ public sealed class AppImageBrowse(
     private ScrolledWindow? _gridScroller;
     private Box? _loadingOverlay;
     private Spinner? _loadingSpinner;
+    private Box? _errorOverlay;
+    private Label? _errorMessageLabel;
 
     // Detail page widgets
     private Box? _gridPage;
@@ -227,6 +229,35 @@ public sealed class AppImageBrowse(
         noResultsBox.Append(noResultsLabel);
         contentOverlay.AddOverlay(noResultsBox);
 
+        // Error overlay
+        _errorOverlay = Box.New(Orientation.Vertical, 16);
+        _errorOverlay.SetValign(Align.Center);
+        _errorOverlay.SetHalign(Align.Center);
+        _errorOverlay.SetVisible(false);
+        var errorIcon = Image.NewFromIconName("network-error-symbolic");
+        errorIcon.SetPixelSize(64);
+        errorIcon.AddCssClass("dim-label");
+        var errorTitle = Label.New(T("Failed to load AppImage catalog"));
+        errorTitle.AddCssClass("title-2");
+        _errorMessageLabel = Label.New(string.Empty);
+        _errorMessageLabel.AddCssClass("dim-label");
+        _errorMessageLabel.SetWrap(true);
+        _errorMessageLabel.MaxWidthChars = 50;
+        var retryButton = Button.New();
+        retryButton.Label = T("Retry");
+        retryButton.AddCssClass("pill");
+        retryButton.SetHalign(Align.Center);
+        retryButton.OnClicked += (_, _) =>
+        {
+            appImageHubService.InvalidateCache();
+            _ = LoadCatalogAsync(_cts.Token);
+        };
+        _errorOverlay.Append(errorIcon);
+        _errorOverlay.Append(errorTitle);
+        _errorOverlay.Append(_errorMessageLabel);
+        _errorOverlay.Append(retryButton);
+        contentOverlay.AddOverlay(_errorOverlay);
+
         rightBox.Append(contentOverlay);
         _gridPage.Append(rightBox);
 
@@ -261,6 +292,7 @@ public sealed class AppImageBrowse(
         Functions.IdleAdd(0, () =>
         {
             if (ct.IsCancellationRequested) return false;
+            _errorOverlay?.SetVisible(false);
             _loadingOverlay?.SetVisible(true);
             _loadingSpinner?.Start();
             return false;
@@ -292,10 +324,13 @@ public sealed class AppImageBrowse(
         catch (Exception e)
         {
             Console.WriteLine($"Failed to load AppImage catalog: {e.Message}");
+            var msg = e.Message;
             Functions.IdleAdd(0, () =>
             {
                 _loadingOverlay?.SetVisible(false);
                 _loadingSpinner?.Stop();
+                _errorMessageLabel?.SetText(msg);
+                _errorOverlay?.SetVisible(true);
                 return false;
             });
         }

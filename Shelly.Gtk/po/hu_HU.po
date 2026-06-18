@@ -1375,6 +1375,13 @@ msgstr "{0} letöltése..."
 msgid "Installation failed: {0}"
 msgstr "A telepítés sikertelen: {0}"
 
+msgid "Failed to load AppImage catalog"
+msgstr ""
+
+msgid "Retry"
+msgstr ""
+
+
 msgid "Multimedia"
 msgstr "Multimédia"
 
