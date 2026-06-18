@@ -37,6 +37,16 @@
                             </object>
                         </child>
                         <child>
+                            <object class="GtkDropDown" id="reason_filter">
+                                <property name="tooltip-text" translatable="yes">Filter by Install Reason</property>
+                                <property name="enable-search">true</property>
+                                <property name="search-match-mode">substring</property>
+                                <property name="expression">
+                                    <lookup name='string' type="GtkStringObject"></lookup>
+                                </property>
+                            </object>
+                        </child>
+                        <child>
                             <object class="GtkButton" id="remove_local_button">
                                 <property name="tooltip-text" translatable="yes">Remove Local Packages</property>
                                 <child>

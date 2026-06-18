@@ -56,6 +56,8 @@ public sealed class PackageManagement(
     private List<string> _groups = [];
     private DropDown _groupDropDown = null!;
     private string _selectedGroup = T("Any");
+    private DropDown _reasonDropDown = null!;
+    private string _selectedReason = T("Any");
 
     private Box _loadingOverlay = null!;
     private Spinner _loadingSpinner = null!;
@@ -120,6 +122,7 @@ public sealed class PackageManagement(
         _selectionModel.Autoselect = false;
         columnView.SetModel(_selectionModel);
         _groupDropDown = (DropDown)builder.GetObject("grouping_selection")!;
+        _reasonDropDown = (DropDown)builder.GetObject("reason_filter")!;
         _detailRevealer = (Revealer)builder.GetObject("detail_revealer")!;
         _detailBox = (Box)builder.GetObject("detail_box")!;
 
@@ -239,6 +242,16 @@ public sealed class PackageManagement(
             var idx = _groupDropDown.GetSelected();
             var item = (StringObject)_groupDropDown.GetModel()!.GetObject(idx)!;
             _selectedGroup = item.GetString();
+            ApplyFilter();
+            _selectionModel.SetSelected(uint.MaxValue);
+            ScrollToTop();
+        };
+        _reasonDropDown.OnNotify += (_, args) =>
+        {
+            if (args.Pspec.GetName() != "selected") return;
+            var idx = _reasonDropDown.GetSelected();
+            var item = (StringObject)_reasonDropDown.GetModel()!.GetObject(idx)!;
+            _selectedReason = item.GetString();
             ApplyFilter();
             _selectionModel.SetSelected(uint.MaxValue);
             ScrollToTop();
@@ -746,7 +759,8 @@ public sealed class PackageManagement(
         var pkg = _packageData[pkgObj.Index];
 
         return PackageSearch.MatchesGroup(pkg.Groups, _selectedGroup) &&
-               PackageSearch.Matches(pkg.Name, pkg.Description, _searchText);
+               PackageSearch.Matches(pkg.Name, pkg.Description, _searchText) &&
+               PackageSearch.MatchesReason(pkg.InstallReason, _selectedReason);
     }
 
     private async Task LoadDataAsync(int generation = 0, CancellationToken ct = default)
@@ -788,6 +802,9 @@ public sealed class PackageManagement(
 
                 var groupsStringList = StringList.New(_groups.ToArray());
                 _groupDropDown.SetModel(groupsStringList);
+
+                var reasonStringList = StringList.New([T("Any"), "Explicit", "Depend"]);
+                _reasonDropDown.SetModel(reasonStringList);
 
                 for (var i = 0; i < packages.Count; i++)
                 {

@@ -68,6 +68,14 @@ internal static class PackageSearch
         return groups is not null && groups.Contains(selectedGroup);
     }
 
+    public static bool MatchesReason(string? installReason, string? selectedReason)
+    {
+        if (string.IsNullOrEmpty(selectedReason) || selectedReason == "Any" || selectedReason == T("Any"))
+            return true;
+
+        return string.Equals(installReason, selectedReason, StringComparison.OrdinalIgnoreCase);
+    }
+
 
     public static CustomFilter CreateSafeFilter(Func<GObject.Object, bool> predicate)
     {
