@@ -95,7 +95,16 @@ public class Explore : GlobalSettingsCommand
         List<AlpmPackageDto> packages = [];
         List<LocalPackageDto> localPackages = [];
 
-        if (Installed) packages.AddRange(manager.GetInstalledPackages(Reason));
+        if (Installed)
+        {
+            var installed = manager.GetInstalledPackages();
+            if (Reason.HasValue)
+            {
+                var target = Reason.Value.ToString();
+                installed = installed.Where(p => string.Equals(p.InstallReason, target, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+            packages.AddRange(installed);
+        }
         if (Available) packages.AddRange(manager.GetAvailablePackages());
         if (Local) localPackages.AddRange(LocalManager.GetInstalledBinaryPackages());
 
@@ -209,7 +218,16 @@ public class Explore : GlobalSettingsCommand
             }
 
             List<AlpmPackageDto> infoPackages = [];
-            if (Installed) infoPackages.AddRange(infoManager.GetInstalledPackages(Reason));
+            if (Installed)
+            {
+                var installed = infoManager.GetInstalledPackages();
+                if (Reason.HasValue)
+                {
+                    var target = Reason.Value.ToString();
+                    installed = installed.Where(p => string.Equals(p.InstallReason, target, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+                infoPackages.AddRange(installed);
+            }
             if (Available) infoPackages.AddRange(infoManager.GetAvailablePackages());
 
             var match = infoPackages.FirstOrDefault(x =>
@@ -238,7 +256,12 @@ public class Explore : GlobalSettingsCommand
 
         if (Installed)
         {
-            var packages = manager.GetInstalledPackages(Reason);
+            var packages = manager.GetInstalledPackages();
+            if (Reason.HasValue)
+            {
+                var target = Reason.Value.ToString();
+                packages = packages.Where(p => string.Equals(p.InstallReason, target, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
 
             if (!string.IsNullOrWhiteSpace(Package))
                 packages = packages
