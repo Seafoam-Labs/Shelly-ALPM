@@ -10,7 +10,7 @@ using Shelly.Gtk.UiModels.PackageManagerObjects;
 namespace Shelly.Gtk.Services;
 
 public class PrivilegedOperationService(
-    ProcessExecutor processExecutor,
+    IProcessExecutor processExecutor,
     ICredentialManager credentialManager,
     IAlpmEventService alpmEventService,
     IConfigService configService,

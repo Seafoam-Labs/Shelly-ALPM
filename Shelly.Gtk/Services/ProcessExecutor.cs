@@ -4,7 +4,7 @@ using Shelly.Gtk.Helpers;
 
 namespace Shelly.Gtk.Services;
 
-public class ProcessExecutor(ICredentialManager credentialManager)
+public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExecutor
 {
     private readonly string _cliPath = CliPathResolver.FindCliPath();
 
