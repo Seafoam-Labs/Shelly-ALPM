@@ -32,6 +32,8 @@ public class Explore : GlobalSettingsCommand
 
     private string? Package { get; set; }
 
+    private PackageInstallReason? Reason { get; set; }
+
     public static Command Create()
     {
         var repos = new Option<bool>("--repos", "-r") { Description = "List available repositories. This supercedes any other modifiers." };
@@ -42,10 +44,11 @@ public class Explore : GlobalSettingsCommand
         var page = new Option<int>("--page", "-p") { Description = "Page number", DefaultValueFactory = _ => 1 };
         var showHidden = new Option<bool>("--show-hidden", "-w") { Description = "Show hidden packages" };
         var info = new Option<bool>("--info", "-I") { Description = "Show detailed information for a single package" };
+        var reason = new Option<PackageInstallReason?>("--reason") { Description = "Filter installed packages by install reason (Explicit, Depend)" };
         var package = new Argument<string?>("package") { Description = "The package to search for", Arity = ZeroOrOne };
 
         var command = new Command("explore", "Explore repositories and packages")
-            { repos, available, installed, local, take, page, showHidden, info, package };
+            { repos, available, installed, local, take, page, showHidden, info, reason, package };
 
         command.SetAction(async (parseResult, _) =>
         {
@@ -59,6 +62,7 @@ public class Explore : GlobalSettingsCommand
                 Page = parseResult.GetValue(page),
                 ShowHidden = parseResult.GetValue(showHidden),
                 Info = parseResult.GetValue(info),
+                Reason = parseResult.GetValue(reason),
                 Package = parseResult.GetValue(package)
             };
             GlobalOptions.Apply(instance, parseResult);
@@ -91,7 +95,7 @@ public class Explore : GlobalSettingsCommand
         List<AlpmPackageDto> packages = [];
         List<LocalPackageDto> localPackages = [];
 
-        if (Installed) packages.AddRange(manager.GetInstalledPackages());
+        if (Installed) packages.AddRange(manager.GetInstalledPackages(Reason));
         if (Available) packages.AddRange(manager.GetAvailablePackages());
         if (Local) localPackages.AddRange(LocalManager.GetInstalledBinaryPackages());
 
@@ -205,7 +209,7 @@ public class Explore : GlobalSettingsCommand
             }
 
             List<AlpmPackageDto> infoPackages = [];
-            if (Installed) infoPackages.AddRange(infoManager.GetInstalledPackages());
+            if (Installed) infoPackages.AddRange(infoManager.GetInstalledPackages(Reason));
             if (Available) infoPackages.AddRange(infoManager.GetAvailablePackages());
 
             var match = infoPackages.FirstOrDefault(x =>
@@ -234,7 +238,7 @@ public class Explore : GlobalSettingsCommand
 
         if (Installed)
         {
-            var packages = manager.GetInstalledPackages();
+            var packages = manager.GetInstalledPackages(Reason);
 
             if (!string.IsNullOrWhiteSpace(Package))
                 packages = packages

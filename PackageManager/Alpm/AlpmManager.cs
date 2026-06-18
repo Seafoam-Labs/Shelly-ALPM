@@ -911,12 +911,20 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         ErrorEvent?.Invoke(this, new AlpmErrorEventArgs($"Sync failed: {error} with {GetErrorMessage(error)}"));
     }
 
-    public List<AlpmPackageDto> GetInstalledPackages()
+    public List<AlpmPackageDto> GetInstalledPackages(PackageInstallReason? reason = null)
     {
         if (_handle == IntPtr.Zero) Initialize();
         var dbPtr = GetLocalDb(_handle);
         var pkgPtr = DbGetPkgCache(dbPtr);
-        var packages = AlpmPackage.FromList(pkgPtr).Select(p => p.ToDto()).ToList();
+        var alpmPackages = AlpmPackage.FromList(pkgPtr);
+
+        if (reason.HasValue)
+        {
+            var targetReason = (AlpmPkgReason)reason.Value;
+            alpmPackages = alpmPackages.Where(p => AlpmReference.GetPkgReason(p.PackagePtr) == targetReason).ToList();
+        }
+
+        var packages = alpmPackages.Select(p => p.ToDto()).ToList();
 
         if (_showHiddenPackages) return packages;
         InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.TraceOutput,

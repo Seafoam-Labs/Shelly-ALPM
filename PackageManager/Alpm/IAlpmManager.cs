@@ -27,7 +27,7 @@ public interface IAlpmManager
         bool showHiddenPackages = false);
 
     void Sync(bool force = false);
-    List<AlpmPackageDto> GetInstalledPackages();
+    List<AlpmPackageDto> GetInstalledPackages(PackageInstallReason? reason = null);
     List<AlpmPackageDto> GetAvailablePackages();
     List<AlpmPackageUpdateDto> GetPackagesNeedingUpdate();
 
