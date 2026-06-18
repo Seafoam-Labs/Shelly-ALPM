@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-06-12 11:40+0000\n"
-"PO-Revision-Date: 2026-06-17 04:57+0900\n"
+"PO-Revision-Date: 2026-06-18 15:04+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
 "Language: ja_JP\n"
@@ -1535,6 +1535,9 @@ msgstr "アプリの権限"
 
 msgid "<span size='large'>Flatpaks are up to date</span>"
 msgstr "<span size='large'>Flatpak パッケージは最新です</span>"
+
+msgid "Update Available: {0}"
+msgstr "アップデートが利用可能: {0}"
 
 #~ msgid "No packages found."
 #~ msgstr "パッケージが見つかりませんでした。"
