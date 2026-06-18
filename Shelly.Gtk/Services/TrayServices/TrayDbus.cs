@@ -4,28 +4,28 @@ namespace Shelly.Gtk.Services.TrayServices;
 
 public sealed class TrayDBus : ITrayDbus, IDisposable
 {
-    private readonly DBusConnection _sessionConnection = new(DBusAddress.Session!);
+    private readonly DBusConnection _connection = new(DBusAddress.Session!);
 
     public void Dispose()
     {
-        _sessionConnection.Dispose();
+        _connection.Dispose();
     }
 
     public async Task RefreshSettingsAsync()
     {
-        await _sessionConnection.ConnectAsync();
+        await _connection.ConnectAsync();
         await CallTrayAsync("RefreshSettings");
     }
 
     public async Task UpdatesMadeInUiAsync()
     {
-        await _sessionConnection.ConnectAsync();
+        await _connection.ConnectAsync();
         await CallTrayAsync("UpdatesMadeInUi");
     }
 
     private Task CallTrayAsync(string method)
     {
-        var writer = _sessionConnection.GetMessageWriter();
+        var writer = _connection.GetMessageWriter();
 
         writer.WriteMethodCallHeader(
             ShellyConstants.TrayService,
@@ -33,6 +33,6 @@ public sealed class TrayDBus : ITrayDbus, IDisposable
             ShellyConstants.TrayInterface,
             method);
 
-        return _sessionConnection.CallMethodAsync(writer.CreateMessage());
+        return _connection.CallMethodAsync(writer.CreateMessage());
     }
 }
