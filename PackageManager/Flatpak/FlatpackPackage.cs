@@ -43,7 +43,7 @@ public class FlatpackPackage(IntPtr pkgPtr)
         return packages;
     }
 
-    public FlatpakPackageDto ToDto() => new FlatpakPackageDto
+    public FlatpakPackageDto ToDto(InstallLevel installLevel = InstallLevel.System) => new()
     {
         Id = Id,
         Branch = Branch,
@@ -53,7 +53,8 @@ public class FlatpackPackage(IntPtr pkgPtr)
         Version = Version,
         LatestCommit = LastCommit,
         Kind = Kind,
-        Remote = Origin
+        Remote = Origin,
+        InstallLevel = installLevel
     };
 
     public override string ToString()

@@ -62,6 +62,25 @@ public static class JsonPackFrame
 
     public static string EncodeFrame<T>(T value) => $"{Prefix}{EncodePayload(value)}{Suffix}";
 
+    /// <summary>
+    /// Decodes the <b>last</b> <c>[JSON]…[/JSON]</c> frame in the output. Use this when the writer
+    /// emits multiple frames (e.g. progress/informational events first and the real payload last),
+    /// as <c>check-updates --ui-mode</c> does.
+    /// </summary>
+    public static bool TryDecodeLast<T>(string output, out T? value)
+    {
+        value = default;
+        if (string.IsNullOrWhiteSpace(output)) return false;
+
+        var pref = output.LastIndexOf(Prefix, StringComparison.Ordinal);
+        if (pref < 0) return false;
+        var suff = output.IndexOf(Suffix, pref + Prefix.Length, StringComparison.Ordinal);
+        if (suff < 0) return false;
+        var payload = output.Substring(pref + Prefix.Length, suff - (pref + Prefix.Length));
+
+        return TryDecodePayload(payload, out value);
+    }
+
     public static bool TryDecode<T>(string output, out T? value)
     {
         value = default;

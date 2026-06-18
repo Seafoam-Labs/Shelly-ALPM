@@ -24,9 +24,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang zlib1g-dev libalpm-dev libgtk-4-dev zip gettext
 
-      - name: Publish Shelly-CLI
+      - name: Publish Shelly.Cli
         run: |
-          dotnet publish Shelly-CLI/Shelly-CLI.csproj -c Release -o publish/shelly-cli -p:InstructionSet=x86-64
+          dotnet publish Shelly.Cli/Shelly.Cli.csproj -c Release -o publish/shelly-cli -p:InstructionSet=x86-64
           cd publish/shelly-cli
           rm -f *.dbg *.pdb
           cp ../../shelly.fish .

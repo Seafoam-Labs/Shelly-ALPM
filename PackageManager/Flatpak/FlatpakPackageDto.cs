@@ -20,6 +20,8 @@ public partial class FlatpakPackageDto
     public List<string> Categories { get; set; } = [];
     
     public string Remote { get; set; } = string.Empty;
+    
+    public InstallLevel InstallLevel { get; set; }
 
     public List<string> Permissions { get; set; } = [];
     

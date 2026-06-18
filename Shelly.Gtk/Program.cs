@@ -808,7 +808,7 @@ sealed class Program
                     var packagesNeedingUpdate = await unprivilegedOperationService.CheckForApplicationUpdates();
 
                     if (packagesNeedingUpdate.Aur.Count == 0 && packagesNeedingUpdate.Packages.Count == 0 &&
-                        packagesNeedingUpdate.Flatpaks.Count == 0)
+                        packagesNeedingUpdate.Flatpak.Count == 0)
                     {
                         var toastArgs = new ToastMessageEventArgs("No packages need to be upgraded");
                         genericQuestionService.RaiseToastMessage(toastArgs);

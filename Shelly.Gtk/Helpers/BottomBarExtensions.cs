@@ -218,7 +218,7 @@ public static class BottomBarExtensions
             {
                 var unprivilegedOps = serviceProvider.GetRequiredService<IUnprivilegedOperationService>();
                 var updates = await unprivilegedOps.CheckForApplicationUpdates();
-                var count = updates.Packages.Count + updates.Aur.Count + updates.Flatpaks.Count;
+                var count = updates.Packages.Count + updates.Aur.Count + updates.Flatpak.Count;
                 GLib.Functions.IdleAdd(0, () =>
                 {
                     updatesPopoverTitle.SetText(Translations.T("Available Updates ({0})", count));
@@ -255,7 +255,7 @@ public static class BottomBarExtensions
                         updatesListBox.Append(row);
                     }
 
-                    foreach (var pkg in updates.Flatpaks)
+                    foreach (var pkg in updates.Flatpak)
                     {
                         var row = ListBoxRow.New();
                         var label = Label.New($"[Flatpak] {pkg.Name ?? pkg.Id}: {pkg.Version}");
@@ -330,14 +330,14 @@ public static class BottomBarExtensions
         const int maxPackageColumnWidth = 28;
         var allNames = packages.Packages.Select(p => p.Name)
             .Concat(packages.Aur.Select(p => p.Name))
-            .Concat(packages.Flatpaks.Select(p => p.Name ?? p.Id));
+            .Concat(packages.Flatpak.Select(p => p.Name ?? p.Id));
         var packageColumnWidth = Math.Min(maxPackageColumnWidth, allNames.Max(n => n.Length));
 
         var lines = packages.Packages
             .Select(p => $"{FormatPackageName(p.Name, packageColumnWidth)}  {p.OldVersion} -> {p.Version}")
             .Concat(packages.Aur
                 .Select(p => $"{FormatPackageName(p.Name, packageColumnWidth)}  {p.OldVersion} -> {p.Version}"))
-            .Concat(packages.Flatpaks
+            .Concat(packages.Flatpak
                 .Select(p => $"{FormatPackageName(p.Name ?? p.Id, packageColumnWidth)}  {p.Version}"));
 
         return string.Join(Environment.NewLine, lines);

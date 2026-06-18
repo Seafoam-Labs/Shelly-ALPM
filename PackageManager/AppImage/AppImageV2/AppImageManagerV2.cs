@@ -46,7 +46,7 @@ public class AppImageManagerV2(string installDirectory = "")
         ProgressEvent?.Invoke(this, new AppImageProgressEventArgs(appName, totalBytes, downloadedBytes, percentage));
     }
 
-    public async Task<int> InstallAppImage(string location)
+    public async Task<bool> InstallAppImage(string location)
     {
         var filePath = Path.GetFullPath(location);
         var appName = Path.GetFileNameWithoutExtension(filePath);
@@ -55,11 +55,29 @@ public class AppImageManagerV2(string installDirectory = "")
         if (!Directory.Exists(_installDirectory))
             Directory.CreateDirectory(_installDirectory);
 
+        var newMetadata = await ExtractMetadata(filePath);
+        newMetadata?.Path = destAppImagePath;
+
         var existingAppImages = await GetAppImagesFromLocalDb();
-        if (existingAppImages.Any(a => string.Equals(a.Name, appName, StringComparison.OrdinalIgnoreCase)) ||
-            File.Exists(destAppImagePath))
+        
+        AppImageDtoV2? existingAppImage = null;
+        if (newMetadata != null)
+        {
+            existingAppImage = existingAppImages.FirstOrDefault(a => 
+                string.Equals(a.Name, newMetadata.Name, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(a.DesktopName, newMetadata.DesktopName, StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            existingAppImage = existingAppImages.FirstOrDefault(a => string.Equals(a.Name, appName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (existingAppImage != null || File.Exists(destAppImagePath))
         {
             LogWarning($"AppImage {appName} already exists. Overwriting...");
+            var oldName = existingAppImage?.Name ?? appName;
+            var oldPath = existingAppImage?.Path ?? destAppImagePath;
+            await CleanDesktopEntries(oldName, oldPath);
         }
 
         LogMessage($"Installing AppImage {appName}...");
@@ -67,16 +85,16 @@ public class AppImageManagerV2(string installDirectory = "")
         XdgPaths.FixOwnershipIfRoot(destAppImagePath);
         SetFilePermissions(destAppImagePath, "a+x");
 
-        var appImageDto = await ExtractMetadata(destAppImagePath);
+        var appImageDto = newMetadata ?? await ExtractMetadata(destAppImagePath);
         if (appImageDto == null)
         {
             LogError("Failed to extract metadata during installation.");
-            return 1;
+            return false;
         }
 
         await AddAppImageToLocalDb(appImageDto);
 
-        return 0;
+        return true;
     }
 
     public async Task<bool> AppImageConfigureUpdates(string updateInfo, string name, UpdateType updateType,
@@ -202,8 +220,7 @@ public class AppImageManagerV2(string installDirectory = "")
         var cleanName = CleanInvalidNames(appName);
         var userDataHome = XdgPaths.DataHome();
         string[] desktopDirs = [Path.Combine(userDataHome, "applications")];
-        string? desktopAppName = null;
-
+        
         try
         {
             await RemoveAppImageFromLocalDb(appName);
@@ -214,39 +231,7 @@ public class AppImageManagerV2(string installDirectory = "")
                 LogMessage($"Removed AppImage: {appImagePath}");
             }
 
-            foreach (var desktopDir in desktopDirs)
-            {
-                if (!Directory.Exists(desktopDir)) continue;
-
-                var desktopFilePath = Path.Combine(desktopDir, $"{cleanName}.desktop");
-                if (File.Exists(desktopFilePath))
-                {
-                    var lines = await File.ReadAllLinesAsync(desktopFilePath);
-                    desktopAppName ??= lines.FirstOrDefault(l => l.StartsWith("Name="))?.Substring(5).Trim();
-                    File.Delete(desktopFilePath);
-                    LogMessage($"Removed desktop entry: {desktopFilePath}");
-                    UpdateDesktopDatabase(desktopDir);
-                }
-                else
-                {
-                    var potentialDesktopFiles = Directory.GetFiles(desktopDir, "*.desktop")
-                        .Where(f => Path.GetFileName(f).Contains(cleanName, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-
-                    foreach (var df in potentialDesktopFiles)
-                    {
-                        var content = await File.ReadAllLinesAsync(df);
-                        if (!content.Any(l =>
-                                l.StartsWith("Exec=") &&
-                                (l.Contains(appImagePath) || l.Contains($"\"{appImagePath}\"")))) continue;
-                        desktopAppName ??= content.FirstOrDefault(l => l.StartsWith("Name="))?.Substring(5).Trim();
-                        File.Delete(df);
-                        LogMessage($"Removed desktop entry: {df}");
-                        UpdateDesktopDatabase(desktopDir);
-                        break;
-                    }
-                }
-            }
+            var desktopAppName = await CleanDesktopEntries(appName, appImagePath);
 
             string[] iconDirs =
             [
@@ -280,6 +265,48 @@ public class AppImageManagerV2(string installDirectory = "")
         }
 
         return 0;
+    }
+
+    private async Task<string?> CleanDesktopEntries(string appName, string appPath)
+    {
+        var cleanName = CleanInvalidNames(appName);
+        var userDataHome = XdgPaths.DataHome();
+        string[] desktopDirs = [Path.Combine(userDataHome, "applications")];
+        string? desktopAppName = null;
+
+        foreach (var desktopDir in desktopDirs)
+        {
+            if (!Directory.Exists(desktopDir)) continue;
+
+            var desktopFiles = Directory.GetFiles(desktopDir, "*.desktop");
+            foreach (var df in desktopFiles)
+            {
+                var fileName = Path.GetFileName(df);
+                var isCleanNameMatch = fileName.Equals($"{cleanName}.desktop", StringComparison.OrdinalIgnoreCase);
+
+                var content = await File.ReadAllLinesAsync(df);
+                var isExecMatch = content.Any(l =>
+                    l.StartsWith("Exec=") &&
+                    (l.Contains(appPath) || l.Contains($"\"{appPath}\"")));
+
+                if (!isCleanNameMatch && !isExecMatch) continue;
+                {
+                    desktopAppName ??= content.FirstOrDefault(l => l.StartsWith("Name="))?.Substring(5).Trim();
+                    try
+                    {
+                        File.Delete(df);
+                        LogMessage($"Removed desktop entry: {df}");
+                        UpdateDesktopDatabase(desktopDir);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogWarning($"Failed to remove desktop entry {df}: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        return desktopAppName;
     }
 
     private void RemoveAppConfigDirectories(string? desktopAppName = null)

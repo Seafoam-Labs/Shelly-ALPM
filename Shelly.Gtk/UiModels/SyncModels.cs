@@ -7,9 +7,10 @@ public partial class SyncModel
     public SyncMetaData MetaData { get; set; } = new();
     public List<SyncPackageModel> Packages { get; set; } = [];
     public List<SyncAurModel> Aur { get; set; } = [];
-    public List<SyncFlatpakModel> Flatpaks { get; set; } = [];
 
-    public int TotalPackageCount => Packages.Count + Aur.Count + Flatpaks.Count;
+    public List<SyncFlatpakModel> Flatpak { get; set; } = [];
+
+    public int TotalPackageCount => Packages.Count + Aur.Count + Flatpak.Count;
 }
 
 public partial class SyncPackageModel

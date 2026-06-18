@@ -50,11 +50,11 @@ dotnet publish -c $BUILD_CONFIG -r linux-x64 -o "$SCRIPT_DIR/publish/Shelly.Gtk"
 echo "Shelly.Gtk build complete."
 echo ""
 
-# Build Shelly-CLI
-echo "Building Shelly-CLI..."
-cd "$SCRIPT_DIR/Shelly-CLI"
-dotnet publish -c $BUILD_CONFIG -r linux-x64 -o "$SCRIPT_DIR/publish/Shelly-CLI" -p:InstructionSet=x86-64
-echo "Shelly-CLI build complete."
+# Build Shelly.Cli
+echo "Building Shelly.Cli..."
+cd "$SCRIPT_DIR/Shelly.Cli"
+dotnet publish -c $BUILD_CONFIG -r linux-x64 -o "$SCRIPT_DIR/publish/Shelly.Cli" -p:InstructionSet=x86-64
+echo "Shelly.Cli build complete."
 echo ""
 
 # Create installation directory
@@ -103,9 +103,9 @@ if [ -d "$SCRIPT_DIR/Shelly-Notifications/locale" ]; then
     cp -r "$SCRIPT_DIR/Shelly-Notifications/locale/"* "$INSTALL_DIR/locale/" 2>/dev/null || true
 fi
 
-# Copy Shelly-CLI binary (output is named 'shelly' due to AssemblyName)
-echo "Copying Shelly-CLI binary to $INSTALL_DIR"
-cp "$SCRIPT_DIR/publish/Shelly-CLI/shelly" "$INSTALL_DIR/shelly"
+# Copy Shelly.Cli binary (output is named 'shelly' due to AssemblyName)
+echo "Copying Shelly.Cli binary to $INSTALL_DIR"
+cp "$SCRIPT_DIR/publish/Shelly.Cli/shelly" "$INSTALL_DIR/shelly"
 
 # Copy the logo
 echo "Copying logo..."

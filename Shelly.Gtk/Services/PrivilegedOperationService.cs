@@ -60,7 +60,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
     public async Task<List<AlpmPackageDto>> SearchPackagesAsync(string query)
     {
-        var result = await ExecuteCommandAsync("list-available", $"--filter=\"{query}\"",
+        var result = await ExecuteCommandAsync("explore", "--available", $"\"{query}\"",
             "--no-confirm", "--json");
         if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
         {
@@ -94,7 +94,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
     public async Task<OperationResult> InstallLocalPackageAsync(string filePath)
     {
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Install local package", "install-local", "--location",
+        var result = await ExecutePrivilegedWithNoConfirmCheck("Install local package", "install",
             $"\"{filePath}\"");
         if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
@@ -113,7 +113,6 @@ public class PrivilegedOperationService : IPrivilegedOperationService
         return await ExecutePrivilegedCommandAsync(
             "Removing package from cache",
             [
-                "utility",
                 "cache-clean",
                 "--no-confirm",
                 ..targetArgs
@@ -153,7 +152,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
     public async Task<OperationResult> RemoveLocalPackagesAsync(IEnumerable<string> packages)
     {
         var packageArgs = string.Join(" ", packages.Select(p => $"\"{p}\""));
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Remove local packages", "remove-local", packageArgs);
+        var result = await ExecutePrivilegedWithNoConfirmCheck("Remove local packages", "remove", packageArgs);
         if (result.Success) _dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
     }
@@ -177,7 +176,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
     public async Task<OperationResult> UpgradeAllAsync()
     {
-        var result = await ExecutePrivilegedWithNoConfirmCheck("Upgrade all", "upgrade", "-a");
+        var result = await ExecutePrivilegedWithNoConfirmCheck("Upgrade all", "upgrade-all");
         
         if(!result.Success)
         {
@@ -253,7 +252,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
     {
         var packageArgs = string.Join(" ", packages);
         var result =
-            await ExecutePrivilegedWithNoConfirmCheck("Get Package Builds", "aur", "get-package-build", packageArgs);
+            await ExecutePrivilegedWithNoConfirmCheck("Get Package Builds", "aur", "search-pkgbuild", packageArgs);
 
         if (!result.Success) return [];
         JsonPackFrame.TryDecode<List<PackageBuild>>(result.Output, out var framed);
@@ -271,8 +270,8 @@ public class PrivilegedOperationService : IPrivilegedOperationService
     public async Task<List<AlpmPackageDto>> GetAvailablePackagesAsync(bool showHidden = false)
     {
         var result = showHidden
-            ? await ExecuteCommandAsync("list-available", "--json", "--show-hidden")
-            : await ExecuteCommandAsync("list-available", "--json");
+            ? await ExecuteCommandAsync("explore", "--available", "--json", "--show-hidden")
+            : await ExecuteCommandAsync("explore", "--available", "--json");
 
         if (!result.Success) return [];
         JsonPackFrame.TryDecode<List<AlpmPackageDto>>(result.Output, out var framed);
@@ -282,8 +281,8 @@ public class PrivilegedOperationService : IPrivilegedOperationService
     public async Task<List<AlpmPackageDto>> GetInstalledPackagesAsync(bool showHidden = false)
     {
         var result = showHidden
-            ? await ExecuteCommandAsync("list-installed", "--json", "--show-hidden")
-            : await ExecuteCommandAsync("list-installed", "--json");
+            ? await ExecuteCommandAsync("explore", "--installed", "--json", "--show-hidden")
+            : await ExecuteCommandAsync("explore", "--installed", "--json");
 
         if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
         {
@@ -304,7 +303,7 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
     public async Task<List<LocalPackageDto>> GetLocalInstalledPackagesAsync()
     {
-        var result = await ExecuteCommandAsync("list-local-installed", "--json");
+        var result = await ExecuteCommandAsync("explore", "--local", "--json");
 
         if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
         {
@@ -326,8 +325,8 @@ public class PrivilegedOperationService : IPrivilegedOperationService
     public async Task<List<AurPackageDto>> GetAurInstalledPackagesAsync(bool showHidden = false)
     {
         var result = showHidden
-            ? await ExecuteCommandAsync("aur list-installed", "--json", "--show-hidden")
-            : await ExecuteCommandAsync("aur list-installed", "--json");
+            ? await ExecuteCommandAsync("aur list", "--json", "--show-hidden")
+            : await ExecuteCommandAsync("aur list", "--json");
 
         if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
         {
@@ -399,9 +398,9 @@ public class PrivilegedOperationService : IPrivilegedOperationService
 
     public async Task<OperationResult> RunCacheCleanAsync(int keep, bool uninstalledOnly)
     {
-        var args = new List<string> { "utility", "cache-clean", "-r", "-k", keep.ToString() };
+        var args = new List<string> { "cache-clean", "-k", keep.ToString() };
         if (uninstalledOnly)
-            args.Add("-u");
+            args.Add("-i");
         return await ExecutePrivilegedCommandAsync("Clean package cache", args.ToArray());
     }
 

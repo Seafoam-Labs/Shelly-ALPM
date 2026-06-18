@@ -39,7 +39,7 @@ sha256sums=('5ee0f766be084f50d8967cb2f1e0fee0d1d8d652bae98a0bf38bcdc38305b8b5')
 build() {
   cd "$srcdir/Shelly-ALPM-${pkgver}"
 
-  dotnet publish Shelly-CLI/Shelly-CLI.csproj -c Release -o out-cli --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
+  dotnet publish Shelly.Cli/Shelly.Cli.csproj -c Release -o out-cli --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
   dotnet publish Shelly.Gtk/Shelly.Gtk.csproj -c Release -r linux-x64 -o out --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
   dotnet publish Shelly-Notifications/Shelly-Notifications.csproj -c Release -r linux-x64 -o out-notify --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
   dotnet publish Shelly.Keys/Shelly.Keys.csproj -c Release -r linux-x64 -o out-keys --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
@@ -70,7 +70,7 @@ package() {
   # Install Shelly-Notifications binary
   install -Dm755 out-notify/Shelly-Notifications "$pkgdir/usr/bin/shelly-notifications"
 
-  # Install Shelly-CLI binary
+  # Install Shelly.Cli binary
   install -Dm755 out-cli/shelly "$pkgdir/usr/bin/shelly"
 
   # Install Shelly.Keys binary

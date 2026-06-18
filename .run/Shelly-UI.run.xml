@@ -18,7 +18,7 @@
     <option name="PROJECT_TFM" value="net10.0" />
     <method v="2">
       <option name="Build" />
-      <option name="Build" default="false" projectName="Shelly-CLI" projectPath="$PROJECT_DIR$/Shelly-CLI/Shelly-CLI.csproj" />
+      <option name="Build" default="false" projectName="Shelly.Cli" projectPath="$PROJECT_DIR$/Shelly.Cli/Shelly.Cli.csproj" />
     </method>
   </configuration>
 </component>

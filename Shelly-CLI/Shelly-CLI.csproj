@@ -39,4 +39,8 @@
         <InternalsVisibleTo Include="Shelly-CLI.Tests" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Commands\AppImage\" />
+    </ItemGroup>
+
 </Project>

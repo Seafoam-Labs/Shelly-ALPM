@@ -118,6 +118,65 @@ public interface IAlpmManager
     /// <param name="packageName"></param>
     /// <returns></returns>
     bool IsPackageInstalled(string packageName);
-    
-    
+
+    /// <summary>
+    /// Gets a single installed package by name, or null if it is not installed or hidden.
+    /// </summary>
+    AlpmPackageDto? GetInstalledPackage(string name);
+
+    /// <summary>
+    /// Gets installed packages that are not present in any sync database (foreign packages).
+    /// </summary>
+    List<AlpmPackageDto> GetForeignPackages();
+
+    /// <summary>
+    /// Marks an installed package as a dependency.
+    /// </summary>
+    bool MarkPackageAsDepend(string packageName);
+
+    /// <summary>
+    /// Marks an installed package as explicitly installed.
+    /// </summary>
+    bool MarkPackageAsExplicit(string packageName);
+
+    /// <summary>
+    /// Updates a single package.
+    /// </summary>
+    bool UpdateSinglePackage(string packageName,
+        AlpmTransFlag flags = AlpmTransFlag.NoScriptlet | AlpmTransFlag.NoHooks);
+
+    /// <summary>
+    /// Updates all packages.
+    /// </summary>
+    bool UpdateAll(AlpmTransFlag flags = AlpmTransFlag.NoScriptlet | AlpmTransFlag.NoHooks);
+
+    /// <summary>
+    /// Adds a package to the ignore list.
+    /// </summary>
+    void IgnorePackage(string packageName);
+
+    /// <summary>
+    /// Adds multiple packages to the ignore list.
+    /// </summary>
+    void IgnorePackages(IEnumerable<string> packageNames);
+
+    /// <summary>
+    /// Removes a package from the ignore list.
+    /// </summary>
+    void UnignorePackage(string packageName);
+
+    /// <summary>
+    /// Removes multiple packages from the ignore list.
+    /// </summary>
+    void UnignorePackages(IEnumerable<string> packageNames);
+
+    /// <summary>
+    /// Gets the list of ignored packages.
+    /// </summary>
+    List<string> GetIgnoredPackages();
+
+    /// <summary>
+    /// Gets the list of allowed architectures.
+    /// </summary>
+    List<string> GetAllowedArchitectures();
 }

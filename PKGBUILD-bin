@@ -43,7 +43,7 @@ package() {
   # Install Shelly-Notifications binary
   install -Dm755 "$srcdir/Shelly-Notifications" "$pkgdir/usr/bin/shelly-notifications"
 
-  # Install Shelly-CLI binary
+  # Install Shelly.Cli binary
   install -Dm755 "$srcdir/shelly" "$pkgdir/usr/bin/shelly"
 
   # Install Shelly.Keys binary
