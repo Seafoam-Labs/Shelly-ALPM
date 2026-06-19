@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-06-12 11:40+0000\n"
-"PO-Revision-Date: 2026-06-18 00:00+0200\n"
+"PO-Revision-Date: 2026-06-19 22:55+0200\n"
 "Last-Translator: helge1o1o1@gmail.com\n"
 "Language-Team: Deutschland (Deutsch) helge1o1o1@gmail.com\n"
 "Language: de\n"
@@ -224,6 +224,15 @@ msgstr "Startparameter"
 
 msgid "Save"
 msgstr "Speichern"
+
+msgid "Language"
+msgstr "Sprache"
+
+msgid "Follow system language"
+msgstr "Systemsprache folgen"
+
+msgid "Restart Shelly to apply the selected language."
+msgstr "Shelly neu starten, um die ausgewählte Sprache zu übernehmen."
 
 msgid "Sync"
 msgstr "Synchronisieren"
@@ -1548,4 +1557,3 @@ msgstr "<span size='large'>Flatpaks sind auf dem neuesten Stand</span>"
 
 msgid "Update Available: {0}"
 msgstr "Update verfügbar: {0}"
-
