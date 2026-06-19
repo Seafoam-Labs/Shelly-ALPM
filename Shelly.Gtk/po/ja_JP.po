@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-06-12 11:40+0000\n"
-"PO-Revision-Date: 2026-06-18 15:04+0900\n"
+"PO-Revision-Date: 2026-06-20 03:42+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
 "Language: ja_JP\n"
@@ -225,6 +225,15 @@ msgstr "起動フラグ"
 
 msgid "Save"
 msgstr "保存"
+
+msgid "Language"
+msgstr "言語"
+
+msgid "Follow system language"
+msgstr "システムの言語に従う"
+
+msgid "Restart Shelly to apply the selected language."
+msgstr "選択した言語を適用するには Shelly を再起動してください。"
 
 msgid "Sync"
 msgstr "同期"
