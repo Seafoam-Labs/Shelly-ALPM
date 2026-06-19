@@ -4,15 +4,16 @@ using System.Text.Json.Serialization;
 
 namespace Shelly.Utilities.Eventing;
 
-
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$kind")]
-[JsonDerivedType(typeof(AlpmErrorEvent),         "alpm.error")]
-[JsonDerivedType(typeof(AlpmHookEvent),          "alpm.hook")]
-[JsonDerivedType(typeof(AlpmScriptletEvent),     "alpm.scriptlet")]
-[JsonDerivedType(typeof(AlpmReplaceEvent),       "alpm.replace")]
-[JsonDerivedType(typeof(AlpmPackageProgressEvent),"alpm.progress")]
-[JsonDerivedType(typeof(AlpmStatusEvent),        "alpm.status")]
+[JsonDerivedType(typeof(AlpmErrorEvent), "alpm.error")]
+[JsonDerivedType(typeof(AlpmHookEvent), "alpm.hook")]
+[JsonDerivedType(typeof(AlpmScriptletEvent), "alpm.scriptlet")]
+[JsonDerivedType(typeof(AlpmReplaceEvent), "alpm.replace")]
+[JsonDerivedType(typeof(AlpmPackageProgressEvent), "alpm.progress")]
+[JsonDerivedType(typeof(AlpmStatusEvent), "alpm.status")]
 [JsonDerivedType(typeof(AlpmInformationalEvent), "alpm.info")]
+[JsonDerivedType(typeof(FlatpakStatusEvent), "flatpak.status")]
+[JsonDerivedType(typeof(FlatpakProgressEvent), "flatpak.progress")]
 public abstract record Event(EventSource Source, EventLevel Level, DateTimeOffset TimeStamp = default)
 {
     public DateTimeOffset TimeStamp { get; init; } = TimeStamp == default ? DateTimeOffset.Now : TimeStamp;
@@ -50,8 +51,6 @@ public sealed record AlpmPackageProgressEvent(
     DateTimeOffset TimeStamp = default)
     : ProgressEvent(EventSource.Alpm, ProgressType, Percent, TimeStamp);
 
-
-
 public sealed record AlpmStatusEvent(string Status, DateTimeOffset TimeStamp = default)
     : Event(EventSource.Alpm, EventLevel.Information, TimeStamp);
 
@@ -63,3 +62,12 @@ public sealed record AlpmInformationalEvent(
     int? TotalCount = null,
     DateTimeOffset TimeStamp = default)
     : Event(EventSource.Alpm, EventLevel.Information, TimeStamp);
+
+public sealed record FlatpakStatusEvent(FlatpakEvents Status, string? Message, DateTimeOffset TimeStamp = default)
+    : Event(EventSource.Flatpak, EventLevel.Information, TimeStamp);
+
+public sealed record FlatpakProgressEvent(
+    string? Status,
+    int? Percentage,
+    DateTimeOffset TimeStamp = default)
+    : Event(EventSource.Flatpak, EventLevel.Information, TimeStamp);

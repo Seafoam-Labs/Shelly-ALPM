@@ -31,6 +31,7 @@ public static class ServiceBuilder
         collection.AddSingleton<IIConDownloadService, IconDownloadService>();
         collection.AddSingleton<IFingerprintAuthDetector, FingerprintAuthDetector>();
         collection.AddSingleton<IFingerprintAuthState, FingerprintAuthState>();
+        collection.AddSingleton<IProcessExecutor, ProcessExecutor>();
         collection.AddScoped<IUpdateService, GitHubUpdateService>();
         collection.AddScoped<ITrayDbus, TrayDBus>();
         collection.AddScoped<IFlatHubApiService, FlatHubApiService>();

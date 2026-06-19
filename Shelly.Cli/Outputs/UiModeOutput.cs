@@ -1,5 +1,7 @@
 using PackageManager.Alpm;
 using PackageManager.Aur;
+using PackageManager.Flatpak;
+using PackageManager.Flatpak.Events;
 using Shelly.Utilities.Eventing;
 
 namespace Shelly.Cli.Outputs;
@@ -19,9 +21,10 @@ internal static class UiModeOutput
             JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, ex.Message));
             return false;
         }
+
         return !hadError;
     }
-    
+
     public static async Task<bool> Run(IAlpmManager manager, Func<IAlpmManager, Task> operation)
     {
         var hadError = false;
@@ -35,6 +38,7 @@ internal static class UiModeOutput
             JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, ex.Message));
             return false;
         }
+
         return !hadError;
     }
 
@@ -78,7 +82,7 @@ internal static class UiModeOutput
                 e.TotalCount));
         };
     }
-    
+
     private static void Attach(IAlpmManager manager, Action onError)
     {
         manager.ErrorEvent += (_, e) =>
@@ -117,5 +121,38 @@ internal static class UiModeOutput
                 e.CurrentIndex,
                 e.TotalCount));
         };
+    }
+
+    private static void Attach(FlatpakManager manager, Action onError)
+    {
+        manager.FlatpakProgressEvent += (_, e) =>
+        {
+            JsonPackFrame.WriteToStdout<Event>(new FlatpakProgressEvent(
+                e.Status,
+                e.Percentage));
+        };
+        manager.FlatpakEvent += (_, e) =>
+        {
+            JsonPackFrame.WriteToStdout<Event>(new FlatpakStatusEvent(
+                (FlatpakEvents)(int)e.EventType,
+                e.Message));
+        };
+    }
+
+    public static async Task<bool> Run(FlatpakManager manager, Func<FlatpakManager, Task> operation)
+    {
+        var hadError = false;
+        Attach(manager, () => hadError = true);
+        try
+        {
+            await operation(manager);
+        }
+        catch (Exception ex)
+        {
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, ex.Message));
+            return false;
+        }
+
+        return !hadError;
     }
 }

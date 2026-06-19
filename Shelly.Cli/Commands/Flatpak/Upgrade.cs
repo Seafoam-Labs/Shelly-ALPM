@@ -1,5 +1,6 @@
 using System.CommandLine;
 using PackageManager.Flatpak;
+using Shelly.Cli.Outputs;
 using static Shelly.Cli.Interactions.AnsiUtilities;
 
 namespace Shelly.Cli.Commands.Flatpak;
@@ -29,23 +30,39 @@ public class Upgrade : GlobalSettingsCommand
             return;
         }
 
-        console.WriteLine(Colorize("Updating all flatpak apps...", ConsoleColor.Yellow));
-        var result = FlatpakManager.UpdateAllUserFlatpak();
-        console.WriteLine(Colorize(result, ConsoleColor.Yellow));
+        var manager = new FlatpakManager();
 
-        result = FlatpakManager.UpdateAllSystemFlatpak();
-        console.WriteLine(Colorize(result, ConsoleColor.Yellow));
+        console.WriteLine(Colorize("Updating all flatpak apps...", ConsoleColor.Yellow));
+
+        var packages = FlatpakManager.GetPackagesWithUpdates(true).OrderBy(p => p.Id).ToList();
+
+        if (packages.Count == 0)
+        {
+            console.WriteLine(Colorize("No flatpak updates!", ConsoleColor.Green));
+            return;
+        }
+
+        if (packages.Any(x => x.InstallLevel == InstallLevel.User))
+        {
+            await FlatpakSinglePaneOutput.Output(console, manager,
+                x => x.UpdateAllUserFlatpak(), NoConfirm);
+        }
+
+        if (packages.Any(x => x.InstallLevel == InstallLevel.System))
+        {
+            await FlatpakSinglePaneOutput.Output(console, manager,
+                x => x.UpdateAllSystemFlatpak(), NoConfirm);
+        }
     }
 
-    public override ValueTask ExecuteUiMode()
+    public async override ValueTask ExecuteUiMode()
     {
-        UiFrames.Info("Updating all flatpak apps...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
-        var result = FlatpakManager.UpdateAllUserFlatpak();
-        UiFrames.Info(result);
+        var manager = new FlatpakManager();
 
-        result = FlatpakManager.UpdateAllSystemFlatpak();
-        UiFrames.Info(result);
+        UiFrames.Info("Updating all flatpak apps...", Shelly.Utilities.Eventing.AlpmEvents.TransactionStart);
+        await UiModeOutput.Run(manager, m => m.UpdateAllUserFlatpak());
+
+        await UiModeOutput.Run(manager, m => manager.UpdateAllSystemFlatpak());
         UiFrames.TxFinish(true, "Flatpak upgrade complete.", "Flatpak upgrade failed.");
-        return ValueTask.CompletedTask;
     }
 }

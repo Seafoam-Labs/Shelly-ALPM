@@ -1,5 +1,6 @@
 using System.CommandLine;
 using PackageManager.Flatpak;
+using Shelly.Cli.Outputs;
 using static Shelly.Cli.Interactions.AnsiUtilities;
 
 namespace Shelly.Cli.Commands.Flatpak;
@@ -46,9 +47,13 @@ public class Remove : GlobalSettingsCommand
         }
 
         var manager = new FlatpakManager();
-        manager.FlatpakEvent += (_, args) => console.WriteLine(Colorize(args.Message, ConsoleColor.Yellow));
         var dto = manager.FindAppByNameOrId(Package);
-        manager.UninstallApp(Package, RemoveUnused);
+        await FlatpakSinglePaneOutput.Output(console, manager,
+            _ =>
+            {
+                manager.UninstallApp(Package, RemoveUnused);
+                return Task.FromResult(true);
+            }, true);
 
         if (RemoveConfig)
         {

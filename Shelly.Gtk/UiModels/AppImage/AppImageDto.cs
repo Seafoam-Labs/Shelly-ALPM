@@ -15,7 +15,7 @@ public partial class AppImageDto
         public string RawUpdateInfo { get; set; } = string.Empty;
         public string? RepoOwner { get; set; }
         public string? RepoName { get; set; }
-        public AppImageUpdateType UpdateType { get; set; } = AppImageUpdateType.StaticUrl;
+        public AppImageUpdateType UpdateType { get; set; } = AppImageUpdateType.None;
     
         public bool AllowPrerelease { get; set; } = false;
         public string? CommandLineArgs { get; set; }

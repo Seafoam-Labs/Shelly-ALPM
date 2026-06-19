@@ -14,11 +14,11 @@ public class ShortcodeTranslatorTests
     }
 
     [Test]
-    public void Explore_PreservesModifierCase()
+    public void Query_ExpandsModifiers()
     {
-        var result = ShortcodeTranslator.Translate(["-SEaI", "query"]);
+        var result = ShortcodeTranslator.Translate(["-SQad", "query"]);
 
-        Assert.That(result, Is.EqualTo(new[] { "explore", "-a", "-I", "query" }));
+        Assert.That(result, Is.EqualTo(new[] { "query", "-a", "-d", "query" }));
     }
 
     [Test]
@@ -90,7 +90,7 @@ public class ShortcodeTranslatorTests
     [Test]
     public void PassesThroughLongOption()
     {
-        string[] args = ["--json", "explore", "-a", "x"];
+        string[] args = ["--json", "query", "-a", "x"];
         var result = ShortcodeTranslator.Translate(args);
 
         Assert.That(result, Is.SameAs(args));

@@ -948,61 +948,7 @@ public sealed class PackageInstall(
                 );
 
                 genericQuestionService.RaiseToastMessage(args);
-                return;
             }
-
-            ShowInstallFailureDialog(selectedPackages, result);
-        }
-    }
-
-    private void ShowInstallFailureDialog(IReadOnlyCollection<string> selectedPackages, OperationResult result)
-    {
-        var dialogArgs = StandardInstallFailureDialog.Create(
-            selectedPackages,
-            LogHelpers.BuildFailureSummary(result),
-            () => ExportInstallLogAsync(selectedPackages, result));
-
-        genericQuestionService.RaiseDialog(dialogArgs);
-    }
-
-    private async Task<bool> ExportInstallLogAsync(IReadOnlyCollection<string> selectedPackages, OperationResult result)
-    {
-        try
-        {
-            var dialog = FileDialog.New();
-            dialog.SetTitle(T("Export Shelly install log"));
-            dialog.SetInitialName(LogHelpers.CreateSuggestedLogFileName(selectedPackages, "shelly"));
-
-            var filter = FileFilter.New();
-            filter.SetName(T("Log Files (*.log)"));
-            filter.AddPattern("*.log");
-
-            var filters = ListStore.New(FileFilter.GetGType());
-            filters.Append(filter);
-            dialog.SetFilters(filters);
-
-            var file = await dialog.SaveAsync((Window)_overlay.GetRoot()!);
-            if (file is null)
-            {
-                return false;
-            }
-
-            var path = file.GetPath();
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return false;
-            }
-
-            await File.WriteAllTextAsync(path, LogHelpers.BuildInstallLog(selectedPackages, result, "aur"));
-
-            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(T("Exported Shelly install log")));
-            return true;
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"Failed to export Shelly install log: {e.Message}");
-            genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(T("Failed to export Shelly install log")));
-            return false;
         }
     }
 

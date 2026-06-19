@@ -11,7 +11,9 @@ public class Search : GlobalSettingsCommand
     public static Command Create()
     {
         var query = new Argument<string[]>("query")
-            { Description = "Search term to find packages in the Arch User Repository", Arity = ArgumentArity.OneOrMore };
+        {
+            Description = "Search term to find packages in the Arch User Repository", Arity = ArgumentArity.OneOrMore
+        };
 
         var command = new Command("search", "Search the Arch User Repository")
         {
@@ -44,7 +46,8 @@ public class Search : GlobalSettingsCommand
 
         if (query.Length < 2)
         {
-            console.WriteLine(AnsiUtilities.Colorize("Error: Query must be at least 2 characters long", ConsoleColor.Red));
+            console.WriteLine(AnsiUtilities.Colorize("Error: Query must be at least 2 characters long",
+                ConsoleColor.Red));
             return;
         }
 
@@ -60,9 +63,11 @@ public class Search : GlobalSettingsCommand
         }
 
         console.WriteLine(BasicTable.Execute(
-            ["Name", "Version", "Description"], results.Take(25).ToList(),
+            ["Name", "Version", "Maintainer", "Last Updated", "Description"], results.Take(25).ToList(),
             p => p.Name,
             p => p.Version,
+            p => p.Maintainer ?? "Unknown Maintainer",
+            p => DateTimeOffset.FromUnixTimeSeconds(p.LastModified).ToString("yyyy-MM-dd HH:mm:ss"),
             p => Truncate(p.Description ?? "", 60)));
         console.WriteLine(AnsiUtilities.Colorize($"Total results: {results.Count}", ConsoleColor.Blue));
     }

@@ -21,6 +21,8 @@ using static PackageManager.Alpm.AlpmReference;
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 
+//Hours wasted here: 5
+//If you touch this code and spend more than 30 minutes in it please increment this counter.
 namespace PackageManager.Alpm;
 
 [SuppressMessage("ReSharper", "SuggestVarOrType_BuiltInTypes",
@@ -465,6 +467,14 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
             currentPtr = node.Next;
         }
 
+        // If there's only one option, skip and use first one directly as all options result in the same behavior.
+        if (!(providerOptions.DistinctBy(p => p.Name).Count() > 1))
+        {
+            selectQuestion.UseIndex = 0;
+            Marshal.StructureToPtr(selectQuestion, questionPtr, false);
+            return;
+        }
+
         // Build the question text
         var questionText = $"Select a provider for '{dependencyName ?? "dependency"}':";
 
@@ -565,7 +575,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
             }
 
             // URL should already be absolute from fetchcb
-            return PerformDownload(url, localpath);
+            return PerformDownload(url, localpath).Result;
         }
         catch (Exception ex)
         {
@@ -575,7 +585,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         }
     }
 
-    private int PerformDownload(string fullUrl, string localpath)
+    private async Task<int> PerformDownload(string fullUrl, string localpath)
     {
         // Use a temporary file for atomic writes - prevents corruption if download is interrupted
         string tempPath = localpath + ".part";
@@ -588,9 +598,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         {
             InformationalEvent?.Invoke(this,
                 new InformationalEventArgs(AlpmEventType.DebugOutput, $"Downloading {fullUrl} to {localpath}"));
-            using var response = DownloadClient.GetAsync(fullUrl, HttpCompletionOption.ResponseContentRead)
-                .GetAwaiter()
-                .GetResult();
+            using var response = await DownloadClient.GetAsync(fullUrl, HttpCompletionOption.ResponseHeadersRead);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -1622,7 +1630,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
             _isPackageDownload = true;
             var updates = GetPackagesNeedingUpdate();
             var updateUrl = updates.Select(BuildPackageUrl).ToList();
-            var downloadTasks = updateUrl.Select(url => Task.Run(() =>
+            var downloadTasks = updateUrl.Select(url => Task.Run(async () =>
             {
                 var fileName = url.Split('/').Last();
                 var localPath = Path.Combine(_config.CacheDir, fileName);
@@ -1633,7 +1641,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
                         fileName,
                         0, 0, 0
                     ));
-                    PerformDownload(url, localPath);
+                    await PerformDownload(url, localPath);
                 }
                 else
                 {

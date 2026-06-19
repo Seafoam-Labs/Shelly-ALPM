@@ -36,7 +36,8 @@ public partial class AppImageList : GlobalSettingsCommand
         {
             manager.MessageEvent += (_, e) =>
                 console.WriteLine(AnsiUtilities.Colorize($"[Info] {e.Message}", ConsoleColor.Blue));
-            manager.ErrorEvent += (_, e) => console.WriteLine(AnsiUtilities.Colorize($"[ERROR]{e.Error}", ConsoleColor.Red));
+            manager.ErrorEvent += (_, e) =>
+                console.WriteLine(AnsiUtilities.Colorize($"[ERROR]{e.Error}", ConsoleColor.Red));
         }
 
         var appImages = await manager.GetAppImagesFromLocalDb();
@@ -47,10 +48,13 @@ public partial class AppImageList : GlobalSettingsCommand
         }
         else
         {
-            
             var displaySize = Enum.Parse<SizeDisplay>(ConfigManager.ReadConfig().FileSizeDisplay);
-            console.WriteLine(BasicTable.Execute(["Name", "Version", "Size", "Update URL"], appImages, c => c.Name, c => c.Version,
-                c => SizeUtilities.FormatSize(displaySize, c.SizeOnDisk), c => c.UpdateURl));
+            console.WriteLine(BasicTable.Execute(["Name", "Version", "Size", "Update Info"], appImages, c => c.Name,
+                c => c.Version,
+                c => SizeUtilities.FormatSize(displaySize, c.SizeOnDisk),
+                c => string.IsNullOrEmpty(c.UpdateURl)
+                    ? string.IsNullOrEmpty(c.RepoOwner) ? "" : $"{c.RepoOwner}/{c.RepoOwner}"
+                    : c.UpdateURl));
         }
     }
 

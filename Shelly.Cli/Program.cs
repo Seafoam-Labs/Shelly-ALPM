@@ -40,7 +40,7 @@ var root = new RootCommand("Shelly CLI");
 
 GlobalOptions.AddToRoot(root);
 
-root.Add(Explore.Create());
+root.Add(Query.Create());
 root.Add(Install.Create());
 root.Add(Upgrade.Create());
 root.Add(UpgradeAll.Create());

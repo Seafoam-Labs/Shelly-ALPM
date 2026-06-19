@@ -1,5 +1,6 @@
 using System.CommandLine;
 using PackageManager.Flatpak;
+using Shelly.Cli.Outputs;
 using static Shelly.Cli.Interactions.AnsiUtilities;
 
 namespace Shelly.Cli.Commands.Flatpak;
@@ -53,17 +54,16 @@ public class Install : GlobalSettingsCommand
 
         console.WriteLine(Colorize("Installing flatpak app...", ConsoleColor.Yellow));
         var manager = new FlatpakManager();
-        manager.FlatpakEvent += (_, args) => console.WriteLine(Colorize(args.Message, ConsoleColor.Yellow));
-        manager.InstallApp(Package, Remote, IsUser, Branch ?? "stable", IsRuntime);
+        await FlatpakSinglePaneOutput.Output(console, manager,
+            x => x.InstallApp(Package, Remote, IsUser, Branch ?? "stable", IsRuntime), NoConfirm);
     }
 
-    public override ValueTask ExecuteUiMode()
+    public async override ValueTask ExecuteUiMode()
     {
         UiFrames.TxStart("Installing flatpak app...");
         var manager = new FlatpakManager();
-        manager.FlatpakEvent += (_, args) => UiFrames.Info(args.Message);
-        manager.InstallApp(Package, Remote, IsUser, Branch ?? "stable", IsRuntime);
+        await UiModeOutput.Run(manager, m =>  manager.InstallApp(Package, Remote, IsUser, Branch ?? "stable", IsRuntime));
         UiFrames.TxDone("Flatpak install complete.");
-        return ValueTask.CompletedTask;
+      
     }
 }

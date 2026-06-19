@@ -209,7 +209,9 @@ public sealed class AppImage(
 
                     var update = _appImageUpdates.FirstOrDefault(u => u.Name == app.Name);
                     if (update == null) continue;
-
+                    
+                    if (update.Version.Replace("v", "") == app.Version) continue;
+                    
                     var hbox = listBoxRow.GetChild() as Box;
                     var vbox = hbox?.GetFirstChild()?.GetNextSibling() as Box;
                     var versionHBox = vbox?.GetFirstChild()?.GetNextSibling() as Box;

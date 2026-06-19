@@ -87,3 +87,11 @@ public enum ProgressType
     MakepkgPackage = 201,
     AurDownload = 202
 }
+
+public enum FlatpakEvents
+{
+    Information,
+    Warning,
+    Error,
+    Success
+}

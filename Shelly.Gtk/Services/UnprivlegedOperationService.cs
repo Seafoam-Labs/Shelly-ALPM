@@ -21,7 +21,8 @@ public class UnprivilegedOperationService(
     IDirtyService dirtyService,
     IAlpmEventService alpmEventService,
     ILockoutService lockoutService,
-    IGenericQuestionService genericQuestionService) : IUnprivilegedOperationService
+    IGenericQuestionService genericQuestionService)
+    : IUnprivilegedOperationService
 {
     private readonly string _cliPath = CliPathResolver.FindCliPath();
 
@@ -249,7 +250,7 @@ public class UnprivilegedOperationService(
 
     public async Task<List<AppImageDto>> GetInstallAppImagesAsync()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Get Installed AppImages", "appimage list --json --ui-mode");
+        var result = await ExecuteUnprivilegedCommandAsync("Get Installed AppImages", "appimage list --json");
         try
         {
             if (!result.Success || string.IsNullOrEmpty(result.Output)) return [];
@@ -338,7 +339,7 @@ public class UnprivilegedOperationService(
 
     public async Task<List<AppImageDto>> GetUpdatesAppImagesAsync()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Get AppImage Updates", "appimage list-updates --json --ui-mode");
+        var result = await ExecuteUnprivilegedCommandAsync("Get AppImage Updates", "appimage list-updates --json");
         try
         {
             JsonPackFrame.TryDecode<List<AppImageDto>>(result.Output, out var framed);
@@ -381,7 +382,7 @@ public class UnprivilegedOperationService(
     public async Task<SyncModel> CheckForApplicationUpdates()
     {
         var result =
-            await ExecuteUnprivilegedCommandAsync("Get Available Updates", "check-updates -a -l --json --ui-mode");
+            await ExecuteUnprivilegedCommandAsync("Get Available Updates", "check-updates -a -l --json");
         //SendDbusMessage(result);
         try
         {
@@ -425,13 +426,13 @@ public class UnprivilegedOperationService(
         UnprivilegedOperationResult result;
         if (updateUrl != "" && updateType != AppImageUpdateType.None)
         {
-            result = await ExecuteUnprivilegedCommandAsync("Install AppImage", "appimage", "install", "-l",
+            result = await ExecuteUnprivilegedCommandAsync("Install AppImage", "appimage", "install",
                 $"\"{filePath}\"", "-u",
                 updateUrl, "-t", updateType.ToString().ToLowerInvariant(), "-n");
         }
         else
         {
-            result = await ExecuteUnprivilegedCommandAsync("Install AppImage", "appimage", "install", "-l",
+            result = await ExecuteUnprivilegedCommandAsync("Install AppImage", "appimage", "install",
                 $"\"{filePath}\"", "-n");
         }
 
@@ -459,7 +460,7 @@ public class UnprivilegedOperationService(
         AppImageUpdateType updateType, bool allowPrerelease)
     {
         return await ExecuteUnprivilegedCommandAsync("Set AppImage's Update Config", "appimage", "configure-updates",
-            $"\"{name}\"", "-u", url, "-t", updateType.ToString().ToLowerInvariant(), allowPrerelease ? "-p" : "");
+            $"\"{name}\"", url, updateType.ToString(), allowPrerelease ? "-p" : "");
     }
 
     public async Task<UnprivilegedOperationResult> AppImageSyncApp(string name)
@@ -523,13 +524,13 @@ public class UnprivilegedOperationService(
                         if (stdinWriter != null)
                         {
                             await stdinWriter.WriteLineAsync(value);
-                            await stdinWriter.FlushAsync();
+                            await stdinWriter.FlushAsync(ct);
                         }
                     }, genericQuestionService);
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"QuestionRouter error: {ex.Message}");
+                    await Console.Error.WriteLineAsync($"QuestionRouter error: {ex.Message}");
                 }
 
                 return;
@@ -548,7 +549,7 @@ public class UnprivilegedOperationService(
                 if (e.Data.StartsWith("[ALPM_QUESTION]"))
                 {
                     var questionText = e.Data.Substring("[ALPM_QUESTION]".Length);
-                    Console.Error.WriteLine($"[Shelly]Question received: {questionText}");
+                    await Console.Error.WriteLineAsync($"[Shelly]Question received: {questionText}");
 
                     // Send response to CLI via stdin
                     if (stdinWriter != null)
@@ -561,7 +562,7 @@ public class UnprivilegedOperationService(
                 else
                 {
                     errorBuilder.AppendLine(e.Data);
-                    Console.Error.WriteLine(e.Data);
+                    await Console.Error.WriteLineAsync(e.Data);
                 }
             }
         };

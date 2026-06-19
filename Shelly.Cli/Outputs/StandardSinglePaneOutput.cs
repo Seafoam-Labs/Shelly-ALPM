@@ -4,6 +4,10 @@ using Pastel;
 using Shelly.Cli.Interactions;
 using Shelly.Cli.Models.Pacfile;
 using PackageManager.Alpm.Pacfile;
+using Shelly.Utilities;
+using Shelly.Utilities.Enums;
+
+// ReSharper disable AccessToDisposedClosure
 
 
 namespace Shelly.Cli.Outputs;
@@ -17,7 +21,8 @@ public static class StandardSinglePaneOutput
         bool noConfirm = false)
     {
         var ansi = AnsiUtilities.SupportsAnsi;
-
+        var config = ConfigManager.ReadConfig();
+        var sizeDisplay = Enum.Parse<SizeDisplay>(config.FileSizeDisplay);
         var pendingPacfiles = new List<PendingPacfile>();
         var pacfileLock = new object();
 
@@ -40,6 +45,13 @@ public static class StandardSinglePaneOutput
             {
                 emittedRetrieving = true;
                 region.WriteLine(Color(":: Retrieving packages...", ConsoleColor.White));
+            }
+
+            if (action.StartsWith("Download", StringComparison.OrdinalIgnoreCase) && e.HowMany > 0)
+            {
+                region.UpdateBar(name, SizeUtilities.ConvertSize(sizeDisplay, e.Current ?? 0),
+                    SizeUtilities.ConvertSize(sizeDisplay, e.HowMany ?? 0), pct, action);
+                return;
             }
 
             region.UpdateBar(name, e.Current ?? 0, e.HowMany ?? 0, pct, action);
@@ -88,10 +100,7 @@ public static class StandardSinglePaneOutput
             }
         };
 
-        manager.ErrorEvent += (_, e) =>
-        {
-            region.WriteLine(Color($"error: {e.Error}", ConsoleColor.Red));
-        };
+        manager.ErrorEvent += (_, e) => { region.WriteLine(Color($"error: {e.Error}", ConsoleColor.Red)); };
 
         manager.Question += (_, e) =>
         {

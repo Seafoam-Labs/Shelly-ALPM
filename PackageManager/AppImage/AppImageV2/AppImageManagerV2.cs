@@ -116,6 +116,10 @@ public class AppImageManagerV2(string installDirectory = "")
         switch (updateType)
         {
             case UpdateType.None:
+                appImage.UpdateType = UpdateType.None;
+                appImage.UpdateURl = string.Empty;
+                appImage.RepoOwner = null;
+                appImage.RepoName = null;
                 break;
             case UpdateType.StaticUrl:
                 appImage.UpdateType = UpdateType.StaticUrl;
@@ -428,6 +432,11 @@ public class AppImageManagerV2(string installDirectory = "")
                     {
                         appImageDto.RawUpdateInfo = existing.RawUpdateInfo;
                     }
+
+                    appImageDto.RepoOwner = existing.RepoOwner;
+                    appImageDto.RepoName = existing.RepoName;
+                    appImageDto.UpdateType = existing.UpdateType;
+                    appImageDto.AllowPrerelease = existing.AllowPrerelease;
                 }
                 else
                 {

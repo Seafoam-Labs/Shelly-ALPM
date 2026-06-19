@@ -72,7 +72,7 @@ public class UpgradeAll : GlobalSettingsCommand
         if (!NoAur)
             await RunChild(new AurUpgrade(), console);
         if (!NoFlatpak)
-            await RunChild(new FlatpakUpgrade(), console);
+            await RunFlatpakStep(console);
         if (!NoAppImage)
             await RunChild(new AppImageUpgrade(), console);
 
@@ -86,9 +86,44 @@ public class UpgradeAll : GlobalSettingsCommand
         if (!NoAur)
             await RunChild(new AurUpgrade(), null);
         if (!NoFlatpak)
-            await RunChild(new FlatpakUpgrade(), null);
+            await RunFlatpakStep(null);
         if (!NoAppImage)
             await RunChild(new AppImageUpgrade(), null);
+    }
+
+
+    private async ValueTask RunFlatpakStep(IShellyConsole? console)
+    {
+        if (!UiMode && RootElevator.TryGetCallingUser(out var user, out var home))
+        {
+            var args = BuildFlatpakArgs();
+            var exitCode = RootElevator.RunFlatpakAsUser(user, home, args);
+
+            if (exitCode != 0)
+            {
+                var message = $"Flatpak upgrade step failed (exit code {exitCode}).";
+                if (console is not null)
+                    console.WriteLine(Colorize(message, ConsoleColor.Red));
+                else
+                    UiFrames.Error(message);
+            }
+
+            return;
+        }
+
+        await RunChild(new FlatpakUpgrade(), console);
+    }
+
+    private List<string> BuildFlatpakArgs()
+    {
+        var args = new List<string> { "flatpak", "upgrade" };
+        if (NoConfirm)
+            args.Add("--no-confirm");
+        if (JsonOutput)
+            args.Add("--json");
+        if (Verbose)
+            args.Add("--verbose");
+        return args;
     }
 
     private async ValueTask RunChild(GlobalSettingsCommand child, IShellyConsole? console)

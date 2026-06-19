@@ -59,6 +59,12 @@ internal sealed class EventRouter
             case AlpmStatusEvent e:
                 Log($"[STATUS] {e.Status}");
                 break;
+            case FlatpakProgressEvent e:
+                Log($"[PROGRESS] {e.Status} {e.Percentage}%");
+                break;
+            case FlatpakStatusEvent e:
+                Log($"[STATUS] {e.Status}");
+                break;
         }
         return true;
     }

@@ -5,7 +5,7 @@ namespace Shelly.Utilities;
 public class ShellyConfig
 {
     // Existing CLI settings
-    public string FileSizeDisplay { get; set; } = nameof(SizeDisplay.Bytes);
+    public string FileSizeDisplay { get; set; } = nameof(SizeDisplay.Megabytes);
     public string DefaultExecution { get; set; } = nameof(DefaultCommand.UpgradeAll);
 
     public int ParallelDownloadCount { get; set; } = 10;

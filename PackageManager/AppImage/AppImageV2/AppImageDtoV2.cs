@@ -15,7 +15,7 @@ public partial record AppImageDtoV2
     public string RawUpdateInfo { get; set; } = string.Empty;
     public string? RepoOwner { get; set; }
     public string? RepoName { get; set; }
-    public UpdateType UpdateType { get; set; } = UpdateType.StaticUrl;
+    public UpdateType UpdateType { get; set; } = UpdateType.None;
     
     public bool AllowPrerelease { get; set; } = false;
     public string? CommandLineArgs { get; set; }

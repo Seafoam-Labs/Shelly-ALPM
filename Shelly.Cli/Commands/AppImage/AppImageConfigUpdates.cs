@@ -50,7 +50,7 @@ public partial class AppImageConfigUpdates : GlobalSettingsCommand
             return;
         }
 
-        if (string.IsNullOrEmpty(Url))
+        if (string.IsNullOrEmpty(Url) && Type != UpdateType.None)
         {
             console.WriteLine(AnsiUtilities.Colorize("Error: Update URL is required", ConsoleColor.Red));
             return;
