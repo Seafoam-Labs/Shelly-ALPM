@@ -34,6 +34,7 @@ public sealed class BottomBarRegion : IDisposable
     private readonly List<string> _order = [];
     private readonly List<StickySlot> _stickies = [];
     private readonly HashSet<(string Name, string Action)> _finalizedBars = [];
+    private readonly List<string> _deferred = [];
     private int _barRowsDrawn;
     private int _stickyDrawnCount;
     private int _frame;
@@ -109,6 +110,12 @@ public sealed class BottomBarRegion : IDisposable
 
     private void EmitLine(string text)
     {
+        if (_suspended)
+        {
+            _deferred.Add(text);
+            return;
+        }
+
         _console.Output.WriteLine(_asciiOnly ? AnsiText.StripAnsi(text) : text);
     }
 
@@ -117,7 +124,7 @@ public sealed class BottomBarRegion : IDisposable
         lock (_ioLock)
         {
             ClearBars();
-            _console.Output.WriteLine(_asciiOnly ? AnsiText.StripAnsi(text) : text);
+            EmitLine(text);
             DrawBars();
         }
     }
@@ -167,7 +174,7 @@ public sealed class BottomBarRegion : IDisposable
                     Pct = pct,
                     ActionType = actionType
                 };
-                _console.Output.WriteLine(AnsiText.StripAnsi(RenderBarLine(rPlain)));
+                EmitLine(RenderBarLine(rPlain));
                 return;
             }
 
@@ -292,6 +299,13 @@ public sealed class BottomBarRegion : IDisposable
         lock (_ioLock)
         {
             _suspended = false;
+            if (_deferred.Count > 0)
+            {
+                foreach (var line in _deferred)
+                    EmitLine(line);
+                _deferred.Clear();
+            }
+
             DrawBars();
         }
     }

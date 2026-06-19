@@ -265,23 +265,11 @@ public static class ConfigManager
             var root = doc.RootElement;
 
             var config = ReadConfig();
-
-            if (root.TryGetProperty("AccentColor", out var accentColor) &&
-                accentColor.ValueKind == JsonValueKind.String)
-            {
-                config.AccentColor = accentColor.GetString();
-            }
-
             if (root.TryGetProperty("Culture", out var culture) && culture.ValueKind == JsonValueKind.String)
             {
                 config.Culture = culture.GetString();
             }
-
-            if (root.TryGetProperty("DarkMode", out var darkMode))
-            {
-                config.DarkMode = darkMode.GetBoolean();
-            }
-
+            
             if (root.TryGetProperty("AurEnabled", out var aurEnabled))
             {
                 config.AurEnabled = aurEnabled.GetBoolean();
@@ -306,11 +294,7 @@ public static class ConfigManager
             {
                 config.FlatPackEnabled = flatpack.GetBoolean();
             }
-
-            if (root.TryGetProperty("ConsoleEnabled", out var console))
-            {
-                config.ConsoleEnabled = console.GetBoolean();
-            }
+            
 
             if (root.TryGetProperty("WindowWidth", out var width))
             {
@@ -326,11 +310,7 @@ public static class ConfigManager
             {
                 config.DefaultView = defaultView.ToString();
             }
-
-            if (root.TryGetProperty("UseKdeTheme", out var kde))
-            {
-                config.UseKdeTheme = kde.GetBoolean();
-            }
+            
 
             if (root.TryGetProperty("UseOldMenu", out var oldMenu))
             {

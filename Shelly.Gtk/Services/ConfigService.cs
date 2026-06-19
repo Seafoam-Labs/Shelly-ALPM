@@ -33,20 +33,16 @@ public class ConfigService : IConfigService
     public void SaveConfig(ShellyConfig config)
     {
         _config = config;
-
-        CallCliConfigSet(nameof(config.AccentColor), config.AccentColor ?? "");
+        
         CallCliConfigSet(nameof(config.Culture), config.Culture ?? "");
-        CallCliConfigSet(nameof(config.DarkMode), config.DarkMode.ToString());
         CallCliConfigSet(nameof(config.AurEnabled), config.AurEnabled.ToString());
         CallCliConfigSet(nameof(config.ShellySearchEnabled), config.ShellySearchEnabled.ToString());
         CallCliConfigSet(nameof(config.AurWarningConfirmed), config.AurWarningConfirmed.ToString());
         CallCliConfigSet(nameof(config.FlatPackEnabled), config.FlatPackEnabled.ToString());
         CallCliConfigSet(nameof(config.AppImageEnabled), config.AppImageEnabled.ToString());
-        CallCliConfigSet(nameof(config.ConsoleEnabled), config.ConsoleEnabled.ToString());
         CallCliConfigSet(nameof(config.WindowWidth), config.WindowWidth.ToString(CultureInfo.InvariantCulture));
         CallCliConfigSet(nameof(config.WindowHeight), config.WindowHeight.ToString(CultureInfo.InvariantCulture));
         CallCliConfigSet(nameof(config.DefaultView), config.DefaultView);
-        CallCliConfigSet(nameof(config.UseKdeTheme), config.UseKdeTheme.ToString());
         CallCliConfigSet(nameof(config.UseOldMenu), config.UseOldMenu.ToString());
         CallCliConfigSet(nameof(config.TrayEnabled), config.TrayEnabled.ToString());
         CallCliConfigSet(nameof(config.TrayCheckIntervalHours), config.TrayCheckIntervalHours.ToString());

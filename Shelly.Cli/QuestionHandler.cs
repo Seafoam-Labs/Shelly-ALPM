@@ -94,9 +94,6 @@ public static class QuestionHandler
 
     public static void HandleQuestion(AlpmQuestionEventArgs question, bool uiMode = false, bool noConfirm = false)
     {
-        //This makes questions work for now till we can convert over to standard eventing.
-        //There is something broken in the log priming on one of the sides that prevents this from working well
-        Console.WriteLine($"Presenting Question.");
         switch (question.QuestionType)
         {
             case AlpmQuestionType.SelectProvider:

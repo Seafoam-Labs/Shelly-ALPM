@@ -42,6 +42,23 @@ public sealed class Settings(
     private DirtySubscription? _sub;
     public string[] ListensTo => [DirtyScopes.Config];
     private Overlay? _parentOverlay;
+    private static readonly (string? Culture, string Label)[] LanguageOptions =
+    [
+        (null, "Follow system language"),
+        ("bg_BG", "Bulgarian"),
+        ("ca", "Català"),
+        ("de_DE", "Deutsch"),
+        ("es", "Español"),
+        ("fr_FR", "Français"),
+        ("hu_HU", "Magyar"),
+        ("ja_JP", "日本語"),
+        ("pl", "Polski"),
+        ("pt_BR", "Português (Brasil)"),
+        ("pt_PT", "Português (Portugal)"),
+        ("ru_RU", "Русский"),
+        ("tr_TR", "Türkçe"),
+        ("zh_CN", "中文（简体）")
+    ];
     private static List<ReleaseNotesDialog.ReleaseItem>? _cachedReleaseList;
     private static string? _cachedLatestVersion;
     private static DateTime _lastVersionCheck = DateTime.MinValue;
@@ -155,6 +172,9 @@ public sealed class Settings(
         versionLabel.SetLabel(
             $"v{System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString(4) ?? "Unknown"}");
 
+        var languageDropDown = (DropDown)builder.GetObject("language_drop")!;
+        PopulateLanguageDropDown(languageDropDown);
+
         var defaultPageDropDown = (DropDown)builder.GetObject("default_page_drop")!;
         PopulateDefaultPageDropDown(defaultPageDropDown);
 
@@ -245,6 +265,22 @@ public sealed class Settings(
             SaveConfig();
         };
 
+        languageDropDown.OnNotify += (_, args) =>
+        {
+            if (args.Pspec.GetName() != "selected") return;
+            if (_isPopulatingLanguageDropDown) return;
+            if (languageDropDown.Selected >= (uint)LanguageOptions.Length) return;
+
+            var selectedOption = LanguageOptions[(int)languageDropDown.Selected];
+            var normalizedCulture = string.IsNullOrWhiteSpace(selectedOption.Culture) ? null : selectedOption.Culture;
+            if (string.Equals(_config.Culture, normalizedCulture, StringComparison.OrdinalIgnoreCase)) return;
+
+            _config.Culture = normalizedCulture;
+            SaveConfig();
+            genericQuestionService.RaiseToastMessage(
+                new ToastMessageEventArgs(Translations.T("Restart Shelly to apply the selected language.")));
+        };
+
         var aurSwitch = (Switch)builder.GetObject("aur_switch")!;
         var flatpakSwitch = (Switch)builder.GetObject("flatpak_switch")!;
         var appImageSwitch = (Switch)builder.GetObject("appimage_switch")!;
@@ -262,6 +298,38 @@ public sealed class Settings(
 
     private List<ShellyTabs> _availablePages = [];
     private bool _isPopulatingDropDown;
+    private bool _isPopulatingLanguageDropDown;
+
+    private void PopulateLanguageDropDown(DropDown dropDown)
+    {
+        _isPopulatingLanguageDropDown = true;
+        try
+        {
+            var labels = LanguageOptions
+                .Select(option => option.Culture is null ? Translations.T(option.Label) : option.Label)
+                .ToArray();
+            var stringList = StringList.New(labels);
+            dropDown.SetModel(stringList);
+
+            var currentIndex = 0;
+            if (!string.IsNullOrWhiteSpace(_config.Culture))
+            {
+                var matchedIndex = Array.FindIndex(
+                    LanguageOptions,
+                    option => string.Equals(option.Culture, _config.Culture, StringComparison.OrdinalIgnoreCase));
+                if (matchedIndex >= 0)
+                {
+                    currentIndex = matchedIndex;
+                }
+            }
+
+            dropDown.Selected = (uint)currentIndex;
+        }
+        finally
+        {
+            _isPopulatingLanguageDropDown = false;
+        }
+    }
 
     private void PopulateDefaultPageDropDown(DropDown dropDown)
     {

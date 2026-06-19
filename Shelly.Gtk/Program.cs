@@ -142,7 +142,11 @@ sealed class Program
         }
 
         Module.Initialize();
-        Init();
+        ServiceCollection serviceCollection = new();
+        var serviceProvider = ServiceBuilder.CreateDependencyInjection(serviceCollection);
+        var configService = serviceProvider.GetRequiredService<IConfigService>();
+        var initialConfig = configService.LoadConfig();
+        Init(initialConfig.Culture);
         if (preferDark)
         {
             var settings = GtkSettings.GetDefault();
@@ -157,9 +161,6 @@ sealed class Program
                 break;
             }
         }
-
-        ServiceCollection serviceCollection = new();
-        var serviceProvider = ServiceBuilder.CreateDependencyInjection(serviceCollection);
 
         var application = Application.New(ShellyConstants.Service,
             ApplicationFlags.DefaultFlags | ApplicationFlags.HandlesCommandLine);
@@ -177,7 +178,7 @@ sealed class Program
 
         application.OnStartup += (_, _) =>
         {
-            if (serviceProvider!.GetService<IConfigService>()!.LoadConfig().TrayEnabled)
+            if (initialConfig.TrayEnabled)
                 TrayStartService.Start();
 
             var existingWindow = application.GetActiveWindow();
@@ -267,9 +268,6 @@ sealed class Program
             var aboutAction = SimpleAction.New("about", null);
             aboutAction.OnActivate += (_, _) => { new ShellyAboutDialog(mainOverlay).OpenAboutDialog(); };
             application.AddAction(aboutAction);
-
-            var configService = serviceProvider.GetRequiredService<IConfigService>();
-            var initialConfig = configService.LoadConfig();
 
             List<IShellyWindow> currentPackagesWindows = [];
             List<IShellyWindow> currentAurWindows = [];

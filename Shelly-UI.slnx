@@ -1,6 +1,5 @@
 <Solution>
   <Folder Name="/Solution Items/">
-    <File Path="help_compiler.cs" />
     <File Path="MANUAL_TESTING.md" />
     <File Path="PKGBUILD" />
     <File Path="PKGBUILD-git" />

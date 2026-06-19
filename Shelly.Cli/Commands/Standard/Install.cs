@@ -26,8 +26,10 @@ public class Install : GlobalSettingsCommand
     {
         var buildDeps = new Option<bool>("--build-deps", "-b") { Description = "Install build dependencies" };
         var makeDeps = new Option<bool>("--make-deps", "-m") { Description = "Install make dependencies" };
-        var noDeps = new Option<bool>("--no-deps", "-d") { Description = "Install without checking/installing dependencies" };
-        var upgrade = new Option<bool>("--upgrade", "-u") { Description = "Upgrades the packages if they are already installed" };
+        var noDeps = new Option<bool>("--no-deps", "-d")
+            { Description = "Install without checking/installing dependencies" };
+        var upgrade = new Option<bool>("--upgrade", "-u")
+            { Description = "Upgrades the packages if they are already installed" };
         var packages = new Argument<string[]>("packages")
             { Description = "The packages to install (repo names, local files or URLs)", Arity = ZeroOrMore };
 
@@ -112,11 +114,21 @@ public class Install : GlobalSettingsCommand
 
         if (Upgrade)
         {
+            manager.Sync();
             console.WriteLine(Colorize("Running system upgrade", ConsoleColor.Yellow));
-            if (!await RunOutput(x => x.SyncSystemUpdate()))
+            var packagesNeedingUpdate = manager.GetPackagesNeedingUpdate();
+            if (packagesNeedingUpdate.Count == 0)
             {
-                console.WriteLine(Colorize("System upgrade failed. See errors above.", ConsoleColor.Red));
-                return;
+                console.WriteLine(Colorize("System is up to date!", ConsoleColor.Green));
+                console.WriteLine(Colorize("Continuing with installation...", ConsoleColor.Yellow));
+            }
+            else
+            {
+                if (!await RunOutput(x => x.SyncSystemUpdate()))
+                {
+                    console.WriteLine(Colorize("System upgrade failed. See errors above.", ConsoleColor.Red));
+                    return;
+                }
             }
         }
 
@@ -124,7 +136,8 @@ public class Install : GlobalSettingsCommand
         {
             if (packageList.Count > 1)
             {
-                console.WriteLine(Colorize("Cannot build dependencies for multiple packages at once.", ConsoleColor.Yellow));
+                console.WriteLine(Colorize("Cannot build dependencies for multiple packages at once.",
+                    ConsoleColor.Yellow));
                 return;
             }
 
@@ -236,6 +249,8 @@ public class Install : GlobalSettingsCommand
                         files.Add(downloaded);
                     break;
                 case PackageSourceKind.PackageName:
+                    names.Add(entry);
+                    break;
                 case PackageSourceKind.FilePath:
                     files.Add(entry);
                     break;

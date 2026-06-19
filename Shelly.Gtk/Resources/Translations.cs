@@ -18,9 +18,20 @@ internal static partial class Translations
 
     // ReSharper disable once InconsistentNaming
     private const int LC_ALL = 6;
+    
+    [LibraryImport("libc", EntryPoint = "setenv", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int setenv(string name, string value, int overwrite);
+    
+    [LibraryImport("libc", EntryPoint = "unsetenv", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int unsetenv(string name);
 
-    internal static void Init()
+    internal static void Init(string? culture = null)
     {
+        if (string.IsNullOrWhiteSpace(culture))
+            unsetenv("LANGUAGE");   
+        else
+            setenv("LANGUAGE", culture, 1);
+        
         setlocale(LC_ALL, "");
         const string localeDir = "/usr/share/locale";
         bindtextdomain(Domain, localeDir);
