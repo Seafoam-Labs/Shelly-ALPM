@@ -46,7 +46,6 @@ public class Query : GlobalSettingsCommand
 
         var command = new Command("query", "Query repositories and packages")
             { repos, available, installed, local, take, page, showHidden, info, package };
-        command.Aliases.Add("explore");
 
         command.SetAction(async (parseResult, _) =>
         {
