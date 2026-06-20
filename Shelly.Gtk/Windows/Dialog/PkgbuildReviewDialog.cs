@@ -1,5 +1,4 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using GLib;
 using Gtk;
 using Shelly.Utilities.Eventing;
 using Shelly.Utilities.Models;
@@ -8,9 +7,9 @@ using static Shelly.GTK.Resources.Translations;
 namespace Shelly.Gtk.Windows.Dialog;
 
 /// <summary>
-/// Consolidated PKGBUILD review dialog. Always renders the unified diff and,
-/// when present, layers the install-scriptlet warnings on top — replacing the
-/// former separate <c>PackageBuildDialog</c> and <c>PkgbuildWarningDialog</c>.
+///     Consolidated PKGBUILD review dialog. Always renders the unified diff and,
+///     when present, layers the install-scriptlet warnings on top — replacing the
+///     former separate <c>PackageBuildDialog</c> and <c>PkgbuildWarningDialog</c>.
 /// </summary>
 public static class PkgbuildReviewDialog
 {
@@ -41,6 +40,8 @@ public static class PkgbuildReviewDialog
         heading.AddCssClass("title-3");
         outer.Append(heading);
 
+        outer.Append(MakeScanStatusBanner(hasWarnings, warnings.Count));
+
         // Diff section — the part that the regression dropped.
         var diffBox = Box.New(Orientation.Vertical, 0);
         diffBox.SetHalign(Align.Fill);
@@ -54,7 +55,7 @@ public static class PkgbuildReviewDialog
             lineLabel.SetXalign(0);
             lineLabel.SetJustify(Justification.Left);
 
-            var escaped = GLib.Markup.EscapeText(line.Text);
+            var escaped = Markup.EscapeText(line.Text);
             var markup = line.Kind switch
             {
                 PkgbuildDiffKind.Added => $"<tt><span foreground=\"#26a269\">+ {escaped}</span></tt>",
@@ -131,7 +132,7 @@ public static class PkgbuildReviewDialog
         return tcs.Task;
     }
 
-    private static Widget MakeWarningRow(PkgbuildWarningDto warning)
+    private static Box MakeWarningRow(PkgbuildWarningDto warning)
     {
         var box = Box.New(Orientation.Vertical, 6);
         box.SetMarginTop(6);
@@ -163,5 +164,33 @@ public static class PkgbuildReviewDialog
         box.Append(frame);
 
         return box;
+    }
+
+    private static Box MakeScanStatusBanner(bool hasWarnings, int warningCount)
+    {
+        var banner = Box.New(Orientation.Horizontal, 8);
+        banner.SetMarginTop(4);
+        banner.SetMarginBottom(8);
+        banner.SetHalign(Align.Fill);
+
+        var iconName = hasWarnings
+            ? "dialog-warning-symbolic"
+            : "security-high-symbolic";
+
+        var icon = Image.NewFromIconName(iconName);
+        icon.SetPixelSize(16);
+        banner.Append(icon);
+
+        var text = hasWarnings
+            ? string.Format(T("Security scan completed - {0} warning(s) found."), warningCount)
+            : T("Security scan completed - no issues found.");
+
+        var label = Label.New(text);
+        label.SetXalign(0);
+        label.SetWrap(true);
+        label.AddCssClass(hasWarnings ? "warning" : "success");
+        banner.Append(label);
+
+        return banner;
     }
 }

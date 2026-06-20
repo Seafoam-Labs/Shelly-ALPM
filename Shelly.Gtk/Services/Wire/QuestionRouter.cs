@@ -99,7 +99,7 @@ internal static class QuestionRouter
         {
             var parent = (Gio.Application.GetDefault() as Application)?.GetActiveWindow();
             _ = PkgbuildReviewDialog.ShowAsync(parent, d.PackageName, diff, warnings)
-                .ContinueWith(t => tcs.TrySetResult(t.IsCompletedSuccessfully && t.Result));
+                .ContinueWith(t => tcs.TrySetResult(t is { IsCompletedSuccessfully: true, Result: true }));
             return false;
         });
 
