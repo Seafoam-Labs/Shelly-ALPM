@@ -7,6 +7,8 @@ namespace Shelly.Cli.Commands.Utility;
 
 public static partial class Docs
 {
+    private const string EmptyPlaceholder = "-";
+
     public static Command Create()
     {
         var command = new Command("docs", "Generate Markdown reference documentation for the Shelly CLI");
@@ -87,27 +89,22 @@ public static partial class Docs
 
         var rows = commands.Select(cmd =>
         {
-            var signature = string.IsNullOrEmpty(prefix) ? cmd.Name : $"{prefix} {cmd.Name}";
+            var signature = new StringBuilder(string.IsNullOrEmpty(prefix) ? cmd.Name : $"{prefix} {cmd.Name}");
             foreach (var arg in cmd.Arguments)
             {
                 var name = arg.Name;
-                if (arg.Arity.MaximumNumberOfValues > 1)
-                    name += "...";
-
+                if (arg.Arity.MaximumNumberOfValues > 1) name += "...";
                 var token = arg.Arity.MinimumNumberOfValues > 0 ? $"<{name}>" : $"[{name}]";
-                signature += $" {token}";
+                signature.Append(' ').Append(token);
             }
 
-            return (Cell: $"`{signature}`", Desc: cmd.Description ?? string.Empty);
+            return (Cmd: signature.ToString(), Desc: cmd.Description ?? EmptyPlaceholder);
         }).ToList();
 
-        var commandWidth = Math.Max("Command".Length, rows.Max(r => r.Cell.Length));
-        var descriptionWidth = Math.Max("Description".Length, rows.Max(r => r.Desc.Length));
-
-        sb.AppendLine($"| {"Command".PadRight(commandWidth)} | {"Description".PadRight(descriptionWidth)} |");
-        sb.AppendLine($"|{new string('-', commandWidth + 2)}|{new string('-', descriptionWidth + 2)}|");
-        foreach (var (cell, desc) in rows)
-            sb.AppendLine($"| {cell.PadRight(commandWidth)} | {desc.PadRight(descriptionWidth)} |");
+        sb.AppendLine("| Command | Description |");
+        sb.AppendLine("| ------- | ----------- |");
+        foreach (var (cmd, desc) in rows)
+            sb.AppendLine($"| {cmd} | {desc} |");
 
         sb.AppendLine();
     }
@@ -162,14 +159,17 @@ public static partial class Docs
 
         if (effectiveOptions.Count > 0)
         {
-            sb.AppendLine("| Option | Type | Required | Description |");
-            sb.AppendLine("|--------|------|----------|-------------|");
+            sb.AppendLine("**Options:**");
+            sb.AppendLine();
+            sb.AppendLine("| Option | Alias | Type | Required | Description |");
+            sb.AppendLine("|--------|-------|------|----------|-------------|");
             foreach (var opt in effectiveOptions)
             {
-                var aliases = string.Join(", ", opt.Aliases.OrderBy(a => a.Length).Select(a => $"`{a}`"));
+                var options = FormatAliases(GetOptions(opt));
+                var aliases = FormatAliases(GetOptionAliases(opt));
                 var type = FormatType(opt.ValueType);
                 var required = opt.Arity.MinimumNumberOfValues > 0 ? "Yes" : "No";
-                sb.AppendLine($"| {aliases} | {type} | {required} | {Escape(opt.Description)} |");
+                sb.AppendLine($"| {options} | {aliases} | {type} | {required} | {Escape(opt.Description)} |");
             }
 
             sb.AppendLine();
@@ -179,7 +179,21 @@ public static partial class Docs
             WriteCommand(sb, sub, displayPath, level + 1, effectiveOptions);
     }
 
-    private static string BuildUsage(string displayPath, Command cmd, IReadOnlyList<Option> effectiveOptions)
+    private static List<Option> GetEffectiveOptions(Command cmd, IReadOnlyList<Option> inheritedOptions)
+    {
+        var result = inheritedOptions.ToList();
+
+        var opts = cmd.Options
+            .Where(o => !IsBuiltInOption(o))
+            .OrderBy(o => o.Name)
+            .ToList();
+
+        result.AddRange(opts);
+
+        return result;
+    }
+
+    private static string BuildUsage(string displayPath, Command cmd, List<Option> effectiveOptions)
     {
         var parts = new List<string> { displayPath };
 
@@ -198,18 +212,42 @@ public static partial class Docs
         return string.Join(" ", parts);
     }
 
-    private static List<Option> GetEffectiveOptions(Command cmd, IReadOnlyList<Option> inheritedOptions)
+    private static string[] GetOptions(Option option)
     {
-        var result = inheritedOptions.ToList();
-        if (result.Count == 0) return result;
+        var aliases = GetDisplayAliases(option)
+            .Where(a => a.StartsWith("--", StringComparison.Ordinal))
+            .ToArray();
 
-        foreach (var opt in cmd.Options
-                     .Where(o => !IsBuiltInOption(o))
-                     .OrderBy(o => o.Aliases.Min(a => a.Length)))
-            if (!result.Any(existing => existing.Aliases.Intersect(opt.Aliases).Any()))
-                result.Add(opt);
+        var primary = option.Name;
+        return aliases.Length > 0
+            ? new[] { primary }.Concat(aliases.Where(a => !string.Equals(a, primary, StringComparison.Ordinal))).ToArray()
+            : [primary];
+    }
 
-        return result;
+    private static string[] GetOptionAliases(Option option)
+    {
+        return GetDisplayAliases(option)
+            .Where(a => a.StartsWith('-') && !a.StartsWith("--", StringComparison.Ordinal))
+            .ToArray();
+    }
+
+    private static string[] GetDisplayAliases(Option option)
+    {
+        var aliases = option.Aliases
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .OrderBy(a => a.Length)
+            .ThenBy(a => a, StringComparer.Ordinal)
+            .ToArray();
+
+        return aliases.Length > 0 ? aliases : [option.Name];
+    }
+
+    private static string FormatAliases(IEnumerable<string> aliases)
+    {
+        var values = aliases.ToArray();
+        return values.Length > 0
+            ? string.Join(", ", values.Select(a => $"`{a}`"))
+            : EmptyPlaceholder;
     }
 
     private static bool IsBuiltInOption(Option option)
@@ -256,7 +294,7 @@ public static partial class Docs
 
     private static string Escape(string? text)
     {
-        return (text ?? "-").Replace("|", "\\|").Replace("\r\n", " ").Replace("\n", " ").Trim();
+        return (text ?? EmptyPlaceholder).Replace("|", "\\|").Replace("\r\n", " ").Replace("\n", " ").Trim();
     }
 
     private static void WriteShortcodesSection(StringBuilder sb)
@@ -320,13 +358,12 @@ public static partial class Docs
 
                 sb.AppendLine("| Action | Verb | Modifiers |");
                 sb.AppendLine("|--------|------|-----------|");
-                foreach (var kv in actions)
+                foreach (var (key, verb) in actions)
                 {
-                    var actionLetter = kv.Key.Item2;
-                    var verb = kv.Value;
-                    var modifiers = ShortcodeMaps.Modifiers.TryGetValue(kv.Key, out var mods) && mods.Count > 0
+                    var actionLetter = key.Item2;
+                    var modifiers = ShortcodeMaps.Modifiers.TryGetValue(key, out var mods) && mods.Count > 0
                         ? string.Join(", ", mods.Order().Select(m => $"`{m}`"))
-                        : "—";
+                        : EmptyPlaceholder;
                     sb.AppendLine($"| `{actionLetter}` | {verb} | {modifiers} |");
                 }
             }
