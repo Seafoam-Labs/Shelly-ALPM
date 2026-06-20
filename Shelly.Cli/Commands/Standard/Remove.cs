@@ -25,7 +25,10 @@ public class Remove : GlobalSettingsCommand
     public static Command Create()
     {
         var cascade = new Option<bool>("--cascade", "-c")
-            { Description = "Removes all things the removed package(s) are dependent on that have no other uses" };
+        {
+            Description = "Removes all things the removed package(s) are dependent on that have no other uses (default: true)",
+            DefaultValueFactory = _ => true
+        };
         var optDeps = new Option<bool>("--opt-deps", "-o")
             { Description = "Removes optional dependencies installed with the package, that don't depend on other packages" };
         var ripple = new Option<bool>("--ripple", "-i")

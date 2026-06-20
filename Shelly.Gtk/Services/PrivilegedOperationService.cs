@@ -55,7 +55,7 @@ public class PrivilegedOperationService(
     {
         var args = new List<string> { "remove" };
         args.AddRange(packages);
-        if (isCascade) args.Add("-c");
+        args.Add($"-c={isCascade}");
         if (isCleanup) args.Add("-r");
         if (removeOptionalDeps) args.Add("-o");
         if (_noConfirm) args.Add("--no-confirm");
@@ -139,7 +139,7 @@ public class PrivilegedOperationService(
     {
         var args = new List<string> { "aur", "remove" };
         args.AddRange(packages);
-        if (isCascade) args.Add("-c");
+        args.Add($"-c={isCascade}");
         if (_noConfirm) args.Add("--no-confirm");
 
         var result = await ExecutePrivilegedCommandAsync("Remove AUR packages", args.ToArray());
