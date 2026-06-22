@@ -12,6 +12,7 @@ using Shelly.Utilities;
 namespace Shelly.Gtk.Services;
 
 public class UnprivilegedOperationService(
+    IProcessExecutor processExecutor,
     ITrayDbus trayDbus,
     IPackageUpdateNotifier packageUpdateNotifier,
     IDirtyService dirtyService,
@@ -174,8 +175,8 @@ public class UnprivilegedOperationService(
         var dir = $"{XdgPaths.ConfigHome()}/systemd/user";
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(Path.Combine(dir, $"{service}.service"), serviceContent);
-        await ExecuteNonShellyUnprivilegedCommandAsync("systemctl", "--user daemon-reload");
-        await ExecuteNonShellyUnprivilegedCommandAsync("systemctl", $"--user enable --now {service}");
+        await processExecutor.RunSystemCommandAsync("systemctl", ["--user", "daemon-reload"]);
+        await processExecutor.RunSystemCommandAsync("systemctl", ["--user", "enable", "--now", service]);
 
         return new OperationResult { Success = true };
     }
@@ -183,9 +184,9 @@ public class UnprivilegedOperationService(
     public async Task<OperationResult> RemoveSystemdServiceTray(string service)
     {
         var dir = $"{XdgPaths.ConfigHome()}/systemd/user";
-        await ExecuteNonShellyUnprivilegedCommandAsync("systemctl", $"--user disable --now {service}");
+        await processExecutor.RunSystemCommandAsync("systemctl", ["--user", "disable", "--now", service]);
         File.Delete($"{dir}/{service}.service");
-        await ExecuteNonShellyUnprivilegedCommandAsync("systemctl", "--user daemon-reload");
+        await processExecutor.RunSystemCommandAsync("systemctl", ["--user", "daemon-reload"]);
 
         return new OperationResult { Success = true };
     }
@@ -370,50 +371,6 @@ public class UnprivilegedOperationService(
                 Success = success,
                 Output = outputBuilder.ToString(),
                 Error = errorBuilder.ToString(),
-                ExitCode = process.ExitCode
-            };
-        }
-        catch (Exception ex)
-        {
-            return new UnprivilegedOperationResult
-            {
-                Success = false,
-                Output = string.Empty,
-                Error = ex.Message,
-                ExitCode = -1
-            };
-        }
-    }
-
-    private static async Task<UnprivilegedOperationResult> ExecuteNonShellyUnprivilegedCommandAsync(string command, params string[] args)
-    {
-        var arguments = string.Join(" ", args);
-
-        Console.WriteLine($"Executing command: {command}");
-
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo(command)
-        {
-            Arguments = arguments,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            CreateNoWindow = true
-        };
-
-        try
-        {
-            process.Start();
-            await process.WaitForExitAsync();
-
-            var success = process.ExitCode == 0;
-
-            return new UnprivilegedOperationResult
-            {
-                Success = success,
-                Output = "",
-                Error = "",
                 ExitCode = process.ExitCode
             };
         }
