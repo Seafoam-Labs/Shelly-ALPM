@@ -131,6 +131,30 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         }
     }
 
+    public async Task<OperationResult> RunPrivilegedShellyCommandAsync(
+        string description,
+        string[] args,
+        IAlpmEventService eventService,
+        ILockoutService lockoutService,
+        IGenericQuestionService questionService)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
+        var chosen = DetectEscalatorAsync();
+        return chosen switch
+        {
+            PrivilegeEscalator.Pkexec => await RunPrivilegedShellyPkexecAsync(args, eventService, lockoutService, questionService),
+            PrivilegeEscalator.Sudo => await RunPrivilegedShellySudoAsync(description, args, eventService, lockoutService, questionService),
+            _ => new OperationResult
+            {
+                Success = false,
+                Output = string.Empty,
+                Error = $"No privilege escalation tool available: {chosen}",
+                ExitCode = -1
+            }
+        };
+    }
+
     public async Task<OperationResult> RunSystemCommandAsync(string command, string[] args)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
@@ -169,6 +193,80 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         };
     }
 
+    private async Task<OperationResult> RunPrivilegedShellySudoAsync(
+        string description,
+        string[] args,
+        IAlpmEventService eventService,
+        ILockoutService lockoutService,
+        IGenericQuestionService questionService)
+    {
+        var hasCredentials = await credentialManager.RequestCredentialsAsync(description);
+        if (!hasCredentials) return AuthCancelledResult();
+
+        var password = credentialManager.GetPassword();
+        if (string.IsNullOrEmpty(password))
+            return new OperationResult
+            {
+                Success = false,
+                Output = string.Empty,
+                Error = "No password available.",
+                ExitCode = -1
+            };
+
+        var isPasswordless = password == CredentialManager.NoPassword;
+
+        var fullArgs = new List<string>();
+        if (!isPasswordless) fullArgs.Add("-S");
+        fullArgs.Add("-k");
+        fullArgs.Add(_cliPath);
+        fullArgs.AddRange(args.Where(arg => !string.IsNullOrWhiteSpace(arg)));
+        fullArgs.Add("--ui-mode");
+
+        var result = await RunPrivilegedShellyAsync(
+            "sudo",
+            [.. fullArgs],
+            isPasswordless ? null : password,
+            true,
+            eventService,
+            lockoutService,
+            questionService);
+
+        if (result.Success)
+        {
+            credentialManager.MarkAsValidated();
+            return result;
+        }
+
+        var errorOutput = result.Error;
+        if (errorOutput.Contains("incorrect password") ||
+            errorOutput.Contains("Sorry, try again") ||
+            errorOutput.Contains("Authentication failure") ||
+            (result.ExitCode == 1 && errorOutput.Contains("sudo")))
+            credentialManager.MarkAsInvalid();
+
+        return result;
+    }
+
+    private async Task<OperationResult> RunPrivilegedShellyPkexecAsync(
+        string[] args,
+        IAlpmEventService eventService,
+        ILockoutService lockoutService,
+        IGenericQuestionService questionService)
+    {
+        var fullArgs = new List<string> { _cliPath };
+        fullArgs.AddRange(args.Where(arg => !string.IsNullOrWhiteSpace(arg)));
+        fullArgs.Add("--ui-mode");
+
+        return await RunPrivilegedShellyAsync(
+            "pkexec",
+            [.. fullArgs],
+            null,
+            false,
+            eventService,
+            lockoutService,
+            questionService);
+    }
+
     private static PrivilegeEscalator DetectEscalatorAsync()
     {
         if (IsCommandOnPath("pkexec")) return PrivilegeEscalator.Pkexec;
@@ -194,6 +292,187 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         {
             Console.WriteLine($"Error checking if command {command} is available: {ex.Message}");
             return false;
+        }
+    }
+
+    private static async Task<OperationResult> RunPrivilegedShellyAsync(
+        string escalatorCommand,
+        string[] escalatorArgs,
+        string? password,
+        bool suppressSudoPasswordPrompt,
+        IAlpmEventService eventService,
+        ILockoutService lockoutService,
+        IGenericQuestionService questionService)
+    {
+        using var process = CreateProcess(escalatorCommand, true, escalatorArgs);
+        LogCommand(process.StartInfo.FileName, process.StartInfo.ArgumentList);
+
+        var outputBuilder = new StringBuilder();
+        var errorBuilder = new StringBuilder();
+        StreamWriter? stdinWriter = null;
+
+        var stdinLock = new SemaphoreSlim(1, 1);
+        var stdinClosed = false;
+        var pendingCallbacks = 0;
+        var allCallbacksDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async Task SafeWriteAsync(string value)
+        {
+            await stdinLock.WaitAsync();
+            try
+            {
+                if (!stdinClosed && stdinWriter != null)
+                {
+                    await stdinWriter.WriteLineAsync(value);
+                    await stdinWriter.FlushAsync();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // ignored
+            }
+            finally
+            {
+                stdinLock.Release();
+            }
+        }
+
+        var restartNeedsReboot = false;
+        var restartFailures = new List<(string Service, string Error)>();
+
+        var eventRouter = new EventRouter(eventService, lockoutService);
+
+        process.OutputDataReceived += async (_, e) =>
+        {
+            if (e.Data == null) return;
+            outputBuilder.AppendLine(e.Data);
+
+            if (JsonPackFrame.TryExtractPayload(e.Data, out var b64))
+            {
+                if (eventRouter.TryDispatch(b64)) return;
+
+                Interlocked.Increment(ref pendingCallbacks);
+                try
+                {
+                    await QuestionRouter.TryDispatchAsync(b64, SafeWriteAsync, questionService, eventService);
+                }
+                catch (Exception ex)
+                {
+                    await Console.Error.WriteLineAsync($"QuestionRouter error: {ex.Message}");
+                }
+                finally
+                {
+                    if (Interlocked.Decrement(ref pendingCallbacks) == 0)
+                        allCallbacksDone.TrySetResult();
+                }
+
+                return;
+            }
+
+            Console.WriteLine(e.Data);
+        };
+
+        process.ErrorDataReceived += async (_, e) =>
+        {
+            if (e.Data == null) return;
+
+            if (suppressSudoPasswordPrompt && (e.Data.Contains("[sudo]") || e.Data.Contains("password for"))) return;
+
+            Interlocked.Increment(ref pendingCallbacks);
+            try
+            {
+                Console.WriteLine(e.Data);
+                if (e.Data.StartsWith("[ALPM_SCRIPTLET]"))
+                {
+                    var line = e.Data["[ALPM_SCRIPTLET]".Length..];
+                    if (!string.IsNullOrEmpty(line)) lockoutService.ParseLog($"[SCRIPTLET] {line}");
+                }
+                else if (e.Data.StartsWith("[ALPM_HOOK]"))
+                {
+                    var line = e.Data["[ALPM_HOOK]".Length..];
+                    if (!string.IsNullOrEmpty(line)) lockoutService.ParseLog($"[HOOK] {line}");
+                }
+                else if (e.Data.StartsWith("[Shelly][RESTART_REQUIRED]"))
+                {
+                    var payload = e.Data["[Shelly][RESTART_REQUIRED]".Length..];
+                    if (payload == "reboot")
+                        restartNeedsReboot = true;
+                }
+                else if (e.Data.StartsWith("[Shelly][RESTART_FAILED]"))
+                {
+                    var payload = e.Data["[Shelly][RESTART_FAILED]".Length..];
+                    if (!payload.StartsWith("service:")) return;
+
+                    var rest = payload["service:".Length..];
+                    var parts = rest.Split('|', 2);
+                    var svcName = parts[0];
+                    var svcError = parts.Length > 1 ? parts[1] : "Unknown error";
+                    restartFailures.Add((svcName, svcError));
+                }
+                else if (e.Data.StartsWith("[Shelly][DEBUG]"))
+                {
+                    // Debug messages - skip, don't forward to lockout dialog
+                }
+                else
+                {
+                    errorBuilder.AppendLine(e.Data);
+                    await Console.Error.WriteLineAsync(e.Data);
+                }
+            }
+            catch (Exception ex)
+            {
+                await Console.Error.WriteLineAsync($"Error processing stderr: {ex.Message}");
+                errorBuilder.AppendLine(e.Data);
+            }
+            finally
+            {
+                if (Interlocked.Decrement(ref pendingCallbacks) == 0)
+                    allCallbacksDone.TrySetResult();
+            }
+        };
+
+        try
+        {
+            process.Start();
+            stdinWriter = process.StandardInput;
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            if (!string.IsNullOrEmpty(password))
+            {
+                await stdinWriter.WriteLineAsync(password);
+                await stdinWriter.FlushAsync();
+            }
+
+            await process.WaitForExitAsync();
+
+            if (Volatile.Read(ref pendingCallbacks) > 0)
+                await Task.WhenAny(allCallbacksDone.Task, Task.Delay(TimeSpan.FromMinutes(2)));
+
+            await stdinLock.WaitAsync();
+            try
+            {
+                stdinClosed = true;
+                stdinWriter.Close();
+            }
+            finally
+            {
+                stdinLock.Release();
+            }
+
+            return new OperationResult
+            {
+                Success = process.ExitCode == 0,
+                Output = outputBuilder.ToString(),
+                Error = errorBuilder.ToString(),
+                ExitCode = process.ExitCode,
+                NeedsReboot = restartNeedsReboot,
+                FailedServiceRestarts = restartFailures
+            };
+        }
+        catch (Exception ex)
+        {
+            return ErrorResult(ex);
         }
     }
 
