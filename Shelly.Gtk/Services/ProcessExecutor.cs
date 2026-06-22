@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Shelly.Gtk.Helpers;
 
@@ -8,11 +7,17 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
 {
     private readonly string _cliPath = CliPathResolver.FindCliPath();
 
-    public async Task<OperationResult> RunShellyCliCommandAsync(string[] args)
+    public async Task<OperationResult> RunShellyCommandAsync(string[] args)
     {
-        using var process = CreateProcess(_cliPath, false, args);
-        process.StartInfo.ArgumentList.Add("--ui-mode");
-        LogCommand(_cliPath, process.StartInfo.ArgumentList);
+        return await RunSystemCommandAsync(_cliPath, args.Append("--ui-mode").ToArray());
+    }
+
+    public async Task<OperationResult> RunSystemCommandAsync(string command, string[] args)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+
+        using var process = CreateProcess(command, false, args);
+        LogCommand(command, process.StartInfo.ArgumentList);
 
         try
         {
@@ -85,7 +90,7 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         process.StartInfo.ArgumentList.Insert(0, "-k");
         if (!isPasswordless) process.StartInfo.ArgumentList.Insert(0, "-S");
 
-        LogCommand("sudo", process.StartInfo.ArgumentList);
+        LogCommand(process.StartInfo.FileName, process.StartInfo.ArgumentList);
 
         try
         {
@@ -109,7 +114,7 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
     private static async Task<OperationResult> RunPkexecAsync(string[] args)
     {
         using var process = CreateProcess("pkexec", false, args);
-        LogCommand("pkexec", process.StartInfo.ArgumentList);
+        LogCommand(process.StartInfo.FileName, process.StartInfo.ArgumentList);
 
         try
         {
@@ -140,9 +145,9 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         return process;
     }
 
-    private static void LogCommand(string path, Collection<string> arguments)
+    private static void LogCommand(string cmd, IEnumerable<string> args)
     {
-        Console.WriteLine($"Executing command: {path} {string.Join(" ", arguments)}");
+        Console.WriteLine($"Executing command: {cmd} {string.Join(" ", args)}");
     }
 
     private static async Task<OperationResult> ReadResultAsync(Process process)
