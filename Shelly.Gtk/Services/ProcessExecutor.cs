@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Text;
 using Shelly.Gtk.Helpers;
+using Shelly.Gtk.Services.Wire;
 
 namespace Shelly.Gtk.Services;
 
@@ -9,7 +11,124 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
 
     public async Task<OperationResult> RunShellyCommandAsync(string[] args)
     {
-        return await RunSystemCommandAsync(_cliPath, args.Append("--ui-mode").ToArray());
+        return await RunSystemCommandAsync(_cliPath, [.. args, "--ui-mode"]);
+    }
+
+    public async Task<OperationResult> RunShellyInteractiveCommandAsync(
+        string[] args,
+        IAlpmEventService eventService,
+        ILockoutService lockoutService,
+        IGenericQuestionService questionService)
+    {
+        using var process = CreateProcess(_cliPath, true, [.. args, "--ui-mode"]);
+        LogCommand(_cliPath, process.StartInfo.ArgumentList);
+
+        var outputBuilder = new StringBuilder();
+        var errorBuilder = new StringBuilder();
+        StreamWriter? stdinWriter = null;
+
+        // Prevent stdin writes racing with shutdown while async callbacks are still in-flight.
+        var stdinLock = new SemaphoreSlim(1, 1);
+        var stdinClosed = false;
+        var pendingCallbacks = 0;
+        var allCallbacksDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async Task SafeWriteAsync(string value)
+        {
+            await stdinLock.WaitAsync();
+            try
+            {
+                if (!stdinClosed && stdinWriter != null)
+                {
+                    await stdinWriter.WriteLineAsync(value);
+                    await stdinWriter.FlushAsync();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // ignored
+            }
+            finally
+            {
+                stdinLock.Release();
+            }
+        }
+
+        var eventRouter = new EventRouter(eventService, lockoutService);
+
+        process.OutputDataReceived += async (_, e) =>
+        {
+            if (e.Data == null) return;
+
+            outputBuilder.AppendLine(e.Data);
+
+            if (JsonPackFrame.TryExtractPayload(e.Data, out var b64))
+            {
+                if (eventRouter.TryDispatch(b64)) return;
+
+                Interlocked.Increment(ref pendingCallbacks);
+                try
+                {
+                    await QuestionRouter.TryDispatchAsync(b64, SafeWriteAsync, questionService, eventService);
+                }
+                catch (Exception ex)
+                {
+                    await Console.Error.WriteLineAsync($"QuestionRouter error: {ex.Message}");
+                }
+                finally
+                {
+                    if (Interlocked.Decrement(ref pendingCallbacks) == 0)
+                        allCallbacksDone.TrySetResult();
+                }
+
+                return;
+            }
+
+            Console.WriteLine(e.Data);
+        };
+
+        process.ErrorDataReceived += async (_, e) =>
+        {
+            if (e.Data == null) return;
+            errorBuilder.AppendLine(e.Data);
+            await Console.Error.WriteLineAsync(e.Data);
+        };
+
+        try
+        {
+            process.Start();
+            stdinWriter = process.StandardInput;
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            await process.WaitForExitAsync();
+
+            if (Volatile.Read(ref pendingCallbacks) > 0)
+                await Task.WhenAny(allCallbacksDone.Task, Task.Delay(TimeSpan.FromMinutes(2)));
+
+            await stdinLock.WaitAsync();
+            try
+            {
+                stdinClosed = true;
+                stdinWriter.Close();
+            }
+            finally
+            {
+                stdinLock.Release();
+            }
+
+            return new OperationResult
+            {
+                Success = process.ExitCode == 0,
+                Output = outputBuilder.ToString(),
+                Error = errorBuilder.ToString(),
+                ExitCode = process.ExitCode
+            };
+        }
+        catch (Exception ex)
+        {
+            return ErrorResult(ex);
+        }
     }
 
     public async Task<OperationResult> RunSystemCommandAsync(string command, string[] args)
