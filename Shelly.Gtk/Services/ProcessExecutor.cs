@@ -29,7 +29,7 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
 
-        var chosen = await DetectEscalatorAsync();
+        var chosen = DetectEscalatorAsync();
 
         return chosen switch
         {
@@ -39,27 +39,32 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
             {
                 Success = false,
                 Output = string.Empty,
-                Error = "No privilege escalation tool available (sudo or pkexec).",
+                Error = $"No privilege escalation tool available: {chosen}",
                 ExitCode = -1
             }
         };
     }
 
-    private static async Task<PrivilegeEscalator> DetectEscalatorAsync()
+    private static PrivilegeEscalator DetectEscalatorAsync()
     {
-        if (await IsCommandAvailableAsync("pkexec")) return PrivilegeEscalator.Pkexec;
-        if (await IsCommandAvailableAsync("sudo")) return PrivilegeEscalator.Sudo;
-        return default;
+        if (IsCommandOnPath("pkexec")) return PrivilegeEscalator.Pkexec;
+        if (IsCommandOnPath("sudo")) return PrivilegeEscalator.Sudo;
+        return PrivilegeEscalator.None;
     }
 
-    private static async Task<bool> IsCommandAvailableAsync(string command)
+    private static bool IsCommandOnPath(string command)
     {
         try
         {
-            using var process = CreateProcess("which", false, [command]);
-            process.Start();
-            await process.WaitForExitAsync();
-            return process.ExitCode == 0;
+            if (string.IsNullOrWhiteSpace(command)) return false;
+
+            var path = Environment.GetEnvironmentVariable("PATH");
+            if (string.IsNullOrWhiteSpace(path)) return false;
+
+            return path
+                .Split(Path.PathSeparator)
+                .Select(dir => Path.Combine(dir, command))
+                .Any(File.Exists);
         }
         catch (Exception ex)
         {
@@ -187,7 +192,7 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
 
     private enum PrivilegeEscalator
     {
-        Auto,
+        None,
         Sudo,
         Pkexec
     }
