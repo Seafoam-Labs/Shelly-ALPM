@@ -9,10 +9,6 @@ using Shelly.Gtk.UiModels.AppImage;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Utilities;
 
-// ReSharper disable UnusedParameter.Local
-// ReSharper disable AccessToModifiedClosure
-// ReSharper disable ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
-
 namespace Shelly.Gtk.Services;
 
 public class UnprivilegedOperationService(
@@ -26,15 +22,11 @@ public class UnprivilegedOperationService(
 {
     private readonly string _cliPath = CliPathResolver.FindCliPath();
 
-
     public async Task<List<FlatpakPackageDto>> ListFlatpakPackages()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("List packages", "flatpak list");
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak list");
 
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
-        {
-            return [];
-        }
+        if (!result.Success) return [];
 
         try
         {
@@ -50,12 +42,9 @@ public class UnprivilegedOperationService(
 
     public async Task<List<FlatpakPackageDto>> ListFlatpakUpdates()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("List packages", "flatpak list-updates");
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak list-updates");
 
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
-        {
-            return [];
-        }
+        if (!result.Success) return [];
 
         try
         {
@@ -69,56 +58,45 @@ public class UnprivilegedOperationService(
         }
     }
 
-    public async Task<UnprivilegedOperationResult> RemoveFlatpakPackage(IEnumerable<string> packages)
+    public async Task<List<AppstreamApp>> ListAppstreamFlatpak()
     {
-        // dirty marked in the per-package overload
-        var packageArgs = string.Join(" ", packages);
-        return await ExecuteUnprivilegedCommandAsync("Remove packages", "flatpak remove", packageArgs);
-    }
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak get-remote-appstream", "all");
 
-    public async Task<List<AppstreamApp>> ListAppstreamFlatpak(CancellationToken ct = default)
-    {
-        var result = await ExecuteUnprivilegedCommandAsync("Get local appstream", ct, "flatpak get-remote-appstream", "all");
+        if (!result.Success) return [];
 
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
+        try
         {
+            JsonPackFrame.TryDecode<List<AppstreamApp>>(result.Output, out var framed);
+            return framed ?? [];
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to parse updates JSON: {ex.Message}");
             return [];
         }
-
-        return await Task.Run(() =>
-        {
-            try
-            {
-                JsonPackFrame.TryDecode<List<AppstreamApp>>(result.Output, out var framed);
-                return framed ?? [];
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to parse updates JSON: {ex.Message}");
-                return [];
-            }
-        }, ct);
     }
 
 
     public async Task<UnprivilegedOperationResult> UpdateFlatpakPackage(string package)
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Update package", "flatpak update", package);
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak update", package);
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
+    }
+
+    public async Task<UnprivilegedOperationResult> RemoveFlatpakPackage(IEnumerable<string> packages)
+    {
+        var packageArgs = string.Join(" ", packages);
+        return await ExecuteUnprivilegedCommandAsync("flatpak remove", packageArgs);
     }
 
     public async Task<UnprivilegedOperationResult> RemoveFlatpakPackage(string package, bool removeConfig)
     {
         UnprivilegedOperationResult result;
         if (removeConfig)
-        {
-            result = await ExecuteUnprivilegedCommandAsync("Remove package", "flatpak uninstall", package, "-c");
-        }
+            result = await ExecuteUnprivilegedCommandAsync("flatpak uninstall", package, "-c");
         else
-        {
-            result = await ExecuteUnprivilegedCommandAsync("Remove package", "flatpak uninstall", package);
-        }
+            result = await ExecuteUnprivilegedCommandAsync("flatpak uninstall", package);
 
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
@@ -129,16 +107,11 @@ public class UnprivilegedOperationService(
     {
         UnprivilegedOperationResult result;
         if (user)
-        {
-            result = await ExecuteUnprivilegedCommandAsync("Install package", "flatpak install", package, "--user",
-                "--remote", remote, "--branch", branch, isRuntime ? "--runtime" : "");
-        }
+            result = await ExecuteUnprivilegedCommandAsync("flatpak install", package, "--user", "--remote", remote, "--branch", branch,
+                isRuntime ? "--runtime" : "");
         else
-        {
-            result = await ExecuteUnprivilegedCommandAsync("Install package", "flatpak install", package, "--remote",
-                remote,
-                "--branch", branch, isRuntime ? "--runtime" : "");
-        }
+            result = await ExecuteUnprivilegedCommandAsync("flatpak install", package, "--remote", remote, "--branch", branch,
+                isRuntime ? "--runtime" : "");
 
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
@@ -146,7 +119,7 @@ public class UnprivilegedOperationService(
 
     public async Task<UnprivilegedOperationResult> FlatpakUpgrade()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Upgrade flatpak", "flatpak upgrade");
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak upgrade");
         SendDbusMessage(result);
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
@@ -154,13 +127,13 @@ public class UnprivilegedOperationService(
 
     public async Task<UnprivilegedOperationResult> FlatpakRepair()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Flatpak repair", "flatpak repair");
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak repair");
         return result;
     }
 
     public async Task<List<FlatpakRemoteDto>> FlatpakListRemotes()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("flatpak list remotes", "flatpak list-remotes");
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak list-remotes");
         if (!result.Success) return [];
         JsonPackFrame.TryDecode<List<FlatpakRemoteDto>>(result.Output, out var framed);
         return framed ?? [];
@@ -168,34 +141,24 @@ public class UnprivilegedOperationService(
 
     public async Task<UnprivilegedOperationResult> FlatpakSyncRemoteAppstream()
     {
-        return await ExecuteUnprivilegedCommandAsync("Sync remote", "flatpak sync-remote-appstream");
+        return await ExecuteUnprivilegedCommandAsync("flatpak sync-remote-appstream");
     }
 
     public async Task<UnprivilegedOperationResult> FlatpakRemoveRemote(string remoteName, string scope)
     {
         if (scope == "user")
-        {
-            return await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak remove-remotes", remoteName,
-                "--system", "false");
-        }
+            return await ExecuteUnprivilegedCommandAsync("flatpak remove-remotes", remoteName, "--system", "false");
 
-        return await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak remove-remotes", remoteName, "--system",
-            "true");
+        return await ExecuteUnprivilegedCommandAsync("flatpak remove-remotes", remoteName, "--system", "true");
     }
 
     public async Task<UnprivilegedOperationResult> FlatpakInsallFromRef(string path, string scope)
     {
         UnprivilegedOperationResult result;
         if (scope == "user")
-        {
-            result = await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak install-ref-file", path);
-        }
+            result = await ExecuteUnprivilegedCommandAsync("flatpak install-ref-file", path);
         else
-        {
-            result = await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak install-ref-file", path,
-                "--system",
-                "true");
-        }
+            result = await ExecuteUnprivilegedCommandAsync("flatpak install-ref-file", path, "--system", "true");
 
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
@@ -203,35 +166,29 @@ public class UnprivilegedOperationService(
 
     public async Task<UnprivilegedOperationResult> FlatpakInstallFromBundle(string path)
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Install Flatpak Bundle", "flatpak install-bundle", path,
-            "--user",
-            "false");
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak install-bundle", path, "--user", "false");
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
     }
 
     public async Task<UnprivilegedOperationResult> RunFlatpakName(string name)
     {
-        return await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak run", name);
+        return await ExecuteUnprivilegedCommandAsync("flatpak run", name);
     }
 
     public async Task<UnprivilegedOperationResult> FlatpakAddRemote(string remoteName, string scope, string url)
     {
         if (scope == "user")
-        {
-            return await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak add-remotes", remoteName,
-                "--remote-url", url, "--system", "false");
-        }
+            return await ExecuteUnprivilegedCommandAsync("flatpak add-remotes", remoteName, "--remote-url", url, "--system", "false");
 
-        return await ExecuteUnprivilegedCommandAsync("Remove Remote", "flatpak add-remotes", remoteName, "--remote-url",
-            url, "--system", "true");
+        return await ExecuteUnprivilegedCommandAsync("flatpak add-remotes", remoteName, "--remote-url", url, "--system", "true");
     }
 
     public async Task<FlatpakRemoteRefInfo> GetFlatpakAppDataAsync(string remote, string app, string arch)
     {
         try
         {
-            var result = await ExecuteUnprivilegedCommandAsync("Sync remote", "flatpak app-remote-info", remote, app, arch);
+            var result = await ExecuteUnprivilegedCommandAsync("flatpak app-remote-info", remote, app, arch);
             if (!result.Success) return new FlatpakRemoteRefInfo();
             JsonPackFrame.TryDecode<FlatpakRemoteRefInfo>(result.Output, out var framed);
             return framed ?? new FlatpakRemoteRefInfo();
@@ -246,10 +203,10 @@ public class UnprivilegedOperationService(
 
     public async Task<List<AppImageDto>> GetInstallAppImagesAsync()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Get Installed AppImages", "appimage list");
+        var result = await ExecuteUnprivilegedCommandAsync("appimage list");
         try
         {
-            if (!result.Success || string.IsNullOrEmpty(result.Output)) return [];
+            if (!result.Success) return [];
             JsonPackFrame.TryDecode<List<AppImageDto>>(result.Output, out var framed);
             return framed ?? [];
         }
@@ -263,11 +220,8 @@ public class UnprivilegedOperationService(
     public async Task<List<RssModel>> GetArchNewsAsync(bool all = false)
     {
         var args = all ? "news --all" : "news";
-        var result = await ExecuteUnprivilegedCommandAsync("Fetch Arch News", args);
-        if (!result.Success || string.IsNullOrEmpty(result.Output))
-        {
-            return [];
-        }
+        var result = await ExecuteUnprivilegedCommandAsync(args);
+        if (!result.Success) return [];
 
         try
         {
@@ -284,11 +238,8 @@ public class UnprivilegedOperationService(
 
     public async Task<List<PacfileRecord>> GetPacFiles()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Fetch Pac files", "pacfile");
-        if (!result.Success || string.IsNullOrEmpty(result.Output))
-        {
-            return [];
-        }
+        var result = await ExecuteUnprivilegedCommandAsync("pacfile");
+        if (!result.Success) return [];
 
         try
         {
@@ -305,29 +256,25 @@ public class UnprivilegedOperationService(
 
     public Task<OperationResult> AddSystemdServiceTray(string serviceContent, string service)
     {
-        var dir = XdgPaths.ConfigHome() + "/systemd/user";
+        var dir = $"{XdgPaths.ConfigHome()}/systemd/user";
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, $"{service}.service"), serviceContent);
 
-        _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
-            "--user daemon-reload");
-        _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
-            $"--user enable --now {service}");
+        _ = ExecuteNonShellyUnprivilegedCommandAsync("systemctl", "--user daemon-reload");
+        _ = ExecuteNonShellyUnprivilegedCommandAsync("systemctl", $"--user enable --now {service}");
 
         return Task.FromResult(new OperationResult());
     }
 
     public Task<OperationResult> RemoveSystemdServiceTray(string service)
     {
-        var dir = XdgPaths.ConfigHome() + "/systemd/user";
+        var dir = $"{XdgPaths.ConfigHome()}/systemd/user";
 
-        _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
-            $"--user disable --now {service}");
+        _ = ExecuteNonShellyUnprivilegedCommandAsync("systemctl", $"--user disable --now {service}");
 
         File.Delete($"{dir}/{service}.service");
 
-        _ = ExecuteNonShellyUnprivilegedCommandAsync("Systemctl", "systemctl", CancellationToken.None,
-            "--user daemon-reload");
+        _ = ExecuteNonShellyUnprivilegedCommandAsync("systemctl", "--user daemon-reload");
 
         return Task.FromResult(new OperationResult());
     }
@@ -335,7 +282,7 @@ public class UnprivilegedOperationService(
 
     public async Task<List<AppImageDto>> GetUpdatesAppImagesAsync()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Get AppImage Updates", "appimage list-updates");
+        var result = await ExecuteUnprivilegedCommandAsync("appimage list-updates");
         try
         {
             JsonPackFrame.TryDecode<List<AppImageDto>>(result.Output, out var framed);
@@ -351,7 +298,7 @@ public class UnprivilegedOperationService(
     public async Task<List<AlpmPackageUpdateDto>> CheckForStandardApplicationUpdates(bool showHidden = false)
     {
         var args = showHidden ? "list-updates --show-hidden" : "list-updates";
-        var result = await ExecuteUnprivilegedCommandAsync("Get Available Updates", args);
+        var result = await ExecuteUnprivilegedCommandAsync(args);
 
         try
         {
@@ -368,17 +315,14 @@ public class UnprivilegedOperationService(
     public async Task<UnprivilegedOperationResult> ExportSyncFile(string filePath, string name)
     {
         if (string.IsNullOrWhiteSpace(name))
-        {
-            return await ExecuteUnprivilegedCommandAsync("Export Sync", "export -o", filePath);
-        }
+            return await ExecuteUnprivilegedCommandAsync("export -o", filePath);
 
-        return await ExecuteUnprivilegedCommandAsync("Export Sync", "export -o", filePath, "-a", name);
+        return await ExecuteUnprivilegedCommandAsync("export -o", filePath, "-a", name);
     }
 
     public async Task<SyncModel> CheckForApplicationUpdates()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Get Available Updates", "check-updates -a -l");
-        //SendDbusMessage(result);
+        var result = await ExecuteUnprivilegedCommandAsync("check-updates -a -l");
         try
         {
             if (!result.Success) return new SyncModel();
@@ -394,12 +338,9 @@ public class UnprivilegedOperationService(
 
     public async Task<List<FlatpakPackageDto>> SearchFlathubAsync(string query)
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Search Flathub", "flatpak search", query, "--limit", "100");
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak search", query, "--limit", "100");
 
-        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
-        {
-            return [];
-        }
+        if (!result.Success) return [];
 
         try
         {
@@ -418,16 +359,10 @@ public class UnprivilegedOperationService(
     {
         UnprivilegedOperationResult result;
         if (updateUrl != "" && updateType != AppImageUpdateType.None)
-        {
-            result = await ExecuteUnprivilegedCommandAsync("Install AppImage", "appimage", "install",
-                $"\"{filePath}\"", "-u",
-                updateUrl, "-t", updateType.ToString().ToLowerInvariant(), "-n");
-        }
+            result = await ExecuteUnprivilegedCommandAsync("appimage", "install", $"\"{filePath}\"", "-u", updateUrl, "-t",
+                updateType.ToString().ToLower(), "-n");
         else
-        {
-            result = await ExecuteUnprivilegedCommandAsync("Install AppImage", "appimage", "install",
-                $"\"{filePath}\"", "-n");
-        }
+            result = await ExecuteUnprivilegedCommandAsync("appimage", "install", $"\"{filePath}\"", "-n");
 
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.AppImage);
         return result;
@@ -435,7 +370,7 @@ public class UnprivilegedOperationService(
 
     public async Task<UnprivilegedOperationResult> AppImageUpgradeAsync()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Upgrade AppImage's", "appimage", "upgrade", "-n");
+        var result = await ExecuteUnprivilegedCommandAsync("appimage", "upgrade", "-n");
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.AppImage);
         return result;
     }
@@ -444,7 +379,7 @@ public class UnprivilegedOperationService(
     {
         var args = new List<string> { "appimage", "remove", $"\"{name}\"", "-n" };
         if (removeConfig) args.Add("-c");
-        var result = await ExecuteUnprivilegedCommandAsync("Remove AppImage's", [.. args]);
+        var result = await ExecuteUnprivilegedCommandAsync([.. args]);
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.AppImage);
         return result;
     }
@@ -452,48 +387,44 @@ public class UnprivilegedOperationService(
     public async Task<UnprivilegedOperationResult> AppImageConfigureUpdatesAsync(string url, string name,
         AppImageUpdateType updateType, bool allowPrerelease)
     {
-        return await ExecuteUnprivilegedCommandAsync("Set AppImage's Update Config", "appimage", "configure-updates",
-            $"\"{name}\"", url, updateType.ToString(), allowPrerelease ? "-p" : "");
+        return await ExecuteUnprivilegedCommandAsync("appimage", "configure-updates", $"\"{name}\"", url, updateType.ToString(),
+            allowPrerelease ? "-p" : "");
     }
 
     public async Task<UnprivilegedOperationResult> AppImageSyncApp(string name)
     {
-        return await ExecuteUnprivilegedCommandAsync("Set AppImage's Update Config", "appimage", "sync-meta", name,
-            "-n");
+        return await ExecuteUnprivilegedCommandAsync("appimage", "sync-meta", name, "-n");
     }
 
     public async Task<UnprivilegedOperationResult> AppImageSyncAll()
     {
-        return await ExecuteUnprivilegedCommandAsync("Set AppImage's Update Config", "appimage", "sync-meta");
+        return await ExecuteUnprivilegedCommandAsync("appimage", "sync-meta");
     }
 
-    private async Task<UnprivilegedOperationResult> ExecuteUnprivilegedCommandAsync(string operationDescription,
-        params string[] args)
+    private void SendDbusMessage(UnprivilegedOperationResult result)
     {
-        return await ExecuteUnprivilegedCommandAsync(operationDescription, CancellationToken.None, args);
+        if (!result.Success) return;
+        _ = Task.Run(trayDbus.UpdatesMadeInUiAsync);
+        packageUpdateNotifier.NotifyPackagesUpdated();
     }
 
-    private async Task<UnprivilegedOperationResult> ExecuteUnprivilegedCommandAsync(string operationDescription,
-        CancellationToken ct, params string[] args)
+    private async Task<UnprivilegedOperationResult> ExecuteUnprivilegedCommandAsync(params string[] args)
     {
         var arguments = string.Join(" ", args);
         arguments += " --ui-mode";
         var fullCommand = $"{_cliPath} {arguments}";
 
-        Console.WriteLine($"Executing unprivileged command: {fullCommand}");
+        Console.WriteLine($"Executing command: {fullCommand}");
 
-        var process = new Process
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo(_cliPath)
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = _cliPath,
-                Arguments = arguments,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                RedirectStandardInput = true,
-                CreateNoWindow = true
-            }
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true,
+            CreateNoWindow = true
         };
 
         var outputBuilder = new StringBuilder();
@@ -502,7 +433,7 @@ public class UnprivilegedOperationService(
 
         var eventRouter = new EventRouter(alpmEventService, lockoutService);
 
-        process.OutputDataReceived += async (sender, e) =>
+        process.OutputDataReceived += async (_, e) =>
         {
             if (e.Data == null) return;
             outputBuilder.Append(e.Data).Append('\n');
@@ -517,7 +448,7 @@ public class UnprivilegedOperationService(
                         if (stdinWriter != null)
                         {
                             await stdinWriter.WriteLineAsync(value);
-                            await stdinWriter.FlushAsync(ct);
+                            await stdinWriter.FlushAsync();
                         }
                     }, genericQuestionService, alpmEventService);
                 }
@@ -532,13 +463,11 @@ public class UnprivilegedOperationService(
             Console.WriteLine(e.Data);
         };
 
-        process.ErrorDataReceived += async (sender, e) =>
+        process.ErrorDataReceived += async (_, e) =>
         {
-            if (e.Data != null)
-            {
-                errorBuilder.AppendLine(e.Data);
-                await Console.Error.WriteLineAsync(e.Data);
-            }
+            if (e.Data == null) return;
+            errorBuilder.AppendLine(e.Data);
+            await Console.Error.WriteLineAsync(e.Data);
         };
 
         try
@@ -548,19 +477,8 @@ public class UnprivilegedOperationService(
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            try
-            {
-                await process.WaitForExitAsync(ct);
-            }
-            catch (OperationCanceledException)
-            {
-                if (!process.HasExited)
-                    process.Kill(true);
-                throw;
-            }
-
-            // Close stdin after process exits
-            stdinWriter?.Close();
+            await process.WaitForExitAsync();
+            stdinWriter.Close();
 
             var success = process.ExitCode == 0;
 
@@ -584,42 +502,27 @@ public class UnprivilegedOperationService(
         }
     }
 
-    private async Task<UnprivilegedOperationResult> ExecuteNonShellyUnprivilegedCommandAsync(
-        string operationDescription, string command,
-        CancellationToken ct, params string[] args)
+    private static async Task<UnprivilegedOperationResult> ExecuteNonShellyUnprivilegedCommandAsync(string command, params string[] args)
     {
         var arguments = string.Join(" ", args);
 
-        Console.WriteLine($"Executing unprivileged command: {command}");
+        Console.WriteLine($"Executing command: {command}");
 
-        var process = new Process
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo(command)
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = command,
-                Arguments = arguments,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                RedirectStandardInput = true,
-                CreateNoWindow = true
-            }
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true,
+            CreateNoWindow = true
         };
-
 
         try
         {
             process.Start();
-            try
-            {
-                await process.WaitForExitAsync(ct);
-            }
-            catch (OperationCanceledException)
-            {
-                if (!process.HasExited)
-                    process.Kill(true);
-                throw;
-            }
+            await process.WaitForExitAsync();
 
             var success = process.ExitCode == 0;
 
@@ -640,15 +543,6 @@ public class UnprivilegedOperationService(
                 Error = ex.Message,
                 ExitCode = -1
             };
-        }
-    }
-
-    private void SendDbusMessage(UnprivilegedOperationResult result)
-    {
-        if (result.Success)
-        {
-            _ = Task.Run(trayDbus.UpdatesMadeInUiAsync);
-            packageUpdateNotifier.NotifyPackagesUpdated();
         }
     }
 }

@@ -858,7 +858,7 @@ public class FlatpakInstall(
             await Task.WhenAny(syncTask, Task.Delay(TimeSpan.FromSeconds(5), ct));
 
             ct.ThrowIfCancellationRequested();
-            _allPackages = await unprivilegedOperationService.ListAppstreamFlatpak(ct);
+            _allPackages = await unprivilegedOperationService.ListAppstreamFlatpak();
             ct.ThrowIfCancellationRequested();
 
             await flathubTask;
