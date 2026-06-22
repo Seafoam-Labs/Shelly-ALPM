@@ -314,7 +314,6 @@ public class PrivilegedOperationService(
 
     private async Task<OperationResult> ExecutePrivilegedCommandAsync(string operationDescription, params string[] args)
     {
-        // Request credentials if not already available
         var hasCredentials = await credentialManager.RequestCredentialsAsync(operationDescription);
         if (!hasCredentials)
             return new OperationResult
@@ -362,7 +361,6 @@ public class PrivilegedOperationService(
         var pendingCallbacks = 0;
         var allCallbacksDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // Helper to safely write to stdin
         async Task SafeWriteAsync(string value)
         {
             await stdinLock.WaitAsync();
@@ -384,7 +382,6 @@ public class PrivilegedOperationService(
             }
         }
 
-        // State for restart check results
         var restartNeedsReboot = false;
         var restartFailures = new List<(string Service, string Error)>();
 
@@ -486,7 +483,6 @@ public class PrivilegedOperationService(
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            // Write password to stdin followed by newline
             if (!isPasswordless)
             {
                 await stdinWriter.WriteLineAsync(password);
@@ -512,14 +508,12 @@ public class PrivilegedOperationService(
 
             var success = process.ExitCode == 0;
 
-            // Update credential validation status based on result
             if (success)
             {
                 credentialManager.MarkAsValidated();
             }
             else
             {
-                // Check if it was an authentication failure
                 var errorOutput = errorBuilder.ToString();
                 if (errorOutput.Contains("incorrect password") ||
                     errorOutput.Contains("Sorry, try again") ||

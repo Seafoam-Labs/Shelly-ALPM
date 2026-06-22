@@ -24,62 +24,25 @@ public class UnprivilegedOperationService(
 
     public async Task<List<FlatpakPackageDto>> ListFlatpakPackages()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("flatpak list");
-
-        if (!result.Success) return [];
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
-            return framed ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse updates JSON: {ex.Message}");
-            return [];
-        }
+        return await ExecuteJsonCommandAsync<List<FlatpakPackageDto>>("list flatpak packages",
+            () => ExecuteUnprivilegedCommandAsync("flatpak", "list"));
     }
 
     public async Task<List<FlatpakPackageDto>> ListFlatpakUpdates()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("flatpak list-updates");
-
-        if (!result.Success) return [];
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
-            return framed ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse updates JSON: {ex.Message}");
-            return [];
-        }
+        return await ExecuteJsonCommandAsync<List<FlatpakPackageDto>>("list flatpak updates",
+            () => ExecuteUnprivilegedCommandAsync("flatpak", "list-updates"));
     }
 
     public async Task<List<AppstreamApp>> ListAppstreamFlatpak()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("flatpak get-remote-appstream", "all");
-
-        if (!result.Success) return [];
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<AppstreamApp>>(result.Output, out var framed);
-            return framed ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse updates JSON: {ex.Message}");
-            return [];
-        }
+        return await ExecuteJsonCommandAsync<List<AppstreamApp>>("list flatpak appstream",
+            () => ExecuteUnprivilegedCommandAsync("flatpak", "get-remote-appstream", "all"));
     }
-
 
     public async Task<UnprivilegedOperationResult> UpdateFlatpakPackage(string package)
     {
-        var result = await ExecuteUnprivilegedCommandAsync("flatpak update", package);
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak", "update", package);
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
     }
@@ -94,9 +57,9 @@ public class UnprivilegedOperationService(
     {
         UnprivilegedOperationResult result;
         if (removeConfig)
-            result = await ExecuteUnprivilegedCommandAsync("flatpak uninstall", package, "-c");
+            result = await ExecuteUnprivilegedCommandAsync("flatpak", "uninstall", package, "-c");
         else
-            result = await ExecuteUnprivilegedCommandAsync("flatpak uninstall", package);
+            result = await ExecuteUnprivilegedCommandAsync("flatpak", "uninstall", package);
 
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
@@ -107,10 +70,10 @@ public class UnprivilegedOperationService(
     {
         UnprivilegedOperationResult result;
         if (user)
-            result = await ExecuteUnprivilegedCommandAsync("flatpak install", package, "--user", "--remote", remote, "--branch", branch,
+            result = await ExecuteUnprivilegedCommandAsync("flatpak", "install", package, "--user", "--remote", remote, "--branch", branch,
                 isRuntime ? "--runtime" : "");
         else
-            result = await ExecuteUnprivilegedCommandAsync("flatpak install", package, "--remote", remote, "--branch", branch,
+            result = await ExecuteUnprivilegedCommandAsync("flatpak", "install", package, "--remote", remote, "--branch", branch,
                 isRuntime ? "--runtime" : "");
 
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
@@ -119,7 +82,7 @@ public class UnprivilegedOperationService(
 
     public async Task<UnprivilegedOperationResult> FlatpakUpgrade()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("flatpak upgrade");
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak", "upgrade");
         SendDbusMessage(result);
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
@@ -127,38 +90,35 @@ public class UnprivilegedOperationService(
 
     public async Task<UnprivilegedOperationResult> FlatpakRepair()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("flatpak repair");
-        return result;
+        return await ExecuteUnprivilegedCommandAsync("flatpak", "repair");
     }
 
     public async Task<List<FlatpakRemoteDto>> FlatpakListRemotes()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("flatpak list-remotes");
-        if (!result.Success) return [];
-        JsonPackFrame.TryDecode<List<FlatpakRemoteDto>>(result.Output, out var framed);
-        return framed ?? [];
+        return await ExecuteJsonCommandAsync<List<FlatpakRemoteDto>>("list flatpak remotes",
+            () => ExecuteUnprivilegedCommandAsync("flatpak", "list-remotes"));
     }
 
     public async Task<UnprivilegedOperationResult> FlatpakSyncRemoteAppstream()
     {
-        return await ExecuteUnprivilegedCommandAsync("flatpak sync-remote-appstream");
+        return await ExecuteUnprivilegedCommandAsync("flatpak", "sync-remote-appstream");
     }
 
     public async Task<UnprivilegedOperationResult> FlatpakRemoveRemote(string remoteName, string scope)
     {
         if (scope == "user")
-            return await ExecuteUnprivilegedCommandAsync("flatpak remove-remotes", remoteName, "--system", "false");
+            return await ExecuteUnprivilegedCommandAsync("flatpak", "remove-remotes", remoteName, "--system", "false");
 
-        return await ExecuteUnprivilegedCommandAsync("flatpak remove-remotes", remoteName, "--system", "true");
+        return await ExecuteUnprivilegedCommandAsync("flatpak", "remove-remotes", remoteName, "--system", "true");
     }
 
     public async Task<UnprivilegedOperationResult> FlatpakInsallFromRef(string path, string scope)
     {
         UnprivilegedOperationResult result;
         if (scope == "user")
-            result = await ExecuteUnprivilegedCommandAsync("flatpak install-ref-file", path);
+            result = await ExecuteUnprivilegedCommandAsync("flatpak", "install-ref-file", path);
         else
-            result = await ExecuteUnprivilegedCommandAsync("flatpak install-ref-file", path, "--system", "true");
+            result = await ExecuteUnprivilegedCommandAsync("flatpak", "install-ref-file", path, "--system", "true");
 
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
@@ -166,192 +126,101 @@ public class UnprivilegedOperationService(
 
     public async Task<UnprivilegedOperationResult> FlatpakInstallFromBundle(string path)
     {
-        var result = await ExecuteUnprivilegedCommandAsync("flatpak install-bundle", path, "--user", "false");
+        var result = await ExecuteUnprivilegedCommandAsync("flatpak", "install-bundle", path, "--user", "false");
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
     }
 
     public async Task<UnprivilegedOperationResult> RunFlatpakName(string name)
     {
-        return await ExecuteUnprivilegedCommandAsync("flatpak run", name);
+        return await ExecuteUnprivilegedCommandAsync("flatpak", "run", name);
     }
 
     public async Task<UnprivilegedOperationResult> FlatpakAddRemote(string remoteName, string scope, string url)
     {
         if (scope == "user")
-            return await ExecuteUnprivilegedCommandAsync("flatpak add-remotes", remoteName, "--remote-url", url, "--system", "false");
+            return await ExecuteUnprivilegedCommandAsync("flatpak", "add-remotes", remoteName, "--remote-url", url, "--system", "false");
 
-        return await ExecuteUnprivilegedCommandAsync("flatpak add-remotes", remoteName, "--remote-url", url, "--system", "true");
+        return await ExecuteUnprivilegedCommandAsync("flatpak", "add-remotes", remoteName, "--remote-url", url, "--system", "true");
     }
 
     public async Task<FlatpakRemoteRefInfo> GetFlatpakAppDataAsync(string remote, string app, string arch)
     {
-        try
-        {
-            var result = await ExecuteUnprivilegedCommandAsync("flatpak app-remote-info", remote, app, arch);
-            if (!result.Success) return new FlatpakRemoteRefInfo();
-            JsonPackFrame.TryDecode<FlatpakRemoteRefInfo>(result.Output, out var framed);
-            return framed ?? new FlatpakRemoteRefInfo();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to get remote info: {ex.Message}");
-        }
-
-        return new FlatpakRemoteRefInfo();
+        return await ExecuteJsonCommandAsync<FlatpakRemoteRefInfo>("get flatpak remote info",
+            () => ExecuteUnprivilegedCommandAsync("flatpak", "app-remote-info", remote, app, arch));
     }
 
     public async Task<List<AppImageDto>> GetInstallAppImagesAsync()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("appimage list");
-        try
-        {
-            if (!result.Success) return [];
-            JsonPackFrame.TryDecode<List<AppImageDto>>(result.Output, out var framed);
-            return framed ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse installed AppImages JSON: {ex.Message}");
-            return [];
-        }
+        return await ExecuteJsonCommandAsync<List<AppImageDto>>("list appimages",
+            () => ExecuteUnprivilegedCommandAsync("appimage", "list"));
     }
 
     public async Task<List<RssModel>> GetArchNewsAsync(bool all = false)
     {
         var args = all ? "news --all" : "news";
-        var result = await ExecuteUnprivilegedCommandAsync(args);
-        if (!result.Success) return [];
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<RssModel>>(result.Output, out var framed);
-            return framed ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error deserializing Arch News: {ex.Message}");
-        }
-
-        return [];
+        return await ExecuteJsonCommandAsync<List<RssModel>>("list archnews",
+            () => ExecuteUnprivilegedCommandAsync(args));
     }
 
     public async Task<List<PacfileRecord>> GetPacFiles()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("pacfile");
-        if (!result.Success) return [];
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<PacfileRecord>>(result.Output, out var framed);
-            return framed ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error deserializing Arch News: {ex.Message}");
-        }
-
-        return [];
+        return await ExecuteJsonCommandAsync<List<PacfileRecord>>("list pacfiles",
+            () => ExecuteUnprivilegedCommandAsync("pacfile"));
     }
 
-    public Task<OperationResult> AddSystemdServiceTray(string serviceContent, string service)
+    public async Task<OperationResult> AddSystemdServiceTray(string serviceContent, string service)
     {
         var dir = $"{XdgPaths.ConfigHome()}/systemd/user";
         Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, $"{service}.service"), serviceContent);
+        await File.WriteAllTextAsync(Path.Combine(dir, $"{service}.service"), serviceContent);
+        await ExecuteNonShellyUnprivilegedCommandAsync("systemctl", "--user daemon-reload");
+        await ExecuteNonShellyUnprivilegedCommandAsync("systemctl", $"--user enable --now {service}");
 
-        _ = ExecuteNonShellyUnprivilegedCommandAsync("systemctl", "--user daemon-reload");
-        _ = ExecuteNonShellyUnprivilegedCommandAsync("systemctl", $"--user enable --now {service}");
-
-        return Task.FromResult(new OperationResult());
+        return new OperationResult { Success = true };
     }
 
-    public Task<OperationResult> RemoveSystemdServiceTray(string service)
+    public async Task<OperationResult> RemoveSystemdServiceTray(string service)
     {
         var dir = $"{XdgPaths.ConfigHome()}/systemd/user";
-
-        _ = ExecuteNonShellyUnprivilegedCommandAsync("systemctl", $"--user disable --now {service}");
-
+        await ExecuteNonShellyUnprivilegedCommandAsync("systemctl", $"--user disable --now {service}");
         File.Delete($"{dir}/{service}.service");
+        await ExecuteNonShellyUnprivilegedCommandAsync("systemctl", "--user daemon-reload");
 
-        _ = ExecuteNonShellyUnprivilegedCommandAsync("systemctl", "--user daemon-reload");
-
-        return Task.FromResult(new OperationResult());
+        return new OperationResult { Success = true };
     }
-
 
     public async Task<List<AppImageDto>> GetUpdatesAppImagesAsync()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("appimage list-updates");
-        try
-        {
-            JsonPackFrame.TryDecode<List<AppImageDto>>(result.Output, out var framed);
-            return framed ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse AppImage updates JSON: {ex.Message}");
-            return [];
-        }
+        return await ExecuteJsonCommandAsync<List<AppImageDto>>("list appimage updates",
+            () => ExecuteUnprivilegedCommandAsync("appimage", "list-updates"));
     }
 
     public async Task<List<AlpmPackageUpdateDto>> CheckForStandardApplicationUpdates(bool showHidden = false)
     {
         var args = showHidden ? "list-updates --show-hidden" : "list-updates";
-        var result = await ExecuteUnprivilegedCommandAsync(args);
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<AlpmPackageUpdateDto>>(result.Output, out var framed);
-            return framed ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse updates JSON: {ex.Message}");
-            return [];
-        }
+        return await ExecuteJsonCommandAsync<List<AlpmPackageUpdateDto>>("list standard updates",
+            () => ExecuteUnprivilegedCommandAsync(args));
     }
 
     public async Task<UnprivilegedOperationResult> ExportSyncFile(string filePath, string name)
     {
         if (string.IsNullOrWhiteSpace(name))
-            return await ExecuteUnprivilegedCommandAsync("export -o", filePath);
+            return await ExecuteUnprivilegedCommandAsync("export", "-o", filePath);
 
-        return await ExecuteUnprivilegedCommandAsync("export -o", filePath, "-a", name);
+        return await ExecuteUnprivilegedCommandAsync("export", "-o", filePath, "-a", name);
     }
 
     public async Task<SyncModel> CheckForApplicationUpdates()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("check-updates -a -l");
-        try
-        {
-            if (!result.Success) return new SyncModel();
-            JsonPackFrame.TryDecodeLast<SyncModel>(result.Output, out var framed);
-            return framed ?? new SyncModel();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse updates JSON: {ex.Message}");
-            return new SyncModel();
-        }
+        return await ExecuteJsonCommandAsync<SyncModel>("check application updates",
+            () => ExecuteUnprivilegedCommandAsync("check-updates", "-a", "-l"));
     }
 
     public async Task<List<FlatpakPackageDto>> SearchFlathubAsync(string query)
     {
-        var result = await ExecuteUnprivilegedCommandAsync("flatpak search", query, "--limit", "100");
-
-        if (!result.Success) return [];
-
-        try
-        {
-            JsonPackFrame.TryDecode<List<FlatpakPackageDto>>(result.Output, out var framed);
-            return framed ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to parse Flathub search JSON: {ex.Message}");
-            return [];
-        }
+        return await ExecuteJsonCommandAsync<List<FlatpakPackageDto>>("list flathub search ",
+            () => ExecuteUnprivilegedCommandAsync("flatpak", "search", query, "--limit", "100"));
     }
 
     public async Task<UnprivilegedOperationResult> AppImageInstallAsync(string filePath, string updateUrl = "",
@@ -406,6 +275,20 @@ public class UnprivilegedOperationService(
         if (!result.Success) return;
         _ = Task.Run(trayDbus.UpdatesMadeInUiAsync);
         packageUpdateNotifier.NotifyPackagesUpdated();
+    }
+
+    private static async Task<T> ExecuteJsonCommandAsync<T>(
+        string operationName,
+        Func<Task<UnprivilegedOperationResult>> executeCommand) where T : new()
+    {
+        var result = await executeCommand();
+        if (!result.Success) return new T();
+
+        if (JsonPackFrame.TryDecode<T>(result.Output, out var framed) && framed is not null)
+            return framed;
+
+        Console.WriteLine($"Failed to decode {operationName}");
+        return new T();
     }
 
     private async Task<UnprivilegedOperationResult> ExecuteUnprivilegedCommandAsync(params string[] args)
