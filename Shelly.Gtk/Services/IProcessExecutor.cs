@@ -4,11 +4,9 @@ public interface IProcessExecutor
 {
     Task<OperationResult> RunShellyCommandAsync(string[] args);
 
-    Task<OperationResult> RunShellyInteractiveCommandAsync(string[] args, IAlpmEventService eventService, ILockoutService lockoutService,
-        IGenericQuestionService questionService);
+    Task<OperationResult> RunShellyInteractiveCommandAsync(string[] args);
 
-    Task<OperationResult> RunPrivilegedShellyCommandAsync(string description, string[] args, IAlpmEventService eventService,
-        ILockoutService lockoutService, IGenericQuestionService questionService);
+    Task<OperationResult> RunPrivilegedShellyCommandAsync(string description, string[] args);
 
     Task<OperationResult> RunSystemCommandAsync(string command, string[] args);
 

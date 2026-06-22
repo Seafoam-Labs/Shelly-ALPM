@@ -12,11 +12,7 @@ public class UnprivilegedOperationService(
     IProcessExecutor processExecutor,
     ITrayDbus trayDbus,
     IPackageUpdateNotifier packageUpdateNotifier,
-    IDirtyService dirtyService,
-    IAlpmEventService alpmEventService,
-    ILockoutService lockoutService,
-    IGenericQuestionService genericQuestionService)
-    : IUnprivilegedOperationService
+    IDirtyService dirtyService) : IUnprivilegedOperationService
 {
     public async Task<List<FlatpakPackageDto>> ListFlatpakPackages()
     {
@@ -47,7 +43,7 @@ public class UnprivilegedOperationService(
     {
         var args = new List<string> { "flatpak", "remove" };
         args.AddRange(packages);
-        return await RunShellyCommandAsync([.. args]);
+        return await RunShellyCommandAsync(args.ToArray());
     }
 
     public async Task<UnprivilegedOperationResult> RemoveFlatpakPackage(string package, bool removeConfig)
@@ -69,7 +65,7 @@ public class UnprivilegedOperationService(
         if (user) args.Add("--user");
         if (isRuntime) args.Add("--runtime");
 
-        var result = await RunShellyCommandAsync([.. args]);
+        var result = await RunShellyCommandAsync(args.ToArray());
 
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
@@ -232,7 +228,7 @@ public class UnprivilegedOperationService(
             args.Add(updateType.ToString().ToLower());
         }
 
-        var result = await RunShellyCommandAsync([.. args]);
+        var result = await RunShellyCommandAsync(args.ToArray());
 
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.AppImage);
         return result;
@@ -249,7 +245,7 @@ public class UnprivilegedOperationService(
     {
         var args = new List<string> { "appimage", "remove", name, "-n" };
         if (removeConfig) args.Add("-c");
-        var result = await RunShellyCommandAsync([.. args]);
+        var result = await RunShellyCommandAsync(args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.AppImage);
         return result;
     }
@@ -259,7 +255,7 @@ public class UnprivilegedOperationService(
     {
         var args = new List<string> { "appimage", "configure-updates", name, url, updateType.ToString() };
         if (allowPrerelease) args.Add("-p");
-        return await RunShellyCommandAsync([.. args]);
+        return await RunShellyCommandAsync(args.ToArray());
     }
 
     public async Task<UnprivilegedOperationResult> AppImageSyncApp(string name)
@@ -295,11 +291,7 @@ public class UnprivilegedOperationService(
 
     private async Task<UnprivilegedOperationResult> RunShellyCommandAsync(params string[] args)
     {
-        var result = await processExecutor.RunShellyInteractiveCommandAsync(
-            args,
-            alpmEventService,
-            lockoutService,
-            genericQuestionService);
+        var result = await processExecutor.RunShellyInteractiveCommandAsync(args);
 
         return new UnprivilegedOperationResult
         {

@@ -5,7 +5,11 @@ using Shelly.Gtk.Services.Wire;
 
 namespace Shelly.Gtk.Services;
 
-public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExecutor
+public class ProcessExecutor(
+    ICredentialManager credentialManager,
+    IAlpmEventService eventService,
+    ILockoutService lockoutService,
+    IGenericQuestionService questionService) : IProcessExecutor
 {
     private readonly string _cliPath = CliPathResolver.FindCliPath();
 
@@ -14,11 +18,7 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         return await RunSystemCommandAsync(_cliPath, [.. args, "--ui-mode"]);
     }
 
-    public async Task<OperationResult> RunShellyInteractiveCommandAsync(
-        string[] args,
-        IAlpmEventService eventService,
-        ILockoutService lockoutService,
-        IGenericQuestionService questionService)
+    public async Task<OperationResult> RunShellyInteractiveCommandAsync(string[] args)
     {
         using var process = CreateProcess(_cliPath, true, [.. args, "--ui-mode"]);
         LogCommand(_cliPath, process.StartInfo.ArgumentList);
@@ -131,20 +131,15 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         }
     }
 
-    public async Task<OperationResult> RunPrivilegedShellyCommandAsync(
-        string description,
-        string[] args,
-        IAlpmEventService eventService,
-        ILockoutService lockoutService,
-        IGenericQuestionService questionService)
+    public async Task<OperationResult> RunPrivilegedShellyCommandAsync(string description, string[] args)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
 
         var chosen = DetectEscalatorAsync();
         return chosen switch
         {
-            PrivilegeEscalator.Pkexec => await RunPrivilegedShellyPkexecAsync(args, eventService, lockoutService, questionService),
-            PrivilegeEscalator.Sudo => await RunPrivilegedShellySudoAsync(description, args, eventService, lockoutService, questionService),
+            PrivilegeEscalator.Pkexec => await RunPrivilegedShellyPkexecAsync(args),
+            PrivilegeEscalator.Sudo => await RunPrivilegedShellySudoAsync(description, args),
             _ => new OperationResult
             {
                 Success = false,
@@ -193,12 +188,7 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         };
     }
 
-    private async Task<OperationResult> RunPrivilegedShellySudoAsync(
-        string description,
-        string[] args,
-        IAlpmEventService eventService,
-        ILockoutService lockoutService,
-        IGenericQuestionService questionService)
+    private async Task<OperationResult> RunPrivilegedShellySudoAsync(string description, string[] args)
     {
         var hasCredentials = await credentialManager.RequestCredentialsAsync(description);
         if (!hasCredentials) return AuthCancelledResult();
@@ -222,14 +212,7 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         fullArgs.AddRange(args.Where(arg => !string.IsNullOrWhiteSpace(arg)));
         fullArgs.Add("--ui-mode");
 
-        var result = await RunPrivilegedShellyAsync(
-            "sudo",
-            [.. fullArgs],
-            isPasswordless ? null : password,
-            true,
-            eventService,
-            lockoutService,
-            questionService);
+        var result = await RunPrivilegedShellyAsync("sudo", fullArgs.ToArray(), isPasswordless ? null : password, true);
 
         if (result.Success)
         {
@@ -247,24 +230,13 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         return result;
     }
 
-    private async Task<OperationResult> RunPrivilegedShellyPkexecAsync(
-        string[] args,
-        IAlpmEventService eventService,
-        ILockoutService lockoutService,
-        IGenericQuestionService questionService)
+    private async Task<OperationResult> RunPrivilegedShellyPkexecAsync(string[] args)
     {
         var fullArgs = new List<string> { _cliPath };
         fullArgs.AddRange(args.Where(arg => !string.IsNullOrWhiteSpace(arg)));
         fullArgs.Add("--ui-mode");
 
-        return await RunPrivilegedShellyAsync(
-            "pkexec",
-            [.. fullArgs],
-            null,
-            false,
-            eventService,
-            lockoutService,
-            questionService);
+        return await RunPrivilegedShellyAsync("pkexec", fullArgs.ToArray(), null, false);
     }
 
     private static PrivilegeEscalator DetectEscalatorAsync()
@@ -295,14 +267,83 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         }
     }
 
-    private static async Task<OperationResult> RunPrivilegedShellyAsync(
+    private async Task<OperationResult> RunSudoAsync(string description, string[] args)
+    {
+        var hasCredentials = await credentialManager.RequestCredentialsAsync(description);
+        if (!hasCredentials) return AuthCancelledResult();
+
+        var password = credentialManager.GetPassword();
+        var isPasswordless = password == CredentialManager.NoPassword;
+
+        using var process = CreateProcess("sudo", true, args);
+        process.StartInfo.ArgumentList.Insert(0, "-k");
+        if (!isPasswordless) process.StartInfo.ArgumentList.Insert(0, "-S");
+
+        LogCommand(process.StartInfo.FileName, process.StartInfo.ArgumentList);
+
+        try
+        {
+            process.Start();
+
+            if (!isPasswordless)
+            {
+                await process.StandardInput.WriteLineAsync(password);
+                await process.StandardInput.FlushAsync();
+                process.StandardInput.Close();
+            }
+
+            return await ReadResultAsync(process);
+        }
+        catch (Exception ex)
+        {
+            return ErrorResult(ex);
+        }
+    }
+
+    private static async Task<OperationResult> RunPkexecAsync(string[] args)
+    {
+        using var process = CreateProcess("pkexec", false, args);
+        LogCommand(process.StartInfo.FileName, process.StartInfo.ArgumentList);
+
+        try
+        {
+            process.Start();
+            return await ReadResultAsync(process);
+        }
+        catch (Exception ex)
+        {
+            return ErrorResult(ex);
+        }
+    }
+
+    private static async Task<OperationResult> ReadResultAsync(Process process)
+    {
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+
+        await Task.WhenAll(outputTask, errorTask);
+        await process.WaitForExitAsync();
+
+        var output = await outputTask;
+        var error = await errorTask;
+
+        if (!string.IsNullOrEmpty(error))
+            await Console.Error.WriteLineAsync(error);
+
+        return new OperationResult
+        {
+            Success = process.ExitCode == 0,
+            Output = output,
+            Error = error,
+            ExitCode = process.ExitCode
+        };
+    }
+
+    private async Task<OperationResult> RunPrivilegedShellyAsync(
         string escalatorCommand,
         string[] escalatorArgs,
         string? password,
-        bool suppressSudoPasswordPrompt,
-        IAlpmEventService eventService,
-        ILockoutService lockoutService,
-        IGenericQuestionService questionService)
+        bool suppressSudoPasswordPrompt)
     {
         using var process = CreateProcess(escalatorCommand, true, escalatorArgs);
         LogCommand(process.StartInfo.FileName, process.StartInfo.ArgumentList);
@@ -476,55 +517,6 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
         }
     }
 
-    private async Task<OperationResult> RunSudoAsync(string description, string[] args)
-    {
-        var hasCredentials = await credentialManager.RequestCredentialsAsync(description);
-        if (!hasCredentials) return AuthCancelledResult();
-
-        var password = credentialManager.GetPassword();
-        var isPasswordless = password == CredentialManager.NoPassword;
-
-        using var process = CreateProcess("sudo", true, args);
-        process.StartInfo.ArgumentList.Insert(0, "-k");
-        if (!isPasswordless) process.StartInfo.ArgumentList.Insert(0, "-S");
-
-        LogCommand(process.StartInfo.FileName, process.StartInfo.ArgumentList);
-
-        try
-        {
-            process.Start();
-
-            if (!isPasswordless)
-            {
-                await process.StandardInput.WriteLineAsync(password);
-                await process.StandardInput.FlushAsync();
-                process.StandardInput.Close();
-            }
-
-            return await ReadResultAsync(process);
-        }
-        catch (Exception ex)
-        {
-            return ErrorResult(ex);
-        }
-    }
-
-    private static async Task<OperationResult> RunPkexecAsync(string[] args)
-    {
-        using var process = CreateProcess("pkexec", false, args);
-        LogCommand(process.StartInfo.FileName, process.StartInfo.ArgumentList);
-
-        try
-        {
-            process.Start();
-            return await ReadResultAsync(process);
-        }
-        catch (Exception ex)
-        {
-            return ErrorResult(ex);
-        }
-    }
-
     private static Process CreateProcess(string path, bool redirectInput, string[] args)
     {
         var process = new Process();
@@ -546,29 +538,6 @@ public class ProcessExecutor(ICredentialManager credentialManager) : IProcessExe
     private static void LogCommand(string cmd, IEnumerable<string> args)
     {
         Console.WriteLine($"Executing command: {cmd} {string.Join(" ", args)}");
-    }
-
-    private static async Task<OperationResult> ReadResultAsync(Process process)
-    {
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
-
-        await Task.WhenAll(outputTask, errorTask);
-        await process.WaitForExitAsync();
-
-        var output = await outputTask;
-        var error = await errorTask;
-
-        if (!string.IsNullOrEmpty(error))
-            await Console.Error.WriteLineAsync(error);
-
-        return new OperationResult
-        {
-            Success = process.ExitCode == 0,
-            Output = output,
-            Error = error,
-            ExitCode = process.ExitCode
-        };
     }
 
     private static OperationResult AuthCancelledResult()

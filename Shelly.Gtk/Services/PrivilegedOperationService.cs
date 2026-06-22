@@ -7,20 +7,17 @@ namespace Shelly.Gtk.Services;
 
 public class PrivilegedOperationService(
     IProcessExecutor processExecutor,
-    IAlpmEventService alpmEventService,
     IConfigService configService,
-    ILockoutService lockoutService,
     ITrayDbus trayDbus,
     IPackageUpdateNotifier packageUpdateNotifier,
-    IDirtyService dirtyService,
-    IGenericQuestionService genericQuestionService)
-    : IPrivilegedOperationService
+    IDirtyService dirtyService) : IPrivilegedOperationService
 {
     private readonly bool _noConfirm = configService.LoadConfig().NoConfirm;
 
     public async Task<OperationResult> SyncDatabasesAsync()
     {
-        return await RunShellyPrivilegedCommandAsync("Synchronize package databases", "sync");
+        var args = new[] { "sync" };
+        return await processExecutor.RunPrivilegedShellyCommandAsync("Synchronize package databases", args);
     }
 
     public async Task<OperationResult> InstallPackagesAsync(IEnumerable<string> packages, bool upgrade = false)
@@ -30,7 +27,7 @@ public class PrivilegedOperationService(
         if (upgrade) args.Add("-u");
         if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await RunShellyPrivilegedCommandAsync("Install packages", args.ToArray());
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Install packages", args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
     }
@@ -40,7 +37,7 @@ public class PrivilegedOperationService(
         var args = new List<string> { "install", $"\"{filePath}\"" };
         if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await RunShellyPrivilegedCommandAsync("Install local package", args.ToArray());
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Install local package", args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
     }
@@ -55,7 +52,7 @@ public class PrivilegedOperationService(
         if (removeOptionalDeps) args.Add("-o");
         if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await RunShellyPrivilegedCommandAsync("Remove packages", args.ToArray());
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Remove packages", args.ToArray());
         if (result.Success && removePackageFromCache) _ = await RemovePackageCacheAsync(packages);
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
@@ -67,7 +64,7 @@ public class PrivilegedOperationService(
         args.AddRange(packages.Select(p => $"\"{p}\""));
         if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await RunShellyPrivilegedCommandAsync("Remove local packages", args.ToArray());
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Remove local packages", args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
     }
@@ -78,7 +75,7 @@ public class PrivilegedOperationService(
         args.AddRange(packages);
         if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await RunShellyPrivilegedCommandAsync("Update packages", args.ToArray());
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Update packages", args.ToArray());
         SendDbusMessage(result);
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
         return result;
@@ -89,7 +86,7 @@ public class PrivilegedOperationService(
         var args = new List<string> { "upgrade" };
         if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await RunShellyPrivilegedCommandAsync("Upgrade system", args.ToArray());
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Upgrade system", args.ToArray());
         SendDbusMessage(result);
         return result;
     }
@@ -99,7 +96,7 @@ public class PrivilegedOperationService(
         var args = new List<string> { "upgrade-all" };
         if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await RunShellyPrivilegedCommandAsync("Upgrade all", args.ToArray());
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Upgrade all", args.ToArray());
         if (!result.Success) _ = Task.Run(trayDbus.UpdatesMadeInUiAsync);
         SendDbusMessage(result);
         return result;
@@ -107,7 +104,8 @@ public class PrivilegedOperationService(
 
     public async Task<OperationResult> ForceSyncDatabaseAsync()
     {
-        return await RunShellyPrivilegedCommandAsync("Force synchronize package databases", "sync", "--force");
+        var args = new[] { "sync", "--force" };
+        return await processExecutor.RunPrivilegedShellyCommandAsync("Force synchronize package databases", args);
     }
 
     public async Task<OperationResult> RemoveDbLockAsync()
@@ -125,7 +123,7 @@ public class PrivilegedOperationService(
         if (runChecks) args.Add("--check");
         if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await RunShellyPrivilegedCommandAsync("Install AUR packages", args.ToArray());
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Install AUR packages", args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Aur);
         return result;
     }
@@ -137,7 +135,7 @@ public class PrivilegedOperationService(
         args.Add($"-c={isCascade}");
         if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await RunShellyPrivilegedCommandAsync("Remove AUR packages", args.ToArray());
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Remove AUR packages", args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Aur);
         return result;
     }
@@ -149,7 +147,7 @@ public class PrivilegedOperationService(
         if (runChecks) args.Add("--check");
         if (_noConfirm) args.Add("--no-confirm");
 
-        var result = await RunShellyPrivilegedCommandAsync("Update AUR packages", args.ToArray());
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Update AUR packages", args.ToArray());
         SendDbusMessage(result);
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Aur);
         return result;
@@ -168,13 +166,13 @@ public class PrivilegedOperationService(
         if (_noConfirm) args.Add("--no-confirm");
 
         return await ExecuteJsonCommandAsync<PackageBuild>("AUR package builds",
-            () => RunShellyPrivilegedCommandAsync("Get Package Builds", args.ToArray()));
+            () => processExecutor.RunPrivilegedShellyCommandAsync("Get Package Builds", args.ToArray()));
     }
 
     public async Task<List<AlpmPackageUpdateDto>> GetPackagesNeedingUpdateAsync()
     {
         return await ExecuteJsonCommandAsync<AlpmPackageUpdateDto>("updates",
-            () => RunShellyPrivilegedCommandAsync("Check for Updates", "list-updates"));
+            () => processExecutor.RunPrivilegedShellyCommandAsync("Check for Updates", ["list-updates"]));
     }
 
     public async Task<List<AlpmPackageDto>> GetAvailablePackagesAsync(bool showHidden = false)
@@ -241,24 +239,26 @@ public class PrivilegedOperationService(
     {
         var args = new List<string> { "cache-clean", "-k", keep.ToString() };
         if (uninstalledOnly) args.Add("-i");
-        return await RunShellyPrivilegedCommandAsync("Clean package cache", args.ToArray());
+        return await processExecutor.RunPrivilegedShellyCommandAsync("Clean package cache", args.ToArray());
     }
 
 
     public async Task<OperationResult> PurifyCorruptionAsync()
     {
-        return await RunShellyPrivilegedCommandAsync("Delete corrupted packages", "purify");
+        var args = new[] { "purify" };
+        return await processExecutor.RunPrivilegedShellyCommandAsync("Delete corrupted packages", args);
     }
 
     public async Task<OperationResult> FixXdgPermissionsAsync()
     {
-        return await RunShellyPrivilegedCommandAsync("Fix Shelly folder ownership", "fix-permissions");
+        var args = new[] { "fix-permissions" };
+        return await processExecutor.RunPrivilegedShellyCommandAsync("Fix Shelly folder ownership", args);
     }
 
     public async Task<OperationResult> FlatpakInstallFromBundle(string path)
     {
-        var result = await RunShellyPrivilegedCommandAsync("Install Flatpak Bundle",
-            "flatpak", "install-bundle", path, "--system", "true");
+        var args = new[] { "flatpak", "install-bundle", path, "--system", "true" };
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Install Flatpak Bundle", args);
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
     }
@@ -268,14 +268,15 @@ public class PrivilegedOperationService(
         var args = new List<string> { "downgrade", packageName, "--target", $"\"{filename}\"", "--no-confirm" };
         if (addIgnore) args.Add("--ignore");
 
-        var result = await RunShellyPrivilegedCommandAsync("Downgrade package", args.ToArray());
+        var result = await processExecutor.RunPrivilegedShellyCommandAsync("Downgrade package", args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.NativeInstalled);
         return result;
     }
 
     public async Task<OperationResult> MigrateAppImagesAsync()
     {
-        return await RunShellyPrivilegedCommandAsync("Migrate AppImages", "appimage", "migrate-manager");
+        var args = new[] { "appimage", "migrate-manager" };
+        return await processExecutor.RunPrivilegedShellyCommandAsync("Migrate AppImages", args);
     }
 
     private static async Task<List<T>> ExecuteJsonCommandAsync<T>(string operationName, Func<Task<OperationResult>> executeCommand)
@@ -296,8 +297,8 @@ public class PrivilegedOperationService(
             .SelectMany(x => new[] { "-t", x })
             .ToArray();
 
-        return await RunShellyPrivilegedCommandAsync("Removing package from cache",
-            ["cache-clean", "--no-confirm", .. targetArgs]);
+        string[] args = ["cache-clean", "--no-confirm", .. targetArgs];
+        return await processExecutor.RunPrivilegedShellyCommandAsync("Removing package from cache", args);
     }
 
     private void SendDbusMessage(OperationResult result)
@@ -305,15 +306,5 @@ public class PrivilegedOperationService(
         if (!result.Success) return;
         _ = Task.Run(trayDbus.UpdatesMadeInUiAsync);
         packageUpdateNotifier.NotifyPackagesUpdated();
-    }
-
-    private async Task<OperationResult> RunShellyPrivilegedCommandAsync(string operationDescription, params string[] args)
-    {
-        return await processExecutor.RunPrivilegedShellyCommandAsync(
-            operationDescription,
-            args,
-            alpmEventService,
-            lockoutService,
-            genericQuestionService);
     }
 }
