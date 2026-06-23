@@ -16,6 +16,7 @@ namespace Shelly.Gtk.Windows.AUR;
 
 public class AurRemove(
     IPrivilegedOperationService privilegedOperationService,
+    IUnprivilegedOperationService unprivilegedOperationService,
     ILockoutService lockoutService,
     IConfigService configService,
     IGenericQuestionService genericQuestionService,
@@ -304,9 +305,9 @@ public class AurRemove(
     {
         try
         {
-            var packages = await privilegedOperationService.GetAurInstalledPackagesAsync(_showHiddenCheck.Active);
+            var packages = await unprivilegedOperationService.GetAurInstalledPackagesAsync(_showHiddenCheck.Active);
             ct.ThrowIfCancellationRequested();
-            Console.WriteLine($@"[DEBUG_LOG] Loaded {packages.Count} installed packages");
+            Console.WriteLine($"[DEBUG_LOG] Loaded {packages.Count} installed packages");
 
             GLib.Functions.IdleAdd(0, () =>
             {

@@ -979,12 +979,12 @@ public sealed class PackageInstall(
 
             ct.ThrowIfCancellationRequested();
 
-            var packages = await privilegedOperationService.GetAvailablePackagesAsync(_showHiddenCheck.Active);
+            var packages = await unprivilegedOperationService.GetAvailablePackagesAsync(_showHiddenCheck.Active);
             _groups = packages.SelectMany(x => x.Groups).Distinct().ToList();
             _groups.Insert(0, T("Any"));
 
             ct.ThrowIfCancellationRequested();
-            var installedPackages = await privilegedOperationService.GetInstalledPackagesAsync();
+            var installedPackages = await unprivilegedOperationService.GetInstalledPackagesAsync();
             _installedPackageNames = new HashSet<string>(installedPackages.Select(x => x.Name));
             installedPackages.Clear();
             installedPackages.TrimExcess();

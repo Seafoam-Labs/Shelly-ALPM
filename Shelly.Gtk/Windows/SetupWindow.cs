@@ -15,7 +15,7 @@ namespace Shelly.Gtk.Windows;
 public sealed class SetupWindow(
     IConfigService configService,
     IPrivilegedOperationService privilegedOperationService,
-    IUnprivilegedOperationService unPrivilegedOperationService,
+    IUnprivilegedOperationService unprivilegedOperationService,
     ILockoutService lockoutService,
     IGenericQuestionService genericQuestionService) : IShellyWindow
 {
@@ -87,7 +87,7 @@ public sealed class SetupWindow(
                 if (trayAutoCheck.Active)
                     try
                     {
-                        await unPrivilegedOperationService.AddSystemdServiceTray(Settings.TrayServiceContent,
+                        await unprivilegedOperationService.AddSystemdServiceTray(Settings.TrayServiceContent,
                             "shelly-notifications");
                     }
                     catch (Exception ex)
@@ -99,7 +99,7 @@ public sealed class SetupWindow(
                 if (!flatpakCheck.Active) return;
                 try
                 {
-                    var result = await privilegedOperationService.IsPackageInstalledOnMachine("flatpak");
+                    var result = await unprivilegedOperationService.IsPackageInstalledOnMachine("flatpak");
                     if (result) return;
 
                     lockoutService.Show(T("Installing flatpak..."));

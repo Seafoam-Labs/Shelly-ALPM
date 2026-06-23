@@ -382,10 +382,10 @@ public sealed class ShellySearch(
 
     private async Task<List<MetaPackageModel>> LoadStandardPackagesAsync(string query)
     {
-        var installed = await privilegedOperationService.GetInstalledPackagesAsync();
+        var installed = await unprivilegedOperationService.GetInstalledPackagesAsync();
         var installedNames = installed.Select(p => p.Name).ToHashSet();
 
-        var available = await privilegedOperationService.SearchPackagesAsync(query);
+        var available = await unprivilegedOperationService.SearchPackagesAsync(query);
         return available
             .Select(y => new MetaPackageModel(
                 y.Name,
@@ -403,10 +403,10 @@ public sealed class ShellySearch(
 
     private async Task<List<MetaPackageModel>> LoadAurPackagesAsync(string query)
     {
-        var installed = await privilegedOperationService.GetAurInstalledPackagesAsync();
+        var installed = await unprivilegedOperationService.GetAurInstalledPackagesAsync();
         var installedNames = installed.Select(p => p.Name).ToHashSet();
 
-        var available = await privilegedOperationService.SearchAurPackagesAsync(query);
+        var available = await unprivilegedOperationService.SearchAurPackagesAsync(query);
         return available
             .Select(y => new MetaPackageModel(
                 y.Name,

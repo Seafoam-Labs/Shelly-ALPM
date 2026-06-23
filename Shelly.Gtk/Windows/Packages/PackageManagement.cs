@@ -22,6 +22,7 @@ namespace Shelly.Gtk.Windows.Packages;
 
 public sealed class PackageManagement(
     IPrivilegedOperationService privilegedOperationService,
+    IUnprivilegedOperationService unprivilegedOperationService,
     ILockoutService lockoutService,
     IConfigService configService,
     IGenericQuestionService genericQuestionService,
@@ -300,6 +301,7 @@ public sealed class PackageManagement(
     {
         using var removeLocal = new RemoveLocal(
             privilegedOperationService,
+            unprivilegedOperationService,
             lockoutService,
             configService,
             genericQuestionService,
@@ -1017,7 +1019,7 @@ public sealed class PackageManagement(
 
         try
         {
-            var packages = await privilegedOperationService.GetInstalledPackagesAsync(_showHiddenCheck.Active);
+            var packages = await unprivilegedOperationService.GetInstalledPackagesAsync(_showHiddenCheck.Active);
             _groups = packages.SelectMany(x => x.Groups).Distinct().ToList();
             _groups.Insert(0, T("Any"));
             _installedPackageNames = new HashSet<string>(packages.Select(x => x.Name));
@@ -1218,7 +1220,7 @@ public sealed class PackageManagement(
             List<DowngradeOptionDto> options;
             try
             {
-                options = await privilegedOperationService.GetDowngradeOptionsAsync(packageName);
+                options = await unprivilegedOperationService.GetDowngradeOptionsAsync(packageName);
             }
             catch (Exception e)
             {

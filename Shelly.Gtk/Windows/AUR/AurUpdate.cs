@@ -15,6 +15,7 @@ namespace Shelly.Gtk.Windows.AUR;
 
 public class AurUpdate(
     IPrivilegedOperationService privilegedOperationService,
+    IUnprivilegedOperationService unprivilegedOperationService,
     ILockoutService lockoutService,
     IConfigService configService,
     IGenericQuestionService genericQuestionService,
@@ -334,9 +335,9 @@ public class AurUpdate(
     {
         try
         {
-            var packages = await privilegedOperationService.GetAurUpdatePackagesAsync(_showHiddenCheck.Active);
+            var packages = await unprivilegedOperationService.GetAurUpdatePackagesAsync(_showHiddenCheck.Active);
             ct.ThrowIfCancellationRequested();
-            Console.WriteLine($@"[DEBUG_LOG] {packages.Count} AUR packages for update.");
+            Console.WriteLine($"[DEBUG_LOG] {packages.Count} AUR packages for update.");
 
             GLib.Functions.IdleAdd(0, () =>
             {

@@ -18,6 +18,7 @@ namespace Shelly.Gtk.Windows.AUR;
 
 public class AurInstall(
     IPrivilegedOperationService privilegedOperationService,
+    IUnprivilegedOperationService unprivilegedOperationService,
     ILockoutService lockoutService,
     IPkgBuildService pkgBuildService,
     IConfigService configService,
@@ -379,13 +380,13 @@ public class AurInstall(
 
         if (!string.IsNullOrWhiteSpace(_searchText))
         {
-            var result = await privilegedOperationService.SearchAurPackagesAsync(_searchText);
+            var result = await unprivilegedOperationService.SearchAurPackagesAsync(_searchText);
             _searchForPackageLabel.Visible = false;
             ct.ThrowIfCancellationRequested();
 
             Console.WriteLine($"[DEBUG_LOG] Search result: {result.Count}");
 
-            var installedPackages = await privilegedOperationService.GetInstalledPackagesAsync();
+            var installedPackages = await unprivilegedOperationService.GetInstalledPackagesAsync();
             var installedNames = new HashSet<string>(installedPackages.Select(p => p.Name));
             installedPackages.Clear();
             installedPackages.TrimExcess();

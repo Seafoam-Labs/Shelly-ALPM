@@ -639,7 +639,7 @@ public sealed class Settings(
 
     private async Task HandleFlatpakMissingAsync(Switch sw, Action<bool> updateAction)
     {
-        var result = await privilegedOperationService.IsPackageInstalledOnMachine("flatpak");
+        var result = await unprivilegedOperationService.IsPackageInstalledOnMachine("flatpak");
 
         if (!result)
         {

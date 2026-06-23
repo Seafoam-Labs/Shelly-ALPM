@@ -16,6 +16,7 @@ namespace Shelly.Gtk.Windows;
 
 public sealed class Recommend(
     IPrivilegedOperationService privilegedOperationService,
+    IUnprivilegedOperationService unprivilegedOperationService,
     IGenericQuestionService genericQuestionService,
     ILockoutService lockoutService,
     IIconResolverService iconResolverService) : IShellyWindow, IReloadable
@@ -107,8 +108,8 @@ public sealed class Recommend(
                 return false;
             });
 
-            var alpmPackages = await privilegedOperationService.GetAvailablePackagesAsync();
-            var installedPackages = await privilegedOperationService.GetInstalledPackagesAsync();
+            var alpmPackages = await unprivilegedOperationService.GetAvailablePackagesAsync();
+            var installedPackages = await unprivilegedOperationService.GetInstalledPackagesAsync();
 
             var response = await Client.GetAsync("https://www.seafoam-labs.org/recommend.json", ct);
             response.EnsureSuccessStatusCode();

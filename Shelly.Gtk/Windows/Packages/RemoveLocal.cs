@@ -10,6 +10,7 @@ namespace Shelly.Gtk.Windows.Packages;
 
 public sealed class RemoveLocal(
     IPrivilegedOperationService privilegedOperationService,
+    IUnprivilegedOperationService unprivilegedOperationService,
     ILockoutService lockoutService,
     IConfigService configService,
     IGenericQuestionService genericQuestionService,
@@ -184,7 +185,7 @@ public sealed class RemoveLocal(
     {
         try
         {
-            var packages = await privilegedOperationService.GetLocalInstalledPackagesAsync();
+            var packages = await unprivilegedOperationService.GetLocalInstalledPackagesAsync();
             ct.ThrowIfCancellationRequested();
             Functions.IdleAdd(0, () =>
             {

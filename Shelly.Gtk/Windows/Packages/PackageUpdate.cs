@@ -827,7 +827,7 @@ public class PackageUpdate(
         {
             var packages =
                 await unprivilegedOperationService.CheckForStandardApplicationUpdates(_showHiddenCheck.Active);
-            var installedPackages = await privilegedOperationService.GetInstalledPackagesAsync();
+            var installedPackages = await unprivilegedOperationService.GetInstalledPackagesAsync();
             _installedPackageNames = new HashSet<string>(installedPackages.Select(x => x.Name));
             ct.ThrowIfCancellationRequested();
             GLib.Functions.IdleAdd(0, () =>
