@@ -206,7 +206,7 @@ public class UnprivilegedOperationService(
 
     public async Task<SyncModel> CheckForApplicationUpdates()
     {
-        return await ExecuteJsonCommandAsync<SyncModel>("check application updates",
+        return await ExecuteJsonCommandLastAsync<SyncModel>("check application updates",
             () => RunShellyCommandAsync("check-updates", "-a", "-l"));
     }
 
@@ -275,14 +275,29 @@ public class UnprivilegedOperationService(
         packageUpdateNotifier.NotifyPackagesUpdated();
     }
 
-    private static async Task<T> ExecuteJsonCommandAsync<T>(
+    private static Task<T> ExecuteJsonCommandLastAsync<T>(
         string operationName,
         Func<Task<UnprivilegedOperationResult>> executeCommand) where T : new()
+    {
+        return ExecuteJsonCommandAsync<T>(operationName, executeCommand, JsonPackFrame.TryDecodeLast);
+    }
+
+    private static Task<T> ExecuteJsonCommandAsync<T>(
+        string operationName,
+        Func<Task<UnprivilegedOperationResult>> executeCommand) where T : new()
+    {
+        return ExecuteJsonCommandAsync<T>(operationName, executeCommand, JsonPackFrame.TryDecode);
+    }
+
+    private static async Task<T> ExecuteJsonCommandAsync<T>(
+        string operationName,
+        Func<Task<UnprivilegedOperationResult>> executeCommand,
+        TryDecode<T> decode) where T : new()
     {
         var result = await executeCommand();
         if (!result.Success) return new T();
 
-        if (JsonPackFrame.TryDecode<T>(result.Output, out var framed) && framed is not null)
+        if (decode(result.Output, out var framed) && framed is not null)
             return framed;
 
         Console.WriteLine($"Failed to decode {operationName}");
@@ -301,4 +316,6 @@ public class UnprivilegedOperationService(
             ExitCode = result.ExitCode
         };
     }
+
+    private delegate bool TryDecode<T>(string input, out T? output);
 }
