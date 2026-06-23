@@ -2,16 +2,18 @@ using System.Diagnostics;
 using System.Text;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services.Wire;
+using Tmds.DBus.Protocol;
 
 namespace Shelly.Gtk.Services;
 
-public class ProcessExecutor(
+public sealed class ProcessExecutor(
     ICredentialManager credentialManager,
     IAlpmEventService eventService,
     ILockoutService lockoutService,
     IGenericQuestionService questionService) : IProcessExecutor
 {
     private readonly string _cliPath = CliPathResolver.FindCliPath();
+    private readonly Lazy<Task<PrivilegeEscalator>> _escalator = new(DetectEscalatorAsync);
 
     public async Task<OperationResult> RunShellyCommandAsync(string[] args)
     {
@@ -135,7 +137,7 @@ public class ProcessExecutor(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
 
-        var chosen = DetectEscalatorAsync();
+        var chosen = await _escalator.Value;
         return chosen switch
         {
             PrivilegeEscalator.Pkexec => await RunPrivilegedShellyPkexecAsync(args),
@@ -172,8 +174,7 @@ public class ProcessExecutor(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
 
-        var chosen = DetectEscalatorAsync();
-
+        var chosen = await _escalator.Value;
         return chosen switch
         {
             PrivilegeEscalator.Sudo => await RunSudoAsync(description, args),
@@ -239,9 +240,9 @@ public class ProcessExecutor(
         return await RunPrivilegedShellyAsync("pkexec", fullArgs.ToArray(), null, false);
     }
 
-    private static PrivilegeEscalator DetectEscalatorAsync()
+    private static async Task<PrivilegeEscalator> DetectEscalatorAsync()
     {
-        if (IsCommandOnPath("pkexec")) return PrivilegeEscalator.Pkexec;
+        if (IsCommandOnPath("pkexec") && await IsPolkitAvailableAsync()) return PrivilegeEscalator.Pkexec;
         if (IsCommandOnPath("sudo")) return PrivilegeEscalator.Sudo;
         return PrivilegeEscalator.None;
     }
@@ -265,6 +266,15 @@ public class ProcessExecutor(
             Console.WriteLine($"Error checking if command {command} is available: {ex.Message}");
             return false;
         }
+    }
+
+    private static async Task<bool> IsPolkitAvailableAsync()
+    {
+        using DBusConnection systemConnection = new(DBusAddress.System!);
+        await systemConnection.ConnectAsync();
+
+        var services = await systemConnection.ListServicesAsync();
+        return services.Contains("org.freedesktop.PolicyKit1");
     }
 
     private async Task<OperationResult> RunSudoAsync(string description, string[] args)

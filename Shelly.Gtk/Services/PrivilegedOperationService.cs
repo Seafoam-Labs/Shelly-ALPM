@@ -153,12 +153,6 @@ public class PrivilegedOperationService(
         return result;
     }
 
-    public async Task<List<AlpmPackageDto>> SearchPackagesAsync(string query)
-    {
-        return await ExecuteJsonCommandAsync<AlpmPackageDto>("search packages",
-            () => processExecutor.RunShellyCommandAsync(["query", "--available", $"\"{query}\"", "--no-confirm"]));
-    }
-
     public async Task<List<PackageBuild>> GetAurPackageBuild(IEnumerable<string> packages)
     {
         var args = new List<string> { "aur", "search-pkgbuild" };
@@ -173,6 +167,12 @@ public class PrivilegedOperationService(
     {
         return await ExecuteJsonCommandAsync<AlpmPackageUpdateDto>("updates",
             () => processExecutor.RunPrivilegedShellyCommandAsync("Check for Updates", ["list-updates"]));
+    }
+
+    public async Task<List<AlpmPackageDto>> SearchPackagesAsync(string query)
+    {
+        return await ExecuteJsonCommandAsync<AlpmPackageDto>("search packages",
+            () => processExecutor.RunShellyCommandAsync(["query", "--available", $"\"{query}\"", "--no-confirm"]));
     }
 
     public async Task<List<AlpmPackageDto>> GetAvailablePackagesAsync(bool showHidden = false)
