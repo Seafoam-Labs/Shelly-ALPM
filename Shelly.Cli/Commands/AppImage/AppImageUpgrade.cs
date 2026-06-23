@@ -2,8 +2,10 @@ using System.CommandLine;
 using PackageManager.AppImage;
 using PackageManager.AppImage.AppImageV2;
 using Shelly.Cli.Interactions;
+using Shelly.Cli.Outputs;
 using Shelly.Utilities;
 using Shelly.Utilities.Enums;
+using Shelly.Utilities.Eventing;
 
 namespace Shelly.Cli.Commands.AppImage;
 
@@ -26,36 +28,14 @@ public partial class AppImageUpgrade : GlobalSettingsCommand
 
     public override async ValueTask ExecuteAsync(IShellyConsole console)
     {
-        var installPath = ConfigManager.ReadConfig().AppImageInstallPath ?? XdgPaths.BinHome();
-        var manager = new AppImageManagerV2(installPath);
-
         if (UiMode)
         {
-            var config = ConfigManager.ReadConfig();
-            manager.MessageEvent += (_, e) => UiFrames.Info(e.Message);
-            manager.ErrorEvent += (_, e) => UiFrames.Error(e.Error);
-            manager.ProgressEvent += (sender, e) =>
-            {
-                var sizeDisplay = Enum.TryParse<SizeDisplay>(config.FileSizeDisplay, true, out var parsed)
-                    ? parsed
-                    : SizeDisplay.Bytes;
-
-                var totalStr = e.TotalBytes.HasValue
-                    ? SizeUtilities.FormatSize(sizeDisplay, e.TotalBytes.Value)
-                    : "unknown";
-                var downloadedStr = SizeUtilities.FormatSize(sizeDisplay, e.DownloadedBytes);
-                var progressStr = e.ProgressPercentage.HasValue ? $"{e.ProgressPercentage.Value:F0}%" : "N/A";
-
-                UiFrames.Info($"Updating {e.AppName}: {progressStr} ({downloadedStr}/{totalStr})");
-            };
+            await ExecuteUiMode();
+            return;
         }
-        else
-        {
-            manager.MessageEvent += (_, e) =>
-                console.WriteLine(AnsiUtilities.Colorize($"[INFO]{e.Message}", ConsoleColor.Blue));
-            manager.ErrorEvent += (_, e) => console.WriteLine(AnsiUtilities.Colorize($"[ERROR] {e.Error}", ConsoleColor.Red));
-            //not sub to progress events because cli rewrite.
-        }
+
+        var installPath = ConfigManager.ReadConfig().AppImageInstallPath ?? XdgPaths.BinHome();
+        var manager = new AppImageManagerV2(installPath);
 
         var updates = await manager.CheckForAppImageUpdates();
 
@@ -67,13 +47,20 @@ public partial class AppImageUpgrade : GlobalSettingsCommand
 
         foreach (var update in updates)
         {
-            console.WriteLine(AnsiUtilities.Colorize($"Updating {update.Name} to {update.Version}", ConsoleColor.Green));
-            await manager.RunUpdate(update);
+            console.WriteLine(AnsiUtilities.Colorize($"Updating {update.Name} to {update.Version}",
+                ConsoleColor.Green));
+            await AppImageSinglePaneOutput.Output(console, manager, x => x.RunUpdate(update), NoConfirm);
         }
     }
 
-    public async override ValueTask ExecuteUiMode()
+    public override async ValueTask ExecuteUiMode()
     {
-        //Not Implemented
+        var installPath = ConfigManager.ReadConfig().AppImageInstallPath ?? XdgPaths.BinHome();
+        var manager = new AppImageManagerV2(installPath);
+        var updates = await manager.CheckForAppImageUpdates();
+        foreach (var update in updates)
+        {
+            await UiModeOutput.Run(manager, x => x.RunUpdate(update));
+        }
     }
 }

@@ -4,7 +4,7 @@ namespace Shelly.Cli;
 
 public static class RootElevator
 {
-    public static void EnsureRootExectuion()
+    public static void EnsureRootExectuion(params string[] extraArgs)
     {
         if (Environment.UserName.Equals("root", StringComparison.OrdinalIgnoreCase)) return;
 
@@ -19,6 +19,7 @@ public static class RootElevator
             UseShellExecute = false
         };
         foreach (var arg in args.Skip(1)) process.StartInfo.ArgumentList.Add(arg);
+        foreach (var extra in extraArgs) process.StartInfo.ArgumentList.Add(extra);
 
         process.Start();
         process.WaitForExit();

@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Text.Json;
 using PackageManager.Flatpak;
 using Shelly.Cli.Interactions;
 
@@ -26,9 +27,15 @@ public class List : GlobalSettingsCommand
         var manager = new FlatpakManager();
         var packages = manager.SearchInstalled().OrderBy(p => p.Id).ToList();
 
-        if (UiMode || JsonOutput)
+        if (UiMode)
         {
             JsonPackFrame.WriteToStdout(packages);
+            return ValueTask.CompletedTask;
+        }
+
+        if (JsonOutput)
+        {
+            console.WriteLine(JsonSerializer.Serialize(packages, ShellyCliJsonContext.Default.ListFlatpakPackageDto));
             return ValueTask.CompletedTask;
         }
 

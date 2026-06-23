@@ -430,7 +430,7 @@ public sealed class ShellySearch(
         var installedIds = (await unprivilegedOperationService.ListFlatpakPackages())
             .Select(y => y.Id).ToHashSet();
 
-        var allApps = await unprivilegedOperationService.ListAppstreamFlatpak(ct);
+        var allApps = await unprivilegedOperationService.ListAppstreamFlatpak();
         return allApps
             .Where(app => app.Type != "addon")
             .Select(app => new { Package = app, Score = MatchObject(query, app.Name, app.Summary) })

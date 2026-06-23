@@ -95,3 +95,11 @@ public enum FlatpakEvents
     Error,
     Success
 }
+
+public enum AppImageEvents
+{
+    Information,
+    Warning,
+    Error,
+    Success
+}

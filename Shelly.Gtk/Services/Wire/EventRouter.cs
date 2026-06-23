@@ -65,6 +65,13 @@ internal sealed class EventRouter
             case FlatpakStatusEvent e:
                 Log($"[STATUS] {e.Status}");
                 break;
+            case AppImageProgressEvent e:
+                Log($"[PROGRESS] {e.Status} {e.Percentage}%");
+                break;
+            case AppImageStatusEvent e:
+                var msg = string.IsNullOrEmpty(e.Message) ? e.Status.ToString() : e.Message;
+                Log($"[STATUS] {msg}");
+                break;
         }
         return true;
     }

@@ -468,7 +468,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         }
 
         // If there's only one option, skip and use first one directly as all options result in the same behavior.
-        if (!(providerOptions.DistinctBy(p => p.Name).Count() > 1))
+        if (providerOptions.DistinctBy(p => p.Name).Count() <= 1)
         {
             selectQuestion.UseIndex = 0;
             Marshal.StructureToPtr(selectQuestion, questionPtr, false);
@@ -900,14 +900,14 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
         // This should always exist, but just in case
         Directory.CreateDirectory(syncDirectory);
 
-        var downloadTasks = databaseDownloads.Select(db => Task.Run(() =>
+        var downloadTasks = databaseDownloads.Select(db => Task.Run(async () =>
         {
             var dbFileName = $"{db.dbName}.db";
             var url = $"{db.serverUrl.TrimEnd('/')}/{dbFileName}";
             var localPath = Path.Combine(syncDirectory, dbFileName);
             InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.DebugOutput,
                 $"Downloading {url} to {localPath}"));
-            PerformDownload(url, localPath);
+            await PerformDownload(url, localPath);
         }));
 
         Task.WhenAll(downloadTasks).Wait();

@@ -269,7 +269,7 @@ public class DBusMenuHandler(DBusConnection connection) : IPathMethodHandler
                 AppRunner.LaunchAppIfNotRunning("%U");
                 break;
             case MenuEnum.UpdatePackages:
-                await AppRunner.SpawnTerminalWithCommandAsync("shelly -a");
+                await AppRunner.SpawnTerminalWithCommandAsync("shelly");
                 var postUpdateUpdates = await new UpdateService(this).CheckForUpdates();
                 if (OnUpdateStatusChanged != null)
                 {

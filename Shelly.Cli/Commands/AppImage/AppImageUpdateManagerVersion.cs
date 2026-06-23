@@ -1,7 +1,9 @@
 using System.CommandLine;
 using PackageManager.AppImage.AppImageV2;
 using Shelly.Cli.Interactions;
+using Shelly.Cli.Outputs;
 using Shelly.Utilities;
+using Shelly.Utilities.Eventing;
 
 namespace Shelly.Cli.Commands.AppImage;
 
@@ -27,39 +29,27 @@ public partial class AppImageUpdateManagerVersion : GlobalSettingsCommand
         RootElevator.EnsureRootExectuion();
 
         var installPath = ConfigManager.ReadConfig().AppImageInstallPath ?? XdgPaths.BinHome();
-        var manger = new AppImageManagerV2(installPath);
-        if (UiMode)
-        {
-            manger.MessageEvent += (_, e) => UiFrames.Info(e.Message);
-            manger.ErrorEvent += (_, e) => UiFrames.Error(e.Error);
-        }
-        else
-        {
-            manger.MessageEvent += (_, e) =>
-            {
-                console.WriteLine(AnsiUtilities.Colorize($"[INFO]{e.Message}", ConsoleColor.Blue));
-            };
-            manger.ErrorEvent += (_, e) =>
-            {
-                console.WriteLine(AnsiUtilities.Colorize($"[ERROR]{e.Error}", ConsoleColor.Red));
-            };
-        }
-
-        var result = await manger.MigrateAppImages();
+        var manager = new AppImageManagerV2(installPath);
 
         if (UiMode)
-            UiFrames.TxFinish(result, "AppImage manager version updated successfully.",
-                "AppImage manager version updated unsuccessfully.");
-        else
         {
-            console.WriteLine(result
-                ? AnsiUtilities.Colorize("AppImage manager version updated successfully.", ConsoleColor.Green)
-                : AnsiUtilities.Colorize("AppImage manager version updated unsuccessfully.", ConsoleColor.Red));
+            await ExecuteUiMode();
+            return;
         }
+        
+        var result = await AppImageSinglePaneOutput.Output(console, manager, x => x.MigrateAppImages());
+
+        console.WriteLine(result
+            ? AnsiUtilities.Colorize("AppImage manager version updated successfully.", ConsoleColor.Green)
+            : AnsiUtilities.Colorize("AppImage manager version updated unsuccessfully.", ConsoleColor.Red));
     }
 
     public override async ValueTask ExecuteUiMode()
     {
-        //Unneeded as the command is not interactive.
+        var installPath = ConfigManager.ReadConfig().AppImageInstallPath ?? XdgPaths.BinHome();
+        var manager = new AppImageManagerV2(installPath);
+        var result = await UiModeOutput.Run(manager, x => x.MigrateAppImages());
+        UiFrames.TxFinish(result, "AppImage manager version updated successfully.",
+            "AppImage manager version updated unsuccessfully.");
     }
 }

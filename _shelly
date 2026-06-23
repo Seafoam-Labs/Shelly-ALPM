@@ -1,0 +1,808 @@
+#compdef shelly
+# Zsh completions for shelly
+# Auto-generated from the Shelly CLI command structure. Do not edit by hand.
+
+_shelly() {
+    local line state
+    _arguments -C \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]' \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            local -a subcommands
+            subcommands=(
+                'query:Query repositories and packages'
+                'install:Install packages'
+                'upgrade:Perform a full system upgrade'
+                'upgrade-all:Upgrade all packages from every source (repo, AUR, Flatpak, AppImage)'
+                'downgrade:Downgrade a package'
+                'ignore:Manage ignored packages'
+                'news:Show ArchLinux news'
+                'cache-clean:Clean the local cache'
+                'check-updates:Check for package updates'
+                'list-updates:List standard packages that have available updates'
+                'export:Export the current system state to a file'
+                'fix-permissions:Fix permissions for Shelly directories'
+                'mark:Mark a package as explicit or a dependency'
+                'purify:Remove corrupted/orphaned packages'
+                'remove:Remove packages (repo or local binary)'
+                'sync:Syncs the system with the current state'
+                'update:Update specific packages'
+                'docs:Generate Markdown reference documentation for the Shelly CLI'
+                'appimage:Manage AppImages'
+                'config:Manage shelly configuration'
+                'aur:Manage AUR packages'
+                'keyring:Manage the pacman keyring'
+                'flatpak:Manage flatpak'
+            )
+            _describe 'command' subcommands
+            ;;
+        args)
+            case $line[1] in
+                query) _shelly_query ;;
+                install) _shelly_install ;;
+                upgrade) _shelly_upgrade ;;
+                upgrade-all) _shelly_upgrade_all ;;
+                downgrade) _shelly_downgrade ;;
+                ignore) _shelly_ignore ;;
+                news) _shelly_news ;;
+                cache-clean) _shelly_cache_clean ;;
+                check-updates) _shelly_check_updates ;;
+                list-updates) _shelly_list_updates ;;
+                export) _shelly_export ;;
+                fix-permissions) _shelly_fix_permissions ;;
+                mark) _shelly_mark ;;
+                purify) _shelly_purify ;;
+                remove) _shelly_remove ;;
+                sync) _shelly_sync ;;
+                update) _shelly_update ;;
+                docs) _shelly_docs ;;
+                appimage) _shelly_appimage ;;
+                config) _shelly_config ;;
+                aur) _shelly_aur ;;
+                keyring) _shelly_keyring ;;
+                flatpak) _shelly_flatpak ;;
+            esac
+            ;;
+    esac
+}
+
+_shelly_query() {
+    _arguments \
+        '(--repos -r){--repos,-r}[List available repositories. This supercedes any other modifiers.]' \
+        '(--available -a){--available,-a}[Include available packages in the search]' \
+        '(--installed -i){--installed,-i}[Include installed packages in the search]' \
+        '(--local -l){--local,-l}[Include local packages in the search]' \
+        '(--take -t){--take,-t}[Number of results to return]:value:' \
+        '(--page -p){--page,-p}[Page number]:value:' \
+        '(--show-hidden -w){--show-hidden,-w}[Show hidden packages]' \
+        '(--detail --info -d){--detail,--info,-d}[Show detailed information for a single package]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_install() {
+    _arguments \
+        '(--build-deps -b){--build-deps,-b}[Install build dependencies]' \
+        '(--make-deps -m){--make-deps,-m}[Install make dependencies]' \
+        '(--no-deps -d){--no-deps,-d}[Install without checking/installing dependencies]' \
+        '(--upgrade -u){--upgrade,-u}[Upgrades the packages if they are already installed]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_upgrade() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_upgrade_all() {
+    _arguments \
+        '(--no-repo)--no-repo[Skip the standard repository (ALPM) upgrade]' \
+        '(--no-aur)--no-aur[Skip the AUR upgrade]' \
+        '(--no-flatpak)--no-flatpak[Skip the Flatpak upgrade]' \
+        '(--no-appimage)--no-appimage[Skip the AppImage upgrade]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_downgrade() {
+    _arguments \
+        '(--oldest -o){--oldest,-o}[Installs the oldest matched version (default newest)]' \
+        '(--ignore -i){--ignore,-i}[Add to IgnorePkg list]' \
+        '(--list-options -l){--list-options,-l}[List available downgrade versions]' \
+        '(--target -t){--target,-t}[Install a specific downgrade target by exact version or package filename]:value:' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_ignore() {
+    _arguments \
+        '(--list -l){--list,-l}[List ignored packages]' \
+        '(--add -a){--add,-a}[Add a package to the ignore list]' \
+        '(--remove -r){--remove,-r}[Remove a package from the ignore list]' \
+        '(--clear -c){--clear,-c}[Clear the ignore list]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_news() {
+    _arguments \
+        '(--all -a){--all,-a}[Show all news, not just news you havent seen before.]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_cache_clean() {
+    _arguments \
+        '(--keep -k){--keep,-k}[Keep the specified number of versions in the cache. Defaults to 3.]:value:' \
+        '(--uninstalled -i){--uninstalled,-i}[Remove only uninstalled packages from the cache.]' \
+        '(--dry-run -d){--dry-run,-d}[Show what would be removed.]' \
+        '(--cache-dir -c){--cache-dir,-c}[Path to the cache directory.]:value:' \
+        '(--target -t){--target,-t}[Remove only the specified packages from the cache.]:value:' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_check_updates() {
+    _arguments \
+        '(--aur -a){--aur,-a}[Check for AUR updates]' \
+        '(--flatpak -l){--flatpak,-l}[Check for Flatpak updates]' \
+        '(--count -c){--count,-c}[Returns the number of updates]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_list_updates() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_export() {
+    _arguments \
+        '(--name -a){--name,-a}[The name of the exported file]:value:' \
+        '(--output -o){--output,-o}[The default output location for the sync file]:value:' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_fix_permissions() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_mark() {
+    _arguments \
+        '(--explicit -e){--explicit,-e}[Mark the package as explicit]' \
+        '(--depends -d){--depends,-d}[Mark the package as a dependency]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_purify() {
+    _arguments \
+        '(--dry-run -d){--dry-run,-d}[Show what would be removed without removing it.]' \
+        '(--orphans -o){--orphans,-o}[Also remove orphaned dependencies.]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_remove() {
+    _arguments \
+        '(--cascade -c){--cascade,-c}[Removes all things the removed package(s) are dependent on that have no other uses]' \
+        '(--opt-deps -o){--opt-deps,-o}[Removes optional dependencies installed with the package, that dont depend on other packages]' \
+        '(--ripple -i){--ripple,-i}[Removes packages that depend on the package being removed]' \
+        '(--remove-config -r){--remove-config,-r}[Removes any files in your ~/.config that can be tied exclusively to the removed package(s). EXPERIMENTAL]' \
+        '(--local -l){--local,-l}[Force removal as a locally-installed binary package]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_sync() {
+    _arguments \
+        '(--force -f){--force,-f}[Force a sync]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_update() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_docs() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_appimage() {
+    local line state
+    _arguments -C \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]' \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            local -a subcommands
+            subcommands=(
+                'install:Install an AppImage'
+                'remove:Remove an AppImage'
+                'list:Lists all AppImages'
+                'upgrade:Upgrades all AppImages'
+                'sync-meta:Syncs meta data for an AppImage'
+                'list-updates:Find Updates for an AppImage'
+                'configure-updates:Configures the update settings for an AppImage'
+                'migrate-manager:Updates the AppImage manager version'
+            )
+            _describe 'command' subcommands
+            ;;
+        args)
+            case $line[1] in
+                install) _shelly_appimage_install ;;
+                remove) _shelly_appimage_remove ;;
+                list) _shelly_appimage_list ;;
+                upgrade) _shelly_appimage_upgrade ;;
+                sync-meta) _shelly_appimage_sync_meta ;;
+                list-updates) _shelly_appimage_list_updates ;;
+                configure-updates) _shelly_appimage_configure_updates ;;
+                migrate-manager) _shelly_appimage_migrate_manager ;;
+            esac
+            ;;
+    esac
+}
+
+_shelly_appimage_install() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_appimage_remove() {
+    _arguments \
+        '(--remove-config -c){--remove-config,-c}[Remove Config]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_appimage_list() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_appimage_upgrade() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_appimage_sync_meta() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_appimage_list_updates() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_appimage_configure_updates() {
+    _arguments \
+        '(--prerelease -p){--prerelease,-p}[Allow prerelease updates]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_appimage_migrate_manager() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_config() {
+    local line state
+    _arguments -C \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]' \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            local -a subcommands
+            subcommands=(
+                'get:Get a configuration value'
+                'set:Set a configuration value'
+                'list:List all configuration values'
+                'reset:Reset the configuration to defaults'
+                'parallel:Set the number of parallel downloads'
+            )
+            _describe 'command' subcommands
+            ;;
+        args)
+            case $line[1] in
+                get) _shelly_config_get ;;
+                set) _shelly_config_set ;;
+                list) _shelly_config_list ;;
+                reset) _shelly_config_reset ;;
+                parallel) _shelly_config_parallel ;;
+            esac
+            ;;
+    esac
+}
+
+_shelly_config_get() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_config_set() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_config_list() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_config_reset() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_config_parallel() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_aur() {
+    local line state
+    _arguments -C \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]' \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            local -a subcommands
+            subcommands=(
+                'install:Install AUR packages'
+                'install-version:Install a specific version of an AUR package'
+                'remove:Remove AUR packages'
+                'update:Rebuild and reinstall specific AUR packages'
+                'upgrade:Upgrade all out-of-date AUR packages'
+                'list:List installed AUR packages'
+                'list-updates:List AUR packages that have available updates'
+                'search:Search the Arch User Repository'
+                'search-pkgbuild:Fetch and display the PKGBUILD of AUR packages'
+            )
+            _describe 'command' subcommands
+            ;;
+        args)
+            case $line[1] in
+                install) _shelly_aur_install ;;
+                install-version) _shelly_aur_install_version ;;
+                remove) _shelly_aur_remove ;;
+                update) _shelly_aur_update ;;
+                upgrade) _shelly_aur_upgrade ;;
+                list) _shelly_aur_list ;;
+                list-updates) _shelly_aur_list_updates ;;
+                search) _shelly_aur_search ;;
+                search-pkgbuild) _shelly_aur_search_pkgbuild ;;
+            esac
+            ;;
+    esac
+}
+
+_shelly_aur_install() {
+    _arguments \
+        '(--build-deps -o){--build-deps,-o}[Install build dependencies only for the specified AUR packages]' \
+        '(--make-deps -m){--make-deps,-m}[Install make dependencies only for the specified AUR packages]' \
+        '(--chroot -c){--chroot,-c}[Build packages in a clean chroot environment using makechrootpkg]' \
+        '(--check)--check[Run the check() function during AUR package builds (disabled by default)]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_aur_install_version() {
+    _arguments \
+        '(--check)--check[Run the check() function during AUR package builds (disabled by default)]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_aur_remove() {
+    _arguments \
+        '(--cascade -c){--cascade,-c}[Removes all things the removed package(s) are dependent on that have no other uses]' \
+        '(--opt-deps -o){--opt-deps,-o}[Removes optional dependencies installed with the package, that dont depend on other packages]' \
+        '(--ripple -i){--ripple,-i}[Removes packages that depend on the package being removed]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_aur_update() {
+    _arguments \
+        '(--check)--check[Run the check() function during AUR package builds (disabled by default)]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_aur_upgrade() {
+    _arguments \
+        '(--check)--check[Run the check() function during AUR package builds (disabled by default)]' \
+        '(--singlepane)--singlepane[Render output as a single pacman-style linear stream]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_aur_list() {
+    _arguments \
+        '(--show-hidden)--show-hidden[Include hidden packages in the listing]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_aur_list_updates() {
+    _arguments \
+        '(--show-hidden)--show-hidden[Include hidden packages in the listing]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_aur_search() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_aur_search_pkgbuild() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_keyring() {
+    _arguments \
+        '(--keyserver)--keyserver[The keyserver to use]:value:' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak() {
+    local line state
+    _arguments -C \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]' \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            local -a subcommands
+            subcommands=(
+                'install:Install flatpak app'
+                'update:Update flatpak app'
+                'list:List installed flatpak apps'
+                'list-updates:List flatpak apps with updates'
+                'running:List running flatpak apps'
+                'repair:Repairs Flatpak Installation'
+                'uninstall:Remove flatpak app'
+                'run:Run flatpak app'
+                'kill:Kill running flatpak app'
+                'search:Search flatpak'
+                'sync-remote-appstream:Sync remote appstream'
+                'get-remote-appstream:Returns remote appstream json'
+                'upgrade:Upgrade all flatpak apps'
+                'list-remotes:Returns all remotes currently added'
+                'add-remotes:Adds a flatpak remote'
+                'remove-remotes:Removes a flatpak remote'
+                'install-ref-file:Installs flatpak app from ref file'
+                'install-bundle:Installs flatpak app from bundle file'
+                'app-remote-info:Get app remote info'
+            )
+            _describe 'command' subcommands
+            ;;
+        args)
+            case $line[1] in
+                install) _shelly_flatpak_install ;;
+                update) _shelly_flatpak_update ;;
+                list) _shelly_flatpak_list ;;
+                list-updates) _shelly_flatpak_list_updates ;;
+                running) _shelly_flatpak_running ;;
+                repair) _shelly_flatpak_repair ;;
+                uninstall) _shelly_flatpak_uninstall ;;
+                run) _shelly_flatpak_run ;;
+                kill) _shelly_flatpak_kill ;;
+                search) _shelly_flatpak_search ;;
+                sync-remote-appstream) _shelly_flatpak_sync_remote_appstream ;;
+                get-remote-appstream) _shelly_flatpak_get_remote_appstream ;;
+                upgrade) _shelly_flatpak_upgrade ;;
+                list-remotes) _shelly_flatpak_list_remotes ;;
+                add-remotes) _shelly_flatpak_add_remotes ;;
+                remove-remotes) _shelly_flatpak_remove_remotes ;;
+                install-ref-file) _shelly_flatpak_install_ref_file ;;
+                install-bundle) _shelly_flatpak_install_bundle ;;
+                app-remote-info) _shelly_flatpak_app_remote_info ;;
+            esac
+            ;;
+    esac
+}
+
+_shelly_flatpak_install() {
+    _arguments \
+        '(--user)--user[Install to user scope instead of system scope]' \
+        '(--remote -r){--remote,-r}[Remote to install from (e.g., flathub, flathub-beta)]:value:' \
+        '(--branch -b){--branch,-b}[Branch to install (e.g., stable, beta). Defaults to stable]:value:' \
+        '(--runtime)--runtime[Install as a runtime instead of an application]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_update() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_list() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_list_updates() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_running() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_repair() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_uninstall() {
+    _arguments \
+        '(--remove-unused -r){--remove-unused,-r}[Remove unused dependencies after uninstalling]' \
+        '(--config -c){--config,-c}[Removes flatpak configuration for removed app]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_run() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_kill() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_search() {
+    _arguments \
+        '(--limit -l){--limit,-l}[Maximum number of search results to display per page]:value:' \
+        '(--page -p){--page,-p}[Page number for paginated results (starts at 1)]:value:' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_sync_remote_appstream() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_get_remote_appstream() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_upgrade() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_list_remotes() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_add_remotes() {
+    _arguments \
+        '(--remote-url -u){--remote-url,-u}[Flatpak remote URL]:value:' \
+        '(--system -s){--system,-s}[Add the remote system-wide]' \
+        '(--gpg-verify -g){--gpg-verify,-g}[Enable GPG verification for the remote]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_remove_remotes() {
+    _arguments \
+        '(--system -s){--system,-s}[Remove the remote system-wide]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_install_ref_file() {
+    _arguments \
+        '(--system -s){--system,-s}[Install system-wide]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_install_bundle() {
+    _arguments \
+        '(--system -s){--system,-s}[Install system-wide]' \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly_flatpak_app_remote_info() {
+    _arguments \
+        '(--no-confirm -n){--no-confirm,-n}[Disable confirmation prompts]' \
+        '(--ui-mode -U){--ui-mode,-U}[Enable UI mode]' \
+        '(--json -j){--json,-j}[Output results in JSON format for scripting.]' \
+        '(--verbose -v){--verbose,-v}[Enable verbose logging.]'
+}
+
+_shelly "$@"

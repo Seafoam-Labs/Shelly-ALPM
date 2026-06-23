@@ -5,6 +5,7 @@ using Gtk;
 using Shelly.Gtk.Helpers;
 using Shelly.Gtk.Services;
 using Shelly.Gtk.UiModels;
+using Shelly.Utilities.Enums;
 using static Shelly.GTK.Resources.Translations;
 using Functions = GLib.Functions;
 using Task = System.Threading.Tasks.Task;
@@ -75,6 +76,9 @@ public sealed class SetupWindow(
             config.TrayAutoStart = trayAutoCheck.Active;
             config.NewInstallInitSettings = true;
             config.NewInstall = false;
+            config.PackageInstallView = ViewType.Grid;
+            config.PackageUpdateView = ViewType.Grid;
+            config.PackageManageView = ViewType.Grid;
 
             try
             {

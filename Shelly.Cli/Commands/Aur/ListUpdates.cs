@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Text.Json;
 using PackageManager.Aur;
 using Shelly.Cli.Interactions;
 using Shelly.Utilities;
@@ -44,9 +45,15 @@ public class ListUpdates : GlobalSettingsCommand
         var updates = await manager.GetPackagesNeedingUpdate();
         var sorted = updates.OrderBy(p => p.Name).ToList();
 
-        if (UiMode || JsonOutput)
+        if (UiMode)
         {
             JsonPackFrame.WriteToStdout(sorted);
+            return;
+        }
+
+        if (JsonOutput)
+        {
+            console.WriteLine(JsonSerializer.Serialize(sorted, ShellyCliJsonContext.Default.ListAurUpdateDto));
             return;
         }
 

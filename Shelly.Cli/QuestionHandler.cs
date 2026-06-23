@@ -1,4 +1,3 @@
-using System.Text.Json;
 using PackageManager.Alpm;
 using PackageManager.Alpm.Questions;
 using PackageManager.Aur;
@@ -147,21 +146,14 @@ public static class QuestionHandler
                 return;
             }
 
-            Console.Error.WriteLine($"[ALPM_SELECT_OPTDEPS]{question.DependencyName}");
-            for (var i = 0; i < question.ProviderOptions.Count; i++)
-            {
-                var o = question.ProviderOptions[i];
-                var desc = o.Description ?? string.Empty;
-                var installed = o.IsInstalled ? "1" : "0";
-                var selected = o.IsSelected ? "1" : "0";
-                Console.Error.WriteLine(
-                    $"[ALPM_OPTDEPS_OPTION]{i}\u001F{o.Name}\u001F{desc}\u001F{installed}\u001F{selected}");
-            }
-
-            Console.Error.WriteLine("[ALPM_OPTDEPS_END]");
-            Console.Error.Flush();
-            var input = Console.ReadLine();
-            var selectedIndices = ParseSelectedIndices(input);
+            var id = Guid.NewGuid().ToString("N");
+            var options = question.ProviderOptions
+                .Select((o, i) => new ProviderOptionDto(i, o.Name, o.Description, o.IsInstalled, o.IsSelected))
+                .ToList();
+            JsonPackFrame.WriteToStdout<QuestionRequest>(new SelectOptDepsQuestionDto(
+                id, question.DependencyName ?? string.Empty, options));
+            var answer = ReadAnswer<SelectOptDepsAnswer>(id);
+            var selectedIndices = new HashSet<int>(answer.SelectedIndices);
             var uiSelected = question.ProviderOptions
                 .Select((o, i) => o with { IsSelected = selectedIndices.Contains(i) && !o.IsInstalled })
                 .ToList();
@@ -192,19 +184,6 @@ public static class QuestionHandler
         question.SetResponse(new QuestionResponse(0, selectedOptions));
     }
 
-    private static HashSet<int> ParseSelectedIndices(string? input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return [];
-        try
-        {
-            var arr = JsonSerializer.Deserialize(input!, ShellyCliJsonContext.Default.Int32Array);
-            return arr is null ? new HashSet<int>() : new HashSet<int>(arr);
-        }
-        catch
-        {
-            return [];
-        }
-    }
 
     private static void HandleProviderSelection(AlpmQuestionEventArgs question, bool uiMode = false,
         bool noConfirm = false)
@@ -220,27 +199,14 @@ public static class QuestionHandler
                 return;
             }
 
-            Console.Error.WriteLine($"[ALPM_SELECT_PROVIDER]{question.DependencyName}");
-            for (int i = 0; i < question.ProviderOptions.Count; i++)
-            {
-                Console.Error.WriteLine($"[ALPM_PROVIDER_OPTION]{i}\u001F{question.ProviderOptions[i].Name}");
-            }
-
-            Console.Error.WriteLine("[ALPM_PROVIDER_END]");
-            Console.Error.Flush();
-            var input = Console.ReadLine();
-            if (int.TryParse(input?.Trim(), out var idx))
-            {
-                question.SetResponse(new QuestionResponse(idx, question.ProviderOptions));
-            }
-            else
-            {
-                // If input is empty or invalid, we don't call SetResponse
-                // The underlying ALPM logic should decide how to handle timeout or abort
-                // But in UI mode, we usually expect a response
-                // For safety, we could set a default if needed, but the UI shouldn't send empty input
-            }
-
+            var id = Guid.NewGuid().ToString("N");
+            var options = question.ProviderOptions
+                .Select((o, i) => new ProviderOptionDto(i, o.Name, o.Description, o.IsInstalled, o.IsSelected))
+                .ToList();
+            JsonPackFrame.WriteToStdout<QuestionRequest>(new SelectProviderQuestionDto(
+                id, question.DependencyName ?? string.Empty, options));
+            var answer = ReadAnswer<SelectProviderAnswer>(id);
+            question.SetResponse(new QuestionResponse(answer.SelectedIndex, question.ProviderOptions));
             return;
         }
 
@@ -267,43 +233,14 @@ public static class QuestionHandler
                 return;
             }
 
-            switch (question.QuestionType)
-            {
-                case AlpmQuestionType.ConflictPkg:
-                    Console.Error.WriteLine($"[ALPM_QUESTION_CONFLICT]{question.QuestionText}");
-                    break;
-                case AlpmQuestionType.ReplacePkg:
-                    Console.Error.WriteLine($"[ALPM_QUESTION_REPLACEPKG]{question.QuestionText}");
-                    break;
-                case AlpmQuestionType.CorruptedPkg:
-                    Console.Error.WriteLine($"[ALPM_QUESTION_CORRUPTEDPKG]{question.QuestionText}");
-                    break;
-                case AlpmQuestionType.ImportKey:
-                    Console.Error.WriteLine($"[ALPM_QUESTION_IMPORTKEY]{question.QuestionText}");
-                    break;
-                case AlpmQuestionType.SelectProvider:
-                    throw new Exception("Select provider is never a y / n question and is being invoked as one.");
-                case AlpmQuestionType.RemovePkgs:
-                    Console.Error.WriteLine($"[ALPM_QUESTION_REMOVEPKG]{question.QuestionText}");
-                    break;
-                case AlpmQuestionType.InstallIgnorePkg:
-                default:
-                    Console.Error.WriteLine($"[ALPM_QUESTION]{question.QuestionText}");
-                    break;
-            }
+            if (question.QuestionType == AlpmQuestionType.SelectProvider)
+                throw new Exception("Select provider is never a y / n question and is being invoked as one.");
 
-            Console.Error.Flush();
-            var input = Console.ReadLine();
-            Console.WriteLine($"Received: {input}");
-            if (input is "y" or "Y")
-            {
-                question.SetResponse(new QuestionResponse(1, null));
-            }
-            else if (input is "n" or "N")
-            {
-                question.SetResponse(new QuestionResponse(0, null));
-            }
-
+            var id = Guid.NewGuid().ToString("N");
+            JsonPackFrame.WriteToStdout<QuestionRequest>(new YesNoQuestionDto(
+                id, question.QuestionType.ToString(), question.QuestionText));
+            var answer = ReadAnswer<YesNoAnswer>(id);
+            question.SetResponse(new QuestionResponse(answer.Accept ? 1 : 0, null));
             return;
         }
 

@@ -89,6 +89,7 @@ public static class Program
         root.Add(Sync.Create());
         root.Add(Update.Create());
         root.Add(Docs.Create());
+        root.Add(CompletionsCommand.Create());
 
         var appImage = new Command("appimage", "Manage AppImages")
         {

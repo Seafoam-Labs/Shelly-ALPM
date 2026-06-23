@@ -1,7 +1,6 @@
 namespace Shelly.Gtk.UiModels;
 
 // NOTE: Values must match PackageManager.Alpm.AlpmQuestionType exactly.
-// Add new entries here whenever the CLI emits a new [ALPM_QUESTION_*] marker.
 public enum QuestionType
 {
     InstallIgnorePkg = 1,

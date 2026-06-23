@@ -326,7 +326,7 @@ public sealed class AurPackageManager(string? configPath = null)
 
         foreach (var pkg in aurPackages)
         {
-            MakePkgAndInstallAurDependency(pkg);
+            await MakePkgAndInstallAurDependency(pkg);
         }
 
 
@@ -446,7 +446,7 @@ public sealed class AurPackageManager(string? configPath = null)
             var (allRepoPackages, orderedAurPackages) = CollectAllDependencies(pkgbuildInfo);
             InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.InformationalOutput,
                 $"Collected {allRepoPackages.Count + orderedAurPackages.Count} dependencies for {packageName}"));
-            InstallCollectedDependencies(allRepoPackages, orderedAurPackages, AlpmTransFlag.AllDeps);
+            await InstallCollectedDependencies(allRepoPackages, orderedAurPackages, AlpmTransFlag.AllDeps);
 
 
             // Backup PKGBUILD to PreviousVersions folder
@@ -575,7 +575,7 @@ public sealed class AurPackageManager(string? configPath = null)
 
             try
             {
-                _ = _alpm.InstallLocalPackage(pkgFile).Result;
+                _ = await _alpm.InstallLocalPackage(pkgFile);
                 _alpm.Refresh();
 
                 // Update VCS info store with current commit SHAs after successful install
@@ -895,7 +895,7 @@ public sealed class AurPackageManager(string? configPath = null)
             .ToList();
 
         var (allRepoPackages, orderedAurPackages) = CollectAllDependencies(pkgbuildInfo);
-        InstallCollectedDependencies(allRepoPackages, orderedAurPackages);
+        await InstallCollectedDependencies(allRepoPackages, orderedAurPackages);
 
 
         if (_useChroot)
@@ -958,7 +958,7 @@ public sealed class AurPackageManager(string? configPath = null)
 
         RaisePkgProgress(AlpmEventType.AurInstallStart, packageName, 1, 1);
 
-        _ = _alpm.InstallLocalPackage(pkgFile).Result;
+        _ = await _alpm.InstallLocalPackage(pkgFile);
         _alpm.Refresh();
 
         // Remove build-only dependencies (makedepends/checkdepends) that were installed for this build
@@ -1527,7 +1527,7 @@ public sealed class AurPackageManager(string? configPath = null)
         }
     }
 
-    private void BuildAndInstallAurPackage(ParsedDependency package)
+    private async Task BuildAndInstallAurPackage(ParsedDependency package)
     {
         var packageName = package.Name;
         if (!_currentlyInstallingAurDeps.Add(packageName))
@@ -1599,7 +1599,7 @@ public sealed class AurPackageManager(string? configPath = null)
                 return;
             }
 
-            _alpm.InstallLocalPackage(pkgFile, AlpmTransFlag.AllDeps);
+            await _alpm.InstallLocalPackage(pkgFile, AlpmTransFlag.AllDeps);
             _alpm.Refresh();
         }
         finally
@@ -1608,7 +1608,7 @@ public sealed class AurPackageManager(string? configPath = null)
         }
     }
 
-    private void InstallCollectedDependencies(
+    private async Task InstallCollectedDependencies(
         List<string> allRepoPackages,
         List<ParsedDependency> orderedAurPackages,
         AlpmTransFlag flags = AlpmTransFlag.None)
@@ -1624,11 +1624,11 @@ public sealed class AurPackageManager(string? configPath = null)
 
         foreach (var aurDep in orderedAurPackages)
         {
-            BuildAndInstallAurPackage(aurDep);
+            await BuildAndInstallAurPackage(aurDep);
         }
     }
 
-    private void MakePkgAndInstallAurDependency(ParsedDependency package)
+    private async Task MakePkgAndInstallAurDependency(ParsedDependency package)
     {
         var packageName = package.Name;
         if (!_currentlyInstallingAurDeps.Add(packageName))
@@ -1668,7 +1668,7 @@ public sealed class AurPackageManager(string? configPath = null)
             // a stale local sync DB can cause real repo deps to be misrouted to AUR.
             _alpm.Refresh();
             var (allRepoPackages, orderedAurPackages) = CollectAllDependencies(pkgbuildInfo);
-            InstallCollectedDependencies(allRepoPackages, orderedAurPackages, AlpmTransFlag.AllDeps);
+            await InstallCollectedDependencies(allRepoPackages, orderedAurPackages, AlpmTransFlag.AllDeps);
 
             if (_useChroot)
             {
@@ -1728,7 +1728,7 @@ public sealed class AurPackageManager(string? configPath = null)
                 return;
             }
 
-            _alpm.InstallLocalPackage(pkgFile, AlpmTransFlag.AllDeps);
+            await _alpm.InstallLocalPackage(pkgFile, AlpmTransFlag.AllDeps);
             _alpm.Refresh();
         }
         finally
@@ -2075,7 +2075,9 @@ public sealed class AurPackageManager(string? configPath = null)
         try
         {
             var info = PkgbuildParser.ParseContent(newPkgbuild, baseDir);
-            return new PostInstallValidator().Validate(info).Findings;
+            var findings = new PostInstallValidator().Validate(info).Findings;
+            findings.AddRange(new HomographValidator().Validate(info).Findings);
+            return findings;
         }
         catch (Exception ex)
         {

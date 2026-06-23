@@ -8,88 +8,89 @@ Shelly — a modern, unified package manager for Arch Linux. Install, update, se
 
 ### Direct Commands (shelly)
 
-| Command                      | Description                                                           |
-|------------------------------|-----------------------------------------------------------------------|
-| `query [package]`            | Query repositories and packages                                       |
-| `install [packages...]`      | Install packages                                                      |
-| `upgrade`                    | Perform a full system upgrade                                         |
-| `upgrade-all`                | Upgrade all packages from every source (repo, AUR, Flatpak, AppImage) |
-| `downgrade [package]`        | Downgrade a package                                                   |
-| `ignore [packages...]`       | Manage ignored packages                                               |
-| `news`                       | Show ArchLinux news                                                   |
-| `cache-clean`                | Clean the local cache                                                 |
-| `check-updates`              | Check for package updates                                             |
-| `list-updates`               | List standard packages that have available updates                    |
-| `export`                     | Export the current system state to a file                             |
-| `fix-permissions`            | Fix permissions for Shelly directories                                |
-| `mark [package]`             | Mark a package as explicit or a dependency                            |
-| `purify`                     | Remove corrupted/orphaned packages                                    |
-| `remove [packages...]`       | Remove packages (repo or local binary)                                |
-| `sync`                       | Syncs the system with the current state                               |
-| `update [packages...]`       | Update specific packages                                              |
-| `docs`                       | Generate Markdown reference documentation for the Shelly CLI          |
-| `keyring <action> [keys...]` | Manage the pacman keyring                                             |
+| Command | Description |
+| ------- | ----------- |
+| query [package] | Query repositories and packages |
+| install [packages...] | Install packages |
+| upgrade | Perform a full system upgrade |
+| upgrade-all | Upgrade all packages from every source (repo, AUR, Flatpak, AppImage) |
+| downgrade [package] | Downgrade a package |
+| ignore [packages...] | Manage ignored packages |
+| news | Show ArchLinux news |
+| cache-clean | Clean the local cache |
+| check-updates | Check for package updates |
+| list-updates | List standard packages that have available updates |
+| export | Export the current system state to a file |
+| fix-permissions | Fix permissions for Shelly directories |
+| mark [package] | Mark a package as explicit or a dependency |
+| purify | Remove corrupted/orphaned packages |
+| remove [packages...] | Remove packages (repo or local binary) |
+| sync | Syncs the system with the current state |
+| update [packages...] | Update specific packages |
+| docs | Generate Markdown reference documentation for the Shelly CLI |
+| completions <shell> | Generate shell completion scripts |
+| keyring <action> [keys...] | Manage the pacman keyring |
 
 ### Manage AppImages (`shelly appimage`)
 
-| Command                                              | Description                                    |
-|------------------------------------------------------|------------------------------------------------|
-| `appimage install <location>`                        | Install an AppImage                            |
-| `appimage remove <appimage>`                         | Remove an AppImage                             |
-| `appimage list`                                      | Lists all AppImages                            |
-| `appimage upgrade`                                   | Upgrades all AppImages                         |
-| `appimage sync-meta [package]`                       | Syncs meta data for an AppImage                |
-| `appimage list-updates`                              | Find Updates for an AppImage                   |
-| `appimage configure-updates <appimage> <url> <type>` | Configures the update settings for an AppImage |
-| `appimage migrate-manager`                           | Updates the AppImage manager version           |
+| Command | Description |
+| ------- | ----------- |
+| appimage install <location> | Install an AppImage |
+| appimage remove <appimage> | Remove an AppImage |
+| appimage list | Lists all AppImages |
+| appimage upgrade | Upgrades all AppImages |
+| appimage sync-meta [package] | Syncs meta data for an AppImage |
+| appimage list-updates | Find Updates for an AppImage |
+| appimage configure-updates <appimage> <url> <type> | Configures the update settings for an AppImage |
+| appimage migrate-manager | Updates the AppImage manager version |
 
 ### Manage shelly configuration (`shelly config`)
 
-| Command                           | Description                          |
-|-----------------------------------|--------------------------------------|
-| `config get <key>`                | Get a configuration value            |
-| `config set <key> <value>`        | Set a configuration value            |
-| `config list`                     | List all configuration values        |
-| `config reset`                    | Reset the configuration to defaults  |
-| `config parallel <downloadCount>` | Set the number of parallel downloads |
+| Command | Description |
+| ------- | ----------- |
+| config get <key> | Get a configuration value |
+| config set <key> <value> | Set a configuration value |
+| config list | List all configuration values |
+| config reset | Reset the configuration to defaults |
+| config parallel <downloadCount> | Set the number of parallel downloads |
 
 ### Manage AUR packages (`shelly aur`)
 
-| Command                                  | Description                                    |
-|------------------------------------------|------------------------------------------------|
-| `aur install [packages...]`              | Install AUR packages                           |
-| `aur install-version <package> <commit>` | Install a specific version of an AUR package   |
-| `aur remove [packages...]`               | Remove AUR packages                            |
-| `aur update [packages...]`               | Rebuild and reinstall specific AUR packages    |
-| `aur upgrade`                            | Upgrade all out-of-date AUR packages           |
-| `aur list`                               | List installed AUR packages                    |
-| `aur list-updates`                       | List AUR packages that have available updates  |
-| `aur search <query...>`                  | Search the Arch User Repository                |
-| `aur search-pkgbuild <packages...>`      | Fetch and display the PKGBUILD of AUR packages |
+| Command | Description |
+| ------- | ----------- |
+| aur install [packages...] | Install AUR packages |
+| aur install-version <package> <commit> | Install a specific version of an AUR package |
+| aur remove [packages...] | Remove AUR packages |
+| aur update [packages...] | Rebuild and reinstall specific AUR packages |
+| aur upgrade | Upgrade all out-of-date AUR packages |
+| aur list | List installed AUR packages |
+| aur list-updates | List AUR packages that have available updates |
+| aur search <query...> | Search the Arch User Repository |
+| aur search-pkgbuild <packages...> | Fetch and display the PKGBUILD of AUR packages |
 
 ### Manage flatpak (`shelly flatpak`)
 
-| Command                                          | Description                           |
-|--------------------------------------------------|---------------------------------------|
-| `flatpak install <package>`                      | Install flatpak app                   |
-| `flatpak update <package>`                       | Update flatpak app                    |
-| `flatpak list`                                   | List installed flatpak apps           |
-| `flatpak list-updates`                           | List flatpak apps with updates        |
-| `flatpak running`                                | List running flatpak apps             |
-| `flatpak repair`                                 | Repairs Flatpak Installation          |
-| `flatpak uninstall <package>`                    | Remove flatpak app                    |
-| `flatpak run <package>`                          | Run flatpak app                       |
-| `flatpak kill <package>`                         | Kill running flatpak app              |
-| `flatpak search <query>`                         | Search flatpak                        |
-| `flatpak sync-remote-appstream`                  | Sync remote appstream                 |
-| `flatpak get-remote-appstream <query>`           | Returns remote appstream json         |
-| `flatpak upgrade`                                | Upgrade all flatpak apps              |
-| `flatpak list-remotes`                           | Returns all remotes currently added   |
-| `flatpak add-remotes <remote>`                   | Adds a flatpak remote                 |
-| `flatpak remove-remotes <remote>`                | Removes a flatpak remote              |
-| `flatpak install-ref-file <RefFilePath>`         | Installs flatpak app from ref file    |
-| `flatpak install-bundle <BundlePath>`            | Installs flatpak app from bundle file |
-| `flatpak app-remote-info <remote> <id> <branch>` | Get app remote info                   |
+| Command | Description |
+| ------- | ----------- |
+| flatpak install <package> | Install flatpak app |
+| flatpak update <package> | Update flatpak app |
+| flatpak list | List installed flatpak apps |
+| flatpak list-updates | List flatpak apps with updates |
+| flatpak running | List running flatpak apps |
+| flatpak repair | Repairs Flatpak Installation |
+| flatpak uninstall <package> | Remove flatpak app |
+| flatpak run <package> | Run flatpak app |
+| flatpak kill <package> | Kill running flatpak app |
+| flatpak search <query> | Search flatpak |
+| flatpak sync-remote-appstream | Sync remote appstream |
+| flatpak get-remote-appstream <query> | Returns remote appstream json |
+| flatpak upgrade | Upgrade all flatpak apps |
+| flatpak list-remotes | Returns all remotes currently added |
+| flatpak add-remotes <remote> | Adds a flatpak remote |
+| flatpak remove-remotes <remote> | Removes a flatpak remote |
+| flatpak install-ref-file <RefFilePath> | Installs flatpak app from ref file |
+| flatpak install-bundle <BundlePath> | Installs flatpak app from bundle file |
+| flatpak app-remote-info <remote> <id> <branch> | Get app remote info |
 
 
 ---
@@ -126,62 +127,62 @@ Examples:
 
 | Action | Verb | Modifiers |
 |--------|------|-----------|
-| `I` | install | — |
+| `I` | install | - |
 | `R` | remove | `c` |
-| `L` | list | — |
-| `U` | upgrade | — |
-| `P` | list-updates | — |
-| `S` | sync-meta | — |
+| `L` | list | - |
+| `U` | upgrade | - |
+| `P` | list-updates | - |
+| `S` | sync-meta | - |
 | `C` | configure-updates | `p` |
-| `M` | migrate-manager | — |
+| `M` | migrate-manager | - |
 
 **`A` — aur**
 
 | Action | Verb | Modifiers |
 |--------|------|-----------|
 | `I` | install | `c`, `m`, `o` |
-| `V` | install-version | — |
+| `V` | install-version | - |
 | `R` | remove | `c`, `i`, `o` |
-| `T` | update | — |
-| `U` | upgrade | — |
-| `L` | list | — |
-| `P` | list-updates | — |
-| `S` | search | — |
-| `B` | search-pkgbuild | — |
+| `T` | update | - |
+| `U` | upgrade | - |
+| `L` | list | - |
+| `P` | list-updates | - |
+| `S` | search | - |
+| `B` | search-pkgbuild | - |
 
 **`C` — config**
 
 | Action | Verb | Modifiers |
 |--------|------|-----------|
-| `G` | get | — |
-| `S` | set | — |
-| `L` | list | — |
-| `R` | reset | — |
-| `P` | parallel | — |
+| `G` | get | - |
+| `S` | set | - |
+| `L` | list | - |
+| `R` | reset | - |
+| `P` | parallel | - |
 
 **`F` — flatpak**
 
 | Action | Verb | Modifiers |
 |--------|------|-----------|
 | `I` | install | `b`, `r` |
-| `T` | update | — |
-| `U` | upgrade | — |
-| `L` | list | — |
-| `P` | list-updates | — |
+| `T` | update | - |
+| `U` | upgrade | - |
+| `L` | list | - |
+| `P` | list-updates | - |
 | `R` | uninstall | `c`, `r` |
-| `N` | running | — |
-| `X` | run | — |
-| `K` | kill | — |
+| `N` | running | - |
+| `X` | run | - |
+| `K` | kill | - |
 | `S` | search | `l`, `p` |
-| `H` | repair | — |
-| `M` | list-remotes | — |
+| `H` | repair | - |
+| `M` | list-remotes | - |
 | `A` | add-remotes | `g`, `s`, `u` |
 | `D` | remove-remotes | `s` |
 | `E` | install-ref-file | `s` |
 | `B` | install-bundle | `s` |
-| `Y` | sync-remote-appstream | — |
-| `G` | get-remote-appstream | — |
-| `O` | app-remote-info | — |
+| `Y` | sync-remote-appstream | - |
+| `G` | get-remote-appstream | - |
+| `O` | app-remote-info | - |
 
 **`K` — keyring**
 
@@ -207,8 +208,8 @@ Examples:
 | `N` | news | `a` |
 | `D` | downgrade | `i`, `l`, `o`, `t` |
 | `G` | ignore | `a`, `c`, `l`, `r` |
-| `U` | upgrade | — |
-| `T` | update | — |
+| `U` | upgrade | - |
+| `T` | update | - |
 
 **`U` — utility**
 
@@ -217,7 +218,7 @@ Examples:
 | `C` | cache-clean | `c`, `d`, `i`, `k`, `t` |
 | `K` | check-updates | `a`, `c`, `l` |
 | `E` | export | `a`, `o` |
-| `F` | fix-permissions | — |
+| `F` | fix-permissions | - |
 
 ---
 
@@ -248,6 +249,7 @@ Shelly — a modern, unified package manager for Arch Linux. Install, update, se
 - [`shelly sync`](#shelly-sync) — Syncs the system with the current state
 - [`shelly update`](#shelly-update) — Update specific packages
 - [`shelly docs`](#shelly-docs) — Generate Markdown reference documentation for the Shelly CLI
+- [`shelly completions`](#shelly-completions) — Generate shell completion scripts
 - [`shelly appimage`](#shelly-appimage) — Manage AppImages
 - [`shelly config`](#shelly-config) — Manage shelly configuration
 - [`shelly aur`](#shelly-aur) — Manage AUR packages
@@ -257,8 +259,18 @@ Shelly — a modern, unified package manager for Arch Linux. Install, update, se
 **Usage:**
 
 ```text
-shelly
+shelly [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 ### `shelly query`
@@ -268,12 +280,30 @@ Query repositories and packages
 **Usage:**
 
 ```text
-shelly query [package]
+shelly query [package] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<package>` | 0..1 | The package to search for |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--available` | `-a` | bool | No | Include available packages in the search |
+| `--detail`, `--info` | `-d` | bool | No | Show detailed information for a single package |
+| `--installed` | `-i` | bool | No | Include installed packages in the search |
+| `--local` | `-l` | bool | No | Include local packages in the search |
+| `--page` | `-p` | int | Yes | Page number |
+| `--repos` | `-r` | bool | No | List available repositories. This supercedes any other modifiers. |
+| `--show-hidden` | `-w` | bool | No | Show hidden packages |
+| `--take` | `-t` | int | Yes | Number of results to return |
 
 
 ### `shelly install`
@@ -283,12 +313,26 @@ Install packages
 **Usage:**
 
 ```text
-shelly install [packages...]
+shelly install [packages...] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<packages>` | 0..100000 | The packages to install (repo names, local files or URLs) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--build-deps` | `-b` | bool | No | Install build dependencies |
+| `--make-deps` | `-m` | bool | No | Install make dependencies |
+| `--no-deps` | `-d` | bool | No | Install without checking/installing dependencies |
+| `--upgrade` | `-u` | bool | No | Upgrades the packages if they are already installed |
 
 
 ### `shelly upgrade`
@@ -298,8 +342,18 @@ Perform a full system upgrade
 **Usage:**
 
 ```text
-shelly upgrade
+shelly upgrade [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 ### `shelly upgrade-all`
@@ -309,8 +363,22 @@ Upgrade all packages from every source (repo, AUR, Flatpak, AppImage)
 **Usage:**
 
 ```text
-shelly upgrade-all
+shelly upgrade-all [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--no-appimage` | - | bool | No | Skip the AppImage upgrade |
+| `--no-aur` | - | bool | No | Skip the AUR upgrade |
+| `--no-flatpak` | - | bool | No | Skip the Flatpak upgrade |
+| `--no-repo` | - | bool | No | Skip the standard repository (ALPM) upgrade |
 
 
 ### `shelly downgrade`
@@ -320,12 +388,26 @@ Downgrade a package
 **Usage:**
 
 ```text
-shelly downgrade [package]
+shelly downgrade [package] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<package>` | 0..1 | The package to downgrade |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--ignore` | `-i` | bool | No | Add to IgnorePkg list |
+| `--list-options` | `-l` | bool | No | List available downgrade versions |
+| `--oldest` | `-o` | bool | No | Installs the oldest matched version (default newest) |
+| `--target` | `-t` | string | Yes | Install a specific downgrade target by exact version or package filename |
 
 
 ### `shelly ignore`
@@ -335,12 +417,26 @@ Manage ignored packages
 **Usage:**
 
 ```text
-shelly ignore [packages...]
+shelly ignore [packages...] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<packages>` | 0..100000 | The packages to interact with |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--add` | `-a` | bool | No | Add a package to the ignore list |
+| `--clear` | `-c` | bool | No | Clear the ignore list |
+| `--list` | `-l` | bool | No | List ignored packages |
+| `--remove` | `-r` | bool | No | Remove a package from the ignore list |
 
 
 ### `shelly news`
@@ -350,8 +446,19 @@ Show ArchLinux news
 **Usage:**
 
 ```text
-shelly news
+shelly news [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--all` | `-a` | bool | No | Show all news, not just news you haven't seen before. |
 
 
 ### `shelly cache-clean`
@@ -361,8 +468,23 @@ Clean the local cache
 **Usage:**
 
 ```text
-shelly cache-clean
+shelly cache-clean [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--cache-dir` | `-c` | string | Yes | Path to the cache directory. |
+| `--dry-run` | `-d` | bool | No | Show what would be removed. |
+| `--keep` | `-k` | int | Yes | Keep the specified number of versions in the cache. Defaults to 3. |
+| `--target` | `-t` | string[] | Yes | Remove only the specified packages from the cache. |
+| `--uninstalled` | `-i` | bool | No | Remove only uninstalled packages from the cache. |
 
 
 ### `shelly check-updates`
@@ -372,8 +494,21 @@ Check for package updates
 **Usage:**
 
 ```text
-shelly check-updates
+shelly check-updates [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--aur` | `-a` | bool | No | Check for AUR updates |
+| `--count` | `-c` | bool | No | Returns the number of updates |
+| `--flatpak` | `-l` | bool | No | Check for Flatpak updates |
 
 
 ### `shelly list-updates`
@@ -383,8 +518,18 @@ List standard packages that have available updates
 **Usage:**
 
 ```text
-shelly list-updates
+shelly list-updates [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 ### `shelly export`
@@ -394,8 +539,20 @@ Export the current system state to a file
 **Usage:**
 
 ```text
-shelly export
+shelly export [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--name` | `-a` | string | Yes | The name of the exported file |
+| `--output` | `-o` | string | Yes | The default output location for the sync file |
 
 
 ### `shelly fix-permissions`
@@ -405,8 +562,18 @@ Fix permissions for Shelly directories
 **Usage:**
 
 ```text
-shelly fix-permissions
+shelly fix-permissions [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 ### `shelly mark`
@@ -416,12 +583,24 @@ Mark a package as explicit or a dependency
 **Usage:**
 
 ```text
-shelly mark [package]
+shelly mark [package] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<package>` | 0..1 | The package to mark |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--depends` | `-d` | bool | No | Mark the package as a dependency |
+| `--explicit` | `-e` | bool | No | Mark the package as explicit |
 
 
 ### `shelly purify`
@@ -431,8 +610,20 @@ Remove corrupted/orphaned packages
 **Usage:**
 
 ```text
-shelly purify
+shelly purify [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--dry-run` | `-d` | bool | No | Show what would be removed without removing it. |
+| `--orphans` | `-o` | bool | No | Also remove orphaned dependencies. |
 
 
 ### `shelly remove`
@@ -442,12 +633,27 @@ Remove packages (repo or local binary)
 **Usage:**
 
 ```text
-shelly remove [packages...]
+shelly remove [packages...] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<packages>` | 0..100000 | The packages to remove (repo names or local binary packages) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--cascade` | `-c` | bool | No | Removes all things the removed package(s) are dependent on that have no other uses (default: true) |
+| `--local` | `-l` | bool | No | Force removal as a locally-installed binary package |
+| `--opt-deps` | `-o` | bool | No | Removes optional dependencies installed with the package, that don't depend on other packages |
+| `--remove-config` | `-r` | bool | No | Removes any files in your ~/.config that can be tied exclusively to the removed package(s). EXPERIMENTAL |
+| `--ripple` | `-i` | bool | No | Removes packages that depend on the package being removed |
 
 
 ### `shelly sync`
@@ -457,8 +663,19 @@ Syncs the system with the current state
 **Usage:**
 
 ```text
-shelly sync
+shelly sync [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--force` | `-f` | bool | No | Force a sync |
 
 
 ### `shelly update`
@@ -468,12 +685,22 @@ Update specific packages
 **Usage:**
 
 ```text
-shelly update [packages...]
+shelly update [packages...] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<packages>` | 0..100000 | The packages to update |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 ### `shelly docs`
@@ -483,8 +710,43 @@ Generate Markdown reference documentation for the Shelly CLI
 **Usage:**
 
 ```text
-shelly docs
+shelly docs [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+
+
+### `shelly completions`
+
+Generate shell completion scripts
+
+**Usage:**
+
+```text
+shelly completions <shell> [options]
+```
+
+| Argument | Arity | Description |
+|----------|-------|-------------|
+| `<shell>` | 1 | The shell to generate completions for (fish, zsh) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 ### `shelly appimage`
@@ -507,8 +769,18 @@ Manage AppImages
 **Usage:**
 
 ```text
-shelly appimage
+shelly appimage [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly appimage install`
@@ -518,12 +790,22 @@ Install an AppImage
 **Usage:**
 
 ```text
-shelly appimage install <location>
+shelly appimage install <location> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<location>` | 1 | Location of the AppImage |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly appimage remove`
@@ -533,12 +815,23 @@ Remove an AppImage
 **Usage:**
 
 ```text
-shelly appimage remove <appimage>
+shelly appimage remove <appimage> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<appimage>` | 1 | Name of the AppImage |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--remove-config` | `-c` | bool | No | Remove Config |
 
 
 #### `shelly appimage list`
@@ -548,8 +841,18 @@ Lists all AppImages
 **Usage:**
 
 ```text
-shelly appimage list
+shelly appimage list [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly appimage upgrade`
@@ -559,8 +862,18 @@ Upgrades all AppImages
 **Usage:**
 
 ```text
-shelly appimage upgrade
+shelly appimage upgrade [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly appimage sync-meta`
@@ -570,12 +883,22 @@ Syncs meta data for an AppImage
 **Usage:**
 
 ```text
-shelly appimage sync-meta [package]
+shelly appimage sync-meta [package] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<package>` | 0..1 | The search query for the AppImage |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly appimage list-updates`
@@ -585,8 +908,18 @@ Find Updates for an AppImage
 **Usage:**
 
 ```text
-shelly appimage list-updates
+shelly appimage list-updates [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly appimage configure-updates`
@@ -596,7 +929,7 @@ Configures the update settings for an AppImage
 **Usage:**
 
 ```text
-shelly appimage configure-updates <appimage> <url> <type>
+shelly appimage configure-updates <appimage> <url> <type> [options]
 ```
 
 | Argument | Arity | Description |
@@ -604,6 +937,17 @@ shelly appimage configure-updates <appimage> <url> <type>
 | `<appimage>` | 1 | AppImage name to configure updates |
 | `<url>` | 1 | Update URL |
 | `<type>` | 1 | Update Type |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--prerelease` | `-p` | bool | No | Allow prerelease updates |
 
 
 #### `shelly appimage migrate-manager`
@@ -613,8 +957,18 @@ Updates the AppImage manager version
 **Usage:**
 
 ```text
-shelly appimage migrate-manager
+shelly appimage migrate-manager [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 ### `shelly config`
@@ -634,8 +988,18 @@ Manage shelly configuration
 **Usage:**
 
 ```text
-shelly config
+shelly config [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly config get`
@@ -645,12 +1009,22 @@ Get a configuration value
 **Usage:**
 
 ```text
-shelly config get <key>
+shelly config get <key> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<key>` | 1 | The configuration key to get |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly config set`
@@ -660,13 +1034,23 @@ Set a configuration value
 **Usage:**
 
 ```text
-shelly config set <key> <value>
+shelly config set <key> <value> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<key>` | 1 | The configuration key to set |
 | `<value>` | 1 | The value to set |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly config list`
@@ -676,8 +1060,18 @@ List all configuration values
 **Usage:**
 
 ```text
-shelly config list
+shelly config list [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly config reset`
@@ -687,8 +1081,18 @@ Reset the configuration to defaults
 **Usage:**
 
 ```text
-shelly config reset
+shelly config reset [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly config parallel`
@@ -698,12 +1102,22 @@ Set the number of parallel downloads
 **Usage:**
 
 ```text
-shelly config parallel <downloadCount>
+shelly config parallel <downloadCount> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<downloadCount>` | 1 | The number of parallel downloads |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 ### `shelly aur`
@@ -727,8 +1141,18 @@ Manage AUR packages
 **Usage:**
 
 ```text
-shelly aur
+shelly aur [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly aur install`
@@ -738,12 +1162,26 @@ Install AUR packages
 **Usage:**
 
 ```text
-shelly aur install [packages...]
+shelly aur install [packages...] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<packages>` | 0..100000 | One or more AUR package names to operate on (space-separated) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--build-deps` | `-o` | bool | No | Install build dependencies only for the specified AUR packages |
+| `--check` | - | bool | No | Run the check() function during AUR package builds (disabled by default) |
+| `--chroot` | `-c` | bool | No | Build packages in a clean chroot environment using makechrootpkg |
+| `--make-deps` | `-m` | bool | No | Install make dependencies only for the specified AUR packages |
 
 
 #### `shelly aur install-version`
@@ -753,13 +1191,24 @@ Install a specific version of an AUR package
 **Usage:**
 
 ```text
-shelly aur install-version <package> <commit>
+shelly aur install-version <package> <commit> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<package>` | 1 | Name of the AUR package to install |
 | `<commit>` | 1 | Git commit hash specifying the exact version to install |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--check` | - | bool | No | Run the check() function during AUR package builds (disabled by default) |
 
 
 #### `shelly aur remove`
@@ -769,12 +1218,25 @@ Remove AUR packages
 **Usage:**
 
 ```text
-shelly aur remove [packages...]
+shelly aur remove [packages...] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<packages>` | 0..100000 | One or more AUR package names to operate on (space-separated) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--cascade` | `-c` | bool | No | Removes all things the removed package(s) are dependent on that have no other uses (default: true) |
+| `--opt-deps` | `-o` | bool | No | Removes optional dependencies installed with the package, that don't depend on other packages |
+| `--ripple` | `-i` | bool | No | Removes packages that depend on the package being removed |
 
 
 #### `shelly aur update`
@@ -784,12 +1246,23 @@ Rebuild and reinstall specific AUR packages
 **Usage:**
 
 ```text
-shelly aur update [packages...]
+shelly aur update [packages...] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<packages>` | 0..100000 | One or more AUR package names to operate on (space-separated) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--check` | - | bool | No | Run the check() function during AUR package builds (disabled by default) |
 
 
 #### `shelly aur upgrade`
@@ -799,8 +1272,20 @@ Upgrade all out-of-date AUR packages
 **Usage:**
 
 ```text
-shelly aur upgrade
+shelly aur upgrade [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--check` | - | bool | No | Run the check() function during AUR package builds (disabled by default) |
+| `--singlepane` | - | bool | No | Render output as a single pacman-style linear stream |
 
 
 #### `shelly aur list`
@@ -810,8 +1295,19 @@ List installed AUR packages
 **Usage:**
 
 ```text
-shelly aur list
+shelly aur list [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--show-hidden` | - | bool | No | Include hidden packages in the listing |
 
 
 #### `shelly aur list-updates`
@@ -821,8 +1317,19 @@ List AUR packages that have available updates
 **Usage:**
 
 ```text
-shelly aur list-updates
+shelly aur list-updates [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--show-hidden` | - | bool | No | Include hidden packages in the listing |
 
 
 #### `shelly aur search`
@@ -832,12 +1339,22 @@ Search the Arch User Repository
 **Usage:**
 
 ```text
-shelly aur search <query...>
+shelly aur search <query...> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<query>` | 1..100000 | Search term to find packages in the Arch User Repository |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly aur search-pkgbuild`
@@ -847,12 +1364,22 @@ Fetch and display the PKGBUILD of AUR packages
 **Usage:**
 
 ```text
-shelly aur search-pkgbuild <packages...>
+shelly aur search-pkgbuild <packages...> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<packages>` | 1..100000 | One or more AUR package names to fetch the PKGBUILD for |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 ### `shelly keyring`
@@ -862,13 +1389,24 @@ Manage the pacman keyring
 **Usage:**
 
 ```text
-shelly keyring <action> [keys...]
+shelly keyring <action> [keys...] [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<action>` | 1 | The keyring action to perform |
 | `<keys>` | 0..100000 | The key IDs to operate on |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--keyserver` | - | string | Yes | The keyserver to use |
 
 
 ### `shelly flatpak`
@@ -902,8 +1440,18 @@ Manage flatpak
 **Usage:**
 
 ```text
-shelly flatpak
+shelly flatpak [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak install`
@@ -913,12 +1461,26 @@ Install flatpak app
 **Usage:**
 
 ```text
-shelly flatpak install <package>
+shelly flatpak install <package> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<package>` | 1 | Flatpak application ID (e.g., com.spotify.Client) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--branch` | `-b` | string | Yes | Branch to install (e.g., stable, beta). Defaults to stable |
+| `--remote` | `-r` | string | Yes | Remote to install from (e.g., flathub, flathub-beta) |
+| `--runtime` | - | bool | No | Install as a runtime instead of an application |
+| `--user` | - | bool | No | Install to user scope instead of system scope |
 
 
 #### `shelly flatpak update`
@@ -928,12 +1490,22 @@ Update flatpak app
 **Usage:**
 
 ```text
-shelly flatpak update <package>
+shelly flatpak update <package> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<package>` | 1 | Flatpak application ID (e.g., com.spotify.Client) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak list`
@@ -943,8 +1515,18 @@ List installed flatpak apps
 **Usage:**
 
 ```text
-shelly flatpak list
+shelly flatpak list [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak list-updates`
@@ -954,8 +1536,18 @@ List flatpak apps with updates
 **Usage:**
 
 ```text
-shelly flatpak list-updates
+shelly flatpak list-updates [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak running`
@@ -965,8 +1557,18 @@ List running flatpak apps
 **Usage:**
 
 ```text
-shelly flatpak running
+shelly flatpak running [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak repair`
@@ -976,8 +1578,18 @@ Repairs Flatpak Installation
 **Usage:**
 
 ```text
-shelly flatpak repair
+shelly flatpak repair [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak uninstall`
@@ -987,12 +1599,24 @@ Remove flatpak app
 **Usage:**
 
 ```text
-shelly flatpak uninstall <package>
+shelly flatpak uninstall <package> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<package>` | 1 | Flatpak application ID (e.g., com.spotify.Client) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--config` | `-c` | bool | No | Removes flatpak configuration for removed app |
+| `--remove-unused` | `-r` | bool | No | Remove unused dependencies after uninstalling |
 
 
 #### `shelly flatpak run`
@@ -1002,12 +1626,22 @@ Run flatpak app
 **Usage:**
 
 ```text
-shelly flatpak run <package>
+shelly flatpak run <package> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<package>` | 1 | Flatpak application ID (e.g., com.spotify.Client) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak kill`
@@ -1017,12 +1651,22 @@ Kill running flatpak app
 **Usage:**
 
 ```text
-shelly flatpak kill <package>
+shelly flatpak kill <package> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<package>` | 1 | Flatpak application ID (e.g., com.spotify.Client) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak search`
@@ -1032,12 +1676,24 @@ Search flatpak
 **Usage:**
 
 ```text
-shelly flatpak search <query>
+shelly flatpak search <query> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<query>` | 1 | Search term to find Flatpak applications on Flathub |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--limit` | `-l` | int | Yes | Maximum number of search results to display per page |
+| `--page` | `-p` | int | Yes | Page number for paginated results (starts at 1) |
 
 
 #### `shelly flatpak sync-remote-appstream`
@@ -1047,8 +1703,18 @@ Sync remote appstream
 **Usage:**
 
 ```text
-shelly flatpak sync-remote-appstream
+shelly flatpak sync-remote-appstream [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak get-remote-appstream`
@@ -1058,12 +1724,22 @@ Returns remote appstream json
 **Usage:**
 
 ```text
-shelly flatpak get-remote-appstream <query>
+shelly flatpak get-remote-appstream <query> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<query>` | 1 | Gets appstream data in json (use all to retrieve all appstreams) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak upgrade`
@@ -1073,8 +1749,18 @@ Upgrade all flatpak apps
 **Usage:**
 
 ```text
-shelly flatpak upgrade
+shelly flatpak upgrade [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak list-remotes`
@@ -1084,8 +1770,18 @@ Returns all remotes currently added
 **Usage:**
 
 ```text
-shelly flatpak list-remotes
+shelly flatpak list-remotes [options]
 ```
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 #### `shelly flatpak add-remotes`
@@ -1095,12 +1791,25 @@ Adds a flatpak remote
 **Usage:**
 
 ```text
-shelly flatpak add-remotes <remote>
+shelly flatpak add-remotes <remote> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<remote>` | 1 | Flatpak remote name ID (e.g., flathub) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--gpg-verify` | `-g` | bool | No | Enable GPG verification for the remote |
+| `--remote-url` | `-u` | string | Yes | Flatpak remote URL |
+| `--system` | `-s` | bool | No | Add the remote system-wide |
 
 
 #### `shelly flatpak remove-remotes`
@@ -1110,12 +1819,23 @@ Removes a flatpak remote
 **Usage:**
 
 ```text
-shelly flatpak remove-remotes <remote>
+shelly flatpak remove-remotes <remote> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<remote>` | 1 | Flatpak remote name ID (e.g., flathub) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--system` | `-s` | bool | No | Remove the remote system-wide |
 
 
 #### `shelly flatpak install-ref-file`
@@ -1125,12 +1845,23 @@ Installs flatpak app from ref file
 **Usage:**
 
 ```text
-shelly flatpak install-ref-file <RefFilePath>
+shelly flatpak install-ref-file <RefFilePath> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<RefFilePath>` | 1 | Path to the ref file |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--system` | `-s` | bool | No | Install system-wide |
 
 
 #### `shelly flatpak install-bundle`
@@ -1140,12 +1871,23 @@ Installs flatpak app from bundle file
 **Usage:**
 
 ```text
-shelly flatpak install-bundle <BundlePath>
+shelly flatpak install-bundle <BundlePath> [options]
 ```
 
 | Argument | Arity | Description |
 |----------|-------|-------------|
 | `<BundlePath>` | 1 | Path to the .flatpak bundle file |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+| `--system` | `-s` | bool | No | Install system-wide |
 
 
 #### `shelly flatpak app-remote-info`
@@ -1155,7 +1897,7 @@ Get app remote info
 **Usage:**
 
 ```text
-shelly flatpak app-remote-info <remote> <id> <branch>
+shelly flatpak app-remote-info <remote> <id> <branch> [options]
 ```
 
 | Argument | Arity | Description |
@@ -1163,4 +1905,14 @@ shelly flatpak app-remote-info <remote> <id> <branch>
 | `<remote>` | 1 | Flatpak remote name (e.g., flathub) |
 | `<id>` | 1 | Flatpak application ID |
 | `<branch>` | 1 | Branch to query (e.g., stable) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 

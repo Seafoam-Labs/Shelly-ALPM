@@ -62,6 +62,38 @@
                             </object>
                         </child>
                         <child>
+                            <object class="GtkMenuButton" id="cart_button">
+                                <property name="tooltip-text" translatable="yes">Selected Packages</property>
+                                <property name="popover">cart_popover</property>
+                                <child>
+                                    <object class="GtkLabel" id="cart_label">
+                                        <property name="label" translatable="yes">0 Selected</property>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkBox">
+                                <property name="spacing">2</property>
+                                <style>
+                                    <class name="linked"/>
+                                </style>
+                                <child>
+                                    <object class="GtkToggleButton" id="grid_view_button">
+                                        <property name="icon-name">view-grid-symbolic</property>
+                                        <property name="tooltip-text" translatable="yes">Grid View</property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkToggleButton" id="list_view_button">
+                                        <property name="icon-name">view-list-symbolic</property>
+                                        <property name="tooltip-text" translatable="yes">List View</property>
+                                        <property name="active">true</property>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child>
                             <object class="GtkMenuButton" id="options_menu">
                                 <property name="icon-name">view-more-symbolic</property>
                                 <property name="tooltip-text" translatable="yes">Additional Options</property>
@@ -90,39 +122,65 @@
                     <object class="GtkSeparator"/>
                 </child>
                 <child>
-                    <object class="GtkBox" id="detail_hbox">
+                    <object class="GtkBox">
                         <property name="hexpand">true</property>
                         <property name="orientation">horizontal</property>
                         <property name="vexpand">true</property>
                         <child>
-                            <object class="GtkScrolledWindow">
+                            <object class="GtkBox" id="detail_hbox">
+                                <property name="visible">true</property>
                                 <property name="hexpand">true</property>
-                                <property name="overlay-scrolling">false</property>
+                                <property name="orientation">horizontal</property>
                                 <property name="vexpand">true</property>
                                 <child>
-                                    <object class="GtkColumnView" id="package_grid">
+                                    <object class="GtkScrolledWindow">
                                         <property name="hexpand">true</property>
+                                        <property name="overlay-scrolling">false</property>
                                         <property name="vexpand">true</property>
                                         <child>
-                                            <object class="GtkColumnViewColumn" id="check_column">
-                                                <property name="title"></property>
+                                            <object class="GtkColumnView" id="package_grid">
+                                                <property name="hexpand">true</property>
+                                                <property name="vexpand">true</property>
+                                                <child>
+                                                    <object class="GtkColumnViewColumn" id="check_column">
+                                                        <property name="title"></property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkColumnViewColumn" id="name_column">
+                                                        <property name="title" translatable="yes">Package Name</property>
+                                                        <property name="expand">true</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkColumnViewColumn" id="size_column">
+                                                        <property name="title" translatable="yes">Size</property>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkColumnViewColumn" id="version_column">
+                                                        <property name="title" translatable="yes">Version</property>
+                                                    </object>
+                                                </child>
                                             </object>
                                         </child>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkBox" id="detail_grid_hbox">
+                                <property name="visible">false</property>
+                                <property name="hexpand">true</property>
+                                <property name="orientation">horizontal</property>
+                                <property name="vexpand">true</property>
+                                <child>
+                                    <object class="GtkScrolledWindow">
+                                        <property name="hexpand">true</property>
+                                        <property name="overlay-scrolling">false</property>
+                                        <property name="vexpand">true</property>
                                         <child>
-                                            <object class="GtkColumnViewColumn" id="name_column">
-                                                <property name="title" translatable="yes">Package Name</property>
-                                                <property name="expand">true</property>
-                                            </object>
-                                        </child>
-                                        <child>
-                                            <object class="GtkColumnViewColumn" id="size_column">
-                                                <property name="title" translatable="yes">Size</property>
-                                            </object>
-                                        </child>
-                                        <child>
-                                            <object class="GtkColumnViewColumn" id="version_column">
-                                                <property name="title" translatable="yes">Version</property>
-                                            </object>
+                                            <object class="GtkGridView" id="list_packages"/>
                                         </child>
                                     </object>
                                 </child>
@@ -199,6 +257,33 @@
                 </child>
             </object>
         </child>
+    </object>
+    <object class="GtkPopover" id="cart_popover">
+        <property name="child">
+            <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">8</property>
+                <property name="margin-top">8</property>
+                <property name="margin-bottom">8</property>
+                <property name="margin-start">12</property>
+                <property name="margin-end">12</property>
+                <child>
+                    <object class="GtkLabel">
+                        <property name="label" translatable="yes">Selected Packages</property>
+                        <property name="halign">start</property>
+                        <style>
+                            <class name="title-4"/>
+                        </style>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkBox" id="cart_items_box">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">4</property>
+                    </object>
+                </child>
+            </object>
+        </property>
     </object>
     <object class="GtkPopover" id="options_popover">
         <property name="child">

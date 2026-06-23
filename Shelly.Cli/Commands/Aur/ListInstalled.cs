@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Text.Json;
 using PackageManager.Aur;
 using Shelly.Cli.Interactions;
 
@@ -40,9 +41,15 @@ public class ListInstalled : GlobalSettingsCommand
         var packages = await manager.GetInstalledPackages();
         var sorted = packages.OrderBy(p => p.Name).ToList();
 
-        if (UiMode || JsonOutput)
+        if (UiMode)
         {
             JsonPackFrame.WriteToStdout(sorted);
+            return;
+        }
+
+        if (JsonOutput)
+        {
+            console.WriteLine(JsonSerializer.Serialize(sorted, ShellyCliJsonContext.Default.ListAurPackageDto));
             return;
         }
 

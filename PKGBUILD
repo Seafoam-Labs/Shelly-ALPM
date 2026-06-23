@@ -1,7 +1,7 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgname=shelly
-pkgver=2.3.3.4
+pkgver=2.4.0.4
 pkgrel=1
 pkgdesc="Shelly: A Modern Arch Package Manager"
 arch=('x86_64')
@@ -28,6 +28,7 @@ depends=(
 optdepends=(
     'flatpak: For supporting flatpak implementation.'
     'fish: Fish shell completions'
+    'zsh: Zsh shell completions'
 )
 makedepends=('dotnet-sdk-10.0' 'clang' 'gettext')
 
@@ -43,6 +44,10 @@ build() {
   dotnet publish Shelly.Gtk/Shelly.Gtk.csproj -c Release -r linux-x64 -o out --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
   dotnet publish Shelly-Notifications/Shelly-Notifications.csproj -c Release -r linux-x64 -o out-notify --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
   dotnet publish Shelly.Keys/Shelly.Keys.csproj -c Release -r linux-x64 -o out-keys --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
+
+  # Generate shell completions from the freshly built CLI binary
+  ./out-cli/shelly completions fish > shelly.fish
+  ./out-cli/shelly completions zsh  > _shelly
 
   # Compile translations
   for po_file in Shelly.Gtk/po/*.po; do
@@ -130,6 +135,9 @@ EOF
 
   # Install fish shell completions
   install -Dm644 shelly.fish "$pkgdir/usr/share/fish/vendor_completions.d/shelly.fish"
+
+  # Install zsh shell completions
+  install -Dm644 _shelly "$pkgdir/usr/share/zsh/site-functions/_shelly"
 
   # Install translations
   for mo_file in shelly-ui-*.mo; do

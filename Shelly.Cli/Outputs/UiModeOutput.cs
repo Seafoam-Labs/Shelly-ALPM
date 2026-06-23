@@ -1,4 +1,5 @@
 using PackageManager.Alpm;
+using PackageManager.AppImage.AppImageV2;
 using PackageManager.Aur;
 using PackageManager.Flatpak;
 using PackageManager.Flatpak.Events;
@@ -140,6 +141,38 @@ internal static class UiModeOutput
     }
 
     public static async Task<bool> Run(FlatpakManager manager, Func<FlatpakManager, Task> operation)
+    {
+        var hadError = false;
+        Attach(manager, () => hadError = true);
+        try
+        {
+            await operation(manager);
+        }
+        catch (Exception ex)
+        {
+            JsonPackFrame.WriteToStdout<Event>(new AlpmErrorEvent(EventLevel.Error, ex.Message));
+            return false;
+        }
+
+        return !hadError;
+    }
+
+    private static void Attach(AppImageManagerV2 manager, Action onError)
+    {
+        manager.StatusEvent += (_, e) =>
+        {
+            JsonPackFrame.WriteToStdout<Event>(new AppImageStatusEvent(e.Severity, e.Message));
+            if (e.Severity == AppImageEvents.Error) onError();
+        };
+        manager.ProgressEvent += (_, e) =>
+        {
+            JsonPackFrame.WriteToStdout<Event>(new AppImageProgressEvent(
+                e.AppName,
+                (int?)e.ProgressPercentage));
+        };
+    }
+
+    public static async Task<bool> Run(AppImageManagerV2 manager, Func<AppImageManagerV2, Task> operation)
     {
         var hadError = false;
         Attach(manager, () => hadError = true);

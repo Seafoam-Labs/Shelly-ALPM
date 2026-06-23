@@ -9,7 +9,7 @@ public class UpdateService(DBusMenuHandler? menuHandler = null)
 {
     public async Task<int> CheckForUpdates()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Get Available Updates", "utility updates -a -l --json");
+        var result = await ExecuteUnprivilegedCommandAsync("Get Available Updates", "check-updates -al --json");
         try
         {
             var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);

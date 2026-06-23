@@ -1,7 +1,7 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgname=shelly-bin
-pkgver=2.3.3.4
+pkgver=2.4.0.4
 pkgrel=1
 pkgdesc="Shelly: A Modern Arch Package Manager (prebuilt binary)"
 arch=('x86_64')
@@ -28,6 +28,7 @@ depends=(
 optdepends=(
     'flatpak: For supporting flatpak implementation.'
     'fish: Fish shell completions'
+    'zsh: Zsh shell completions'
 )
 
 source=(
@@ -104,6 +105,9 @@ EOF
 
   # Install fish shell completions
   install -Dm644 "$srcdir/shelly.fish" "$pkgdir/usr/share/fish/vendor_completions.d/shelly.fish"
+
+  # Install zsh shell completions
+  install -Dm644 "$srcdir/_shelly" "$pkgdir/usr/share/zsh/site-functions/_shelly"
 
   # Install translations
 if [ -d "$srcdir/locale" ] && [ -n "$(ls -A "$srcdir/locale" 2>/dev/null)" ]; then

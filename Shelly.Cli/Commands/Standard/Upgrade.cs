@@ -71,8 +71,7 @@ public class Upgrade : GlobalSettingsCommand
         console.WriteLine(Colorize($"Net Upgrade Size: {upgradeSize}", ConsoleColor.DarkGreen));
         console.WriteLine();
 
-        var result = Confirm.Execute("Proceed with upgrade?", false);
-        if (!result)
+        if (!NoConfirm && !Confirm.Execute("Proceed with upgrade?", false))
         {
             console.WriteLine(Colorize("Upgrade cancelled.", ConsoleColor.Red));
             return;

@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Text.Json;
 using PackageManager.Flatpak;
 using static Shelly.Cli.Interactions.AnsiUtilities;
 
@@ -26,9 +27,15 @@ public class ListRemotes : GlobalSettingsCommand
         var manager = new FlatpakManager();
         var remotes = manager.ListRemotesWithDetails();
 
-        if (UiMode || JsonOutput)
+        if (UiMode)
         {
             JsonPackFrame.WriteToStdout(remotes);
+            return ValueTask.CompletedTask;
+        }
+
+        if (JsonOutput)
+        {
+            console.WriteLine(JsonSerializer.Serialize(remotes, ShellyCliJsonContext.Default.ListFlatpakRemoteDto));
             return ValueTask.CompletedTask;
         }
 

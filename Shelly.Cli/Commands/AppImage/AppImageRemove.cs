@@ -1,6 +1,7 @@
 using System.CommandLine;
 using PackageManager.AppImage.AppImageV2;
 using Shelly.Cli.Interactions;
+using Shelly.Cli.Outputs;
 using Shelly.Utilities;
 
 namespace Shelly.Cli.Commands.AppImage;
@@ -45,6 +46,12 @@ public partial class AppImageRemove : GlobalSettingsCommand
             searchPaths.Add(oldDefaultPath);
         }
 
+        if (UiMode)
+        {
+            await ExecuteUiMode();
+            return;
+        }
+
         var matches = new List<string>();
         foreach (var appImages in from path in searchPaths
                  where Directory.Exists(path)
@@ -75,32 +82,54 @@ public partial class AppImageRemove : GlobalSettingsCommand
         }
 
         if (NoConfirm &&
-            !Confirm.Execute($"Are you sure you want to remove [red]{Path.GetFileName(targetAppImage)}[/]?"))
+            !Confirm.Execute($"Are you sure you want to remove {Path.GetFileName(targetAppImage)}?"))
         {
             return;
         }
 
         var manager = new AppImageManagerV2(ConfigManager.ReadConfig().AppImageInstallPath ?? "");
-        if (UiMode)
+        await AppImageSinglePaneOutput.Output(console, manager, x => x.RemoveAppImage(targetAppImage, RemoveConfig),
+            NoConfirm);
+    }
+
+    public override async ValueTask ExecuteUiMode()
+    {
+        var config = ConfigManager.ReadConfig();
+        var installDir = config.AppImageInstallPath ?? XdgPaths.BinHome();
+        var oldDefaultPath = XdgPaths.BinHome();
+        var searchPaths = new List<string> { installDir };
+        if (installDir != oldDefaultPath)
         {
-            manager.ErrorEvent += (_, args) => UiFrames.Error(args.Error);
-            manager.MessageEvent += (_, args) => UiFrames.Info(args.Message);
-            UiFrames.Info("Removing AppImage...", Utilities.Eventing.AlpmEvents.TransactionStart);
+            searchPaths.Add(oldDefaultPath);
+        }
+
+        var matches = new List<string>();
+        foreach (var appImages in from path in searchPaths
+                 where Directory.Exists(path)
+                 select Directory.GetFiles(path, "*.AppImage", SearchOption.TopDirectoryOnly))
+        {
+            matches.AddRange(appImages.Where(f =>
+                Path.GetFileName(f).Contains(AppImage, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        if (matches.Count == 0)
+        {
+            UiFrames.Info($"No AppImage matching \"{AppImage}\" found in searched paths.");
+            return;
+        }
+
+        string targetAppImage;
+        if (matches.Count == 1)
+        {
+            targetAppImage = matches[0];
         }
         else
         {
-            manager.ErrorEvent += (_, args) => console.WriteLine(AnsiUtilities.Colorize($"{args.Error}", ConsoleColor.Red));
-            manager.MessageEvent += (_, args) =>
-                console.WriteLine(AnsiUtilities.Colorize($"{args.Message}", ConsoleColor.Blue));
+            UiFrames.Info($"Multiple matches found, please refine your input to match a singular installed AppImage.");
+            return;
         }
 
-        var result = await manager.RemoveAppImage(targetAppImage, RemoveConfig);
-        if (UiMode)
-            UiFrames.TxFinish(result == 0, "AppImage removed.", "Failed to remove AppImage.");
-    }
-
-    public override ValueTask ExecuteUiMode()
-    {
-        throw new NotImplementedException();
+        var manager = new AppImageManagerV2(ConfigManager.ReadConfig().AppImageInstallPath ?? "");
+        await UiModeOutput.Run(manager, x => x.RemoveAppImage(targetAppImage, RemoveConfig));
     }
 }

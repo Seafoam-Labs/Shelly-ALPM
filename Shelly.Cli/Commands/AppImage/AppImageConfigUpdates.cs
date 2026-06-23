@@ -2,7 +2,9 @@ using System.CommandLine;
 using PackageManager.AppImage;
 using PackageManager.AppImage.AppImageV2;
 using Shelly.Cli.Interactions;
+using Shelly.Cli.Outputs;
 using Shelly.Utilities;
+using Shelly.Utilities.Eventing;
 
 namespace Shelly.Cli.Commands.AppImage;
 
@@ -23,7 +25,8 @@ public partial class AppImageConfigUpdates : GlobalSettingsCommand
         var type = new Argument<UpdateType>("type") { Description = "Update Type" };
         var prerelease = new Option<bool>("--prerelease", "-p") { Description = "Allow prerelease updates" };
 
-        var command = new Command("configure-updates", "Configures the update settings for an AppImage") { appImage, url, type, prerelease };
+        var command = new Command("configure-updates", "Configures the update settings for an AppImage")
+            { appImage, url, type, prerelease };
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
@@ -44,6 +47,12 @@ public partial class AppImageConfigUpdates : GlobalSettingsCommand
 
     public override async ValueTask ExecuteAsync(IShellyConsole console)
     {
+        if (UiMode)
+        {
+            await ExecuteUiMode();
+            return;
+        }
+
         if (string.IsNullOrEmpty(AppImage))
         {
             console.WriteLine(AnsiUtilities.Colorize("Error: AppImage name is required)", ConsoleColor.Red));
@@ -56,10 +65,53 @@ public partial class AppImageConfigUpdates : GlobalSettingsCommand
             return;
         }
 
-        var config = ConfigManager.ReadConfig();
-        var installDir = config.AppImageInstallPath ?? XdgPaths.BinHome();
-        var oldDefaultPath = XdgPaths.BinHome();
+        var matches = await GetAppImageMatches();
+        if (matches.Count == 0)
+        {
+            console.WriteLine(AnsiUtilities.Colorize($"No AppImage matching \"{AppImage}\" found in searched paths.",
+                ConsoleColor.Red));
+            return;
+        }
+        
+        var manager = new AppImageManagerV2(ConfigManager.ReadConfig().AppImageInstallPath ?? "");
+        
+        var success = await AppImageSinglePaneOutput.Output(console, manager,
+            x => x.AppImageConfigureUpdates(Url, AppImage, Type, AllowPrerelease));
+        
+        if (success)
+        {
+            console.WriteLine(AnsiUtilities.Colorize($"Successfully configured updates for {AppImage}",
+                ConsoleColor.Green));
+            return;
+        }
 
+        console.WriteLine(AnsiUtilities.Colorize($"Failed to configure updates for {AppImage}. Is it installed?",
+            ConsoleColor.Red));
+    }
+
+    public override async ValueTask ExecuteUiMode()
+    {
+        var matches = await GetAppImageMatches();
+        if (matches.Count == 0)
+        {
+            UiFrames.Error($"No AppImage matching \"{AppImage}\" found in searched paths.");
+            return;
+        }
+
+        var manager = new AppImageManagerV2(ConfigManager.ReadConfig().AppImageInstallPath ?? "");
+        var success = await UiModeOutput.Run(manager,
+            x => x.AppImageConfigureUpdates(Url, AppImage, Type, AllowPrerelease));
+
+        if (success)
+        {
+            UiFrames.Info($"Successfully configured updates for {AppImage}");
+        }
+    }
+
+    private async Task<List<string>> GetAppImageMatches()
+    {
+        var installDir = ConfigManager.ReadConfig().AppImageInstallPath ?? XdgPaths.BinHome();
+        var oldDefaultPath = XdgPaths.BinHome();
         var searchPaths = new List<string> { installDir };
         if (installDir != oldDefaultPath)
         {
@@ -75,43 +127,6 @@ public partial class AppImageConfigUpdates : GlobalSettingsCommand
                 Path.GetFileName(f).Contains(AppImage, StringComparison.OrdinalIgnoreCase)));
         }
 
-        if (matches.Count == 0)
-        {
-            console.WriteLine(AnsiUtilities.Colorize($"No AppImage matching \"{AppImage}\" found in searched paths.",
-                ConsoleColor.Red));
-            return;
-        }
-
-
-        var manager = new AppImageManagerV2(ConfigManager.ReadConfig().AppImageInstallPath ?? "");
-
-        if (UiMode)
-        {
-            manager.MessageEvent += (_, e) => UiFrames.Info(e.Message);
-            manager.ErrorEvent += (_, e) => UiFrames.Error(e.Error);
-        }
-        else
-        {
-            manager.MessageEvent += (_, e) =>
-                console.WriteLine(AnsiUtilities.Colorize($"[[INFO]]{e.Message}", ConsoleColor.Blue));
-            manager.ErrorEvent += (_, e) => console.WriteLine(AnsiUtilities.Colorize($"[ERROR] {e.Error}", ConsoleColor.Red));
-        }
-
-        var success = await manager.AppImageConfigureUpdates(Url, AppImage, Type,
-            AllowPrerelease);
-
-        if (success)
-        {
-            console.WriteLine(AnsiUtilities.Colorize($"Successfully configured updates for {AppImage}", ConsoleColor.Green));
-            return;
-        }
-
-        console.WriteLine(AnsiUtilities.Colorize($"Failed to configure updates for {AppImage}. Is it installed?",
-            ConsoleColor.Red));
-    }
-
-    public override async ValueTask ExecuteUiMode()
-    {
-        //Unneeded as the command is not interactive.
+        return matches;
     }
 }

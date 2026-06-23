@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Text.Json;
 using PackageManager.Aur;
 using Shelly.Cli.Interactions;
 
@@ -6,7 +7,7 @@ namespace Shelly.Cli.Commands.Aur;
 
 public class Search : GlobalSettingsCommand
 {
-    private string[] Query { get; set; } = Array.Empty<string>();
+    private string[] Query { get; set; } = [];
 
     public static Command Create()
     {
@@ -24,7 +25,7 @@ public class Search : GlobalSettingsCommand
         {
             var instance = new Search
             {
-                Query = parseResult.GetValue(query) ?? Array.Empty<string>()
+                Query = parseResult.GetValue(query) ?? []
             };
             GlobalOptions.Apply(instance, parseResult);
             await instance.ExecuteAsync(new SystemShellyConsole());
@@ -56,9 +57,15 @@ public class Search : GlobalSettingsCommand
 
         var results = await manager.SearchPackages(query);
 
-        if (UiMode || JsonOutput)
+        if (UiMode)
         {
             JsonPackFrame.WriteToStdout(results);
+            return;
+        }
+
+        if (JsonOutput)
+        {
+            console.WriteLine(JsonSerializer.Serialize(results, ShellyCliJsonContext.Default.ListAurPackageDto));
             return;
         }
 

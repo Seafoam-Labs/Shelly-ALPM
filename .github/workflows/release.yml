@@ -29,7 +29,9 @@ jobs:
           dotnet publish Shelly.Cli/Shelly.Cli.csproj -c Release -o publish/shelly-cli -p:InstructionSet=x86-64
           cd publish/shelly-cli
           rm -f *.dbg *.pdb
-          cp ../../shelly.fish .
+          # generate completion scripts from the freshly built binary
+          ./shelly completions fish > shelly.fish
+          ./shelly completions zsh  > _shelly
           tar -czf ../Shelly-CLI-linux-x64.tar.gz .
           cd ../..
 
@@ -85,14 +87,17 @@ jobs:
 
       - name: Bundle Shelly-ALPM
         run: |
-          cp shelly.fish publish/shelly-ui/
+          cp publish/shelly-cli/shelly.fish publish/shelly-ui/
+          cp publish/shelly-cli/_shelly     publish/shelly-ui/
           cd publish/shelly-ui
           rm -f *.dbg *.pdb
           tar -czf ../Shelly-ALPM-linux-x64.tar.gz .
           cd ../..
 
       - name: Copy standalone completions
-        run: cp shelly.fish publish/shelly.fish
+        run: |
+          cp publish/shelly-cli/shelly.fish publish/shelly.fish
+          cp publish/shelly-cli/_shelly     publish/_shelly
 
       - name: Generate SHA256 checksums
         run: |
@@ -102,7 +107,7 @@ jobs:
           curl -sL "https://github.com/ZoeyErinBauer/Shelly-ALPM/archive/${VERSION}.tar.gz" -o "source-${VERSION}.tar.gz"
           sha256sum "source-${VERSION}.tar.gz" | sed "s/source-${VERSION}.tar.gz/${VERSION}.tar.gz/" > SHA256SUMS.txt
           # Add binary tarballs and completions checksums
-          sha256sum Shelly-ALPM-linux-x64.tar.gz Shelly-CLI-linux-x64.tar.gz Shelly-Keys-linux-x64.tar.gz shelly.fish >> SHA256SUMS.txt
+          sha256sum Shelly-ALPM-linux-x64.tar.gz Shelly-CLI-linux-x64.tar.gz Shelly-Keys-linux-x64.tar.gz shelly.fish _shelly >> SHA256SUMS.txt
           rm "source-${VERSION}.tar.gz"
           cat SHA256SUMS.txt
 
@@ -114,6 +119,7 @@ jobs:
             publish/Shelly-CLI-linux-x64.tar.gz
             publish/Shelly-Keys-linux-x64.tar.gz
             publish/shelly.fish
+            publish/_shelly
             publish/SHA256SUMS.txt
           draft: false
           prerelease: false

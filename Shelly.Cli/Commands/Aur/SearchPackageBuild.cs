@@ -1,28 +1,30 @@
 using System.CommandLine;
+using System.Text.Json;
 using PackageManager.Aur;
 using Shelly.Cli.Interactions;
+using Shelly.Cli.Models.Aur;
 
 namespace Shelly.Cli.Commands.Aur;
 
 public class SearchPackageBuild : GlobalSettingsCommand
 {
-    private string[] Package { get; set; } = Array.Empty<string>();
+    private string[] Packages { get; set; } = [];
 
     public static Command Create()
     {
-        var package = new Argument<string[]>("packages")
+        var packages = new Argument<string[]>("packages")
             { Description = "One or more AUR package names to fetch the PKGBUILD for", Arity = ArgumentArity.OneOrMore };
 
         var command = new Command("search-pkgbuild", "Fetch and display the PKGBUILD of AUR packages")
         {
-            package
+            packages
         };
 
         command.SetAction(async (parseResult, _) =>
         {
             var instance = new SearchPackageBuild
             {
-                Package = parseResult.GetValue(package) ?? Array.Empty<string>()
+                Packages = parseResult.GetValue(packages) ?? []
             };
             GlobalOptions.Apply(instance, parseResult);
             await instance.ExecuteAsync(new SystemShellyConsole());
@@ -34,7 +36,7 @@ public class SearchPackageBuild : GlobalSettingsCommand
 
     public override async ValueTask ExecuteAsync(IShellyConsole console)
     {
-        if (Package.Length == 0)
+        if (Packages.Length == 0)
         {
             console.WriteLine(AnsiUtilities.Colorize("No packages specified.", ConsoleColor.Red));
             return;
@@ -43,33 +45,38 @@ public class SearchPackageBuild : GlobalSettingsCommand
         using var manager = new AurPackageManager();
         await manager.Initialize();
 
-        if (UiMode || JsonOutput)
-        {
-            var builds = new List<PackageBuild>();
-            foreach (var package in Package)
-                builds.Add(new PackageBuild(package, await manager.FetchPkgbuildAsync(package)));
+        var builds = new List<PackageBuild>(Packages.Length);
 
+        foreach (var package in Packages)
+        {
+            var pkgbuild = await manager.FetchPkgbuildAsync(package);
+            builds.Add(new PackageBuild(package, pkgbuild));
+        }
+
+        if (UiMode)
+        {
             JsonPackFrame.WriteToStdout(builds);
             return;
         }
 
-        foreach (var package in Package)
+        if (JsonOutput)
         {
-            var pkgbuild = await manager.FetchPkgbuildAsync(package);
+            console.WriteLine(JsonSerializer.Serialize(builds, ShellyCliJsonContext.Default.ListPackageBuild));
+            return;
+        }
 
-            if (pkgbuild == null)
+        foreach (var build in builds)
+        {
+            if (build.PkgBuild is null)
             {
-                console.WriteLine(AnsiUtilities.Colorize($"Failed to get pkgbuild for: {package}", ConsoleColor.Red));
+                console.WriteLine(AnsiUtilities.Colorize($"Failed to get pkgbuild for: {build.PkgBuild}", ConsoleColor.Red));
+                continue;
             }
-            else
-            {
-                console.WriteLine(AnsiUtilities.Colorize($"Package build for: {package}", ConsoleColor.Yellow));
-                console.WriteLine(pkgbuild);
-            }
+
+            console.WriteLine(AnsiUtilities.Colorize($"Package build for: {build.Name}", ConsoleColor.Yellow));
+            console.WriteLine(build.Name);
         }
     }
 
     public override ValueTask ExecuteUiMode() => ValueTask.CompletedTask;
-
-    private sealed record PackageBuild(string Package, string? Build);
 }

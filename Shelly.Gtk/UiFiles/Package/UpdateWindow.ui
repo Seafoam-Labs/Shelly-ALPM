@@ -31,6 +31,27 @@
                             </object>
                         </child>
                         <child>
+                            <object class="GtkBox">
+                                <property name="spacing">2</property>
+                                <style>
+                                    <class name="linked"/>
+                                </style>
+                                <child>
+                                    <object class="GtkToggleButton" id="grid_view_button">
+                                        <property name="icon-name">view-grid-symbolic</property>
+                                        <property name="tooltip-text" translatable="yes">Grid View</property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkToggleButton" id="list_view_button">
+                                        <property name="icon-name">view-list-symbolic</property>
+                                        <property name="tooltip-text" translatable="yes">List View</property>
+                                        <property name="active">true</property>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child>
                             <object class="GtkMenuButton" id="options_menu">
                                 <property name="icon-name">view-more-symbolic</property>
                                 <property name="tooltip-text" translatable="yes">Additional Options</property>
@@ -52,58 +73,84 @@
                     <object class="GtkSeparator"/>
                 </child>
                 <child>
-                    <object class="GtkBox" id="detail_hbox">
+                    <object class="GtkBox">
                         <property name="hexpand">true</property>
                         <property name="orientation">horizontal</property>
                         <property name="vexpand">true</property>
                         <child>
-                            <object class="GtkOverlay">
+                            <object class="GtkBox" id="detail_hbox">
+                                <property name="visible">true</property>
+                                <property name="hexpand">true</property>
+                                <property name="orientation">horizontal</property>
+                                <property name="vexpand">true</property>
+                                <child>
+                                    <object class="GtkOverlay">
+                                        <child>
+                                            <object class="GtkScrolledWindow">
+                                                <property name="hexpand">true</property>
+                                                <property name="overlay-scrolling">false</property>
+                                                <property name="vexpand">true</property>
+                                                <child>
+                                                    <object class="GtkColumnView" id="package_grid">
+                                                        <property name="hexpand">true</property>
+                                                        <property name="vexpand">true</property>
+                                                        <child>
+                                                            <object class="GtkColumnViewColumn" id="check_column">
+                                                                <property name="title"></property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkColumnViewColumn" id="name_column">
+                                                                <property name="title" translatable="yes">Package Name</property>
+                                                                <property name="expand">true</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkColumnViewColumn" id="size_diff_column">
+                                                                <property name="title" translatable="yes">Size Difference</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkColumnViewColumn" id="old_column">
+                                                                <property name="title" translatable="yes">Old Version</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkColumnViewColumn" id="version_column">
+                                                                <property name="title" translatable="yes">Version</property>
+                                                            </object>
+                                                        </child>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                        <child type="overlay">
+                                            <object class="GtkLabel" id="no_packages_label">
+                                                <property name="halign">center</property>
+                                                <property name="valign">center</property>
+                                                <property name="opacity">0.5</property>
+                                                <property name="visible">false</property>
+                                                <property name="use-markup">true</property>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkBox" id="detail_grid_hbox">
+                                <property name="visible">false</property>
+                                <property name="hexpand">true</property>
+                                <property name="orientation">horizontal</property>
+                                <property name="vexpand">true</property>
                                 <child>
                                     <object class="GtkScrolledWindow">
                                         <property name="hexpand">true</property>
                                         <property name="overlay-scrolling">false</property>
                                         <property name="vexpand">true</property>
                                         <child>
-                                            <object class="GtkColumnView" id="package_grid">
-                                                <property name="hexpand">true</property>
-                                                <property name="vexpand">true</property>
-                                                <child>
-                                                    <object class="GtkColumnViewColumn" id="check_column">
-                                                        <property name="title"></property>
-                                                    </object>
-                                                </child>
-                                                <child>
-                                                    <object class="GtkColumnViewColumn" id="name_column">
-                                                        <property name="title" translatable="yes">Package Name</property>
-                                                        <property name="expand">true</property>
-                                                    </object>
-                                                </child>
-                                                <child>
-                                                    <object class="GtkColumnViewColumn" id="size_diff_column">
-                                                        <property name="title" translatable="yes">Size Difference</property>
-                                                    </object>
-                                                </child>
-                                                <child>
-                                                    <object class="GtkColumnViewColumn" id="old_column">
-                                                        <property name="title" translatable="yes">Old Version</property>
-                                                    </object>
-                                                </child>
-                                                <child>
-                                                    <object class="GtkColumnViewColumn" id="version_column">
-                                                        <property name="title" translatable="yes">Version</property>
-                                                    </object>
-                                                </child>
-                                            </object>
+                                            <object class="GtkGridView" id="list_packages"/>
                                         </child>
-                                    </object>
-                                </child>
-                                <child type="overlay">
-                                    <object class="GtkLabel" id="no_packages_label">
-                                        <property name="halign">center</property>
-                                        <property name="valign">center</property>
-                                        <property name="opacity">0.5</property>
-                                        <property name="visible">false</property>
-                                        <property name="use-markup">true</property>
                                     </object>
                                 </child>
                             </object>

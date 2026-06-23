@@ -2,7 +2,9 @@ using System.CommandLine;
 using PackageManager.AppImage;
 using PackageManager.AppImage.AppImageV2;
 using Shelly.Cli.Interactions;
+using Shelly.Cli.Outputs;
 using Shelly.Utilities;
+using Shelly.Utilities.Eventing;
 
 namespace Shelly.Cli.Commands.AppImage;
 
@@ -32,47 +34,44 @@ public partial class AppImageInstall : GlobalSettingsCommand
 
     public override async ValueTask ExecuteAsync(IShellyConsole console)
     {
+        if (UiMode)
+        {
+            await ExecuteUiMode();
+            return;
+        }
+
         if (!File.Exists(AppImageLocation))
         {
-            if (UiMode)
-                UiFrames.Error("Specified file does not exist.");
-            else
-                console.WriteLine(AnsiUtilities.Colorize("Error: Specified file does not exist.", ConsoleColor.Red));
-            return;
+            console.WriteLine(AnsiUtilities.Colorize("Error: Specified file does not exist.", ConsoleColor.Red));
         }
 
         if (await AppImageManagerV2.IsAppImage(AppImageLocation))
         {
             var installPath = ConfigManager.ReadConfig().AppImageInstallPath ?? XdgPaths.BinHome();
             var manager = new AppImageManagerV2(installPath);
-            if (UiMode)
-            {
-                manager.ErrorEvent += (_, args) => UiFrames.Error(args.Error);
-                manager.MessageEvent += (_, args) => UiFrames.Info(args.Message);
-            }
-            else
-            {
-                manager.ErrorEvent += (_, args) =>
-                    console.WriteLine(AnsiUtilities.Colorize($"{args.Error}", ConsoleColor.Red));
-                manager.MessageEvent += (_, args) =>
-                    console.WriteLine(AnsiUtilities.Colorize($"{args.Message}", ConsoleColor.Red));
-            }
 
-            var result = await manager.InstallAppImage(AppImageLocation);
+            var result =
+                await AppImageSinglePaneOutput.Output(console, manager, x => x.InstallAppImage(AppImageLocation));
 
-            if (UiMode)
-                UiFrames.TxFinish(result, "Successfully installed appimage.", "Failed to install appimage.");
-            else if (result)
-            {
-                console.WriteLine(AnsiUtilities.Colorize("Successfully installed appimage.", ConsoleColor.Green));
-            }
-
-            console.WriteLine(AnsiUtilities.Colorize("Failled to install appimage.", ConsoleColor.Red));
+            console.WriteLine(result
+                ? AnsiUtilities.Colorize("Successfully installed appimage.", ConsoleColor.Green)
+                : AnsiUtilities.Colorize("Failled to install appimage.", ConsoleColor.Red));
         }
     }
 
     public override async ValueTask ExecuteUiMode()
     {
-        //Not Implemented.
+        if (!File.Exists(AppImageLocation))
+        {
+            UiFrames.Error("Specified file does not exist.");
+        }
+
+        if (await AppImageManagerV2.IsAppImage(AppImageLocation))
+        {
+            var installPath = ConfigManager.ReadConfig().AppImageInstallPath ?? XdgPaths.BinHome();
+            var manager = new AppImageManagerV2(installPath);
+            var result = await UiModeOutput.Run(manager, x => x.InstallAppImage(AppImageLocation));
+            UiFrames.TxFinish(result, "Successfully installed appimage.", "Failed to install appimage.");
+        }
     }
 }

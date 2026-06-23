@@ -10,7 +10,7 @@ using Shelly.Gtk.Services.PackageTraversal;
 using Shelly.Gtk.UiModels;
 using Shelly.Gtk.UiModels.PackageManagerObjects;
 using Shelly.Gtk.UiModels.PackageManagerObjects.GObjects;
-using Shelly.Gtk.Windows.Dialog;
+using Shelly.Utilities.Enums;
 using static Shelly.GTK.Resources.Translations;
 using ListStore = Gio.ListStore;
 
@@ -59,6 +59,8 @@ public sealed class PackageInstall(
 
     private Revealer _detailRevealer = null!;
     private Box _detailBox = null!;
+    private Label _cartLabel = null!;
+    private Box _cartItemsBox = null!;
     private HashSet<string> _installedPackageNames = [];
     private static readonly ConditionalWeakTable<CheckButton, BindState> CheckState = new();
 
@@ -66,6 +68,8 @@ public sealed class PackageInstall(
     private Spinner _loadingSpinner = null!;
     private Label _errorLabel = null!;
 
+    private GridView _gridView = null!;
+    
     public Widget CreateWindow()
     {
         var builder = Builder.NewFromString(ResourceHelper.LoadUiFile("UiFiles/Package/PackageWindow.ui"), -1);
@@ -89,6 +93,8 @@ public sealed class PackageInstall(
         _searchEntry = (SearchEntry)builder.GetObject("search_entry")!;
         _detailRevealer = (Revealer)builder.GetObject("detail_revealer")!;
         _detailBox = (Box)builder.GetObject("detail_box")!;
+        _cartLabel = (Label)builder.GetObject("cart_label")!;
+        _cartItemsBox = (Box)builder.GetObject("cart_items_box")!;
         _groupDropDown = (DropDown)builder.GetObject("grouping_selection")!;
         _upgradeCheck = (CheckButton)builder.GetObject("upgrade_check")!;
         _showHiddenCheck = (CheckButton)builder.GetObject("show_hidden_check")!;
@@ -109,7 +115,41 @@ public sealed class PackageInstall(
         _selectionModel.Autoselect = false;
         columnView.SetModel(_selectionModel);
 
+        _gridView = (GridView)builder.GetObject("list_packages")!;
+        var detailGridHbox = (Box)builder.GetObject("detail_grid_hbox")!;
+        detailGridHbox.SetVisible(true);
+        var detailHbox = (Box)builder.GetObject("detail_hbox")!;
+        detailHbox.SetVisible(false);
+
+        var gridViewButton = (ToggleButton)builder.GetObject("grid_view_button")!;
+        var listViewButton = (ToggleButton)builder.GetObject("list_view_button")!;
+
+        gridViewButton.OnToggled += (_, _) =>
+        {
+            if (!gridViewButton.Active) return;
+            listViewButton.Active = false;
+            detailGridHbox.SetVisible(true);
+            detailHbox.SetVisible(false);
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageInstallView = ViewType.Grid;
+            configService.SaveConfig(updatedConfig);
+        };
+        listViewButton.OnToggled += (_, _) =>
+        {
+            if (!listViewButton.Active) return;
+            gridViewButton.Active = false;
+            detailHbox.SetVisible(true);
+            detailGridHbox.SetVisible(false);
+            var updatedConfig = configService.LoadConfig();
+            updatedConfig.PackageInstallView = ViewType.List;
+            configService.SaveConfig(updatedConfig);
+        };
+
+        _gridView.SetMaxColumns(4);
+        _gridView.SetMinColumns(1);
+
         SetupColumns(checkColumn, _nameColumn, _sizeColumn, _versionColumn, _repositoryColumn);
+        SetupGridView();
 
         _nameColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
         _repositoryColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
@@ -148,8 +188,9 @@ public sealed class PackageInstall(
         ColumnViewHelper.AlignColumnHeader(columnView, 2, Align.End);
         ColumnViewHelper.AlignColumnHeader(columnView, 3, Align.End);
         ColumnViewHelper.AlignColumnHeader(columnView, 4, Align.End);
-
-        columnView.OnRealize += (_, _) => { Reload(); };
+        
+        Reload();
+        
         columnView.OnActivate += (_, _) =>
         {
             var item = _selectionModel.GetSelectedItem();
@@ -262,6 +303,211 @@ public sealed class PackageInstall(
         old.Dispose();
         Interlocked.Increment(ref _loadGeneration);
         _ = LoadDataAsync(_loadGeneration, _cts.Token);
+    }
+
+    private void SetupGridView()
+    {
+        var factory = SignalListItemFactory.New();
+        factory.OnSetup += (sender, args) =>
+        {
+            var item = (ListItem)args.Object;
+
+            var contentGrid = Grid.New();
+            contentGrid.SetMarginTop(10);
+            contentGrid.SetMarginBottom(10);
+            contentGrid.SetMarginStart(12);
+            contentGrid.SetMarginEnd(12);
+            contentGrid.SetColumnSpacing(12);
+            contentGrid.SetRowSpacing(4);
+            contentGrid.SetHexpand(true);
+            contentGrid.SetValign(Align.Center);
+
+            var image = Image.NewFromIconName("package-x-generic");
+            image.SetPixelSize(48);
+            image.SetValign(Align.Center);
+            image.SetHalign(Align.Center);
+            image.AddCssClass("icon-dropshadow");
+           
+            contentGrid.Attach(image, 0, 0, 1, 2);
+
+            var titleLabel = Label.New("");
+            titleLabel.SetHalign(Align.Start);
+            titleLabel.SetValign(Align.Center);
+            titleLabel.Vexpand = false;
+            titleLabel.Hexpand = false;
+            titleLabel.SetEllipsize(Pango.EllipsizeMode.End);
+
+            var installedCheck = Image.NewFromIconName("object-select-symbolic");
+            installedCheck.SetValign(Align.Center);
+            installedCheck.SetHalign(Align.Start);
+            installedCheck.SetHexpand(false);
+            installedCheck.SetTooltipText(T("Package is already installed"));
+
+            var versionLabel = Label.New("");
+            versionLabel.SetHalign(Align.End);
+            versionLabel.SetValign(Align.Center);
+            versionLabel.SetHexpand(true);
+            versionLabel.AddCssClass("dim-label");
+
+            var selectionCheck = CheckButton.New();
+            selectionCheck.SetValign(Align.Center);
+            selectionCheck.SetHalign(Align.End);
+            selectionCheck.SetHexpand(false);
+            
+            contentGrid.Attach(titleLabel, 1, 0, 1, 1);
+            contentGrid.Attach(installedCheck, 2, 0, 1, 1);
+            contentGrid.Attach(versionLabel, 3, 0, 1, 1);
+            contentGrid.Attach(selectionCheck, 4, 0, 1, 2);
+
+
+            var descLabel = Label.New("");
+            descLabel.SetHalign(Align.Start);
+            descLabel.SetValign(Align.Start);
+            descLabel.Vexpand = false;
+            descLabel.Hexpand = true;
+            descLabel.AddCssClass("dim-label");
+            descLabel.SetEllipsize(Pango.EllipsizeMode.End);
+            descLabel.SetHexpand(true);
+            
+            contentGrid.Attach(descLabel, 1, 1, 3, 1);
+
+            var frame = Frame.New(null);
+            frame.SetChild(contentGrid);
+            frame.SetSizeRequest(300, -1);
+            frame.Hexpand = true;
+            frame.Halign = Align.Fill;
+            frame.AddCssClass("card");
+
+            item.Child = frame;
+        };
+        factory.OnBind += (sender, args) =>
+        {
+            var item = (ListItem)args.Object;
+            var pkgObj = (AlpmPackageGObject)item.Item!;
+            var frame = (Frame)item.Child!;
+            var contentGrid = (Grid)frame.GetChild()!;
+            var iconImage = (Image)contentGrid.GetChildAt(0, 0)!;
+            var titleLabel = (Label)contentGrid.GetChildAt(1, 0)!;
+            var installedCheck = (Image)contentGrid.GetChildAt(2, 0)!;
+            var versionLabel = (Label)contentGrid.GetChildAt(3, 0)!;
+            var selectionCheck = (CheckButton)contentGrid.GetChildAt(4, 0)!;
+            var descLabel = (Label)contentGrid.GetChildAt(1, 1)!;
+
+            if (CheckState.TryGetValue(selectionCheck, out var old))
+            {
+                if (old.Toggled is not null) selectionCheck.OnToggled -= old.Toggled;
+                if (old.Pkg is not null && old.External is not null)
+                    old.Pkg.OnSelectionToggled -= old.External;
+                CheckState.Remove(selectionCheck);
+            }
+
+            selectionCheck.Active = pkgObj.IsSelected;
+
+            void OnExternalToggle(object? s, EventArgs e)
+            {
+                selectionCheck.Active = pkgObj.IsSelected;
+                UpdateCart();
+            }
+
+            selectionCheck.OnToggled += OnToggled;
+            pkgObj.OnSelectionToggled += OnExternalToggle;
+            CheckState.Add(selectionCheck, new BindState
+            {
+                Pkg = pkgObj,
+                Toggled = OnToggled,
+                External = OnExternalToggle
+            });
+
+            
+            
+            
+            
+            if (pkgObj.Index < 0 || pkgObj.Index >= _packageData.Count) return;
+
+            var pkg = _packageData[pkgObj.Index];
+
+            var iconPath = iconResolverService.GetIconPath(pkg.Name);
+            if (!string.IsNullOrWhiteSpace(iconPath) && iconPath != "Unavailable" && File.Exists(iconPath))
+            {
+                iconImage.SetFromFile(iconPath);
+            }
+            else
+            {
+                iconImage.SetFromIconName("package-x-generic");
+            }
+
+            titleLabel.SetText(pkg.Name);
+            versionLabel.SetText(pkg.Version);
+            installedCheck.SetVisible(pkgObj.IsInstalled);
+            descLabel.SetText(pkg.Description);
+            return;
+
+            void OnToggled(CheckButton sender2, EventArgs e)
+            {
+                if (pkgObj.IsSelected != sender2.Active)
+                    pkgObj.ToggleSelection();
+                UpdateCart();
+                if (sender2.Active)
+                {
+                    ShowPackageDetails(pkgObj);
+                }
+            }
+        };
+        factory.OnUnbind += (_, args) =>
+        {
+            var item = (ListItem)args.Object;
+            var frame = (Frame?)item.Child;
+            var contentGrid = (Grid?)frame?.GetChild();
+            var selectionCheck = (CheckButton?)contentGrid?.GetChildAt(4, 0);
+            if (selectionCheck is null) return;
+            if (!CheckState.TryGetValue(selectionCheck, out var state)) return;
+            if (state.Toggled is not null) selectionCheck.OnToggled -= state.Toggled;
+            if (state.Pkg is not null && state.External is not null)
+                state.Pkg.OnSelectionToggled -= state.External;
+            CheckState.Remove(selectionCheck);
+        };
+        factory.OnTeardown += (_, args) =>
+        {
+            var item = (ListItem)args.Object;
+            item.Child = null;
+        };
+        _gridView.SetFactory(factory);
+        _gridView.SetModel(_selectionModel);
+    }
+
+    private void UpdateCart()
+    {
+        while (_cartItemsBox.GetFirstChild() is { } child)
+        {
+            _cartItemsBox.Remove(child);
+        }
+
+        var selectedPackages = _packageGObjectRefs.Where(p => p.IsSelected).ToList();
+        _cartLabel.SetText(T("{0} Selected", selectedPackages.Count));
+
+        foreach (var pkg in selectedPackages)
+        {
+            var box = Box.New(Orientation.Horizontal, 0);
+
+            var name = _packageData[pkg.Index].Name;
+            var label = Label.New(name);
+            label.Hexpand = true;
+            label.Halign = Align.Start;
+            label.MarginStart = 4;
+            label.MarginEnd = 8;
+            box.Append(label);
+
+            var removeButton = Button.NewFromIconName("window-close-symbolic");
+            removeButton.Halign = Align.End;
+            removeButton.OnClicked += (_, _) =>
+            {
+                pkg.ToggleSelection();
+                UpdateCart();
+            };
+            box.Append(removeButton);
+
+            _cartItemsBox.Append(box);
+        }
     }
 
     private void ShowPackageDetails(AlpmPackageGObject pkgObj)
@@ -538,6 +784,7 @@ public sealed class PackageInstall(
             {
                 if (syncing) return;
                 pkgObj.IsSelected = sender.Active;
+                UpdateCart();
                 if (sender.Active)
                 {
                     ShowPackageDetails(pkgObj);
@@ -550,6 +797,7 @@ public sealed class PackageInstall(
                 syncing = true;
                 checkButton.SetActive(pkgObj.IsSelected);
                 syncing = false;
+                UpdateCart();
             }
         };
 
@@ -803,7 +1051,6 @@ public sealed class PackageInstall(
                     }
                 }
                 return false;
-
             });
         }
         catch (OperationCanceledException)

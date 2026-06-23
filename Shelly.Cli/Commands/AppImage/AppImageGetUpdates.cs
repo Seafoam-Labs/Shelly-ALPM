@@ -1,7 +1,10 @@
 using System.CommandLine;
+using Microsoft.VisualBasic;
+using PackageManager.AppImage;
 using PackageManager.AppImage.AppImageV2;
 using Shelly.Cli.Interactions;
 using Shelly.Utilities;
+using Shelly.Utilities.Eventing;
 
 namespace Shelly.Cli.Commands.AppImage;
 
@@ -24,43 +27,34 @@ public partial class AppImageGetUpdates : GlobalSettingsCommand
 
     public override async ValueTask ExecuteAsync(IShellyConsole console)
     {
-        var installPath = ConfigManager.ReadConfig().AppImageInstallPath ?? XdgPaths.BinHome();
-        var manager = new AppImageManagerV2(installPath);
         if (UiMode)
         {
-            manager.MessageEvent += (_, e) => UiFrames.Info(e.Message);
-            manager.ErrorEvent += (_, e) => UiFrames.Error(e.Error);
-        }
-        else
-        {
-            manager.MessageEvent +=
-                (_, e) => console.WriteLine(AnsiUtilities.Colorize($"[INFO]{e.Message}", ConsoleColor.Blue));
-            manager.ErrorEvent += (_, e) => console.WriteLine(AnsiUtilities.Colorize($"[ERROR]]{e.Error}", ConsoleColor.Red));
+            await ExecuteUiMode();
+            return;
         }
 
-        var result = await manager.CheckForAppImageUpdates();
-
-        if (UiMode)
+        var result = await GetAppImageUpdates();
+        foreach (var update in result)
         {
-            JsonPackFrame.WriteToStdout(result);
+            console.WriteLine(AnsiUtilities.Colorize($"{update.Name} {update.Version} is available",
+                ConsoleColor.Green));
         }
 
-        else
+        if (result.Count == 0)
         {
-            foreach (var update in result)
-            {
-                console.WriteLine(AnsiUtilities.Colorize($"{update.Name} {update.Version} is available", ConsoleColor.Green));
-            }
-
-            if (result.Count == 0)
-            {
-                console.WriteLine(AnsiUtilities.Colorize("No updates available", ConsoleColor.Yellow));
-            }
+            console.WriteLine(AnsiUtilities.Colorize("No updates available", ConsoleColor.Yellow));
         }
     }
 
     public override async ValueTask ExecuteUiMode()
     {
-        //Not Implemented 
+        JsonPackFrame.WriteToStdout(await GetAppImageUpdates());
+    }
+
+    private static async Task<List<AppImageUpdateDto>> GetAppImageUpdates()
+    {
+        var installPath = ConfigManager.ReadConfig().AppImageInstallPath ?? XdgPaths.BinHome();
+        var manager = new AppImageManagerV2(installPath);
+        return await manager.CheckForAppImageUpdates();
     }
 }
