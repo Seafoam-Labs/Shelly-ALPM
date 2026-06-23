@@ -11,6 +11,7 @@ public class XdgPathsTests
     private string? _origData;
     private string? _origConfig;
     private string? _origSudoUser;
+    private string? _origPkexecUid;
     private string? _origHome;
 
     [SetUp]
@@ -20,8 +21,10 @@ public class XdgPathsTests
         _origData = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
         _origConfig = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
         _origSudoUser = Environment.GetEnvironmentVariable("SUDO_USER");
+        _origPkexecUid = Environment.GetEnvironmentVariable("PKEXEC_UID");
         _origHome = Environment.GetEnvironmentVariable("HOME");
         Environment.SetEnvironmentVariable("SUDO_USER", null);
+        Environment.SetEnvironmentVariable("PKEXEC_UID", null);
     }
 
     [TearDown]
@@ -31,6 +34,7 @@ public class XdgPathsTests
         Environment.SetEnvironmentVariable("XDG_DATA_HOME", _origData);
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", _origConfig);
         Environment.SetEnvironmentVariable("SUDO_USER", _origSudoUser);
+        Environment.SetEnvironmentVariable("PKEXEC_UID", _origPkexecUid);
         Environment.SetEnvironmentVariable("HOME", _origHome);
     }
 
@@ -68,7 +72,7 @@ public class XdgPathsTests
 
         Assert.That(XdgPaths.CacheHome(), Is.EqualTo("/tmp/xcache"));
     }
-    
+
 
     [Test]
     public void ShellyCache_WithParts_ComposesCorrectly()
@@ -101,11 +105,35 @@ public class XdgPathsTests
     public void InvokingUserHome_WithoutSudoUser_FallsBackToHome()
     {
         Environment.SetEnvironmentVariable("SUDO_USER", null);
+        Environment.SetEnvironmentVariable("PKEXEC_UID", null);
         Environment.SetEnvironmentVariable("HOME", "/tmp/fakehome");
 
         Assert.That(XdgPaths.InvokingUserHome(), Is.EqualTo("/tmp/fakehome"));
     }
-    
+
+    [Test]
+    public void InvokingUserHome_WithPkexecUid_UsesPasswdHome()
+    {
+        var current = Environment.UserName;
+        var entry = File.ReadLines("/etc/passwd")
+            .Select(line => line.Split(':'))
+            .FirstOrDefault(parts => parts.Length >= 6 && parts[0] == current);
+        Assert.That(entry, Is.Not.Null, "Current user must exist in /etc/passwd for this test");
+
+        var uid = entry![2];
+        var expectedHome = entry[5];
+
+        Environment.SetEnvironmentVariable("SUDO_USER", null);
+        Environment.SetEnvironmentVariable("PKEXEC_UID", uid);
+        Environment.SetEnvironmentVariable("HOME", "/root");
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(XdgPaths.InvokingUserHome(), Is.EqualTo(expectedHome));
+            Assert.That(XdgPaths.ShellyCache("x"), Is.EqualTo(Path.Combine(expectedHome, ".cache", "Shelly", "x")));
+        }
+    }
+
 
     [Test]
     public void Defaults_UnsetEnv_ProduceLegacyPaths()

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -369,7 +370,6 @@ public sealed class AurPackageManager(string? configPath = null)
             }
 
             // Build the package using makepkg
-            var user = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
             var pkgbase = await ResolvePkgbaseAsync(packageName);
             var tempPath = XdgPaths.ShellyCache(pkgbase);
             RaisePkgProgress(AlpmEventType.AurBuildStart, packageName, i + 1, totalCount,
@@ -455,20 +455,7 @@ public sealed class AurPackageManager(string? configPath = null)
             if (File.Exists(pkgbuildPath))
             {
                 // Create directory as the non-root user to avoid permission issues
-                var mkdirProcess = new System.Diagnostics.Process
-                {
-                    StartInfo = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "sudo",
-                        Arguments = $"-u {user} mkdir -p {previousVersionsPath}",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-                mkdirProcess.Start();
-                await mkdirProcess.WaitForExitAsync();
+                _ = await RunAsInvokingUserAsync("mkdir", ["-p", previousVersionsPath]);
 
                 var existingBackups = Directory.Exists(previousVersionsPath)
                     ? Directory.GetFiles(previousVersionsPath, "PKGBUILD.*")
@@ -476,39 +463,13 @@ public sealed class AurPackageManager(string? configPath = null)
                 var nextNumber = existingBackups.Length + 1;
                 var backupPath = Path.Combine(previousVersionsPath, $"PKGBUILD.{nextNumber}");
 
-                var cpProcess = new System.Diagnostics.Process
-                {
-                    StartInfo = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "sudo",
-                        Arguments = $"-u {user} cp {pkgbuildPath} {backupPath}",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-                cpProcess.Start();
-                await cpProcess.WaitForExitAsync();
+                _ = await RunAsInvokingUserAsync("cp", [pkgbuildPath, backupPath]);
             }
 
             // Remove any existing package files before building
             foreach (var oldPkgFile in Directory.GetFiles(tempPath, "*.pkg.tar.*"))
             {
-                var rmPkgProcess = new System.Diagnostics.Process
-                {
-                    StartInfo = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "sudo",
-                        Arguments = $"-u {user} rm -f {oldPkgFile}",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-                rmPkgProcess.Start();
-                await rmPkgProcess.WaitForExitAsync();
+                _ = await RunAsInvokingUserAsync("rm", ["-f", oldPkgFile]);
             }
 
             if (_useChroot)
@@ -630,7 +591,7 @@ public sealed class AurPackageManager(string? configPath = null)
             // Clean makepkg build artifacts (src/, pkg/) so a later fresh-clone recovery
             // isn't blocked by root-owned fakeroot-staged trees inside the cache dir.
             // Best-effort; failures are logged but never fail the install.
-            await CleanBuildArtifactsAsync(user, tempPath);
+            await CleanBuildArtifactsAsync(tempPath);
             RaiseBuildLine(packageName, "[Shelly] Cleaned build artifacts (src/, pkg/)", false);
 
             RaisePkgProgress(AlpmEventType.AurPackageCompleted, packageName, i + 1, totalCount);
@@ -802,27 +763,13 @@ public sealed class AurPackageManager(string? configPath = null)
         {
             _vcsInfoStore.RemovePackage(packageName);
             // Clean up cache folder
-            var user = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
             var pkgbase = await ResolvePkgbaseAsync(packageName);
             var cachePath = XdgPaths.ShellyCache(pkgbase);
 
             if (Directory.Exists(cachePath))
             {
-                // Remove cache directory as the original user
-                var rmProcess = new System.Diagnostics.Process
-                {
-                    StartInfo = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "sudo",
-                        Arguments = $"-u {user} rm -rf {cachePath}",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-                rmProcess.Start();
-                await rmProcess.WaitForExitAsync();
+                // Remove cache directory as the original invoking user.
+                _ = await RunAsInvokingUserAsync("rm", ["-rf", cachePath]);
             }
         }
 
@@ -989,9 +936,9 @@ public sealed class AurPackageManager(string? configPath = null)
     private static async Task<(int ExitCode, string StdOut, string StdErr)> RunProcessAsync(
         string fileName, string arguments, string? workingDirectory = null)
     {
-        var process = new System.Diagnostics.Process
+        var process = new Process
         {
-            StartInfo = new System.Diagnostics.ProcessStartInfo
+            StartInfo = new ProcessStartInfo
             {
                 FileName = fileName,
                 Arguments = arguments,
@@ -1009,13 +956,112 @@ public sealed class AurPackageManager(string? configPath = null)
         return (process.ExitCode, await stdoutTask, await stderrTask);
     }
 
+    private static async Task<(int ExitCode, string StdOut, string StdErr)> RunProcessAsync(
+        ProcessStartInfo startInfo)
+    {
+        var process = new Process
+        {
+            StartInfo = startInfo
+        };
+        process.Start();
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        return (process.ExitCode, await stdoutTask, await stderrTask);
+    }
+
+    private static string BuildExecutionPath()
+    {
+        var path = Environment.GetEnvironmentVariable("PATH") ?? "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin";
+        if (!path.Contains("core_perl", StringComparison.Ordinal))
+            path = $"/usr/bin/core_perl:/usr/bin/vendor_perl:/usr/bin/site_perl:{path}";
+
+        return path;
+    }
+
+    private static string ResolveUsernameForUid(string uid)
+    {
+        if (string.IsNullOrEmpty(uid)) return uid;
+        try
+        {
+            foreach (var line in File.ReadLines("/etc/passwd"))
+            {
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#')) continue;
+
+                var parts = line.Split(':');
+                if (parts.Length >= 3 && string.Equals(parts[2], uid, StringComparison.Ordinal)) return parts[0];
+            }
+        }
+        catch
+        {
+            // Best-effort lookup; fall back to the raw UID
+        }
+
+        return uid;
+    }
+
+    private static ProcessStartInfo CreateAsInvokingUserStartInfo(
+        string command,
+        IEnumerable<string> commandArgs,
+        string? workingDirectory = null)
+    {
+        var sudoUser = Environment.GetEnvironmentVariable("SUDO_USER");
+        var pkexecUid = Environment.GetEnvironmentVariable("PKEXEC_UID");
+        var pkexecUser = ResolveUsernameForUid(pkexecUid ?? string.Empty);
+        var startInfo = new ProcessStartInfo
+        {
+            WorkingDirectory = workingDirectory ?? string.Empty,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        if (!string.IsNullOrWhiteSpace(sudoUser))
+        {
+            startInfo.FileName = "sudo";
+            startInfo.ArgumentList.Add("--preserve-env=PATH");
+            startInfo.ArgumentList.Add("-u");
+            startInfo.ArgumentList.Add(sudoUser);
+            startInfo.ArgumentList.Add(command);
+        }
+        else if (!string.IsNullOrWhiteSpace(pkexecUser))
+        {
+            startInfo.FileName = "runuser";
+            startInfo.ArgumentList.Add("-u");
+            startInfo.ArgumentList.Add(pkexecUser);
+            startInfo.ArgumentList.Add("-w");
+            startInfo.ArgumentList.Add("PATH");
+            startInfo.ArgumentList.Add("--");
+            startInfo.ArgumentList.Add(command);
+        }
+        else
+        {
+            startInfo.FileName = command;
+        }
+
+        foreach (var arg in commandArgs) startInfo.ArgumentList.Add(arg);
+
+        startInfo.Environment["PATH"] = BuildExecutionPath();
+        return startInfo;
+    }
+
+    private static Task<(int ExitCode, string StdOut, string StdErr)> RunAsInvokingUserAsync(
+        string command,
+        IEnumerable<string> commandArgs,
+        string? workingDirectory = null)
+    {
+        var startInfo = CreateAsInvokingUserStartInfo(command, commandArgs, workingDirectory);
+        return RunProcessAsync(startInfo);
+    }
+
     /// <summary>
     /// Best-effort cleanup of makepkg build artifacts (<c>src/</c> and <c>pkg/</c>) inside
-    /// the per-package cache dir. Mirrors the sudo→root fallback strategy in
+    /// the per-package cache dir. Mirrors the invoking-user→root fallback strategy in
     /// <see cref="RemoveCacheDirAsync"/> because <c>pkg/</c> commonly contains
     /// fakeroot-staged root-owned files. Never throws; cleanup failure is logged only.
     /// </summary>
-    private async Task CleanBuildArtifactsAsync(string user, string tempPath)
+    private async Task CleanBuildArtifactsAsync(string tempPath)
     {
         if (!Directory.Exists(tempPath)) return;
 
@@ -1024,8 +1070,7 @@ public sealed class AurPackageManager(string? configPath = null)
             var path = Path.Combine(tempPath, sub);
             if (!Directory.Exists(path)) continue;
 
-            var (rc, _, rerr) = await RunProcessAsync(
-                "sudo", $"-u {user} rm -rf {path}");
+            var (rc, _, rerr) = await RunAsInvokingUserAsync("rm", ["-rf", path]);
             if (rc == 0) continue;
 
             var (rc2, _, rerr2) = await RunProcessAsync("rm", $"-rf {path}");
@@ -1037,14 +1082,14 @@ public sealed class AurPackageManager(string? configPath = null)
         }
     }
 
-    private async Task<bool> RemoveCacheDirAsync(string user, string tempPath)
+    private async Task<bool> RemoveCacheDirAsync(string tempPath)
     {
         if (!Directory.Exists(tempPath))
         {
             return true;
         }
 
-        var (rc, _, rerr) = await RunProcessAsync("sudo", $"-u {user} rm -rf {tempPath}");
+        var (rc, _, rerr) = await RunAsInvokingUserAsync("rm", ["-rf", tempPath]);
         if (rc == 0)
         {
             return true;
@@ -1061,18 +1106,17 @@ public sealed class AurPackageManager(string? configPath = null)
     {
         try
         {
-            var user = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
             var pkgbase = await _aurSearchManager.GetPackageBaseAsync(packageName);
             var tempPath = XdgPaths.ShellyCache(pkgbase);
             var expectedRemote = $"https://aur.archlinux.org/{pkgbase}.git";
 
-            if (!await RemoveCacheDirAsync(user, tempPath))
+            if (!await RemoveCacheDirAsync(tempPath))
             {
                 return false;
             }
 
             var (cc, _, cerr) = await RunProcessAsync(
-                "sudo", $"-u {user} git clone {expectedRemote} {tempPath}");
+                CreateAsInvokingUserStartInfo("git", ["clone", expectedRemote, tempPath]));
             if (cc != 0)
             {
                 InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.InformationalOutput,
@@ -1082,7 +1126,7 @@ public sealed class AurPackageManager(string? configPath = null)
             }
 
             var (xc, _, xerr) = await RunProcessAsync(
-                "sudo", $"-u {user} git checkout {commit}", tempPath);
+                CreateAsInvokingUserStartInfo("git", ["checkout", commit], tempPath));
             if (xc != 0)
             {
                 InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.InformationalOutput,
@@ -1107,7 +1151,6 @@ public sealed class AurPackageManager(string? configPath = null)
     {
         try
         {
-            var user = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
             var pkgbase = await ResolvePkgbaseAsync(packageName);
             var tempPath = XdgPaths.ShellyCache(pkgbase);
             var expectedRemote = $"https://aur.archlinux.org/{pkgbase}.git";
@@ -1118,7 +1161,7 @@ public sealed class AurPackageManager(string? configPath = null)
             if (hasGit)
             {
                 var (rgc, rgout, _) = await RunProcessAsync(
-                    "sudo", $"-u {user} git -C {tempPath} remote get-url origin");
+                    CreateAsInvokingUserStartInfo("git", ["-C", tempPath, "remote", "get-url", "origin"]));
                 remoteOk = rgc == 0 && string.Equals(rgout.Trim(), expectedRemote, StringComparison.Ordinal);
             }
 
@@ -1127,7 +1170,7 @@ public sealed class AurPackageManager(string? configPath = null)
             if (hasGit && remoteOk)
             {
                 var (pc, _, _) = await RunProcessAsync(
-                    "sudo", $"-u {user} git -C {tempPath} pull --ff-only");
+                    CreateAsInvokingUserStartInfo("git", ["-C", tempPath, "pull", "--ff-only"]));
                 if (pc != 0)
                 {
                     InformationalEvent?.Invoke(this,
@@ -1145,15 +1188,14 @@ public sealed class AurPackageManager(string? configPath = null)
             {
                 // Strip root-owned src/ and pkg/ first so the subsequent user-level
                 // rm -rf on the cache dir isn't blocked by fakeroot-staged artifacts.
-                await CleanBuildArtifactsAsync(user, tempPath);
+                await CleanBuildArtifactsAsync(tempPath);
 
-                if (!await RemoveCacheDirAsync(user, tempPath))
+                if (!await RemoveCacheDirAsync(tempPath))
                 {
                     return false;
                 }
 
-                var (cc, _, cerr) = await RunProcessAsync(
-                    "sudo", $"-u {user} git clone {expectedRemote} {tempPath}");
+                var (cc, _, cerr) = await RunProcessAsync(CreateAsInvokingUserStartInfo("git", ["clone", expectedRemote, tempPath]));
                 if (cc != 0)
                 {
                     InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.InformationalOutput,
@@ -1183,7 +1225,6 @@ public sealed class AurPackageManager(string? configPath = null)
     {
         try
         {
-            var user = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
             var home = XdgPaths.InvokingUserHome();
             var shellyCachePath = XdgPaths.ShellyCache();
 
@@ -1197,13 +1238,13 @@ public sealed class AurPackageManager(string? configPath = null)
             // Import from paru cache
             if (Directory.Exists(paruCachePath))
             {
-                await ImportFromAurHelperCache(paruCachePath, shellyCachePath, foreignPackages, user);
+                await ImportFromAurHelperCache(paruCachePath, shellyCachePath, foreignPackages);
             }
 
             // Import from yay cache
             if (Directory.Exists(yayCachePath))
             {
-                await ImportFromAurHelperCache(yayCachePath, shellyCachePath, foreignPackages, user);
+                await ImportFromAurHelperCache(yayCachePath, shellyCachePath, foreignPackages);
             }
         }
         catch (Exception ex)
@@ -1222,8 +1263,7 @@ public sealed class AurPackageManager(string? configPath = null)
     /// not necessarily an installed pkgname. We resolve the real pkgbase from
     /// the clone and only import when an installed foreign package maps to it.
     /// </summary>
-    private async Task ImportFromAurHelperCache(string sourceCachePath, string shellyCachePath,
-        HashSet<string> foreignPackages, string user)
+    private async Task ImportFromAurHelperCache(string sourceCachePath, string shellyCachePath, HashSet<string> foreignPackages)
     {
         try
         {
@@ -1236,7 +1276,7 @@ public sealed class AurPackageManager(string? configPath = null)
                     continue;
 
 
-                var (pkgbase, memberNames) = await ResolveCloneIdentityAsync(packageDir, user);
+                var (pkgbase, memberNames) = await ResolveCloneIdentityAsync(packageDir);
                 if (pkgbase is null)
                     continue;
 
@@ -1253,55 +1293,16 @@ public sealed class AurPackageManager(string? configPath = null)
                     continue;
 
 
-                var mkdirProcess = new System.Diagnostics.Process
-                {
-                    StartInfo = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "sudo",
-                        Arguments = $"-u {user} mkdir -p {shellyPackagePath}",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-                mkdirProcess.Start();
-                await mkdirProcess.WaitForExitAsync();
+                _ = await RunAsInvokingUserAsync("mkdir", ["-p", shellyPackagePath]);
 
 
-                var copyProcess = new System.Diagnostics.Process
-                {
-                    StartInfo = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "sudo",
-                        Arguments = $"-u {user} cp -r {packageDir}/. {shellyPackagePath}/",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-                copyProcess.Start();
-                await copyProcess.WaitForExitAsync();
+                _ = await RunAsInvokingUserAsync("cp", ["-r", $"{packageDir}/.", $"{shellyPackagePath}/"]);
 
 
                 var gitDir = Path.Combine(shellyPackagePath, ".git");
                 if (Directory.Exists(gitDir))
                 {
-                    var rmGitProcess = new System.Diagnostics.Process
-                    {
-                        StartInfo = new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = "sudo",
-                            Arguments = $"-u {user} rm -rf {gitDir}",
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                            UseShellExecute = false,
-                            CreateNoWindow = true
-                        }
-                    };
-                    rmGitProcess.Start();
-                    await rmGitProcess.WaitForExitAsync();
+                    _ = await RunAsInvokingUserAsync("rm", ["-rf", gitDir]);
                 }
             }
         }
@@ -1314,8 +1315,7 @@ public sealed class AurPackageManager(string? configPath = null)
         }
     }
 
-    private async Task<(string? pkgbase, HashSet<string> pkgnames)> ResolveCloneIdentityAsync(
-        string cloneDir, string user)
+    private static async Task<(string? pkgbase, HashSet<string> pkgnames)> ResolveCloneIdentityAsync(string cloneDir)
     {
         var srcinfo = Path.Combine(cloneDir, ".SRCINFO");
         if (File.Exists(srcinfo))
@@ -1338,7 +1338,7 @@ public sealed class AurPackageManager(string? configPath = null)
             try
             {
                 var (code, stdout, _) = await RunProcessAsync(
-                    "sudo", $"-u {user} git -C {cloneDir} remote get-url origin");
+                    CreateAsInvokingUserStartInfo("git", ["-C", cloneDir, "remote", "get-url", "origin"]));
                 if (code == 0)
                 {
                     const string prefix = "https://aur.archlinux.org/";
@@ -1749,9 +1749,9 @@ public sealed class AurPackageManager(string? configPath = null)
 
         Directory.CreateDirectory(_chrootPath);
 
-        var initProcess = new System.Diagnostics.Process
+        var initProcess = new Process
         {
-            StartInfo = new System.Diagnostics.ProcessStartInfo
+            StartInfo = new ProcessStartInfo
             {
                 FileName = "mkarchroot",
                 Arguments = $"{chrootRoot} base-devel",
@@ -1775,9 +1775,9 @@ public sealed class AurPackageManager(string? configPath = null)
     private void UpdateChroot()
     {
         var chrootRoot = Path.Combine(_chrootPath, "root");
-        var updateProcess = new System.Diagnostics.Process
+        var updateProcess = new Process
         {
-            StartInfo = new System.Diagnostics.ProcessStartInfo
+            StartInfo = new ProcessStartInfo
             {
                 FileName = "arch-nspawn",
                 Arguments = $"{chrootRoot} shelly upgrade -n",
@@ -1797,19 +1797,18 @@ public sealed class AurPackageManager(string? configPath = null)
         File.Copy("/etc/makepkg.conf", destination, overwrite: true);
     }
 
-    private System.Diagnostics.Process CreateBuildProcess(string tempPath,
-        string? makepkgArgs = null)
+    private Process CreateBuildProcess(string tempPath, string? makepkgArgs = null)
     {
         // Use `-s --needed` as defense-in-depth: if Shelly's resolver ever misses a repo dep,
         // makepkg itself will install it via pacman instead of aborting with
         // "could not resolve all dependencies". `--needed` makes this a no-op when Shelly
         // already installed everything. See issue #880 follow-up.
         makepkgArgs ??= "-f -c -s --noconfirm --needed --skippgpcheck" + (_noCheck ? " --nocheck" : "");
+
         if (_useChroot)
-        {
-            return new System.Diagnostics.Process
+            return new Process
             {
-                StartInfo = new System.Diagnostics.ProcessStartInfo
+                StartInfo = new ProcessStartInfo
                 {
                     FileName = "makechrootpkg",
                     Arguments = $"-c -r {_chrootPath}",
@@ -1817,32 +1816,15 @@ public sealed class AurPackageManager(string? configPath = null)
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
-                    CreateNoWindow = true,
+                    CreateNoWindow = true
                 }
             };
-        }
 
-        var user = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
-        var path = Environment.GetEnvironmentVariable("PATH") ??
-                   "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin";
-        if (!path.Contains("core_perl"))
-            path = $"/usr/bin/core_perl:/usr/bin/vendor_perl:/usr/bin/site_perl:{path}";
-
-        var process = new System.Diagnostics.Process
+        var makepkgArgList = makepkgArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return new Process
         {
-            StartInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "sudo",
-                Arguments = $"--preserve-env=PATH -u {user} makepkg {makepkgArgs}",
-                WorkingDirectory = tempPath,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            }
+            StartInfo = CreateAsInvokingUserStartInfo("makepkg", makepkgArgList, tempPath)
         };
-        process.StartInfo.Environment["PATH"] = path;
-        return process;
     }
 
     /// <summary>
@@ -1917,9 +1899,9 @@ public sealed class AurPackageManager(string? configPath = null)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
         try
         {
-            var process = new System.Diagnostics.Process
+            var process = new Process
             {
-                StartInfo = new System.Diagnostics.ProcessStartInfo
+                StartInfo = new ProcessStartInfo
                 {
                     FileName = "git",
                     Arguments = $"ls-remote {url} {(string.IsNullOrEmpty(branch) ? "" : branch)}",
@@ -2066,7 +2048,7 @@ public sealed class AurPackageManager(string? configPath = null)
         PkgbuildDiffRequest.Invoke(this, args);
         return args.ProceedWithUpdate;
     }
-    
+
     private List<ValidationFinding> ValidatePkgbuild(string? newPkgbuild, string? baseDir)
     {
         if (string.IsNullOrWhiteSpace(newPkgbuild))
@@ -2187,10 +2169,8 @@ public sealed class AurPackageManager(string? configPath = null)
             if (!Directory.Exists(Path.Combine(dir, ".git")))
                 return null;
 
-            var user = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
-
             var (code, stdout, _) = await RunProcessAsync(
-                "sudo", $"-u {user} git -C {dir} remote get-url origin");
+                CreateAsInvokingUserStartInfo("git", ["-C", dir, "remote", "get-url", "origin"]));
 
             if (code != 0)
                 return null;
