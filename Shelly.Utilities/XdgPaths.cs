@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Shelly.Utilities;
 
-public static class XdgPaths
+public static partial class XdgPaths
 {
     public static string ConfigHome() => Resolve("XDG_CONFIG_HOME", ".config");
     public static string CacheHome() => Resolve("XDG_CACHE_HOME", ".cache");
@@ -105,10 +105,10 @@ public static class XdgPaths
         return null;
     }
 
-    [DllImport("libc", EntryPoint = "geteuid")]
-    private static extern uint geteuid();
+    [LibraryImport("libc")]
+    private static partial uint getuid();
 
-    private static bool IsRoot() => geteuid() == 0;
+    private static bool IsRoot() => getuid() == 0;
 
     [DllImport("libc", EntryPoint = "getpwnam_r", SetLastError = true)]
     private static extern unsafe int getpwnam_r(
