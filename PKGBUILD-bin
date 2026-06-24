@@ -107,7 +107,7 @@ EOF
   <action id="com.shellyorg.shelly.pkexec.cli">
     <description>Run Shelly CLI as administrator</description>
     <message>Authentication is required to run privileged Shelly CLI operations.</message>
-    <icon_name>shelly-shell</icon_name>
+    <icon_name>shelly</icon_name>
     <defaults>
       <allow_any>auth_admin</allow_any>
       <allow_inactive>auth_admin</allow_inactive>
