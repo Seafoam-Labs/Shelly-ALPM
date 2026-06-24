@@ -129,14 +129,25 @@ public class AppImageManagerV2(string installDirectory = "")
                 appImage.RepoName = null;
                 break;
             case UpdateType.StaticUrl:
-                appImage.UpdateType = UpdateType.StaticUrl;
                 appImage.UpdateURl = updateInfo;
                 appImage.UpdateType = updateType;
+                break;
+            case UpdateType.Forgejo:
+                if (updateInfo.Contains("//") &&
+                    updateInfo.Split("//")[1].Count(c => c == '/') == 2)
+                {
+                    appImage.UpdateURl = updateInfo;
+                    appImage.UpdateType = updateType;
+                }
+                else
+                {
+                    LogWarning(
+                        "Could not parse update info. Please use the format: https://<domain>/<user>/<repo>");
+                }
                 break;
             case UpdateType.GitHub:
             case UpdateType.GitLab:
             case UpdateType.Codeberg:
-            case UpdateType.Forgejo:
                 if (updateInfo.Count(c => c == '/') == 1)
                 {
                     appImage.RepoOwner = updateInfo.Split('/')[0];
@@ -959,10 +970,8 @@ public class AppImageManagerV2(string installDirectory = "")
                 ? await CheckCodebergUpdate(appImage.RepoName, appImage.RepoOwner, appImage.Name, appImage.Version,
                     appImage.AllowPrerelease)
                 : null,
-            UpdateType.Forgejo => appImage.RepoOwner != null && appImage.RepoName != null
-                ? await CheckForgejoUpdate(appImage.RepoName, appImage.Name, appImage.RepoOwner, appImage.Version,
-                    appImage.AllowPrerelease)
-                : null,
+            UpdateType.Forgejo => await CheckForgejoUpdate(appImage.UpdateURl, appImage.Name, appImage.Version,
+                    appImage.AllowPrerelease),
             UpdateType.StaticUrl => await CheckStaticUrlUpdate(appImage.UpdateURl, appImage.Name,
                 appImage.Version),
             _ => null
@@ -1710,11 +1719,15 @@ public class AppImageManagerV2(string installDirectory = "")
         return await CheckGiteaUpdate(owner, repo, appName, currentVersion, "codeberg.org", allowPrerelease);
     }
 
-    private static async Task<AppImageUpdateDto?> CheckForgejoUpdate(string repo, string appName, string owner,
+    private static async Task<AppImageUpdateDto?> CheckForgejoUpdate(string updateUrl, string appName,
         string currentVersion, bool allowPrerelease = false)
     {
-        var uri = new Uri(repo);
-        return await CheckGiteaUpdate(owner, repo, appName, currentVersion, uri.Host, allowPrerelease);
+        var uri = new Uri(updateUrl);
+        if (uri.LocalPath.Split('/') is ["", var owner, var repo])
+        {
+            return await CheckGiteaUpdate(owner, repo, appName, currentVersion, uri.Host, allowPrerelease);
+        }
+        return null;
     }
 
     #endregion

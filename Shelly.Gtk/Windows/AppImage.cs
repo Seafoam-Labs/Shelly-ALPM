@@ -243,42 +243,51 @@ public sealed class AppImage(
 
         var isValid = true;
 
-        if (updateType is AppImageUpdateType.GitHub or AppImageUpdateType.GitLab or AppImageUpdateType.Codeberg
-            or AppImageUpdateType.Forgejo)
+        switch (updateType)
         {
-            if (string.IsNullOrWhiteSpace(updateUrl) || updateUrl.Count(c => c == '/') != 1 ||
-                updateUrl.StartsWith('/') || updateUrl.EndsWith('/'))
+            case AppImageUpdateType.Codeberg:
+            case AppImageUpdateType.GitHub:
+            case AppImageUpdateType.GitLab: 
             {
-                isValid = false;
-                _updateUrlErrorLabel.SetText(T("Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"));
-                _updateUrlErrorLabel.SetVisible(true);
-                _updateUrlEntry.AddCssClass("error");
+                if (string.IsNullOrWhiteSpace(updateUrl) || updateUrl.Count(c => c == '/') != 1 ||
+                    updateUrl.StartsWith('/') || updateUrl.EndsWith('/'))
+                {
+                    isValid = false;
+                    _updateUrlErrorLabel.SetText(T("Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"));
+                    _updateUrlErrorLabel.SetVisible(true);
+                    _updateUrlEntry.AddCssClass("error");
+                }
+                else
+                {
+                    _updateUrlErrorLabel.SetVisible(false);
+                    _updateUrlEntry.RemoveCssClass("error");
+                }
+
+                break;
             }
-            else
+            case AppImageUpdateType.Forgejo:
+            case AppImageUpdateType.StaticUrl: 
             {
+                if (string.IsNullOrWhiteSpace(updateUrl) || !updateUrl.StartsWith("http"))
+                {
+                    isValid = false;
+                    _updateUrlErrorLabel.SetText(T("Invalid URL. Must start with http:// or https://"));
+                    _updateUrlErrorLabel.SetVisible(true);
+                    _updateUrlEntry.AddCssClass("error");
+                }
+                else
+                {
+                    _updateUrlErrorLabel.SetVisible(false);
+                    _updateUrlEntry.RemoveCssClass("error");
+                }
+
+                break;
+            }
+            case AppImageUpdateType.None:
+            default:
                 _updateUrlErrorLabel.SetVisible(false);
                 _updateUrlEntry.RemoveCssClass("error");
-            }
-        }
-        else if (updateType == AppImageUpdateType.StaticUrl)
-        {
-            if (string.IsNullOrWhiteSpace(updateUrl) || !updateUrl.StartsWith("http"))
-            {
-                isValid = false;
-                _updateUrlErrorLabel.SetText(T("Invalid URL. Must start with http:// or https://"));
-                _updateUrlErrorLabel.SetVisible(true);
-                _updateUrlEntry.AddCssClass("error");
-            }
-            else
-            {
-                _updateUrlErrorLabel.SetVisible(false);
-                _updateUrlEntry.RemoveCssClass("error");
-            }
-        }
-        else
-        {
-            _updateUrlErrorLabel.SetVisible(false);
-            _updateUrlEntry.RemoveCssClass("error");
+                break;
         }
 
         return isValid;

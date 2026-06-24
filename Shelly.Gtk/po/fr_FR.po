@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-05-14 18:41-0400\n"
-"PO-Revision-Date: 2026-05-19 19:08+0000\n"
+"PO-Revision-Date: 2026-06-22 19:08+0000\n"
 "Last-Translator: Julien Brouillard <julienbrouillard1@gmail.com>\n"
 "Language-Team: French\n"
 "Language: fr\n"
@@ -11,9 +11,6 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
-
-msgid "Any"
-msgstr "Tous"
 
 msgid "Loading..."
 msgstr "Chargement..."
@@ -62,6 +59,9 @@ msgstr "hier"
 
 msgid "{0}d ago"
 msgstr "il y a {0}j"
+
+msgid "Any"
+msgstr "Tous"
 
 msgid "<span size='large'>Search for AUR packages</span>"
 msgstr "<span size='large'>Rechercher des paquets AUR</span>"
@@ -606,7 +606,7 @@ msgid "Select File"
 msgstr "Sélectionner un fichier"
 
 msgid "Recommend"
-msgstr "Recommander"
+msgstr "Recommandations"
 
 msgid "AUR"
 msgstr "AUR"
@@ -970,10 +970,10 @@ msgid "Install Local"
 msgstr "Installer en local"
 
 msgid "Perform Upgrade"
-msgstr "Effectuer la mise à niveau"
+msgstr "Effectuer la mise à jour"
 
 msgid "Perform a full system upgrade with install (-u)"
-msgstr "Effectuer une mise à niveau complète du système avec installation (-u)"
+msgstr "Effectuer une mise à jour complète du système avec installation (-u)"
 
 msgid "Install Selected"
 msgstr "Installer la sélection"
@@ -1147,7 +1147,7 @@ msgid "Upgrade all AppImages to their latest versions"
 msgstr "Mettre à jour tous les AppImages vers leurs dernières versions"
 
 msgid "Upgrade All"
-msgstr "Tout mettre à niveau"
+msgstr "Tout mettre à jour"
 
 msgid "Install a new AppImage from a file"
 msgstr "Installer un nouvel AppImage depuis un fichier"
@@ -1288,3 +1288,134 @@ msgstr "Supprimer les dépendances optionnelles"
 
 msgid "Also remove orphaned optional dependencies installed with these packages."
 msgstr "Supprimer également les dépendances optionnelles orphelines installées avec ces paquets."
+
+msgid "Add Tray To Auto Start"
+msgstr "Ajouter l’icône au démarrage automatique"
+
+msgid "Systemd startup service added."
+msgstr "Service de démarrage systemd ajouté."
+
+msgid "Systemd startup service removed."
+msgstr "Service de démarrage systemd supprimé."
+
+msgid "Tray Icon Autostart"
+msgstr "Démarrage automatique de l’icône"
+
+msgid "Allow the tray service to autostart."
+msgstr "Autoriser le service à démarrer automatiquement."
+
+msgid "Unable to load package data. You may have a db.lck."
+msgstr "Impossible de charger les données du paquet. Un fichier db.lck est peut‑être présent."
+
+msgid "Downgrade Selected"
+msgstr "Rétrograder la sélection"
+
+msgid "Downgrade selected packages one by one"
+msgstr "Rétrograder les paquets sélectionnés un par un"
+
+msgid "No downgrade options found for {0}"
+msgstr "Aucune version antérieure trouvée pour {0}"
+
+msgid "Downgrading {0}..."
+msgstr "Rétrogradation de {0}…"
+
+msgid "Downgraded {0} Package(s)"
+msgstr "{0} paquet(s) rétrogradé(s)"
+
+msgid "Downgrade: {0}"
+msgstr "Rétrograder : {0}"
+
+msgid "Select version:"
+msgstr "Sélectionner une version : "
+
+msgid "Add to IgnorePkg list"
+msgstr "Ajouter à la liste IgnorePkg"
+
+msgid "Downgrade"
+msgstr "Rétrograder"
+
+msgid "Enable Package Downgrade"
+msgstr "Activer la rétrogradation de paquets"
+
+msgid "PKGBUILD Diff - {0}"
+msgstr "Différences du PKGBUILD – {0}"
+
+msgid "Review the PKGBUILD changes before continuing."
+msgstr "Examiner les changements du PKGBUILD avant de continuer."
+
+msgid "Accept Changes"
+msgstr "Accepter les modifications"
+
+msgid "Allow Prerelease"
+msgstr "Autoriser les préversions"
+
+msgid "AppImage Migration"
+msgstr "Migration AppImage"
+
+msgid "Drop AppImage here to install"
+msgstr "Déposer un fichier AppImage ici pour l’installer"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "ex. : propriétaire/dépôt ou https://..."
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr "Obtenir plus d’informations sur l’URL de mise à jour / les informations du dépôt"
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr "Format invalide. Utiliser propriétaire/dépôt (ex. : seafoam-labs/shelly-alpm)"
+
+msgid "Launch Flags"
+msgstr "Options de lancement"
+
+msgid "Migrate Now"
+msgstr "Migrer maintenant"
+
+msgid ""
+"To continue managing your AppImages with shelly a confirmation is required to switch to the "
+"new v2 implementation."
+msgstr ""
+"Pour continuer à gérer vos AppImages avec Shelly, une confirmation est nécessaire pour passer "
+"à la nouvelle implémentation v2."
+
+msgid "Review install scriptlet warnings"
+msgstr "Examiner les avertissements des scripts d’installation"
+
+msgid "The install scriptlet for {0} runs external tools"
+msgstr "Le script d’installation de {0} exécute des outils externes"
+
+msgid ""
+"These commands fetch and execute code outside of pacman's control. Review them before "
+"continuing."
+msgstr ""
+"Ces commandes récupèrent et exécutent du code en dehors du contrôle de pacman. Examinez-les "
+"avant de continuer."
+
+msgid "Install Anyway"
+msgstr "Installer quand même"
+
+msgid "{0} used in {1}"
+msgstr "{0} utilisé dans {1}"
+
+msgid "Installed Size"
+msgstr "Taille installée"
+
+msgid "Build Date"
+msgstr "Date de compilation"
+
+msgid "Required By"
+msgstr "Requis par"
+
+msgid "Install As"
+msgstr "Installer en tant que"
+
+msgid "Loading Recommended Packages..."
+msgstr "Chargement des paquets recommandés…"
+
+msgid "Show Recommended"
+msgstr "Afficher les recommandations"
+
+msgid "Show Packages"
+msgstr "Afficher les paquets"
+
+msgid "Show AUR"
+msgstr "Afficher l’AUR"

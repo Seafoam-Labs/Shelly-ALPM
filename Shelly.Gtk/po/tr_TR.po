@@ -1,47 +1,46 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: shelly-ui 2.2.4.1\n"
+"Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-05-14 18:41-0400\n"
-"PO-Revision-Date: 2026-05-29 16:53+0300\n"
+"PO-Revision-Date: 2026-06-17 11:40-0400\n"
 "Last-Translator: Ulaş Çakmak <celonfix@protonmail.com>\n"
-"Language-Team: Turkish (Turkiye) <>\n"
+"Language-Team: Turkish (Turkiye)<>\n"
 "Language: tr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
-
-msgid "Any"
-msgstr "Herhangi biri"
+"X-Generator: Weblate 2026.7.dev0\n"
 
 msgid "Loading..."
 msgstr "Yükleniyor..."
 
 msgid "Recent Operations"
-msgstr "Son işlemler"
+msgstr "Son İşlemler"
 
 msgid "History"
 msgstr "Geçmiş"
 
 msgid "No recent activity"
-msgstr "Son etkinlik yok"
+msgstr "Son Etkinlik Yok"
 
 msgid "Session log is too large to display"
 msgstr "Oturum günlüğü görüntülenemeyecek kadar büyük"
 
 msgid "Session Log"
-msgstr "Oturum günlüğü"
+msgstr "Oturum Günlüğü"
 
 msgid "Copy Log"
-msgstr "Günlüğü kopyala"
+msgstr "Günlüğü Kopyala"
 
 msgid "Log copied to clipboard"
 msgstr "Günlük panoya kopyalandı"
 
+#, csharp-format
 msgid "Available Updates ({0})"
-msgstr "Mevcut güncellemeler ({0})"
+msgstr "Mevcut Güncellemeler ({0})"
 
+#, csharp-format
 msgid "Updates ({0})"
 msgstr "Güncellemeler ({0})"
 
@@ -51,41 +50,640 @@ msgstr "Tüm paketler güncel"
 msgid "just now"
 msgstr "az önce"
 
+#, csharp-format
 msgid "{0} min ago"
 msgstr "{0} dk önce"
 
+#, csharp-format
 msgid "{0}h ago"
 msgstr "{0} sa önce"
 
 msgid "yesterday"
 msgstr "dün"
 
+#, csharp-format
 msgid "{0}d ago"
 msgstr "{0} gün önce"
 
+msgid "Any"
+msgstr "Herhangi Biri"
+
+msgid "color-scheme"
+msgstr "color-scheme"
+
+msgid "Install"
+msgstr "Kur"
+
+msgid "Updates"
+msgstr "Güncellemeler"
+
+msgid "Manage"
+msgstr "Yönet"
+
+msgid "Remove"
+msgstr "Kaldır"
+
+#
+msgid "Happy pride month!"
+msgstr "Onur ayınız kutlu olsun!"
+
+#
+msgid "You found Chel's hidden page."
+msgstr "Chel'in gizli sayfasını buldun."
+
+msgid "Search packages..."
+msgstr "Paket ara..."
+
+msgid "Additional Options"
+msgstr "Ek Seçenekler"
+
+msgid "Install Aur Package(s)"
+msgstr "AUR Paketlerini Kur"
+
+msgid "Name"
+msgstr "Ad"
+
+msgid "Votes"
+msgstr "Oylar"
+
+msgid "Popularity"
+msgstr "Popülerlik"
+
+msgid "Version"
+msgstr "Sürüm"
+
+msgid "Use chroot"
+msgstr "chroot Kullan"
+
+msgid "Build packages in a clean chroot environment"
+msgstr "Paketleri temiz bir chroot ortamında derle"
+
+msgid "Run checks"
+msgstr "Kontrolleri Çalıştır"
+
+msgid "Run the --check function during package build (installs checkdepends)"
+msgstr "Paket derlemesi sırasında --check işlevini çalıştır (checkdepends bağımlılıklarını kurar)"
+
+msgid "refresh"
+msgstr "Yenile"
+
+msgid "Remove Aur Package(s)"
+msgstr "AUR Paketlerini Kaldır"
+
+msgid "Clean Uninstall"
+msgstr "Temiz Kaldırma"
+
+msgid "Show Hidden"
+msgstr "Gizlileri Göster"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "pacman.conf içindeki IgnorePkg listesinde yer alan paketleri göster"
+
+msgid "Update Aur Package(s)"
+msgstr "AUR Paketlerini Güncelle"
+
+#
+msgid "Run the --check function during package build (installs checkdepends)\n                         "
+msgstr "Paket derlemesi sırasında --check işlevini çalıştır (checkdepends bağımlılıklarını kurar)\n                         "
+
+msgid "Search..."
+msgstr "Ara..."
+
+#
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr "Tüm AppImage'lar için üst verileri eşitle. AppImage kendini güncellediyse kullanışlıdır."
+
+msgid "Sync All"
+msgstr "Tümünü Eşitle"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "Tüm AppImage'ları en son sürümlerine yükselt"
+
+msgid "Upgrade All"
+msgstr "Tümünü Yükselt"
+
+msgid "Install a new AppImage from a file"
+msgstr "Dosyadan yeni bir AppImage kur"
+
+msgid "Install AppImage"
+msgstr "AppImage Kur"
+
+msgid "Drop AppImage here to install"
+msgstr "Kurmak için AppImage'ı buraya bırak"
+
+msgid "AppImage Migration"
+msgstr "AppImage Geçişi"
+
+#
+msgid "To continue managing your AppImages with shelly a confirmation is required to switch to the new v2 implementation."
+msgstr "AppImage'larınızı shelly ile yönetmeye devam etmek için yeni v2 uygulamasına geçiş onayı gereklidir."
+
+msgid "Migrate Now"
+msgstr "Şimdi Geçiş Yap"
+
+msgid "App Name"
+msgstr "Uygulama Adı"
+
+msgid "Description goes here..."
+msgstr "Açıklama buraya gelecek..."
+
+msgid "Size on Disk"
+msgstr "Diskteki Boyut"
+
+msgid "Update Strategy"
+msgstr "Güncelleme Stratejisi"
+
+msgid "Update URL / Repository Info"
+msgstr "Güncelleme URL'si / Depo Bilgisi"
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr "Güncelleme URL'si / Depo Bilgisi hakkında daha fazla bilgi al"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "örn. sahip/depo veya https://..."
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr "Geçersiz biçim. sahip/depo kullanın (örn. seafoam-labs/shelly-alpm)"
+
+msgid "Allow Prerelease"
+msgstr "Ön Sürümlere İzin Ver"
+
+msgid "Installation Path"
+msgstr "Kurulum Yolu"
+
+msgid "Launch Flags"
+msgstr "Başlatma Parametreleri"
+
+msgid "Save"
+msgstr "Kaydet"
+
+msgid "Sync"
+msgstr "Eşitle"
+
+msgid "Updating..."
+msgstr "Güncelleniyor..."
+
+#
+msgid "Please wait while we update your system."
+msgstr "Sisteminiz güncellenirken lütfen bekleyin."
+
+msgid "Reload"
+msgstr "Yeniden Yükle"
+
+msgid "Manage Remote Refs"
+msgstr "Uzak Referansları Yönet"
+
+msgid "Install local flatpak"
+msgstr "Yerel Flatpak Kur"
+
+msgid "system"
+msgstr "sistem"
+
+msgid "user"
+msgstr "kullanıcı"
+
+msgid "Loading Flatpak Data..."
+msgstr "Flatpak Verileri Yükleniyor..."
+
+msgid "Back"
+msgstr "Geri"
+
+msgid "Addons"
+msgstr "Eklentiler"
+
+msgid "Group Filter"
+msgstr "Grup Filtresi"
+
+msgid "Author"
+msgstr "Yazar"
+
+msgid "Version: -"
+msgstr "Sürüm: -"
+
+msgid "Size: -"
+msgstr "Boyut: -"
+
+msgid "License: -"
+msgstr "Lisans: -"
+
+msgid "Summary"
+msgstr "Özet"
+
+#
+msgid "No description available."
+msgstr "Açıklama mevcut değil."
+
+msgid "Version History"
+msgstr "Sürüm Geçmişi"
+
+msgid "Delete Selected Remote"
+msgstr "Seçili Uzak Kaynağı Sil"
+
+msgid "Add Remote"
+msgstr "Uzak Kaynak Ekle"
+
+msgid "Add New Flatpak Remote"
+msgstr "Yeni Flatpak Uzak Kaynağı Ekle"
+
+msgid "Add"
+msgstr "Ekle"
+
+msgid "Remote Name"
+msgstr "Uzak Kaynak Adı"
+
+msgid "e.g., flathub"
+msgstr "örn., flathub"
+
+msgid "Remote URL"
+msgstr "Uzak Kaynak URL'si"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "örn., https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "Kapsam"
+
+msgid "Remove Selected"
+msgstr "Seçilenleri Kaldır"
+
+msgid "Flatpak Repair"
+msgstr "Flatpak Onarımı"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Flatpak Kurulumunu Onarır (Deneysel)"
+
+msgid "Update All"
+msgstr "Tümünü Güncelle"
+
+msgid "Install Package(s)"
+msgstr "Paketleri Kur"
+
+msgid "Update Package(s)"
+msgstr "Paketleri Güncelle"
+
+msgid "Manage Package(s)"
+msgstr "Paketleri Yönet"
+
+msgid "Install AUR"
+msgstr "AUR Kur"
+
+msgid "Update AUR"
+msgstr "AUR Güncelle"
+
+msgid "Remove AUR"
+msgstr "AUR Kaldır"
+
+msgid "Install Flatpak"
+msgstr "Flatpak Kur"
+
+msgid "Update Flatpak"
+msgstr "Flatpak Güncelle"
+
+msgid "Remove Flatpak"
+msgstr "Flatpak Kaldır"
+
+msgid "Manage AppImage(s)"
+msgstr "AppImage'ları Yönet"
+
+msgid "Cache Cleaner"
+msgstr "Önbellek Temizleyici"
+
+msgid "Arch News"
+msgstr "Arch Haberleri"
+
+msgid "Settings"
+msgstr "Ayarlar"
+
+msgid "About"
+msgstr "Hakkında"
+
+msgid "Toggle Sidebar"
+msgstr "Kenar Çubuğunu Aç/Kapat"
+
+msgid "Show Recommended"
+msgstr "Önerilenleri Göster"
+
+msgid "Recommend"
+msgstr "Önerilenler"
+
+msgid "Show Packages"
+msgstr "Paketleri Göster"
+
+msgid "Packages"
+msgstr "Paketler"
+
+#
+msgid "Show AUR"
+msgstr "AUR Göster"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Show Flat"
+msgstr "Flat Göster"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Show AppImage"
+msgstr "AppImage Göster"
+
+msgid "AppImage"
+msgstr "AppImage"
+
+msgid "Show Shelly Searchs"
+msgstr "Shelly Aramalarını Göster"
+
+msgid "Shelly Search"
+msgstr "Shelly Arama"
+
+msgid "Available Updates"
+msgstr "Mevcut Güncellemeler"
+
+msgid "Package Group Filter"
+msgstr "Paket Grubu Filtresi"
+
+msgid "Remove Local Packages"
+msgstr "Yerel Paketleri Kaldır"
+
+msgid "Remove Local"
+msgstr "Yereli Kaldır"
+
+msgid "Downgrade Selected"
+msgstr "Seçilenleri Sürüm Düşür"
+
+msgid "Downgrade selected packages one by one"
+msgstr "Seçilen paketlerin sürümünü tek tek düşür"
+
+msgid "Package Name"
+msgstr "Paket Adı"
+
+msgid "Size"
+msgstr "Boyut"
+
+#
+msgid "Had an issue loading your packages.\nCheck if you have a db lock."
+msgstr "Paketleriniz yüklenirken bir sorun oluştu.\nVeritabanı kilidi olup olmadığını kontrol edin."
+
+msgid "Remove Configs"
+msgstr "Yapılandırmaları Kaldır"
+
+msgid "Remove Optional Deps"
+msgstr "İsteğe Bağlı Bağımlılıkları Kaldır"
+
+msgid "Also remove orphaned optional dependencies installed with these packages."
+msgstr "Bu paketlerle kurulan sahipsiz isteğe bağlı bağımlılıkları da kaldır."
+
+msgid "Install Local Packages"
+msgstr "Yerel Paketleri Kur"
+
+msgid "Install Local"
+msgstr "Yerel Kur"
+
+msgid "Install Selected"
+msgstr "Seçilenleri Kur"
+
+msgid "Repository"
+msgstr "Depo"
+
+msgid "Perform Upgrade"
+msgstr "Yükseltme Gerçekleştir"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "Kurulum ile tam bir sistem yükseltmesi gerçekleştir (-u)"
+
+msgid "Update Selected"
+msgstr "Seçilenleri Güncelle"
+
+msgid "Size Difference"
+msgstr "Boyut Farkı"
+
+msgid "Old Version"
+msgstr "Eski Sürüm"
+
+msgid "Loading Recommended Packages..."
+msgstr "Önerilen Paketler Yükleniyor..."
+
+msgid "General"
+msgstr "Genel"
+
+msgid "Enable AUR"
+msgstr "AUR'u Etkinleştir"
+
+msgid "Enable Flatpak"
+msgstr "Flatpak'i Etkinleştir"
+
+msgid "Enable Recommended Page"
+msgstr "Önerilenler Sayfasını Etkinleştir"
+
+msgid "Enable AppImage"
+msgstr "AppImage'ı Etkinleştir"
+
+msgid "Enable Tray Icon"
+msgstr "Tepsi Simgesini Etkinleştir"
+
+msgid "Add Tray To Auto Start"
+msgstr "Sistem Tepsisini Otomatik Başlatmaya Ekle"
+
+msgid "Use weekly schedule"
+msgstr "Haftalık program kullan"
+
+msgid "Tray Check Interval (Hours)"
+msgstr "Tepsi Kontrol Aralığı (Saat)"
+
+msgid "Weekly Schedule"
+msgstr "Haftalık Program"
+
+#
+msgid "Sun"
+msgstr "Paz"
+
+msgid "Mon"
+msgstr "Pzt"
+
+msgid "Tue"
+msgstr "Sal"
+
+msgid "Wed"
+msgstr "Çar"
+
+msgid "Thu"
+msgstr "Per"
+
+msgid "Fri"
+msgstr "Cum"
+
+msgid "Sat"
+msgstr "Cmt"
+
+msgid "Update Time (24h):"
+msgstr "Güncelleme Saati (24s):"
+
+msgid "Look & Feel"
+msgstr "Görünüm ve His"
+
+msgid "Icons Enabled"
+msgstr "Simgeler Etkin"
+
+msgid "Use Sidebar Navigation"
+msgstr "Kenar Çubuğu Gezinmesini Kullan"
+
+msgid "Use Symbolic Tray Icon"
+msgstr "Sembolik Tepsi Simgesi Kullan"
+
+msgid "Tray Icon"
+msgstr "Tepsi Simgesi"
+
+msgid "Select File"
+msgstr "Dosya Seç"
+
+msgid "Clear"
+msgstr "Temizle"
+
+msgid "Tray Updates Icon"
+msgstr "Tepsi Güncellemeleri Simgesi"
+
+msgid "Default page"
+msgstr "Varsayılan Sayfa"
+
+msgid "Advanced"
+msgstr "Gelişmiş"
+
+msgid "Remove Cache on Uninstall"
+msgstr "Kaldırırken Önbelleği Temizle"
+
+msgid "No Confirm"
+msgstr "Onay Yok"
+
+msgid "Enable Shelly Search"
+msgstr "Shelly Aramayı Etkinleştir"
+
+msgid "Enable Package Downgrade"
+msgstr "Paket Sürüm Düşürmeyi Etkinleştir"
+
+msgid "Enable Webview Visualization (experimental)"
+msgstr "Webview Görselleştirmeyi Etkinleştir (Deneysel)"
+
+msgid "AppImage Install Path"
+msgstr "AppImage Kurulum Yolu"
+
+msgid "Select Directory"
+msgstr "Dizin Seç"
+
+msgid "Parallel Downloads"
+msgstr "Paralel İndirmeler"
+
+msgid "Force Database Update"
+msgstr "Veritabanı Güncellemesini Zorla"
+
+msgid "Remove db.lck"
+msgstr "db.lck Dosyasını Kaldır"
+
+msgid "View Pacfiles"
+msgstr "Pacfile'ları Görüntüle"
+
+msgid "Fix Permissions"
+msgstr "İzinleri Düzelt"
+
+#
+msgid "Restores correct user ownership of Shelly configuration and cache folders if they were accidentally created by root."
+msgstr "Shelly yapılandırma ve önbellek klasörleri yanlışlıkla root tarafından oluşturulmuşsa doğru kullanıcı sahipliğini geri yükler."
+
+msgid "Purify Packages"
+msgstr "Paketleri Arındır"
+
+msgid "View Changelog"
+msgstr "Değişiklik Günlüğünü Görüntüle"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "Community fluxer"
+msgstr "Topluluk Katkıcısı"
+
+msgid "Sponsor"
+msgstr "Sponsor"
+
+msgid "Welcome to Shelly"
+msgstr "Shelly'e Hoş Geldiniz"
+
+msgid "Let's get you set up with some basic configurations."
+msgstr "Sizi bazı temel yapılandırmalarla hazırlayalım."
+
+msgid "Enable AUR Support"
+msgstr "AUR Desteğini Etkinleştir"
+
+#
+msgid "Access the Arch User Repository for a vast collection of community-maintained packages. AUR packages can contain malicous software, so please use caution when using the AUR."
+msgstr "Topluluk tarafından sürdürülen geniş bir paket koleksiyonu için Arch Kullanıcı Deposu'na erişin. AUR paketleri kötü amaçlı yazılım içerebilir, bu nedenle AUR'u kullanırken lütfen dikkatli olun."
+
+msgid "Enable Flatpak Support"
+msgstr "Flatpak Desteğini Etkinleştir"
+
+msgid "Enable support for Flatpak applications from Flathub and other remotes."
+msgstr "Flathub ve diğer uzak kaynaklardaki Flatpak uygulamaları için desteği etkinleştir."
+
+msgid "Enable AppImage Support"
+msgstr "AppImage Desteğini Etkinleştir"
+
+msgid "Manage and configure updates for AppImage applications easily."
+msgstr "AppImage uygulamaları için güncellemeleri kolayca yönetin ve yapılandırın."
+
+msgid "Show a status icon in your system tray for quick access and notifications."
+msgstr "Hızlı erişim ve bildirimler için sistem tepsinizde bir durum simgesi gösterin."
+
+msgid "Tray Icon Autostart"
+msgstr "Tepsi Simgesini Otomatik Başlat"
+
+msgid "Allow the tray service to autostart."
+msgstr "Tepsi hizmetinin otomatik başlamasına izin ver."
+
+msgid "Vertical Navigation"
+msgstr "Dikey Gezinme"
+
+msgid "Change navigation style to vertical or horizontal style."
+msgstr "Gezinme stilini dikey veya yatay olarak değiştirin."
+
+msgid "Finish Setup"
+msgstr "Kurulumu Bitir"
+
+msgid "Any required installations will run after the Finish button has been accepted."
+msgstr "Gerekli tüm kurulumlar Bitir düğmesi onaylandıktan sonra çalışacaktır."
+
+#
+msgid "These options and others can be configured later in settings."
+msgstr "Bu seçenekler ve diğerleri daha sonra ayarlardan yapılandırılabilir."
+
+msgid "Remove Package(s)"
+msgstr "Paketleri Kaldır"
+
+msgid "Description"
+msgstr "Açıklama"
+
+msgid "Last Updated"
+msgstr "Son Güncelleme"
+
 msgid "<span size='large'>Search for AUR packages</span>"
-msgstr "<span size='large'>AUR paketleri ara</span>"
+msgstr "<span size='large'>AUR Paketlerini Ara</span>"
+
+msgid "Installed"
+msgstr "Kurulu"
 
 msgid "Install Packages?"
-msgstr "Paketler kurulsun mu?"
+msgstr "Paketler Kurulsun mu?"
 
 msgid "Installing..."
 msgstr "Kuruluyor..."
 
-msgid "No packages found."
-msgstr "Paket bulunamadı."
-
-msgid "Displaying Package Build {0}"
-msgstr "{0} paket derlemesi görüntüleniyor"
-
+#, csharp-format
 msgid "Installed {0} Package(s)"
-msgstr "{0} paket kuruldu"
+msgstr "{0} Paket Kuruldu"
 
 msgid "Export AUR install log"
-msgstr "AUR kurulum günlüğünü dışa aktar"
+msgstr "AUR Kurulum Günlüğünü Dışa Aktar"
 
 msgid "Log Files (*.log)"
-msgstr "Günlük dosyaları (*.log)"
+msgstr "Günlük Dosyaları (*.log)"
 
 msgid "Exported AUR install log"
 msgstr "AUR kurulum günlüğü dışa aktarıldı"
@@ -94,28 +692,19 @@ msgid "Failed to export AUR install log"
 msgstr "AUR kurulum günlüğü dışa aktarılamadı"
 
 msgid "Package Build"
-msgstr "Paket derlemesi"
+msgstr "Paket Derlemesi"
 
 msgid "Preview PKGBUILD"
-msgstr "PKGBUILD önizlemesi"
+msgstr "PKGBUILD Önizle"
 
 msgid "Displays Package Build"
-msgstr "Paket derlemesini görüntüler"
+msgstr "Paket Derlemesini Görüntüler"
 
 msgid "Close details"
-msgstr "Ayrıntıları kapat"
-
-msgid "Version"
-msgstr "Sürüm"
-
-msgid "Votes"
-msgstr "Oylar"
-
-msgid "Popularity"
-msgstr "Popülerlik"
+msgstr "Ayrıntıları Kapat"
 
 msgid "Out of Date"
-msgstr "Güncel değil"
+msgstr "Güncel Değil"
 
 msgid "Maintainer"
 msgstr "Sürdürücü"
@@ -124,10 +713,10 @@ msgid "Orphaned"
 msgstr "Sahipsiz"
 
 msgid "Last Modified"
-msgstr "Son değiştirilme"
+msgstr "Son Değiştirilme"
 
 msgid "First Submitted"
-msgstr "İlk gönderim"
+msgstr "İlk Gönderim"
 
 msgid "URL:"
 msgstr "URL:"
@@ -139,20 +728,21 @@ msgid "Depends"
 msgstr "Bağımlılıklar"
 
 msgid "Make Depends"
-msgstr "Derleme bağımlılıkları"
+msgstr "Derleme Bağımlılıkları"
 
 msgid "Check Depends"
-msgstr "Kontrol bağımlılıkları"
+msgstr "Kontrol Bağımlılıkları"
 
 msgid "Optional Deps"
-msgstr "İsteğe bağlı bağımlılıklar"
+msgstr "İsteğe Bağlı Bağımlılıklar"
 
 msgid "Licenses"
 msgstr "Lisanslar"
 
 msgid "Keywords"
-msgstr "Anahtar kelimeler"
+msgstr "Anahtar Kelimeler"
 
+#
 msgid "Provides"
 msgstr "Sağladıkları"
 
@@ -163,43 +753,159 @@ msgid "Groups"
 msgstr "Gruplar"
 
 msgid "Replaces"
-msgstr "Yerini aldıkları"
+msgstr "Yerini Aldıkları"
 
 msgid "Remove Packages?"
-msgstr "Paketler kaldırılsın mı?"
+msgstr "Paketler Kaldırılsın mı?"
 
 msgid "Removing..."
 msgstr "Kaldırılıyor..."
 
+#, csharp-format
 msgid "Removed {0} Package(s)"
-msgstr "{0} paket kaldırıldı"
+msgstr "{0} Paket Kaldırıldı"
 
 msgid "<span size='large'>AUR packages are up to date</span>"
 msgstr "<span size='large'>AUR paketleri güncel</span>"
 
 msgid "Update Packages?"
-msgstr "Paketler güncellensin mi?"
+msgstr "Paketler Güncellensin mi?"
 
+#, csharp-format
 msgid "Updated {0} Package(s)"
-msgstr "{0} paket güncellendi"
+msgstr "{0} Paket Güncellendi"
+
+msgid "None"
+msgstr "Hiçbiri"
+
+msgid "StaticUrl"
+msgstr "Statik URL"
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+#
+msgid "Invalid URL.\nMust start with http:// or https://"
+msgstr "Geçersiz URL.\nhttp:// veya https:// ile başlamalıdır"
+
+msgid "Select AppImage to Install"
+msgstr "Kurulacak AppImage'ı Seç"
+
+msgid "AppImage Files"
+msgstr "AppImage Dosyaları"
+
+msgid "No AppImages need to be upgraded"
+msgstr "Yükseltilmesi gereken AppImage yok"
+
+msgid "Running updates..."
+msgstr "Güncellemeler çalıştırılıyor..."
+
+msgid "Updating AppImages..."
+msgstr "AppImage'lar güncelleniyor..."
+
+msgid "All AppImages updated successfully!"
+msgstr "Tüm AppImage'lar başarıyla güncellendi!"
+
+#, csharp-format
+msgid "Failed to update AppImages: {0}"
+msgstr "AppImage'lar güncellenemedi: {0}"
+
+#, csharp-format
+msgid "Version {0}"
+msgstr "Sürüm {0}"
+
+#, csharp-format
+msgid "Configuration saved for {0}"
+msgstr "{0} için yapılandırma kaydedildi"
+
+#, csharp-format
+msgid "Failed to save configuration: {0}"
+msgstr "Yapılandırma kaydedilemedi: {0}"
+
+#, csharp-format
+msgid "Syncing {0}..."
+msgstr "{0} eşitleniyor..."
+
+#, csharp-format
+msgid "Synced {0}"
+msgstr "{0} eşitlendi"
+
+#, csharp-format
+msgid "Failed to sync: {0}"
+msgstr "Eşitleme başarısız: {0}"
+
+msgid "Syncing all AppImages ..."
+msgstr "Tüm AppImage'lar eşitleniyor ..."
+
+msgid "Synced"
+msgstr "Eşitlendi"
+
+#, csharp-format
+msgid "Removing {0}..."
+msgstr "{0} kaldırılıyor..."
+
+#, csharp-format
+msgid "{0} removed successfully!"
+msgstr "{0} başarıyla kaldırıldı!"
+
+#, csharp-format
+msgid "Failed to remove {0}: {1}"
+msgstr "{0} kaldırılamadı: {1}"
+
+msgid "Only AppImage files are supported"
+msgstr "Yalnızca AppImage dosyaları desteklenir"
+
+#
+msgid "Migrating AppImages to V2..."
+msgstr "AppImage'lar V2'ye taşınıyor..."
+
+msgid "Migration successful!"
+msgstr "Geçiş başarılı!"
+
+#, csharp-format
+msgid "Migration failed: {0}"
+msgstr "Geçiş başarısız: {0}"
+
+msgid "Installing AppImage..."
+msgstr "AppImage Kuruluyor..."
+
+#, csharp-format
+msgid "{0} installed successfully!"
+msgstr "{0} başarıyla kuruldu!"
+
+#, csharp-format
+msgid "Failed to install {0}: {1}"
+msgstr "{0} kurulamadı: {1}"
 
 msgid "Shelly is an Arch Linux package manager"
-msgstr "Shelly, Arch Linux için bir paket yöneticisidir"
+msgstr "Shelly bir Arch Linux paket yöneticisidir"
 
 msgid "Seafoam Labs Website"
-msgstr "Seafoam Labs web sitesi"
+msgstr "Seafoam Labs Web Sitesi"
 
 msgid "Project Leads"
-msgstr "Proje liderleri"
+msgstr "Proje Liderleri"
 
 msgid "Maintainers"
 msgstr "Sürdürücüler"
+
+msgid "installed"
+msgstr "kurulu"
 
 msgid "Select"
 msgstr "Seç"
 
 msgid "Select All"
-msgstr "Tümünü seç"
+msgstr "Tümünü Seç"
+
+msgid "already installed"
+msgstr "zaten kurulu"
 
 msgid "Confirm"
 msgstr "Onayla"
@@ -211,58 +917,81 @@ msgid "Yes"
 msgstr "Evet"
 
 msgid "Install Ignored Package?"
-msgstr "Yok sayılan paket kurulsun mu?"
+msgstr "Yok Sayılan Paket Kurulsun mu?"
 
 msgid "Replace Package?"
-msgstr "Paket değiştirilsin mi?"
+msgstr "Paket Değiştirilsin mi?"
 
 msgid "Package Conflict Detected"
-msgstr "Paket çakışması algılandı"
+msgstr "Paket Çakışması Tespit Edildi"
 
 msgid "Corrupted Package Found"
-msgstr "Bozuk paket bulundu"
+msgstr "Bozuk Paket Bulundu"
 
 msgid "Import PGP Key?"
-msgstr "PGP anahtarı içe aktarılsın mı?"
+msgstr "PGP Anahtarı İçe Aktarılsın mı?"
 
 msgid "Select Provider"
-msgstr "Sağlayıcı seç"
+msgstr "Sağlayıcı Seç"
 
 msgid "Select Optional Dependencies"
-msgstr "İsteğe bağlı bağımlılıkları seç"
+msgstr "İsteğe Bağlı Bağımlılıkları Seç"
 
 msgid "System Question"
-msgstr "Sistem sorusu"
+msgstr "Sistem Sorusu"
 
 msgid "Arch Linux News"
-msgstr "Arch Linux haberleri"
+msgstr "Arch Linux Haberleri"
 
 msgid "No news available"
 msgstr "Haber yok"
 
 msgid "package"
-msgstr "paketi"
+msgstr "paket"
 
+#
 msgid "packages"
-msgstr "paketleri"
+msgstr "paketler"
 
 msgid "AUR installation failed"
-msgstr "AUR kurulumu başarısız oldu"
+msgstr "AUR kurulumu başarısız"
 
-msgid "Shelly couldn't finish building or installing the selected AUR {0}. Export the logs and attach them to your report so the team can check whether the issue came from the PKGBUILD or from Shelly."
-msgstr "Shelly, seçilen AUR {0} derleme veya kurulum işlemini tamamlayamadı. Günlükleri dışa aktarın ve raporunuza ekleyin; böylece ekip sorunun PKGBUILD’den mi yoksa Shelly’den mi kaynaklandığını kontrol edebilir."
-
-msgid "Packages"
-msgstr "Paketler"
+#
+#, csharp-format
+msgid "Shelly couldn't finish building or installing the selected AUR {0}.\nExport the logs and attach them to your report so the team can check whether the issue came from the PKGBUILD or from Shelly."
+msgstr "Shelly, seçilen AUR {0} paketini derlemeyi veya kurmayı bitiremedi.\nEkibin sorunun PKGBUILD'den mi yoksa Shelly'den mi kaynaklandığını kontrol edebilmesi için günlükleri dışa aktarın ve raporunuza ekleyin."
 
 msgid "Recent output"
-msgstr "Son çıktı"
+msgstr "Son Çıktı"
 
 msgid "Close"
 msgstr "Kapat"
 
 msgid "Export Logs"
-msgstr "Günlükleri dışa aktar"
+msgstr "Günlükleri Dışa Aktar"
+
+#, csharp-format
+msgid "Cache directory: {0}\nTotal cached files: {1} ({2})"
+msgstr "Önbellek dizini: {0}\nToplam önbelleğe alınmış dosya: {1} ({2})"
+
+msgid "Keep versions:"
+msgstr "Sürümleri Koru:"
+
+msgid "Uninstalled only"
+msgstr "Sadece Kaldırılanlar"
+
+msgid "Cancel"
+msgstr "İptal"
+
+msgid "Clean"
+msgstr "Temizle"
+
+msgid "No candidates for removal."
+msgstr "Kaldırılacak aday yok."
+
+#, csharp-format
+msgid "{0} files, {1} would be freed"
+msgstr "{0} dosya, {1} alan boşaltılacak"
 
 msgid "Cache directory does not exist"
 msgstr "Önbellek dizini mevcut değil"
@@ -273,11 +1002,26 @@ msgstr "Paket önbelleği temizleniyor..."
 msgid "Package cache cleaned successfully"
 msgstr "Paket önbelleği başarıyla temizlendi"
 
+#, csharp-format
 msgid "Cache clean failed: {0}"
-msgstr "Önbellek temizleme başarısız oldu: {0}"
+msgstr "Önbellek temizleme başarısız: {0}"
 
+#, csharp-format
+msgid "Downgrade: {0}"
+msgstr "Sürüm Düşür: {0}"
+
+msgid "Select version:"
+msgstr "Sürüm Seç:"
+
+msgid "Add to IgnorePkg list"
+msgstr "IgnorePkg Listesine Ekle"
+
+msgid "Downgrade"
+msgstr "Sürüm Düşür"
+
+#
 msgid "Fingerprint Disable Instructions"
-msgstr "Parmak izini devre dışı bırakma yönergeleri"
+msgstr "Parmak İzi Devre Dışı Bırakma Talimatları"
 
 msgid "Disable fingerprint authentication for sudo"
 msgstr "sudo için parmak izi kimlik doğrulamasını devre dışı bırak"
@@ -286,67 +1030,85 @@ msgid "1. Inspect"
 msgstr "1. İncele"
 
 msgid "2. Disable for sudo"
-msgstr "2. sudo için devre dışı bırak"
+msgstr "2. sudo İçin Devre Dışı Bırak"
 
+#
 msgid "3. Re-enable later"
-msgstr "3. Daha sonra yeniden etkinleştir"
+msgstr "3. Daha Sonra Yeniden Etkinleştir"
 
 msgid "Copy"
 msgstr "Kopyala"
 
 msgid "Operation Complete"
-msgstr "İşlem tamamlandı"
+msgstr "İşlem Tamamlandı"
 
-msgid "Cancel"
-msgstr "İptal"
+#, csharp-format
+msgid "PKGBUILD Diff - {0}"
+msgstr "PKGBUILD Farkı - {0}"
+
+msgid "Review the PKGBUILD changes before continuing."
+msgstr "Devam etmeden önce PKGBUILD değişikliklerini gözden geçirin."
+
+msgid "Accept Changes"
+msgstr "Değişiklikleri Kabul Et"
 
 msgid "Authentication Required"
-msgstr "Kimlik doğrulaması gerekli"
+msgstr "Kimlik Doğrulaması Gerekiyor"
 
+#, csharp-format
 msgid "Password needed to execute: {0}."
 msgstr "Çalıştırmak için parola gerekiyor: {0}."
 
 msgid "Authenticate"
-msgstr "Kimlik doğrula"
+msgstr "Kimlik Doğrula"
 
-msgid "Incorrect password. Try again."
-msgstr "Parola yanlış. Tekrar deneyin."
+#
+msgid "Incorrect password.\nTry again."
+msgstr "Yanlış parola.\nTekrar deneyin."
+
+msgid "Review PKGBUILD changes"
+msgstr "PKGBUILD Değişikliklerini Gözden Geçir"
+
+#, csharp-format
+msgid "Review PKGBUILD changes for {0}"
+msgstr "{0} için PKGBUILD değişikliklerini gözden geçir"
+
+#
+msgid "These commands fetch and execute code outside of pacman's control.\nReview them before continuing."
+msgstr "Bu komutlar, pacman'in kontrolü dışında kod getirir ve çalıştırır.\nDevam etmeden önce bunları gözden geçirin."
+
+msgid "Install Anyway"
+msgstr "Yine de Kur"
+
+#, csharp-format
+msgid "{0} used in {1}"
+msgstr "{1} içinde {0} kullanıldı"
 
 msgid "What's New"
 msgstr "Yenilikler"
 
-msgid "Version History"
-msgstr "Sürüm geçmişi"
+msgid "Keep Config"
+msgstr "Yapılandırmayı Koru"
 
-msgid "Version {0}"
-msgstr "Sürüm {0}"
+msgid "Keep user data and configuration"
+msgstr "Kullanıcı verilerini ve yapılandırmasını koru"
+
+msgid "Delete Config"
+msgstr "Yapılandırmayı Sil"
+
+msgid "Delete user data and configuration"
+msgstr "Kullanıcı verilerini ve yapılandırmasını sil"
+
+msgid "Keep Config?"
+msgstr "Yapılandırma Korunsun mu?"
 
 msgid "Package installation failed"
-msgstr "Paket kurulumu başarısız oldu"
+msgstr "Paket kurulumu başarısız"
 
-msgid "Shelly couldn't finish building or installing the selected {0}. Export the logs and attach them to your report so the team can check whether the issue came from the PKGBUILD or from Shelly."
-msgstr "Shelly, seçilen {0} için derleme veya kurulum işlemini tamamlayamadı. Günlükleri dışa aktarın ve raporunuza ekleyin; böylece ekip sorunun PKGBUILD’den mi yoksa Shelly’den mi kaynaklandığını kontrol edebilir."
-
-msgid "Cache Cleaner"
-msgstr "Önbellek temizleyici"
-
-msgid "Cache directory: {0}\nTotal cached files: {1} ({2})"
-msgstr "Önbellek dizini: {0}\nToplam önbelleğe alınmış dosya: {1} ({2})"
-
-msgid "Keep versions:"
-msgstr "Saklanacak sürümler:"
-
-msgid "Uninstalled only"
-msgstr "Yalnızca kaldırılmış olanlar"
-
-msgid "Clean"
-msgstr "Temizle"
-
-msgid "No candidates for removal."
-msgstr "Kaldırma adayı yok."
-
-msgid "{0} files, {1} would be freed"
-msgstr "{0} dosya, {1} boşaltılacak"
+#
+#, csharp-format
+msgid "Shelly couldn't finish building or installing the selected {0}.\nExport the logs and attach them to your report so the team can check whether the issue came from the PKGBUILD or from Shelly."
+msgstr "Shelly, seçilen {0} paketini derlemeyi veya kurmayı bitiremedi.\nEkibin sorunun PKGBUILD'den mi yoksa Shelly'den mi kaynaklandığını kontrol edebilmesi için günlükleri dışa aktarın ve raporunuza ekleyin."
 
 msgid "Name and URL are required"
 msgstr "Ad ve URL gereklidir"
@@ -354,32 +1116,34 @@ msgstr "Ad ve URL gereklidir"
 msgid "URL must end with .flatpakrepo"
 msgstr "URL .flatpakrepo ile bitmelidir"
 
+#, csharp-format
 msgid "Failed to add remote: {0}"
 msgstr "Uzak kaynak eklenemedi: {0}"
 
+#, csharp-format
 msgid "Added Remote: {0}"
-msgstr "Uzak kaynak eklendi: {0}"
+msgstr "Uzak Kaynak Eklendi: {0}"
 
 msgid "Removed Remote"
-msgstr "Uzak kaynak kaldırıldı"
+msgstr "Uzak Kaynak Kaldırıldı"
 
 msgid "All Applications"
-msgstr "Tüm uygulamalar"
+msgstr "Tüm Uygulamalar"
 
 msgid "Recommended"
 msgstr "Önerilenler"
 
 msgid "Most Wanted"
-msgstr "En çok istenenler"
+msgstr "En Çok İstenenler"
 
 msgid "Recently Added"
-msgstr "Son eklenenler"
+msgstr "Son Eklenenler"
 
 msgid "Recently Updated"
-msgstr "Son güncellenenler"
+msgstr "Son Güncellenenler"
 
 msgid "Audio & Video"
-msgstr "Ses ve video"
+msgstr "Ses ve Video"
 
 msgid "Development"
 msgstr "Geliştirme"
@@ -406,91 +1170,136 @@ msgid "System"
 msgstr "Sistem"
 
 msgid "Utility"
-msgstr "Araçlar"
+msgstr "Araç"
 
+#, csharp-format
 msgid "Version: {0}"
 msgstr "Sürüm: {0}"
 
+#, csharp-format
 msgid "License: {0}"
 msgstr "Lisans: {0}"
 
-msgid "Installed"
-msgstr "Kurulu"
-
-msgid "Install"
-msgstr "Kur"
-
+#, csharp-format
 msgid "Size: {0}"
 msgstr "Boyut: {0}"
 
+#
 msgid "No links available"
-msgstr "Bağlantı yok"
+msgstr "Bağlantı Yok"
 
 msgid "Install Flatpak Ref"
-msgstr "Flatpak Ref kur"
+msgstr "Flatpak Ref Kur"
 
 msgid "Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""
-msgstr "Yerel Flatpak dosyaları (\"*.FlatpakRef\", \"*.flatpak\")"
+msgstr "Yerel Flatpak dosyaları (\"*.FlatpakRef\", \"*.flatpak)\""
 
 msgid "Installing selected local flatpak file..."
-msgstr "Seçili yerel Flatpak dosyası kuruluyor..."
+msgstr "Seçilen yerel flatpak dosyası kuruluyor..."
 
 msgid "Installing Flatpak failed"
-msgstr "Flatpak kurulumu başarısız oldu"
+msgstr "Flatpak kurulumu başarısız"
 
 msgid "Installed Flatpak"
-msgstr "Flatpak kuruldu"
+msgstr "Flatpak Kuruldu"
 
 msgid "Install Package?"
-msgstr "Paket kurulsun mu?"
+msgstr "Paket Kurulsun mu?"
 
+#, csharp-format
 msgid "Installing {0}..."
-msgstr "{0} kuruluyor..."
+msgstr "{0} Kuruluyor..."
 
 msgid "Installed Flatpak addon"
 msgstr "Flatpak eklentisi kuruldu"
 
 msgid "Available Addons"
-msgstr "Mevcut eklentiler"
+msgstr "Mevcut Eklentiler"
 
 msgid "No details available"
 msgstr "Ayrıntı yok"
 
-msgid "Keep Config"
-msgstr "Yapılandırmayı sakla"
+msgid "Repaired Flatpak installation"
+msgstr "Flatpak kurulumu onarıldı"
 
-msgid "Keep user data and configuration"
-msgstr "Kullanıcı verilerini ve yapılandırmayı sakla"
+msgid "Failed to repair Flatpak installation"
+msgstr "Flatpak kurulumu onarılamadı"
 
-msgid "Delete Config"
-msgstr "Yapılandırmayı sil"
-
-msgid "Delete user data and configuration"
-msgstr "Kullanıcı verilerini ve yapılandırmayı sil"
-
-msgid "Keep Config?"
-msgstr "Yapılandırma saklansın mı?"
-
-msgid "Removing {0}..."
-msgstr "{0} kaldırılıyor..."
-
+#, csharp-format
 msgid "Failed to remove package {0}: {1}"
 msgstr "{0} paketi kaldırılamadı: {1}"
 
 msgid "Removed Package(s)"
-msgstr "Paketler kaldırıldı"
+msgstr "Paket(ler) Kaldırıldı"
 
 msgid "Permission Changes"
-msgstr "İzin değişiklikleri"
+msgstr "İzin Değişiklikleri"
 
 msgid "Updating Flatpak packages..."
 msgstr "Flatpak paketleri güncelleniyor..."
 
+#, csharp-format
 msgid "Failed to update packages: {0}"
 msgstr "Paketler güncellenemedi: {0}"
 
 msgid "Updated all Flatpak(s)"
-msgstr "Tüm Flatpak paketleri güncellendi"
+msgstr "Tüm Flatpak'ler Güncellendi"
+
+msgid "Installed Size"
+msgstr "Kurulu Boyut"
+
+msgid "Build Date"
+msgstr "Derleme Tarihi"
+
+msgid "Required By"
+msgstr "Gerektirenler"
+
+msgid "Failed to load packages."
+msgstr "Paketler yüklenemedi."
+
+#
+msgid "--- Packages \nto Upgrade ---"
+msgstr "--- Yükseltilecek \nPaketler ---"
+
+msgid "Export Shelly install log"
+msgstr "Shelly Kurulum Günlüğünü Dışa Aktar"
+
+msgid "Exported Shelly install log"
+msgstr "Shelly kurulum günlüğü dışa aktarıldı"
+
+msgid "Failed to export Shelly install log"
+msgstr "Shelly kurulum günlüğü dışa aktarılamadı"
+
+msgid "Install Local Package"
+msgstr "Yerel Paket Kur"
+
+msgid "Local package files (\"*.gz\", \"*.zst\")"
+msgstr "Yerel paket dosyaları (\"*.gz\", \"*.zst\")"
+
+msgid "Installing local package..."
+msgstr "Yerel paket kuruluyor..."
+
+msgid "Installed local package"
+msgstr "Yerel paket kuruldu"
+
+msgid "Install As"
+msgstr "Olarak Kur"
+
+#, csharp-format
+msgid "Package Files ({0})"
+msgstr "Paket Dosyaları ({0})"
+
+#, csharp-format
+msgid "No downgrade options found for {0}"
+msgstr "{0} için sürüm düşürme seçeneği bulunamadı"
+
+#, csharp-format
+msgid "Downgrading {0}..."
+msgstr "{0} sürümü düşürülüyor..."
+
+#, csharp-format
+msgid "Downgraded {0} Package(s)"
+msgstr "{0} Paket Sürümü Düşürüldü"
 
 msgid "<span size='large'>System packages are up to date</span>"
 msgstr "<span size='large'>Sistem paketleri güncel</span>"
@@ -502,103 +1311,87 @@ msgid "New"
 msgstr "Yeni"
 
 msgid "Download"
-msgstr "İndirme"
+msgstr "İndir"
 
 msgid "Size Diff"
-msgstr "Boyut farkı"
-
-msgid "Repository"
-msgstr "Depo"
-
-msgid "Size"
-msgstr "Boyut"
+msgstr "Boyut Farkı"
 
 msgid "Partial Update Warning"
-msgstr "Kısmi güncelleme uyarısı"
+msgstr "Kısmi Güncelleme Uyarısı"
 
-msgid "It is not advised you do partial system updates. Are you sure you want to continue?"
-msgstr "Kısmi sistem güncellemeleri önerilmez. Devam etmek istediğinizden emin misiniz?"
+#
+msgid "It is not advised you do partial system updates.\nAre you sure you want to continue?"
+msgstr "Kısmi sistem güncellemeleri yapmanız tavsiye edilmez.\nDevam etmek istediğinizden emin misiniz?"
 
-msgid "It is unadvised to not update all packages at once. Are you sure you want to continue?"
-msgstr "Tüm paketleri aynı anda güncellememek önerilmez. Devam etmek istediğinizden emin misiniz?"
-
-msgid "Updating..."
-msgstr "Güncelleniyor..."
+#
+msgid "It is unadvised to not update all packages at once.\nAre you sure you want to continue?"
+msgstr "Tüm paketleri aynı anda güncellememek tavsiye edilmez.\nDevam etmek istediğinizden emin misiniz?"
 
 msgid "Reboot Required"
-msgstr "Yeniden başlatma gerekli"
+msgstr "Yeniden Başlatma Gerekiyor"
 
 msgid "A full system reboot is required for updates to take effect.\n\nWould you like to reboot now?"
-msgstr "Güncellemelerin etkili olması için sistemin tamamen yeniden başlatılması gerekir.\n\nŞimdi yeniden başlatmak ister misiniz?"
+msgstr "Güncellemelerin etkili olması için tam bir sistem yeniden başlatması gereklidir.\n\nŞimdi yeniden başlatmak ister misiniz?"
 
 msgid "Service Restart Failures"
-msgstr "Servis yeniden başlatma hataları"
+msgstr "Hizmet Yeniden Başlatma Hataları"
 
+#, csharp-format
 msgid "The following services failed to restart automatically:\n{0}"
-msgstr "Aşağıdaki servisler otomatik olarak yeniden başlatılamadı:\n{0}"
+msgstr "Aşağıdaki hizmetler otomatik olarak yeniden başlatılamadı:\n{0}"
 
-msgid "--- Packages to Upgrade ---"
-msgstr "--- Yükseltilecek paketler ---"
+#
+msgid "No recommendations found.\nPlease check your internet connection and try again."
+msgstr "Öneri bulunamadı.\nLütfen internet bağlantınızı kontrol edin ve tekrar deneyin."
 
-msgid "Export Shelly install log"
-msgstr "Shelly kurulum günlüğünü dışa aktar"
+msgid "Package is already installed"
+msgstr "Paket zaten kurulu"
 
-msgid "Exported Shelly install log"
-msgstr "Shelly kurulum günlüğü dışa aktarıldı"
+msgid "Remove "
+msgstr "Kaldır "
 
-msgid "Failed to export Shelly install log"
-msgstr "Shelly kurulum günlüğü dışa aktarılamadı"
+msgid "Removing package..."
+msgstr "Paket kaldırılıyor..."
 
-msgid "Install Local Package"
-msgstr "Yerel paket kur"
+msgid "Package removed successfully"
+msgstr "Paket başarıyla kaldırıldı"
 
-msgid "Local package files (\"*.gz\", \"*.zst\")"
-msgstr "Yerel paket dosyaları (\"*.gz\", \"*.zst\")"
+msgid "Install "
+msgstr "Kur "
 
-msgid "Installing local package..."
-msgstr "Yerel paket kuruluyor..."
+msgid "Installing package..."
+msgstr "Paket kuruluyor..."
 
-msgid "Installed local package"
-msgstr "Yerel paket kuruldu"
-
-msgid "Package Files ({0})"
-msgstr "Paket dosyaları ({0})"
+msgid "Package installed successfully"
+msgstr "Paket başarıyla kuruldu"
 
 msgid "Remove corrupted packages"
-msgstr "Bozuk paketleri kaldır"
+msgstr "Bozuk Paketleri Kaldır"
 
-msgid "Select File"
-msgstr "Dosya seç"
-
-msgid "Recommend"
-msgstr "Öneriler"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "AppImage"
-msgstr "AppImage"
-
-msgid "Shelly Search"
-msgstr "Shelly araması"
+msgid "Select AppImage Install Directory"
+msgstr "AppImage Kurulum Dizinini Seç"
 
 msgid "Select Icon File"
-msgstr "Simge dosyası seç"
+msgstr "Simge Dosyası Seç"
 
 msgid "Image Files"
-msgstr "Görsel dosyaları"
+msgstr "Görüntü Dosyaları"
+
+msgid "Systemd startup service added."
+msgstr "Systemd başlangıç hizmeti eklendi."
+
+msgid "Systemd startup service removed."
+msgstr "Systemd başlangıç hizmeti kaldırıldı."
 
 msgid "Enable AUR?"
-msgstr "AUR etkinleştirilsin mi?"
+msgstr "AUR Etkinleştirilsin mi?"
 
-msgid "The Arch User Repository (AUR) is a community-driven repository. Packages are user-produced and may contain risks. Do you want to enable it?"
-msgstr "Arch User Repository (AUR), topluluk tarafından yürütülen bir depodur. Paketler kullanıcılar tarafından üretilir ve riskler içerebilir. Etkinleştirmek istiyor musunuz?"
+#
+msgid "The Arch User Repository (AUR) is a community-driven repository.\nPackages are user-produced and may contain risks. Do you want to enable it?"
+msgstr "Arch Kullanıcı Deposu (AUR), topluluk odaklı bir depodur.\nPaketler kullanıcılar tarafından üretilir ve riskler içerebilir. Etkinleştirmek istiyor musunuz?"
 
 msgid "Missing Flatpak"
-msgstr "Flatpak eksik"
+msgstr "Eksik Flatpak"
 
 msgid "Would you like to install this this now?"
 msgstr "Bunu şimdi kurmak ister misiniz?"
@@ -607,7 +1400,7 @@ msgid "Installing flatpak..."
 msgstr "Flatpak kuruluyor..."
 
 msgid "Reboot required to complete installation."
-msgstr "Kurulumu tamamlamak için yeniden başlatma gerekli."
+msgstr "Kurulumu tamamlamak için yeniden başlatma gerekiyor."
 
 msgid "Synchronizing databases..."
 msgstr "Veritabanları eşitleniyor..."
@@ -625,7 +1418,7 @@ msgid "Error fixing folder permissions"
 msgstr "Klasör izinleri düzeltilirken hata oluştu"
 
 msgid "Purified Corruption"
-msgstr "Bozukluk temizlendi"
+msgstr "Bozulma Arındırıldı"
 
 msgid "No corrupted packages found"
 msgstr "Bozuk paket bulunamadı"
@@ -634,22 +1427,22 @@ msgid "No pacfiles found"
 msgstr "Pacfile bulunamadı"
 
 msgid "Pacfiles Found"
-msgstr "Pacfile bulundu"
+msgstr "Pacfile Bulundu"
 
 msgid "Copy content"
-msgstr "İçeriği kopyala"
+msgstr "İçeriği Kopyala"
 
 msgid "Copied to clipboard"
 msgstr "Panoya kopyalandı"
 
 msgid "Overlay not available"
-msgstr "Kaplama mevcut değil"
+msgstr "Arayüz mevcut değil"
 
 msgid "No changelog entries found"
 msgstr "Değişiklik günlüğü girdisi bulunamadı"
 
 msgid "Unknown"
-msgstr "Bilinmiyor"
+msgstr "Bilinmeyen"
 
 msgid "No details for this release"
 msgstr "Bu sürüm için ayrıntı yok"
@@ -657,113 +1450,12 @@ msgstr "Bu sürüm için ayrıntı yok"
 msgid "Unknown date"
 msgstr "Bilinmeyen tarih"
 
+#
 msgid "Failed to load changelog"
 msgstr "Değişiklik günlüğü yüklenemedi"
 
-msgid "None"
-msgstr "Yok"
-
-msgid "StaticUrl"
-msgstr "Sabit URL"
-
-msgid "GitHub"
-msgstr "GitHub"
-
-msgid "GitLab"
-msgstr "GitLab"
-
-msgid "Codeberg"
-msgstr "Codeberg"
-
-msgid "Forgejo"
-msgstr "Forgejo"
-
-msgid "Select AppImage to Install"
-msgstr "Kurulacak AppImage'ı seç"
-
-msgid "AppImage Files"
-msgstr "AppImage dosyaları"
-
-msgid "Installing AppImage..."
-msgstr "AppImage kuruluyor..."
-
-msgid "{0} installed successfully!"
-msgstr "{0} başarıyla kuruldu!"
-
-msgid "Failed to install {0}: {1}"
-msgstr "{0} kurulamadı: {1}"
-
-msgid "No AppImages need to be upgraded"
-msgstr "Yükseltilmesi gereken AppImage yok"
-
-msgid "Running updates..."
-msgstr "Güncellemeler çalıştırılıyor..."
-
-msgid "Updating AppImages..."
-msgstr "AppImage'lar güncelleniyor..."
-
-msgid "All AppImages updated successfully!"
-msgstr "Tüm AppImage'lar başarıyla güncellendi!"
-
-msgid "Failed to update AppImages: {0}"
-msgstr "AppImage'lar güncellenemedi: {0}"
-
-msgid "Configuration saved for {0}"
-msgstr "{0} için yapılandırma kaydedildi"
-
-msgid "Failed to save configuration: {0}"
-msgstr "Yapılandırma kaydedilemedi: {0}"
-
-msgid "Syncing {0}..."
-msgstr "{0} eşitleniyor..."
-
-msgid "Synced {0}"
-msgstr "{0} eşitlendi"
-
-msgid "Failed to sync: {0}"
-msgstr "Eşitlenemedi: {0}"
-
-msgid "Syncing all AppImages ..."
-msgstr "Tüm AppImage'lar eşitleniyor..."
-
-msgid "Synced"
-msgstr "Eşitlendi"
-
-msgid "{0} removed successfully!"
-msgstr "{0} başarıyla kaldırıldı!"
-
-msgid "Failed to remove {0}: {1}"
-msgstr "{0} kaldırılamadı: {1}"
-
-msgid "No recommendations found. Please check your internet connection and try again."
-msgstr "Öneri bulunamadı. Lütfen internet bağlantınızı kontrol edip yeniden deneyin."
-
-msgid "Already installed"
-msgstr "Zaten kurulu"
-
-msgid "Install "
-msgstr "Kur "
-
-msgid "Package is already installed"
-msgstr "Paket zaten kurulu"
-
-msgid "Installing package..."
-msgstr "Paket kuruluyor..."
-
-msgid "Package installed successfully"
-msgstr "Paket başarıyla kuruldu"
-
-msgid "Remove "
-msgstr "Kaldır "
-
-msgid "Removing package..."
-msgstr "Paket kaldırılıyor..."
-
-msgid "Package removed successfully"
-msgstr "Paket başarıyla kaldırıldı"
-
 msgid "Reboot required after flatpak installation."
-msgstr "Flatpak kurulumundan sonra yeniden başlatma gerekli."
+msgstr "Flatpak kurulumundan sonra yeniden başlatma gerekiyor."
 
 msgid "Failed to install flatpak"
 msgstr "Flatpak kurulamadı"
@@ -771,506 +1463,21 @@ msgstr "Flatpak kurulamadı"
 msgid "Searching..."
 msgstr "Aranıyor..."
 
+#, csharp-format
 msgid "Search error: {0}"
 msgstr "Arama hatası: {0}"
 
+#, csharp-format
 msgid "Failed to install packages: {0}"
 msgstr "Paketler kurulamadı: {0}"
 
+#, csharp-format
 msgid "Install for {0} package(s) was unsuccessful."
-msgstr "{0} paket için kurulum başarısız oldu."
+msgstr "{0} paket(ler) için kurulum başarısız oldu."
 
+#, csharp-format
 msgid "Failed to remove packages: {0}"
 msgstr "Paketler kaldırılamadı: {0}"
 
-msgid "color-scheme"
-msgstr "color-scheme"
-
-msgid "Updates"
-msgstr "Güncellemeler"
-
-msgid "Manage"
-msgstr "Yönet"
-
-msgid "Remove"
-msgstr "Kaldır"
-
-msgid "Search packages..."
-msgstr "Paket ara..."
-
-msgid "Use chroot"
-msgstr "chroot kullan"
-
-msgid "Build packages in a clean chroot environment"
-msgstr "Paketleri temiz bir chroot ortamında derle"
-
-msgid "Run checks"
-msgstr "Kontrolleri çalıştır"
-
-msgid "Run the --check function during package build (installs checkdepends)"
-msgstr "Paket derlemesi sırasında --check işlevini çalıştır (checkdepends bağımlılıklarını kurar)"
-
-msgid "Install Aur Package(s)"
-msgstr "AUR paketlerini kur"
-
-msgid "Name"
-msgstr "Ad"
-
-msgid "refresh"
-msgstr "Yenile"
-
-msgid "Clean Uninstall"
-msgstr "Temiz kaldırma"
-
-msgid "Show Hidden"
-msgstr "Gizlileri göster"
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr "pacman.conf içindeki IgnorePkg listesinde yer alan paketleri göster"
-
-msgid "Remove Aur Package(s)"
-msgstr "AUR paketlerini kaldır"
-
-msgid "Run the --check function during package build (installs checkdepends)\n                        "
-msgstr "Paket derlemesi sırasında --check işlevini çalıştır (checkdepends bağımlılıklarını kurar)"
-
-msgid "Update Aur Package(s)"
-msgstr "AUR paketlerini güncelle"
-
-msgid "Please wait while we update your system."
-msgstr "Sisteminizi güncellerken lütfen bekleyin."
-
-msgid "Reload"
-msgstr "Yeniden yükle"
-
-msgid "Manage Remote Refs"
-msgstr "Uzak referansları yönet"
-
-msgid "Install local flatpak"
-msgstr "Yerel Flatpak kur"
-
-msgid "system"
-msgstr "sistem"
-
-msgid "user"
-msgstr "kullanıcı"
-
-msgid "Loading Flatpak Data..."
-msgstr "Flatpak verileri yükleniyor..."
-
-msgid "Back"
-msgstr "Geri"
-
-msgid "Addons"
-msgstr "Eklentiler"
-
-msgid "Group Filter"
-msgstr "Grup filtresi"
-
-msgid "App Name"
-msgstr "Uygulama adı"
-
-msgid "Author"
-msgstr "Yazar"
-
-msgid "Version: -"
-msgstr "Sürüm: -"
-
-msgid "Size: -"
-msgstr "Boyut: -"
-
-msgid "License: -"
-msgstr "Lisans: -"
-
-msgid "Summary"
-msgstr "Özet"
-
-msgid "No description available."
-msgstr "Açıklama yok."
-
-msgid "Delete Selected Remote"
-msgstr "Seçili uzak kaynağı sil"
-
-msgid "Add Remote"
-msgstr "Uzak kaynak ekle"
-
-msgid "Add New Flatpak Remote"
-msgstr "Yeni Flatpak uzak kaynağı ekle"
-
-msgid "Add"
-msgstr "Ekle"
-
-msgid "Remote Name"
-msgstr "Uzak kaynak adı"
-
-msgid "e.g., flathub"
-msgstr "örn. flathub"
-
-msgid "Remote URL"
-msgstr "Uzak kaynak URL'si"
-
-msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr "örn. https://flathub.org/repo/flathub.flatpakrepo"
-
-msgid "Scope"
-msgstr "Kapsam"
-
-msgid "Remove Selected"
-msgstr "Seçileni kaldır"
-
-msgid "Update All"
-msgstr "Tümünü güncelle"
-
-msgid "Package Group Filter"
-msgstr "Paket grubu filtresi"
-
-msgid "Install Local Packages"
-msgstr "Yerel paketleri kur"
-
-msgid "Install Local"
-msgstr "Yerel kur"
-
-msgid "Perform Upgrade"
-msgstr "Yükseltme yap"
-
-msgid "Perform a full system upgrade with install (-u)"
-msgstr "Kurulumla birlikte tam sistem yükseltmesi yap (-u)"
-
-msgid "Install Selected"
-msgstr "Seçileni kur"
-
-msgid "Sync"
-msgstr "Eşitle"
-
-msgid "Update Selected"
-msgstr "Seçileni güncelle"
-
-msgid "Package Name"
-msgstr "Paket adı"
-
-msgid "Size Difference"
-msgstr "Boyut farkı"
-
-msgid "Old Version"
-msgstr "Eski sürüm"
-
-msgid "Remove Local Packages"
-msgstr "Yerel paketleri kaldır"
-
-msgid "Remove Local"
-msgstr "Yereli kaldır"
-
-msgid "Remove Configs"
-msgstr "Yapılandırmaları kaldır"
-
-msgid "General"
-msgstr "Genel"
-
-msgid "Enable AUR"
-msgstr "AUR'yi etkinleştir"
-
-msgid "Enable Flatpak"
-msgstr "Flatpak'i etkinleştir"
-
-msgid "Enable Recommended Page"
-msgstr "Önerilenler sayfasını etkinleştir"
-
-msgid "Enable AppImage"
-msgstr "AppImage'ı etkinleştir"
-
-msgid "Enable Tray Icon"
-msgstr "Tepsi simgesini etkinleştir"
-
-msgid "Use weekly schedule"
-msgstr "Haftalık zamanlamayı kullan"
-
-msgid "Tray Check Interval (Hours)"
-msgstr "Tepsi kontrol aralığı (saat)"
-
-msgid "Weekly Schedule"
-msgstr "Haftalık zamanlama"
-
-msgid "Sun"
-msgstr "Paz"
-
-msgid "Mon"
-msgstr "Pzt"
-
-msgid "Tue"
-msgstr "Sal"
-
-msgid "Wed"
-msgstr "Çar"
-
-msgid "Thu"
-msgstr "Per"
-
-msgid "Fri"
-msgstr "Cum"
-
-msgid "Sat"
-msgstr "Cmt"
-
-msgid "Update Time (24h):"
-msgstr "Güncelleme saati (24 saat):"
-
-msgid "Look & Feel"
-msgstr "Görünüm"
-
-msgid "Icons Enabled"
-msgstr "Simgeler etkin"
-
-msgid "Use Symbolic Tray Icon"
-msgstr "Sembolik tepsi simgesi kullan"
-
-msgid "Both tray icons must be set for use, if not it will default to standard shelly icons. Changing tray icons requires a restart of shelly-notifications."
-msgstr "Kullanım için her iki tepsi simgesi de ayarlanmalıdır; ayarlanmazsa varsayılan Shelly simgeleri kullanılır. Tepsi simgelerini değiştirmek için shelly-notifications yeniden başlatılmalıdır."
-
-msgid "Tray Icon"
-msgstr "Tepsi simgesi"
-
-msgid "Clear"
-msgstr "Temizle"
-
-msgid "Tray Updates Icon"
-msgstr "Tepsi güncelleme simgesi"
-
-msgid "Default page"
-msgstr "Varsayılan sayfa"
-
-msgid "Use Sidebar Navigation"
-msgstr "Kenar çubuğu gezinmesini kullan"
-
-msgid "Advanced"
-msgstr "Gelişmiş"
-
-msgid "Remove Cache on Uninstall"
-msgstr "Kaldırırken önbelleği sil"
-
-msgid "No Confirm"
-msgstr "Onay sorma"
-
-msgid "Enable Shelly Search"
-msgstr "Shelly aramasını etkinleştir"
-
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Webview görselleştirmesini etkinleştir (deneysel)"
-
-msgid "Parallel Downloads"
-msgstr "Paralel indirmeler"
-
-msgid "Force Database Update"
-msgstr "Veritabanı güncellemesini zorla"
-
-msgid "Remove db.lock"
-msgstr "db.lock dosyasını kaldır"
-
-msgid "View Pacfiles"
-msgstr "Pacfile'ları görüntüle"
-
-msgid "Fix Permissions"
-msgstr "İzinleri düzelt"
-
-msgid "Restores correct user ownership of Shelly configuration and cache folders if they were accidentally created by root."
-msgstr "Shelly yapılandırma ve önbellek klasörleri yanlışlıkla root tarafından oluşturulduysa doğru kullanıcı sahipliğini geri yükler."
-
-msgid "Purify Packages"
-msgstr "Paketleri temizle"
-
-msgid "Save"
-msgstr "Kaydet"
-
-msgid "View Changelog"
-msgstr "Değişiklik günlüğünü görüntüle"
-
-msgid "Community fluxer"
-msgstr "Topluluk katkıcısı"
-
-msgid "Sponsor"
-msgstr "Sponsor"
-
-msgid "Search..."
-msgstr "Ara..."
-
-msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr "Tüm AppImage'lar için üst verileri eşitle. AppImage kendini güncellediyse kullanışlıdır."
-
-msgid "Sync All"
-msgstr "Tümünü eşitle"
-
-msgid "Upgrade all AppImages to their latest versions"
-msgstr "Tüm AppImage'ları en son sürümlerine yükselt"
-
-msgid "Upgrade All"
-msgstr "Tümünü yükselt"
-
-msgid "Install a new AppImage from a file"
-msgstr "Dosyadan yeni bir AppImage kur"
-
-msgid "Install AppImage"
-msgstr "AppImage kur"
-
-msgid "Description goes here..."
-msgstr "Açıklama buraya gelecek..."
-
-msgid "Size on Disk"
-msgstr "Diskteki boyut"
-
-msgid "Update Strategy"
-msgstr "Güncelleme stratejisi"
-
-msgid "Update URL / Repository Info"
-msgstr "Güncelleme URL'si / Depo bilgisi"
-
-msgid "e.g. repo or https://..."
-msgstr "örn. depo veya https://..."
-
-msgid "Installation Path"
-msgstr "Kurulum yolu"
-
-msgid "Install Package(s)"
-msgstr "Paketleri kur"
-
-msgid "Update Package(s)"
-msgstr "Paketleri güncelle"
-
-msgid "Manage Package(s)"
-msgstr "Paketleri yönet"
-
-msgid "Install AUR"
-msgstr "AUR kur"
-
-msgid "Update AUR"
-msgstr "AUR'yi güncelle"
-
-msgid "Remove AUR"
-msgstr "AUR'yi kaldır"
-
-msgid "Install Flatpak"
-msgstr "Flatpak kur"
-
-msgid "Update Flatpak"
-msgstr "Flatpak'i güncelle"
-
-msgid "Remove Flatpak"
-msgstr "Flatpak'i kaldır"
-
-msgid "Manage AppImage(s)"
-msgstr "AppImage'ları yönet"
-
-msgid "Arch News"
-msgstr "Arch haberleri"
-
-msgid "Settings"
-msgstr "Ayarlar"
-
-msgid "About"
-msgstr "Hakkında"
-
-msgid "Toggle Sidebar"
-msgstr "Kenar çubuğunu aç/kapat"
-
-msgid "Available Updates"
-msgstr "Mevcut güncellemeler"
-
-msgid "Welcome to Shelly"
-msgstr "Shelly’ye hoş geldiniz"
-
-msgid "Let's get you set up with some basic configurations."
-msgstr "Bazı temel yapılandırmaları ayarlayalım."
-
-msgid "Enable AUR Support"
-msgstr "AUR desteğini etkinleştir"
-
-msgid "Access the Arch User Repository for a vast collection of community-maintained packages. AUR packages can contain malicious software, so please use caution when using the AUR."
-msgstr "Topluluk tarafından sürdürülen geniş bir paket koleksiyonuna erişmek için Arch User Repository’yi etkinleştirin. AUR paketleri kötü amaçlı yazılım içerebilir, bu yüzden AUR kullanırken dikkatli olun."
-
-msgid "Enable Flatpak Support"
-msgstr "Flatpak desteğini etkinleştir"
-
-msgid "Enable support for Flatpak applications from Flathub and other remotes."
-msgstr "Flathub ve diğer uzak kaynaklardaki Flatpak uygulamaları için desteği etkinleştir."
-
-msgid "Enable AppImage Support"
-msgstr "AppImage desteğini etkinleştir"
-
-msgid "Manage and configure updates for AppImage applications easily."
-msgstr "AppImage uygulamalarının güncellemelerini kolayca yönetin ve yapılandırın."
-
-msgid "Show a status icon in your system tray for quick access and notifications."
-msgstr "Hızlı erişim ve bildirimler için sistem tepsisinde bir durum simgesi göster."
-
-msgid "Vertical Navigation"
-msgstr "Dikey gezinme"
-
-msgid "Change navigation style to vertical or horizontal style."
-msgstr "Gezinme stilini dikey veya yatay olarak değiştir."
-
-msgid "Finish Setup"
-msgstr "Kurulumu bitir"
-
-msgid "Any required installations will run after the Finish button has been accepted."
-msgstr "Gerekli kurulumlar, Bitir düğmesi onaylandıktan sonra çalıştırılacaktır."
-
-msgid "These options and others can be configured later in settings."
-msgstr "Bu seçenekler ve diğerleri daha sonra ayarlardan yapılandırılabilir."
-
-msgid "Remove Package(s)"
-msgstr "Paketleri kaldır"
-
-msgid "Description"
-msgstr "Açıklama"
-
-msgid "Last Updated"
-msgstr "Son güncelleme"
-
-msgid "Remove Optional Deps"
-msgstr "İsteğe bağlı bağımlılıkları kaldır"
-
-msgid "Also remove orphaned optional dependencies installed with these packages."
-msgstr "Bu paketlerle birlikte kurulan sahipsiz isteğe bağlı bağımlılıkları da kaldır."
-
-msgid "Add Tray To Auto Start"
-msgstr "Tepsiyi otomatik başlatmaya ekle"
-
-msgid "Systemd startup service added."
-msgstr "Systemd başlangıç servisi eklendi."
-
-msgid "Systemd startup service removed."
-msgstr "Systemd başlangıç servisi kaldırıldı."
-
-msgid "Tray Icon Autostart"
-msgstr "Tepsi simgesi otomatik başlatma"
-
-msgid "Allow the tray service to autostart."
-msgstr "Tepsi servisinin otomatik başlamasına izin ver."
-
-msgid "Unable to load package data. You may have a db.lck."
-msgstr "Paket verileri yüklenemedi. db.lck dosyanız olabilir."
-
-msgid "Downgrade Selected"
-msgstr "Seçilenleri Eski Sürüme Düşür"
-
-msgid "Downgrade selected packages one by one"
-msgstr "Seçilen paketleri tek tek eski sürüme düşür"
-
-msgid "No downgrade options found for {0}"
-msgstr "{0} için eski sürüme düşürme seçeneği bulunamadı"
-
-msgid "Downgrading {0}..."
-msgstr "{0} eski sürüme düşürülüyor..."
-
-msgid "Downgraded {0} Package(s)"
-msgstr "{0} paket eski sürüme düşürüldü"
-
-msgid "Downgrade: {0}"
-msgstr "Eski sürüme düşür: {0}"
-
-msgid "Select version:"
-msgstr "Sürüm seç:"
-
-msgid "Add to IgnorePkg list"
-msgstr "IgnorePkg listesine ekle"
-
-msgid "Downgrade"
-msgstr "Eski Sürüme Düşür"
+msgid "App Permissions"
+msgstr "Uygulama İzinleri"

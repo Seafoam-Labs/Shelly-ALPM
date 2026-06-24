@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-05-14 18:41-0400\n"
-"PO-Revision-Date: 2026-06-02 15:36+0900\n"
+"POT-Creation-Date: 2026-06-12 11:40+0000\n"
+"PO-Revision-Date: 2026-06-20 03:42+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
 "Language: ja_JP\n"
@@ -12,11 +12,8 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 3.9\n"
 
-msgid "Any"
-msgstr "すべて"
-
 msgid "Loading..."
-msgstr "ロード中..."
+msgstr "読み込み中..."
 
 msgid "Recent Operations"
 msgstr "最近の操作"
@@ -39,9 +36,11 @@ msgstr "ログをコピー"
 msgid "Log copied to clipboard"
 msgstr "ログがクリップボードにコピーされました"
 
+#, csharp-format
 msgid "Available Updates ({0})"
 msgstr "利用可能なアップデート ({0})"
 
+#, csharp-format
 msgid "Updates ({0})"
 msgstr "アップデート ({0})"
 
@@ -51,20 +50,656 @@ msgstr "すべてのパッケージは最新です"
 msgid "just now"
 msgstr "たった今"
 
+#, csharp-format
 msgid "{0} min ago"
 msgstr "{0} 分前"
 
+#, csharp-format
 msgid "{0}h ago"
 msgstr "{0} 時間前"
 
 msgid "yesterday"
 msgstr "昨日"
 
+#, csharp-format
 msgid "{0}d ago"
 msgstr "{0} 日前"
 
+msgid "Any"
+msgstr "すべて"
+
+msgid "color-scheme"
+msgstr "配色"
+
+msgid "Install"
+msgstr "インストール"
+
+msgid "Updates"
+msgstr "アップデート"
+
+msgid "Manage"
+msgstr "管理"
+
+msgid "Remove"
+msgstr "削除"
+
+msgid "Happy pride month!"
+msgstr "ハッピープライド月間！"
+
+msgid "You found Chel's hidden page."
+msgstr "チェルの隠しページを見つけました。"
+
+msgid "Search packages..."
+msgstr "パッケージを検索..."
+
+msgid "Additional Options"
+msgstr "その他のオプション"
+
+msgid "Install Aur Package(s)"
+msgstr "AUR パッケージをインストール"
+
+msgid "Name"
+msgstr "名前"
+
+msgid "Votes"
+msgstr "投票数"
+
+msgid "Popularity"
+msgstr "人気度"
+
+msgid "Version"
+msgstr "バージョン"
+
+msgid "Use chroot"
+msgstr "chroot を使用"
+
+msgid "Build packages in a clean chroot environment"
+msgstr "クリーンな chroot 環境でパッケージをビルドする"
+
+msgid "Run checks"
+msgstr "チェックを実行"
+
+msgid "Run the --check function during package build (installs checkdepends)"
+msgstr ""
+"パッケージビルド中に --check 機能を実行します (checkdepends をインストールし"
+"ます)。"
+
+msgid "refresh"
+msgstr "更新"
+
+msgid "Remove Aur Package(s)"
+msgstr "AUR パッケージを削除"
+
+msgid "Clean Uninstall"
+msgstr "クリーンアンインストール"
+
+msgid "Show Hidden"
+msgstr "隠しパッケージを表示"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "pacman.conf の IgnorePkg リストにあるパッケージを表示する"
+
+msgid "Update Aur Package(s)"
+msgstr "AUR パッケージをアップデート"
+
+msgid ""
+"Run the --check function during package build (installs checkdepends)\n"
+"                        "
+msgstr ""
+"パッケージビルド中に --check 機能を実行します (checkdepends をインストール)\n"
+"                        "
+
+msgid "Search..."
+msgstr "検索..."
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr ""
+"すべての AppImage のメタデータを同期します。AppImage を自動更新する場合に便利"
+"です。"
+
+msgid "Sync All"
+msgstr "すべて同期"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "すべての AppImage を最新バージョンにアップグレードします"
+
+msgid "Upgrade All"
+msgstr "すべてアップグレード"
+
+msgid "Install a new AppImage from a file"
+msgstr "ファイルから新しい AppImage をインストールする"
+
+msgid "Install AppImage"
+msgstr "AppImage をインストール"
+
+msgid "Drop AppImage here to install"
+msgstr "ここに AppImage をドロップしてインストール"
+
+msgid "AppImage Migration"
+msgstr "AppImage の移行"
+
+msgid ""
+"To continue managing your AppImages with shelly a confirmation is required "
+"to switch to the new v2 implementation."
+msgstr ""
+"Shelly で AppImage の管理を続けるには、新しい v2 実装に切り替えるための確認が"
+"必要です。"
+
+msgid "Migrate Now"
+msgstr "今すぐ移行"
+
+msgid "App Name"
+msgstr "アプリ名"
+
+msgid "Description goes here..."
+msgstr "ここに説明文が入ります..."
+
+msgid "Size on Disk"
+msgstr "ディスク上のサイズ"
+
+msgid "Update Strategy"
+msgstr "アップデート計画"
+
+msgid "Update URL / Repository Info"
+msgstr "URL / リポジトリ情報をアップデート"
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr "URL / リポジトリ情報の更新についてもっと知る"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "例: owner/repo または https://..."
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr ""
+"無効な形式です。オーナー/リポジトリを使用してください (例: seafoam-labs/"
+"shelly-alpm)"
+
+msgid "Allow Prerelease"
+msgstr "プレリリースを許可する"
+
+msgid "Installation Path"
+msgstr "インストールパス"
+
+msgid "Launch Flags"
+msgstr "起動フラグ"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Language"
+msgstr "言語"
+
+msgid "Follow system language"
+msgstr "システムの言語に従う"
+
+msgid "Restart Shelly to apply the selected language."
+msgstr "選択した言語を適用するには Shelly を再起動してください。"
+
+msgid "Sync"
+msgstr "同期"
+
+msgid "Updating..."
+msgstr "アップデート中..."
+
+msgid "Please wait while we update your system."
+msgstr "システムを更新しています。お待ちください。"
+
+msgid "Reload"
+msgstr "再読み込み"
+
+msgid "Manage Remote Refs"
+msgstr "リモート参照先を管理"
+
+msgid "Install local flatpak"
+msgstr "ローカル Flatpak をインストール"
+
+msgid "system"
+msgstr "システム"
+
+msgid "user"
+msgstr "ユーザー"
+
+msgid "Loading Flatpak Data..."
+msgstr "Flatpak のデータを読み込み中..."
+
+msgid "Back"
+msgstr "戻る"
+
+msgid "Addons"
+msgstr "アドオン"
+
+msgid "Group Filter"
+msgstr "グループフィルター"
+
+msgid "Author"
+msgstr "作者"
+
+msgid "Version: -"
+msgstr "バージョン: -"
+
+msgid "Size: -"
+msgstr "サイズ: -"
+
+msgid "License: -"
+msgstr "ライセンス: -"
+
+msgid "Summary"
+msgstr "概要"
+
+msgid "No description available."
+msgstr "説明がありません。"
+
+msgid "Version History"
+msgstr "バージョン履歴"
+
+msgid "Delete Selected Remote"
+msgstr "選択したリモートを削除"
+
+msgid "Add Remote"
+msgstr "リモートを追加"
+
+msgid "Add New Flatpak Remote"
+msgstr "新しい Flatpak リモートを追加"
+
+msgid "Add"
+msgstr "追加"
+
+msgid "Remote Name"
+msgstr "リモート名"
+
+msgid "e.g., flathub"
+msgstr "例: flathub"
+
+msgid "Remote URL"
+msgstr "リモートの URL"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "例: https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "範囲"
+
+msgid "Remove Selected"
+msgstr "選択したものを削除"
+
+msgid "Flatpak Repair"
+msgstr "Flatpak を修復"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Flatpak インストールを修復する (実験的)"
+
+msgid "Update All"
+msgstr "すべてアップデート"
+
+msgid "Install Package(s)"
+msgstr "パッケージをインストール"
+
+msgid "Update Package(s)"
+msgstr "パッケージをアップデート"
+
+msgid "Manage Package(s)"
+msgstr "パッケージを管理"
+
+msgid "Install AUR"
+msgstr "AUR をインストール"
+
+msgid "Update AUR"
+msgstr "AUR をアップデート"
+
+msgid "Remove AUR"
+msgstr "AUR を削除"
+
+msgid "Install Flatpak"
+msgstr "Flatpak をインストール"
+
+msgid "Update Flatpak"
+msgstr "Flatpak をアップデート"
+
+msgid "Remove Flatpak"
+msgstr "Flatpak を削除"
+
+msgid "Manage AppImage(s)"
+msgstr "AppImage を管理"
+
+msgid "Cache Cleaner"
+msgstr "キャッシュクリーナー"
+
+msgid "Arch News"
+msgstr "Arch ニュース"
+
+msgid "Settings"
+msgstr "設定"
+
+msgid "About"
+msgstr "About"
+
+msgid "Toggle Sidebar"
+msgstr "サイドバーをトグル"
+
+msgid "Show Recommended"
+msgstr "おすすめを表示"
+
+msgid "Recommend"
+msgstr "おすすめ"
+
+msgid "Show Packages"
+msgstr "パッケージを表示"
+
+msgid "Packages"
+msgstr "パッケージ"
+
+msgid "Show AUR"
+msgstr "AUR を表示"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Show Flat"
+msgstr "Flat を表示"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Show AppImage"
+msgstr "AppImage を表示"
+
+msgid "AppImage"
+msgstr "AppImage"
+
+msgid "Show Shelly Searchs"
+msgstr "Shelly 検索を表示"
+
+msgid "Shelly Search"
+msgstr "Shelly 検索"
+
+msgid "Available Updates"
+msgstr "利用可能なアップデート"
+
+msgid "Package Group Filter"
+msgstr "パッケージグループフィルター"
+
+msgid "Remove Local Packages"
+msgstr "ローカルパッケージを削除"
+
+msgid "Remove Local"
+msgstr "ローカルを削除"
+
+msgid "Downgrade Selected"
+msgstr "選択したものをダウングレード"
+
+msgid "Downgrade selected packages one by one"
+msgstr "選択したパッケージを1個ずつダウングレードする"
+
+msgid "Package Name"
+msgstr "パッケージ名"
+
+msgid "Size"
+msgstr "サイズ"
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
+msgstr ""
+"パッケージの読み込み中に問題が発生しました。DB のロックがあるか確認してくださ"
+"い。"
+
+msgid "Remove Configs"
+msgstr "設定を削除"
+
+msgid "Remove Optional Deps"
+msgstr "オプションパッケージを削除"
+
+msgid ""
+"Also remove orphaned optional dependencies installed with these packages."
+msgstr ""
+"これらと一緒にインストールした、孤立するオプションパッケージも削除する。"
+
+msgid "Install Local Packages"
+msgstr "ローカルパッケージをインストールする"
+
+msgid "Install Local"
+msgstr "ローカルをインストール"
+
+msgid "Install Selected"
+msgstr "選択したものをインストール"
+
+msgid "Repository"
+msgstr "リポジトリ"
+
+msgid "Perform Upgrade"
+msgstr "アップグレードを実行"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "インストール (-u) を使用してシステム全体のアップグレードを実行する"
+
+msgid "Update Selected"
+msgstr "選択したものをアップデート"
+
+msgid "Size Difference"
+msgstr "サイズの違い"
+
+msgid "Old Version"
+msgstr "古いバージョン"
+
+msgid "Loading Recommended Packages..."
+msgstr "おすすめパッケージを読み込み中..."
+
+msgid "General"
+msgstr "全般"
+
+msgid "Enable AUR"
+msgstr "AUR を有効にする"
+
+msgid "Enable Flatpak"
+msgstr "Flatpak を有効にする"
+
+msgid "Enable Recommended Page"
+msgstr "おすすめページを有効にする"
+
+msgid "Enable AppImage"
+msgstr "AppImage を有効にする"
+
+msgid "Enable Tray Icon"
+msgstr "トレイアイコンを有効にする"
+
+msgid "Add Tray To Auto Start"
+msgstr "トレイを自動起動に追加する"
+
+msgid "Use weekly schedule"
+msgstr "週間スケジュールを使用する"
+
+msgid "Tray Check Interval (Hours)"
+msgstr "トレイのチェック間隔 (時間)"
+
+msgid "Weekly Schedule"
+msgstr "週間スケジュール"
+
+msgid "Sun"
+msgstr "日"
+
+msgid "Mon"
+msgstr "月"
+
+msgid "Tue"
+msgstr "火"
+
+msgid "Wed"
+msgstr "水"
+
+msgid "Thu"
+msgstr "木"
+
+msgid "Fri"
+msgstr "金"
+
+msgid "Sat"
+msgstr "土"
+
+msgid "Update Time (24h):"
+msgstr "アップデート時刻 (24時間制):"
+
+msgid "Look & Feel"
+msgstr "ルック＆フィール"
+
+msgid "Icons Enabled"
+msgstr "アイコンを有効にする"
+
+msgid "Use Sidebar Navigation"
+msgstr "サイドバーナビゲーションを使用する"
+
+msgid "Use Symbolic Tray Icon"
+msgstr "シンボルトレイアイコンを使用する"
+
+msgid "Tray Icon"
+msgstr "トレイアイコン"
+
+msgid "Select File"
+msgstr "ファイルを選択"
+
+msgid "Clear"
+msgstr "クリア"
+
+msgid "Tray Updates Icon"
+msgstr "アップデートのトレイアイコン"
+
+msgid "Default page"
+msgstr "デフォルトページ"
+
+msgid "Advanced"
+msgstr "上級者向け"
+
+msgid "Remove Cache on Uninstall"
+msgstr "アンインストール時にキャッシュを削除する"
+
+msgid "No Confirm"
+msgstr "確認しない"
+
+msgid "Enable Shelly Search"
+msgstr "Shelly 検索を有効にする"
+
+msgid "Enable Package Downgrade"
+msgstr "パッケージのダウングレードを有効にする"
+
+msgid "Enable Webview Visualization (experimental)"
+msgstr "WebView 表示を有効にする (実験的)"
+
+msgid "AppImage Install Path"
+msgstr "AppImage のインストールパス"
+
+msgid "Select Directory"
+msgstr "ディレクトリーを選択"
+
+msgid "Parallel Downloads"
+msgstr "並列ダウンロード"
+
+msgid "Force Database Update"
+msgstr "強制的にデータベースをアップデート"
+
+msgid "Remove db.lck"
+msgstr "db.lck を削除"
+
+msgid "View Pacfiles"
+msgstr "Pacfile を表示"
+
+msgid "Fix Permissions"
+msgstr "権限を修正"
+
+msgid ""
+"Restores correct user ownership of Shelly configuration and cache folders if "
+"they were accidentally created by root."
+msgstr ""
+"Shelly の設定フォルダーとキャッシュフォルダーが誤って root によって作成された"
+"場合、正しいユーザー所有権を復元します。"
+
+msgid "Purify Packages"
+msgstr "パッケージをクリーンアップ"
+
+msgid "View Changelog"
+msgstr "Changelog を見る"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "Community fluxer"
+msgstr "コミュニティー fluxer"
+
+msgid "Sponsor"
+msgstr "スポンサー"
+
+msgid "Welcome to Shelly"
+msgstr "Shelly へようこそ"
+
+msgid "Let's get you set up with some basic configurations."
+msgstr "基本設定のセットアップを始めましょう。"
+
+msgid "Enable AUR Support"
+msgstr "AUR サポートを有効にする"
+
+msgid ""
+"Access the Arch User Repository for a vast collection of community-"
+"maintained packages. AUR packages can contain malicous software, so please "
+"use caution when using the AUR."
+msgstr ""
+"Arch User Repository にアクセスすると、コミュニティーが管理する膨大なパッケー"
+"ジコレクションを利用できます。AUR パッケージには悪意のあるソフトウェアが含ま"
+"れている可能性があるため、AUR を使用する際は注意してください。"
+
+msgid "Enable Flatpak Support"
+msgstr "Flatpak サポートを有効にする"
+
+msgid "Enable support for Flatpak applications from Flathub and other remotes."
+msgstr ""
+"Flathub や他のリモートからの Flatpak アプリケーションのサポートを有効にしま"
+"す。"
+
+msgid "Enable AppImage Support"
+msgstr "AppImage サポートを有効にする"
+
+msgid "Manage and configure updates for AppImage applications easily."
+msgstr "AppImage アプリケーションのアップデートを簡単に管理・設定します。"
+
+msgid ""
+"Show a status icon in your system tray for quick access and notifications."
+msgstr ""
+"システムトレイにステータスアイコンを表示して、すばやくアクセスしたり通知を受"
+"け取ったりできるようにします。"
+
+msgid "Tray Icon Autostart"
+msgstr "トレイアイコンの自動起動"
+
+msgid "Allow the tray service to autostart."
+msgstr "トレイサービスの自動起動を許可します。"
+
+msgid "Vertical Navigation"
+msgstr "垂直ナビゲーション"
+
+msgid "Change navigation style to vertical or horizontal style."
+msgstr "ナビゲーションスタイルを縦または横に変更します。"
+
+msgid "Finish Setup"
+msgstr "セットアップを完了"
+
+msgid ""
+"Any required installations will run after the Finish button has been "
+"accepted."
+msgstr "完了ボタンをクリックすると必要なインストール処理を実行します。"
+
+msgid "These options and others can be configured later in settings."
+msgstr ""
+"これらのオプションやその他のオプションは、設定画面で後から変更できます。"
+
+msgid "Remove Package(s)"
+msgstr "パッケージを削除"
+
+msgid "Description"
+msgstr "説明"
+
+msgid "Last Updated"
+msgstr "最終更新日時"
+
 msgid "<span size='large'>Search for AUR packages</span>"
 msgstr "<span size='large'>AUR パッケージを検索</span>"
+
+msgid "Installed"
+msgstr "インストール済み"
 
 msgid "Install Packages?"
 msgstr "パッケージをインストールしますか？"
@@ -72,12 +707,7 @@ msgstr "パッケージをインストールしますか？"
 msgid "Installing..."
 msgstr "インストール中..."
 
-msgid "No packages found."
-msgstr "パッケージが見つかりませんでした。"
-
-msgid "Displaying Package Build {0}"
-msgstr "パッケージビルド {0} を表示しています"
-
+#, csharp-format
 msgid "Installed {0} Package(s)"
 msgstr "{0} 個のパッケージをインストールしました"
 
@@ -105,17 +735,8 @@ msgstr "パッケージビルドを表示"
 msgid "Close details"
 msgstr "詳細を閉じる"
 
-msgid "Version"
-msgstr "バージョン"
-
-msgid "Votes"
-msgstr "投票数"
-
-msgid "Popularity"
-msgstr "人気度"
-
 msgid "Out of Date"
-msgstr "古いと報告された日"
+msgstr "期限切れした日時"
 
 msgid "Maintainer"
 msgstr "メンテナー"
@@ -124,10 +745,10 @@ msgid "Orphaned"
 msgstr "孤立"
 
 msgid "Last Modified"
-msgstr "最終更新日"
+msgstr "最終更新日時"
 
 msgid "First Submitted"
-msgstr "初回登録日"
+msgstr "初回登録日時"
 
 msgid "URL:"
 msgstr "URL:"
@@ -136,16 +757,16 @@ msgid "AUR:"
 msgstr "AUR:"
 
 msgid "Depends"
-msgstr "依存関係"
+msgstr "次が必要"
 
 msgid "Make Depends"
 msgstr "ビルドに必要"
 
 msgid "Check Depends"
-msgstr "依存関係を確認"
+msgstr "必要なものを確認"
 
 msgid "Optional Deps"
-msgstr "オプションの依存関係"
+msgstr "オプションで必要"
 
 msgid "Licenses"
 msgstr "ライセンス"
@@ -154,16 +775,16 @@ msgid "Keywords"
 msgstr "キーワード"
 
 msgid "Provides"
-msgstr "提供"
+msgstr "次を提供"
 
 msgid "Conflicts"
-msgstr "競合"
+msgstr "次と競合"
 
 msgid "Groups"
 msgstr "グループ"
 
 msgid "Replaces"
-msgstr "置換"
+msgstr "次を置換"
 
 msgid "Remove Packages?"
 msgstr "パッケージを削除しますか？"
@@ -171,6 +792,7 @@ msgstr "パッケージを削除しますか？"
 msgid "Removing..."
 msgstr "削除中..."
 
+#, csharp-format
 msgid "Removed {0} Package(s)"
 msgstr "{0} 個のパッケージを削除しました"
 
@@ -180,8 +802,115 @@ msgstr "<span size='large'>AUR パッケージは最新です</span>"
 msgid "Update Packages?"
 msgstr "パッケージをアップデートしますか？"
 
+#, csharp-format
 msgid "Updated {0} Package(s)"
 msgstr "{0} 個のパッケージをアップデートしました"
+
+msgid "None"
+msgstr "なし"
+
+msgid "StaticUrl"
+msgstr "StaticUrl"
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+msgid "Invalid URL. Must start with http:// or https://"
+msgstr "無効なURLです。http:// または https:// で始める必要があります"
+
+msgid "Select AppImage to Install"
+msgstr "インストールする AppImage を選択"
+
+msgid "AppImage Files"
+msgstr "AppImage ファイル"
+
+msgid "No AppImages need to be upgraded"
+msgstr "アップグレードする必要のある AppImage はありません"
+
+msgid "Running updates..."
+msgstr "アップデートを実行中..."
+
+msgid "Updating AppImages..."
+msgstr "AppImage をアップデート中..."
+
+msgid "All AppImages updated successfully!"
+msgstr "すべての AppImage が正常に更新されました！"
+
+#, csharp-format
+msgid "Failed to update AppImages: {0}"
+msgstr "AppImage の更新に失敗しました: {0}"
+
+#, csharp-format
+msgid "Version {0}"
+msgstr "バージョン {0}"
+
+#, csharp-format
+msgid "Configuration saved for {0}"
+msgstr "{0} の設定を保存しました"
+
+#, csharp-format
+msgid "Failed to save configuration: {0}"
+msgstr "設定の保存に失敗しました: {0}"
+
+#, csharp-format
+msgid "Syncing {0}..."
+msgstr "{0} を同期中..."
+
+#, csharp-format
+msgid "Synced {0}"
+msgstr "{0} を同期しました"
+
+#, csharp-format
+msgid "Failed to sync: {0}"
+msgstr "同期に失敗しました: {0}"
+
+msgid "Syncing all AppImages ..."
+msgstr "すべての AppImage を同期中..."
+
+msgid "Synced"
+msgstr "同期しました"
+
+#, csharp-format
+msgid "Removing {0}..."
+msgstr "{0} を削除中..."
+
+#, csharp-format
+msgid "{0} removed successfully!"
+msgstr "{0} が正常に削除されました！"
+
+#, csharp-format
+msgid "Failed to remove {0}: {1}"
+msgstr "{0} の削除に失敗しました: {1}"
+
+msgid "Only AppImage files are supported"
+msgstr "AppImage ファイルのみサポートされています"
+
+msgid "Migrating AppImages to V2..."
+msgstr "AppImage を V2 に移行中..."
+
+msgid "Migration successful!"
+msgstr "移行が成功しました！"
+
+#, csharp-format
+msgid "Migration failed: {0}"
+msgstr "移行が失敗しました: {0}"
+
+msgid "Installing AppImage..."
+msgstr "AppImage をインストール中..."
+
+#, csharp-format
+msgid "{0} installed successfully!"
+msgstr "{0} が正常にインストールされました！"
+
+#, csharp-format
+msgid "Failed to install {0}: {1}"
+msgstr "{0} のインストールに失敗しました: {1}"
 
 msgid "Shelly is an Arch Linux package manager"
 msgstr "Shelly は Arch Linux のパッケージマネージャーです"
@@ -195,11 +924,17 @@ msgstr "プロジェクトリーダー"
 msgid "Maintainers"
 msgstr "メンテナー"
 
+msgid "installed"
+msgstr "インストール済み"
+
 msgid "Select"
 msgstr "選択"
 
 msgid "Select All"
 msgstr "すべて選択"
+
+msgid "already installed"
+msgstr "既にインストール済み"
 
 msgid "Confirm"
 msgstr "確認"
@@ -229,7 +964,7 @@ msgid "Select Provider"
 msgstr "プロバイダーを選択"
 
 msgid "Select Optional Dependencies"
-msgstr "オプションの依存関係を選択"
+msgstr "オプションパッケージを選択"
 
 msgid "System Question"
 msgstr "システムの質問"
@@ -249,6 +984,7 @@ msgstr "パッケージ"
 msgid "AUR installation failed"
 msgstr "AUR のインストールに失敗しました"
 
+#, csharp-format
 msgid ""
 "Shelly couldn't finish building or installing the selected AUR {0}. Export "
 "the logs and attach them to your report so the team can check whether the "
@@ -257,9 +993,6 @@ msgstr ""
 "Shelly は選択した AUR {0} のビルドまたはインストールを完了できませんでした。"
 "ログをエクスポートしてレポートに添付し、この問題が PKGBUILD に起因するものか "
 "Shelly に起因するものかをチームが確認できるようにしてください。"
-
-msgid "Packages"
-msgstr "パッケージ"
 
 msgid "Recent output"
 msgstr "最近の出力"
@@ -270,6 +1003,33 @@ msgstr "閉じる"
 msgid "Export Logs"
 msgstr "ログをエクスポート"
 
+#, csharp-format
+msgid ""
+"Cache directory: {0}\n"
+"Total cached files: {1} ({2})"
+msgstr ""
+"キャッシュディレクトリー: {0}\n"
+"キャッシュファイルの総数: {1} ({2})"
+
+msgid "Keep versions:"
+msgstr "保持するバージョン数:"
+
+msgid "Uninstalled only"
+msgstr "アンインストールのみ"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "Clean"
+msgstr "削除"
+
+msgid "No candidates for removal."
+msgstr "削除対象がありません。"
+
+#, csharp-format
+msgid "{0} files, {1} would be freed"
+msgstr "{0} 個のファイル, {1} が解放されます"
+
 msgid "Cache directory does not exist"
 msgstr "キャッシュディレクトリーが存在しません"
 
@@ -279,8 +1039,22 @@ msgstr "パッケージキャッシュをクリーンアップ..."
 msgid "Package cache cleaned successfully"
 msgstr "パッケージキャッシュのクリーンアップが正常に完了しました"
 
+#, csharp-format
 msgid "Cache clean failed: {0}"
 msgstr "キャッシュのクリーンアップが失敗しました: {0}"
+
+#, csharp-format
+msgid "Downgrade: {0}"
+msgstr "ダウングレード: {0}"
+
+msgid "Select version:"
+msgstr "バージョンを選択:"
+
+msgid "Add to IgnorePkg list"
+msgstr "IgnorePkg リストに追加"
+
+msgid "Downgrade"
+msgstr "ダウングレード"
 
 msgid "Fingerprint Disable Instructions"
 msgstr "フィンガープリントの無効化手順"
@@ -303,12 +1077,20 @@ msgstr "コピー"
 msgid "Operation Complete"
 msgstr "操作が完了しました"
 
-msgid "Cancel"
-msgstr "キャンセル"
+#, csharp-format
+msgid "PKGBUILD Diff - {0}"
+msgstr "PKGBUILD の差分 - {0}"
+
+msgid "Review the PKGBUILD changes before continuing."
+msgstr "続行する前に PKGBUILD の変更を確認してください。"
+
+msgid "Accept Changes"
+msgstr "変更を承認"
 
 msgid "Authentication Required"
 msgstr "認証が必要です"
 
+#, csharp-format
 msgid "Password needed to execute: {0}."
 msgstr "実行にはパスワードが必要です: {0}."
 
@@ -318,18 +1100,49 @@ msgstr "認証"
 msgid "Incorrect password. Try again."
 msgstr "パスワードが違います。もう一度お試しください。"
 
+msgid "Review PKGBUILD changes"
+msgstr "PKGBUILD の変更点を確認する"
+
+#, csharp-format
+msgid "Review PKGBUILD changes for {0}"
+msgstr "{0} の PKGBUILD の変更をレビュー"
+
+msgid ""
+"These commands fetch and execute code outside of pacman's control. Review "
+"them before continuing."
+msgstr ""
+"これらのコマンドは Pacman の管理外のコードを取得して実行します。続行する前に"
+"確認してください。"
+
+msgid "Install Anyway"
+msgstr "とにかくインストール"
+
+#, csharp-format
+msgid "{0} used in {1}"
+msgstr "{1} で使用される {0}"
+
 msgid "What's New"
 msgstr "新着情報"
 
-msgid "Version History"
-msgstr "バージョン履歴"
+msgid "Keep Config"
+msgstr "設定を保持"
 
-msgid "Version {0}"
-msgstr "バージョン {0}"
+msgid "Keep user data and configuration"
+msgstr "ユーザーデータと設定を保持する"
+
+msgid "Delete Config"
+msgstr "設定を削除"
+
+msgid "Delete user data and configuration"
+msgstr "ユーザーデータと設定を削除する"
+
+msgid "Keep Config?"
+msgstr "設定を保持しますか？"
 
 msgid "Package installation failed"
 msgstr "パッケージのインストールに失敗しました"
 
+#, csharp-format
 msgid ""
 "Shelly couldn't finish building or installing the selected {0}. Export the "
 "logs and attach them to your report so the team can check whether the issue "
@@ -339,40 +1152,17 @@ msgstr ""
 "をエクスポートしてレポートに添付し、この問題が PKGBUILD に起因するものか "
 "Shelly に起因するものかをチームが確認できるようにしてください。"
 
-msgid "Cache Cleaner"
-msgstr "キャッシュクリーナー"
-
-msgid ""
-"Cache directory: {0}\n"
-"Total cached files: {1} ({2})"
-msgstr ""
-"キャッシュディレクトリー: {0}\n"
-"キャッシュファイルの総数: {1} ({2})"
-
-msgid "Keep versions:"
-msgstr "保持するバージョン数:"
-
-msgid "Uninstalled only"
-msgstr "アンインストールのみ"
-
-msgid "Clean"
-msgstr "削除"
-
-msgid "No candidates for removal."
-msgstr "削除対象がありません。"
-
-msgid "{0} files, {1} would be freed"
-msgstr "{0} 個のファイル, {1} が解放されます"
-
 msgid "Name and URL are required"
 msgstr "名前と URL が必要です"
 
 msgid "URL must end with .flatpakrepo"
 msgstr "URL は .flatpakrepo で終わる必要があります"
 
+#, csharp-format
 msgid "Failed to add remote: {0}"
 msgstr "リモートの追加に失敗しました: {0}"
 
+#, csharp-format
 msgid "Added Remote: {0}"
 msgstr "リモートを追加しました: {0}"
 
@@ -424,18 +1214,15 @@ msgstr "システム"
 msgid "Utility"
 msgstr "ユーティリティー"
 
+#, csharp-format
 msgid "Version: {0}"
 msgstr "バージョン: {0}"
 
+#, csharp-format
 msgid "License: {0}"
 msgstr "ライセンス: {0}"
 
-msgid "Installed"
-msgstr "インストール済み"
-
-msgid "Install"
-msgstr "インストール"
-
+#, csharp-format
 msgid "Size: {0}"
 msgstr "サイズ: {0}"
 
@@ -443,7 +1230,7 @@ msgid "No links available"
 msgstr "リンクがありません"
 
 msgid "Install Flatpak Ref"
-msgstr "Flatpak 参照先をインストール"
+msgstr "Flatpak をインストール"
 
 msgid "Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""
 msgstr "ローカル Flatpak ファイル (\"*.FlatpakRef\", \"*.flatpak\")"
@@ -460,6 +1247,7 @@ msgstr "Flatpak をインストールしました"
 msgid "Install Package?"
 msgstr "パッケージをインストールしますか？"
 
+#, csharp-format
 msgid "Installing {0}..."
 msgstr "{0} をインストール中..."
 
@@ -472,24 +1260,13 @@ msgstr "利用可能なアドオン"
 msgid "No details available"
 msgstr "詳細がありません"
 
-msgid "Keep Config"
-msgstr "設定を維持"
+msgid "Repaired Flatpak installation"
+msgstr "Flatpak のインストールを修復しました"
 
-msgid "Keep user data and configuration"
-msgstr "ユーザーデータと設定を維持する"
+msgid "Failed to repair Flatpak installation"
+msgstr "Flatpak インストールの修復に失敗しました"
 
-msgid "Delete Config"
-msgstr "設定を削除"
-
-msgid "Delete user data and configuration"
-msgstr "ユーザーデータと設定を削除する"
-
-msgid "Keep Config?"
-msgstr "設定を維持しますか？"
-
-msgid "Removing {0}..."
-msgstr "{0} を削除中..."
-
+#, csharp-format
 msgid "Failed to remove package {0}: {1}"
 msgstr "パッケージ {0} の削除に失敗しました: {1}"
 
@@ -502,72 +1279,24 @@ msgstr "権限の変更"
 msgid "Updating Flatpak packages..."
 msgstr "Flatpak パッケージをアップデート中..."
 
+#, csharp-format
 msgid "Failed to update packages: {0}"
 msgstr "パッケージのアップデートに失敗しました: {0}"
 
 msgid "Updated all Flatpak(s)"
 msgstr "すべての Flatpak をアップデートしました"
 
-msgid "<span size='large'>System packages are up to date</span>"
-msgstr "<span size='large'>システムパッケージは最新です</span>"
+msgid "Installed Size"
+msgstr "インストール時のサイズ"
 
-msgid "Current"
-msgstr "現在"
+msgid "Build Date"
+msgstr "ビルド日時"
 
-msgid "New"
-msgstr "新規"
+msgid "Required By"
+msgstr "次に必要"
 
-msgid "Download"
-msgstr "ダウンロード"
-
-msgid "Size Diff"
-msgstr "サイズの違い"
-
-msgid "Repository"
-msgstr "リポジトリ"
-
-msgid "Size"
-msgstr "サイズ"
-
-msgid "Partial Update Warning"
-msgstr "部分的なアップデートについての警告"
-
-msgid ""
-"It is not advised you do partial system updates. Are you sure you want to "
-"continue?"
-msgstr "部分的なシステムアップデートは推奨されません。本当に続行しますか？"
-
-msgid ""
-"It is unadvised to not update all packages at once. Are you sure you want to "
-"continue?"
-msgstr ""
-"すべてのパッケージを一度に更新しないことは推奨されません。本当に続行します"
-"か？"
-
-msgid "Updating..."
-msgstr "アップデート中..."
-
-msgid "Reboot Required"
-msgstr "再起動が必要です"
-
-msgid ""
-"A full system reboot is required for updates to take effect.\n"
-"\n"
-"Would you like to reboot now?"
-msgstr ""
-"アップデートを有効にするにはシステム全体の再起動が必要です。\n"
-"\n"
-"今すぐ再起動しますか？"
-
-msgid "Service Restart Failures"
-msgstr "サービス再起動の失敗"
-
-msgid ""
-"The following services failed to restart automatically:\n"
-"{0}"
-msgstr ""
-"以下のサービスが自動的に再起動されませんでした:\n"
-"{0}"
+msgid "Failed to load packages."
+msgstr "パッケージの読み込みに失敗しました。"
 
 msgid "--- Packages to Upgrade ---"
 msgstr "--- アップグレードするパッケージ ---"
@@ -585,7 +1314,7 @@ msgid "Install Local Package"
 msgstr "ローカルパッケージをインストール"
 
 msgid "Local package files (\"*.gz\", \"*.zst\")"
-msgstr "ローカルパッケージファイル（\"*.gz\", \"*.zst\")"
+msgstr "ローカルパッケージファイル (\"*.gz\", \"*.zst\")"
 
 msgid "Installing local package..."
 msgstr "ローカルパッケージをインストール中..."
@@ -593,35 +1322,123 @@ msgstr "ローカルパッケージをインストール中..."
 msgid "Installed local package"
 msgstr "ローカルパッケージをインストールしました"
 
+msgid "Install As"
+msgstr "次としてインストール"
+
+#, csharp-format
 msgid "Package Files ({0})"
-msgstr "パッケージファイル ({0})"
+msgstr "パッケージ内のファイル ({0})"
+
+#, csharp-format
+msgid "No downgrade options found for {0}"
+msgstr "{0} のダウングレードオプションは見つかりませんでした"
+
+#, csharp-format
+msgid "Downgrading {0}..."
+msgstr "{0} をダウングレード中..."
+
+#, csharp-format
+msgid "Downgraded {0} Package(s)"
+msgstr "{0} 個のパッケージをダウングレード"
+
+msgid "<span size='large'>System packages are up to date</span>"
+msgstr "<span size='large'>システムパッケージは最新です</span>"
+
+msgid "Current"
+msgstr "現在"
+
+msgid "New"
+msgstr "新規"
+
+msgid "Download"
+msgstr "ダウンロード"
+
+msgid "Size Diff"
+msgstr "サイズの違い"
+
+msgid "Partial Update Warning"
+msgstr "部分的なアップデートについての警告"
+
+msgid ""
+"It is not advised you do partial system updates. Are you sure you want to "
+"continue?"
+msgstr "部分的なシステムアップデートは推奨されません。本当に続行しますか？"
+
+msgid ""
+"It is unadvised to not update all packages at once. Are you sure you want to "
+"continue?"
+msgstr ""
+"すべてのパッケージを一度に更新しないことは推奨されません。本当に続行します"
+"か？"
+
+msgid "Reboot Required"
+msgstr "再起動が必要です"
+
+msgid ""
+"A full system reboot is required for updates to take effect.\n"
+"\n"
+"Would you like to reboot now?"
+msgstr ""
+"アップデートを有効にするにはシステム全体の再起動が必要です。\n"
+"\n"
+"今すぐ再起動しますか？"
+
+msgid "Service Restart Failures"
+msgstr "サービス再起動の失敗"
+
+#, csharp-format
+msgid ""
+"The following services failed to restart automatically:\n"
+"{0}"
+msgstr ""
+"以下のサービスが自動的に再起動されませんでした:\n"
+"{0}"
+
+msgid ""
+"No recommendations found. Please check your internet connection and try "
+"again."
+msgstr ""
+"おすすめが見つかりませんでした。インターネット接続を確認して、もう一度お試し"
+"ください。"
+
+msgid "Package is already installed"
+msgstr "パッケージは既にインストールされています"
+
+msgid "Remove "
+msgstr "削除 "
+
+msgid "Removing package..."
+msgstr "パッケージを削除中..."
+
+msgid "Package removed successfully"
+msgstr "パッケージを正常に削除しました"
+
+msgid "Install "
+msgstr "インストール "
+
+msgid "Installing package..."
+msgstr "パッケージをインストール中..."
+
+msgid "Package installed successfully"
+msgstr "パッケージを正常にインストールしました"
 
 msgid "Remove corrupted packages"
 msgstr "壊れたパッケージを削除する"
 
-msgid "Select File"
-msgstr "ファイルを選択"
-
-msgid "Recommend"
-msgstr "おすすめ"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "AppImage"
-msgstr "AppImage"
-
-msgid "Shelly Search"
-msgstr "Shelly 検索"
+msgid "Select AppImage Install Directory"
+msgstr "AppImage のインストールディレクトリーを選択"
 
 msgid "Select Icon File"
 msgstr "アイコンファイルを選択"
 
 msgid "Image Files"
 msgstr "画像ファイル"
+
+msgid "Systemd startup service added."
+msgstr "Systemd 起動サービスが追加されました。"
+
+msgid "Systemd startup service removed."
+msgstr "Systemd 起動サービスが削除されました。"
 
 msgid "Enable AUR?"
 msgstr "AUR を有効にしますか？"
@@ -692,116 +1509,10 @@ msgid "No details for this release"
 msgstr "このリリースの詳細情報はありません"
 
 msgid "Unknown date"
-msgstr "日付不明"
+msgstr "日時不明"
 
 msgid "Failed to load changelog"
-msgstr "変更履歴のロードに失敗しました"
-
-msgid "None"
-msgstr "なし"
-
-msgid "StaticUrl"
-msgstr "StaticUrl"
-
-msgid "GitHub"
-msgstr "GitHub"
-
-msgid "GitLab"
-msgstr "GitLab"
-
-msgid "Codeberg"
-msgstr "Codeberg"
-
-msgid "Forgejo"
-msgstr "Forgejo"
-
-msgid "Select AppImage to Install"
-msgstr "インストールする AppImage を選択"
-
-msgid "AppImage Files"
-msgstr "AppImage ファイル"
-
-msgid "Installing AppImage..."
-msgstr "AppImage をインストール中..."
-
-msgid "{0} installed successfully!"
-msgstr "{0} が正常にインストールされました！"
-
-msgid "Failed to install {0}: {1}"
-msgstr "{0} のインストールに失敗しました: {1}"
-
-msgid "No AppImages need to be upgraded"
-msgstr "アップグレードする必要のある AppImage はありません"
-
-msgid "Running updates..."
-msgstr "アップデートを実行中..."
-
-msgid "Updating AppImages..."
-msgstr "AppImage をアップデート中..."
-
-msgid "All AppImages updated successfully!"
-msgstr "すべての AppImage が正常に更新されました！"
-
-msgid "Failed to update AppImages: {0}"
-msgstr "AppImage の更新に失敗しました: {0}"
-
-msgid "Configuration saved for {0}"
-msgstr "{0} の設定を保存しました"
-
-msgid "Failed to save configuration: {0}"
-msgstr "設定の保存に失敗しました: {0}"
-
-msgid "Syncing {0}..."
-msgstr "{0} を同期中..."
-
-msgid "Synced {0}"
-msgstr "{0} を同期しました"
-
-msgid "Failed to sync: {0}"
-msgstr "同期に失敗しました: {0}"
-
-msgid "Syncing all AppImages ..."
-msgstr "すべての AppImage を同期中..."
-
-msgid "Synced"
-msgstr "同期しました"
-
-msgid "{0} removed successfully!"
-msgstr "{0} が正常に削除されました！"
-
-msgid "Failed to remove {0}: {1}"
-msgstr "{0} の削除に失敗しました: {1}"
-
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
-msgstr ""
-"おすすめが見つかりませんでした。インターネット接続を確認して、もう一度お試し"
-"ください。"
-
-msgid "Already installed"
-msgstr "既にインストール済みです"
-
-msgid "Install "
-msgstr "インストール "
-
-msgid "Package is already installed"
-msgstr "パッケージは既にインストールされています"
-
-msgid "Installing package..."
-msgstr "パッケージをインストール中..."
-
-msgid "Package installed successfully"
-msgstr "パッケージを正常にインストールしました"
-
-msgid "Remove "
-msgstr "削除 "
-
-msgid "Removing package..."
-msgstr "パッケージを削除中..."
-
-msgid "Package removed successfully"
-msgstr "パッケージを正常に削除しました"
+msgstr "変更履歴の読み込みに失敗しました"
 
 msgid "Reboot required after flatpak installation."
 msgstr "Flatpak のインストール後に再起動が必要です。"
@@ -812,550 +1523,45 @@ msgstr "Flatpak のインストールに失敗しました"
 msgid "Searching..."
 msgstr "検索中..."
 
+#, csharp-format
 msgid "Search error: {0}"
 msgstr "検索エラー: {0}"
 
+#, csharp-format
 msgid "Failed to install packages: {0}"
 msgstr "パッケージのインストールに失敗しました: {0}"
 
+#, csharp-format
 msgid "Install for {0} package(s) was unsuccessful."
 msgstr "{0} 個のパッケージのインストールに失敗しました。"
 
+#, csharp-format
 msgid "Failed to remove packages: {0}"
 msgstr "パッケージの削除に失敗しました: {0}"
 
-msgid "color-scheme"
-msgstr "配色"
-
-msgid "Updates"
-msgstr "アップデート"
-
-msgid "Manage"
-msgstr "管理"
-
-msgid "Remove"
-msgstr "削除"
-
-msgid "Search packages..."
-msgstr "パッケージを検索..."
-
-msgid "Use chroot"
-msgstr "chroot を使用"
-
-msgid "Build packages in a clean chroot environment"
-msgstr "クリーンな chroot 環境でパッケージをビルドする"
-
-msgid "Run checks"
-msgstr "チェックを実行"
-
-msgid "Run the --check function during package build (installs checkdepends)"
-msgstr ""
-"パッケージビルド中に --check 機能を実行します (checkdepends をインストールし"
-"ます)。"
-
-msgid "Install Aur Package(s)"
-msgstr "AUR パッケージをインストール"
-
-msgid "Name"
-msgstr "名前"
-
-msgid "refresh"
-msgstr "更新"
-
-msgid "Clean Uninstall"
-msgstr "クリーンアンインストール"
-
-msgid "Show Hidden"
-msgstr "非表示を表示"
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr "pacman.conf の IgnorePkg リストにあるパッケージを表示する"
-
-msgid "Remove Aur Package(s)"
-msgstr "AUR パッケージを削除"
-
-msgid ""
-"Run the --check function during package build (installs checkdepends)\n"
-"                        "
-msgstr ""
-"パッケージビルド中に --check 機能を実行します (checkdepends をインストールし"
-"ます)\n"
-"                        "
-
-msgid "Update Aur Package(s)"
-msgstr "AUR パッケージをアップデート"
-
-msgid "Please wait while we update your system."
-msgstr "システムを更新しています。お待ちください。"
-
-msgid "Reload"
-msgstr "リロード"
-
-msgid "Manage Remote Refs"
-msgstr "リモート参照先を管理"
-
-msgid "Install local flatpak"
-msgstr "ローカル Flatpak をインストール"
-
-msgid "system"
-msgstr "システム"
-
-msgid "user"
-msgstr "ユーザー"
-
-msgid "Loading Flatpak Data..."
-msgstr "Flatpak データをロード中..."
-
-msgid "Back"
-msgstr "戻る"
-
-msgid "Addons"
-msgstr "アドオン"
-
-msgid "Group Filter"
-msgstr "グループフィルター"
-
-msgid "App Name"
-msgstr "アプリ名"
-
-msgid "Author"
-msgstr "作者"
-
-msgid "Version: -"
-msgstr "バージョン: -"
-
-msgid "Size: -"
-msgstr "サイズ: -"
-
-msgid "License: -"
-msgstr "ライセンス: -"
-
-msgid "Summary"
-msgstr "概要"
-
-msgid "No description available."
-msgstr "説明がありません。"
-
-msgid "Delete Selected Remote"
-msgstr "選択したリモートを削除"
-
-msgid "Add Remote"
-msgstr "リモートを追加"
-
-msgid "Add New Flatpak Remote"
-msgstr "新しい Flatpak リモートを追加"
-
-msgid "Add"
-msgstr "追加"
-
-msgid "Remote Name"
-msgstr "リモート名"
-
-msgid "e.g., flathub"
-msgstr "例: flathub"
-
-msgid "Remote URL"
-msgstr "リモートの URL"
-
-msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr "例: https://flathub.org/repo/flathub.flatpakrepo"
-
-msgid "Scope"
-msgstr "範囲"
-
-msgid "Remove Selected"
-msgstr "選択したものを削除"
-
-msgid "Flatpak Repair"
-msgstr "Flatpak を修復"
-
-msgid "Repairs Flatpak Installation (Experimental)"
-msgstr "Flatpak インストールを修復する（実験的）"
-
-msgid "Update All"
-msgstr "すべてアップデート"
-
-msgid "Package Group Filter"
-msgstr "パッケージグループフィルター"
-
-msgid "Install Local Packages"
-msgstr "ローカルパッケージをインストールする"
-
-msgid "Install Local"
-msgstr "ローカルをインストール"
-
-msgid "Perform Upgrade"
-msgstr "アップグレードを実行"
-
-msgid "Perform a full system upgrade with install (-u)"
-msgstr "インストール（-u）を使用してシステム全体のアップグレードを実行する"
-
-msgid "Install Selected"
-msgstr "選択したものをインストール"
-
-msgid "Sync"
-msgstr "同期"
-
-msgid "Update Selected"
-msgstr "選択したものをアップデート"
-
-msgid "Package Name"
-msgstr "パッケージ名"
-
-msgid "Size Difference"
-msgstr "サイズの違い"
-
-msgid "Old Version"
-msgstr "古いバージョン"
-
-msgid "Remove Local Packages"
-msgstr "ローカルパッケージを削除"
-
-msgid "Remove Local"
-msgstr "ローカルを削除"
-
-msgid "Remove Configs"
-msgstr "設定を削除"
-
-msgid "General"
-msgstr "全般"
-
-msgid "Enable AUR"
-msgstr "AUR を有効にする"
-
-msgid "Enable Flatpak"
-msgstr "Flatpak を有効にする"
-
-msgid "Enable Recommended Page"
-msgstr "おすすめページを有効にする"
-
-msgid "Enable AppImage"
-msgstr "AppImage を有効にする"
-
-msgid "Enable Tray Icon"
-msgstr "トレイアイコンを有効にする"
-
-msgid "Use weekly schedule"
-msgstr "週間スケジュールを使用する"
-
-msgid "Tray Check Interval (Hours)"
-msgstr "トレイのチェック間隔 (時間単位)"
-
-msgid "Weekly Schedule"
-msgstr "週間スケジュール"
-
-msgid "Sun"
-msgstr "日"
-
-msgid "Mon"
-msgstr "月"
-
-msgid "Tue"
-msgstr "火"
-
-msgid "Wed"
-msgstr "水"
-
-msgid "Thu"
-msgstr "木"
-
-msgid "Fri"
-msgstr "金"
-
-msgid "Sat"
-msgstr "土"
-
-msgid "Update Time (24h):"
-msgstr "アップデート時刻 (24時間制):"
-
-msgid "Look & Feel"
-msgstr "ルック＆フィール"
-
-msgid "Icons Enabled"
-msgstr "アイコンを有効にする"
-
-msgid "Use Symbolic Tray Icon"
-msgstr "シンボルトレイアイコンを使用する"
-
-msgid ""
-"Both tray icons must be set for use, if not it will default to standard "
-"shelly icons. Changing tray icons requires a restart of shelly-notifications."
-msgstr ""
-"両方のトレイアイコンを使用するよう設定する必要があります。設定されていない場"
-"合は標準の shelly アイコンがデフォルトとなります。トレイアイコンを変更するに"
-"は shelly-notifications を再起動する必要があります。"
-
-msgid "Tray Icon"
-msgstr "トレイアイコン"
-
-msgid "Clear"
-msgstr "クリア"
-
-msgid "Tray Updates Icon"
-msgstr "アップデートのトレイアイコン"
-
-msgid "Default page"
-msgstr "デフォルトページ"
-
-msgid "Use Sidebar Navigation"
-msgstr "サイドバーナビゲーションを使用する"
-
-msgid "Advanced"
-msgstr "上級者向け"
-
-msgid "Remove Cache on Uninstall"
-msgstr "アンインストール時にキャッシュを削除する"
-
-msgid "No Confirm"
-msgstr "確認しない"
-
-msgid "Enable Shelly Search"
-msgstr "Shelly 検索を有効にする"
-
-msgid "Enable Webview Visualization (experimental)"
-msgstr "WebView 表示を有効にする（実験的）"
-
-msgid "Parallel Downloads"
-msgstr "並列ダウンロード"
-
-msgid "Force Database Update"
-msgstr "強制的にデータベースをアップデート"
-
-msgid "Remove db.lck"
-msgstr "db.lck を削除"
-
-msgid "View Pacfiles"
-msgstr "Pacfiles を表示"
-
-msgid "Fix Permissions"
-msgstr "権限を修正"
-
-msgid ""
-"Restores correct user ownership of Shelly configuration and cache folders if "
-"they were accidentally created by root."
-msgstr ""
-"Shelly の設定フォルダーとキャッシュフォルダーが誤って root によって作成された"
-"場合、正しいユーザー所有権を復元します。"
-
-msgid "Purify Packages"
-msgstr "パッケージをクリーンアップ"
-
-msgid "Save"
-msgstr "保存"
-
-msgid "View Changelog"
-msgstr "Changelog を見る"
-
-msgid "Community fluxer"
-msgstr "コミュニティー fluxer"
-
-msgid "Sponsor"
-msgstr "スポンサー"
-
-msgid "Search..."
-msgstr "検索..."
-
-msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr ""
-"すべての AppImage のメタデータを同期します。AppImage を自動更新する場合に便利"
-"です。"
-
-msgid "Sync All"
-msgstr "すべて同期"
-
-msgid "Upgrade all AppImages to their latest versions"
-msgstr "すべての AppImage を最新バージョンにアップグレードします"
-
-msgid "Upgrade All"
-msgstr "すべてアップグレード"
-
-msgid "Install a new AppImage from a file"
-msgstr "ファイルから新しい AppImage をインストールする"
-
-msgid "Install AppImage"
-msgstr "AppImage をインストール"
-
-msgid "Description goes here..."
-msgstr "ここに説明文が入ります..."
-
-msgid "Size on Disk"
-msgstr "ディスク上のサイズ"
-
-msgid "Update Strategy"
-msgstr "アップデート計画"
-
-msgid "Update URL / Repository Info"
-msgstr "URL / リポジトリ情報をアップデート"
-
-msgid "e.g. repo or https://..."
-msgstr "例: repo または https://..."
-
-msgid "Installation Path"
-msgstr "インストールパス"
-
-msgid "Install Package(s)"
-msgstr "パッケージをインストール"
-
-msgid "Update Package(s)"
-msgstr "パッケージをアップデート"
-
-msgid "Manage Package(s)"
-msgstr "パッケージを管理"
-
-msgid "Install AUR"
-msgstr "AUR をインストール"
-
-msgid "Update AUR"
-msgstr "AUR をアップデート"
-
-msgid "Remove AUR"
-msgstr "AUR を削除"
-
-msgid "Install Flatpak"
-msgstr "Flatpak をインストール"
-
-msgid "Update Flatpak"
-msgstr "Flatpak をアップデート"
-
-msgid "Remove Flatpak"
-msgstr "Flatpak を削除"
-
-msgid "Manage AppImage(s)"
-msgstr "AppImage を管理"
-
-msgid "Arch News"
-msgstr "Arch ニュース"
-
-msgid "Settings"
-msgstr "設定"
-
-msgid "About"
-msgstr "About"
-
-msgid "Toggle Sidebar"
-msgstr "サイドバーをトグル"
-
-msgid "Available Updates"
-msgstr "利用可能なアップデート"
-
-msgid "Welcome to Shelly"
-msgstr "Shelly へようこそ"
-
-msgid "Let's get you set up with some basic configurations."
-msgstr "基本設定のセットアップを始めましょう。"
-
-msgid "Enable AUR Support"
-msgstr "AUR サポートを有効にする"
-
-msgid ""
-"Access the Arch User Repository for a vast collection of community-"
-"maintained packages. AUR packages can contain malicious software, so please "
-"use caution when using the AUR."
-msgstr ""
-"Arch User Repository（AUR）にはコミュニティが管理する膨大なパッケージ群があり"
-"ます。AUR パッケージには悪意のあるソフトウェアが含まれている可能性があるの"
-"で、AUR を使用する際は十分ご注意ください。"
-
-msgid "Enable Flatpak Support"
-msgstr "Flatpak サポートを有効にする"
-
-msgid "Enable support for Flatpak applications from Flathub and other remotes."
-msgstr ""
-"Flathub や他のリモートからの Flatpak アプリケーションのサポートを有効にしま"
-"す。"
-
-msgid "Enable AppImage Support"
-msgstr "AppImage サポートを有効にする"
-
-msgid "Manage and configure updates for AppImage applications easily."
-msgstr "AppImage アプリケーションのアップデートを簡単に管理・設定します。"
-
-msgid ""
-"Show a status icon in your system tray for quick access and notifications."
-msgstr ""
-"システムトレイにステータスアイコンを表示して、すばやくアクセスしたり通知を受"
-"け取ったりできるようにします。"
-
-msgid "Vertical Navigation"
-msgstr "垂直ナビゲーション"
-
-msgid "Change navigation style to vertical or horizontal style."
-msgstr "ナビゲーションスタイルを縦または横に変更します。"
-
-msgid "Finish Setup"
-msgstr "セットアップを完了"
-
-msgid ""
-"Any required installations will run after the Finish button has been "
-"accepted."
-msgstr "完了ボタンをクリックすると必要なインストール処理を実行します。"
-
-msgid "These options and others can be configured later in settings."
-msgstr ""
-"これらのオプションやその他のオプションは、設定画面で後から変更できます。"
-
-msgid "Remove Package(s)"
-msgstr "パッケージを削除"
-
-msgid "Description"
-msgstr "説明"
-
-msgid "Last Updated"
-msgstr "最終更新日"
-
-msgid "Remove Optional Deps"
-msgstr "オプションの依存関係を削除"
-
-msgid ""
-"Also remove orphaned optional dependencies installed with these packages."
-msgstr ""
-"これらのパッケージと一緒にインストールした、オプションの孤立した依存関係も削"
-"除する。"
-
-msgid "Add Tray To Auto Start"
-msgstr "トレイを自動起動に追加する"
-
-msgid "Systemd startup service added."
-msgstr "Systemd 起動サービスが追加されました。"
-
-msgid "Systemd startup service removed."
-msgstr "Systemd 起動サービスが削除されました。"
-
-msgid "Tray Icon Autostart"
-msgstr "トレイアイコンの自動起動"
-
-msgid "Allow the tray service to autostart."
-msgstr "トレイサービスの自動起動を許可します。"
-
-msgid "Unable to load package data. You may have a db.lck."
-msgstr "パッケージデータを読み込めません。db.lck があるかもしれません。"
-
-msgid "Downgrade Selected"
-msgstr "選択したものをダウングレード"
-
-msgid "Downgrade selected packages one by one"
-msgstr "選択したパッケージを1個ずつダウングレードする"
-
-msgid "No downgrade options found for {0}"
-msgstr "{0} のダウングレードオプションは見つかりませんでした"
-
-msgid "Downgrading {0}..."
-msgstr "{0} をダウングレード中..."
-
-msgid "Downgraded {0} Package(s)"
-msgstr "{0} 個のパッケージをダウングレード"
-
-msgid "Downgrade: {0}"
-msgstr "ダウングレード: {0}"
-
-msgid "Select version:"
-msgstr "バージョンを選択:"
-
-msgid "Add to IgnorePkg list"
-msgstr "IgnorePkg リストに追加"
-
-msgid "Downgrade"
-msgstr "ダウングレード"
-
-msgid "Enable Package Downgrade"
-msgstr "パッケージのダウングレードを有効にする"
+msgid "App Permissions"
+msgstr "アプリの権限"
+
+msgid "<span size='large'>Flatpaks are up to date</span>"
+msgstr "<span size='large'>Flatpak パッケージは最新です</span>"
+
+msgid "Update Available: {0}"
+msgstr "アップデートが利用可能: {0}"
+
+#~ msgid "No packages found."
+#~ msgstr "パッケージが見つかりませんでした。"
+
+#~ msgid "Displaying Package Build {0}"
+#~ msgstr "パッケージビルド {0} を表示しています"
+
+#~ msgid ""
+#~ "Both tray icons must be set for use, if not it will default to standard "
+#~ "shelly icons. Changing tray icons requires a restart of shelly-"
+#~ "notifications."
+#~ msgstr ""
+#~ "両方のトレイアイコンを使用するよう設定する必要があります。設定されていない"
+#~ "場合は標準の shelly アイコンがデフォルトとなります。トレイアイコンを変更す"
+#~ "るには shelly-notifications を再起動する必要があります。"
+
+#~ msgid "Unable to load package data. You may have a db.lck."
+#~ msgstr "パッケージデータを読み込めません。db.lck があるかもしれません。"
