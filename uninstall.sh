@@ -30,6 +30,19 @@ if [ -L /usr/bin/shelly-notifications ] || [ -f /usr/bin/shelly-notifications ];
     echo "Removing /usr/bin/shelly-notifications "
     rm -f /usr/bin/shelly-notifications 
 fi
+
+# Remove Flatpak integration helper
+if [ -f /usr/bin/shelly-flatpak-integrate ]; then
+    echo "Removing /usr/bin/shelly-flatpak-integrate"
+    rm -f /usr/bin/shelly-flatpak-integrate
+fi
+
+# Remove Polkit policy
+if [ -f /usr/share/polkit-1/actions/com.shellyorg.shelly.policy ]; then
+    echo "Removing Polkit policy"
+    rm -f /usr/share/polkit-1/actions/com.shellyorg.shelly.policy
+fi
+
 # Remove native libraries installed by web-install.sh
 #check both lib and bin locations from older versions.
 if [ -f /usr/bin/libSkiaSharp.so ]; then
@@ -89,7 +102,7 @@ fi
 # Remove notification service shortcut
 if [ -f "$USER_DESKTOP/shelly-notifications.desktop" ]; then
     echo "Removing desktop shortcut for user: $REAL_USER"
-    rm -f "$USER_DESKTOP/shelly-notifications.desktop
+    rm -f "$USER_DESKTOP/shelly-notifications.desktop"
 fi
 
 # Remove user config directory (~/.local/share/Shelly)

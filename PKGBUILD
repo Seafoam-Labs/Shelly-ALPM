@@ -124,6 +124,31 @@ Terminal=false
 NoDisplay=true
 EOF
 
+  # Ensure the polkit directory exists
+  install -m0755 -d "${pkgdir}"/usr/share/polkit-1/actions
+
+  # Install Polkit policy for privileged Shelly CLI execution via pkexec
+  cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/polkit-1/actions/com.shellyorg.shelly.policy"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <vendor>Shelly</vendor>
+  <vendor_url>https://github.com/Seafoam-Labs/Shelly-ALPM</vendor_url>
+  <action id="com.shellyorg.shelly.pkexec.cli">
+    <description>Run Shelly CLI as administrator</description>
+    <message>Authentication is required to run privileged Shelly CLI operations.</message>
+    <icon_name>shelly-shell</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/shelly</annotate>
+  </action>
+</policyconfig>
+EOF
+
   # Install icon
   install -Dm644 Shelly.Gtk/Assets/shellylogo.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly.png"
   install -Dm644 Shelly.Gtk/Assets/shellylogo-tray.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-tray.png"

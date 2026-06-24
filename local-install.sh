@@ -194,6 +194,74 @@ Terminal=false
 NoDisplay=true
 EOF
 
+# Install Flatpak integration helper
+echo "Installing Flatpak integration helper..."
+cat <<'SCRIPT' > /usr/bin/shelly-flatpak-integrate
+#!/bin/bash
+# Adds "Manage in Shelly" right-click action to Flatpak .desktop files
+FLATPAK_DIRS=(
+        "/var/lib/flatpak/exports/share/applications"
+        "$HOME/.local/share/flatpak/exports/share/applications"
+)
+LOCAL_APPS_DIR="$HOME/.local/share/applications"
+mkdir -p "$LOCAL_APPS_DIR"
+
+for dir in "${FLATPAK_DIRS[@]}"; do
+        [ -d "$dir" ] || continue
+        for desktop_file in "$dir"/*.desktop; do
+                [ -f "$desktop_file" ] || continue
+                filename=$(basename "$desktop_file")
+                dest="$LOCAL_APPS_DIR/$filename"
+
+                [ -f "$dest" ] || cp "$desktop_file" "$dest"
+
+                grep -q "ShellyManage" "$dest" && continue
+
+                if grep -q "^Actions=" "$dest"; then
+                        sed -i 's/^Actions=\(.*\)/Actions=\1ShellyManage;/' "$dest"
+                else
+                        sed -i '/^\[Desktop Entry\]/a Actions=ShellyManage;' "$dest"
+                fi
+
+                cat >> "$dest" << EOF
+
+[Desktop Action ShellyManage]
+Name=Manage in Shelly
+Icon=shelly
+Exec=/usr/bin/shelly-ui --page flatpak-install
+EOF
+        done
+done
+
+update-desktop-database "$LOCAL_APPS_DIR" 2>/dev/null || true
+echo "Flatpak desktop entries patched with Shelly integration."
+SCRIPT
+chmod 755 /usr/bin/shelly-flatpak-integrate
+
+# Install Polkit policy for privileged Shelly CLI execution via pkexec
+echo "Installing Polkit policy..."
+mkdir -p /usr/share/polkit-1/actions
+cat <<EOF > /usr/share/polkit-1/actions/com.shellyorg.shelly.policy
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+    <vendor>Shelly</vendor>
+    <vendor_url>https://github.com/Seafoam-Labs/Shelly-ALPM</vendor_url>
+    <action id="com.shellyorg.shelly.pkexec.cli">
+        <description>Run Shelly CLI as administrator</description>
+        <message>Authentication is required to run privileged Shelly CLI operations.</message>
+        <icon_name>shelly-shell</icon_name>
+        <defaults>
+            <allow_any>auth_admin</allow_any>
+            <allow_inactive>auth_admin</allow_inactive>
+            <allow_active>auth_admin_keep</allow_active>
+        </defaults>
+        <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/shelly</annotate>
+    </action>
+</policyconfig>
+EOF
+chmod 644 /usr/share/polkit-1/actions/com.shellyorg.shelly.policy
 
 # Clean up publish directory (optional - comment out to keep build artifacts)
 echo "Cleaning up build artifacts..."
