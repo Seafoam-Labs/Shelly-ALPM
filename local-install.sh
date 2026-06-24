@@ -250,7 +250,7 @@ cat <<EOF > /usr/share/polkit-1/actions/com.shellyorg.shelly.policy
     <vendor_url>https://github.com/Seafoam-Labs/Shelly-ALPM</vendor_url>
     <action id="com.shellyorg.shelly.pkexec.cli">
         <description>Run Shelly CLI as administrator</description>
-        <message>Authentication is required to run privileged Shelly CLI operations.</message>
+        <message>Run Shelly CLI with administrator privileges.</message>
         <icon_name>shelly</icon_name>
         <defaults>
             <allow_any>auth_admin</allow_any>
