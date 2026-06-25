@@ -176,10 +176,9 @@ public class PrivilegedOperationService(
         return await processExecutor.RunPrivilegedShellyCommandAsync("Clean package cache", args.ToArray());
     }
 
-
     public async Task<OperationResult> PurifyCorruptionAsync()
     {
-        var args = new[] { "purify" };
+        var args = new[] { "purify", "--orphans" };
         return await processExecutor.RunPrivilegedShellyCommandAsync("Delete corrupted packages", args);
     }
 
