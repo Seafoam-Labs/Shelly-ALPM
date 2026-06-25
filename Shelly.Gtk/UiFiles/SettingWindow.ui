@@ -357,6 +357,7 @@
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Icons Enabled</property>
+                                                                        <property name="tooltip-text" translatable="yes">If enabled, Shelly will use appstream icons in the package list and details pages.</property>
                                                                         <property name="halign">start</property>
                                                                         <property name="hexpand">true</property>
                                                                     </object>
@@ -375,6 +376,7 @@
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Use Sidebar Navigation</property>
+                                                                        <property name="tooltip-text" translatable="yes">If enabled, Shelly will use a sidebar vertical navigation instead of the top bar one.</property>
                                                                         <property name="halign">start</property>
                                                                         <property name="hexpand">true</property>
                                                                     </object>
@@ -393,6 +395,7 @@
                                                                 <child>
                                                                     <object class="GtkLabel">
                                                                         <property name="label" translatable="yes">Use Symbolic Tray Icon</property>
+                                                                        <property name="tooltip-text" translatable="yes">If enabled, Shelly will use a symbolic svg icon instead of the default image one.</property>
                                                                         <property name="halign">start</property>
                                                                         <property name="hexpand">true</property>
                                                                     </object>
@@ -642,6 +645,7 @@
                                                         <child>
                                                             <object class="GtkButton" id="sync_button">
                                                                 <property name="label" translatable="yes">Force Database Update</property>
+                                                                <property name="tooltip-text" translatable="yes">Force a synchronization of the package database.</property>
                                                                 <property name="margin-top">10</property>
                                                                 <style>
                                                                     <class name="suggested-action"/>
@@ -651,6 +655,7 @@
                                                         <child>
                                                             <object class="GtkButton" id="rm_db_lock_button">
                                                                 <property name="label" translatable="yes">Remove db.lck</property>
+                                                                <property name="tooltip-text" translatable="yes">Removes the db.lck file if it was left behind by an interrupted alpm process.</property>
                                                                 <property name="margin-top">10</property>
                                                                 <style>
                                                                     <class name="suggested-action"/>
@@ -660,6 +665,7 @@
                                                         <child>
                                                             <object class="GtkButton" id="view_pacfiles_button">
                                                                 <property name="label" translatable="yes">View Pacfiles</property>
+                                                                <property name="tooltip-text" translatable="yes">View the contents of stored pacfiles.</property>
                                                                 <property name="margin-top">10</property>
                                                                 <style>
                                                                     <class name="suggested-action"/>
@@ -679,6 +685,7 @@
                                                         <child>
                                                             <object class="GtkButton" id="purify_button">
                                                                 <property name="label" translatable="yes">Purify Packages</property>
+                                                                <property name="tooltip-text" translatable="yes">Remove corrupted/orphaned packages.</property>
                                                                 <property name="margin-top">10</property>
                                                                 <style>
                                                                     <class name="destructive-action"/>
