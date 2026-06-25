@@ -23,6 +23,7 @@ Shelly — a modern, unified package manager for Arch Linux. Install, update, se
 | export | Export the current system state to a file |
 | fix-permissions | Fix permissions for Shelly directories |
 | mark [package] | Mark a package as explicit or a dependency |
+| pacfile [pacfiles...] | Manage pacfiles |
 | purify | Remove corrupted/orphaned packages |
 | remove [packages...] | Remove packages (repo or local binary) |
 | sync | Syncs the system with the current state |
@@ -91,6 +92,7 @@ Shelly — a modern, unified package manager for Arch Linux. Install, update, se
 | flatpak install-ref-file <RefFilePath> | Installs flatpak app from ref file |
 | flatpak install-bundle <BundlePath> | Installs flatpak app from bundle file |
 | flatpak app-remote-info <remote> <id> <branch> | Get app remote info |
+| flatpak purify | Cleans all unused dependencies |
 
 
 ---
@@ -244,6 +246,7 @@ Shelly — a modern, unified package manager for Arch Linux. Install, update, se
 - [`shelly export`](#shelly-export) — Export the current system state to a file
 - [`shelly fix-permissions`](#shelly-fix-permissions) — Fix permissions for Shelly directories
 - [`shelly mark`](#shelly-mark) — Mark a package as explicit or a dependency
+- [`shelly pacfile`](#shelly-pacfile) — Manage pacfiles
 - [`shelly purify`](#shelly-purify) — Remove corrupted/orphaned packages
 - [`shelly remove`](#shelly-remove) — Remove packages (repo or local binary)
 - [`shelly sync`](#shelly-sync) — Syncs the system with the current state
@@ -601,6 +604,31 @@ shelly mark [package] [options]
 | `--version` | - | void | No | Show version information |
 | `--depends` | `-d` | bool | No | Mark the package as a dependency |
 | `--explicit` | `-e` | bool | No | Mark the package as explicit |
+
+
+### `shelly pacfile`
+
+Manage pacfiles
+
+**Usage:**
+
+```text
+shelly pacfile [pacfiles...] [options]
+```
+
+| Argument | Arity | Description |
+|----------|-------|-------------|
+| `<pacfiles>` | 0..100000 | Pacfile names, defaults to all pacfiles if not specified |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
 
 
 ### `shelly purify`
@@ -1436,6 +1464,7 @@ Manage flatpak
 - [`shelly flatpak install-ref-file`](#shelly-flatpak-install-ref-file) — Installs flatpak app from ref file
 - [`shelly flatpak install-bundle`](#shelly-flatpak-install-bundle) — Installs flatpak app from bundle file
 - [`shelly flatpak app-remote-info`](#shelly-flatpak-app-remote-info) — Get app remote info
+- [`shelly flatpak purify`](#shelly-flatpak-purify) — Cleans all unused dependencies
 
 **Usage:**
 
@@ -1905,6 +1934,27 @@ shelly flatpak app-remote-info <remote> <id> <branch> [options]
 | `<remote>` | 1 | Flatpak remote name (e.g., flathub) |
 | `<id>` | 1 | Flatpak application ID |
 | `<branch>` | 1 | Branch to query (e.g., stable) |
+
+**Options:**
+
+| Option | Alias | Type | Required | Description |
+|--------|-------|------|----------|-------------|
+| `--json` | `-j` | bool | No | Output results in JSON format for scripting. |
+| `--no-confirm` | `-n` | bool | No | Disable confirmation prompts |
+| `--ui-mode` | `-U` | bool | No | Enable UI mode |
+| `--verbose` | `-v` | bool | No | Enable verbose logging. |
+| `--version` | - | void | No | Show version information |
+
+
+#### `shelly flatpak purify`
+
+Cleans all unused dependencies
+
+**Usage:**
+
+```text
+shelly flatpak purify [options]
+```
 
 **Options:**
 

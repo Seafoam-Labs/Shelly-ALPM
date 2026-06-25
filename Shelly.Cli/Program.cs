@@ -91,6 +91,7 @@ public static class Program
         root.Add(Export.Create());
         root.Add(FixPermissions.Create());
         root.Add(Mark.Create());
+        root.Add(Pacfile.Create());
         root.Add(PurifyPackages.Create());
         root.Add(Remove.Create());
         root.Add(Sync.Create());

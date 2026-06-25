@@ -1,3 +1,4 @@
+using System.Text;
 using Gtk;
 using Shelly.Gtk.Helpers;
 using Shelly.GTK.Resources;
@@ -5,10 +6,12 @@ using Shelly.Gtk.Services;
 using Shelly.Gtk.Services.TrayServices;
 using Shelly.Gtk.UiModels;
 using System.Text.Json;
+using Gdk;
 using Shelly.Gtk.Windows.Dialog;
 using Shelly.Utilities;
 using Shelly.Utilities.Enums;
 using DateTime = System.DateTime;
+using Functions = GLib.Functions;
 using TimeSpan = System.TimeSpan;
 
 namespace Shelly.Gtk.Windows;
@@ -617,7 +620,7 @@ public sealed class Settings(
         genericQuestionService.RaiseQuestion(args);
         var confirmed = await args.ResponseTask;
 
-        GLib.Functions.IdleAdd(0, () =>
+        Functions.IdleAdd(0, () =>
         {
             if (confirmed)
             {
@@ -657,7 +660,7 @@ public sealed class Settings(
                 {
                     lockoutService.Show(Translations.T("Installing flatpak..."));
                     await privilegedOperationService.InstallPackagesAsync(["flatpak"]);
-                    GLib.Functions.IdleAdd(0, () =>
+                    Functions.IdleAdd(0, () =>
                     {
                         updateAction(true);
                         SaveConfig();
@@ -669,7 +672,7 @@ public sealed class Settings(
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error installing flatpak: {ex.Message}");
-                    GLib.Functions.IdleAdd(0, () =>
+                    Functions.IdleAdd(0, () =>
                     {
                         sw.Active = false;
                         sw.State = false;
@@ -685,7 +688,7 @@ public sealed class Settings(
             }
             else
             {
-                GLib.Functions.IdleAdd(0, () =>
+                Functions.IdleAdd(0, () =>
                 {
                     sw.Active = false;
                     sw.State = false;
@@ -695,7 +698,7 @@ public sealed class Settings(
         }
         else
         {
-            GLib.Functions.IdleAdd(0, () =>
+            Functions.IdleAdd(0, () =>
             {
                 updateAction(true);
                 SaveConfig();
@@ -815,89 +818,83 @@ public sealed class Settings(
             return;
         }
 
-        var pacfileBox = Box.NewWithProperties([]);
-        pacfileBox.SetOrientation(Orientation.Vertical);
-        pacfileBox.SetSpacing(12);
-        pacfileBox.SetSizeRequest(600, -1);
-
-        var title = Label.NewWithProperties([]);
-        title.SetText(Translations.T("Pacfiles Found"));
-        title.AddCssClass("title-2");
-        title.SetHalign(Align.Center);
-        pacfileBox.Append(title);
-
-        var scroll = ScrolledWindow.NewWithProperties([]);
-        scroll.HscrollbarPolicy = PolicyType.Never;
-        scroll.VscrollbarPolicy = PolicyType.Automatic;
-        scroll.SetOverlayScrolling(false);
-        scroll.SetSizeRequest(-1, 400);
-
-        var list = Box.NewWithProperties([]);
-        list.SetOrientation(Orientation.Vertical);
-        list.SetSpacing(8);
-
-        foreach (var pacfile in pacfiles)
+        Functions.IdleAdd(0, () =>
         {
-            var itemBox = Box.NewWithProperties([]);
-            itemBox.SetOrientation(Orientation.Vertical);
-            itemBox.SetSpacing(4);
-            itemBox.SetMarginBottom(16);
+            var pacfileBox = Box.NewWithProperties([]);
+            pacfileBox.SetOrientation(Orientation.Vertical);
+            pacfileBox.SetSpacing(12);
+            pacfileBox.SetSizeRequest(620, -1);
 
-            var headerBox = Box.NewWithProperties([]);
-            headerBox.SetOrientation(Orientation.Horizontal);
-            headerBox.SetSpacing(8);
+            var title = Label.NewWithProperties([]);
+            title.SetText(Translations.T("Pacfiles Found"));
+            title.AddCssClass("title-2");
+            title.SetHalign(Align.Center);
+            pacfileBox.Append(title);
 
-            var nameLabel = Label.NewWithProperties([]);
-            nameLabel.SetMarkup($"<b>{pacfile.Name}</b>");
-            nameLabel.SetHalign(Align.Start);
-            nameLabel.SetHexpand(true);
-            headerBox.Append(nameLabel);
+            var scroll = ScrolledWindow.NewWithProperties([]);
+            scroll.HscrollbarPolicy = PolicyType.Never;
+            scroll.VscrollbarPolicy = PolicyType.Automatic;
+            scroll.SetOverlayScrolling(false);
+            scroll.SetSizeRequest(-1, 400);
 
-            var copyButton = Button.NewFromIconName("edit-copy-symbolic");
-            copyButton.SetTooltipText(Translations.T("Copy content"));
-            copyButton.AddCssClass("flat");
-            copyButton.OnClicked += (_, _) =>
+            var list = Box.NewWithProperties([]);
+            list.SetOrientation(Orientation.Vertical);
+            list.SetSpacing(8);
+
+            foreach (var pacfile in pacfiles)
             {
-                var clipboard = Gdk.Display.GetDefault()!.GetClipboard();
-                clipboard.SetText(pacfile.Text);
-                genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(Translations.T("Copied to clipboard")));
-            };
-            headerBox.Append(copyButton);
+                var itemBox = Box.NewWithProperties([]);
+                itemBox.SetOrientation(Orientation.Vertical);
+                itemBox.SetSpacing(4);
+                itemBox.SetMarginBottom(16);
 
-            itemBox.Append(headerBox);
+                var headerBox = Box.NewWithProperties([]);
+                headerBox.SetOrientation(Orientation.Horizontal);
+                headerBox.SetSpacing(8);
 
-            var textView = TextView.NewWithProperties([]);
-            textView.Editable = false;
-            textView.CursorVisible = false;
-            textView.WrapMode = WrapMode.None;
-            textView.Monospace = true;
+                var nameLabel = Label.NewWithProperties([]);
+                nameLabel.SetMarkup($"<b>{pacfile.Name}</b>");
+                nameLabel.SetHalign(Align.Start);
+                nameLabel.SetHexpand(true);
+                headerBox.Append(nameLabel);
 
-            var buffer = textView.Buffer;
-            if (buffer != null)
-            {
-                var lines = pacfile.Text.Split('\n');
-                var builder = new System.Text.StringBuilder();
-                for (var i = 0; i < lines.Length; i++)
+                var copyButton = Button.NewFromIconName("edit-copy-symbolic");
+                copyButton.SetTooltipText(Translations.T("Copy content"));
+                copyButton.AddCssClass("flat");
+                copyButton.OnClicked += (_, _) =>
                 {
-                    builder.AppendLine($"{(i + 1).ToString().PadLeft(3)} | {lines[i]}");
-                }
+                    var clipboard = Display.GetDefault()!.GetClipboard();
+                    clipboard.SetText(pacfile.Text);
+                    genericQuestionService.RaiseToastMessage(new ToastMessageEventArgs(Translations.T("Copied to clipboard")));
+                };
+                headerBox.Append(copyButton);
 
-                buffer.SetText(builder.ToString(), -1);
+                itemBox.Append(headerBox);
+
+                var textView = TextView.New();
+                textView.Editable = false;
+                textView.CursorVisible = false;
+                textView.WrapMode = WrapMode.None;
+                textView.Monospace = true;
+
+                textView.GetBuffer().SetText(pacfile.Text, pacfile.Text.Length);
+
+                var textScroll = ScrolledWindow.New();
+                textScroll.SetSizeRequest(-1, 200);
+                textScroll.SetPolicy(PolicyType.Automatic, PolicyType.Automatic);
+                textScroll.SetChild(textView);
+                textScroll.AddCssClass("rounded-card");
+                textScroll.SetLimitEvents(true);
+
+                itemBox.Append(textScroll);
+                list.Append(itemBox);
             }
 
-            var textScroll = ScrolledWindow.NewWithProperties([]);
-            textScroll.SetSizeRequest(-1, 200);
-            textScroll.SetPolicy(PolicyType.Automatic, PolicyType.Automatic);
-            textScroll.SetChild(textView);
-            textScroll.AddCssClass("rounded-card");
-
-            itemBox.Append(textScroll);
-            list.Append(itemBox);
-        }
-
-        scroll.SetChild(list);
-        pacfileBox.Append(scroll);
-        genericQuestionService.RaiseDialog(new GenericDialogEventArgs(pacfileBox));
+            scroll.SetChild(list);
+            pacfileBox.Append(scroll);
+            genericQuestionService.RaiseDialog(new GenericDialogEventArgs(pacfileBox));
+            return false;
+        });
     }
 
     private async Task ShowAppChangelogAsync()
