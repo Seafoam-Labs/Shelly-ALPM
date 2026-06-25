@@ -44,7 +44,7 @@ public class Query : GlobalSettingsCommand
         var info = new Option<bool>("--detail", "--info", "-d") { Description = "Show detailed information for a single package" };
         var package = new Argument<string?>("package") { Description = "The package to search for", Arity = ZeroOrOne };
 
-        var command = new Command("query", "Query repositories and packages")
+        var command = new Command("query", "Query repositories and packages. Includes installed and available by default.")
             { repos, available, installed, local, take, page, showHidden, info, package };
 
         command.SetAction(async (parseResult, _) =>
@@ -88,6 +88,7 @@ public class Query : GlobalSettingsCommand
         if (!Repos && !Available && !Installed && !Local && !Info)
         {
             Installed = true;
+            Available = true;
             Info = !string.IsNullOrWhiteSpace(Package);
         }
 

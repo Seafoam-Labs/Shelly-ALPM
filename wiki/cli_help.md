@@ -10,7 +10,7 @@ Shelly — a modern, unified package manager for Arch Linux. Install, update, se
 
 | Command | Description |
 | ------- | ----------- |
-| query [package] | Query repositories and packages |
+| query [package] | Query repositories and packages. Includes installed and available by default. |
 | install [packages...] | Install packages |
 | upgrade | Perform a full system upgrade |
 | upgrade-all | Upgrade all packages from every source (repo, AUR, Flatpak, AppImage) |
@@ -233,7 +233,7 @@ Shelly — a modern, unified package manager for Arch Linux. Install, update, se
 
 **Subcommands:**
 
-- [`shelly query`](#shelly-query) — Query repositories and packages
+- [`shelly query`](#shelly-query) — Query repositories and packages. Includes installed and available by default.
 - [`shelly install`](#shelly-install) — Install packages
 - [`shelly upgrade`](#shelly-upgrade) — Perform a full system upgrade
 - [`shelly upgrade-all`](#shelly-upgrade-all) — Upgrade all packages from every source (repo, AUR, Flatpak, AppImage)
@@ -278,7 +278,7 @@ shelly [options]
 
 ### `shelly query`
 
-Query repositories and packages
+Query repositories and packages. Includes installed and available by default.
 
 **Usage:**
 
