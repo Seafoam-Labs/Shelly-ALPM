@@ -1228,10 +1228,18 @@ public sealed class PackageInstall(
             {
                 lockoutService.Show(T("Installing local package..."));
                 var result = await privilegedOperationService.InstallLocalPackageAsync(filePath);
-                if (!result.Success)
+                ToastMessageEventArgs args;
+                if (result.Success)
+                {
+                    args = new ToastMessageEventArgs(T("Installed local package"));
+                }
+                else
                 {
                     Console.WriteLine($"Failed to install local package: {result.Error}");
+                    args = new ToastMessageEventArgs(T("Failed to install local package."));
                 }
+
+                genericQuestionService.RaiseToastMessage(args);
             }
         }
         catch (Exception ex)
@@ -1241,9 +1249,6 @@ public sealed class PackageInstall(
         finally
         {
             lockoutService.Hide();
-
-            var args = new ToastMessageEventArgs(T("Installed local package"));
-            genericQuestionService.RaiseToastMessage(args);
         }
     }
 
