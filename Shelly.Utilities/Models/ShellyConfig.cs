@@ -40,8 +40,6 @@ public class ShellyConfig
 
     public ShellyTabs DefaultPageDropDown { get; set; } = ShellyTabs.Packages;
 
-    public bool SuppressFingerprintWarning { get; set; }
-
     public bool RecommendedEnabled { get; set; } = true;
 
     public string ProgressBarStyle { get; set; } = nameof(ProgressBarStyleKind.Blocks);

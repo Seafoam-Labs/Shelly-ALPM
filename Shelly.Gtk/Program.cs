@@ -692,8 +692,6 @@ sealed class Program
 
             window.Show();
 
-            ShowFingerprintWarningBannerIfNeeded(serviceProvider, configService, mainOverlay, window);
-
             if (!initialConfig.NewInstallInitSettings)
             {
                 var setupWindow = serviceProvider.GetRequiredService<SetupWindow>();
@@ -913,85 +911,4 @@ sealed class Program
              genericQuestionService.RaiseDialog(new GenericDialogEventArgs(dialogBox));
          };
      }
-
-     private static bool _fingerprintBannerShown;
-
-     private static void ShowFingerprintWarningBannerIfNeeded(IServiceProvider serviceProvider,
-         IConfigService configService, Overlay mainOverlay, Window parentWindow)
-     {
-         if (_fingerprintBannerShown) return;
-
-         Task.Run(() =>
-         {
-             try
-             {
-                 var state = serviceProvider.GetRequiredService<IFingerprintAuthState>();
-                 if (!state.ShouldWarn) return;
-
-                 GLib.Functions.IdleAdd(0, () =>
-                 {
-                     if (_fingerprintBannerShown) return false;
-                     _fingerprintBannerShown = true;
-
-                     var bannerFrame = Frame.New(null);
-                     bannerFrame.AddCssClass("background");
-                     bannerFrame.AddCssClass("toast-message");
-                     bannerFrame.SetOverflow(Overflow.Hidden);
-                     bannerFrame.SetHalign(Align.Center);
-                     bannerFrame.SetValign(Align.Start);
-                     bannerFrame.SetMarginTop(12);
-
-                     var box = Box.New(Orientation.Horizontal, 8);
-                     box.SetMarginTop(8);
-                     box.SetMarginBottom(8);
-                     box.SetMarginStart(12);
-                     box.SetMarginEnd(12);
-
-                     var label = Label.New(
-                         "Fingerprint authentication detected for sudo. This can interfere with privileged " +
-                         "operations (issue #728). Disable pam_fprintd in /etc/pam.d/sudo as a workaround.");
-                     label.SetWrap(true);
-                     label.SetXalign(0);
-                     box.Append(label);
-
-                     var showFix = Button.NewWithLabel("Show fix");
-                     showFix.OnClicked += (_, _) => FingerprintFixDialog.Show(parentWindow);
-                     box.Append(showFix);
-
-                     var dontShow = Button.NewWithLabel("Don't show again");
-                     dontShow.OnClicked += (_, _) =>
-                     {
-                         try
-                         {
-                             var cfg = configService.LoadConfig();
-                             cfg.SuppressFingerprintWarning = true;
-                             configService.SaveConfig(cfg);
-                         }
-                         catch
-                         {
-                             // ignored
-                         }
-
-                         if (bannerFrame.GetParent() != null) mainOverlay.RemoveOverlay(bannerFrame);
-                     };
-                     box.Append(dontShow);
-
-                     var dismiss = Button.NewWithLabel("Dismiss");
-                     dismiss.OnClicked += (_, _) =>
-                     {
-                         if (bannerFrame.GetParent() != null) mainOverlay.RemoveOverlay(bannerFrame);
-                     };
-                     box.Append(dismiss);
-
-                     bannerFrame.SetChild(box);
-                     mainOverlay.AddOverlay(bannerFrame);
-                     return false;
-                 });
-             }
-             catch (Exception ex)
-             {
-                 Console.WriteLine($"ShowFingerprintWarningBannerIfNeeded failed: {ex}");
-             }
-         });
-     }
- }
+}
