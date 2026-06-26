@@ -54,7 +54,7 @@ jobs:
               msgfmt "$po_file" -o "publish/shelly-ui/locale/$lang/LC_MESSAGES/shelly-ui.mo"
             fi
           done
-          
+
       - name: Compile and bundle tray service translations
         run: |
           mkdir -p publish/shelly-ui/locale
@@ -125,3 +125,9 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy Seafoam Labs website
+        uses: digitalocean/app_action@v2
+        with:
+          app_name: seafoam-labs-website
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
