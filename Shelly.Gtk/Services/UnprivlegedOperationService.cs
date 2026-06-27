@@ -10,10 +10,14 @@ namespace Shelly.Gtk.Services;
 
 public class UnprivilegedOperationService(
     IProcessExecutor processExecutor,
+    IConfigService configService,
     ITrayDbus trayDbus,
     IPackageUpdateNotifier packageUpdateNotifier,
     IDirtyService dirtyService) : IUnprivilegedOperationService
 {
+    private readonly bool _aurEnabled = configService.LoadConfig().AurEnabled;
+    private readonly bool _flatpakEnabled = configService.LoadConfig().FlatPackEnabled;
+
     public async Task<List<FlatpakPackageDto>> ListFlatpakPackages()
     {
         return await ExecuteJsonCommandAsync<List<FlatpakPackageDto>>("list flatpak packages",
@@ -269,8 +273,11 @@ public class UnprivilegedOperationService(
 
     public async Task<SyncModel> CheckForApplicationUpdates()
     {
+        var args = new List<string> { "check-updates" };
+        if (_aurEnabled) args.Add("--aur");
+        if (_flatpakEnabled) args.Add("--flatpak");
         return await ExecuteJsonCommandLastAsync<SyncModel>("check application updates",
-            () => RunShellyCommandAsync("check-updates", "-a", "-l"));
+            () => RunShellyCommandAsync(args.ToArray()));
     }
 
     public async Task<UnprivilegedOperationResult> AppImageInstallAsync(string filePath, string updateUrl = "",
