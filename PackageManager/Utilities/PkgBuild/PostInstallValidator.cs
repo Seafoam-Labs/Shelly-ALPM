@@ -54,13 +54,49 @@ public class PostInstallValidator
     /// </summary>
     private IReadOnlyList<string> RiskyTools { get; init; } =
     [
-        "npm", "npx", "yarn", "pnpm", "bun",
-        "pip", "pip3", "pipx", "uv",
+        // JavaScript / Node
+        "npm", "npx", "yarn", "pnpm", "pnpx", "bun", "node", "deno",
+        // Python
+        "pip", "pip3", "pipx", "uv", "poetry", "pipenv", "rye",
+        "conda", "mamba", "micromamba",
+        // Ruby
         "gem",
-        "cargo install",
+        // Rust
+        "cargo install", "rustup",
+        // Go
         "go install",
-        "curl", "wget",
-        "php"
+        // PHP
+        "php", "composer",
+        // Perl
+        "cpan", "cpanm",
+        // Haskell
+        "cabal install", "stack install",
+        // Lua
+        "luarocks",
+        // Nim
+        "nimble install",
+        // OCaml
+        "opam",
+        // Elixir / Erlang
+        "mix", "rebar3",
+        // C/C++
+        "conan", "vcpkg",
+        // JVM / Scala / Clojure
+        "gradle", "mvn", "sbt", "ant", "lein",
+        // .NET
+        "dotnet",
+        // Swift
+        "swift",
+        // Julia
+        "julia",
+        // R
+        "Rscript",
+        // Downloaders / network tools
+        "curl", "wget", "wget2", "aria2c", "lftp", "rsync", "scp", "sftp", "fetch",
+        // Containers / orchestration / alternative package managers
+        "docker", "podman", "kubectl", "helm", "snap", "flatpak", "appimage",
+        // Version managers
+        "nvm", "rvm", "rbenv", "pyenv", "gvm", "asdf"
     ];
 
     public ValidationResult Validate(PkgbuildInfo info)
