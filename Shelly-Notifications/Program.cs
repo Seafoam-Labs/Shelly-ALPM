@@ -30,7 +30,7 @@ try
     var trayHandler = new StatusNotifierItemHandler(connection, configReader);
     connection.AddMethodHandler(trayHandler);
 
-    var menuHandler = new DBusMenuHandler(connection);
+    var menuHandler = new DBusMenuHandler(configReader, connection);
     menuHandler.OnUpdateStatusChanged += async (pending) =>
     {
         await trayHandler.SetUpdatesPending(pending);
@@ -101,7 +101,7 @@ try
 
     _ = Task.Run(async () =>
     {
-        var updates = new UpdateService(menuHandler);
+        var updates = new UpdateService(configReader, menuHandler);
         var update = await updates.CheckForUpdates();
         await trayHandler.SetUpdatesPending(update > 0);
         if (update > 0)

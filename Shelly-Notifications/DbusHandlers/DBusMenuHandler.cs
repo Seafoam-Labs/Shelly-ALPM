@@ -6,7 +6,7 @@ using Tmds.DBus.Protocol;
 
 namespace Shelly_Notifications.DbusHandlers;
 
-public class DBusMenuHandler(DBusConnection connection) : IPathMethodHandler
+public class DBusMenuHandler(ConfigReader configReader, DBusConnection connection) : IPathMethodHandler
 {
     public string Path => "/MenuBar";
     public bool HandlesChildPaths => false;
@@ -257,7 +257,7 @@ public class DBusMenuHandler(DBusConnection connection) : IPathMethodHandler
         switch (action)
         {
             case MenuEnum.CheckForUpdates:
-                var updates = await new UpdateService(this).CheckForUpdates();
+                var updates = await new UpdateService(configReader, this).CheckForUpdates();
                 new NotificationHandler().SendNotif(connection,
                     updates > 0 ? Translations.T("Updates available: {0}", updates) : Translations.T("No updates available."));
                 if (OnUpdateStatusChanged != null)
@@ -270,7 +270,7 @@ public class DBusMenuHandler(DBusConnection connection) : IPathMethodHandler
                 break;
             case MenuEnum.UpdatePackages:
                 await AppRunner.SpawnTerminalWithCommandAsync("shelly");
-                var postUpdateUpdates = await new UpdateService(this).CheckForUpdates();
+                var postUpdateUpdates = await new UpdateService(configReader, this).CheckForUpdates();
                 if (OnUpdateStatusChanged != null)
                 {
                     await OnUpdateStatusChanged(postUpdateUpdates > 0);

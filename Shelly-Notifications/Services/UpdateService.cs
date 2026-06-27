@@ -5,18 +5,27 @@ using Shelly_Notifications.Models;
 
 namespace Shelly_Notifications.Services;
 
-public class UpdateService(DBusMenuHandler? menuHandler = null)
+public class UpdateService(ConfigReader configReader, DBusMenuHandler? menuHandler = null)
 {
     public async Task<int> CheckForUpdates()
     {
-        var result = await ExecuteUnprivilegedCommandAsync("Get Available Updates", "check-updates -al --json");
+        configReader.Refresh();
+        var aurEnabled = configReader.LoadConfig().AurEnabled;
+        var flatpakEnabled = configReader.LoadConfig().FlatPackEnabled;
+
+        var args = new List<string> { "check-updates" };
+        if (aurEnabled) args.Add("--aur");
+        if (flatpakEnabled) args.Add("--flatpak");
+        args.Add("--json");
+
+        var result = await ExecuteUnprivilegedCommandAsync("Get Available Updates", args.ToArray());
         try
         {
             var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             foreach (var line in lines)
             {
                 var trimmedLine = StripBom(line.Trim());
-                if (trimmedLine.StartsWith("{") && trimmedLine.EndsWith("}"))
+                if (trimmedLine.StartsWith('{') && trimmedLine.EndsWith('}'))
                 {
                     var updates =
                         System.Text.Json.JsonSerializer.Deserialize(trimmedLine,

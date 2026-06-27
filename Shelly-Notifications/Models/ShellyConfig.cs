@@ -19,6 +19,10 @@ public class ShellyConfig
 
     public string? TrayUpdatesIconPath { get; set; }
 
+    public bool AurEnabled { get; set; }
+
+    public bool FlatPackEnabled { get; set; }
+
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
