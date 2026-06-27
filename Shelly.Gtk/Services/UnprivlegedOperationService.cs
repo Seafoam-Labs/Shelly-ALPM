@@ -118,11 +118,7 @@ public class UnprivilegedOperationService(
 
     public async Task<UnprivilegedOperationResult> RemoveFlatpakPackage(string package, bool removeConfig)
     {
-        UnprivilegedOperationResult result;
-        if (removeConfig)
-            result = await RunShellyCommandAsync("flatpak", "uninstall", package, "-cr");
-        else
-            result = await RunShellyCommandAsync("flatpak", "uninstall", package, "-r");
+        var result = await RunShellyCommandAsync("flatpak", "uninstall", package, removeConfig ? "-cr" : "-r");
 
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
@@ -167,19 +163,14 @@ public class UnprivilegedOperationService(
 
     public async Task<UnprivilegedOperationResult> FlatpakRemoveRemote(string remoteName, InstallLevel scope)
     {
-        if (scope == InstallLevel.User)
-            return await RunShellyCommandAsync("flatpak", "remove-remotes", remoteName, "--system", "false");
-
-        return await RunShellyCommandAsync("flatpak", "remove-remotes", remoteName, "--system", "true");
+        return await RunShellyCommandAsync("flatpak", "remove-remotes", remoteName, "--system",
+            scope == InstallLevel.System ? "true" : "false");
     }
 
     public async Task<UnprivilegedOperationResult> FlatpakInsallFromRef(string path, InstallLevel scope)
     {
-        UnprivilegedOperationResult result;
-        if (scope == InstallLevel.User)
-            result = await RunShellyCommandAsync("flatpak", "install-ref-file", path, "--system", "false");
-        else
-            result = await RunShellyCommandAsync("flatpak", "install-ref-file", path, "--system", "true");
+        var result = await RunShellyCommandAsync("flatpak", "install-ref-file", path, "--system",
+            scope == InstallLevel.System ? "true" : "false");
 
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
@@ -191,15 +182,11 @@ public class UnprivilegedOperationService(
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Flatpak);
         return result;
     }
-    
+
     public async Task<UnprivilegedOperationResult> FlatpakAddRemote(string remoteName, InstallLevel scope, string url)
     {
-        if (scope == InstallLevel.User)
-            return await RunShellyCommandAsync("flatpak", "add-remotes", remoteName, "--remote-url", url, "--system",
-                "false");
-
         return await RunShellyCommandAsync("flatpak", "add-remotes", remoteName, "--remote-url", url, "--system",
-            "true");
+            scope == InstallLevel.System ? "true" : "false");
     }
 
     public async Task<FlatpakRemoteRefInfo> GetFlatpakAppDataAsync(string remote, string app, string arch)
@@ -216,10 +203,10 @@ public class UnprivilegedOperationService(
 
     public async Task<List<RssModel>> GetArchNewsAsync(bool all = false)
     {
+        var args = new List<string> { "news" };
+        if (all) args.Add("--all");
         return await ExecuteJsonCommandAsync<List<RssModel>>("list archnews",
-            () => all
-                ? RunShellyCommandAsync("news", "--all")
-                : RunShellyCommandAsync("news"));
+            () => RunShellyCommandAsync(args.ToArray()));
     }
 
     public async Task<List<PacfileRecord>> GetPacFiles()
@@ -257,18 +244,21 @@ public class UnprivilegedOperationService(
 
     public async Task<List<AlpmPackageUpdateDto>> CheckForStandardApplicationUpdates(bool showHidden = false)
     {
-        return await ExecuteJsonCommandAsync<List<AlpmPackageUpdateDto>>("list standard updates",
-            () => showHidden
-                ? RunShellyCommandAsync("list-updates", "--show-hidden")
-                : RunShellyCommandAsync("list-updates"));
+        var args = new List<string> { "check-updates" };
+        if (showHidden) args.Add("--show-hidden");
+        return await ExecuteJsonCommandAsync<List<AlpmPackageUpdateDto>>("check standard application updates",
+            () => RunShellyCommandAsync(args.ToArray()));
     }
 
     public async Task<UnprivilegedOperationResult> ExportSyncFile(string filePath, string name)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return await RunShellyCommandAsync("export", "-o", filePath);
-
-        return await RunShellyCommandAsync("export", "-o", filePath, "-a", name);
+        var args = new List<string> { "export", "--output", filePath };
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            args.Add("--name");
+            args.Add(name);
+        }
+        return await RunShellyCommandAsync(args.ToArray());
     }
 
     public async Task<SyncModel> CheckForApplicationUpdates()
