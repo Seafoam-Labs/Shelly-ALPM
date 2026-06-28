@@ -127,7 +127,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy Seafoam Labs website
-        uses: digitalocean/app_action@v2
+        uses: digitalocean/app_action/deploy@v2
         with:
           app_name: seafoam-labs-website
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
