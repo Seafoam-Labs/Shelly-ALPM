@@ -433,8 +433,9 @@
                                         <property name="margin-start">10</property>
                                         <property name="margin-top">10</property>
                                         <child>
-                                            <object class="GtkButton" id="chel_button">
-                                                <property name="tooltip-text">Chel's Flag</property>
+                                            <object class="GtkButton" id="stat_button">
+                                                <property name="tooltip-text">Package Statistics</property>
+                                                <property name="icon-name">help-about-symbolic</property>
                                             </object>
                                         </child>
                                         <child>

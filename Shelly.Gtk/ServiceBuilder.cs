@@ -50,6 +50,7 @@ public static class ServiceBuilder
         collection.AddTransient<AppImage>();
         collection.AddTransient<Recommend>();
         collection.AddTransient<SetupWindow>();
+        collection.AddTransient<StatWindow>();
         return collection.BuildServiceProvider();
     }
 }
