@@ -198,7 +198,7 @@ public class PrivilegedOperationService(
 
     public async Task<OperationResult> DowngradePackageAsync(string packageName, string filename, bool addIgnore)
     {
-        var args = new List<string> { "downgrade", packageName, "--target", filename, "--no-confirm" };
+        var args = new List<string> { "downgrade", packageName, "--target", filename };
         if (addIgnore) args.Add("--ignore");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Downgrade package", args.ToArray());
