@@ -63,46 +63,35 @@ public class AppImageManagerV2(string installDirectory = "")
         if (!Directory.Exists(_installDirectory))
             Directory.CreateDirectory(_installDirectory);
 
-        var newMetadata = await ExtractMetadata(filePath);
-        newMetadata?.Path = destAppImagePath;
-
-        var existingAppImages = await GetAppImagesFromLocalDb();
-
-        AppImageDtoV2? existingAppImage = null;
-        if (newMetadata != null)
-        {
-            existingAppImage = existingAppImages.FirstOrDefault(a =>
-                string.Equals(a.Name, newMetadata.Name, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(a.DesktopName, newMetadata.DesktopName, StringComparison.OrdinalIgnoreCase));
-        }
-        else
-        {
-            existingAppImage =
-                existingAppImages.FirstOrDefault(a =>
-                    string.Equals(a.Name, appName, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (existingAppImage != null || File.Exists(destAppImagePath))
-        {
-            LogWarning($"AppImage {appName} already exists. Overwriting...");
-            var oldName = existingAppImage?.Name ?? appName;
-            var oldPath = existingAppImage?.Path ?? destAppImagePath;
-            await CleanDesktopEntries(oldName, oldPath);
-        }
-
         LogMessage($"Installing AppImage {appName}...");
         File.Copy(filePath, destAppImagePath, true);
         XdgPaths.FixOwnershipIfRoot(destAppImagePath);
         SetFilePermissions(destAppImagePath, "a+x");
 
-        var appImageDto = newMetadata ?? await ExtractMetadata(destAppImagePath);
-        if (appImageDto == null)
+        var newMetadata = await ExtractMetadata(destAppImagePath);
+
+        if (newMetadata == null)
         {
             LogError("Failed to extract metadata during installation.");
+            File.Delete(destAppImagePath);
             return false;
         }
 
-        await AddAppImageToLocalDb(appImageDto);
+        var existingAppImages = await GetAppImagesFromLocalDb();
+
+        var existingAppImage = existingAppImages.FirstOrDefault(a =>
+            string.Equals(a.Name, newMetadata.Name, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(a.DesktopName, newMetadata.DesktopName, StringComparison.OrdinalIgnoreCase));
+
+        if (existingAppImage != null)
+        {
+            LogWarning($"AppImage {appName} already exists. Overwriting...");
+            var oldName = existingAppImage.Name;
+            var oldPath = existingAppImage.Path ?? destAppImagePath;
+            await CleanDesktopEntries(oldName, oldPath);
+        }
+
+        await AddAppImageToLocalDb(newMetadata);
 
         return true;
     }
