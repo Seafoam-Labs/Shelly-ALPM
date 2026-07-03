@@ -85,10 +85,11 @@ public class AppImageManagerV2(string installDirectory = "")
 
         if (existingAppImage != null)
         {
-            LogWarning($"AppImage {appName} already exists. Overwriting...");
             var oldName = existingAppImage.Name;
             var oldPath = existingAppImage.Path ?? destAppImagePath;
+            LogWarning($"AppImage {oldName} already exists. Overwriting...");
             await CleanDesktopEntries(oldName, oldPath);
+            if (existingAppImage.Path != null) File.Delete(existingAppImage.Path);
         }
 
         await AddAppImageToLocalDb(newMetadata);
