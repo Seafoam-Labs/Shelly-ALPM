@@ -27,6 +27,24 @@ if ! command -v dotnet &> /dev/null; then
     exit 1
 fi
 
+# Check if meson is installed
+if ! command -v meson &> /dev/null; then
+    echo "Error: meson is not installed. Please install meson first."
+    exit 1
+fi
+
+# Check if ninja is installed
+if ! command -v ninja &> /dev/null; then
+    echo "Error: ninja is not installed. Please install ninja first."
+    exit 1
+fi
+
+# Check if valac is installed
+if ! command -v valac &> /dev/null; then
+    echo "Error: valac is not installed. Please install vala first."
+    exit 1
+fi
+
 # Check if msgfmt is installed (for translations)
 if ! command -v msgfmt &> /dev/null; then
     echo "Warning: msgfmt not found. Translations might not be compiled."
@@ -36,11 +54,11 @@ echo "Script directory: $SCRIPT_DIR"
 echo "Install directory: $INSTALL_DIR"
 echo ""
 
-# Build Shelly-Notifications
-echo "Building Shelly-Notifications..."
-cd "$SCRIPT_DIR/Shelly-Notifications"
-dotnet publish -c $BUILD_CONFIG -r linux-x64 -o "$SCRIPT_DIR/publish/Shelly-Notifications" -p:InstructionSet=x86-64
-echo "Shelly-Notifications build complete."
+# Build Shelly.Notifications
+echo "Building Shelly.Notifications..."
+cd "$SCRIPT_DIR/Shelly.Notifications"
+./build.sh
+echo "Shelly.Notifications build complete."
 echo ""
 
 # Build Shelly.Gtk
@@ -61,9 +79,9 @@ echo ""
 echo "Creating installation directory: $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 
-# Copy Shelly-Notifications files
-echo "Copying Shelly-Notifications files to $INSTALL_DIR"
-cp -r "$SCRIPT_DIR/publish/Shelly-Notifications/"* "$INSTALL_DIR/"
+# Copy Shelly.Notifications files
+echo "Copying Shelly.Notifications files to $INSTALL_DIR"
+cp "$SCRIPT_DIR/Shelly.Notifications/build/shelly-notifications" "$INSTALL_DIR/shelly-notifications"
 
 # Copy Shelly.Gtk files (binary is named 'shelly-ui' due to AssemblyName)
 echo "Copying Shelly.Gtk files to $INSTALL_DIR"
@@ -82,11 +100,11 @@ if command -v msgfmt &> /dev/null; then
     done
 
     # Compile tray service translations
-    for po_file in "$SCRIPT_DIR/Shelly-Notifications/po/"*.po; do
+    for po_file in "$SCRIPT_DIR/Shelly.Notifications/po/"*.po; do
         if [ -f "$po_file" ]; then
             lang=$(basename "$po_file" .po)
-            mkdir -p "$SCRIPT_DIR/Shelly-Notifications/locale/$lang/LC_MESSAGES"
-            msgfmt "$po_file" -o "$SCRIPT_DIR/Shelly-Notifications/locale/$lang/LC_MESSAGES/shelly-notifications.mo"
+            mkdir -p "$SCRIPT_DIR/Shelly.Notifications/locale/$lang/LC_MESSAGES"
+            msgfmt "$po_file" -o "$SCRIPT_DIR/Shelly.Notifications/locale/$lang/LC_MESSAGES/shelly-notifications.mo"
         fi
     done
 fi
@@ -99,8 +117,8 @@ if [ -d "$SCRIPT_DIR/Shelly.Gtk/locale" ]; then
     cp -r "$SCRIPT_DIR/Shelly.Gtk/locale/"* "$INSTALL_DIR/locale/" 2>/dev/null || true
 fi
 
-if [ -d "$SCRIPT_DIR/Shelly-Notifications/locale" ]; then
-    cp -r "$SCRIPT_DIR/Shelly-Notifications/locale/"* "$INSTALL_DIR/locale/" 2>/dev/null || true
+if [ -d "$SCRIPT_DIR/Shelly.Notifications/locale" ]; then
+    cp -r "$SCRIPT_DIR/Shelly.Notifications/locale/"* "$INSTALL_DIR/locale/" 2>/dev/null || true
 fi
 
 # Copy Shelly.Cli binary (output is named 'shelly' due to AssemblyName)
@@ -115,7 +133,7 @@ cp "$SCRIPT_DIR/Shelly.Gtk/Assets/shellylogo.png" "$INSTALL_DIR/"
 echo "Creating symlinks in /usr/bin..."
 ln -sf "$INSTALL_DIR/shelly-ui" /usr/bin/shelly-ui
 ln -sf "$INSTALL_DIR/shelly" /usr/bin/shelly
-ln -sf "$INSTALL_DIR/Shelly-Notifications" /usr/bin/shelly-notifications
+ln -sf "$INSTALL_DIR/shelly-notifications" /usr/bin/shelly-notifications
 
 # Install icons to standard location
 echo "Installing icons to standard location..."
@@ -142,7 +160,7 @@ for lang_dir in "$SCRIPT_DIR/Shelly.Gtk/locale/"*; do
 done
 
 # Install tray service translations
-for lang_dir in "$SCRIPT_DIR/Shelly-Notifications/locale/"*; do
+for lang_dir in "$SCRIPT_DIR/Shelly.Notifications/locale/"*; do
     if [ -d "$lang_dir" ] && [ -f "$lang_dir/LC_MESSAGES/shelly-notifications.mo" ]; then
         lang=$(basename "$lang_dir")
         mkdir -p "/usr/share/locale/$lang/LC_MESSAGES"
