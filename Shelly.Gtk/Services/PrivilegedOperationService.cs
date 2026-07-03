@@ -34,7 +34,7 @@ public class PrivilegedOperationService(
 
     public async Task<OperationResult> InstallLocalPackageAsync(string filePath)
     {
-        var args = new List<string> { "install", $"\"{filePath}\"" };
+        var args = new List<string> { "install", filePath };
         if (_noConfirm) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Install local package", args.ToArray());
@@ -61,7 +61,7 @@ public class PrivilegedOperationService(
     public async Task<OperationResult> RemoveLocalPackagesAsync(IEnumerable<string> packages)
     {
         var args = new List<string> { "remove" };
-        args.AddRange(packages.Select(p => $"\"{p}\""));
+        args.AddRange(packages);
         if (_noConfirm) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Remove local packages", args.ToArray());
@@ -198,7 +198,7 @@ public class PrivilegedOperationService(
 
     public async Task<OperationResult> DowngradePackageAsync(string packageName, string filename, bool addIgnore)
     {
-        var args = new List<string> { "downgrade", packageName, "--target", $"\"{filename}\"", "--no-confirm" };
+        var args = new List<string> { "downgrade", packageName, "--target", filename, "--no-confirm" };
         if (addIgnore) args.Add("--ignore");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Downgrade package", args.ToArray());
