@@ -94,7 +94,6 @@ public sealed class Settings(
         SetupStarfishSwitch("webview_switch", _config.StarFishEnabled, (v) => _config.StarFishEnabled = v, builder);
         SetupSwitch("no_confirm_switch", _config.NoConfirm, (v) => _config.NoConfirm = v, builder);
         SetupSwitch("remove_cache_switch", _config.RemoveCache, (v) => _config.RemoveCache = v, builder);
-        SetupSwitch("webview_switch", _config.StarFishEnabled, (v) => _config.StarFishEnabled = v, builder);
         SetupSwitch("recommended_switch", _config.RecommendedEnabled, (v) => _config.RecommendedEnabled = v, builder);
         SetupSwitch("appimage_switch", _config.AppImageEnabled, (v) => _config.AppImageEnabled = v, builder);
         SetupSwitch("symbolic_tray_switch", _config.UseSymbolicTray, (v) => _config.UseSymbolicTray = v, builder);
