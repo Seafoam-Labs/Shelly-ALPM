@@ -83,7 +83,6 @@ public sealed class Recommend(
         overlay.AddOverlay(_noResultsOverlay);
 
         _scrolledWindow.OnRealize += (_, _) => { _ = LoadDataAsync(_cts.Token); };
-
         return overlay;
     }
 
@@ -108,14 +107,15 @@ public sealed class Recommend(
                 return false;
             });
 
-            var alpmPackages = await unprivilegedOperationService.GetAvailablePackagesAsync();
-            var installedPackages = await unprivilegedOperationService.GetInstalledPackagesAsync();
+            var alpmPackagesTask = unprivilegedOperationService.GetAvailablePackagesAsync();
+            var installedPackagesTask = unprivilegedOperationService.GetInstalledPackagesAsync();
+            var recommendationsTask = GetRecommendations(ct);
 
-            var response = await Client.GetAsync("https://www.seafoam-labs.org/recommend.json", ct);
-            response.EnsureSuccessStatusCode();
-            var values = await response.Content.ReadAsStringAsync(ct);
+            await Task.WhenAll(alpmPackagesTask, installedPackagesTask, recommendationsTask);
 
-            var result = JsonSerializer.Deserialize(values, RecommendJsonContext.Default.ListRecommendModel) ?? [];
+            var alpmPackages = await alpmPackagesTask;
+            var installedPackages = await installedPackagesTask;
+            var result = await recommendationsTask;
 
             // Build package list on background thread (no GTK calls)
             var packages = new List<FlatRecommendModel>();
@@ -166,6 +166,16 @@ public sealed class Recommend(
                 return false;
             });
         }
+    }
+
+    private static async Task<List<RecommendModel>> GetRecommendations(CancellationToken ct)
+    {
+        var response = await Client.GetAsync("https://www.seafoam-labs.org/recommend.json", ct);
+        response.EnsureSuccessStatusCode();
+        var values = await response.Content.ReadAsStringAsync(ct);
+
+        var result = JsonSerializer.Deserialize(values, RecommendJsonContext.Default.ListRecommendModel) ?? [];
+        return result;
     }
 
     private Task FlowChartBuilder()
