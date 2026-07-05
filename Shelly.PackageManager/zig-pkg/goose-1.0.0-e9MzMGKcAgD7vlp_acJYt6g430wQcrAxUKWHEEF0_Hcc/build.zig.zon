@@ -1,0 +1,17 @@
+.{
+    .name = .goose,
+
+    .fingerprint = 0xf43488ea3033d37b,
+    .version = "1.0.0",
+    .minimum_zig_version = "0.16.0",
+
+    .dependencies = .{},
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}
