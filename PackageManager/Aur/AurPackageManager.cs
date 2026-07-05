@@ -1605,11 +1605,11 @@ public sealed class AurPackageManager(string? configPath = null)
             buildProcess.Start();
             buildProcess.BeginOutputReadLine();
             buildProcess.BeginErrorReadLine();
-            buildProcess.WaitForExit();
+            await buildProcess.WaitForExitAsync();
             if (buildProcess.ExitCode != 0)
             {
                 InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.InformationalOutput,
-                    $"Failed to build {packageName} with makepkg: {buildProcess.StandardError.ReadToEnd()}"));
+                    $"Failed to build {packageName} with makepkg: {await buildProcess.StandardError.ReadToEndAsync()}"));
                 return;
             }
 
@@ -1734,7 +1734,7 @@ public sealed class AurPackageManager(string? configPath = null)
             buildProcess.Start();
             buildProcess.BeginOutputReadLine();
             buildProcess.BeginErrorReadLine();
-            buildProcess.WaitForExit();
+            await buildProcess.WaitForExitAsync();
             if (buildProcess.ExitCode != 0)
             {
                 InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.InformationalOutput,
@@ -1771,17 +1771,15 @@ public sealed class AurPackageManager(string? configPath = null)
 
         Directory.CreateDirectory(_chrootPath);
 
-        var initProcess = new Process
+        using var initProcess = new Process();
+        initProcess.StartInfo = new ProcessStartInfo
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "mkarchroot",
-                Arguments = $"{chrootRoot} base-devel",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            }
+            FileName = "mkarchroot",
+            Arguments = $"{chrootRoot} base-devel",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
         };
         initProcess.Start();
         initProcess.WaitForExit();
@@ -1797,17 +1795,15 @@ public sealed class AurPackageManager(string? configPath = null)
     private void UpdateChroot()
     {
         var chrootRoot = Path.Combine(_chrootPath, "root");
-        var updateProcess = new Process
+        using var updateProcess = new Process();
+        updateProcess.StartInfo = new ProcessStartInfo
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "arch-nspawn",
-                Arguments = $"{chrootRoot} shelly upgrade -n",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            }
+            FileName = "arch-nspawn",
+            Arguments = $"{chrootRoot} shelly upgrade -n",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
         };
         updateProcess.Start();
         updateProcess.WaitForExit();
@@ -1821,19 +1817,25 @@ public sealed class AurPackageManager(string? configPath = null)
 
     private Process CreateBuildProcess(string tempPath, string? makepkgArgs = null)
     {
-        // Use `-s --needed` as defense-in-depth: if Shelly's resolver ever misses a repo dep,
-        // makepkg itself will install it via pacman instead of aborting with
-        // "could not resolve all dependencies". `--needed` makes this a no-op when Shelly
-        // already installed everything. See issue #880 follow-up.
-        makepkgArgs ??= "-f -c -s --noconfirm --needed --skippgpcheck" + (_noCheck ? " --nocheck" : "");
-
         if (_useChroot)
-            return new Process
+        {
+            var sudoUser = Environment.GetEnvironmentVariable("SUDO_USER");
+            var pkexecUid = Environment.GetEnvironmentVariable("PKEXEC_UID");
+            var pkexecUser = ResolveUsernameForUid(pkexecUid ?? string.Empty);
+            var user = sudoUser ?? pkexecUser;
+
+            var args = new List<string> { "-c", "-r", _chrootPath };
+            if (!string.IsNullOrEmpty(user))
+            {
+                args.Add("-U");
+                args.Add(user);
+            }
+
+            var process = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = "makechrootpkg",
-                    Arguments = $"-c -r {_chrootPath}",
                     WorkingDirectory = tempPath,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -1841,6 +1843,20 @@ public sealed class AurPackageManager(string? configPath = null)
                     CreateNoWindow = true
                 }
             };
+
+            foreach (var arg in args)
+            {
+                process.StartInfo.ArgumentList.Add(arg);
+            }
+
+            return process;
+        }
+
+        // Use `-s --needed` as defense-in-depth: if Shelly's resolver ever misses a repo dep,
+        // makepkg itself will install it via pacman instead of aborting with
+        // "could not resolve all dependencies". `--needed` makes this a no-op when Shelly
+        // already installed everything. See issue #880 follow-up.
+        makepkgArgs ??= "-f -c -s --noconfirm --needed --skippgpcheck" + (_noCheck ? " --nocheck" : "");
 
         var makepkgArgList = makepkgArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return new Process
