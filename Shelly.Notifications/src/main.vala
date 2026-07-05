@@ -3,6 +3,8 @@ using GLib;
 public class ShellyApp : Object {
 
     private const string SERVICE_NAME = "org.shelly.Notifications";
+    private const string SHELLY_UI_SERVICE = "com.shellyorg.shelly";
+    private const string SHELLY_UI_PATH = "/com/shellyorg/shelly";
 
     private MainLoop loop;
     private StatusNotifierItem tray_item;
@@ -47,6 +49,7 @@ public class ShellyApp : Object {
                     break;
                 case 99:
                     stdout.printf ("[shelly] Exiting...\n");
+                    quit_shelly_ui ();
                     loop.quit ();
                     break;
             }
@@ -153,6 +156,19 @@ public class ShellyApp : Object {
         stdout.printf ("[shelly-notifications] Check complete — %d update(s)\n", model.total ());
     }
 
+
+    private void quit_shelly_ui () {
+        try {
+            var sui = Bus.get_proxy_sync<GtkActions> (BusType.SESSION,
+                SHELLY_UI_SERVICE, SHELLY_UI_PATH, DBusProxyFlags.NONE, null);
+
+            GLib.Variant[] no_params = {};
+            var platform_data = new GLib.HashTable<string, GLib.Variant> (str_hash, str_equal);
+            sui.activate ("quit", no_params, platform_data);
+        } catch (Error e) {
+            stdout.printf ("[shelly-notifications] shelly-ui not reachable for quit: %s\n", e.message);
+        }
+    }
 
     private void on_sni_name_acquired (string sni_name) {
         register_with_watcher.begin (sni_name, (obj, res) => {

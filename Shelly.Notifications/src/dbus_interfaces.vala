@@ -15,6 +15,12 @@ public interface FreedesktopStatusNotifierWatcher : Object {
     public abstract bool is_status_notifier_host_registered { owned get; }
 }
 
+[DBus (name = "org.gtk.Actions")]
+public interface GtkActions : Object {
+    public abstract void activate (string action_name, GLib.Variant[] parameter,
+        GLib.HashTable<string, GLib.Variant> platform_data) throws DBusError, IOError;
+}
+
 [DBus (name = "org.freedesktop.Notifications")]
 public interface FreedesktopNotifications : Object {
     public abstract async uint notify (string app_name,
