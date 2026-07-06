@@ -1,7 +1,7 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgname=shelly
-pkgver=2.4.1.1
+pkgver=2.4.1.2
 pkgrel=1
 pkgdesc="Shelly: A Modern Arch Package Manager"
 arch=('x86_64')
@@ -59,7 +59,7 @@ build() {
       msgfmt "$po_file" -o "shelly-ui-${lang}.mo"
     fi
   done
-  
+
   # Compile tray service translations
     for po_file in Shelly.Notifications/po/*.po; do
       if [ -f "$po_file" ]; then
@@ -175,7 +175,7 @@ EOF
       install -Dm644 "$mo_file" "$pkgdir/usr/share/locale/$lang/LC_MESSAGES/shelly-ui.mo"
     fi
   done
-  
+
   # Install tray service translations
     for mo_file in shelly-notifications-*.mo; do
       if [ -f "$mo_file" ]; then

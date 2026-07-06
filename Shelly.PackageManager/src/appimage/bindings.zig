@@ -1,0 +1,36 @@
+const std = @import("std");
+
+pub const appimage = struct {
+    pub const UpdateType = enum {
+        none,
+        static_url,
+        github,
+        gitlab,
+        codeberg,
+        forgejo,
+    };
+
+    pub const AppImage = struct {
+        name: []const u8,
+        version: []const u8 = "Unknown",
+        raw_update_info: []const u8 = "",
+        icon_name: []const u8 = "",
+        description: []const u8 = "",
+        desktop_name: []const u8 = "",
+        size_on_disk: u64 = 0,
+        command_line_args: []const u8 = "",
+        path: []const u8 = "",
+        update_url: []const u8 = "",
+        update_type: UpdateType = .none,
+        repo_owner: ?[]const u8 = null,
+        repo_name: ?[]const u8 = null,
+        allow_prerelease: bool = false,
+    };
+
+    pub const AppImageUpdate = struct {
+        name: []const u8,
+        version: []const u8,
+        download_url: []const u8,
+        is_update_available: bool,
+    };
+};

@@ -160,11 +160,11 @@ pub const RemoteManager = struct {
             const value = std.mem.trim(u8, trimmed[eq_pos + 1 ..], " \t");
 
             if (std.mem.eql(u8, key, "Url")) {
-                config.url = try allocator.dupeZ(u8, value);
+                config.url = try allocator.dupeSentinel(u8, value, 0);
             } else if (std.mem.eql(u8, key, "GPGVerify")) {
                 config.gpg_verify = std.ascii.eqlIgnoreCase(value, "true");
             } else if (std.mem.eql(u8, key, "GPGKey")) {
-                config.gpg_key = try allocator.dupeZ(u8, value);
+                config.gpg_key = try allocator.dupeSentinel(u8, value, 0);
             }
         }
 

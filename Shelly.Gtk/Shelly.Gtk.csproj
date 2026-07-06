@@ -16,16 +16,16 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Version>2.4.1.1</Version>
+        <Version>2.4.1.2</Version>
         <AssemblyName>shelly-ui</AssemblyName>
-        <AssemblyVersion>2.4.1.1</AssemblyVersion>
+        <AssemblyVersion>2.4.1.2</AssemblyVersion>
         <AssemblyTitle>Shelly GTK UI</AssemblyTitle>
         <Description>Shelly GTK is a arch linux package manager</Description>
         <Company>Seafoam Labs</Company>
         <Product>Shelly CLI by Seafoam Labs</Product>
         <Copyright>2026 Seafoam Labs</Copyright>
     </PropertyGroup>
-    
+
 
     <ItemGroup>
         <EmbeddedResource Include="UiFiles\**\*.ui" />
