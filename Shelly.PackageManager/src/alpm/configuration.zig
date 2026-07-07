@@ -28,21 +28,21 @@ pub const Configuration = struct {
     pub const Config = struct {
         arena: *std.heap.ArenaAllocator,
 
-        root_directory: []const u8,
-        database_path: []const u8,
-        cache_directory: []const u8,
-        log_file: []const u8,
-        gpg_directory: []const u8,
-        hook_directory: std.ArrayList([]const u8),
-        hold_packages: std.ArrayList([]const u8),
-        transfer_command: []const u8,
-        transfer_command_two: []const u8,
+        root_directory: [:0]const u8,
+        database_path: [:0]const u8,
+        cache_directory: [:0]const u8,
+        log_file: [:0]const u8,
+        gpg_directory: [:0]const u8,
+        hook_directory: std.ArrayList([:0]const u8),
+        hold_packages: std.ArrayList([:0]const u8),
+        transfer_command: [:0]const u8,
+        transfer_command_two: [:0]const u8,
         use_delta: f64,
-        architecture: []const u8,
-        ignore_package: std.ArrayList([]const u8),
-        ignore_group: std.ArrayList([]const u8),
-        no_upgrade: std.ArrayList([]const u8),
-        no_extract: std.ArrayList([]const u8),
+        architecture: [:0]const u8,
+        ignore_package: std.ArrayList([:0]const u8),
+        ignore_group: std.ArrayList([:0]const u8),
+        no_upgrade: std.ArrayList([:0]const u8),
+        no_extract: std.ArrayList([:0]const u8),
         use_system_log: bool,
         check_space: bool,
         repositories: std.ArrayList(Repository),
@@ -343,11 +343,11 @@ pub const Configuration = struct {
             }
         }
 
-        fn dupe(self: *Parser, s: []const u8) Allocator.Error![]const u8 {
-            return self.arena_allocater.dupe(u8, s);
+        fn dupe(self: *Parser, s: []const u8) Allocator.Error![:0]const u8 {
+            return self.arena_allocater.dupeSentinel(u8, s, 0);
         }
 
-        fn add_split(self: *Parser, list: *std.ArrayList([]const u8), value: []const u8) Allocator.Error!void {
+        fn add_split(self: *Parser, list: *std.ArrayList([:0]const u8), value: []const u8) Allocator.Error!void {
             var it = std.mem.tokenizeScalar(u8, value, ' ');
             while (it.next()) |tok| {
                 try list.append(self.arena_allocater, try self.dupe(tok));

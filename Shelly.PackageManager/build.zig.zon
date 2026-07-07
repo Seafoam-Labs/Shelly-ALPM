@@ -40,6 +40,10 @@
             .url = "git+https://github.com/deatil/zig-time?ref=main#ea9fb647bb5d855b3e6a20c302a41ebd2d74478b",
             .hash = "zig_time-1.3.3-FD_-CkW4AQBIycdlOnmzXXTDQHt73McH_oB0fDbk3jnG",
         },
+        .@"zig-xml" = .{
+            .url = "git+https://github.com/ianprime0509/zig-xml#6a446191d2509788959766b60a13b8626d9ad078",
+            .hash = "xml-0.2.0-ZTbP3x07AgAwDNgFEj9liF24YjojTKyznD3-Njf9w5HT",
+        },
     },
     .paths = .{
         "build.zig",

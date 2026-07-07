@@ -28,4 +28,6 @@ test {
     _ = @import("flatpak/remote_manager.zig");
     _ = @import("flatpak/manager.zig");
     _ = @import("flatpak/appstream_manager.zig");
+    _ = @import("flatpak/appstream_parser.zig");
+    _ = @import("appimage/manager.zig");
 }

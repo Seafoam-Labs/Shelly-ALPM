@@ -1,0 +1,13 @@
+.{
+    .name = .xml,
+    .version = "0.2.0",
+    .fingerprint = 0x31f4d863dfcf3665, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.16.0",
+    .paths = .{
+        "src",
+        "LICENSE",
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+    },
+}

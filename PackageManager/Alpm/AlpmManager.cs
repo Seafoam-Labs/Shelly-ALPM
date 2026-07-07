@@ -45,7 +45,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
 
     private bool? _isCachyOs;
 
-    public bool IsCachyOs =>
+    public bool  IsCachyOs =>
         _isCachyOs ??= DistributionHooks.OsRelease.PrettyName?
             .Contains("cachyos", StringComparison.OrdinalIgnoreCase) ?? false;
 
@@ -1232,11 +1232,18 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
                      AlpmTransFlag.NoCheckSpace;
         }
 
-        List<ProviderOption> optDependList = [];
+        // Optional-dependency resolution. Note: we must NOT mutate pkgPtrs while it is
+        // being enumerated below (that throws "Collection was modified; enumeration
+        // operation may not execute"). Resolved opt-dep targets are collected here and
+        // merged into pkgPtrs after the loop completes.
+        List<IntPtr> optDepPkgPtrs = [];
 
         foreach (var pkgPtr in pkgPtrs)
         {
             var pkg = new AlpmPackage(pkgPtr);
+
+            // Scoped per package so opt-deps from one package don't leak into another's prompt.
+            List<ProviderOption> optDependList = [];
             foreach (var raw in pkg.OptDepends)
             {
                 var parts = raw.Split(':', 2);
@@ -1250,8 +1257,6 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
                 optDependList.Add(new ProviderOption(name, description, isInstalled));
             }
 
-
-
             if (optDependList.Count > 0)
             {
                 var args = new AlpmQuestionEventArgs(AlpmQuestionType.SelectOptionalDeps,
@@ -1260,17 +1265,21 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
                 Question?.Invoke(this, args);
                 args.WaitForResponse();
                 var responseOptions = args.Response.ProviderOptions ?? [];
-                optDepNames.AddRange(responseOptions
-                .Where(x => x is { IsSelected: true, IsInstalled: false })
-                .Select(x => x.Name)
-                .Where(n => !IsDependencySatisfiedByInstalled(n)) // defensive guard: skip already-satisfied
-                .Select(ResolveOptDepProvider) // virtual -> concrete (prompt if ambiguous)
-                .Distinct()
-                .ToList());
-                var result = PackageListBuilder.Build(_handle, optDepNames);
-                pkgPtrs.AddRange(result);
+                var selected = responseOptions
+                    .Where(x => x is { IsSelected: true, IsInstalled: false })
+                    .Select(x => x.Name)
+                    .Where(n => !IsDependencySatisfiedByInstalled(n)) // defensive guard: skip already-satisfied
+                    .Select(ResolveOptDepProvider) // virtual -> concrete (prompt if ambiguous)
+                    .Distinct()
+                    .ToList();
+                optDepNames.AddRange(selected);
+                // Build only the newly selected names, not the full accumulated list.
+                optDepPkgPtrs.AddRange(PackageListBuilder.Build(_handle, selected));
             }
         }
+
+        // Safe to mutate now that enumeration of pkgPtrs has finished.
+        pkgPtrs.AddRange(optDepPkgPtrs);
 
         InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.TraceOutput,
             $"TransInit: handle={_handle} flags={flags} pkgPtrs={pkgPtrs.Count} dbPath={_config.DbPath}"));

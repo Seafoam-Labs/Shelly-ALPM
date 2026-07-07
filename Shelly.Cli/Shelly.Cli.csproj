@@ -12,14 +12,14 @@
         <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
     </PropertyGroup>
 
-    
+
     <PropertyGroup>
         <!--<IlcDisableReflection>true</IlcDisableReflection>-->
     </PropertyGroup>
     <PropertyGroup>
-        <Version>2.4.1.1</Version>
+        <Version>2.4.1.2</Version>
         <AssemblyName>shelly</AssemblyName>
-        <AssemblyVersion>2.4.1.1</AssemblyVersion>
+        <AssemblyVersion>2.4.1.2</AssemblyVersion>
         <AssemblyTitle>Shelly CLI</AssemblyTitle>
         <Description>Shelly CLI is a arch linux package manager</Description>
         <Company>Seafoam Labs</Company>

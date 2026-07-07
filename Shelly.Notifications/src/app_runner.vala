@@ -20,15 +20,25 @@ public class AppRunner {
                 break;
             }
         }
-
         if (app_path == null) {
             printerr ("[shelly-notifications] shelly-ui not found at known paths\n");
             return;
         }
 
         try {
-            new Subprocess.newv ({ app_path }, SubprocessFlags.NONE);
-            stdout.printf ("[app] Launched %s\n", app_path);
+            string[] argv = { "setsid", app_path };
+
+            Pid child_pid;
+            Process.spawn_async (
+                null,
+                argv,
+                null,
+                SpawnFlags.SEARCH_PATH | SpawnFlags.STDOUT_TO_DEV_NULL | SpawnFlags.STDERR_TO_DEV_NULL,
+                null,
+                out child_pid
+            );
+
+            stdout.printf ("[app] Launched %s (detached, pid %d)\n", app_path, (int) child_pid);
         } catch (Error e) {
             printerr ("[shelly-notifications] Could not launch shelly-ui: %s\n", e.message);
         }

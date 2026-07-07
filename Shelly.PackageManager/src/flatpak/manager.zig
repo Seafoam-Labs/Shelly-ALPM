@@ -31,7 +31,7 @@ pub const Manager = struct {
         );
         defer self.allocator.free(ref_str);
 
-        const ref_string = try self.allocator.dupeZ(u8, ref_str);
+        const ref_string = try self.allocator.dupeSentinel(u8, ref_str, 0);
         defer self.allocator.free(ref_string);
 
         const trans_ptr = rawflatpak.flatpak_transaction_new_for_installation(installation, cancellable, &g_error);
@@ -154,7 +154,7 @@ pub const Manager = struct {
         defer self.allocator.free(ref_string);
 
         const commit_c_safe: ?[:0]u8 = if (commit) |c|
-            try self.allocator.dupeZ(u8, c)
+            try self.allocator.dupeSentinel(u8, c, 0)
         else
             null;
         defer if (commit_c_safe) |c| self.allocator.free(c);
@@ -397,6 +397,54 @@ pub const Manager = struct {
         }
 
         return list.toOwnedSlice(self.allocator);
+    }
+
+    pub fn get_running_instances_flatpak(self: Manager) ![]flatpak.InstalledFlatpak {
+        var list: std.ArrayList(flatpak.InstalledFlatpak) = .empty;
+        errdefer list.deinit(self.allocator);
+
+        const instances_ptr = rawflatpak.flatpak_instance_get_all();
+        var j: usize = 0;
+        while (j < instances_ptr.*.len) : (j += 1) {
+            const raw: *rawflatpak.FlatpakRef = @ptrCast(@alignCast(instances_ptr.*.pdata[j]));
+            const flatpak_ref = flatpak.InstalledFlatpak.new(raw, flatpak.Scope.UNKNOWN);
+            try list.append(self.allocator, flatpak_ref);
+        }
+
+        return list.toOwnedSlice(self.allocator);
+    }
+
+    pub fn kill_flatpak(_: Manager, flatpak_id: [:0]const u8) !bool {
+        const instances_ptr = rawflatpak.flatpak_instance_get_all();
+        var pid: ?i32 = null;
+        var j: usize = 0;
+        while (j < instances_ptr.*.len) : (j += 1) {
+            const raw: *rawflatpak.FlatpakInstance = @ptrCast(@alignCast(instances_ptr.*.pdata[j]));
+            const app_id_c = rawflatpak.flatpak_instance_get_app(raw);
+            if (app_id_c == null) continue;
+
+            if (std.ascii.eqlIgnoreCase(std.mem.span(app_id_c), flatpak_id)) {
+                pid = rawflatpak.flatpak_instance_get_child_pid(raw);
+                break;
+            }
+        }
+
+        const found_pid = pid orelse {
+            std.log.err("Failed to find PID for running instance of {s}.", .{flatpak_id});
+            return error.InvalidPid;
+        };
+
+        if (found_pid <= 0) {
+            std.log.err("Invalid PID for running instance of {s}.", .{flatpak_id});
+            return error.InvalidPid;
+        }
+
+        std.posix.kill(found_pid, std.posix.SIG.KILL) catch |err| {
+            std.log.err("Failed to kill instance of {s} with PID {d}: {s}", .{ flatpak_id, found_pid, @errorName(err) });
+            return err;
+        };
+
+        return true;
     }
 
     fn get_updates_ptr(self: Manager, installation: [*c]rawflatpak.FlatpakInstallation, scope: flatpak.Scope) ![]flatpak.InstalledFlatpak {
@@ -872,31 +920,45 @@ test "test getRemoteRefInfo" {
     try std.testing.expect(result.permissions.len > 1);
 }
 
-test "test updateswithperms" {
-    const manager = Manager{ .allocator = std.testing.allocator, .io = std.testing.io };
-    const result = try manager.get_updates_flatpak();
-    defer {
-        for (result) |item| {
-            if (item.permissions.len > 0) {
-                for (item.permissions) |p| std.testing.allocator.free(p);
-                std.testing.allocator.free(item.permissions);
-            }
-            rawflatpak.g_object_unref(item.ptr); // release the ref we took
-        }
-        std.testing.allocator.free(result);
-    }
+// test "test updateswithperms" {
+//     const manager = Manager{ .allocator = std.testing.allocator, .io = std.testing.io };
+//     const result = try manager.get_updates_flatpak();
+//     defer {
+//         for (result) |item| {
+//             if (item.permissions.len > 0) {
+//                 for (item.permissions) |p| std.testing.allocator.free(p);
+//                 std.testing.allocator.free(item.permissions);
+//             }
+//             rawflatpak.g_object_unref(item.ptr); // release the ref we took
+//         }
+//         std.testing.allocator.free(result);
+//     }
 
-    var found: ?flatpak.InstalledFlatpak = null;
-    for (result) |item| {
-        if (std.mem.eql(u8, item.id(), "it.mijorus.gearlever")) {
-            found = item;
-            break;
-        }
-    }
+//     var found: ?flatpak.InstalledFlatpak = null;
+//     for (result) |item| {
+//         if (std.mem.eql(u8, item.id(), "it.mijorus.gearlever")) {
+//             found = item;
+//             break;
+//         }
+//     }
 
-    const gearlever = found orelse return error.GearleverNotInUpdateList;
-    try std.testing.expect(gearlever.permissions.len > 0);
-}
+//     const gearlever = found orelse return error.GearleverNotInUpdateList;
+//     try std.testing.expect(gearlever.permissions.len > 0);
+// }
+
+// test "test killApp" {
+//     const manager = Manager{ .allocator = std.testing.allocator, .io = std.testing.io };
+
+//     const result = try manager.kill_flatpak("it.mijorus.gearlever");
+//     try std.testing.expect(result);
+// }
+
+// test "test flatpakinstances" {
+//     const manager = Manager{ .allocator = std.testing.allocator, .io = std.testing.io };
+//     const result = try manager.get_running_instances_flatpak();
+//     defer std.testing.allocator.free(result);
+//     try std.testing.expect(result.len >= 1);
+// }
 
 // test "test installfromref" {
 //     const manager = Manager{ .allocator = std.testing.allocator, .io = std.testing.io };

@@ -172,6 +172,149 @@ public class PkgbuildParserTests
     }
 
     [Test]
+    public void ParseContent_ResolvesSuffixRemovalExpansion_InProvides()
+    {
+        var pkgbuild = """
+                       pkgname=kwin-effect-rounded-corners-git
+                       pkgver=0.9.0.r8.g0926a7e
+                       provides=("kwin-effect-rounded-corners=${pkgver%%.g*}")
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.Provides, Has.Count.EqualTo(1));
+        Assert.That(result.Provides[0], Is.EqualTo("kwin-effect-rounded-corners=0.9.0.r8"));
+    }
+
+    [Test]
+    public void ParseContent_ResolvesFirstMatchReplacement_InDepends()
+    {
+        var pkgbuild = """
+                       _x=foo-foo
+                       depends=("${_x/foo/bar}")
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.Depends[0], Is.EqualTo("bar-foo"));
+    }
+
+    [Test]
+    public void ParseContent_ResolvesGlobalReplacement_InDepends()
+    {
+        var pkgbuild = """
+                       _x=foo-foo
+                       depends=("${_x//foo/bar}")
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.Depends[0], Is.EqualTo("bar-bar"));
+    }
+
+    [Test]
+    public void ParseContent_ResolvesPrefixAnchoredReplacement_InDepends()
+    {
+        var pkgbuild = """
+                       pkgver=v1.2.3
+                       depends=("pkg=${pkgver/#v/}")
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.Depends[0], Is.EqualTo("pkg=1.2.3"));
+    }
+
+    [Test]
+    public void ParseContent_ResolvesSuffixAnchoredReplacement_InProvides()
+    {
+        var pkgbuild = """
+                       pkgname=foo-git
+                       provides=("${pkgname/%-git/}")
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.Provides[0], Is.EqualTo("foo"));
+    }
+
+    [Test]
+    public void ParseContent_ResolvesDeletionReplacement_InDepends()
+    {
+        var pkgbuild = """
+                       _x=a-b-c
+                       depends=("${_x/-b}")
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.Depends[0], Is.EqualTo("a-c"));
+    }
+
+    [Test]
+    public void ParseContent_ResolvesSubstringWithLength_InDepends()
+    {
+        var pkgbuild = """
+                       pkgver=1.2.3
+                       depends=("pkg=${pkgver:0:3}")
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.Depends[0], Is.EqualTo("pkg=1.2"));
+    }
+
+    [Test]
+    public void ParseContent_ResolvesSubstringToEnd_InDepends()
+    {
+        var pkgbuild = """
+                       pkgver=1.2.3
+                       depends=("pkg=${pkgver:2}")
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.Depends[0], Is.EqualTo("pkg=2.3"));
+    }
+
+    [Test]
+    public void ParseContent_ResolvesSubstringNegativeOffset_InDepends()
+    {
+        var pkgbuild = """
+                       pkgver=1.2.3
+                       depends=("pkg=${pkgver: -3}")
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.Depends[0], Is.EqualTo("pkg=2.3"));
+    }
+
+    [Test]
+    public void ParseContent_LeavesDefaultValueExpansionUnresolved()
+    {
+        var pkgbuild = """
+                       depends=("electron${_x:-38}")
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.Depends[0], Is.EqualTo("electron${_x:-38}"));
+    }
+
+    [Test]
+    public void ParseContent_KeepsReplacementWhenVariableNotFound()
+    {
+        var pkgbuild = """
+                       depends=("${_missing/a/b}")
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.Depends[0], Is.EqualTo("${_missing/a/b}"));
+    }
+
+    [Test]
     public void ParseContent_FfmpegObsStyle_ResolvesVersionedDeps()
     {
         var pkgbuild = """

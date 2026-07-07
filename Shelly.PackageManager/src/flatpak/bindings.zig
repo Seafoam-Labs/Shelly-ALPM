@@ -8,10 +8,7 @@ pub const libflatpak = struct {
         return std.mem.span(ptr);
     }
 
-    pub const Scope = enum(i32) {
-        SYSTEM = 0,
-        USER = 1,
-    };
+    pub const Scope = enum(i32) { SYSTEM = 0, USER = 1, UNKNOWN = 2 };
 
     pub const Remote = struct {
         ptr: *flatpak.FlatpakRemote,
@@ -229,6 +226,6 @@ pub const libflatpak = struct {
         );
         defer allocator.free(ref_str);
 
-        return allocator.dupeZ(u8, ref_str);
+        return allocator.dupeSentinel(u8, ref_str, 0);
     }
 };
