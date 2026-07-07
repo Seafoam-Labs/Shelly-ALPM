@@ -269,6 +269,9 @@ sealed class Program
             var sidebarBox = (Box)mainBuilder.GetObject("SidebarBox")!;
             var sidebarToggle = (ToggleButton)mainBuilder.GetObject("SidebarToggleButton")!;
             var topHeaderBar = (HeaderBar)mainBuilder.GetObject("TopHeaderBar")!;
+            var mainStackSwitcher = (StackSwitcher)mainBuilder.GetObject("MainStackSwitcher")!;
+            var topTitleLabel = (Label)mainBuilder.GetObject("TopTitleLabel")!;
+            var topMenuButton = (MenuButton)mainBuilder.GetObject("TopMenuButton")!;
             var sidebarRecommendBtn = (ToggleButton)mainBuilder.GetObject("SidebarRecommendButton")!;
             var sidebarPackagesBtn = (ToggleButton)mainBuilder.GetObject("SidebarPackagesButton")!;
             var sidebarAurBtn = (ToggleButton)mainBuilder.GetObject("SidebarAurButton")!;
@@ -395,12 +398,17 @@ sealed class Program
             _settingsStack.GetPage(appImagePageBox).Visible = initialConfig.AppImageEnabled;
             _settingsStack.GetPage(shellySearchPageBox).Visible = initialConfig.ShellySearchEnabled;
 
-            // Sidebar setup - controlled by UseOldMenu config
+            // Sidebar setup - controlled by UseOldMenu config. The header bar is the
+            // window titlebar, so keep it visible in both navigation modes and only
+            // toggle the navigation widgets inside it.
             void ApplyNavigationStyle(bool useOldMenu, ShellyConfig config)
             {
                 sidebarBox.Visible = useOldMenu;
-                topHeaderBar.Visible = !useOldMenu;
-                _settingsStack.MarginStart = !useOldMenu ? 9 : 0;
+                topHeaderBar.Visible = true;
+                mainStackSwitcher.Visible = !useOldMenu;
+                topMenuButton.Visible = !useOldMenu;
+                topTitleLabel.Visible = useOldMenu;
+                _settingsStack!.MarginStart = !useOldMenu ? 9 : 0;
 
                 if (!useOldMenu) return;
                 sidebarRecommendBtn.Visible = config.RecommendedEnabled;

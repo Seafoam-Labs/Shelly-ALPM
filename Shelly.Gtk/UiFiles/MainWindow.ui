@@ -82,6 +82,37 @@
         <property name="default-width">800</property>
         <property name="title">Shelly</property>
         <property name="decorated">true</property>
+        <child type="titlebar">
+            <object class="GtkHeaderBar" id="TopHeaderBar">
+                <property name="show-title-buttons">true</property>
+                <child type="title">
+                    <object class="GtkBox" id="TopTitleBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="halign">center</property>
+                        <child>
+                            <object class="GtkStackSwitcher" id="MainStackSwitcher">
+                                <property name="stack">settings_stack</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkLabel" id="TopTitleLabel">
+                                <property name="label">Shelly</property>
+                                <property name="visible">false</property>
+                                <style>
+                                    <class name="title"/>
+                                </style>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+                <child type="end">
+                    <object class="GtkMenuButton" id="TopMenuButton">
+                        <property name="icon-name">open-menu-symbolic</property>
+                        <property name="menu-model">MainMenu</property>
+                    </object>
+                </child>
+            </object>
+        </child>
         <child>
             <object class="GtkOverlay" id="MainOverlay">
                 <property name="child">
@@ -319,22 +350,6 @@
                                 <property name="orientation">vertical</property>
                                 <property name="hexpand">true</property>
                                 <property name="vexpand">true</property>
-                                <child>
-                                    <object class="GtkHeaderBar" id="TopHeaderBar">
-                                        <property name="show-title-buttons">false</property>
-                                        <child type="title">
-                                            <object class="GtkStackSwitcher" id="MainStackSwitcher">
-                                                <property name="stack">settings_stack</property>
-                                            </object>
-                                        </child>
-                                        <child type="end">
-                                            <object class="GtkMenuButton" id="TopMenuButton">
-                                                <property name="icon-name">open-menu-symbolic</property>
-                                                <property name="menu-model">MainMenu</property>
-                                            </object>
-                                        </child>
-                                    </object>
-                                </child>
                                 <child>
                                     <object class="GtkStack" id="settings_stack">
                                         <property name="hexpand">true</property>
