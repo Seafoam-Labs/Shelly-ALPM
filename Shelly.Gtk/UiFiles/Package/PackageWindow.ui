@@ -21,6 +21,9 @@
                             <object class="GtkSearchEntry" id="search_entry">
                                 <property name="placeholder-text" translatable="yes">Search packages...</property>
                                 <property name="width-request">200</property>
+                                <style>
+                                    <class name="spaced-search"/>
+                                </style>
                             </object>
                         </child>
                         <child>
