@@ -1,5 +1,6 @@
 const std = @import("std");
 const appimage = @import("bindings.zig").appimage;
+const xdg_paths = @import("../helpers/xdg_paths.zig").xdg_paths;
 
 pub const AppImageManager = struct {
     allocator: std.mem.Allocator,
@@ -25,6 +26,24 @@ pub const AppImageManager = struct {
             return false;
         };
         defer self.freeAppImage(metadata);
+
+        const existing_images = try self.getAppImagesFromLocalDb();
+        defer self.freeAppImages(existing_images);
+        for (existing_images) |existing| {
+            const name_match = std.ascii.eqlIgnoreCase(existing.name, metadata.name);
+            const desktop_match = existing.desktop_name.len > 0 and metadata.desktop_name.len > 0 and
+                std.ascii.eqlIgnoreCase(existing.desktop_name, metadata.desktop_name);
+            if (name_match or desktop_match) {
+                std.log.warn("AppImage {s} already exists. Overwriting...", .{existing.name});
+                const old_path = if (existing.path.len > 0) existing.path else dest_path;
+                const removed_name = self.cleanDesktopEntries(existing.name, old_path) catch null;
+                if (removed_name) |n| self.allocator.free(n);
+                if (existing.path.len > 0 and !std.mem.eql(u8, existing.path, dest_path)) {
+                    std.Io.Dir.cwd().deleteFile(self.io, existing.path) catch {};
+                }
+                break;
+            }
+        }
 
         try self.addAppImageToLocalDb(metadata);
         return true;
@@ -60,9 +79,34 @@ pub const AppImageManager = struct {
     }
 
     fn extractMetadata(self: AppImageManager, path: []const u8) !?appimage.AppImage {
-        const app_name = std.fs.path.stem(path);
+        const is_rep = path.len >= 4 and std.ascii.eqlIgnoreCase(path[path.len - 4 ..], ".rep");
+        const app_name = if (is_rep)
+            std.fs.path.stem(std.fs.path.stem(path))
+        else
+            std.fs.path.stem(path);
+        const exec_path = if (is_rep) path[0 .. path.len - 4] else path;
+
         const clean_name = try self.cleanInvalidNames(app_name);
         defer self.allocator.free(clean_name);
+
+        cleanup: {
+            const dh = self.xdgDataHome() catch break :cleanup;
+            defer self.allocator.free(dh);
+            const dd = std.fs.path.join(self.allocator, &.{ dh, "applications" }) catch break :cleanup;
+            defer self.allocator.free(dd);
+            var dir = std.Io.Dir.cwd().openDir(self.io, dd, .{ .iterate = true }) catch break :cleanup;
+            defer dir.close(self.io);
+            var dir_it = dir.iterate();
+            while (dir_it.next(self.io) catch null) |entry| {
+                if (entry.kind != .file) continue;
+                const bad_suffix = ".AppImage.desktop";
+                if (entry.name.len < bad_suffix.len) continue;
+                if (!std.ascii.eqlIgnoreCase(entry.name[entry.name.len - bad_suffix.len ..], bad_suffix)) continue;
+                const bad_path = std.fs.path.join(self.allocator, &.{ dd, entry.name }) catch continue;
+                defer self.allocator.free(bad_path);
+                std.Io.Dir.cwd().deleteFile(self.io, bad_path) catch {};
+            }
+        }
 
         var random_suffix: [8]u8 = undefined;
         self.io.random(&random_suffix);
@@ -132,7 +176,7 @@ pub const AppImageManager = struct {
             break :blk try self.installIcon(squashfs_root, clean_name, icon_val);
         } else try self.allocator.dupe(u8, "");
 
-        try self.writeDesktopEntry(clean_name, path, desktop_file_path, squashfs_root, icon_name, desktop_name, description);
+        try self.writeDesktopEntry(clean_name, exec_path, desktop_file_path, squashfs_root, icon_name, desktop_name, description);
 
         const update_info = try self.getAppImageUpdateInfo(path);
 
@@ -153,7 +197,7 @@ pub const AppImageManager = struct {
             .description = owned_description,
             .desktop_name = owned_desktop_name,
             .size_on_disk = (try std.Io.Dir.cwd().statFile(self.io, path, .{})).size,
-            .path = try self.allocator.dupe(u8, path),
+            .path = try self.allocator.dupe(u8, exec_path),
         };
     }
 
@@ -282,7 +326,22 @@ pub const AppImageManager = struct {
             var lines = std.mem.splitScalar(u8, contents, '\n');
             while (lines.next()) |line| {
                 if (std.mem.startsWith(u8, line, "Exec=")) {
-                    try out.writer.print("Exec=\"{s}\"\n", .{exec_path});
+                    const exec_value = line["Exec=".len..];
+                    const trimmed = std.mem.trim(u8, exec_value, " \t");
+                    var tokens = std.mem.splitScalar(u8, trimmed, ' ');
+                    _ = tokens.next(); // skip original executable token
+                    var field_code: ?[]const u8 = null;
+                    while (tokens.next()) |token| {
+                        if (std.mem.startsWith(u8, token, "%")) {
+                            field_code = token;
+                            break;
+                        }
+                    }
+                    if (field_code) |fc| {
+                        try out.writer.print("Exec=\"{s}\" {s}\n", .{ exec_path, fc });
+                    } else {
+                        try out.writer.print("Exec=\"{s}\"\n", .{exec_path});
+                    }
                 } else if (std.mem.startsWith(u8, line, "TryExec=")) {
                     continue;
                 } else if (std.mem.startsWith(u8, line, "Icon=")) {
@@ -409,8 +468,10 @@ pub const AppImageManager = struct {
         try writer.interface.flush();
     }
 
-    pub fn removeAppImage(self: AppImageManager, appimage_path: []const u8) !bool {
+    pub fn removeAppImage(self: AppImageManager, appimage_path: []const u8, remove_config_files: bool) !bool {
         const app_name = std.fs.path.stem(appimage_path);
+        const clean_name = try self.cleanInvalidNames(app_name);
+        defer self.allocator.free(clean_name);
 
         const existing = try self.getAppImagesFromLocalDb();
         var list: std.ArrayList(appimage.AppImage) = .empty;
@@ -431,8 +492,126 @@ pub const AppImageManager = struct {
 
         std.Io.Dir.cwd().deleteFile(self.io, appimage_path) catch {};
 
-        const clean_name = try self.cleanInvalidNames(app_name);
+        const desktop_app_name = self.cleanDesktopEntries(app_name, appimage_path) catch null;
+        defer if (desktop_app_name) |n| self.allocator.free(n);
+
+        const data_home = try xdg_paths.xdgDataHome(self.allocator, self.environ);
+        defer self.allocator.free(data_home);
+        for ([_][]const u8{ "icons/hicolor/scalable/apps", "icons/hicolor/256x256/apps" }) |icon_sub_dir| {
+            const icon_dir = std.fs.path.join(self.allocator, &.{ data_home, icon_sub_dir }) catch continue;
+            defer self.allocator.free(icon_dir);
+            var d = std.Io.Dir.cwd().openDir(self.io, icon_dir, .{ .iterate = true }) catch continue;
+            defer d.close(self.io);
+            var it = d.iterate();
+            while (it.next(self.io) catch null) |entry| {
+                if (entry.kind != .file) continue;
+                if (!std.ascii.eqlIgnoreCase(std.fs.path.stem(entry.name), clean_name)) continue;
+                const icon_path = std.fs.path.join(self.allocator, &.{ icon_dir, entry.name }) catch continue;
+                defer self.allocator.free(icon_path);
+                std.Io.Dir.cwd().deleteFile(self.io, icon_path) catch {};
+            }
+        }
+
+        if (remove_config_files) {
+            self.removeAppConfigDirectories(desktop_app_name);
+        }
+
+        return true;
+    }
+
+    pub fn syncAppImageMeta(self: AppImageManager, app_image_names: []const []const u8) !bool {
+        const db_images = try self.getAppImagesFromLocalDb();
+        defer self.freeAppImages(db_images);
+        var success = true;
+
+        for (app_image_names) |app_name| {
+            const existing: ?appimage.AppImage = blk: {
+                for (db_images) |img| {
+                    if (std.ascii.eqlIgnoreCase(img.name, app_name)) break :blk img;
+                }
+                break :blk null;
+            };
+
+            const dest_name = std.fmt.allocPrint(self.allocator, "{s}.AppImage", .{app_name}) catch {
+                success = false;
+                continue;
+            };
+            defer self.allocator.free(dest_name);
+            const appimage_path = std.fs.path.join(self.allocator, &.{ self.install_directory, dest_name }) catch {
+                success = false;
+                continue;
+            };
+            defer self.allocator.free(appimage_path);
+
+            const file_at_install = (std.Io.Dir.cwd().statFile(self.io, appimage_path, .{}) catch null) != null;
+
+            if (!file_at_install) {
+                const moved = blk: {
+                    if (existing) |ex| {
+                        if (ex.path.len == 0) break :blk false;
+                        const old_exists = (std.Io.Dir.cwd().statFile(self.io, ex.path, .{}) catch null) != null;
+                        if (!old_exists) break :blk false;
+                        std.log.info("Moving AppImage from {s} to {s}", .{ ex.path, appimage_path });
+                        std.Io.Dir.cwd().createDirPath(self.io, self.install_directory) catch {};
+                        self.copyFile(ex.path, appimage_path) catch |err| {
+                            std.log.err("Failed to move AppImage: {s}", .{@errorName(err)});
+                            break :blk false;
+                        };
+                        std.Io.Dir.cwd().deleteFile(self.io, ex.path) catch {};
+                        break :blk true;
+                    }
+                    break :blk false;
+                };
+                if (!moved) {
+                    std.log.warn("AppImage not found at {s}", .{appimage_path});
+                    success = false;
+                    continue;
+                }
+            }
+
+            const new_meta = (try self.extractMetadata(appimage_path)) orelse {
+                std.log.err("Failed to extract metadata for {s}", .{app_name});
+                success = false;
+                continue;
+            };
+            defer self.freeAppImage(new_meta);
+
+            var updated = new_meta;
+            if (existing) |ex| {
+                if (ex.update_url.len > 0) {
+                    updated.update_url = ex.update_url;
+                    updated.update_type = ex.update_type;
+                }
+                if (ex.raw_update_info.len > 0 and new_meta.raw_update_info.len == 0) {
+                    updated.raw_update_info = ex.raw_update_info;
+                }
+                updated.repo_owner = ex.repo_owner;
+                updated.repo_name = ex.repo_name;
+                updated.update_type = ex.update_type;
+                updated.allow_prerelease = ex.allow_prerelease;
+            } else {
+                if (new_meta.raw_update_info.len > 0 and new_meta.update_url.len == 0) {
+                    updated.update_type = .static_url;
+                }
+            }
+
+            try self.addAppImageToLocalDb(updated);
+            self.migrateDesktopEntry(updated) catch |err| {
+                std.log.warn("Could not migrate desktop entry for {s}: {s}", .{ app_name, @errorName(err) });
+            };
+        }
+
+        return success;
+    }
+
+    fn migrateDesktopEntry(self: AppImageManager, ai: appimage.AppImage) !void {
+        const clean_name = try self.cleanInvalidNames(ai.name);
         defer self.allocator.free(clean_name);
+
+        const new_exec_filename = try std.fmt.allocPrint(self.allocator, "{s}.AppImage", .{ai.name});
+        defer self.allocator.free(new_exec_filename);
+        const new_exec_path = try std.fs.path.join(self.allocator, &.{ self.install_directory, new_exec_filename });
+        defer self.allocator.free(new_exec_path);
 
         const data_home = try self.xdgDataHome();
         defer self.allocator.free(data_home);
@@ -443,10 +622,178 @@ pub const AppImageManager = struct {
         defer self.allocator.free(desktop_file_name);
         const desktop_file_path = try std.fs.path.join(self.allocator, &.{ desktop_dir, desktop_file_name });
         defer self.allocator.free(desktop_file_path);
-        std.Io.Dir.cwd().deleteFile(self.io, desktop_file_path) catch {};
+
+        std.Io.Dir.cwd().statFile(self.io, desktop_file_path, .{}) catch return;
+
+        const contents = try self.readFileAllocOwned(desktop_file_path);
+        defer self.allocator.free(contents);
+
+        var out: std.Io.Writer.Allocating = .init(self.allocator);
+        defer out.deinit();
+
+        var updated = false;
+        var lines = std.mem.splitScalar(u8, contents, '\n');
+        while (lines.next()) |line| {
+            if (std.mem.startsWith(u8, line, "Exec=")) {
+                const current_exec = std.mem.trim(u8, line["Exec=".len..], " \t");
+                if (std.mem.indexOf(u8, current_exec, new_exec_path) != null) {
+                    try out.writer.print("{s}\n", .{line});
+                    continue;
+                }
+                var tokens = std.mem.splitScalar(u8, current_exec, ' ');
+                _ = tokens.next(); // skip existing executable
+                var field_code: ?[]const u8 = null;
+                while (tokens.next()) |token| {
+                    if (std.mem.startsWith(u8, token, "%")) {
+                        field_code = token;
+                        break;
+                    }
+                }
+                if (field_code) |fc| {
+                    try out.writer.print("Exec=\"{s}\" {s}\n", .{ new_exec_path, fc });
+                } else {
+                    try out.writer.print("Exec=\"{s}\"\n", .{new_exec_path});
+                }
+                updated = true;
+            } else {
+                try out.writer.print("{s}\n", .{line});
+            }
+        }
+
+        if (updated) {
+            var file = try std.Io.Dir.cwd().createFile(self.io, desktop_file_path, .{});
+            defer file.close(self.io);
+            var write_buf: [4096]u8 = undefined;
+            var writer = file.writer(self.io, &write_buf);
+            try writer.interface.writeAll(out.written());
+            try writer.interface.flush();
+        }
+
         self.updateDesktopDatabase(desktop_dir);
 
-        return true;
+        if (ai.icon_name.len > 0) {
+            self.updateIconCache(data_home);
+        }
+    }
+
+    fn cleanDesktopEntries(self: AppImageManager, app_name: []const u8, app_path: []const u8) !?[]u8 {
+        const clean_name = try self.cleanInvalidNames(app_name);
+        defer self.allocator.free(clean_name);
+
+        const data_home = try xdg_paths.xdgDataHome(self.allocator, self.environ);
+        defer self.allocator.free(data_home);
+        const desktop_dir = try std.fs.path.join(self.allocator, &.{ data_home, "applications" });
+        defer self.allocator.free(desktop_dir);
+
+        var d = std.Io.Dir.cwd().openDir(self.io, desktop_dir, .{ .iterate = true }) catch return null;
+        defer d.close(self.io);
+
+        var desktop_app_name: ?[]u8 = null;
+
+        var it = d.iterate();
+        while (try it.next(self.io)) |entry| {
+            if (entry.kind != .file) continue;
+            if (!std.mem.endsWith(u8, entry.name, ".desktop")) continue;
+
+            const df_path = try std.fs.path.join(self.allocator, &.{ desktop_dir, entry.name });
+            defer self.allocator.free(df_path);
+
+            const expected_name = try std.fmt.allocPrint(self.allocator, "{s}.desktop", .{clean_name});
+            defer self.allocator.free(expected_name);
+            const is_name_match = std.ascii.eqlIgnoreCase(entry.name, expected_name);
+
+            const contents: ?[]u8 = blk: {
+                const c = self.readFileAllocOwned(df_path) catch break :blk null;
+                break :blk c;
+            };
+            defer if (contents) |c| self.allocator.free(c);
+
+            var is_exec_match = false;
+            if (contents) |c| {
+                var file_lines = std.mem.splitScalar(u8, c, '\n');
+                find_exec: while (file_lines.next()) |fl| {
+                    if (!std.mem.startsWith(u8, fl, "Exec=")) continue;
+                    if (std.mem.indexOf(u8, fl, app_path) != null) {
+                        is_exec_match = true;
+                        break :find_exec;
+                    }
+                    const quoted = std.fmt.allocPrint(self.allocator, "\"{s}\"", .{app_path}) catch continue;
+                    defer self.allocator.free(quoted);
+                    if (std.mem.indexOf(u8, fl, quoted) != null) {
+                        is_exec_match = true;
+                        break :find_exec;
+                    }
+                }
+            }
+
+            if (!is_name_match and !is_exec_match) continue;
+
+            if (desktop_app_name == null) {
+                if (contents) |c| {
+                    var name_lines = std.mem.splitScalar(u8, c, '\n');
+                    while (name_lines.next()) |nl| {
+                        if (std.mem.startsWith(u8, nl, "Name=")) {
+                            const val = std.mem.trim(u8, nl["Name=".len..], " \t\r\n");
+                            desktop_app_name = try self.allocator.dupe(u8, val);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            std.Io.Dir.cwd().deleteFile(self.io, df_path) catch |err| {
+                std.log.warn("Failed to remove desktop entry {s}: {s}", .{ df_path, @errorName(err) });
+            };
+            self.updateDesktopDatabase(desktop_dir);
+        }
+
+        return desktop_app_name;
+    }
+
+    fn removeAppConfigDirectories(self: AppImageManager, desktop_app_name: ?[]const u8) void {
+        const name = desktop_app_name orelse return;
+        if (name.len == 0) return;
+
+        const normalized_key = self.normalizeForConfig(name) catch return;
+        defer self.allocator.free(normalized_key);
+
+        const config_home = xdg_paths.xdgConfigHome(self.allocator, self.environ) catch return;
+        defer self.allocator.free(config_home);
+        const data_home = xdg_paths.xdgDataHome(self.allocator, self.environ) catch return;
+        defer self.allocator.free(data_home);
+        const cache_home = xdg_paths.xdgCacheHome(self.allocator, self.environ) catch return;
+        defer self.allocator.free(cache_home);
+        const state_home = xdg_paths.xdgStateHome(self.allocator, self.environ) catch return;
+        defer self.allocator.free(state_home);
+
+        for ([_][]const u8{ config_home, data_home, cache_home, state_home }) |root| {
+            var dir = std.Io.Dir.cwd().openDir(self.io, root, .{ .iterate = true }) catch continue;
+            defer dir.close(self.io);
+            var dir_it = dir.iterate();
+            while (dir_it.next(self.io) catch null) |entry| {
+                if (entry.kind != .directory) continue;
+                const norm = self.normalizeForConfig(entry.name) catch continue;
+                defer self.allocator.free(norm);
+                if (!std.mem.eql(u8, norm, normalized_key)) continue;
+                const dir_path = std.fs.path.join(self.allocator, &.{ root, entry.name }) catch continue;
+                defer self.allocator.free(dir_path);
+                std.Io.Dir.cwd().deleteTree(self.io, dir_path) catch |err| {
+                    std.log.warn("Could not remove config directory {s}: {s}", .{ dir_path, @errorName(err) });
+                };
+            }
+        }
+    }
+
+    fn normalizeForConfig(self: AppImageManager, name: []const u8) ![]u8 {
+        var buf = try self.allocator.alloc(u8, name.len);
+        errdefer self.allocator.free(buf);
+        var len: usize = 0;
+        for (name) |c| {
+            if (c == '-' or c == '_' or c == ' ') continue;
+            buf[len] = std.ascii.toLower(c);
+            len += 1;
+        }
+        return self.allocator.realloc(buf, len);
     }
 
     fn cleanInvalidNames(self: AppImageManager, name: []const u8) ![]u8 {
@@ -457,12 +804,6 @@ pub const AppImageManager = struct {
             if (c.* == ' ' or c.* == '/' or c.* == '\\') c.* = '-';
         }
         return buf;
-    }
-
-    fn xdgDataHome(self: AppImageManager) ![]u8 {
-        if (self.environ.getPosix("XDG_DATA_HOME")) |v| return try self.allocator.dupe(u8, v);
-        const home: []const u8 = self.environ.getPosix("HOME") orelse return error.HomeNotSet;
-        return std.fs.path.join(self.allocator, &.{ home, ".local", "share" });
     }
 
     fn freeAppImage(self: AppImageManager, appimage_struct: appimage.AppImage) void {
@@ -543,31 +884,6 @@ test "cleanInvalidNames handles empty string" {
     const result = try manager.cleanInvalidNames("");
     defer allocator.free(result);
     try std.testing.expectEqualStrings("", result);
-}
-
-test "xdgDataHome falls back to HOME/.local/share when XDG_DATA_HOME unset" {
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-
-    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
-    const db_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
-    defer std.testing.allocator.free(db_path);
-
-    const full_db_path = try std.fs.path.join(std.testing.allocator, &.{ db_path, "nonexistent.db" });
-    defer std.testing.allocator.free(full_db_path);
-
-    const manager = AppImageManager{
-        .allocator = std.testing.allocator,
-        .io = std.testing.io,
-        .environ = std.testing.environ,
-        .install_directory = db_path,
-        .local_db_path = full_db_path,
-    };
-    const allocator = std.testing.allocator;
-    const path = try manager.xdgDataHome();
-    defer allocator.free(path);
-    try std.testing.expect(path.len > 0);
 }
 
 test "getAppImagesFromLocalDb returns empty when db file does not exist" {
@@ -733,7 +1049,7 @@ test "removeAppImage removes matching entry from db by name" {
     try manager.addAppImageToLocalDb(.{ .name = "RemoveMe", .desktop_name = "RemoveMe", .path = fake_appimage_path });
     try manager.addAppImageToLocalDb(.{ .name = "KeepMe", .desktop_name = "KeepMe", .path = "/fake/keep" });
 
-    const removed = try manager.removeAppImage(fake_appimage_path);
+    const removed = try manager.removeAppImage(fake_appimage_path, false);
     try std.testing.expect(removed);
 
     const result = try manager.getAppImagesFromLocalDb();
@@ -785,32 +1101,3 @@ test "copyFile duplicates file contents" {
 
     try std.testing.expectEqualStrings("hello from the test file", contents);
 }
-
-// test "manual: installAppImage with a real AppImage file" {
-//     var tmp = std.testing.tmpDir(.{});
-//     defer tmp.cleanup();
-
-//     var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-//     const len = try tmp.dir.realPath(std.testing.io, &path_buf);
-
-//     const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
-//     defer std.testing.allocator.free(dir_path);
-
-//     const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
-//     defer std.testing.allocator.free(db_path);
-
-//     const manager = AppImageManager{
-//         .allocator = std.testing.allocator,
-//         .io = std.testing.io,
-//         .environ = std.testing.environ,
-//         .install_directory = dir_path,
-//         .local_db_path = db_path,
-//     };
-
-//     const result = try manager.installAppImage("/home/caro/Downloads/osu.AppImage");
-//     try std.testing.expect(result);
-
-//     const db = try manager.getAppImagesFromLocalDb();
-//     defer manager.freeAppImages(db);
-//     try std.testing.expect(db.len == 1);
-// }
