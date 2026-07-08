@@ -22,7 +22,7 @@ public class ShellyConfig
     public bool UseOldMenu { get; set; }
     public bool TrayEnabled { get; set; } = true;
     public int TrayCheckIntervalHours { get; set; } = 72;
-    public bool NoConfirm { get; set; }
+    public NoConfirmSettings NoConfirmSettings { get; set; } = new();
     public bool NewInstall { get; set; } = true;
     public string CurrentVersion { get; set; } = "0.0.0.0";
     public bool UseWeeklySchedule { get; set; }

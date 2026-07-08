@@ -14,6 +14,11 @@ namespace Shelly.Cli.Commands.Standard;
 
 public class Install : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for install actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmInstall ?? false || NoConfirm;
+
     private bool BuildDeps { get; set; }
 
     private bool MakeDeps { get; set; }
@@ -104,7 +109,7 @@ public class Install : GlobalSettingsCommand
     {
         console.WriteLine(Colorize($"Packages to install: {string.Join(", ", packageList)}", ConsoleColor.Yellow));
 
-        if (!NoConfirm && !Confirm.Execute("Do you want to proceed?"))
+        if (!EffectiveNoConfirm && !Confirm.Execute("Do you want to proceed?"))
         {
             console.WriteLine(Colorize("Operation cancelled.", ConsoleColor.Yellow));
             return;
@@ -184,7 +189,7 @@ public class Install : GlobalSettingsCommand
 
         Task<bool> RunOutput(Func<IAlpmManager, Task<bool>> op)
         {
-            return StandardSinglePaneOutput.Output(console, manager, op, NoConfirm);
+            return StandardSinglePaneOutput.Output(console, manager, op, EffectiveNoConfirm);
         }
     }
 
@@ -202,7 +207,7 @@ public class Install : GlobalSettingsCommand
             console.WriteLine(Colorize("Initializing ALPM...", ConsoleColor.Yellow));
             manager.Initialize();
             var result = await StandardSinglePaneOutput.Output(console, manager,
-                x => x.InstallLocalPackage(Path.GetFullPath(location)), NoConfirm);
+                x => x.InstallLocalPackage(Path.GetFullPath(location)), EffectiveNoConfirm);
             if (!result)
                 console.WriteLine(Colorize("Installation failed. See errors above.", ConsoleColor.Red));
             return;
@@ -269,7 +274,7 @@ public class Install : GlobalSettingsCommand
     {
         using var manager = new AlpmManager();
         manager.Initialize(true);
-        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
 
         if (Upgrade)
         {
@@ -324,7 +329,7 @@ public class Install : GlobalSettingsCommand
         if (await FileInspector.IsArchPackage(location))
         {
             using var manager = new AlpmManager();
-            manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
+            manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
             manager.Initialize();
 
             UiFrames.TxStart($"Installing local package: {location}");

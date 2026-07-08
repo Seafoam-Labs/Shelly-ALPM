@@ -224,7 +224,7 @@ public sealed class RemoveLocal(
 
         if (selectedPackages.Count != 0)
         {
-            if (!configService.LoadConfig().NoConfirm)
+            if (!configService.LoadConfig().NoConfirmSettings.Resolve(configService.LoadConfig().NoConfirmSettings.Remove))
             {
                 var args = new GenericQuestionEventArgs(
                     "Remove Packages?", string.Join("\n", selectedPackages)

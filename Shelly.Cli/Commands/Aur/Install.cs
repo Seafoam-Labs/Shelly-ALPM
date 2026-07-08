@@ -7,6 +7,11 @@ namespace Shelly.Cli.Commands.Aur;
 
 public class Install : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for aurinstall actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmAurInstall ?? false || NoConfirm;
+
     private bool BuildDeps { get; set; }
 
     private bool MakeDeps { get; set; }
@@ -74,7 +79,7 @@ public class Install : GlobalSettingsCommand
         console.WriteLine(AnsiUtilities.Colorize(
             $"AUR packages to install: {string.Join(", ", packageList)}", ConsoleColor.Yellow));
 
-        if (!NoConfirm && !Confirm.Execute("Do you want to proceed?"))
+        if (!EffectiveNoConfirm && !Confirm.Execute("Do you want to proceed?"))
         {
             console.WriteLine(AnsiUtilities.Colorize("Operation cancelled.", ConsoleColor.Yellow));
             return;
@@ -97,7 +102,7 @@ public class Install : GlobalSettingsCommand
                 ConsoleColor.Yellow));
 
             var depsResult = await AurSinglePaneOutput.Output(console, manager,
-                m => m.InstallDependenciesOnly(packageList.First(), MakeDeps), NoConfirm);
+                m => m.InstallDependenciesOnly(packageList.First(), MakeDeps), EffectiveNoConfirm);
 
             console.WriteLine(depsResult
                 ? AnsiUtilities.Colorize("Dependencies installed successfully!", ConsoleColor.Green)
@@ -109,7 +114,7 @@ public class Install : GlobalSettingsCommand
             $"Installing AUR packages: {string.Join(", ", packageList)}", ConsoleColor.Yellow));
 
         var result = await AurSinglePaneOutput.Output(console, manager,
-            m => m.InstallPackages(packageList), NoConfirm);
+            m => m.InstallPackages(packageList), EffectiveNoConfirm);
 
         console.WriteLine(result
             ? AnsiUtilities.Colorize("Installation complete.", ConsoleColor.Green)
@@ -127,8 +132,8 @@ public class Install : GlobalSettingsCommand
         using var manager = new AurPackageManager();
         await manager.Initialize(root: true, useChroot: UseChroot, noCheck: !Check);
 
-        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
-        manager.PkgbuildDiffRequest += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
+        manager.PkgbuildDiffRequest += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
 
         var packageList = Package.ToList();
 

@@ -12,6 +12,11 @@ namespace Shelly.Cli.Commands.Standard;
 
 public class Upgrade : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for upgrade actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmUpgrade ?? false || NoConfirm;
+
     public static Command Create()
     {
         var command = new Command("upgrade", "Perform a full system upgrade");
@@ -71,14 +76,14 @@ public class Upgrade : GlobalSettingsCommand
         console.WriteLine(Colorize($"Net Upgrade Size: {upgradeSize}", ConsoleColor.DarkGreen));
         console.WriteLine();
 
-        if (!NoConfirm && !Confirm.Execute("Proceed with upgrade?", false))
+        if (!EffectiveNoConfirm && !Confirm.Execute("Proceed with upgrade?", DefaultYes))
         {
             console.WriteLine(Colorize("Upgrade cancelled.", ConsoleColor.Red));
             return;
         }
 
         console.WriteLine(Colorize("Starting System Upgrade...", ConsoleColor.Green));
-        var upgradeResult = await StandardSinglePaneOutput.Output(console, manager, x => x.SyncSystemUpdate(), NoConfirm);
+        var upgradeResult = await StandardSinglePaneOutput.Output(console, manager, x => x.SyncSystemUpdate(), EffectiveNoConfirm);
         manager.Dispose();
 
         console.WriteLine(upgradeResult
@@ -91,7 +96,7 @@ public class Upgrade : GlobalSettingsCommand
         UiFrames.Info("Performing full system upgrade...");
 
         using var manager = new AlpmManager();
-        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
 
         UiFrames.Info("Initializing and syncing repositories...");
         manager.IntializeWithSync();

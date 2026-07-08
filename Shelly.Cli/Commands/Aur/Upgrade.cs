@@ -10,6 +10,11 @@ namespace Shelly.Cli.Commands.Aur;
 
 public class Upgrade : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for aurupgrade actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmAurUpgrade ?? false || NoConfirm;
+
     private static readonly Option<bool> CheckOption =
         new("--check") { Description = "Run the check() function during AUR package builds (disabled by default)" };
 
@@ -65,7 +70,7 @@ public class Upgrade : GlobalSettingsCommand
         foreach (var pkg in updates)
             console.WriteLine($"  {pkg.Name}: {pkg.Version} -> {pkg.NewVersion}");
 
-        if (!NoConfirm && !Confirm.Execute("Proceed with upgrade?", false))
+        if (!EffectiveNoConfirm && !Confirm.Execute("Proceed with upgrade?", DefaultYes))
         {
             console.WriteLine(Color("Upgrade cancelled.", ConsoleColor.Red));
             return;
@@ -73,7 +78,7 @@ public class Upgrade : GlobalSettingsCommand
 
         var packageNames = updates.Select(u => u.Name).ToList();
         var result = await AurSinglePaneOutput.Output(
-            console, manager, m => m.UpdatePackages(packageNames), NoConfirm);
+            console, manager, m => m.UpdatePackages(packageNames), EffectiveNoConfirm);
 
         console.WriteLine(result
             ? Color("Upgrade complete.", ConsoleColor.Green)
@@ -92,8 +97,8 @@ public class Upgrade : GlobalSettingsCommand
             return;
         }
 
-        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
-        manager.PkgbuildDiffRequest += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
+        manager.PkgbuildDiffRequest += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
 
         JsonPackFrame.WriteToStdout<Event>(new AlpmInformationalEvent(
             AlpmEvents.AurDownloadStart,

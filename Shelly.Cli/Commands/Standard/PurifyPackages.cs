@@ -8,6 +8,11 @@ namespace Shelly.Cli.Commands.Standard;
 
 public class PurifyPackages : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for purify actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmPurify ?? false || NoConfirm;
+
     private bool DryRun { get; set; }
 
     private bool Orphans { get; set; }
@@ -43,7 +48,7 @@ public class PurifyPackages : GlobalSettingsCommand
         RootElevator.EnsureRootExectuion();
 
 
-        if (!NoConfirm && !DryRun && !Confirm.Execute("Do you want to proceed with the operation?"))
+        if (!EffectiveNoConfirm && !DryRun && !Confirm.Execute("Do you want to proceed with the operation?"))
         {
             console.WriteLine(Colorize("Operation Cancelled.", ConsoleColor.Yellow));
             return;

@@ -9,6 +9,11 @@ namespace Shelly.Cli.Commands.Standard;
 
 public class Update : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for upgrade actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmUpgrade ?? false || NoConfirm;
+
     private string[] Packages { get; set; } = [];
 
     public static Command Create()
@@ -49,7 +54,7 @@ public class Update : GlobalSettingsCommand
 
         console.WriteLine(Colorize($"Packages to update: {string.Join(", ", Packages)}", ConsoleColor.Yellow));
 
-        if (!NoConfirm)
+        if (!EffectiveNoConfirm)
         {
             console.WriteLine(Colorize(
                 "WARNING: Updating individual packages is a partial upgrade and is strongly discouraged on Arch Linux.",
@@ -71,7 +76,7 @@ public class Update : GlobalSettingsCommand
         manager.IntializeWithSync();
 
         console.WriteLine(Colorize("Updating packages...", ConsoleColor.Yellow));
-        var result = await StandardSinglePaneOutput.Output(console, manager, m => m.UpdatePackages(Packages.ToList()), NoConfirm);
+        var result = await StandardSinglePaneOutput.Output(console, manager, m => m.UpdatePackages(Packages.ToList()), EffectiveNoConfirm);
 
         console.WriteLine(result
             ? Colorize("Packages updated successfully!", ConsoleColor.Green)
@@ -87,7 +92,7 @@ public class Update : GlobalSettingsCommand
         }
 
         using var manager = new AlpmManager();
-        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
         manager.IntializeWithSync();
 
         UiFrames.TxStart($"Updating packages: {string.Join(", ", Packages)}");

@@ -8,6 +8,11 @@ namespace Shelly.Cli.Commands.Standard;
 
 public class Mark : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for mark actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmMark ?? false || NoConfirm;
+
     private bool Explicit { get; set; }
 
     private bool Depends { get; set; }
@@ -57,7 +62,7 @@ public class Mark : GlobalSettingsCommand
 
         RootElevator.EnsureRootExectuion();
 
-        if (!NoConfirm && !Confirm.Execute("Do you want to proceed with the operation?"))
+        if (!EffectiveNoConfirm && !Confirm.Execute("Do you want to proceed with the operation?"))
         {
             console.WriteLine(Colorize("Operation Cancelled.", ConsoleColor.Yellow));
             return;

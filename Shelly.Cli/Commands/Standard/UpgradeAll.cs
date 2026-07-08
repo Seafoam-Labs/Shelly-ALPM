@@ -23,6 +23,11 @@ namespace Shelly.Cli.Commands.Standard;
 
 public class UpgradeAll : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for upgrade actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmUpgrade ?? false || NoConfirm;
+
     private static readonly Option<bool> NoRepoOption =
         new("--no-repo") { Description = "Skip the standard repository (ALPM) upgrade" };
 
@@ -93,7 +98,7 @@ public class UpgradeAll : GlobalSettingsCommand
 
             RenderPlan(console, plan);
 
-            if (!NoConfirm && !Confirm.Execute("Proceed with all upgrades?", false))
+            if (!EffectiveNoConfirm && !Confirm.Execute("Proceed with all upgrades?", DefaultYes))
             {
                 console.WriteLine(Colorize("Upgrade cancelled.", ConsoleColor.Red));
                 return;
@@ -351,7 +356,7 @@ public class UpgradeAll : GlobalSettingsCommand
     private List<string> BuildFlatpakArgs()
     {
         var args = new List<string> { "flatpak", "upgrade" };
-        if (NoConfirm)
+        if (EffectiveNoConfirm)
             args.Add("--no-confirm");
         if (JsonOutput)
             args.Add("--json");
@@ -362,7 +367,7 @@ public class UpgradeAll : GlobalSettingsCommand
 
     private async ValueTask RunChild(GlobalSettingsCommand child, IShellyConsole? console, bool isStandardUpgrade = false)
     {
-        child.NoConfirm = NoConfirm || isStandardUpgrade;
+        child.EffectiveNoConfirm = EffectiveNoConfirm || isStandardUpgrade;
         child.UiMode = UiMode;
         child.JsonOutput = JsonOutput;
         child.Verbose = Verbose;

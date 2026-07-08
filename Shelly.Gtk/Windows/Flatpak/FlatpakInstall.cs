@@ -1174,7 +1174,7 @@ public class FlatpakInstall(
 
     private async Task InstallSelectedAsync()
     {
-        if (!configService.LoadConfig().NoConfirm)
+        if (!configService.LoadConfig().NoConfirmSettings.Resolve(configService.LoadConfig().NoConfirmSettings.FlatpakInstall))
         {
             var args = new GenericQuestionEventArgs(
                 Translations.T("Install Package?"), _selectedPackage.Id
@@ -1247,7 +1247,7 @@ public class FlatpakInstall(
         
         var selectedRemote = remote ?? _selectedRemote;
         
-        if (!configService.LoadConfig().NoConfirm)
+        if (!configService.LoadConfig().NoConfirmSettings.Resolve(configService.LoadConfig().NoConfirmSettings.FlatpakInstall))
         {
             var args = new GenericQuestionEventArgs(
                 Translations.T("Install Package?"), id

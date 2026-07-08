@@ -398,7 +398,7 @@ public class AurUpdate(
 
         if (selectedPackages.Count != 0)
         {
-            if (!configService.LoadConfig().NoConfirm)
+            if (!configService.LoadConfig().NoConfirmSettings.Resolve(configService.LoadConfig().NoConfirmSettings.AurUpgrade))
             {
                 var args = new GenericQuestionEventArgs(
                     T("Update Packages?"), string.Join("\n", selectedPackages)

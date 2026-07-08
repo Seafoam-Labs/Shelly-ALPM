@@ -920,7 +920,7 @@ public class PackageUpdate(
 
         if (selectedPackages.Count != 0)
         {
-            if (!configService.LoadConfig().NoConfirm)
+            if (!configService.LoadConfig().NoConfirmSettings.Resolve(configService.LoadConfig().NoConfirmSettings.Upgrade))
             {
                 var args = new GenericQuestionEventArgs(
                     T("Update Packages?"),

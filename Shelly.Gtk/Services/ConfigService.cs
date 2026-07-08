@@ -46,7 +46,9 @@ public class ConfigService : IConfigService
         CallCliConfigSet(nameof(config.UseOldMenu), config.UseOldMenu.ToString());
         CallCliConfigSet(nameof(config.TrayEnabled), config.TrayEnabled.ToString());
         CallCliConfigSet(nameof(config.TrayCheckIntervalHours), config.TrayCheckIntervalHours.ToString());
-        CallCliConfigSet(nameof(config.NoConfirm), config.NoConfirm.ToString());
+        // NoConfirmSettings - save as a JSON object via a single config key
+        var noConfirmJson = System.Text.Json.JsonSerializer.Serialize(config.NoConfirmSettings);
+        CallCliConfigSet("NoConfirmSettings", noConfirmJson);
         CallCliConfigSet(nameof(config.NewInstall), config.NewInstall.ToString());
         CallCliConfigSet(nameof(config.CurrentVersion), config.CurrentVersion);
         CallCliConfigSet(nameof(config.UseWeeklySchedule), config.UseWeeklySchedule.ToString());

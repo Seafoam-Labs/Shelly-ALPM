@@ -362,7 +362,7 @@ public class AurRemove(
 
         if (selectedPackages.Count != 0)
         {
-            if (!configService.LoadConfig().NoConfirm)
+            if (!configService.LoadConfig().NoConfirmSettings.Resolve(configService.LoadConfig().NoConfirmSettings.AurRemove))
             {
                 var args = new GenericQuestionEventArgs(
                     T("Remove Packages?"), string.Join("\n", selectedPackages)

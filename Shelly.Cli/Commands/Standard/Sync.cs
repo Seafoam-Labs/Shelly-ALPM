@@ -7,6 +7,11 @@ namespace Shelly.Cli.Commands.Standard;
 
 public class Sync : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for upgrade actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmUpgrade ?? false || NoConfirm;
+
     private bool Force { get; set; }
 
     public static Command Create()
@@ -47,7 +52,7 @@ public class Sync : GlobalSettingsCommand
             {
                 m.Sync(Force);
                 return Task.FromResult(true);
-            }, NoConfirm);
+            }, EffectiveNoConfirm);
 
         console.WriteLine(result
             ? Colorize("Package databases synchronized successfully!", ConsoleColor.Green)
@@ -57,7 +62,7 @@ public class Sync : GlobalSettingsCommand
     public override async ValueTask ExecuteUiMode()
     {
         using var manager = new AlpmManager();
-        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
         manager.Initialize(true);
 
         UiFrames.TxStart("Synchronizing package databases...");

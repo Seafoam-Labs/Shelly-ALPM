@@ -152,6 +152,10 @@ public static class ConfigManager
                         .ToList();
                 }
             }
+            else if (targetType == typeof(NoConfirmSettings))
+            {
+                convertedValue = JsonSerializer.Deserialize<NoConfirmSettings>(value) ?? new NoConfirmSettings();
+            }
             else if (targetType.IsEnum)
             {
                 if (!Enum.TryParse(targetType, value, true, out convertedValue))
@@ -329,9 +333,45 @@ public static class ConfigManager
                 config.TrayCheckIntervalHours = interval.GetInt32();
             }
 
-            if (root.TryGetProperty("NoConfirm", out var noConfirm))
+            if (root.TryGetProperty("NoConfirmSettings", out var noConfirmSettings) && noConfirmSettings.ValueKind == JsonValueKind.Object)
             {
-                config.NoConfirm = noConfirm.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("All", out var all))
+                    config.NoConfirmSettings.All = all.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("Upgrade", out var upgrade))
+                    config.NoConfirmSettings.Upgrade = upgrade.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("Install", out var install))
+                    config.NoConfirmSettings.Install = install.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("Remove", out var remove))
+                    config.NoConfirmSettings.Remove = remove.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("Downgrade", out var downgrade))
+                    config.NoConfirmSettings.Downgrade = downgrade.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("AurInstall", out var aurInstall))
+                    config.NoConfirmSettings.AurInstall = aurInstall.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("AurRemove", out var aurRemove))
+                    config.NoConfirmSettings.AurRemove = aurRemove.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("AurUpgrade", out var aurUpgrade))
+                    config.NoConfirmSettings.AurUpgrade = aurUpgrade.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("FlatpakInstall", out var flatpakInstall))
+                    config.NoConfirmSettings.FlatpakInstall = flatpakInstall.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("FlatpakRemove", out var flatpakRemove))
+                    config.NoConfirmSettings.FlatpakRemove = flatpakRemove.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("FlatpakUpgrade", out var flatpakUpgrade))
+                    config.NoConfirmSettings.FlatpakUpgrade = flatpakUpgrade.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("AppImageRemove", out var appImageRemove))
+                    config.NoConfirmSettings.AppImageRemove = appImageRemove.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("AppImageUpgrade", out var appImageUpgrade))
+                    config.NoConfirmSettings.AppImageUpgrade = appImageUpgrade.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("Purify", out var purify))
+                    config.NoConfirmSettings.Purify = purify.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("Mark", out var mark))
+                    config.NoConfirmSettings.Mark = mark.GetBoolean();
+                if (noConfirmSettings.TryGetProperty("DefaultYesPrompt", out var defaultYes))
+                    config.NoConfirmSettings.DefaultYesPrompt = defaultYes.GetBoolean();
+            }
+            else if (root.TryGetProperty("NoConfirm", out var noConfirm))
+            {
+                // Backward compatibility: old single bool maps to All
+                config.NoConfirmSettings.All = noConfirm.GetBoolean();
             }
 
             if (root.TryGetProperty("NewInstall", out var newInstall))

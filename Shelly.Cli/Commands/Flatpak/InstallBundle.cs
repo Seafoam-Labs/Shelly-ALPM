@@ -8,6 +8,11 @@ namespace Shelly.Cli.Commands.Flatpak;
 
 public class InstallBundle : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for flatpakinstall actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmFlatpakInstall ?? false || NoConfirm;
+
     private string BundlePath { get; set; } = string.Empty;
     private bool SystemWide { get; set; }
 
@@ -48,7 +53,7 @@ public class InstallBundle : GlobalSettingsCommand
         console.WriteLine(Colorize("Installing flatpak bundle...", ConsoleColor.Yellow));
         var manager = new FlatpakManager();
         await FlatpakSinglePaneOutput.Output(console, manager,
-            x => x.InstallAppFromBundle(BundlePath, SystemWide ? InstallLevel.System : InstallLevel.User), NoConfirm);
+            x => x.InstallAppFromBundle(BundlePath, SystemWide ? InstallLevel.System : InstallLevel.User), EffectiveNoConfirm);
     }
 
     public override async ValueTask ExecuteUiMode()

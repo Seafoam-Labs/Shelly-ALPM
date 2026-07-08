@@ -9,6 +9,11 @@ namespace Shelly.Cli.Commands.Flatpak;
 
 public class Install : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for flatpakinstall actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmFlatpakInstall ?? false || NoConfirm;
+
     private string Package { get; set; } = string.Empty;
     private bool IsUser { get; set; }
     private string? Remote { get; set; }
@@ -107,7 +112,7 @@ public class Install : GlobalSettingsCommand
 
         await FlatpakSinglePaneOutput.Output(console, manager,
             x => x.InstallApp(packageToInstall, IsUser ? InstallLevel.User : InstallLevel.System, Branch ?? "stable",
-                remoteToUse, IsRuntime), NoConfirm);
+                remoteToUse, IsRuntime), EffectiveNoConfirm);
     }
 
     public override async ValueTask ExecuteUiMode()

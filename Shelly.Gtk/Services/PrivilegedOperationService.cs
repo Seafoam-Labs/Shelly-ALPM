@@ -12,7 +12,7 @@ public class PrivilegedOperationService(
     IPackageUpdateNotifier packageUpdateNotifier,
     IDirtyService dirtyService) : IPrivilegedOperationService
 {
-    private readonly bool _noConfirm = configService.LoadConfig().NoConfirm;
+    private NoConfirmSettings NoConfirmSettings => configService.LoadConfig().NoConfirmSettings;
 
     public async Task<OperationResult> SyncDatabasesAsync()
     {
@@ -25,7 +25,7 @@ public class PrivilegedOperationService(
         var args = new List<string> { "install" };
         args.AddRange(packages);
         if (upgrade) args.Add("-u");
-        if (_noConfirm) args.Add("--no-confirm");
+        if (NoConfirmSettings.Resolve(NoConfirmSettings.Install)) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Install packages", args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
@@ -35,7 +35,7 @@ public class PrivilegedOperationService(
     public async Task<OperationResult> InstallLocalPackageAsync(string filePath)
     {
         var args = new List<string> { "install", filePath };
-        if (_noConfirm) args.Add("--no-confirm");
+        if (NoConfirmSettings.Resolve(NoConfirmSettings.Install)) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Install local package", args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
@@ -50,7 +50,7 @@ public class PrivilegedOperationService(
         args.Add($"-c={isCascade}");
         if (isCleanup) args.Add("-r");
         if (removeOptionalDeps) args.Add("-o");
-        if (_noConfirm) args.Add("--no-confirm");
+        if (NoConfirmSettings.Resolve(NoConfirmSettings.Remove)) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Remove packages", args.ToArray());
         if (result.Success && removePackageFromCache) _ = await RemovePackageCacheAsync(packages);
@@ -62,7 +62,7 @@ public class PrivilegedOperationService(
     {
         var args = new List<string> { "remove" };
         args.AddRange(packages);
-        if (_noConfirm) args.Add("--no-confirm");
+        if (NoConfirmSettings.Resolve(NoConfirmSettings.Remove)) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Remove local packages", args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Native);
@@ -73,7 +73,7 @@ public class PrivilegedOperationService(
     {
         var args = new List<string> { "update" };
         args.AddRange(packages);
-        if (_noConfirm) args.Add("--no-confirm");
+        if (NoConfirmSettings.Resolve(NoConfirmSettings.Upgrade)) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Update packages", args.ToArray());
         SendDbusMessage(result);
@@ -84,7 +84,7 @@ public class PrivilegedOperationService(
     public async Task<OperationResult> UpgradeSystemAsync()
     {
         var args = new List<string> { "upgrade" };
-        if (_noConfirm) args.Add("--no-confirm");
+        if (NoConfirmSettings.Resolve(NoConfirmSettings.Upgrade)) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Upgrade system", args.ToArray());
         SendDbusMessage(result);
@@ -94,7 +94,7 @@ public class PrivilegedOperationService(
     public async Task<OperationResult> UpgradeAllAsync()
     {
         var args = new List<string> { "upgrade-all" };
-        if (_noConfirm) args.Add("--no-confirm");
+        if (NoConfirmSettings.Resolve(NoConfirmSettings.Upgrade)) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Upgrade all", args.ToArray());
         if (!result.Success) _ = Task.Run(trayDbus.UpdatesMadeInUiAsync);
@@ -121,7 +121,7 @@ public class PrivilegedOperationService(
         args.AddRange(packages);
         if (useChroot) args.Add("-c");
         if (runChecks) args.Add("--check");
-        if (_noConfirm) args.Add("--no-confirm");
+        if (NoConfirmSettings.Resolve(NoConfirmSettings.AurInstall)) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Install AUR packages", args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Aur);
@@ -133,7 +133,7 @@ public class PrivilegedOperationService(
         var args = new List<string> { "aur", "remove" };
         args.AddRange(packages);
         args.Add($"-c={isCascade}");
-        if (_noConfirm) args.Add("--no-confirm");
+        if (NoConfirmSettings.Resolve(NoConfirmSettings.AurRemove)) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Remove AUR packages", args.ToArray());
         if (result.Success) dirtyService.MarkDirty(DirtyScopes.Aur);
@@ -145,7 +145,7 @@ public class PrivilegedOperationService(
         var args = new List<string> { "aur", "update" };
         args.AddRange(packages);
         if (runChecks) args.Add("--check");
-        if (_noConfirm) args.Add("--no-confirm");
+        if (NoConfirmSettings.Resolve(NoConfirmSettings.AurUpgrade)) args.Add("--no-confirm");
 
         var result = await processExecutor.RunPrivilegedShellyCommandAsync("Update AUR packages", args.ToArray());
         SendDbusMessage(result);
@@ -157,7 +157,7 @@ public class PrivilegedOperationService(
     {
         var args = new List<string> { "aur", "search-pkgbuild" };
         args.AddRange(packages);
-        if (_noConfirm) args.Add("--no-confirm");
+        if (NoConfirmSettings.Resolve(NoConfirmSettings.AurInstall)) args.Add("--no-confirm");
 
         return await ExecuteJsonCommandAsync<PackageBuild>("AUR package builds",
             () => processExecutor.RunPrivilegedShellyCommandAsync("Get Package Builds", args.ToArray()));

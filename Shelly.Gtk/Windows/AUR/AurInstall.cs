@@ -444,7 +444,7 @@ public class AurInstall(
 
             try
             {
-                if (!configService.LoadConfig().NoConfirm)
+                if (!configService.LoadConfig().NoConfirmSettings.Resolve(configService.LoadConfig().NoConfirmSettings.AurInstall))
                 {
                     var args = new GenericQuestionEventArgs(
                         T("Install Packages?"), string.Join("\n", selectedPackages)

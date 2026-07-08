@@ -9,6 +9,11 @@ namespace Shelly.Cli.Commands.Aur;
 
 public class Remove : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for aurremove actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmAurRemove ?? false || NoConfirm;
+
     private bool Cascade { get; set; }
 
     private bool OptDeps { get; set; }
@@ -84,7 +89,7 @@ public class Remove : GlobalSettingsCommand
         console.WriteLine(AnsiUtilities.Colorize(
             $"Removing AUR packages: {string.Join(", ", packageList)}", ConsoleColor.Yellow));
 
-        if (!NoConfirm && !Confirm.Execute("Do you want to proceed?"))
+        if (!EffectiveNoConfirm && !Confirm.Execute("Do you want to proceed?"))
         {
             console.WriteLine(AnsiUtilities.Colorize("Operation cancelled.", ConsoleColor.Yellow));
             return;
@@ -94,7 +99,7 @@ public class Remove : GlobalSettingsCommand
         await manager.Initialize(root: true);
 
         var result = await AurSinglePaneOutput.Output(console, manager,
-            m => m.RemovePackages(packageList, BuildFlags(), OptDeps), NoConfirm);
+            m => m.RemovePackages(packageList, BuildFlags(), OptDeps), EffectiveNoConfirm);
 
         console.WriteLine(result
             ? AnsiUtilities.Colorize("Removal complete.", ConsoleColor.Green)
@@ -112,8 +117,8 @@ public class Remove : GlobalSettingsCommand
         using var manager = new AurPackageManager();
         await manager.Initialize(root: true);
 
-        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
-        manager.PkgbuildDiffRequest += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
+        manager.PkgbuildDiffRequest += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
 
         var packageList = Package.ToList();
         UiFrames.TxStart($"Removing AUR packages: {string.Join(", ", packageList)}");

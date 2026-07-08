@@ -230,7 +230,7 @@ public class FlatpakUpdate(
 
     private async Task UpdateAllCommand()
     {
-        if (!configService.LoadConfig().NoConfirm)
+        if (!configService.LoadConfig().NoConfirmSettings.Resolve(configService.LoadConfig().NoConfirmSettings.FlatpakUpgrade))
         {
             var args = new GenericQuestionEventArgs(
                 Translations.T("Update Packages?"), string.Join("\n", _allPackages.Select(x => x.Id))

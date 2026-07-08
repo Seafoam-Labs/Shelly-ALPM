@@ -11,6 +11,11 @@ namespace Shelly.Cli.Commands.Standard;
 
 public class Remove : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for remove actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmRemove ?? false || NoConfirm;
+
     private bool Cascade { get; set; }
 
     private bool OptDeps { get; set; }
@@ -100,7 +105,7 @@ public class Remove : GlobalSettingsCommand
 
         console.WriteLine(Colorize($"Packages to remove: {string.Join(", ", Packages)}", ConsoleColor.Yellow));
 
-        if (!NoConfirm && !Confirm.Execute("Do you want to proceed?"))
+        if (!EffectiveNoConfirm && !Confirm.Execute("Do you want to proceed?"))
         {
             console.WriteLine(Colorize("Operation cancelled.", ConsoleColor.Yellow));
             return;
@@ -159,7 +164,7 @@ public class Remove : GlobalSettingsCommand
         }
 
         var result = await StandardSinglePaneOutput.Output(console, manager,
-            x => x.RemovePackages(packages, flags, OptDeps), NoConfirm);
+            x => x.RemovePackages(packages, flags, OptDeps), EffectiveNoConfirm);
 
         if (!result)
         {
@@ -218,7 +223,7 @@ public class Remove : GlobalSettingsCommand
             flags |= AlpmTransFlag.Cascade;
 
         using var manager = new AlpmManager();
-        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
         manager.Initialize(true);
 
         UiFrames.TxStart($"Removing packages: {string.Join(", ", packages)}");

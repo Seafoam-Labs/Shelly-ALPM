@@ -11,6 +11,11 @@ namespace Shelly.Cli.Commands.AppImage;
 
 public partial class AppImageUpgrade : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for appimageupgrade actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmAppImageUpgrade ?? false || NoConfirm;
+
     public static Command Create()
     {
         var command = new Command("upgrade", "Upgrades all AppImages");
@@ -49,7 +54,7 @@ public partial class AppImageUpgrade : GlobalSettingsCommand
         {
             console.WriteLine(AnsiUtilities.Colorize($"Updating {update.Name} to {update.Version}",
                 ConsoleColor.Green));
-            await AppImageSinglePaneOutput.Output(console, manager, x => x.RunUpdate(update), NoConfirm);
+            await AppImageSinglePaneOutput.Output(console, manager, x => x.RunUpdate(update), EffectiveNoConfirm);
         }
     }
 

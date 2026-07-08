@@ -8,6 +8,11 @@ namespace Shelly.Cli.Commands.AppImage;
 
 public partial class AppImageRemove : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for appimageremove actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmAppImageRemove ?? false || NoConfirm;
+
     public required string AppImage { get; set; }
 
     private bool RemoveConfig { get; set; }
@@ -81,7 +86,7 @@ public partial class AppImageRemove : GlobalSettingsCommand
             return;
         }
 
-        if (NoConfirm &&
+        if (EffectiveNoConfirm &&
             !Confirm.Execute($"Are you sure you want to remove {Path.GetFileName(targetAppImage)}?"))
         {
             return;
@@ -89,7 +94,7 @@ public partial class AppImageRemove : GlobalSettingsCommand
 
         var manager = new AppImageManagerV2(ConfigManager.ReadConfig().AppImageInstallPath ?? "");
         await AppImageSinglePaneOutput.Output(console, manager, x => x.RemoveAppImage(targetAppImage, RemoveConfig),
-            NoConfirm);
+            EffectiveNoConfirm);
     }
 
     public override async ValueTask ExecuteUiMode()

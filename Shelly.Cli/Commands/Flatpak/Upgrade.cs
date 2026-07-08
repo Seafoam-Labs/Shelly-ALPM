@@ -8,6 +8,11 @@ namespace Shelly.Cli.Commands.Flatpak;
 
 public class Upgrade : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for flatpakupgrade actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmFlatpakUpgrade ?? false || NoConfirm;
+
     public static Command Create()
     {
         var command = new Command("upgrade", "Upgrade all flatpak apps");
@@ -46,13 +51,13 @@ public class Upgrade : GlobalSettingsCommand
         if (packages.Any(x => x.InstallLevel == InstallLevel.User))
         {
             await FlatpakSinglePaneOutput.Output(console, manager,
-                x => x.UpdateAllUserFlatpak(), NoConfirm);
+                x => x.UpdateAllUserFlatpak(), EffectiveNoConfirm);
         }
 
         if (packages.Any(x => x.InstallLevel == InstallLevel.System))
         {
             await FlatpakSinglePaneOutput.Output(console, manager,
-                x => x.UpdateAllSystemFlatpak(), NoConfirm);
+                x => x.UpdateAllSystemFlatpak(), EffectiveNoConfirm);
         }
     }
 

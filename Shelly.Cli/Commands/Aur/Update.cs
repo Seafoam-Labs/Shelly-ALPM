@@ -7,6 +7,11 @@ namespace Shelly.Cli.Commands.Aur;
 
 public class Update : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for aurupgrade actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmAurUpgrade ?? false || NoConfirm;
+
     private bool Check { get; set; }
 
     private string[] Package { get; set; } = Array.Empty<string>();
@@ -56,7 +61,7 @@ public class Update : GlobalSettingsCommand
 
         var packageList = Package.ToList();
 
-        if (!NoConfirm && !Confirm.Execute($"Proceed with update for {string.Join(", ", packageList)}?", true))
+        if (!EffectiveNoConfirm && !Confirm.Execute($"Proceed with update for {string.Join(", ", packageList)}?", true))
         {
             console.WriteLine(AnsiUtilities.Colorize("Update cancelled.", ConsoleColor.Yellow));
             return;
@@ -66,7 +71,7 @@ public class Update : GlobalSettingsCommand
         await manager.Initialize(root: true, noCheck: !Check);
 
         var result = await AurSinglePaneOutput.Output(console, manager,
-            m => m.UpdatePackages(packageList), NoConfirm);
+            m => m.UpdatePackages(packageList), EffectiveNoConfirm);
 
         console.WriteLine(result
             ? AnsiUtilities.Colorize("Update complete.", ConsoleColor.Green)
@@ -84,8 +89,8 @@ public class Update : GlobalSettingsCommand
         using var manager = new AurPackageManager();
         await manager.Initialize(root: true, noCheck: !Check);
 
-        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
-        manager.PkgbuildDiffRequest += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
+        manager.PkgbuildDiffRequest += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
 
         var packageList = Package.ToList();
         UiFrames.TxStart($"Updating AUR packages: {string.Join(", ", packageList)}");

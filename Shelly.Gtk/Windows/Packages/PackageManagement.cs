@@ -1128,7 +1128,7 @@ public sealed class PackageManagement(
 
         if (selectedPackages.Count != 0)
         {
-            if (!configService.LoadConfig().NoConfirm)
+            if (!configService.LoadConfig().NoConfirmSettings.Resolve(configService.LoadConfig().NoConfirmSettings.Remove))
             {
                 var args = new GenericQuestionEventArgs(
                     T("Remove Packages?"), string.Join("\n", selectedPackages)

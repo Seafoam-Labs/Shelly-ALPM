@@ -7,6 +7,11 @@ namespace Shelly.Cli.Commands.Aur;
 
 public class InstallVersion : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for aurinstall actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmAurInstall ?? false || NoConfirm;
+
     private bool Check { get; set; }
 
     private string Package { get; set; } = string.Empty;
@@ -72,7 +77,7 @@ public class InstallVersion : GlobalSettingsCommand
             $"Installing AUR package {Package} at commit {Commit}", ConsoleColor.Yellow));
 
         var result = await AurSinglePaneOutput.Output(console, manager,
-            m => m.InstallPackageVersion(Package, Commit), NoConfirm);
+            m => m.InstallPackageVersion(Package, Commit), EffectiveNoConfirm);
 
         console.WriteLine(result
             ? AnsiUtilities.Colorize("Installation complete.", ConsoleColor.Green)
@@ -96,8 +101,8 @@ public class InstallVersion : GlobalSettingsCommand
         using var manager = new AurPackageManager();
         await manager.Initialize(root: true, noCheck: !Check);
 
-        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
-        manager.PkgbuildDiffRequest += (_, args) => QuestionHandler.HandleQuestion(args, true, NoConfirm);
+        manager.Question += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
+        manager.PkgbuildDiffRequest += (_, args) => QuestionHandler.HandleQuestion(args, true, EffectiveNoConfirm);
 
         UiFrames.TxStart($"Installing AUR package {Package} at commit {Commit}");
         var ok = await UiModeOutput.Run(manager, m => m.InstallPackageVersion(Package, Commit));

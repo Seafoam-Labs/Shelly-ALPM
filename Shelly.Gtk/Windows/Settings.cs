@@ -92,7 +92,20 @@ public sealed class Settings(
         SetupWeeklyScheduleSwitch("daily_schedule", _config.UseWeeklySchedule, (v) => _config.UseWeeklySchedule = v,
             builder);
         SetupStarfishSwitch("webview_switch", _config.StarFishEnabled, (v) => _config.StarFishEnabled = v, builder);
-        SetupSwitch("no_confirm_switch", _config.NoConfirm, (v) => _config.NoConfirm = v, builder);
+        SetupSwitch("no_confirm_all_switch", _config.NoConfirmSettings.All, (v) => { _config.NoConfirmSettings.All = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_upgrade_switch", _config.NoConfirmSettings.Upgrade, (v) => { _config.NoConfirmSettings.Upgrade = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_install_switch", _config.NoConfirmSettings.Install, (v) => { _config.NoConfirmSettings.Install = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_remove_switch", _config.NoConfirmSettings.Remove, (v) => { _config.NoConfirmSettings.Remove = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_downgrade_switch", _config.NoConfirmSettings.Downgrade, (v) => { _config.NoConfirmSettings.Downgrade = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_aur_install_switch", _config.NoConfirmSettings.AurInstall, (v) => { _config.NoConfirmSettings.AurInstall = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_aur_remove_switch", _config.NoConfirmSettings.AurRemove, (v) => { _config.NoConfirmSettings.AurRemove = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_aur_upgrade_switch", _config.NoConfirmSettings.AurUpgrade, (v) => { _config.NoConfirmSettings.AurUpgrade = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_flatpak_install_switch", _config.NoConfirmSettings.FlatpakInstall, (v) => { _config.NoConfirmSettings.FlatpakInstall = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_flatpak_remove_switch", _config.NoConfirmSettings.FlatpakRemove, (v) => { _config.NoConfirmSettings.FlatpakRemove = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_flatpak_upgrade_switch", _config.NoConfirmSettings.FlatpakUpgrade, (v) => { _config.NoConfirmSettings.FlatpakUpgrade = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_appimage_remove_switch", _config.NoConfirmSettings.AppImageRemove, (v) => { _config.NoConfirmSettings.AppImageRemove = v; SaveConfig(); }, builder);
+        SetupSwitch("no_confirm_appimage_upgrade_switch", _config.NoConfirmSettings.AppImageUpgrade, (v) => { _config.NoConfirmSettings.AppImageUpgrade = v; SaveConfig(); }, builder);
+        SetupSwitch("default_yes_prompt_switch", _config.NoConfirmSettings.DefaultYesPrompt, (v) => { _config.NoConfirmSettings.DefaultYesPrompt = v; SaveConfig(); }, builder);
         SetupSwitch("remove_cache_switch", _config.RemoveCache, (v) => _config.RemoveCache = v, builder);
         SetupSwitch("webview_switch", _config.StarFishEnabled, (v) => _config.StarFishEnabled = v, builder);
         SetupSwitch("recommended_switch", _config.RecommendedEnabled, (v) => _config.RecommendedEnabled = v, builder);

@@ -853,7 +853,7 @@ sealed class Program
                         return;
                     }
 
-                    if (!configService.LoadConfig().NoConfirm)
+                    if (!configService.LoadConfig().NoConfirmSettings.Resolve(configService.LoadConfig().NoConfirmSettings.Upgrade))
                     {
                         var confirmArgs = new GenericQuestionEventArgs(
                             "Upgrade All Packages?",

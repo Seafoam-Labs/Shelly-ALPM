@@ -17,6 +17,11 @@ namespace Shelly.Cli.Commands.Standard;
 
 public partial class DowngradePackage : GlobalSettingsCommand
 {
+    /// <summary>
+    /// Resolved no-confirm for downgrade actions: per-action flag OR global flag.
+    /// </summary>
+    private bool EffectiveNoConfirm => NoConfirmDowngrade ?? false || NoConfirm;
+
     private const string ArchRepo = "https://archive.archlinux.org/packages/";
     private const string CachyosRepo = "https://archive.cachyos.org/archive/cachyos/";
     private const string CachyosV3Repo = "https://archive.cachyos.org/archive/cachyos-v3/";
@@ -134,7 +139,7 @@ public partial class DowngradePackage : GlobalSettingsCommand
         }
 
         PackageInfo selectedPackage;
-        if (NoConfirm || UseOldest)
+        if (EffectiveNoConfirm || UseOldest)
         {
             selectedPackage = UseOldest ? packages[^1] : packages[0];
         }
@@ -161,7 +166,7 @@ public partial class DowngradePackage : GlobalSettingsCommand
         var path = await ResolveFilePathCli(selectedPackage, console);
         if (path == null) return;
 
-        if (!NoConfirm && !Confirm.Execute("Do you want to proceed with the installation?"))
+        if (!EffectiveNoConfirm && !Confirm.Execute("Do you want to proceed with the installation?"))
         {
             console.WriteLine(Colorize("Operation Cancelled.", ConsoleColor.Yellow));
             return;
@@ -170,7 +175,7 @@ public partial class DowngradePackage : GlobalSettingsCommand
         console.WriteLine(Colorize($"Installing: {selectedPackage.Filename}", ConsoleColor.Green));
 
         var isSuccess =
-            await StandardSinglePaneOutput.Output(console, manager, m => m.InstallLocalPackage(path), NoConfirm);
+            await StandardSinglePaneOutput.Output(console, manager, m => m.InstallLocalPackage(path), EffectiveNoConfirm);
 
         if (selectedPackage.Location == Location.Remote && File.Exists(path))
             try
@@ -189,7 +194,7 @@ public partial class DowngradePackage : GlobalSettingsCommand
             return;
         }
 
-        if (AddIgnore || (!NoConfirm && Confirm.Execute("Do you want to add package to IgnorePkg list?")))
+        if (AddIgnore || (!EffectiveNoConfirm && Confirm.Execute("Do you want to add package to IgnorePkg list?")))
         {
             console.WriteLine(Colorize($"Adding to IgnorePkg: {Package}", ConsoleColor.Green));
             try

@@ -1170,7 +1170,7 @@ public sealed class PackageInstall(
 
             try
             {
-                if (!configService.LoadConfig().NoConfirm)
+                if (!configService.LoadConfig().NoConfirmSettings.Resolve(configService.LoadConfig().NoConfirmSettings.Install))
                 {
                     var message = string.Join("\n", selectedPackages);
                     var performUpgradeForDialog = _upgradeCheck.GetActive();

@@ -526,13 +526,234 @@
                                                                 <property name="orientation">horizontal</property>
                                                                 <child>
                                                                     <object class="GtkLabel">
-                                                                        <property name="label" translatable="yes">No Confirm</property>
+                                                                        <property name="label" translatable="yes">No Confirm - All Actions</property>
                                                                         <property name="halign">start</property>
                                                                         <property name="hexpand">true</property>
                                                                     </object>
                                                                 </child>
                                                                 <child>
-                                                                    <object class="GtkSwitch" id="no_confirm_switch">
+                                                                    <object class="GtkSwitch" id="no_confirm_all_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - Upgrade</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_upgrade_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - Install</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_install_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - Remove</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_remove_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - Downgrade</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_downgrade_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - AUR Install</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_aur_install_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - AUR Remove</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_aur_remove_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - AUR Upgrade</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_aur_upgrade_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - Flatpak Install</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_flatpak_install_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - Flatpak Remove</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_flatpak_remove_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - Flatpak Upgrade</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_flatpak_upgrade_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - AppImage Remove</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_appimage_remove_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">No Confirm - AppImage Upgrade</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="no_confirm_appimage_upgrade_switch">
+                                                                        <property name="halign">end</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkBox">
+                                                                <property name="orientation">horizontal</property>
+                                                                <child>
+                                                                    <object class="GtkLabel">
+                                                                        <property name="label" translatable="yes">Default Yes Prompt (Y/n)</property>
+                                                                        <property name="halign">start</property>
+                                                                        <property name="hexpand">true</property>
+                                                                    </object>
+                                                                </child>
+                                                                <child>
+                                                                    <object class="GtkSwitch" id="default_yes_prompt_switch">
                                                                         <property name="halign">end</property>
                                                                     </object>
                                                                 </child>
