@@ -35,7 +35,7 @@ public class ShellyApp : Object {
         this.menu_handler = new DBusMenuHandler ((id) => {
             switch (id) {
                 case 1:
-                    AppRunner.launch_app_if_not_running ();
+                    AppRunner.launch_app_if_not_running.begin ();
                     break;
                 case 2:
                     do_update_packages.begin ((obj, res) => {

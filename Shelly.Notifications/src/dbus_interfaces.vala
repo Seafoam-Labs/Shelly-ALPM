@@ -21,6 +21,11 @@ public interface GtkActions : Object {
         GLib.HashTable<string, GLib.Variant> platform_data) throws DBusError, IOError;
 }
 
+[DBus (name = "org.freedesktop.Application")]
+public interface FreedesktopApplication : Object {
+    public abstract async void activate (GLib.HashTable<string, GLib.Variant> platform_data) throws DBusError, IOError;
+}
+
 [DBus (name = "org.freedesktop.Notifications")]
 public interface FreedesktopNotifications : Object {
     public abstract async uint notify (string app_name,
@@ -34,4 +39,5 @@ public interface FreedesktopNotifications : Object {
 
     public signal void action_invoked (uint32 id, string action_key);
     public signal void notification_closed (uint32 id, uint32 reason);
+    public signal void activation_token (uint32 id, string activation_token);
 }

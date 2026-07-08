@@ -18,6 +18,9 @@
           <object class="GtkSearchEntry" id="search_entry">
             <property name="hexpand">true</property>
             <property name="placeholder-text" translatable="yes">Search packages...</property>
+            <style>
+                <class name="spaced-search"/>
+            </style>
           </object>
         </child>
         <child>

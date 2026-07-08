@@ -217,17 +217,14 @@ sealed class Program
         application.AddAction(quitAction);
         application.SetAccelsForAction("app.quit", ["<Ctrl>Q"]);
 
+        // Fired when another process (e.g. shelly-notifications) calls
+        // org.freedesktop.Application.Activate on our bus name.
+        application.OnActivate += (_, _) => _window?.Present();
+
         application.OnStartup += (_, _) =>
         {
             if (initialConfig.TrayEnabled)
                 TrayStartService.Start();
-
-            var existingWindow = application.GetActiveWindow();
-            if (existingWindow != null)
-            {
-                existingWindow.Present();
-                return;
-            }
 
             var cssProvider = CssProvider.New();
             cssProvider.LoadFromString(ResourceHelper.LoadAsset("Assets/style.css"));

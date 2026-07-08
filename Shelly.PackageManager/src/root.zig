@@ -2,6 +2,7 @@
 const std = @import("std");
 const alpm = @import("alpm/manager.zig");
 const flatpak = @import("flatpak/remote_manager.zig");
+const downloader = @import("shared/downloader.zig");
 const Io = std.Io;
 
 /// This is a documentation comment to explain the `printAnotherMessage` function below.
@@ -30,4 +31,5 @@ test {
     _ = @import("flatpak/appstream_manager.zig");
     _ = @import("flatpak/appstream_parser.zig");
     _ = @import("appimage/manager.zig");
+    _ = @import("shared/downloader.zig");
 }
