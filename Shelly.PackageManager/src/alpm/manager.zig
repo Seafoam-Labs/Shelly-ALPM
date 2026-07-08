@@ -3,6 +3,7 @@ const bindings = @import("bindings.zig");
 const events = @import("events.zig");
 const configuration = @import("configuration.zig");
 const builtin = @import("builtin");
+const downloader = @import("../shared/downloader.zig");
 
 const libalpm = bindings.libalpm; // typed aliases (Handle, Database, Config, ...)
 const rawLibalpm = bindings.libalpm.alpm;
@@ -65,16 +66,24 @@ pub const Manager = struct {
         return self;
     }
 
-    pub fn sync(self: *Manager, force: bool) InitError!void {
+    pub fn sync(self: *Manager, force: bool) libalpm.Error!void {
         _ = force;
         self.package_download = false;
-        if (self.handle == null) return InitError.InitFailed;
-        var sync_dbs = rawLibalpm.alpm_get_syncdbs(self.handle);
-        if (sync_dbs == null) return InitError.RegisterDbFailed;
-        while (sync_dbs != null) : (sync_dbs = sync_dbs.?.next) {
-            const db = sync_dbs.?.data orelse continue;
-            var database: libalpm.Database = .{ .ptr = db };
-            if (database.name() != null) {}
+        if (self.handle == null) return libalpm.Error.HandleNull;
+        var database: libalpm.DatabaseList = rawLibalpm.alpm_get_syncdbs(self.handle);
+        if (database == null) return libalpm.Error.RegisterDbFailed;
+        while (database != null) : (database = database.?.next) {
+            const db = database.?.data orelse continue;
+            var db_struct: libalpm.Database = .{ .ptr = db };
+            var servers = db_struct.servers();
+            while (servers != null) : (servers = servers.next()) {
+                const server = servers.?.data orelse continue;
+                var server_urls = rawLibalpm.alpm_db_get_servers(server);
+                while (server_urls != null) : (server_urls = server_urls.?.next) {
+                    const url = server_urls.?.data orelse continue;
+                    _ = url;
+                }
+            }
         }
     }
 
@@ -93,6 +102,7 @@ pub const Manager = struct {
         _ = rawLibalpm.alpm_option_set_progresscb(h, progressCallback, self);
         _ = rawLibalpm.alpm_option_set_eventcb(h, eventCallback, self);
         _ = rawLibalpm.alpm_option_set_questioncb(h, questionCallback, self);
+        _ = rawLibalpm.alpm_option_set_fetchcb(h, fetchCallback, self);
     }
 
     fn applyConfig(self: *Manager, config: configuration.Configuration.Config, root: bool) void {
@@ -260,6 +270,52 @@ pub const Manager = struct {
         const step2 = std.mem.replaceOwned(u8, self.allocator, step1, "$arch", resolved_arch) catch return null;
         defer self.allocator.free(step2);
         return self.allocator.dupeSentinel(u8, step2, 0) catch null;
+    }
+
+    fn fetchCallback(
+        ctx: ?*anyopaque,
+        url: [:0]const u8,
+        local_path: [:0]const u8,
+        force: bool,
+    ) callconv(.c) void {
+        const self: *Manager = @ptrCast(@alignCast(ctx));
+        const download_config: downloader.DownloadConfiguration = .{ .user_agent = "Shelly-ALPM/3" };
+        var downloader_instance = downloader.CoreDownloader.init(self.allocator, self.io(), download_config);
+        defer downloader_instance.deinit();
+
+        downloader_instance.setEventCallback(onDownloadEvent, self);
+        const result = downloader_instance.downloadToFile(url, local_path, !force);
+        switch (result) {
+            .succes => |succ| self.dispatcher.raiseInformational(.{ .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE, .message = succ.destination_path }),
+            .failure => |err| self.dispatcher.raiseError(.{ .message = if (err) |e| @errorName(e) else "download failed" }),
+            .skipped => |skip| self.dispatcher.raiseInformational(.{ .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE, .message = skip.destination_path }),
+        }
+    }
+
+    fn onDownloadEvent(ctx: ?*anyopaque, event: downloader.DownloadEvent) void {
+        const self: *Manager = @ptrCast(@alignCast(ctx));
+        const path = event.destination_path orelse "";
+        switch (event.event_type) {
+            .Start => self.dispatcher.raiseInformational(.{
+                .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_START,
+                .message = path,
+            }),
+            .Progress => if (event.progress) |p| self.dispatcher.raiseProgress(.{
+                .progress_type = @intCast(rawLibalpm.ALPM_PROGRESS_ADD_START), // pick an appropriate alpm_progress_t
+                .pkg_name = std.fs.path.basename(path),
+                .percent = p.percent,
+                .howmany = 1,
+                .current = 1,
+            }),
+            .Complete => self.dispatcher.raiseInformational(.{
+                .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE,
+                .message = path,
+            }),
+            .Error => self.dispatcher.raiseError(.{
+                .message = if (event.download_error) |e| @errorName(e) else "download failed",
+            }),
+            .Skipped => {},
+        }
     }
 
     fn progressCallback(

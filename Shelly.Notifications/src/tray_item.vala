@@ -22,7 +22,17 @@ public class StatusNotifierItem : Object {
     public void context_menu (int x, int y) throws DBusError, IOError {}
 
     public void activate (int x, int y) throws DBusError, IOError {
-        AppRunner.launch_app_if_not_running ();
+        AppRunner.launch_app_if_not_running.begin ();
+    }
+
+    /*
+     * On Wayland the tray host (plasmashell, gnome-shell's appindicator
+     * extension, etc.) calls this right before Activate/ContextMenu/menu
+     * events, handing us a fresh XDG activation token so the window we
+     * raise can actually take focus.
+     */
+    public void provide_xdg_activation_token (string token) throws DBusError, IOError {
+        AppRunner.set_activation_token (token);
     }
 
     internal void apply_config (ShellyConfig config) {

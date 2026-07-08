@@ -7,9 +7,34 @@ public class AppRunner {
         "/opt/shelly/Shelly-UI"
     };
 
-    public static void launch_app_if_not_running () {
-        if (is_process_running ("shelly-ui")) {
-            stdout.printf ("[shelly-runner] shelly-ui is already running\n");
+    private const string SHELLY_UI_SERVICE = "com.shellyorg.shelly";
+    private const string SHELLY_UI_PATH = "/com/shellyorg/shelly";
+
+    private static string? _activation_token = null;
+
+    /*
+     * Stores the single-use XDG activation token that the tray host
+     * (e.g. plasmashell, gnome-shell's appindicator
+     * extension, etc.) hands us via ProvideXdgActivationToken right
+     * before it delivers an Activate/menu-click event. Without it,
+     * Wayland compositors refuse to shift focus (focus-stealing
+     * prevention) and only mark the window as demanding attention.
+     */
+    public static void set_activation_token (string token) {
+        _activation_token = token;
+    }
+
+    private static string ? take_activation_token () {
+        var token = _activation_token;
+        _activation_token = null;
+        return token;
+    }
+
+    public static async void launch_app_if_not_running () {
+        var token = take_activation_token ();
+
+        if (yield try_activate_running_instance (token)) {
+            stdout.printf ("[shelly-runner] shelly-ui already running — activated existing window\n");
             return;
         }
 
@@ -28,11 +53,15 @@ public class AppRunner {
         try {
             string[] argv = { "setsid", app_path };
 
+            var envp = Environ.get ();
+            if (token != null)
+                envp = Environ.set_variable (envp, "XDG_ACTIVATION_TOKEN", token, true);
+
             Pid child_pid;
             Process.spawn_async (
                 null,
                 argv,
-                null,
+                envp,
                 SpawnFlags.SEARCH_PATH | SpawnFlags.STDOUT_TO_DEV_NULL | SpawnFlags.STDERR_TO_DEV_NULL,
                 null,
                 out child_pid
@@ -64,17 +93,30 @@ public class AppRunner {
         yield proc.wait_async (null);
     }
 
-    private static bool is_process_running (string name) {
+    /*
+     * Asks a running shelly-ui instance to raise and focus its window via the
+     * org.freedesktop.Application interface that GtkApplication exports on the
+     * session bus. Returns false if no instance owns the name (i.e. not running).
+     *
+     * The token travels as "activation-token" in platform_data; GTK reads it in
+     * gtk_application_impl_wayland_before_emit() and uses it for xdg-activation
+     * when the app calls gtk_window_present().
+     */
+    private static async bool try_activate_running_instance (string? token) {
         try {
-            int exit_status;
-            GLib.Process.spawn_sync (
-                                     null, { "pgrep", "-x", name }, null,
-                                     SpawnFlags.SEARCH_PATH
-                                     | SpawnFlags.STDOUT_TO_DEV_NULL
-                                     | SpawnFlags.STDERR_TO_DEV_NULL,
-                                     null, null, null, out exit_status
-            );
-            return exit_status == 0;
+            var app = yield Bus.get_proxy<FreedesktopApplication> (BusType.SESSION,
+                SHELLY_UI_SERVICE,
+                SHELLY_UI_PATH,
+                DBusProxyFlags.DO_NOT_AUTO_START, null);
+
+            var platform_data = new GLib.HashTable<string, GLib.Variant> (str_hash, str_equal);
+            if (token != null) {
+                platform_data["activation-token"] = new GLib.Variant.string (token);
+                platform_data["desktop-startup-id"] = new GLib.Variant.string (token);
+            }
+
+            yield app.activate (platform_data);
+            return true;
         } catch (Error e) {
             return false;
         }
