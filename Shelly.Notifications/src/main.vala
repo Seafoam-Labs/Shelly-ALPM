@@ -3,8 +3,6 @@ using GLib;
 public class ShellyApp : Object {
 
     private const string SERVICE_NAME = "org.shelly.Notifications";
-    private const string SHELLY_UI_SERVICE = "com.shellyorg.shelly";
-    private const string SHELLY_UI_PATH = "/com/shellyorg/shelly";
 
     private MainLoop loop;
     private StatusNotifierItem tray_item;
@@ -49,8 +47,10 @@ public class ShellyApp : Object {
                     break;
                 case 99:
                     stdout.printf ("[shelly] Exiting...\n");
-                    quit_shelly_ui ();
+                    quit_shelly_ui.begin ((obj, res) => {
+                    quit_shelly_ui.end (res);
                     loop.quit ();
+                });
                     break;
             }
         });
@@ -157,14 +157,21 @@ public class ShellyApp : Object {
     }
 
 
-    private void quit_shelly_ui () {
+    private async void quit_shelly_ui () {
         try {
-            var sui = Bus.get_proxy_sync<GtkActions> (BusType.SESSION,
-                SHELLY_UI_SERVICE, SHELLY_UI_PATH, DBusProxyFlags.NONE, null);
+            var sui = yield Bus.get_proxy<FreedesktopApplication> (BusType.SESSION,
+                AppRunner.SHELLY_UI_SERVICE, AppRunner.SHELLY_UI_PATH,
+                DBusProxyFlags.DO_NOT_AUTO_START, null);
+
+            /*
+             * Bound how long Exit lingers on a hung shelly-ui —
+             * GDBus's default call timeout is 25 s.
+             */
+            ((DBusProxy) sui).set_default_timeout (3000);
 
             GLib.Variant[] no_params = {};
             var platform_data = new GLib.HashTable<string, GLib.Variant> (str_hash, str_equal);
-            sui.activate ("quit", no_params, platform_data);
+            yield sui.activate_action ("quit", no_params, platform_data);
         } catch (Error e) {
             stdout.printf ("[shelly-notifications] shelly-ui not reachable for quit: %s\n", e.message);
         }

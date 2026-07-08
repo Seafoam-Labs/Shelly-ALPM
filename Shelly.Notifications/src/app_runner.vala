@@ -7,8 +7,8 @@ public class AppRunner {
         "/opt/shelly/Shelly-UI"
     };
 
-    private const string SHELLY_UI_SERVICE = "com.shellyorg.shelly";
-    private const string SHELLY_UI_PATH = "/com/shellyorg/shelly";
+    internal const string SHELLY_UI_SERVICE = "com.shellyorg.shelly";
+    internal const string SHELLY_UI_PATH = "/com/shellyorg/shelly";
 
     private static string? _activation_token = null;
 
