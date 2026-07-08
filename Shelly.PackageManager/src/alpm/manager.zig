@@ -68,6 +68,8 @@ pub const Manager = struct {
 
     pub fn sync(self: *Manager, force: bool) libalpm.Error!void {
         _ = force;
+        var databaseMap = std.StringHashMap(std.ArrayList([]const u8)).init(self.allocator);
+        defer databaseMap.deinit();
         self.package_download = false;
         if (self.handle == null) return libalpm.Error.HandleNull;
         var database: libalpm.DatabaseList = rawLibalpm.alpm_get_syncdbs(self.handle);

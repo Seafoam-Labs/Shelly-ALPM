@@ -131,9 +131,9 @@ pub const CoreDownloader = struct {
             .{ .override = agent }
         else
             .default;
-
         var req = self.http_client.request(.GET, uri, .{
             .headers = .{ .user_agent = user_agent },
+            .redirect_behavior = .init(10),
         }) catch |err| {
             std.log.err("HTTP request setup failed for {s}: {}", .{ url, err });
             return mapRequestError(err);
