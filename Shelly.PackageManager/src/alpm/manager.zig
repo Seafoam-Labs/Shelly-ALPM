@@ -4,6 +4,7 @@ const events = @import("events.zig");
 const configuration = @import("configuration.zig");
 const builtin = @import("builtin");
 const downloader = @import("../shared/downloader.zig");
+const listDictionary = @import("../shared/list_dictionary.zig");
 
 const libalpm = bindings.libalpm; // typed aliases (Handle, Database, Config, ...)
 const rawLibalpm = bindings.libalpm.alpm;
@@ -25,7 +26,9 @@ pub const TransactionError = error{
     UnsatisfiedDeps,
     ConflictingDeps,
     FileConflicts,
+    SyncDbFailed,
 };
+
 pub const QueryError = error{ DbNotFound, PkgNotFound };
 
 pub const Manager = struct {
@@ -39,10 +42,12 @@ pub const Manager = struct {
     local_db: ?bindings.libalpm.Database = null,
     sync_dbs: std.ArrayList(bindings.libalpm.Database) = .empty,
     package_download: bool = false,
+    is_root: bool = false,
+    temp_root_path: []const u8,
 
     /// If null is passed for config it will use the default /etc/pacman.conf
-    pub fn init(allocator: std.mem.Allocator, root: bool, configPath: ?[]const u8) InitError!Manager {
-        const database_path = configPath orelse "/etc/pacman.conf";
+    pub fn init(allocator: std.mem.Allocator, configPath: ?[]const u8, use_root: bool, temp_root_path: ?[]const u8) InitError!Manager {
+        const config_path = configPath orelse "/etc/pacman.conf";
         var self = Manager{
             .handle = null,
             .is_initialized = true,
@@ -50,39 +55,155 @@ pub const Manager = struct {
             .dispatcher = events.Dispatcher.init(allocator),
             .threaded = .init(allocator, .{}),
             .config = undefined,
+            .is_root = use_root,
+            .temp_root_path = temp_root_path orelse "",
         };
-        self.config = configuration.Configuration.parse(allocator, self.io(), database_path);
+        errdefer self.threaded.deinit();
+        errdefer self.dispatcher.deinit();
+        self.config = configuration.Configuration.parse(allocator, self.io(), config_path) catch {
+            return InitError.ConfigParseFailed;
+        };
+        errdefer self.config.deinitialize();
+        errdefer self.sync_dbs.deinit(self.allocator);
+
+        // Checks to see if the temp path is being used to run in non-root mode
+        // for update checking. Symlink the real local database into the temp
+        // path so ALPM can see installed packages when checking for updates.
+        if (self.temp_root_path.len != 0) {
+            // "{DBPath}/local" for the *real* database, captured before we repoint DBPath.
+            const real_local_db = blk: {
+                const s = std.fmt.allocPrint(self.allocator, "{s}/local", .{self.config.database_path}) catch {
+                    return InitError.InitFailed;
+                };
+                defer self.allocator.free(s);
+                break :blk self.allocator.dupeSentinel(u8, s, 0) catch return InitError.InitFailed;
+            };
+            defer self.allocator.free(real_local_db);
+
+            // From here on libalpm should read/write the local db under the temp root.
+            self.config.database_path = self.config.arena.allocator().dupeSentinel(u8, self.temp_root_path, 0) catch {
+                return InitError.InitFailed;
+            };
+
+            // "{tempPath}/local" — the symlink we want to (re)create.
+            const temp_local_db = blk: {
+                const s = std.fmt.allocPrint(self.allocator, "{s}/local", .{self.temp_root_path}) catch {
+                    return InitError.InitFailed;
+                };
+                defer self.allocator.free(s);
+                break :blk self.allocator.dupeSentinel(u8, s, 0) catch return InitError.InitFailed;
+            };
+            defer self.allocator.free(temp_local_db);
+
+            // Only link if the real local database actually exists.
+            if (std.Io.Dir.cwd().statFile(self.io(), real_local_db, .{})) |_| {
+                // Remove any existing dir/symlink at the temp location so we can create
+                // a fresh symlink. deleteTree unlinks a symlink (leaving its target
+                // intact) and recursively removes a real directory, covering both of
+                // the C# branches; a missing path is not an error we care about.
+                std.Io.Dir.cwd().deleteTree(self.io(), temp_local_db) catch {};
+                _ = rawLibalpm.symlink(real_local_db.ptr, temp_local_db.ptr);
+            } else |_| {}
+        }
 
         var err: rawLibalpm.alpm_errno_t = 0;
-        const handle = rawLibalpm.alpm_initialize(root, database_path, &err) orelse {
+
+        const handle = rawLibalpm.alpm_initialize(self.config.root_directory, self.config.database_path, &err) orelse {
             std.log.err("alpm_initialize failed: {s}", .{std.mem.span(rawLibalpm.alpm_strerror(err))});
             return error.InitFailed;
         };
         self.handle = handle;
         self.is_initialized = true;
 
-        self.applyConfig(self.config, root);
+        self.applyConfig(self.config, self.is_root);
         self.setupCallbacks();
         return self;
     }
 
-    pub fn sync(self: *Manager, force: bool) libalpm.Error!void {
-        _ = force;
+    pub fn sync(self: *Manager, force: bool) TransactionError!void {
+        var databaseMap = std.StringHashMap(std.ArrayList([]const u8)).init(self.allocator);
+        defer databaseMap.deinit();
         self.package_download = false;
-        if (self.handle == null) return libalpm.Error.HandleNull;
-        var database: libalpm.DatabaseList = rawLibalpm.alpm_get_syncdbs(self.handle);
-        if (database == null) return libalpm.Error.RegisterDbFailed;
-        while (database != null) : (database = database.?.next) {
-            const db = database.?.data orelse continue;
-            var db_struct: libalpm.Database = .{ .ptr = db };
+        if (self.handle == null) return TransactionError.SyncDbFailed;
+        var databases: libalpm.DatabaseList = rawLibalpm.alpm_get_syncdbs(self.handle);
+        if (databases == null) return TransactionError.SyncDbFailed;
+        var dict = listDictionary.ListDictionary.init(self.allocator);
+        defer dict.deinit();
+        while (databases != null) : (databases = databases.?.next) {
+            const db = databases.?.data orelse continue;
+            var db_struct: libalpm.Database = .{ .ptr = @ptrCast(@alignCast(db)) };
+            const db_name: []const u8 = db_struct.name() orelse continue;
             var servers = db_struct.servers();
-            while (servers != null) : (servers = servers.next()) {
-                const server = servers.?.data orelse continue;
-                var server_urls = rawLibalpm.alpm_db_get_servers(server);
-                while (server_urls != null) : (server_urls = server_urls.?.next) {
-                    const url = server_urls.?.data orelse continue;
-                    _ = url;
-                }
+            while (servers.next()) |server| {
+                dict.add(db_name, server) catch {
+                    return TransactionError.SyncDbFailed;
+                };
+            }
+        }
+        const syncDirectory = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.config.database_path, "/sync" }) catch {
+            return TransactionError.SyncDbFailed;
+        };
+        defer self.allocator.free(syncDirectory);
+
+        //Dropping the response as we don't care if it was successful or not just that it was done.
+        // This will never come back to bite me right?
+        if (std.Io.Dir.cwd().createDirPath(self.io(), syncDirectory)) |_| {} else |_| {}
+
+        var futures: std.ArrayList(std.Io.Future(void)) = .empty;
+        defer futures.deinit(self.allocator);
+
+        var dict_iterator = dict.map.iterator();
+        while (dict_iterator.next()) |entry| {
+            const database_name = entry.key_ptr.*;
+            const urls = entry.value_ptr.*;
+            const future = self.io().concurrent(download_database, .{ self, database_name, urls, syncDirectory, force }) catch {
+                self.download_database(database_name, urls, syncDirectory, force);
+                continue;
+            };
+
+            futures.append(self.allocator, future) catch {
+                var f = future;
+                f.await(self.io());
+            };
+        }
+
+        for (futures.items) |*future| future.await(self.io());
+
+        for (self.sync_dbs.items) |db| {
+            if (db.verify()) continue;
+            const name = db.name() orelse continue;
+            const db_path = std.fmt.allocPrint(self.allocator, "{s}/{s}.db", .{ syncDirectory, name }) catch continue;
+            defer self.allocator.free(db_path);
+            const sig_path = std.fmt.allocPrint(self.allocator, "{s}.sig", .{db_path}) catch continue;
+            defer self.allocator.free(sig_path);
+            std.Io.Dir.cwd().deleteFile(self.io(), db_path) catch {};
+            std.Io.Dir.cwd().deleteFile(self.io(), sig_path) catch {};
+            return TransactionError.SyncDbFailed;
+        }
+    }
+
+    fn download_database(self: *Manager, database_name: []const u8, urls: std.ArrayList([]const u8), sync_directory: []const u8, force_download: bool) void {
+        const download_config: downloader.DownloadConfiguration = .{ .user_agent = "Shelly-ALPM/3" };
+        var downloader_instance = downloader.CoreDownloader.init(self.allocator, self.io(), download_config);
+        defer downloader_instance.deinit();
+        downloader_instance.setEventCallback(onDownloadEvent, self);
+        const dest = std.fmt.allocPrint(self.allocator, "{s}/{s}.db", .{ sync_directory, database_name }) catch return;
+        defer self.allocator.free(dest);
+        const sig_dest = std.fmt.allocPrint(self.allocator, "{s}.sig", .{dest}) catch return;
+        defer self.allocator.free(sig_dest);
+
+        for (urls.items) |url_base| {
+            const db_url = std.fmt.allocPrint(self.allocator, "{s}/{s}.db", .{ url_base, database_name }) catch continue;
+            defer self.allocator.free(db_url);
+
+            switch (downloader_instance.downloadToFile(db_url, dest, force_download)) {
+                .succes, .skipped => {
+                    const sig_url = std.fmt.allocPrint(self.allocator, "{s}.sig", .{db_url}) catch return;
+                    defer self.allocator.free(sig_url);
+                    _ = downloader_instance.downloadToFile(sig_url, sig_dest, force_download);
+                    return;
+                },
+                .failure => continue,
             }
         }
     }
@@ -95,6 +216,10 @@ pub const Manager = struct {
         if (self.handle) |h| _ = libalpm.alpm.alpm_release(h);
         self.handle = null;
         self.is_initialized = false;
+        self.sync_dbs.deinit(self.allocator);
+        self.config.deinitialize();
+        self.dispatcher.deinit();
+        self.threaded.deinit();
     }
 
     fn setupCallbacks(self: *Manager) void {
@@ -272,23 +397,39 @@ pub const Manager = struct {
         return self.allocator.dupeSentinel(u8, step2, 0) catch null;
     }
 
+    // Matches libalpm's `alpm_cb_fetch`: receives C strings and an int flag and
+    // returns 0 (downloaded), 1 (already up to date), or -1 (error).
     fn fetchCallback(
         ctx: ?*anyopaque,
-        url: [:0]const u8,
-        local_path: [:0]const u8,
-        force: bool,
-    ) callconv(.c) void {
+        url: [*c]const u8,
+        local_path: [*c]const u8,
+        force: c_int,
+    ) callconv(.c) c_int {
         const self: *Manager = @ptrCast(@alignCast(ctx));
+
+        // libalpm may hand us null pointers; treat that as a hard error.
+        if (url == null or local_path == null) return -1;
+        const url_slice = std.mem.span(url);
+        const local_slice = std.mem.span(local_path);
+
         const download_config: downloader.DownloadConfiguration = .{ .user_agent = "Shelly-ALPM/3" };
         var downloader_instance = downloader.CoreDownloader.init(self.allocator, self.io(), download_config);
         defer downloader_instance.deinit();
 
         downloader_instance.setEventCallback(onDownloadEvent, self);
-        const result = downloader_instance.downloadToFile(url, local_path, !force);
-        switch (result) {
-            .succes => |succ| self.dispatcher.raiseInformational(.{ .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE, .message = succ.destination_path }),
-            .failure => |err| self.dispatcher.raiseError(.{ .message = if (err) |e| @errorName(e) else "download failed" }),
-            .skipped => |skip| self.dispatcher.raiseInformational(.{ .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE, .message = skip.destination_path }),
+        switch (downloader_instance.downloadToFile(url_slice, local_slice, force != 0)) {
+            .succes => |succ| {
+                self.dispatcher.raiseInformational(.{ .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE, .message = succ.destination_path });
+                return 0;
+            },
+            .skipped => |skip| {
+                self.dispatcher.raiseInformational(.{ .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE, .message = skip.destination_path });
+                return 1;
+            },
+            .failure => |err| {
+                self.dispatcher.raiseError(.{ .message = @errorName(err) });
+                return -1;
+            },
         }
     }
 
@@ -408,7 +549,7 @@ pub const Manager = struct {
                 q.import(self.askYesNo(manager_io, qtype, text));
             },
             .select_provider => {
-                self.handleSelectProvider(manager_io, libalpm.SelectProviderQuestion.from(data).?, qtype);
+                self.handleSelectProvider(libalpm.SelectProviderQuestion.from(data).?, qtype);
             },
             else => {
                 // Leave alpm's default answer (0) untouched.
@@ -428,10 +569,9 @@ pub const Manager = struct {
 
     fn handleSelectProvider(
         self: *Manager,
-        manager_io: std.Io,
         q: libalpm.SelectProviderQuestion,
         qtype: c_int,
-    ) callconv(.c) void {
+    ) void {
         var names: std.ArrayList([]const u8) = .empty;
         defer names.deinit(self.allocator);
         var providers: std.ArrayList(events.ProviderOption) = .empty;
@@ -457,7 +597,7 @@ pub const Manager = struct {
             break :blk spanC(dep_string);
         };
 
-        const resp = self.dispatcher.raiseQuestion(manager_io, .{
+        const resp = self.dispatcher.raiseQuestion(self.io(), .{
             .question = "Select a provider",
             .question_type = qtype,
             .options = names.items,
@@ -961,4 +1101,121 @@ fn askResponder(data: ?*anyopaque, args: events.QuestionArgs) void {
     _ = args;
     const ctx: *AskResponder = @ptrCast(@alignCast(data));
     ctx.disp.respond(ctx.io, .{ .answer = ctx.answer, .pkg = null, .choice = null });
+}
+
+// ---------------------------------------------------------------------------
+// init + sync (integration)
+//
+// These exercise the full path: parse a config, initialize libalpm, register a
+// sync database, and download it over the network. Everything is confined to a
+// unique temporary directory whose `DBPath` is redirected away from the host's
+// real /var/lib/pacman, and the workspace is deleted once each test finishes.
+// ---------------------------------------------------------------------------
+
+// A throwaway pacman configuration written to disk under a unique temp root.
+const SyncTestWorkspace = struct {
+    io: std.Io,
+    root: []const u8,
+    config_path: []const u8,
+    db_path: []const u8,
+
+    fn create(allocator: std.mem.Allocator, io: std.Io) !SyncTestWorkspace {
+        const anchor: u8 = 0;
+        var prng = std.Random.DefaultPrng.init(@intFromPtr(&anchor));
+        const root = try std.fmt.allocPrint(allocator, "/tmp/shelly-alpm-test-{x}", .{prng.random().int(u32)});
+        errdefer allocator.free(root);
+
+        const db_path = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+        errdefer allocator.free(db_path);
+
+        const config_path = try std.fmt.allocPrint(allocator, "{s}/pacman.conf", .{root});
+        errdefer allocator.free(config_path);
+
+        // Create the root and database directories up front.
+        try std.Io.Dir.cwd().createDirPath(io, db_path);
+
+        // A minimal config: DBPath points into our temp dir, and a single [core]
+        // repository is aimed at a real Arch mirror. Signature checking is
+        // disabled so no keyring/GPG setup is required to fetch the database.
+        const config = try std.fmt.allocPrint(
+            allocator,
+            "[options]\n" ++
+                "Architecture = auto\n" ++
+                "SigLevel = Never\n" ++
+                "DBPath = {s}\n" ++
+                "\n" ++
+                "[seafoam-labs]\n" ++
+                "Server =  https://repo.seafoam-labs.org/x86_64\n",
+            //"Server = https://mirrors.kernel.org/archlinux/$repo/os/$arch\n",
+            .{db_path},
+        );
+        defer allocator.free(config);
+
+        var file = try std.Io.Dir.cwd().createFile(io, config_path, .{});
+        defer file.close(io);
+        try file.writeStreamingAll(io, config);
+
+        return .{
+            .io = io,
+            .root = root,
+            .config_path = config_path,
+            .db_path = db_path,
+        };
+    }
+
+    // Removes the entire temp tree (config + downloaded databases) and frees the
+    // owned path strings. Safe to call regardless of how far `create` got.
+    fn cleanup(self: *SyncTestWorkspace, allocator: std.mem.Allocator) void {
+        std.Io.Dir.cwd().deleteTree(self.io, self.root) catch {};
+        allocator.free(self.config_path);
+        allocator.free(self.db_path);
+        allocator.free(self.root);
+    }
+};
+
+test "Manager.init registers the configured sync database" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+
+    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.db_path);
+    defer mgr.deinit();
+
+    try testing.expect(mgr.is_initialized);
+    try testing.expect(mgr.handle != null);
+    // applyConfig must have registered the [core] repository as a sync db.
+    try testing.expect(mgr.sync_dbs.items.len >= 1);
+}
+
+test "Manager.sync downloads the configured database into DBPath/sync" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+
+    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.db_path);
+    defer mgr.deinit();
+
+    // Force the download so the result never depends on a pre-existing cache.
+    try mgr.sync(true);
+
+    // sync creates "<DBPath>/sync" and download_database stores each database
+    // there under its bare repository name (no extension).
+    const sync_dir = try std.fmt.allocPrint(allocator, "{s}/sync", .{workspace.db_path});
+    defer allocator.free(sync_dir);
+    _ = try std.Io.Dir.cwd().statFile(io, sync_dir, .{});
+
+    const core_db = try std.fmt.allocPrint(allocator, "{s}/seafoam-labs.db", .{sync_dir});
+    defer allocator.free(core_db);
+    const stat = try std.Io.Dir.cwd().statFile(io, core_db, .{});
+    try testing.expect(stat.size > 0);
 }

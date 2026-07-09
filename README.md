@@ -12,23 +12,7 @@
 
 ## About
 
-Shelly is a modern reimagination of the Arch Linux package manager, designed to be a more intuitive and user-friendly
-alternative to `pacman` and `octopi`. Unlike other Arch package managers, Shelly offers a modern, visual interface with
-a focus on
-user experience and ease of use; It **IS NOT** built as a `pacman` wrapper or front-end. It is a complete reimagination
-of how a user
-interacts with their Arch Linux system, providing a more streamlined and intuitive experience.
-
-<details>
-  <summary>Screenshots</summary>
-  <p align="center">
-  Search Standard Packages, AUR, and Flatpak in one place
-
-  <img width="1372" height="1019" alt="image" src="https://github.com/user-attachments/assets/6aa86662-d9f6-4d3c-9164-9df5d05257b3" />
-  <img width="1768" height="1177" alt="image" src="https://github.com/user-attachments/assets/8e9d851b-a3a0-4aaf-b91a-b3b3c3ec7f6d" />
-  <img width="1768" height="1177" alt="image" src="https://github.com/user-attachments/assets/cc2a8d31-e5c9-42d4-ba87-db25e10a1110" />
-  </p>
-</details>
+Shelly is a modern package manager for Arch Linux designed to be a more user-friendly alternative. Offering a visual interface with a focus on user experience and ease of use. Shelly interfaces directly with `libalpm`. It is a complete reimagination of how a user interacts with their Arch Linux system, providing a more intuitive experience.
 
 ## Quick Install
 
@@ -87,8 +71,6 @@ paru -Rns shelly
 Upcoming features and development targets:
 
 - **Repository Modification**: Allow modification of supported repositories (In progress).
-- **App Image Support**: Further app image support similar to [AppLever](https://github.com/mijorus/gearlever). (In
-  progress)
 - **Package Import**: Allow for import of a previously existing package list to bring the system back to a saved package
   state. (Not yet started)
 - **Multi Language Support**: Translation layer for supporting languages outside english
@@ -99,6 +81,7 @@ Upcoming features and development targets:
 
 - **Arch Linux** (or an Arch-based distribution)
 - **.NET 10.0 SDK** (for building)
+- **vala** (for building)
 - **libalpm** (provided by `pacman`)
 
 #### Optional Prerequisites

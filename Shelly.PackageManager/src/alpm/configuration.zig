@@ -73,7 +73,7 @@ pub const Configuration = struct {
                 .check_space = false,
                 .repositories = .empty,
 
-                .signature_level = sig(.package) | sig(.database_optional),
+                .signature_level = sig(.package) | sig(.database) | sig(.database_optional),
                 .local_file_signature_level = sig(.package_optional) | sig(.database_optional),
                 .remote_file_signature_level = sig(.package) | sig(.database),
             };
@@ -129,35 +129,45 @@ pub const Configuration = struct {
     }
 
     pub fn parse_signature_level(value: []const u8) u32 {
-        var result: u32 = sig(.none);
+        var level: u32 = 0;
         var it = std.mem.tokenizeScalar(u8, value, ' ');
-        while (it.next()) |level| {
-            if (equalIgnoreCase(level, "required") or equalIgnoreCase(level, "packagerequired")) {
-                result |= sig(.package);
-            } else if (equalIgnoreCase(level, "optional") or equalIgnoreCase(level, "packageoptional")) {
-                result |= sig(.package_optional);
-            } else if (equalIgnoreCase(level, "packagemarginalok")) {
-                result |= sig(.package_marginal_ok);
-            } else if (equalIgnoreCase(level, "packageunknownok")) {
-                result |= sig(.package_unknown_ok);
-            } else if (equalIgnoreCase(level, "databaserequired")) {
-                result |= sig(.database);
-            } else if (equalIgnoreCase(level, "databaseoptional")) {
-                result |= sig(.database_optional);
-            } else if (equalIgnoreCase(level, "databasemarginalok")) {
-                result |= sig(.database_marginal_ok);
-            } else if (equalIgnoreCase(level, "databaseunknownok")) {
-                result |= sig(.database_unknown_ok);
-            } else if (equalIgnoreCase(level, "never")) {
-                result = sig(.none);
-            } else if (equalIgnoreCase(level, "trustall")) {
-                result |= sig(.package_unknown_ok) | sig(.package_marginal_ok) |
-                    sig(.database_unknown_ok) | sig(.database_marginal_ok);
-            } else if (equalIgnoreCase(level, "usedefault")) {
-                result |= sig(.use_default);
+        while (it.next()) |token| {
+            var name = token;
+            var package = true;
+            var database = true;
+            if (token.len >= 7 and equalIgnoreCase(token[0..7], "package")) {
+                name = token[7..];
+                database = false;
+            } else if (token.len >= 8 and equalIgnoreCase(token[0..8], "database")) {
+                name = token[8..];
+                package = false;
             }
+
+            if (equalIgnoreCase(name, "never")) {
+                if (package) level &= ~sig(.package);
+                if (database) level &= ~sig(.database);
+            } else if (equalIgnoreCase(name, "optional")) {
+                if (package) level |= sig(.package) | sig(.package_optional);
+                if (database) level |= sig(.database) | sig(.database_optional);
+            } else if (equalIgnoreCase(name, "required")) {
+                if (package) {
+                    level |= sig(.package);
+                    level &= ~sig(.package_optional);
+                }
+                if (database) {
+                    level |= sig(.database);
+                    level &= ~sig(.database_optional);
+                }
+            } else if (equalIgnoreCase(name, "trustedonly")) {
+                if (package) level &= ~(sig(.package_marginal_ok) | sig(.package_unknown_ok));
+                if (database) level &= ~(sig(.database_marginal_ok) | sig(.database_unknown_ok));
+            } else if (equalIgnoreCase(name, "trustall")) {
+                if (package) level |= sig(.package_marginal_ok) | sig(.package_unknown_ok);
+                if (database) level |= sig(.database_marginal_ok) | sig(.database_unknown_ok);
+            }
+            level &= ~sig(.use_default);
         }
-        return result;
+        return level;
     }
 
     pub fn parse_usage(value: []const u8) u32 {
@@ -366,7 +376,7 @@ test "empty input yields defaults" {
     try testing.expectEqualStrings("/var/lib/pacman", conf.database_path);
     try testing.expectEqual(@as(usize, 0), conf.repositories.items.len);
     try testing.expectEqual(@as(usize, 3), conf.hold_packages.items.len);
-    try testing.expectEqual(sig(.package) | sig(.database_optional), conf.signature_level);
+    try testing.expectEqual(sig(.package) | sig(.database) | sig(.database_optional), conf.signature_level);
 }
 
 test "parses options section" {
@@ -390,7 +400,7 @@ test "parses options section" {
     try testing.expectEqualStrings("linux", conf.ignore_package.items[0]);
     try testing.expectEqualStrings("nvidia", conf.ignore_package.items[1]);
     try testing.expect(conf.check_space);
-    try testing.expectEqual(sig(.package) | sig(.database_optional), conf.signature_level);
+    try testing.expectEqual(sig(.package) | sig(.database) | sig(.database_optional), conf.signature_level);
 }
 
 test "parses repositories, servers, siglevel and usage" {
@@ -412,7 +422,7 @@ test "parses repositories, servers, siglevel and usage" {
     const core = conf.repositories.items[0];
     try testing.expectEqualStrings("core", core.name);
     try testing.expectEqual(@as(usize, 1), core.servers.items.len);
-    try testing.expectEqual(sig(.package) | sig(.database_optional), core.sig_level);
+    try testing.expectEqual(sig(.package) | sig(.database) | sig(.database_optional), conf.signature_level);
     try testing.expectEqual(usageBit(.sync) | usageBit(.search), core.usage);
 
     const extra = conf.repositories.items[1];
