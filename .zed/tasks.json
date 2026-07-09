@@ -1,0 +1,15 @@
+// Project tasks configuration. See https://zed.dev/docs/tasks for documentation.
+//
+// Example:
+[
+  {
+    "label": "Package Manager Build Test",
+    "command": "zig build test --summary all",
+    "args": [],
+    "reveal": "always",
+    "reveal_target": "dock",
+    "hide": "never",
+    "cwd": "$ZED_WORKTREE_ROOT/Shelly.PackageManager",
+    "show_command": true,
+  },
+]

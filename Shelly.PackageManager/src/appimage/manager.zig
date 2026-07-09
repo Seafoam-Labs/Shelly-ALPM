@@ -1,6 +1,6 @@
 const std = @import("std");
 const appimage = @import("bindings.zig").appimage;
-const xdg_paths = @import("../helpers/xdg_paths.zig").xdg_paths;
+const xdg_paths = @import("../shared/xdg_paths.zig").xdg_paths;
 
 pub const AppImageManager = struct {
     allocator: std.mem.Allocator,
@@ -49,7 +49,7 @@ pub const AppImageManager = struct {
         return true;
     }
 
-    fn copyFile(self: AppImageManager, src_path: []const u8, dest_path: []const u8) !void {
+    pub fn copyFile(self: AppImageManager, src_path: []const u8, dest_path: []const u8) !void {
         var src = try std.Io.Dir.cwd().openFile(self.io, src_path, .{});
         defer src.close(self.io);
         var dst = try std.Io.Dir.cwd().createFile(self.io, dest_path, .{});
@@ -68,7 +68,7 @@ pub const AppImageManager = struct {
         try writer.interface.flush();
     }
 
-    fn setExecutable(self: AppImageManager, path: []const u8) !void {
+    pub fn setExecutable(self: AppImageManager, path: []const u8) !void {
         var proc = try std.process.spawn(self.io, .{
             .argv = &.{ "chmod", "a+x", path },
             .stdin = .ignore,
@@ -78,7 +78,7 @@ pub const AppImageManager = struct {
         _ = try proc.wait(self.io);
     }
 
-    fn extractMetadata(self: AppImageManager, path: []const u8) !?appimage.AppImage {
+    pub fn extractMetadata(self: AppImageManager, path: []const u8) !?appimage.AppImage {
         const is_rep = path.len >= 4 and std.ascii.eqlIgnoreCase(path[path.len - 4 ..], ".rep");
         const app_name = if (is_rep)
             std.fs.path.stem(std.fs.path.stem(path))
@@ -90,7 +90,7 @@ pub const AppImageManager = struct {
         defer self.allocator.free(clean_name);
 
         cleanup: {
-            const dh = self.xdgDataHome() catch break :cleanup;
+            const dh = xdg_paths.xdgDataHome(self.allocator, self.environ) catch break :cleanup;
             defer self.allocator.free(dh);
             const dd = std.fs.path.join(self.allocator, &.{ dh, "applications" }) catch break :cleanup;
             defer self.allocator.free(dd);
@@ -258,7 +258,7 @@ pub const AppImageManager = struct {
         else
             "icons/hicolor/256x256/apps";
 
-        const data_home = try self.xdgDataHome();
+        const data_home = try xdg_paths.xdgDataHome(self.allocator, self.environ);
         defer self.allocator.free(data_home);
         const icon_dir = try std.fs.path.join(self.allocator, &.{ data_home, icon_sub_dir });
         defer self.allocator.free(icon_dir);
@@ -306,7 +306,7 @@ pub const AppImageManager = struct {
         description: []const u8,
     ) !void {
         _ = squashfs_root;
-        const data_home = try self.xdgDataHome();
+        const data_home = try xdg_paths.xdgDataHome(self.allocator, self.environ);
         defer self.allocator.free(data_home);
         const desktop_dir = try std.fs.path.join(self.allocator, &.{ data_home, "applications" });
         defer self.allocator.free(desktop_dir);
@@ -440,7 +440,7 @@ pub const AppImageManager = struct {
         return result;
     }
 
-    fn addAppImageToLocalDb(self: AppImageManager, appimage_struct: appimage.AppImage) !void {
+    pub fn addAppImageToLocalDb(self: AppImageManager, appimage_struct: appimage.AppImage) !void {
         const existing = try self.getAppImagesFromLocalDb();
         defer self.freeAppImages(existing);
 
@@ -613,7 +613,7 @@ pub const AppImageManager = struct {
         const new_exec_path = try std.fs.path.join(self.allocator, &.{ self.install_directory, new_exec_filename });
         defer self.allocator.free(new_exec_path);
 
-        const data_home = try self.xdgDataHome();
+        const data_home = try xdg_paths.xdgDataHome(self.allocator, self.environ);
         defer self.allocator.free(data_home);
         const desktop_dir = try std.fs.path.join(self.allocator, &.{ data_home, "applications" });
         defer self.allocator.free(desktop_dir);
@@ -806,7 +806,7 @@ pub const AppImageManager = struct {
         return buf;
     }
 
-    fn freeAppImage(self: AppImageManager, appimage_struct: appimage.AppImage) void {
+    pub fn freeAppImage(self: AppImageManager, appimage_struct: appimage.AppImage) void {
         self.allocator.free(appimage_struct.name);
         self.allocator.free(appimage_struct.version);
         self.allocator.free(appimage_struct.raw_update_info);

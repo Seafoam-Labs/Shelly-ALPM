@@ -58,7 +58,7 @@ public class DBusMenuHandler : Object {
         switch (name) {
         case "type" :
             bool is_sep = (id == ID_SEP || id == ID_SEP2);
-            return new GLib.Variant.string (is_sep ? "separator" : "");
+            return new GLib.Variant.string (is_sep ? "separator" : "standard");
         case "label" :
             var dl = dynamic_label (id);
             return new GLib.Variant.string (dl ?? label_for (id));
@@ -170,7 +170,7 @@ public class DBusMenuHandler : Object {
         bool is_sub = (id == ID_SUB_STD || id == ID_SUB_AUR || id == ID_SUB_FLAT);
 
         if (want (all, wanted, "type"))
-            b.add ("{sv}", "type", new GLib.Variant.string (""));
+            b.add ("{sv}", "type", new GLib.Variant.string ("standard"));
 
         if (want (all, wanted, "label")) {
             var dl = dynamic_label (id);

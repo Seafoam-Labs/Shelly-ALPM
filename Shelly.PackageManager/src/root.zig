@@ -32,4 +32,5 @@ test {
     _ = @import("flatpak/appstream_parser.zig");
     _ = @import("appimage/manager.zig");
     _ = @import("shared/downloader.zig");
+    _ = @import("appimage/update_manager.zig");
 }

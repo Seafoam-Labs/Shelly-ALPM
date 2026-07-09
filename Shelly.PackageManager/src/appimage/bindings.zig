@@ -32,5 +32,11 @@ pub const appimage = struct {
         version: []const u8,
         download_url: []const u8,
         is_update_available: bool,
+
+        pub fn deinit(self: AppImageUpdate, allocator: std.mem.Allocator) void {
+            allocator.free(self.name);
+            allocator.free(self.version);
+            allocator.free(self.download_url);
+        }
     };
 };

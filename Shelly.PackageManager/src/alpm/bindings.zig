@@ -116,12 +116,74 @@ pub const libalpm = struct {
             return @intCast(alpm.alpm_db_get_siglevel(self.ptr));
         }
 
+        // Basic sig validity
+        pub fn checkPgpSignature(self: Database) c_int {
+            var siglist: alpm.alpm_siglist_t = .{};
+            defer _ = alpm.alpm_siglist_cleanup(&siglist);
+            return alpm.alpm_db_check_pgp_signature(self.ptr, &siglist);
+        }
+
+        // Full context aware sig validation
+        pub fn verify(self: Database) bool {
+            const level: c_int = @intCast(alpm.alpm_db_get_siglevel(self.ptr));
+            // Database signature checking not enabled -> nothing to enforce.
+            if (level & alpm.ALPM_SIG_DATABASE == 0) return true;
+
+            const optional = level & alpm.ALPM_SIG_DATABASE_OPTIONAL != 0;
+            const marginal_ok = level & alpm.ALPM_SIG_DATABASE_MARGINAL_OK != 0;
+            const unknown_ok = level & alpm.ALPM_SIG_DATABASE_UNKNOWN_OK != 0;
+
+            var siglist: alpm.alpm_siglist_t = .{};
+            defer _ = alpm.alpm_siglist_cleanup(&siglist);
+
+            if (alpm.alpm_db_check_pgp_signature(self.ptr, &siglist) != 0) {
+                // The only tolerable failure is a missing-but-optional signature.
+                const errno: c_int = @intCast(alpm.alpm_errno(alpm.alpm_db_get_handle(self.ptr)));
+                return optional and errno == alpm.ALPM_ERR_SIG_MISSING;
+            }
+
+            // A signature is present: every result must be valid and trusted to
+            // the configured level (libalpm groups VALID and KEY_EXPIRED as valid).
+            var i: usize = 0;
+            while (i < siglist.count) : (i += 1) {
+                const status: c_int = @intCast(siglist.results[i].status);
+                const validity: c_int = @intCast(siglist.results[i].validity);
+                switch (status) {
+                    alpm.ALPM_SIGSTATUS_VALID, alpm.ALPM_SIGSTATUS_KEY_EXPIRED => switch (validity) {
+                        alpm.ALPM_SIGVALIDITY_FULL => {},
+                        alpm.ALPM_SIGVALIDITY_MARGINAL => if (!marginal_ok) return false,
+                        alpm.ALPM_SIGVALIDITY_UNKNOWN => if (!unknown_ok) return false,
+                        else => return false, // NEVER
+                    },
+                    else => return false, // SIG_EXPIRED, KEY_UNKNOWN, KEY_DISABLED, INVALID
+                }
+            }
+            return true;
+        }
+
         pub fn handle(self: Database) Handle {
             return alpm.alpm_db_get_handle(self.ptr);
         }
 
         pub fn unregister(self: Database) bool {
             return alpm.alpm_db_unregister(self.ptr) == 0;
+        }
+
+        pub fn verifyAndReport(self: Database) bool {
+            var siglist: alpm.alpm_siglist_t = .{};
+            defer _ = alpm.alpm_siglist_cleanup(&siglist);
+            const ret = alpm.alpm_db_check_pgp_signature(self.ptr, &siglist);
+            if (ret == 0) return true;
+            var i: usize = 0;
+            while (i < siglist.count) : (i += 1) {
+                const r = siglist.results[i];
+                if (r.status != alpm.ALPM_SIGSTATUS_VALID) {
+                    std.log.warn("{s}.db signature bad: status={d} validity={d}", .{
+                        self.name() orelse "?", @intFromEnum(r.status), @intFromEnum(r.validity),
+                    });
+                }
+            }
+            return false;
         }
     };
 
@@ -381,7 +443,7 @@ pub const libalpm = struct {
         }
 
         pub fn package(self: InstallIgnoredQuestion) Package {
-            return .{ .ptr = self.ptr.pkg };
+            return .{ .ptr = self.ptr.pkg.? };
         }
     };
 
@@ -397,11 +459,11 @@ pub const libalpm = struct {
         }
 
         pub fn old_package(self: ReplacePackageQuestion) Package {
-            return .{ .ptr = self.ptr.oldpkg };
+            return .{ .ptr = self.ptr.oldpkg.? };
         }
 
         pub fn new_package(self: ReplacePackageQuestion) Package {
-            return .{ .ptr = self.ptr.newpkg };
+            return .{ .ptr = self.ptr.newpkg.? };
         }
 
         pub fn new_database(self: ReplacePackageQuestion) Database {
@@ -425,7 +487,7 @@ pub const libalpm = struct {
         }
 
         pub fn filepath(self: RemoveCorruptedPackagesQuestion) [:0]const u8 {
-            return str(self.ptr.filepath);
+            return str(self.ptr.filepath) orelse "";
         }
 
         pub fn reason(self: RemoveCorruptedPackagesQuestion) Error {
@@ -438,7 +500,7 @@ pub const libalpm = struct {
     };
 
     pub const RemovePackagesQuestion = struct {
-        ptr: *alpm.alpm_question_remove_t,
+        ptr: *alpm.alpm_question_remove_pkgs_t,
 
         pub fn from(data: *anyopaque) ?RemovePackagesQuestion {
             return .{ .ptr = @ptrCast(@alignCast(data)) };
@@ -489,7 +551,7 @@ pub const libalpm = struct {
         }
 
         pub fn import(self: ImportKeyQuestion, confirmImport: bool) void {
-            if (confirmImport) self.ptr.confirm = 1 else self.ptr.confirm = 0;
+            if (confirmImport) self.ptr.import = 1 else self.ptr.import = 0;
         }
 
         pub fn uid(self: ImportKeyQuestion) ?[:0]const u8 {

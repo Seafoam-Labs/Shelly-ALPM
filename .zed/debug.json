@@ -1,0 +1,10 @@
+[
+  {
+    "adapter": "CodeLLDB",
+    "label": "PackageManager Build Test",
+    "request": "launch",
+    "program": "$ZED_WORKTREE_ROOT/Shelly.PackageManager/zig-out/bin/Zigalpm",
+    "build": "Package Manager Build Test",
+    "cwd": "$ZED_WORKTREE_ROOT/Shelly.PackageManager",
+  },
+]
