@@ -70,6 +70,9 @@ pub const CoreDownloader = struct {
     http_client: std.http.Client,
     event_callback: ?DownloadEventCallback = null,
     event_context: ?*anyopaque = null,
+    /// When true, error-level logging is suppressed for best-effort downloads
+    /// (e.g. optional database signatures that may legitimately be absent).
+    quiet: bool = false,
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io, config: DownloadConfiguration) CoreDownloader {
         return .{
@@ -149,7 +152,7 @@ pub const CoreDownloader = struct {
             .extra_headers = extra_headers,
             .redirect_behavior = .init(10),
         }) catch |err| {
-            std.log.err("HTTP request setup failed for {s}: {}", .{ url, err });
+            self.logErr("HTTP request setup failed for {s}: {}", .{ url, err });
             return mapRequestError(err);
         };
         defer req.deinit();
@@ -158,13 +161,13 @@ pub const CoreDownloader = struct {
         req.accept_encoding[@intFromEnum(std.http.ContentEncoding.deflate)] = false;
 
         req.sendBodiless() catch |err| {
-            std.log.err("Failed to send request for {s}: {}", .{ url, err });
+            self.logErr("Failed to send request for {s}: {}", .{ url, err });
             return DownloadError.NetworkError;
         };
 
         var redirect_buffer: [8 * 1024]u8 = undefined;
         var response = req.receiveHead(&redirect_buffer) catch |err| {
-            std.log.err("Failed to receive response head for {s}: {}", .{ url, err });
+            self.logErr("Failed to receive response head for {s}: {}", .{ url, err });
             return mapReceiveHeadError(err);
         };
 
@@ -173,11 +176,11 @@ pub const CoreDownloader = struct {
         switch (status.class()) {
             .success => {},
             .server_error => {
-                std.log.err("Server error {d} for {s}", .{ @intFromEnum(status), url });
+                self.logErr("Server error {d} for {s}", .{ @intFromEnum(status), url });
                 return DownloadError.NetworkError;
             },
             else => {
-                std.log.err("HTTP status {d} for {s}", .{ @intFromEnum(status), url });
+                self.logErr("HTTP status {d} for {s}", .{ @intFromEnum(status), url });
                 return DownloadError.HttpError;
             },
         }
@@ -196,7 +199,7 @@ pub const CoreDownloader = struct {
         });
 
         var file = std.Io.Dir.cwd().createFile(self.io, destination_path, .{}) catch |err| {
-            std.log.err("Failed to create file {s}: {}", .{ destination_path, err });
+            self.logErr("Failed to create file {s}: {}", .{ destination_path, err });
             return DownloadError.FileError;
         };
         defer file.close(self.io);
@@ -214,13 +217,13 @@ pub const CoreDownloader = struct {
 
         while (true) {
             const n = body_reader.readSliceShort(copy_buffer) catch {
-                std.log.err("Read failed while downloading {s}: {?}", .{ url, response.bodyErr() });
+                self.logErr("Read failed while downloading {s}: {?}", .{ url, response.bodyErr() });
                 return DownloadError.NetworkError;
             };
             if (n == 0) break;
 
             file.writeStreamingAll(self.io, copy_buffer[0..n]) catch |err| {
-                std.log.err("Failed to write to {s}: {}", .{ destination_path, err });
+                self.logErr("Failed to write to {s}: {}", .{ destination_path, err });
                 return DownloadError.FileError;
             };
 
@@ -279,6 +282,12 @@ pub const CoreDownloader = struct {
 
     fn emitEvent(self: *const CoreDownloader, event: DownloadEvent) void {
         if (self.event_callback) |callback| callback(self.event_context, event);
+    }
+
+    /// Logs at error level unless `quiet` is set, used so best-effort downloads
+    /// do not surface expected failures (e.g. a missing optional signature).
+    fn logErr(self: *const CoreDownloader, comptime fmt: []const u8, args: anytype) void {
+        if (!self.quiet) std.log.err(fmt, args);
     }
 };
 

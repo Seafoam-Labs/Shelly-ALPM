@@ -22,6 +22,11 @@ public class NotificationHandler : Object {
             register_watchers ();
 
             var hints = new GLib.HashTable<string, GLib.Variant> (str_hash, str_equal);
+            // Attribute notifications to the main Shelly desktop entry so
+            // GNOME and Plasma list us in their notification settings and
+            // apply per-app policy. Must not be the helper's own desktop
+            // file: it is NoDisplay=true, which Plasma's KCM filters out.
+            hints["desktop-entry"] = new Variant.string ("com.shellyorg.shelly");
 
             _last_id = yield proxy.notify ("Shelly",
                 _last_id,
