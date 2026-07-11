@@ -55,15 +55,11 @@ pub fn ensureRoot(
         .stdout = .inherit,
         .stderr = .inherit,
     });
+    errdefer child.kill(io);
 
     const term = try child.wait(io);
     try handleTerm(term);
 }
-
-const TermAction = union(enum) {
-    exit: u8,
-    err: ElevateError,
-};
 
 fn handleTerm(term: std.process.Child.Term) ElevateError!noreturn {
     switch (term) {
