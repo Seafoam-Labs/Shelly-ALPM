@@ -16,7 +16,12 @@ fn run(init: std.process.Init) !void {
     switch (opts.command) {
         .help => try Shelly_Key.cli.printHelp(stdout),
         .init => {
-            try Shelly_Key.elevate.ensureRoot(init);
+            try Shelly_Key.elevate.ensureRoot(
+                init.io,
+                init.gpa,
+                args,
+                init.environ_map.get("PATH").?,
+            );
 
             const init_path = opts.init_path;
             try Shelly_Key.keyring.init(init_path);
