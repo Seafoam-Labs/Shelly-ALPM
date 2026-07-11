@@ -38,7 +38,7 @@ pub fn ensureRoot(
 
     const elevator = findElevator(io, allocator, path_env) orelse return error.NoElevator;
 
-    const exe = std.process.executablePathAlloc(io, allocator) catch return error.ExecFailed;
+    const exe = try std.process.executablePathAlloc(io, allocator);
     defer allocator.free(exe);
 
     var new_args: std.ArrayList([]const u8) = .empty;
@@ -49,19 +49,34 @@ pub fn ensureRoot(
     try new_args.append(allocator, exe);
     for (args[1..]) |arg| try new_args.append(allocator, arg);
 
-    var child = std.process.spawn(io, .{
+    var child = try std.process.spawn(io, .{
         .argv = new_args.items,
         .stdin = .inherit,
         .stdout = .inherit,
         .stderr = .inherit,
-    }) catch return error.ExecFailed;
+    });
 
-    const term = child.wait(io) catch return error.ExecFailed;
+    const term = try child.wait(io);
+    try handleTerm(term);
+}
 
+const TermAction = union(enum) {
+    exit: u8,
+    err: ElevateError,
+};
+
+fn handleTerm(term: std.process.Child.Term) ElevateError!noreturn {
     switch (term) {
         .exited => |code| std.process.exit(code),
         // Mirror the shell convention of 128 + signum for signal termination.
         .signal => |sig| std.process.exit(@truncate(128 + @intFromEnum(sig))),
-        else => return error.ExecFailed,
+        .stopped => |sig| {
+            std.log.err("elevator stopped by signal {s}", .{@tagName(sig)});
+            return error.ExecFailed;
+        },
+        .unknown => |status| {
+            std.log.err("elevator unknown status 0x{x}", .{status});
+            return error.ExecFailed;
+        },
     }
 }
