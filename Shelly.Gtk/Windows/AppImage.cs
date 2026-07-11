@@ -247,13 +247,28 @@ public sealed class AppImage(
         {
             case AppImageUpdateType.Codeberg:
             case AppImageUpdateType.GitHub:
-            case AppImageUpdateType.GitLab: 
             {
-                if (string.IsNullOrWhiteSpace(updateUrl) || updateUrl.Count(c => c == '/') != 1 ||
-                    updateUrl.StartsWith('/') || updateUrl.EndsWith('/'))
+                if (!IsOwnerRepo(updateUrl))
                 {
                     isValid = false;
                     _updateUrlErrorLabel.SetText(T("Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"));
+                    _updateUrlErrorLabel.SetVisible(true);
+                    _updateUrlEntry.AddCssClass("error");
+                }
+                else
+                {
+                    _updateUrlErrorLabel.SetVisible(false);
+                    _updateUrlEntry.RemoveCssClass("error");
+                }
+
+                break;
+            }
+            case AppImageUpdateType.GitLab:
+            {
+                if (!IsOwnerRepo(updateUrl) && !IsHttpsGitLabProjectUrl(updateUrl))
+                {
+                    isValid = false;
+                    _updateUrlErrorLabel.SetText(T("Invalid format. Use owner/repo or https://host/group/project"));
                     _updateUrlErrorLabel.SetVisible(true);
                     _updateUrlEntry.AddCssClass("error");
                 }
@@ -291,6 +306,29 @@ public sealed class AppImage(
         }
 
         return isValid;
+    }
+
+    private static bool IsOwnerRepo(string value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        !value.Contains("://", StringComparison.Ordinal) &&
+        value.Count(c => c == '/') == 1 &&
+        !value.StartsWith('/') &&
+        !value.EndsWith('/') &&
+        value.Split('/').All(part => !string.IsNullOrWhiteSpace(part));
+
+    private static bool IsHttpsGitLabProjectUrl(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)) return false;
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) return false;
+        if (string.IsNullOrWhiteSpace(uri.Host)) return false;
+        if (!string.IsNullOrEmpty(uri.UserInfo)) return false;
+
+        var path = uri.AbsolutePath.Trim('/');
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        if (path.StartsWith("api/", StringComparison.OrdinalIgnoreCase)) return false;
+
+        var segments = path.Split('/');
+        return segments.Length >= 2 && segments.All(segment => !string.IsNullOrWhiteSpace(segment));
     }
 
     private static Widget CreateAppRow(AppImageDto app)

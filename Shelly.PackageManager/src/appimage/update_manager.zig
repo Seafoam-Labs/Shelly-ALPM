@@ -70,7 +70,23 @@ pub const UpdateManager = struct {
                 }
             },
             .github, .gitlab, .codeberg => {
-                if (countChar(update_info, '/') == 1) {
+                if (update_type == .gitlab) {
+                    if (parse_gitlab_project(update_info)) |project| {
+                        app.update_type = update_type;
+                        if (project.is_shorthand) {
+                            const idx = std.mem.indexOf(u8, project.project_path, "/").?;
+                            app.repo_owner = project.project_path[0..idx];
+                            app.repo_name = project.project_path[idx + 1 ..];
+                            app.update_url = "";
+                        } else {
+                            app.update_url = update_info;
+                            app.repo_owner = null;
+                            app.repo_name = null;
+                        }
+                    } else {
+                        // std.log.warn("Could not parse update info. Please use owner/repo or https://<domain>/<group>/<repo>");
+                    }
+                } else if (countChar(update_info, '/') == 1) {
                     const idx = std.mem.indexOf(u8, update_info, "/").?;
                     app.repo_owner = update_info[0..idx];
                     app.repo_name = update_info[idx + 1 ..];
@@ -112,7 +128,12 @@ pub const UpdateManager = struct {
                 return self.check_github_update(app.repo_owner.?, app.repo_name.?, app.name, app.version, app.allow_prerelease);
             },
             .gitlab => {
-                return self.check_gitlab_update(app.repo_owner.?, app.repo_name.?, app.name, app.version, app.allow_prerelease);
+                if (app.update_url.len > 0) {
+                    return self.check_gitlab_update(app.update_url, app.name, app.version, app.allow_prerelease);
+                }
+                const update_info = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ app.repo_owner.?, app.repo_name.? });
+                defer self.allocator.free(update_info);
+                return self.check_gitlab_update(update_info, app.name, app.version, app.allow_prerelease);
             },
             .codeberg => {
                 return self.check_codeberg_update(app.repo_owner.?, app.repo_name.?, app.name, app.version, app.allow_prerelease);
@@ -519,8 +540,59 @@ pub const UpdateManager = struct {
         };
     }
 
-    pub fn check_gitlab_update(self: UpdateManager, owner: []const u8, repo: []const u8, app_name: []const u8, current_version: []const u8, allow_prerelease: bool) !?appimage.AppImageUpdate {
-        const url = try gitlab_to_releases_api(self.allocator, owner, repo);
+    const GitLabProject = struct {
+        host: []const u8,
+        project_path: []const u8,
+        is_shorthand: bool,
+    };
+
+    fn parse_gitlab_project(update_info: []const u8) ?GitLabProject {
+        if (update_info.len == 0) return null;
+
+        if (std.mem.indexOf(u8, update_info, "://") == null) {
+            if (countChar(update_info, '/') != 1 or update_info[0] == '/' or update_info[update_info.len - 1] == '/') return null;
+            const idx = std.mem.indexOf(u8, update_info, "/").?;
+            if (idx == 0 or idx + 1 >= update_info.len) return null;
+            return .{
+                .host = "gitlab.com",
+                .project_path = update_info,
+                .is_shorthand = true,
+            };
+        }
+
+        const uri = std.Uri.parse(update_info) catch return null;
+        if (!std.mem.eql(u8, uri.scheme, "https")) return null;
+
+        const host = switch (uri.host orelse return null) {
+            .raw => |h| h,
+            .percent_encoded => |h| h,
+        };
+        if (host.len == 0) return null;
+
+        const path = switch (uri.path) {
+            .raw => |p| p,
+            .percent_encoded => |p| p,
+        };
+        if (path.len < 2 or path[0] != '/') return null;
+        if (std.mem.startsWith(u8, path, "/api/")) return null;
+
+        const project_path = path[1..];
+        if (countChar(project_path, '/') < 1) return null;
+        var segments = std.mem.splitScalar(u8, project_path, '/');
+        while (segments.next()) |segment| {
+            if (segment.len == 0) return null;
+        }
+
+        return .{
+            .host = host,
+            .project_path = project_path,
+            .is_shorthand = false,
+        };
+    }
+
+    pub fn check_gitlab_update(self: UpdateManager, update_info: []const u8, app_name: []const u8, current_version: []const u8, allow_prerelease: bool) !?appimage.AppImageUpdate {
+        const project = parse_gitlab_project(update_info) orelse return null;
+        const url = try gitlab_to_releases_api(self.allocator, project.host, project.project_path);
         defer self.allocator.free(url);
 
         var client = http_client.HttpClient.init(self.allocator, self.io, "Shelly-AppImage-Manager");
@@ -540,12 +612,10 @@ pub const UpdateManager = struct {
         return std.fmt.allocPrint(allocator, "https://api.github.com/repos/{s}/{s}/releases", .{ owner, repo });
     }
 
-    fn gitlab_to_releases_api(allocator: std.mem.Allocator, owner: []const u8, repo: []const u8) ![]u8 {
-        const raw = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ owner, repo });
-        defer allocator.free(raw);
-        const encoded = try std.mem.replaceOwned(u8, allocator, raw, "/", "%2F");
+    fn gitlab_to_releases_api(allocator: std.mem.Allocator, host: []const u8, project_path: []const u8) ![]u8 {
+        const encoded = try std.mem.replaceOwned(u8, allocator, project_path, "/", "%2F");
         defer allocator.free(encoded);
-        return std.fmt.allocPrint(allocator, "https://gitlab.com/api/v4/projects/{s}/releases", .{encoded});
+        return std.fmt.allocPrint(allocator, "https://{s}/api/v4/projects/{s}/releases", .{ host, encoded });
     }
 
     fn parse_gitlab_response(allocator: std.mem.Allocator, body: []const u8, app_name: []const u8, current_version: []const u8, allow_prerelease: bool) !?appimage.AppImageUpdate {
@@ -760,6 +830,50 @@ test "configureUpdates: GitLab works identically to GitHub" {
     try std.testing.expectEqualStrings("gitlab", app.repo_name.?);
 }
 
+test "configureUpdates: GitLab full https url stores update_url and clears repo fields" {
+    var app = appimage.AppImage{ .name = "Test", .repo_owner = "old", .repo_name = "repo" };
+
+    try UpdateManager.configure_update("https://gitlab.example.com/group/project", .gitlab, &app, false);
+
+    try std.testing.expectEqual(appimage.UpdateType.gitlab, app.update_type);
+    try std.testing.expectEqualStrings("https://gitlab.example.com/group/project", app.update_url);
+    try std.testing.expectEqual(@as(?[]const u8, null), app.repo_owner);
+    try std.testing.expectEqual(@as(?[]const u8, null), app.repo_name);
+}
+
+test "configureUpdates: GitLab full https url allows nested groups" {
+    var app = appimage.AppImage{ .name = "Test" };
+
+    try UpdateManager.configure_update("https://gitlab.example.com/group/subgroup/project", .gitlab, &app, false);
+
+    try std.testing.expectEqual(appimage.UpdateType.gitlab, app.update_type);
+    try std.testing.expectEqualStrings("https://gitlab.example.com/group/subgroup/project", app.update_url);
+}
+
+test "configureUpdates: GitLab rejects non-https project urls" {
+    var app = appimage.AppImage{ .name = "Test", .update_type = .none };
+
+    try UpdateManager.configure_update("http://gitlab.example.com/group/project", .gitlab, &app, false);
+
+    try std.testing.expectEqual(appimage.UpdateType.none, app.update_type);
+}
+
+test "configureUpdates: GitLab rejects api endpoint urls" {
+    var app = appimage.AppImage{ .name = "Test", .update_type = .none };
+
+    try UpdateManager.configure_update("https://gitlab.example.com/api/v4/projects/group%2Fproject/releases", .gitlab, &app, false);
+
+    try std.testing.expectEqual(appimage.UpdateType.none, app.update_type);
+}
+
+test "configureUpdates: GitLab rejects empty path segments" {
+    var app = appimage.AppImage{ .name = "Test", .update_type = .none };
+
+    try UpdateManager.configure_update("https://gitlab.example.com/group//project", .gitlab, &app, false);
+
+    try std.testing.expectEqual(appimage.UpdateType.none, app.update_type);
+}
+
 test "configureUpdates: Codeberg rejects malformed owner/repo (no slash)" {
     var app = appimage.AppImage{ .name = "Test", .repo_owner = null, .repo_name = null, .update_type = .none };
 
@@ -793,9 +907,15 @@ test "github_to_releases_api builds correct url" {
 }
 
 test "gitlab_to_releases_api builds correct url with encoded path" {
-    const url = try UpdateManager.gitlab_to_releases_api(std.testing.allocator, "gitlab-org", "gitlab");
+    const url = try UpdateManager.gitlab_to_releases_api(std.testing.allocator, "gitlab.com", "gitlab-org/gitlab");
     defer std.testing.allocator.free(url);
     try std.testing.expectEqualStrings("https://gitlab.com/api/v4/projects/gitlab-org%2Fgitlab/releases", url);
+}
+
+test "gitlab_to_releases_api builds self-hosted url with encoded nested path" {
+    const url = try UpdateManager.gitlab_to_releases_api(std.testing.allocator, "gitlab.example.com", "group/subgroup/project");
+    defer std.testing.allocator.free(url);
+    try std.testing.expectEqualStrings("https://gitlab.example.com/api/v4/projects/group%2Fsubgroup%2Fproject/releases", url);
 }
 
 test "parse_github_response: returns null for empty array" {
@@ -1129,7 +1249,7 @@ test "github_to_releases_api: owner and repo are embedded correctly" {
 }
 
 test "gitlab_to_releases_api: slash in owner/repo is percent-encoded" {
-    const url = try UpdateManager.gitlab_to_releases_api(std.testing.allocator, "my-group", "my-project");
+    const url = try UpdateManager.gitlab_to_releases_api(std.testing.allocator, "gitlab.com", "my-group/my-project");
     defer std.testing.allocator.free(url);
     try std.testing.expect(std.mem.indexOf(u8, url, "%2F") != null);
     try std.testing.expect(std.mem.indexOf(u8, url, "my-group") != null);

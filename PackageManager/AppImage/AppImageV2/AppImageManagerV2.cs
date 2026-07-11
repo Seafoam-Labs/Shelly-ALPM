@@ -18,6 +18,8 @@ namespace PackageManager.AppImage.AppImageV2;
 
 public class AppImageManagerV2(string installDirectory = "")
 {
+    internal readonly record struct GitLabProject(string Host, string ProjectPath, bool IsShorthand);
+
     private readonly string _installDirectory =
         string.IsNullOrEmpty(installDirectory) ? XdgPaths.BinHome() : installDirectory;
 
@@ -140,12 +142,12 @@ public class AppImageManagerV2(string installDirectory = "")
 
                 break;
             case UpdateType.GitHub:
-            case UpdateType.GitLab:
             case UpdateType.Codeberg:
-                if (updateInfo.Count(c => c == '/') == 1)
+                if (IsShorthandRepositoryInfo(updateInfo))
                 {
                     appImage.RepoOwner = updateInfo.Split('/')[0];
                     appImage.RepoName = updateInfo.Split('/')[1];
+                    appImage.UpdateURl = string.Empty;
                     appImage.UpdateType = updateType;
                 }
                 else
@@ -154,6 +156,31 @@ public class AppImageManagerV2(string installDirectory = "")
                         "Could not parse update info. Please use the format: <user>/<repo> (e.g., github.com/user/repo or gitlab.com/user/repo");
                 }
 
+                break;
+            case UpdateType.GitLab:
+                var gitLabProject = NormalizeGitLabProject(updateInfo);
+                if (gitLabProject == null)
+                {
+                    LogWarning(
+                        "Could not parse update info. Please use owner/repo or https://<domain>/<group>/<repo>");
+                    break;
+                }
+
+                if (gitLabProject.Value.IsShorthand)
+                {
+                    var parts = gitLabProject.Value.ProjectPath.Split('/', 2);
+                    appImage.RepoOwner = parts[0];
+                    appImage.RepoName = parts[1];
+                    appImage.UpdateURl = string.Empty;
+                }
+                else
+                {
+                    appImage.UpdateURl = updateInfo;
+                    appImage.RepoOwner = null;
+                    appImage.RepoName = null;
+                }
+
+                appImage.UpdateType = updateType;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(updateType), updateType, null);
@@ -957,10 +984,12 @@ public class AppImageManagerV2(string installDirectory = "")
                 ? await CheckGitHubUpdate(appImage.RepoOwner, appImage.RepoName, appImage.Name, appImage.Version,
                     appImage.AllowPrerelease)
                 : null,
-            UpdateType.GitLab => appImage is { RepoOwner: not null, RepoName: not null }
-                ? await CheckGitLabUpdate(appImage.RepoOwner, appImage.RepoName, appImage.Name, appImage.Version,
-                    appImage.AllowPrerelease)
-                : null,
+            UpdateType.GitLab => !string.IsNullOrWhiteSpace(appImage.UpdateURl)
+                ? await CheckGitLabUpdate(appImage.UpdateURl, appImage.Name, appImage.Version, appImage.AllowPrerelease)
+                : appImage is { RepoOwner: not null, RepoName: not null }
+                    ? await CheckGitLabUpdate($"{appImage.RepoOwner}/{appImage.RepoName}", appImage.Name,
+                        appImage.Version, appImage.AllowPrerelease)
+                    : null,
             UpdateType.Codeberg => appImage is { RepoOwner: not null, RepoName: not null }
                 ? await CheckCodebergUpdate(appImage.RepoName, appImage.RepoOwner, appImage.Name, appImage.Version,
                     appImage.AllowPrerelease)
@@ -1363,14 +1392,14 @@ public class AppImageManagerV2(string installDirectory = "")
                          UpdateURl = apps.UpdateURl,
                          RepoOwner = apps.UpdateType switch
                          {
-                             UpdateType.GitHub or UpdateType.GitLab or UpdateType.Codeberg or UpdateType.Forgejo
-                                 when apps.UpdateURl.Contains('/') => apps.UpdateURl.Split('/')[0],
+                             UpdateType.GitHub or UpdateType.Codeberg or UpdateType.Forgejo => GetShorthandOwner(apps.UpdateURl),
+                             UpdateType.GitLab => GetGitLabShorthandOwner(apps.UpdateURl),
                              _ => null
                          },
                          RepoName = apps.UpdateType switch
                          {
-                             UpdateType.GitHub or UpdateType.GitLab or UpdateType.Codeberg or UpdateType.Forgejo
-                                 when apps.UpdateURl.Contains('/') => apps.UpdateURl.Split('/')[1],
+                             UpdateType.GitHub or UpdateType.Codeberg or UpdateType.Forgejo => GetShorthandRepo(apps.UpdateURl),
+                             UpdateType.GitLab => GetGitLabShorthandRepo(apps.UpdateURl),
                              _ => null
                          },
                          SizeOnDisk = apps.SizeOnDisk,
@@ -1553,12 +1582,15 @@ public class AppImageManagerV2(string installDirectory = "")
 
     #region GitLab
 
-    private static async Task<AppImageUpdateDto?> CheckGitLabUpdate(string owner, string repo, string appName,
+    private static async Task<AppImageUpdateDto?> CheckGitLabUpdate(string updateInfo, string appName,
         string currentVersion, bool allowPrerelease = false)
     {
         try
         {
-            var url = GitLabToReleasesApi(owner, repo);
+            var project = NormalizeGitLabProject(updateInfo);
+            if (project == null) return null;
+
+            var url = GitLabToReleasesApi(project.Value.Host, project.Value.ProjectPath);
 
             var response = await HttpClient.GetAsync(url);
             if (!response.IsSuccessStatusCode) return null;
@@ -1626,10 +1658,64 @@ public class AppImageManagerV2(string installDirectory = "")
         }
     }
 
-    private static string GitLabToReleasesApi(string owner, string repo)
+    internal static GitLabProject? NormalizeGitLabProject(string updateInfo)
     {
-        var encodedPath = Uri.EscapeDataString($"{owner}/{repo}");
-        return $"https://gitlab.com/api/v4/projects/{encodedPath}/releases";
+        if (string.IsNullOrWhiteSpace(updateInfo)) return null;
+
+        if (!updateInfo.Contains("://", StringComparison.Ordinal))
+        {
+            if (!IsShorthandRepositoryInfo(updateInfo)) return null;
+
+            return new GitLabProject("gitlab.com", updateInfo, true);
+        }
+
+        if (!Uri.TryCreate(updateInfo, UriKind.Absolute, out var uri)) return null;
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) return null;
+        if (string.IsNullOrWhiteSpace(uri.Host)) return null;
+        if (!string.IsNullOrEmpty(uri.UserInfo)) return null;
+
+        var path = uri.AbsolutePath.Trim('/');
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        if (path.StartsWith("api/", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var pathParts = path.Split('/');
+        if (pathParts.Length < 2) return null;
+        if (pathParts.Any(string.IsNullOrWhiteSpace)) return null;
+
+        var host = uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
+        return new GitLabProject(host, path, false);
+    }
+
+    internal static string GitLabToReleasesApi(string host, string projectPath)
+    {
+        var encodedPath = Uri.EscapeDataString(projectPath);
+        return $"https://{host}/api/v4/projects/{encodedPath}/releases";
+    }
+
+    private static bool IsShorthandRepositoryInfo(string updateInfo) =>
+        !string.IsNullOrWhiteSpace(updateInfo) &&
+        !updateInfo.Contains("://", StringComparison.Ordinal) &&
+        updateInfo.Count(c => c == '/') == 1 &&
+        !updateInfo.StartsWith('/') &&
+        !updateInfo.EndsWith('/') &&
+        updateInfo.Split('/').All(part => !string.IsNullOrWhiteSpace(part));
+
+    private static string? GetShorthandOwner(string updateInfo) =>
+        IsShorthandRepositoryInfo(updateInfo) ? updateInfo.Split('/')[0] : null;
+
+    private static string? GetShorthandRepo(string updateInfo) =>
+        IsShorthandRepositoryInfo(updateInfo) ? updateInfo.Split('/')[1] : null;
+
+    private static string? GetGitLabShorthandOwner(string updateInfo)
+    {
+        var project = NormalizeGitLabProject(updateInfo);
+        return project is { } value && value.IsShorthand ? value.ProjectPath.Split('/')[0] : null;
+    }
+
+    private static string? GetGitLabShorthandRepo(string updateInfo)
+    {
+        var project = NormalizeGitLabProject(updateInfo);
+        return project is { } value && value.IsShorthand ? value.ProjectPath.Split('/')[1] : null;
     }
 
     #endregion
