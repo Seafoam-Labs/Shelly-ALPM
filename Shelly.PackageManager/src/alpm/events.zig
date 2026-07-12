@@ -30,7 +30,7 @@ pub const ErrorArgs = struct {
 };
 
 pub const InformationalArgs = struct {
-    event_type: c_int,
+    event_type: bindings.libalpm.EventType,
     message: []const u8,
 };
 
@@ -673,7 +673,7 @@ test "informational, scriptlet and hook handlers dispatch" {
     _ = disp.addScriptletHandler(.{ .function = setBoolCallback(ScriptletArgs), .data = @ptrCast(&scriptlet_called) }) catch unreachable;
     _ = disp.addHookHandler(.{ .function = setBoolCallback(HookArgs), .data = @ptrCast(&hook_called) }) catch unreachable;
 
-    disp.raiseInformational(.{ .event_type = 0, .message = "info" });
+    disp.raiseInformational(.{ .event_type = .transaction_start, .message = "info" });
     disp.raiseScriptlet(.{ .line = "line" });
     disp.raiseHook(.{ .description = "hook", .position = 1, .total = 2 });
 

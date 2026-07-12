@@ -5,6 +5,7 @@ const configuration = @import("configuration.zig");
 const builtin = @import("builtin");
 const downloader = @import("../shared/downloader.zig");
 const listDictionary = @import("../shared/list_dictionary.zig");
+const TransFlag = bindings.libalpm.TransFlag;
 
 const libalpm = bindings.libalpm; // typed aliases (Handle, Database, Config, ...)
 const rawLibalpm = bindings.libalpm.alpm;
@@ -19,7 +20,7 @@ pub const InitError = error{
     RegisterDbFailed,
     ConfigParseFailed,
 };
-pub const TransactionError = error{ NoHandle, TransInitFailed, PrepareFailed, CommitFailed, UnsatisfiedDeps, ConflictingDeps, FileConflicts, SyncDbFailed, PackageFetchFailed, DatabaseReadFailed, RefreshFailed };
+pub const TransactionError = error{ NoHandle, TransInitFailed, PrepareFailed, CommitFailed, UnsatisfiedDeps, ConflictingDeps, FileConflicts, SyncDbFailed, PackageFetchFailed, DatabaseReadFailed, RefreshFailed, OutOfMemory, NoPackageFound };
 
 pub const QueryError = error{ DbNotFound, PkgNotFound };
 
@@ -303,104 +304,226 @@ pub const Manager = struct {
     pub fn install_packages(
         self: *Manager,
         package_names: [][:0]const u8,
-        trans_flags: [][]const bindings.libalpm.TransFlag,
-    ) TransactionError!void {
-        const sync_databases = rawLibalpm.alpm_get_syncdbs(self.handle);
-        _ = trans_flags;
+        trans_flags_arg: TransFlag,
+    ) TransactionError!bool {
         if (self.handle == null) return TransactionError.NoHandle;
-        var packages: std.ArrayList(rawLibalpm.alpm_pkg_t) = .empty;
+        const sync_databases = rawLibalpm.alpm_get_syncdbs(self.handle);
+        var packages: std.ArrayList(*rawLibalpm.alpm_pkg_t) = .empty;
         defer packages.deinit(self.allocator);
-        var repo_package = std.StringHashMap([:0]const u8);
-        repo_package.init(self.allocator);
-        defer repo_package.deinit();
-        var name_only_packages: std.ArrayList([:0]const u8) = .empty;
-        defer name_only_packages.deinit(self.allocator);
+        var optional_names: std.ArrayList([:0]const u8) = .empty;
+        defer optional_names.deinit(self.allocator);
 
-        // Split package names into repo/pkg and name-only packages
-        for (package_names) |name| {
-            const split = std.mem.splitScalar([]const u8, name, '/');
-            if (split.buffer == null) continue;
-            const repo = split.next() orelse {
-                name_only_packages.append(self.allocator, name) orelse continue;
-                continue;
-            };
-            const pkg_name = split.next() orelse continue;
-            repo_package.put(pkg_name, repo);
+        for (package_names) |target| {
+            const slash = std.mem.indexOfScalar(u8, target, '/');
+            if (slash) |i| {
+                if (i == 0 or i + 1 >= target.len) return TransactionError.PackageFetchFailed;
+                const repo = target[0..i];
+                const name = target[i + 1 ..];
+                var node = sync_databases;
+                var found: ?*rawLibalpm.alpm_pkg_t = null;
+                while (node != null) : (node = node.*.next) {
+                    const db_data: ?*anyopaque = node.*.data;
+                    const db_ptr: *rawLibalpm.alpm_db_t = @ptrCast(@alignCast(db_data orelse continue));
+                    const db_name = libalpm.str(rawLibalpm.alpm_db_get_name(db_ptr)) orelse continue;
+                    if (!std.ascii.eqlIgnoreCase(repo, db_name)) continue;
+                    found = rawLibalpm.alpm_db_get_pkg(db_ptr, name.ptr);
+                    break;
+                }
+                try packages.append(self.allocator, found orelse return TransactionError.PackageFetchFailed);
+            } else {
+                var node = sync_databases;
+                var found_any = false;
+                while (node != null) : (node = node.*.next) {
+                    const db_data: ?*anyopaque = node.*.data;
+                    const db_ptr: *rawLibalpm.alpm_db_t = @ptrCast(@alignCast(db_data orelse continue));
+                    if (rawLibalpm.alpm_db_get_pkg(db_ptr, target.ptr)) |pkg| {
+                        try packages.append(self.allocator, pkg);
+                        found_any = true;
+                        break;
+                    }
+                    if (rawLibalpm.alpm_db_get_group(db_ptr, target.ptr)) |group| {
+                        var pkg_node = group.*.packages;
+                        while (pkg_node != null) : (pkg_node = pkg_node.*.next) {
+                            const pkg_data: ?*anyopaque = pkg_node.*.data;
+                            const pkg: *rawLibalpm.alpm_pkg_t = @ptrCast(@alignCast(pkg_data orelse continue));
+                            try packages.append(self.allocator, pkg);
+                        }
+                        found_any = true;
+                        break;
+                    }
+                    if (rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(db_ptr), target.ptr)) |pkg| {
+                        try packages.append(self.allocator, pkg);
+                        found_any = true;
+                        break;
+                    }
+                }
+                if (!found_any) return TransactionError.PackageFetchFailed;
+            }
+        }
+        if (packages.items.len == 0) return TransactionError.PackageFetchFailed;
+
+        // Ask once per package. The event response's `pkg` is the selected optional
+        // dependency; callers may answer repeatedly as each package is inspected.
+        const initial_count = packages.items.len;
+        for (packages.items[0..initial_count]) |pkg| {
+            var names: std.ArrayList([]const u8) = .empty;
+            defer names.deinit(self.allocator);
+            var options: std.ArrayList(events.ProviderOption) = .empty;
+            defer options.deinit(self.allocator);
+            var deps = (libalpm.Package{ .ptr = pkg }).optional_depends();
+            while (deps.next()) |dep| {
+                const name = dep.name() orelse continue;
+                if (!(self.get_opt_depend_if_available(name) catch false)) continue;
+                const local_cache = rawLibalpm.alpm_db_get_pkgcache(rawLibalpm.alpm_get_localdb(self.handle));
+                try names.append(self.allocator, name);
+                try options.append(self.allocator, .{
+                    .name = name,
+                    .description = dep.description() orelse "No description found",
+                    .is_installed = rawLibalpm.alpm_find_satisfier(local_cache, name.ptr) != null,
+                });
+            }
+            if (options.items.len == 0 or self.dispatcher.question.items.len == 0) continue;
+            const pkg_name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse "package";
+            const prompt = try std.fmt.allocPrint(self.allocator, "Select an optional dependency for {s}", .{pkg_name});
+            defer self.allocator.free(prompt);
+            const response = self.dispatcher.raiseQuestion(self.io(), .{
+                .question = prompt,
+                .question_type = @intFromEnum(libalpm.QuestionType.select_optional_dependencies),
+                .options = names.items,
+                .provider_options = options.items,
+            });
+            const selected = response.pkg orelse continue;
+            const selected_z = try self.allocator.dupeZ(u8, selected);
+            defer self.allocator.free(selected_z);
+            if (rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(rawLibalpm.alpm_get_localdb(self.handle)), selected_z.ptr) != null) continue;
+            var node = sync_databases;
+            while (node != null) : (node = node.*.next) {
+                const db_data: ?*anyopaque = node.*.data;
+                const db_ptr: *rawLibalpm.alpm_db_t = @ptrCast(@alignCast(db_data orelse continue));
+                const selected_pkg = rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(db_ptr), selected_z.ptr) orelse continue;
+                try packages.append(self.allocator, selected_pkg);
+                if (libalpm.str(rawLibalpm.alpm_pkg_get_name(selected_pkg))) |resolved_name|
+                    try optional_names.append(self.allocator, resolved_name);
+                break;
+            }
         }
 
-        var sync_dbs = sync_databases.*;
-        while (sync_dbs != null) : (sync_dbs = sync_dbs.next()) {
-            var repo_package_iterator = repo_package.iterator();
-            const db_ptr = sync_dbs.data orelse continue;
-            const db: libalpm.Database = .{ .ptr = db_ptr };
+        // Starts transaction impleentation
+        var trans_flags = trans_flags_arg.to_trans_flag();
+        if (trans_flags_arg == .dbonly) trans_flags |= TransFlag.nodeps.to_trans_flag();
+        if (rawLibalpm.alpm_trans_init(self.handle, @bitCast(trans_flags)) != 0) return TransactionError.TransInitFailed;
+        defer _ = rawLibalpm.alpm_trans_release(self.handle);
 
-            // Iterates repo/pkg combinations
-            while (repo_package_iterator.next()) |entry| {
-                if (std.ascii.eqlIgnoreCase(entry.value_ptr.*, db.name() orelse "")) {
-                    const temp_pkg = db.getPackage(entry.key) orelse continue;
-                    packages.append(self.allocator, temp_pkg.ptr) catch {
+        for (packages.items) |pkg| {
+            if (rawLibalpm.alpm_add_pkg(self.handle, pkg) == 0) continue;
+            if (rawLibalpm.alpm_errno(self.handle) == rawLibalpm.ALPM_ERR_TRANS_DUP_TARGET) continue;
+            return TransactionError.PrepareFailed;
+        }
+        var data: [*c]rawLibalpm.alpm_list_t = null;
+        if (rawLibalpm.alpm_trans_prepare(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {};
+            return TransactionError.PrepareFailed;
+        }
+        if (rawLibalpm.alpm_trans_commit(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {};
+            return TransactionError.CommitFailed;
+        }
+        const local_db = rawLibalpm.alpm_get_localdb(self.handle);
+        for (optional_names.items) |name| {
+            const installed = rawLibalpm.alpm_db_get_pkg(local_db, name.ptr) orelse continue;
+            _ = rawLibalpm.alpm_pkg_set_reason(installed, rawLibalpm.ALPM_PKG_REASON_DEPEND);
+        }
+        return true;
+    }
+
+    pub fn remove_packages(self: *Manager, packages_names: [][:0]const u8, flags: TransFlag, keep_optional_dependencis: bool) TransactionError!bool {
+        if (self.handle == null) return TransactionError.NoHandle;
+        _ = flags;
+
+        for (self.config.hold_packages.items) |hold_pkg| {
+            for (packages_names) |pkg| {
+                if (std.ascii.eqlIgnoreCase(hold_pkg, pkg)) {
+                    const prompt = std.fmt.allocPrint(self.allocator, "Are you sure you want to remove {s} is it listed as a held package", .{pkg});
+                    defer self.allocator.free(prompt);
+                    const response = self.askYesNo(self.io(), @intFromEnum(libalpm.QuestionType.remove_packages), prompt);
+                    if (!response) {
+                        self.dispatcher.raiseError(.{"Held package removal cancelled."});
                         return TransactionError.PrepareFailed;
-                    };
-
-                    const message = try std.fmt.allocPrint(self.allocator, "Found package {s} in repository {s}", .{ entry.key_ptr.*, entry.value_ptr.* });
-                    defer self.allocator.free(message);
-                    self.dispatcher.raiseInformational(.{ .message = message });
-                    _ = repo_package.remove(entry.key_ptr.*);
-                    break;
+                    }
                 }
             }
         }
 
-        if (repo_package.count() > 0) {
-            var repo_package_iterator = repo_package.iterator();
-            while (repo_package_iterator.next()) |entry| {
-                const message = try std.fmt.allocPrint(self.allocator, "Package {s} not found in any repository", .{entry.key_ptr.*});
-                defer self.allocator.free(message);
-                self.dispatcher.raiseInformational(.{ .message = message });
-            }
+        const local_db = rawLibalpm.alpm_get_localdb(self.handle);
+        var package_pointers: std.ArrayList(*rawLibalpm.alpm_pkg_t) = .empty;
+        defer package_pointers.deinit(self.allocator);
+        for (packages_names) |pkg| {
+            // Check for regular package
+            const package = rawLibalpm.alpm_db_get_pkg(local_db, pkg) orelse {
+                // Check for group name
+                const group_ptr = rawLibalpm.alpm_db_get_group(local_db, pkg) orelse {
+                    const satisfier = rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(local_db), pkg) orelse {
+                        self.dispatcher.raiseError(.{ .message = "Failed to find package" });
+                        return TransactionError.NoPackageFound;
+                    };
+                    package_pointers.append(self.allocator, satisfier) catch {
+                        return TransactionError.OutOfMemory;
+                    };
+                    continue;
+                };
+                const group = libalpm.AlpmPackageGroup{ .ptr = group_ptr };
+                var packages = group.packages();
+
+                while (packages.next()) |package| {
+                    package_pointers.append(self.allocator, package) catch {
+                        return TransactionError.OutOfMemory;
+                    };
+                }
+                continue;
+            };
+
+            package_pointers.append(self.allocator, package) catch {
+                return TransactionError.OutOfMemory;
+            };
         }
 
-        //TODO: this should be refactored to completely replace the iteration with a multithreaded approach and resolution
-        // currently single threaded and exact copy of the original c# implementation
-        //Iterates name only input checking in a single db for correct pkg in the order of pkg->group pkg->generic satisfier
-        for (name_only_packages.items) |package_name| {
-            // reassigning to head to iterate again
-            sync_dbs = sync_databases.*;
-            while (sync_dbs != null) : (sync_dbs = sync_dbs.next()) {
-                const db_ptr = sync_dbs.data orelse continue;
-                const db: libalpm.Database = .{ .ptr = db_ptr };
-                // Lookgs for pkgname match falls to group if fails
-                const pkg = rawLibalpm.alpm_db_get_pkg(db.ptr, package_name) orelse {
-                    // Looks for group match falls to satisfier if fails
-                    const group = rawLibalpm.alpm_db_get_group(db.ptr, package_name.ptr) orelse {
-                        // Looks for satisfier gives up if fails and moves to next db
-                        const pkg_cache = rawLibalpm.alpm_db_get_pkgcache(db.ptr) orelse {
-                            continue;
-                        };
-                        // I guess I'll definitely die and go to the next db if this fails
-                        const match = rawLibalpm.alpm_find_satisfier(pkg_cache, package_name.ptr) orelse {
-                            continue;
-                        };
-                        packages.append(self.allocator, match) orelse {
-                            return TransactionError.PrepareFailed;
-                        };
-                        break;
+        if (!keep_optional_dependencis) {
+            const current_count = package_pointers.items.len;
+            for (package_pointers.items[0..current_count]) |*ptr| {
+                const package = libalpm.Package{ .ptr = *ptr };
+                const optional_deps = package.optional_depends();
+                while (optional_deps.next()) |deps| {
+                    const local_ptr = rawLibalpm.alpm_db_get_pkg(local_db, deps.name()) orelse {
+                        const message = std.fmt.allocPrint(self.allocator, "Failed to find {s} in local database. Skipping...", .{deps.name()});
+                        defer self.allocator.free(message);
+                        self.dispatcher.raiseInformational(.{
+                            .event_type = libalpm.EventType.failed_optional_dependency_operation,
+                            .message = message,
+                        });
                     };
-                    var group_packages = group.*.packages.?.*;
-                    while (group_packages != null) : (group_packages = group_packages.next()) {
-                        const pkg = group_packages.data.?;
-                        packages.append(self.allocator, pkg) orelse {
-                            return TransactionError.PrepareFailed;
-                        };
-                    }
-                    break;
-                };
-                packages.append(self.allocator, pkg) orelse {
-                    return TransactionError.PrepareFailed;
-                };
-                break;
+                    const pkg_reason = rawLibalpm.alpm_pkg_get_reason(local_ptr);
+                    _ = pkg_reason;
+                }
             }
         }
+        return false;
+    }
+
+    //Essentially same as above but iterates just for a single package name to determine
+    fn get_opt_depend_if_available(self: *Manager, pkg_name: [:0]const u8) TransactionError!bool {
+        if (self.handle == null) return TransactionError.NoHandle;
+        const sync_database = rawLibalpm.alpm_get_syncdbs(self.handle);
+        var sync_dbs = sync_database;
+        // Essentially same as above but iterates just for a single package name
+        // Discarding the results as we don't need them here and it removes unnecessary allocations.
+        while (sync_dbs != null) : (sync_dbs = sync_dbs.*.next) {
+            const db_data: ?*anyopaque = sync_dbs.*.data;
+            const db: *rawLibalpm.alpm_db_t = @ptrCast(@alignCast(db_data orelse continue));
+            if (rawLibalpm.alpm_db_get_pkg(db, pkg_name.ptr) != null) return true;
+            if (rawLibalpm.alpm_db_get_group(db, pkg_name.ptr) != null) return true;
+            if (rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(db), pkg_name.ptr) != null) return true;
+        }
+        return false;
     }
 
     fn refresh(self: *Manager) TransactionError!void {
@@ -665,11 +788,11 @@ pub const Manager = struct {
         downloader_instance.setEventCallback(onDownloadEvent, self);
         switch (downloader_instance.downloadToFile(url_slice, local_slice, force != 0)) {
             .succes => |succ| {
-                self.dispatcher.raiseInformational(.{ .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE, .message = succ.destination_path });
+                self.dispatcher.raiseInformational(.{ .event_type = .pkg_retrieve_done, .message = succ.destination_path });
                 return 0;
             },
             .skipped => |skip| {
-                self.dispatcher.raiseInformational(.{ .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE, .message = skip.destination_path });
+                self.dispatcher.raiseInformational(.{ .event_type = .pkg_retrieve_done, .message = skip.destination_path });
                 return 1;
             },
             .failure => |err| {
@@ -684,7 +807,7 @@ pub const Manager = struct {
         const path = event.destination_path orelse "";
         switch (event.event_type) {
             .Start => self.dispatcher.raiseInformational(.{
-                .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_START,
+                .event_type = .pkg_retrieve_start,
                 .message = path,
             }),
             .Progress => if (event.progress) |p| self.dispatcher.raiseProgress(.{
@@ -695,7 +818,7 @@ pub const Manager = struct {
                 .current = 1,
             }),
             .Complete => self.dispatcher.raiseInformational(.{
-                .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE,
+                .event_type = .pkg_retrieve_done,
                 .message = path,
             }),
             .Error => self.dispatcher.raiseError(.{
@@ -729,7 +852,7 @@ pub const Manager = struct {
     ) callconv(.c) void {
         const self: *Manager = @ptrCast(@alignCast(ctx));
         self.dispatcher.raiseInformational(.{
-            .event_type = @intCast(event.*.type),
+            .event_type = libalpm.EventType.from_libalpm(@intCast(event.*.type)),
             .message = "Temp Message",
         });
     }
@@ -1170,7 +1293,7 @@ test "eventCallback dispatches an informational event carrying the event type" {
     Manager.eventCallback(@ptrCast(&mgr), &ev);
 
     const args = cap.args orelse return error.TestFailed;
-    try testing.expectEqual(@as(c_int, rawLibalpm.ALPM_EVENT_TRANSACTION_START), args.event_type);
+    try testing.expectEqual(libalpm.EventType.transaction_start, args.event_type);
     try testing.expectEqualStrings("Temp Message", args.message);
 }
 
@@ -2017,6 +2140,91 @@ test "toggle_hidden_packages flips state and returns the new value" {
     try testing.expectEqual(true, mgr.show_hidden_packages);
     try testing.expectEqual(false, mgr.toggle_hidden_packages());
     try testing.expectEqual(false, mgr.show_hidden_packages);
+}
+
+// ---------------------------------------------------------------------------
+// install_packages
+// ---------------------------------------------------------------------------
+
+test "install_packages returns NoHandle when the handle is null" {
+    var mgr: Manager = undefined;
+    mgr.handle = null;
+    mgr.allocator = testing.allocator;
+
+    var package_names = [_][:0]const u8{"anything"};
+    try testing.expectError(
+        error.NoHandle,
+        mgr.install_packages(&package_names, .none),
+    );
+}
+
+test "install_packages rejects an empty package list" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+
+    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.db_path);
+    defer mgr.deinit();
+
+    var package_names = [_][:0]const u8{};
+    try testing.expectError(
+        error.PackageFetchFailed,
+        mgr.install_packages(&package_names, .none),
+    );
+}
+
+test "install_packages rejects malformed repository-qualified targets" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+
+    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.db_path);
+    defer mgr.deinit();
+
+    const malformed = [_][:0]const u8{ "/package", "repository/" };
+    for (malformed) |target| {
+        var package_names = [_][:0]const u8{target};
+        try testing.expectError(
+            error.PackageFetchFailed,
+            mgr.install_packages(&package_names, .none),
+        );
+    }
+}
+
+test "install_packages returns PackageFetchFailed when a target cannot be resolved" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+
+    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.db_path);
+    defer mgr.deinit();
+
+    var unqualified = [_][:0]const u8{"shelly-package-that-does-not-exist"};
+    try testing.expectError(
+        error.PackageFetchFailed,
+        mgr.install_packages(&unqualified, .none),
+    );
+
+    var qualified = [_][:0]const u8{"seafoam-labs/shelly-package-that-does-not-exist"};
+    try testing.expectError(
+        error.PackageFetchFailed,
+        mgr.install_packages(&qualified, .none),
+    );
 }
 
 // ---------------------------------------------------------------------------
