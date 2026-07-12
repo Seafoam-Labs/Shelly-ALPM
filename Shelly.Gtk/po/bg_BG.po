@@ -1,11 +1,11 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: shelly-ui 2.3.0.3\n"
+"Project-Id-Version: shelly-ui 2.5.0.0\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-05-14 18:41-0400\n"
-"PO-Revision-Date: 2026-05-16 11:00+EST\n"
+"PO-Revision-Date: 2026-07-12 11:00+EST\n"
 "Last-Translator: momchil.nikolov@outlook.com\n"
-"Language-Team: Bulgarian (Bulgaria) momchil.nikolov@outlook.com\n"
+"Language-Team: Bulgaria momchil.nikolov@outlook.com\n"
 "Language: bg\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -39,10 +39,10 @@ msgid "Log copied to clipboard"
 msgstr "Логът е копиран в клипборда"
 
 msgid "Available Updates ({0})"
-msgstr "Налични актуализации ({0})"
+msgstr "Налични обновления ({0})"
 
 msgid "Updates ({0})"
-msgstr "Актуализации ({0})"
+msgstr "Обновления ({0})"
 
 msgid "All packages are up to date"
 msgstr "Всички пакети са актуални"
@@ -81,25 +81,25 @@ msgid "Installed {0} Package(s)"
 msgstr "Инсталирани {0} пакет(а)"
 
 msgid "Export AUR install log"
-msgstr "Експортиране на лог от инсталация на AUR"
+msgstr "Експортиране на лог за инсталация от AUR"
 
-msgid "Log Files (.log)"
-msgstr "Лог файлове (.log)"
+msgid "Log Files (*.log)"
+msgstr "Лог файлове (*.log)"
 
 msgid "Exported AUR install log"
-msgstr "Експортиран AUR инсталационен лог"
+msgstr "Логът за инсталация от AUR е експортиран"
 
 msgid "Failed to export AUR install log"
-msgstr "Неуспешно експортиране на AUR инсталационен лог"
+msgstr "Неуспешно експортиране на лог за инсталация от AUR"
 
 msgid "Package Build"
-msgstr "Изграждане на пакет"
+msgstr "Компилация на пакет"
 
 msgid "Preview PKGBUILD"
 msgstr "Преглед на PKGBUILD"
 
 msgid "Displays Package Build"
-msgstr "Показва изграждането на пакета"
+msgstr "Показва компилацията на пакета"
 
 msgid "Close details"
 msgstr "Затваряне на детайлите"
@@ -117,16 +117,16 @@ msgid "Out of Date"
 msgstr "Остарял"
 
 msgid "Maintainer"
-msgstr "Поддръжник"
+msgstr "Поддръжка"
 
 msgid "Orphaned"
-msgstr "Осиротял"
+msgstr "Изоставен"
 
 msgid "Last Modified"
-msgstr "Последно модифициран"
+msgstr "Последна промяна"
 
 msgid "First Submitted"
-msgstr "Първоначално изпратен"
+msgstr "Първоначално подаване"
 
 msgid "URL:"
 msgstr "URL:"
@@ -138,10 +138,10 @@ msgid "Depends"
 msgstr "Зависимости"
 
 msgid "Make Depends"
-msgstr "Зависимости при компилиране"
+msgstr "Make Зависимости"
 
 msgid "Check Depends"
-msgstr "Зависимости при проверка"
+msgstr "Check Зависимости"
 
 msgid "Optional Deps"
 msgstr "Незадължителни зависимости"
@@ -162,7 +162,7 @@ msgid "Groups"
 msgstr "Групи"
 
 msgid "Replaces"
-msgstr "Замества"
+msgstr "Заменя"
 
 msgid "Remove Packages?"
 msgstr "Премахване на пакети?"
@@ -177,13 +177,13 @@ msgid "<span size='large'>AUR packages are up to date</span>"
 msgstr "<span size='large'>AUR пакетите са актуални</span>"
 
 msgid "Update Packages?"
-msgstr "Актуализиране на пакети?"
+msgstr "Обновяване на пакети?"
 
 msgid "Updated {0} Package(s)"
-msgstr "Актуализирани {0} пакет(а)"
+msgstr "Обновени {0} пакет(а)"
 
 msgid "Shelly is an Arch Linux package manager"
-msgstr "Shelly е мениджър на пакети за Arch Linux"
+msgstr "Shelly е пакетен мениджър за Arch Linux"
 
 msgid "Seafoam Labs Website"
 msgstr "Уебсайт на Seafoam Labs"
@@ -192,7 +192,7 @@ msgid "Project Leads"
 msgstr "Ръководители на проекта"
 
 msgid "Maintainers"
-msgstr "Поддръжници"
+msgstr "Поддържащи"
 
 msgid "Select"
 msgstr "Избор"
@@ -216,25 +216,25 @@ msgid "Replace Package?"
 msgstr "Замяна на пакет?"
 
 msgid "Package Conflict Detected"
-msgstr "Открит конфликт на пакети"
+msgstr "Открит е конфликт на пакети"
 
 msgid "Corrupted Package Found"
-msgstr "Открит повреден пакет"
+msgstr "Открит е повреден пакет"
 
 msgid "Import PGP Key?"
 msgstr "Импортиране на PGP ключ?"
 
 msgid "Select Provider"
-msgstr "Избор на доставчик"
+msgstr "Изберете доставчик"
 
 msgid "Select Optional Dependencies"
-msgstr "Избор на незадължителни зависимости"
+msgstr "Изберете незадължителни зависимости"
 
 msgid "System Question"
 msgstr "Системен въпрос"
 
 msgid "Arch Linux News"
-msgstr "Новини от Arch Linux"
+msgstr "Новини за Arch Linux"
 
 msgid "No news available"
 msgstr "Няма налични новини"
@@ -246,16 +246,16 @@ msgid "packages"
 msgstr "пакети"
 
 msgid "AUR installation failed"
-msgstr "Инсталацията от AUR се провали"
+msgstr "Инсталацията от AUR не успя"
 
 msgid ""
 "Shelly couldn't finish building or installing the selected AUR {0}. Export "
 "the logs and attach them to your report so the team can check whether the "
 "issue came from the PKGBUILD or from Shelly."
 msgstr ""
-"Shelly не успя да завърши изграждането или инсталирането на избрания AUR {0}. Експортирайте "
-"логовете и ги прикачете към доклада си, за да може екипът да провери дали проблемът идва от "
-"PKGBUILD или от Shelly."
+"Shelly не успя да завърши компилирането или инсталирането на избрания AUR {0}. Експортирайте "
+"логовете и ги прикачете към доклада си, за да може екипът да провери дали проблемът идва "
+"от PKGBUILD или от Shelly."
 
 msgid "Packages"
 msgstr "Пакети"
@@ -270,7 +270,7 @@ msgid "Export Logs"
 msgstr "Експортиране на логове"
 
 msgid "Cache directory does not exist"
-msgstr "Кеш директорията не съществува"
+msgstr "Директорията за кеш не съществува"
 
 msgid "Cleaning package cache..."
 msgstr "Почистване на кеша на пакетите..."
@@ -279,7 +279,7 @@ msgid "Package cache cleaned successfully"
 msgstr "Кешът на пакетите е почистен успешно"
 
 msgid "Cache clean failed: {0}"
-msgstr "Неуспешно почистване на кеша: {0}"
+msgstr "Неуспешно почистване на кеш: {0}"
 
 msgid "Fingerprint Disable Instructions"
 msgstr "Инструкции за деактивиране на пръстов отпечатък"
@@ -288,7 +288,7 @@ msgid "Disable fingerprint authentication for sudo"
 msgstr "Деактивиране на удостоверяване с пръстов отпечатък за sudo"
 
 msgid "1. Inspect"
-msgstr "1. Проверка"
+msgstr "1. Преглед"
 
 msgid "2. Disable for sudo"
 msgstr "2. Деактивиране за sudo"
@@ -297,10 +297,10 @@ msgid "3. Re-enable later"
 msgstr "3. Повторно активиране по-късно"
 
 msgid "Copy"
-msgstr "Копирай"
+msgstr "Копиране"
 
 msgid "Operation Complete"
-msgstr "Операцията завършена"
+msgstr "Операцията завърши"
 
 msgid "Cancel"
 msgstr "Отказ"
@@ -309,10 +309,10 @@ msgid "Authentication Required"
 msgstr "Изисква се удостоверяване"
 
 msgid "Password needed to execute: {0}."
-msgstr "Необходима е парола за изпълнение на: {0}."
+msgstr "Необходима е парола за изпълнение: {0}."
 
 msgid "Authenticate"
-msgstr "Удостовери"
+msgstr "Удостоверяване"
 
 msgid "Incorrect password. Try again."
 msgstr "Грешна парола. Опитайте отново."
@@ -327,16 +327,16 @@ msgid "Version {0}"
 msgstr "Версия {0}"
 
 msgid "Package installation failed"
-msgstr "Инсталирането на пакет се провали"
+msgstr "Инсталацията на пакет не успя"
 
 msgid ""
 "Shelly couldn't finish building or installing the selected {0}. Export the "
 "logs and attach them to your report so the team can check whether the issue "
 "came from the PKGBUILD or from Shelly."
 msgstr ""
-"Shelly не успя да завърши изграждането или инсталирането на избрания {0}. Експортирайте "
-"логовете и ги прикачете към доклада си, за да може екипът да провери дали проблемът идва от "
-"PKGBUILD или от Shelly."
+"Shelly не успя да завърши компилирането или инсталирането на избрания {0}. Експортирайте "
+"логовете и ги прикачете към доклада си, за да може екипът да провери дали проблемът идва "
+"от PKGBUILD или от Shelly."
 
 msgid "Cache Cleaner"
 msgstr "Почистване на кеш"
@@ -345,14 +345,14 @@ msgid ""
 "Cache directory: {0}\n"
 "Total cached files: {1} ({2})"
 msgstr ""
-"Кеш директория: {0}\n"
+"Директория за кеш: {0}\n"
 "Общо кеширани файлове: {1} ({2})"
 
 msgid "Keep versions:"
 msgstr "Запазване на версии:"
 
 msgid "Uninstalled only"
-msgstr "Само деинсталирани"
+msgstr "Само деинсталираните"
 
 msgid "Clean"
 msgstr "Почисти"
@@ -361,22 +361,22 @@ msgid "No candidates for removal."
 msgstr "Няма кандидати за премахване."
 
 msgid "{0} files, {1} would be freed"
-msgstr "{0} файла, {1} ще бъдат освободени"
+msgstr "{0} файла, ще се освободят {1}"
 
 msgid "Name and URL are required"
-msgstr "Име и URL са задължителни"
+msgstr "Името и URL са задължителни"
 
 msgid "URL must end with .flatpakrepo"
 msgstr "URL трябва да завършва на .flatpakrepo"
 
 msgid "Failed to add remote: {0}"
-msgstr "Неуспешно добавяне на отдалечен: {0}"
+msgstr "Неуспешно добавяне на отдалечен източник: {0}"
 
 msgid "Added Remote: {0}"
-msgstr "Добавен отдалечен: {0}"
+msgstr "Добавен отдалечен източник: {0}"
 
 msgid "Removed Remote"
-msgstr "Премахнат отдалечен"
+msgstr "Премахнат отдалечен източник"
 
 msgid "All Applications"
 msgstr "Всички приложения"
@@ -391,7 +391,7 @@ msgid "Recently Added"
 msgstr "Наскоро добавени"
 
 msgid "Recently Updated"
-msgstr "Наскоро актуализирани"
+msgstr "Наскоро обновени"
 
 msgid "Audio & Video"
 msgstr "Аудио и видео"
@@ -445,16 +445,16 @@ msgid "Install Flatpak Ref"
 msgstr "Инсталиране на Flatpak Ref"
 
 msgid "Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""
-msgstr "Локални Flatpak файлове (\".FlatpakRef\", \".flatpak\")"
+msgstr "Локални Flatpak файлове (\"*.FlatpakRef\", \"*.flatpak\")"
 
 msgid "Installing selected local flatpak file..."
 msgstr "Инсталиране на избрания локален flatpak файл..."
 
 msgid "Installing Flatpak failed"
-msgstr "Инсталирането на Flatpak се провали"
+msgstr "Инсталирането на Flatpak не успя"
 
 msgid "Installed Flatpak"
-msgstr "Инсталиран Flatpak"
+msgstr "Flatpak е инсталиран"
 
 msgid "Install Package?"
 msgstr "Инсталиране на пакет?"
@@ -463,7 +463,7 @@ msgid "Installing {0}..."
 msgstr "Инсталиране на {0}..."
 
 msgid "Installed Flatpak addon"
-msgstr "Инсталирана добавка за Flatpak"
+msgstr "Flatpak добавката е инсталирана"
 
 msgid "Available Addons"
 msgstr "Налични добавки"
@@ -472,16 +472,16 @@ msgid "No details available"
 msgstr "Няма налични детайли"
 
 msgid "Keep Config"
-msgstr "Запази конфигурация"
+msgstr "Запазване на конфигурацията"
 
 msgid "Keep user data and configuration"
-msgstr "Запази потребителски данни и конфигурация"
+msgstr "Запазване на потребителските данни и конфигурация"
 
 msgid "Delete Config"
-msgstr "Изтрий конфигурация"
+msgstr "Изтриване на конфигурацията"
 
 msgid "Delete user data and configuration"
-msgstr "Изтрий потребителски данни и конфигурация"
+msgstr "Изтриване на потребителските данни и конфигурация"
 
 msgid "Keep Config?"
 msgstr "Да се запази ли конфигурацията?"
@@ -496,25 +496,25 @@ msgid "Removed Package(s)"
 msgstr "Премахнати пакети"
 
 msgid "Permission Changes"
-msgstr "Промени в разрешенията"
+msgstr "Промени в правата"
 
 msgid "Updating Flatpak packages..."
-msgstr "Актуализиране на Flatpak пакети..."
+msgstr "Обновяване на Flatpak пакетите..."
 
 msgid "Failed to update packages: {0}"
-msgstr "Неуспешно актуализиране на пакети: {0}"
+msgstr "Неуспешно обновяване на пакети: {0}"
 
 msgid "Updated all Flatpak(s)"
-msgstr "Актуализирани всички Flatpak"
+msgstr "Всички Flatpak пакети са обновени"
 
 msgid "<span size='large'>System packages are up to date</span>"
 msgstr "<span size='large'>Системните пакети са актуални</span>"
 
 msgid "Current"
-msgstr "Текущо"
+msgstr "Текуща"
 
 msgid "New"
-msgstr "Ново"
+msgstr "Нова"
 
 msgid "Download"
 msgstr "Изтегляне"
@@ -529,24 +529,24 @@ msgid "Size"
 msgstr "Размер"
 
 msgid "Partial Update Warning"
-msgstr "Предупреждение за частична актуализация"
+msgstr "Предупреждение за частично обновяване"
 
 msgid ""
 "It is not advised you do partial system updates. Are you sure you want to "
 "continue?"
 msgstr ""
-"Не се препоръчва да правите частични системни актуализации. Сигурни ли сте, че искате да "
+"Не се препоръчва да правите частични обновления на системата. Сигурни ли сте, че искате да "
 "продължите?"
 
 msgid ""
 "It is unadvised to not update all packages at once. Are you sure you want to "
 "continue?"
 msgstr ""
-"Не се препоръчва да не актуализирате всички пакети наведнъж. Сигурни ли сте, че искате да "
+"Не се препоръчва да не обновявате всички пакети наведнъж. Сигурни ли сте, че искате да "
 "продължите?"
 
 msgid "Updating..."
-msgstr "Актуализиране..."
+msgstr "Обновяване..."
 
 msgid "Reboot Required"
 msgstr "Изисква се рестартиране"
@@ -556,12 +556,12 @@ msgid ""
 "\n"
 "Would you like to reboot now?"
 msgstr ""
-"Необходимо е пълно рестартиране на системата, за да влязат в сила актуализациите.\n"
+"За да влязат в сила обновленията, е необходимо пълно рестартиране на системата.\n"
 "\n"
 "Искате ли да рестартирате сега?"
 
 msgid "Service Restart Failures"
-msgstr "Грешки при рестартиране на услуги"
+msgstr "Неуспешни рестартирания на услуги"
 
 msgid ""
 "The following services failed to restart automatically:\n"
@@ -571,28 +571,28 @@ msgstr ""
 "{0}"
 
 msgid "--- Packages to Upgrade ---"
-msgstr "--- Пакети за обновяване ---"
+msgstr "--- Пакети за надграждане ---"
 
 msgid "Export Shelly install log"
-msgstr "Експортиране на инсталационен лог на Shelly"
+msgstr "Експортиране на лог за инсталация от Shelly"
 
 msgid "Exported Shelly install log"
-msgstr "Експортиран инсталационен лог на Shelly"
+msgstr "Логът за инсталация от Shelly е експортиран"
 
 msgid "Failed to export Shelly install log"
-msgstr "Неуспешно експортиране на инсталационен лог на Shelly"
+msgstr "Неуспешно експортиране на лог за инсталация от Shelly"
 
 msgid "Install Local Package"
 msgstr "Инсталиране на локален пакет"
 
 msgid "Local package files (\"*.gz\", \"*.zst\")"
-msgstr "Локални пакетни файлове (\".gz\", \".zst\")"
+msgstr "Локални пакетни файлове (\"*.gz\", \"*.zst\")"
 
 msgid "Installing local package..."
 msgstr "Инсталиране на локален пакет..."
 
 msgid "Installed local package"
-msgstr "Инсталиран локален пакет"
+msgstr "Локалният пакет е инсталиран"
 
 msgid "Package Files ({0})"
 msgstr "Пакетни файлове ({0})"
@@ -601,10 +601,10 @@ msgid "Remove corrupted packages"
 msgstr "Премахване на повредени пакети"
 
 msgid "Select File"
-msgstr "Избор на файл"
+msgstr "Изберете файл"
 
 msgid "Recommend"
-msgstr "Препоръчай"
+msgstr "Препоръчано"
 
 msgid "AUR"
 msgstr "AUR"
@@ -616,7 +616,7 @@ msgid "AppImage"
 msgstr "AppImage"
 
 msgid "Shelly Search"
-msgstr "Търсене в Shelly"
+msgstr "Shelly търсене"
 
 msgid "Select Icon File"
 msgstr "Избор на файл с икона"
@@ -631,8 +631,8 @@ msgid ""
 "The Arch User Repository (AUR) is a community-driven repository. Packages "
 "are user-produced and may contain risks. Do you want to enable it?"
 msgstr ""
-"Arch User Repository (AUR) е хранилище, управлявано от общността. Пакетите "
-"се създават от потребители и могат да съдържат рискове. Искате ли да го активирате?"
+"Arch User Repository (AUR) е хранилище, поддържано от общността. Пакетите се създават от "
+"потребители и могат да съдържат рискове. Искате ли да го активирате?"
 
 msgid "Missing Flatpak"
 msgstr "Липсва Flatpak"
@@ -644,13 +644,13 @@ msgid "Installing flatpak..."
 msgstr "Инсталиране на flatpak..."
 
 msgid "Reboot required to complete installation."
-msgstr "Необходимо е рестартиране за завършване на инсталацията."
+msgstr "Необходимо е рестартиране, за да завърши инсталацията."
 
 msgid "Synchronizing databases..."
 msgstr "Синхронизиране на бази данни..."
 
 msgid "Database lock removed"
-msgstr "Заключването на базата данни е премахнато"
+msgstr "Блокировката на базата данни е премахната"
 
 msgid "Shelly folder ownership restored"
 msgstr "Собствеността на папката на Shelly е възстановена"
@@ -662,7 +662,7 @@ msgid "Error fixing folder permissions"
 msgstr "Грешка при поправяне на правата на папката"
 
 msgid "Purified Corruption"
-msgstr "Повредите са изчистени"
+msgstr "Почистени повредени файлове"
 
 msgid "No corrupted packages found"
 msgstr "Не са открити повредени пакети"
@@ -671,7 +671,7 @@ msgid "No pacfiles found"
 msgstr "Не са открити pacfiles"
 
 msgid "Pacfiles Found"
-msgstr "Открити pacfiles"
+msgstr "Открити са pacfiles"
 
 msgid "Copy content"
 msgstr "Копиране на съдържание"
@@ -683,25 +683,25 @@ msgid "Overlay not available"
 msgstr "Наслагването не е налично"
 
 msgid "No changelog entries found"
-msgstr "Няма открити записи в changelog"
+msgstr "Не са открити записи в списъка с промени"
 
 msgid "Unknown"
-msgstr "Неизвестен"
+msgstr "Неизвестно"
 
 msgid "No details for this release"
-msgstr "Няма детайли за тази версия"
+msgstr "Няма детайли за това издание"
 
 msgid "Unknown date"
 msgstr "Неизвестна дата"
 
 msgid "Failed to load changelog"
-msgstr "Неуспешно зареждане на changelog"
+msgstr "Неуспешно зареждане на списъка с промени"
 
 msgid "None"
 msgstr "Няма"
 
 msgid "StaticUrl"
-msgstr "StaticUrl"
+msgstr "Статичен URL"
 
 msgid "GitHub"
 msgstr "GitHub"
@@ -725,25 +725,25 @@ msgid "Installing AppImage..."
 msgstr "Инсталиране на AppImage..."
 
 msgid "{0} installed successfully!"
-msgstr "{0} инсталиран успешно!"
+msgstr "{0} е инсталиран успешно!"
 
 msgid "Failed to install {0}: {1}"
 msgstr "Неуспешно инсталиране на {0}: {1}"
 
 msgid "No AppImages need to be upgraded"
-msgstr "Няма AppImage, които да се нуждаят от обновяване"
+msgstr "Няма AppImage-и, които да се нуждаят от надграждане"
 
 msgid "Running updates..."
-msgstr "Извършване на актуализации..."
+msgstr "Изпълняване на обновленията..."
 
 msgid "Updating AppImages..."
-msgstr "Актуализиране на AppImages..."
+msgstr "Обновяване на AppImage-и..."
 
 msgid "All AppImages updated successfully!"
-msgstr "Всички AppImages са актуализирани успешно!"
+msgstr "Всички AppImage-и са обновени успешно!"
 
 msgid "Failed to update AppImages: {0}"
-msgstr "Неуспешно актуализиране на AppImages: {0}"
+msgstr "Неуспешно обновяване на AppImage-и: {0}"
 
 msgid "Configuration saved for {0}"
 msgstr "Конфигурацията е запазена за {0}"
@@ -755,19 +755,19 @@ msgid "Syncing {0}..."
 msgstr "Синхронизиране на {0}..."
 
 msgid "Synced {0}"
-msgstr "{0} синхронизиран"
+msgstr "{0} е синхронизиран"
 
 msgid "Failed to sync: {0}"
 msgstr "Неуспешно синхронизиране: {0}"
 
 msgid "Syncing all AppImages ..."
-msgstr "Синхронизиране на всички AppImages ..."
+msgstr "Синхронизиране на всички AppImage-и..."
 
 msgid "Synced"
-msgstr "Синхронизиран"
+msgstr "Синхронизирано"
 
 msgid "{0} removed successfully!"
-msgstr "{0} премахнат успешно!"
+msgstr "{0} е премахнат успешно!"
 
 msgid "Failed to remove {0}: {1}"
 msgstr "Неуспешно премахване на {0}: {1}"
@@ -776,14 +776,14 @@ msgid ""
 "No recommendations found. Please check your internet connection and try "
 "again."
 msgstr ""
-"Не са открити препоръки. Моля, проверете интернет връзката си и опитайте "
+"Не са намерени препоръки. Моля, проверете интернет връзката си и опитайте "
 "отново."
 
 msgid "Already installed"
 msgstr "Вече е инсталиран"
 
 msgid "Install "
-msgstr "Инсталирай "
+msgstr "Инсталиране "
 
 msgid "Package is already installed"
 msgstr "Пакетът вече е инсталиран"
@@ -794,8 +794,17 @@ msgstr "Инсталиране на пакет..."
 msgid "Package installed successfully"
 msgstr "Пакетът е инсталиран успешно"
 
+msgid "Remove "
+msgstr "Премахване "
+
+msgid "Removing package..."
+msgstr "Премахване на пакет..."
+
+msgid "Package removed successfully"
+msgstr "Пакетът е премахнат успешно"
+
 msgid "Reboot required after flatpak installation."
-msgstr "Необходимо е рестартиране след инсталиране на flatpak."
+msgstr "След инсталиране на flatpak е необходимо рестартиране."
 
 msgid "Failed to install flatpak"
 msgstr "Неуспешно инсталиране на flatpak"
@@ -819,13 +828,13 @@ msgid "color-scheme"
 msgstr "цветова схема"
 
 msgid "Updates"
-msgstr "Актуализации"
+msgstr "Обновления"
 
 msgid "Manage"
 msgstr "Управление"
 
 msgid "Remove"
-msgstr "Премахни"
+msgstr "Премахване"
 
 msgid "Search packages..."
 msgstr "Търсене на пакети..."
@@ -834,13 +843,13 @@ msgid "Use chroot"
 msgstr "Използване на chroot"
 
 msgid "Build packages in a clean chroot environment"
-msgstr "Изграждане на пакети в чиста chroot среда"
+msgstr "Компилиране на пакети в чиста chroot среда"
 
 msgid "Run checks"
-msgstr "Изпълни проверки"
+msgstr "Изпълнение на проверки"
 
 msgid "Run the --check function during package build (installs checkdepends)"
-msgstr "Изпълняване на функцията --check по време на изграждане на пакета (инсталира checkdepends)"
+msgstr "Изпълнение на функцията --check по време на компилация (инсталира checkdepends)"
 
 msgid "Install Aur Package(s)"
 msgstr "Инсталиране на AUR пакет(и)"
@@ -849,7 +858,7 @@ msgid "Name"
 msgstr "Име"
 
 msgid "refresh"
-msgstr "опресни"
+msgstr "опресняване"
 
 msgid "Clean Uninstall"
 msgstr "Чисто деинсталиране"
@@ -858,29 +867,29 @@ msgid "Show Hidden"
 msgstr "Показване на скрити"
 
 msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr "Показване на пакети от списъка IgnorePkg в pacman.conf"
+msgstr "Показване на пакетите в списъка IgnorePkg от pacman.conf"
 
 msgid "Remove Aur Package(s)"
 msgstr "Премахване на AUR пакет(и)"
 
 msgid ""
 "Run the --check function during package build (installs checkdepends)\n"
-" "
+"                        "
 msgstr ""
-"Изпълняване на функцията --check по време на изграждане на пакета (инсталира checkdepends)\n"
-" "
+"Изпълнение на функцията --check по време на компилация (инсталира checkdepends)\n"
+"                        "
 
 msgid "Update Aur Package(s)"
-msgstr "Актуализиране на AUR пакет(и)"
+msgstr "Обновяване на AUR пакет(и)"
 
 msgid "Please wait while we update your system."
-msgstr "Моля, изчакайте, докато актуализираме системата ви."
+msgstr "Моля, изчакайте, докато обновяваме системата."
 
 msgid "Reload"
-msgstr "Презареди"
+msgstr "Презареждане"
 
 msgid "Manage Remote Refs"
-msgstr "Управление на отдалечени референции"
+msgstr "Управление на отдалечени източници"
 
 msgid "Install local flatpak"
 msgstr "Инсталиране на локален flatpak"
@@ -925,37 +934,43 @@ msgid "No description available."
 msgstr "Няма налично описание."
 
 msgid "Delete Selected Remote"
-msgstr "Изтриване на избрания отдалечен"
+msgstr "Изтриване на избрания отдалечен източник"
 
 msgid "Add Remote"
-msgstr "Добавяне на отдалечен"
+msgstr "Добавяне на отдалечен източник"
 
 msgid "Add New Flatpak Remote"
-msgstr "Добавяне на нов Flatpak отдалечен"
+msgstr "Добавяне на нов Flatpak отдалечен източник"
 
 msgid "Add"
 msgstr "Добави"
 
 msgid "Remote Name"
-msgstr "Име на отдалечения"
+msgstr "Име на отдалечения източник"
 
 msgid "e.g., flathub"
-msgstr "напр. flathub"
+msgstr "напр., flathub"
 
 msgid "Remote URL"
-msgstr "URL на отдалечения"
+msgstr "URL на отдалечения източник"
 
 msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr "напр. https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "напр., https://flathub.org/repo/flathub.flatpakrepo"
 
 msgid "Scope"
 msgstr "Обхват"
 
 msgid "Remove Selected"
-msgstr "Премахни избраните"
+msgstr "Премахване на избраните"
+
+msgid "Flatpak Repair"
+msgstr "Поправка на Flatpak"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Поправя Flatpak инсталацията (експериментално)"
 
 msgid "Update All"
-msgstr "Актуализирай всички"
+msgstr "Обнови всички"
 
 msgid "Package Group Filter"
 msgstr "Филтър по група пакети"
@@ -964,22 +979,22 @@ msgid "Install Local Packages"
 msgstr "Инсталиране на локални пакети"
 
 msgid "Install Local"
-msgstr "Инсталирай локални"
+msgstr "Инсталиране на локален"
 
 msgid "Perform Upgrade"
-msgstr "Извърши обновяване"
+msgstr "Извършване на надграждане"
 
 msgid "Perform a full system upgrade with install (-u)"
-msgstr "Извършване на пълно системно обновяване с инсталиране (-u)"
+msgstr "Извършване на пълно системно надграждане с инсталация (-u)"
 
 msgid "Install Selected"
-msgstr "Инсталирай избраните"
+msgstr "Инсталиране на избраните"
 
 msgid "Sync"
-msgstr "Синхронизирай"
+msgstr "Синхронизиране"
 
 msgid "Update Selected"
-msgstr "Актуализирай избраните"
+msgstr "Обновяване на избраните"
 
 msgid "Package Name"
 msgstr "Име на пакет"
@@ -994,10 +1009,10 @@ msgid "Remove Local Packages"
 msgstr "Премахване на локални пакети"
 
 msgid "Remove Local"
-msgstr "Премахни локални"
+msgstr "Премахване на локален"
 
 msgid "Remove Configs"
-msgstr "Премахни конфигурации"
+msgstr "Премахване на конфигурации"
 
 msgid "General"
 msgstr "Общи"
@@ -1021,7 +1036,7 @@ msgid "Use weekly schedule"
 msgstr "Използване на седмичен график"
 
 msgid "Tray Check Interval (Hours)"
-msgstr "Интервал на проверка в трея (часове)"
+msgstr "Интервал за проверка в трея (часове)"
 
 msgid "Weekly Schedule"
 msgstr "Седмичен график"
@@ -1039,7 +1054,7 @@ msgid "Wed"
 msgstr "Ср"
 
 msgid "Thu"
-msgstr "Чет"
+msgstr "Четв"
 
 msgid "Fri"
 msgstr "Пет"
@@ -1048,13 +1063,13 @@ msgid "Sat"
 msgstr "Съб"
 
 msgid "Update Time (24h):"
-msgstr "Време за актуализация (24ч):"
+msgstr "Време за обновяване (24ч):"
 
 msgid "Look & Feel"
 msgstr "Изглед и усещане"
 
 msgid "Icons Enabled"
-msgstr "Иконите са активирани"
+msgstr "Активирани икони"
 
 msgid "Use Symbolic Tray Icon"
 msgstr "Използване на символна икона в трея"
@@ -1063,8 +1078,8 @@ msgid ""
 "Both tray icons must be set for use, if not it will default to standard "
 "shelly icons. Changing tray icons requires a restart of shelly-notifications."
 msgstr ""
-"И двете икони в трея трябва да бъдат зададени за използване, в противен случай ще се използват "
-"стандартните икони на Shelly. Смяната на иконите в трея изисква рестартиране на shelly-notifications."
+"И двете икони в трея трябва да бъдат зададени за използване, в противен случай ще се използват стандартните "
+"икони на Shelly. Смяната на иконите в трея изисква рестартиране на shelly-notifications."
 
 msgid "Tray Icon"
 msgstr "Икона в трея"
@@ -1073,10 +1088,10 @@ msgid "Clear"
 msgstr "Изчисти"
 
 msgid "Tray Updates Icon"
-msgstr "Икона за актуализации в трея"
+msgstr "Икона за обновления в трея"
 
 msgid "Default page"
-msgstr "Страница по подразбиране"
+msgstr "Стандартна страница"
 
 msgid "Use Sidebar Navigation"
 msgstr "Използване на странична навигация"
@@ -1084,45 +1099,48 @@ msgstr "Използване на странична навигация"
 msgid "Advanced"
 msgstr "Разширени"
 
+msgid "Remove Cache on Uninstall"
+msgstr "Премахване на кеш при деинсталиране"
+
 msgid "No Confirm"
 msgstr "Без потвърждение"
 
 msgid "Enable Shelly Search"
-msgstr "Активиране на търсенето в Shelly"
+msgstr "Активиране на Shelly търсене"
 
 msgid "Enable Webview Visualization (experimental)"
-msgstr "Активиране на визуализация чрез Webview (експериментално)"
+msgstr "Активиране на Webview визуализация (експериментално)"
 
 msgid "Parallel Downloads"
 msgstr "Паралелни изтегляния"
 
 msgid "Force Database Update"
-msgstr "Принудително актуализиране на базата данни"
+msgstr "Принудително обновяване на базата данни"
 
-msgid "Remove db.lock"
-msgstr "Премахване на db.lock"
+msgid "Remove db.lck"
+msgstr "Премахване на db.lck"
 
 msgid "View Pacfiles"
 msgstr "Преглед на pacfiles"
 
 msgid "Fix Permissions"
-msgstr "Поправяне на права"
+msgstr "Поправяне на правата"
 
 msgid ""
 "Restores correct user ownership of Shelly configuration and cache folders if "
 "they were accidentally created by root."
 msgstr ""
-"Възстановява правилната собственост на потребителя върху конфигурационните и кеш папките на Shelly, "
-"ако са били случайно създадени от root."
+"Възстановява правилната собственост на потребителя върху папките за конфигурация и кеш на Shelly, ако "
+"те са били случайно създадени от root."
 
 msgid "Purify Packages"
-msgstr "Пречистване на пакети"
+msgstr "Почистване на пакети"
 
 msgid "Save"
 msgstr "Запази"
 
 msgid "View Changelog"
-msgstr "Преглед на changelog"
+msgstr "Преглед на списъка с промени"
 
 msgid "Community fluxer"
 msgstr "Общностен fluxer"
@@ -1134,34 +1152,34 @@ msgid "Search..."
 msgstr "Търсене..."
 
 msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr "Синхронизиране на метаданни за всички AppImages. Полезно, ако AppImage се е самоактуализирал."
+msgstr "Синхронизиране на метаданните за всички AppImage-и. Полезно, ако AppImage се е обновил сам."
 
 msgid "Sync All"
 msgstr "Синхронизирай всички"
 
 msgid "Upgrade all AppImages to their latest versions"
-msgstr "Обновяване на всички AppImages до най-новите им версии"
+msgstr "Надграждане на всички AppImage-и до последните им версии"
 
 msgid "Upgrade All"
-msgstr "Обнови всички"
+msgstr "Надгради всички"
 
 msgid "Install a new AppImage from a file"
 msgstr "Инсталиране на нов AppImage от файл"
 
 msgid "Install AppImage"
-msgstr "Инсталирай AppImage"
+msgstr "Инсталиране на AppImage"
 
 msgid "Description goes here..."
-msgstr "Описанието идва тук..."
+msgstr "Описанието тук..."
 
 msgid "Size on Disk"
 msgstr "Размер на диска"
 
 msgid "Update Strategy"
-msgstr "Стратегия за актуализация"
+msgstr "Стратегия за обновяване"
 
 msgid "Update URL / Repository Info"
-msgstr "URL за актуализация / Информация за хранилището"
+msgstr "URL за обновяване / Информация за хранилището"
 
 msgid "e.g. repo or https://..."
 msgstr "напр. repo или https://..."
@@ -1173,7 +1191,7 @@ msgid "Install Package(s)"
 msgstr "Инсталиране на пакет(и)"
 
 msgid "Update Package(s)"
-msgstr "Актуализиране на пакет(и)"
+msgstr "Обновяване на пакет(и)"
 
 msgid "Manage Package(s)"
 msgstr "Управление на пакет(и)"
@@ -1182,7 +1200,7 @@ msgid "Install AUR"
 msgstr "Инсталиране от AUR"
 
 msgid "Update AUR"
-msgstr "Актуализиране от AUR"
+msgstr "Обновяване от AUR"
 
 msgid "Remove AUR"
 msgstr "Премахване от AUR"
@@ -1191,7 +1209,7 @@ msgid "Install Flatpak"
 msgstr "Инсталиране на Flatpak"
 
 msgid "Update Flatpak"
-msgstr "Актуализиране на Flatpak"
+msgstr "Обновяване на Flatpak"
 
 msgid "Remove Flatpak"
 msgstr "Премахване на Flatpak"
@@ -1200,7 +1218,7 @@ msgid "Manage AppImage(s)"
 msgstr "Управление на AppImage(и)"
 
 msgid "Arch News"
-msgstr "Новини от Arch"
+msgstr "Arch новини"
 
 msgid "Settings"
 msgstr "Настройки"
@@ -1212,41 +1230,41 @@ msgid "Toggle Sidebar"
 msgstr "Превключване на страничната лента"
 
 msgid "Available Updates"
-msgstr "Налични актуализации"
+msgstr "Налични обновления"
 
 msgid "Welcome to Shelly"
 msgstr "Добре дошли в Shelly"
 
 msgid "Let's get you set up with some basic configurations."
-msgstr "Нека да настроим някои основни конфигурации."
+msgstr "Нека ви настроим с някои основни конфигурации."
 
 msgid "Enable AUR Support"
-msgstr "Активиране на поддръжка на AUR"
+msgstr "Активиране на поддръжка за AUR"
 
 msgid ""
 "Access the Arch User Repository for a vast collection of community-"
-"maintained packages. AUR packages can contain malicous software, so please "
+"maintained packages. AUR packages can contain malicious software, so please "
 "use caution when using the AUR."
 msgstr ""
-"Достъп до Arch User Repository за огромна колекция от поддържани от общността "
-"пакети. AUR пакетите могат да съдържат злонамерен софтуер, затова бъдете "
-"внимателни при използването на AUR."
+"Достъп до Arch User Repository за огромна колекция от поддържани от общността пакети."
+"AUR пакетите могат да съдържат злонамерен софтуер, затова бъдете внимателни, когато използвате AUR."
 
 msgid "Enable Flatpak Support"
-msgstr "Активиране на поддръжка на Flatpak"
+msgstr "Активиране на поддръжка за Flatpak"
 
 msgid "Enable support for Flatpak applications from Flathub and other remotes."
-msgstr "Активиране на поддръжка за Flatpak приложения от Flathub и други отдалечени хранилища."
+msgstr "Активиране на поддръжка за Flatpak приложения от Flathub и други отдалечени източници."
 
 msgid "Enable AppImage Support"
-msgstr "Активиране на поддръжка на AppImage"
+msgstr "Активиране на поддръжка за AppImage"
 
 msgid "Manage and configure updates for AppImage applications easily."
-msgstr "Лесно управление и конфигуриране на актуализации за AppImage приложения."
+msgstr "Лесно управление и конфигуриране на обновления за AppImage приложения."
 
 msgid ""
 "Show a status icon in your system tray for quick access and notifications."
-msgstr "Показване на икона на състоянието в системния трей за бърз достъп и известия."
+msgstr ""
+"Показване на икона за състояние в системния трей за бърз достъп и известия."
 
 msgid "Vertical Navigation"
 msgstr "Вертикална навигация"
@@ -1260,7 +1278,8 @@ msgstr "Завършване на настройката"
 msgid ""
 "Any required installations will run after the Finish button has been "
 "accepted."
-msgstr "Всички необходими инсталации ще се извършат след приемане на бутона „Завършване“."
+msgstr ""
+"Всички необходими инсталации ще се изпълнят след като бъде приет бутонът Завърши."
 
 msgid "These options and others can be configured later in settings."
 msgstr "Тези и други опции могат да бъдат конфигурирани по-късно в настройките."
@@ -1272,10 +1291,58 @@ msgid "Description"
 msgstr "Описание"
 
 msgid "Last Updated"
-msgstr "Последно актуализиран"
+msgstr "Последно обновен"
 
 msgid "Remove Optional Deps"
 msgstr "Премахване на незадължителни зависимости"
 
 msgid "Also remove orphaned optional dependencies installed with these packages."
-msgstr "Също така премахване на осиротели незадължителни зависимости, инсталирани с тези пакети."
+msgstr "Също така премахване на изоставените незадължителни зависимости, инсталирани с тези пакети."
+
+msgid "Add Tray To Auto Start"
+msgstr "Добавяне на трея към автоматично стартиране"
+
+msgid "Systemd startup service added."
+msgstr "Systemd услугата за стартиране е добавена."
+
+msgid "Systemd startup service removed."
+msgstr "Systemd услугата за стартиране е премахната."
+
+msgid "Tray Icon Autostart"
+msgstr "Автоматично стартиране на иконата в трея"
+
+msgid "Allow the tray service to autostart."
+msgstr "Позволяване на услугата в трея да се стартира автоматично."
+
+msgid "Unable to load package data. You may have a db.lck."
+msgstr "Неуспешно зареждане на данните за пакетите. Възможно е да имате db.lck."
+
+msgid "Downgrade Selected"
+msgstr "Понижаване на избраните"
+
+msgid "Downgrade selected packages one by one"
+msgstr "Понижаване на избраните пакети един по един"
+
+msgid "No downgrade options found for {0}"
+msgstr "Не са намерени опции за понижаване на {0}"
+
+msgid "Downgrading {0}..."
+msgstr "Понижаване на {0}..."
+
+msgid "Downgraded {0} Package(s)"
+msgstr "Понижени {0} пакет(а)"
+
+msgid "Downgrade: {0}"
+msgstr "Понижаване: {0}"
+
+msgid "Select version:"
+msgstr "Изберете версия:"
+
+msgid "Add to IgnorePkg list"
+msgstr "Добавяне към списъка IgnorePkg"
+
+msgid "Downgrade"
+msgstr "Понижаване"
+
+msgid "Enable Package Downgrade"
+msgstr "Активиране на възможност за понижаване на пакети"
