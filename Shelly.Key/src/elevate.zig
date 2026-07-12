@@ -76,3 +76,97 @@ fn handleTerm(term: std.process.Child.Term) ElevateError!noreturn {
         },
     }
 }
+
+const testing = std.testing;
+
+fn createFakeBinary(dir: std.Io.Dir, io: std.Io, name: []const u8) !void {
+    var f = try dir.createFile(io, name, .{});
+    f.close(io);
+}
+
+test "findElevator returns null for an empty PATH" {
+    try testing.expectEqual(
+        @as(?Elevator, null),
+        findElevator(testing.io, testing.allocator, ""),
+    );
+}
+
+test "findElevator returns null when PATH has no elevator" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    const path_env = try tmp.dir.realPathFileAlloc(testing.io, ".", testing.allocator);
+    defer testing.allocator.free(path_env);
+
+    try testing.expectEqual(
+        @as(?Elevator, null),
+        findElevator(testing.io, testing.allocator, path_env),
+    );
+}
+
+test "findElevator finds sudo" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    try createFakeBinary(tmp.dir, testing.io, "sudo");
+
+    const path_env = try tmp.dir.realPathFileAlloc(testing.io, ".", testing.allocator);
+    defer testing.allocator.free(path_env);
+
+    try testing.expectEqual(
+        @as(?Elevator, .sudo),
+        findElevator(testing.io, testing.allocator, path_env),
+    );
+}
+
+test "findElevator finds doas" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    try createFakeBinary(tmp.dir, testing.io, "doas");
+
+    const path_env = try tmp.dir.realPathFileAlloc(testing.io, ".", testing.allocator);
+    defer testing.allocator.free(path_env);
+
+    try testing.expectEqual(
+        @as(?Elevator, .doas),
+        findElevator(testing.io, testing.allocator, path_env),
+    );
+}
+
+test "findElevator picks the first matching directory in PATH" {
+    var tmp_empty = testing.tmpDir(.{ .iterate = true });
+    defer tmp_empty.cleanup();
+    var tmp_doas = testing.tmpDir(.{ .iterate = true });
+    defer tmp_doas.cleanup();
+    try createFakeBinary(tmp_doas.dir, testing.io, "doas");
+
+    const first = try tmp_empty.dir.realPathFileAlloc(testing.io, ".", testing.allocator);
+    defer testing.allocator.free(first);
+    const second = try tmp_doas.dir.realPathFileAlloc(testing.io, ".", testing.allocator);
+    defer testing.allocator.free(second);
+
+    const path_env = try std.fmt.allocPrint(testing.allocator, "{s}:{s}", .{ first, second });
+    defer testing.allocator.free(path_env);
+
+    try testing.expectEqual(
+        @as(?Elevator, .doas),
+        findElevator(testing.io, testing.allocator, path_env),
+    );
+}
+
+test "findElevator skips empty PATH segments" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    try createFakeBinary(tmp.dir, testing.io, "pkexec");
+
+    const dir_path = try tmp.dir.realPathFileAlloc(testing.io, ".", testing.allocator);
+    defer testing.allocator.free(dir_path);
+
+    // Leading, middle, and trailing empty segments.
+    const path_env = try std.fmt.allocPrint(testing.allocator, "::{s}::", .{dir_path});
+    defer testing.allocator.free(path_env);
+
+    try testing.expectEqual(
+        @as(?Elevator, .pkexec),
+        findElevator(testing.io, testing.allocator, path_env),
+    );
+}
