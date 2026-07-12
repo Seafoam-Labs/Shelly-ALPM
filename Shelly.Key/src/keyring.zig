@@ -1,9 +1,10 @@
 const std = @import("std");
+const Io = std.Io;
 
-pub const InitError = error{};
+const keydir = @import("keydir.zig");
 
-pub fn init(init_path: []const u8) InitError!void {
-    _ = init_path;
+pub const KeyringError = keydir.KeydirError;
 
-    return;
+pub fn init(io: Io, keyring_path: []const u8) KeyringError!void {
+    try keydir.createKeyringDir(.cwd(), io, keyring_path);
 }
