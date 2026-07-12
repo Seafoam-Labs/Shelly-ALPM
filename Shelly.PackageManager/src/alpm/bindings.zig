@@ -17,6 +17,7 @@ pub const libalpm = struct {
 
     pub const Error = enum(i32) { Ok = 0, Memory, System, BadPerms, NotAFile, NotADir, WrongArgs, DiskSpace, HandleNull, HandleNotNull, HandleLock, DbOpen, DbCreate, DbNull, DbNotNull, DbNotFound, DbInvalid, DbInvalidSig, DbVersion, DbWrite, DbRemove, ServerBadUrl, ServerNone, TransNotNull, TransNull, TransDupTarget, TransDupFilename, TransNotInitialized, TransNotPrepared, TransAbort, TransType, TransNotLocked, TransHookFailed, PkgNotFound, PkgIgnored, PkgInvalid, PkgInvalidChecksum, PkgInvalidSig, PkgMissingSig, PkgOpen, PkgCantRemove, PkgInvalidName, PkgInvalidArch, SigMissing, SigInvalid, UnsatisfiedDeps, ConflictingDeps, FileConflicts, DownloadFailed, Gpgme, ExternalDownload, SandboxFailed };
 
+    pub const PackageReason = enum(i32) { Explicit = 0, Dependency = 1, Unknown = 2 };
     pub const SigLevel = enum(u32) {
         none = 0,
         package = 1 << 0,
@@ -71,6 +72,7 @@ pub const libalpm = struct {
     };
 
     pub const TransFlag = enum(u32) {
+        none = 0,
         nodeps = 1 << 0,
         nosave = 1 << 2,
         nodepversion = 1 << 3,
@@ -90,6 +92,7 @@ pub const libalpm = struct {
 
         pub fn from_trans_flag(trans_flag: alpm.alpm_transflag_t) TransFlag {
             return switch (trans_flag) {
+                0 => .none,
                 alpm.ALPM_TRANS_FLAG_NODEPS => .nodeps,
                 alpm.ALPM_TRANS_FLAG_NOSAVE => .nosave,
                 alpm.ALPM_TRANS_FLAG_NODEPVERSION => .nodepversion,
@@ -112,6 +115,7 @@ pub const libalpm = struct {
 
         pub fn to_trans_flag(trans_flag: TransFlag) alpm.alpm_transflag_t {
             return switch (trans_flag) {
+                .none => 0,
                 .nodeps => alpm.ALPM_TRANS_FLAG_NODEPS,
                 .nosave => alpm.ALPM_TRANS_FLAG_NOSAVE,
                 .nodepversion => alpm.ALPM_TRANS_FLAG_NODEPVERSION,
@@ -131,12 +135,8 @@ pub const libalpm = struct {
             };
         }
 
-        pub fn stack(flags: []const TransFlag) alpm.alpm_transflag_t {
-            var combined: alpm.alpm_transflag_t = 0;
-            for (flags) |flag| {
-                combined |= to_trans_flag(flag);
-            }
-            return combined;
+        pub fn contains(combined: alpm.alpm_transflag_t, flag: TransFlag) bool {
+            return (combined & @intFromEnum(flag)) != 0;
         }
     };
 
@@ -322,10 +322,12 @@ pub const libalpm = struct {
             return .{ .node = alpm.alpm_pkg_get_conflicts(self.ptr) };
         }
 
-        pub fn install_reason(self: Package) ?[:0]const u8 {
-            const db = alpm.alpm_pkg_get_db(self.ptr);
-            if (db == null) return @as([:0]const u8, "Not Installed");
-            return str(alpm.alpm_pkg_get_reason(self.ptr));
+        pub fn install_reason(self: Package) PackageReason {
+            return switch (alpm.alpm_pkg_get_reason(self.ptr)) {
+                alpm.ALPM_PKG_REASON_EXPLICIT => .Explicit,
+                alpm.ALPM_PKG_REASON_DEPEND => .Dependency,
+                else => .Unknown,
+            };
         }
 
         pub fn build_date(self: Package) ?time.Time {
@@ -338,11 +340,11 @@ pub const libalpm = struct {
             return time.Time.fromUnix(date.?);
         }
 
-        pub fn optional_for(self: Package) ListIterator(Dependency, Dependency.from) {
+        pub fn optional_for(self: Package) ListIterator([:0]const u8, asStr) {
             return .{ .node = alpm.alpm_pkg_compute_optionalfor(self.ptr) };
         }
 
-        pub fn required_by(self: Package) ListIterator(Dependency, Dependency.from) {
+        pub fn required_by(self: Package) ListIterator([:0]const u8, asStr) {
             return .{ .node = alpm.alpm_pkg_compute_requiredby(self.ptr) };
         }
 
@@ -687,6 +689,83 @@ pub const libalpm = struct {
                 alpm.S_IFSOCK => .socket,
                 else => .unknown,
             };
+        }
+    };
+
+    pub const EventType = enum(u32) {
+        // libalpm events (1–37)
+        checkdeps_start = 1,
+        checkdeps_done = 2,
+        fileconflicts_start = 3,
+        fileconflicts_done = 4,
+        resolvedeps_start = 5,
+        resolvedeps_done = 6,
+        interconflicts_start = 7,
+        interconflicts_done = 8,
+        transaction_start = 9,
+        transaction_done = 10,
+        package_operation_start = 11,
+        package_operation_done = 12,
+        integrity_start = 13,
+        integrity_done = 14,
+        load_start = 15,
+        load_done = 16,
+        scriptlet_info = 17,
+        db_retrieve_start = 18,
+        db_retrieve_done = 19,
+        db_retrieve_failed = 20,
+        pkg_retrieve_start = 21,
+        pkg_retrieve_done = 22,
+        pkg_retrieve_failed = 23,
+        diskspace_start = 24,
+        diskspace_done = 25,
+        optdep_removal = 26,
+        database_missing = 27,
+        keyring_start = 28,
+        keyring_done = 29,
+        key_download_start = 30,
+        key_download_done = 31,
+        pacnew_created = 32,
+        pacsave_created = 33,
+        hook_start = 34,
+        hook_done = 35,
+        hook_run_start = 36,
+        hook_run_done = 37,
+
+        // Application-defined events (100+)
+        download_start = 100,
+        download_complete = 101,
+        download_failed = 102,
+        extraction_start = 103,
+        extraction_complete = 104,
+        extraction_failed = 105,
+        validation_start = 106,
+        validation_complete = 107,
+        validation_failed = 108,
+        transaction_preparing = 109,
+        transaction_committing = 110,
+        rollback_start = 111,
+        rollback_complete = 112,
+
+        // Custom events
+        failed_optional_dependency_operation = 200,
+        package_explicit = 201,
+
+        pub fn from_libalpm(c_type: c_int) EventType {
+            return @enumFromInt(@as(u32, @intCast(c_type)));
+        }
+
+        pub fn to_libalpm(self: EventType) c_int {
+            return @intCast(@intFromEnum(self));
+        }
+
+        pub fn is_libalpm(self: EventType) bool {
+            const val = @intFromEnum(self);
+            return val >= 1 and val <= 37;
+        }
+
+        pub fn is_custom(self: EventType) bool {
+            return @intFromEnum(self) >= 100;
         }
     };
 

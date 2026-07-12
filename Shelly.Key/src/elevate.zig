@@ -19,7 +19,6 @@ fn findElevator(io: std.Io, gpa: std.mem.Allocator, path_env: []const u8) ?Eleva
         if (path.len == 0) continue;
         for (binaries, 0..) |bin, i| {
             const full_path = std.fs.path.join(gpa, &.{ path, bin }) catch continue;
-            defer gpa.free(full_path);
             std.Io.Dir.accessAbsolute(io, full_path, .{}) catch continue;
             return @enumFromInt(i);
         }
@@ -29,25 +28,24 @@ fn findElevator(io: std.Io, gpa: std.mem.Allocator, path_env: []const u8) ?Eleva
 
 pub fn ensureRoot(
     io: std.Io,
-    allocator: std.mem.Allocator,
+    arena: *std.heap.ArenaAllocator,
     args: []const []const u8,
     path_env: []const u8,
 ) !void {
     const uid = std.os.linux.getuid();
     if (uid == 0) return;
 
-    const elevator = findElevator(io, allocator, path_env) orelse return error.NoElevator;
+    const gpa = arena.allocator();
+    const elevator = findElevator(io, gpa, path_env) orelse return error.NoElevator;
 
-    const exe = try std.process.executablePathAlloc(io, allocator);
-    defer allocator.free(exe);
+    const exe = try std.process.executablePathAlloc(io, gpa);
 
     var new_args: std.ArrayList([]const u8) = .empty;
-    defer new_args.deinit(allocator);
 
     const bin_name = @tagName(elevator);
-    try new_args.append(allocator, bin_name);
-    try new_args.append(allocator, exe);
-    for (args[1..]) |arg| try new_args.append(allocator, arg);
+    try new_args.append(gpa, bin_name);
+    try new_args.append(gpa, exe);
+    for (args[1..]) |arg| try new_args.append(gpa, arg);
 
     var child = try std.process.spawn(io, .{
         .argv = new_args.items,

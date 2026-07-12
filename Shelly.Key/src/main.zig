@@ -18,7 +18,7 @@ fn run(init: std.process.Init) !void {
         .init => {
             try Shelly_Key.elevate.ensureRoot(
                 init.io,
-                init.gpa,
+                init.arena,
                 args,
                 init.environ_map.get("PATH").?,
             );

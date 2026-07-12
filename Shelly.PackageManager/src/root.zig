@@ -33,4 +33,5 @@ test {
     _ = @import("appimage/manager.zig");
     _ = @import("shared/downloader.zig");
     _ = @import("appimage/update_manager.zig");
+    _ = @import("pkgbuild/pkgbuild_parser.zig");
 }
