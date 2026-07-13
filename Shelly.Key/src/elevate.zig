@@ -19,6 +19,7 @@ fn findElevator(io: std.Io, gpa: std.mem.Allocator, path_env: []const u8) ?Eleva
         if (path.len == 0) continue;
         for (binaries, 0..) |bin, i| {
             const full_path = std.fs.path.join(gpa, &.{ path, bin }) catch continue;
+            defer gpa.free(full_path);
             std.Io.Dir.accessAbsolute(io, full_path, .{}) catch continue;
             return @enumFromInt(i);
         }
