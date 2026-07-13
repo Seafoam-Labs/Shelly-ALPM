@@ -1,7 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 
-const gpg = @import("gpg.zig");
+const gpg = @import("../gpg.zig");
 const keydir = @import("keydir.zig");
 const keyfiles = @import("keyfiles.zig");
 
