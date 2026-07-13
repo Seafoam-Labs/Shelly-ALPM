@@ -137,16 +137,18 @@ public class ShellyApp : Object {
         tray_item.set_updates_pending (model.total () > 0);
         menu_handler.notify_updates (model);
         menu_handler.set_last_check_label (
-            new DateTime.now_local ().format ("Last check: %H:%M %m/%d")
+            new DateTime.now_local ().format (_("Last check: %H:%M %m/%d"))
         );
 
         if (notify) {
             if (model.total () > 0) {
-                yield notification_handler.send ("%d package update%s available".printf (
-                    model.total (), model.total () == 1 ? "" : "s"
-                ));
+                yield notification_handler.send (
+                    ngettext ("%d package update available",
+                              "%d package updates available",
+                              model.total ()).printf (model.total ())
+                );
             } else {
-                yield notification_handler.send ("No updates available");
+                yield notification_handler.send (_("No updates available"));
             }
         }
 
@@ -194,6 +196,11 @@ public class ShellyApp : Object {
 }
 
 void main (string[] args) {
+    Intl.setlocale (LocaleCategory.ALL, "");
+    Intl.bindtextdomain ("shelly-notifications", "/usr/share/locale");
+    Intl.bind_textdomain_codeset ("shelly-notifications", "UTF-8");
+    Intl.textdomain ("shelly-notifications");
+
     var loop = new MainLoop ();
     var shelly = new ShellyApp (loop);
     shelly.start ();

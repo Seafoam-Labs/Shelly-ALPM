@@ -26,9 +26,9 @@ public class NotificationHandler : Object {
             _last_id = yield proxy.notify ("Shelly",
                 _last_id,
                 "shelly",
-                "Shelly Notifications",
+                _("Shelly Notifications"),
                 body,
-                { DEFAULT_ACTION_KEY, "Open Shelly" },
+                { DEFAULT_ACTION_KEY, _("Open Shelly") },
                 hints,
                 5000);
 

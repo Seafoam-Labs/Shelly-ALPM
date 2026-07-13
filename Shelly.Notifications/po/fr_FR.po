@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-notifications 2.3.0.2\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-06-27 10:03+0000\n"
+"POT-Creation-Date: 2026-07-13 21:08+0200\n"
 "PO-Revision-Date: 2026-05-31 00:00+0200\n"
 "Last-Translator: Seafoam Labs <csnyder@seafoamlabs.org>\n"
 "Language-Team: French\n"
@@ -12,56 +12,96 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-msgid "Open Shelly"
-msgstr "Ouvrir Shelly"
-
-msgid "Update Packages"
-msgstr "Mettre à jour les paquets"
-
-msgid "Check for Updates"
-msgstr "Rechercher des mises à jour"
-
+#: src/dbus_menu.vala:17
 msgid "Last check: Never"
 msgstr "Dernière vérification : jamais"
 
+#: src/dbus_menu.vala:194 src/notification_handler.vala:31
+msgid "Open Shelly"
+msgstr "Ouvrir Shelly"
+
+#: src/dbus_menu.vala:195
+msgid "Update Packages"
+msgstr "Mettre à jour les paquets"
+
+#: src/dbus_menu.vala:196
+msgid "Check for Updates"
+msgstr "Rechercher des mises à jour"
+
+#: src/dbus_menu.vala:198
 msgid "Exit"
 msgstr "Quitter"
 
-#, csharp-format
-msgid "Updates available: {0}"
-msgstr "Mises à jour disponibles : {0}"
-
-msgid "No updates available."
-msgstr "Aucune mise à jour disponible."
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "AUR"
-msgstr "AUR"
-
+#: src/dbus_menu.vala:201
 msgid "Standard"
 msgstr "Standard"
 
-#, csharp-format
-msgid "Last check: {0}"
-msgstr "Dernière vérification : {0}"
+#: src/dbus_menu.vala:201
+#, c-format
+msgid "Standard (%d)"
+msgstr "Standard (%d)"
 
+#: src/dbus_menu.vala:204
+msgid "AUR"
+msgstr "AUR"
+
+#: src/dbus_menu.vala:204
+#, c-format
+msgid "AUR (%d)"
+msgstr "AUR (%d)"
+
+#: src/dbus_menu.vala:207
+msgid "Flatpak"
+msgstr "Flatpak"
+
+#: src/dbus_menu.vala:207
+#, c-format
+msgid "Flatpak (%d)"
+msgstr "Flatpak (%d)"
+
+#: src/main.vala:140
+msgid "Last check: %H:%M %m/%d"
+msgstr "Dernière vérification : %H:%M %d/%m"
+
+#: src/main.vala:146
+#, c-format
+msgid "%d package update available"
+msgid_plural "%d package updates available"
+msgstr[0] "%d mise à jour de paquet disponible"
+msgstr[1] "%d mises à jour de paquets disponibles"
+
+#: src/main.vala:151
+msgid "No updates available"
+msgstr "Aucune mise à jour disponible"
+
+#: src/notification_handler.vala:29 src/tray_item.vala:11
 msgid "Shelly Notifications"
 msgstr "Notifications Shelly"
 
-msgid "Shelly Notifications started. Press Ctrl+C to exit."
-msgstr "Notifications Shelly démarrées. Appuyez sur Ctrl+C pour quitter."
+#, csharp-format
+#~ msgid "Updates available: {0}"
+#~ msgstr "Mises à jour disponibles : {0}"
 
-msgid ""
-"Warning: No StatusNotifierWatcher found. The tray icon will not be visible."
-msgstr ""
-"Avertissement : aucun StatusNotifierWatcher trouvé. L’icône de la barre "
-"d’état ne sera pas visible."
+#~ msgid "No updates available."
+#~ msgstr "Aucune mise à jour disponible."
 
-msgid ""
-"Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
-"installed."
-msgstr ""
-"Astuce : si vous utilisez GNOME, vérifiez qu’une extension « AppIndicator » "
-"est installée."
+#, csharp-format
+#~ msgid "Last check: {0}"
+#~ msgstr "Dernière vérification : {0}"
+
+#~ msgid "Shelly Notifications started. Press Ctrl+C to exit."
+#~ msgstr "Notifications Shelly démarrées. Appuyez sur Ctrl+C pour quitter."
+
+#~ msgid ""
+#~ "Warning: No StatusNotifierWatcher found. The tray icon will not be "
+#~ "visible."
+#~ msgstr ""
+#~ "Avertissement : aucun StatusNotifierWatcher trouvé. L’icône de la barre "
+#~ "d’état ne sera pas visible."
+
+#~ msgid ""
+#~ "Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
+#~ "installed."
+#~ msgstr ""
+#~ "Astuce : si vous utilisez GNOME, vérifiez qu’une extension "
+#~ "« AppIndicator » est installée."

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-notifications 2.3.0.2\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-05-20 12:32-0400\n"
+"POT-Creation-Date: 2026-07-13 21:08+0200\n"
 "PO-Revision-Date: 2026-06-04 11:17+0200\n"
 "Last-Translator: Daniel Talens <dtalens@dtalens.com>\n"
 "Language-Team: \n"
@@ -12,54 +12,94 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 3.9\n"
 
-msgid "Updates available: {0}"
-msgstr "Actualitzacions disponibles: {0}"
-
-msgid "Shelly Notifications started. Press Ctrl+C to exit."
-msgstr "S'ha iniciat notifications de Shelly. Premeu Ctrl+C per a sortir."
-
-msgid ""
-"Warning: No StatusNotifierWatcher found. The tray icon will not be visible."
-msgstr ""
-"Avís: no s'ha trobat cap StatusNotifierWatcher. La icona de la safata no "
-"serà visible."
-
-msgid ""
-"Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
-"installed."
-msgstr ""
-"Consell: si utilitzeu GNOME, assegureu-vos que teniu instal·lada "
-"l'extensió «AppIndicator»."
-
-msgid "Open Shelly"
-msgstr "Obre Shelly"
-
-msgid "Update Packages"
-msgstr "Actualitza els paquets"
-
-msgid "Check for Updates"
-msgstr "Comprova si hi ha actualitzacions"
-
+#: src/dbus_menu.vala:17
 msgid "Last check: Never"
 msgstr "Última comprovació: mai"
 
+#: src/dbus_menu.vala:194 src/notification_handler.vala:31
+msgid "Open Shelly"
+msgstr "Obre Shelly"
+
+#: src/dbus_menu.vala:195
+msgid "Update Packages"
+msgstr "Actualitza els paquets"
+
+#: src/dbus_menu.vala:196
+msgid "Check for Updates"
+msgstr "Comprova si hi ha actualitzacions"
+
+#: src/dbus_menu.vala:198
 msgid "Exit"
 msgstr "Surt"
 
-msgid "No updates available."
-msgstr "No hi ha actualitzacions disponibles."
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "AUR"
-msgstr "AUR"
-
+#: src/dbus_menu.vala:201
 msgid "Standard"
 msgstr "Estàndard"
 
-msgid "Last check: {0}"
-msgstr "Última comprovació: {0}"
+#: src/dbus_menu.vala:201
+#, c-format
+msgid "Standard (%d)"
+msgstr ""
 
+#: src/dbus_menu.vala:204
+msgid "AUR"
+msgstr "AUR"
+
+#: src/dbus_menu.vala:204
+#, c-format
+msgid "AUR (%d)"
+msgstr ""
+
+#: src/dbus_menu.vala:207
+msgid "Flatpak"
+msgstr "Flatpak"
+
+#: src/dbus_menu.vala:207
+#, c-format
+msgid "Flatpak (%d)"
+msgstr ""
+
+#: src/main.vala:140
+msgid "Last check: %H:%M %m/%d"
+msgstr ""
+
+#: src/main.vala:146
+#, c-format
+msgid "%d package update available"
+msgid_plural "%d package updates available"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/main.vala:151
+msgid "No updates available"
+msgstr ""
+
+#: src/notification_handler.vala:29 src/tray_item.vala:11
 msgid "Shelly Notifications"
 msgstr "Notificacions de Shelly"
+
+#~ msgid "Updates available: {0}"
+#~ msgstr "Actualitzacions disponibles: {0}"
+
+#~ msgid "Shelly Notifications started. Press Ctrl+C to exit."
+#~ msgstr "S'ha iniciat notifications de Shelly. Premeu Ctrl+C per a sortir."
+
+#~ msgid ""
+#~ "Warning: No StatusNotifierWatcher found. The tray icon will not be "
+#~ "visible."
+#~ msgstr ""
+#~ "Avís: no s'ha trobat cap StatusNotifierWatcher. La icona de la safata no "
+#~ "serà visible."
+
+#~ msgid ""
+#~ "Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
+#~ "installed."
+#~ msgstr ""
+#~ "Consell: si utilitzeu GNOME, assegureu-vos que teniu instal·lada "
+#~ "l'extensió «AppIndicator»."
+
+#~ msgid "No updates available."
+#~ msgstr "No hi ha actualitzacions disponibles."
+
+#~ msgid "Last check: {0}"
+#~ msgstr "Última comprovació: {0}"

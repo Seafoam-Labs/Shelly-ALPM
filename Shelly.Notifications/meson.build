@@ -6,6 +6,7 @@ project(
 )
 
 add_project_arguments(['--pkg', 'posix'], language: 'vala')
+add_project_arguments('-DGETTEXT_PACKAGE="shelly-notifications"', language: 'c')
 
 deps = [
     dependency('glib-2.0'),

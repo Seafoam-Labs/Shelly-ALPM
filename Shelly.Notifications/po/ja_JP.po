@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-notifications 2.3.0.2\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-05-20 12:32-0400\n"
+"POT-Creation-Date: 2026-07-13 21:08+0200\n"
 "PO-Revision-Date: 2026-06-02 15:24+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: \n"
@@ -12,55 +12,95 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 3.9\n"
 
-msgid "Updates available: {0}"
-msgstr "利用可能なアップデート: {0}"
-
-msgid "Shelly Notifications started. Press Ctrl+C to exit."
-msgstr ""
-"Shelly 通知アプリを開始しました。終了するには Ctrl+C を押してください。"
-
-msgid ""
-"Warning: No StatusNotifierWatcher found. The tray icon will not be visible."
-msgstr ""
-"警告: StatusNotifierWatcher が見つかりませんでした。トレイアイコンは表示され"
-"ません。"
-
-msgid ""
-"Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
-"installed."
-msgstr ""
-"ヒント: GNOME を使用している場合は「AppIndicator」拡張機能がインストールされ"
-"ていることを確認してください。"
-
-msgid "Open Shelly"
-msgstr "Shelly を開く"
-
-msgid "Update Packages"
-msgstr "パッケージをアップデート"
-
-msgid "Check for Updates"
-msgstr "アップデートを確認"
-
+#: src/dbus_menu.vala:17
 msgid "Last check: Never"
 msgstr "最終確認: なし"
 
+#: src/dbus_menu.vala:194 src/notification_handler.vala:31
+msgid "Open Shelly"
+msgstr "Shelly を開く"
+
+#: src/dbus_menu.vala:195
+msgid "Update Packages"
+msgstr "パッケージをアップデート"
+
+#: src/dbus_menu.vala:196
+msgid "Check for Updates"
+msgstr "アップデートを確認"
+
+#: src/dbus_menu.vala:198
 msgid "Exit"
 msgstr "終了"
 
-msgid "No updates available."
-msgstr "アップデートがありません。"
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "AUR"
-msgstr "AUR"
-
+#: src/dbus_menu.vala:201
 msgid "Standard"
 msgstr "標準"
 
-msgid "Last check: {0}"
-msgstr "最終確認: {0}"
+#: src/dbus_menu.vala:201
+#, c-format
+msgid "Standard (%d)"
+msgstr ""
 
+#: src/dbus_menu.vala:204
+msgid "AUR"
+msgstr "AUR"
+
+#: src/dbus_menu.vala:204
+#, c-format
+msgid "AUR (%d)"
+msgstr ""
+
+#: src/dbus_menu.vala:207
+msgid "Flatpak"
+msgstr "Flatpak"
+
+#: src/dbus_menu.vala:207
+#, c-format
+msgid "Flatpak (%d)"
+msgstr ""
+
+#: src/main.vala:140
+msgid "Last check: %H:%M %m/%d"
+msgstr ""
+
+#: src/main.vala:146
+#, c-format
+msgid "%d package update available"
+msgid_plural "%d package updates available"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/main.vala:151
+msgid "No updates available"
+msgstr ""
+
+#: src/notification_handler.vala:29 src/tray_item.vala:11
 msgid "Shelly Notifications"
 msgstr "Shelly 通知アプリ"
+
+#~ msgid "Updates available: {0}"
+#~ msgstr "利用可能なアップデート: {0}"
+
+#~ msgid "Shelly Notifications started. Press Ctrl+C to exit."
+#~ msgstr ""
+#~ "Shelly 通知アプリを開始しました。終了するには Ctrl+C を押してください。"
+
+#~ msgid ""
+#~ "Warning: No StatusNotifierWatcher found. The tray icon will not be "
+#~ "visible."
+#~ msgstr ""
+#~ "警告: StatusNotifierWatcher が見つかりませんでした。トレイアイコンは表示さ"
+#~ "れません。"
+
+#~ msgid ""
+#~ "Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
+#~ "installed."
+#~ msgstr ""
+#~ "ヒント: GNOME を使用している場合は「AppIndicator」拡張機能がインストールさ"
+#~ "れていることを確認してください。"
+
+#~ msgid "No updates available."
+#~ msgstr "アップデートがありません。"
+
+#~ msgid "Last check: {0}"
+#~ msgstr "最終確認: {0}"

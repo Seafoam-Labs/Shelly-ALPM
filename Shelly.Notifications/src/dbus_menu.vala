@@ -14,7 +14,7 @@ public class DBusMenuHandler : Object {
 
     private uint _revision = 1;
     private MenuActionHandler? _on_action;
-    private string _last_check_label = "Last check: Never";
+    private string _last_check_label = _("Last check: Never");
     private SyncModel? _updates = null;
 
     private const int ID_ROOT = 0;
@@ -191,20 +191,20 @@ public class DBusMenuHandler : Object {
 
     private string label_for (int id) {
         switch (id) {
-        case ID_OPEN:      return "Open Shelly";
-        case ID_UPD_PKGS:  return "Update Packages";
-        case ID_CHECK:     return "Check for Updates";
+        case ID_OPEN:      return _("Open Shelly");
+        case ID_UPD_PKGS:  return _("Update Packages");
+        case ID_CHECK:     return _("Check for Updates");
         case ID_LASTCHECK: return _last_check_label;
-        case ID_EXIT:      return "Exit";
+        case ID_EXIT:      return _("Exit");
         case ID_SUB_STD:
             return _updates != null
-                    ? "Standard (%d)".printf ((int) _updates.packages.length) : "Standard";
+                    ? _("Standard (%d)").printf ((int) _updates.packages.length) : _("Standard");
         case ID_SUB_AUR:
             return _updates != null
-                    ? "AUR (%d)".printf ((int) _updates.aur.length) : "AUR";
+                    ? _("AUR (%d)").printf ((int) _updates.aur.length) : _("AUR");
         case ID_SUB_FLAT:
             return _updates != null
-                    ? "Flatpak (%d)".printf ((int) _updates.flatpaks.length) : "Flatpak";
+                    ? _("Flatpak (%d)").printf ((int) _updates.flatpaks.length) : _("Flatpak");
         default: return "";
         }
     }

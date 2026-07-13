@@ -8,7 +8,7 @@ public class StatusNotifierItem : Object {
 
     public string category        { owned get { return "ApplicationStatus"; } }
     public string id              { owned get { return "Shelly"; } }
-    public string title           { owned get { return "Shelly Notifications"; } }
+    public string title           { owned get { return _("Shelly Notifications"); } }
     public string status          { owned get { return "Active"; } }
     public string icon_name       { owned get { return _icon_name; } }
     public string icon_theme_path { owned get { return ""; } }
