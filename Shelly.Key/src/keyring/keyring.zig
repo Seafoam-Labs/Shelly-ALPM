@@ -2,6 +2,7 @@ const std = @import("std");
 const Io = std.Io;
 
 const gpg = @import("../gpg.zig");
+const gpgconf = @import("gpgconf.zig");
 const keydir = @import("keydir.zig");
 const keyfiles = @import("keyfiles.zig");
 
@@ -18,4 +19,7 @@ pub fn init(io: Io, keyring_path: []const u8) !void {
     }
 
     try keyfiles.applyKeyringPermissions(base, io, keyring_path);
+
+    try gpgconf.ensureGpgConf(base, io, keyring_path);
+    try gpgconf.ensureGpgAgentConf(base, io, keyring_path);
 }

@@ -4,6 +4,7 @@ pub const gpg = @import("gpg.zig");
 pub const keyring = @import("keyring/keyring.zig");
 pub const keydir = @import("keyring/keydir.zig");
 pub const keyfiles = @import("keyring/keyfiles.zig");
+pub const gpgconf = @import("keyring/gpgconf.zig");
 
 test {
     _ = @import("cli.zig");
@@ -12,4 +13,5 @@ test {
     _ = @import("keyring/keyring.zig");
     _ = @import("keyring/keydir.zig");
     _ = @import("keyring/keyfiles.zig");
+    _ = @import("keyring/gpgconf.zig");
 }
