@@ -58,7 +58,7 @@ fn statSize(dir: Io.Dir, io: Io, sub_path: []const u8) !u64 {
     return st.size;
 }
 
-test "ensureLegacyKeyringFilesCreated creates pubring.gpg and secring.gpg when absent" {
+test "ensureKeyringFilesCreated creates pubring.gpg and secring.gpg when absent" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
@@ -78,7 +78,7 @@ test "ensureLegacyKeyringFilesCreated creates pubring.gpg and secring.gpg when a
     try testing.expectEqual(@as(u64, 0), try statSize(gnupg, testing.io, "secring.gpg"));
 }
 
-test "ensureLegacyKeyringFilesCreated is idempotent and preserves existing content" {
+test "ensureKeyringFilesCreated is idempotent and preserves existing content" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
@@ -104,7 +104,7 @@ test "ensureLegacyKeyringFilesCreated is idempotent and preserves existing conte
     try testing.expectEqual(@as(u64, 0), try statSize(gnupg, testing.io, "secring.gpg"));
 }
 
-test "ensureLegacyKeyringFilesCreated fails when pubring.gpg is a directory" {
+test "ensureKeyringFilesCreated fails when pubring.gpg is a directory" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
@@ -141,7 +141,7 @@ test "trustdbNeedsInit returns false when trustdb.gpg exists as a regular file" 
     try testing.expect(!try trustdbNeedsInit(tmp.dir, testing.io, "gnupg"));
 }
 
-test "applyLegacyKeyringPermissions sets the canonical modes on all three files" {
+test "applyKeyringPermissions sets the canonical modes on all three files" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
@@ -162,12 +162,12 @@ test "applyLegacyKeyringPermissions sets the canonical modes on all three files"
     var gnupg = try tmp.dir.openDir(testing.io, "gnupg", .{});
     defer gnupg.close(testing.io);
 
-    try testing.expectEqual(@as(std.posix.mode_t, 0o644), try statMode(gnupg, testing.io, "pubring.gpg"));
-    try testing.expectEqual(@as(std.posix.mode_t, 0o644), try statMode(gnupg, testing.io, "trustdb.gpg"));
-    try testing.expectEqual(@as(std.posix.mode_t, 0o600), try statMode(gnupg, testing.io, "secring.gpg"));
+    try testing.expectFmt("0644", "{o:0>4}", .{try statMode(gnupg, testing.io, "pubring.gpg")});
+    try testing.expectFmt("0644", "{o:0>4}", .{try statMode(gnupg, testing.io, "trustdb.gpg")});
+    try testing.expectFmt("0600", "{o:0>4}", .{try statMode(gnupg, testing.io, "secring.gpg")});
 }
 
-test "applyLegacyKeyringPermissions reports missing trustdb.gpg" {
+test "applyKeyringPermissions reports missing trustdb.gpg" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 

@@ -340,10 +340,8 @@ test "ensureGpgConf creates gpg.conf with required options" {
     var gnupg = try tmp.dir.openDir(testing.io, "gnupg", .{});
     defer gnupg.close(testing.io);
 
-    try testing.expectEqual(
-        @as(std.posix.mode_t, 0o644),
-        try fsutil.statMode(gnupg, testing.io, "gpg.conf"),
-    );
+    const mode = try fsutil.statMode(gnupg, testing.io, "gpg.conf");
+    try testing.expectFmt("0644", "{o:0>4}", .{mode});
 
     const content = try readFile(gnupg, testing.io, "gpg.conf");
     defer testing.allocator.free(content);
@@ -436,10 +434,8 @@ test "ensureGpgAgentConf creates gpg-agent.conf with disable-scdaemon" {
     var gnupg = try tmp.dir.openDir(testing.io, "gnupg", .{});
     defer gnupg.close(testing.io);
 
-    try testing.expectEqual(
-        @as(std.posix.mode_t, 0o644),
-        try fsutil.statMode(gnupg, testing.io, "gpg-agent.conf"),
-    );
+    const mode = try fsutil.statMode(gnupg, testing.io, "gpg-agent.conf");
+    try testing.expectFmt("0644", "{o:0>4}", .{mode});
 
     const content = try readFile(gnupg, testing.io, "gpg-agent.conf");
     defer testing.allocator.free(content);

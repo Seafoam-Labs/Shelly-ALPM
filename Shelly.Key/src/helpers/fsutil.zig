@@ -89,7 +89,8 @@ test "statMode reflects explicit file mode" {
     var f = try tmp.dir.createFile(testing.io, "f", .{ .permissions = mode.private });
     defer f.close(testing.io);
 
-    try testing.expectEqual(@as(std.posix.mode_t, 0o600), try statMode(tmp.dir, testing.io, "f"));
+    const mode_bits = try statMode(tmp.dir, testing.io, "f");
+    try testing.expectFmt("0600", "{o:0>4}", .{mode_bits});
 }
 
 test "statMode reflects directory permissions" {
@@ -98,7 +99,8 @@ test "statMode reflects directory permissions" {
 
     try tmp.dir.createDir(testing.io, "d", mode.executable);
 
-    try testing.expectEqual(@as(std.posix.mode_t, 0o755), try statMode(tmp.dir, testing.io, "d"));
+    const mode_bits = try statMode(tmp.dir, testing.io, "d");
+    try testing.expectFmt("0755", "{o:0>4}", .{mode_bits});
 }
 
 test "statMode fails for missing entry" {
