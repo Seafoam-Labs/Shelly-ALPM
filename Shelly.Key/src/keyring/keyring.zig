@@ -6,6 +6,9 @@ const gpgconf = @import("gpgconf.zig");
 const keydir = @import("keydir.zig");
 const keyfiles = @import("keyfiles.zig");
 
+/// Default keyring location, used when `--init` is invoked without a path.
+pub const default_path = "/etc/pacman.d/gnupg";
+
 /// Batch parameters for `gpg --gen-key --batch` to create local signing key.
 const master_key_batch =
     \\%echo Generating keyring master key...
