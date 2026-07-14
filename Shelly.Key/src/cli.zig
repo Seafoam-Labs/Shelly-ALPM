@@ -130,7 +130,7 @@ test "printHelp prints the expected usage text" {
         \\Usage: shelly-key [OPTIONS]
         \\
         \\Options:
-        \\  --init [path] Initialize gpg keys and ensure correct permissions (default: /etc/shelly.d/gnupg)
+        \\  --init [path] Initialize gpg keys and ensure correct permissions (default: /etc/pacman.d/gnupg)
         \\  -h, --help    Show this help message
         \\
     ,
