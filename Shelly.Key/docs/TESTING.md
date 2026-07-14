@@ -26,8 +26,6 @@ ls -l /tmp/test-gnupg/
 | Path             | Mode   |
 | ---------------- | ------ |
 | `gnupg/`         | `0755` |
-| `pubring.gpg`    | `0644` |
-| `secring.gpg`    | `0600` |
 | `trustdb.gpg`    | `0644` |
 | `gpg.conf`       | `0644` |
 | `gpg-agent.conf` | `0644` |

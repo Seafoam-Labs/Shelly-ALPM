@@ -28,7 +28,6 @@ pub fn init(io: Io, keyring_path: []const u8, out: *Io.Writer) !void {
     const base: std.Io.Dir = .cwd();
 
     try keydir.ensureKeyringDir(base, io, keyring_path);
-    try keyfiles.ensureKeyringFilesCreated(base, io, keyring_path);
 
     const gpg_cli: gpg.Gpg = .{ .io = io, .homedir = keyring_path };
 
