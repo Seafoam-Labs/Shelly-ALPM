@@ -785,9 +785,24 @@ pub const Manager = struct {
     }
 
     pub fn find_remote_satisfier_for_dependency(self: *Manager, dependency: [:0]const u8) QueryError![:0]const u8 {
+        if (self.handle == null) return QueryError.NoHandle;
+        const sync_dbs = rawLibalpm.alpm_get_syncdbs(self.handle);
+        while (sync_dbs != null) : (sync_dbs = sync_dbs.*.next) {
+            const db_ptr = sync_dbs.*.data orelse continue;
+            const db = libalpm.Database.from(db_ptr) orelse continue;
+            const pkg_cache = db.package_cache();
+            const satisfier = rawLibalpm.alpm_find_satisfier(pkg_cache, dependency) orelse continue;
+            const pkg = libalpm.Package.from(satisfier) orelse continue;
+            return pkg.name();
+        }
+        return QueryError.PkgNotFound;
+    }
+
+    pub fn install_dependencies_only(self: *Manager, package_name: [:0]const u8, include_make_deps: bool, flags: TransFlag){
         _ = self;
-        _ = dependency;
-        return "";
+        _ = package_name;
+        _ include_make_deps;
+        _ = flags;
     }
 
     // Determines if a single package is available for optional dependency install.
