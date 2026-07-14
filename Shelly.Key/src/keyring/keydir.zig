@@ -10,7 +10,7 @@ pub const KeydirError = error{
     std.Io.Dir.StatFileError ||
     std.Io.Dir.SetFilePermissionsError;
 
-pub fn createKeyringDir(base: std.Io.Dir, io: Io, sub_path: []const u8) KeydirError!void {
+pub fn ensureKeyringDir(base: std.Io.Dir, io: Io, sub_path: []const u8) KeydirError!void {
     // Check if already exists (including symlinks).
     if (base.statFile(io, sub_path, .{})) |st| {
         if (st.kind == .directory) {
@@ -47,11 +47,11 @@ pub fn createKeyringDir(base: std.Io.Dir, io: Io, sub_path: []const u8) KeydirEr
 
 const testing = std.testing;
 
-test "createKeyringDir creates a fresh directory with mode 0755" {
+test "ensureKeyringDir creates a fresh directory with mode 0755" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
-    try createKeyringDir(tmp.dir, testing.io, "gnupg");
+    try ensureKeyringDir(tmp.dir, testing.io, "gnupg");
 
     const st = try tmp.dir.statFile(testing.io, "gnupg", .{});
     try testing.expectEqual(@as(std.Io.File.Kind, .directory), st.kind);
@@ -60,55 +60,55 @@ test "createKeyringDir creates a fresh directory with mode 0755" {
     try testing.expectFmt("0755", "{o:0>4}", .{mode});
 }
 
-test "createKeyringDir leaves an existing directory's mode untouched" {
+test "ensureKeyringDir leaves an existing directory's mode untouched" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
     try tmp.dir.createDir(testing.io, "gnupg", @enumFromInt(0o700));
 
-    try createKeyringDir(tmp.dir, testing.io, "gnupg");
+    try ensureKeyringDir(tmp.dir, testing.io, "gnupg");
 
     const mode = try fsutil.statMode(tmp.dir, testing.io, "gnupg");
     try testing.expectFmt("0700", "{o:0>4}", .{mode});
 }
 
-test "createKeyringDir accepts a symlink to a directory" {
+test "ensureKeyringDir accepts a symlink to a directory" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
     try tmp.dir.createDir(testing.io, "real", .default_dir);
     try tmp.dir.symLink(testing.io, "real", "gnupg", .{});
 
-    try createKeyringDir(tmp.dir, testing.io, "gnupg");
+    try ensureKeyringDir(tmp.dir, testing.io, "gnupg");
 
     const st = try tmp.dir.statFile(testing.io, "gnupg", .{});
     try testing.expectEqual(@as(std.Io.File.Kind, .directory), st.kind);
 }
 
-test "createKeyringDir fails on an existing regular file" {
+test "ensureKeyringDir fails on an existing regular file" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
     var f = try tmp.dir.createFile(testing.io, "gnupg", .{});
     f.close(testing.io);
 
-    try testing.expectError(error.NotADirectory, createKeyringDir(tmp.dir, testing.io, "gnupg"));
+    try testing.expectError(error.NotADirectory, ensureKeyringDir(tmp.dir, testing.io, "gnupg"));
 }
 
-test "createKeyringDir fails on a dangling symlink" {
+test "ensureKeyringDir fails on a dangling symlink" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
     try tmp.dir.symLink(testing.io, "does-not-exist", "gnupg", .{});
 
-    try testing.expectError(error.DanglingSymlink, createKeyringDir(tmp.dir, testing.io, "gnupg"));
+    try testing.expectError(error.DanglingSymlink, ensureKeyringDir(tmp.dir, testing.io, "gnupg"));
 }
 
-test "createKeyringDir creates missing parent directories" {
+test "ensureKeyringDir creates missing parent directories" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
-    try createKeyringDir(tmp.dir, testing.io, "a/b/gnupg");
+    try ensureKeyringDir(tmp.dir, testing.io, "a/b/gnupg");
 
     const st = try tmp.dir.statFile(testing.io, "a/b/gnupg", .{});
     try testing.expectEqual(@as(std.Io.File.Kind, .directory), st.kind);
@@ -116,13 +116,13 @@ test "createKeyringDir creates missing parent directories" {
     try testing.expectFmt("0755", "{o:0>4}", .{mode});
 }
 
-test "createKeyringDir is idempotent" {
+test "ensureKeyringDir is idempotent" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
-    try createKeyringDir(tmp.dir, testing.io, "gnupg");
-    try createKeyringDir(tmp.dir, testing.io, "gnupg");
-    try createKeyringDir(tmp.dir, testing.io, "gnupg");
+    try ensureKeyringDir(tmp.dir, testing.io, "gnupg");
+    try ensureKeyringDir(tmp.dir, testing.io, "gnupg");
+    try ensureKeyringDir(tmp.dir, testing.io, "gnupg");
 
     const mode = try fsutil.statMode(tmp.dir, testing.io, "gnupg");
     try testing.expectFmt("0755", "{o:0>4}", .{mode});
