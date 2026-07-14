@@ -160,6 +160,10 @@ pub const libalpm = struct {
             return .{ .node = alpm.alpm_db_get_pkgcache(self.ptr) };
         }
 
+        pub fn package_cache(self: Database) [*c]alpm.alpm_list_t {
+            return alpm.alpm_db_get_pkgcache(self.ptr);
+        }
+
         pub fn getGroup(self: Database, group_name: [:0]const u8) ?AlpmPackageGroup {
             const grp = alpm.alpm_db_get_group(self.ptr, group_name.ptr);
             if (grp == null) return null;
