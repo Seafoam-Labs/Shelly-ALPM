@@ -1,14 +1,14 @@
 const std = @import("std");
 const Io = std.Io;
 
+const fsutil = @import("../helpers/fsutil.zig");
+
 pub const GpgConfError = error{
-    NotARegularFile,
     OptionTooLong,
     ConfigFileTooLarge,
-} || std.Io.Dir.OpenError ||
-    std.Io.Dir.StatFileError ||
+} || fsutil.FsUtilError ||
+    std.Io.Dir.OpenError ||
     std.Io.Dir.SetFilePermissionsError ||
-    std.Io.File.OpenError ||
     std.Io.File.ReadPositionalError ||
     std.Io.File.WritePositionalError ||
     std.Io.File.LengthError;
@@ -21,8 +21,8 @@ pub fn ensureGpgConf(
     var dir = try base.openDir(io, keyring_dir, .{});
     defer dir.close(io);
 
-    try ensureRegularFile(dir, io, "gpg.conf");
-    try dir.setFilePermissions(io, "gpg.conf", @enumFromInt(0o644), .{});
+    try fsutil.ensureRegularFile(dir, io, "gpg.conf");
+    try dir.setFilePermissions(io, "gpg.conf", fsutil.mode.readable, .{});
 
     try ensureOption(dir, io, "gpg.conf", "no-greeting", null);
     try ensureOption(dir, io, "gpg.conf", "no-permission-warning", null);
@@ -39,8 +39,8 @@ pub fn ensureGpgAgentConf(
     var dir = try base.openDir(io, keyring_dir, .{});
     defer dir.close(io);
 
-    try ensureRegularFile(dir, io, "gpg-agent.conf");
-    try dir.setFilePermissions(io, "gpg-agent.conf", @enumFromInt(0o644), .{});
+    try fsutil.ensureRegularFile(dir, io, "gpg-agent.conf");
+    try dir.setFilePermissions(io, "gpg-agent.conf", fsutil.mode.readable, .{});
 
     try ensureOption(dir, io, "gpg-agent.conf", "disable-scdaemon", null);
 }
@@ -59,24 +59,6 @@ pub fn ensureOption(
     if (try optionExists(dir, io, conf_name, option_str)) return;
 
     try appendOption(dir, io, conf_name, option_str);
-}
-
-fn ensureRegularFile(dir: std.Io.Dir, io: Io, name: []const u8) GpgConfError!void {
-    if (try isRegularFile(dir, io, name)) return;
-
-    var f = dir.createFile(io, name, .{}) catch |err| switch (err) {
-        error.IsDir => return error.NotARegularFile,
-        else => |e| return e,
-    };
-    f.close(io);
-}
-
-fn isRegularFile(dir: std.Io.Dir, io: Io, name: []const u8) GpgConfError!bool {
-    const st = dir.statFile(io, name, .{}) catch |err| switch (err) {
-        error.FileNotFound => return false,
-        else => |e| return e,
-    };
-    return st.kind == .file;
 }
 
 fn optionExists(
@@ -166,11 +148,6 @@ fn isSpace(c: u8) bool {
 }
 
 const testing = std.testing;
-
-fn statMode(dir: Io.Dir, io: Io, sub_path: []const u8) !std.posix.mode_t {
-    const st = try dir.statFile(io, sub_path, .{});
-    return st.permissions.toMode() & 0o7777;
-}
 
 fn readFile(dir: Io.Dir, io: Io, name: []const u8) ![]u8 {
     var buf: [4096]u8 = undefined;
@@ -365,7 +342,7 @@ test "ensureGpgConf creates gpg.conf with required options" {
 
     try testing.expectEqual(
         @as(std.posix.mode_t, 0o644),
-        try statMode(gnupg, testing.io, "gpg.conf"),
+        try fsutil.statMode(gnupg, testing.io, "gpg.conf"),
     );
 
     const content = try readFile(gnupg, testing.io, "gpg.conf");
@@ -461,7 +438,7 @@ test "ensureGpgAgentConf creates gpg-agent.conf with disable-scdaemon" {
 
     try testing.expectEqual(
         @as(std.posix.mode_t, 0o644),
-        try statMode(gnupg, testing.io, "gpg-agent.conf"),
+        try fsutil.statMode(gnupg, testing.io, "gpg-agent.conf"),
     );
 
     const content = try readFile(gnupg, testing.io, "gpg-agent.conf");

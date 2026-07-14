@@ -1,12 +1,11 @@
 const std = @import("std");
 const Io = std.Io;
 
-pub const KeyfilesError = error{
-    NotARegularFile,
-} || std.Io.Dir.OpenError ||
-    std.Io.Dir.StatFileError ||
-    std.Io.Dir.SetFilePermissionsError ||
-    std.Io.File.OpenError;
+const fsutil = @import("../helpers/fsutil.zig");
+
+pub const KeyfilesError = fsutil.FsUtilError ||
+    std.Io.Dir.OpenError ||
+    std.Io.Dir.SetFilePermissionsError;
 
 // Old GnuPG keyring format for parity with older setups / `gpg1` interop.
 // TODO: No longer needed? Modern GnuPG commonly uses `pubring.kbx` and private-key storage under `private-keys-v1.d`.
@@ -18,8 +17,8 @@ pub fn ensureKeyringFilesCreated(
     var dir = try base.openDir(io, keyring_dir, .{});
     defer dir.close(io);
 
-    try ensureRegularFile(dir, io, "pubring.gpg");
-    try ensureRegularFile(dir, io, "secring.gpg");
+    try fsutil.ensureRegularFile(dir, io, "pubring.gpg");
+    try fsutil.ensureRegularFile(dir, io, "secring.gpg");
 }
 
 pub fn trustdbNeedsInit(
@@ -30,7 +29,7 @@ pub fn trustdbNeedsInit(
     var dir = try base.openDir(io, keyring_dir, .{});
     defer dir.close(io);
 
-    return !try isRegularFile(dir, io, "trustdb.gpg");
+    return !try fsutil.isRegularFile(dir, io, "trustdb.gpg");
 }
 
 pub fn applyKeyringPermissions(
@@ -41,27 +40,9 @@ pub fn applyKeyringPermissions(
     var dir = try base.openDir(io, keyring_dir, .{});
     defer dir.close(io);
 
-    try dir.setFilePermissions(io, "pubring.gpg", @enumFromInt(0o644), .{});
-    try dir.setFilePermissions(io, "trustdb.gpg", @enumFromInt(0o644), .{});
-    try dir.setFilePermissions(io, "secring.gpg", @enumFromInt(0o600), .{});
-}
-
-fn ensureRegularFile(dir: std.Io.Dir, io: Io, name: []const u8) KeyfilesError!void {
-    if (try isRegularFile(dir, io, name)) return;
-
-    var f = dir.createFile(io, name, .{}) catch |err| switch (err) {
-        error.IsDir => return error.NotARegularFile,
-        else => |e| return e,
-    };
-    f.close(io);
-}
-
-fn isRegularFile(dir: std.Io.Dir, io: Io, name: []const u8) KeyfilesError!bool {
-    const st = dir.statFile(io, name, .{}) catch |err| switch (err) {
-        error.FileNotFound => return false,
-        else => |e| return e,
-    };
-    return st.kind == .file;
+    try dir.setFilePermissions(io, "pubring.gpg", fsutil.mode.readable, .{});
+    try dir.setFilePermissions(io, "trustdb.gpg", fsutil.mode.readable, .{});
+    try dir.setFilePermissions(io, "secring.gpg", fsutil.mode.private, .{});
 }
 
 const testing = std.testing;
