@@ -1,8 +1,7 @@
 const std = @import("std");
 
 pub const bin_name = "shelly-key";
-// TODO: Change me.
-pub const default_init_path = "/etc/shelly.d/gnupg";
+pub const default_init_path = "/etc/pacman.d/gnupg";
 
 pub const Command = union(enum) {
     help,

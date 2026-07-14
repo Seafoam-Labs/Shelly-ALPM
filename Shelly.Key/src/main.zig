@@ -24,7 +24,7 @@ fn run(init: std.process.Init) !void {
             );
 
             const init_path = opts.init_path;
-            try Shelly_Key.keyring.init(init.io, init_path);
+            try Shelly_Key.keyring.init(init.io, init_path, stdout);
             try stdout.print("Keyring initialized at {s}\n", .{init_path});
         },
     }

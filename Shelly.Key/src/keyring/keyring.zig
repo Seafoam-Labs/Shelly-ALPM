@@ -6,17 +6,31 @@ const gpgconf = @import("gpgconf.zig");
 const keydir = @import("keydir.zig");
 const keyfiles = @import("keyfiles.zig");
 
-pub fn init(io: Io, keyring_path: []const u8) !void {
+/// Batch parameters for `gpg --gen-key --batch` to create local signing key.
+const master_key_batch =
+    \\%echo Generating pacman keyring master key...
+    \\Key-Type: RSA
+    \\Key-Length: 4096
+    \\Key-Usage: sign
+    \\Name-Real: Pacman Keyring Master Key
+    \\Name-Email: pacman@localhost
+    \\Expire-Date: 0
+    \\%no-protection
+    \\%commit
+    \\%echo Done
+    \\
+;
+
+pub fn init(io: Io, keyring_path: []const u8, out: *Io.Writer) !void {
     const base: std.Io.Dir = .cwd();
 
     try keydir.createKeyringDir(base, io, keyring_path);
-
     try keyfiles.ensureKeyringFilesCreated(base, io, keyring_path);
-    
-    const runner: gpg.Gpg = .{ .io = io, .homedir = keyring_path };
+
+    const gpg_cli: gpg.Gpg = .{ .io = io, .homedir = keyring_path };
 
     if (try keyfiles.trustdbNeedsInit(base, io, keyring_path)) {
-        try runner.updateTrustdb();
+        try gpg_cli.updateTrustdb();
     }
 
     try keyfiles.applyKeyringPermissions(base, io, keyring_path);
@@ -24,11 +38,13 @@ pub fn init(io: Io, keyring_path: []const u8) !void {
     try gpgconf.ensureGpgConf(base, io, keyring_path);
     try gpgconf.ensureGpgAgentConf(base, io, keyring_path);
 
-    const has_secret_key = try runner.secretKeysAvailable();
-    if (!has_secret_key) {
-        // TODO(step 9): generate the Pacman Keyring Master Key via
-        //   runner.genKey(master_key_batch_input) and set an `updatedb_required = true` flag.
-        // TODO(step 10): when a key was generated, run
-        //   runner.checkTrustdb() after printing "Updating trust database...".
+    if (!try gpg_cli.secretKeysAvailable()) {
+        try out.print("Generating pacman master key. This may take some time.\n", .{});
+        try out.flush();
+        try gpg_cli.genKey(master_key_batch);
+
+        try out.print("Updating trust database...\n", .{});
+        try out.flush();
+        try gpg_cli.checkTrustdb();
     }
 }
