@@ -14,56 +14,63 @@ pub const Gpg = struct {
     io: Io,
     homedir: []const u8,
 
-    /// `gpg --homedir <dir> --no-permission-warning --update-trustdb`
+    /// Run `gpg --homedir <dir> --no-permission-warning --update-trustdb`
     pub fn updateTrustdb(self: Gpg) !void {
         try self.run(&.{"--update-trustdb"}, null);
     }
 
-    /// `gpg --homedir <dir> --no-permission-warning -K --with-colons`
-    pub fn listSecretKeys(self: Gpg) !void {
-        try self.run(&.{ "-K", "--with-colons" }, null);
+    /// Run `gpg --homedir <dir> --no-permission-warning -K --with-colons`
+    pub fn secretKeysAvailable(self: Gpg) !bool {
+        var argv: [argv_capacity][]const u8 = undefined;
+        const argv_len = buildArgv(&argv, &.{ "-K", "--with-colons" }, self.homedir);
+
+        var child = try process.spawn(self.io, .{
+            .argv = argv[0..argv_len],
+            .stdin = .ignore,
+            .stdout = .pipe,
+            .stderr = .inherit,
+        });
+        errdefer child.kill(self.io);
+
+        // Any output means a secret key exists; drain fully to avoid blocking.
+        var buf: [4096]u8 = undefined;
+        var available = false;
+        while (true) {
+            const n = child.stdout.?.readStreaming(self.io, &.{&buf}) catch |err| switch (err) {
+                error.EndOfStream => break,
+                else => |e| return e,
+            };
+            if (n > 0) available = true;
+        }
+        child.stdout.?.close(self.io);
+        child.stdout = null;
+
+        try checkTerm(try child.wait(self.io));
+        return available;
     }
 
-    /// `gpg --homedir <dir> --no-permission-warning --gen-key --batch`
+    /// Run `gpg --homedir <dir> --no-permission-warning --gen-key --batch`
     ///
-    /// `batch_input` is written to the child's stdin (the unattended key
-    /// generation parameters gpg reads in batch mode).
+    /// `batch_input` is written to the stdin.
     pub fn genKey(self: Gpg, batch_input: []const u8) !void {
         try self.run(&.{ "--gen-key", "--batch" }, batch_input);
     }
 
-    /// `gpg --homedir <dir> --no-permission-warning --batch --check-trustdb`
+    /// Run `gpg --homedir <dir> --no-permission-warning --batch --check-trustdb`
     pub fn checkTrustdb(self: Gpg) !void {
         try self.run(&.{ "--batch", "--check-trustdb" }, null);
     }
 
-    /// Spawns `gpg --homedir <homedir> --no-permission-warning <extra...>`.
-    ///
-    /// When `stdin_data` is non-null, a pipe is created for stdin, the data is
-    /// written and the write end is closed so the child observes EOF. Otherwise
-    /// stdin is inherited from the parent process. stdout and stderr are always
-    /// inherited.
+    /// Spawn `gpg --homedir <homedir> --no-permission-warning <extra...>`.
     fn run(self: Gpg, extra: []const []const u8, stdin_data: ?[]const u8) !void {
-        var argv: [8][]const u8 = undefined;
-        var n: usize = 0;
-        argv[n] = "gpg";
-        n += 1;
-        argv[n] = "--homedir";
-        n += 1;
-        argv[n] = self.homedir;
-        n += 1;
-        argv[n] = "--no-permission-warning";
-        n += 1;
-        for (extra) |arg| {
-            argv[n] = arg;
-            n += 1;
-        }
+        var argv: [argv_capacity][]const u8 = undefined;
+        const argv_len = buildArgv(&argv, extra, self.homedir);
 
         const stdin_kind: process.SpawnOptions.StdIo =
             if (stdin_data != null) .pipe else .inherit;
 
         var child = try process.spawn(self.io, .{
-            .argv = argv[0..n],
+            .argv = argv[0..argv_len],
             .stdin = stdin_kind,
             .stdout = .inherit,
             .stderr = .inherit,
@@ -76,10 +83,73 @@ pub const Gpg = struct {
             child.stdin = null;
         }
 
-        const term = try child.wait(self.io);
-        switch (term) {
-            .exited => |code| if (code != 0) return error.GpgFailed,
-            .signal, .stopped, .unknown => return error.GpgFailed,
-        }
+        try checkTerm(try child.wait(self.io));
     }
 };
+
+/// Maximum argv capacity: `gpg --homedir <dir> --no-permission-warning`
+/// (4 slots) plus room for command-specific arguments.
+const argv_capacity: usize = 8;
+
+fn buildArgv(
+    argv: *[argv_capacity][]const u8,
+    extra: []const []const u8,
+    homedir: []const u8,
+) usize {
+    var n: usize = 0;
+    argv[n] = "gpg";
+    n += 1;
+    argv[n] = "--homedir";
+    n += 1;
+    argv[n] = homedir;
+    n += 1;
+    argv[n] = "--no-permission-warning";
+    n += 1;
+    for (extra) |arg| {
+        argv[n] = arg;
+        n += 1;
+    }
+    return n;
+}
+
+fn checkTerm(term: process.Child.Term) GpgError!void {
+    switch (term) {
+        .exited => |code| if (code != 0) return error.GpgFailed,
+        .signal, .stopped, .unknown => return error.GpgFailed,
+    }
+}
+
+const testing = std.testing;
+
+test "buildArgv prefixes every command with the homedir boilerplate" {
+    var argv: [argv_capacity][]const u8 = undefined;
+    const n = buildArgv(&argv, &.{ "-K", "--with-colons" }, "/tmp/gnupg");
+
+    try testing.expectEqual(@as(usize, 6), n);
+    try testing.expectEqualStrings("gpg", argv[0]);
+    try testing.expectEqualStrings("--homedir", argv[1]);
+    try testing.expectEqualStrings("/tmp/gnupg", argv[2]);
+    try testing.expectEqualStrings("--no-permission-warning", argv[3]);
+    try testing.expectEqualStrings("-K", argv[4]);
+    try testing.expectEqualStrings("--with-colons", argv[5]);
+}
+
+test "checkTerm accepts a zero exit code" {
+    try checkTerm(.{ .exited = 0 });
+}
+
+test "checkTerm rejects a nonzero exit code" {
+    try testing.expectError(error.GpgFailed, checkTerm(.{ .exited = 2 }));
+}
+
+test "checkTerm rejects signal termination" {
+    try testing.expectError(
+        error.GpgFailed,
+        checkTerm(.{ .signal = .TERM }),
+    );
+}
+
+test "checkTerm rejects stopped and unknown terminations" {
+    try testing.expectError(error.GpgFailed, checkTerm(.{ .stopped = .TERM }));
+    try testing.expectError(error.GpgFailed, checkTerm(.{ .unknown = 0x7f }));
+}
