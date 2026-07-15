@@ -7,7 +7,10 @@ const keydir = @import("keydir.zig");
 const keyfiles = @import("keyfiles.zig");
 
 /// Default keyring location, used when `--init` is invoked without a path.
-pub const default_path = "/etc/pacman.d/gnupg";
+pub const default_gpgdir = "/etc/pacman.d/gnupg";
+
+/// Default source directory for `--populate`, used when `--populate-from` is not given.
+pub const default_populate_from = "/usr/share/pacman/keyrings";
 
 /// Batch parameters for `gpg --gen-key --batch` to create local signing key.
 const master_key_batch =

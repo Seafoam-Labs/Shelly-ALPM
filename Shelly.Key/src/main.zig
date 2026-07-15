@@ -26,6 +26,18 @@ fn run(init: std.process.Init) !void {
             const init_path = opts.init_path;
             try Shelly_Key.keyring.init(init.io, init_path, stdout);
         },
+        .populate => {
+            try Shelly_Key.elevate.ensureRoot(
+                init.io,
+                init.arena,
+                args,
+                init.environ_map.get("PATH").?,
+            );
+
+            // TODO: implement the --populate pipeline
+            try Io.File.stderr().writeStreamingAll(init.io, "error: --populate is not yet implemented\n");
+            std.process.exit(1);
+        },
     }
 }
 
@@ -33,6 +45,14 @@ pub fn main(init: std.process.Init) !void {
     run(init) catch |err| switch (err) {
         error.UnknownArgument => {
             try Io.File.stderr().writeStreamingAll(init.io, "error: unknown or invalid argument(s). See --help for usage.\n");
+            std.process.exit(1);
+        },
+        error.MultipleOperations => {
+            try Io.File.stderr().writeStreamingAll(init.io, "error: multiple operations specified; run each operation separately.\n");
+            std.process.exit(1);
+        },
+        error.MissingArgumentValue => {
+            try Io.File.stderr().writeStreamingAll(init.io, "error: option requires an argument. See --help for usage.\n");
             std.process.exit(1);
         },
         error.NoElevator => {
