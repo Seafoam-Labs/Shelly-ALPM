@@ -7,7 +7,7 @@ pub const KeyfilesError = fsutil.FsUtilError ||
     std.Io.Dir.OpenError ||
     std.Io.Dir.SetFilePermissionsError;
 
-pub fn trustdbNeedsInit(
+pub fn trustdbExists(
     base: std.Io.Dir,
     io: Io,
     keyring_dir: []const u8,
@@ -15,7 +15,7 @@ pub fn trustdbNeedsInit(
     var dir = try base.openDir(io, keyring_dir, .{});
     defer dir.close(io);
 
-    return !try fsutil.isRegularFile(dir, io, "trustdb.gpg");
+    return fsutil.isRegularFile(dir, io, "trustdb.gpg");
 }
 
 pub fn applyKeyringPermissions(
@@ -29,24 +29,113 @@ pub fn applyKeyringPermissions(
     try dir.setFilePermissions(io, "trustdb.gpg", fsutil.mode.readable, .{});
 }
 
-const testing = std.testing;
+pub const ResolveKeyringsError = error{
+    NoKeyringsFound,
+    MissingKeyringFile,
+    OutOfMemory,
+} || std.Io.Dir.OpenError ||
+    std.Io.Dir.Iterator.Error ||
+    fsutil.FsUtilError;
 
-fn statMode(dir: Io.Dir, io: Io, sub_path: []const u8) !std.posix.mode_t {
-    const st = try dir.statFile(io, sub_path, .{});
-    // Mask with 0o7777 to keep only permission bits.
-    return st.permissions.toMode() & 0o7777;
+pub fn resolveKeyrings(
+    allocator: std.mem.Allocator,
+    base: std.Io.Dir,
+    io: Io,
+    import_dir: []const u8,
+    requested: []const []const u8,
+) ResolveKeyringsError![][]const u8 {
+    if (requested.len == 0) {
+        return discoverKeyrings(allocator, base, io, import_dir);
+    }
+
+    return validateRequestedKeyrings(allocator, base, io, import_dir, requested);
 }
 
-test "trustdbNeedsInit returns true when trustdb.gpg is absent" {
+fn discoverKeyrings(
+    allocator: std.mem.Allocator,
+    base: std.Io.Dir,
+    io: Io,
+    import_dir: []const u8,
+) ResolveKeyringsError![][]const u8 {
+    var dir = try base.openDir(io, import_dir, .{ .iterate = true });
+    defer dir.close(io);
+
+    var ids: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (ids.items) |id| allocator.free(id);
+        ids.deinit(allocator);
+    }
+
+    var iter = dir.iterate();
+    while (try iter.next(io)) |entry| {
+        if (entry.kind != .file) continue;
+        if (!std.mem.endsWith(u8, entry.name, ".gpg")) continue;
+        if (entry.name.len <= ".gpg".len) continue;
+
+        const stem = entry.name[0 .. entry.name.len - ".gpg".len];
+        const owned = try allocator.dupe(u8, stem);
+        try ids.append(allocator, owned);
+    }
+
+    if (ids.items.len == 0) return error.NoKeyringsFound;
+
+    return try ids.toOwnedSlice(allocator);
+}
+
+fn validateRequestedKeyrings(
+    allocator: std.mem.Allocator,
+    base: std.Io.Dir,
+    io: Io,
+    import_dir: []const u8,
+    requested: []const []const u8,
+) ResolveKeyringsError![][]const u8 {
+    var dir = try base.openDir(io, import_dir, .{});
+    defer dir.close(io);
+
+    var is_missing = false;
+    for (requested) |id| {
+        if (!try keyringIdFileExists(dir, io, id)) is_missing = true;
+    }
+
+    if (is_missing) return error.MissingKeyringFile;
+
+    var result = try allocator.alloc([]const u8, requested.len);
+    errdefer allocator.free(result);
+    for (requested, 0..) |id, i| {
+        result[i] = try allocator.dupe(u8, id);
+    }
+    return result;
+}
+
+fn keyringIdFileExists(dir: Io.Dir, io: Io, id: []const u8) !bool {
+    var name_buf: [256]u8 = undefined;
+    const filename = std.fmt.bufPrint(&name_buf, "{s}.gpg", .{id}) catch return false;
+    return fsutil.isRegularFile(dir, io, filename);
+}
+
+pub fn keyringFileExists(
+    base: std.Io.Dir,
+    io: Io,
+    import_dir: []const u8,
+    id: []const u8,
+) !bool {
+    var dir = try base.openDir(io, import_dir, .{});
+    defer dir.close(io);
+    return keyringIdFileExists(dir, io, id);
+}
+
+const testing = std.testing;
+
+test "trustdbExists returns false when trustdb.gpg is absent" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
     try tmp.dir.createDir(testing.io, "gnupg", .default_dir);
 
-    try testing.expect(try trustdbNeedsInit(tmp.dir, testing.io, "gnupg"));
+    try testing.expect(!try trustdbExists(tmp.dir, testing.io, "gnupg"));
 }
 
-test "trustdbNeedsInit returns false when trustdb.gpg exists as a regular file" {
+test "trustdbExists returns true when trustdb.gpg exists as a regular file" {
     var tmp = testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
 
@@ -58,7 +147,7 @@ test "trustdbNeedsInit returns false when trustdb.gpg exists as a regular file" 
         f.close(testing.io);
     }
 
-    try testing.expect(!try trustdbNeedsInit(tmp.dir, testing.io, "gnupg"));
+    try testing.expect(try trustdbExists(tmp.dir, testing.io, "gnupg"));
 }
 
 test "applyKeyringPermissions sets the canonical mode on trustdb.gpg" {
@@ -80,7 +169,7 @@ test "applyKeyringPermissions sets the canonical mode on trustdb.gpg" {
     var gnupg = try tmp.dir.openDir(testing.io, "gnupg", .{});
     defer gnupg.close(testing.io);
 
-    try testing.expectFmt("0644", "{o:0>4}", .{try statMode(gnupg, testing.io, "trustdb.gpg")});
+    try testing.expectFmt("0644", "{o:0>4}", .{try fsutil.statMode(gnupg, testing.io, "trustdb.gpg")});
 }
 
 test "applyKeyringPermissions reports missing trustdb.gpg" {
@@ -92,5 +181,158 @@ test "applyKeyringPermissions reports missing trustdb.gpg" {
     try testing.expectError(
         error.FileNotFound,
         applyKeyringPermissions(tmp.dir, testing.io, "gnupg"),
+    );
+}
+
+fn touch(dir: Io.Dir, io: Io, name: []const u8) !void {
+    var f = try dir.createFile(io, name, .{});
+    f.close(io);
+}
+
+test "trustdbExists returns false when trustdb.gpg is a directory" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "gnupg", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "gnupg", .{});
+        defer dir.close(testing.io);
+        try dir.createDir(testing.io, "trustdb.gpg", .default_dir);
+    }
+
+    try testing.expect(!try trustdbExists(tmp.dir, testing.io, "gnupg"));
+}
+
+test "resolveKeyrings discovers every .gpg file when no targets are given" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try touch(dir, testing.io, "archlinux.gpg");
+        try touch(dir, testing.io, "cachyos.gpg");
+        try touch(dir, testing.io, "arch32.gpg");
+        // Non-.gpg files must be ignored.
+        try touch(dir, testing.io, "archlinux-trusted");
+        try touch(dir, testing.io, "archlinux-revoked");
+        try touch(dir, testing.io, "README");
+    }
+
+    const ids = try resolveKeyrings(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        &.{},
+    );
+    defer {
+        for (ids) |id| testing.allocator.free(id);
+        testing.allocator.free(ids);
+    }
+
+    // Directory order is not guaranteed, so collect and compare as a set.
+    var got = std.AutoHashMap(u64, void).init(testing.allocator);
+    defer got.deinit();
+    for (ids) |id| try got.put(std.hash_map.hashString(id), {});
+    try testing.expectEqual(@as(usize, 3), ids.len);
+    try testing.expect(got.contains(std.hash_map.hashString("archlinux")));
+    try testing.expect(got.contains(std.hash_map.hashString("cachyos")));
+    try testing.expect(got.contains(std.hash_map.hashString("arch32")));
+}
+
+test "resolveKeyrings fails when the import directory has no .gpg files" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try touch(dir, testing.io, "README");
+    }
+
+    try testing.expectError(
+        error.NoKeyringsFound,
+        resolveKeyrings(testing.allocator, tmp.dir, testing.io, "keyrings", &.{}),
+    );
+}
+
+test "resolveKeyrings fails when the import directory is empty" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+
+    try testing.expectError(
+        error.NoKeyringsFound,
+        resolveKeyrings(testing.allocator, tmp.dir, testing.io, "keyrings", &.{}),
+    );
+}
+
+test "resolveKeyrings accepts requested keyring IDs whose .gpg files exist" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try touch(dir, testing.io, "archlinux.gpg");
+        try touch(dir, testing.io, "cachyos.gpg");
+    }
+
+    const requested: []const []const u8 = &.{ "archlinux", "cachyos" };
+    const ids = try resolveKeyrings(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        requested,
+    );
+    defer {
+        for (ids) |id| testing.allocator.free(id);
+        testing.allocator.free(ids);
+    }
+
+    try testing.expectEqual(@as(usize, 2), ids.len);
+    try testing.expectEqualStrings("archlinux", ids[0]);
+    try testing.expectEqualStrings("cachyos", ids[1]);
+}
+
+test "resolveKeyrings reports all missing requested keyring files" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try touch(dir, testing.io, "archlinux.gpg");
+    }
+
+    const requested: []const []const u8 = &.{ "archlinux", "missing1", "missing2" };
+    try testing.expectError(
+        error.MissingKeyringFile,
+        resolveKeyrings(testing.allocator, tmp.dir, testing.io, "keyrings", requested),
+    );
+}
+
+test "resolveKeyrings rejects a requested keyring that is a directory" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try dir.createDir(testing.io, "weird.gpg", .default_dir);
+    }
+
+    const requested: []const []const u8 = &.{"weird"};
+    try testing.expectError(
+        error.MissingKeyringFile,
+        resolveKeyrings(testing.allocator, tmp.dir, testing.io, "keyrings", requested),
     );
 }
