@@ -11,7 +11,7 @@ fn run(init: std.process.Init) !void {
     const stdout = &stdout_file_writer.interface;
     defer stdout.flush() catch {};
 
-    const opts = try Shelly_Key.cli.parse(args);
+    const opts = try Shelly_Key.cli.parse(init.arena.allocator(), args);
 
     switch (opts.command) {
         .help => try Shelly_Key.cli.printHelp(stdout),

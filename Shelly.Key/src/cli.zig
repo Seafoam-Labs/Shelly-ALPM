@@ -25,12 +25,13 @@ pub const ParseError = error{
     UnknownArgument,
     MultipleOperations,
     MissingArgumentValue,
+    OutOfMemory,
 };
 
-pub fn parse(args: []const []const u8) ParseError!Options {
+pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!Options {
     var opts: Options = .{};
-
-    if (args.len <= 1) return opts;
+    var positionals: std.ArrayList([]const u8) = .empty;
+    defer positionals.deinit(allocator);
 
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
@@ -40,52 +41,46 @@ pub fn parse(args: []const []const u8) ParseError!Options {
             opts.command = .help;
             return opts;
         } else if (std.mem.eql(u8, arg, "--init")) {
-            try setOperation(&opts, .init);
-            if (i + 1 < args.len and !std.mem.startsWith(u8, args[i + 1], "-")) {
-                i += 1;
-                opts.init_path = args[i];
-            }
+            if (opts.command == .populate) return error.MultipleOperations;
+            opts.command = .init;
         } else if (std.mem.eql(u8, arg, "--populate")) {
-            try setOperation(&opts, .populate);
+            if (opts.command == .init) return error.MultipleOperations;
+            opts.command = .populate;
         } else if (std.mem.eql(u8, arg, "--gpgdir")) {
-            opts.gpgdir = try takeValue(args, &i);
+            if (i + 1 >= args.len or std.mem.startsWith(u8, args[i + 1], "-")) {
+                return error.MissingArgumentValue;
+            }
+            i += 1;
+            opts.gpgdir = args[i];
         } else if (std.mem.eql(u8, arg, "--populate-from")) {
-            opts.populate_from = try takeValue(args, &i);
+            if (i + 1 >= args.len or std.mem.startsWith(u8, args[i + 1], "-")) {
+                return error.MissingArgumentValue;
+            }
+            i += 1;
+            opts.populate_from = args[i];
+        } else if (std.mem.startsWith(u8, arg, "-")) {
+            return error.UnknownArgument;
         } else {
-            if (std.mem.startsWith(u8, arg, "-")) {
-                return error.UnknownArgument;
-            }
-            if (opts.command != .populate) {
-                return error.UnknownArgument;
-            }
-            for (args[i..]) |positional| {
-                if (std.mem.startsWith(u8, positional, "-")) {
-                    return error.UnknownArgument;
-                }
-            }
-            opts.populate_keyrings = args[i..];
-            return opts;
+            try positionals.append(allocator, arg);
         }
     }
 
-    return opts;
-}
-
-fn takeValue(args: []const []const u8, i: *usize) ParseError![]const u8 {
-    if (i.* + 1 >= args.len) return error.MissingArgumentValue;
-    i.* += 1;
-    return args[i.*];
-}
-
-fn setOperation(opts: *Options, cmd: Command) ParseError!void {
     switch (opts.command) {
-        .help => opts.command = cmd,
-        else => {
-            if (std.meta.activeTag(opts.command) != std.meta.activeTag(cmd)) {
-                return error.MultipleOperations;
+        .help => {
+            if (positionals.items.len > 0) return error.UnknownArgument;
+        },
+        .init => {
+            if (positionals.items.len > 1) return error.UnknownArgument;
+            if (positionals.items.len == 1) opts.init_path = positionals.items[0];
+        },
+        .populate => {
+            if (positionals.items.len > 0) {
+                opts.populate_keyrings = try positionals.toOwnedSlice(allocator);
             }
         },
     }
+
+    return opts;
 }
 
 pub fn printHelp(writer: *std.Io.Writer) !void {
@@ -108,7 +103,7 @@ pub fn printHelp(writer: *std.Io.Writer) !void {
 
 test "parse uses defaults when only the program name is provided" {
     const args: []const []const u8 = &.{exe_name};
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.help, opts.command);
     try std.testing.expectEqualStrings(default_gpgdir, opts.init_path);
@@ -119,7 +114,7 @@ test "parse uses defaults when only the program name is provided" {
 
 test "parse uses defaults for an empty argument slice" {
     const args: []const []const u8 = &.{};
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.help, opts.command);
     try std.testing.expectEqualStrings(default_gpgdir, opts.init_path);
@@ -130,7 +125,7 @@ test "parse uses defaults for an empty argument slice" {
 
 test "parse recognizes --help" {
     const args: []const []const u8 = &.{ exe_name, "--help" };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.help, opts.command);
     try std.testing.expectEqualStrings(default_gpgdir, opts.init_path);
@@ -138,7 +133,7 @@ test "parse recognizes --help" {
 
 test "parse recognizes -h" {
     const args: []const []const u8 = &.{ exe_name, "-h" };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.help, opts.command);
     try std.testing.expectEqualStrings(default_gpgdir, opts.init_path);
@@ -146,7 +141,7 @@ test "parse recognizes -h" {
 
 test "parse recognizes --init without a path" {
     const args: []const []const u8 = &.{ exe_name, "--init" };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.init, opts.command);
     try std.testing.expectEqualStrings(default_gpgdir, opts.init_path);
@@ -157,7 +152,7 @@ test "parse recognizes --init without a path" {
 
 test "parse recognizes --init with a custom path" {
     const args: []const []const u8 = &.{ exe_name, "--init", "/custom/path" };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.init, opts.command);
     try std.testing.expectEqualStrings("/custom/path", opts.init_path);
@@ -166,7 +161,7 @@ test "parse recognizes --init with a custom path" {
 test "parse rejects unknown arguments" {
     const args: []const []const u8 = &.{ exe_name, "--bogus" };
 
-    try std.testing.expectError(error.UnknownArgument, parse(args));
+    try std.testing.expectError(error.UnknownArgument, parse(std.testing.allocator, args));
 }
 
 test "parse does not treat a flag-looking token as the init directory" {
@@ -176,18 +171,18 @@ test "parse does not treat a flag-looking token as the init directory" {
         "--looks-like-a-flag",
     };
 
-    try std.testing.expectError(error.UnknownArgument, parse(args));
+    try std.testing.expectError(error.UnknownArgument, parse(std.testing.allocator, args));
 }
 
 test "parse rejects --init followed by --populate" {
     const args: []const []const u8 = &.{ exe_name, "--init", "--populate" };
 
-    try std.testing.expectError(error.MultipleOperations, parse(args));
+    try std.testing.expectError(error.MultipleOperations, parse(std.testing.allocator, args));
 }
 
 test "parse prints help when --init is combined with --help" {
     const args: []const []const u8 = &.{ exe_name, "--init", "--help" };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.help, opts.command);
     try std.testing.expectEqualStrings(default_gpgdir, opts.init_path);
@@ -195,7 +190,7 @@ test "parse prints help when --init is combined with --help" {
 
 test "parse recognizes --populate without keyring IDs" {
     const args: []const []const u8 = &.{ exe_name, "--populate" };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.populate, opts.command);
     try std.testing.expectEqualStrings(default_gpgdir, opts.gpgdir);
@@ -205,7 +200,8 @@ test "parse recognizes --populate without keyring IDs" {
 
 test "parse collects a single keyring ID after --populate" {
     const args: []const []const u8 = &.{ exe_name, "--populate", "archlinux" };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.populate_keyrings);
 
     try std.testing.expectEqual(Command.populate, opts.command);
     try std.testing.expectEqual(@as(usize, 1), opts.populate_keyrings.len);
@@ -220,7 +216,8 @@ test "parse collects multiple keyring IDs after --populate" {
         "cachyos",
         "arch32",
     };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.populate_keyrings);
 
     try std.testing.expectEqual(Command.populate, opts.command);
     try std.testing.expectEqual(@as(usize, 3), opts.populate_keyrings.len);
@@ -231,7 +228,7 @@ test "parse collects multiple keyring IDs after --populate" {
 
 test "parse recognizes --gpgdir" {
     const args: []const []const u8 = &.{ exe_name, "--gpgdir", "/custom/gnupg", "--populate" };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.populate, opts.command);
     try std.testing.expectEqualStrings("/custom/gnupg", opts.gpgdir);
@@ -245,7 +242,7 @@ test "parse recognizes --populate-from" {
         "/custom/keyrings",
         "--populate",
     };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.populate, opts.command);
     try std.testing.expectEqualStrings(default_gpgdir, opts.gpgdir);
@@ -263,7 +260,8 @@ test "parse combines --gpgdir, --populate-from, and keyring IDs" {
         "archlinux",
         "cachyos",
     };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.populate_keyrings);
 
     try std.testing.expectEqual(Command.populate, opts.command);
     try std.testing.expectEqualStrings("/g", opts.gpgdir);
@@ -273,10 +271,29 @@ test "parse combines --gpgdir, --populate-from, and keyring IDs" {
     try std.testing.expectEqualStrings("cachyos", opts.populate_keyrings[1]);
 }
 
+test "parse accepts flags after --populate keyrings" {
+    const args: []const []const u8 = &.{
+        exe_name,
+        "--populate",
+        "archlinux",
+        "--gpgdir",
+        "/g",
+        "cachyos",
+    };
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.populate_keyrings);
+
+    try std.testing.expectEqual(Command.populate, opts.command);
+    try std.testing.expectEqualStrings("/g", opts.gpgdir);
+    try std.testing.expectEqual(@as(usize, 2), opts.populate_keyrings.len);
+    try std.testing.expectEqualStrings("archlinux", opts.populate_keyrings[0]);
+    try std.testing.expectEqualStrings("cachyos", opts.populate_keyrings[1]);
+}
+
 test "parse rejects --populate combined with --init" {
     const args: []const []const u8 = &.{ exe_name, "--populate", "--init" };
 
-    try std.testing.expectError(error.MultipleOperations, parse(args));
+    try std.testing.expectError(error.MultipleOperations, parse(std.testing.allocator, args));
 }
 
 test "parse detects the conflict even with options between the operations" {
@@ -288,12 +305,12 @@ test "parse detects the conflict even with options between the operations" {
         "--init",
     };
 
-    try std.testing.expectError(error.MultipleOperations, parse(args));
+    try std.testing.expectError(error.MultipleOperations, parse(std.testing.allocator, args));
 }
 
 test "parse treats --populate as idempotent when repeated" {
     const args: []const []const u8 = &.{ exe_name, "--populate", "--populate" };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.populate, opts.command);
     try std.testing.expectEqual(@as(usize, 0), opts.populate_keyrings.len);
@@ -302,24 +319,24 @@ test "parse treats --populate as idempotent when repeated" {
 test "parse rejects --gpgdir without a value" {
     const args: []const []const u8 = &.{ exe_name, "--gpgdir" };
 
-    try std.testing.expectError(error.MissingArgumentValue, parse(args));
+    try std.testing.expectError(error.MissingArgumentValue, parse(std.testing.allocator, args));
 }
 
 test "parse rejects --populate-from without a value" {
     const args: []const []const u8 = &.{ exe_name, "--populate-from" };
 
-    try std.testing.expectError(error.MissingArgumentValue, parse(args));
+    try std.testing.expectError(error.MissingArgumentValue, parse(std.testing.allocator, args));
 }
 
 test "parse rejects a bare positional without --populate" {
     const args: []const []const u8 = &.{ exe_name, "archlinux" };
 
-    try std.testing.expectError(error.UnknownArgument, parse(args));
+    try std.testing.expectError(error.UnknownArgument, parse(std.testing.allocator, args));
 }
 
 test "parse does not mutate defaults when only --gpgdir is given" {
     const args: []const []const u8 = &.{ exe_name, "--gpgdir", "/x" };
-    const opts = try parse(args);
+    const opts = try parse(std.testing.allocator, args);
 
     try std.testing.expectEqual(Command.help, opts.command);
     try std.testing.expectEqualStrings("/x", opts.gpgdir);
