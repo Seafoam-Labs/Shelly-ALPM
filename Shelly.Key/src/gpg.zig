@@ -16,7 +16,7 @@ pub const Gpg = struct {
 
     /// Run `gpg --homedir <dir> --no-permission-warning --update-trustdb`
     pub fn updateTrustdb(self: Gpg) !void {
-        try self.run(&.{"--update-trustdb"}, null);
+        try self.run(&.{"--update-trustdb"}, null, null);
     }
 
     /// Run `gpg --homedir <dir> --no-permission-warning -K --with-colons`
@@ -50,20 +50,36 @@ pub const Gpg = struct {
     }
 
     /// Run `gpg --homedir <dir> --no-permission-warning --gen-key --batch`
-    ///
-    /// `batch_input` is written to the stdin.
     pub fn genKey(self: Gpg, batch_input: []const u8) !void {
-        try self.run(&.{ "--gen-key", "--batch" }, batch_input);
+        try self.run(&.{ "--gen-key", "--batch" }, batch_input, null);
     }
 
     /// Run `gpg --homedir <dir> --no-permission-warning --batch --check-trustdb`
     pub fn checkTrustdb(self: Gpg) !void {
-        try self.run(&.{ "--batch", "--check-trustdb" }, null);
+        try self.run(&.{ "--batch", "--check-trustdb" }, null, null);
     }
 
     /// Run `gpg --homedir <dir> --no-permission-warning --quiet --import <path>`.
     pub fn importKeyring(self: Gpg, path: []const u8) !void {
-        try self.run(&.{ "--quiet", "--import", path }, null);
+        try self.run(&.{ "--quiet", "--import", path }, null, null);
+    }
+
+    /// Run `gpg --homedir <dir> --no-permission-warning --command-fd 0 --quiet --batch --lsign-key <key_id>`,
+    pub fn locallySignKey(
+        self: Gpg,
+        allocator: std.mem.Allocator,
+        env_map: *const process.Environ.Map,
+        key_id: []const u8,
+    ) !void {
+        var sign_env = try env_map.clone(allocator);
+        defer sign_env.deinit();
+        // Override `LANG` to ensure consistent output for questions.
+        try sign_env.put("LANG", "C");
+        try self.run(
+            &.{ "--command-fd", "0", "--quiet", "--batch", "--lsign-key", key_id },
+            "y\ny\n", // The `y\ny\n` is needed to suppress confirmation prompts.
+            &sign_env,
+        );
     }
 
     /// Run `gpg --with-colons --list-secret-key --quiet`.
@@ -122,7 +138,12 @@ pub const Gpg = struct {
     }
 
     /// Spawn `gpg --homedir <homedir> --no-permission-warning <extra...>`.
-    fn run(self: Gpg, extra: []const []const u8, stdin_data: ?[]const u8) !void {
+    fn run(
+        self: Gpg,
+        extra: []const []const u8,
+        stdin_data: ?[]const u8,
+        env_map: ?*const process.Environ.Map,
+    ) !void {
         var argv: [argv_capacity][]const u8 = undefined;
         const argv_len = buildArgv(&argv, extra, self.homedir);
 
@@ -134,6 +155,7 @@ pub const Gpg = struct {
             .stdin = stdin_kind,
             .stdout = .inherit,
             .stderr = .inherit,
+            .environ_map = env_map,
         });
         errdefer child.kill(self.io);
 
@@ -149,7 +171,7 @@ pub const Gpg = struct {
 
 /// Maximum argv capacity: `gpg --homedir <dir> --no-permission-warning`
 /// (4 slots) plus room for command-specific arguments.
-const argv_capacity: usize = 8;
+const argv_capacity: usize = 12;
 
 fn buildArgv(
     argv: *[argv_capacity][]const u8,

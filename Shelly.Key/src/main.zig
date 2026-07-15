@@ -37,9 +37,11 @@ fn run(init: std.process.Init) !void {
             Shelly_Key.keyring.populate(
                 init.io,
                 init.arena.allocator(),
+                init.environ_map,
                 opts.gpgdir,
                 opts.populate_from,
                 opts.populate_keyrings,
+                stdout,
             ) catch |err| switch (err) {
                 error.TrustdbMissing => {
                     stderrPrint(init.io, "error: The pacman keyring is not initialized (trustdb.gpg not found).", .{});
