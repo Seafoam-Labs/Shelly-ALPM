@@ -85,6 +85,38 @@ pub fn populate(
         try gpg_cli.importKeyring(path);
     }
 
-    // TODO: implement (trusted metadata, local signing, ownertrust import, revoked metadata, disabling, and the final trustdb update).
+    const secret_key_id = try gpg_cli.firstSecretKeyId(allocator) orelse return error.NoSecretKey;
+    defer allocator.free(secret_key_id);
+
+    var keys_to_sign = std.StringHashMap(void).init(allocator);
+    defer {
+        var it = keys_to_sign.iterator();
+        while (it.next()) |entry| allocator.free(entry.key_ptr.*);
+        keys_to_sign.deinit();
+    }
+
+    for (keyring_ids) |id| {
+        const trusted = try keyfiles.readTrustedFingerprints(
+            allocator,
+            base,
+            io,
+            populate_from,
+            id,
+        );
+        defer {
+            for (trusted) |fp| allocator.free(fp);
+            allocator.free(trusted);
+        }
+
+        for (trusted) |fp| {
+            if (keys_to_sign.contains(fp)) continue;
+            if (try gpg_cli.keyIsLsigned(allocator, secret_key_id, fp)) continue;
+            const owned = try allocator.dupe(u8, fp);
+            try keys_to_sign.put(owned, {});
+        }
+    }
+
+    // Remaining steps (local signing, ownertrust import, revoked metadata,
+    // disabling, and the final trustdb update) are not yet implemented.
     return error.NotImplemented;
 }

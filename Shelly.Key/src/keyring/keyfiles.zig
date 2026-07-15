@@ -124,6 +124,60 @@ pub fn keyringFileExists(
     return keyringIdFileExists(dir, io, id);
 }
 
+pub fn readTrustedFingerprints(
+    allocator: std.mem.Allocator,
+    base: std.Io.Dir,
+    io: Io,
+    import_dir: []const u8,
+    keyring_id: []const u8,
+) ![][]const u8 {
+    var dir = base.openDir(io, import_dir, .{}) catch |err| switch (err) {
+        error.FileNotFound => return &.{},
+        else => |e| return e,
+    };
+    defer dir.close(io);
+
+    var name_buf: [256]u8 = undefined;
+    const filename = std.fmt.bufPrint(&name_buf, "{s}-trusted", .{keyring_id}) catch
+        return &.{};
+
+    var file = dir.openFile(io, filename, .{ .mode = .read_only }) catch |err| switch (err) {
+        error.FileNotFound => return &.{},
+        else => |e| return e,
+    };
+    defer file.close(io);
+
+    var read_buf: [16384]u8 = undefined;
+    const n = try file.readPositionalAll(io, &read_buf, 0);
+    if (n == read_buf.len) {
+        const size = try file.length(io);
+        if (size > n) return error.TrustedFileTooLarge;
+    }
+    const contents = read_buf[0..n];
+
+    var fingerprints: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (fingerprints.items) |fp| allocator.free(fp);
+        fingerprints.deinit(allocator);
+    }
+
+    var iter = std.mem.splitScalar(u8, contents, '\n');
+    while (iter.next()) |raw_line| {
+        const line = std.mem.trimEnd(u8, raw_line, "\r");
+        if (line.len == 0) continue;
+        if (line[0] == '#') continue;
+
+        const fp = if (std.mem.indexOfScalar(u8, line, ':')) |pos|
+            line[0..pos]
+        else
+            line;
+        if (fp.len == 0) continue;
+        try fingerprints.append(allocator, try allocator.dupe(u8, fp));
+    }
+
+    return try fingerprints.toOwnedSlice(allocator);
+}
+
 const testing = std.testing;
 
 test "trustdbExists returns false when trustdb.gpg is absent" {
@@ -335,4 +389,183 @@ test "resolveKeyrings rejects a requested keyring that is a directory" {
         error.MissingKeyringFile,
         resolveKeyrings(testing.allocator, tmp.dir, testing.io, "keyrings", requested),
     );
+}
+
+fn writeFile(dir: Io.Dir, io: Io, name: []const u8, content: []const u8) !void {
+    var f = try dir.createFile(io, name, .{});
+    defer f.close(io);
+    try f.writeStreamingAll(io, content);
+}
+
+test "readTrustedFingerprints returns an empty list when the file is absent" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+
+    const fps = try readTrustedFingerprints(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    );
+    defer testing.allocator.free(fps);
+
+    try testing.expectEqual(@as(usize, 0), fps.len);
+}
+
+test "readTrustedFingerprints returns an empty list when the directory is absent" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    const fps = try readTrustedFingerprints(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "nonexistent",
+        "archlinux",
+    );
+    defer testing.allocator.free(fps);
+
+    try testing.expectEqual(@as(usize, 0), fps.len);
+}
+
+test "readTrustedFingerprints extracts fingerprints before the first colon" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try writeFile(dir, testing.io, "archlinux-trusted", "ABCD1234EFGH5678:4:\n" ++
+            "IJKL9012MNOP3456:4:\n");
+    }
+
+    const fps = try readTrustedFingerprints(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    );
+    defer {
+        for (fps) |fp| testing.allocator.free(fp);
+        testing.allocator.free(fps);
+    }
+
+    try testing.expectEqual(@as(usize, 2), fps.len);
+    try testing.expectEqualStrings("ABCD1234EFGH5678", fps[0]);
+    try testing.expectEqualStrings("IJKL9012MNOP3456", fps[1]);
+}
+
+test "readTrustedFingerprints skips blank and comment lines" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try writeFile(dir, testing.io, "archlinux-trusted", "# Trusted keys for archlinux\n" ++
+            "\n" ++
+            "ABCD1234EFGH5678:4:\n" ++
+            "# another comment\n" ++
+            "\n" ++
+            "IJKL9012MNOP3456:4:\n");
+    }
+
+    const fps = try readTrustedFingerprints(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    );
+    defer {
+        for (fps) |fp| testing.allocator.free(fp);
+        testing.allocator.free(fps);
+    }
+
+    try testing.expectEqual(@as(usize, 2), fps.len);
+    try testing.expectEqualStrings("ABCD1234EFGH5678", fps[0]);
+    try testing.expectEqualStrings("IJKL9012MNOP3456", fps[1]);
+}
+
+test "readTrustedFingerprints accepts lines without a colon" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try writeFile(dir, testing.io, "archlinux-trusted", "ABCD1234EFGH5678\n");
+    }
+
+    const fps = try readTrustedFingerprints(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    );
+    defer {
+        for (fps) |fp| testing.allocator.free(fp);
+        testing.allocator.free(fps);
+    }
+
+    try testing.expectEqual(@as(usize, 1), fps.len);
+    try testing.expectEqualStrings("ABCD1234EFGH5678", fps[0]);
+}
+
+test "readTrustedFingerprints strips trailing carriage returns" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try writeFile(dir, testing.io, "archlinux-trusted", "ABCD1234EFGH5678\r\n");
+    }
+
+    const fps = try readTrustedFingerprints(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    );
+    defer {
+        for (fps) |fp| testing.allocator.free(fp);
+        testing.allocator.free(fps);
+    }
+
+    try testing.expectEqual(@as(usize, 1), fps.len);
+    try testing.expectEqualStrings("ABCD1234EFGH5678", fps[0]);
+}
+
+test "readTrustedFingerprints returns an empty list for an empty file" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try touch(dir, testing.io, "archlinux-trusted");
+    }
+
+    const fps = try readTrustedFingerprints(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    );
+    defer testing.allocator.free(fps);
+
+    try testing.expectEqual(@as(usize, 0), fps.len);
 }
