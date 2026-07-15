@@ -327,6 +327,10 @@ pub const libalpm = struct {
             return .{ .node = alpm.alpm_pkg_get_optdepends(self.ptr) };
         }
 
+        pub fn make_depends(self: Package) ListIterator(Dependency, Dependency.from) {
+            return .{ .node = alpm.alpm_pkg_get_makedepends(self.ptr) };
+        }
+
         pub fn conflicts(self: Package) ListIterator(Dependency, Dependency.from) {
             return .{ .node = alpm.alpm_pkg_get_conflicts(self.ptr) };
         }
@@ -409,6 +413,15 @@ pub const libalpm = struct {
         /// Comparison value of the dependency
         pub fn comparison(self: Dependency) Comparator {
             return @enumFromInt(self.ptr.mod);
+        }
+
+        pub fn computed_dependency_string(self: Dependency, allocator: std.mem.Allocator) ?[:0]const u8 {
+            const computed = alpm.alpm_dep_compute_string(self.ptr);
+            if (computed == null) return null;
+            defer std.c.free(computed);
+            return allocator.dupeZ(u8, std.mem.span(computed)) catch {
+                return null;
+            };
         }
     };
 
