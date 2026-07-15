@@ -64,7 +64,6 @@ pub fn populate(
     gpgdir: []const u8,
     populate_from: []const u8,
     requested: []const []const u8,
-    stdout: *Io.Writer,
 ) !void {
     const base: std.Io.Dir = .cwd();
 
@@ -80,11 +79,12 @@ pub fn populate(
         allocator.free(keyring_ids);
     }
 
-    // TODO: implement (import, sign, disable, trustdb update).
-    try stdout.print("Resolved {d} keyring(s):", .{keyring_ids.len});
-    for (keyring_ids) |id| try stdout.print(" {s}", .{id});
-    try stdout.print("\n", .{});
-    try stdout.flush();
+    var path_buf: [4096]u8 = undefined;
+    for (keyring_ids) |id| {
+        const path = std.fmt.bufPrint(&path_buf, "{s}/{s}.gpg", .{ populate_from, id }) catch return error.PathTooLong;
+        try gpg_cli.importKeyring(path);
+    }
 
+    // TODO: implement (trusted metadata, local signing, ownertrust import, revoked metadata, disabling, and the final trustdb update).
     return error.NotImplemented;
 }

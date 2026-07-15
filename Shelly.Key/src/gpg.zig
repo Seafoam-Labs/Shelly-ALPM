@@ -61,6 +61,11 @@ pub const Gpg = struct {
         try self.run(&.{ "--batch", "--check-trustdb" }, null);
     }
 
+    /// Run `gpg --homedir <dir> --no-permission-warning --quiet --import <path>`.
+    pub fn importKeyring(self: Gpg, path: []const u8) !void {
+        try self.run(&.{ "--quiet", "--import", path }, null);
+    }
+
     /// Spawn `gpg --homedir <homedir> --no-permission-warning <extra...>`.
     fn run(self: Gpg, extra: []const []const u8, stdin_data: ?[]const u8) !void {
         var argv: [argv_capacity][]const u8 = undefined;

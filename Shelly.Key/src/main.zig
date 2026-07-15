@@ -40,7 +40,6 @@ fn run(init: std.process.Init) !void {
                 opts.gpgdir,
                 opts.populate_from,
                 opts.populate_keyrings,
-                stdout,
             ) catch |err| switch (err) {
                 error.TrustdbMissing => {
                     stderrPrint(init.io, "error: The pacman keyring is not initialized (trustdb.gpg not found).", .{});
