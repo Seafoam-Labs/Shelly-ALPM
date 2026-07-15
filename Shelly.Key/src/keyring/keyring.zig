@@ -94,10 +94,21 @@ pub fn populate(
         keys_to_sign.deinit();
     }
 
-    try locallySignKeys(allocator, gpg_cli, env_map, stdout, &keys_to_sign);
+    if (keys_to_sign.count() > 0) {
+        try locallySignKeys(allocator, gpg_cli, env_map, stdout, &keys_to_sign);
 
-    // Remaining steps (ownertrust import, revoked metadata, disabling,
-    // and the final trustdb update) are not yet implemented.
+        try importOwnertrust(
+            gpg_cli,
+            base,
+            io,
+            populate_from,
+            keyring_ids,
+            stdout,
+        );
+    }
+
+    // Remaining steps (revoked metadata, disabling, and the final trustdb
+    // update) are not yet implemented.
     return error.NotImplemented;
 }
 
@@ -150,8 +161,6 @@ fn locallySignKeys(
     stdout: *Io.Writer,
     keys_to_sign: *const std.StringHashMap(void),
 ) !void {
-    if (keys_to_sign.count() == 0) return;
-
     try stdout.print("Locally signing trusted keys in keyring...\n", .{});
     try stdout.flush();
 
@@ -164,4 +173,27 @@ fn locallySignKeys(
 
     try stdout.print("  Locally signed {d} key(s).\n", .{keys_to_sign.count()});
     try stdout.flush();
+}
+
+fn importOwnertrust(
+    gpg_cli: gpg.Gpg,
+    base: std.Io.Dir,
+    io: Io,
+    populate_from: []const u8,
+    keyring_ids: []const []const u8,
+    stdout: *Io.Writer,
+) !void {
+    var path_buf: [4096]u8 = undefined;
+    var imported_any = false;
+    for (keyring_ids) |id| {
+        if (!try keyfiles.trustedFileNonempty(base, io, populate_from, id)) continue;
+        if (!imported_any) {
+            try stdout.print("Importing ownertrust values...\n", .{});
+            try stdout.flush();
+            imported_any = true;
+        }
+        const path = std.fmt.bufPrint(&path_buf, "{s}/{s}-trusted", .{ populate_from, id }) catch
+            return error.PathTooLong;
+        try gpg_cli.importOwnertrust(path);
+    }
 }

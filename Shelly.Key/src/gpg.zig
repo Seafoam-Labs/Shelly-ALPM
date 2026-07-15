@@ -64,6 +64,11 @@ pub const Gpg = struct {
         try self.run(&.{ "--quiet", "--import", path }, null, null);
     }
 
+    /// Run `gpg --homedir <dir> --no-permission-warning --import-ownertrust <path>`.
+    pub fn importOwnertrust(self: Gpg, path: []const u8) !void {
+        try self.run(&.{ "--import-ownertrust", path }, null, null);
+    }
+
     /// Run `gpg --homedir <dir> --no-permission-warning --command-fd 0 --quiet --batch --lsign-key <key_id>`,
     pub fn locallySignKey(
         self: Gpg,

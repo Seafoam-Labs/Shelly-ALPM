@@ -178,6 +178,29 @@ pub fn readTrustedFingerprints(
     return try fingerprints.toOwnedSlice(allocator);
 }
 
+pub fn trustedFileNonempty(
+    base: std.Io.Dir,
+    io: Io,
+    import_dir: []const u8,
+    keyring_id: []const u8,
+) !bool {
+    var dir = base.openDir(io, import_dir, .{}) catch |err| switch (err) {
+        error.FileNotFound => return false,
+        else => |e| return e,
+    };
+    defer dir.close(io);
+
+    var name_buf: [256]u8 = undefined;
+    const filename = std.fmt.bufPrint(&name_buf, "{s}-trusted", .{keyring_id}) catch
+        return false;
+
+    const st = dir.statFile(io, filename, .{}) catch |err| switch (err) {
+        error.FileNotFound => return false,
+        else => |e| return e,
+    };
+    return st.kind == .file and st.size > 0;
+}
+
 const testing = std.testing;
 
 test "trustdbExists returns false when trustdb.gpg is absent" {
@@ -568,4 +591,68 @@ test "readTrustedFingerprints returns an empty list for an empty file" {
     defer testing.allocator.free(fps);
 
     try testing.expectEqual(@as(usize, 0), fps.len);
+}
+
+test "trustedFileNonempty returns true for a nonempty trusted file" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try writeFile(dir, testing.io, "archlinux-trusted", "ABCD1234EFGH5678:f:\n");
+    }
+
+    try testing.expect(try trustedFileNonempty(
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    ));
+}
+
+test "trustedFileNonempty returns false for an empty trusted file" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try touch(dir, testing.io, "archlinux-trusted");
+    }
+
+    try testing.expect(!try trustedFileNonempty(
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    ));
+}
+
+test "trustedFileNonempty returns false when the trusted file is absent" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+
+    try testing.expect(!try trustedFileNonempty(
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    ));
+}
+
+test "trustedFileNonempty returns false when the import directory is absent" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try testing.expect(!try trustedFileNonempty(
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    ));
 }
