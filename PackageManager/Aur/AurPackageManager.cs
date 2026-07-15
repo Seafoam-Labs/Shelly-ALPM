@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -136,7 +137,11 @@ public sealed class AurPackageManager(string? configPath = null)
         var aurPackages = response.Results;
         foreach (var pkg in aurPackages)
         {
+            var localMatch = foreignPackages.First(x => x.Name == pkg.Name);
+            
             pkg.Explicit = foreignPackages.First(x => x.Name == pkg.Name).InstallReason == "Explicit";
+            
+            pkg.Version = localMatch.Version;
         }
 
         return aurPackages;
@@ -1567,6 +1572,7 @@ public sealed class AurPackageManager(string? configPath = null)
             }
 
             var buildProcess = CreateBuildProcess(tempPath);
+            var buildErrors = new StringBuilder();
             buildProcess.OutputDataReceived += (_, e) =>
             {
                 if (string.IsNullOrEmpty(e.Data))
@@ -1597,6 +1603,7 @@ public sealed class AurPackageManager(string? configPath = null)
                     return;
                 }
 
+                buildErrors.AppendLine(e.Data);
                 RaiseBuildLine(packageName, e.Data, true);
             };
 
@@ -1606,8 +1613,13 @@ public sealed class AurPackageManager(string? configPath = null)
             await buildProcess.WaitForExitAsync();
             if (buildProcess.ExitCode != 0)
             {
+                var errorDetails = buildErrors.ToString().Trim();
+                var message = $"Failed to build {packageName} with makepkg";
+                if (!string.IsNullOrEmpty(errorDetails))
+                    message += $": {errorDetails}";
+
                 InformationalEvent?.Invoke(this, new InformationalEventArgs(AlpmEventType.InformationalOutput,
-                    $"Failed to build {packageName} with makepkg: {await buildProcess.StandardError.ReadToEndAsync()}"));
+                    message));
                 return;
             }
 

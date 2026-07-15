@@ -42,7 +42,7 @@ public class UnprivilegedOperationService(
     public async Task<List<AlpmPackageDto>> SearchPackagesAsync(string query)
     {
         return await ExecuteJsonCommandAsync<List<AlpmPackageDto>>("search packages",
-            () => FromOperationResult(processExecutor.RunShellyCommandAsync(["query", "--available", $"\"{query}\"", "--no-confirm"])));
+            () => FromOperationResult(processExecutor.RunShellyCommandAsync(["query", "--available", query])));
     }
 
     public async Task<List<AlpmPackageDto>> GetAvailablePackagesAsync(bool showHidden = false)

@@ -244,6 +244,7 @@ public class Query : GlobalSettingsCommand
         if (!Repos && !Available && !Installed && !Local && !Info)
         {
             Installed = true;
+            Available = true;
             Info = !string.IsNullOrWhiteSpace(Package);
         }
 

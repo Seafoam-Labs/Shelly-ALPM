@@ -157,6 +157,34 @@ public class PkgbuildParserTests
     }
 
     [Test]
+    public void ParseContent_IncludesTrueSameLineConditionalMakeDepends()
+    {
+        var pkgbuild = """
+                       _build_cuda=1
+                       makedepends=('cmake')
+                       [[ $_build_cuda -eq 1 ]] && makedepends+=('ccache-ext' 'cuda' 'cudnn')
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.MakeDepends, Is.EqualTo(new[] { "cmake", "ccache-ext", "cuda", "cudnn" }));
+    }
+
+    [Test]
+    public void ParseContent_SkipsFalseSameLineConditionalMakeDepends()
+    {
+        var pkgbuild = """
+                       _build_cuda=0
+                       makedepends=('cmake')
+                       [[ $_build_cuda -eq 1 ]] && makedepends+=('ccache-ext' 'cuda' 'cudnn')
+                       """;
+
+        var result = PkgbuildParser.ParseContent(pkgbuild);
+
+        Assert.That(result.MakeDepends, Is.EqualTo(new[] { "cmake" }));
+    }
+
+    [Test]
     public void ParseContent_StripsUnresolvedVersionConstraint()
     {
         // Simulates command substitution that can't be resolved

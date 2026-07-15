@@ -27,7 +27,7 @@ public static class PkgbuildParser
         var rawInstall = ResolveOrParse(pkgbuildContent, vars, "install");
         var installFile = rawInstall is null ? null : ResolveString(rawInstall, vars);
 
-        var source = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "source"));
+        var source = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "source", vars));
         var localSourceFiles = ExtractLocalSourceFiles(source);
         var localSourceContents = ResolveLocalSourceContents(localSourceFiles, baseDir);
 
@@ -40,19 +40,19 @@ public static class PkgbuildParser
             Epoch = ResolveOrParse(pkgbuildContent, vars, "epoch"),
             PkgDesc = ResolveOrParse(pkgbuildContent, vars, "pkgdesc"),
             Url = ResolveOrParse(pkgbuildContent, vars, "url"),
-            License = ParseArray(pkgbuildContent, "license"),
-            Arch = ParseArray(pkgbuildContent, "arch"),
-            Depends = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "depends")),
-            MakeDepends = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "makedepends")),
-            CheckDepends = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "checkdepends")),
-            OptDepends = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "optdepends")),
-            Provides = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "provides")),
-            Conflicts = ParseArray(pkgbuildContent, "conflicts"),
-            Replaces = ParseArray(pkgbuildContent, "replaces"),
+            License = ParseArray(pkgbuildContent, "license", vars),
+            Arch = ParseArray(pkgbuildContent, "arch", vars),
+            Depends = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "depends", vars)),
+            MakeDepends = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "makedepends", vars)),
+            CheckDepends = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "checkdepends", vars)),
+            OptDepends = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "optdepends", vars)),
+            Provides = ResolveVariableReferences(pkgbuildContent, vars, ParseArray(pkgbuildContent, "provides", vars)),
+            Conflicts = ParseArray(pkgbuildContent, "conflicts", vars),
+            Replaces = ParseArray(pkgbuildContent, "replaces", vars),
             Source = source,
-            Sha256Sums = ParseArray(pkgbuildContent, "sha256sums"),
-            Sha512Sums = ParseArray(pkgbuildContent, "sha512sums"),
-            Md5Sums = ParseArray(pkgbuildContent, "md5sums"),
+            Sha256Sums = ParseArray(pkgbuildContent, "sha256sums", vars),
+            Sha512Sums = ParseArray(pkgbuildContent, "sha512sums", vars),
+            Md5Sums = ParseArray(pkgbuildContent, "md5sums", vars),
 
             InstallFile = installFile,
             PostInstall = ResolvePostInstall(installFile, baseDir)
@@ -534,17 +534,37 @@ public static class PkgbuildParser
 
 
 
-    private static List<string> ParseArray(string content, string variableName)
+    private static List<string> ParseArray(
+        string content,
+        string variableName,
+        Dictionary<string, string> vars)
     {
         var result = new List<string>();
 
-        var startPattern = $@"^{Regex.Escape(variableName)}\+?=\(";
+        // Besides ordinary array assignments, accept a common PKGBUILD idiom:
+        //   [[ $_feature -eq 1 ]] && makedepends+=('conditional-dependency')
+        // Only guards that can be resolved from literal scalar variables are evaluated.
+        // More complex shell conditions remain skipped rather than being guessed.
+        var startPattern =
+            $@"^(?:(?<guard>\[\[[^\r\n]*\]\])\s*&&\s*)?{Regex.Escape(variableName)}\+?=\(";
         var starts = Regex.Matches(content, startPattern, RegexOptions.Multiline);
 
         foreach (Match match in starts)
         {
-            // Check if this match is inside a conditional block
-            if (IsInsideConditionalBlock(content, match.Index))
+            var guard = match.Groups["guard"];
+            if (guard.Success)
+            {
+                if (!TryEvaluateConditionalGuard(guard.Value, vars, out var includeAssignment))
+                {
+                    System.Console.Error.WriteLine(
+                        $"[Shelly] Skipping unsupported conditional {variableName}+=() at offset {match.Index}");
+                    continue;
+                }
+
+                if (!includeAssignment)
+                    continue;
+            }
+            else if (IsInsideConditionalBlock(content, match.Index))
             {
                 System.Console.Error.WriteLine(
                     $"[Shelly] Skipping conditional {variableName}+=() at offset {match.Index}");
@@ -588,6 +608,67 @@ public static class PkgbuildParser
         return result;
     }
 
+    private static bool TryEvaluateConditionalGuard(
+        string guard,
+        Dictionary<string, string> vars,
+        out bool result)
+    {
+        result = false;
+        if (guard.Length < 4)
+            return false;
+
+        var expression = guard[2..^2].Trim();
+        var match = Regex.Match(
+            expression,
+            @"^(?<left>(?:""[^""]*""|'[^']*'|\S+))\s+" +
+            @"(?<operator>-eq|-ne|-gt|-ge|-lt|-le|==|!=)\s+" +
+            @"(?<right>(?:""[^""]*""|'[^']*'|\S+))$");
+        if (!match.Success)
+            return false;
+
+        var left = ResolveConditionalOperand(match.Groups["left"].Value, vars);
+        var right = ResolveConditionalOperand(match.Groups["right"].Value, vars);
+        if (left.Contains('$') || right.Contains('$'))
+            return false;
+
+        switch (match.Groups["operator"].Value)
+        {
+            case "==":
+                result = string.Equals(left, right, StringComparison.Ordinal);
+                return true;
+            case "!=":
+                result = !string.Equals(left, right, StringComparison.Ordinal);
+                return true;
+        }
+
+        if (!long.TryParse(left, out var leftNumber) || !long.TryParse(right, out var rightNumber))
+            return false;
+
+        result = match.Groups["operator"].Value switch
+        {
+            "-eq" => leftNumber == rightNumber,
+            "-ne" => leftNumber != rightNumber,
+            "-gt" => leftNumber > rightNumber,
+            "-ge" => leftNumber >= rightNumber,
+            "-lt" => leftNumber < rightNumber,
+            "-le" => leftNumber <= rightNumber,
+            _ => false
+        };
+        return true;
+    }
+
+    private static string ResolveConditionalOperand(string operand, Dictionary<string, string> vars)
+    {
+        if (operand.Length >= 2 &&
+            ((operand[0] == '\'' && operand[^1] == '\'') ||
+             (operand[0] == '"' && operand[^1] == '"')))
+        {
+            operand = operand[1..^1];
+        }
+
+        return ResolveString(operand, vars);
+    }
+
 
     private static bool IsInsideConditionalBlock(string content, int position)
     {
@@ -627,7 +708,7 @@ public static class PkgbuildParser
             if (varRefMatch.Success)
             {
                 var referencedVar = varRefMatch.Groups[1].Value;
-                var referencedItems = ParseArray(content, referencedVar);
+                var referencedItems = ParseArray(content, referencedVar, vars);
                 resolved.AddRange(ResolveVariableReferences(content, vars, referencedItems));
             }
             else

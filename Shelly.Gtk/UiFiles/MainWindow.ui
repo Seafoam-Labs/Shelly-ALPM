@@ -548,9 +548,6 @@
                                         <child>
                                             <object class="GtkButton" id="upgrade_all_button">
                                                 <property name="label" translatable="yes">Upgrade All</property>
-                                                <style>
-                                                    <class name="suggested-action"/>
-                                                </style>
                                             </object>
                                         </child>
                                     </object>

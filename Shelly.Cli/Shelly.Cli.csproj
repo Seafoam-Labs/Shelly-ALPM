@@ -17,9 +17,9 @@
         <!--<IlcDisableReflection>true</IlcDisableReflection>-->
     </PropertyGroup>
     <PropertyGroup>
-        <Version>2.4.1.2</Version>
+        <Version>2.4.1.4</Version>
         <AssemblyName>shelly</AssemblyName>
-        <AssemblyVersion>2.4.1.2</AssemblyVersion>
+        <AssemblyVersion>2.4.1.4</AssemblyVersion>
         <AssemblyTitle>Shelly CLI</AssemblyTitle>
         <Description>Shelly CLI is a arch linux package manager</Description>
         <Company>Seafoam Labs</Company>

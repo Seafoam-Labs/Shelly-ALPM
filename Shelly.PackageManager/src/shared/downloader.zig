@@ -16,11 +16,14 @@ pub const DownloadError = error{
     Timeout,
     RetryExceeded,
     SslError,
+    NotModified,
+    FailedDownload,
 };
 
 pub const SkippedReason = enum {
     ExistsAndUpToDate,
     ForceDownloadDisabled,
+    NotModified,
 };
 
 pub const DownloadProgress = struct {
@@ -68,6 +71,9 @@ pub const CoreDownloader = struct {
     http_client: std.http.Client,
     event_callback: ?DownloadEventCallback = null,
     event_context: ?*anyopaque = null,
+    /// When true, error-level logging is suppressed for best-effort downloads
+    /// (e.g. optional database signatures that may legitimately be absent).
+    quiet: bool = false,
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io, config: DownloadConfiguration) CoreDownloader {
         return .{
@@ -91,13 +97,8 @@ pub const CoreDownloader = struct {
         self: *CoreDownloader,
         url: []const u8,
         destination_path: []const u8,
-        skip_if_exists: bool,
+        force: bool,
     ) DownloadResult {
-        const already_present = std.Io.Dir.cwd().statFile(self.io, destination_path, .{}) catch null;
-        if (skip_if_exists and already_present != null) {
-            return .{ .skipped = .{ .destination_path = destination_path, .reason = .ExistsAndUpToDate } };
-        }
-
         var attempt: u8 = 0;
         while (true) : (attempt += 1) {
             if (attempt > 0) {
@@ -107,9 +108,13 @@ pub const CoreDownloader = struct {
                 ) catch {};
             }
 
-            if (self.performDownload(url, destination_path)) {
+            if (self.performDownload(url, destination_path, force)) {
                 return .{ .succes = .{ .destination_path = destination_path } };
             } else |err| {
+                if (err == DownloadError.NotModified) {
+                    self.emitEvent(.{ .event_type = .Skipped, .destination_path = destination_path });
+                    return .{ .skipped = .{ .destination_path = destination_path, .reason = .NotModified } };
+                }
                 const can_retry = isRetryable(err) and attempt < self.configuration.max_retries;
                 if (!can_retry) {
                     const final_err = if (isRetryable(err)) DownloadError.RetryExceeded else err;
@@ -124,18 +129,31 @@ pub const CoreDownloader = struct {
         }
     }
 
-    fn performDownload(self: *CoreDownloader, url: []const u8, destination_path: []const u8) DownloadError!void {
+    fn performDownload(self: *CoreDownloader, url: []const u8, destination_path: []const u8, force: bool) DownloadError!void {
         const uri = std.Uri.parse(url) catch return DownloadError.InvalidUrl;
+
+        var ims_buf: [64]u8 = undefined;
+        var ims_header: [1]std.http.Header = undefined;
+        var extra_headers: []const std.http.Header = &.{};
+        if (!force) {
+            if (std.Io.Dir.cwd().statFile(self.io, destination_path, .{})) |st| {
+                if (formatHttpDate(&ims_buf, st.mtime.nanoseconds)) |http_date| {
+                    ims_header[0] = .{ .name = "if-modified-since", .value = http_date };
+                    extra_headers = ims_header[0..1];
+                }
+            } else |_| {}
+        }
 
         const user_agent: std.http.Client.Request.Headers.Value = if (self.configuration.user_agent) |agent|
             .{ .override = agent }
         else
             .default;
-
         var req = self.http_client.request(.GET, uri, .{
-            .headers = .{ .user_agent = user_agent },
+            .headers = .{ .user_agent = user_agent, .accept_encoding = .{ .override = "identity" } },
+            .extra_headers = extra_headers,
+            .redirect_behavior = .init(10),
         }) catch |err| {
-            std.log.err("HTTP request setup failed for {s}: {}", .{ url, err });
+            self.logErr("HTTP request setup failed for {s}: {}", .{ url, err });
             return mapRequestError(err);
         };
         defer req.deinit();
@@ -144,25 +162,26 @@ pub const CoreDownloader = struct {
         req.accept_encoding[@intFromEnum(std.http.ContentEncoding.deflate)] = false;
 
         req.sendBodiless() catch |err| {
-            std.log.err("Failed to send request for {s}: {}", .{ url, err });
+            self.logErr("Failed to send request for {s}: {}", .{ url, err });
             return DownloadError.NetworkError;
         };
 
         var redirect_buffer: [8 * 1024]u8 = undefined;
         var response = req.receiveHead(&redirect_buffer) catch |err| {
-            std.log.err("Failed to receive response head for {s}: {}", .{ url, err });
+            self.logErr("Failed to receive response head for {s}: {}", .{ url, err });
             return mapReceiveHeadError(err);
         };
 
         const status = response.head.status;
+        if (status == .not_modified) return DownloadError.NotModified;
         switch (status.class()) {
             .success => {},
             .server_error => {
-                std.log.err("Server error {d} for {s}", .{ @intFromEnum(status), url });
+                self.logErr("Server error {d} for {s}", .{ @intFromEnum(status), url });
                 return DownloadError.NetworkError;
             },
             else => {
-                std.log.err("HTTP status {d} for {s}", .{ @intFromEnum(status), url });
+                self.logErr("HTTP status {d} for {s}", .{ @intFromEnum(status), url });
                 return DownloadError.HttpError;
             },
         }
@@ -181,7 +200,7 @@ pub const CoreDownloader = struct {
         });
 
         var file = std.Io.Dir.cwd().createFile(self.io, destination_path, .{}) catch |err| {
-            std.log.err("Failed to create file {s}: {}", .{ destination_path, err });
+            self.logErr("Failed to create file {s}: {}", .{ destination_path, err });
             return DownloadError.FileError;
         };
         defer file.close(self.io);
@@ -199,13 +218,13 @@ pub const CoreDownloader = struct {
 
         while (true) {
             const n = body_reader.readSliceShort(copy_buffer) catch {
-                std.log.err("Read failed while downloading {s}: {?}", .{ url, response.bodyErr() });
+                self.logErr("Read failed while downloading {s}: {?}", .{ url, response.bodyErr() });
                 return DownloadError.NetworkError;
             };
             if (n == 0) break;
 
             file.writeStreamingAll(self.io, copy_buffer[0..n]) catch |err| {
-                std.log.err("Failed to write to {s}: {}", .{ destination_path, err });
+                self.logErr("Failed to write to {s}: {}", .{ destination_path, err });
                 return DownloadError.FileError;
             };
 
@@ -265,6 +284,12 @@ pub const CoreDownloader = struct {
     fn emitEvent(self: *const CoreDownloader, event: DownloadEvent) void {
         if (self.event_callback) |callback| callback(self.event_context, event);
     }
+
+    /// Logs at error level unless `quiet` is set, used so best-effort downloads
+    /// do not surface expected failures (e.g. a missing optional signature).
+    fn logErr(self: *const CoreDownloader, comptime fmt: []const u8, args: anytype) void {
+        if (!self.quiet) std.log.err(fmt, args);
+    }
 };
 
 fn makeProgress(downloaded: u64, total: ?u64, speed: ?u64) DownloadProgress {
@@ -278,6 +303,33 @@ fn makeProgress(downloaded: u64, total: ?u64, speed: ?u64) DownloadProgress {
         .percent = percent,
         .speed_bytes_per_sec = speed,
     };
+}
+
+fn formatHttpDate(buf: []u8, mtime_ns: i128) ?[]const u8 {
+    if (mtime_ns < 0) return null;
+    const total_secs: u64 = @intCast(@divFloor(mtime_ns, std.time.ns_per_s));
+
+    const epoch_secs: std.time.epoch.EpochSeconds = .{ .secs = total_secs };
+    const epoch_day = epoch_secs.getEpochDay();
+    const day_secs = epoch_secs.getDaySeconds();
+    const year_day = epoch_day.calculateYearDay();
+    const month_day = year_day.calculateMonthDay();
+
+    const weekdays = [_][]const u8{ "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed" };
+    const months = [_][]const u8{
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    };
+
+    return std.fmt.bufPrint(buf, "{s}, {d:0>2} {s} {d} {d:0>2}:{d:0>2}:{d:0>2} GMT", .{
+        weekdays[@intCast(epoch_day.day % 7)],
+        @as(u32, month_day.day_index) + 1,
+        months[month_day.month.numeric() - 1],
+        year_day.year,
+        day_secs.getHoursIntoDay(),
+        day_secs.getMinutesIntoHour(),
+        day_secs.getSecondsIntoMinute(),
+    }) catch null;
 }
 
 fn isRetryable(err: DownloadError) bool {

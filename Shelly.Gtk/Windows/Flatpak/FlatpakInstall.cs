@@ -1191,7 +1191,7 @@ public class FlatpakInstall(
         {
             UnprivilegedOperationResult result;
             lockoutService.Show(Translations.T("Installing {0}...", _selectedPackage.Id));
-            if (_selectedRemote.Contains("user"))
+            if (_selectedRemote.Contains("user", StringComparison.OrdinalIgnoreCase))
             {
                 result = await unprivilegedOperationService.InstallFlatpakPackage(_selectedPackage.Id,
                     true, _selectedRemote.Split(":")[0].Trim(),
@@ -1265,7 +1265,7 @@ public class FlatpakInstall(
             UnprivilegedOperationResult result;
             lockoutService.Show(Translations.T("Installing {0}...", id));
             
-            if (selectedRemote.Contains("user"))
+            if (selectedRemote.Contains("user", StringComparison.OrdinalIgnoreCase))
             {
                 result = await unprivilegedOperationService.InstallFlatpakPackage(id,
                     true, selectedRemote.Split(":")[0].Trim(),

@@ -1,7 +1,7 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgname=shelly
-pkgver=2.4.1.2
+pkgver=2.4.1.4
 pkgrel=1
 pkgdesc="Shelly: A Modern Arch Package Manager"
 arch=('x86_64')
@@ -96,6 +96,7 @@ Categories=System;Utility;
 Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
 MimeType=x-scheme-handler/appstream;x-scheme-handler/flatpak+https;
 Terminal=false
+X-GNOME-UsesNotifications=true
 Actions=FlatpakInstall;FlatpakUpdate;FlatpakRemove;
 
 [Desktop Action FlatpakInstall]

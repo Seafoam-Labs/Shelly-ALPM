@@ -180,6 +180,7 @@ Type=Application
 Categories=System;Utility;
 Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
 Terminal=false
+X-GNOME-UsesNotifications=true
 Actions=FlatpakInstall;FlatpakUpdate;FlatpakRemove;
 
 [Desktop Action FlatpakInstall]
