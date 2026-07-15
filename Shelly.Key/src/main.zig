@@ -18,7 +18,7 @@ fn run(init: std.process.Init) !void {
         .init => {
             try Shelly_Key.elevate.ensureRoot(
                 init.io,
-                init.arena,
+                init.arena.allocator(),
                 args,
                 init.environ_map.get("PATH").?,
             );
@@ -29,7 +29,7 @@ fn run(init: std.process.Init) !void {
         .populate => {
             try Shelly_Key.elevate.ensureRoot(
                 init.io,
-                init.arena,
+                init.arena.allocator(),
                 args,
                 init.environ_map.get("PATH").?,
             );

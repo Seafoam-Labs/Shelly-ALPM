@@ -11,15 +11,15 @@ const Elevator = enum {
     pkexec,
 };
 
-fn findElevator(io: std.Io, gpa: std.mem.Allocator, path_env: []const u8) ?Elevator {
+fn findElevator(io: std.Io, allocator: std.mem.Allocator, path_env: []const u8) ?Elevator {
     const binaries = std.meta.fieldNames(Elevator);
 
     var it = std.mem.splitScalar(u8, path_env, ':');
     while (it.next()) |path| {
         if (path.len == 0) continue;
         for (binaries, 0..) |bin, i| {
-            const full_path = std.fs.path.join(gpa, &.{ path, bin }) catch continue;
-            defer gpa.free(full_path);
+            const full_path = std.fs.path.join(allocator, &.{ path, bin }) catch continue;
+            defer allocator.free(full_path);
             std.Io.Dir.accessAbsolute(io, full_path, .{}) catch continue;
             return @enumFromInt(i);
         }
@@ -29,24 +29,25 @@ fn findElevator(io: std.Io, gpa: std.mem.Allocator, path_env: []const u8) ?Eleva
 
 pub fn ensureRoot(
     io: std.Io,
-    arena: *std.heap.ArenaAllocator,
+    allocator: std.mem.Allocator,
     args: []const []const u8,
     path_env: []const u8,
 ) !void {
     const uid = std.os.linux.getuid();
     if (uid == 0) return;
 
-    const gpa = arena.allocator();
-    const elevator = findElevator(io, gpa, path_env) orelse return error.NoElevator;
+    const elevator = findElevator(io, allocator, path_env) orelse return error.NoElevator;
 
-    const exe = try std.process.executablePathAlloc(io, gpa);
+    const exe = try std.process.executablePathAlloc(io, allocator);
+    defer allocator.free(exe);
 
     var new_args: std.ArrayList([]const u8) = .empty;
+    defer new_args.deinit(allocator);
 
     const bin_name = @tagName(elevator);
-    try new_args.append(gpa, bin_name);
-    try new_args.append(gpa, exe);
-    for (args[1..]) |arg| try new_args.append(gpa, arg);
+    try new_args.append(allocator, bin_name);
+    try new_args.append(allocator, exe);
+    for (args[1..]) |arg| try new_args.append(allocator, arg);
 
     var child = try std.process.spawn(io, .{
         .argv = new_args.items,
