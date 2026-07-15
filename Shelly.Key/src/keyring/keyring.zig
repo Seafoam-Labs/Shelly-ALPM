@@ -107,9 +107,20 @@ pub fn populate(
         );
     }
 
-    // Remaining steps (revoked metadata, disabling, and the final trustdb
-    // update) are not yet implemented.
-    return error.NotImplemented;
+    try disableRevokedKeys(
+        allocator,
+        gpg_cli,
+        env_map,
+        base,
+        io,
+        populate_from,
+        keyring_ids,
+        stdout,
+    );
+
+    try stdout.print("Updating trust database...\n", .{});
+    try stdout.flush();
+    try gpg_cli.checkTrustdb();
 }
 
 fn collectKeysToSign(
@@ -196,4 +207,58 @@ fn importOwnertrust(
             return error.PathTooLong;
         try gpg_cli.importOwnertrust(path);
     }
+}
+
+fn disableRevokedKeys(
+    allocator: std.mem.Allocator,
+    gpg_cli: gpg.Gpg,
+    env_map: *const std.process.Environ.Map,
+    base: std.Io.Dir,
+    io: Io,
+    populate_from: []const u8,
+    keyring_ids: []const []const u8,
+    stdout: *Io.Writer,
+) !void {
+    var keys_to_disable = std.StringHashMap(void).init(allocator);
+    defer {
+        var it = keys_to_disable.iterator();
+        while (it.next()) |entry| allocator.free(entry.key_ptr.*);
+        keys_to_disable.deinit();
+    }
+
+    for (keyring_ids) |id| {
+        const revoked = try keyfiles.readRevokedFingerprints(
+            allocator,
+            base,
+            io,
+            populate_from,
+            id,
+        );
+        defer {
+            for (revoked) |fp| allocator.free(fp);
+            allocator.free(revoked);
+        }
+
+        for (revoked) |fp| {
+            if (keys_to_disable.contains(fp)) continue;
+            if (try gpg_cli.keyIsRevoked(allocator, fp)) continue;
+            const owned = try allocator.dupe(u8, fp);
+            try keys_to_disable.put(owned, {});
+        }
+    }
+
+    if (keys_to_disable.count() == 0) return;
+
+    try stdout.print("Disabling revoked keys in keyring...\n", .{});
+    try stdout.flush();
+
+    var it = keys_to_disable.iterator();
+    while (it.next()) |entry| {
+        try stdout.print("  Disabling key {s}...\n", .{entry.key_ptr.*});
+        try stdout.flush();
+        try gpg_cli.disableKey(allocator, env_map, entry.key_ptr.*);
+    }
+
+    try stdout.print("  Disabled {d} key(s).\n", .{keys_to_disable.count()});
+    try stdout.flush();
 }

@@ -76,10 +76,6 @@ fn run(init: std.process.Init) !void {
                     }
                     std.process.exit(1);
                 },
-                error.NotImplemented => {
-                    stderrPrint(init.io, "error: --populate pipeline is not yet implemented past validation", .{});
-                    std.process.exit(1);
-                },
                 else => return err,
             };
         },

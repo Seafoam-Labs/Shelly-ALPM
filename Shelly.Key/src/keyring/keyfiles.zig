@@ -131,6 +131,27 @@ pub fn readTrustedFingerprints(
     import_dir: []const u8,
     keyring_id: []const u8,
 ) ![][]const u8 {
+    return readFingerprintFile(allocator, base, io, import_dir, keyring_id, "-trusted");
+}
+
+pub fn readRevokedFingerprints(
+    allocator: std.mem.Allocator,
+    base: std.Io.Dir,
+    io: Io,
+    import_dir: []const u8,
+    keyring_id: []const u8,
+) ![][]const u8 {
+    return readFingerprintFile(allocator, base, io, import_dir, keyring_id, "-revoked");
+}
+
+fn readFingerprintFile(
+    allocator: std.mem.Allocator,
+    base: std.Io.Dir,
+    io: Io,
+    import_dir: []const u8,
+    keyring_id: []const u8,
+    suffix: []const u8,
+) ![][]const u8 {
     var dir = base.openDir(io, import_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => return &.{},
         else => |e| return e,
@@ -138,7 +159,7 @@ pub fn readTrustedFingerprints(
     defer dir.close(io);
 
     var name_buf: [256]u8 = undefined;
-    const filename = std.fmt.bufPrint(&name_buf, "{s}-trusted", .{keyring_id}) catch
+    const filename = std.fmt.bufPrint(&name_buf, "{s}{s}", .{ keyring_id, suffix }) catch
         return &.{};
 
     var file = dir.openFile(io, filename, .{ .mode = .read_only }) catch |err| switch (err) {
@@ -151,7 +172,7 @@ pub fn readTrustedFingerprints(
     const n = try file.readPositionalAll(io, &read_buf, 0);
     if (n == read_buf.len) {
         const size = try file.length(io);
-        if (size > n) return error.TrustedFileTooLarge;
+        if (size > n) return error.MetadataFileTooLarge;
     }
     const contents = read_buf[0..n];
 
@@ -655,4 +676,74 @@ test "trustedFileNonempty returns false when the import directory is absent" {
         "keyrings",
         "archlinux",
     ));
+}
+
+test "readRevokedFingerprints reads fingerprints from the revoked file" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        try writeFile(dir, testing.io, "archlinux-revoked", "DEAD1111BEEF2222\n# revoked\n\nFEED3333CAFE4444:\n");
+    }
+
+    const fps = try readRevokedFingerprints(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    );
+    defer {
+        for (fps) |fp| testing.allocator.free(fp);
+        testing.allocator.free(fps);
+    }
+
+    try testing.expectEqual(@as(usize, 2), fps.len);
+    try testing.expectEqualStrings("DEAD1111BEEF2222", fps[0]);
+    try testing.expectEqualStrings("FEED3333CAFE4444", fps[1]);
+}
+
+test "readRevokedFingerprints returns an empty list when the revoked file is absent" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+
+    const fps = try readRevokedFingerprints(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    );
+    defer testing.allocator.free(fps);
+
+    try testing.expectEqual(@as(usize, 0), fps.len);
+}
+
+test "readRevokedFingerprints ignores a similarly-named trusted file" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    try tmp.dir.createDir(testing.io, "keyrings", .default_dir);
+    {
+        var dir = try tmp.dir.openDir(testing.io, "keyrings", .{});
+        defer dir.close(testing.io);
+        // Only the -trusted side exists; -revoked must not pick it up.
+        try writeFile(dir, testing.io, "archlinux-trusted", "TRUSTED0000000000\n");
+    }
+
+    const fps = try readRevokedFingerprints(
+        testing.allocator,
+        tmp.dir,
+        testing.io,
+        "keyrings",
+        "archlinux",
+    );
+    defer testing.allocator.free(fps);
+
+    try testing.expectEqual(@as(usize, 0), fps.len);
 }

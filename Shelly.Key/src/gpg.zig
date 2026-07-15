@@ -78,7 +78,7 @@ pub const Gpg = struct {
     ) !void {
         var sign_env = try env_map.clone(allocator);
         defer sign_env.deinit();
-        // Override `LANG` to ensure consistent output for questions.
+        // Override `LANG` to ensure consistent output.
         try sign_env.put("LANG", "C");
         try self.run(
             &.{ "--command-fd", "0", "--quiet", "--batch", "--lsign-key", key_id },
@@ -108,6 +108,45 @@ pub const Gpg = struct {
         });
         defer allocator.free(output);
         return parseKeyIsLsigned(output, secret_key_id);
+    }
+
+    /// Run `gpg --with-colons --list-key --quiet <key_id>`.
+    pub fn keyIsRevoked(
+        self: Gpg,
+        allocator: std.mem.Allocator,
+        key_id: []const u8,
+    ) !bool {
+        const output = try self.runCapture(allocator, &.{
+            "--with-colons", "--list-key", "--quiet", key_id,
+        });
+        defer allocator.free(output);
+        return parseKeyIsRevoked(output);
+    }
+
+    /// Run `gpg --command-fd 0 --no-auto-check-trustdb --quiet --batch --edit-key <key_id>`.
+    pub fn disableKey(
+        self: Gpg,
+        allocator: std.mem.Allocator,
+        env_map: *const process.Environ.Map,
+        key_id: []const u8,
+    ) !void {
+        var disable_env = try env_map.clone(allocator);
+        defer disable_env.deinit();
+        // Override `LANG` to ensure consistent output.
+        try disable_env.put("LANG", "C");
+        try self.run(
+            &.{
+                "--command-fd",
+                "0",
+                "--no-auto-check-trustdb",
+                "--quiet",
+                "--batch",
+                "--edit-key",
+                key_id,
+            },
+            "disable\nquit\n", // Feed the `disable` and `quit` commands to the edit menu.
+            &disable_env,
+        );
     }
 
     fn runCapture(self: Gpg, allocator: std.mem.Allocator, extra: []const []const u8) ![]u8 {
@@ -241,6 +280,16 @@ fn parseKeyIsLsigned(output: []const u8, secret_key_id: []const u8) bool {
     return false;
 }
 
+fn parseKeyIsRevoked(output: []const u8) bool {
+    var iter = std.mem.splitScalar(u8, output, '\n');
+    while (iter.next()) |line| {
+        if (!std.mem.eql(u8, colonField(line, 0), "pub")) continue;
+        const flags = colonField(line, 11);
+        return std.mem.indexOfScalar(u8, flags, 'D') != null;
+    }
+    return false;
+}
+
 const testing = std.testing;
 
 test "buildArgv prefixes every command with the homedir boilerplate" {
@@ -367,4 +416,45 @@ test "parseKeyIsLsigned returns false when no sig records exist" {
 
 test "parseKeyIsLsigned returns false on empty output" {
     try testing.expect(!parseKeyIsLsigned("", "ABCDEF1234567890"));
+}
+
+test "parseKeyIsRevoked returns true when the pub record flags contain D" {
+    // Field 12 (index 11) holds the capability/flags column; `D` marks disabled.
+    const output = "pub:d:4096:1:ABCD1111ABCD1111:2020-01-01:::d:::sDcESC:\n";
+    try testing.expect(parseKeyIsRevoked(output));
+}
+
+test "parseKeyIsRevoked returns true when D appears alongside other flags" {
+    const output = "pub:u:4096:1:ABCD1111ABCD1111:2020-01-01:::u:::sDc::\n";
+    try testing.expect(parseKeyIsRevoked(output));
+}
+
+test "parseKeyIsRevoked returns false when the pub record has no D flag" {
+    const output = "pub:u:4096:1:ABCD1111ABCD1111:2020-01-01:::u:::scESC:\n";
+    try testing.expect(!parseKeyIsRevoked(output));
+}
+
+test "parseKeyIsRevoked ignores D flags in non-pub records" {
+    const output =
+        "pub:u:4096:1:ABCD1111ABCD1111:2020-01-01:::u:::scESC:\n" ++
+        "sub:d:2048:1:DEAD2222DEAD2222:2020-01-01:::d:::e::\n";
+    // The pub record is not disabled, so the key is not considered revoked.
+    try testing.expect(!parseKeyIsRevoked(output));
+}
+
+test "parseKeyIsRevoked returns false when no pub record exists" {
+    const output = "uid:u::::::::Test User <test@example.com>::\n";
+    try testing.expect(!parseKeyIsRevoked(output));
+}
+
+test "parseKeyIsRevoked returns false on empty output" {
+    try testing.expect(!parseKeyIsRevoked(""));
+}
+
+test "parseKeyIsRevoked inspects only the first pub record" {
+    const output =
+        "pub:u:4096:1:ABCD1111ABCD1111:2020-01-01:::u:::scESC:\n" ++
+        "pub:d:4096:1:ABCD1111ABCD1111:2020-01-01:::d:::scESC:\n";
+    // First pub is not disabled; we do not consider a later pub.
+    try testing.expect(!parseKeyIsRevoked(output));
 }
