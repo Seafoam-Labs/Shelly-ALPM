@@ -27,6 +27,12 @@ if ! command -v dotnet &> /dev/null; then
     exit 1
 fi
 
+# Check if zig is installed
+if ! command -v zig &> /dev/null; then
+    echo "Error: zig is not installed. Please install zig first."
+    exit 1
+fi
+
 # Check if meson is installed
 if ! command -v meson &> /dev/null; then
     echo "Error: meson is not installed. Please install meson first."
@@ -73,6 +79,13 @@ echo "Building Shelly.Cli..."
 cd "$SCRIPT_DIR/Shelly.Cli"
 dotnet publish -c $BUILD_CONFIG -r linux-x64 -o "$SCRIPT_DIR/publish/Shelly.Cli" -p:InstructionSet=x86-64
 echo "Shelly.Cli build complete."
+echo ""
+
+# Build Shelly.Key
+echo "Building Shelly.Key..."
+cd "$SCRIPT_DIR/Shelly.Key"
+zig build -p "$SCRIPT_DIR/publish/Shelly.Key"
+echo "Shelly.Key build complete."
 echo ""
 
 # Create installation directory
@@ -125,6 +138,10 @@ fi
 echo "Copying Shelly.Cli binary to $INSTALL_DIR"
 cp "$SCRIPT_DIR/publish/Shelly.Cli/shelly" "$INSTALL_DIR/shelly"
 
+# Copy Shelly.Key binary
+echo "Copying Shelly.Key binary to $INSTALL_DIR"
+cp "$SCRIPT_DIR/publish/Shelly.Key/bin/shelly-key" "$INSTALL_DIR/shelly-key"
+
 # Copy the logo
 echo "Copying logo..."
 cp "$SCRIPT_DIR/Shelly.Gtk/Assets/shellylogo.png" "$INSTALL_DIR/"
@@ -134,6 +151,7 @@ echo "Creating symlinks in /usr/bin..."
 ln -sf "$INSTALL_DIR/shelly-ui" /usr/bin/shelly-ui
 ln -sf "$INSTALL_DIR/shelly" /usr/bin/shelly
 ln -sf "$INSTALL_DIR/shelly-notifications" /usr/bin/shelly-notifications
+ln -sf "$INSTALL_DIR/shelly-key" /usr/bin/shelly-key
 
 # Install icons to standard location
 echo "Installing icons to standard location..."
@@ -295,5 +313,6 @@ echo "You can now:"
 echo "  - Run the GUI: shelly-ui"
 echo "  - Run the CLI: shelly"
 echo "  - Notification Service: shelly-notifications"
+echo "  - Key Management: shelly-key"
 echo "  - Find Shelly in your application menu"
 echo ""

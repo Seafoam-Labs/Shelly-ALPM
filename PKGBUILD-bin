@@ -49,8 +49,8 @@ package() {
   # Install Shelly.Cli binary
   install -Dm755 "$srcdir/shelly" "$pkgdir/usr/bin/shelly"
 
-  # Install Shelly.Keys binary
-  install -Dm755 "$srcdir/shelly-keys" "$pkgdir/usr/bin/shelly-keys"
+  # Install Shelly.Key binary
+  install -Dm755 "$srcdir/shelly-key" "$pkgdir/usr/bin/shelly-key"
 
   # Install desktop entry
   cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/com.shellyorg.shelly.desktop"
