@@ -12,7 +12,10 @@ pub fn trustdbExists(
     io: Io,
     keyring_dir: []const u8,
 ) KeyfilesError!bool {
-    var dir = try base.openDir(io, keyring_dir, .{});
+    var dir = base.openDir(io, keyring_dir, .{}) catch |err| switch (err) {
+        error.FileNotFound => return false,
+        else => |e| return e,
+    };
     defer dir.close(io);
 
     return fsutil.isRegularFile(dir, io, "trustdb.gpg");
@@ -297,6 +300,13 @@ test "trustdbExists returns false when trustdb.gpg is a directory" {
         defer dir.close(testing.io);
         try dir.createDir(testing.io, "trustdb.gpg", .default_dir);
     }
+
+    try testing.expect(!try trustdbExists(tmp.dir, testing.io, "gnupg"));
+}
+
+test "trustdbExists returns false when the keyring directory is absent" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
 
     try testing.expect(!try trustdbExists(tmp.dir, testing.io, "gnupg"));
 }

@@ -44,8 +44,16 @@ fn run(init: std.process.Init) !void {
                 stdout,
             ) catch |err| switch (err) {
                 error.TrustdbMissing => {
-                    stderrPrint(init.io, "error: The pacman keyring is not initialized (trustdb.gpg not found).", .{});
-                    stderrPrint(init.io, "Run 'shelly-key --init' to initialize the keyring.", .{});
+                    stderrPrint(
+                        init.io,
+                        "error: The pacman keyring at '{s}' is not initialized.",
+                        .{opts.gpgdir},
+                    );
+                    stderrPrint(
+                        init.io,
+                        "Run 'shelly-key --init {s}' first.",
+                        .{opts.gpgdir},
+                    );
                     std.process.exit(1);
                 },
                 error.NoSecretKey => {

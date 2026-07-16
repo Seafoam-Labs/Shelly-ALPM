@@ -69,6 +69,7 @@ pub const Gpg = struct {
         try self.run(&.{ "--import-ownertrust", path }, null, null);
     }
 
+    // TODO: Check if --quick-lsign-key option is better. Currently it's taken from original script.
     /// Run `gpg --homedir <dir> --no-permission-warning --command-fd 0 --quiet --batch --lsign-key <key_id>`,
     pub fn locallySignKey(
         self: Gpg,
