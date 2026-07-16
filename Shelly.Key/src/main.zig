@@ -65,6 +65,19 @@ fn run(init: std.process.Init) !void {
                     stderrPrint(init.io, "error: No keyring files exist in {s}.", .{opts.populate_from});
                     std.process.exit(1);
                 },
+                error.PopulateFromMissing => {
+                    stderrPrint(
+                        init.io,
+                        "error: The keyring source directory '{s}' does not exist.",
+                        .{opts.populate_from},
+                    );
+                    stderrPrint(
+                        init.io,
+                        "Check --populate-from or install a package that ships keyring files.",
+                        .{},
+                    );
+                    std.process.exit(1);
+                },
                 error.MissingKeyringFile => {
                     const base: std.Io.Dir = .cwd();
                     for (opts.populate_keyrings) |id| {

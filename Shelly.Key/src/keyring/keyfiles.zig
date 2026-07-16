@@ -35,6 +35,7 @@ pub fn applyKeyringPermissions(
 pub const ResolveKeyringsError = error{
     NoKeyringsFound,
     MissingKeyringFile,
+    PopulateFromMissing,
     OutOfMemory,
 } || std.Io.Dir.OpenError ||
     std.Io.Dir.Iterator.Error ||
@@ -60,7 +61,10 @@ fn discoverKeyrings(
     io: Io,
     import_dir: []const u8,
 ) ResolveKeyringsError![][]const u8 {
-    var dir = try base.openDir(io, import_dir, .{ .iterate = true });
+    var dir = base.openDir(io, import_dir, .{ .iterate = true }) catch |err| switch (err) {
+        error.FileNotFound => return error.PopulateFromMissing,
+        else => |e| return e,
+    };
     defer dir.close(io);
 
     var ids: std.ArrayList([]const u8) = .empty;
@@ -92,7 +96,10 @@ fn validateRequestedKeyrings(
     import_dir: []const u8,
     requested: []const []const u8,
 ) ResolveKeyringsError![][]const u8 {
-    var dir = try base.openDir(io, import_dir, .{});
+    var dir = base.openDir(io, import_dir, .{}) catch |err| switch (err) {
+        error.FileNotFound => return error.PopulateFromMissing,
+        else => |e| return e,
+    };
     defer dir.close(io);
 
     var is_missing = false;
@@ -376,6 +383,24 @@ test "resolveKeyrings fails when the import directory is empty" {
     try testing.expectError(
         error.NoKeyringsFound,
         resolveKeyrings(testing.allocator, tmp.dir, testing.io, "keyrings", &.{}),
+    );
+}
+
+test "resolveKeyrings reports PopulateFromMissing when the directory is absent" {
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+
+    // No targets: discovery path.
+    try testing.expectError(
+        error.PopulateFromMissing,
+        resolveKeyrings(testing.allocator, tmp.dir, testing.io, "does-not-exist", &.{}),
+    );
+
+    // Targets supplied: validation path.
+    const requested: []const []const u8 = &.{"archlinux"};
+    try testing.expectError(
+        error.PopulateFromMissing,
+        resolveKeyrings(testing.allocator, tmp.dir, testing.io, "does-not-exist", requested),
     );
 }
 
