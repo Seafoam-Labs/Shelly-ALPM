@@ -1,6 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 
+const elevate = @import("../helpers/elevate.zig");
 const gpg = @import("../gpg.zig");
 const gpgconf = @import("gpgconf.zig");
 const keydir = @import("keydir.zig");
@@ -27,7 +28,16 @@ const master_key_batch =
     \\
 ;
 
-pub fn init(io: Io, keyring_path: []const u8, out: *Io.Writer) !void {
+pub fn init(
+    io: Io,
+    allocator: std.mem.Allocator,
+    args: []const []const u8,
+    path_env: []const u8,
+    keyring_path: []const u8,
+    out: *Io.Writer,
+) !void {
+    try elevate.ensureRoot(io, allocator, args, path_env);
+
     const base: std.Io.Dir = .cwd();
 
     try keydir.ensureKeyringDir(base, io, keyring_path);
@@ -58,15 +68,34 @@ pub fn init(io: Io, keyring_path: []const u8, out: *Io.Writer) !void {
     }
 }
 
+pub fn updatedb(
+    io: Io,
+    allocator: std.mem.Allocator,
+    args: []const []const u8,
+    path_env: []const u8,
+    gpgdir: []const u8,
+    stdout: *Io.Writer,
+) !void {
+    try elevate.ensureRoot(io, allocator, args, path_env);
+
+    try stdout.print("Updating trust database...\n", .{});
+    try stdout.flush();
+    const gpg_cli = gpg.Gpg{ .io = io, .homedir = gpgdir };
+    try gpg_cli.checkTrustdb();
+}
+
 pub fn populate(
     io: Io,
     allocator: std.mem.Allocator,
+    args: []const []const u8,
     env_map: *const std.process.Environ.Map,
     gpgdir: []const u8,
     populate_from: []const u8,
     requested: []const []const u8,
     stdout: *Io.Writer,
 ) !void {
+    try elevate.ensureRoot(io, allocator, args, env_map.get("PATH").?);
+
     const base: std.Io.Dir = .cwd();
 
     if (!try keyfiles.trustdbExists(base, io, gpgdir)) return error.TrustdbMissing;

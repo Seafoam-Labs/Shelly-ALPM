@@ -11,6 +11,7 @@ pub const Command = union(enum) {
     help,
     init,
     populate,
+    updatedb,
 };
 
 pub const Options = struct {
@@ -42,9 +43,15 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
             return opts;
         } else if (std.mem.eql(u8, arg, "--init")) {
             if (opts.command == .populate) return error.MultipleOperations;
+            if (opts.command == .updatedb) return error.MultipleOperations;
             opts.command = .init;
+        } else if (std.mem.eql(u8, arg, "--updatedb") or std.mem.eql(u8, arg, "-u")) {
+            if (opts.command == .init) return error.MultipleOperations;
+            if (opts.command == .populate) return error.MultipleOperations;
+            opts.command = .updatedb;
         } else if (std.mem.eql(u8, arg, "--populate")) {
             if (opts.command == .init) return error.MultipleOperations;
+            if (opts.command == .updatedb) return error.MultipleOperations;
             opts.command = .populate;
         } else if (std.mem.eql(u8, arg, "--gpgdir")) {
             if (i + 1 >= args.len or std.mem.startsWith(u8, args[i + 1], "-")) {
@@ -73,6 +80,9 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
             if (positionals.items.len > 1) return error.UnknownArgument;
             if (positionals.items.len == 1) opts.init_path = positionals.items[0];
         },
+        .updatedb => {
+            if (positionals.items.len > 0) return error.UnknownArgument;
+        },
         .populate => {
             if (positionals.items.len > 0) {
                 opts.populate_keyrings = try positionals.toOwnedSlice(allocator);
@@ -91,6 +101,7 @@ pub fn printHelp(writer: *std.Io.Writer) !void {
         \\  --init [dir]              Initialize the pacman keyring (default: {s})
         \\  --populate [keyring...]   Reload keys from the given keyrings, or every
         \\                            keyring found in the source directory
+        \\  -u, --updatedb            Update the trust database
         \\
         \\Options:
         \\  --gpgdir <dir>            Set the GnuPG directory (default: {s})
@@ -356,6 +367,7 @@ test "printHelp prints the expected usage text" {
         \\  --init [dir]              Initialize the pacman keyring (default: /etc/pacman.d/gnupg)
         \\  --populate [keyring...]   Reload keys from the given keyrings, or every
         \\                            keyring found in the source directory
+        \\  -u, --updatedb            Update the trust database
         \\
         \\Options:
         \\  --gpgdir <dir>            Set the GnuPG directory (default: /etc/pacman.d/gnupg)
