@@ -2,6 +2,8 @@ const std = @import("std");
 const Io = std.Io;
 const process = std.process;
 
+const argv_capacity: usize = 64;
+
 pub const GpgError = error{
     GpgFailed,
 };
@@ -16,13 +18,13 @@ pub const Gpg = struct {
 
     /// Run `gpg --homedir <dir> --no-permission-warning --update-trustdb`
     pub fn updateTrustdb(self: Gpg) !void {
-        try self.run(&.{"--update-trustdb"}, null, null);
+        try self.run(&.{"--update-trustdb"}, null, null, null);
     }
 
     /// Run `gpg --homedir <dir> --no-permission-warning -K --with-colons`
     pub fn secretKeysAvailable(self: Gpg) !bool {
         var argv: [argv_capacity][]const u8 = undefined;
-        const argv_len = buildArgv(&argv, &.{ "-K", "--with-colons" }, self.homedir);
+        const argv_len = buildArgv(&argv, &.{ "-K", "--with-colons" }, self.homedir, null);
 
         var child = try process.spawn(self.io, .{
             .argv = argv[0..argv_len],
@@ -51,27 +53,27 @@ pub const Gpg = struct {
 
     /// Run `gpg --homedir <dir> --no-permission-warning --gen-key --batch`
     pub fn genKey(self: Gpg, batch_input: []const u8) !void {
-        try self.run(&.{ "--gen-key", "--batch" }, batch_input, null);
+        try self.run(&.{ "--gen-key", "--batch" }, null, batch_input, null);
     }
 
     /// Run `gpg --homedir <dir> --no-permission-warning --batch --check-trustdb`
     pub fn checkTrustdb(self: Gpg) !void {
-        try self.run(&.{ "--batch", "--check-trustdb" }, null, null);
+        try self.run(&.{ "--batch", "--check-trustdb" }, null, null, null);
     }
 
     /// Run `gpg --homedir <dir> --no-permission-warning --quiet --import <path>`.
     pub fn importKeyring(self: Gpg, path: []const u8) !void {
-        try self.run(&.{ "--quiet", "--import", path }, null, null);
+        try self.run(&.{ "--quiet", "--import", path }, null, null, null);
     }
 
     /// Run `gpg --homedir <dir> --no-permission-warning --import-ownertrust <path>`.
     pub fn importOwnertrust(self: Gpg, path: []const u8) !void {
-        try self.run(&.{ "--import-ownertrust", path }, null, null);
+        try self.run(&.{ "--import-ownertrust", path }, null, null, null);
     }
 
     /// Run `gpg --homedir <dir> --no-permission-warning --quiet --batch --yes --quick-lsign-key <key_id>`.
     pub fn locallySignKey(self: Gpg, key_id: []const u8) !void {
-        try self.run(&.{ "--quiet", "--batch", "--yes", "--quick-lsign-key", key_id }, null, null);
+        try self.run(&.{ "--quiet", "--batch", "--yes", "--quick-lsign-key", key_id }, null, null, null);
     }
 
     /// Run `gpg --with-colons --list-secret-key --quiet`.
@@ -110,7 +112,7 @@ pub const Gpg = struct {
         return parseKeyIsRevoked(output);
     }
 
-    /// Run `gpg --command-fd 0 --no-auto-check-trustdb --quiet --batch --edit-key <key_id>`.
+    /// Run `gpg --homedir <dir> --no-permission-warning --command-fd 0 --no-auto-check-trustdb --quiet --batch --edit-key <key_id>`.
     pub fn disableKey(
         self: Gpg,
         allocator: std.mem.Allocator,
@@ -131,14 +133,35 @@ pub const Gpg = struct {
                 "--edit-key",
                 key_id,
             },
+            null,
             "disable\nquit\n", // Feed the `disable` and `quit` commands to the edit menu.
             &disable_env,
         );
     }
 
-    fn runCapture(self: Gpg, allocator: std.mem.Allocator, extra: []const []const u8) ![]u8 {
+    /// Run `gpg --homedir <dir> --no-permission-warning --batch --list-keys [ids...]`
+    pub fn listKeys(self: Gpg, ids: []const []const u8) !void {
+        try self.run(&.{ "--batch", "--list-keys" }, ids, null, null);
+    }
+
+    /// Run `gpg --homedir <dir> --no-permission-warning --batch --fingerprint [ids...]`
+    pub fn finger(self: Gpg, ids: []const []const u8) !void {
+        try self.run(&.{ "--batch", "--fingerprint" }, ids, null, null);
+    }
+
+    /// Run `gpg --homedir <dir> --no-permission-warning --batch --list-sigs [ids...]`
+    pub fn listSigs(self: Gpg, ids: []const []const u8) !void {
+        try self.run(&.{ "--batch", "--list-sigs" }, ids, null, null);
+    }
+
+    /// Run `gpg --homedir <dir> --no-permission-warning --armor --export [ids...]`
+    pub fn exportKeys(self: Gpg, ids: []const []const u8) !void {
+        try self.run(&.{ "--armor", "--export" }, ids, null, null);
+    }
+
+    pub fn runCapture(self: Gpg, allocator: std.mem.Allocator, extra: []const []const u8) ![]u8 {
         var argv: [argv_capacity][]const u8 = undefined;
-        const argv_len = buildArgv(&argv, extra, self.homedir);
+        const argv_len = buildArgv(&argv, extra, self.homedir, null);
 
         var child = try process.spawn(self.io, .{
             .argv = argv[0..argv_len],
@@ -168,15 +191,16 @@ pub const Gpg = struct {
         return try list.toOwnedSlice(allocator);
     }
 
-    /// Spawn `gpg --homedir <homedir> --no-permission-warning <extra...>`.
+    /// Spawn `gpg --homedir <homedir> --no-permission-warning <extra...> <ids...>`.
     fn run(
         self: Gpg,
         extra: []const []const u8,
+        ids: ?[]const []const u8,
         stdin_data: ?[]const u8,
         env_map: ?*const process.Environ.Map,
     ) !void {
         var argv: [argv_capacity][]const u8 = undefined;
-        const argv_len = buildArgv(&argv, extra, self.homedir);
+        const argv_len = buildArgv(&argv, extra, self.homedir, ids);
 
         const stdin_kind: process.SpawnOptions.StdIo =
             if (stdin_data != null) .pipe else .inherit;
@@ -200,14 +224,11 @@ pub const Gpg = struct {
     }
 };
 
-/// Maximum argv capacity: `gpg --homedir <dir> --no-permission-warning`
-/// (4 slots) plus room for command-specific arguments.
-const argv_capacity: usize = 12;
-
 fn buildArgv(
     argv: *[argv_capacity][]const u8,
     extra: []const []const u8,
     homedir: []const u8,
+    ids: ?[]const []const u8,
 ) usize {
     var n: usize = 0;
     argv[n] = "gpg";
@@ -221,6 +242,12 @@ fn buildArgv(
     for (extra) |arg| {
         argv[n] = arg;
         n += 1;
+    }
+    if (ids) |id_slice| {
+        for (id_slice) |id| {
+            argv[n] = id;
+            n += 1;
+        }
     }
     return n;
 }
@@ -281,7 +308,7 @@ const testing = std.testing;
 
 test "buildArgv prefixes every command with the homedir boilerplate" {
     var argv: [argv_capacity][]const u8 = undefined;
-    const n = buildArgv(&argv, &.{ "-K", "--with-colons" }, "/tmp/gnupg");
+    const n = buildArgv(&argv, &.{ "-K", "--with-colons" }, "/tmp/gnupg", null);
 
     try testing.expectEqual(@as(usize, 6), n);
     try testing.expectEqualStrings("gpg", argv[0]);

@@ -12,6 +12,10 @@ pub const Command = union(enum) {
     init,
     populate,
     updatedb,
+    list_keys,
+    finger,
+    list_sigs,
+    export_keys,
 };
 
 pub const Options = struct {
@@ -20,6 +24,7 @@ pub const Options = struct {
     gpgdir: []const u8 = default_gpgdir,
     populate_from: []const u8 = default_populate_from,
     populate_keyrings: []const []const u8 = &.{},
+    key_ids: []const []const u8 = &.{},
 };
 
 pub const ParseError = error{
@@ -44,15 +49,59 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
         } else if (std.mem.eql(u8, arg, "--init")) {
             if (opts.command == .populate) return error.MultipleOperations;
             if (opts.command == .updatedb) return error.MultipleOperations;
+            if (opts.command == .list_keys) return error.MultipleOperations;
+            if (opts.command == .finger) return error.MultipleOperations;
+            if (opts.command == .list_sigs) return error.MultipleOperations;
+            if (opts.command == .export_keys) return error.MultipleOperations;
             opts.command = .init;
         } else if (std.mem.eql(u8, arg, "--updatedb") or std.mem.eql(u8, arg, "-u")) {
             if (opts.command == .init) return error.MultipleOperations;
             if (opts.command == .populate) return error.MultipleOperations;
+            if (opts.command == .list_keys) return error.MultipleOperations;
+            if (opts.command == .finger) return error.MultipleOperations;
+            if (opts.command == .list_sigs) return error.MultipleOperations;
+            if (opts.command == .export_keys) return error.MultipleOperations;
             opts.command = .updatedb;
         } else if (std.mem.eql(u8, arg, "--populate")) {
             if (opts.command == .init) return error.MultipleOperations;
             if (opts.command == .updatedb) return error.MultipleOperations;
+            if (opts.command == .list_keys) return error.MultipleOperations;
+            if (opts.command == .finger) return error.MultipleOperations;
+            if (opts.command == .list_sigs) return error.MultipleOperations;
+            if (opts.command == .export_keys) return error.MultipleOperations;
             opts.command = .populate;
+        } else if (std.mem.eql(u8, arg, "--list-keys") or std.mem.eql(u8, arg, "-l")) {
+            if (opts.command == .init) return error.MultipleOperations;
+            if (opts.command == .populate) return error.MultipleOperations;
+            if (opts.command == .updatedb) return error.MultipleOperations;
+            if (opts.command == .finger) return error.MultipleOperations;
+            if (opts.command == .list_sigs) return error.MultipleOperations;
+            if (opts.command == .export_keys) return error.MultipleOperations;
+            opts.command = .list_keys;
+        } else if (std.mem.eql(u8, arg, "--finger") or std.mem.eql(u8, arg, "-f")) {
+            if (opts.command == .init) return error.MultipleOperations;
+            if (opts.command == .populate) return error.MultipleOperations;
+            if (opts.command == .updatedb) return error.MultipleOperations;
+            if (opts.command == .list_keys) return error.MultipleOperations;
+            if (opts.command == .list_sigs) return error.MultipleOperations;
+            if (opts.command == .export_keys) return error.MultipleOperations;
+            opts.command = .finger;
+        } else if (std.mem.eql(u8, arg, "--list-sigs")) {
+            if (opts.command == .init) return error.MultipleOperations;
+            if (opts.command == .populate) return error.MultipleOperations;
+            if (opts.command == .updatedb) return error.MultipleOperations;
+            if (opts.command == .list_keys) return error.MultipleOperations;
+            if (opts.command == .finger) return error.MultipleOperations;
+            if (opts.command == .export_keys) return error.MultipleOperations;
+            opts.command = .list_sigs;
+        } else if (std.mem.eql(u8, arg, "--export") or std.mem.eql(u8, arg, "-e")) {
+            if (opts.command == .init) return error.MultipleOperations;
+            if (opts.command == .populate) return error.MultipleOperations;
+            if (opts.command == .updatedb) return error.MultipleOperations;
+            if (opts.command == .list_keys) return error.MultipleOperations;
+            if (opts.command == .finger) return error.MultipleOperations;
+            if (opts.command == .list_sigs) return error.MultipleOperations;
+            opts.command = .export_keys;
         } else if (std.mem.eql(u8, arg, "--gpgdir")) {
             if (i + 1 >= args.len or std.mem.startsWith(u8, args[i + 1], "-")) {
                 return error.MissingArgumentValue;
@@ -83,6 +132,11 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
         .updatedb => {
             if (positionals.items.len > 0) return error.UnknownArgument;
         },
+        .list_keys, .finger, .list_sigs, .export_keys => {
+            if (positionals.items.len > 0) {
+                opts.key_ids = try positionals.toOwnedSlice(allocator);
+            }
+        },
         .populate => {
             if (positionals.items.len > 0) {
                 opts.populate_keyrings = try positionals.toOwnedSlice(allocator);
@@ -102,6 +156,10 @@ pub fn printHelp(writer: *std.Io.Writer) !void {
         \\  --populate [keyring...]   Reload keys from the given keyrings, or every
         \\                            keyring found in the source directory
         \\  -u, --updatedb            Update the trust database
+        \\  -l, --list-keys [ids...]  List keys from the keyring
+        \\  -f, --finger [ids...]     List keys with their fingerprints
+        \\  --list-sigs [ids...]      List keys and their signatures
+        \\  -e, --export [ids...]     Export public or secret keys
         \\
         \\Options:
         \\  --gpgdir <dir>            Set the GnuPG directory (default: {s})
@@ -368,6 +426,10 @@ test "printHelp prints the expected usage text" {
         \\  --populate [keyring...]   Reload keys from the given keyrings, or every
         \\                            keyring found in the source directory
         \\  -u, --updatedb            Update the trust database
+        \\  -l, --list-keys [ids...]  List keys from the keyring
+        \\  -f, --finger [ids...]     List keys with their fingerprints
+        \\  --list-sigs [ids...]      List keys and their signatures
+        \\  -e, --export [ids...]     Export public or secret keys
         \\
         \\Options:
         \\  --gpgdir <dir>            Set the GnuPG directory (default: /etc/pacman.d/gnupg)
