@@ -95,7 +95,7 @@ pub fn populate(
     }
 
     if (keys_to_sign.count() > 0) {
-        try locallySignKeys(allocator, gpg_cli, env_map, stdout, &keys_to_sign);
+        try locallySignKeys(gpg_cli, stdout, &keys_to_sign);
 
         try importOwnertrust(
             gpg_cli,
@@ -166,9 +166,7 @@ fn collectKeysToSign(
 }
 
 fn locallySignKeys(
-    allocator: std.mem.Allocator,
     gpg_cli: gpg.Gpg,
-    env_map: *const std.process.Environ.Map,
     stdout: *Io.Writer,
     keys_to_sign: *const std.StringHashMap(void),
 ) !void {
@@ -179,7 +177,7 @@ fn locallySignKeys(
     while (it.next()) |entry| {
         try stdout.print("  Locally signing key {s}...\n", .{entry.key_ptr.*});
         try stdout.flush();
-        try gpg_cli.locallySignKey(allocator, env_map, entry.key_ptr.*);
+        try gpg_cli.locallySignKey(entry.key_ptr.*);
     }
 
     try stdout.print("  Locally signed {d} key(s).\n", .{keys_to_sign.count()});

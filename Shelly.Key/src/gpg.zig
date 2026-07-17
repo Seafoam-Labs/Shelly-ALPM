@@ -69,23 +69,9 @@ pub const Gpg = struct {
         try self.run(&.{ "--import-ownertrust", path }, null, null);
     }
 
-    // TODO: Check if --quick-lsign-key option is better. Currently it's taken from original script.
-    /// Run `gpg --homedir <dir> --no-permission-warning --command-fd 0 --quiet --batch --lsign-key <key_id>`,
-    pub fn locallySignKey(
-        self: Gpg,
-        allocator: std.mem.Allocator,
-        env_map: *const process.Environ.Map,
-        key_id: []const u8,
-    ) !void {
-        var sign_env = try env_map.clone(allocator);
-        defer sign_env.deinit();
-        // Override `LANG` to ensure consistent output.
-        try sign_env.put("LANG", "C");
-        try self.run(
-            &.{ "--command-fd", "0", "--quiet", "--batch", "--lsign-key", key_id },
-            "y\ny\n", // The `y\ny\n` is needed to suppress confirmation prompts.
-            &sign_env,
-        );
+    /// Run `gpg --homedir <dir> --no-permission-warning --quiet --batch --yes --quick-lsign-key <key_id>`.
+    pub fn locallySignKey(self: Gpg, key_id: []const u8) !void {
+        try self.run(&.{ "--quiet", "--batch", "--yes", "--quick-lsign-key", key_id }, null, null);
     }
 
     /// Run `gpg --with-colons --list-secret-key --quiet`.
