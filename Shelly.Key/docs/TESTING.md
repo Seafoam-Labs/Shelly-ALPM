@@ -257,3 +257,157 @@ The counts should match.
 gpgconf --homedir /tmp/test-gnupg --kill gpg-agent
 sudo rm -rf /tmp/test-gnupg
 ```
+
+## Read-only operations: `--list-keys`, `--finger`, `--list-sigs`, `--export`
+
+These four commands are thin gpg wrappers that inherit stdout/stderr. They work
+as non-root users and require only an existing keyring (populated or otherwise).
+
+### Common prerequisites
+
+Any keyring with at least one public key will do. Either reuse the temp keyring
+from the populate tests above, or use the system keyring:
+
+```bash
+# Option 1: reuse the temp keyring from --populate tests
+# (skip this if you already have /tmp/test-gnupg from previous tests)
+zig build
+./zig-out/bin/shelly-key --init /tmp/test-gnupg
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --populate archlinux
+
+# Option 2: test against the live system keyring
+# (no setup needed, but may be large and slow)
+```
+
+The "list all keys" examples below use the default keyring (`/etc/pacman.d/gnupg`)
+and work with either option. The "list specific keys" examples extract a
+fingerprint from `/tmp/test-gnupg` and pass `--gpgdir /tmp/test-gnupg` to the
+shelly-key call, so they require Option 1. To use Option 2 for those examples,
+swap both paths for `/etc/pacman.d/gnupg`.
+
+### `--list-keys` / `-l`
+
+#### List all keys
+
+```bash
+./zig-out/bin/shelly-key --list-keys
+```
+
+Expected: multi-line output with one block per key, starting with `pub   ...`.
+
+#### List specific keys
+
+```bash
+# First, grab a real fingerprint from the keyring
+FP=$(gpg --homedir /tmp/test-gnupg --list-keys --with-colons | awk -F: '/^pub/ {print $5; exit}')
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --list-keys "$FP"
+```
+
+Expected: a single key block. If no keys match, exits nonzero with an error
+message.
+
+### `--finger` / `-f`
+
+#### Show all keys with fingerprints
+
+```bash
+./zig-out/bin/shelly-key --finger
+```
+
+Expected: each `pub` block is followed by a full fingerprint line of
+space-separated hex groups (e.g. `904D 6D2C 1D7F 7002 4755  F694 2403 9905 145B 1016`).
+
+#### Show specific keys
+
+```bash
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --finger "$FP"
+```
+
+Expected: a single key with its full fingerprint.
+
+### `--list-sigs`
+
+#### List all keys and their signatures
+
+```bash
+./zig-out/bin/shelly-key --list-sigs
+```
+
+Expected: key listing with signature records (`sig    ...`).
+
+#### List specific keys
+
+```bash
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --list-sigs "$FP"
+```
+
+Expected: a single key with all its signatures.
+
+### `--export` / `-e`
+
+#### Export all keys
+
+```bash
+./zig-out/bin/shelly-key --export
+```
+
+Expected: ASCII-armored PGP public key blocks, starting with
+`-----BEGIN PGP PUBLIC KEY BLOCK-----`.
+
+#### Export specific keys
+
+```bash
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --export "$FP"
+```
+
+Expected: a single key block.
+
+### Error cases
+
+All four commands exit nonzero with an error message when given a nonexistent
+key ID:
+
+```bash
+./zig-out/bin/shelly-key --list-keys NONEXISTENTKEY1234567890ABCDEF
+# -> error: gpg command failed.
+```
+
+### Multiple operation conflict
+
+All read-only operations conflict with each other and with `--init`, `--populate`,
+and `--updatedb`. Specifying more than one operation exits nonzero:
+
+```bash
+./zig-out/bin/shelly-key --list-keys --finger
+# -> error: multiple operations specified; run each operation separately.
+```
+
+### Verify gpg parity (optional)
+
+For side-by-side comparison, run the equivalent `gpg` commands against the
+same keyring and compare output:
+
+```bash
+# Use the temp keyring so we don't need root
+GPGDIR=/tmp/test-gnupg
+
+# Count primary public keys.
+printf 'shelly-key: ' ; ./zig-out/bin/shelly-key --gpgdir "$GPGDIR" -l | grep -c '^pub'
+printf 'gpg:         ' ; gpg --homedir "$GPGDIR" --batch --list-keys | grep -c '^pub'
+
+# Count fingerprints.
+printf 'shelly-key: ' ; ./zig-out/bin/shelly-key --gpgdir "$GPGDIR" -f | grep -cE '^      [0-9A-F]{4} '
+printf 'gpg:         ' ; gpg --homedir "$GPGDIR" --batch --fingerprint | grep -cE '^      [0-9A-F]{4} '
+```
+
+The counts should match.
+
+### Revert
+
+The read-only operations do not modify the keyring, so no cleanup is needed.
+If you used a temp keyring for testing:
+
+```bash
+gpgconf --homedir /tmp/test-gnupg --kill gpg-agent
+sudo rm -rf /tmp/test-gnupg
+```
