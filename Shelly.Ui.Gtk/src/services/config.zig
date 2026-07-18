@@ -3,7 +3,7 @@ const Io = std.Io;
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const xdg_paths = @import("xdg_paths.zig").xdg_paths;
 
-const settings_relative_path = "shelly/settings.json";
+const settings_path = "shelly/settings.json";
 
 /// Maximum size accepted when reading the settings file (1 MiB).
 const max_settings_size: Io.Limit = .limited(1 << 20);
@@ -56,27 +56,20 @@ pub const ConfigService = struct {
         }
     }
 
-    pub fn configPath(self: ConfigService) ![]u8 {
-        return try self.allocator.dupe(u8, settings_relative_path);
-    }
-
     pub fn load(self: *ConfigService) !void {
         if (self.parsed) |*p| {
             p.deinit();
             self.parsed = null;
         }
 
-        const path = try self.configPath();
-        defer self.allocator.free(path);
-
         const data = self.config_dir.readFileAlloc(
             self.io,
-            path,
+            settings_path,
             self.allocator,
             max_settings_size,
         ) catch |err| switch (err) {
             error.FileNotFound => {
-                try self.saveDefault(path);
+                try self.saveDefault(settings_path);
                 const default_json = try std.json.Stringify.valueAlloc(
                     self.allocator,
                     ShellyConfig{},
@@ -106,14 +99,11 @@ pub const ConfigService = struct {
     pub fn save(self: *ConfigService) !void {
         if (self.parsed == null) return ConfigError.NotLoaded;
 
-        const path = try self.configPath();
-        defer self.allocator.free(path);
-
-        const dir_name = std.fs.path.dirname(path).?;
+        const dir_name = std.fs.path.dirname(settings_path).?;
         var sub_dir = try self.config_dir.createDirPathOpen(self.io, dir_name, .{});
         defer sub_dir.close(self.io);
 
-        const file = try sub_dir.createFile(self.io, std.fs.path.basename(path), .{});
+        const file = try sub_dir.createFile(self.io, std.fs.path.basename(settings_path), .{});
         defer file.close(self.io);
 
         var buf: [4096]u8 = undefined;
@@ -188,19 +178,6 @@ test "save before load returns NotLoaded" {
     defer svc.deinit();
 
     try testing.expectError(ConfigError.NotLoaded, svc.save());
-}
-
-test "configPath is relative to config dir" {
-    var tmp = testing.tmpDir(.{});
-    defer tmp.cleanup();
-
-    var svc = makeService(&tmp);
-    defer svc.deinit();
-
-    const path = try svc.configPath();
-    defer svc.allocator.free(path);
-
-    try testing.expectEqualStrings("shelly/settings.json", path);
 }
 
 test "load creates a default file when none exists" {
