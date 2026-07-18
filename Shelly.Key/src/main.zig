@@ -39,16 +39,9 @@ fn run(init: std.process.Init) !void {
         },
         .list_keys => Shelly_Key.keyring.listKeys(
             init.io,
-            init.arena.allocator(),
-            args,
-            init.environ_map.get("PATH").?,
             opts.gpgdir,
             opts.key_ids,
         ) catch |err| switch (err) {
-            error.KeyNotFound => {
-                stderrPrint(init.io, "error: specified key(s) not found in keyring.", .{});
-                std.process.exit(1);
-            },
             error.GpgFailed => {
                 stderrPrint(init.io, "error: gpg command failed.", .{});
                 std.process.exit(1);
@@ -57,16 +50,9 @@ fn run(init: std.process.Init) !void {
         },
         .finger => Shelly_Key.keyring.finger(
             init.io,
-            init.arena.allocator(),
-            args,
-            init.environ_map.get("PATH").?,
             opts.gpgdir,
             opts.key_ids,
         ) catch |err| switch (err) {
-            error.KeyNotFound => {
-                stderrPrint(init.io, "error: specified key(s) not found in keyring.", .{});
-                std.process.exit(1);
-            },
             error.GpgFailed => {
                 stderrPrint(init.io, "error: gpg command failed.", .{});
                 std.process.exit(1);
@@ -75,16 +61,9 @@ fn run(init: std.process.Init) !void {
         },
         .list_sigs => Shelly_Key.keyring.listSigs(
             init.io,
-            init.arena.allocator(),
-            args,
-            init.environ_map.get("PATH").?,
             opts.gpgdir,
             opts.key_ids,
         ) catch |err| switch (err) {
-            error.KeyNotFound => {
-                stderrPrint(init.io, "error: specified key(s) not found in keyring.", .{});
-                std.process.exit(1);
-            },
             error.GpgFailed => {
                 stderrPrint(init.io, "error: gpg command failed.", .{});
                 std.process.exit(1);
@@ -94,15 +73,9 @@ fn run(init: std.process.Init) !void {
         .export_keys => Shelly_Key.keyring.exportKeys(
             init.io,
             init.arena.allocator(),
-            args,
-            init.environ_map.get("PATH").?,
             opts.gpgdir,
             opts.key_ids,
         ) catch |err| switch (err) {
-            error.KeyNotFound => {
-                stderrPrint(init.io, "error: specified key(s) not found in keyring.", .{});
-                std.process.exit(1);
-            },
             error.GpgFailed => {
                 stderrPrint(init.io, "error: gpg command failed.", .{});
                 std.process.exit(1);
