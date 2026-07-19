@@ -9,6 +9,7 @@ const PackagePage = @import("pages/package_page.zig").PackagePage;
 const AurPage = @import("pages/aur_page.zig").AurPage;
 const UpdatePage = @import("pages/update_page.zig").UpdatePage;
 const SupportPage = @import("pages/support.zig");
+const ShellySettingsWindow = @import("windows/settings_window.zig").ShellySettingsWindow;
 
 const NavButton = struct {
     button: *gtk.Button,
@@ -145,7 +146,7 @@ pub const ShellyWindow = extern struct {
 
         const settings_btn = gtk.Button.newWithLabel("Settings");
         gtk.Widget.addCssClass(settings_btn.as(gtk.Widget), "flat");
-        //    _ = gtk.Button.signals.clicked.connect(settings_btn, *ShellyWindow, &on_settings, self, .{});
+        _ = gtk.Button.signals.clicked.connect(settings_btn, *ShellyWindow, &on_settings, self, .{});
         gtk.Box.append(menu_box, settings_btn.as(gtk.Widget));
 
         const utils_btn = gtk.Button.newWithLabel("Utilities");
@@ -194,6 +195,11 @@ pub const ShellyWindow = extern struct {
 
     fn on_nav_click(_: *gtk.Button, nb: *NavButton) callconv(.c) void {
         gtk.Stack.setVisibleChildName(nb.stack, nb.name);
+    }
+
+    fn on_settings(_: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
+        const settings = ShellySettingsWindow.new(self.as(gtk.Window));
+        gtk.Window.present(settings.as(gtk.Window));
     }
 
     fn on_chevron(_: *gtk.Button, self: *ShellyWindow) callconv(.c) void {

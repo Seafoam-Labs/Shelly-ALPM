@@ -45,6 +45,7 @@ pub fn build(b: *std.Build) void {
 
     gresource.addFileInput(b.path("src/style.css"));
     gresource.addFileInput(b.path("src/ui/main_window.ui"));
+    gresource.addFileInput(b.path("src/ui/settings_window.ui"));
     gresource.addFileInput(b.path("src/ui/flatpak/flatpak_page.ui"));
     gresource.addFileInput(b.path("src/ui/appimage_page.ui"));
     gresource.addFileInput(b.path("src/ui/aur_page.ui"));
