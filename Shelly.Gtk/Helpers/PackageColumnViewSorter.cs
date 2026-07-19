@@ -41,6 +41,12 @@ public static class PackageColumnViewSorter
                         packageData[a.Index].InstalledSize,
                         packageData[b.Index].InstalledSize
                     ),
+                
+                PackageSortColumn.LastUpdated =>
+                    (a, b) => Compare(
+                        packageData[a.Index].InstallDate,
+                        packageData[b.Index].InstallDate
+                    ),
 
                 _ => (_, _) => 0
             };
@@ -156,6 +162,11 @@ public static class PackageColumnViewSorter
     }
 
     private static int Compare(long? a, long? b)
+    {
+        return Nullable.Compare(a, b);
+    }
+
+    private static int Compare(DateTime? a, DateTime? b)
     {
         return Nullable.Compare(a, b);
     }

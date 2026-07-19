@@ -1017,6 +1017,9 @@ public sealed class PackageManagement(
 
         if (column == _sizeColumn)
             return PackageSortColumn.Size;
+        
+        if (column == _lastUpdatedColumn)
+            return PackageSortColumn.LastUpdated;
 
         return null;
     }

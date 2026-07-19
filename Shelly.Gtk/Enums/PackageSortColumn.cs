@@ -5,5 +5,6 @@ public enum PackageSortColumn
     Name,
     Repo,
     Version,
-    Size
+    Size,
+    LastUpdated
 }
