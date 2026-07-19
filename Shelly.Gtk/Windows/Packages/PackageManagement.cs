@@ -989,6 +989,7 @@ public sealed class PackageManagement(
         {
             if (args.Object is not ColumnViewCell listItem) return;
             var label = Label.New(string.Empty);
+            label.SetMarginStart(12);
             listItem.SetChild(label);
         };
         lastUpdatedFactory.OnBind += (_, args) =>
