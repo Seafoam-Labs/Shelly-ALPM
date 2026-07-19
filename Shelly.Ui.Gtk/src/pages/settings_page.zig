@@ -2,18 +2,21 @@ const std = @import("std");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gobject = bindings.gobject;
-const support = @import("../pages/support.zig");
+const support = @import("support.zig");
 
-pub const ShellySettingsWindow = extern struct {
+pub const SettingsPage = ShellySettingsPage;
+
+pub const ShellySettingsPage = extern struct {
     parent_instance: Parent,
 
     const Self = @This();
-    pub const Parent = gtk.Window;
+    pub const Parent = gtk.Box;
 
-    const resource_path = "/com/shellyorg/shelly/ui/settings_window.ui";
+    pub const title: [:0]const u8 = "Settings";
+    pub const icon_name: [:0]const u8 = "emblem-system-symbolic";
+    const resource_path = "/com/shellyorg/shelly/ui/settings_page.ui";
 
     const Private = struct {
-        settings_overlay: *gtk.Overlay,
         settings_stack: *gtk.Stack,
 
         // General
@@ -79,17 +82,15 @@ pub const ShellySettingsWindow = extern struct {
     };
 
     pub const getGObjectType = gobject.ext.defineClass(Self, .{
-        .name = "ShellySettingsWindow",
+        .name = "ShellySettingsPage",
         .instanceInit = &init,
         .classInit = &Class.init,
         .parent_class = &Class.parent,
         .private = .{ .Type = Private, .offset = &Private.offset },
     });
 
-    pub fn new(parent: *gtk.Window) *Self {
-        return gobject.ext.newInstance(Self, .{
-            .transient_for = parent,
-        });
+    pub fn new() *Self {
+        return gobject.ext.newInstance(Self, .{});
     }
 
     pub fn as(self: *Self, comptime T: type) *T {
@@ -119,15 +120,23 @@ pub const ShellySettingsWindow = extern struct {
         _ = gtk.Button.signals.clicked.connect(p.view_pacfiles_button, *Self, &on_view_pacfiles, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.fix_permissions_button, *Self, &on_fix_permissions, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.purify_button, *Self, &on_purify, self, .{});
+
+        support.connectLifecycle(Self, self);
     }
 
-    fn close_window(self: *Self) void {
-        gtk.Window.destroy(self.as(gtk.Window));
+    pub fn onMap(self: *Self) void {
+        _ = self;
+        // Config load will be wired in a later phase.
+    }
+
+    pub fn onUnmap(self: *Self) void {
+        _ = self;
+        // Nothing to tear down yet; added for parity with other pages.
     }
 
     fn on_save_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
+        _ = self;
         std.debug.print("settings: save (not implemented yet)\n", .{});
-        close_window(self);
     }
 
     fn on_changelog_clicked(_: *gtk.Button, _: *Self) callconv(.c) void {
@@ -175,7 +184,6 @@ pub const ShellySettingsWindow = extern struct {
     }
 
     const template_children = .{
-        .{ "settings_overlay", @offsetOf(Private, "settings_overlay") },
         .{ "settings_stack", @offsetOf(Private, "settings_stack") },
 
         // General

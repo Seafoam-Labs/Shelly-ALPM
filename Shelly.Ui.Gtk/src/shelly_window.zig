@@ -9,7 +9,7 @@ const PackagePage = @import("pages/package_page.zig").PackagePage;
 const AurPage = @import("pages/aur_page.zig").AurPage;
 const UpdatePage = @import("pages/update_page.zig").UpdatePage;
 const SupportPage = @import("pages/support.zig");
-const ShellySettingsWindow = @import("windows/settings_window.zig").ShellySettingsWindow;
+const SettingsPage = @import("pages/settings_page.zig").SettingsPage;
 
 const NavButton = struct {
     button: *gtk.Button,
@@ -144,15 +144,15 @@ pub const ShellyWindow = extern struct {
         gtk.Widget.setMarginTop(menu_box.as(gtk.Widget), 8);
         gtk.Widget.setMarginBottom(menu_box.as(gtk.Widget), 8);
 
-        const settings_btn = gtk.Button.newWithLabel("Settings");
-        gtk.Widget.addCssClass(settings_btn.as(gtk.Widget), "flat");
-        _ = gtk.Button.signals.clicked.connect(settings_btn, *ShellyWindow, &on_settings, self, .{});
-        gtk.Box.append(menu_box, settings_btn.as(gtk.Widget));
-
         const utils_btn = gtk.Button.newWithLabel("Utilities");
         gtk.Widget.addCssClass(utils_btn.as(gtk.Widget), "flat");
         //    _ = gtk.Button.signals.clicked.connect(utils_btn, *ShellyWindow, &on_utils, self, .{});
         gtk.Box.append(menu_box, utils_btn.as(gtk.Widget));
+
+        const sp_btn = gtk.Button.newWithLabel("Settings");
+        gtk.Widget.addCssClass(sp_btn.as(gtk.Widget), "flat");
+        _ = gtk.Button.signals.clicked.connect(sp_btn, *ShellyWindow, &on_settings, self, .{});
+        gtk.Box.append(menu_box, sp_btn.as(gtk.Widget));
 
         gtk.Popover.setChild(popover, menu_box.as(gtk.Widget));
         gtk.MenuButton.setPopover(menu_button, popover);
@@ -197,11 +197,6 @@ pub const ShellyWindow = extern struct {
         gtk.Stack.setVisibleChildName(nb.stack, nb.name);
     }
 
-    fn on_settings(_: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
-        const settings = ShellySettingsWindow.new(self.as(gtk.Window));
-        gtk.Window.present(settings.as(gtk.Window));
-    }
-
     fn on_chevron(_: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
         const p = self.private();
         p.collapsed = !p.collapsed;
@@ -210,6 +205,14 @@ pub const ShellyWindow = extern struct {
         }
         if (p.chevron_img) |img| {
             gtk.Image.setFromIconName(img, if (p.collapsed) "go-next-symbolic" else "go-previous-symbolic");
+        }
+    }
+
+    fn on_settings(btn: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
+        const p = self.private();
+        gtk.Stack.setVisibleChildName(p.content_stack, "settings");
+        if (gtk.Widget.getAncestor(btn.as(gtk.Widget), gtk.Popover.getGObjectType())) |pop| {
+            gtk.Popover.popdown(@ptrCast(@alignCast(pop)));
         }
     }
 
@@ -235,6 +238,10 @@ pub const ShellyWindow = extern struct {
         const up = UpdatePage.new();
         const up_page = gtk.Stack.addTitled(stack, up.as(gtk.Widget), "update", UpdatePage.title);
         gtk.StackPage.setIconName(up_page, UpdatePage.icon_name);
+
+        const sp = SettingsPage.new();
+        const sp_page = gtk.Stack.addTitled(stack, sp.as(gtk.Widget), "settings", SettingsPage.title);
+        gtk.StackPage.setIconName(sp_page, SettingsPage.icon_name);
     }
 
     pub fn showLockout(self: *ShellyWindow, content: *gtk.Widget) void {
