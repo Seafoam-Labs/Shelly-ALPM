@@ -397,7 +397,7 @@ public sealed class PackageManagement(
 
         AddDetail(T("Version"), pkg.Version);
         AddDetail(T("Size"), SizeHelpers.FormatSize(pkg.InstalledSize));
-        AddDetail(T("Last Updated"), pkg.InstallDate.ToString() ?? " ");
+        AddDetail(T("Last Updated"), pkg.InstallDate?.ToString("g") ?? string.Empty);
         if (!string.IsNullOrEmpty(pkg.Url))
         {
             var row = Box.New(Orientation.Horizontal, 12);
@@ -998,7 +998,7 @@ public sealed class PackageManagement(
                 listItem.GetChild() is not Label label) return;
             if (pkgObj.Index < 0 || pkgObj.Index >= _packageData.Count) return;
             var installDate = _packageData[pkgObj.Index].InstallDate;
-            label.SetText(installDate?.ToString("yyyy-MM-dd HH:mm:ss") ?? string.Empty);
+            label.SetText(installDate?.ToLocalTime().ToString("g") ?? string.Empty);
             label.Halign = Align.End;
             label.SetMarginEnd(10);
         };
