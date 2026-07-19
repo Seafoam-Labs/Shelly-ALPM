@@ -66,6 +66,7 @@ public sealed class PackageManagement(
     private ColumnViewColumn _nameColumn = null!;
     private ColumnViewColumn _sizeColumn = null!;
     private ColumnViewColumn _versionColumn = null!;
+    private ColumnViewColumn _lastUpdatedColumn = null!;
 
     private ColumnViewSorter _columnViewSorter = null!;
 
@@ -109,6 +110,8 @@ public sealed class PackageManagement(
         _sizeColumn.Resizable = true;
         _versionColumn = (ColumnViewColumn)builder.GetObject("version_column")!;
         _versionColumn.Resizable = true;
+        _lastUpdatedColumn = (ColumnViewColumn)builder.GetObject("last_updated_column")!;
+        _lastUpdatedColumn.Resizable = true;        
 
         var refreshButton = (Button)builder.GetObject("sync_button")!;
         var localRemoveButton = (Button)builder.GetObject("remove_local_button")!;
@@ -129,11 +132,12 @@ public sealed class PackageManagement(
         _detailRevealer = (Revealer)builder.GetObject("detail_revealer")!;
         _detailBox = (Box)builder.GetObject("detail_box")!;
 
-        SetupColumns(checkColumn, _nameColumn, _sizeColumn, _versionColumn);
+        SetupColumns(checkColumn, _nameColumn, _sizeColumn, _versionColumn, _lastUpdatedColumn);
 
         _nameColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
         _sizeColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
         _versionColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
+        _lastUpdatedColumn.Sorter = CustomSorter.New<AlpmPackageGObject>((_, _) => 0);
 
         _columnViewSorter = (ColumnViewSorter)columnView.GetSorter()!;
 
@@ -393,6 +397,7 @@ public sealed class PackageManagement(
 
         AddDetail(T("Version"), pkg.Version);
         AddDetail(T("Size"), SizeHelpers.FormatSize(pkg.InstalledSize));
+        AddDetail(T("Last Updated"), pkg.InstallDate.ToString() ?? " ");
         if (!string.IsNullOrEmpty(pkg.Url))
         {
             var row = Box.New(Orientation.Horizontal, 12);
@@ -829,7 +834,7 @@ public sealed class PackageManagement(
     }
 
     private void SetupColumns(ColumnViewColumn checkColumn, ColumnViewColumn nameColumn, ColumnViewColumn sizeColumn,
-        ColumnViewColumn versionColumn)
+        ColumnViewColumn versionColumn, ColumnViewColumn lastUpdatedColumn)
     {
         var checkFactory = SignalListItemFactory.New();
         checkFactory.OnSetup += (_, args) =>
@@ -975,10 +980,30 @@ public sealed class PackageManagement(
             if (pkgObj.Index < 0 || pkgObj.Index >= _packageData.Count) return;
             label.SetText(_packageData[pkgObj.Index].Version);
             label.Halign = Align.End;
-            label.SetMarginEnd(10);
         };
 
         versionColumn.SetFactory(versionFactory);
+
+        var lastUpdatedFactory = SignalListItemFactory.New();
+        lastUpdatedFactory.OnSetup += (_, args) =>
+        {
+            if (args.Object is not ColumnViewCell listItem) return;
+            var label = Label.New(string.Empty);
+            listItem.SetChild(label);
+        };
+        lastUpdatedFactory.OnBind += (_, args) =>
+        {
+            if (args.Object is not ColumnViewCell listItem) return;
+            if (listItem.GetItem() is not AlpmPackageGObject pkgObj ||
+                listItem.GetChild() is not Label label) return;
+            if (pkgObj.Index < 0 || pkgObj.Index >= _packageData.Count) return;
+            var installDate = _packageData[pkgObj.Index].InstallDate;
+            label.SetText(installDate?.ToString("yyyy-MM-dd HH:mm:ss") ?? string.Empty);
+            label.Halign = Align.End;
+            label.SetMarginEnd(10);
+        };
+
+        lastUpdatedColumn.SetFactory(lastUpdatedFactory);
     }
 
     private PackageSortColumn? GetSortColumn(ColumnViewColumn column)
