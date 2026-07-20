@@ -124,6 +124,53 @@ pub fn exportKeys(
     try gpg_cli.exportKeys(key_ids);
 }
 
+pub fn lsignKey(
+    io: Io,
+    allocator: std.mem.Allocator,
+    args: []const []const u8,
+    path_env: []const u8,
+    gpgdir: []const u8,
+    key_ids: []const []const u8,
+    stdout: *Io.Writer,
+) !void {
+    try elevate.ensureRoot(io, allocator, args, path_env);
+
+    if (key_ids.len == 0) return error.NoTargetsSpecified;
+
+    const gpg_cli = gpg.Gpg{ .io = io, .homedir = gpgdir };
+
+    if (!try gpg_cli.secretKeysAvailable()) return error.NoSecretKey;
+
+    for (key_ids) |key_id| {
+        try ensureKeyExists(allocator, gpg_cli, key_id);
+    }
+
+    var signed_count: usize = 0;
+    var had_failure = false;
+    for (key_ids) |key_id| {
+        try stdout.print("Locally signing key {s}...\n", .{key_id});
+        try stdout.flush();
+        gpg_cli.locallySignKey(key_id) catch {
+            try stdout.print("{s} could not be locally signed.\n", .{key_id});
+            try stdout.flush();
+            had_failure = true;
+            continue;
+        };
+        signed_count += 1;
+    }
+
+    if (had_failure) return error.GpgFailed;
+
+    if (signed_count > 0) {
+        try stdout.print("Locally signed {d} key(s).\n", .{signed_count});
+        try stdout.flush();
+    }
+
+    try stdout.print("Updating trust database...\n", .{});
+    try stdout.flush();
+    try gpg_cli.checkTrustdb();
+}
+
 pub fn populate(
     io: Io,
     allocator: std.mem.Allocator,

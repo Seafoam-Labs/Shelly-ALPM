@@ -82,6 +82,30 @@ fn run(init: std.process.Init) !void {
             },
             else => return err,
         },
+        .lsign_key => Shelly_Key.keyring.lsignKey(
+            init.io,
+            init.arena.allocator(),
+            args,
+            init.environ_map.get("PATH").?,
+            opts.gpgdir,
+            opts.key_ids,
+            stdout,
+        ) catch |err| switch (err) {
+            error.NoTargetsSpecified => {
+                stderrPrint(init.io, "error: no targets specified.", .{});
+                std.process.exit(1);
+            },
+            error.NoSecretKey => {
+                stderrPrint(init.io, "error: There is no secret key available to sign with.", .{});
+                stderrPrint(init.io, "Use 'shelly-key --init' to generate a default secret key.", .{});
+                std.process.exit(1);
+            },
+            error.GpgFailed => {
+                stderrPrint(init.io, "error: gpg command failed.", .{});
+                std.process.exit(1);
+            },
+            else => return err,
+        },
         .populate => Shelly_Key.keyring.populate(
             init.io,
             init.arena.allocator(),
