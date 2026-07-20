@@ -1,6 +1,25 @@
 const std = @import("std");
 const appimage = @import("bindings.zig").appimage;
+const events = @import("events.zig");
 const xdg_paths = @import("../shared/xdg_paths.zig").xdg_paths;
+const operation_api = @import("operation_context");
+
+const LegacyAppImage = struct {
+    Name: []const u8 = "",
+    DesktopName: []const u8 = "",
+    Version: []const u8 = "",
+    IconName: []const u8 = "",
+    Description: []const u8 = "",
+    SizeOnDisk: i64 = 0,
+    UpdateURl: []const u8 = "",
+    RawUpdateInfo: []const u8 = "",
+    RepoOwner: ?[]const u8 = null,
+    RepoName: ?[]const u8 = null,
+    UpdateType: i64 = 0,
+    AllowPrerelease: bool = false,
+    CommandLineArgs: ?[]const u8 = null,
+    Path: ?[]const u8 = null,
+};
 
 pub const AppImageManager = struct {
     allocator: std.mem.Allocator,
@@ -8,9 +27,54 @@ pub const AppImageManager = struct {
     environ: std.process.Environ,
     install_directory: []const u8,
     local_db_path: []const u8,
+    dispatcher: ?*events.Dispatcher = null,
+    operation_context: ?*operation_api.OperationContext = null,
+    owned_dispatcher: ?*events.Dispatcher = null,
+
+    pub fn setEventDispatcher(self: *AppImageManager, dispatcher: ?*events.Dispatcher) void {
+        self.dispatcher = dispatcher orelse self.owned_dispatcher;
+    }
+
+    /// Borrows a shared context and creates an internal legacy adapter when
+    /// needed. The context must outlive this manager and all active calls.
+    pub fn setOperationContext(self: *AppImageManager, context: ?*operation_api.OperationContext) !void {
+        self.operation_context = context;
+        if (context != null and self.dispatcher == null) {
+            const dispatcher = try self.allocator.create(events.Dispatcher);
+            dispatcher.* = events.Dispatcher.init(self.allocator);
+            self.owned_dispatcher = dispatcher;
+            self.dispatcher = dispatcher;
+        }
+    }
+
+    pub fn deinit(self: *AppImageManager) void {
+        if (self.owned_dispatcher) |dispatcher| {
+            if (self.dispatcher == dispatcher) self.dispatcher = null;
+            dispatcher.deinit();
+            self.allocator.destroy(dispatcher);
+            self.owned_dispatcher = null;
+        }
+        self.operation_context = null;
+    }
+
+    /// Classifies paths by the AppImage extension, matching the established
+    /// C# behavior without opening or executing the file.
+    pub fn isAppImage(file_path: []const u8) bool {
+        return std.ascii.eqlIgnoreCase(std.fs.path.extension(file_path), ".AppImage");
+    }
+
+    pub fn is_app_image(file_path: []const u8) bool {
+        return isAppImage(file_path);
+    }
 
     pub fn installAppImage(self: AppImageManager, location: []const u8) !bool {
+        var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .install, location);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
         const app_name = std.fs.path.stem(location);
+        self.emitStatusFmt(.information, "Installing AppImage {s}...", .{app_name});
         const dest_name = try std.fmt.allocPrint(self.allocator, "{s}.AppImage", .{app_name});
         defer self.allocator.free(dest_name);
         const dest_path = try std.fs.path.join(self.allocator, &.{ self.install_directory, dest_name });
@@ -22,6 +86,7 @@ pub const AppImageManager = struct {
 
         const metadata = (try self.extractMetadata(dest_path)) orelse {
             std.log.err("Failed to extract metadata during installation.", .{});
+            self.emitStatus(.err, "Failed to extract metadata during installation.");
             std.Io.Dir.cwd().deleteFile(self.io, dest_path) catch {};
             return false;
         };
@@ -35,6 +100,7 @@ pub const AppImageManager = struct {
                 std.ascii.eqlIgnoreCase(existing.desktop_name, metadata.desktop_name);
             if (name_match or desktop_match) {
                 std.log.warn("AppImage {s} already exists. Overwriting...", .{existing.name});
+                self.emitStatusFmt(.warning, "AppImage {s} already exists. Overwriting...", .{existing.name});
                 const old_path = if (existing.path.len > 0) existing.path else dest_path;
                 const removed_name = self.cleanDesktopEntries(existing.name, old_path) catch null;
                 if (removed_name) |n| self.allocator.free(n);
@@ -46,10 +112,16 @@ pub const AppImageManager = struct {
         }
 
         try self.addAppImageToLocalDb(metadata);
+        self.emitStatusFmt(.success, "Installed AppImage {s}.", .{app_name});
         return true;
     }
 
     pub fn copyFile(self: AppImageManager, src_path: []const u8, dest_path: []const u8) !void {
+        var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .install, src_path);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
         var src = try std.Io.Dir.cwd().openFile(self.io, src_path, .{});
         defer src.close(self.io);
         var dst = try std.Io.Dir.cwd().createFile(self.io, dest_path, .{});
@@ -61,6 +133,7 @@ pub const AppImageManager = struct {
         var writer = dst.writer(self.io, &write_buf);
 
         while (true) {
+            try self.checkCancelled();
             const n = try reader.interface.readSliceShort(&read_buf);
             if (n == 0) break;
             try writer.interface.writeAll(read_buf[0..n]);
@@ -69,6 +142,11 @@ pub const AppImageManager = struct {
     }
 
     pub fn setExecutable(self: AppImageManager, path: []const u8) !void {
+        var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .configure, path);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
         var proc = try std.process.spawn(self.io, .{
             .argv = &.{ "chmod", "a+x", path },
             .stdin = .ignore,
@@ -79,6 +157,11 @@ pub const AppImageManager = struct {
     }
 
     pub fn extractMetadata(self: AppImageManager, path: []const u8) !?appimage.AppImage {
+        var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .inspect, path);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
         const is_rep = path.len >= 4 and std.ascii.eqlIgnoreCase(path[path.len - 4 ..], ".rep");
         const app_name = if (is_rep)
             std.fs.path.stem(std.fs.path.stem(path))
@@ -378,6 +461,11 @@ pub const AppImageManager = struct {
     }
 
     pub fn getAppImageUpdateInfo(self: AppImageManager, appimage_path: []const u8) ![]const u8 {
+        var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .inspect, appimage_path);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
         var proc = std.process.spawn(self.io, .{
             .argv = &.{ appimage_path, "--appimage-updateinfo" },
             .stdin = .ignore,
@@ -401,6 +489,11 @@ pub const AppImageManager = struct {
     }
 
     pub fn getAppImagesFromLocalDb(self: AppImageManager) ![]appimage.AppImage {
+        var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .search, self.local_db_path);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
         var file = std.Io.Dir.cwd().openFile(self.io, self.local_db_path, .{}) catch |err| switch (err) {
             error.FileNotFound => return &.{},
             else => return err,
@@ -412,48 +505,132 @@ pub const AppImageManager = struct {
         const contents = try reader.interface.allocRemaining(self.allocator, .unlimited);
         defer self.allocator.free(contents);
 
-        const parsed = std.json.parseFromSlice([]appimage.AppImage, self.allocator, contents, .{}) catch |err| {
-            std.log.err("Error reading AppImage local DB: {s}", .{@errorName(err)});
+        if (std.json.parseFromSlice([]appimage.AppImage, self.allocator, contents, .{})) |parsed| {
+            defer parsed.deinit();
+            return try self.cloneAppImages(parsed.value);
+        } else |_| {}
+
+        const parsed = std.json.parseFromSlice([]LegacyAppImage, self.allocator, contents, .{
+            .ignore_unknown_fields = true,
+        }) catch |err| {
+            std.log.warn("Error reading AppImage local DB: {s}", .{@errorName(err)});
             return &.{};
         };
         defer parsed.deinit();
 
-        const result = try self.allocator.alloc(appimage.AppImage, parsed.value.len);
-        for (parsed.value, result) |src, *dst| {
-            dst.* = .{
-                .name = try self.allocator.dupe(u8, src.name),
-                .version = try self.allocator.dupe(u8, src.version),
-                .raw_update_info = try self.allocator.dupe(u8, src.raw_update_info),
-                .icon_name = try self.allocator.dupe(u8, src.icon_name),
-                .description = try self.allocator.dupe(u8, src.description),
-                .desktop_name = try self.allocator.dupe(u8, src.desktop_name),
-                .size_on_disk = src.size_on_disk,
-                .command_line_args = try self.allocator.dupe(u8, src.command_line_args),
-                .path = try self.allocator.dupe(u8, src.path),
-                .update_url = try self.allocator.dupe(u8, src.update_url),
-                .update_type = src.update_type,
-                .repo_owner = if (src.repo_owner) |v| try self.allocator.dupe(u8, v) else null,
-                .repo_name = if (src.repo_name) |v| try self.allocator.dupe(u8, v) else null,
-                .allow_prerelease = src.allow_prerelease,
-            };
+        const result = self.convertLegacyAppImages(parsed.value) catch |err| switch (err) {
+            error.InvalidLegacySizeOnDisk, error.UnsupportedLegacyUpdateType => {
+                std.log.warn("Error reading AppImage local DB: {s}", .{@errorName(err)});
+                return &.{};
+            },
+            else => return err,
+        };
+        errdefer self.freeAppImages(result);
+        try self.persistAppImages(result);
+        return result;
+    }
+
+    fn cloneAppImages(self: AppImageManager, source: []const appimage.AppImage) ![]appimage.AppImage {
+        const result = try self.allocator.alloc(appimage.AppImage, source.len);
+        errdefer self.allocator.free(result);
+
+        var initialized: usize = 0;
+        errdefer for (result[0..initialized]) |item| self.freeAppImage(item);
+
+        for (source) |item| {
+            result[initialized] = try self.cloneAppImage(item);
+            initialized += 1;
         }
         return result;
     }
 
-    pub fn addAppImageToLocalDb(self: AppImageManager, appimage_struct: appimage.AppImage) !void {
-        const existing = try self.getAppImagesFromLocalDb();
-        defer self.freeAppImages(existing);
+    fn cloneAppImage(self: AppImageManager, source: appimage.AppImage) !appimage.AppImage {
+        const name = try self.allocator.dupe(u8, source.name);
+        errdefer self.allocator.free(name);
+        const version = try self.allocator.dupe(u8, source.version);
+        errdefer self.allocator.free(version);
+        const raw_update_info = try self.allocator.dupe(u8, source.raw_update_info);
+        errdefer self.allocator.free(raw_update_info);
+        const icon_name = try self.allocator.dupe(u8, source.icon_name);
+        errdefer self.allocator.free(icon_name);
+        const description = try self.allocator.dupe(u8, source.description);
+        errdefer self.allocator.free(description);
+        const desktop_name = try self.allocator.dupe(u8, source.desktop_name);
+        errdefer self.allocator.free(desktop_name);
+        const command_line_args = try self.allocator.dupe(u8, source.command_line_args);
+        errdefer self.allocator.free(command_line_args);
+        const path = try self.allocator.dupe(u8, source.path);
+        errdefer self.allocator.free(path);
+        const update_url = try self.allocator.dupe(u8, source.update_url);
+        errdefer self.allocator.free(update_url);
+        const repo_owner: ?[]const u8 = if (source.repo_owner) |value| try self.allocator.dupe(u8, value) else null;
+        errdefer if (repo_owner) |value| self.allocator.free(value);
+        const repo_name: ?[]const u8 = if (source.repo_name) |value| try self.allocator.dupe(u8, value) else null;
+        errdefer if (repo_name) |value| self.allocator.free(value);
 
-        var list: std.ArrayList(appimage.AppImage) = .empty;
-        defer list.deinit(self.allocator);
+        return .{
+            .name = name,
+            .version = version,
+            .raw_update_info = raw_update_info,
+            .icon_name = icon_name,
+            .description = description,
+            .desktop_name = desktop_name,
+            .size_on_disk = source.size_on_disk,
+            .command_line_args = command_line_args,
+            .path = path,
+            .update_url = update_url,
+            .update_type = source.update_type,
+            .repo_owner = repo_owner,
+            .repo_name = repo_name,
+            .allow_prerelease = source.allow_prerelease,
+        };
+    }
 
-        for (existing) |item| {
-            if (appimage_struct.desktop_name.len > 0 and std.ascii.eqlIgnoreCase(item.desktop_name, appimage_struct.desktop_name)) continue;
-            try list.append(self.allocator, item);
+    fn convertLegacyAppImages(self: AppImageManager, source: []const LegacyAppImage) ![]appimage.AppImage {
+        const result = try self.allocator.alloc(appimage.AppImage, source.len);
+        errdefer self.allocator.free(result);
+
+        var initialized: usize = 0;
+        errdefer for (result[0..initialized]) |item| self.freeAppImage(item);
+
+        for (source) |item| {
+            const size_on_disk = std.math.cast(u64, item.SizeOnDisk) orelse return error.InvalidLegacySizeOnDisk;
+            const update_type = try legacyUpdateType(item.UpdateType);
+            result[initialized] = try self.cloneAppImage(.{
+                .name = item.Name,
+                .version = item.Version,
+                .raw_update_info = item.RawUpdateInfo,
+                .icon_name = item.IconName,
+                .description = item.Description,
+                .desktop_name = item.DesktopName,
+                .size_on_disk = size_on_disk,
+                .command_line_args = item.CommandLineArgs orelse "",
+                .path = item.Path orelse "",
+                .update_url = item.UpdateURl,
+                .update_type = update_type,
+                .repo_owner = item.RepoOwner,
+                .repo_name = item.RepoName,
+                .allow_prerelease = item.AllowPrerelease,
+            });
+            initialized += 1;
         }
-        try list.append(self.allocator, appimage_struct);
+        return result;
+    }
 
-        const json_bytes = try std.json.Stringify.valueAlloc(self.allocator, list.items, .{ .whitespace = .indent_2 });
+    fn legacyUpdateType(value: i64) !appimage.UpdateType {
+        return switch (value) {
+            0 => .none,
+            1 => .static_url,
+            2 => .github,
+            3 => .gitlab,
+            4 => .codeberg,
+            5 => .forgejo,
+            else => error.UnsupportedLegacyUpdateType,
+        };
+    }
+
+    fn persistAppImages(self: AppImageManager, items: []const appimage.AppImage) !void {
+        const json_bytes = try std.json.Stringify.valueAlloc(self.allocator, items, .{ .whitespace = .indent_2 });
         defer self.allocator.free(json_bytes);
 
         if (std.fs.path.dirname(self.local_db_path)) |dir| {
@@ -468,8 +645,38 @@ pub const AppImageManager = struct {
         try writer.interface.flush();
     }
 
+    pub fn addAppImageToLocalDb(self: AppImageManager, appimage_struct: appimage.AppImage) !void {
+        var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .configure, appimage_struct.name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
+        const existing = try self.getAppImagesFromLocalDb();
+        defer self.freeAppImages(existing);
+
+        var list: std.ArrayList(appimage.AppImage) = .empty;
+        defer list.deinit(self.allocator);
+
+        for (existing) |item| {
+            const same_name = std.ascii.eqlIgnoreCase(item.name, appimage_struct.name);
+            const same_desktop_name = appimage_struct.desktop_name.len > 0 and
+                std.ascii.eqlIgnoreCase(item.desktop_name, appimage_struct.desktop_name);
+            if (same_name or same_desktop_name) continue;
+            try list.append(self.allocator, item);
+        }
+        try list.append(self.allocator, appimage_struct);
+
+        try self.persistAppImages(list.items);
+    }
+
     pub fn removeAppImage(self: AppImageManager, appimage_path: []const u8, remove_config_files: bool) !bool {
+        var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .remove, appimage_path);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
         const app_name = std.fs.path.stem(appimage_path);
+        self.emitStatusFmt(.information, "Removing AppImage {s}...", .{app_name});
         const clean_name = try self.cleanInvalidNames(app_name);
         defer self.allocator.free(clean_name);
 
@@ -481,14 +688,7 @@ pub const AppImageManager = struct {
         for (existing) |item| {
             if (!std.ascii.eqlIgnoreCase(item.name, app_name)) try list.append(self.allocator, item);
         }
-        const json_bytes = try std.json.Stringify.valueAlloc(self.allocator, list.items, .{ .whitespace = .indent_2 });
-        defer self.allocator.free(json_bytes);
-        var db_file = try std.Io.Dir.cwd().createFile(self.io, self.local_db_path, .{});
-        defer db_file.close(self.io);
-        var write_buf: [4096]u8 = undefined;
-        var writer = db_file.writer(self.io, &write_buf);
-        try writer.interface.writeAll(json_bytes);
-        try writer.interface.flush();
+        try self.persistAppImages(list.items);
 
         std.Io.Dir.cwd().deleteFile(self.io, appimage_path) catch {};
 
@@ -504,6 +704,7 @@ pub const AppImageManager = struct {
             defer d.close(self.io);
             var it = d.iterate();
             while (it.next(self.io) catch null) |entry| {
+                try self.checkCancelled();
                 if (entry.kind != .file) continue;
                 if (!std.ascii.eqlIgnoreCase(std.fs.path.stem(entry.name), clean_name)) continue;
                 const icon_path = std.fs.path.join(self.allocator, &.{ icon_dir, entry.name }) catch continue;
@@ -516,15 +717,32 @@ pub const AppImageManager = struct {
             self.removeAppConfigDirectories(desktop_app_name);
         }
 
+        self.emitStatusFmt(.success, "Removed AppImage {s}.", .{app_name});
         return true;
     }
 
     pub fn syncAppImageMeta(self: AppImageManager, app_image_names: []const []const u8) !bool {
+        var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .sync, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
+        self.emitStatus(.information, "Synchronizing AppImage metadata...");
         const db_images = try self.getAppImagesFromLocalDb();
         defer self.freeAppImages(db_images);
         var success = true;
 
-        for (app_image_names) |app_name| {
+        for (app_image_names, 0..) |app_name, app_index| {
+            try self.checkCancelled();
+            if (self.dispatcher) |dispatcher| {
+                if (dispatcher.operation) |operation| operation.progress(.{
+                    .stage = "metadata",
+                    .completed = app_index,
+                    .total = app_image_names.len,
+                    .percentage = if (app_image_names.len == 0) 100 else @as(f64, @floatFromInt(app_index)) * 100.0 / @as(f64, @floatFromInt(app_image_names.len)),
+                    .message = app_name,
+                });
+            }
             const existing: ?appimage.AppImage = blk: {
                 for (db_images) |img| {
                     if (std.ascii.eqlIgnoreCase(img.name, app_name)) break :blk img;
@@ -601,6 +819,10 @@ pub const AppImageManager = struct {
             };
         }
 
+        self.emitStatus(
+            if (success) .success else .warning,
+            if (success) "AppImage metadata synchronized." else "Some AppImage metadata could not be synchronized.",
+        );
         return success;
     }
 
@@ -623,7 +845,7 @@ pub const AppImageManager = struct {
         const desktop_file_path = try std.fs.path.join(self.allocator, &.{ desktop_dir, desktop_file_name });
         defer self.allocator.free(desktop_file_path);
 
-        std.Io.Dir.cwd().statFile(self.io, desktop_file_path, .{}) catch return;
+        _ = std.Io.Dir.cwd().statFile(self.io, desktop_file_path, .{}) catch return;
 
         const contents = try self.readFileAllocOwned(desktop_file_path);
         defer self.allocator.free(contents);
@@ -806,6 +1028,28 @@ pub const AppImageManager = struct {
         return buf;
     }
 
+    fn emitStatus(self: AppImageManager, kind: events.StatusKind, message: []const u8) void {
+        if (self.dispatcher) |dispatcher| dispatcher.raiseStatus(.{ .kind = kind, .message = message });
+    }
+
+    fn checkCancelled(self: AppImageManager) error{Cancelled}!void {
+        if (self.dispatcher) |dispatcher| {
+            if (dispatcher.operation) |operation| try operation.checkCancelled();
+        }
+        if (self.operation_context) |context| {
+            if (context.isCancelled()) return error.Cancelled;
+        }
+    }
+
+    fn emitStatusFmt(self: AppImageManager, kind: events.StatusKind, comptime format: []const u8, args: anytype) void {
+        const message = std.fmt.allocPrint(self.allocator, format, args) catch {
+            self.emitStatus(kind, "AppImage operation status unavailable.");
+            return;
+        };
+        defer self.allocator.free(message);
+        self.emitStatus(kind, message);
+    }
+
     pub fn freeAppImage(self: AppImageManager, appimage_struct: appimage.AppImage) void {
         self.allocator.free(appimage_struct.name);
         self.allocator.free(appimage_struct.version);
@@ -825,6 +1069,30 @@ pub const AppImageManager = struct {
         self.allocator.free(appimage_structs);
     }
 };
+
+fn writeTestAppImageDb(path: []const u8, contents: []const u8) !void {
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, path, .{});
+    defer file.close(std.testing.io);
+    var write_buf: [4096]u8 = undefined;
+    var writer = file.writer(std.testing.io, &write_buf);
+    try writer.interface.writeAll(contents);
+    try writer.interface.flush();
+}
+
+fn readTestAppImageDb(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
+    var file = try std.Io.Dir.cwd().openFile(std.testing.io, path, .{});
+    defer file.close(std.testing.io);
+    var read_buf: [4096]u8 = undefined;
+    var reader = file.reader(std.testing.io, &read_buf);
+    return reader.interface.allocRemaining(allocator, .unlimited);
+}
+
+test "AppImage classification is case insensitive and extension based" {
+    try std.testing.expect(AppImageManager.isAppImage("Example.AppImage"));
+    try std.testing.expect(AppImageManager.is_app_image("/tmp/Example.appimage"));
+    try std.testing.expect(!AppImageManager.isAppImage("Example.AppImage.zsync"));
+    try std.testing.expect(!AppImageManager.isAppImage("AppImage"));
+}
 
 test "cleanInvalidNames lowercases and replaces separators" {
     var tmp = std.testing.tmpDir(.{});
@@ -909,6 +1177,296 @@ test "getAppImagesFromLocalDb returns empty when db file does not exist" {
     const result = try manager.getAppImagesFromLocalDb();
     defer manager.freeAppImages(result);
     try std.testing.expectEqual(0, result.len);
+}
+
+test "getAppImagesFromLocalDb maps C# AppImage V2 fields" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
+    defer std.testing.allocator.free(db_path);
+
+    try writeTestAppImageDb(db_path,
+        \\[
+        \\  {
+        \\    "Name": "LegacyApp",
+        \\    "DesktopName": "Legacy App",
+        \\    "Version": "2.3.4",
+        \\    "IconName": "legacy-icon",
+        \\    "Description": "Legacy description",
+        \\    "SizeOnDisk": 123456,
+        \\    "UpdateURl": "https://example.test/LegacyApp.AppImage",
+        \\    "RawUpdateInfo": "zsync|https://example.test/LegacyApp.zsync",
+        \\    "RepoOwner": "shelly",
+        \\    "RepoName": "legacy-app",
+        \\    "UpdateType": 4,
+        \\    "AllowPrerelease": true,
+        \\    "CommandLineArgs": "--safe-mode",
+        \\    "Path": "/opt/appimages/LegacyApp.AppImage"
+        \\  }
+        \\]
+    );
+
+    const manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = std.testing.environ,
+        .install_directory = dir_path,
+        .local_db_path = db_path,
+    };
+    const result = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(result);
+
+    try std.testing.expectEqual(@as(usize, 1), result.len);
+    const item = result[0];
+    try std.testing.expectEqualStrings("LegacyApp", item.name);
+    try std.testing.expectEqualStrings("Legacy App", item.desktop_name);
+    try std.testing.expectEqualStrings("2.3.4", item.version);
+    try std.testing.expectEqualStrings("legacy-icon", item.icon_name);
+    try std.testing.expectEqualStrings("Legacy description", item.description);
+    try std.testing.expectEqual(@as(u64, 123456), item.size_on_disk);
+    try std.testing.expectEqualStrings("https://example.test/LegacyApp.AppImage", item.update_url);
+    try std.testing.expectEqualStrings("zsync|https://example.test/LegacyApp.zsync", item.raw_update_info);
+    try std.testing.expectEqualStrings("shelly", item.repo_owner.?);
+    try std.testing.expectEqualStrings("legacy-app", item.repo_name.?);
+    try std.testing.expectEqual(appimage.UpdateType.codeberg, item.update_type);
+    try std.testing.expect(item.allow_prerelease);
+    try std.testing.expectEqualStrings("--safe-mode", item.command_line_args);
+    try std.testing.expectEqualStrings("/opt/appimages/LegacyApp.AppImage", item.path);
+}
+
+test "getAppImagesFromLocalDb normalizes nullable C# strings" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
+    defer std.testing.allocator.free(db_path);
+
+    try writeTestAppImageDb(db_path,
+        \\[
+        \\  {
+        \\    "Name": "NullableApp",
+        \\    "RepoOwner": null,
+        \\    "RepoName": null,
+        \\    "CommandLineArgs": null,
+        \\    "Path": null
+        \\  }
+        \\]
+    );
+
+    const manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = std.testing.environ,
+        .install_directory = dir_path,
+        .local_db_path = db_path,
+    };
+    const result = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(result);
+
+    try std.testing.expectEqual(@as(usize, 1), result.len);
+    try std.testing.expectEqualStrings("", result[0].command_line_args);
+    try std.testing.expectEqualStrings("", result[0].path);
+    try std.testing.expect(result[0].repo_owner == null);
+    try std.testing.expect(result[0].repo_name == null);
+}
+
+test "getAppImagesFromLocalDb maps every C# update type" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
+    defer std.testing.allocator.free(db_path);
+
+    try writeTestAppImageDb(db_path,
+        \\[
+        \\  { "Name": "None", "UpdateType": 0 },
+        \\  { "Name": "Static", "UpdateType": 1 },
+        \\  { "Name": "GitHub", "UpdateType": 2 },
+        \\  { "Name": "GitLab", "UpdateType": 3 },
+        \\  { "Name": "Codeberg", "UpdateType": 4 },
+        \\  { "Name": "Forgejo", "UpdateType": 5 }
+        \\]
+    );
+
+    const manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = std.testing.environ,
+        .install_directory = dir_path,
+        .local_db_path = db_path,
+    };
+    const result = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(result);
+
+    const expected = [_]appimage.UpdateType{ .none, .static_url, .github, .gitlab, .codeberg, .forgejo };
+    try std.testing.expectEqual(expected.len, result.len);
+    for (result, expected) |item, update_type| {
+        try std.testing.expectEqual(update_type, item.update_type);
+    }
+}
+
+test "getAppImagesFromLocalDb rejects unsupported C# update type" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const source = "[{\"Name\":\"FutureApp\",\"UpdateType\":6}]";
+    try writeTestAppImageDb(db_path, source);
+
+    const manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = std.testing.environ,
+        .install_directory = dir_path,
+        .local_db_path = db_path,
+    };
+    const result = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(result);
+    try std.testing.expectEqual(@as(usize, 0), result.len);
+
+    const contents = try readTestAppImageDb(std.testing.allocator, db_path);
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings(source, contents);
+}
+
+test "getAppImagesFromLocalDb migrates C# database and second load is native" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
+    defer std.testing.allocator.free(db_path);
+
+    try writeTestAppImageDb(db_path,
+        \\[
+        \\  {
+        \\    "Name": "MigratedApp",
+        \\    "DesktopName": "Migrated App",
+        \\    "Version": "1.0.0",
+        \\    "UpdateType": 2,
+        \\    "UpdateVersion": "ignored legacy field",
+        \\    "CommandLineArgs": null,
+        \\    "Path": null
+        \\  }
+        \\]
+    );
+
+    const manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = std.testing.environ,
+        .install_directory = dir_path,
+        .local_db_path = db_path,
+    };
+    const first = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(first);
+    try std.testing.expectEqual(@as(usize, 1), first.len);
+    try std.testing.expectEqual(appimage.UpdateType.github, first[0].update_type);
+
+    const canonical = try readTestAppImageDb(std.testing.allocator, db_path);
+    defer std.testing.allocator.free(canonical);
+    try std.testing.expect(std.mem.indexOf(u8, canonical, "\"name\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, canonical, "\"update_type\": \"github\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, canonical, "\"Name\"") == null);
+    try std.testing.expect(std.mem.indexOf(u8, canonical, "UpdateVersion") == null);
+
+    const parsed = try std.json.parseFromSlice([]appimage.AppImage, std.testing.allocator, canonical, .{});
+    defer parsed.deinit();
+    try std.testing.expectEqual(@as(usize, 1), parsed.value.len);
+
+    const second = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(second);
+    try std.testing.expectEqualStrings(first[0].name, second[0].name);
+    try std.testing.expectEqual(first[0].update_type, second[0].update_type);
+    try std.testing.expectEqualStrings(first[0].command_line_args, second[0].command_line_args);
+    try std.testing.expectEqualStrings(first[0].path, second[0].path);
+
+    const after_second_load = try readTestAppImageDb(std.testing.allocator, db_path);
+    defer std.testing.allocator.free(after_second_load);
+    try std.testing.expectEqualStrings(canonical, after_second_load);
+}
+
+test "getAppImagesFromLocalDb leaves native database unchanged" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const source = "[{\"name\":\"NativeApp\",\"version\":\"4.0.0\",\"update_type\":\"forgejo\"}]";
+    try writeTestAppImageDb(db_path, source);
+
+    const manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = std.testing.environ,
+        .install_directory = dir_path,
+        .local_db_path = db_path,
+    };
+    const result = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(result);
+    try std.testing.expectEqual(@as(usize, 1), result.len);
+    try std.testing.expectEqual(appimage.UpdateType.forgejo, result[0].update_type);
+
+    const contents = try readTestAppImageDb(std.testing.allocator, db_path);
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings(source, contents);
+}
+
+test "getAppImagesFromLocalDb leaves malformed C# database unchanged" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const source = "[{\"Name\":\"BrokenApp\",\"UpdateType\":\"GitHub\"}]";
+    try writeTestAppImageDb(db_path, source);
+
+    const manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = std.testing.environ,
+        .install_directory = dir_path,
+        .local_db_path = db_path,
+    };
+    const result = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(result);
+    try std.testing.expectEqual(@as(usize, 0), result.len);
+
+    const contents = try readTestAppImageDb(std.testing.allocator, db_path);
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings(source, contents);
 }
 
 test "addAppImageToLocalDb then getAppImagesFromLocalDb round-trips a single entry" {

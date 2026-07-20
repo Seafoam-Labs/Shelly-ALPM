@@ -1,7 +1,7 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgname=shelly
-pkgver=2.4.1.2
+pkgver=2.4.1.4
 pkgrel=1
 pkgdesc="Shelly: A Modern Arch Package Manager"
 arch=('x86_64')
@@ -32,7 +32,7 @@ optdepends=(
     'zsh: Zsh shell completions'
     'libstarfish: dependency viewer for arch packages'
 )
-makedepends=('dotnet-sdk-10.0' 'clang' 'gettext' 'vala' 'meson' 'ninja')
+makedepends=('dotnet-sdk-10.0' 'zig' 'clang' 'gettext' 'vala' 'meson' 'ninja')
 
 # Source tarball from GitHub release
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/archive/v${pkgver}.tar.gz")
@@ -46,7 +46,7 @@ build() {
   dotnet publish Shelly.Gtk/Shelly.Gtk.csproj -c Release -r linux-x64 -o out --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
   meson setup --prefix=/usr build-notify Shelly.Notifications
   meson compile -C build-notify
-  dotnet publish Shelly.Keys/Shelly.Keys.csproj -c Release -r linux-x64 -o out-keys --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
+  (cd Shelly.Key && zig build -p ../out-key)
 
   # Generate shell completions from the freshly built CLI binary
   ./out-cli/shelly completions fish > shelly.fish
@@ -81,8 +81,8 @@ package() {
   # Install Shelly.Cli binary
   install -Dm755 out-cli/shelly "$pkgdir/usr/bin/shelly"
 
-  # Install Shelly.Keys binary
-  install -Dm755 out-keys/shelly-keys "$pkgdir/usr/bin/shelly-keys"
+  # Install Shelly.Key binary
+  install -Dm755 out-key/bin/shelly-key "$pkgdir/usr/bin/shelly-key"
 
   # Install desktop entry
   cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/com.shellyorg.shelly.desktop"

@@ -1,0 +1,12 @@
+.{
+    .name = .ShellyHttp,
+    .version = "0.1.0",
+    .fingerprint = 0x1ff5cec08b3ad0fe,
+    .minimum_zig_version = "0.16.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "http_client.zig",
+        "tls_client.zig",
+    },
+}

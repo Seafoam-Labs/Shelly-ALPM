@@ -1,4 +1,6 @@
 const std = @import("std");
+const operations = @import("operation_context");
+const HttpClient = @import("http_client.zig");
 
 pub const DownloadEventType = enum {
     Start,
@@ -16,7 +18,10 @@ pub const DownloadError = error{
     Timeout,
     RetryExceeded,
     SslError,
+    CertificateBundleError,
     NotModified,
+    FailedDownload,
+    Cancelled,
 };
 
 pub const SkippedReason = enum {
@@ -67,9 +72,12 @@ pub const CoreDownloader = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
     configuration: DownloadConfiguration,
-    http_client: std.http.Client,
+    http_client: HttpClient,
     event_callback: ?DownloadEventCallback = null,
     event_context: ?*anyopaque = null,
+    operation_context: ?*operations.OperationContext = null,
+    parent_operation: ?*const operations.Operation = null,
+    active_operation: ?*operations.Operation = null,
     /// When true, error-level logging is suppressed for best-effort downloads
     /// (e.g. optional database signatures that may legitimately be absent).
     quiet: bool = false,
@@ -88,8 +96,27 @@ pub const CoreDownloader = struct {
         self.event_context = context;
     }
 
+    /// The context and optional parent operation are borrowed. They must remain
+    /// valid until the current synchronous download call returns.
+    pub fn setOperationContext(self: *CoreDownloader, context: ?*operations.OperationContext) void {
+        self.operation_context = context;
+    }
+
+    pub fn setParentOperation(self: *CoreDownloader, parent: ?*const operations.Operation) void {
+        self.parent_operation = parent;
+        if (parent) |operation| self.operation_context = operation.context;
+    }
+
     pub fn deinit(self: *CoreDownloader) void {
         self.http_client.deinit();
+    }
+
+    fn resetHttpClient(self: *CoreDownloader) void {
+        self.http_client.deinit();
+        self.http_client = .{
+            .allocator = self.allocator,
+            .io = self.io,
+        };
     }
 
     pub fn downloadToFile(
@@ -98,8 +125,48 @@ pub const CoreDownloader = struct {
         destination_path: []const u8,
         force: bool,
     ) DownloadResult {
+        var operation_storage: operations.Operation = undefined;
+        const has_operation = if (self.parent_operation) |parent| blk: {
+            operation_storage = parent.child(.{
+                .backend = .download,
+                .kind = .download,
+                .subject = destination_path,
+            });
+            break :blk true;
+        } else if (self.operation_context) |context| blk: {
+            operation_storage = context.begin(.{
+                .backend = .download,
+                .kind = .download,
+                .subject = destination_path,
+            });
+            break :blk true;
+        } else false;
+
+        const previous_operation = self.active_operation;
+        if (has_operation) self.active_operation = &operation_storage;
+        defer self.active_operation = previous_operation;
+
+        const result = self.downloadToFileImpl(url, destination_path, force);
+        if (has_operation) switch (result) {
+            .succes, .skipped => operation_storage.finish(.success),
+            .failure => |err| operation_storage.finish(if (err == DownloadError.Cancelled) .cancelled else .failed),
+        };
+        return result;
+    }
+
+    fn downloadToFileImpl(
+        self: *CoreDownloader,
+        url: []const u8,
+        destination_path: []const u8,
+        force: bool,
+    ) DownloadResult {
         var attempt: u8 = 0;
+        var tls_reset_used = false;
         while (true) : (attempt += 1) {
+            if (self.isCancelled()) {
+                self.emitEvent(.{ .event_type = .Error, .download_error = DownloadError.Cancelled, .destination_path = destination_path });
+                return .{ .failure = DownloadError.Cancelled };
+            }
             if (attempt > 0) {
                 self.io.sleep(
                     std.Io.Duration.fromSeconds(@intCast(self.configuration.retry_delay_secs)),
@@ -114,21 +181,30 @@ pub const CoreDownloader = struct {
                     self.emitEvent(.{ .event_type = .Skipped, .destination_path = destination_path });
                     return .{ .skipped = .{ .destination_path = destination_path, .reason = .NotModified } };
                 }
-                const can_retry = isRetryable(err) and attempt < self.configuration.max_retries;
-                if (!can_retry) {
-                    const final_err = if (isRetryable(err)) DownloadError.RetryExceeded else err;
-                    self.emitEvent(.{
-                        .event_type = .Error,
-                        .download_error = final_err,
-                        .destination_path = destination_path,
-                    });
-                    return .{ .failure = final_err };
+                switch (retryAction(err, attempt, self.configuration.max_retries, tls_reset_used)) {
+                    .retry => {},
+                    .reset_tls_and_retry => {
+                        // Recreate the client once so the next attempt gets a fresh
+                        // connection pool, CA bundle, and cached realtime value.
+                        tls_reset_used = true;
+                        self.resetHttpClient();
+                    },
+                    .stop => {
+                        const final_err = if (isRetryable(err)) DownloadError.RetryExceeded else err;
+                        self.emitEvent(.{
+                            .event_type = .Error,
+                            .download_error = final_err,
+                            .destination_path = destination_path,
+                        });
+                        return .{ .failure = final_err };
+                    },
                 }
             }
         }
     }
 
     fn performDownload(self: *CoreDownloader, url: []const u8, destination_path: []const u8, force: bool) DownloadError!void {
+        if (self.isCancelled()) return DownloadError.Cancelled;
         const uri = std.Uri.parse(url) catch return DownloadError.InvalidUrl;
 
         var ims_buf: [64]u8 = undefined;
@@ -143,15 +219,15 @@ pub const CoreDownloader = struct {
             } else |_| {}
         }
 
-        const user_agent: std.http.Client.Request.Headers.Value = if (self.configuration.user_agent) |agent|
+        const user_agent: HttpClient.Request.Headers.Value = if (self.configuration.user_agent) |agent|
             .{ .override = agent }
         else
             .default;
-        var req = self.http_client.request(.GET, uri, .{
-            .headers = .{ .user_agent = user_agent, .accept_encoding = .{ .override = "identity" } },
-            .extra_headers = extra_headers,
-            .redirect_behavior = .init(10),
-        }) catch |err| {
+        var req = self.http_client.request(
+            .GET,
+            uri,
+            downloadRequestOptions(user_agent, extra_headers),
+        ) catch |err| {
             self.logErr("HTTP request setup failed for {s}: {}", .{ url, err });
             return mapRequestError(err);
         };
@@ -216,6 +292,7 @@ pub const CoreDownloader = struct {
         var last_reported: u64 = 0;
 
         while (true) {
+            if (self.isCancelled()) return DownloadError.Cancelled;
             const n = body_reader.readSliceShort(copy_buffer) catch {
                 self.logErr("Read failed while downloading {s}: {?}", .{ url, response.bodyErr() });
                 return DownloadError.NetworkError;
@@ -282,6 +359,35 @@ pub const CoreDownloader = struct {
 
     fn emitEvent(self: *const CoreDownloader, event: DownloadEvent) void {
         if (self.event_callback) |callback| callback(self.event_context, event);
+        const operation = self.active_operation orelse return;
+        switch (event.event_type) {
+            .Start => operation.status(.information, "Download started", "download.start", null),
+            .Progress => if (event.progress) |progress| operation.progress(.{
+                .stage = "download",
+                .completed = progress.bytes_downloaded,
+                .total = progress.bytes_total,
+                .percentage = @floatFromInt(progress.percent),
+                .bytes_completed = progress.bytes_downloaded,
+                .bytes_total = progress.bytes_total,
+                .bytes_per_second = progress.speed_bytes_per_sec,
+            }),
+            .Complete => operation.status(.success, "Download completed", "download.complete", null),
+            .Error => if (event.download_error) |download_error| operation.reportError(
+                download_error,
+                @errorName(download_error),
+                "download",
+                null,
+                false,
+            ),
+            .Skipped => operation.status(.information, "Download skipped", "download.skipped", null),
+        }
+    }
+
+    fn isCancelled(self: *const CoreDownloader) bool {
+        if (self.active_operation) |operation| return operation.isCancelled();
+        if (self.parent_operation) |operation| return operation.isCancelled();
+        if (self.operation_context) |context| return context.isCancelled();
+        return false;
     }
 
     /// Logs at error level unless `quiet` is set, used so best-effort downloads
@@ -290,6 +396,22 @@ pub const CoreDownloader = struct {
         if (!self.quiet) std.log.err(fmt, args);
     }
 };
+
+fn downloadRequestOptions(
+    user_agent: HttpClient.Request.Headers.Value,
+    extra_headers: []const std.http.Header,
+) HttpClient.RequestOptions {
+    return .{
+        .headers = .{ .user_agent = user_agent, .accept_encoding = .{ .override = "identity" } },
+        .extra_headers = extra_headers,
+        .redirect_behavior = .init(10),
+        // A 304 response may legally advertise the selected representation's
+        // Content-Length while carrying no body. Closing the request instead
+        // of pooling it prevents cleanup from waiting for those nonexistent
+        // bytes.
+        .keep_alive = false,
+    };
+}
 
 fn makeProgress(downloaded: u64, total: ?u64, speed: ?u64) DownloadProgress {
     const percent: u8 = if (total) |t|
@@ -338,15 +460,29 @@ fn isRetryable(err: DownloadError) bool {
     };
 }
 
-fn mapRequestError(err: std.http.Client.RequestError) DownloadError {
+const RetryAction = enum {
+    stop,
+    retry,
+    reset_tls_and_retry,
+};
+
+fn retryAction(err: DownloadError, attempt: u8, max_retries: u8, tls_reset_used: bool) RetryAction {
+    if (attempt >= max_retries) return .stop;
+    if (err == DownloadError.SslError and !tls_reset_used) return .reset_tls_and_retry;
+    if (isRetryable(err)) return .retry;
+    return .stop;
+}
+
+fn mapRequestError(err: HttpClient.RequestError) DownloadError {
     return switch (err) {
         error.UnsupportedUriScheme, error.UriMissingHost => DownloadError.InvalidUrl,
-        error.TlsInitializationFailed, error.CertificateBundleLoadFailure => DownloadError.SslError,
+        error.TlsInitializationFailed => DownloadError.SslError,
+        error.CertificateBundleLoadFailure => DownloadError.CertificateBundleError,
         else => DownloadError.NetworkError,
     };
 }
 
-fn mapReceiveHeadError(err: std.http.Client.Request.ReceiveHeadError) DownloadError {
+fn mapReceiveHeadError(err: HttpClient.Request.ReceiveHeadError) DownloadError {
     return switch (err) {
         error.TooManyHttpRedirects,
         error.RedirectRequiresResend,
@@ -360,7 +496,8 @@ fn mapReceiveHeadError(err: std.http.Client.Request.ReceiveHeadError) DownloadEr
         error.HttpChunkTruncated,
         => DownloadError.HttpError,
         error.UnsupportedUriScheme => DownloadError.InvalidUrl,
-        error.TlsInitializationFailed, error.CertificateBundleLoadFailure => DownloadError.SslError,
+        error.TlsInitializationFailed => DownloadError.SslError,
+        error.CertificateBundleLoadFailure => DownloadError.CertificateBundleError,
         else => DownloadError.NetworkError,
     };
 }
@@ -374,6 +511,11 @@ test "DownloadConfiguration.default() returns correct default values" {
     try std.testing.expectEqual(@as(u32, 1), config.retry_delay_secs);
     try std.testing.expectEqual(true, config.verify_ssl);
     try std.testing.expectEqual(@as(u8, 10), config.parallel_downloads);
+}
+
+test "download requests disable connection reuse for bodyless conditional responses" {
+    const options = downloadRequestOptions(.default, &.{});
+    try std.testing.expect(!options.keep_alive);
 }
 
 test "makeProgress calculates progress correctly with total size" {
@@ -409,6 +551,26 @@ test "isRetryable returns false for other errors" {
     try std.testing.expect(!isRetryable(DownloadError.InvalidUrl));
     try std.testing.expect(!isRetryable(DownloadError.RetryExceeded));
     try std.testing.expect(!isRetryable(DownloadError.SslError));
+    try std.testing.expect(!isRetryable(DownloadError.CertificateBundleError));
+}
+
+test "retryAction resets TLS once before stopping" {
+    try std.testing.expectEqual(RetryAction.reset_tls_and_retry, retryAction(DownloadError.SslError, 0, 3, false));
+    try std.testing.expectEqual(RetryAction.stop, retryAction(DownloadError.SslError, 1, 3, true));
+    try std.testing.expectEqual(RetryAction.stop, retryAction(DownloadError.SslError, 0, 0, false));
+}
+
+test "retryAction retries transient errors without resetting TLS" {
+    try std.testing.expectEqual(RetryAction.retry, retryAction(DownloadError.NetworkError, 0, 3, false));
+    try std.testing.expectEqual(RetryAction.retry, retryAction(DownloadError.Timeout, 2, 3, false));
+    try std.testing.expectEqual(RetryAction.stop, retryAction(DownloadError.NetworkError, 3, 3, false));
+}
+
+test "retryAction does not retry certificate bundle failures" {
+    try std.testing.expectEqual(
+        RetryAction.stop,
+        retryAction(DownloadError.CertificateBundleError, 0, 3, false),
+    );
 }
 
 test "mapRequestError maps UnsupportedUriScheme and UriMissingHost to InvalidUrl" {
@@ -416,9 +578,9 @@ test "mapRequestError maps UnsupportedUriScheme and UriMissingHost to InvalidUrl
     try std.testing.expectEqual(DownloadError.InvalidUrl, mapRequestError(error.UriMissingHost));
 }
 
-test "mapRequestError maps TLS errors to SslError" {
+test "mapRequestError distinguishes TLS initialization from certificate bundle failures" {
     try std.testing.expectEqual(DownloadError.SslError, mapRequestError(error.TlsInitializationFailed));
-    try std.testing.expectEqual(DownloadError.SslError, mapRequestError(error.CertificateBundleLoadFailure));
+    try std.testing.expectEqual(DownloadError.CertificateBundleError, mapRequestError(error.CertificateBundleLoadFailure));
 }
 
 test "mapRequestError maps other errors to NetworkError" {
@@ -437,9 +599,9 @@ test "mapReceiveHeadError maps UnsupportedUriScheme to InvalidUrl" {
     try std.testing.expectEqual(DownloadError.InvalidUrl, mapReceiveHeadError(error.UnsupportedUriScheme));
 }
 
-test "mapReceiveHeadError maps TLS errors to SslError" {
+test "mapReceiveHeadError distinguishes TLS initialization from certificate bundle failures" {
     try std.testing.expectEqual(DownloadError.SslError, mapReceiveHeadError(error.TlsInitializationFailed));
-    try std.testing.expectEqual(DownloadError.SslError, mapReceiveHeadError(error.CertificateBundleLoadFailure));
+    try std.testing.expectEqual(DownloadError.CertificateBundleError, mapReceiveHeadError(error.CertificateBundleLoadFailure));
 }
 
 test "mapReceiveHeadError maps other errors to NetworkError" {
@@ -519,4 +681,48 @@ test "DownloadResult union variants are correctly defined" {
         },
         else => try std.testing.expect(false),
     }
+}
+
+test "shared cancellation stops downloads before network access" {
+    const Capture = struct {
+        started: usize = 0,
+        failures: usize = 0,
+        completed: usize = 0,
+        completion: ?operations.CompletionStatus = null,
+
+        fn receive(data: ?*anyopaque, event: operations.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (event) {
+                .started => self.started += 1,
+                .failure => self.failures += 1,
+                .completed => |value| {
+                    self.completed += 1;
+                    self.completion = value.status;
+                },
+                else => {},
+            }
+        }
+    };
+
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    var context = operations.OperationContext.init(std.testing.allocator, threaded.io());
+    defer context.deinit();
+    var capture: Capture = .{};
+    _ = try context.subscribe(.{ .function = Capture.receive, .data = &capture });
+    context.cancel();
+
+    var downloader = CoreDownloader.init(std.testing.allocator, threaded.io(), .{});
+    defer downloader.deinit();
+    downloader.setOperationContext(&context);
+    const result = downloader.downloadToFile("https://example.invalid/package", "/tmp/shelly-cancelled-download", true);
+    switch (result) {
+        .failure => |err| try std.testing.expectEqual(DownloadError.Cancelled, err),
+        else => return error.ExpectedCancelledDownload,
+    }
+
+    try std.testing.expectEqual(@as(usize, 1), capture.started);
+    try std.testing.expectEqual(@as(usize, 1), capture.failures);
+    try std.testing.expectEqual(@as(usize, 1), capture.completed);
+    try std.testing.expectEqual(operations.CompletionStatus.cancelled, capture.completion.?);
 }

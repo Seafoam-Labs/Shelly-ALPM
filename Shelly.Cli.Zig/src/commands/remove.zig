@@ -1,0 +1,834 @@
+const std = @import("std");
+const Zigalpm = @import("Zigalpm");
+const output = @import("../output/config.zig");
+const standard_single_pane = @import("../output/standard_single_pane.zig");
+const ui_operation = @import("../output/ui_operation.zig");
+const config_manager = @import("../config/manager.zig");
+const config_model = @import("../config/model.zig");
+const parser = @import("../cli/parser.zig");
+const runtime = @import("../runtime/context.zig");
+const elevation = @import("../runtime/elevation.zig");
+const xdg = @import("../runtime/xdg.zig");
+
+const standard_command_path = "shelly remove standard";
+const appimage_command_path = "shelly remove appimage";
+const aur_command_path = "shelly remove aur";
+const flatpak_command_path = "shelly remove flatpak";
+
+const RemoveError = error{
+    AmbiguousAppImage,
+    AppImageNotFound,
+    BackendFailed,
+    BackendNotImplemented,
+    FlatpakNotFound,
+};
+
+const Runner = struct {
+    data: ?*anyopaque = null,
+    call: *const fn (
+        data: ?*anyopaque,
+        context: *runtime.RuntimeContext,
+        operation_context: *Zigalpm.OperationContext,
+        invocation: *const parser.Invocation,
+    ) anyerror!void,
+};
+
+const RunnerAdapter = struct {
+    runner: Runner,
+    invocation: *const parser.Invocation,
+
+    fn call(
+        data: ?*anyopaque,
+        context: *runtime.RuntimeContext,
+        operation_context: *Zigalpm.OperationContext,
+    ) !void {
+        const self: *RunnerAdapter = @ptrCast(@alignCast(data.?));
+        try self.runner.call(self.runner.data, context, operation_context, self.invocation);
+    }
+};
+
+const Partition = struct {
+    alpm: []const []const u8,
+    local: []const []const u8,
+
+    fn deinit(self: *Partition, allocator: std.mem.Allocator) void {
+        allocator.free(self.alpm);
+        allocator.free(self.local);
+        self.* = undefined;
+    }
+};
+
+const DependencyRemoval = struct {
+    flags: Zigalpm.alpm.TransFlag,
+    remove_optional_dependencies: bool,
+    keep_optional_dependencies: bool,
+};
+
+const real_runner: Runner = .{ .call = runRealRemove };
+
+pub fn dispatch(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+) !?u8 {
+    if (!isRemovePath(invocation.command.path)) return null;
+    if (invocation.positionals.len == 0)
+        return try reportValidationFailure(context, invocation, "No packages specified.");
+
+    if (!invocation.globals.ui_mode and needsElevation(invocation)) {
+        const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
+            try context.stderr.print("Unable to elevate remove: {t}\n", .{err});
+            return 1;
+        };
+        if (elevated_exit) |exit_code| return exit_code;
+    }
+
+    return try executeWithRunner(context, invocation, real_runner);
+}
+
+fn executeWithRunner(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+    runner: Runner,
+) !u8 {
+    const opening = try openingMessage(context.allocator, invocation);
+    defer context.allocator.free(opening);
+    return if (invocation.globals.ui_mode)
+        executeUi(context, invocation, runner, opening)
+    else
+        executeStandard(context, invocation, runner, opening);
+}
+
+fn executeStandard(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+    runner: Runner,
+    opening: []const u8,
+) !u8 {
+    var adapter: RunnerAdapter = .{ .runner = runner, .invocation = invocation };
+    const succeeded = try standard_single_pane.output(
+        context,
+        opening,
+        invocation.globals.no_confirm,
+        .{ .data = &adapter, .call = RunnerAdapter.call },
+    );
+    return if (succeeded) 0 else 1;
+}
+
+fn executeUi(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+    runner: Runner,
+    opening: []const u8,
+) !u8 {
+    var operation_context = Zigalpm.OperationContext.init(context.allocator, context.io);
+    defer operation_context.deinit();
+    var question_responder: ui_operation.QuestionResponder = .{
+        .context = context,
+        .operation_context = &operation_context,
+        .no_confirm = invocation.globals.no_confirm,
+    };
+    question_responder.attach();
+    defer question_responder.detach();
+    var reporter: ui_operation.Reporter = .{ .context = context };
+    const event_subscription = try operation_context.subscribe(.{
+        .function = ui_operation.Reporter.handle,
+        .data = &reporter,
+    });
+    defer _ = operation_context.unsubscribe(event_subscription);
+
+    try output.writeAlpmInfoFrame(context, "TransactionStart", opening);
+    try ui_operation.flush(context);
+
+    runner.call(runner.data, context, &operation_context, invocation) catch |err| {
+        const message = try std.fmt.allocPrint(context.allocator, "Removal failed: {t}", .{err});
+        defer context.allocator.free(message);
+        try output.writeErrorFrame(context, message);
+        try output.writeAlpmInfoFrame(context, "TransactionFailed", failureMessage(invocation));
+        try ui_operation.flush(context);
+        return 1;
+    };
+
+    try output.writeAlpmInfoFrame(context, "TransactionDone", successMessage(invocation));
+    try ui_operation.flush(context);
+    return if (reporter.failed()) 1 else 0;
+}
+
+fn runRealRemove(
+    _: ?*anyopaque,
+    context: *runtime.RuntimeContext,
+    operation_context: *Zigalpm.OperationContext,
+    invocation: *const parser.Invocation,
+) !void {
+    if (std.mem.eql(u8, invocation.command.path, standard_command_path))
+        return runStandard(context, operation_context, invocation);
+    if (std.mem.eql(u8, invocation.command.path, aur_command_path))
+        return runAur(context, operation_context, invocation);
+    if (std.mem.eql(u8, invocation.command.path, appimage_command_path))
+        return runAppImage(context, operation_context, invocation);
+    if (std.mem.eql(u8, invocation.command.path, flatpak_command_path))
+        return runFlatpak(context, operation_context, invocation);
+    return RemoveError.BackendNotImplemented;
+}
+
+fn runStandard(
+    context: *runtime.RuntimeContext,
+    operation_context: *Zigalpm.OperationContext,
+    invocation: *const parser.Invocation,
+) !void {
+    var local_manager = Zigalpm.LocalManager.init(context.allocator, context.io, .{});
+    defer local_manager.deinit();
+    local_manager.setOperationContext(operation_context);
+    defer local_manager.setOperationContext(null);
+
+    const local_only = optionEnabled(invocation, "--local");
+    var local_names: std.ArrayList([]const u8) = .empty;
+    defer local_names.deinit(context.allocator);
+    var installed: ?[]Zigalpm.local.Package = null;
+    defer if (installed) |packages| Zigalpm.local.Package.deinitSlice(context.allocator, packages);
+    if (!local_only) {
+        installed = try local_manager.getInstalledBinaryPackages();
+        for (installed.?) |package| try local_names.append(context.allocator, package.name);
+    }
+
+    var partition = try partitionTargets(
+        context.allocator,
+        invocation.positionals,
+        local_names.items,
+        local_only,
+    );
+    defer partition.deinit(context.allocator);
+
+    if (partition.alpm.len > 0) {
+        const dependency_removal = dependencyRemoval(invocation, true, true);
+        const manager = try Zigalpm.AlpmManager.init(context.allocator, context.environ, null, true, null);
+        defer manager.deinit();
+        manager.setOperationContext(operation_context);
+        defer manager.setOperationContext(null);
+        const names = try sentinelStrings(context.allocator, partition.alpm);
+        defer freeSentinelStrings(context.allocator, names);
+        try manager.remove_packages(
+            names,
+            dependency_removal.flags,
+            dependency_removal.keep_optional_dependencies,
+        );
+    }
+    if (partition.local.len > 0 and !try local_manager.removeBinaryPackages(partition.local))
+        return RemoveError.BackendFailed;
+
+    if (optionEnabled(invocation, "--remove-config"))
+        cleanupStandardConfig(context, invocation.positionals);
+}
+
+fn runAur(
+    context: *runtime.RuntimeContext,
+    operation_context: *Zigalpm.OperationContext,
+    invocation: *const parser.Invocation,
+) !void {
+    const dependency_removal = dependencyRemoval(invocation, false, false);
+    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{ .root = true });
+    defer manager.deinit();
+    manager.setOperationContext(operation_context);
+    defer manager.setOperationContext(null);
+    try manager.removePackages(
+        invocation.positionals,
+        dependency_removal.flags,
+        dependency_removal.remove_optional_dependencies,
+    );
+}
+
+fn runAppImage(
+    context: *runtime.RuntimeContext,
+    operation_context: *Zigalpm.OperationContext,
+    invocation: *const parser.Invocation,
+) !void {
+    const configuration = config_manager.Manager.init(context).read() catch
+        try config_model.Config.defaults(context.allocator);
+    const fallback_directory = try xdg.binHome(context);
+    const install_directory = stringValue(&configuration, "AppImageInstallPath") orelse fallback_directory;
+    const search_paths: []const []const u8 = if (std.mem.eql(u8, install_directory, fallback_directory))
+        &.{install_directory}
+    else
+        &.{ install_directory, fallback_directory };
+    const target = try resolveAppImage(
+        context.allocator,
+        context.io,
+        invocation.positionals[0],
+        search_paths,
+    );
+    defer context.allocator.free(target);
+    const local_db_path = try std.fs.path.join(
+        context.allocator,
+        &.{ try xdg.configHome(context), "shelly", "appimage-metadata-v2.db" },
+    );
+    defer context.allocator.free(local_db_path);
+    var manager = Zigalpm.AppImageManager{
+        .allocator = context.allocator,
+        .io = context.io,
+        .environ = context.environ,
+        .install_directory = install_directory,
+        .local_db_path = local_db_path,
+    };
+    defer manager.deinit();
+    try manager.setOperationContext(operation_context);
+    defer manager.setOperationContext(null) catch {};
+    if (!try manager.removeAppImage(target, optionEnabled(invocation, "--remove-config")))
+        return RemoveError.BackendFailed;
+}
+
+fn runFlatpak(
+    context: *runtime.RuntimeContext,
+    operation_context: *Zigalpm.OperationContext,
+    invocation: *const parser.Invocation,
+) !void {
+    var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
+    defer manager.deinit();
+    try manager.setOperationContext(operation_context);
+    defer manager.setOperationContext(null) catch {};
+    var application = (try manager.find_installed_flatpak(invocation.positionals[0])) orelse
+        return RemoveError.FlatpakNotFound;
+    defer application.deinit(context.allocator);
+    if (!try manager.uninstall_flatpak(
+        application.id,
+        application.scope,
+        optionEnabled(invocation, "--remove-unused"),
+    )) return RemoveError.BackendFailed;
+    if (optionEnabled(invocation, "--remove-config"))
+        cleanupFlatpakConfig(context, application.id);
+}
+
+fn partitionTargets(
+    allocator: std.mem.Allocator,
+    targets: []const []const u8,
+    installed_local_names: []const []const u8,
+    local_only: bool,
+) !Partition {
+    var alpm: std.ArrayList([]const u8) = .empty;
+    defer alpm.deinit(allocator);
+    var local: std.ArrayList([]const u8) = .empty;
+    defer local.deinit(allocator);
+    for (targets) |target| {
+        if (local_only or containsIgnoreCase(installed_local_names, target))
+            try local.append(allocator, target)
+        else
+            try alpm.append(allocator, target);
+    }
+    return .{
+        .alpm = try alpm.toOwnedSlice(allocator),
+        .local = try local.toOwnedSlice(allocator),
+    };
+}
+
+fn containsIgnoreCase(values: []const []const u8, target: []const u8) bool {
+    for (values) |value| {
+        if (std.ascii.eqlIgnoreCase(value, target)) return true;
+    }
+    return false;
+}
+
+fn removalFlags(cascade: bool, ripple: bool, force: bool) Zigalpm.alpm.TransFlag {
+    if (force) return .{ .nodeps = true, .nodepversion = true };
+    if (cascade) return .{ .nosave = true, .recurse = true };
+    if (ripple) return .{ .cascade = true };
+    return .{};
+}
+
+fn dependencyRemoval(
+    invocation: *const parser.Invocation,
+    cascade_by_default: bool,
+    allow_force: bool,
+) DependencyRemoval {
+    const remove_optional_dependencies = optionEnabled(invocation, "--opt-deps");
+    const cascade = !optionEnabled(invocation, "--no-cascade") and
+        (cascade_by_default or optionEnabled(invocation, "--cascade"));
+    return .{
+        .flags = removalFlags(
+            cascade,
+            optionEnabled(invocation, "--ripple"),
+            allow_force and optionEnabled(invocation, "--force"),
+        ),
+        .remove_optional_dependencies = remove_optional_dependencies,
+        .keep_optional_dependencies = !remove_optional_dependencies,
+    };
+}
+
+fn resolveAppImage(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    query: []const u8,
+    search_paths: []const []const u8,
+) ![]const u8 {
+    var match: ?[]const u8 = null;
+    errdefer if (match) |path| allocator.free(path);
+    for (search_paths) |directory| {
+        var dir = std.Io.Dir.cwd().openDir(io, directory, .{ .iterate = true }) catch continue;
+        defer dir.close(io);
+        var iterator = dir.iterate();
+        while (try iterator.next(io)) |entry| {
+            if (entry.kind != .file and entry.kind != .sym_link) continue;
+            if (!std.ascii.eqlIgnoreCase(std.fs.path.extension(entry.name), ".AppImage")) continue;
+            if (!containsTextIgnoreCase(entry.name, query)) continue;
+            if (match != null) return RemoveError.AmbiguousAppImage;
+            match = try std.fs.path.join(allocator, &.{ directory, entry.name });
+        }
+    }
+    return match orelse RemoveError.AppImageNotFound;
+}
+
+fn containsTextIgnoreCase(value: []const u8, query: []const u8) bool {
+    if (query.len == 0) return true;
+    if (query.len > value.len) return false;
+    var index: usize = 0;
+    while (index + query.len <= value.len) : (index += 1) {
+        if (std.ascii.eqlIgnoreCase(value[index .. index + query.len], query)) return true;
+    }
+    return false;
+}
+
+fn cleanupStandardConfig(context: *runtime.RuntimeContext, package_names: []const []const u8) void {
+    const config_home = xdg.configHome(context) catch |err| {
+        context.stderr.print("Unable to resolve configuration directory: {t}\n", .{err}) catch {};
+        return;
+    };
+    for (package_names) |package_name| {
+        const path = std.fs.path.join(context.allocator, &.{ config_home, package_name }) catch |err| {
+            context.stderr.print("Unable to build configuration path for {s}: {t}\n", .{ package_name, err }) catch {};
+            continue;
+        };
+        defer context.allocator.free(path);
+        std.Io.Dir.cwd().deleteTree(context.io, path) catch |err| {
+            if (err == error.FileNotFound) continue;
+            context.stderr.print("Unable to remove configuration for {s}: {t}\n", .{ package_name, err }) catch {};
+        };
+    }
+}
+
+fn cleanupFlatpakConfig(context: *runtime.RuntimeContext, canonical_id: []const u8) void {
+    const home = xdg.getEnv(context, "HOME") orelse {
+        context.stderr.print("Unable to resolve the home directory for Flatpak configuration cleanup.\n", .{}) catch {};
+        return;
+    };
+    const path = std.fs.path.join(context.allocator, &.{ home, ".var", "app", canonical_id }) catch |err| {
+        context.stderr.print("Unable to build Flatpak configuration path for {s}: {t}\n", .{ canonical_id, err }) catch {};
+        return;
+    };
+    defer context.allocator.free(path);
+    std.Io.Dir.cwd().deleteTree(context.io, path) catch |err| {
+        if (err == error.FileNotFound) return;
+        context.stderr.print("Unable to remove Flatpak configuration for {s}: {t}\n", .{ canonical_id, err }) catch {};
+    };
+}
+
+fn reportValidationFailure(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+    message: []const u8,
+) !u8 {
+    if (invocation.globals.ui_mode)
+        try output.writeErrorFrame(context, message)
+    else
+        try output.writeFailure(context, message);
+    try ui_operation.flush(context);
+    return 1;
+}
+
+fn openingMessage(allocator: std.mem.Allocator, invocation: *const parser.Invocation) ![]const u8 {
+    const names = try std.mem.join(allocator, ", ", invocation.positionals);
+    defer allocator.free(names);
+    if (std.mem.eql(u8, invocation.command.path, standard_command_path))
+        return std.fmt.allocPrint(allocator, "Removing packages: {s}", .{names});
+    if (std.mem.eql(u8, invocation.command.path, aur_command_path))
+        return std.fmt.allocPrint(allocator, "Removing AUR packages: {s}", .{names});
+    if (std.mem.eql(u8, invocation.command.path, appimage_command_path))
+        return std.fmt.allocPrint(allocator, "Removing AppImage: {s}", .{names});
+    return std.fmt.allocPrint(allocator, "Removing Flatpak: {s}", .{names});
+}
+
+fn successMessage(invocation: *const parser.Invocation) []const u8 {
+    if (std.mem.eql(u8, invocation.command.path, appimage_command_path))
+        return "AppImage removed successfully.";
+    if (std.mem.eql(u8, invocation.command.path, flatpak_command_path))
+        return "Flatpak removed successfully.";
+    return "Packages removed successfully.";
+}
+
+fn failureMessage(invocation: *const parser.Invocation) []const u8 {
+    if (std.mem.eql(u8, invocation.command.path, appimage_command_path)) return "AppImage removal failed.";
+    if (std.mem.eql(u8, invocation.command.path, flatpak_command_path)) return "Flatpak removal failed.";
+    return "Package removal failed.";
+}
+
+fn sentinelStrings(allocator: std.mem.Allocator, values: []const []const u8) ![][:0]const u8 {
+    const result = try allocator.alloc([:0]const u8, values.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (result[0..initialized]) |value| allocator.free(value);
+        allocator.free(result);
+    }
+    for (values, result) |value, *destination| {
+        destination.* = try allocator.dupeZ(u8, value);
+        initialized += 1;
+    }
+    return result;
+}
+
+fn freeSentinelStrings(allocator: std.mem.Allocator, values: [][:0]const u8) void {
+    for (values) |value| allocator.free(value);
+    allocator.free(values);
+}
+
+fn optionEnabled(invocation: *const parser.Invocation, name: []const u8) bool {
+    for (invocation.options) |option| {
+        if (!std.mem.eql(u8, option.name, name)) continue;
+        const value = option.value orelse return true;
+        return !std.ascii.eqlIgnoreCase(value, "false");
+    }
+    return false;
+}
+
+fn needsElevation(invocation: *const parser.Invocation) bool {
+    return std.mem.eql(u8, invocation.command.path, standard_command_path) or
+        std.mem.eql(u8, invocation.command.path, aur_command_path);
+}
+
+fn stringValue(config: *const config_model.Config, key: []const u8) ?[]const u8 {
+    const value = config.values.get(key) orelse return null;
+    return switch (value) {
+        .string => |string| if (string.len > 0) string else null,
+        else => null,
+    };
+}
+
+fn isRemovePath(path: []const u8) bool {
+    return std.mem.eql(u8, path, standard_command_path) or
+        std.mem.eql(u8, path, appimage_command_path) or
+        std.mem.eql(u8, path, aur_command_path) or
+        std.mem.eql(u8, path, flatpak_command_path);
+}
+
+test "recognizes every remove command path" {
+    try std.testing.expect(isRemovePath(standard_command_path));
+    try std.testing.expect(isRemovePath(appimage_command_path));
+    try std.testing.expect(isRemovePath(aur_command_path));
+    try std.testing.expect(isRemovePath(flatpak_command_path));
+    try std.testing.expect(!isRemovePath("shelly install standard"));
+}
+
+test "maps dependency modifiers and force precedence" {
+    const cascade = removalFlags(true, false, false);
+    try std.testing.expect(cascade.nosave);
+    try std.testing.expect(cascade.recurse);
+    try std.testing.expect(!cascade.cascade);
+
+    const ripple = removalFlags(false, true, false);
+    try std.testing.expect(ripple.cascade);
+    try std.testing.expect(!ripple.nosave);
+    try std.testing.expect(!ripple.recurse);
+
+    const force = removalFlags(true, true, true);
+    try std.testing.expect(force.nodeps);
+    try std.testing.expect(force.nodepversion);
+    try std.testing.expect(!force.nosave);
+    try std.testing.expect(!force.recurse);
+    try std.testing.expect(!force.cascade);
+}
+
+test "maps optional dependency semantics for ALPM and AUR" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+
+    var outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "standard", "--cascade", "--ripple", "--force", "--opt-deps", "demo",
+    });
+    var settings = dependencyRemoval(&outcome.dispatch, true, true);
+    try std.testing.expect(settings.flags.nodeps);
+    try std.testing.expect(settings.flags.nodepversion);
+    try std.testing.expect(!settings.flags.cascade);
+    try std.testing.expect(settings.remove_optional_dependencies);
+    try std.testing.expect(!settings.keep_optional_dependencies);
+
+    outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "aur", "--ripple", "--opt-deps", "demo-git",
+    });
+    settings = dependencyRemoval(&outcome.dispatch, false, false);
+    try std.testing.expect(settings.flags.cascade);
+    try std.testing.expect(settings.remove_optional_dependencies);
+    try std.testing.expect(!settings.keep_optional_dependencies);
+}
+
+test "standard removal cascades by default and supports an explicit opt out" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+
+    var outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "standard", "demo",
+    });
+    var settings = dependencyRemoval(&outcome.dispatch, true, true);
+    try std.testing.expect(settings.flags.nosave);
+    try std.testing.expect(settings.flags.recurse);
+
+    outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "standard", "--no-cascade", "demo",
+    });
+    settings = dependencyRemoval(&outcome.dispatch, true, true);
+    try std.testing.expect(!settings.flags.nosave);
+    try std.testing.expect(!settings.flags.recurse);
+
+    outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "standard", "-c", "--no-cascade", "demo",
+    });
+    settings = dependencyRemoval(&outcome.dispatch, true, true);
+    try std.testing.expect(!settings.flags.nosave);
+    try std.testing.expect(!settings.flags.recurse);
+}
+
+test "partitions standard targets case-insensitively and honors local override" {
+    var partition = try partitionTargets(
+        std.testing.allocator,
+        &.{ "repo-package", "LOCAL-TOOL", "another" },
+        &.{ "local-tool", "another-local" },
+        false,
+    );
+    defer partition.deinit(std.testing.allocator);
+    try std.testing.expectEqualSlices([]const u8, &.{ "repo-package", "another" }, partition.alpm);
+    try std.testing.expectEqualSlices([]const u8, &.{"LOCAL-TOOL"}, partition.local);
+
+    var local_only = try partitionTargets(
+        std.testing.allocator,
+        &.{ "repo-package", "LOCAL-TOOL" },
+        &.{"local-tool"},
+        true,
+    );
+    defer local_only.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), local_only.alpm.len);
+    try std.testing.expectEqualSlices([]const u8, &.{ "repo-package", "LOCAL-TOOL" }, local_only.local);
+}
+
+test "routes every removal backend through shared output lifecycles" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    const Capture = struct {
+        calls: usize = 0,
+
+        fn run(
+            data: ?*anyopaque,
+            _: *runtime.RuntimeContext,
+            _: *Zigalpm.OperationContext,
+            invocation: *const parser.Invocation,
+        ) !void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            self.calls += 1;
+            if (std.mem.eql(u8, invocation.command.path, standard_command_path)) {
+                try std.testing.expect(optionEnabled(invocation, "--cascade"));
+                try std.testing.expect(optionEnabled(invocation, "--opt-deps"));
+                try std.testing.expect(optionEnabled(invocation, "--remove-config"));
+                return;
+            }
+            if (std.mem.eql(u8, invocation.command.path, aur_command_path)) {
+                try std.testing.expect(optionEnabled(invocation, "--ripple"));
+                try std.testing.expect(invocation.globals.ui_mode);
+                return;
+            }
+            if (std.mem.eql(u8, invocation.command.path, appimage_command_path)) {
+                try std.testing.expect(optionEnabled(invocation, "--remove-config"));
+                return;
+            }
+            try std.testing.expectEqualStrings(flatpak_command_path, invocation.command.path);
+            try std.testing.expect(optionEnabled(invocation, "--remove-unused"));
+            try std.testing.expect(optionEnabled(invocation, "--remove-config"));
+            try std.testing.expect(invocation.globals.ui_mode);
+        }
+    };
+    var capture: Capture = .{};
+    const runner: Runner = .{ .data = &capture, .call = Capture.run };
+
+    var outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "standard", "--no-confirm", "-c", "-o", "--remove-config", "demo",
+    });
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&context, &outcome.dispatch, runner));
+    try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "demo") != null);
+
+    stdout.writer.end = 0;
+    outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "aur", "--ui-mode", "-i", "demo-git",
+    });
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&context, &outcome.dispatch, runner));
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, stdout.writer.buffered(), "[JSON]"));
+
+    stdout.writer.end = 0;
+    outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "appimage", "--no-confirm", "--remove-config", "Editor",
+    });
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&context, &outcome.dispatch, runner));
+    try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "Editor") != null);
+
+    stdout.writer.end = 0;
+    outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "flatpak", "--ui-mode", "-r", "--remove-config", "Example",
+    });
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&context, &outcome.dispatch, runner));
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, stdout.writer.buffered(), "[JSON]"));
+    try std.testing.expectEqual(@as(usize, 4), capture.calls);
+}
+
+test "remove backend failures return a nonzero status" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    const outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "standard", "--no-confirm", "demo",
+    });
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    const Failure = struct {
+        fn run(_: ?*anyopaque, _: *runtime.RuntimeContext, _: *Zigalpm.OperationContext, _: *const parser.Invocation) !void {
+            return error.TestBackendFailure;
+        }
+    };
+
+    try std.testing.expectEqual(
+        @as(u8, 1),
+        try executeWithRunner(&context, &outcome.dispatch, .{ .call = Failure.run }),
+    );
+}
+
+test "rejects empty remove targets before backend execution" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    const outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "aur", "--ui-mode",
+    });
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+
+    try std.testing.expectEqual(@as(?u8, 1), try dispatch(&context, &outcome.dispatch));
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, stdout.writer.buffered(), "[JSON]"));
+}
+
+test "standard config cleanup removes existing targets and ignores missing ones" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var anchor: u8 = 0;
+    const root = try std.fmt.allocPrint(allocator, "/tmp/shelly-remove-config-test-{x}", .{@intFromPtr(&anchor)});
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const existing = try std.fs.path.join(allocator, &.{ root, "demo" });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, existing);
+
+    var environment = std.process.Environ.Map.init(allocator);
+    try environment.put("XDG_CONFIG_HOME", root);
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+        .environment = &environment,
+    };
+
+    cleanupStandardConfig(&context, &.{ "demo", "not-installed" });
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(std.testing.io, existing, .{}));
+    try std.testing.expectEqual(@as(usize, 0), stderr.writer.buffered().len);
+}
+
+test "resolves one AppImage across configured and fallback locations" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var anchor: u8 = 0;
+    const root = try std.fmt.allocPrint(allocator, "/tmp/shelly-remove-appimage-test-{x}", .{@intFromPtr(&anchor)});
+    std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const configured = try std.fs.path.join(allocator, &.{ root, "configured" });
+    const fallback = try std.fs.path.join(allocator, &.{ root, "fallback" });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, configured);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, fallback);
+    const appimage = try std.fs.path.join(allocator, &.{ fallback, "Example-Editor.AppImage" });
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, appimage, .{});
+    file.close(std.testing.io);
+
+    const resolved = try resolveAppImage(allocator, std.testing.io, "example", &.{ configured, fallback });
+    defer allocator.free(resolved);
+    try std.testing.expectEqualStrings(appimage, resolved);
+    try std.testing.expectError(
+        RemoveError.AppImageNotFound,
+        resolveAppImage(allocator, std.testing.io, "missing", &.{ configured, fallback }),
+    );
+
+    const second = try std.fs.path.join(allocator, &.{ configured, "Another-Example.AppImage" });
+    file = try std.Io.Dir.cwd().createFile(std.testing.io, second, .{});
+    file.close(std.testing.io);
+    try std.testing.expectError(
+        RemoveError.AmbiguousAppImage,
+        resolveAppImage(allocator, std.testing.io, "example", &.{ configured, fallback }),
+    );
+}
+
+test "flatpak config cleanup uses the canonical application id" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var anchor: u8 = 0;
+    const home = try std.fmt.allocPrint(allocator, "/tmp/shelly-remove-flatpak-test-{x}", .{@intFromPtr(&anchor)});
+    std.Io.Dir.cwd().deleteTree(std.testing.io, home) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, home) catch {};
+    const canonical = try std.fs.path.join(allocator, &.{ home, ".var", "app", "org.example.Canonical" });
+    const friendly = try std.fs.path.join(allocator, &.{ home, ".var", "app", "Friendly Name" });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, canonical);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, friendly);
+    var environment = std.process.Environ.Map.init(allocator);
+    try environment.put("HOME", home);
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+        .environment = &environment,
+    };
+
+    cleanupFlatpakConfig(&context, "org.example.Canonical");
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(std.testing.io, canonical, .{}));
+    try std.Io.Dir.cwd().access(std.testing.io, friendly, .{});
+}

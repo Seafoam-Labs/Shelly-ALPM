@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellyConfirmDialog" parent="GtkBox">
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <property name="halign">center</property>
+    <property name="valign">center</property>
+    <child>
+      <object class="GtkFrame">
+        <property name="halign">center</property>
+        <property name="valign">center</property>
+        <property name="width-request">420</property>
+        <style>
+          <class name="lockout-card"/>
+        </style>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="spacing">20</property>
+            <property name="margin-start">30</property>
+            <property name="margin-end">30</property>
+            <property name="margin-top">20</property>
+            <property name="margin-bottom">20</property>
+            <child>
+              <object class="GtkLabel" id="title_label">
+                <property name="wrap">true</property>
+                <property name="justify">center</property>
+                <style>
+                  <class name="title-2"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="message_label">
+                <property name="wrap">true</property>
+                <property name="justify">center</property>
+                <property name="max-width-chars">40</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">12</property>
+                <property name="halign">center</property>
+                <property name="homogeneous">true</property>
+                <property name="margin-top">12</property>
+                <child>
+                  <object class="GtkButton" id="confirm_button">
+                    <property name="label" translatable="yes">Confirm</property>
+                    <signal name="clicked" handler="on_confirm" swapped="true"/>
+                    <style>
+                      <class name="suggested-action"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="cancel_button">
+                    <property name="label" translatable="yes">Cancel</property>
+                    <signal name="clicked" handler="on_cancel" swapped="true"/>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

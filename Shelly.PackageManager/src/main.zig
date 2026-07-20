@@ -39,6 +39,19 @@ test "simple test" {
     try std.testing.expectEqual(@as(i32, 42), list.pop());
 }
 
+test "consumer can access the public Zigalpm API" {
+    _ = Zigalpm.AlpmManager;
+    _ = Zigalpm.AurManager;
+    _ = Zigalpm.FlatpakManager;
+    _ = Zigalpm.AppImageManager;
+    _ = Zigalpm.alpm.TransFlag;
+    _ = Zigalpm.aur.models.Package;
+    _ = Zigalpm.flatpak.RemoteManager;
+    _ = Zigalpm.appimage.UpdateManager;
+    _ = Zigalpm.pkgbuild.Parser;
+    _ = Zigalpm.shared.Downloader;
+}
+
 test "fuzz example" {
     try std.testing.fuzz({}, testOne, .{});
 }

@@ -31,6 +31,12 @@ if [ -L /usr/bin/shelly-notifications ] || [ -f /usr/bin/shelly-notifications ];
     rm -f /usr/bin/shelly-notifications 
 fi
 
+# Remove shelly-key from /usr/bin
+if [ -L /usr/bin/shelly-key ] || [ -f /usr/bin/shelly-key ]; then
+    echo "Removing /usr/bin/shelly-key"
+    rm -f /usr/bin/shelly-key
+fi
+
 # Remove Flatpak integration helper
 if [ -f /usr/bin/shelly-flatpak-integrate ]; then
     echo "Removing /usr/bin/shelly-flatpak-integrate"

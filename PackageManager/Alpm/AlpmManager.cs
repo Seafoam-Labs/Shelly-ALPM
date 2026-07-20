@@ -38,7 +38,7 @@ public class AlpmManager(string configPath = "/etc/pacman.conf") : IDisposable, 
     private readonly PacmanConf _config = PacmanConfParser.Parse(configPath);
     private IntPtr _handle = IntPtr.Zero;
 
-    private static readonly HttpClient DownloadClient = OptimizedClient.CreateClient(3, 5, 5);
+    private static readonly HttpClient DownloadClient = OptimizedClient.CreateClient(30, 5, 5);
 
 
     private HashSet<string> _preDownloadedFiles = [];

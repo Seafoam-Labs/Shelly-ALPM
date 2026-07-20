@@ -1,0 +1,63 @@
+.lockout-scrim {
+  background-color: alpha(black, 0.6);
+}
+
+.lockout-card {
+  background-color: @theme_bg_color;
+  border-radius: 12px;
+}
+
+.package-title {
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+.detail-title {
+  font-size: 1.3em;
+  font-weight: bold;
+}
+
+.detail-section-header {
+  font-size: 1.05em;
+  font-weight: bold;
+}
+
+.spec-row {
+  border-bottom: 1px solid alpha(@theme_fg_color, 0.1);
+}
+
+.spec-value {
+  font-weight: 600;
+}
+
+.pill {
+  background-color: alpha(@theme_fg_color, 0.08);
+  border-radius: 12px;
+  padding: 3px 10px;
+}
+
+.detail-title { font-size: 1.3em; font-weight: bold; }
+.detail-section-header { font-weight: bold; }
+.spec-row { border-bottom: 1px solid alpha(@theme_fg_color, 0.1); }
+.spec-value { font-weight: 600; }
+
+.nav-rail {
+  padding: 8px 4px;
+
+.nav-btn {
+  padding: 10px 8px;
+  margin: 2px 4px;
+  border-radius: 8px;
+}
+
+.nav-btn:hover {
+  background-color: alpha(@theme_fg_color, 0.06);
+}
+
+.nav-selected {
+  background-color: alpha(@theme_fg_color, 0.10);
+}
+
+.nav-selected label {
+  font-weight: 600;
+}

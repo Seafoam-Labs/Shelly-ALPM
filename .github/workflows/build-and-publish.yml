@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm dotnet-sdk base-devel gtk4 clang glibc git vala meson ninja json-glib
+          pacman -S --noconfirm dotnet-sdk zig base-devel gtk4 clang glibc git vala meson ninja json-glib
 
       # Checkout only after git is installed
       - uses: actions/checkout@v6
@@ -33,8 +33,8 @@ jobs:
       - name: Test
         run: dotnet test --no-build --verbosity normal
 
-      - name: AOT publish Shelly.Keys (smoke)
-        run: dotnet publish Shelly.Keys/Shelly.Keys.csproj -c Release -r linux-x64 --nologo -p:InstructionSet=x86-64
+      - name: Build Shelly.Key (smoke)
+        run: cd Shelly.Key && zig build -p ../publish/key
 
       - name: Build Shelly.Notifications
         run: |

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/com/shellyorg/shelly">
+    <file>ui/main_window.ui</file>
+    <file>ui/settings_page.ui</file>
+    <file>ui/flatpak/flatpak_page.ui</file>
+    <file>ui/flatpak/flatpak_install_view.ui</file>
+    <file>ui/flatpak/flatpak_remove_view.ui</file>
+    <file>ui/flatpak/flatpak_remotes_view.ui</file>
+    <file>dialog/ui/yn.ui</file>
+    <file>ui/appimage_page.ui</file>
+    <file>ui/package_page.ui</file>
+    <file>ui/aur_page.ui</file>
+    <file>ui/package_detail.ui</file>
+    <file>ui/update_page.ui</file>
+    <file>style.css</file>
+  </gresource>
+</gresources>

@@ -1,0 +1,85 @@
+# Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
+
+pkgname=shelly-cli
+pkgbase=shelly-cli
+pkgver=3.0.0+4r0.g0000000
+pkgrel=1
+pkgdesc='Native Shelly package-manager CLI beta'
+arch=('x86_64')
+url='https://github.com/Seafoam-Labs/Shelly-ALPM'
+license=('GPL-3.0-only')
+provides=('shelly-beta')
+depends=(
+  'diffutils'
+  'flatpak'
+  'git'
+  'glibc'
+  'glib2'
+  'libarchive'
+  'pacman'
+  'sudo'
+)
+makedepends=(
+  'git'
+  'pkgconf'
+  'zig>=0.16.0'
+)
+optdepends=(
+  'base-devel: build and install AUR packages'
+  'devtools: build AUR packages in a clean chroot'
+  'desktop-file-utils: update AppImage desktop entries'
+  'fuse2: run AppImages that require FUSE 2'
+  'gtk-update-icon-cache: update AppImage icons'
+  'opendoas: alternative privilege elevator to sudo'
+  'plocate: locate-based pacfile discovery'
+  'vim: default visual pacfile diff viewer'
+)
+source=("${pkgname}::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=development")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "${srcdir}/${pkgname}"
+
+  printf '3.0.0.0.r%s.g%s' \
+    "$(git rev-list --count HEAD)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+  cd "${srcdir}/${pkgname}/Shelly.Cli.Zig"
+
+  zig build \
+    --prefix "${srcdir}/zig-out" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSmall
+
+  for shell in bash fish zsh; do
+    "${srcdir}/zig-out/bin/shelly" utility --completions "${shell}" \
+      > "${srcdir}/shelly-beta.${shell}"
+  done
+  sed -i \
+    -e 's/_shelly/_shelly_beta/g' \
+    -e 's/complete -F _shelly_beta shelly/complete -F _shelly_beta shelly-beta/' \
+    "${srcdir}/shelly-beta.bash"
+  sed -i 's/complete -c shelly/complete -c shelly-beta/g' \
+    "${srcdir}/shelly-beta.fish"
+  sed -i \
+    -e 's/^#compdef shelly$/#compdef shelly-beta/' \
+    -e 's/_shelly/_shelly-beta/g' \
+    "${srcdir}/shelly-beta.zsh"
+}
+
+package() {
+  cd "${srcdir}/${pkgname}"
+
+  install -Dm755 "${srcdir}/zig-out/bin/shelly" \
+    "${pkgdir}/usr/bin/shelly-beta"
+  install -Dm644 "${srcdir}/shelly-beta.bash" \
+    "${pkgdir}/usr/share/bash-completion/completions/shelly-beta"
+  install -Dm644 "${srcdir}/shelly-beta.fish" \
+    "${pkgdir}/usr/share/fish/vendor_completions.d/shelly-beta.fish"
+  install -Dm644 "${srcdir}/shelly-beta.zsh" \
+    "${pkgdir}/usr/share/zsh/site-functions/_shelly-beta"
+  install -Dm644 LICENSE \
+    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

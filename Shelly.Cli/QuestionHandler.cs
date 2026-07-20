@@ -69,7 +69,7 @@ public static class QuestionHandler
 
         var supportsAnsi = AnsiUtilities.SupportsAnsi;
         var header =
-            "PKGBUILD security warnings \u2014 these commands fetch/execute code outside pacman's control:";
+            "PKGBUILD security warnings \u2014 these commands fetch/execute code outside Shelly's control:";
         Console.WriteLine(supportsAnsi ? header.Pastel(ConsoleColor.Red) : header);
 
         foreach (var w in warnings)

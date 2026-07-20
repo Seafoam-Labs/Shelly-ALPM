@@ -39,4 +39,20 @@ pub const appimage = struct {
             allocator.free(self.download_url);
         }
     };
+
+    /// Owns an update slice and every string held by its entries.
+    pub const UpdateList = struct {
+        allocator: std.mem.Allocator,
+        items: []AppImageUpdate,
+
+        pub fn init(allocator: std.mem.Allocator, items: []AppImageUpdate) UpdateList {
+            return .{ .allocator = allocator, .items = items };
+        }
+
+        pub fn deinit(self: *UpdateList) void {
+            for (self.items) |update| update.deinit(self.allocator);
+            self.allocator.free(self.items);
+            self.* = undefined;
+        }
+    };
 };

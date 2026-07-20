@@ -140,7 +140,15 @@ public partial class DowngradePackage : GlobalSettingsCommand
         }
         else if (string.IsNullOrWhiteSpace(Target))
         {
-            var selection = BasicSelection.Execute("Select Package", packages.Select(x => x.Filename).ToList());
+            var selection = BasicSelection
+                .Execute("Select Package", packages
+                    .Select(x =>
+                    {
+                        var host = GetHost(x.Uri);
+                        var location = host is null ? x.Location.ToString() : $"{x.Location}: {host}";
+                        return $"{x.Filename} ({location})";
+                    })
+                    .ToList());
             selectedPackage = packages[selection];
         }
         else
@@ -484,5 +492,10 @@ public partial class DowngradePackage : GlobalSettingsCommand
     private static string CreatePackageRegex(string packageName)
     {
         return $"""{Regex.Escape(packageName)}-{VersionRegex()}-{ReleaseOrHashRegex()}-[^"]+\.pkg\.tar\.[^"]+""";
+    }
+
+    private static string? GetHost(string? uriString)
+    {
+        return Uri.TryCreate(uriString, UriKind.Absolute, out var uri) ? uri.Host : null;
     }
 }

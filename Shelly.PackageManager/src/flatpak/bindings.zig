@@ -147,12 +147,21 @@ pub const libflatpak = struct {
             for (self.permissions) |p| allocator.free(p);
             allocator.free(self.permissions);
         }
+
+        pub fn deinit(self: RemoteRef, allocator: std.mem.Allocator) void {
+            self.deinitPermissions(allocator);
+            flatpak.g_object_unref(self.ptr);
+        }
     };
 
     pub const InstalledFlatpak = struct {
         ptr: *flatpak.FlatpakRef,
         scope: Scope,
         permissions: []const [:0]const u8 = &.{},
+
+        fn installedRef(self: InstalledFlatpak) *flatpak.FlatpakInstalledRef {
+            return @ptrCast(self.ptr);
+        }
 
         pub fn new(ptr: *flatpak.FlatpakRef, scope: Scope) InstalledFlatpak {
             return .{ .ptr = ptr, .scope = scope };
@@ -171,40 +180,40 @@ pub const libflatpak = struct {
         }
 
         pub fn name(self: InstalledFlatpak) [:0]const u8 {
-            const n = str(flatpak.flatpak_installed_ref_get_appdata_name(self.ptr)) orelse "";
+            const n = str(flatpak.flatpak_installed_ref_get_appdata_name(self.installedRef())) orelse "";
             return if (n.len > 0) n else self.id();
         }
 
         pub fn summary(self: InstalledFlatpak) [:0]const u8 {
-            return str(flatpak.flatpak_installed_ref_get_appdata_summary(self.ptr)) orelse "";
+            return str(flatpak.flatpak_installed_ref_get_appdata_summary(self.installedRef())) orelse "";
         }
 
         pub fn last_commit(self: InstalledFlatpak) [:0]const u8 {
-            return str(flatpak.flatpak_installed_ref_get_latest_commit(self.ptr)) orelse "";
+            return str(flatpak.flatpak_installed_ref_get_latest_commit(self.installedRef())) orelse "";
         }
 
         pub fn version(self: InstalledFlatpak) [:0]const u8 {
-            const v = str(flatpak.flatpak_installed_ref_get_appdata_version(self.ptr)) orelse "";
+            const v = str(flatpak.flatpak_installed_ref_get_appdata_version(self.installedRef())) orelse "";
             return if (v.len > 0) v else self.branch();
         }
 
         pub fn origin(self: InstalledFlatpak) [:0]const u8 {
-            return str(flatpak.flatpak_installed_ref_get_origin(self.ptr)) orelse "";
+            return str(flatpak.flatpak_installed_ref_get_origin(self.installedRef())) orelse "";
         }
 
         pub fn installed_size(self: InstalledFlatpak) u64 {
-            return flatpak.flatpak_installed_ref_get_installed_size(self.ptr);
+            return flatpak.flatpak_installed_ref_get_installed_size(self.installedRef());
         }
 
         pub fn kind(self: InstalledFlatpak) i32 {
-            return flatpak.flatpak_ref_get_kind(self.ptr);
+            return @intCast(flatpak.flatpak_ref_get_kind(self.ptr));
         }
 
         pub fn get_scope(self: InstalledFlatpak) Scope {
             return self.scope;
         }
 
-        pub fn deinitPermissions(self: RemoteRef, allocator: std.mem.Allocator) void {
+        pub fn deinitPermissions(self: InstalledFlatpak, allocator: std.mem.Allocator) void {
             for (self.permissions) |p| allocator.free(p);
             allocator.free(self.permissions);
         }

@@ -1,0 +1,329 @@
+const std = @import("std");
+const bindings = @import("Shelly_Ui_Gtk");
+const gtk = bindings.gtk;
+const gio = bindings.gio;
+const glib = bindings.glib;
+const gobject = bindings.gobject;
+const gdk = bindings.gdk;
+const c_string = @import("../helpers/c_string.zig");
+const support = @import("support.zig");
+const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
+const Package = @import("../models/packages.zig").Package;
+const SizeConverter = @import("../helpers/size_converts.zig").SizeConverter;
+
+pub const PackageDetail = extern struct {
+    parent_instance: Parent,
+    const Self = @This();
+    pub const Parent = gtk.Box;
+    const resource_path = "/com/shellyorg/shelly/ui/package_detail.ui";
+
+    const Private = struct {
+        content_box: *gtk.Box,
+        icon: *gtk.Image,
+        name_label: *gtk.Label,
+        description_label: *gtk.Label,
+        spec_box: *gtk.Box,
+        subtitle_label: *gtk.Label,
+        sections_box: *gtk.Box,
+        debounce_source: c_uint,
+        pending_name: [256]u8,
+        pending_len: usize,
+        generation: u64,
+        arena: ?*std.heap.ArenaAllocator,
+        var offset: c_int = 0;
+    };
+
+    pub const getGObjectType = gobject.ext.defineClass(Self, .{
+        .name = "ShellyPackageDetail",
+        .instanceInit = &init,
+        .classInit = &Class.init,
+        .parent_class = &Class.parent,
+        .private = .{ .Type = Private, .offset = &Private.offset },
+    });
+
+    fn priv(self: *Self) *Private {
+        return gobject.ext.impl_helpers.getPrivate(self, Private, Private.offset);
+    }
+
+    pub fn as(self: *Self, comptime T: type) *T {
+        return gobject.ext.as(T, self);
+    }
+
+    fn init(self: *Self, _: *Class) callconv(.c) void {
+        gtk.Widget.initTemplate(self.as(gtk.Widget));
+        const p = self.priv();
+        p.generation = 0;
+        p.arena = null;
+        p.debounce_source = 0;
+        p.pending_len = 0;
+    }
+
+    pub fn new() *Self {
+        return gobject.ext.newInstance(Self, .{});
+    }
+
+    pub fn showPackage(self: *Self, name: []const u8, icon_path: ?[:0]const u8) void {
+        const p = self.priv();
+
+        const len = @min(name.len, p.pending_name.len);
+        @memcpy(p.pending_name[0..len], name[0..len]);
+        p.pending_len = len;
+
+        if (icon_path) |path| {
+            gtk.Image.setFromFile(p.icon, path);
+        } else {
+            gtk.Image.setFromIconName(p.icon, "package-x-generic");
+        }
+        var buf: [256]u8 = undefined;
+        gtk.Label.setLabel(p.name_label, c_string.cstr(&buf, name));
+        gtk.Label.setLabel(p.description_label, "Loading...");
+        clear_box(p.spec_box);
+        clear_box(p.sections_box);
+
+        if (p.debounce_source != 0) {
+            _ = glib.Source.remove(p.debounce_source);
+            p.debounce_source = 0;
+        }
+        p.debounce_source = glib.timeoutAdd(150, &on_debounce, self);
+    }
+
+    fn on_debounce(data: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(data.?));
+        const p = self.priv();
+        p.debounce_source = 0;
+
+        const name = p.pending_name[0..p.pending_len];
+
+        p.generation += 1;
+        const gen = p.generation;
+
+        const name_copy = std.heap.c_allocator.dupe(u8, name) catch return 0;
+        const thread = std.Thread.spawn(.{}, worker, .{ self, name_copy, gen }) catch {
+            std.heap.c_allocator.free(name_copy);
+            return 0;
+        };
+        thread.detach();
+
+        return 0;
+    }
+
+    fn worker(page: *Self, name: []const u8, gen: u64) void {
+        defer std.heap.c_allocator.free(name);
+
+        const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
+        arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+        const alloc = arena_ptr.allocator();
+
+        var threaded: std.Io.Threaded = .init(alloc, .{});
+        defer threaded.deinit();
+        const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
+
+        const parsed = cli.get_package_details(name) catch {
+            arena_ptr.deinit();
+            std.heap.c_allocator.destroy(arena_ptr);
+            return;
+        };
+
+        post_result(page, parsed.value, arena_ptr, gen);
+    }
+
+    const Result = struct { page: *Self, package: Package, arena: *std.heap.ArenaAllocator, generation: u64 };
+
+    fn post_result(page: *Self, package: Package, arena: *std.heap.ArenaAllocator, gen: u64) void {
+        const r = std.heap.c_allocator.create(Result) catch {
+            arena.deinit();
+            std.heap.c_allocator.destroy(arena);
+            return;
+        };
+        r.* = .{ .page = page, .package = package, .arena = arena, .generation = gen };
+        _ = glib.idleAdd(&on_complete, r);
+    }
+
+    fn on_complete(data: ?*anyopaque) callconv(.c) c_int {
+        const r: *Result = @ptrCast(@alignCast(data.?));
+        defer std.heap.c_allocator.destroy(r);
+        const p = r.page.priv();
+
+        if (r.generation != p.generation) {
+            r.arena.deinit();
+            std.heap.c_allocator.destroy(r.arena);
+            return 0;
+        }
+
+        if (p.arena) |old| {
+            old.deinit();
+            std.heap.c_allocator.destroy(old);
+        }
+        p.arena = r.arena;
+
+        populate(r.page, r.package);
+        return 0;
+    }
+
+    fn populate(self: *Self, package: Package) void {
+        const p = self.priv();
+        var buf: [512]u8 = undefined;
+
+        gtk.Label.setLabel(p.name_label, c_string.cstr(&buf, package.Name));
+        gtk.Label.setLabel(p.description_label, c_string.cstr(&buf, package.Description));
+
+        var sbuf: [32]u8 = undefined;
+        gtk.Label.setLabel(p.subtitle_label, SizeConverter.convert_null_term(&sbuf, package.InstalledSize));
+
+        clear_box(p.spec_box);
+        add_spec_row(p.spec_box, "Version", package.Version);
+        add_spec_row(p.spec_box, "Repository", package.Repository);
+        add_spec_row(p.spec_box, "Installed Size", SizeConverter.convert_null_term(&sbuf, package.InstalledSize));
+        if (package.DownloadSize > 0) add_spec_size(p.spec_box, "Download Size", package.DownloadSize);
+        if (package.BuildDate.len > 0) add_spec_row(p.spec_box, "Build Date", package.BuildDate);
+        if (package.InstallReason.len > 0) add_spec_row(p.spec_box, "Install Reason", package.InstallReason);
+
+        clear_box(p.sections_box);
+        const alloc = (p.arena orelse return).allocator();
+
+        add_spec_list(p.spec_box, alloc, "Licenses", package.Licenses);
+        add_spec_list(p.spec_box, alloc, "Provides", package.Provides);
+        add_spec_list(p.spec_box, alloc, "Conflicts", package.Conflicts);
+
+        add_list_section(p.sections_box, "Depends", package.Depends);
+        add_list_section(p.sections_box, "Optional Depends", package.OptDepends);
+        add_list_section(p.sections_box, "Required By", package.RequiredBy);
+    }
+
+    fn add_spec_row(box: *gtk.Box, label: []const u8, value: []const u8) void {
+        var lbuf: [64]u8 = undefined;
+        var vbuf: [512]u8 = undefined;
+        const row = gtk.Box.new(.horizontal, 8);
+        gtk.Widget.setMarginTop(row.as(gtk.Widget), 10);
+        gtk.Widget.setMarginBottom(row.as(gtk.Widget), 10);
+        gtk.Widget.addCssClass(row.as(gtk.Widget), "spec-row");
+        const key = gtk.Label.new(c_string.cstr(&lbuf, label));
+        gtk.Widget.setHalign(key.as(gtk.Widget), .start);
+        gtk.Label.setXalign(key, 0);
+        gtk.Widget.addCssClass(key.as(gtk.Widget), "dim-label");
+        gtk.Box.append(row, key.as(gtk.Widget));
+        const val = gtk.Label.new(c_string.cstr(&vbuf, value));
+        gtk.Widget.setHalign(val.as(gtk.Widget), .end);
+        gtk.Widget.setHexpand(val.as(gtk.Widget), 1);
+        gtk.Label.setXalign(val, 1);
+        gtk.Label.setEllipsize(val, .end);
+        gtk.Widget.addCssClass(val.as(gtk.Widget), "spec-value");
+        gtk.Box.append(row, val.as(gtk.Widget));
+        gtk.Box.append(box, row.as(gtk.Widget));
+    }
+
+    fn add_spec_list(box: *gtk.Box, allocator: std.mem.Allocator, label: []const u8, items: []const []const u8) void {
+        if (items.len == 0) return;
+        var joined: std.ArrayListUnmanaged(u8) = .empty;
+        defer joined.deinit(allocator);
+        for (items, 0..) |item, i| {
+            if (i > 0) joined.appendSlice(allocator, ", ") catch return;
+            joined.appendSlice(allocator, item) catch return;
+        }
+        joined.append(allocator, 0) catch return;
+        const value: [:0]const u8 = joined.items[0 .. joined.items.len - 1 :0];
+        add_spec_row_raw(box, label, value);
+    }
+
+    fn add_spec_row_raw(box: *gtk.Box, label: []const u8, value: [:0]const u8) void {
+        var lbuf: [64]u8 = undefined;
+        const row = gtk.Box.new(.horizontal, 8);
+        gtk.Widget.setMarginTop(row.as(gtk.Widget), 10);
+        gtk.Widget.setMarginBottom(row.as(gtk.Widget), 10);
+        gtk.Widget.addCssClass(row.as(gtk.Widget), "spec-row");
+        const key = gtk.Label.new(c_string.cstr(&lbuf, label));
+        gtk.Widget.setHalign(key.as(gtk.Widget), .start);
+        gtk.Widget.setValign(key.as(gtk.Widget), .start);
+        gtk.Label.setXalign(key, 0);
+        gtk.Widget.addCssClass(key.as(gtk.Widget), "dim-label");
+        gtk.Box.append(row, key.as(gtk.Widget));
+        const val = gtk.Label.new(value);
+        gtk.Widget.setHalign(val.as(gtk.Widget), .end);
+        gtk.Widget.setHexpand(val.as(gtk.Widget), 1);
+        gtk.Label.setXalign(val, 1);
+        gtk.Label.setWrap(val, 1);
+        gtk.Label.setJustify(val, .right);
+        gtk.Widget.addCssClass(val.as(gtk.Widget), "spec-value");
+        gtk.Box.append(row, val.as(gtk.Widget));
+        gtk.Box.append(box, row.as(gtk.Widget));
+    }
+
+    fn add_list_section(box: *gtk.Box, title: []const u8, items: []const []const u8) void {
+        if (items.len == 0) return;
+        var buf: [64]u8 = undefined;
+        const header = std.fmt.bufPrintZ(&buf, "{s} ({d})", .{ title, items.len }) catch "Section";
+        const expander = gtk.Expander.new(header);
+        gtk.Expander.setExpanded(expander, 0);
+        const list = gtk.Box.new(.vertical, 2);
+        gtk.Widget.setMarginTop(list.as(gtk.Widget), 6);
+        gtk.Widget.setMarginStart(list.as(gtk.Widget), 8);
+        for (items) |item| {
+            var ibuf: [256]u8 = undefined;
+            const lbl = gtk.Label.new(c_string.cstr(&ibuf, item));
+            gtk.Widget.setHalign(lbl.as(gtk.Widget), .start);
+            gtk.Label.setXalign(lbl, 0);
+            gtk.Label.setEllipsize(lbl, .end);
+            gtk.Widget.addCssClass(lbl.as(gtk.Widget), "dim-label");
+            gtk.Box.append(list, lbl.as(gtk.Widget));
+        }
+        const scroll = gtk.ScrolledWindow.new();
+        gtk.ScrolledWindow.setChild(scroll, list.as(gtk.Widget));
+        gtk.ScrolledWindow.setPolicy(scroll, .never, .automatic);
+        gtk.ScrolledWindow.setMaxContentHeight(scroll, 180);
+        gtk.ScrolledWindow.setPropagateNaturalHeight(scroll, 1);
+        gtk.Expander.setChild(expander, scroll.as(gtk.Widget));
+        gtk.Box.append(box, expander.as(gtk.Widget));
+    }
+
+    fn add_spec_size(box: *gtk.Box, label: []const u8, bytes: i64) void {
+        var buf: [32]u8 = undefined;
+        const formatted = SizeConverter.convert_null_term(&buf, bytes);
+        add_spec_row(box, label, formatted);
+    }
+
+    fn clear_box(box: *gtk.Box) void {
+        while (gtk.Widget.getFirstChild(box.as(gtk.Widget))) |child| {
+            gtk.Box.remove(box, child);
+        }
+    }
+
+    fn finalize(self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.debounce_source != 0) {
+            _ = glib.Source.remove(p.debounce_source);
+            p.debounce_source = 0;
+        }
+        if (p.arena) |a| {
+            a.deinit();
+            std.heap.c_allocator.destroy(a);
+            p.arena = null;
+        }
+        const parent_class: *gobject.Object.Class = @ptrCast(Class.parent);
+        gobject.Object.virtual_methods.finalize.call(parent_class, self.as(gobject.Object));
+    }
+
+    const template_children = .{
+        .{ "icon", @offsetOf(Private, "icon") },
+        .{ "name_label", @offsetOf(Private, "name_label") },
+        .{ "subtitle_label", @offsetOf(Private, "subtitle_label") },
+        .{ "description_label", @offsetOf(Private, "description_label") },
+        .{ "spec_box", @offsetOf(Private, "spec_box") },
+        .{ "sections_box", @offsetOf(Private, "sections_box") },
+        .{ "content_box", @offsetOf(Private, "content_box") },
+    };
+
+    pub const Class = extern struct {
+        parent_class: Parent.Class,
+        var parent: *Parent.Class = undefined;
+        pub const Instance = Self;
+
+        fn init(class: *Class) callconv(.c) void {
+            const wc = gobject.ext.as(gtk.Widget.Class, class);
+            gtk.Widget.Class.setTemplateFromResource(wc, resource_path);
+            inline for (template_children) |c| {
+                support.bindChild(class, Private.offset, c[0], c[1]);
+            }
+            gobject.Object.virtual_methods.finalize.implement(class, &finalize);
+        }
+    };
+};

@@ -173,6 +173,7 @@ public static class BottomBarExtensions
         MenuButton updatesMenuButton,
         ListBox updatesListBox,
         Label updatesPopoverTitle,
+        Button upgradeAllButton,
         IServiceProvider serviceProvider,
         IPackageUpdateNotifier packageUpdateNotifier)
     {
@@ -223,6 +224,11 @@ public static class BottomBarExtensions
                 {
                     updatesPopoverTitle.SetText(Translations.T("Available Updates ({0})", count));
                     updatesMenuButton.SetLabel(Translations.T("Updates ({0})", count));
+
+                    if (count > 0)
+                        upgradeAllButton.AddCssClass("suggested-action");
+                    else
+                        upgradeAllButton.RemoveCssClass("suggested-action");
 
                     while (updatesListBox.GetFirstChild() is { } child)
                         updatesListBox.Remove(child);

@@ -5,6 +5,10 @@ const configuration = @import("configuration.zig");
 const builtin = @import("builtin");
 const downloader = @import("../shared/downloader.zig");
 const listDictionary = @import("../shared/list_dictionary.zig");
+const os_tool = @import("distribution-hooks/os_utilities.zig");
+const TransFlag = bindings.libalpm.TransFlag;
+const cachyos = @import("distribution-hooks/CachyOS/update_notice.zig");
+const operation_api = @import("operation_context");
 
 const libalpm = bindings.libalpm; // typed aliases (Handle, Database, Config, ...)
 const rawLibalpm = bindings.libalpm.alpm;
@@ -19,15 +23,138 @@ pub const InitError = error{
     RegisterDbFailed,
     ConfigParseFailed,
 };
-pub const TransactionError = error{ NoHandle, TransInitFailed, PrepareFailed, CommitFailed, UnsatisfiedDeps, ConflictingDeps, FileConflicts, SyncDbFailed, PackageFetchFailed };
+pub const TransactionError = error{
+    NoHandle,
+    TransInitFailed,
+    PrepareFailed,
+    CommitFailed,
+    UnsatisfiedDeps,
+    ConflictingDeps,
+    FileConflicts,
+    SyncDbFailed,
+    PackageFetchFailed,
+    DatabaseReadFailed,
+    RefreshFailed,
+    OutOfMemory,
+    NoPackageFound,
+    RemovalFailed,
+    UpdateFetchFailed,
+    SetReasonFailed,
+    PackageLoadFailed,
+    PackageAddFailed,
+    OrphanShootFailed,
+    DirectoryReadFailed,
+    Cancelled,
+};
 
-pub const QueryError = error{ DbNotFound, PkgNotFound };
+pub const QueryError = error{ DbNotFound, PkgNotFound, NoHandle, OutOfMemory, Cancelled };
+
+pub const IgnorePackageError = configuration.IgnorePackageError;
+pub const HoldPackageError = configuration.HoldPackageError;
+
+/// A package that satisfies a dependency in a configured sync database.
+/// `real_name` is borrowed from libalpm and remains valid while the manager's
+/// databases remain loaded.
+pub const DependencySatisfier = struct {
+    real_name: [:0]const u8,
+    via_provides: bool,
+};
+
+/// Why restarting a systemd service failed after a system upgrade.
+pub const ServiceRestartFailureKind = enum {
+    spawn,
+    exit_status,
+    terminated,
+};
+
+/// A process which still has a deleted shared library mapped into its address
+/// space. All strings are owned by the containing `RestartReport`.
+pub const AffectedProcess = struct {
+    pid: u32,
+    command: ?[]u8,
+    service: ?[]u8,
+
+    fn deinit(self: *AffectedProcess, allocator: std.mem.Allocator) void {
+        if (self.command) |command| allocator.free(command);
+        if (self.service) |service| allocator.free(service);
+        self.* = undefined;
+    }
+};
+
+/// A structured failure returned when `systemctl restart` could not restart a
+/// service. `exit_code` is populated only when systemctl exited normally.
+pub const ServiceRestartFailure = struct {
+    service: []u8,
+    kind: ServiceRestartFailureKind,
+    exit_code: ?u8,
+    message: []u8,
+
+    fn deinit(self: *ServiceRestartFailure, allocator: std.mem.Allocator) void {
+        allocator.free(self.service);
+        allocator.free(self.message);
+        self.* = undefined;
+    }
+};
+
+/// Owned restart information collected immediately after a successful system
+/// upgrade. Call `deinit` when the report is no longer needed.
+pub const RestartReport = struct {
+    allocator: std.mem.Allocator,
+    /// Null when `/proc/sys/kernel/osrelease` could not be read.
+    running_kernel: ?[]u8,
+    /// Null when the running kernel or module directory could not be inspected.
+    running_kernel_modules_present: ?bool,
+    needs_reboot: bool,
+    process_scan_complete: bool,
+    skipped_processes: usize,
+    affected_processes: []AffectedProcess,
+    affected_services: [][]u8,
+    restarted_services: [][]u8,
+    failures: []ServiceRestartFailure,
+
+    pub fn empty(allocator: std.mem.Allocator) RestartReport {
+        return .{
+            .allocator = allocator,
+            .running_kernel = null,
+            .running_kernel_modules_present = null,
+            .needs_reboot = false,
+            .process_scan_complete = false,
+            .skipped_processes = 0,
+            .affected_processes = &.{},
+            .affected_services = &.{},
+            .restarted_services = &.{},
+            .failures = &.{},
+        };
+    }
+
+    pub fn deinit(self: *RestartReport) void {
+        if (self.running_kernel) |running_kernel| self.allocator.free(running_kernel);
+        for (self.affected_processes) |*process| process.deinit(self.allocator);
+        if (self.affected_processes.len != 0) self.allocator.free(self.affected_processes);
+        for (self.affected_services) |service| self.allocator.free(service);
+        if (self.affected_services.len != 0) self.allocator.free(self.affected_services);
+        for (self.restarted_services) |service| self.allocator.free(service);
+        if (self.restarted_services.len != 0) self.allocator.free(self.restarted_services);
+        for (self.failures) |*failure| failure.deinit(self.allocator);
+        if (self.failures.len != 0) self.allocator.free(self.failures);
+        self.* = undefined;
+    }
+};
+
+const RestartCheckOptions = struct {
+    proc_root: []const u8 = "/proc",
+    modules_root: []const u8 = "/usr/lib/modules",
+    systemctl_path: []const u8 = "systemctl",
+    restart_services: bool = true,
+};
 
 pub const Manager = struct {
     handle: libalpm.Handle = null,
     is_initialized: bool = false,
-    is_cachyos: bool = false,
+    detected_cachyos: bool = false,
     allocator: std.mem.Allocator,
+    environ: std.process.Environ,
+    config_path: []const u8,
     config: configuration.Configuration.Config,
     dispatcher: events.Dispatcher,
     threaded: std.Io.Threaded,
@@ -37,16 +164,31 @@ pub const Manager = struct {
     is_root: bool = false,
     temp_root_path: []const u8,
     show_hidden_packages: bool = false,
+    operation_context: ?*operation_api.OperationContext = null,
+    unexpected_fetch_reported: std.atomic.Value(bool) = .init(false),
 
-    /// If null is passed for config it will use the default /etc/pacman.conf
-    pub fn init(allocator: std.mem.Allocator, configPath: ?[]const u8, use_root: bool, temp_root_path: ?[]const u8) InitError!Manager {
+    /// If null is passed for config it will use the default /etc/pacman.conf.
+    /// The caller owns the returned manager and must call deinit when finished.
+    pub fn init(
+        allocator: std.mem.Allocator,
+        environ: std.process.Environ,
+        configPath: ?[]const u8,
+        use_root: bool,
+        temp_root_path: ?[]const u8,
+    ) InitError!*Manager {
         const config_path = configPath orelse "/etc/pacman.conf";
-        var self = Manager{
+        const self = allocator.create(Manager) catch return InitError.InitFailed;
+        errdefer allocator.destroy(self);
+        const owned_config_path = allocator.dupe(u8, config_path) catch return InitError.InitFailed;
+        errdefer allocator.free(owned_config_path);
+        self.* = Manager{
             .handle = null,
             .is_initialized = true,
             .allocator = allocator,
+            .environ = environ,
+            .config_path = owned_config_path,
             .dispatcher = events.Dispatcher.init(allocator),
-            .threaded = .init(allocator, .{}),
+            .threaded = .init(allocator, .{ .environ = environ }),
             .config = undefined,
             .is_root = use_root,
             .temp_root_path = temp_root_path orelse "",
@@ -58,6 +200,10 @@ pub const Manager = struct {
         };
         errdefer self.config.deinitialize();
         errdefer self.sync_dbs.deinit(self.allocator);
+        if (os_tool.prettyName(self.allocator, self.io())) |pretty_name| {
+            defer self.allocator.free(pretty_name);
+            if (std.ascii.eqlIgnoreCase("cachyos", pretty_name)) self.detected_cachyos = true;
+        }
 
         // Checks to see if the temp path is being used to run in non-root mode
         // for update checking. Symlink the real local database into the temp
@@ -108,7 +254,7 @@ pub const Manager = struct {
         self.handle = handle;
         self.is_initialized = true;
 
-        self.applyConfig(self.config, self.is_root);
+        self.applyConfig(self.config);
         self.setupCallbacks();
         return self;
     }
@@ -118,11 +264,38 @@ pub const Manager = struct {
         return self.show_hidden_packages;
     }
 
+    /// Borrows a shared operation context; it must outlive this manager and all
+    /// synchronous calls made through it.
+    pub fn setOperationContext(self: *Manager, context: ?*operation_api.OperationContext) void {
+        self.operation_context = context;
+    }
+
     pub fn sync(self: *Manager, force: bool) TransactionError!void {
-        var databaseMap = std.StringHashMap(std.ArrayList([]const u8)).init(self.allocator);
-        defer databaseMap.deinit();
-        self.package_download = false;
+        return self.syncDatabases(force, true);
+    }
+
+    /// Synchronizes repository databases for a non-root update preview. This
+    /// mirrors the C# temporary-DB path: downloads and reloads the user-owned
+    /// databases, but leaves signature enforcement to the eventual root
+    /// transaction instead of rejecting an otherwise readable preview cache.
+    pub fn sync_for_update_check(self: *Manager, force: bool) TransactionError!void {
+        return self.syncDatabases(force, false);
+    }
+
+    fn syncDatabases(
+        self: *Manager,
+        force: bool,
+        enforce_signature_verification: bool,
+    ) TransactionError!void {
         if (self.handle == null) return TransactionError.SyncDbFailed;
+        var operation_scope = OperationScope.init(self, .sync, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        var required_signatures = std.StringHashMap(bool).init(self.allocator);
+        defer required_signatures.deinit();
+        self.package_download = false;
         var databases: libalpm.DatabaseList = rawLibalpm.alpm_get_syncdbs(self.handle);
         if (databases == null) return TransactionError.SyncDbFailed;
         var dict = listDictionary.ListDictionary.init(self.allocator);
@@ -131,6 +304,9 @@ pub const Manager = struct {
             const db = databases.?.data orelse continue;
             var db_struct: libalpm.Database = .{ .ptr = @ptrCast(@alignCast(db)) };
             const db_name: []const u8 = db_struct.name() orelse continue;
+            required_signatures.put(db_name, databaseSignatureRequired(db_struct.sigLevel())) catch {
+                return TransactionError.SyncDbFailed;
+            };
             var servers = db_struct.servers();
             while (servers.next()) |server| {
                 dict.add(db_name, server) catch {
@@ -138,7 +314,7 @@ pub const Manager = struct {
                 };
             }
         }
-        const syncDirectory = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.config.database_path, "/sync" }) catch {
+        const syncDirectory = std.fs.path.join(self.allocator, &.{ self.config.database_path, "sync" }) catch {
             return TransactionError.SyncDbFailed;
         };
         defer self.allocator.free(syncDirectory);
@@ -147,57 +323,89 @@ pub const Manager = struct {
         // This will never come back to bite me right?
         if (std.Io.Dir.cwd().createDirPath(self.io(), syncDirectory)) |_| {} else |_| {}
 
-        var futures: std.ArrayList(std.Io.Future(void)) = .empty;
+        const database_future = std.Io.Future(downloader.DownloadError!void);
+        var futures: std.ArrayList(database_future) = .empty;
         defer futures.deinit(self.allocator);
 
+        var failed = false;
         var dict_iterator = dict.map.iterator();
         while (dict_iterator.next()) |entry| {
             const database_name = entry.key_ptr.*;
             const urls = entry.value_ptr.*;
-            const future = self.io().concurrent(download_database, .{ self, database_name, urls, syncDirectory, force }) catch {
-                self.download_database(database_name, urls, syncDirectory, force);
+            const signature_required = required_signatures.get(database_name) orelse false;
+            const future = self.io().concurrent(download_database, .{ self, database_name, urls, syncDirectory, force, signature_required }) catch {
+                self.download_database(database_name, urls, syncDirectory, force, signature_required) catch {
+                    failed = true;
+                };
                 continue;
             };
 
             futures.append(self.allocator, future) catch {
                 var f = future;
-                f.await(self.io());
+                f.await(self.io()) catch {
+                    failed = true;
+                };
             };
         }
 
-        for (futures.items) |*future| future.await(self.io());
-
-        for (self.sync_dbs.items) |db| {
-            if (db.verify()) continue;
-            const name = db.name() orelse continue;
-            const db_path = std.fmt.allocPrint(self.allocator, "{s}/{s}.db", .{ syncDirectory, name }) catch continue;
-            defer self.allocator.free(db_path);
-            const sig_path = std.fmt.allocPrint(self.allocator, "{s}.sig", .{db_path}) catch continue;
-            defer self.allocator.free(sig_path);
-            std.Io.Dir.cwd().deleteFile(self.io(), db_path) catch {};
-            std.Io.Dir.cwd().deleteFile(self.io(), sig_path) catch {};
-            return TransactionError.SyncDbFailed;
+        for (futures.items) |*future| {
+            future.await(self.io()) catch {
+                failed = true;
+            };
         }
+
+        if (failed) return TransactionError.UpdateFetchFailed;
+
+        if (enforce_signature_verification) {
+            for (self.sync_dbs.items) |db| {
+                if (db.verify()) continue;
+                const name = db.name() orelse continue;
+                const db_path = std.fmt.allocPrint(self.allocator, "{s}/{s}.db", .{ syncDirectory, name }) catch continue;
+                defer self.allocator.free(db_path);
+                const sig_path = std.fmt.allocPrint(self.allocator, "{s}.sig", .{db_path}) catch continue;
+                defer self.allocator.free(sig_path);
+                std.Io.Dir.cwd().deleteFile(self.io(), db_path) catch {};
+                std.Io.Dir.cwd().deleteFile(self.io(), sig_path) catch {};
+                return TransactionError.SyncDbFailed;
+            }
+        }
+        try self.refresh();
     }
 
-    pub fn get_installed_packages(self: *Manager) TransactionError!std.ArrayList(libalpm.Package) {
+    pub fn get_installed_packages(self: *Manager) TransactionError![]libalpm.OwnedPackage {
         if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
         const database = rawLibalpm.alpm_get_localdb(self.handle);
         const packages: libalpm.DatabaseList = rawLibalpm.alpm_db_get_pkgcache(database);
-        var package_list: std.ArrayList(libalpm.Package) = .empty;
+        var package_list: std.ArrayList(libalpm.OwnedPackage) = .empty;
+        errdefer {
+            libalpm.OwnedPackage.deinitItems(self.allocator, package_list.items);
+            package_list.deinit(self.allocator);
+        }
         var pkg_ptr = packages;
         while (pkg_ptr != null) : (pkg_ptr = pkg_ptr.?.*.next) {
             const package_ptr = pkg_ptr.?.data orelse continue;
             const package = libalpm.Package.from(package_ptr) orelse continue;
-            package_list.append(self.allocator, package) catch {
-                return TransactionError.PackageFetchFailed;
+            var owned_package = libalpm.OwnedPackage.init(self.allocator, package) catch return TransactionError.OutOfMemory;
+            package_list.append(self.allocator, owned_package) catch {
+                owned_package.deinit(self.allocator);
+                return TransactionError.OutOfMemory;
             };
         }
-        return package_list;
+        return package_list.toOwnedSlice(self.allocator) catch return TransactionError.OutOfMemory;
     }
 
     pub fn get_single_installed_package(self: *Manager, package_name: [:0]const u8) TransactionError!?libalpm.Package {
         if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, package_name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
         const database = rawLibalpm.alpm_get_localdb(self.handle);
         const package = rawLibalpm.alpm_db_get_pkg(database, package_name.ptr);
         if (package == null) {
@@ -208,22 +416,28 @@ pub const Manager = struct {
         return libalpm.Package.from(package.?);
     }
 
-    pub fn get_foreign_packages(self: *Manager) TransactionError!std.ArrayList(libalpm.Package) {
+    pub fn get_foreign_packages(self: *Manager) TransactionError![]libalpm.OwnedPackage {
         if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
 
         // Foreign packages are installed packages that are not provided by any
         // registered sync database (e.g. AUR or locally built packages).
-        var packages = self.get_installed_packages() catch {
-            return TransactionError.PackageFetchFailed;
-        };
-        defer packages.deinit(self.allocator);
-
-        var foreign_packages: std.ArrayList(libalpm.Package) = .empty;
-        defer foreign_packages.deinit(self.allocator);
-        errdefer foreign_packages.deinit(self.allocator);
+        var foreign_packages: std.ArrayList(libalpm.OwnedPackage) = .empty;
+        errdefer {
+            libalpm.OwnedPackage.deinitItems(self.allocator, foreign_packages.items);
+            foreign_packages.deinit(self.allocator);
+        }
 
         const sync_databases = rawLibalpm.alpm_get_syncdbs(self.handle);
-        for (packages.items) |package| {
+        const local_database = rawLibalpm.alpm_get_localdb(self.handle);
+        var packages = rawLibalpm.alpm_db_get_pkgcache(local_database);
+        while (packages != null) : (packages = packages.*.next) {
+            const package_data = packages.*.data orelse continue;
+            const package = libalpm.Package.from(package_data) orelse continue;
             const package_name = package.name() orelse continue;
             var found_in_sync: bool = false;
             var sync_ptr = sync_databases;
@@ -235,35 +449,1468 @@ pub const Manager = struct {
                     break;
                 }
             }
-            if (!found_in_sync) {
-                foreign_packages.append(self.allocator, package) catch {
-                    return TransactionError.PackageFetchFailed;
-                };
-            }
-        }
-        if (!self.show_hidden_packages) {
-            var filtered_packages: std.ArrayList(libalpm.Package) = .empty;
-            errdefer filtered_packages.deinit(self.allocator);
-            for (foreign_packages.items) |*package| {
-                var ignored: bool = false;
-                const name = package.name() orelse continue;
+            if (found_in_sync) continue;
+
+            if (!self.show_hidden_packages) {
+                var ignored = false;
                 for (self.config.ignore_package.items) |ignore| {
-                    if (std.mem.eql(u8, name, ignore)) {
+                    if (std.mem.eql(u8, package_name, ignore)) {
                         ignored = true;
                         break;
                     }
                 }
-                if (!ignored) filtered_packages.append(self.allocator, package.*) catch return TransactionError.PackageFetchFailed;
+                if (ignored) continue;
             }
-            return filtered_packages;
+
+            var owned_package = libalpm.OwnedPackage.init(self.allocator, package) catch return TransactionError.OutOfMemory;
+            foreign_packages.append(self.allocator, owned_package) catch {
+                owned_package.deinit(self.allocator);
+                return TransactionError.OutOfMemory;
+            };
         }
-        return foreign_packages;
+        return foreign_packages.toOwnedSlice(self.allocator) catch return TransactionError.OutOfMemory;
     }
 
-    fn download_database(self: *Manager, database_name: []const u8, urls: std.ArrayList([]const u8), sync_directory: []const u8, force_download: bool) void {
+    pub fn get_available_packages(self: *Manager) TransactionError![]libalpm.OwnedPackage {
+        if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        var packages: std.ArrayList(libalpm.OwnedPackage) = .empty;
+        errdefer {
+            libalpm.OwnedPackage.deinitItems(self.allocator, packages.items);
+            packages.deinit(self.allocator);
+        }
+
+        var sync_database: libalpm.DatabaseList = rawLibalpm.alpm_get_syncdbs(self.handle);
+        while (sync_database != null) : (sync_database = sync_database.?.*.next) {
+            const db_data = sync_database.?.*.data orelse continue;
+            const database = libalpm.Database.from(db_data) orelse continue;
+            var tempPackages = database.packages();
+            while (tempPackages.next()) |pkg| {
+                var owned_package = libalpm.OwnedPackage.init(self.allocator, pkg) catch return TransactionError.OutOfMemory;
+                packages.append(self.allocator, owned_package) catch {
+                    owned_package.deinit(self.allocator);
+                    return TransactionError.OutOfMemory;
+                };
+            }
+        }
+        return packages.toOwnedSlice(self.allocator) catch return TransactionError.OutOfMemory;
+    }
+
+    pub fn get_available_packages_from_group(self: *Manager, groupName: [:0]const u8) TransactionError![]libalpm.OwnedPackage {
+        if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, groupName);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        var packages: std.ArrayList(libalpm.OwnedPackage) = .empty;
+        errdefer {
+            libalpm.OwnedPackage.deinitItems(self.allocator, packages.items);
+            packages.deinit(self.allocator);
+        }
+
+        var sync_database: libalpm.DatabaseList = rawLibalpm.alpm_get_syncdbs(self.handle);
+        while (sync_database != null) : (sync_database = sync_database.?.*.next) {
+            const db = sync_database.?.*.data orelse continue;
+            const database = libalpm.Database.from(db) orelse continue;
+            const group = database.getGroup(groupName) orelse continue;
+            var package_list = group.packages();
+            while (package_list.next()) |pkg| {
+                const owned_pkg = try libalpm.OwnedPackage.init(self.allocator, pkg);
+                packages.append(self.allocator, owned_pkg) catch return TransactionError.OutOfMemory;
+            }
+            break;
+        }
+        return packages.toOwnedSlice(self.allocator) catch TransactionError.OutOfMemory;
+    }
+
+    pub fn get_updates_available(self: *Manager) TransactionError![]libalpm.OwnedPackageWithUpdate {
+        if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        var package_updates: std.ArrayList(libalpm.OwnedPackageWithUpdate) = .empty;
+        errdefer {
+            for (package_updates.items) |*update| update.deinit(self.allocator);
+            package_updates.deinit(self.allocator);
+        }
+        const sync_databases = rawLibalpm.alpm_get_syncdbs(self.handle);
+        const local_database = rawLibalpm.alpm_get_localdb(self.handle);
+        var local_packages = rawLibalpm.alpm_db_get_pkgcache(local_database);
+        while (local_packages != null) : (local_packages = local_packages.*.next) {
+            const package_data = local_packages.*.data orelse continue;
+            const local_pkg = libalpm.Package.from(package_data) orelse continue;
+            const new_version = rawLibalpm.alpm_sync_get_new_version(local_pkg.ptr, sync_databases) orelse continue;
+            var owned_update = libalpm.OwnedPackageWithUpdate.init(
+                self.allocator,
+                local_pkg,
+                .{ .ptr = new_version },
+            ) catch return TransactionError.OutOfMemory;
+            var ignored = false;
+            for (self.config.ignore_package.items) |ign_pkg| {
+                if (std.ascii.eqlIgnoreCase(ign_pkg, owned_update.new_package.name() orelse "")) {
+                    ignored = true;
+                    break;
+                }
+            }
+            if (!ignored) {
+                for (self.config.ignore_group.items) |ign_group| {
+                    for (owned_update.new_package.groups()) |group| {
+                        if (std.ascii.eqlIgnoreCase(ign_group, group)) {
+                            ignored = true;
+
+                            break;
+                        }
+                    }
+                    if (ignored) {
+                        owned_update.deinit(self.allocator);
+                        break;
+                    }
+                }
+            }
+            if (ignored) continue;
+            package_updates.append(self.allocator, owned_update) catch {
+                owned_update.deinit(self.allocator);
+                return TransactionError.OutOfMemory;
+            };
+        }
+        return package_updates.toOwnedSlice(self.allocator) catch return TransactionError.OutOfMemory;
+    }
+
+    pub fn install_packages(
+        self: *Manager,
+        package_names: [][:0]const u8,
+        trans_flags_arg: TransFlag,
+    ) TransactionError!void {
+        if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .install, if (package_names.len == 0) null else package_names[0]);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        const sync_databases = rawLibalpm.alpm_get_syncdbs(self.handle);
+        var packages: std.ArrayList(*rawLibalpm.alpm_pkg_t) = .empty;
+        defer packages.deinit(self.allocator);
+        var optional_names: std.ArrayList([:0]const u8) = .empty;
+        defer optional_names.deinit(self.allocator);
+
+        for (package_names) |target| {
+            const slash = std.mem.indexOfScalar(u8, target, '/');
+            if (slash) |i| {
+                if (i == 0 or i + 1 >= target.len) return TransactionError.PackageFetchFailed;
+                const repo = target[0..i];
+                const name = target[i + 1 ..];
+                var node = sync_databases;
+                var found: ?*rawLibalpm.alpm_pkg_t = null;
+                while (node != null) : (node = node.*.next) {
+                    const db_data: ?*anyopaque = node.*.data;
+                    const db_ptr: *rawLibalpm.alpm_db_t = @ptrCast(@alignCast(db_data orelse continue));
+                    const db_name = libalpm.str(rawLibalpm.alpm_db_get_name(db_ptr)) orelse continue;
+                    if (!std.ascii.eqlIgnoreCase(repo, db_name)) continue;
+                    found = rawLibalpm.alpm_db_get_pkg(db_ptr, name.ptr);
+                    break;
+                }
+                try packages.append(self.allocator, found orelse return TransactionError.PackageFetchFailed);
+            } else {
+                var node = sync_databases;
+                var found_any = false;
+                while (node != null) : (node = node.*.next) {
+                    const db_data: ?*anyopaque = node.*.data;
+                    const db_ptr: *rawLibalpm.alpm_db_t = @ptrCast(@alignCast(db_data orelse continue));
+                    if (rawLibalpm.alpm_db_get_pkg(db_ptr, target.ptr)) |pkg| {
+                        try packages.append(self.allocator, pkg);
+                        found_any = true;
+                        break;
+                    }
+                    if (rawLibalpm.alpm_db_get_group(db_ptr, target.ptr)) |group| {
+                        var pkg_node = group.*.packages;
+                        while (pkg_node != null) : (pkg_node = pkg_node.*.next) {
+                            const pkg_data: ?*anyopaque = pkg_node.*.data;
+                            const pkg: *rawLibalpm.alpm_pkg_t = @ptrCast(@alignCast(pkg_data orelse continue));
+                            try packages.append(self.allocator, pkg);
+                        }
+                        found_any = true;
+                        break;
+                    }
+                    if (rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(db_ptr), target.ptr)) |pkg| {
+                        try packages.append(self.allocator, pkg);
+                        found_any = true;
+                        break;
+                    }
+                }
+                if (!found_any) return TransactionError.PackageFetchFailed;
+            }
+        }
+        if (packages.items.len == 0) return TransactionError.PackageFetchFailed;
+
+        // Ask once per package. The event response's `pkg` is the selected optional
+        // dependency; callers may answer repeatedly as each package is inspected.
+        const initial_count = packages.items.len;
+        for (packages.items[0..initial_count]) |pkg| {
+            var names: std.ArrayList([]const u8) = .empty;
+            defer names.deinit(self.allocator);
+            var options: std.ArrayList(events.ProviderOption) = .empty;
+            defer options.deinit(self.allocator);
+            var deps = (libalpm.Package{ .ptr = pkg }).optional_depends();
+            while (deps.next()) |dep| {
+                const name = dep.name() orelse continue;
+                if (!(self.get_opt_depend_if_available(name) catch false)) continue;
+                const local_cache = rawLibalpm.alpm_db_get_pkgcache(rawLibalpm.alpm_get_localdb(self.handle));
+                try names.append(self.allocator, name);
+                try options.append(self.allocator, .{
+                    .name = name,
+                    .description = dep.description() orelse "No description found",
+                    .is_installed = rawLibalpm.alpm_find_satisfier(local_cache, name.ptr) != null,
+                });
+            }
+            if (options.items.len == 0 or
+                (self.dispatcher.operation == null and self.dispatcher.question.items.len == 0)) continue;
+            const pkg_name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse "package";
+            const prompt = try std.fmt.allocPrint(self.allocator, "Select an optional dependency for {s}", .{pkg_name});
+            defer self.allocator.free(prompt);
+            const response = self.dispatcher.raiseQuestion(self.io(), .{
+                .question = prompt,
+                .question_type = @intFromEnum(libalpm.QuestionType.select_optional_dependencies),
+                .options = names.items,
+                .provider_options = options.items,
+            });
+            const selected = response.pkg orelse continue;
+            const selected_z = try self.allocator.dupeZ(u8, selected);
+            defer self.allocator.free(selected_z);
+            if (rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(rawLibalpm.alpm_get_localdb(self.handle)), selected_z.ptr) != null) continue;
+            var node = sync_databases;
+            while (node != null) : (node = node.*.next) {
+                const db_data: ?*anyopaque = node.*.data;
+                const db_ptr: *rawLibalpm.alpm_db_t = @ptrCast(@alignCast(db_data orelse continue));
+                const selected_pkg = rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(db_ptr), selected_z.ptr) orelse continue;
+                try packages.append(self.allocator, selected_pkg);
+                if (libalpm.str(rawLibalpm.alpm_pkg_get_name(selected_pkg))) |resolved_name|
+                    try optional_names.append(self.allocator, resolved_name);
+                break;
+            }
+        }
+
+        // Starts transaction impleentation
+        var trans_flags = trans_flags_arg;
+        if (trans_flags.dbonly) trans_flags.nodeps = true;
+        if (rawLibalpm.alpm_trans_init(self.handle, @bitCast(trans_flags.to_trans_flag())) != 0) return TransactionError.TransInitFailed;
+        defer _ = rawLibalpm.alpm_trans_release(self.handle);
+
+        for (packages.items) |pkg| {
+            if (rawLibalpm.alpm_add_pkg(self.handle, pkg) == 0) continue;
+            if (rawLibalpm.alpm_errno(self.handle) == rawLibalpm.ALPM_ERR_TRANS_DUP_TARGET) continue;
+            return TransactionError.PrepareFailed;
+        }
+        var data: [*c]rawLibalpm.alpm_list_t = null;
+        if (rawLibalpm.alpm_trans_prepare(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {};
+            return TransactionError.PrepareFailed;
+        }
+        try self.predownloadPreparedPackages(trans_flags);
+
+        // The prepare error list does not belong to the commit call.
+        data = null;
+        if (rawLibalpm.alpm_trans_commit(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {};
+            return TransactionError.CommitFailed;
+        }
+        const local_db = rawLibalpm.alpm_get_localdb(self.handle);
+        for (optional_names.items) |name| {
+            const installed = rawLibalpm.alpm_db_get_pkg(local_db, name.ptr) orelse continue;
+            _ = rawLibalpm.alpm_pkg_set_reason(installed, rawLibalpm.ALPM_PKG_REASON_DEPEND);
+        }
+    }
+
+    pub fn remove_packages(self: *Manager, packages_names: [][:0]const u8, flags: TransFlag, keep_optional_dependencis: bool) TransactionError!void {
+        if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .remove, if (packages_names.len == 0) null else packages_names[0]);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        if (packages_names.len == 0) return TransactionError.NoPackageFound;
+
+        for (self.config.hold_packages.items) |hold_pkg| {
+            for (packages_names) |pkg| {
+                if (std.ascii.eqlIgnoreCase(hold_pkg, pkg)) {
+                    const prompt = try std.fmt.allocPrint(self.allocator, "Are you sure you want to remove {s}? It is listed as a held package.", .{pkg});
+                    defer self.allocator.free(prompt);
+                    const response = self.askYesNo(self.io(), @intFromEnum(libalpm.QuestionType.remove_packages), prompt);
+                    if (!response) {
+                        self.dispatcher.raiseError(.{ .message = "Held package removal cancelled." });
+                        return TransactionError.PrepareFailed;
+                    }
+                }
+            }
+        }
+
+        const local_db = rawLibalpm.alpm_get_localdb(self.handle);
+        var package_pointers: std.ArrayList(*rawLibalpm.alpm_pkg_t) = .empty;
+        defer package_pointers.deinit(self.allocator);
+        for (packages_names) |pkg| {
+            // Check for regular package
+            const package = rawLibalpm.alpm_db_get_pkg(local_db, pkg.ptr) orelse {
+                // Check for group name
+                const group_ptr = rawLibalpm.alpm_db_get_group(local_db, pkg.ptr) orelse {
+                    const satisfier = rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(local_db), pkg.ptr) orelse {
+                        self.dispatcher.raiseError(.{ .message = "Failed to find package" });
+                        return TransactionError.NoPackageFound;
+                    };
+                    package_pointers.append(self.allocator, satisfier) catch {
+                        return TransactionError.OutOfMemory;
+                    };
+                    continue;
+                };
+                const group = libalpm.AlpmPackageGroup{ .ptr = group_ptr };
+                var packages = group.packages();
+
+                while (packages.next()) |package| {
+                    package_pointers.append(self.allocator, package.ptr) catch {
+                        return TransactionError.OutOfMemory;
+                    };
+                }
+                continue;
+            };
+
+            package_pointers.append(self.allocator, package) catch {
+                return TransactionError.OutOfMemory;
+            };
+        }
+
+        if (!keep_optional_dependencis) {
+            const current_count = package_pointers.items.len;
+            var package_index: usize = 0;
+            while (package_index < current_count) : (package_index += 1) {
+                const package = libalpm.Package{ .ptr = package_pointers.items[package_index] };
+                var optional_deps = package.optional_depends();
+                while (optional_deps.next()) |deps| {
+                    const dep_name = deps.name() orelse continue;
+                    // looks for local package continues on if failes to find.
+                    const local_ptr = rawLibalpm.alpm_db_get_pkg(local_db, dep_name.ptr) orelse {
+                        const message = try std.fmt.allocPrint(self.allocator, "Failed to find {s} in local database. Skipping...", .{dep_name});
+                        defer self.allocator.free(message);
+                        self.dispatcher.raiseInformational(.{
+                            .event_type = libalpm.EventType.failed_optional_dependency_operation,
+                            .message = message,
+                        });
+                        continue;
+                    };
+                    const local_pkg = libalpm.Package{ .ptr = local_ptr };
+                    // checks reason and continues loop if explicit
+                    const pkg_reason = local_pkg.install_reason();
+                    if (pkg_reason == libalpm.PackageReason.Explicit) {
+                        const message = try std.fmt.allocPrint(self.allocator, "Package {s} is explicit. Skipping...", .{dep_name});
+                        defer self.allocator.free(message);
+                        self.dispatcher.raiseInformational(.{
+                            .event_type = libalpm.EventType.package_explicit,
+                            .message = message,
+                        });
+                        continue;
+                    }
+
+                    // checks if package is still in use by other applications
+                    var required_by = local_pkg.required_by();
+                    var still_required: bool = false;
+                    while (required_by.next()) |package_name| {
+                        _ = rawLibalpm.alpm_db_get_pkg(local_db, package_name.ptr) orelse {
+                            // continuing on as this package is not installed and we can ignore.
+                            continue;
+                        };
+                        const message = try std.fmt.allocPrint(self.allocator, "Found {s} is still needed. Skipping removal...", .{package_name});
+                        defer self.allocator.free(message);
+                        self.dispatcher.raiseInformational(.{ .event_type = libalpm.EventType.failed_optional_dependency_operation, .message = message });
+                        still_required = true;
+                        break;
+                    }
+                    // skips optional dependency removal as the package is still required
+                    if (still_required) {
+                        continue;
+                    }
+                    const package_name = package.name() orelse "unknown package";
+                    const message = try std.fmt.allocPrint(self.allocator, "Found {s} is unneeded after removal. queuing for removal", .{package_name});
+                    defer self.allocator.free(message);
+                    self.dispatcher.raiseInformational(.{ .event_type = libalpm.EventType.optdep_removal, .message = message });
+                    package_pointers.append(self.allocator, local_ptr) catch return TransactionError.OutOfMemory;
+                }
+            }
+        }
+
+        var trans_flags = flags;
+        if (trans_flags.dbonly) trans_flags.nodeps = true;
+
+        if (rawLibalpm.alpm_trans_init(self.handle, @bitCast(trans_flags.to_trans_flag())) != 0) return TransactionError.TransInitFailed;
+        defer _ = rawLibalpm.alpm_trans_release(self.handle);
+
+        for (package_pointers.items) |pkg_ptr| {
+            if (rawLibalpm.alpm_remove_pkg(self.handle, pkg_ptr) == 0) continue;
+            const errno = rawLibalpm.alpm_errno(self.handle);
+            const reason = libalpm.str(rawLibalpm.alpm_strerror(errno)) orelse
+                "Unknown libalpm error";
+            const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg_ptr)) orelse
+                "unknown package";
+
+            const message = std.fmt.allocPrint(
+                self.allocator,
+                "Failed to queue {s} for removal: {s}",
+                .{ name, reason },
+            ) catch {
+                self.dispatcher.raiseError(.{
+                    .message = "Failed to queue package for removal.",
+                });
+                return TransactionError.RemovalFailed;
+            };
+            defer self.allocator.free(message);
+
+            self.dispatcher.raiseError(.{ .message = message });
+            return TransactionError.RemovalFailed;
+        }
+
+        var data: [*c]rawLibalpm.alpm_list_t = null;
+        if (rawLibalpm.alpm_trans_prepare(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {};
+            return TransactionError.PrepareFailed;
+        }
+        if (rawLibalpm.alpm_trans_commit(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {};
+            return TransactionError.CommitFailed;
+        }
+    }
+
+    /// Performs a full system upgrade and then checks the running system for
+    /// processes and services which still use replaced libraries. The returned
+    /// report is owned by the caller and must be deinitialized.
+    pub fn sync_system_update(self: *Manager, flags: TransFlag) TransactionError!RestartReport {
+        if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .update, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+
+        // This is first before updating so it can bail before database is downloaded
+        if (self.detected_cachyos) {
+            const update_notice = cachyos.UpdateNotice.init(self.allocator, self.io());
+            if (!update_notice.check(self.environ, &self.dispatcher)) return RestartReport.empty(self.allocator);
+        }
+        self.sync(true) catch return TransactionError.SyncDbFailed;
+
+        self.package_download = true;
+
+        var trans_flags = flags;
+        if (trans_flags.dbonly) trans_flags.nodeps = true;
+
+        if (rawLibalpm.alpm_trans_init(self.handle, @bitCast(trans_flags.to_trans_flag())) != 0) {
+            return TransactionError.TransInitFailed;
+        }
+        var transaction_active = true;
+        defer {
+            if (transaction_active) _ = rawLibalpm.alpm_trans_release(self.handle);
+        }
+
+        // Potentially could allow downgrade here
+        if (rawLibalpm.alpm_sync_sysupgrade(self.handle, @intFromBool(false)) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), null) catch {
+                // Dropping here cause this is super screwed.
+            };
+            return TransactionError.UpdateFetchFailed;
+        }
+
+        var data: [*c]rawLibalpm.alpm_list_t = null;
+
+        // Fully calculate dependencies, replacements, and conflicts,
+        // collects data for concurrent downloading
+        if (rawLibalpm.alpm_trans_prepare(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {
+                // drop here has now use
+            };
+            return TransactionError.PrepareFailed;
+        }
+
+        try self.predownloadPreparedPackages(trans_flags);
+
+        data = null;
+        if (rawLibalpm.alpm_trans_commit(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {
+                // Abandon hope all yee who enter here
+            };
+            return TransactionError.CommitFailed;
+        }
+
+        // Do not hold the pacman database lock while inspecting processes or
+        // invoking systemctl.
+        _ = rawLibalpm.alpm_trans_release(self.handle);
+        transaction_active = false;
+
+        if (trans_flags.dbonly) return RestartReport.empty(self.allocator);
+        return self.checkForRequiredRestarts(.{}) catch TransactionError.OutOfMemory;
+    }
+
+    /// Detects stale runtime state and restarts mapped systemd services. File
+    /// access races and permission failures under procfs are non-fatal and are
+    /// reflected by `process_scan_complete`/`skipped_processes`. Allocation is
+    /// the only error because restart command failures belong in the report.
+    fn checkForRequiredRestarts(self: *Manager, options: RestartCheckOptions) error{OutOfMemory}!RestartReport {
+        if (builtin.os.tag != .linux) return RestartReport.empty(self.allocator);
+
+        var running_kernel: ?[]u8 = null;
+        errdefer if (running_kernel) |kernel| self.allocator.free(kernel);
+        var running_kernel_modules_present: ?bool = null;
+        var needs_reboot = false;
+        var process_scan_complete = true;
+        var skipped_processes: usize = 0;
+
+        var affected_processes: std.ArrayList(AffectedProcess) = .empty;
+        errdefer {
+            for (affected_processes.items) |*process| process.deinit(self.allocator);
+            affected_processes.deinit(self.allocator);
+        }
+        var affected_services: std.ArrayList([]u8) = .empty;
+        errdefer {
+            for (affected_services.items) |service| self.allocator.free(service);
+            affected_services.deinit(self.allocator);
+        }
+        var restarted_services: std.ArrayList([]u8) = .empty;
+        errdefer {
+            for (restarted_services.items) |service| self.allocator.free(service);
+            restarted_services.deinit(self.allocator);
+        }
+        var failures: std.ArrayList(ServiceRestartFailure) = .empty;
+        errdefer {
+            for (failures.items) |*failure| failure.deinit(self.allocator);
+            failures.deinit(self.allocator);
+        }
+
+        const osrelease_path = std.fs.path.join(
+            self.allocator,
+            &.{ options.proc_root, "sys", "kernel", "osrelease" },
+        ) catch return error.OutOfMemory;
+        defer self.allocator.free(osrelease_path);
+
+        if (std.Io.Dir.cwd().readFileAlloc(
+            self.io(),
+            osrelease_path,
+            self.allocator,
+            .limited(4096),
+        )) |contents| {
+            defer self.allocator.free(contents);
+            const trimmed = std.mem.trim(u8, contents, " \t\r\n");
+            if (trimmed.len != 0) {
+                running_kernel = self.allocator.dupe(u8, trimmed) catch return error.OutOfMemory;
+                const modules_path = std.fs.path.join(
+                    self.allocator,
+                    &.{ options.modules_root, trimmed },
+                ) catch return error.OutOfMemory;
+                defer self.allocator.free(modules_path);
+
+                if (std.Io.Dir.cwd().statFile(self.io(), modules_path, .{})) |stat| {
+                    running_kernel_modules_present = stat.kind == .directory;
+                    needs_reboot = !running_kernel_modules_present.?;
+                } else |err| switch (err) {
+                    error.FileNotFound, error.NotDir => {
+                        running_kernel_modules_present = false;
+                        needs_reboot = true;
+                    },
+                    else => running_kernel_modules_present = null,
+                }
+            }
+        } else |_| {}
+
+        var proc_dir = std.Io.Dir.cwd().openDir(
+            self.io(),
+            options.proc_root,
+            .{ .iterate = true },
+        ) catch {
+            process_scan_complete = false;
+            return .{
+                .allocator = self.allocator,
+                .running_kernel = running_kernel,
+                .running_kernel_modules_present = running_kernel_modules_present,
+                .needs_reboot = needs_reboot,
+                .process_scan_complete = process_scan_complete,
+                .skipped_processes = skipped_processes,
+                .affected_processes = &.{},
+                .affected_services = &.{},
+                .restarted_services = &.{},
+                .failures = &.{},
+            };
+        };
+        defer proc_dir.close(self.io());
+
+        var iterator = proc_dir.iterateAssumeFirstIteration();
+        while (true) {
+            const next_entry = iterator.next(self.io()) catch {
+                process_scan_complete = false;
+                break;
+            };
+            const entry = next_entry orelse break;
+            if (entry.kind != .directory and entry.kind != .sym_link) continue;
+            const pid = std.fmt.parseInt(u32, entry.name, 10) catch continue;
+
+            const maps_path = std.fs.path.join(
+                self.allocator,
+                &.{ options.proc_root, entry.name, "maps" },
+            ) catch return error.OutOfMemory;
+            defer self.allocator.free(maps_path);
+            const maps = std.Io.Dir.cwd().readFileAlloc(
+                self.io(),
+                maps_path,
+                self.allocator,
+                .limited(16 * 1024 * 1024),
+            ) catch {
+                skipped_processes += 1;
+                continue;
+            };
+            defer self.allocator.free(maps);
+            if (!hasDeletedSharedLibrary(maps)) continue;
+
+            var command: ?[]u8 = null;
+            const comm_path = std.fs.path.join(
+                self.allocator,
+                &.{ options.proc_root, entry.name, "comm" },
+            ) catch return error.OutOfMemory;
+            defer self.allocator.free(comm_path);
+            if (std.Io.Dir.cwd().readFileAlloc(
+                self.io(),
+                comm_path,
+                self.allocator,
+                .limited(4096),
+            )) |comm_contents| {
+                defer self.allocator.free(comm_contents);
+                const comm = std.mem.trim(u8, comm_contents, " \t\r\n");
+                if (comm.len != 0) {
+                    command = self.allocator.dupe(u8, comm) catch return error.OutOfMemory;
+                    if (isCriticalRestartProcess(comm)) needs_reboot = true;
+                }
+            } else |_| {}
+
+            var service: ?[]u8 = null;
+            const cgroup_path = std.fs.path.join(
+                self.allocator,
+                &.{ options.proc_root, entry.name, "cgroup" },
+            ) catch {
+                if (command) |owned| self.allocator.free(owned);
+                return error.OutOfMemory;
+            };
+            defer self.allocator.free(cgroup_path);
+            if (std.Io.Dir.cwd().readFileAlloc(
+                self.io(),
+                cgroup_path,
+                self.allocator,
+                .limited(1024 * 1024),
+            )) |cgroup| {
+                defer self.allocator.free(cgroup);
+                if (serviceFromCgroup(cgroup)) |service_name| {
+                    service = self.allocator.dupe(u8, service_name) catch {
+                        if (command) |owned| self.allocator.free(owned);
+                        return error.OutOfMemory;
+                    };
+
+                    var seen = false;
+                    for (affected_services.items) |known| {
+                        if (std.mem.eql(u8, known, service_name)) {
+                            seen = true;
+                            break;
+                        }
+                    }
+                    if (!seen) {
+                        const owned_service = self.allocator.dupe(u8, service_name) catch {
+                            if (command) |owned| self.allocator.free(owned);
+                            if (service) |owned| self.allocator.free(owned);
+                            return error.OutOfMemory;
+                        };
+                        affected_services.append(self.allocator, owned_service) catch {
+                            self.allocator.free(owned_service);
+                            if (command) |owned| self.allocator.free(owned);
+                            if (service) |owned| self.allocator.free(owned);
+                            return error.OutOfMemory;
+                        };
+                    }
+                }
+            } else |_| {}
+
+            affected_processes.append(self.allocator, .{
+                .pid = pid,
+                .command = command,
+                .service = service,
+            }) catch {
+                if (command) |owned| self.allocator.free(owned);
+                if (service) |owned| self.allocator.free(owned);
+                return error.OutOfMemory;
+            };
+        }
+
+        std.mem.sort([]u8, affected_services.items, {}, stringBefore);
+
+        if (options.restart_services and !needs_reboot) {
+            for (affected_services.items) |service| {
+                const result = std.process.run(self.allocator, self.io(), .{
+                    .argv = &.{ options.systemctl_path, "restart", service },
+                    .stdout_limit = .limited(4096),
+                    .stderr_limit = .limited(64 * 1024),
+                }) catch |err| {
+                    const failure_service = self.allocator.dupe(u8, service) catch return error.OutOfMemory;
+                    const failure_message = self.allocator.dupe(u8, @errorName(err)) catch {
+                        self.allocator.free(failure_service);
+                        return error.OutOfMemory;
+                    };
+                    failures.append(self.allocator, .{
+                        .service = failure_service,
+                        .kind = .spawn,
+                        .exit_code = null,
+                        .message = failure_message,
+                    }) catch {
+                        self.allocator.free(failure_service);
+                        self.allocator.free(failure_message);
+                        return error.OutOfMemory;
+                    };
+                    continue;
+                };
+                defer self.allocator.free(result.stdout);
+                defer self.allocator.free(result.stderr);
+
+                const succeeded = switch (result.term) {
+                    .exited => |code| code == 0,
+                    else => false,
+                };
+                if (succeeded) {
+                    const restarted = self.allocator.dupe(u8, service) catch return error.OutOfMemory;
+                    restarted_services.append(self.allocator, restarted) catch {
+                        self.allocator.free(restarted);
+                        return error.OutOfMemory;
+                    };
+                    continue;
+                }
+
+                const failure_kind: ServiceRestartFailureKind = switch (result.term) {
+                    .exited => .exit_status,
+                    else => .terminated,
+                };
+                const exit_code: ?u8 = switch (result.term) {
+                    .exited => |code| code,
+                    else => null,
+                };
+                const stderr = std.mem.trim(u8, result.stderr, " \t\r\n");
+                const failure_message = if (stderr.len != 0)
+                    self.allocator.dupe(u8, stderr) catch return error.OutOfMemory
+                else if (exit_code) |code|
+                    std.fmt.allocPrint(self.allocator, "systemctl exited with status {d}", .{code}) catch return error.OutOfMemory
+                else
+                    self.allocator.dupe(
+                        u8,
+                        "systemctl was terminated before it exited",
+                    ) catch return error.OutOfMemory;
+                const failure_service = self.allocator.dupe(u8, service) catch {
+                    self.allocator.free(failure_message);
+                    return error.OutOfMemory;
+                };
+                failures.append(self.allocator, .{
+                    .service = failure_service,
+                    .kind = failure_kind,
+                    .exit_code = exit_code,
+                    .message = failure_message,
+                }) catch {
+                    self.allocator.free(failure_service);
+                    self.allocator.free(failure_message);
+                    return error.OutOfMemory;
+                };
+            }
+        }
+
+        const process_slice: []AffectedProcess = if (affected_processes.items.len == 0)
+            &.{}
+        else
+            affected_processes.toOwnedSlice(self.allocator) catch return error.OutOfMemory;
+        errdefer {
+            for (process_slice) |*process| process.deinit(self.allocator);
+            if (process_slice.len != 0) self.allocator.free(process_slice);
+        }
+        const affected_service_slice: [][]u8 = if (affected_services.items.len == 0)
+            &.{}
+        else
+            affected_services.toOwnedSlice(self.allocator) catch return error.OutOfMemory;
+        errdefer {
+            for (affected_service_slice) |service| self.allocator.free(service);
+            if (affected_service_slice.len != 0) self.allocator.free(affected_service_slice);
+        }
+        const restarted_service_slice: [][]u8 = if (restarted_services.items.len == 0)
+            &.{}
+        else
+            restarted_services.toOwnedSlice(self.allocator) catch return error.OutOfMemory;
+        errdefer {
+            for (restarted_service_slice) |service| self.allocator.free(service);
+            if (restarted_service_slice.len != 0) self.allocator.free(restarted_service_slice);
+        }
+        const failure_slice: []ServiceRestartFailure = if (failures.items.len == 0)
+            &.{}
+        else
+            failures.toOwnedSlice(self.allocator) catch return error.OutOfMemory;
+        errdefer {
+            for (failure_slice) |*failure| failure.deinit(self.allocator);
+            if (failure_slice.len != 0) self.allocator.free(failure_slice);
+        }
+
+        return .{
+            .allocator = self.allocator,
+            .running_kernel = running_kernel,
+            .running_kernel_modules_present = running_kernel_modules_present,
+            .needs_reboot = needs_reboot,
+            .process_scan_complete = process_scan_complete,
+            .skipped_processes = skipped_processes,
+            .affected_processes = process_slice,
+            .affected_services = affected_service_slice,
+            .restarted_services = restarted_service_slice,
+            .failures = failure_slice,
+        };
+    }
+
+    pub fn update_package_reason(self: *Manager, pkg_name: [:0]const u8, reason: libalpm.PackageReason) TransactionError!void {
+        if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .configure, pkg_name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        const local_database = rawLibalpm.alpm_get_localdb(self.handle) orelse return TransactionError.DatabaseReadFailed;
+        const pkg = rawLibalpm.alpm_db_get_pkg(local_database, pkg_name) orelse return TransactionError.PackageFetchFailed;
+        if (rawLibalpm.alpm_pkg_set_reason(pkg, @intCast(@intFromEnum(reason))) != 0) return TransactionError.SetReasonFailed;
+    }
+
+    pub fn install_local_packages(self: *Manager, paths: []const []const u8, flags: TransFlag) TransactionError!void {
+        if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .install, if (paths.len == 0) null else paths[0]);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        if (paths.len == 0) return TransactionError.NoPackageFound;
+
+        var package_ptrs: std.ArrayList(libalpm.Package) = .empty;
+        defer package_ptrs.deinit(self.allocator);
+        const sig_level = rawLibalpm.ALPM_SIG_PACKAGE_OPTIONAL | rawLibalpm.ALPM_SIG_DATABASE_OPTIONAL;
+        for (paths) |path| {
+            const path_z = self.allocator.dupeZ(u8, path) catch {
+                for (package_ptrs.items) |pkg| _ = rawLibalpm.alpm_pkg_free(pkg.ptr);
+                return TransactionError.OutOfMemory;
+            };
+            defer self.allocator.free(path_z);
+
+            var temp_pkg: ?*rawLibalpm.alpm_pkg_t = null;
+            if (rawLibalpm.alpm_pkg_load(self.handle, path_z.ptr, @intFromBool(true), sig_level, &temp_pkg) != 0 or temp_pkg == null) {
+                const errno = rawLibalpm.alpm_errno(self.handle);
+                if (temp_pkg) |pkg| _ = rawLibalpm.alpm_pkg_free(pkg);
+                for (package_ptrs.items) |pkg| _ = rawLibalpm.alpm_pkg_free(pkg.ptr);
+                self.handleErrorMessage(@intCast(errno), null) catch {};
+                return TransactionError.PackageLoadFailed;
+            }
+            package_ptrs.append(self.allocator, .{ .ptr = temp_pkg.? }) catch {
+                _ = rawLibalpm.alpm_pkg_free(temp_pkg);
+                for (package_ptrs.items) |pkg| _ = rawLibalpm.alpm_pkg_free(pkg.ptr);
+                return TransactionError.OutOfMemory;
+            };
+        }
+
+        if (rawLibalpm.alpm_trans_init(self.handle, @bitCast(flags.to_trans_flag())) != 0) {
+            for (package_ptrs.items) |pkg| _ = rawLibalpm.alpm_pkg_free(pkg.ptr);
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), null) catch {};
+            return TransactionError.TransInitFailed;
+        }
+        defer _ = rawLibalpm.alpm_trans_release(self.handle);
+
+        for (package_ptrs.items, 0..) |pkg, index| {
+            if (rawLibalpm.alpm_add_pkg(self.handle, pkg.ptr) != 0) {
+                const errno = rawLibalpm.alpm_errno(self.handle);
+                _ = rawLibalpm.alpm_pkg_free(pkg.ptr);
+                if (errno == rawLibalpm.ALPM_ERR_TRANS_DUP_TARGET) {
+                    self.handleInformationMessage(libalpm.EventType.failed_add_local_package);
+                    continue;
+                }
+                for (package_ptrs.items[index + 1 ..]) |remaining_pkg| _ = rawLibalpm.alpm_pkg_free(remaining_pkg.ptr);
+                self.handleErrorMessage(@intCast(errno), null) catch {};
+                return TransactionError.PackageAddFailed;
+            }
+        }
+
+        var data: [*c]rawLibalpm.alpm_list_t = null;
+        if (rawLibalpm.alpm_trans_prepare(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {
+                // drop here has now use
+            };
+            return TransactionError.PrepareFailed;
+        }
+
+        data = null;
+        if (rawLibalpm.alpm_trans_commit(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {
+                // Abandon hope all yee who enter here
+            };
+            return TransactionError.CommitFailed;
+        }
+    }
+
+    pub fn get_package_from_provides(self: *Manager, provides: [:0]const u8) QueryError![:0]const u8 {
+        if (self.handle == null) return QueryError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, provides);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        var sync_dbs = rawLibalpm.alpm_get_syncdbs(self.handle);
+        while (sync_dbs != null) : (sync_dbs = sync_dbs.*.next) {
+            const db_ptr = sync_dbs.*.data orelse continue;
+            const db: libalpm.Database = libalpm.Database.from(db_ptr) orelse continue;
+            const pkg_cache = db.package_cache();
+            const satisfier = rawLibalpm.alpm_find_satisfier(pkg_cache, provides.ptr) orelse continue;
+            const pkg = libalpm.Package.from(satisfier) orelse continue;
+            return pkg.name() orelse return QueryError.PkgNotFound;
+        }
+        return QueryError.PkgNotFound;
+    }
+
+    pub fn is_dependency_satisfied_by_installed_packages(self: *Manager, dependency: [:0]const u8) QueryError!bool {
+        if (self.handle == null) return QueryError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, dependency);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        const local_db = rawLibalpm.alpm_get_localdb(self.handle);
+        const db = libalpm.Database.from(local_db.?) orelse return QueryError.DbNotFound;
+        _ = rawLibalpm.alpm_find_satisfier(db.package_cache(), dependency) orelse return false;
+        return true;
+    }
+
+    pub fn find_remote_satisfier_for_dependency(self: *Manager, dependency: [:0]const u8) QueryError![:0]const u8 {
+        if (self.handle == null) return QueryError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, dependency);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        return (try self.find_remote_satisfier_for_dependency_details(dependency)).real_name;
+    }
+
+    /// Finds a remote dependency satisfier and reports whether the match was
+    /// made through a `provides` entry instead of the package's real name.
+    pub fn find_remote_satisfier_for_dependency_details(
+        self: *Manager,
+        dependency: [:0]const u8,
+    ) QueryError!DependencySatisfier {
+        if (self.handle == null) return QueryError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, dependency);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        const requested_name = dependencyName(dependency);
+        var sync_dbs = rawLibalpm.alpm_get_syncdbs(self.handle);
+        while (sync_dbs != null) : (sync_dbs = sync_dbs.*.next) {
+            const db_ptr = sync_dbs.*.data orelse continue;
+            const db = libalpm.Database.from(db_ptr) orelse continue;
+            const pkg_cache = db.package_cache();
+            const satisfier = rawLibalpm.alpm_find_satisfier(pkg_cache, dependency) orelse continue;
+            const pkg = libalpm.Package.from(satisfier) orelse continue;
+            const real_name = pkg.name() orelse continue;
+            return .{
+                .real_name = real_name,
+                .via_provides = !std.mem.eql(u8, real_name, requested_name),
+            };
+        }
+        return QueryError.PkgNotFound;
+    }
+
+    pub fn install_dependencies_only(self: *Manager, package_name: [:0]const u8, include_make_deps: bool, flags: TransFlag) TransactionError!void {
+        if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .install, package_name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        const local_db = rawLibalpm.alpm_get_localdb(self.handle);
+        var deps_to_install: std.ArrayList(libalpm.Dependency) = .empty;
+        defer deps_to_install.deinit(self.allocator);
+        const pkg_ptr = rawLibalpm.alpm_db_get_pkg(local_db, package_name) orelse find_pkg: {
+            var sync_dbs = rawLibalpm.alpm_get_syncdbs(self.handle);
+            while (sync_dbs != null) : (sync_dbs = sync_dbs.*.next) {
+                const db = libalpm.Database.from(sync_dbs.*.data.?) orelse continue;
+                const sync_pkg = rawLibalpm.alpm_db_get_pkg(db.ptr, package_name) orelse continue;
+                break :find_pkg sync_pkg;
+            }
+            return TransactionError.NoPackageFound;
+        };
+        const pkg = libalpm.Package.from(pkg_ptr) orelse return TransactionError.PackageFetchFailed;
+        var dependencies = pkg.depends();
+        while (dependencies.next()) |dep| {
+            deps_to_install.append(self.allocator, dep) catch return TransactionError.OutOfMemory;
+        }
+        if (include_make_deps) {
+            var make_dependencies = pkg.make_depends();
+            while (make_dependencies.next()) |dep| {
+                deps_to_install.append(self.allocator, dep) catch return TransactionError.OutOfMemory;
+            }
+        }
+
+        var pkgs_to_install: std.ArrayList([:0]const u8) = .empty;
+        defer {
+            for (pkgs_to_install.items) |pkg_name| {
+                self.allocator.free(pkg_name);
+            }
+            pkgs_to_install.deinit(self.allocator);
+        }
+
+        for (deps_to_install.items) |dep| {
+            const dep_string = dep.computed_dependency_string(self.allocator) orelse continue;
+            errdefer self.allocator.free(dep_string);
+            pkgs_to_install.append(self.allocator, dep_string) catch return TransactionError.OutOfMemory;
+        }
+        if (pkgs_to_install.items.len > 0) {
+            self.install_packages(pkgs_to_install.items, flags) catch |err| return err;
+        }
+    }
+
+    pub fn update_packages(self: *Manager, package_list: [][:0]const u8, flags: libalpm.TransFlag) TransactionError!void {
+        if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .update, if (package_list.len == 0) null else package_list[0]);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        self.sync(false) catch |err| return err;
+        const sync_dbs = rawLibalpm.alpm_get_syncdbs(self.handle);
+        const local_db = rawLibalpm.alpm_get_localdb(self.handle);
+
+        var trans_flags = flags;
+        if (trans_flags.dbonly) trans_flags.nodeps = true;
+
+        if (rawLibalpm.alpm_trans_init(self.handle, @bitCast(trans_flags.to_trans_flag())) != 0) return TransactionError.TransInitFailed;
+        defer _ = rawLibalpm.alpm_trans_release(self.handle);
+
+        for (package_list) |pkg_name| {
+            const pkg_ptr = rawLibalpm.alpm_db_get_pkg(local_db, pkg_name) orelse continue;
+            const new_pkg_ptr = rawLibalpm.alpm_sync_get_new_version(pkg_ptr, sync_dbs) orelse continue;
+            if (rawLibalpm.alpm_add_pkg(self.handle, new_pkg_ptr) != 0) {
+                return TransactionError.PackageAddFailed;
+            }
+        }
+
+        var data: [*c]rawLibalpm.alpm_list_t = null;
+        if (rawLibalpm.alpm_trans_prepare(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {
+                // drop here has now use
+            };
+            data = null;
+            return TransactionError.PrepareFailed;
+        }
+
+        try self.predownloadPreparedPackages(trans_flags);
+
+        data = null;
+        if (rawLibalpm.alpm_trans_commit(self.handle, &data) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {
+                // drop here has now use
+            };
+            data = null;
+            return TransactionError.CommitFailed;
+        }
+    }
+
+    pub fn purify(self: *Manager, dry_run: bool, shoot_orphans: bool, purge_corruption: bool) TransactionError![][:0]const u8 {
+        if (self.handle == null) return TransactionError.NoHandle;
+        var operation_scope = OperationScope.init(self, .cleanup, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        var target_names: std.ArrayList([:0]const u8) = .empty;
+        errdefer {
+            for (target_names.items) |target_name| self.allocator.free(target_name);
+            target_names.deinit(self.allocator);
+        }
+        if (shoot_orphans) {
+            const orphans = self.get_orphans() catch return TransactionError.OrphanShootFailed;
+            defer libalpm.OwnedPackage.deinitSlice(self.allocator, orphans);
+
+            for (orphans) |orphan| {
+                const target_name = self.allocator.dupeZ(u8, orphan.name() orelse "") catch return TransactionError.OutOfMemory;
+                target_names.append(self.allocator, target_name) catch {
+                    self.allocator.free(target_name);
+                    return TransactionError.OutOfMemory;
+                };
+            }
+            if (!dry_run) {
+                self.remove_packages(target_names.items, .{ .nosave = true, .recurse = true, .cascade = true }, true) catch |err| {
+                    return err;
+                };
+            }
+        }
+
+        if (purge_corruption) {
+            var dir = std.Io.Dir.cwd().openDir(self.io(), self.config.cache_directory, .{ .iterate = true }) catch return TransactionError.DirectoryReadFailed;
+            defer dir.close(self.io());
+            var file_walker = dir.walk(self.allocator) catch return TransactionError.DirectoryReadFailed;
+            defer file_walker.deinit();
+            while (file_walker.next(self.io()) catch return TransactionError.DatabaseReadFailed) |entry| {
+                if (entry.kind != .file) continue;
+                if (std.mem.indexOf(u8, entry.basename, ".pkg.tar") == null) continue;
+                if (std.mem.endsWith(u8, entry.basename, ".sig")) continue;
+                const full_path_z = std.fs.path.joinZ(
+                    self.allocator,
+                    &.{ self.config.cache_directory, entry.path },
+                ) catch return TransactionError.OutOfMemory;
+                defer self.allocator.free(full_path_z);
+                var pkg_ptr: ?*rawLibalpm.alpm_pkg_t = null;
+                const sig_level = (libalpm.SigLevel{ .package_optional = true, .database_optional = true }).to_sig_level();
+                const pkg_load = rawLibalpm.alpm_pkg_load(self.handle, full_path_z, @intFromBool(false), sig_level, &pkg_ptr);
+                _ = rawLibalpm.alpm_pkg_free(pkg_ptr);
+                if (pkg_load != -1) continue;
+
+                const name = self.allocator.dupeZ(u8, entry.basename) catch return TransactionError.OutOfMemory;
+                target_names.append(self.allocator, name) catch {
+                    self.allocator.free(name);
+                    return TransactionError.OutOfMemory;
+                };
+                if (!dry_run) {
+                    std.Io.Dir.cwd().deleteFile(self.io(), full_path_z) catch |err| switch (err) {
+                        error.FileNotFound => {}, // Already deleted
+                        else => return TransactionError.RemovalFailed,
+                    };
+                }
+            }
+        }
+
+        return target_names.toOwnedSlice(self.allocator);
+    }
+
+    pub fn is_package_installed(self: *Manager, package_name: [:0]const u8) bool {
+        if (self.handle == null) return false;
+        var operation_scope = OperationScope.init(self, .search, package_name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        if (self.operation_context) |context| {
+            if (context.isCancelled()) {
+                operation_scope.finish(.cancelled);
+                return false;
+            }
+        }
+        const local_db = rawLibalpm.alpm_get_localdb(self.handle);
+        const pkg = rawLibalpm.alpm_db_get_pkg(local_db, package_name);
+        return pkg != null;
+    }
+
+    pub fn ignore_package(self: *Manager, package_name: []const u8) IgnorePackageError!void {
+        var operation_scope = OperationScope.init(self, .configure, package_name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try configuration.Configuration.add_ignore_package(
+            &self.config,
+            self.io(),
+            self.allocator,
+            self.config_path,
+            package_name,
+        );
+    }
+
+    pub fn ignore_packages(self: *Manager, package_names: []const []const u8) IgnorePackageError!void {
+        var operation_scope = OperationScope.init(self, .configure, if (package_names.len == 0) null else package_names[0]);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try configuration.Configuration.add_ignore_packages(
+            &self.config,
+            self.io(),
+            self.allocator,
+            self.config_path,
+            package_names,
+        );
+    }
+
+    pub fn unignore_package(self: *Manager, package_name: []const u8) IgnorePackageError!void {
+        var operation_scope = OperationScope.init(self, .configure, package_name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try configuration.Configuration.remove_ignore_package(
+            &self.config,
+            self.io(),
+            self.allocator,
+            self.config_path,
+            package_name,
+        );
+    }
+
+    pub fn unignore_packages(self: *Manager, package_names: []const []const u8) IgnorePackageError!void {
+        var operation_scope = OperationScope.init(self, .configure, if (package_names.len == 0) null else package_names[0]);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try configuration.Configuration.remove_ignore_packages(
+            &self.config,
+            self.io(),
+            self.allocator,
+            self.config_path,
+            package_names,
+        );
+    }
+
+    /// Returns a normalized list whose strings are borrowed from `self.config`.
+    /// The caller must deinitialize the returned list, but must not free its items.
+    pub fn get_ignored_packages(self: *Manager) IgnorePackageError!std.ArrayList([:0]const u8) {
+        var operation_scope = OperationScope.init(self, .search, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        return configuration.Configuration.get_ignored_packages(&self.config, self.allocator);
+    }
+
+    pub fn hold_package(self: *Manager, package_name: []const u8) HoldPackageError!void {
+        var operation_scope = OperationScope.init(self, .configure, package_name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try configuration.Configuration.add_hold_package(
+            &self.config,
+            self.io(),
+            self.allocator,
+            self.config_path,
+            package_name,
+        );
+    }
+
+    pub fn hold_packages(self: *Manager, package_names: []const []const u8) HoldPackageError!void {
+        var operation_scope = OperationScope.init(self, .configure, if (package_names.len == 0) null else package_names[0]);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try configuration.Configuration.add_hold_packages(
+            &self.config,
+            self.io(),
+            self.allocator,
+            self.config_path,
+            package_names,
+        );
+    }
+
+    pub fn unhold_package(self: *Manager, package_name: []const u8) HoldPackageError!void {
+        var operation_scope = OperationScope.init(self, .configure, package_name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try configuration.Configuration.remove_hold_package(
+            &self.config,
+            self.io(),
+            self.allocator,
+            self.config_path,
+            package_name,
+        );
+    }
+
+    pub fn unhold_packages(self: *Manager, package_names: []const []const u8) HoldPackageError!void {
+        var operation_scope = OperationScope.init(self, .configure, if (package_names.len == 0) null else package_names[0]);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try configuration.Configuration.remove_hold_packages(
+            &self.config,
+            self.io(),
+            self.allocator,
+            self.config_path,
+            package_names,
+        );
+    }
+
+    /// Returns a normalized list whose strings are borrowed from `self.config`.
+    /// The caller must deinitialize the returned list, but must not free its items.
+    pub fn get_held_packages(self: *Manager) HoldPackageError!std.ArrayList([:0]const u8) {
+        var operation_scope = OperationScope.init(self, .search, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        return configuration.Configuration.get_held_packages(&self.config, self.allocator);
+    }
+
+    /// Returns repository names borrowed from the parsed configuration in
+    /// declaration order. Deinitialize the list, but do not free its items.
+    pub fn get_repository_names(self: *Manager) QueryError!std.ArrayList([]const u8) {
+        var operation_scope = OperationScope.init(self, .search, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        return configuration.Configuration.get_repository_names(&self.config, self.allocator);
+    }
+
+    /// Finds a parsed repository by its exact ALPM database name.
+    pub fn find_configured_repository(
+        self: *const Manager,
+        name: []const u8,
+    ) ?*const configuration.Configuration.Repository {
+        return configuration.Configuration.find_repository(&self.config, name);
+    }
+
+    /// Returns cache directories currently configured on the libalpm handle.
+    /// Strings are borrowed from libalpm; deinitialize only the returned list.
+    pub fn get_configured_cache_directories(self: *Manager) QueryError!std.ArrayList([:0]const u8) {
+        if (self.handle == null) return QueryError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+
+        var result: std.ArrayList([:0]const u8) = .empty;
+        errdefer result.deinit(self.allocator);
+
+        var directories = rawLibalpm.alpm_option_get_cachedirs(self.handle);
+        while (directories != null) : (directories = directories.*.next) {
+            const data = directories.*.data orelse continue;
+            const directory = libalpm.str(@as([*c]const u8, @ptrCast(data))) orelse continue;
+            result.append(self.allocator, directory) catch return QueryError.OutOfMemory;
+        }
+        return result;
+    }
+
+    pub fn get_cache_directories(self: *Manager) QueryError!std.ArrayList([:0]const u8) {
+        if (self.handle == null) return QueryError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        return self.get_configured_cache_directories();
+    }
+
+    /// Compares package versions using libalpm semantics. Returns a negative
+    /// value when `a < b`, zero when equal, and a positive value when `a > b`.
+    pub fn compare_package_versions(a: [:0]const u8, b: [:0]const u8) c_int {
+        return rawLibalpm.alpm_pkg_vercmp(a.ptr, b.ptr);
+    }
+
+    pub fn version_compare(a: [:0]const u8, b: [:0]const u8) c_int {
+        return compare_package_versions(a, b);
+    }
+
+    /// Reports whether the initialized host was detected as CachyOS.
+    pub fn is_cachyos(self: *const Manager) bool {
+        return self.detected_cachyos;
+    }
+
+    pub fn get_allowed_architecture(self: *Manager) QueryError![][:0]const u8 {
+        if (self.handle == null) return QueryError.NoHandle;
+        var operation_scope = OperationScope.init(self, .search, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        var arches = rawLibalpm.alpm_option_get_architectures(self.handle);
+        var arch_list: std.ArrayList([:0]const u8) = .empty;
+        errdefer {
+            for (arch_list.items) |owned_arch| {
+                self.allocator.free(owned_arch);
+            }
+            arch_list.deinit(self.allocator);
+        }
+
+        while (arches != null) : (arches = arches.*.next) {
+            const data = arches.*.data orelse continue;
+            const arch: [:0]const u8 =
+                std.mem.span(@as([*c]const u8, @ptrCast(data)));
+            const owned_arch = self.allocator.dupeZ(u8, arch) catch return QueryError.OutOfMemory;
+            arch_list.append(self.allocator, owned_arch) catch
+                {
+                    self.allocator.free(owned_arch);
+                    return QueryError.OutOfMemory;
+                };
+        }
+        return arch_list.toOwnedSlice(self.allocator);
+    }
+
+    fn get_orphans(self: *Manager) TransactionError![]libalpm.OwnedPackage {
+        if (self.handle == null) return TransactionError.NoHandle;
+        const local_db = rawLibalpm.alpm_get_localdb(self.handle);
+        var pkgs_list = rawLibalpm.alpm_db_get_pkgcache(local_db) orelse return TransactionError.DatabaseReadFailed;
+        var orphans: std.ArrayList(libalpm.OwnedPackage) = .empty;
+        errdefer {
+            libalpm.OwnedPackage.deinitItems(self.allocator, orphans.items);
+            orphans.deinit(self.allocator);
+        }
+        while (pkgs_list != null) : (pkgs_list = pkgs_list.*.next) {
+            const pkg = libalpm.Package.from(pkgs_list.*.data.?) orelse continue;
+            if (pkg.install_reason() == .Explicit) continue;
+            var required_by = pkg.required_by();
+            var bool_required_by = false;
+            while (required_by.next()) |_| {
+                bool_required_by = true;
+            }
+            if (bool_required_by) continue;
+            var owned_package = libalpm.OwnedPackage.init(self.allocator, pkg) catch return TransactionError.OutOfMemory;
+            orphans.append(self.allocator, owned_package) catch {
+                owned_package.deinit(self.allocator);
+                return TransactionError.OutOfMemory;
+            };
+        }
+        return orphans.toOwnedSlice(self.allocator) catch return TransactionError.OutOfMemory;
+    }
+
+    // Determines if a single package is available for optional dependency install.
+    fn get_opt_depend_if_available(self: *Manager, pkg_name: [:0]const u8) TransactionError!bool {
+        if (self.handle == null) return TransactionError.NoHandle;
+        const sync_database = rawLibalpm.alpm_get_syncdbs(self.handle);
+        var sync_dbs = sync_database;
+        // Essentially same as above but iterates just for a single package name
+        // Discarding the results as we don't need them here and it removes unnecessary allocations.
+        while (sync_dbs != null) : (sync_dbs = sync_dbs.*.next) {
+            const db_data: ?*anyopaque = sync_dbs.*.data;
+            const db: *rawLibalpm.alpm_db_t = @ptrCast(@alignCast(db_data orelse continue));
+            if (rawLibalpm.alpm_db_get_pkg(db, pkg_name.ptr) != null) return true;
+            if (rawLibalpm.alpm_db_get_group(db, pkg_name.ptr) != null) return true;
+            if (rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(db), pkg_name.ptr) != null) return true;
+        }
+        return false;
+    }
+
+    pub fn refresh(self: *Manager) TransactionError!void {
+        var operation_scope = OperationScope.init(self, .sync, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkOperationCancelled();
+        if (self.handle != null) {
+            const refresh_result = rawLibalpm.alpm_release(self.handle);
+            if (refresh_result != 0) {
+                return TransactionError.RefreshFailed;
+            }
+        }
+
+        self.sync_dbs.clearRetainingCapacity();
+
+        var err2: rawLibalpm.alpm_errno_t = 0;
+        self.handle = rawLibalpm.alpm_initialize(self.config.root_directory, self.config.database_path, &err2);
+        if (self.handle == null) {
+            return TransactionError.RefreshFailed;
+        }
+
+        self.applyConfig(self.config);
+        self.setupCallbacks();
+    }
+
+    fn download_database(
+        self: *Manager,
+        database_name: []const u8,
+        urls: std.ArrayList([]const u8),
+        sync_directory: []const u8,
+        force_download: bool,
+        signature_required: bool,
+    ) downloader.DownloadError!void {
         const download_config: downloader.DownloadConfiguration = .{ .user_agent = "Shelly-ALPM/3" };
         var downloader_instance = downloader.CoreDownloader.init(self.allocator, self.io(), download_config);
         defer downloader_instance.deinit();
+        if (self.dispatcher.operation) |operation| downloader_instance.setParentOperation(operation) else downloader_instance.setOperationContext(self.operation_context);
         downloader_instance.setEventCallback(onDownloadEvent, self);
         const dest = std.fmt.allocPrint(self.allocator, "{s}/{s}.db", .{ sync_directory, database_name }) catch return;
         defer self.allocator.free(dest);
@@ -275,34 +1922,147 @@ pub const Manager = struct {
             defer self.allocator.free(db_url);
 
             switch (downloader_instance.downloadToFile(db_url, dest, force_download)) {
-                .succes, .skipped => {
+                .succes => {
+                    if (!signature_required) {
+                        // An optional signature must not keep a completed database
+                        // sync alive. Remove any signature belonging to an older
+                        // database so libalpm cannot validate mismatched files.
+                        std.Io.Dir.cwd().deleteFile(self.io(), sig_dest) catch {};
+                        return;
+                    }
                     const sig_url = std.fmt.allocPrint(self.allocator, "{s}.sig", .{db_url}) catch return;
                     defer self.allocator.free(sig_url);
-                    // The database signature is best-effort and optional: many
-                    // repositories (e.g. Arch's) do not sign databases, so a
-                    // missing signature must not be surfaced as an error.
+                    // Required database signatures are fetched here and
+                    // validated by the sync verification pass below.
                     downloader_instance.quiet = true;
                     _ = downloader_instance.downloadToFile(sig_url, sig_dest, force_download);
+                    downloader_instance.quiet = false;
+                    return;
+                },
+                .skipped => {
+                    if (!signature_required) return;
+                    const sig_url = std.fmt.allocPrint(self.allocator, "{s}.sig", .{db_url}) catch return;
+                    defer self.allocator.free(sig_url);
+                    downloader_instance.quiet = true;
+                    _ = downloader_instance.downloadToFile(sig_url, sig_dest, false);
                     downloader_instance.quiet = false;
                     return;
                 },
                 .failure => continue,
             }
         }
+        return downloader.DownloadError.FailedDownload;
+    }
+
+    fn databaseSignatureRequired(level: i32) bool {
+        return level & rawLibalpm.ALPM_SIG_DATABASE != 0 and
+            level & rawLibalpm.ALPM_SIG_DATABASE_OPTIONAL == 0;
+    }
+
+    /// Downloads every repository package selected by a prepared transaction
+    /// before libalpm begins its commit. DB-only transactions intentionally do
+    /// not require package archives.
+    fn predownloadPreparedPackages(self: *Manager, trans_flags: TransFlag) TransactionError!void {
+        if (trans_flags.dbonly) return;
+        self.unexpected_fetch_reported.store(false, .release);
+        try self.download_prepared_packages();
+    }
+
+    fn download_prepared_packages(self: *Manager) TransactionError!void {
+        const download_future = std.Io.Future(downloader.DownloadError!void);
+
+        var futures: std.ArrayList(download_future) = .empty;
+        defer futures.deinit(self.allocator);
+
+        var failed = false;
+        var packages = rawLibalpm.alpm_trans_get_add(self.handle);
+
+        while (packages != null) : (packages = packages.*.next) {
+            const data = packages.*.data orelse continue;
+            const package = libalpm.Package{ .ptr = @ptrCast(@alignCast(data)) };
+
+            const database = package.database() orelse {
+                failed = true;
+                continue;
+            };
+
+            var future = self.io().concurrent(download_package, .{ self, package, database }) catch {
+                // Fall back to a synchronous download when concurrency fails to allocate
+                self.download_package(package, database) catch {
+                    failed = true;
+                };
+                continue;
+            };
+
+            futures.append(self.allocator, future) catch {
+                future.await(self.io()) catch {
+                    failed = true;
+                };
+            };
+        }
+
+        for (futures.items) |*future_item| {
+            future_item.await(self.io()) catch {
+                failed = true;
+            };
+        }
+
+        if (failed) return TransactionError.UpdateFetchFailed;
+    }
+
+    fn download_package(self: *Manager, package: libalpm.Package, database: libalpm.Database) downloader.DownloadError!void {
+        const download_config: downloader.DownloadConfiguration = .{ .user_agent = "Shelly-ALPM/3" };
+        var downloader_instance = downloader.CoreDownloader.init(self.allocator, self.io(), download_config);
+        defer downloader_instance.deinit();
+        if (self.dispatcher.operation) |operation| downloader_instance.setParentOperation(operation) else downloader_instance.setOperationContext(self.operation_context);
+        downloader_instance.setEventCallback(onDownloadEvent, self);
+        const dest = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.config.cache_directory, package.file_name() }) catch return;
+        defer self.allocator.free(dest);
+        const sig_dest = std.fmt.allocPrint(self.allocator, "{s}.sig", .{dest}) catch return;
+        defer self.allocator.free(sig_dest);
+
+        var urls = database.servers();
+        while (urls.next()) |url| {
+            const file_url = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ url, package.file_name() }) catch return downloader.DownloadError.InvalidUrl;
+            defer self.allocator.free(file_url);
+
+            switch (downloader_instance.downloadToFile(file_url, dest, true)) {
+                .succes => {
+                    const sig_url = std.fmt.allocPrint(self.allocator, "{s}.sig", .{file_url}) catch return downloader.DownloadError.InvalidUrl;
+                    defer self.allocator.free(sig_url);
+                    downloader_instance.quiet = true;
+                    _ = downloader_instance.downloadToFile(sig_url, sig_dest, true);
+                    downloader_instance.quiet = false;
+                    return;
+                },
+                .failure, .skipped => continue,
+            }
+        }
+        return downloader.DownloadError.FailedDownload;
     }
 
     pub fn io(self: *Manager) std.Io {
         return self.threaded.io();
     }
 
+    fn checkOperationCancelled(self: *Manager) error{Cancelled}!void {
+        if (self.dispatcher.operation) |operation| try operation.checkCancelled();
+        if (self.operation_context) |context| {
+            if (context.isCancelled()) return error.Cancelled;
+        }
+    }
+
     pub fn deinit(self: *Manager) void {
+        const allocator = self.allocator;
         if (self.handle) |h| _ = libalpm.alpm.alpm_release(h);
         self.handle = null;
         self.is_initialized = false;
         self.sync_dbs.deinit(self.allocator);
         self.config.deinitialize();
+        allocator.free(self.config_path);
         self.dispatcher.deinit();
         self.threaded.deinit();
+        allocator.destroy(self);
     }
 
     fn setupCallbacks(self: *Manager) void {
@@ -313,7 +2073,7 @@ pub const Manager = struct {
         _ = rawLibalpm.alpm_option_set_fetchcb(h, fetchCallback, self);
     }
 
-    fn applyConfig(self: *Manager, config: configuration.Configuration.Config, root: bool) void {
+    fn applyConfig(self: *Manager, config: configuration.Configuration.Config) void {
         const h = self.handle;
 
         for (config.ignore_package.items) |pkg_name| {
@@ -328,9 +2088,7 @@ pub const Manager = struct {
             self.check("hook_directory", rawLibalpm.alpm_option_add_hookdir(h, hook_dir.ptr));
         }
 
-        if (root and config.gpg_directory.len != 0) {
-            self.check("gpgdir", rawLibalpm.alpm_option_set_gpgdir(h, config.gpg_directory.ptr));
-        }
+        self.check("gpgdir", rawLibalpm.alpm_option_set_gpgdir(h, config.gpg_directory.ptr));
 
         if (config.signature_level != 0) {
             self.check("default_sig_level", rawLibalpm.alpm_option_set_default_siglevel(h, @intCast(config.signature_level)));
@@ -397,7 +2155,7 @@ pub const Manager = struct {
         resolved_arch: []const u8,
         registered_arches: *std.ArrayList([]const u8),
     ) void {
-        const use_default: u32 = @intFromEnum(libalpm.SigLevel.use_default);
+        const use_default: u32 = @bitCast((libalpm.SigLevel{ .use_default = true }).to_sig_level());
         const effective_sig: c_int = if (repo.sig_level == 0 or repo.sig_level == use_default)
             @intCast(self.config.signature_level)
         else
@@ -480,40 +2238,58 @@ pub const Manager = struct {
         return self.allocator.dupeSentinel(u8, step2, 0) catch null;
     }
 
-    // Matches libalpm's `alpm_cb_fetch`: receives C strings and an int flag and
-    // returns 0 (downloaded), 1 (already up to date), or -1 (error).
+    // libalpm invokes an external fetch callback even when a prepared artifact
+    // is already cached. Validate that predownload populated the directory and
+    // report the file as current; never perform network or filesystem writes
+    // from this callback.
     fn fetchCallback(
         ctx: ?*anyopaque,
         url: [*c]const u8,
         local_path: [*c]const u8,
         force: c_int,
     ) callconv(.c) c_int {
-        const self: *Manager = @ptrCast(@alignCast(ctx));
+        _ = force;
+        if (ctx == null or url == null or local_path == null) return -1;
 
-        // libalpm may hand us null pointers; treat that as a hard error.
-        if (url == null or local_path == null) return -1;
-        const url_slice = std.mem.span(url);
-        const local_slice = std.mem.span(local_path);
+        const self: *Manager = @ptrCast(@alignCast(ctx.?));
+        const file_name = fetchUrlBasename(std.mem.span(url)) orelse {
+            self.reportUnexpectedFetch();
+            return -1;
+        };
+        const cached_path = std.fs.path.join(
+            self.allocator,
+            &.{ std.mem.span(local_path), file_name },
+        ) catch {
+            self.reportUnexpectedFetch();
+            return -1;
+        };
+        defer self.allocator.free(cached_path);
 
-        const download_config: downloader.DownloadConfiguration = .{ .user_agent = "Shelly-ALPM/3" };
-        var downloader_instance = downloader.CoreDownloader.init(self.allocator, self.io(), download_config);
-        defer downloader_instance.deinit();
+        std.Io.Dir.cwd().access(self.io(), cached_path, .{}) catch {
+            self.reportUnexpectedFetch();
+            return -1;
+        };
+        return 1;
+    }
 
-        downloader_instance.setEventCallback(onDownloadEvent, self);
-        switch (downloader_instance.downloadToFile(url_slice, local_slice, force != 0)) {
-            .succes => |succ| {
-                self.dispatcher.raiseInformational(.{ .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE, .message = succ.destination_path });
-                return 0;
-            },
-            .skipped => |skip| {
-                self.dispatcher.raiseInformational(.{ .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE, .message = skip.destination_path });
-                return 1;
-            },
-            .failure => |err| {
-                self.dispatcher.raiseError(.{ .message = @errorName(err) });
-                return -1;
-            },
-        }
+    fn reportUnexpectedFetch(self: *Manager) void {
+        if (self.unexpected_fetch_reported.swap(true, .acq_rel)) return;
+        self.dispatcher.raiseError(.{
+            .message = "Unexpected libalpm fetch request: prepared package is missing from the cache.",
+        });
+    }
+
+    fn fetchUrlBasename(url: []const u8) ?[]const u8 {
+        var end = url.len;
+        if (std.mem.indexOfScalar(u8, url, '?')) |index| end = @min(end, index);
+        if (std.mem.indexOfScalar(u8, url, '#')) |index| end = @min(end, index);
+        const path = url[0..end];
+        const slash = std.mem.lastIndexOfScalar(u8, path, '/');
+        const file_name = if (slash) |index| path[index + 1 ..] else path;
+        if (file_name.len == 0 or
+            std.mem.eql(u8, file_name, ".") or
+            std.mem.eql(u8, file_name, "..")) return null;
+        return file_name;
     }
 
     fn onDownloadEvent(ctx: ?*anyopaque, event: downloader.DownloadEvent) void {
@@ -521,7 +2297,7 @@ pub const Manager = struct {
         const path = event.destination_path orelse "";
         switch (event.event_type) {
             .Start => self.dispatcher.raiseInformational(.{
-                .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_START,
+                .event_type = .pkg_retrieve_start,
                 .message = path,
             }),
             .Progress => if (event.progress) |p| self.dispatcher.raiseProgress(.{
@@ -532,7 +2308,7 @@ pub const Manager = struct {
                 .current = 1,
             }),
             .Complete => self.dispatcher.raiseInformational(.{
-                .event_type = rawLibalpm.ALPM_EVENT_PKG_RETRIEVE_DONE,
+                .event_type = .pkg_retrieve_done,
                 .message = path,
             }),
             .Error => self.dispatcher.raiseError(.{
@@ -564,10 +2340,99 @@ pub const Manager = struct {
         ctx: ?*anyopaque,
         event: [*c]rawLibalpm.alpm_event_t,
     ) callconv(.c) void {
+        if (event == null) return;
+
         const self: *Manager = @ptrCast(@alignCast(ctx));
+        const type_value: u32 = @intCast(event.*.type);
+        if (type_value < rawLibalpm.ALPM_EVENT_CHECKDEPS_START or type_value > rawLibalpm.ALPM_EVENT_HOOK_RUN_DONE) return;
+
+        const event_type = libalpm.EventType.from_libalpm(@intCast(type_value));
+        switch (event_type) {
+            .scriptlet_info => {
+                const line = spanC(event.*.scriptlet_info.line) orelse return;
+                if (line.len != 0) self.dispatcher.raiseScriptlet(.{ .line = line });
+            },
+            .hook_run_start => {
+                const hook = event.*.hook_run;
+                const name = spanC(hook.name);
+                const description = spanC(hook.desc);
+                var message_buffer: [512]u8 = undefined;
+                const message = if (description) |desc|
+                    std.fmt.bufPrint(&message_buffer, "({d}/{d}) {s}", .{ hook.position, hook.total, desc }) catch desc
+                else if (name) |hook_name|
+                    std.fmt.bufPrint(&message_buffer, "({d}/{d}) {s}", .{ hook.position, hook.total, hook_name }) catch hook_name
+                else
+                    std.fmt.bufPrint(&message_buffer, "({d}/{d}) Running hook...", .{ hook.position, hook.total }) catch "Running hook...";
+
+                self.dispatcher.raiseHook(.{
+                    .description = message,
+                    .position = @intCast(hook.position),
+                    .total = @intCast(hook.total),
+                });
+            },
+            .pacnew_created => self.dispatcher.raisePacnew(.{
+                .file = spanC(event.*.pacnew_created.file),
+            }),
+            .pacsave_created => {
+                const pacsave = event.*.pacsave_created;
+                const pkg_name = if (pacsave.oldpkg) |pkg|
+                    (libalpm.Package{ .ptr = pkg }).name()
+                else
+                    null;
+                self.dispatcher.raisePacsave(.{
+                    .pkg_name = pkg_name,
+                    .file = spanC(pacsave.file),
+                });
+            },
+            else => self.handleInformationMessage(event_type),
+        }
+    }
+
+    fn handleInformationMessage(self: *Manager, event_type: libalpm.EventType) void {
+        const message = switch (event_type) {
+            .checkdeps_start => "Checking dependencies...",
+            .checkdeps_done => "Dependency check finished.",
+            .fileconflicts_start => "Checking for file conflicts...",
+            .fileconflicts_done => "File conflict check finished.",
+            .resolvedeps_start => "Resolving dependencies...",
+            .resolvedeps_done => "Dependency resolution finished.",
+            .interconflicts_start => "Checking for package conflicts...",
+            .interconflicts_done => "Package conflict check finished.",
+            .transaction_start => "Starting transaction...",
+            .transaction_done => "Transaction completed.",
+            .package_operation_start => "Starting package operation...",
+            .package_operation_done => "Package operation completed.",
+            .integrity_start => "Checking package integrity...",
+            .integrity_done => "Package integrity check finished.",
+            .load_start => "Loading packages...",
+            .load_done => "Packages loaded.",
+            .db_retrieve_start => "Retrieving database...",
+            .db_retrieve_done => "Database retrieved.",
+            .db_retrieve_failed => "Failed to retrieve database.",
+            .pkg_retrieve_start => "Retrieving package...",
+            .pkg_retrieve_done => "Package retrieved.",
+            .pkg_retrieve_failed => "Package retrieval failed.",
+            .diskspace_start => "Checking disk space...",
+            .diskspace_done => "Disk space check finished.",
+            .optdep_removal => "Removing optional dependencies...",
+            .database_missing => "Database missing. Please run `shelly keyring init` to initialize the keyring.",
+            .keyring_start => "Checking keyring...",
+            .keyring_done => "Keyring check finished.",
+            .key_download_start => "Downloading key...",
+            .key_download_done => "Key download finished.",
+            .hook_start => "Running hooks...",
+            .hook_done => "Finished running hooks.",
+            .hook_run_done => "Finished running hook.",
+            .scriptlet_info, .pacnew_created, .pacsave_created, .hook_run_start => return,
+            .failed_optional_dependency_operation => "Failed to remove optional dependency.",
+            .package_explicit => "Package marked as explicitly installed.",
+            .failed_add_local_package => "Failed to add local package.",
+            else => return,
+        };
+
         self.dispatcher.raiseInformational(.{
-            .event_type = @intCast(event.*.type),
-            .message = "Temp Message",
+            .event_type = event_type,
+            .message = message,
         });
     }
 
@@ -808,7 +2673,261 @@ pub const Manager = struct {
     }
 };
 
+const OperationScope = struct {
+    manager: *Manager,
+    operation: ?operation_api.Operation = null,
+    previous: ?*operation_api.Operation = null,
+    cancellation_subscription: ?operation_api.SubscriptionId = null,
+    attached: bool = false,
+
+    fn init(manager: *Manager, kind: operation_api.OperationKind, subject: ?[]const u8) OperationScope {
+        var scope: OperationScope = .{ .manager = manager, .previous = manager.dispatcher.operation };
+        if (scope.previous) |parent| {
+            scope.operation = parent.child(.{ .backend = .alpm, .kind = kind, .subject = subject });
+        } else if (manager.operation_context) |context| {
+            scope.operation = context.begin(.{ .backend = .alpm, .kind = kind, .subject = subject });
+        }
+        return scope;
+    }
+
+    fn attach(self: *OperationScope) void {
+        if (self.operation) |*operation| {
+            self.manager.dispatcher.setOperation(operation);
+            self.cancellation_subscription = operation.context.subscribeCancellation(.{
+                .function = interruptTransaction,
+                .data = self.manager,
+            }) catch null;
+        }
+        self.attached = true;
+    }
+
+    fn fail(self: *OperationScope) void {
+        if (self.operation) |*operation| operation.reportError(
+            if (operation.isCancelled()) error.Cancelled else error.AlpmOperationFailed,
+            if (operation.isCancelled()) "ALPM operation cancelled" else "ALPM operation failed",
+            "alpm",
+            null,
+            false,
+        );
+        const status: operation_api.CompletionStatus = if (self.operation) |*operation|
+            if (operation.isCancelled()) .cancelled else .failed
+        else
+            .failed;
+        self.finish(status);
+    }
+
+    fn finish(self: *OperationScope, status: operation_api.CompletionStatus) void {
+        if (self.operation) |*operation| {
+            if (self.cancellation_subscription) |subscription| {
+                _ = operation.context.unsubscribeCancellation(subscription);
+                self.cancellation_subscription = null;
+            }
+            operation.finish(status);
+        }
+        if (self.attached) {
+            self.manager.dispatcher.setOperation(self.previous);
+            self.attached = false;
+        }
+    }
+
+    fn interruptTransaction(data: ?*anyopaque) void {
+        const manager: *Manager = @ptrCast(@alignCast(data orelse return));
+        if (manager.handle) |handle| _ = rawLibalpm.alpm_trans_interrupt(handle);
+    }
+};
+
+fn hasDeletedSharedLibrary(maps: []const u8) bool {
+    var lines = std.mem.splitScalar(u8, maps, '\n');
+    while (lines.next()) |line| {
+        if (std.mem.indexOf(u8, line, "(deleted)") != null and
+            std.mem.indexOf(u8, line, ".so") != null)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn serviceFromCgroup(cgroup: []const u8) ?[]const u8 {
+    var lines = std.mem.splitScalar(u8, cgroup, '\n');
+    while (lines.next()) |line| {
+        const marker = "/system.slice/";
+        const marker_index = std.mem.indexOf(u8, line, marker) orelse continue;
+        var components = std.mem.splitScalar(u8, line[marker_index + marker.len ..], '/');
+        while (components.next()) |component| {
+            const trimmed = std.mem.trim(u8, component, " \t\r");
+            if (trimmed.len > ".service".len and std.mem.endsWith(u8, trimmed, ".service")) {
+                return trimmed;
+            }
+        }
+    }
+    return null;
+}
+
+fn isCriticalRestartProcess(command: []const u8) bool {
+    return std.mem.eql(u8, command, "systemd") or
+        std.mem.eql(u8, command, "dbus-daemon") or
+        std.mem.eql(u8, command, "dbus-broker");
+}
+
+fn stringBefore(_: void, lhs: []u8, rhs: []u8) bool {
+    return std.mem.order(u8, lhs, rhs) == .lt;
+}
+
+fn dependencyName(dependency: []const u8) []const u8 {
+    const end = std.mem.indexOfAny(u8, dependency, "<>=") orelse dependency.len;
+    return std.mem.trim(u8, dependency[0..end], " \t\r\n");
+}
+
 const testing = std.testing;
+
+test "public ALPM query helpers expose typed results" {
+    _ = Manager.get_repository_names;
+    _ = Manager.find_configured_repository;
+    _ = Manager.get_configured_cache_directories;
+    _ = Manager.get_cache_directories;
+    _ = Manager.find_remote_satisfier_for_dependency_details;
+    _ = DependencySatisfier;
+}
+
+test "compare_package_versions uses libalpm ordering" {
+    try testing.expect(Manager.compare_package_versions("1.0-1", "2.0-1") < 0);
+    try testing.expectEqual(@as(c_int, 0), Manager.compare_package_versions("2.0-1", "2.0-1"));
+    try testing.expect(Manager.compare_package_versions("2.0-2", "2.0-1") > 0);
+    try testing.expect(Manager.compare_package_versions("10.0-1", "2.0-1") > 0);
+}
+
+test "dependencyName strips constraints used to detect provides matches" {
+    try testing.expectEqualStrings("python", dependencyName("python>=3.10"));
+    try testing.expectEqualStrings("libgl", dependencyName("libgl"));
+    try testing.expectEqualStrings("virtual-feature", dependencyName("  virtual-feature = 2  "));
+}
+
+test "is_cachyos exposes the detected manager state" {
+    var manager: Manager = undefined;
+    manager.detected_cachyos = false;
+    try testing.expect(!manager.is_cachyos());
+    manager.detected_cachyos = true;
+    try testing.expect(manager.is_cachyos());
+}
+
+test "restart parsing identifies deleted shared libraries and system services" {
+    try testing.expect(hasDeletedSharedLibrary(
+        "7f00-7f01 r-xp /usr/lib/libdemo.so.1 (deleted)\n",
+    ));
+    try testing.expect(!hasDeletedSharedLibrary(
+        "7f00-7f01 r-xp /usr/lib/libdemo.so.1\n" ++
+            "7f02-7f03 r-xp /usr/bin/demo (deleted)\n",
+    ));
+    try testing.expectEqualStrings(
+        "demo.service",
+        serviceFromCgroup("0::/system.slice/system-demo.slice/demo.service/tasks\n").?,
+    );
+    try testing.expect(serviceFromCgroup("0::/user.slice/session-1.scope\n") == null);
+    try testing.expect(isCriticalRestartProcess("systemd"));
+    try testing.expect(isCriticalRestartProcess("dbus-broker"));
+    try testing.expect(!isCriticalRestartProcess("demo"));
+}
+
+test "restart report detects kernels and records structured service results" {
+    const anchor: u8 = 0;
+    const root = try std.fmt.allocPrint(testing.allocator, "/tmp/shelly-restart-test-{x}", .{@intFromPtr(&anchor)});
+    defer testing.allocator.free(root);
+    std.Io.Dir.cwd().deleteTree(testing.io, root) catch {};
+    defer std.Io.Dir.cwd().deleteTree(testing.io, root) catch {};
+
+    const proc_root = try std.fs.path.join(testing.allocator, &.{ root, "proc" });
+    defer testing.allocator.free(proc_root);
+    const modules_root = try std.fs.path.join(testing.allocator, &.{ root, "modules" });
+    defer testing.allocator.free(modules_root);
+    const kernel_dir = try std.fs.path.join(testing.allocator, &.{ modules_root, "6.12.1-test" });
+    defer testing.allocator.free(kernel_dir);
+    const kernel_parent = try std.fs.path.join(testing.allocator, &.{ proc_root, "sys", "kernel" });
+    defer testing.allocator.free(kernel_parent);
+    const process_dir = try std.fs.path.join(testing.allocator, &.{ proc_root, "123" });
+    defer testing.allocator.free(process_dir);
+    const kernel_file = try std.fs.path.join(testing.allocator, &.{ kernel_parent, "osrelease" });
+    defer testing.allocator.free(kernel_file);
+    const maps_file = try std.fs.path.join(testing.allocator, &.{ process_dir, "maps" });
+    defer testing.allocator.free(maps_file);
+    const comm_file = try std.fs.path.join(testing.allocator, &.{ process_dir, "comm" });
+    defer testing.allocator.free(comm_file);
+    const cgroup_file = try std.fs.path.join(testing.allocator, &.{ process_dir, "cgroup" });
+    defer testing.allocator.free(cgroup_file);
+
+    try std.Io.Dir.cwd().createDirPath(testing.io, kernel_parent);
+    try std.Io.Dir.cwd().createDirPath(testing.io, process_dir);
+    try std.Io.Dir.cwd().createDirPath(testing.io, modules_root);
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = kernel_file, .data = "6.12.1-test\n" });
+    try std.Io.Dir.cwd().writeFile(testing.io, .{
+        .sub_path = maps_file,
+        .data = "7f00-7f01 r-xp 00000000 00:00 0 /usr/lib/libdemo.so.1 (deleted)\n",
+    });
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = comm_file, .data = "demo\n" });
+    try std.Io.Dir.cwd().writeFile(testing.io, .{
+        .sub_path = cgroup_file,
+        .data = "0::/system.slice/system-demo.slice/demo.service\n",
+    });
+
+    var manager: Manager = undefined;
+    manager.allocator = testing.allocator;
+    manager.threaded = .init(testing.allocator, .{});
+    defer manager.threaded.deinit();
+
+    var reboot_report = try manager.checkForRequiredRestarts(.{
+        .proc_root = proc_root,
+        .modules_root = modules_root,
+        .systemctl_path = "/bin/false",
+    });
+    defer reboot_report.deinit();
+    try testing.expectEqualStrings("6.12.1-test", reboot_report.running_kernel.?);
+    try testing.expectEqual(false, reboot_report.running_kernel_modules_present.?);
+    try testing.expect(reboot_report.needs_reboot);
+    try testing.expect(reboot_report.process_scan_complete);
+    try testing.expectEqual(@as(usize, 1), reboot_report.affected_processes.len);
+    try testing.expectEqual(@as(u32, 123), reboot_report.affected_processes[0].pid);
+    try testing.expectEqualStrings("demo", reboot_report.affected_processes[0].command.?);
+    try testing.expectEqualStrings("demo.service", reboot_report.affected_processes[0].service.?);
+    try testing.expectEqual(@as(usize, 1), reboot_report.affected_services.len);
+    try testing.expectEqualStrings("demo.service", reboot_report.affected_services[0]);
+    try testing.expectEqual(@as(usize, 0), reboot_report.failures.len);
+
+    try std.Io.Dir.cwd().createDirPath(testing.io, kernel_dir);
+    var failure_report = try manager.checkForRequiredRestarts(.{
+        .proc_root = proc_root,
+        .modules_root = modules_root,
+        .systemctl_path = "/bin/false",
+    });
+    defer failure_report.deinit();
+    try testing.expect(!failure_report.needs_reboot);
+    try testing.expectEqual(true, failure_report.running_kernel_modules_present.?);
+    try testing.expectEqual(@as(usize, 0), failure_report.restarted_services.len);
+    try testing.expectEqual(@as(usize, 1), failure_report.failures.len);
+    try testing.expectEqualStrings("demo.service", failure_report.failures[0].service);
+    try testing.expectEqual(ServiceRestartFailureKind.exit_status, failure_report.failures[0].kind);
+    try testing.expectEqual(@as(?u8, 1), failure_report.failures[0].exit_code);
+
+    var spawn_failure_report = try manager.checkForRequiredRestarts(.{
+        .proc_root = proc_root,
+        .modules_root = modules_root,
+        .systemctl_path = "/definitely/missing/systemctl",
+    });
+    defer spawn_failure_report.deinit();
+    try testing.expectEqual(@as(usize, 1), spawn_failure_report.failures.len);
+    try testing.expectEqual(ServiceRestartFailureKind.spawn, spawn_failure_report.failures[0].kind);
+    try testing.expect(spawn_failure_report.failures[0].exit_code == null);
+
+    var success_report = try manager.checkForRequiredRestarts(.{
+        .proc_root = proc_root,
+        .modules_root = modules_root,
+        .systemctl_path = "/bin/true",
+    });
+    defer success_report.deinit();
+    try testing.expect(!success_report.needs_reboot);
+    try testing.expectEqual(@as(usize, 1), success_report.restarted_services.len);
+    try testing.expectEqualStrings("demo.service", success_report.restarted_services[0]);
+    try testing.expectEqual(@as(usize, 0), success_report.failures.len);
+}
 
 // ---------------------------------------------------------------------------
 // spanC
@@ -935,6 +3054,93 @@ test "resolveServer replaces every occurrence of each marker" {
     try testing.expectEqualStrings("core/x86_64/core/x86_64", resolved);
 }
 
+test "resolveServer returns null and releases intermediates on allocation failure" {
+    for (0..3) |fail_index| {
+        var failing = testing.FailingAllocator.init(testing.allocator, .{
+            .fail_index = fail_index,
+        });
+        var mgr: Manager = undefined;
+        mgr.allocator = failing.allocator();
+
+        try testing.expect(mgr.resolveServer(
+            "https://mirror/$repo/os/$arch",
+            "core",
+            "x86_64",
+        ) == null);
+        try testing.expect(failing.has_induced_failure);
+        try testing.expectEqual(failing.allocated_bytes, failing.freed_bytes);
+    }
+}
+
+test "fetchCallback accepts prepared cache entries and rejects missing artifacts" {
+    var mgr: Manager = undefined;
+    mgr.allocator = testing.allocator;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+    mgr.threaded = .init(testing.allocator, .{});
+    defer mgr.threaded.deinit();
+    mgr.unexpected_fetch_reported = .init(false);
+
+    var capture = ErrorCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{
+        .function = captureError,
+        .data = @ptrCast(&capture),
+    });
+
+    var temporary = testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const absolute_length = try temporary.dir.realPath(testing.io, &absolute_buffer);
+    const cache_path = try testing.allocator.dupeZ(u8, absolute_buffer[0..absolute_length]);
+    defer testing.allocator.free(cache_path);
+    var cached_file = try temporary.dir.createFile(testing.io, "prepared.pkg.tar.zst", .{});
+    cached_file.close(testing.io);
+
+    try testing.expectEqual(@as(c_int, 1), Manager.fetchCallback(
+        @ptrCast(&mgr),
+        "https://example.invalid/prepared.pkg.tar.zst?mirror=primary",
+        cache_path.ptr,
+        0,
+    ));
+    try testing.expectEqual(@as(usize, 0), capture.len);
+
+    try testing.expectEqual(@as(c_int, -1), Manager.fetchCallback(
+        @ptrCast(&mgr),
+        null,
+        "/tmp",
+        0,
+    ));
+    try testing.expectEqual(@as(c_int, -1), Manager.fetchCallback(
+        @ptrCast(&mgr),
+        "https://example.invalid/package",
+        null,
+        0,
+    ));
+    try testing.expectEqual(@as(c_int, -1), Manager.fetchCallback(
+        null,
+        "https://example.invalid/package",
+        "/tmp",
+        0,
+    ));
+    try testing.expectEqual(@as(c_int, -1), Manager.fetchCallback(
+        @ptrCast(&mgr),
+        "https://example.invalid/missing.pkg.tar.zst",
+        cache_path.ptr,
+        0,
+    ));
+    try testing.expectEqual(@as(c_int, -1), Manager.fetchCallback(
+        @ptrCast(&mgr),
+        "https://backup.example.invalid/still-missing.pkg.tar.zst",
+        cache_path.ptr,
+        0,
+    ));
+    try testing.expectEqualStrings(
+        "Unexpected libalpm fetch request: prepared package is missing from the cache.",
+        capture.text(),
+    );
+    try testing.expectEqual(@as(usize, 1), capture.count);
+}
+
 // ---------------------------------------------------------------------------
 // check
 // ---------------------------------------------------------------------------
@@ -989,10 +3195,125 @@ test "progressCallback forwards a null package name as null" {
 }
 
 // ---------------------------------------------------------------------------
-// eventCallback
+// handleInformationMessage + eventCallback
 // ---------------------------------------------------------------------------
 
-test "eventCallback dispatches an informational event carrying the event type" {
+test "handleInformationMessage emits a known informational description" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var cap = InfoCapture{};
+    _ = mgr.dispatcher.addInformationalHandler(.{
+        .function = captureInfo,
+        .data = @ptrCast(&cap),
+    }) catch unreachable;
+
+    mgr.handleInformationMessage(.transaction_start);
+
+    const args = cap.args orelse return error.TestFailed;
+    try testing.expectEqual(libalpm.EventType.transaction_start, args.event_type);
+    try testing.expectEqualStrings("Starting transaction...", args.message);
+}
+
+test "handleInformationMessage ignores specialized event types" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var cap = InfoCapture{};
+    _ = mgr.dispatcher.addInformationalHandler(.{
+        .function = captureInfo,
+        .data = @ptrCast(&cap),
+    }) catch unreachable;
+
+    mgr.handleInformationMessage(.scriptlet_info);
+
+    try testing.expect(cap.args == null);
+}
+
+test "handleInformationMessage ignores application-only event types" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var cap = InfoCapture{};
+    _ = try mgr.dispatcher.addInformationalHandler(.{
+        .function = captureInfo,
+        .data = @ptrCast(&cap),
+    });
+
+    mgr.handleInformationMessage(.download_start);
+    mgr.handleInformationMessage(.validation_failed);
+    mgr.handleInformationMessage(.rollback_complete);
+
+    try testing.expect(cap.args == null);
+}
+
+test "handleInformationMessage emits every generic informational description" {
+    const Case = struct {
+        event_type: libalpm.EventType,
+        message: []const u8,
+    };
+    const cases = [_]Case{
+        .{ .event_type = .checkdeps_start, .message = "Checking dependencies..." },
+        .{ .event_type = .checkdeps_done, .message = "Dependency check finished." },
+        .{ .event_type = .fileconflicts_start, .message = "Checking for file conflicts..." },
+        .{ .event_type = .fileconflicts_done, .message = "File conflict check finished." },
+        .{ .event_type = .resolvedeps_start, .message = "Resolving dependencies..." },
+        .{ .event_type = .resolvedeps_done, .message = "Dependency resolution finished." },
+        .{ .event_type = .interconflicts_start, .message = "Checking for package conflicts..." },
+        .{ .event_type = .interconflicts_done, .message = "Package conflict check finished." },
+        .{ .event_type = .transaction_start, .message = "Starting transaction..." },
+        .{ .event_type = .transaction_done, .message = "Transaction completed." },
+        .{ .event_type = .package_operation_start, .message = "Starting package operation..." },
+        .{ .event_type = .package_operation_done, .message = "Package operation completed." },
+        .{ .event_type = .integrity_start, .message = "Checking package integrity..." },
+        .{ .event_type = .integrity_done, .message = "Package integrity check finished." },
+        .{ .event_type = .load_start, .message = "Loading packages..." },
+        .{ .event_type = .load_done, .message = "Packages loaded." },
+        .{ .event_type = .db_retrieve_start, .message = "Retrieving database..." },
+        .{ .event_type = .db_retrieve_done, .message = "Database retrieved." },
+        .{ .event_type = .db_retrieve_failed, .message = "Failed to retrieve database." },
+        .{ .event_type = .pkg_retrieve_start, .message = "Retrieving package..." },
+        .{ .event_type = .pkg_retrieve_done, .message = "Package retrieved." },
+        .{ .event_type = .pkg_retrieve_failed, .message = "Package retrieval failed." },
+        .{ .event_type = .diskspace_start, .message = "Checking disk space..." },
+        .{ .event_type = .diskspace_done, .message = "Disk space check finished." },
+        .{ .event_type = .optdep_removal, .message = "Removing optional dependencies..." },
+        .{ .event_type = .database_missing, .message = "Database missing. Please run `shelly keyring init` to initialize the keyring." },
+        .{ .event_type = .keyring_start, .message = "Checking keyring..." },
+        .{ .event_type = .keyring_done, .message = "Keyring check finished." },
+        .{ .event_type = .key_download_start, .message = "Downloading key..." },
+        .{ .event_type = .key_download_done, .message = "Key download finished." },
+        .{ .event_type = .hook_start, .message = "Running hooks..." },
+        .{ .event_type = .hook_done, .message = "Finished running hooks." },
+        .{ .event_type = .hook_run_done, .message = "Finished running hook." },
+        .{ .event_type = .failed_optional_dependency_operation, .message = "Failed to remove optional dependency." },
+        .{ .event_type = .package_explicit, .message = "Package marked as explicitly installed." },
+        .{ .event_type = .failed_add_local_package, .message = "Failed to add local package." },
+    };
+
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var cap = InfoCapture{};
+    _ = try mgr.dispatcher.addInformationalHandler(.{
+        .function = captureInfo,
+        .data = @ptrCast(&cap),
+    });
+
+    for (cases) |case| {
+        cap.args = null;
+        mgr.handleInformationMessage(case.event_type);
+        const args = cap.args orelse return error.TestExpectedEqual;
+        try testing.expectEqual(case.event_type, args.event_type);
+        try testing.expectEqualStrings(case.message, args.message);
+    }
+}
+
+test "eventCallback dispatches the informational message for an event type" {
     var mgr: Manager = undefined;
     mgr.dispatcher = events.Dispatcher.init(testing.allocator);
     defer mgr.dispatcher.deinit();
@@ -1007,8 +3328,319 @@ test "eventCallback dispatches an informational event carrying the event type" {
     Manager.eventCallback(@ptrCast(&mgr), &ev);
 
     const args = cap.args orelse return error.TestFailed;
-    try testing.expectEqual(@as(c_int, rawLibalpm.ALPM_EVENT_TRANSACTION_START), args.event_type);
-    try testing.expectEqualStrings("Temp Message", args.message);
+    try testing.expectEqual(libalpm.EventType.transaction_start, args.event_type);
+    try testing.expectEqualStrings("Starting transaction...", args.message);
+}
+
+test "eventCallback dispatches scriptlet output to the scriptlet handlers" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var cap = ScriptletCapture{};
+    _ = mgr.dispatcher.addScriptletHandler(.{
+        .function = captureScriptlet,
+        .data = @ptrCast(&cap),
+    }) catch unreachable;
+
+    var ev: rawLibalpm.alpm_event_t = .{ .scriptlet_info = .{
+        .type = @intCast(rawLibalpm.ALPM_EVENT_SCRIPTLET_INFO),
+        .line = "Running post-install script",
+    } };
+    Manager.eventCallback(@ptrCast(&mgr), &ev);
+
+    const args = cap.args orelse return error.TestFailed;
+    try testing.expectEqualStrings("Running post-install script", args.line);
+}
+
+test "eventCallback formats and dispatches hook progress" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var cap = HookCapture{};
+    _ = mgr.dispatcher.addHookHandler(.{
+        .function = captureHook,
+        .data = @ptrCast(&cap),
+    }) catch unreachable;
+
+    var ev: rawLibalpm.alpm_event_t = .{ .hook_run = .{
+        .type = @intCast(rawLibalpm.ALPM_EVENT_HOOK_RUN_START),
+        .name = "update-cache.hook",
+        .desc = "Updating package cache",
+        .position = 2,
+        .total = 4,
+    } };
+    Manager.eventCallback(@ptrCast(&mgr), &ev);
+
+    try testing.expectEqualStrings("(2/4) Updating package cache", cap.text());
+    try testing.expectEqual(@as(c_ulong, 2), cap.position);
+    try testing.expectEqual(@as(c_ulong, 4), cap.total);
+}
+
+test "eventCallback dispatches pacnew and pacsave paths" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var pacnew_cap = PacnewCapture{};
+    var pacsave_cap = PacsaveCapture{};
+    _ = mgr.dispatcher.addPacnewHandler(.{
+        .function = capturePacnew,
+        .data = @ptrCast(&pacnew_cap),
+    }) catch unreachable;
+    _ = mgr.dispatcher.addPacsaveHandler(.{
+        .function = capturePacsave,
+        .data = @ptrCast(&pacsave_cap),
+    }) catch unreachable;
+
+    var pacnew_event: rawLibalpm.alpm_event_t = .{ .pacnew_created = .{
+        .type = @intCast(rawLibalpm.ALPM_EVENT_PACNEW_CREATED),
+        .file = "/etc/example.conf.pacnew",
+    } };
+    Manager.eventCallback(@ptrCast(&mgr), &pacnew_event);
+
+    var pacsave_event: rawLibalpm.alpm_event_t = .{ .pacsave_created = .{
+        .type = @intCast(rawLibalpm.ALPM_EVENT_PACSAVE_CREATED),
+        .file = "/etc/example.conf.pacsave",
+    } };
+    Manager.eventCallback(@ptrCast(&mgr), &pacsave_event);
+
+    try testing.expectEqualStrings("/etc/example.conf.pacnew", pacnew_cap.file orelse return error.TestFailed);
+    try testing.expect(pacsave_cap.pkg_name == null);
+    try testing.expectEqualStrings("/etc/example.conf.pacsave", pacsave_cap.file orelse return error.TestFailed);
+}
+
+test "eventCallback ignores null out-of-range and empty scriptlet events" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var info_cap = InfoCapture{};
+    var scriptlet_cap = ScriptletCapture{};
+    _ = try mgr.dispatcher.addInformationalHandler(.{
+        .function = captureInfo,
+        .data = @ptrCast(&info_cap),
+    });
+    _ = try mgr.dispatcher.addScriptletHandler(.{
+        .function = captureScriptlet,
+        .data = @ptrCast(&scriptlet_cap),
+    });
+
+    Manager.eventCallback(@ptrCast(&mgr), null);
+
+    var out_of_range: rawLibalpm.alpm_event_t = .{ .type = 0 };
+    Manager.eventCallback(@ptrCast(&mgr), &out_of_range);
+
+    var empty_scriptlet: rawLibalpm.alpm_event_t = .{ .scriptlet_info = .{
+        .type = @intCast(rawLibalpm.ALPM_EVENT_SCRIPTLET_INFO),
+        .line = "",
+    } };
+    Manager.eventCallback(@ptrCast(&mgr), &empty_scriptlet);
+
+    try testing.expect(info_cap.args == null);
+    try testing.expect(scriptlet_cap.args == null);
+}
+
+test "eventCallback ignores event values above the libalpm range" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var cap = InfoCapture{};
+    _ = try mgr.dispatcher.addInformationalHandler(.{
+        .function = captureInfo,
+        .data = @ptrCast(&cap),
+    });
+
+    var event: rawLibalpm.alpm_event_t = .{
+        .type = @intCast(rawLibalpm.ALPM_EVENT_HOOK_RUN_DONE + 1),
+    };
+    Manager.eventCallback(@ptrCast(&mgr), &event);
+
+    try testing.expect(cap.args == null);
+}
+
+test "eventCallback forwards nullable pacnew and pacsave payloads" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var pacnew_cap = PacnewCapture{};
+    var pacsave_cap = PacsaveCapture{};
+    _ = try mgr.dispatcher.addPacnewHandler(.{
+        .function = capturePacnew,
+        .data = @ptrCast(&pacnew_cap),
+    });
+    _ = try mgr.dispatcher.addPacsaveHandler(.{
+        .function = capturePacsave,
+        .data = @ptrCast(&pacsave_cap),
+    });
+
+    var pacnew: rawLibalpm.alpm_event_t = .{ .pacnew_created = .{
+        .type = @intCast(rawLibalpm.ALPM_EVENT_PACNEW_CREATED),
+        .file = null,
+    } };
+    Manager.eventCallback(@ptrCast(&mgr), &pacnew);
+
+    var pacsave: rawLibalpm.alpm_event_t = .{ .pacsave_created = .{
+        .type = @intCast(rawLibalpm.ALPM_EVENT_PACSAVE_CREATED),
+        .oldpkg = null,
+        .file = null,
+    } };
+    Manager.eventCallback(@ptrCast(&mgr), &pacsave);
+
+    try testing.expect(pacnew_cap.file == null);
+    try testing.expect(pacsave_cap.pkg_name == null);
+    try testing.expect(pacsave_cap.file == null);
+}
+
+test "eventCallback falls back from hook description to name and generic text" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var cap = HookCapture{};
+    _ = try mgr.dispatcher.addHookHandler(.{
+        .function = captureHook,
+        .data = @ptrCast(&cap),
+    });
+
+    var named: rawLibalpm.alpm_event_t = .{ .hook_run = .{
+        .type = @intCast(rawLibalpm.ALPM_EVENT_HOOK_RUN_START),
+        .name = "named-hook",
+        .desc = null,
+        .position = 1,
+        .total = 2,
+    } };
+    Manager.eventCallback(@ptrCast(&mgr), &named);
+    try testing.expectEqualStrings("(1/2) named-hook", cap.text());
+
+    var generic: rawLibalpm.alpm_event_t = .{ .hook_run = .{
+        .type = @intCast(rawLibalpm.ALPM_EVENT_HOOK_RUN_START),
+        .name = null,
+        .desc = null,
+        .position = 2,
+        .total = 2,
+    } };
+    Manager.eventCallback(@ptrCast(&mgr), &generic);
+    try testing.expectEqualStrings("(2/2) Running hook...", cap.text());
+}
+
+test "onDownloadEvent translates start progress and completion events" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var info_cap = InfoCapture{};
+    var progress_cap = ProgressCapture{};
+    _ = try mgr.dispatcher.addInformationalHandler(.{
+        .function = captureInfo,
+        .data = @ptrCast(&info_cap),
+    });
+    _ = try mgr.dispatcher.addProgressHandler(.{
+        .function = captureProgress,
+        .data = @ptrCast(&progress_cap),
+    });
+
+    Manager.onDownloadEvent(@ptrCast(&mgr), .{
+        .event_type = .Start,
+        .destination_path = "/tmp/example.pkg.tar.zst",
+    });
+    var info = info_cap.args orelse return error.TestFailed;
+    try testing.expectEqual(libalpm.EventType.pkg_retrieve_start, info.event_type);
+    try testing.expectEqualStrings("/tmp/example.pkg.tar.zst", info.message);
+
+    Manager.onDownloadEvent(@ptrCast(&mgr), .{
+        .event_type = .Progress,
+        .destination_path = "/tmp/example.pkg.tar.zst",
+        .progress = .{
+            .bytes_downloaded = 50,
+            .bytes_total = 100,
+            .percent = 50,
+            .speed_bytes_per_sec = 25,
+        },
+    });
+    const progress = progress_cap.args orelse return error.TestFailed;
+    try testing.expectEqualStrings("example.pkg.tar.zst", progress.pkg_name orelse return error.TestFailed);
+    try testing.expectEqual(@as(c_int, 50), progress.percent);
+    try testing.expectEqual(@as(c_ulong, 1), progress.howmany);
+    try testing.expectEqual(@as(c_ulong, 1), progress.current);
+
+    Manager.onDownloadEvent(@ptrCast(&mgr), .{
+        .event_type = .Complete,
+        .destination_path = "/tmp/example.pkg.tar.zst",
+    });
+    info = info_cap.args orelse return error.TestFailed;
+    try testing.expectEqual(libalpm.EventType.pkg_retrieve_done, info.event_type);
+    try testing.expectEqualStrings("/tmp/example.pkg.tar.zst", info.message);
+}
+
+test "onDownloadEvent reports concrete and fallback errors and ignores skipped events" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var error_cap = ErrorCapture{};
+    var info_cap = InfoCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{
+        .function = captureError,
+        .data = @ptrCast(&error_cap),
+    });
+    _ = try mgr.dispatcher.addInformationalHandler(.{
+        .function = captureInfo,
+        .data = @ptrCast(&info_cap),
+    });
+
+    Manager.onDownloadEvent(@ptrCast(&mgr), .{
+        .event_type = .Error,
+        .download_error = downloader.DownloadError.NetworkError,
+    });
+    try testing.expectEqualStrings("NetworkError", error_cap.text());
+
+    Manager.onDownloadEvent(@ptrCast(&mgr), .{ .event_type = .Error });
+    try testing.expectEqualStrings("download failed", error_cap.text());
+
+    error_cap.len = 0;
+    Manager.onDownloadEvent(@ptrCast(&mgr), .{
+        .event_type = .Skipped,
+        .destination_path = "/tmp/skipped.pkg.tar.zst",
+    });
+    try testing.expectEqual(@as(usize, 0), error_cap.len);
+    try testing.expect(info_cap.args == null);
+}
+
+test "onDownloadEvent handles missing paths and missing progress payloads" {
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var info_cap = InfoCapture{};
+    var progress_cap = ProgressCapture{};
+    _ = try mgr.dispatcher.addInformationalHandler(.{
+        .function = captureInfo,
+        .data = @ptrCast(&info_cap),
+    });
+    _ = try mgr.dispatcher.addProgressHandler(.{
+        .function = captureProgress,
+        .data = @ptrCast(&progress_cap),
+    });
+
+    Manager.onDownloadEvent(@ptrCast(&mgr), .{ .event_type = .Start });
+    const info = info_cap.args orelse return error.TestFailed;
+    try testing.expectEqual(libalpm.EventType.pkg_retrieve_start, info.event_type);
+    try testing.expectEqualStrings("", info.message);
+
+    Manager.onDownloadEvent(@ptrCast(&mgr), .{ .event_type = .Progress });
+    try testing.expect(progress_cap.args == null);
+}
+
+test "database signature downloads are reserved for required signatures" {
+    try testing.expect(!Manager.databaseSignatureRequired(0));
+    try testing.expect(Manager.databaseSignatureRequired(rawLibalpm.ALPM_SIG_DATABASE));
+    try testing.expect(!Manager.databaseSignatureRequired(
+        rawLibalpm.ALPM_SIG_DATABASE | rawLibalpm.ALPM_SIG_DATABASE_OPTIONAL,
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -1049,6 +3681,130 @@ test "askYesNo returns false for a zero answer" {
     }) catch unreachable;
 
     try testing.expect(!mgr.askYesNo(tio, 0, "proceed?"));
+}
+
+test "askYesNo maps shared confirmation responses" {
+    const CommonResponder = struct {
+        response: operation_api.QuestionResponse,
+
+        fn answer(data: ?*anyopaque, question: operation_api.Question) operation_api.QuestionResponse {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            testing.expect(question.kind == .confirmation) catch unreachable;
+            return self.response;
+        }
+    };
+
+    var mgr: Manager = undefined;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    var threaded: std.Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    const tio = threaded.io();
+    var context = operation_api.OperationContext.init(testing.allocator, tio);
+    defer context.deinit();
+    var responder: CommonResponder = .{ .response = .accepted };
+    context.setQuestionHandler(.{ .function = CommonResponder.answer, .data = &responder });
+    var operation = context.begin(.{ .backend = .alpm, .kind = .install });
+    defer operation.finish(.success);
+    mgr.dispatcher.setOperation(&operation);
+
+    const question_type = @intFromEnum(libalpm.QuestionType.install_ignore);
+    try testing.expect(mgr.askYesNo(tio, question_type, "proceed?"));
+    responder.response = .declined;
+    try testing.expect(!mgr.askYesNo(tio, question_type, "proceed?"));
+}
+
+test "questionCallback applies affirmative answers to simple libalpm questions" {
+    var mgr: Manager = undefined;
+    mgr.allocator = testing.allocator;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+    mgr.threaded = .init(testing.allocator, .{});
+    defer mgr.threaded.deinit();
+
+    var responder = AskResponder{
+        .disp = &mgr.dispatcher,
+        .io = mgr.io(),
+        .answer = 1,
+    };
+    _ = try mgr.dispatcher.addQuestionHandler(.{
+        .function = askResponder,
+        .data = @ptrCast(&responder),
+    });
+
+    var corrupted: rawLibalpm.alpm_question_t = .{ .corrupted = .{
+        .type = rawLibalpm.ALPM_QUESTION_CORRUPTED_PKG,
+        .filepath = "/tmp/corrupt.pkg.tar.zst",
+    } };
+    Manager.questionCallback(@ptrCast(&mgr), &corrupted);
+    try testing.expectEqual(@as(c_int, 1), corrupted.corrupted.remove);
+
+    var remove: rawLibalpm.alpm_question_t = .{ .remove_pkgs = .{
+        .type = rawLibalpm.ALPM_QUESTION_REMOVE_PKGS,
+    } };
+    Manager.questionCallback(@ptrCast(&mgr), &remove);
+    try testing.expectEqual(@as(c_int, 1), remove.remove_pkgs.skip);
+
+    var import_key: rawLibalpm.alpm_question_t = .{ .import_key = .{
+        .type = rawLibalpm.ALPM_QUESTION_IMPORT_KEY,
+        .uid = "Shelly Test Key",
+    } };
+    Manager.questionCallback(@ptrCast(&mgr), &import_key);
+    try testing.expectEqual(@as(c_int, 1), import_key.import_key.import);
+}
+
+test "questionCallback keeps unknown answers and applies selected provider choices" {
+    var mgr: Manager = undefined;
+    mgr.allocator = testing.allocator;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+    mgr.threaded = .init(testing.allocator, .{});
+    defer mgr.threaded.deinit();
+
+    var unknown: rawLibalpm.alpm_question_t = .{ .any = .{
+        .type = 0,
+        .answer = 7,
+    } };
+    Manager.questionCallback(@ptrCast(&mgr), &unknown);
+    try testing.expectEqual(@as(c_int, 7), unknown.any.answer);
+
+    var responder = ChoiceResponder{
+        .disp = &mgr.dispatcher,
+        .io = mgr.io(),
+        .choice = 3,
+    };
+    _ = try mgr.dispatcher.addQuestionHandler(.{
+        .function = choiceResponder,
+        .data = @ptrCast(&responder),
+    });
+
+    var provider: rawLibalpm.alpm_question_t = .{ .select_provider = .{
+        .type = rawLibalpm.ALPM_QUESTION_SELECT_PROVIDER,
+        .providers = null,
+        .depend = null,
+    } };
+    Manager.questionCallback(@ptrCast(&mgr), &provider);
+    try testing.expectEqual(@as(c_int, 3), provider.select_provider.use_index);
+}
+
+test "questionCallback defaults provider selection to the first entry without handlers" {
+    var mgr: Manager = undefined;
+    mgr.allocator = testing.allocator;
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+    mgr.threaded = .init(testing.allocator, .{});
+    defer mgr.threaded.deinit();
+
+    var provider: rawLibalpm.alpm_question_t = .{ .select_provider = .{
+        .type = rawLibalpm.ALPM_QUESTION_SELECT_PROVIDER,
+        .use_index = 9,
+        .providers = null,
+        .depend = null,
+    } };
+    Manager.questionCallback(@ptrCast(&mgr), &provider);
+
+    try testing.expectEqual(@as(c_int, 0), provider.select_provider.use_index);
 }
 
 // ---------------------------------------------------------------------------
@@ -1108,6 +3864,31 @@ test "handleErrorMessage reports an out-of-range error number as unknown" {
     try testing.expect(std.mem.indexOf(u8, cap.text(), "Unknown error: 9999") != null);
 }
 
+test "handleErrorMessage propagates allocation failures without dispatching" {
+    for (0..2) |fail_index| {
+        var failing = testing.FailingAllocator.init(testing.allocator, .{
+            .fail_index = fail_index,
+        });
+        var mgr = newErrorManager();
+        defer mgr.dispatcher.deinit();
+        mgr.allocator = failing.allocator();
+
+        var cap = ErrorCapture{};
+        _ = try mgr.dispatcher.addErrorHandler(.{
+            .function = captureError,
+            .data = @ptrCast(&cap),
+        });
+
+        try testing.expectError(
+            error.OutOfMemory,
+            mgr.handleErrorMessage(@intFromEnum(libalpm.Error.Memory), null),
+        );
+        try testing.expectEqual(@as(usize, 0), cap.len);
+        try testing.expect(failing.has_induced_failure);
+        try testing.expectEqual(failing.allocated_bytes, failing.freed_bytes);
+    }
+}
+
 test "handleErrorMessage tolerates a null list for list-based errors" {
     var mgr = newErrorManager();
     defer mgr.dispatcher.deinit();
@@ -1136,6 +3917,157 @@ test "handleErrorMessage tolerates a null list for list-based errors" {
     try testing.expect(cap.len != 0);
 }
 
+test "handleErrorMessage includes invalid package names from a populated list" {
+    var mgr = newErrorManager();
+    defer mgr.dispatcher.deinit();
+
+    var cap = ErrorCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{
+        .function = captureError,
+        .data = @ptrCast(&cap),
+    });
+
+    var invalid_name = [_:0]u8{ 'b', 'a', 'd', ' ', 'n', 'a', 'm', 'e' };
+    var node: rawLibalpm.alpm_list_t = .{
+        .data = @ptrCast(&invalid_name),
+    };
+
+    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.PkgInvalidName), &node);
+
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "bad name\n") != null);
+}
+
+test "handleErrorMessage formats populated unsatisfied dependency details" {
+    var mgr = newErrorManager();
+    defer mgr.dispatcher.deinit();
+
+    var cap = ErrorCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{
+        .function = captureError,
+        .data = @ptrCast(&cap),
+    });
+
+    var dependency: rawLibalpm.alpm_depend_t = .{
+        .name = @ptrCast(@constCast("libexample")),
+        .version = @ptrCast(@constCast("2")),
+        .mod = @intCast(rawLibalpm.ALPM_DEP_MOD_GE),
+    };
+    var missing: rawLibalpm.alpm_depmissing_t = .{
+        .target = @ptrCast(@constCast("target-package")),
+        .depend = &dependency,
+    };
+    var node: rawLibalpm.alpm_list_t = .{
+        .data = @ptrCast(&missing),
+    };
+
+    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.UnsatisfiedDeps), &node);
+
+    try testing.expect(std.mem.indexOf(
+        u8,
+        cap.text(),
+        "target-package => libexample>=2\n",
+    ) != null);
+}
+
+test "handleErrorMessage formats populated file conflict details" {
+    var mgr = newErrorManager();
+    defer mgr.dispatcher.deinit();
+
+    var cap = ErrorCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{
+        .function = captureError,
+        .data = @ptrCast(&cap),
+    });
+
+    var conflict: rawLibalpm.alpm_fileconflict_t = .{
+        .target = @ptrCast(@constCast("target-package")),
+        .type = @intCast(rawLibalpm.ALPM_FILECONFLICT_FILESYSTEM),
+        .file = @ptrCast(@constCast("/usr/bin/example")),
+    };
+    var node: rawLibalpm.alpm_list_t = .{
+        .data = @ptrCast(&conflict),
+    };
+
+    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.FileConflicts), &node);
+
+    try testing.expect(std.mem.indexOf(
+        u8,
+        cap.text(),
+        "target-package in file /usr/bin/example\n",
+    ) != null);
+}
+
+test "handleErrorMessage emits descriptions for every scalar libalpm error" {
+    const Case = struct {
+        err: libalpm.Error,
+        detail: []const u8,
+    };
+    const cases = [_]Case{
+        .{ .err = .Memory, .detail = "Memory allocation failed." },
+        .{ .err = .System, .detail = "System error." },
+        .{ .err = .BadPerms, .detail = "Bad permissions." },
+        .{ .err = .NotAFile, .detail = "Expected a file, did not receive a file." },
+        .{ .err = .NotADir, .detail = "Expected a directory, did not receive a directory." },
+        .{ .err = .WrongArgs, .detail = "Wrong or NULL arguments" },
+        .{ .err = .DiskSpace, .detail = "Not enough disk space" },
+        .{ .err = .HandleNull, .detail = "Lost the handle." },
+        .{ .err = .HandleNotNull, .detail = "Handle is not null." },
+        .{ .err = .HandleLock, .detail = "You have a db.lck." },
+        .{ .err = .DbOpen, .detail = "Failed to open the database." },
+        .{ .err = .DbCreate, .detail = "Failed to create the database." },
+        .{ .err = .DbNull, .detail = "Database is null." },
+        .{ .err = .DbNotNull, .detail = "Database is not null." },
+        .{ .err = .DbNotFound, .detail = "Database not found." },
+        .{ .err = .DbInvalid, .detail = "Database is invalid." },
+        .{ .err = .DbInvalidSig, .detail = "Database signature is invalid." },
+        .{ .err = .DbVersion, .detail = "Database version is invalid." },
+        .{ .err = .DbWrite, .detail = "Failed to write to the database." },
+        .{ .err = .DbRemove, .detail = "Failed to remove the database." },
+        .{ .err = .ServerBadUrl, .detail = "Server URL is invalid." },
+        .{ .err = .ServerNone, .detail = "No server found." },
+        .{ .err = .TransNotNull, .detail = "Transaction is not null." },
+        .{ .err = .TransNull, .detail = "Transaction is null." },
+        .{ .err = .TransDupTarget, .detail = "Transaction target is duplicated." },
+        .{ .err = .TransDupFilename, .detail = "Transaction filename is duplicated." },
+        .{ .err = .TransNotInitialized, .detail = "Transaction is not initialized." },
+        .{ .err = .TransNotPrepared, .detail = "Transaction is not prepared." },
+        .{ .err = .TransAbort, .detail = "Transaction aborted." },
+        .{ .err = .TransType, .detail = "Transaction type is invalid." },
+        .{ .err = .TransNotLocked, .detail = "Transaction is not locked." },
+        .{ .err = .TransHookFailed, .detail = "Transaction hook failed." },
+        .{ .err = .PkgNotFound, .detail = "Package not found." },
+        .{ .err = .PkgIgnored, .detail = "Package ignored." },
+        .{ .err = .PkgInvalid, .detail = "Package is invalid." },
+        .{ .err = .PkgInvalidChecksum, .detail = "Package checksum is invalid." },
+        .{ .err = .PkgInvalidSig, .detail = "Package signature is invalid." },
+        .{ .err = .PkgMissingSig, .detail = "Package signature is missing." },
+        .{ .err = .PkgOpen, .detail = "Failed to open package." },
+        .{ .err = .PkgCantRemove, .detail = "Failed to remove package." },
+        .{ .err = .PkgInvalidArch, .detail = "Package architecture is invalid." },
+        .{ .err = .SigMissing, .detail = "Signature is missing." },
+        .{ .err = .SigInvalid, .detail = "Signature is invalid." },
+        .{ .err = .DownloadFailed, .detail = "Download failed." },
+        .{ .err = .Gpgme, .detail = "Gpgme error." },
+        .{ .err = .ExternalDownload, .detail = "External download failed." },
+        .{ .err = .SandboxFailed, .detail = "Sandbox failed." },
+    };
+
+    var mgr = newErrorManager();
+    defer mgr.dispatcher.deinit();
+
+    var cap = ErrorCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{
+        .function = captureError,
+        .data = @ptrCast(&cap),
+    });
+
+    for (cases) |case| {
+        cap.len = 0;
+        try mgr.handleErrorMessage(@intFromEnum(case.err), null);
+        try testing.expect(std.mem.indexOf(u8, cap.text(), case.detail) != null);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
@@ -1158,9 +4090,60 @@ fn captureInfo(data: ?*anyopaque, args: events.InformationalArgs) void {
     cap.args = args;
 }
 
+const ScriptletCapture = struct {
+    args: ?events.ScriptletArgs = null,
+};
+
+fn captureScriptlet(data: ?*anyopaque, args: events.ScriptletArgs) void {
+    const cap: *ScriptletCapture = @ptrCast(@alignCast(data));
+    cap.args = args;
+}
+
+const HookCapture = struct {
+    buf: [512]u8 = undefined,
+    len: usize = 0,
+    position: c_ulong = 0,
+    total: c_ulong = 0,
+
+    fn text(self: *const HookCapture) []const u8 {
+        return self.buf[0..self.len];
+    }
+};
+
+fn captureHook(data: ?*anyopaque, args: events.HookArgs) void {
+    const cap: *HookCapture = @ptrCast(@alignCast(data));
+    if (args.description) |description| {
+        cap.len = @min(description.len, cap.buf.len);
+        @memcpy(cap.buf[0..cap.len], description[0..cap.len]);
+    }
+    cap.position = args.position;
+    cap.total = args.total;
+}
+
+const PacnewCapture = struct {
+    file: ?[]const u8 = null,
+};
+
+fn capturePacnew(data: ?*anyopaque, args: events.PacnewArgs) void {
+    const cap: *PacnewCapture = @ptrCast(@alignCast(data));
+    cap.file = args.file;
+}
+
+const PacsaveCapture = struct {
+    pkg_name: ?[]const u8 = null,
+    file: ?[]const u8 = null,
+};
+
+fn capturePacsave(data: ?*anyopaque, args: events.PacsaveArgs) void {
+    const cap: *PacsaveCapture = @ptrCast(@alignCast(data));
+    cap.pkg_name = args.pkg_name;
+    cap.file = args.file;
+}
+
 const ErrorCapture = struct {
     buf: [2048]u8 = undefined,
     len: usize = 0,
+    count: usize = 0,
 
     fn text(self: *const ErrorCapture) []const u8 {
         return self.buf[0..self.len];
@@ -1169,6 +4152,7 @@ const ErrorCapture = struct {
 
 fn captureError(data: ?*anyopaque, args: events.ErrorArgs) void {
     const cap: *ErrorCapture = @ptrCast(@alignCast(data));
+    cap.count += 1;
     const n = @min(args.message.len, cap.buf.len);
     @memcpy(cap.buf[0..n], args.message[0..n]);
     cap.len = n;
@@ -1186,592 +4170,14 @@ fn askResponder(data: ?*anyopaque, args: events.QuestionArgs) void {
     ctx.disp.respond(ctx.io, .{ .answer = ctx.answer, .pkg = null, .choice = null });
 }
 
-// ---------------------------------------------------------------------------
-// init + sync (integration)
-//
-// These exercise the full path: parse a config, initialize libalpm, register a
-// sync database, and download it over the network. Everything is confined to a
-// unique temporary directory whose `DBPath` is redirected away from the host's
-// real /var/lib/pacman, and the workspace is deleted once each test finishes.
-// ---------------------------------------------------------------------------
-
-// A throwaway pacman configuration written to disk under a unique temp root.
-const SyncTestWorkspace = struct {
+const ChoiceResponder = struct {
+    disp: *events.Dispatcher,
     io: std.Io,
-    root: []const u8,
-    config_path: []const u8,
-    db_path: []const u8,
-
-    fn create(allocator: std.mem.Allocator, io: std.Io) !SyncTestWorkspace {
-        const anchor: u8 = 0;
-        var prng = std.Random.DefaultPrng.init(@intFromPtr(&anchor));
-        const root = try std.fmt.allocPrint(allocator, "/tmp/shelly-alpm-test-{x}", .{prng.random().int(u32)});
-        errdefer allocator.free(root);
-
-        const db_path = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-        errdefer allocator.free(db_path);
-
-        const config_path = try std.fmt.allocPrint(allocator, "{s}/pacman.conf", .{root});
-        errdefer allocator.free(config_path);
-
-        // Create the root and database directories up front.
-        try std.Io.Dir.cwd().createDirPath(io, db_path);
-
-        // A minimal config: DBPath points into our temp dir, and a single [core]
-        // repository is aimed at a real Arch mirror. Signature checking is
-        // disabled so no keyring/GPG setup is required to fetch the database.
-        const config = try std.fmt.allocPrint(
-            allocator,
-            "[options]\n" ++
-                "Architecture = auto\n" ++
-                "SigLevel = Never\n" ++
-                "DBPath = {s}\n" ++
-                "\n" ++
-                "[seafoam-labs]\n" ++
-                "Server =  https://repo.seafoam-labs.org/x86_64\n",
-            //"Server = https://mirrors.kernel.org/archlinux/$repo/os/$arch\n",
-            .{db_path},
-        );
-        defer allocator.free(config);
-
-        var file = try std.Io.Dir.cwd().createFile(io, config_path, .{});
-        defer file.close(io);
-        try file.writeStreamingAll(io, config);
-
-        return .{
-            .io = io,
-            .root = root,
-            .config_path = config_path,
-            .db_path = db_path,
-        };
-    }
-
-    // Removes the entire temp tree (config + downloaded databases) and frees the
-    // owned path strings. Safe to call regardless of how far `create` got.
-    fn cleanup(self: *SyncTestWorkspace, allocator: std.mem.Allocator) void {
-        std.Io.Dir.cwd().deleteTree(self.io, self.root) catch {};
-        allocator.free(self.config_path);
-        allocator.free(self.db_path);
-        allocator.free(self.root);
-    }
+    choice: c_int,
 };
 
-test "Manager.init registers the configured sync database" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var workspace = try SyncTestWorkspace.create(allocator, io);
-    defer workspace.cleanup(allocator);
-
-    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.db_path);
-    defer mgr.deinit();
-
-    try testing.expect(mgr.is_initialized);
-    try testing.expect(mgr.handle != null);
-    // applyConfig must have registered the [core] repository as a sync db.
-    try testing.expect(mgr.sync_dbs.items.len >= 1);
-}
-
-test "Manager.sync downloads the configured database into DBPath/sync" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var workspace = try SyncTestWorkspace.create(allocator, io);
-    defer workspace.cleanup(allocator);
-
-    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.db_path);
-    defer mgr.deinit();
-
-    // Force the download so the result never depends on a pre-existing cache.
-    try mgr.sync(true);
-
-    // sync creates "<DBPath>/sync" and download_database stores each database
-    // there under its bare repository name (no extension).
-    const sync_dir = try std.fmt.allocPrint(allocator, "{s}/sync", .{workspace.db_path});
-    defer allocator.free(sync_dir);
-    _ = try std.Io.Dir.cwd().statFile(io, sync_dir, .{});
-
-    const core_db = try std.fmt.allocPrint(allocator, "{s}/seafoam-labs.db", .{sync_dir});
-    defer allocator.free(core_db);
-    const stat = try std.Io.Dir.cwd().statFile(io, core_db, .{});
-    try testing.expect(stat.size > 0);
-}
-
-// ---------------------------------------------------------------------------
-// get_single_installed_package
-// ---------------------------------------------------------------------------
-
-test "get_single_installed_package returns NoHandle when the handle is null" {
-    var mgr: Manager = undefined;
-    mgr.handle = null;
-    mgr.allocator = testing.allocator;
-
-    const result = mgr.get_single_installed_package("anything");
-    try testing.expectError(error.NoHandle, result);
-}
-
-test "get_single_installed_package returns null for a non-existent package" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var workspace = try SyncTestWorkspace.create(allocator, io);
-    defer workspace.cleanup(allocator);
-
-    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.db_path);
-    defer mgr.deinit();
-
-    // A fresh temporary database has no installed packages.
-    const result = try mgr.get_single_installed_package("nonexistent-package");
-    try testing.expect(result == null);
-}
-
-test "get_single_installed_package returns a package when it exists" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    // Use the real system database to find an actually installed package.
-    const sys_config = "/etc/pacman.conf";
-    const sys_db = "/var/lib/pacman";
-
-    // Skip gracefully if the system database is unavailable.
-    const stat = std.Io.Dir.cwd().statFile(io, sys_db, .{}) catch {
-        return; // no system database — skip
-    };
-    _ = stat;
-
-    var mgr = Manager.init(allocator, sys_config, false, sys_db) catch {
-        return; // config parse or init failure — skip
-    };
-    defer mgr.deinit();
-
-    // `pacman` is installed on virtually every Arch-based system.
-    const result = try mgr.get_single_installed_package("pacman");
-    const pkg = result orelse return; // skip if pacman is somehow absent
-
-    const name = pkg.name() orelse return error.TestFailed;
-    try testing.expectEqualStrings("pacman", name);
-}
-
-// ---------------------------------------------------------------------------
-// get_installed_packages
-// ---------------------------------------------------------------------------
-
-test "get_installed_packages returns NoHandle when the handle is null" {
-    var mgr: Manager = undefined;
-    mgr.handle = null;
-    mgr.allocator = testing.allocator;
-
-    const result = mgr.get_installed_packages();
-    try testing.expectError(error.NoHandle, result);
-}
-
-test "get_installed_packages returns an empty list when no packages are installed" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var workspace = try SyncTestWorkspace.create(allocator, io);
-    defer workspace.cleanup(allocator);
-
-    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.db_path);
-    defer mgr.deinit();
-
-    var packages = try mgr.get_installed_packages();
-    defer packages.deinit(mgr.allocator);
-
-    // A fresh temporary database has no installed packages.
-    try testing.expectEqual(@as(usize, 0), packages.items.len);
-}
-
-test "get_installed_packages lists packages from the system database" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    // Use the real system database, skipping gracefully when it is unavailable.
-    const sys_config = "/etc/pacman.conf";
-    const sys_db = "/var/lib/pacman";
-    _ = std.Io.Dir.cwd().statFile(io, sys_db, .{}) catch return;
-
-    var mgr = Manager.init(allocator, sys_config, false, sys_db) catch return;
-    defer mgr.deinit();
-
-    var packages = try mgr.get_installed_packages();
-    defer packages.deinit(mgr.allocator);
-
-    // A real system always has packages installed, each exposing a name.
-    try testing.expect(packages.items.len > 0);
-    for (packages.items) |package| {
-        _ = package.name() orelse return error.TestFailed;
-    }
-
-    // `pacman` is installed on every Arch-based system.
-    var found_pacman = false;
-    for (packages.items) |package| {
-        const name = package.name() orelse continue;
-        if (std.mem.eql(u8, name, "pacman")) {
-            found_pacman = true;
-            break;
-        }
-    }
-    try testing.expect(found_pacman);
-}
-
-test "get_single_installed_package matches an entry from get_installed_packages" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    const sys_config = "/etc/pacman.conf";
-    const sys_db = "/var/lib/pacman";
-    _ = std.Io.Dir.cwd().statFile(io, sys_db, .{}) catch return;
-
-    var mgr = Manager.init(allocator, sys_config, false, sys_db) catch return;
-    defer mgr.deinit();
-
-    var packages = try mgr.get_installed_packages();
-    defer packages.deinit(mgr.allocator);
-    if (packages.items.len == 0) return;
-
-    // Package names are null-terminated slices, so they can be looked up directly.
-    const first_name = packages.items[0].name() orelse return error.TestFailed;
-    const single = try mgr.get_single_installed_package(first_name);
-    const pkg = single orelse return error.TestFailed;
-    const single_name = pkg.name() orelse return error.TestFailed;
-    try testing.expectEqualStrings(first_name, single_name);
-}
-
-// ---------------------------------------------------------------------------
-// get_foreign_packages
-// ---------------------------------------------------------------------------
-
-test "get_foreign_packages returns NoHandle when the handle is null" {
-    var mgr: Manager = undefined;
-    mgr.handle = null;
-    mgr.allocator = testing.allocator;
-
-    const result = mgr.get_foreign_packages();
-    try testing.expectError(error.NoHandle, result);
-}
-
-test "get_foreign_packages returns an empty list when no packages are installed" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var workspace = try SyncTestWorkspace.create(allocator, io);
-    defer workspace.cleanup(allocator);
-
-    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.db_path);
-    defer mgr.deinit();
-
-    var foreign = try mgr.get_foreign_packages();
-    defer foreign.deinit(mgr.allocator);
-
-    // With no installed packages there is nothing that could be foreign.
-    try testing.expectEqual(@as(usize, 0), foreign.items.len);
-}
-
-test "get_foreign_packages excludes packages provided by a sync database" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    const sys_config = "/etc/pacman.conf";
-    const sys_db = "/var/lib/pacman";
-    _ = std.Io.Dir.cwd().statFile(io, sys_db, .{}) catch return;
-
-    var mgr = Manager.init(allocator, sys_config, false, sys_db) catch return;
-    defer mgr.deinit();
-
-    var installed = try mgr.get_installed_packages();
-    defer installed.deinit(mgr.allocator);
-
-    var foreign = try mgr.get_foreign_packages();
-    defer foreign.deinit(mgr.allocator);
-
-    // Foreign packages are always a subset of the installed packages.
-    try testing.expect(foreign.items.len <= installed.items.len);
-
-    // Every foreign package is nonetheless installed, so it resolves locally.
-    for (foreign.items) |package| {
-        const name = package.name() orelse return error.TestFailed;
-        const local = try mgr.get_single_installed_package(name);
-        try testing.expect(local != null);
-    }
-
-    // If some packages were matched to a sync database, the sync caches are
-    // loaded and repository packages must be excluded. `pacman` ships from the
-    // official [core] repository, so it must never be reported as foreign.
-    if (foreign.items.len < installed.items.len) {
-        for (foreign.items) |package| {
-            const name = package.name() orelse continue;
-            try testing.expect(!std.mem.eql(u8, name, "pacman"));
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Local-database symlink (non-root update checking)
-//
-// When a temp root is supplied, Manager.init symlinks "{tempRoot}/local" to the
-// real "{DBPath}/local" so libalpm can see the actually installed packages
-// while every write (sync databases, etc.) stays inside the throwaway temp
-// root. These tests drive that path against the real system database.
-// ---------------------------------------------------------------------------
-
-// A throwaway temp root whose config points DBPath at the *real* system
-// database, so Manager.init links the real `local` directory into the temp root.
-const LocalDbTestWorkspace = struct {
-    io: std.Io,
-    root: []const u8,
-    config_path: []const u8,
-    real_db_path: []const u8,
-
-    // The real system database whose `local` directory holds installed packages.
-    const system_db_path = "/var/lib/pacman";
-
-    // Returns null (skip) when the real local database is unavailable, e.g. on
-    // non-Arch hosts or CI without a populated /var/lib/pacman/local.
-    fn create(allocator: std.mem.Allocator, io: std.Io) !?LocalDbTestWorkspace {
-        const real_local = try std.fmt.allocPrint(allocator, "{s}/local", .{system_db_path});
-        defer allocator.free(real_local);
-        _ = std.Io.Dir.cwd().statFile(io, real_local, .{}) catch return null;
-
-        const anchor: u8 = 0;
-        var prng = std.Random.DefaultPrng.init(@intFromPtr(&anchor));
-        const root = try std.fmt.allocPrint(allocator, "/tmp/shelly-alpm-local-test-{x}", .{prng.random().int(u32)});
-        errdefer allocator.free(root);
-
-        const config_path = try std.fmt.allocPrint(allocator, "{s}/pacman.conf", .{root});
-        errdefer allocator.free(config_path);
-
-        // The temp root must exist so init can plant the "local" symlink inside it.
-        try std.Io.Dir.cwd().createDirPath(io, root);
-
-        // DBPath points at the *real* database; init captures "{DBPath}/local",
-        // repoints DBPath to the temp root (passed as temp_root_path), and links
-        // "{tempRoot}/local" -> "{real}/local". No repositories are configured,
-        // so no sync database is registered.
-        const config = try std.fmt.allocPrint(
-            allocator,
-            "[options]\n" ++
-                "Architecture = auto\n" ++
-                "SigLevel = Never\n" ++
-                "DBPath = {s}\n",
-            .{system_db_path},
-        );
-        defer allocator.free(config);
-
-        var file = try std.Io.Dir.cwd().createFile(io, config_path, .{});
-        defer file.close(io);
-        try file.writeStreamingAll(io, config);
-
-        return .{
-            .io = io,
-            .root = root,
-            .config_path = config_path,
-            .real_db_path = system_db_path,
-        };
-    }
-
-    // deleteTree unlinks the "local" symlink without touching its target.
-    fn cleanup(self: *LocalDbTestWorkspace, allocator: std.mem.Allocator) void {
-        std.Io.Dir.cwd().deleteTree(self.io, self.root) catch {};
-        allocator.free(self.config_path);
-        allocator.free(self.root);
-    }
-};
-
-test "Manager.init symlinks the real local database into the temp root" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var workspace = (try LocalDbTestWorkspace.create(allocator, io)) orelse return;
-    defer workspace.cleanup(allocator);
-
-    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.root);
-    defer mgr.deinit();
-
-    const link_path = try std.fmt.allocPrint(allocator, "{s}/local", .{workspace.root});
-    defer allocator.free(link_path);
-
-    // The temp-root entry must be a symlink...
-    const link_stat = try std.Io.Dir.cwd().statFile(io, link_path, .{ .follow_symlinks = false });
-    try testing.expectEqual(std.Io.File.Kind.sym_link, link_stat.kind);
-
-    // ...pointing at the real "{DBPath}/local" directory...
-    const expected_target = try std.fmt.allocPrint(allocator, "{s}/local", .{workspace.real_db_path});
-    defer allocator.free(expected_target);
-    var buf: [std.fs.max_path_bytes]u8 = undefined;
-    const n = try std.Io.Dir.cwd().readLink(io, link_path, &buf);
-    try testing.expectEqualStrings(expected_target, buf[0..n]);
-
-    // ...and following the link must resolve to the real database directory.
-    const target_stat = try std.Io.Dir.cwd().statFile(io, link_path, .{ .follow_symlinks = true });
-    try testing.expectEqual(std.Io.File.Kind.directory, target_stat.kind);
-}
-
-test "get_installed_packages reads real packages through the local symlink" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var workspace = (try LocalDbTestWorkspace.create(allocator, io)) orelse return;
-    defer workspace.cleanup(allocator);
-
-    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.root);
-    defer mgr.deinit();
-
-    var packages = try mgr.get_installed_packages();
-    defer packages.deinit(mgr.allocator);
-
-    // The real system database always has packages installed.
-    try testing.expect(packages.items.len > 0);
-
-    // `pacman` is installed on every Arch-based system and must be visible
-    // through the symlinked local database.
-    var found_pacman = false;
-    for (packages.items) |package| {
-        const name = package.name() orelse continue;
-        if (std.mem.eql(u8, name, "pacman")) {
-            found_pacman = true;
-            break;
-        }
-    }
-    try testing.expect(found_pacman);
-}
-
-test "get_single_installed_package resolves a real package through the local symlink" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var workspace = (try LocalDbTestWorkspace.create(allocator, io)) orelse return;
-    defer workspace.cleanup(allocator);
-
-    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.root);
-    defer mgr.deinit();
-
-    // An installed package resolves through the symlinked local database...
-    const pkg = (try mgr.get_single_installed_package("pacman")) orelse return error.TestFailed;
-    try testing.expectEqualStrings("pacman", pkg.name() orelse return error.TestFailed);
-
-    // ...while a package that is not installed does not.
-    try testing.expect((try mgr.get_single_installed_package("shelly-definitely-not-installed")) == null);
-}
-
-test "get_foreign_packages treats installed packages as foreign without a sync database" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    var workspace = (try LocalDbTestWorkspace.create(allocator, io)) orelse return;
-    defer workspace.cleanup(allocator);
-
-    var mgr = try Manager.init(allocator, workspace.config_path, false, workspace.root);
-    defer mgr.deinit();
-
-    var installed = try mgr.get_installed_packages();
-    defer installed.deinit(mgr.allocator);
-    try testing.expect(installed.items.len > 0);
-
-    var foreign = try mgr.get_foreign_packages();
-    defer foreign.deinit(mgr.allocator);
-
-    // The workspace configures no repositories, so no sync database is
-    // registered and every installed package counts as foreign.
-    try testing.expectEqual(installed.items.len, foreign.items.len);
-}
-
-fn containsPackage(packages: []const libalpm.Package, name: []const u8) bool {
-    for (packages) |package| {
-        const pkg_name = package.name() orelse continue;
-        if (std.mem.eql(u8, pkg_name, name)) return true;
-    }
-    return false;
-}
-
-// Mirrors the non-root `check-updates` flow in the C# CLI
-// (CheckPackageUpdateNonRoot.GetSyncStandards): initialize against the real
-// system configuration with `use_root = false` and a throwaway temp root
-// (equivalent to `Initialize(useTempPath: true, tempPath: ...)`), then `sync()`
-// the configured repositories. init symlinks the temp root's `local` database
-// to the real one, so installed packages are visible while every downloaded
-// sync database lands in the temp root. This exercises get_installed_packages
-// and get_foreign_packages together against real repository data.
-test "get_foreign_packages excludes repository packages after a non-root sync" {
-    const allocator = testing.allocator;
-
-    var threaded: std.Io.Threaded = .init(allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
-    // Skip gracefully when there is no real system database to link against.
-    const sys_config = "/etc/pacman.conf";
-    _ = std.Io.Dir.cwd().statFile(io, "/var/lib/pacman/local", .{}) catch return;
-
-    // A unique temp root plays the role of the C# `tempPath` cache directory.
-    const anchor: u8 = 0;
-    var prng = std.Random.DefaultPrng.init(@intFromPtr(&anchor));
-    const temp_root = try std.fmt.allocPrint(allocator, "/tmp/shelly-alpm-checkupdates-{x}", .{prng.random().int(u32)});
-    defer allocator.free(temp_root);
-    try std.Io.Dir.cwd().createDirPath(io, temp_root);
-    defer std.Io.Dir.cwd().deleteTree(io, temp_root) catch {};
-
-    // Initialize(useTempPath: true, tempPath: temp_root) + Sync().
-    var mgr = Manager.init(allocator, sys_config, false, temp_root) catch return;
-    defer mgr.deinit();
-    mgr.sync(true) catch return;
-
-    var installed = try mgr.get_installed_packages();
-    defer installed.deinit(mgr.allocator);
-
-    var foreign = try mgr.get_foreign_packages();
-    defer foreign.deinit(mgr.allocator);
-
-    // The linked local database always exposes the real installed packages.
-    try testing.expect(installed.items.len > 0);
-    try testing.expect(containsPackage(installed.items, "pacman"));
-
-    // Skip the exclusion assertions unless the sync actually loaded repository
-    // data (network available and databases downloaded). Without it every
-    // installed package would trivially be "foreign".
-    if (foreign.items.len == installed.items.len) return;
-
-    // `pacman` is provided by the official [core] repository, so once its sync
-    // database is loaded it must never be reported as a foreign package.
-    try testing.expect(!containsPackage(foreign.items, "pacman"));
-    try testing.expect(foreign.items.len < installed.items.len);
+fn choiceResponder(data: ?*anyopaque, args: events.QuestionArgs) void {
+    _ = args;
+    const ctx: *ChoiceResponder = @ptrCast(@alignCast(data));
+    ctx.disp.respond(ctx.io, .{ .choice = ctx.choice });
 }
