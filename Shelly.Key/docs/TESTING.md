@@ -258,6 +258,132 @@ gpgconf --homedir /tmp/test-gnupg --kill gpg-agent
 sudo rm -rf /tmp/test-gnupg
 ```
 
+## `shelly-key --lsign-key`
+
+Always test against a throwaway keyring. `--lsign-key` creates a local
+(non-exportable) signature on each target public key using the keyring's
+master key. It requires root, an existing secret key, and at least one target
+key ID.
+
+### Prerequisites
+
+The target keyring must already have:
+
+1. A secret key (run `--init` first).
+2. At least one public key to act as the signing target.
+
+The simplest setup is to `--init` a temp keyring and import the Arch keyring
+**without** going through `--populate` (which would auto-sign every trusted
+key and leave nothing for `--lsign-key` to do):
+
+```bash
+zig build
+./zig-out/bin/shelly-key --init /tmp/test-gnupg
+
+# Import the public keys only - no signing, no ownertrust.
+sudo gpg --homedir /tmp/test-gnupg --import \
+  /usr/share/pacman/keyrings/archlinux.gpg
+```
+
+`--lsign-key` requires root and self-elevates.
+
+### Run
+
+Pick a fingerprint from the imported keys and sign it:
+
+```bash
+FP=$(sudo gpg --homedir /tmp/test-gnupg --list-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --lsign-key "$FP"
+```
+
+NB: It might pick an already-signed key if you previously ran `--populate`. If so, pick a different fingerprint from the list of imported keys.
+
+Expected output, in order:
+
+```text
+Locally signing key <fingerprint>...
+Locally signed 1 key(s).
+Updating trust database...
+```
+
+Signing invalidates the trust database, so `--lsign-key` refreshes
+it after a fully successful run. If any key failed to sign, the trust-database
+refresh is skipped.
+
+### Multiple targets
+
+Pass several key IDs to sign them in one invocation:
+
+```bash
+FPS=$(sudo gpg --homedir /tmp/test-gnupg --list-keys --with-colons | awk -F: '/^fpr/ {print $10}' | sed -n '1,2p')
+mapfile -t FP_ARR <<< "$FPS"
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --lsign-key "${FP_ARR[0]}" "${FP_ARR[1]}"
+```
+
+Expected:
+
+```text
+Locally signing key <fp1>...
+Locally signing key <fp2>...
+Locally signed 2 key(s).
+Updating trust database...
+```
+
+### Verify
+
+#### The target key is locally signed
+
+The master key should appear among the target key's signatures:
+
+```bash
+MASTER=$(sudo gpg --homedir /tmp/test-gnupg --list-secret-keys --with-colons | awk -F: '/^sec/ {print $5; exit}')
+
+sudo gpg --homedir /tmp/test-gnupg --list-sigs "$FP" | grep -q "$MASTER" && echo "signed" || echo "NOT signed"
+```
+
+### Idempotency
+
+Re-running `--lsign-key` against an already-signed key does **not** create a
+second local signature. GnuPG's `--quick-lsign-key` deduplicates internally.
+
+```bash
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --lsign-key "$FP"
+```
+
+```text
+Locally signing key <fingerprint>...
+Locally signed 1 key(s).
+Updating trust database...
+```
+
+Confirm no duplicate signature was added:
+
+```bash
+sudo gpg --homedir /tmp/test-gnupg --list-sigs "$FP"
+```
+
+### Error cases
+
+All of these exit nonzero. The first four print a one-line `error:` message on
+stderr; the nonexistent-key case fails during the existence check before any
+signing is attempted.
+
+| Scenario                    | How to trigger                                        |
+| --------------------------- | ----------------------------------------------------- |
+| No targets specified        | `--lsign-key` with no key ID                          |
+| Nonexistent key id          | `--lsign-key NONEXISTENTKEY1234567890ABCDEF`          |
+| Keyring not initialized     | `--gpgdir /tmp/empty-gnupg --lsign-key <fp>`          |
+| No secret key to sign with  | `--init` skipped; or keyring with no `sec` record     |
+
+### Revert
+
+`--lsign-key` writes only into the target keyring directory:
+
+```bash
+gpgconf --homedir /tmp/test-gnupg --kill gpg-agent
+sudo rm -rf /tmp/test-gnupg
+```
+
 ## Read-only operations: `--list-keys`, `--finger`, `--list-sigs`, `--export`
 
 These four commands are thin gpg wrappers that inherit stdout/stderr. They work
@@ -299,7 +425,7 @@ Expected: multi-line output with one block per key, starting with `pub   ...`.
 
 ```bash
 # First, grab a real fingerprint from the keyring
-FP=$(gpg --homedir /tmp/test-gnupg --list-keys --with-colons | awk -F: '/^pub/ {print $5; exit}')
+FP=$(gpg --homedir /tmp/test-gnupg --list-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')
 ./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --list-keys "$FP"
 ```
 
