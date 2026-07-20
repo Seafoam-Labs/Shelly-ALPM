@@ -17,6 +17,7 @@ pub fn main(init: std.process.Init) void {
     _ = gio.Application.signals.activate.connect(app, ?*anyopaque, &activate, null, .{});
 
     const status = gio.Application.run(gobject.ext.as(gio.Application, app), 0, null);
+    runtime.teardownConfig(std.heap.c_allocator);
     std.process.exit(@intCast(status));
 }
 
@@ -29,6 +30,10 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
         provider.as(gtk.StyleProvider),
         gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
+
+    _ = runtime.setupConfig(std.heap.c_allocator) catch |err| {
+        std.log.warn("settings: failed to load config service: {t}", .{err});
+    };
 
     const window = ShellyWindow.new(app);
     gtk.Window.present(gobject.ext.as(gtk.Window, window));

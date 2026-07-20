@@ -377,9 +377,6 @@ fn disableRevokedKeys(
     try stdout.flush();
 }
 
-/// Verify that `key_id` exists in the keyring by invoking
-/// `gpg --with-colons --list-key <key_id>`. Returns `error.GpgFailed` if gpg
-/// exits nonzero (which it does for missing keys).
 fn ensureKeyExists(allocator: std.mem.Allocator, gpg_cli: gpg.Gpg, key_id: []const u8) !void {
     const output = try gpg_cli.runCapture(allocator, &.{
         "--with-colons", "--list-key", "--quiet", key_id,
