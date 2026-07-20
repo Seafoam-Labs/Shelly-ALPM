@@ -16,6 +16,7 @@ const runtime = @import("../services/runtime.zig");
 const c_string = @import("../helpers/c_string.zig");
 const ShellyOperation = @import("../services/shelly_operation.zig").ShellyOperation;
 const Event = @import("../services/shelly_operation.zig").Event;
+const PackageDetail = @import("package_detail.zig").PackageDetail;
 
 pub const PackagePage = extern struct {
     parent_instance: Parent,
@@ -58,6 +59,8 @@ pub const PackagePage = extern struct {
         search_text: [256]u8,
         search_len: usize,
         operation: ?*ShellyOperation,
+        detail_revealer: *gtk.Revealer,
+        detail: *PackageDetail,
         var offset: c_int = 0;
     };
 
@@ -99,6 +102,11 @@ pub const PackagePage = extern struct {
         p.show_installed_only = false;
         p.operation = null;
 
+        const detail = PackageDetail.new();
+        p.detail = detail;
+        gtk.Revealer.setChild(p.detail_revealer, detail.as(gtk.Widget));
+        // or gtk.Box.append(p.detail_hbox, detail.as(gtk.Widget)) — whatever your slot is
+
         p.list_store = gio.ListStore.new(PackageObject.getGObjectType());
         p.selection = gtk.SingleSelection.new(p.list_store.as(gio.ListModel));
         gtk.ColumnView.setModel(p.column_view, p.selection.as(gtk.SelectionModel));
@@ -130,13 +138,8 @@ pub const PackagePage = extern struct {
 
         _ = gtk.SearchEntry.signals.search_changed.connect(p.search_entry, *Self, &on_search_changed, self, .{});
 
-        _ = gobject.Object.signals.notify.connect(
-            p.grouping_selection.as(gobject.Object),
-            *Self,
-            &on_group_notify,
-            self,
-            .{ .detail = "selected" },
-        );
+        _ = gobject.Object.signals.notify.connect(p.grouping_selection.as(gobject.Object), *Self, &on_group_notify, self, .{ .detail = "selected" });
+        _ = gobject.Object.signals.notify.connect(p.selection.as(gobject.Object), *Self, &on_selection_changed, self, .{ .detail = "selected" });
 
         p.resolver = IconResolver.init(std.heap.c_allocator);
 
@@ -289,10 +292,10 @@ pub const PackagePage = extern struct {
                 const list_item = gobject.ext.cast(gtk.ListItem, item) orelse return;
 
                 const content_grid = gtk.Grid.new();
-                gtk.Widget.setMarginStart(content_grid.as(gtk.Widget), 12);
+                gtk.Widget.setMarginStart(content_grid.as(gtk.Widget), 10);
                 gtk.Widget.setMarginEnd(content_grid.as(gtk.Widget), 12);
-                gtk.Widget.setMarginTop(content_grid.as(gtk.Widget), 6);
-                gtk.Widget.setMarginBottom(content_grid.as(gtk.Widget), 6);
+                gtk.Widget.setMarginTop(content_grid.as(gtk.Widget), 12);
+                gtk.Widget.setMarginBottom(content_grid.as(gtk.Widget), 10);
                 gtk.Grid.setColumnSpacing(content_grid, 6);
                 gtk.Grid.setRowSpacing(content_grid, 0);
                 gtk.Widget.setHexpand(content_grid.as(gtk.Widget), 1);
@@ -311,6 +314,7 @@ pub const PackagePage = extern struct {
                 gtk.Widget.setHexpand(right_box.as(gtk.Widget), 1);
 
                 const title_label = gtk.Label.new("");
+                gtk.Widget.addCssClass(title_label.as(gtk.Widget), "package-title");
                 gtk.Widget.setHalign(title_label.as(gtk.Widget), .start);
                 gtk.Widget.setValign(title_label.as(gtk.Widget), .center);
                 gtk.Widget.setVexpand(title_label.as(gtk.Widget), 0);
@@ -358,10 +362,10 @@ pub const PackagePage = extern struct {
                 gtk.Widget.setSizeRequest(frame.as(gtk.Widget), 300, -1);
                 gtk.Widget.setHexpand(frame.as(gtk.Widget), 0);
                 gtk.Widget.setHalign(frame.as(gtk.Widget), .fill);
-                gtk.Widget.setMarginStart(frame.as(gtk.Widget), 2);
-                gtk.Widget.setMarginEnd(frame.as(gtk.Widget), 2);
-                gtk.Widget.setMarginTop(frame.as(gtk.Widget), 1);
-                gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 1);
+                gtk.Widget.setMarginStart(frame.as(gtk.Widget), 3);
+                gtk.Widget.setMarginEnd(frame.as(gtk.Widget), 3);
+                gtk.Widget.setMarginTop(frame.as(gtk.Widget), 3);
+                gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 3);
                 gtk.Widget.addCssClass(frame.as(gtk.Widget), "card");
 
                 gtk.ListItem.setChild(list_item, frame.as(gtk.Widget));
@@ -473,6 +477,19 @@ pub const PackagePage = extern struct {
         p.search_len = len;
 
         gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
+    }
+
+    fn on_selection_changed(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        const obj = gtk.SingleSelection.getSelectedItem(p.selection) orelse {
+            gtk.Revealer.setRevealChild(p.detail_revealer, 0);
+            return;
+        };
+        const pkg = gobject.ext.cast(PackageObject, obj) orelse return;
+
+        const path = p.resolver.resolve(pkg.getName());
+        p.detail.showPackage(pkg.getName(), path);
+        gtk.Revealer.setRevealChild(p.detail_revealer, 1);
     }
 
     fn on_group_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
@@ -681,6 +698,7 @@ pub const PackagePage = extern struct {
         .{ "grid_view_button", @offsetOf(Private, "grid_view_button") },
         .{ "list_view_button", @offsetOf(Private, "list_view_button") },
         .{ "grouping_selection", @offsetOf(Private, "grouping_selection") },
+        .{ "detail_revealer", @offsetOf(Private, "detail_revealer") },
     };
 
     pub const Class = extern struct {

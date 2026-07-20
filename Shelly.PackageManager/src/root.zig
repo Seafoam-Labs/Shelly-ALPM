@@ -137,6 +137,9 @@ pub const local = struct {
 /// Backend-neutral lifecycle, event, question, and cancellation API.
 pub const operation = @import("operation_context");
 
+/// Zig 0.16 HTTP client with a compact, VPN-compatible TLS ClientHello.
+pub const HttpClient = @import("shared/http_client.zig");
+
 pub const shared = struct {
     pub const downloader = @import("shared/downloader.zig");
     pub const list_dictionary = @import("shared/list_dictionary.zig");

@@ -33,11 +33,11 @@
                                         <property name="margin-end">20</property>
                                         <property name="margin-top">20</property>
                                         <property name="margin-bottom">20</property>
-                                        <property name="spacing">12</property>
+                                        <property name="spacing">20</property>
                                         <property name="hexpand">true</property>
                                         <property name="vexpand">true</property>
                                         <property name="halign">center</property>
-                                        <property name="width-request">450</property>
+                                        <property name="width-request">600</property>
                                         <child>
                                             <object class="GtkBox">
                                                 <property name="orientation">horizontal</property>
@@ -62,7 +62,7 @@
                                                 <property name="spacing">12</property>
                                                 <child>
                                                     <object class="GtkLabel">
-                                                        <property name="label" translatable="yes"> Language</property>
+                                                        <property name="label" translatable="yes">Language</property>
                                                         <property name="halign">start</property>
                                                         <property name="hexpand">true</property>
                                                     </object>
@@ -348,11 +348,11 @@
                                         <property name="margin-end">20</property>
                                         <property name="margin-top">20</property>
                                         <property name="margin-bottom">20</property>
-                                        <property name="spacing">12</property>
+                                        <property name="spacing">20</property>
                                         <property name="hexpand">true</property>
                                         <property name="vexpand">true</property>
                                         <property name="halign">center</property>
-                                        <property name="width-request">450</property>
+                                        <property name="width-request">600</property>
                                         <child>
                                             <object class="GtkBox">
                                                 <property name="orientation">horizontal</property>
@@ -521,11 +521,11 @@
                                         <property name="margin-end">20</property>
                                         <property name="margin-top">20</property>
                                         <property name="margin-bottom">20</property>
-                                        <property name="spacing">12</property>
+                                        <property name="spacing">20</property>
                                         <property name="hexpand">true</property>
                                         <property name="vexpand">true</property>
                                         <property name="halign">center</property>
-                                        <property name="width-request">450</property>
+                                        <property name="width-request">600</property>
                                         <child>
                                             <object class="GtkBox">
                                                 <property name="orientation">horizontal</property>
@@ -765,9 +765,6 @@
                 <child>
                     <object class="GtkButton" id="changelog_button">
                         <property name="label" translatable="yes">View Changelog</property>
-                        <style>
-                            <class name="suggested-action"/>
-                        </style>
                     </object>
                 </child>
                 <child>
@@ -778,6 +775,8 @@
                         <property name="halign">end</property>
                         <child>
                             <object class="GtkLabel" id="version_label">
+                                <property name="margin-start">20</property>
+                                <property name="margin-end">20</property>
                                 <property name="label">v0.0.0</property>
                                 <style>
                                     <class name="dim-label"/>

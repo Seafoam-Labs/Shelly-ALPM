@@ -29,7 +29,10 @@ pub fn render(
                 try writeUsageArgument(allocator, writer, argument);
             }
         } else if (command.isBranch) {
-            try writer.writeAll(if (action_branch and !usesNamedSubcommands(command)) " [type]" else " [command]");
+            if (command == manifest.root() and command.arguments.len > 0)
+                try writer.writeAll(" [command | <query>...]")
+            else
+                try writer.writeAll(if (action_branch and !usesNamedSubcommands(command)) " [type]" else " [command]");
         } else {
             for (command.arguments) |argument| {
                 try writer.writeByte(' ');
@@ -828,6 +831,8 @@ test "root help combines shortcodes with implemented top-level command examples"
 
     try render(arena.allocator(), &manifest, manifest.root(), &output.writer);
     const rendered = output.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "shelly [command | <query>...] [options]") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "interactive standard/AUR install fallback") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Implementation:") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "[implementation:") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "-<UppercaseAction><lowercaseTypeOrCommand><modifiers...>") != null);

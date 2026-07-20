@@ -49,7 +49,7 @@ pub const Manifest = struct {
             .isBranch = true,
             .hasAction = true,
             .aliases = &.{},
-            .arguments = &.{},
+            .arguments = &catalog.root_arguments,
             .options = &catalog.root_options,
             .implementation = "Native Zig action/type dispatcher",
         });
@@ -205,6 +205,7 @@ test "builds the complete action-first manifest from native Zig metadata" {
     try std.testing.expect(manifest.findByPath("shelly sync flatpak") != null);
     try std.testing.expect(manifest.findByPath("shelly flatpak search") == null);
     try std.testing.expect(manifest.findByPath("shelly query") == null);
+    try std.testing.expectEqualStrings("query", manifest.root().arguments[0].name);
     try std.testing.expect(manifest.findByPath("shelly config get") != null);
     try std.testing.expect(manifest.findByPath("shelly config set") != null);
     try std.testing.expect(manifest.findByPath("shelly config list") != null);

@@ -11,6 +11,7 @@ const purify = @import("purify.zig");
 const remove = @import("remove.zig");
 const run = @import("run.zig");
 const search = @import("search.zig");
+const search_install = @import("search_install.zig");
 const sync = @import("sync.zig");
 const update = @import("update.zig");
 const upgrade = @import("upgrade.zig");
@@ -23,6 +24,7 @@ pub fn dispatch(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
 ) !u8 {
+    if (try search_install.dispatch(context, invocation)) |exit_code| return exit_code;
     if (try upgrade.dispatch(context, invocation)) |exit_code| return exit_code;
     if (try sync.dispatch(context, invocation)) |exit_code| return exit_code;
     if (try update.dispatch(context, invocation)) |exit_code| return exit_code;

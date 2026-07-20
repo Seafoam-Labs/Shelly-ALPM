@@ -1,4 +1,5 @@
 const std = @import("std");
+const HttpClient = @import("../shared/http_client.zig");
 const appimage = @import("bindings.zig").appimage;
 const builtin = @import("builtin");
 const appimage_manager = @import("manager.zig");
@@ -388,7 +389,7 @@ pub const UpdateManager = struct {
         try self.checkCancelled();
         const uri = std.Uri.parse(url) catch return null;
 
-        var client: std.http.Client = .{ .allocator = self.allocator, .io = self.io };
+        var client: HttpClient = .{ .allocator = self.allocator, .io = self.io };
         defer client.deinit();
 
         var req = client.request(.HEAD, uri, .{
@@ -778,7 +779,7 @@ pub const UpdateManager = struct {
             return null;
         };
 
-        var client: std.http.Client = .{ .allocator = self.allocator, .io = self.io };
+        var client: HttpClient = .{ .allocator = self.allocator, .io = self.io };
         defer client.deinit();
         const headers = [_]std.http.Header{.{ .name = "accept", .value = accept }};
         var request = client.request(.GET, uri, .{

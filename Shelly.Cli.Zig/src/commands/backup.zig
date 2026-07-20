@@ -910,11 +910,8 @@ test "backup is a standalone -B command with export and local modifiers" {
     try std.testing.expectEqualStrings(command_path, long_form.dispatch.command.path);
 
     const removed_export_command = try parser.parse(allocator, &manifest, &.{"export"});
-    try std.testing.expect(removed_export_command == .failure);
-    try std.testing.expectEqualStrings(
-        "Unrecognized command or argument 'export'.",
-        removed_export_command.failure.message,
-    );
+    try std.testing.expect(removed_export_command == .dispatch);
+    try std.testing.expectEqualStrings("shelly", removed_export_command.dispatch.command.path);
 
     const removed_export_shortcode = try @import("../cli/shortcodes.zig").translate(
         allocator,

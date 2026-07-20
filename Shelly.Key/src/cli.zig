@@ -16,6 +16,7 @@ pub const Command = union(enum) {
     finger,
     list_sigs,
     export_keys,
+    lsign_key,
 };
 
 pub const Options = struct {
@@ -53,6 +54,7 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
             if (opts.command == .finger) return error.MultipleOperations;
             if (opts.command == .list_sigs) return error.MultipleOperations;
             if (opts.command == .export_keys) return error.MultipleOperations;
+            if (opts.command == .lsign_key) return error.MultipleOperations;
             opts.command = .init;
         } else if (std.mem.eql(u8, arg, "--updatedb") or std.mem.eql(u8, arg, "-u")) {
             if (opts.command == .init) return error.MultipleOperations;
@@ -61,6 +63,7 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
             if (opts.command == .finger) return error.MultipleOperations;
             if (opts.command == .list_sigs) return error.MultipleOperations;
             if (opts.command == .export_keys) return error.MultipleOperations;
+            if (opts.command == .lsign_key) return error.MultipleOperations;
             opts.command = .updatedb;
         } else if (std.mem.eql(u8, arg, "--populate")) {
             if (opts.command == .init) return error.MultipleOperations;
@@ -69,6 +72,7 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
             if (opts.command == .finger) return error.MultipleOperations;
             if (opts.command == .list_sigs) return error.MultipleOperations;
             if (opts.command == .export_keys) return error.MultipleOperations;
+            if (opts.command == .lsign_key) return error.MultipleOperations;
             opts.command = .populate;
         } else if (std.mem.eql(u8, arg, "--list-keys") or std.mem.eql(u8, arg, "-l")) {
             if (opts.command == .init) return error.MultipleOperations;
@@ -77,6 +81,7 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
             if (opts.command == .finger) return error.MultipleOperations;
             if (opts.command == .list_sigs) return error.MultipleOperations;
             if (opts.command == .export_keys) return error.MultipleOperations;
+            if (opts.command == .lsign_key) return error.MultipleOperations;
             opts.command = .list_keys;
         } else if (std.mem.eql(u8, arg, "--finger") or std.mem.eql(u8, arg, "-f")) {
             if (opts.command == .init) return error.MultipleOperations;
@@ -85,6 +90,7 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
             if (opts.command == .list_keys) return error.MultipleOperations;
             if (opts.command == .list_sigs) return error.MultipleOperations;
             if (opts.command == .export_keys) return error.MultipleOperations;
+            if (opts.command == .lsign_key) return error.MultipleOperations;
             opts.command = .finger;
         } else if (std.mem.eql(u8, arg, "--list-sigs")) {
             if (opts.command == .init) return error.MultipleOperations;
@@ -93,6 +99,7 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
             if (opts.command == .list_keys) return error.MultipleOperations;
             if (opts.command == .finger) return error.MultipleOperations;
             if (opts.command == .export_keys) return error.MultipleOperations;
+            if (opts.command == .lsign_key) return error.MultipleOperations;
             opts.command = .list_sigs;
         } else if (std.mem.eql(u8, arg, "--export") or std.mem.eql(u8, arg, "-e")) {
             if (opts.command == .init) return error.MultipleOperations;
@@ -101,7 +108,17 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
             if (opts.command == .list_keys) return error.MultipleOperations;
             if (opts.command == .finger) return error.MultipleOperations;
             if (opts.command == .list_sigs) return error.MultipleOperations;
+            if (opts.command == .lsign_key) return error.MultipleOperations;
             opts.command = .export_keys;
+        } else if (std.mem.eql(u8, arg, "--lsign-key")) {
+            if (opts.command == .init) return error.MultipleOperations;
+            if (opts.command == .updatedb) return error.MultipleOperations;
+            if (opts.command == .populate) return error.MultipleOperations;
+            if (opts.command == .list_keys) return error.MultipleOperations;
+            if (opts.command == .finger) return error.MultipleOperations;
+            if (opts.command == .list_sigs) return error.MultipleOperations;
+            if (opts.command == .export_keys) return error.MultipleOperations;
+            opts.command = .lsign_key;
         } else if (std.mem.eql(u8, arg, "--gpgdir")) {
             if (i + 1 >= args.len or std.mem.startsWith(u8, args[i + 1], "-")) {
                 return error.MissingArgumentValue;
@@ -132,7 +149,7 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
         .updatedb => {
             if (positionals.items.len > 0) return error.UnknownArgument;
         },
-        .list_keys, .finger, .list_sigs, .export_keys => {
+        .list_keys, .finger, .list_sigs, .export_keys, .lsign_key => {
             if (positionals.items.len > 0) {
                 opts.key_ids = try positionals.toOwnedSlice(allocator);
             }
@@ -160,6 +177,7 @@ pub fn printHelp(writer: *std.Io.Writer) !void {
         \\  -f, --finger [ids...]     List keys with their fingerprints
         \\  --list-sigs [ids...]      List keys and their signatures
         \\  -e, --export [ids...]     Export public or secret keys
+        \\  --lsign-key <ids...>      Locally sign keys with your master key
         \\
         \\Options:
         \\  --gpgdir <dir>            Set the GnuPG directory (default: {s})
@@ -385,6 +403,49 @@ test "parse treats --populate as idempotent when repeated" {
     try std.testing.expectEqual(@as(usize, 0), opts.populate_keyrings.len);
 }
 
+test "parse recognizes --lsign-key with a single key id" {
+    const args: []const []const u8 = &.{ exe_name, "--lsign-key", "ABC1234" };
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.key_ids);
+
+    try std.testing.expectEqual(Command.lsign_key, opts.command);
+    try std.testing.expectEqual(@as(usize, 1), opts.key_ids.len);
+    try std.testing.expectEqualStrings("ABC1234", opts.key_ids[0]);
+}
+
+test "parse collects multiple key ids after --lsign-key" {
+    const args: []const []const u8 = &.{ exe_name, "--lsign-key", "ABC1234", "DEF5678" };
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.key_ids);
+
+    try std.testing.expectEqual(Command.lsign_key, opts.command);
+    try std.testing.expectEqual(@as(usize, 2), opts.key_ids.len);
+    try std.testing.expectEqualStrings("ABC1234", opts.key_ids[0]);
+    try std.testing.expectEqualStrings("DEF5678", opts.key_ids[1]);
+}
+
+test "parse accepts --gpgdir with --lsign-key" {
+    const args: []const []const u8 = &.{ exe_name, "--gpgdir", "/tmp/k", "--lsign-key", "ABC1234" };
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.key_ids);
+
+    try std.testing.expectEqual(Command.lsign_key, opts.command);
+    try std.testing.expectEqualStrings("/tmp/k", opts.gpgdir);
+    try std.testing.expectEqual(@as(usize, 1), opts.key_ids.len);
+}
+
+test "parse rejects --lsign-key combined with --init" {
+    const args: []const []const u8 = &.{ exe_name, "--lsign-key", "ABC1234", "--init" };
+
+    try std.testing.expectError(error.MultipleOperations, parse(std.testing.allocator, args));
+}
+
+test "parse rejects --lsign-key combined with --list-keys" {
+    const args: []const []const u8 = &.{ exe_name, "--list-keys", "--lsign-key", "ABC1234" };
+
+    try std.testing.expectError(error.MultipleOperations, parse(std.testing.allocator, args));
+}
+
 test "parse rejects --gpgdir without a value" {
     const args: []const []const u8 = &.{ exe_name, "--gpgdir" };
 
@@ -430,6 +491,7 @@ test "printHelp prints the expected usage text" {
         \\  -f, --finger [ids...]     List keys with their fingerprints
         \\  --list-sigs [ids...]      List keys and their signatures
         \\  -e, --export [ids...]     Export public or secret keys
+        \\  --lsign-key <ids...>      Locally sign keys with your master key
         \\
         \\Options:
         \\  --gpgdir <dir>            Set the GnuPG directory (default: /etc/pacman.d/gnupg)

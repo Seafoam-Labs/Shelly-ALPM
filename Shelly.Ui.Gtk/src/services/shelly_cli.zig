@@ -92,6 +92,13 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode(FlatpakRemoteInfo, self.allocator, result.stdout);
     }
 
+    pub fn get_package_details(self: ShellyCli, name: []const u8) !std.json.Parsed(Package) {
+        const result = try self.run(&.{ "search", "standard", name });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+        return JsonPackFrame.decodeLast(Package, self.allocator, result.stdout);
+    }
+
     pub fn check_updates(self: ShellyCli) !std.json.Parsed(CheckUpdates) {
         const result = try self.run(&.{"-P"});
         defer self.allocator.free(result.stdout);

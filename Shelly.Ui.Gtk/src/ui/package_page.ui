@@ -194,41 +194,14 @@
                                     </object>
                                 </child>
                                 <child>
-                                    <object class="GtkRevealer" id="detail_revealer">
-                                        <property name="reveal-child">false</property>
-                                        <property name="transition-type">slide-left</property>
-                                        <child>
-                                            <object class="GtkFrame">
-                                                <property name="margin-start">10</property>
-                                                <property name="margin-end">10</property>
-                                                <property name="margin-top">10</property>
-                                                <property name="margin-bottom">10</property>
-                                                <property name="width-request">300</property>
-                                                <style>
-                                                    <class name="rounded-card"/>
-                                                </style>
-                                                <child>
-                                                    <object class="GtkScrolledWindow">
-                                                        <property name="hscrollbar-policy">never</property>
-                                                        <property name="overlay-scrolling">true</property>
-                                                        <property name="propagate-natural-height">True</property>
-                                                        <property name="propagate-natural-width">False</property>
-                                                        <property name="vexpand">true</property>
-                                                        <child>
-                                                            <object class="GtkBox" id="detail_box">
-                                                                <property name="margin-bottom">10</property>
-                                                                <property name="margin-end">10</property>
-                                                                <property name="margin-start">10</property>
-                                                                <property name="margin-top">10</property>
-                                                                <property name="orientation">vertical</property>
-                                                                <property name="spacing">8</property>
-                                                            </object>
-                                                        </child>
-                                                    </object>
-                                                </child>
-                                            </object>
-                                        </child>
-                                    </object>
+
+                                <object class="GtkRevealer" id="detail_revealer">
+                                    <property name="reveal-child">false</property>
+                                    <property name="transition-type">slide-left</property>
+                                    <property name="hexpand">false</property>
+                                    <property name="halign">end</property>
+                                </object>
+
                                 </child>
                             </object>
                         </child>

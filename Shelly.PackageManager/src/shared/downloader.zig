@@ -1,5 +1,6 @@
 const std = @import("std");
 const operations = @import("operation_context");
+const HttpClient = @import("http_client.zig");
 
 pub const DownloadEventType = enum {
     Start,
@@ -17,6 +18,7 @@ pub const DownloadError = error{
     Timeout,
     RetryExceeded,
     SslError,
+    CertificateBundleError,
     NotModified,
     FailedDownload,
     Cancelled,
@@ -70,14 +72,15 @@ pub const CoreDownloader = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
     configuration: DownloadConfiguration,
-    http_client: std.http.Client,
+    http_client: HttpClient,
     event_callback: ?DownloadEventCallback = null,
     event_context: ?*anyopaque = null,
     operation_context: ?*operations.OperationContext = null,
     parent_operation: ?*const operations.Operation = null,
     active_operation: ?*operations.Operation = null,
-    /// When true, error-level logging is suppressed for best-effort downloads
-    /// (e.g. optional database signatures that may legitimately be absent).
+    /// When true, candidate failures are suppressed from logs, callbacks, and
+    /// operation events. Used for mirrors that can still fail over and for
+    /// optional signatures that may legitimately be absent.
     quiet: bool = false,
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io, config: DownloadConfiguration) CoreDownloader {
@@ -85,7 +88,11 @@ pub const CoreDownloader = struct {
             .allocator = allocator,
             .io = io,
             .configuration = config,
-            .http_client = .{ .allocator = allocator, .io = io },
+            .http_client = .{
+                .allocator = allocator,
+                .io = io,
+                .connect_timeout = connectTimeout(config.timeout_in_seconds),
+            },
         };
     }
 
@@ -109,6 +116,15 @@ pub const CoreDownloader = struct {
         self.http_client.deinit();
     }
 
+    fn resetHttpClient(self: *CoreDownloader) void {
+        self.http_client.deinit();
+        self.http_client = .{
+            .allocator = self.allocator,
+            .io = self.io,
+            .connect_timeout = connectTimeout(self.configuration.timeout_in_seconds),
+        };
+    }
+
     pub fn downloadToFile(
         self: *CoreDownloader,
         url: []const u8,
@@ -116,7 +132,7 @@ pub const CoreDownloader = struct {
         force: bool,
     ) DownloadResult {
         var operation_storage: operations.Operation = undefined;
-        const has_operation = if (self.parent_operation) |parent| blk: {
+        const has_operation = if (self.quiet) false else if (self.parent_operation) |parent| blk: {
             operation_storage = parent.child(.{
                 .backend = .download,
                 .kind = .download,
@@ -151,6 +167,7 @@ pub const CoreDownloader = struct {
         force: bool,
     ) DownloadResult {
         var attempt: u8 = 0;
+        var tls_reset_used = false;
         while (true) : (attempt += 1) {
             if (self.isCancelled()) {
                 self.emitEvent(.{ .event_type = .Error, .download_error = DownloadError.Cancelled, .destination_path = destination_path });
@@ -170,15 +187,23 @@ pub const CoreDownloader = struct {
                     self.emitEvent(.{ .event_type = .Skipped, .destination_path = destination_path });
                     return .{ .skipped = .{ .destination_path = destination_path, .reason = .NotModified } };
                 }
-                const can_retry = isRetryable(err) and attempt < self.configuration.max_retries;
-                if (!can_retry) {
-                    const final_err = if (isRetryable(err)) DownloadError.RetryExceeded else err;
-                    self.emitEvent(.{
-                        .event_type = .Error,
-                        .download_error = final_err,
-                        .destination_path = destination_path,
-                    });
-                    return .{ .failure = final_err };
+                switch (retryAction(err, attempt, self.configuration.max_retries, tls_reset_used)) {
+                    .retry => {},
+                    .reset_tls_and_retry => {
+                        // Recreate the client once so the next attempt gets a fresh
+                        // connection pool, CA bundle, and cached realtime value.
+                        tls_reset_used = true;
+                        self.resetHttpClient();
+                    },
+                    .stop => {
+                        const final_err = if (isRetryable(err)) DownloadError.RetryExceeded else err;
+                        self.emitEvent(.{
+                            .event_type = .Error,
+                            .download_error = final_err,
+                            .destination_path = destination_path,
+                        });
+                        return .{ .failure = final_err };
+                    },
                 }
             }
         }
@@ -200,14 +225,17 @@ pub const CoreDownloader = struct {
             } else |_| {}
         }
 
-        const user_agent: std.http.Client.Request.Headers.Value = if (self.configuration.user_agent) |agent|
+        const user_agent: HttpClient.Request.Headers.Value = if (self.configuration.user_agent) |agent|
             .{ .override = agent }
         else
             .default;
-        var req = self.http_client.request(
+        var req = requestWithSetupTimeout(
+            &self.http_client,
+            self.io,
             .GET,
             uri,
             downloadRequestOptions(user_agent, extra_headers),
+            connectTimeout(self.configuration.timeout_in_seconds),
         ) catch |err| {
             self.logErr("HTTP request setup failed for {s}: {}", .{ url, err });
             return mapRequestError(err);
@@ -339,6 +367,7 @@ pub const CoreDownloader = struct {
     }
 
     fn emitEvent(self: *const CoreDownloader, event: DownloadEvent) void {
+        if (self.quiet and event.event_type == .Error) return;
         if (self.event_callback) |callback| callback(self.event_context, event);
         const operation = self.active_operation orelse return;
         switch (event.event_type) {
@@ -378,10 +407,74 @@ pub const CoreDownloader = struct {
     }
 };
 
+const RequestSetupRace = union(enum) {
+    request: HttpClient.RequestError!HttpClient.Request,
+    timeout: std.Io.Cancelable!void,
+};
+
+/// Bounds DNS, TCP, and TLS initialization together. The response body is not
+/// part of this deadline, so a mirror that successfully starts responding can
+/// finish at normal transfer speed.
+fn requestWithSetupTimeout(
+    client: *HttpClient,
+    io: std.Io,
+    method: std.http.Method,
+    uri: std.Uri,
+    options: HttpClient.RequestOptions,
+    timeout: std.Io.Timeout,
+) HttpClient.RequestError!HttpClient.Request {
+    if (timeout == .none) return client.request(method, uri, options);
+
+    var result_buffer: [2]RequestSetupRace = undefined;
+    var select = std.Io.Select(RequestSetupRace).init(io, &result_buffer);
+    select.async(.request, beginRequest, .{ client, method, uri, options });
+    select.async(.timeout, waitForRequestSetupTimeout, .{ io, timeout });
+    defer while (select.cancel()) |remaining| closeRequestSetupRace(remaining);
+
+    return switch (try select.await()) {
+        .request => |result| result,
+        .timeout => |result| {
+            try result;
+            return error.Timeout;
+        },
+    };
+}
+
+fn beginRequest(
+    client: *HttpClient,
+    method: std.http.Method,
+    uri: std.Uri,
+    options: HttpClient.RequestOptions,
+) HttpClient.RequestError!HttpClient.Request {
+    return client.request(method, uri, options);
+}
+
+fn waitForRequestSetupTimeout(io: std.Io, timeout: std.Io.Timeout) std.Io.Cancelable!void {
+    return timeout.sleep(io);
+}
+
+fn closeRequestSetupRace(completed: RequestSetupRace) void {
+    switch (completed) {
+        .request => |result| if (result) |request| {
+            var loser = request;
+            loser.deinit();
+        } else |_| {},
+        .timeout => {},
+    }
+}
+
+fn connectTimeout(seconds: u32) std.Io.Timeout {
+    if (seconds == 0) return .none;
+    return .{ .duration = .{
+        .clock = .awake,
+        .raw = .fromSeconds(seconds),
+    } };
+}
+
 fn downloadRequestOptions(
-    user_agent: std.http.Client.Request.Headers.Value,
+    user_agent: HttpClient.Request.Headers.Value,
     extra_headers: []const std.http.Header,
-) std.http.Client.RequestOptions {
+) HttpClient.RequestOptions {
     return .{
         .headers = .{ .user_agent = user_agent, .accept_encoding = .{ .override = "identity" } },
         .extra_headers = extra_headers,
@@ -441,15 +534,29 @@ fn isRetryable(err: DownloadError) bool {
     };
 }
 
-fn mapRequestError(err: std.http.Client.RequestError) DownloadError {
+const RetryAction = enum {
+    stop,
+    retry,
+    reset_tls_and_retry,
+};
+
+fn retryAction(err: DownloadError, attempt: u8, max_retries: u8, tls_reset_used: bool) RetryAction {
+    if (attempt >= max_retries) return .stop;
+    if (err == DownloadError.SslError and !tls_reset_used) return .reset_tls_and_retry;
+    if (isRetryable(err)) return .retry;
+    return .stop;
+}
+
+fn mapRequestError(err: HttpClient.RequestError) DownloadError {
     return switch (err) {
         error.UnsupportedUriScheme, error.UriMissingHost => DownloadError.InvalidUrl,
-        error.TlsInitializationFailed, error.CertificateBundleLoadFailure => DownloadError.SslError,
+        error.TlsInitializationFailed => DownloadError.SslError,
+        error.CertificateBundleLoadFailure => DownloadError.CertificateBundleError,
         else => DownloadError.NetworkError,
     };
 }
 
-fn mapReceiveHeadError(err: std.http.Client.Request.ReceiveHeadError) DownloadError {
+fn mapReceiveHeadError(err: HttpClient.Request.ReceiveHeadError) DownloadError {
     return switch (err) {
         error.TooManyHttpRedirects,
         error.RedirectRequiresResend,
@@ -463,7 +570,8 @@ fn mapReceiveHeadError(err: std.http.Client.Request.ReceiveHeadError) DownloadEr
         error.HttpChunkTruncated,
         => DownloadError.HttpError,
         error.UnsupportedUriScheme => DownloadError.InvalidUrl,
-        error.TlsInitializationFailed, error.CertificateBundleLoadFailure => DownloadError.SslError,
+        error.TlsInitializationFailed => DownloadError.SslError,
+        error.CertificateBundleLoadFailure => DownloadError.CertificateBundleError,
         else => DownloadError.NetworkError,
     };
 }
@@ -477,6 +585,18 @@ test "DownloadConfiguration.default() returns correct default values" {
     try std.testing.expectEqual(@as(u32, 1), config.retry_delay_secs);
     try std.testing.expectEqual(true, config.verify_ssl);
     try std.testing.expectEqual(@as(u8, 10), config.parallel_downloads);
+}
+
+test "connect timeout uses the configured duration" {
+    const timeout = connectTimeout(30);
+    switch (timeout) {
+        .duration => |duration| {
+            try std.testing.expectEqual(std.Io.Clock.awake, duration.clock);
+            try std.testing.expectEqual(std.Io.Duration.fromSeconds(30), duration.raw);
+        },
+        else => return error.TestExpectedDuration,
+    }
+    try std.testing.expect(connectTimeout(0) == .none);
 }
 
 test "download requests disable connection reuse for bodyless conditional responses" {
@@ -517,6 +637,26 @@ test "isRetryable returns false for other errors" {
     try std.testing.expect(!isRetryable(DownloadError.InvalidUrl));
     try std.testing.expect(!isRetryable(DownloadError.RetryExceeded));
     try std.testing.expect(!isRetryable(DownloadError.SslError));
+    try std.testing.expect(!isRetryable(DownloadError.CertificateBundleError));
+}
+
+test "retryAction resets TLS once before stopping" {
+    try std.testing.expectEqual(RetryAction.reset_tls_and_retry, retryAction(DownloadError.SslError, 0, 3, false));
+    try std.testing.expectEqual(RetryAction.stop, retryAction(DownloadError.SslError, 1, 3, true));
+    try std.testing.expectEqual(RetryAction.stop, retryAction(DownloadError.SslError, 0, 0, false));
+}
+
+test "retryAction retries transient errors without resetting TLS" {
+    try std.testing.expectEqual(RetryAction.retry, retryAction(DownloadError.NetworkError, 0, 3, false));
+    try std.testing.expectEqual(RetryAction.retry, retryAction(DownloadError.Timeout, 2, 3, false));
+    try std.testing.expectEqual(RetryAction.stop, retryAction(DownloadError.NetworkError, 3, 3, false));
+}
+
+test "retryAction does not retry certificate bundle failures" {
+    try std.testing.expectEqual(
+        RetryAction.stop,
+        retryAction(DownloadError.CertificateBundleError, 0, 3, false),
+    );
 }
 
 test "mapRequestError maps UnsupportedUriScheme and UriMissingHost to InvalidUrl" {
@@ -524,9 +664,9 @@ test "mapRequestError maps UnsupportedUriScheme and UriMissingHost to InvalidUrl
     try std.testing.expectEqual(DownloadError.InvalidUrl, mapRequestError(error.UriMissingHost));
 }
 
-test "mapRequestError maps TLS errors to SslError" {
+test "mapRequestError distinguishes TLS initialization from certificate bundle failures" {
     try std.testing.expectEqual(DownloadError.SslError, mapRequestError(error.TlsInitializationFailed));
-    try std.testing.expectEqual(DownloadError.SslError, mapRequestError(error.CertificateBundleLoadFailure));
+    try std.testing.expectEqual(DownloadError.CertificateBundleError, mapRequestError(error.CertificateBundleLoadFailure));
 }
 
 test "mapRequestError maps other errors to NetworkError" {
@@ -545,13 +685,32 @@ test "mapReceiveHeadError maps UnsupportedUriScheme to InvalidUrl" {
     try std.testing.expectEqual(DownloadError.InvalidUrl, mapReceiveHeadError(error.UnsupportedUriScheme));
 }
 
-test "mapReceiveHeadError maps TLS errors to SslError" {
+test "mapReceiveHeadError distinguishes TLS initialization from certificate bundle failures" {
     try std.testing.expectEqual(DownloadError.SslError, mapReceiveHeadError(error.TlsInitializationFailed));
-    try std.testing.expectEqual(DownloadError.SslError, mapReceiveHeadError(error.CertificateBundleLoadFailure));
+    try std.testing.expectEqual(DownloadError.CertificateBundleError, mapReceiveHeadError(error.CertificateBundleLoadFailure));
 }
 
 test "mapReceiveHeadError maps other errors to NetworkError" {
     try std.testing.expectEqual(DownloadError.NetworkError, mapReceiveHeadError(error.ConnectionRefused));
+}
+
+test "quiet mirror candidates suppress error callbacks" {
+    var callback_called = false;
+    var downloader = CoreDownloader.init(std.testing.allocator, std.testing.io, .{});
+    defer downloader.deinit();
+    downloader.quiet = true;
+    downloader.setEventCallback(struct {
+        fn callback(context: ?*anyopaque, _: DownloadEvent) void {
+            const called: *bool = @ptrCast(@alignCast(context.?));
+            called.* = true;
+        }
+    }.callback, &callback_called);
+
+    downloader.emitEvent(.{
+        .event_type = .Error,
+        .download_error = DownloadError.NetworkError,
+    });
+    try std.testing.expect(!callback_called);
 }
 
 test "shouldEmitProgress emits on percentage change when total is known" {

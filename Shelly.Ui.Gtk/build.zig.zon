@@ -32,6 +32,9 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        .shelly_http = .{
+            .path = "../Shelly.PackageManager/src/shared",
+        },
         .gobject = .{
             .url = "https://github.com/ghostty-org/zig-gobject/releases/download/0.9.0-2026-05-22-28-1/ghostty-gobject-0.9.0-2026-05-22-28-1.tar.zst",
             .hash = "gobject-0.3.1-Skun7CCNogB9kSZJzqLTf_TwzMPW3-Rqdw86UgxADV-z",

@@ -4,6 +4,8 @@ This document is the implementation contract for a future graphical or text UI t
 
 Use canonical long-form commands from UI code. Shortcodes are convenient for people, but are intentionally omitted here because they are compact parser aliases rather than a stable application interface.
 
+The bare-value fallback (`shelly firefox`) is a terminal-only SearchInstall convenience: it searches standard repositories and the AUR, presents reverse-numbered choices with the closest match last as option `1`, and then enters the normal install command. UI clients must use explicit `search` and `install` commands; the fallback rejects `--ui-mode` and `--json`.
+
 ## Starting a command
 
 Start `shelly` as a child process with an argument array, not a shell-built command string:
@@ -383,7 +385,9 @@ Queries standard, AUR, AppImage, and Flatpak updates, concatenating their struct
 
 ### `shelly upgrade all`
 
-Builds an invoking-user update plan, confirms it, and upgrades all selected backends. Independent backends continue after another backend fails; the overall exit is nonzero if any selected backend fails.
+Builds an invoking-user update plan, confirms it, and upgrades all selected backends. Standard and AUR planning each synchronize and read the invoking user's XDG-cached ALPM database; this also works when either backend is skipped or fails independently. The elevated transaction separately synchronizes and uses the root/system ALPM database for package resolution and downloads. The AUR portion includes VCS/development revision checks so every package selected by execution is represented in the plan. Independent backends continue after another backend fails; the overall exit is nonzero if any selected backend fails.
+
+In terminal mode the prepared-upgrade confirmation defaults to yes (`Y/n`); pressing Enter proceeds. An explicit `n` cancels before elevation or mutation.
 
 - `--no-repo`: skip standard packages.
 - `--no-aur`: skip AUR.

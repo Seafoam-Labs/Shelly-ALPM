@@ -1,4 +1,5 @@
 const std = @import("std");
+const Zigalpm = @import("Zigalpm");
 const output = @import("../output/config.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
@@ -94,7 +95,7 @@ fn fetchFeed(
     url: []const u8,
 ) ![]u8 {
     const uri = try std.Uri.parse(url);
-    var client: std.http.Client = .{ .allocator = context.allocator, .io = context.io };
+    var client: Zigalpm.HttpClient = .{ .allocator = context.allocator, .io = context.io };
     defer client.deinit();
 
     const accept_headers = [_]std.http.Header{.{

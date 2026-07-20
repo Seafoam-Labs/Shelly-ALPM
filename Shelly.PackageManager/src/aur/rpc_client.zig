@@ -1,6 +1,7 @@
 const std = @import("std");
 const models = @import("models.zig");
 const operation_api = @import("operation_context");
+const HttpClient = @import("../shared/http_client.zig");
 
 pub const default_rpc_url = "https://aur.archlinux.org/rpc/";
 pub const default_cgit_url = "https://aur.archlinux.org/cgit/aur.git/plain";
@@ -9,7 +10,7 @@ const max_response_size = 32 * 1024 * 1024;
 pub const Client = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
-    http: std.http.Client,
+    http: HttpClient,
     rpc_url: []const u8 = default_rpc_url,
     cgit_url: []const u8 = default_cgit_url,
     operation_context: ?*operation_api.OperationContext = null,

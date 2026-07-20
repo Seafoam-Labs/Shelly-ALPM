@@ -35,6 +35,23 @@ fn captureInfo(data: ?*anyopaque, args: events.InformationalArgs) void {
     if (args.event_type == .failed_add_local_package) cap.args = args;
 }
 
+const CancelOnDownload = struct {
+    context: *operations.OperationContext,
+    saw_download: std.atomic.Value(bool) = .init(false),
+
+    fn handle(data: ?*anyopaque, event: operations.Event) void {
+        const self: *@This() = @ptrCast(@alignCast(data.?));
+        switch (event) {
+            .started => |started| {
+                if (started.envelope.backend != .download) return;
+                self.saw_download.store(true, .release);
+                self.context.cancel();
+            },
+            else => {},
+        }
+    }
+};
+
 // ---------------------------------------------------------------------------
 // init + sync (integration)
 //
@@ -105,6 +122,16 @@ const SyncTestWorkspace = struct {
         name: []const u8,
         version: []const u8,
     ) !void {
+        return self.addLocalPackageWithDependencies(allocator, name, version, &.{});
+    }
+
+    fn addLocalPackageWithDependencies(
+        self: *const SyncTestWorkspace,
+        allocator: std.mem.Allocator,
+        name: []const u8,
+        version: []const u8,
+        dependencies: []const []const u8,
+    ) !void {
         const package_dir = try std.fmt.allocPrint(
             allocator,
             "{s}/local/{s}-{s}",
@@ -121,6 +148,13 @@ const SyncTestWorkspace = struct {
 
         const desc_path = try std.fmt.allocPrint(allocator, "{s}/desc", .{package_dir});
         defer allocator.free(desc_path);
+        const dependency_values = try std.mem.join(allocator, "\n", dependencies);
+        defer allocator.free(dependency_values);
+        const dependency_section = if (dependencies.len == 0)
+            try allocator.dupe(u8, "")
+        else
+            try std.fmt.allocPrint(allocator, "%DEPENDS%\n{s}\n\n", .{dependency_values});
+        defer allocator.free(dependency_section);
         const desc = try std.fmt.allocPrint(
             allocator,
             "%NAME%\n{s}\n\n" ++
@@ -128,8 +162,9 @@ const SyncTestWorkspace = struct {
                 "%DESC%\nTemporary package used by remove_packages tests\n\n" ++
                 "%ARCH%\nany\n\n" ++
                 "%REASON%\n0\n\n" ++
-                "%VALIDATION%\nnone\n\n",
-            .{ name, version },
+                "%VALIDATION%\nnone\n\n" ++
+                "{s}",
+            .{ name, version, dependency_section },
         );
         defer allocator.free(desc);
 
@@ -142,6 +177,45 @@ const SyncTestWorkspace = struct {
         var files = try std.Io.Dir.cwd().createFile(self.io, files_path, .{});
         defer files.close(self.io);
         try files.writeStreamingAll(self.io, "%FILES%\n\n");
+    }
+
+    fn createRequiredBySyncDatabase(self: *const SyncTestWorkspace, allocator: std.mem.Allocator) !void {
+        const sync_dir = try std.fmt.allocPrint(allocator, "{s}/sync", .{self.db_path});
+        defer allocator.free(sync_dir);
+        try std.Io.Dir.cwd().createDirPath(self.io, sync_dir);
+
+        const database_path = try std.fmt.allocPrint(allocator, "{s}/seafoam-labs.db", .{sync_dir});
+        defer allocator.free(database_path);
+
+        const target_desc =
+            "%FILENAME%\nremote-target-1.0-1-any.pkg.tar\n\n" ++
+            "%NAME%\nremote-target\n\n" ++
+            "%BASE%\nremote-target\n\n" ++
+            "%VERSION%\n1.0-1\n\n" ++
+            "%DESC%\nTarget for required-by query tests\n\n" ++
+            "%CSIZE%\n1\n\n" ++
+            "%ISIZE%\n1\n\n" ++
+            "%ARCH%\nany\n\n";
+        const consumer_desc =
+            "%FILENAME%\nremote-consumer-1.0-1-any.pkg.tar\n\n" ++
+            "%NAME%\nremote-consumer\n\n" ++
+            "%BASE%\nremote-consumer\n\n" ++
+            "%VERSION%\n1.0-1\n\n" ++
+            "%DESC%\nConsumer for required-by query tests\n\n" ++
+            "%CSIZE%\n1\n\n" ++
+            "%ISIZE%\n1\n\n" ++
+            "%ARCH%\nany\n\n" ++
+            "%DEPENDS%\nremote-target>=1\n\n";
+
+        var file = try std.Io.Dir.cwd().createFile(self.io, database_path, .{});
+        defer file.close(self.io);
+        var write_buffer: [4096]u8 = undefined;
+        var file_writer = file.writer(self.io, &write_buffer);
+        var archive_writer: std.tar.Writer = .{ .underlying_writer = &file_writer.interface };
+        try archive_writer.writeFileBytes("remote-target-1.0-1/desc", target_desc, .{ .mode = 0o644 });
+        try archive_writer.writeFileBytes("remote-consumer-1.0-1/desc", consumer_desc, .{ .mode = 0o644 });
+        try archive_writer.finishPedantically();
+        try file_writer.interface.flush();
     }
 
     fn createPackageArchive(
@@ -272,6 +346,29 @@ test "Manager.sync downloads the configured database into DBPath/sync" {
     try testing.expect(stat.size > 0);
 }
 
+test "Manager.sync exposes cancellable logical database downloads during mirror failover" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    defer mgr.deinit();
+
+    var context = operations.OperationContext.init(allocator, io);
+    defer context.deinit();
+    var cancel_download: CancelOnDownload = .{ .context = &context };
+    _ = try context.subscribe(.{ .function = CancelOnDownload.handle, .data = &cancel_download });
+    mgr.setOperationContext(&context);
+
+    try testing.expectError(error.UpdateFetchFailed, mgr.sync(true));
+    try testing.expect(cancel_download.saw_download.load(.acquire));
+}
+
 // ---------------------------------------------------------------------------
 // get_single_installed_package
 // ---------------------------------------------------------------------------
@@ -331,6 +428,145 @@ test "get_single_installed_package returns a package when it exists" {
 
     const name = pkg.name() orelse return error.TestFailed;
     try testing.expectEqualStrings("pacman", name);
+}
+
+// ---------------------------------------------------------------------------
+// get_required_packages
+// ---------------------------------------------------------------------------
+
+fn deinitRequiredPackageNames(allocator: std.mem.Allocator, names: [][]const u8) void {
+    for (names) |name| allocator.free(name);
+    if (names.len != 0) allocator.free(names);
+}
+
+fn containsRequiredPackage(names: []const []const u8, expected: []const u8) bool {
+    for (names) |name| {
+        if (std.mem.eql(u8, name, expected)) return true;
+    }
+    return false;
+}
+
+test "get_required_packages returns NoHandle when the handle is null" {
+    var mgr: Manager = undefined;
+    mgr.handle = null;
+
+    try testing.expectError(error.NoHandle, mgr.get_required_packages("target", "local"));
+}
+
+test "get_required_packages rejects empty package and database names" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
+    defer mgr.deinit();
+
+    try testing.expectError(error.NoPackageFound, mgr.get_required_packages("", "local"));
+    try testing.expectError(error.NoPackageFound, mgr.get_required_packages("target", ""));
+}
+
+test "get_required_packages returns owned local reverse dependencies" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.addLocalPackage(allocator, "shelly-required-target", "1.0-1");
+    try workspace.addLocalPackageWithDependencies(
+        allocator,
+        "shelly-required-first",
+        "1.0-1",
+        &.{"shelly-required-target>=1"},
+    );
+    try workspace.addLocalPackageWithDependencies(
+        allocator,
+        "shelly-required-second",
+        "1.0-1",
+        &.{"shelly-required-target"},
+    );
+    try workspace.addLocalPackageWithDependencies(
+        allocator,
+        "shelly-unrelated",
+        "1.0-1",
+        &.{"another-target"},
+    );
+
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
+    defer mgr.deinit();
+
+    const required = try mgr.get_required_packages("SHELLY-REQUIRED-TARGET", "LOCAL");
+    defer deinitRequiredPackageNames(allocator, required);
+
+    try testing.expectEqual(@as(usize, 2), required.len);
+    try testing.expect(containsRequiredPackage(required, "shelly-required-first"));
+    try testing.expect(containsRequiredPackage(required, "shelly-required-second"));
+    try testing.expect(!containsRequiredPackage(required, "shelly-unrelated"));
+}
+
+test "get_required_packages returns an empty result for an unknown package" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
+    defer mgr.deinit();
+
+    const required = try mgr.get_required_packages("missing-package", "local");
+    defer deinitRequiredPackageNames(allocator, required);
+    try testing.expectEqual(@as(usize, 0), required.len);
+}
+
+test "get_required_packages rejects an unknown sync database" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
+    defer mgr.deinit();
+
+    try testing.expectError(
+        error.DatabaseReadFailed,
+        mgr.get_required_packages("target", "missing-repository"),
+    );
+}
+
+test "get_required_packages resolves a named sync database" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.createRequiredBySyncDatabase(allocator);
+
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
+    defer mgr.deinit();
+
+    const required = try mgr.get_required_packages("remote-target", "SEAFOAM-LABS");
+    defer deinitRequiredPackageNames(allocator, required);
+
+    try testing.expectEqual(@as(usize, 1), required.len);
+    try testing.expectEqualStrings("remote-consumer", required[0]);
 }
 
 // ---------------------------------------------------------------------------
@@ -1004,26 +1240,10 @@ test "install_packages predownloads prepared repository packages before commit" 
     const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
-    const CancelDownload = struct {
-        context: *operations.OperationContext,
-        saw_download: bool = false,
-
-        fn handle(data: ?*anyopaque, event: operations.Event) void {
-            const self: *@This() = @ptrCast(@alignCast(data.?));
-            switch (event) {
-                .started => |started| {
-                    if (started.envelope.backend != .download) return;
-                    self.saw_download = true;
-                    self.context.cancel();
-                },
-                else => {},
-            }
-        }
-    };
     var context = operations.OperationContext.init(allocator, io);
     defer context.deinit();
-    var cancel_download: CancelDownload = .{ .context = &context };
-    _ = try context.subscribe(.{ .function = CancelDownload.handle, .data = &cancel_download });
+    var cancel_download: CancelOnDownload = .{ .context = &context };
+    _ = try context.subscribe(.{ .function = CancelOnDownload.handle, .data = &cancel_download });
     mgr.setOperationContext(&context);
 
     var package_names = [_][:0]const u8{"remote-provider"};
@@ -1031,7 +1251,7 @@ test "install_packages predownloads prepared repository packages before commit" 
         error.UpdateFetchFailed,
         mgr.install_packages(&package_names, .{}),
     );
-    try testing.expect(cancel_download.saw_download);
+    try testing.expect(cancel_download.saw_download.load(.acquire));
 }
 
 // ---------------------------------------------------------------------------

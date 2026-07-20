@@ -18,6 +18,7 @@ pub const backup_command = @import("commands/backup.zig");
 pub const install_command = @import("commands/install.zig");
 pub const keyring_command = @import("commands/keyring.zig");
 pub const search_command = @import("commands/search.zig");
+pub const search_install_command = @import("commands/search_install.zig");
 pub const upgrade_command = @import("commands/upgrade.zig");
 pub const list_command = @import("commands/list.zig");
 pub const list_updates_command = @import("commands/list_updates.zig");
@@ -56,6 +57,7 @@ test {
     _ = install_command;
     _ = keyring_command;
     _ = search_command;
+    _ = search_install_command;
     _ = upgrade_command;
     _ = list_command;
     _ = list_updates_command;

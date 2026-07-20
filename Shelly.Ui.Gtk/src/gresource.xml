@@ -11,6 +11,7 @@
     <file>ui/appimage_page.ui</file>
     <file>ui/package_page.ui</file>
     <file>ui/aur_page.ui</file>
+    <file>ui/package_detail.ui</file>
     <file>ui/update_page.ui</file>
     <file>style.css</file>
   </gresource>

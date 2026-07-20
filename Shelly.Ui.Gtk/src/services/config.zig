@@ -3,6 +3,7 @@ const Io = std.Io;
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const xdg_paths = @import("xdg_paths.zig").xdg_paths;
 
+// TODO: Change me to config.json
 const settings_path = "shelly/settings.json";
 
 /// Maximum size accepted when reading the settings file (1 MiB).
@@ -122,11 +123,11 @@ pub const ConfigService = struct {
     }
 
     pub fn set(self: *ConfigService, new_config: ShellyConfig) !void {
+        const json = try std.json.Stringify.valueAlloc(self.allocator, new_config, .{});
+        defer self.allocator.free(json);
         if (self.parsed) |*p| {
             p.deinit();
         }
-        const json = try std.json.Stringify.valueAlloc(self.allocator, new_config, .{});
-        defer self.allocator.free(json);
         self.parsed = try std.json.parseFromSlice(
             ShellyConfig,
             self.allocator,

@@ -16,6 +16,7 @@ const NavButton = struct {
     revealer: *gtk.Revealer,
     stack: *gtk.Stack,
     name: [:0]const u8,
+    window: *ShellyWindow,
 };
 
 pub const ShellyWindow = extern struct {
@@ -86,6 +87,9 @@ pub const ShellyWindow = extern struct {
             .sidebar => {
                 gtk.Orientable.setOrientation(p.shell_box.as(gtk.Orientable), .horizontal);
                 const rail = build_rail(self, stack);
+                if (p.nav_buttons.items.len > 0) {
+                    set_active_nav(self, p.nav_buttons.items[0]);
+                }
                 const sep = gtk.Separator.new(.vertical);
                 gtk.Box.append(p.shell_box, rail.as(gtk.Widget));
                 gtk.Box.append(p.shell_box, sep.as(gtk.Widget));
@@ -162,6 +166,19 @@ pub const ShellyWindow = extern struct {
         return rail;
     }
 
+    fn on_chevron(_: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
+        const p = self.private();
+        p.collapsed = !p.collapsed;
+
+        if (p.chevron_img) |img| {
+            gtk.Image.setFromIconName(img, if (p.collapsed) "go-next-symbolic" else "go-previous-symbolic");
+        }
+
+        for (p.nav_buttons.items) |nb| {
+            gtk.Revealer.setRevealChild(nb.revealer, @intFromBool(!p.collapsed));
+        }
+    }
+
     fn add_nav_button(self: *ShellyWindow, rail: *gtk.Box, stack: *gtk.Stack, name: [:0]const u8, icon: [:0]const u8, text: [:0]const u8) void {
         const p = self.private();
         const box = gtk.Box.new(.horizontal, 0);
@@ -173,7 +190,7 @@ pub const ShellyWindow = extern struct {
 
         const label = gtk.Label.new(text);
         gtk.Widget.setMarginStart(label.as(gtk.Widget), LABEL_GAP);
-
+        gtk.Widget.setHalign(label.as(gtk.Widget), .start);
         const revealer = gtk.Revealer.new();
         gtk.Revealer.setTransitionType(revealer, .slide_right);
         gtk.Revealer.setChild(revealer, label.as(gtk.Widget));
@@ -186,7 +203,7 @@ pub const ShellyWindow = extern struct {
         gtk.Widget.addCssClass(btn.as(gtk.Widget), "nav-btn");
 
         const nb = std.heap.c_allocator.create(NavButton) catch unreachable;
-        nb.* = .{ .button = btn, .revealer = revealer, .stack = stack, .name = name };
+        nb.* = .{ .button = btn, .revealer = revealer, .stack = stack, .name = name, .window = self };
         p.nav_buttons.append(std.heap.c_allocator, nb) catch unreachable;
 
         _ = gtk.Button.signals.clicked.connect(btn, *NavButton, &on_nav_click, nb, .{});
@@ -195,16 +212,17 @@ pub const ShellyWindow = extern struct {
 
     fn on_nav_click(_: *gtk.Button, nb: *NavButton) callconv(.c) void {
         gtk.Stack.setVisibleChildName(nb.stack, nb.name);
+        set_active_nav(nb.window, nb);
     }
 
-    fn on_chevron(_: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
+    fn set_active_nav(self: *ShellyWindow, active: *NavButton) void {
         const p = self.private();
-        p.collapsed = !p.collapsed;
         for (p.nav_buttons.items) |nb| {
-            gtk.Revealer.setRevealChild(nb.revealer, @intFromBool(!p.collapsed));
-        }
-        if (p.chevron_img) |img| {
-            gtk.Image.setFromIconName(img, if (p.collapsed) "go-next-symbolic" else "go-previous-symbolic");
+            if (nb == active) {
+                gtk.Widget.addCssClass(nb.button.as(gtk.Widget), "nav-selected");
+            } else {
+                gtk.Widget.removeCssClass(nb.button.as(gtk.Widget), "nav-selected");
+            }
         }
     }
 

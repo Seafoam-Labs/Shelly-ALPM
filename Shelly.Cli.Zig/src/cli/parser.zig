@@ -150,7 +150,7 @@ pub fn parse(
 
     if (command == manifest.root() and positionals.items.len == 0) {
         command = manifest.findByPath("shelly upgrade all") orelse return error.InvalidCatalog;
-    } else if (command.isBranch and positionals.items.len > 0) {
+    } else if (command.isBranch and positionals.items.len > 0 and command != manifest.root()) {
         return unrecognized(allocator, command, positionals.items[0], false);
     } else if (command.isBranch and !command.hasAction) {
         return .{ .failure = .{
@@ -321,14 +321,15 @@ test "verbose options are not accepted by commands" {
     try std.testing.expectEqualStrings("Unrecognized command or argument '-v'.", short.failure.message);
 }
 
-test "commands without native dispatchers are not registered" {
+test "removed commands are treated as root package queries" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const manifest = try spec.Manifest.load(arena.allocator());
 
     const outcome = try parse(arena.allocator(), &manifest, &.{ "add-remotes", "flatpak", "flathub" });
-    try std.testing.expect(outcome == .failure);
-    try std.testing.expectEqualStrings("Unrecognized command or argument 'add-remotes'.", outcome.failure.message);
+    try std.testing.expect(outcome == .dispatch);
+    try std.testing.expectEqualStrings("shelly", outcome.dispatch.command.path);
+    try std.testing.expectEqualStrings("add-remotes", outcome.dispatch.positionals[0]);
 }
 
 test "maps an empty invocation to upgrade all" {
@@ -338,6 +339,18 @@ test "maps an empty invocation to upgrade all" {
     const outcome = try parse(arena.allocator(), &manifest, &.{});
     try std.testing.expect(outcome == .dispatch);
     try std.testing.expectEqualStrings("shelly upgrade all", outcome.dispatch.command.path);
+}
+
+test "maps unknown bare values to the root search-install fallback" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    const outcome = try parse(arena.allocator(), &manifest, &.{ "visual", "studio", "code" });
+    try std.testing.expect(outcome == .dispatch);
+    try std.testing.expectEqualStrings("shelly", outcome.dispatch.command.path);
+    try std.testing.expectEqual(@as(usize, 3), outcome.dispatch.positionals.len);
+    try std.testing.expectEqualStrings("visual", outcome.dispatch.positionals[0]);
+    try std.testing.expectEqualStrings("code", outcome.dispatch.positionals[2]);
 }
 
 test "command-local AUR install version does not trigger program version output" {
@@ -397,24 +410,18 @@ test "parses Flatpak AppStream sync as an action-type command" {
     try std.testing.expectEqualStrings("shelly sync flatpak", outcome.dispatch.command.path);
 }
 
-test "hard cut rejects old type-first and implicit-standard paths" {
+test "unknown old root paths fall back to search while known commands still validate" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const manifest = try spec.Manifest.load(arena.allocator());
 
     const type_first = try parse(arena.allocator(), &manifest, &.{ "flatpak", "search", "query" });
-    try std.testing.expect(type_first == .failure);
-    try std.testing.expectEqualStrings(
-        "Unrecognized command or argument 'flatpak'.",
-        type_first.failure.message,
-    );
+    try std.testing.expect(type_first == .dispatch);
+    try std.testing.expectEqualStrings("shelly", type_first.dispatch.command.path);
 
     const old_flatpak_sync = try parse(arena.allocator(), &manifest, &.{ "sync-remote-appstream", "flatpak" });
-    try std.testing.expect(old_flatpak_sync == .failure);
-    try std.testing.expectEqualStrings(
-        "Unrecognized command or argument 'sync-remote-appstream'.",
-        old_flatpak_sync.failure.message,
-    );
+    try std.testing.expect(old_flatpak_sync == .dispatch);
+    try std.testing.expectEqualStrings("shelly", old_flatpak_sync.dispatch.command.path);
 
     const implicit_standard = try parse(arena.allocator(), &manifest, &.{ "install", "firefox" });
     try std.testing.expect(implicit_standard == .failure);
@@ -424,9 +431,6 @@ test "hard cut rejects old type-first and implicit-standard paths" {
     );
 
     const upgrade_all = try parse(arena.allocator(), &manifest, &.{"upgrade-all"});
-    try std.testing.expect(upgrade_all == .failure);
-    try std.testing.expectEqualStrings(
-        "Unrecognized command or argument 'upgrade-all'.",
-        upgrade_all.failure.message,
-    );
+    try std.testing.expect(upgrade_all == .dispatch);
+    try std.testing.expectEqualStrings("shelly", upgrade_all.dispatch.command.path);
 }

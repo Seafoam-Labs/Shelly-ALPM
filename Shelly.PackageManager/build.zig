@@ -300,6 +300,12 @@ pub fn build(b: *std.Build) void {
             "compare_package_versions uses libalpm ordering",
             "dependencyName strips constraints",
             "is_cachyos exposes the detected manager state",
+            "get_required_packages returns NoHandle when the handle is null",
+            "get_required_packages rejects empty package and database names",
+            "get_required_packages returns owned local reverse dependencies",
+            "get_required_packages returns an empty result for an unknown package",
+            "get_required_packages rejects an unknown sync database",
+            "get_required_packages resolves a named sync database",
             "fetchCallback accepts prepared cache entries and rejects missing artifacts",
             "parses repositories, servers, siglevel and usage",
             "hold package mutations rewrite HoldPkg and preserve shelly",
@@ -309,11 +315,25 @@ pub fn build(b: *std.Build) void {
             "install_local_packages installs multiple archives in a DB-only transaction",
             "Manager.init applies configured libalpm options and callback contexts",
             "ALPM queries honor shared cancellation",
+            "single-server repositories receive a thirty second setup timeout",
+            "zero-server and multi-mirror repositories retain fast failover",
         },
     });
     const run_alpm_query_tests = b.addRunArtifact(alpm_query_tests);
     const alpm_query_test_step = b.step("alpm-query-test", "Run safe ALPM configuration and query API tests");
     alpm_query_test_step.dependOn(&run_alpm_query_tests.step);
+
+    const required_packages_tests = b.addTest(.{
+        .name = "required-packages-test",
+        .root_module = mod,
+        .filters = &.{"get_required_packages"},
+    });
+    const run_required_packages_tests = b.addRunArtifact(required_packages_tests);
+    const required_packages_test_step = b.step(
+        "required-packages-test",
+        "Run isolated ALPM reverse-dependency query tests",
+    );
+    required_packages_test_step.dependOn(&run_required_packages_tests.step);
 
     const alpm_sync_tests = b.addTest(.{
         .name = "alpm-sync-test",
@@ -321,6 +341,7 @@ pub fn build(b: *std.Build) void {
         .filters = &.{
             "database signature downloads are reserved for required signatures",
             "Manager.sync downloads the configured database into DBPath/sync",
+            "Manager.sync exposes cancellable logical database downloads during mirror failover",
         },
     });
     const run_alpm_sync_tests = b.addRunArtifact(alpm_sync_tests);
@@ -378,6 +399,7 @@ pub fn build(b: *std.Build) void {
             "AUR update projection compares remote and installed versions",
             "AUR git remote and VCS suffix parsing mirror the C# manager",
             "helper cache identity recognizes installed split-package members",
+            "all requested PKGBUILDs are reviewed before the first build",
             "AUR operation-hooked public APIs compile",
             "build progress parser recognizes makepkg percentage lines",
             "streaming process execution forwards stdout stderr and a final unterminated line",

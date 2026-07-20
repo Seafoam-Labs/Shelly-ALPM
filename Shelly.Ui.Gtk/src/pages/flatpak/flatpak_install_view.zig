@@ -1,4 +1,5 @@
 const std = @import("std");
+const HttpClient = @import("ShellyHttp");
 const bindings = @import("Shelly_Ui_Gtk");
 const gio = bindings.gio;
 const glib = bindings.glib;
@@ -578,7 +579,7 @@ pub const FlatpakInstallView = extern struct {
         var allocating: std.Io.Writer.Allocating = .init(std.heap.c_allocator);
         errdefer allocating.deinit();
 
-        var client: std.http.Client = .{
+        var client: HttpClient = .{
             .allocator = std.heap.c_allocator,
             .io = io,
         };

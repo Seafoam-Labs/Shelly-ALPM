@@ -12,6 +12,8 @@ const operation_api = @import("operation_context");
 
 const libalpm = bindings.libalpm; // typed aliases (Handle, Database, Config, ...)
 const rawLibalpm = bindings.libalpm.alpm;
+const mirror_failover_timeout_seconds: u32 = 1;
+const single_server_timeout_seconds: u32 = 30;
 
 pub const ConfigError = error{
     InitFailed,
@@ -1899,6 +1901,56 @@ pub const Manager = struct {
         self.setupCallbacks();
     }
 
+    /// Returns owned names of packages that require `packageName` in the named
+    /// database. The caller owns both the returned slice and every name in it.
+    pub fn get_required_packages(self: *Manager, packageName: []const u8, databaseName: []const u8) TransactionError![][]const u8 {
+        if (self.handle == null) return TransactionError.NoHandle;
+        if (databaseName.len == 0 or packageName.len == 0) return TransactionError.NoPackageFound;
+        var required_names: std.ArrayList([]const u8) = .empty;
+        errdefer {
+            for (required_names.items) |item| self.allocator.free(item);
+            required_names.deinit(self.allocator);
+        }
+
+        const db: libalpm.Database = if (std.ascii.eqlIgnoreCase(databaseName, "local")) blk: {
+            const local_db = rawLibalpm.alpm_get_localdb(self.handle) orelse return TransactionError.DatabaseReadFailed;
+            break :blk .{ .ptr = local_db };
+        } else blk: {
+            var dbs = rawLibalpm.alpm_get_syncdbs(self.handle);
+            while (dbs != null) : (dbs = dbs.*.next) {
+                const data = dbs.*.data orelse continue;
+                const sync_db = libalpm.Database.from(data) orelse continue;
+                const name = sync_db.name() orelse continue;
+                if (std.ascii.eqlIgnoreCase(databaseName, name)) break :blk sync_db;
+            }
+            return TransactionError.DatabaseReadFailed;
+        };
+
+        var pkgs = db.packages();
+        while (pkgs.next()) |pkg| {
+            const pkg_name = pkg.name() orelse continue;
+            if (std.ascii.eqlIgnoreCase(pkg_name, packageName)) {
+                const required_by = rawLibalpm.alpm_pkg_compute_requiredby(pkg.ptr);
+                defer {
+                    rawLibalpm.alpm_list_free_inner(required_by, rawLibalpm.free);
+                    rawLibalpm.alpm_list_free(required_by);
+                }
+                var node = required_by;
+                while (node != null) : (node = node.*.next) {
+                    const data = node.*.data orelse continue;
+                    const req_by = std.mem.span(@as([*c]const u8, @ptrCast(data)));
+                    const owned_name = self.allocator.dupe(u8, req_by) catch return TransactionError.OutOfMemory;
+                    required_names.append(self.allocator, owned_name) catch {
+                        self.allocator.free(owned_name);
+                        return TransactionError.OutOfMemory;
+                    };
+                }
+                break;
+            }
+        }
+        return required_names.toOwnedSlice(self.allocator) catch return TransactionError.OutOfMemory;
+    }
+
     fn download_database(
         self: *Manager,
         database_name: []const u8,
@@ -1907,9 +1959,10 @@ pub const Manager = struct {
         force_download: bool,
         signature_required: bool,
     ) downloader.DownloadError!void {
-        const download_config: downloader.DownloadConfiguration = .{ .user_agent = "Shelly-ALPM/3" };
+        const download_config = mirrorDownloadConfiguration(urls.items.len);
         var downloader_instance = downloader.CoreDownloader.init(self.allocator, self.io(), download_config);
         defer downloader_instance.deinit();
+        downloader_instance.quiet = true;
         if (self.dispatcher.operation) |operation| downloader_instance.setParentOperation(operation) else downloader_instance.setOperationContext(self.operation_context);
         downloader_instance.setEventCallback(onDownloadEvent, self);
         const dest = std.fmt.allocPrint(self.allocator, "{s}/{s}.db", .{ sync_directory, database_name }) catch return;
@@ -1917,6 +1970,11 @@ pub const Manager = struct {
         const sig_dest = std.fmt.allocPrint(self.allocator, "{s}.sig", .{dest}) catch return;
         defer self.allocator.free(sig_dest);
 
+        var download_scope = MirrorDownloadScope.init(self, dest);
+        defer download_scope.finish();
+        download_scope.attach(&downloader_instance);
+
+        var last_failure: ?downloader.DownloadError = null;
         for (urls.items) |url_base| {
             const db_url = std.fmt.allocPrint(self.allocator, "{s}/{s}.db", .{ url_base, database_name }) catch continue;
             defer self.allocator.free(db_url);
@@ -1928,6 +1986,7 @@ pub const Manager = struct {
                         // sync alive. Remove any signature belonging to an older
                         // database so libalpm cannot validate mismatched files.
                         std.Io.Dir.cwd().deleteFile(self.io(), sig_dest) catch {};
+                        download_scope.succeed();
                         return;
                     }
                     const sig_url = std.fmt.allocPrint(self.allocator, "{s}.sig", .{db_url}) catch return;
@@ -1935,23 +1994,36 @@ pub const Manager = struct {
                     // Required database signatures are fetched here and
                     // validated by the sync verification pass below.
                     downloader_instance.quiet = true;
-                    _ = downloader_instance.downloadToFile(sig_url, sig_dest, force_download);
+                    const signature_result = downloader_instance.downloadToFile(sig_url, sig_dest, force_download);
                     downloader_instance.quiet = false;
+                    try propagateSignatureCancellation(signature_result);
+                    download_scope.succeed();
                     return;
                 },
                 .skipped => {
-                    if (!signature_required) return;
+                    if (!signature_required) {
+                        download_scope.succeed();
+                        return;
+                    }
                     const sig_url = std.fmt.allocPrint(self.allocator, "{s}.sig", .{db_url}) catch return;
                     defer self.allocator.free(sig_url);
                     downloader_instance.quiet = true;
-                    _ = downloader_instance.downloadToFile(sig_url, sig_dest, false);
+                    const signature_result = downloader_instance.downloadToFile(sig_url, sig_dest, false);
                     downloader_instance.quiet = false;
+                    try propagateSignatureCancellation(signature_result);
+                    download_scope.succeed();
                     return;
                 },
-                .failure => continue,
+                .failure => |err| {
+                    if (err == downloader.DownloadError.Cancelled) return err;
+                    last_failure = err;
+                    continue;
+                },
             }
         }
-        return downloader.DownloadError.FailedDownload;
+        const final_error = last_failure orelse downloader.DownloadError.FailedDownload;
+        self.reportAllMirrorsFailed(database_name, final_error);
+        return final_error;
     }
 
     fn databaseSignatureRequired(level: i32) bool {
@@ -2011,9 +2083,10 @@ pub const Manager = struct {
     }
 
     fn download_package(self: *Manager, package: libalpm.Package, database: libalpm.Database) downloader.DownloadError!void {
-        const download_config: downloader.DownloadConfiguration = .{ .user_agent = "Shelly-ALPM/3" };
+        const download_config = mirrorDownloadConfiguration(databaseServerCount(database));
         var downloader_instance = downloader.CoreDownloader.init(self.allocator, self.io(), download_config);
         defer downloader_instance.deinit();
+        downloader_instance.quiet = true;
         if (self.dispatcher.operation) |operation| downloader_instance.setParentOperation(operation) else downloader_instance.setOperationContext(self.operation_context);
         downloader_instance.setEventCallback(onDownloadEvent, self);
         const dest = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.config.cache_directory, package.file_name() }) catch return;
@@ -2021,6 +2094,11 @@ pub const Manager = struct {
         const sig_dest = std.fmt.allocPrint(self.allocator, "{s}.sig", .{dest}) catch return;
         defer self.allocator.free(sig_dest);
 
+        var download_scope = MirrorDownloadScope.init(self, dest);
+        defer download_scope.finish();
+        download_scope.attach(&downloader_instance);
+
+        var last_failure: ?downloader.DownloadError = null;
         var urls = database.servers();
         while (urls.next()) |url| {
             const file_url = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ url, package.file_name() }) catch return downloader.DownloadError.InvalidUrl;
@@ -2031,14 +2109,36 @@ pub const Manager = struct {
                     const sig_url = std.fmt.allocPrint(self.allocator, "{s}.sig", .{file_url}) catch return downloader.DownloadError.InvalidUrl;
                     defer self.allocator.free(sig_url);
                     downloader_instance.quiet = true;
-                    _ = downloader_instance.downloadToFile(sig_url, sig_dest, true);
+                    const signature_result = downloader_instance.downloadToFile(sig_url, sig_dest, true);
                     downloader_instance.quiet = false;
+                    try propagateSignatureCancellation(signature_result);
+                    download_scope.succeed();
                     return;
                 },
-                .failure, .skipped => continue,
+                .failure => |err| {
+                    if (err == downloader.DownloadError.Cancelled) return err;
+                    last_failure = err;
+                    continue;
+                },
+                .skipped => continue,
             }
         }
-        return downloader.DownloadError.FailedDownload;
+        const final_error = last_failure orelse downloader.DownloadError.FailedDownload;
+        self.reportAllMirrorsFailed(package.file_name(), final_error);
+        return final_error;
+    }
+
+    fn reportAllMirrorsFailed(self: *Manager, subject: []const u8, err: downloader.DownloadError) void {
+        const message = std.fmt.allocPrint(
+            self.allocator,
+            "All mirrors failed for {s}: {s}",
+            .{ subject, @errorName(err) },
+        ) catch {
+            self.dispatcher.raiseError(.{ .message = "All configured mirrors failed" });
+            return;
+        };
+        defer self.allocator.free(message);
+        self.dispatcher.raiseError(.{ .message = message });
     }
 
     pub fn io(self: *Manager) std.Io {
@@ -2670,6 +2770,95 @@ pub const Manager = struct {
     fn spanC(ptr: [*c]const u8) ?[]const u8 {
         if (ptr == null) return null;
         return std.mem.span(ptr);
+    }
+};
+
+fn databaseServerCount(database: libalpm.Database) usize {
+    var count: usize = 0;
+    var servers = database.servers();
+    while (servers.next() != null) count += 1;
+    return count;
+}
+
+fn mirrorDownloadConfiguration(configured_server_count: usize) downloader.DownloadConfiguration {
+    return .{
+        .user_agent = "Shelly-ALPM/3",
+        .timeout_in_seconds = if (configured_server_count == 1)
+            single_server_timeout_seconds
+        else
+            mirror_failover_timeout_seconds,
+        // A failed candidate should immediately advance to the next mirror.
+        .max_retries = 0,
+        .retry_delay_secs = 0,
+    };
+}
+
+fn propagateSignatureCancellation(result: downloader.DownloadResult) downloader.DownloadError!void {
+    switch (result) {
+        .failure => |err| if (err == downloader.DownloadError.Cancelled) return err,
+        else => {},
+    }
+}
+
+test "single-server repositories receive a thirty second setup timeout" {
+    const config = mirrorDownloadConfiguration(1);
+    try std.testing.expectEqual(single_server_timeout_seconds, config.timeout_in_seconds);
+    try std.testing.expectEqual(@as(u8, 0), config.max_retries);
+    try std.testing.expectEqual(@as(u32, 0), config.retry_delay_secs);
+}
+
+test "zero-server and multi-mirror repositories retain fast failover" {
+    for ([_]usize{ 0, 2, 8 }) |server_count| {
+        const config = mirrorDownloadConfiguration(server_count);
+        try std.testing.expectEqual(mirror_failover_timeout_seconds, config.timeout_in_seconds);
+        try std.testing.expectEqual(@as(u8, 0), config.max_retries);
+        try std.testing.expectEqual(@as(u32, 0), config.retry_delay_secs);
+    }
+}
+
+/// Tracks one logical package or database download across all mirror attempts.
+/// Individual attempts remain quiet, while callers still receive a correlated
+/// download lifecycle and can cancel before any network work begins.
+const MirrorDownloadScope = struct {
+    operation: ?operation_api.Operation = null,
+    successful: bool = false,
+
+    fn init(manager: *Manager, subject: []const u8) MirrorDownloadScope {
+        if (manager.dispatcher.operation) |parent| {
+            return .{ .operation = parent.child(.{
+                .backend = .download,
+                .kind = .download,
+                .subject = subject,
+            }) };
+        }
+        if (manager.operation_context) |context| {
+            return .{ .operation = context.begin(.{
+                .backend = .download,
+                .kind = .download,
+                .subject = subject,
+            }) };
+        }
+        return .{};
+    }
+
+    fn attach(self: *MirrorDownloadScope, downloader_instance: *downloader.CoreDownloader) void {
+        if (self.operation) |*operation| downloader_instance.setParentOperation(operation);
+    }
+
+    fn succeed(self: *MirrorDownloadScope) void {
+        self.successful = true;
+    }
+
+    fn finish(self: *MirrorDownloadScope) void {
+        if (self.operation) |*operation| {
+            const status: operation_api.CompletionStatus = if (operation.isCancelled())
+                .cancelled
+            else if (self.successful)
+                .success
+            else
+                .failed;
+            operation.finish(status);
+        }
     }
 };
 

@@ -1,4 +1,5 @@
 const std = @import("std");
+const HttpClient = @import("../shared/http_client.zig");
 const bindings = @import("bindings.zig");
 const cache_manager = @import("cache_manager.zig");
 const alpm_manager = @import("manager.zig");
@@ -115,7 +116,7 @@ pub const ArchiveManager = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
     options: Options,
-    http_client: std.http.Client,
+    http_client: HttpClient,
     download_event_callback: ?shared_downloader.DownloadEventCallback = null,
     download_event_context: ?*anyopaque = null,
     operation_context: ?*operation_api.OperationContext = null,

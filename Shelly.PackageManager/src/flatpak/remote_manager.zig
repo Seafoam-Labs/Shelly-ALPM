@@ -2,6 +2,7 @@ const bindings = @import("bindings.zig");
 const std = @import("std");
 const events = @import("events.zig");
 const operation_api = @import("operation_context");
+const HttpClient = @import("../shared/http_client.zig");
 
 const flatpak = bindings.libflatpak;
 const rawflatpak = bindings.libflatpak.flatpak;
@@ -207,7 +208,7 @@ pub const RemoteManager = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try operation_scope.checkCancelled();
-        var client: std.http.Client = .{ .allocator = allocator, .io = io };
+        var client: HttpClient = .{ .allocator = allocator, .io = io };
         defer client.deinit();
 
         const uri = try std.Uri.parse(url);

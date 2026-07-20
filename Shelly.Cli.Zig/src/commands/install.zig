@@ -1078,13 +1078,15 @@ test "Flatpak file install modifiers use the shared command and scope" {
         &manifest,
         &.{ "install-ref-file", "flatpak", "demo.flatpakref" },
     );
-    try std.testing.expect(old_ref == .failure);
+    try std.testing.expect(old_ref == .dispatch);
+    try std.testing.expectEqualStrings("shelly", old_ref.dispatch.command.path);
     const old_bundle = try parser.parse(
         arena.allocator(),
         &manifest,
         &.{ "install-bundle", "flatpak", "demo.flatpak" },
     );
-    try std.testing.expect(old_bundle == .failure);
+    try std.testing.expect(old_bundle == .dispatch);
+    try std.testing.expectEqualStrings("shelly", old_bundle.dispatch.command.path);
 }
 
 test "Flatpak file install modifiers reject conflicting modes and repository options" {

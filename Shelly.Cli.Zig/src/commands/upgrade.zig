@@ -437,14 +437,14 @@ fn renderStandardUpgradePreview(
 fn confirmPreparedUpgrade(context: *runtime.RuntimeContext, prompt: []const u8) !bool {
     const reader = context.stdin orelse return false;
     while (true) {
-        try context.stdout.print("{s} (y/N) ", .{prompt});
+        try context.stdout.print("{s} (Y/n) ", .{prompt});
         try context.stdout.flush();
         const input = (try reader.takeDelimiter('\n')) orelse return false;
         const answer = std.mem.trim(u8, input, " \t\r\n");
-        if (answer.len == 0 or std.ascii.eqlIgnoreCase(answer, "n") or
-            std.ascii.eqlIgnoreCase(answer, "no")) return false;
-        if (std.ascii.eqlIgnoreCase(answer, "y") or
+        if (answer.len == 0 or std.ascii.eqlIgnoreCase(answer, "y") or
             std.ascii.eqlIgnoreCase(answer, "yes")) return true;
+        if (std.ascii.eqlIgnoreCase(answer, "n") or
+            std.ascii.eqlIgnoreCase(answer, "no")) return false;
         try context.stdout.writeAll("Please answer 'y' or 'n'.\n");
     }
 }
@@ -1040,12 +1040,12 @@ test "combined upgrade plan renders enabled user updates and confirms once" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "demo-git: 1.0 -> 1.1") != null);
     try std.testing.expectEqual(
         @as(usize, 2),
-        std.mem.count(u8, rendered, "Proceed with all upgrades? (y/N)"),
+        std.mem.count(u8, rendered, "Proceed with all upgrades? (Y/n)"),
     );
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Please answer 'y' or 'n'.") != null);
 }
 
-test "combined upgrade plan defaults to cancellation and no-confirm bypasses the prompt" {
+test "combined upgrade plan defaults to approval, supports decline, and no-confirm bypasses the prompt" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const manifest = try spec.Manifest.load(arena.allocator());
@@ -1067,17 +1067,17 @@ test "combined upgrade plan defaults to cancellation and no-confirm bypasses the
     };
     const collector: PlanCollector = .{ .call = Capture.collect };
 
-    const declined = try parser.parse(arena.allocator(), &manifest, &.{
+    const defaulted = try parser.parse(arena.allocator(), &manifest, &.{
         "upgrade",
         "all",
         "--no-repo",
         "--no-aur",
         "--no-flatpak",
     });
-    try std.testing.expect(declined == .dispatch);
-    try std.testing.expect(!requiresElevation(&declined.dispatch));
-    try std.testing.expect(shouldPrepareAllPreview(&declined.dispatch, false));
-    var decline_stdin = std.Io.Reader.fixed("\n");
+    try std.testing.expect(defaulted == .dispatch);
+    try std.testing.expect(!requiresElevation(&defaulted.dispatch));
+    try std.testing.expect(shouldPrepareAllPreview(&defaulted.dispatch, false));
+    var default_stdin = std.Io.Reader.fixed("\n");
     var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer stdout.deinit();
     var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
@@ -1085,13 +1085,26 @@ test "combined upgrade plan defaults to cancellation and no-confirm bypasses the
     var context: runtime.RuntimeContext = .{
         .allocator = arena.allocator(),
         .io = std.testing.io,
-        .stdin = &decline_stdin,
+        .stdin = &default_stdin,
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
+    const defaulted_preview = try prepareAllUpgradePreviewWithCollector(
+        &context,
+        &defaulted.dispatch,
+        collector,
+    );
+    try std.testing.expect(defaulted_preview.has_updates);
+    try std.testing.expect(defaulted_preview.proceed);
+    try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "Proceed with all upgrades? (Y/n)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "Upgrade cancelled.") == null);
+
+    stdout.writer.end = 0;
+    var decline_stdin = std.Io.Reader.fixed("n\n");
+    context.stdin = &decline_stdin;
     const declined_preview = try prepareAllUpgradePreviewWithCollector(
         &context,
-        &declined.dispatch,
+        &defaulted.dispatch,
         collector,
     );
     try std.testing.expect(declined_preview.has_updates);

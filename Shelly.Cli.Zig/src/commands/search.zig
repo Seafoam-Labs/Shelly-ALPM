@@ -239,6 +239,8 @@ fn runStandard(
     const group = optionEnabled(invocation, "--group");
     const show_hidden = optionEnabled(invocation, "--show-hidden");
     const query: ?[]const u8 = if (invocation.positionals.len == 0) null else invocation.positionals[0];
+    const depends = optionEnabled(invocation, "--depends");
+    const explicit = optionEnabled(invocation, "--explicit");
 
     if (!repositories and !available and !installed and !local and !detail) {
         installed = true;
@@ -271,7 +273,15 @@ fn runStandard(
         for (values) |value| {
             const name = value.name() orelse continue;
             if (!show_hidden and ignoredPackage(manager, name)) continue;
-            try packages.append(context.allocator, try copyStandardPackage(context.allocator, value));
+            if (depends and value.reason_value == .Dependency) {
+                try packages.append(context.allocator, try copyStandardPackage(context.allocator, value));
+                continue;
+            }
+            if (explicit and value.reason_value == .Explicit) {
+                try packages.append(context.allocator, try copyStandardPackage(context.allocator, value));
+                continue;
+            }
+            if (!explicit and !depends) try packages.append(context.allocator, try copyStandardPackage(context.allocator, value));
         }
     }
     if (available) {
@@ -286,24 +296,16 @@ fn runStandard(
             if (!show_hidden and ignoredPackage(manager, name)) continue;
             try packages.append(context.allocator, try copyStandardPackage(context.allocator, value));
         }
-
-        const query_null: [:0]u8 = try context.allocator.dupeZ(u8, query.?);
-        defer context.allocator.free(query_null);
-        const values_group = try manager.get_available_packages_from_group(query_null);
-        for (values_group) |value| {
-            const name = value.name() orelse continue;
-            if (seen.contains(name)) continue;
-            try seen.put(name, {});
-            if (!show_hidden and ignoredPackage(manager, name)) continue;
-            try packages.append(context.allocator, try copyStandardPackage(context.allocator, value));
-        }
     }
 
     if (detail and !group) {
         const wanted = query orelse return error.NoPackageSpecified;
         for (packages.items) |package| {
-            if (std.ascii.eqlIgnoreCase(package.name, wanted))
-                return .{ .mode = .detail, .detail = package };
+            var pkg = package;
+            if (std.ascii.eqlIgnoreCase(package.name, wanted)) {
+                pkg.required_by = try manager.get_required_packages(package.name, package.repository);
+                return .{ .mode = .detail, .detail = pkg };
+            }
         }
         return error.PackageNotFound;
     }
@@ -378,6 +380,7 @@ fn runStandard(
 
     const limit: usize = @intCast(optionInteger(invocation, "--limit", 100));
     const page: usize = @intCast(optionInteger(invocation, "--page", 1));
+
     return .{
         .mode = .packages,
         .packages = try pageSlice(StandardPackage, context.allocator, selected.items, page, limit),
