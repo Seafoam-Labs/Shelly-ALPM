@@ -69,10 +69,8 @@ pub const ShellySettingsPage = extern struct {
         webview_switch: *gtk.Switch,
         appimage_install_path_box: *gtk.Box,
         appimage_install_path_button: *gtk.Button,
-        parallel_downloads_spin: *gtk.SpinButton,
         sync_button: *gtk.Button,
         rm_db_lock_button: *gtk.Button,
-        view_pacfiles_button: *gtk.Button,
         fix_permissions_button: *gtk.Button,
         purify_button: *gtk.Button,
 
@@ -128,7 +126,6 @@ pub const ShellySettingsPage = extern struct {
 
         _ = gtk.Button.signals.clicked.connect(p.sync_button, *Self, &on_sync_db, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.rm_db_lock_button, *Self, &on_remove_db_lock, self, .{});
-        _ = gtk.Button.signals.clicked.connect(p.view_pacfiles_button, *Self, &on_view_pacfiles, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.fix_permissions_button, *Self, &on_fix_permissions, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.purify_button, *Self, &on_purify, self, .{});
 
@@ -229,10 +226,6 @@ pub const ShellySettingsPage = extern struct {
         std.debug.print("settings: remove db.lck (not implemented yet)\n", .{});
     }
 
-    fn on_view_pacfiles(_: *gtk.Button, _: *Self) callconv(.c) void {
-        std.debug.print("settings: view pacfiles (not implemented yet)\n", .{});
-    }
-
     fn on_fix_permissions(_: *gtk.Button, _: *Self) callconv(.c) void {
         std.debug.print("settings: fix permissions (not implemented yet)\n", .{});
     }
@@ -296,10 +289,8 @@ pub const ShellySettingsPage = extern struct {
         .{ "webview_switch", @offsetOf(Private, "webview_switch") },
         .{ "appimage_install_path_box", @offsetOf(Private, "appimage_install_path_box") },
         .{ "appimage_install_path_button", @offsetOf(Private, "appimage_install_path_button") },
-        .{ "parallel_downloads_spin", @offsetOf(Private, "parallel_downloads_spin") },
         .{ "sync_button", @offsetOf(Private, "sync_button") },
         .{ "rm_db_lock_button", @offsetOf(Private, "rm_db_lock_button") },
-        .{ "view_pacfiles_button", @offsetOf(Private, "view_pacfiles_button") },
         .{ "fix_permissions_button", @offsetOf(Private, "fix_permissions_button") },
         .{ "purify_button", @offsetOf(Private, "purify_button") },
 
