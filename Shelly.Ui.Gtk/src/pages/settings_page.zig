@@ -247,21 +247,14 @@ pub const ShellySettingsPage = extern struct {
         const p = self.priv();
         gtk.Button.setLabel(p.tray_icon_button, path_cstr);
 
-        const svc = obtainConfigService() catch return;
-        const cfg = svc.get() catch return;
-        var updated = cfg.*;
-        updated.TrayIconPath = path_slice;
-        svc.set(updated) catch |set_err| {
-            std.log.err("settings: failed to update config: {t}", .{set_err});
-            return;
-        };
-        svc.save() catch |save_err| {
-            std.log.err("settings: failed to save config: {t}", .{save_err});
-        };
+        updateConfigField(.TrayIconPath, path_slice);
     }
 
-    fn on_clear_tray_icon(_: *gtk.Button, _: *Self) callconv(.c) void {
-        std.debug.print("settings: clear tray icon (not implemented yet)\n", .{});
+    fn on_clear_tray_icon(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        gtk.Button.setLabel(p.tray_icon_button, "Select Icon");
+
+        updateConfigField(.TrayIconPath, "");
     }
 
     fn on_pick_tray_updates_icon(_: *gtk.Button, self: *Self) callconv(.c) void {
@@ -309,21 +302,14 @@ pub const ShellySettingsPage = extern struct {
         const p = self.priv();
         gtk.Button.setLabel(p.tray_updates_icon_button, path_cstr);
 
-        const svc = obtainConfigService() catch return;
-        const cfg = svc.get() catch return;
-        var updated = cfg.*;
-        updated.TrayUpdatesIconPath = path_slice;
-        svc.set(updated) catch |set_err| {
-            std.log.err("settings: failed to update config: {t}", .{set_err});
-            return;
-        };
-        svc.save() catch |save_err| {
-            std.log.err("settings: failed to save config: {t}", .{save_err});
-        };
+        updateConfigField(.TrayUpdatesIconPath, path_slice);
     }
 
-    fn on_clear_tray_updates_icon(_: *gtk.Button, _: *Self) callconv(.c) void {
-        std.debug.print("settings: clear tray updates icon (not implemented yet)\n", .{});
+    fn on_clear_tray_updates_icon(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        gtk.Button.setLabel(p.tray_updates_icon_button, "Select Icon");
+
+        updateConfigField(.TrayUpdatesIconPath, "");
     }
 
     fn on_pick_appimage_install_path(_: *gtk.Button, self: *Self) callconv(.c) void {
@@ -371,17 +357,7 @@ pub const ShellySettingsPage = extern struct {
         const p = self.priv();
         gtk.Button.setLabel(p.appimage_install_path_button, path_cstr);
 
-        const svc = obtainConfigService() catch return;
-        const cfg = svc.get() catch return;
-        var updated = cfg.*;
-        updated.AppImageInstallPath = path_slice;
-        svc.set(updated) catch |set_err| {
-            std.log.err("settings: failed to update config: {t}", .{set_err});
-            return;
-        };
-        svc.save() catch |save_err| {
-            std.log.err("settings: failed to save config: {t}", .{save_err});
-        };
+        updateConfigField(.AppImageInstallPath, path_slice);
     }
 
     fn on_sync_db(_: *gtk.Button, _: *Self) callconv(.c) void {
@@ -542,6 +518,23 @@ fn obtainConfigService() !*ConfigResolver {
     return runtime.config.?;
 }
 
+fn updateConfigField(
+    comptime field: std.meta.FieldEnum(ShellyConfig),
+    value: std.meta.fieldInfo(ShellyConfig, field).type,
+) void {
+    const svc = obtainConfigService() catch return;
+    const cfg = svc.get() catch return;
+    var updated = cfg.*;
+    @field(updated, @tagName(field)) = value;
+    svc.set(updated) catch |set_err| {
+        std.log.err("settings: failed to update config: {t}", .{set_err});
+        return;
+    };
+    svc.save() catch |save_err| {
+        std.log.err("settings: failed to save config: {t}", .{save_err});
+    };
+}
+
 fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.aur_switch, cfg.AurEnabled);
     setSwitch(p.flatpak_switch, cfg.FlatPackEnabled);
@@ -588,6 +581,28 @@ fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
         defer std.heap.c_allocator.free(dup);
         gtk.Button.setLabel(p.appimage_install_path_button, dup);
     }
+
+    if (cfg.TrayIconPath.len == 0) {
+        gtk.Button.setLabel(p.tray_icon_button, "Select Icon");
+    } else {
+        const dup = std.heap.c_allocator.dupeSentinel(u8, cfg.TrayIconPath, 0) catch {
+            gtk.Button.setLabel(p.tray_icon_button, "Select Icon");
+            return;
+        };
+        defer std.heap.c_allocator.free(dup);
+        gtk.Button.setLabel(p.tray_icon_button, dup);
+    }
+
+    if (cfg.TrayUpdatesIconPath.len == 0) {
+        gtk.Button.setLabel(p.tray_updates_icon_button, "Select Icon");
+    } else {
+        const dup = std.heap.c_allocator.dupeSentinel(u8, cfg.TrayUpdatesIconPath, 0) catch {
+            gtk.Button.setLabel(p.tray_updates_icon_button, "Select Icon");
+            return;
+        };
+        defer std.heap.c_allocator.free(dup);
+        gtk.Button.setLabel(p.tray_updates_icon_button, dup);
+    }
 }
 
 fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocator, cfg: *ShellyConfig) void {
@@ -625,7 +640,6 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.NoConfirm = getSwitch(p.no_confirm_switch);
     cfg.ShellySearchEnabled = getSwitch(p.shelly_search_switch);
     cfg.PackageDowngradeEnabled = getSwitch(p.package_downgrade_switch);
-    // AppImageInstallPath is updated directly when the user picks a folder.
 }
 
 fn applyScheduleVisibility(p: *ShellySettingsPage.Private) void {

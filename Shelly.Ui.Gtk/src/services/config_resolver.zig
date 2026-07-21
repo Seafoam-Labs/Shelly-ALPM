@@ -89,9 +89,6 @@ pub const ConfigResolver = struct {
         };
         defer self.allocator.free(data);
 
-        // Log the raw JSON for debugging purposes.
-        std.log.debug("Loaded config JSON: {s}", .{data});
-
         self.parsed = try std.json.parseFromSlice(
             ShellyConfig,
             self.allocator,
