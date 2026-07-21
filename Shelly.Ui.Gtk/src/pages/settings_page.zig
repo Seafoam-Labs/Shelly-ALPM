@@ -242,6 +242,7 @@ pub const ShellySettingsPage = extern struct {
 
     fn on_tray_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         applyTrayVisibility(self.priv());
+        applyScheduleVisibility(self.priv());
     }
 
     const template_children = .{
@@ -439,15 +440,23 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
 }
 
 fn applyScheduleVisibility(p: *ShellySettingsPage.Private) void {
-    const enabled = gtk.Switch.getActive(p.daily_schedule) != 0;
-    gtk.Widget.setVisible(p.weekly_schedule_box.as(gtk.Widget), @intFromBool(enabled));
-    gtk.Widget.setVisible(p.weekly_schedule_switch_box.as(gtk.Widget), @intFromBool(enabled));
+    const tray_enabled = gtk.Switch.getActive(p.tray_switch) != 0;
+    if (!tray_enabled) {
+        gtk.Widget.setVisible(p.weekly_schedule_switch_box.as(gtk.Widget), 0);
+        gtk.Widget.setVisible(p.weekly_schedule_box.as(gtk.Widget), 0);
+        gtk.Widget.setVisible(p.tray_interval_box.as(gtk.Widget), 0);
+        return;
+    }
+
+    gtk.Widget.setVisible(p.weekly_schedule_switch_box.as(gtk.Widget), 1);
+    const daily_enabled = gtk.Switch.getActive(p.daily_schedule) != 0;
+    gtk.Widget.setVisible(p.weekly_schedule_box.as(gtk.Widget), @intFromBool(daily_enabled));
+    gtk.Widget.setVisible(p.tray_interval_box.as(gtk.Widget), @intFromBool(!daily_enabled));
 }
 
 fn applyTrayVisibility(p: *ShellySettingsPage.Private) void {
     const enabled = gtk.Switch.getActive(p.tray_switch) != 0;
     gtk.Widget.setVisible(p.tray_auto_switch_box.as(gtk.Widget), @intFromBool(enabled));
-    gtk.Widget.setVisible(p.tray_interval_box.as(gtk.Widget), @intFromBool(enabled));
     gtk.Widget.setVisible(p.symbolic_tray_box.as(gtk.Widget), @intFromBool(enabled));
 }
 
