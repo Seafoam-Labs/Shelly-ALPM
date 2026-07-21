@@ -9,6 +9,7 @@ const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
 const ConfigService = @import("../services/config.zig").ConfigService;
 const runtime = @import("../services/runtime.zig");
 const support = @import("support.zig");
+const datetime = @import("../helpers/datetime.zig");
 
 pub const SettingsPage = ShellySettingsPage;
 
@@ -152,7 +153,7 @@ pub const ShellySettingsPage = extern struct {
         if (p.loaded) return;
         p.loaded = true;
 
-        const svc = obtainConfig() catch |err| {
+        const svc = obtainConfigService() catch |err| {
             std.log.warn("settings: could not open config service: {t}", .{err});
             return;
         };
@@ -167,7 +168,9 @@ pub const ShellySettingsPage = extern struct {
     }
 
     pub fn onUnmap(self: *Self) void {
-        _ = self;
+        self.save() catch |err| {
+            std.log.err("settings: save failed: {t}", .{err});
+        };
     }
 
     fn on_save_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
@@ -178,15 +181,14 @@ pub const ShellySettingsPage = extern struct {
 
     fn save(self: *Self) !void {
         const p = self.priv();
-        const svc = obtainConfig() catch return;
+        const svc = obtainConfigService() catch return;
         const cfg = svc.get() catch return;
 
         var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         defer arena.deinit();
-        const tmp = arena.allocator();
 
         var updated = cfg.*;
-        collectIntoConfig(p, tmp, &updated);
+        collectIntoConfig(p, arena.allocator(), &updated);
         try svc.set(updated);
         try svc.save();
 
@@ -358,9 +360,8 @@ fn populateDropdowns(p: *ShellySettingsPage.Private) void {
     gtk.DropDown.setModel(p.language_drop, lang_strings.as(gio.ListModel));
 }
 
-fn obtainConfig() !*ConfigService {
-    if (runtime.config) |existing| return existing;
-    return runtime.setupConfig(std.heap.c_allocator);
+fn obtainConfigService() !*ConfigService {
+    return runtime.config.?;
 }
 
 fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
@@ -382,7 +383,7 @@ fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setCheck(p.day_fri_check, daySelected(cfg, .friday));
     setCheck(p.day_sat_check, daySelected(cfg, .saturday));
 
-    const parsed_time = parseTime(cfg.Time);
+    const parsed_time = datetime.parseTime(cfg.Time);
     gtk.SpinButton.setValue(p.update_hour_spin, @floatFromInt(parsed_time.hour));
     gtk.SpinButton.setValue(p.update_minute_spin, @floatFromInt(parsed_time.minute));
 
@@ -413,7 +414,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
 
     cfg.DaysOfWeek = collectDays(p, allocator) catch cfg.DaysOfWeek;
 
-    cfg.Time = formatTime(
+    cfg.Time = datetime.formatTime(
         allocator,
         gtk.SpinButton.getValueAsInt(p.update_hour_spin),
         gtk.SpinButton.getValueAsInt(p.update_minute_spin),
@@ -494,34 +495,6 @@ fn collectDays(p: *ShellySettingsPage.Private, allocator: std.mem.Allocator) ![]
     }
 
     return allocator.dupe(DayOfWeek, buf[0..len]);
-}
-
-fn parseTime(time: ?[]const u8) struct { hour: i32, minute: i32 } {
-    const raw = time orelse return .{ .hour = 0, .minute = 0 };
-    const sep = std.mem.indexOfScalar(u8, raw, ':') orelse return .{ .hour = 0, .minute = 0 };
-    if (sep == 0 or sep + 1 >= raw.len) return .{ .hour = 0, .minute = 0 };
-
-    const hour = std.fmt.parseInt(i32, raw[0..sep], 10) catch return .{ .hour = 0, .minute = 0 };
-    const minute = std.fmt.parseInt(i32, raw[sep + 1 ..], 10) catch return .{ .hour = 0, .minute = 0 };
-
-    return .{
-        .hour = clamp(hour, 0, 23),
-        .minute = clamp(minute, 0, 59),
-    };
-}
-
-fn formatTime(allocator: std.mem.Allocator, hour: i32, minute: i32) ![]const u8 {
-    return std.fmt.allocPrint(
-        allocator,
-        "{d:0>2}:{d:0>2}",
-        .{ clamp(hour, 0, 23), clamp(minute, 0, 59) },
-    );
-}
-
-fn clamp(value: i32, low: i32, high: i32) i32 {
-    if (value < low) return low;
-    if (value > high) return high;
-    return value;
 }
 
 fn languageIndex(culture: ?[]const u8) c_uint {
