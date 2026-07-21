@@ -566,43 +566,30 @@ fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     gtk.DropDown.setSelected(p.default_page_drop, @intFromEnum(cfg.DefaultPageDropDown));
     gtk.DropDown.setSelected(p.language_drop, languageIndex(cfg.Culture));
 
+    setButtonLabel(p.tray_icon_button, std.heap.c_allocator, cfg.TrayIconPath, "Select Icon");
+    setButtonLabel(p.tray_updates_icon_button, std.heap.c_allocator, cfg.TrayUpdatesIconPath, "Select Icon");
+
     // Advanced
     setSwitch(p.no_confirm_switch, cfg.NoConfirm);
     setSwitch(p.shelly_search_switch, cfg.ShellySearchEnabled);
     setSwitch(p.package_downgrade_switch, cfg.PackageDowngradeEnabled);
 
-    if (cfg.AppImageInstallPath.len == 0) {
-        gtk.Button.setLabel(p.appimage_install_path_button, "Select Directory");
-    } else {
-        const dup = std.heap.c_allocator.dupeSentinel(u8, cfg.AppImageInstallPath, 0) catch {
-            gtk.Button.setLabel(p.appimage_install_path_button, "Select Directory");
-            return;
-        };
-        defer std.heap.c_allocator.free(dup);
-        gtk.Button.setLabel(p.appimage_install_path_button, dup);
+    setButtonLabel(p.appimage_install_path_button, std.heap.c_allocator, cfg.AppImageInstallPath, "Select Directory");
+}
+
+fn setButtonLabel(b: *gtk.Button, allocator: std.mem.Allocator, value: []const u8, default: [:0]const u8) void {
+    if (value.len == 0) {
+        gtk.Button.setLabel(b, default);
+        return;
     }
 
-    if (cfg.TrayIconPath.len == 0) {
-        gtk.Button.setLabel(p.tray_icon_button, "Select Icon");
-    } else {
-        const dup = std.heap.c_allocator.dupeSentinel(u8, cfg.TrayIconPath, 0) catch {
-            gtk.Button.setLabel(p.tray_icon_button, "Select Icon");
-            return;
-        };
-        defer std.heap.c_allocator.free(dup);
-        gtk.Button.setLabel(p.tray_icon_button, dup);
-    }
+    const dup = allocator.dupeSentinel(u8, value, 0) catch {
+        gtk.Button.setLabel(b, default);
+        return;
+    };
+    defer allocator.free(dup);
 
-    if (cfg.TrayUpdatesIconPath.len == 0) {
-        gtk.Button.setLabel(p.tray_updates_icon_button, "Select Icon");
-    } else {
-        const dup = std.heap.c_allocator.dupeSentinel(u8, cfg.TrayUpdatesIconPath, 0) catch {
-            gtk.Button.setLabel(p.tray_updates_icon_button, "Select Icon");
-            return;
-        };
-        defer std.heap.c_allocator.free(dup);
-        gtk.Button.setLabel(p.tray_updates_icon_button, dup);
-    }
+    gtk.Button.setLabel(b, dup);
 }
 
 fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocator, cfg: *ShellyConfig) void {
