@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the CLI, then build this project and run it.
-# Usage: ./run.sh [zig build args...]
-# Example: ./run.sh -Doptimize=ReleaseFast
+# Usage: ./build.sh [zig build args...]
+# Example: ./build.sh -Doptimize=ReleaseFast
 set -euo pipefail
 cd "$(dirname "$0")"
 
