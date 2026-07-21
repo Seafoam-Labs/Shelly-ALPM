@@ -1,5 +1,5 @@
 const std = @import("std");
-const ConfigService = @import("config.zig").ConfigService;
+const ConfigResolver = @import("config_resolver.zig").ConfigResolver;
 const xdg_paths = @import("xdg_paths.zig");
 
 // src/shellpers/runtime.zig
@@ -7,7 +7,7 @@ pub var io: std.Io = undefined;
 pub var environ_map: *std.process.Environ.Map = undefined;
 pub var data_home: []const u8 = "";
 
-pub var config: ?*ConfigService = null;
+pub var config: ?*ConfigResolver = null;
 
 pub fn setup(init: std.process.Init) void {
     io = init.io;
@@ -15,13 +15,13 @@ pub fn setup(init: std.process.Init) void {
     data_home = xdg_paths.xdgDataHome(init.arena.allocator(), init.environ_map) catch "";
 }
 
-pub fn setupConfig(allocator: std.mem.Allocator) !*ConfigService {
+pub fn setupConfig(allocator: std.mem.Allocator) !*ConfigResolver {
     if (config) |existing| return existing;
 
-    const svc = try allocator.create(ConfigService);
+    const svc = try allocator.create(ConfigResolver);
     errdefer allocator.destroy(svc);
 
-    svc.* = try ConfigService.init(allocator, io, environ_map);
+    svc.* = try ConfigResolver.init(allocator, io, environ_map);
     try svc.load();
 
     config = svc;

@@ -13,7 +13,7 @@ pub const ConfigError = error{
     NotLoaded,
 };
 
-pub const ConfigService = struct {
+pub const ConfigResolver = struct {
     allocator: std.mem.Allocator,
     io: Io,
     config_dir: Io.Dir,
@@ -23,7 +23,7 @@ pub const ConfigService = struct {
         allocator: std.mem.Allocator,
         io: Io,
         env_map: *const std.process.Environ.Map,
-    ) !ConfigService {
+    ) !ConfigResolver {
         const home_path = try xdg_paths.xdgConfigHome(allocator, env_map);
         defer allocator.free(home_path);
 
@@ -41,7 +41,7 @@ pub const ConfigService = struct {
         };
     }
 
-    pub fn initDir(allocator: std.mem.Allocator, io: Io, config_dir: Io.Dir) ConfigService {
+    pub fn initDir(allocator: std.mem.Allocator, io: Io, config_dir: Io.Dir) ConfigResolver {
         return .{
             .allocator = allocator,
             .io = io,
@@ -50,14 +50,14 @@ pub const ConfigService = struct {
         };
     }
 
-    pub fn deinit(self: *ConfigService) void {
+    pub fn deinit(self: *ConfigResolver) void {
         if (self.parsed) |*p| {
             p.deinit();
             self.parsed = null;
         }
     }
 
-    pub fn load(self: *ConfigService) !void {
+    pub fn load(self: *ConfigResolver) !void {
         if (self.parsed) |*p| {
             p.deinit();
             self.parsed = null;
@@ -89,6 +89,9 @@ pub const ConfigService = struct {
         };
         defer self.allocator.free(data);
 
+        // Log the raw JSON for debugging purposes.
+        std.log.debug("Loaded config JSON: {s}", .{data});
+
         self.parsed = try std.json.parseFromSlice(
             ShellyConfig,
             self.allocator,
@@ -97,7 +100,7 @@ pub const ConfigService = struct {
         );
     }
 
-    pub fn save(self: *ConfigService) !void {
+    pub fn save(self: *ConfigResolver) !void {
         if (self.parsed == null) return ConfigError.NotLoaded;
 
         const dir_name = std.fs.path.dirname(settings_path).?;
@@ -115,14 +118,14 @@ pub const ConfigService = struct {
         try fw.flush();
     }
 
-    pub fn get(self: *ConfigService) !*ShellyConfig {
+    pub fn get(self: *ConfigResolver) !*ShellyConfig {
         if (self.parsed) |*p| {
             return &p.value;
         }
         return ConfigError.NotLoaded;
     }
 
-    pub fn set(self: *ConfigService, new_config: ShellyConfig) !void {
+    pub fn set(self: *ConfigResolver, new_config: ShellyConfig) !void {
         const json = try std.json.Stringify.valueAlloc(self.allocator, new_config, .{});
         defer self.allocator.free(json);
         if (self.parsed) |*p| {
@@ -136,7 +139,7 @@ pub const ConfigService = struct {
         );
     }
 
-    fn saveDefault(self: *ConfigService, path: []const u8) !void {
+    fn saveDefault(self: *ConfigResolver, path: []const u8) !void {
         const dir_name = std.fs.path.dirname(path).?;
         var sub_dir = try self.config_dir.createDirPathOpen(self.io, dir_name, .{});
         defer sub_dir.close(self.io);
@@ -157,8 +160,8 @@ pub const ConfigService = struct {
 
 const testing = std.testing;
 
-fn makeService(tmp: *std.testing.TmpDir) ConfigService {
-    return ConfigService.initDir(testing.allocator, testing.io, tmp.dir);
+fn makeService(tmp: *std.testing.TmpDir) ConfigResolver {
+    return ConfigResolver.initDir(testing.allocator, testing.io, tmp.dir);
 }
 
 test "get before load returns NotLoaded" {

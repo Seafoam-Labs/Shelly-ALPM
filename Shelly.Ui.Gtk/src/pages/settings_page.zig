@@ -3,13 +3,15 @@ const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gobject = bindings.gobject;
 const gio = bindings.gio;
+const glib = bindings.glib;
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const ShellyTabs = @import("../models/shelly_config.zig").ShellyTabs;
 const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
-const ConfigService = @import("../services/config.zig").ConfigService;
+const ConfigResolver = @import("../services/config_resolver.zig").ConfigResolver;
 const runtime = @import("../services/runtime.zig");
 const support = @import("support.zig");
 const datetime = @import("../helpers/datetime.zig");
+const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 
 pub const SettingsPage = ShellySettingsPage;
 
@@ -216,8 +218,62 @@ pub const ShellySettingsPage = extern struct {
         std.debug.print("settings: clear tray updates icon (not implemented yet)\n", .{});
     }
 
-    fn on_pick_appimage_install_path(_: *gtk.Button, _: *Self) callconv(.c) void {
-        std.debug.print("settings: pick appimage install path (not implemented yet)\n", .{});
+    fn on_pick_appimage_install_path(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const dialog = gtk.FileDialog.new();
+        gtk.FileDialog.setTitle(dialog, "Select AppImage Install Directory");
+
+        const root = gtk.Widget.getRoot(self.as(gtk.Widget));
+        const parent: ?*gtk.Window = if (root) |r| gobject.ext.cast(gtk.Window, r) else null;
+
+        gtk.FileDialog.selectFolder(
+            dialog,
+            parent,
+            null,
+            &on_appimage_folder_selected,
+            self,
+        );
+    }
+
+    fn on_appimage_folder_selected(
+        source_object: ?*gobject.Object,
+        result: *gio.AsyncResult,
+        user_data: ?*anyopaque,
+    ) callconv(.c) void {
+        const dialog: *gtk.FileDialog = @ptrCast(@alignCast(source_object.?));
+        defer gobject.Object.unref(gobject.ext.as(gobject.Object, dialog));
+
+        var err: ?*glib.Error = null;
+        const file = gtk.FileDialog.selectFolderFinish(dialog, result, &err);
+        if (err) |e| {
+            if (e.f_code != @intFromEnum(gio.IOErrorEnum.cancelled)) {
+                std.log.warn("settings: folder selection failed: {s}", .{e.f_message orelse ""});
+            }
+            glib.Error.free(e);
+            return;
+        }
+
+        const f = file orelse return;
+        defer gobject.Object.unref(gobject.ext.as(gobject.Object, f));
+
+        const path_cstr = gio.File.getPath(f) orelse return;
+        defer glib.free(path_cstr);
+        const path_slice = std.mem.span(path_cstr);
+
+        const self: *Self = @ptrCast(@alignCast(user_data.?));
+        const p = self.priv();
+        gtk.Button.setLabel(p.appimage_install_path_button, path_cstr);
+
+        const svc = obtainConfigService() catch return;
+        const cfg = svc.get() catch return;
+        var updated = cfg.*;
+        updated.AppImageInstallPath = path_slice;
+        svc.set(updated) catch |set_err| {
+            std.log.err("settings: failed to update config: {t}", .{set_err});
+            return;
+        };
+        svc.save() catch |save_err| {
+            std.log.err("settings: failed to save config: {t}", .{save_err});
+        };
     }
 
     fn on_sync_db(_: *gtk.Button, _: *Self) callconv(.c) void {
@@ -374,7 +430,7 @@ fn populateDropdowns(p: *ShellySettingsPage.Private) void {
     gtk.DropDown.setModel(p.language_drop, lang_strings.as(gio.ListModel));
 }
 
-fn obtainConfigService() !*ConfigService {
+fn obtainConfigService() !*ConfigResolver {
     return runtime.config.?;
 }
 
@@ -413,6 +469,17 @@ fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.no_confirm_switch, cfg.NoConfirm);
     setSwitch(p.shelly_search_switch, cfg.ShellySearchEnabled);
     setSwitch(p.package_downgrade_switch, cfg.PackageDowngradeEnabled);
+
+    if (cfg.AppImageInstallPath.len == 0) {
+        gtk.Button.setLabel(p.appimage_install_path_button, "Select Directory");
+    } else {
+        const dup = std.heap.c_allocator.dupeSentinel(u8, cfg.AppImageInstallPath, 0) catch {
+            gtk.Button.setLabel(p.appimage_install_path_button, "Select Directory");
+            return;
+        };
+        defer std.heap.c_allocator.free(dup);
+        gtk.Button.setLabel(p.appimage_install_path_button, dup);
+    }
 }
 
 fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocator, cfg: *ShellyConfig) void {
@@ -450,6 +517,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.NoConfirm = getSwitch(p.no_confirm_switch);
     cfg.ShellySearchEnabled = getSwitch(p.shelly_search_switch);
     cfg.PackageDowngradeEnabled = getSwitch(p.package_downgrade_switch);
+    // AppImageInstallPath is updated directly when the user picks a folder.
 }
 
 fn applyScheduleVisibility(p: *ShellySettingsPage.Private) void {

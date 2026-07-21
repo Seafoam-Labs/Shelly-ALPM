@@ -41,7 +41,7 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
 
 test {
     // _ = @import("services/icon_resolver.zig");
-    _ = @import("services/config.zig");
+    _ = @import("services/config_resolver.zig");
     _ = @import("services/shelly_cli.zig");
     _ = @import("g_objects/appstream_app_object.zig");
     _ = @import("helpers/custom_ui_comps/carousel.zig");

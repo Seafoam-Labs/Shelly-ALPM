@@ -24,7 +24,7 @@ pub const DayOfWeek = enum(u8) {
 
 pub const ShellyConfig = struct {
     // General
-    Culture: ?[]const u8 = null,
+    Culture: []const u8 = "",
     NewInstall: bool = true,
     NewInstallInitSettings: bool = false,
     NoConfirm: bool = false,
@@ -34,6 +34,7 @@ pub const ShellyConfig = struct {
     AurEnabled: bool = false,
     AurWarningConfirmed: bool = false,
     AppImageEnabled: bool = false,
+    AppImageInstallPath: []const u8 = "",
     FlatPackEnabled: bool = false,
     PackageDowngradeEnabled: bool = false,
     RecommendedEnabled: bool = true,
@@ -82,11 +83,11 @@ pub const ShellyConfig = struct {
     TrayAutoStart: bool = false,
     TrayCheckIntervalHours: i32 = 72,
     UseSymbolicTray: bool = true,
-    TrayIconPath: ?[]const u8 = null,
-    TrayUpdatesIconPath: ?[]const u8 = null,
+    TrayIconPath: []const u8 = "",
+    TrayUpdatesIconPath: []const u8 = "",
 
     // Scheduled Operations
     UseWeeklySchedule: bool = false,
     DaysOfWeek: []const DayOfWeek = &.{},
-    Time: ?[]const u8 = null,
+    Time: []const u8 = "",
 };
