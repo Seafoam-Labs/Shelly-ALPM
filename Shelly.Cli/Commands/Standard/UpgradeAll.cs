@@ -80,6 +80,8 @@ public class UpgradeAll : GlobalSettingsCommand
             return;
         }
 
+        var archNews = new ArchNews();
+        await archNews.ExecuteAsync(console);
 
         if (!UserIdentity.IsRoot())
         {
