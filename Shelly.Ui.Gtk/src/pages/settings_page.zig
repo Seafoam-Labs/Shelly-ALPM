@@ -202,16 +202,124 @@ pub const ShellySettingsPage = extern struct {
         std.debug.print("settings: view changelog (not implemented yet)\n", .{});
     }
 
-    fn on_pick_tray_icon(_: *gtk.Button, _: *Self) callconv(.c) void {
-        std.debug.print("settings: pick tray icon (not implemented yet)\n", .{});
+    fn on_pick_tray_icon(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const dialog = gtk.FileDialog.new();
+        gtk.FileDialog.setTitle(dialog, "Select Tray Icon");
+
+        const root = gtk.Widget.getRoot(self.as(gtk.Widget));
+        const parent: ?*gtk.Window = if (root) |r| gobject.ext.cast(gtk.Window, r) else null;
+
+        gtk.FileDialog.open(
+            dialog,
+            parent,
+            null,
+            &on_tray_icon_selected,
+            self,
+        );
+    }
+
+    fn on_tray_icon_selected(
+        source_object: ?*gobject.Object,
+        result: *gio.AsyncResult,
+        user_data: ?*anyopaque,
+    ) callconv(.c) void {
+        const dialog: *gtk.FileDialog = @ptrCast(@alignCast(source_object.?));
+        defer gobject.Object.unref(gobject.ext.as(gobject.Object, dialog));
+
+        var err: ?*glib.Error = null;
+        const file = gtk.FileDialog.openFinish(dialog, result, &err);
+        if (err) |e| {
+            if (e.f_code != @intFromEnum(gio.IOErrorEnum.cancelled)) {
+                std.log.warn("settings: file selection failed: {s}", .{e.f_message orelse ""});
+            }
+            glib.Error.free(e);
+            return;
+        }
+
+        const f = file orelse return;
+        defer gobject.Object.unref(gobject.ext.as(gobject.Object, f));
+
+        const path_cstr = gio.File.getPath(f) orelse return;
+        defer glib.free(path_cstr);
+        const path_slice = std.mem.span(path_cstr);
+
+        const self: *Self = @ptrCast(@alignCast(user_data.?));
+        const p = self.priv();
+        gtk.Button.setLabel(p.tray_icon_button, path_cstr);
+
+        const svc = obtainConfigService() catch return;
+        const cfg = svc.get() catch return;
+        var updated = cfg.*;
+        updated.TrayIconPath = path_slice;
+        svc.set(updated) catch |set_err| {
+            std.log.err("settings: failed to update config: {t}", .{set_err});
+            return;
+        };
+        svc.save() catch |save_err| {
+            std.log.err("settings: failed to save config: {t}", .{save_err});
+        };
     }
 
     fn on_clear_tray_icon(_: *gtk.Button, _: *Self) callconv(.c) void {
         std.debug.print("settings: clear tray icon (not implemented yet)\n", .{});
     }
 
-    fn on_pick_tray_updates_icon(_: *gtk.Button, _: *Self) callconv(.c) void {
-        std.debug.print("settings: pick tray updates icon (not implemented yet)\n", .{});
+    fn on_pick_tray_updates_icon(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const dialog = gtk.FileDialog.new();
+        gtk.FileDialog.setTitle(dialog, "Select Tray Updates Icon");
+
+        const root = gtk.Widget.getRoot(self.as(gtk.Widget));
+        const parent: ?*gtk.Window = if (root) |r| gobject.ext.cast(gtk.Window, r) else null;
+
+        gtk.FileDialog.open(
+            dialog,
+            parent,
+            null,
+            &on_tray_updates_icon_selected,
+            self,
+        );
+    }
+
+    fn on_tray_updates_icon_selected(
+        source_object: ?*gobject.Object,
+        result: *gio.AsyncResult,
+        user_data: ?*anyopaque,
+    ) callconv(.c) void {
+        const dialog: *gtk.FileDialog = @ptrCast(@alignCast(source_object.?));
+        defer gobject.Object.unref(gobject.ext.as(gobject.Object, dialog));
+
+        var err: ?*glib.Error = null;
+        const file = gtk.FileDialog.openFinish(dialog, result, &err);
+        if (err) |e| {
+            if (e.f_code != @intFromEnum(gio.IOErrorEnum.cancelled)) {
+                std.log.warn("settings: file selection failed: {s}", .{e.f_message orelse ""});
+            }
+            glib.Error.free(e);
+            return;
+        }
+
+        const f = file orelse return;
+        defer gobject.Object.unref(gobject.ext.as(gobject.Object, f));
+
+        const path_cstr = gio.File.getPath(f) orelse return;
+        defer glib.free(path_cstr);
+        const path_slice = std.mem.span(path_cstr);
+
+        const self: *Self = @ptrCast(@alignCast(user_data.?));
+        const p = self.priv();
+        gtk.Button.setLabel(p.tray_updates_icon_button, path_cstr);
+
+        const svc = obtainConfigService() catch return;
+        const cfg = svc.get() catch return;
+        var updated = cfg.*;
+        updated.TrayUpdatesIconPath = path_slice;
+        svc.set(updated) catch |set_err| {
+            std.log.err("settings: failed to update config: {t}", .{set_err});
+            return;
+        };
+        svc.save() catch |save_err| {
+            std.log.err("settings: failed to save config: {t}", .{save_err});
+        };
     }
 
     fn on_clear_tray_updates_icon(_: *gtk.Button, _: *Self) callconv(.c) void {
