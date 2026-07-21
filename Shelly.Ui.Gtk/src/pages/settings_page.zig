@@ -345,6 +345,19 @@ const language_entries = [_]struct {
 }{
     .{ .label = "System Default", .value = "" },
     .{ .label = "English", .value = "en" },
+    .{ .label = "Bulgarian", .value = "bg_BG" },
+    .{ .label = "Català", .value = "ca" },
+    .{ .label = "Deutsch", .value = "de_DE" },
+    .{ .label = "Español", .value = "es" },
+    .{ .label = "Français", .value = "fr_FR" },
+    .{ .label = "Magyar", .value = "hu_HU" },
+    .{ .label = "日本語", .value = "ja_JP" },
+    .{ .label = "Polski", .value = "pl" },
+    .{ .label = "Português (Brasil)", .value = "pt_BR" },
+    .{ .label = "Português (Portugal)", .value = "pt_PT" },
+    .{ .label = "Русский", .value = "ru_RU" },
+    .{ .label = "Türkçe", .value = "tr_TR" },
+    .{ .label = "中文（简体）", .value = "zh_CN" },
 };
 
 fn populateDropdowns(p: *ShellySettingsPage.Private) void {
@@ -403,6 +416,8 @@ fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
 }
 
 fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocator, cfg: *ShellyConfig) void {
+    cfg.Culture = language_entries[gtk.DropDown.getSelected(p.language_drop)].value;
+
     cfg.AurEnabled = getSwitch(p.aur_switch);
     cfg.FlatPackEnabled = getSwitch(p.flatpak_switch);
     cfg.RecommendedEnabled = getSwitch(p.recommended_switch);
@@ -426,11 +441,9 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.UseOldMenu = getSwitch(p.use_old_menu_switch);
     cfg.UseSymbolicTray = getSwitch(p.symbolic_tray_switch);
 
-    {
-        const idx = gtk.DropDown.getSelected(p.default_page_drop);
-        if (idx != std.math.maxInt(u32) and idx < default_page_entries.len) {
-            cfg.DefaultPageDropDown = default_page_entries[idx].value;
-        }
+    const idx = gtk.DropDown.getSelected(p.default_page_drop);
+    if (idx != std.math.maxInt(u32) and idx < default_page_entries.len) {
+        cfg.DefaultPageDropDown = default_page_entries[idx].value;
     }
 
     // Advanced
@@ -483,7 +496,7 @@ fn daySelected(cfg: *const ShellyConfig, day: DayOfWeek) bool {
     return false;
 }
 
-fn collectDays(p: *ShellySettingsPage.Private, allocator: std.mem.Allocator) ![]const DayOfWeek {
+fn collectDays(p: *ShellySettingsPage.Private, allocator: std.mem.Allocator) ![]DayOfWeek {
     var buf: [7]DayOfWeek = undefined;
     var len: usize = 0;
 
