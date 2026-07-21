@@ -6,10 +6,6 @@ riderModule.iml
 .idea/
 Shelly-UI.sln.DotSettings.user
 .junie/
-Shelly.Ui.Gtk/.zig-cache/
-Shelly.Ui.Gtk/zig-pkg/
-Shelly.Cli.Zig/.zig-cache/
-Shelly.Cli.Zig/zig-pkg/
-Shelly.Tui/.zig-cache/
-Shelly.Tui/zig-pkg/zigzag-0.1.2-YXwYS_kJEgA3GRXhR4qLp6PfG0-RKpyQq-DxJLLqlF0a/
-Shelly.Tui/zig-pkg/
+.zig-cache/
+zig-out/
+zig-pkg/
