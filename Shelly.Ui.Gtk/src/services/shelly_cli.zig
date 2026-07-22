@@ -11,6 +11,22 @@ const RunResult = std.process.RunResult;
 const runtime = @import("runtime.zig");
 const builtin = @import("builtin");
 
+pub const CliMessage = struct {
+    @"$kind": []const u8 = "",
+    Message: []const u8 = "",
+    ErrorMessage: []const u8 = "",
+    Level: []const u8 = "",
+
+    pub fn isSuccess(self: *const CliMessage) bool {
+        return self.ErrorMessage.len == 0;
+    }
+
+    pub fn text(self: *const CliMessage) []const u8 {
+        if (self.ErrorMessage.len > 0) return self.ErrorMessage;
+        return self.Message;
+    }
+};
+
 pub const ShellyCli = struct {
     allocator: std.mem.Allocator,
     io: Io,
@@ -77,10 +93,12 @@ pub const ShellyCli = struct {
         return result;
     }
 
-    pub fn repair_db(self: ShellyCli) !void {
+    pub fn repair_db(self: ShellyCli) !std.json.Parsed(CliMessage) {
         const result = try self.runPrivileged(&.{ "utility", "--repair-db" });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
+
+        return try JsonPackFrame.decode(CliMessage, self.allocator, result.stdout);
     }
 
     pub fn get_packages(self: ShellyCli) !std.json.Parsed([]Package) {
@@ -111,6 +129,7 @@ pub const ShellyCli = struct {
         const result = try self.run(&.{"-Lf"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
+
         return try JsonPackFrame.decode([]Flatpak, self.allocator, result.stdout);
     }
 
@@ -136,6 +155,7 @@ pub const ShellyCli = struct {
         const result = try self.run(&.{ "search", "standard", name });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
+
         return JsonPackFrame.decodeLast(Package, self.allocator, result.stdout);
     }
 
@@ -161,44 +181,44 @@ pub const ShellyCli = struct {
     }
 };
 
-// test "get_packages" {
-//     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
-//     defer threaded.deinit();
+test "get_packages" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
 
-//     const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = threaded.io() };
+    const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = threaded.io() };
 
-//     const parsed = try cli.get_packages();
+    const parsed = try cli.get_packages();
 
-//     defer parsed.deinit();
+    defer parsed.deinit();
 
-//     try std.testing.expect(parsed.value.len > 0);
-//     std.debug.print("{s} {s}\n", .{ parsed.value[0].Name, parsed.value[0].Version });
-// }
+    try std.testing.expect(parsed.value.len > 0);
+    std.debug.print("{s} {s}\n", .{ parsed.value[0].Name, parsed.value[0].Version });
+}
 
-// test "get_remotes" {
-//     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
-//     defer threaded.deinit();
+test "get_remotes" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
 
-//     const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = threaded.io() };
+    const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = threaded.io() };
 
-//     const parsed = try cli.get_remotes();
+    const parsed = try cli.get_remotes();
 
-//     defer parsed.deinit();
+    defer parsed.deinit();
 
-//     try std.testing.expect(parsed.value.len > 0);
-//     std.debug.print("{s} {t}\n", .{ parsed.value[0].Name, parsed.value[0].Scope });
-// }
+    try std.testing.expect(parsed.value.len > 0);
+    std.debug.print("{s} {t}\n", .{ parsed.value[0].Name, parsed.value[0].Scope });
+}
 
-// test "get_flatpaks" {
-//     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
-//     defer threaded.deinit();
+test "get_flatpaks" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
 
-//     const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = threaded.io() };
+    const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = threaded.io() };
 
-//     const parsed = try cli.get_installed_flatpaks();
+    const parsed = try cli.get_installed_flatpaks();
 
-//     defer parsed.deinit();
+    defer parsed.deinit();
 
-//     try std.testing.expect(parsed.value.len > 0);
-//     std.debug.print("{s} {t}\n", .{ parsed.value[0].Name, parsed.value[0].InstallLevel });
-// }
+    try std.testing.expect(parsed.value.len > 0);
+    std.debug.print("{s} {t}\n", .{ parsed.value[0].Name, parsed.value[0].InstallLevel });
+}

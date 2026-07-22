@@ -386,18 +386,25 @@ pub const ShellySettingsPage = extern struct {
         }
     }
 
-    fn on_remove_db_lock(_: *gtk.Button, self: *Self) callconv(.c) void {
+    fn on_remove_db_lock(_: *gtk.Button, _: *Self) callconv(.c) void {
         var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         defer arena.deinit();
         var threaded: std.Io.Threaded = .init(arena.allocator(), .{});
         defer threaded.deinit();
 
         const cli = ShellyCli{ .allocator = arena.allocator(), .io = threaded.io() };
-        cli.repair_db() catch {
-            on_transaction_complete(self, false);
+        const parsed = cli.repair_db() catch |err| {
+            std.log.err("settings: repair-db failed: {any}", .{err});
             return;
         };
-        on_transaction_complete(self, true);
+        defer parsed.deinit();
+
+        const response = parsed.value;
+        // TODO: A toast must be given.
+        std.log.info("settings: repair-db {s}: '{s}'", .{
+            if (response.isSuccess()) "succeeded" else "failed",
+            response.text(),
+        });
     }
 
     fn on_fix_permissions(_: *gtk.Button, self: *Self) callconv(.c) void {
