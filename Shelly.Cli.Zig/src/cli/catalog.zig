@@ -279,6 +279,7 @@ pub const variants = [_]Variant{
             .implementation = "Native Zig ownership repair; Zigalpm.PacfileManager pacdiff workflow; Markdown documentation and Bash/Fish/Zsh completion generators",
             .options = &.{
                 .{ .name = "--fix-permissions", .description = "Restore the invoking user's ownership of Shelly's configuration, cache, and data directories" },
+                .{ .name = "--repair-db", .description = "Remove a stale database lock" },
                 .{ .name = "--docs", .description = "Write Markdown CLI reference documentation to standard output" },
                 .{ .name = "--completions", .description = "Write a Bash, Fish, or Zsh completion script to standard output" },
                 .{ .name = "--pacfiles", .description = "Run the pacdiff-compatible pacnew, pacorig, and pacsave maintenance workflow" },
@@ -977,6 +978,7 @@ pub fn findActionByCode(action_code: u8) ?[]const u8 {
 fn optionDefinitions(comptime action: []const u8, comptime type_name: []const u8) []const Option {
     if (pathIs(action, type_name, "utility", "utility")) return &.{
         flag("--fix-permissions", &.{"-f"}, "Restore ownership of Shelly's user directories"),
+        flag("--repair-db", &.{"-r"}, "Remove a stale database lock"),
         flag("--docs", &.{"-d"}, "Generate Markdown CLI documentation"),
         .{
             .name = "--completions",

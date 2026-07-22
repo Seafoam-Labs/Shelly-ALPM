@@ -10,9 +10,11 @@ const spec = @import("../cli/spec.zig");
 const xdg = @import("../runtime/xdg.zig");
 
 const command_path = "shelly utility utility";
+const default_database_directory = "/var/lib/pacman";
 
 const Operation = union(enum) {
     fix_permissions,
+    repair_db,
     docs,
     completions: completions.Shell,
     pacfiles,
@@ -46,7 +48,7 @@ pub fn dispatch(
     if (selection != .operation) return try writeSelectionError(context, selection);
     const operation = selection.operation;
 
-    const needs_elevation = operation == .fix_permissions or
+    const needs_elevation = operation == .fix_permissions or operation == .repair_db or
         (operation == .pacfiles and pacfiles.requiresElevation(invocation));
     if (needs_elevation and !elevation.isRoot()) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
@@ -67,6 +69,7 @@ fn execute(
 ) !u8 {
     return switch (operation) {
         .fix_permissions => fixPermissions(context, invocation, permission_runner),
+        .repair_db => repairDb(context, invocation, default_database_directory),
         .docs => generateDocs(context),
         .completions => |shell| generateCompletions(context, shell),
         .pacfiles => pacfiles.run(context, invocation),
@@ -90,6 +93,8 @@ fn selectOperation(invocation: *const parser.Invocation) Selection {
     for (invocation.options) |option| {
         const operation: ?Operation = if (std.mem.eql(u8, option.name, "--fix-permissions"))
             .fix_permissions
+        else if (std.mem.eql(u8, option.name, "--repair-db"))
+            .repair_db
         else if (std.mem.eql(u8, option.name, "--docs"))
             .docs
         else if (std.mem.eql(u8, option.name, "--completions"))
@@ -131,7 +136,7 @@ fn isPacfileOption(name: []const u8) bool {
 
 fn writeSelectionError(context: *runtime.RuntimeContext, selection: Selection) !u8 {
     const message = switch (selection) {
-        .missing => "No utility operation selected. Use --fix-permissions, --docs, --completions <shell>, or --pacfiles.",
+        .missing => "No utility operation selected. Use --fix-permissions, --repair-db, --docs, --completions <shell>, or --pacfiles.",
         .conflicting => "Utility operations are mutually exclusive; select exactly one.",
         .operation => unreachable,
     };
@@ -146,7 +151,7 @@ fn fixPermissions(
 ) !u8 {
     const user = try invokingUser(context) orelse {
         const message = "Could not determine the invoking user (SUDO_USER, DOAS_USER, or PKEXEC_UID).";
-        try writePermissionMessage(context, invocation, false, message);
+        try writeResponseMessage(context, invocation, false, message);
         return 1;
     };
 
@@ -163,12 +168,12 @@ fn fixPermissions(
         const exit_code = runner.call(runner.data, context, user, path) catch |err| {
             failed = true;
             const message = try std.fmt.allocPrint(context.allocator, "Failed to fix ownership for {s}: {t}", .{ path, err });
-            try writePermissionMessage(context, invocation, false, message);
+            try writeResponseMessage(context, invocation, false, message);
             continue;
         };
         if (exit_code == 0) {
             const message = try std.fmt.allocPrint(context.allocator, "Fixed ownership: {s}", .{path});
-            try writePermissionMessage(context, invocation, true, message);
+            try writeResponseMessage(context, invocation, true, message);
         } else {
             failed = true;
             const message = try std.fmt.allocPrint(
@@ -176,17 +181,36 @@ fn fixPermissions(
                 "Failed to fix ownership for {s}: chown exited with code {d}",
                 .{ path, exit_code },
             );
-            try writePermissionMessage(context, invocation, false, message);
+            try writeResponseMessage(context, invocation, false, message);
         }
     }
 
     if (!found) {
-        try writePermissionMessage(context, invocation, true, "No Shelly directories need permission repair.");
+        try writeResponseMessage(context, invocation, true, "No Shelly directories need permission repair.");
     }
     return if (failed) 1 else 0;
 }
 
-fn writePermissionMessage(
+fn repairDb(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+    database_directory: []const u8,
+) !u8 {
+    const db_lock = try std.fs.path.join(context.allocator, &.{ database_directory, "db.lck" });
+    std.Io.Dir.accessAbsolute(context.io, db_lock, .{}) catch {
+        try writeResponseMessage(context, invocation, true, "Database lock is not present; nothing to repair.");
+        return 0;
+    };
+    std.Io.Dir.deleteFileAbsolute(context.io, db_lock) catch |err| {
+        const message = try std.fmt.allocPrint(context.allocator, "Failed to remove pacman database lock: {t}", .{err});
+        try writeResponseMessage(context, invocation, false, message);
+        return 1;
+    };
+    try writeResponseMessage(context, invocation, true, "Removed stale database lock.");
+    return 0;
+}
+
+fn writeResponseMessage(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
     succeeded: bool,
@@ -424,6 +448,75 @@ test "permission repair targets only existing Shelly user directories" {
     ));
     try std.testing.expectEqual(@as(usize, 2), capture.calls);
     try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, stdout.writer.buffered(), "Fixed ownership:"));
+}
+
+test "selectOperation selects repair-db from flag" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const invocation = try parseInvocation(arena.allocator(), &.{ "utility", "--repair-db" });
+    const selection = selectOperation(&invocation);
+    try std.testing.expect(selection == .operation);
+    try std.testing.expect(selection.operation == .repair_db);
+}
+
+test "repairDb removes stale pacman database lock" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const absolute_length = try temporary.dir.realPath(std.testing.io, &absolute_buffer);
+    const database_directory = absolute_buffer[0..absolute_length];
+    const db_lock = try std.fs.path.join(allocator, &.{ database_directory, "db.lck" });
+    var file = try std.Io.Dir.createFileAbsolute(std.testing.io, db_lock, .{});
+    file.close(std.testing.io);
+
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    const invocation = try parseInvocation(allocator, &.{ "utility", "--repair-db" });
+
+    try std.testing.expectEqual(@as(u8, 0), try repairDb(&context, &invocation, database_directory));
+    try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "Removed stale database lock") != null);
+
+    const access_err = std.Io.Dir.accessAbsolute(std.testing.io, db_lock, .{}) catch |err| err;
+    try std.testing.expect(access_err == error.FileNotFound);
+}
+
+test "repairDb succeeds gracefully when no lock file is present" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const absolute_length = try temporary.dir.realPath(std.testing.io, &absolute_buffer);
+    const database_directory = absolute_buffer[0..absolute_length];
+
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    const invocation = try parseInvocation(allocator, &.{ "utility", "--repair-db" });
+
+    try std.testing.expectEqual(@as(u8, 0), try repairDb(&context, &invocation, database_directory));
+    try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "not present") != null);
 }
 
 fn expectArguments(expected: []const []const u8, actual: []const []const u8) !void {

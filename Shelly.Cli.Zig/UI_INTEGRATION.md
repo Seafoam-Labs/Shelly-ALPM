@@ -442,6 +442,7 @@ Use this as an export action and surface the final file path. Do not infer that 
 Exactly one primary utility mode should be selected:
 
 - `--fix-permissions`: restore the invoking user's ownership of Shelly configuration, cache, and data directories. This requires elevation.
+- `--repair-db`: remove a stale database lock (`/var/lib/pacman/db.lck`) if present. This requires elevation.
 - `--docs`: write generated Markdown CLI reference as raw stdout. Capture it as text or redirect it to a user-selected file outside the CLI.
 - `--completions bash|fish|zsh`: write a completion script as raw stdout.
 - `--pacfiles`: run pacdiff-compatible `.pacnew`, `.pacorig`, and `.pacsave` management.
@@ -477,6 +478,7 @@ Interactive pacfile management offers pacdiff-style review actions such as view,
 | System cleanup | dry-run/list queries | `purify standard`, `purify flatpak`, removal commands |
 | Package policy | `mark ignore/hold --list` | mark add/remove/clear and reason changes |
 | Settings | `config [list]` / `config get` | `config set/reset/parallel` |
+| Settings (maintenance) | — | `utility --fix-permissions`, `utility --repair-db` |
 
 ## UI implementation checklist
 
