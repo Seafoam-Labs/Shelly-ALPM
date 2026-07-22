@@ -377,15 +377,6 @@ pub const ShellySettingsPage = extern struct {
         });
     }
 
-    fn on_transaction_complete(_: *anyopaque, success: bool) void {
-        // TODO: Let there be toast.
-        if (success) {
-            std.log.info("settings: database sync completed", .{});
-        } else {
-            std.log.warn("settings: database sync failed", .{});
-        }
-    }
-
     fn on_remove_db_lock(_: *gtk.Button, _: *Self) callconv(.c) void {
         var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         defer arena.deinit();
@@ -422,8 +413,28 @@ pub const ShellySettingsPage = extern struct {
         });
     }
 
-    fn on_purify(_: *gtk.Button, _: *Self) callconv(.c) void {
-        std.debug.print("settings: purify packages (not implemented yet)\n", .{});
+    fn on_purify(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const argv = ShellyCommands.purify(std.heap.c_allocator) catch return;
+        defer std.mem.Allocator.free(std.heap.c_allocator, argv);
+
+        const win = support.getWindow(ShellyWindow, self) orelse return;
+        win.startTransaction(.{
+            .title = "Purifying packages",
+            .argv = argv,
+            .packages = &.{},
+            .on_complete = &on_transaction_complete,
+            .privileged = true,
+            .ctx = self,
+        });
+    }
+
+    fn on_transaction_complete(_: *anyopaque, success: bool) void {
+        // TODO: Let there be toast.
+        if (success) {
+            std.log.info("settings: database sync completed", .{});
+        } else {
+            std.log.warn("settings: database sync failed", .{});
+        }
     }
 
     fn on_schedule_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
