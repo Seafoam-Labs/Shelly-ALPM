@@ -14,6 +14,7 @@ const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const support = @import("support.zig");
 const datetime = @import("../helpers/datetime.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
+const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 
 pub const SettingsPage = ShellySettingsPage;
 
@@ -28,6 +29,7 @@ pub const ShellySettingsPage = extern struct {
     const resource_path = "/com/shellyorg/shelly/ui/settings_page.ui";
 
     const Private = struct {
+        page_overlay: *gtk.Overlay,
         settings_stack: *gtk.Stack,
 
         // General
@@ -87,6 +89,7 @@ pub const ShellySettingsPage = extern struct {
         fluxer_link: *gtk.LinkButton,
         sponsor_link: *gtk.LinkButton,
 
+        toast: *Toast,
         loaded: bool,
 
         var offset: c_int = 0;
@@ -150,6 +153,10 @@ pub const ShellySettingsPage = extern struct {
         );
 
         support.connectLifecycle(Self, self);
+
+        const toast = Toast.new();
+        gtk.Overlay.addOverlay(p.page_overlay, toast.as(gtk.Widget));
+        p.toast = toast;
     }
 
     pub fn onMap(self: *Self) void {
@@ -180,7 +187,10 @@ pub const ShellySettingsPage = extern struct {
     fn on_save_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
         self.save() catch |err| {
             std.log.err("settings: save failed: {t}", .{err});
+            self.priv().toast.show(.@"error", "Failed to save settings");
+            return;
         };
+        self.priv().toast.show(.success, "Settings saved");
     }
 
     fn save(self: *Self) !void {
@@ -377,7 +387,7 @@ pub const ShellySettingsPage = extern struct {
         });
     }
 
-    fn on_remove_db_lock(_: *gtk.Button, _: *Self) callconv(.c) void {
+    fn on_remove_db_lock(_: *gtk.Button, self: *Self) callconv(.c) void {
         var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         defer arena.deinit();
         var threaded: std.Io.Threaded = .init(arena.allocator(), .{});
@@ -391,11 +401,11 @@ pub const ShellySettingsPage = extern struct {
         defer parsed.deinit();
 
         const response = parsed.value;
-        // TODO: A toast must be given.
-        std.log.info("settings: repair-db {s}: '{s}'", .{
-            if (response.isSuccess()) "succeeded" else "failed",
-            response.text(),
-        });
+        if (response.isSuccess()) {
+            self.priv().toast.show(.success, "Database lock removed successfully");
+        } else {
+            self.priv().toast.show(.@"error", "Failed to remove database lock");
+        }
     }
 
     fn on_fix_permissions(_: *gtk.Button, self: *Self) callconv(.c) void {
@@ -428,12 +438,12 @@ pub const ShellySettingsPage = extern struct {
         });
     }
 
-    fn on_transaction_complete(_: *anyopaque, success: bool) void {
-        // TODO: Let there be toast.
+    fn on_transaction_complete(ctx: *anyopaque, success: bool) void {
+        const self: *Self = @ptrCast(@alignCast(ctx));
         if (success) {
-            std.log.info("settings: database sync completed", .{});
+            self.priv().toast.show(.success, "Operation completed successfully");
         } else {
-            std.log.warn("settings: database sync failed", .{});
+            self.priv().toast.show(.@"error", "Operation failed");
         }
     }
 
@@ -447,6 +457,7 @@ pub const ShellySettingsPage = extern struct {
     }
 
     const template_children = .{
+        .{ "page_overlay", @offsetOf(Private, "page_overlay") },
         .{ "settings_stack", @offsetOf(Private, "settings_stack") },
 
         // General

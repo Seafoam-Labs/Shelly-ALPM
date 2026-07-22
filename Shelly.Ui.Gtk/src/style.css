@@ -100,3 +100,37 @@
 #question_layer, .question-layer {
   background-color: alpha(black, 0.5);
 }
+
+.toast-revealer {
+  margin: 8px;
+}
+
+.toast-card {
+  background-color: alpha(@theme_fg_color, 0.92);
+  color: @theme_bg_color;
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow:
+    0 6px 14px alpha(black, 0.20),
+    0 2px 6px alpha(black, 0.18);
+}
+
+.toast-card label {
+  color: @theme_bg_color;
+}
+
+.toast-card button {
+  color: @theme_bg_color;
+}
+
+.toast-card.success {
+  background-color: alpha(#2ec27e, 0.95);
+}
+
+.toast-card.error {
+  background-color: alpha(#e01b24, 0.95);
+}
+
+.toast-card.warning {
+  background-color: alpha(#e5a50a, 0.95);
+}
