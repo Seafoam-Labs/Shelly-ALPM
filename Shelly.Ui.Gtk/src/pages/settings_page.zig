@@ -9,6 +9,8 @@ const ShellyTabs = @import("../models/shelly_config.zig").ShellyTabs;
 const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
 const ConfigResolver = @import("../services/config_resolver.zig").ConfigResolver;
 const runtime = @import("../services/runtime.zig");
+const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
+const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const support = @import("support.zig");
 const datetime = @import("../helpers/datetime.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
@@ -360,12 +362,42 @@ pub const ShellySettingsPage = extern struct {
         updateConfigField(.AppImageInstallPath, path_slice);
     }
 
-    fn on_sync_db(_: *gtk.Button, _: *Self) callconv(.c) void {
-        std.debug.print("settings: force database update (not implemented yet)\n", .{});
+    fn on_sync_db(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const argv = ShellyCommands.sync_db(std.heap.c_allocator) catch return;
+        defer std.mem.Allocator.free(std.heap.c_allocator, argv);
+
+        const win = support.getWindow(ShellyWindow, self) orelse return;
+        win.startTransaction(.{
+            .title = "Refreshing package databases",
+            .argv = argv,
+            .packages = &.{},
+            .on_complete = &on_transaction_complete,
+            .privileged = true,
+            .ctx = self,
+        });
     }
 
-    fn on_remove_db_lock(_: *gtk.Button, _: *Self) callconv(.c) void {
-        std.debug.print("settings: remove db.lck (not implemented yet)\n", .{});
+    fn on_transaction_complete(_: *anyopaque, success: bool) void {
+        // TODO: Let there be toast.
+        if (success) {
+            std.log.info("settings: database sync completed", .{});
+        } else {
+            std.log.warn("settings: database sync failed", .{});
+        }
+    }
+
+    fn on_remove_db_lock(_: *gtk.Button, self: *Self) callconv(.c) void {
+        var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+        defer arena.deinit();
+        var threaded: std.Io.Threaded = .init(arena.allocator(), .{});
+        defer threaded.deinit();
+
+        const cli = ShellyCli{ .allocator = arena.allocator(), .io = threaded.io() };
+        cli.repair_db() catch {
+            on_transaction_complete(self, false);
+            return;
+        };
+        on_transaction_complete(self, true);
     }
 
     fn on_fix_permissions(_: *gtk.Button, _: *Self) callconv(.c) void {
