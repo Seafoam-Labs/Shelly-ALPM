@@ -400,8 +400,19 @@ pub const ShellySettingsPage = extern struct {
         on_transaction_complete(self, true);
     }
 
-    fn on_fix_permissions(_: *gtk.Button, _: *Self) callconv(.c) void {
-        std.debug.print("settings: fix permissions (not implemented yet)\n", .{});
+    fn on_fix_permissions(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const argv = ShellyCommands.fix_permissions(std.heap.c_allocator) catch return;
+        defer std.mem.Allocator.free(std.heap.c_allocator, argv);
+
+        const win = support.getWindow(ShellyWindow, self) orelse return;
+        win.startTransaction(.{
+            .title = "Fixing permissions",
+            .argv = argv,
+            .packages = &.{},
+            .on_complete = &on_transaction_complete,
+            .privileged = true,
+            .ctx = self,
+        });
     }
 
     fn on_purify(_: *gtk.Button, _: *Self) callconv(.c) void {

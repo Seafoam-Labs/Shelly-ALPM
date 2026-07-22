@@ -231,6 +231,13 @@ pub const ShellyCommands = struct {
         if (user) try argv.append(alloc, "--user");
         return argv.toOwnedSlice(alloc);
     }
+
+    pub fn fix_permissions(alloc: std.mem.Allocator) ![]const []const u8 {
+        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        try argv.append(alloc, "utility");
+        try argv.append(alloc, "--fix-permissions");
+        return argv.toOwnedSlice(alloc);
+    }
 };
 
 pub const ShellyOperation = struct {
