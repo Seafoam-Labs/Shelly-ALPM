@@ -1,7 +1,7 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgname=shelly-bin
-pkgver=2.4.1.2
+pkgver=2.4.1.4
 pkgrel=1
 pkgdesc="Shelly: A Modern Arch Package Manager (prebuilt binary)"
 arch=('x86_64')
@@ -49,8 +49,8 @@ package() {
   # Install Shelly.Cli binary
   install -Dm755 "$srcdir/shelly" "$pkgdir/usr/bin/shelly"
 
-  # Install Shelly.Keys binary
-  install -Dm755 "$srcdir/shelly-keys" "$pkgdir/usr/bin/shelly-keys"
+  # Install Shelly.Key binary
+  install -Dm755 "$srcdir/shelly-key" "$pkgdir/usr/bin/shelly-key"
 
   # Install desktop entry
   cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/com.shellyorg.shelly.desktop"

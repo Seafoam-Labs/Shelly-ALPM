@@ -1,0 +1,314 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<interface domain="shelly-ui">
+    <requires lib="gtk" version="4.0"/>
+    <template class="ShellyPackagePage" parent="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+        <child>
+            <object class="GtkOverlay" id="PackageWindow">
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
+                <child>
+                    <object class="GtkBox">
+                        <property name="hexpand">true</property>
+                        <property name="orientation">vertical</property>
+                        <property name="vexpand">true</property>
+                        <child>
+                            <object class="GtkBox">
+                                <property name="halign">baseline</property>
+                                <property name="margin-bottom">10</property>
+                                <property name="margin-end">10</property>
+                                <property name="margin-start">10</property>
+                                <property name="margin-top">10</property>
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">5</property>
+                                <property name="valign">baseline-center</property>
+                                <child>
+                                    <object class="GtkSearchEntry" id="search_entry">
+                                        <property name="placeholder-text" translatable="yes">Search packages...</property>
+                                        <property name="width-request">200</property>
+                                        <style>
+                                            <class name="spaced-search"/>
+                                        </style>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkDropDown" id="grouping_selection">
+                                        <property name="tooltip-text" translatable="yes">Package Group Filter</property>
+                                        <property name="enable-search">true</property>
+                                        <property name="search-match-mode">substring</property>
+                                        <property name="expression">
+                                              <lookup name='string' type="GtkStringObject"></lookup>
+                                        </property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkCheckButton" id="installed_only_check">
+                                        <property name="label" translatable="yes">Installed Only</property>
+                                        <property name="tooltip-text" translatable="yes">Show only installed packages</property>
+                                        <signal name="toggled" handler="on_installed_only_toggled"/>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkBox">
+                                        <property name="hexpand">true</property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkMenuButton" id="cart_button">
+                                        <property name="tooltip-text" translatable="yes">Selected Packages</property>
+                                        <property name="sensitive" >true</property>
+                                        <property name="popover">cart_popover</property>
+                                        <child>
+                                            <object class="GtkLabel" id="cart_label">
+                                                <property name="label" translatable="yes">0 Selected</property>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkBox">
+                                        <property name="spacing">2</property>
+                                        <style>
+                                            <class name="linked"/>
+                                        </style>
+                                        <child>
+                                            <object class="GtkToggleButton" id="grid_view_button">
+                                                <property name="icon-name">view-grid-symbolic</property>
+                                                <property name="tooltip-text" translatable="yes">Grid View</property>
+                                                <property name="active">true</property>
+                                                <signal name="toggled" handler="on_grid_view_toggled" swapped="true"/>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkToggleButton" id="list_view_button">
+                                                <property name="icon-name">view-list-symbolic</property>
+                                                  <property name="group">grid_view_button</property>
+                                                <property name="tooltip-text" translatable="yes">List View</property>
+                                                <signal name="toggled" handler="on_list_view_toggled" swapped="true"/>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkMenuButton" id="options_menu">
+                                        <property name="icon-name">view-more-symbolic</property>
+                                        <property name="tooltip-text" translatable="yes">Additional Options</property>
+                                        <property name="popover">options_popover</property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkButton" id="install_button">
+                                        <property name="halign">start</property>
+                                        <property name="label" translatable="yes">Install Selected</property>
+                                        <signal name="clicked" handler="install_selected" swapped="true"/>
+                                        <style>
+                                            <class name="suggested-action"/>
+                                        </style>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkSeparator"/>
+                        </child>
+                        <child>
+                            <object class="GtkBox" id="views_and_detail_hbox">
+                                <property name="hexpand">true</property>
+                                <property name="orientation">horizontal</property>
+                                <property name="vexpand">true</property>
+                                <child>
+                                    <object class="GtkBox" id="detail_hbox">
+                                        <property name="visible">true</property>
+                                        <property name="hexpand">true</property>
+                                        <property name="orientation">horizontal</property>
+                                        <property name="vexpand">true</property>
+                                        <child>
+                                            <object class="GtkScrolledWindow">
+                                                <property name="hexpand">true</property>
+                                                <property name="overlay-scrolling">false</property>
+                                                <property name="vexpand">true</property>
+                                                <child>
+                                                    <object class="GtkColumnView" id="package_column_view">
+                                                        <property name="hexpand">true</property>
+                                                        <property name="show-column-separators">false</property>
+                                                        <property name="show-row-separators">false</property>
+                                                        <property name="vexpand">true</property>
+                                                        <child>
+                                                            <object class="GtkColumnViewColumn" id="check_column">
+                                                                <property name="title"/>
+
+                                                                   <property name="resizable">false</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkColumnViewColumn" id="name_column">
+                                                                <property name="expand">true</property>
+                                                                <property name="title" translatable="yes">Name</property>
+                                                                <property name="resizable">true</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkColumnViewColumn" id="version_column">
+                                                                <property name="expand">true</property>
+                                                                <property name="title" translatable="yes">Version</property>
+                                                                <property name="resizable">true</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkColumnViewColumn" id="size_column">
+                                                                <property name="expand">true</property>
+                                                                <property name="title" translatable="yes">Size</property>
+                                                                <property name="resizable">true</property>
+                                                            </object>
+                                                        </child>
+                                                        <child>
+                                                            <object class="GtkColumnViewColumn" id="repository_column">
+                                                                <property name="expand">true</property>
+                                                                <property name="title" translatable="yes">Repository</property>
+                                                                <property name="resizable">true</property>
+                                                            </object>
+                                                        </child>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkBox" id="detail_grid_hbox">
+                                        <property name="visible">false</property>
+                                        <property name="hexpand">true</property>
+                                        <property name="orientation">horizontal</property>
+                                        <property name="vexpand">true</property>
+                                        <child>
+                                            <object class="GtkScrolledWindow">
+                                                <property name="hexpand">true</property>
+                                                <property name="overlay-scrolling">false</property>
+                                                <property name="vexpand">true</property>
+                                                <child>
+                                                    <object class="GtkGridView" id="list_packages"/>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                                <child>
+
+                                <object class="GtkRevealer" id="detail_revealer">
+                                    <property name="reveal-child">false</property>
+                                    <property name="transition-type">slide-left</property>
+                                    <property name="hexpand">false</property>
+                                    <property name="halign">end</property>
+                                </object>
+
+                                </child>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+                <child type="overlay">
+                    <object class="GtkBox" id="loading_overlay">
+                        <property name="visible">false</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">10</property>
+                        <child>
+                            <object class="GtkSpinner" id="loading_spinner">
+                                <property name="spinning">true</property>
+                                <property name="width-request">32</property>
+                                <property name="height-request">32</property>
+                                <property name="halign">center</property>
+                                <property name="valign">center</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkLabel" id="error_label">
+                                <property name="visible">false</property>
+                                <property name="label" translatable="yes">Had an issue loading your packages. Check if you have a db lock.</property>
+                                <property name="wrap">true</property>
+                                <property name="justify">center</property>
+                                <property name="max-width-chars">40</property>
+                                <style>
+                                    <class name="error"/>
+                                </style>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+            </object>
+        </child>
+    </template>
+
+    <object class="GtkPopover" id="options_popover">
+        <property name="child">
+            <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">8</property>
+                <property name="margin-top">8</property>
+                <property name="margin-bottom">8</property>
+                <property name="margin-start">12</property>
+                <property name="margin-end">12</property>
+                <child>
+                    <object class="GtkCheckButton" id="upgrade_check">
+                        <property name="label" translatable="yes">Perform Upgrade</property>
+                        <property name="tooltip-text" translatable="yes">Perform a full system upgrade with install (-u)</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="show_hidden_check">
+                        <property name="label" translatable="yes">Show Hidden</property>
+                        <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
+                        <property name="active">false</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="show_explicit_only">
+                        <property name="label" translatable="yes">Show Explicit Only</property>
+                        <property name="tooltip-text" translatable="yes">Show only explicitly installed packages</property>
+                        <signal name="toggled" handler="on_explicit_only"/>
+                        <property name="active">false</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="show_detail_pane">
+                        <property name="label" translatable="yes">Hide Detail Pane</property>
+                        <property name="tooltip-text" translatable="yes">Hide Detail Pane</property>
+                        <signal name="toggled" handler="on_detail_pane"/>
+                        <property name="active">false</property>
+                    </object>
+                </child>
+            </object>
+        </property>
+    </object>
+
+    <object class="GtkPopover" id="cart_popover">
+        <property name="child">
+            <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">8</property>
+                <property name="margin-top">8</property>
+                <property name="margin-bottom">8</property>
+                <property name="margin-start">12</property>
+                <property name="margin-end">12</property>
+                <child>
+                    <object class="GtkLabel">
+                        <property name="label" translatable="yes">Selected Packages</property>
+                        <property name="halign">start</property>
+                        <style>
+                            <class name="title-4"/>
+                        </style>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkBox" id="cart_items_box">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">4</property>
+                    </object>
+                </child>
+            </object>
+        </property>
+    </object>
+</interface>

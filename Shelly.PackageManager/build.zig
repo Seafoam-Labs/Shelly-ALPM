@@ -47,6 +47,12 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
+    const operation_context_mod = b.createModule(.{
+        .root_source_file = b.path("src/shared/operation_context.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     // This creates a module, which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
     // Zig modules are the preferred way of making Zig code available to consumers.
@@ -65,12 +71,15 @@ pub fn build(b: *std.Build) void {
         // Later on we'll use this module as the root module of a test executable
         // which requires us to specify a target.
         .target = target,
+        .optimize = optimize,
         .link_libc = true,
     });
     mod.addImport("alpm_c", alpm_c);
+    mod.addImport("operation_context", operation_context_mod);
     mod.linkSystemLibrary("alpm", .{});
     mod.addImport("flatpak", flatpak_mod);
     mod.linkSystemLibrary("flatpak", .{});
+    mod.linkSystemLibrary("archive", .{});
 
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
@@ -182,6 +191,259 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+
+    // Local package tests are isolated from the package manager's live-system
+    // integration tests and use only temporary configured roots.
+    const local_test_module = b.createModule(.{
+        .root_source_file = b.path("src/local/manager.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    local_test_module.addImport("operation_context", operation_context_mod);
+    local_test_module.linkSystemLibrary("archive", .{});
+    const local_tests = b.addTest(.{ .root_module = local_test_module });
+    const run_local_tests = b.addRunArtifact(local_tests);
+    const local_test_step = b.step("local-test", "Run safe local package tests");
+    local_test_step.dependOn(&run_local_tests.step);
+
+    const operation_tests = b.addTest(.{
+        .name = "operation-test",
+        .root_module = mod,
+        .filters = &.{
+            "operation context emits correlated parent and child events",
+            "operation context supports immediate and deferred question responses",
+            "structured reviews preserve findings and default to rejection without a handler",
+            "cancellation notifies adapters and cancels operations",
+            "subscription identifiers remain stable after removals",
+        },
+    });
+    const run_operation_tests = b.addRunArtifact(operation_tests);
+    const adapter_tests = b.addTest(.{
+        .name = "operation-adapter-test",
+        .root_module = mod,
+        .filters = &.{
+            "backend dispatchers share one operation event stream",
+            "ALPM and AUR questions use the shared response hook",
+        },
+    });
+    const run_adapter_tests = b.addRunArtifact(adapter_tests);
+    const operation_test_step = b.step("operation-test", "Run shared operation context and backend-adapter tests");
+    operation_test_step.dependOn(&run_operation_tests.step);
+    operation_test_step.dependOn(&run_adapter_tests.step);
+
+    const pkgbuild_review_tests = b.addTest(.{
+        .name = "pkgbuild-review-test",
+        .root_module = mod,
+        .filters = &.{
+            "PKGBUILD validation combines post-install and homograph findings",
+            "review digest covers exact local source contents and missing sources fail closed",
+            "fixture checkout cannot invoke fake makepkg before review and integrity gates pass",
+            "embedded whitespace does not bypass homograph analysis",
+            "risky tool in local_source_contents produces finding",
+        },
+    });
+    const run_pkgbuild_review_tests = b.addRunArtifact(pkgbuild_review_tests);
+    const pkgbuild_review_test_step = b.step(
+        "pkgbuild-review-test",
+        "Run fail-closed PKGBUILD analysis and reviewed-input tests",
+    );
+    pkgbuild_review_test_step.dependOn(&run_pkgbuild_review_tests.step);
+
+    const downloader_test_module = b.createModule(.{
+        .root_source_file = b.path("src/shared/downloader.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    downloader_test_module.addImport("operation_context", operation_context_mod);
+    const downloader_tests = b.addTest(.{ .name = "downloader-test", .root_module = downloader_test_module });
+    const run_downloader_tests = b.addRunArtifact(downloader_tests);
+    const downloader_test_step = b.step("downloader-test", "Run safe downloader and cancellation tests");
+    downloader_test_step.dependOn(&run_downloader_tests.step);
+
+    const cache_test_module = b.createModule(.{
+        .root_source_file = b.path("src/alpm/cache_manager.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    cache_test_module.addImport("alpm_c", alpm_c);
+    cache_test_module.addImport("operation_context", operation_context_mod);
+    cache_test_module.linkSystemLibrary("alpm", .{});
+    const cache_tests = b.addTest(.{ .name = "cache-test", .root_module = cache_test_module });
+    const run_cache_tests = b.addRunArtifact(cache_tests);
+    const cache_test_step = b.step("cache-test", "Run safe package-cache tests");
+    cache_test_step.dependOn(&run_cache_tests.step);
+
+    const archive_tests = b.addTest(.{
+        .name = "archive-test",
+        .root_module = mod,
+        .filters = &.{
+            "archive endpoints include Arch and selected CachyOS variants",
+            "archive listing parses package filenames",
+            "local cache lookup returns owned matching candidates",
+            "target resolution accepts exact version-release or filename",
+            "prepare_candidate retains local cache files",
+            "archive installation API delegates through the ALPM manager",
+            "archive downloads honor shared cancellation",
+        },
+    });
+    const run_archive_tests = b.addRunArtifact(archive_tests);
+    const archive_test_step = b.step("archive-test", "Run safe ALPM downgrade archive tests");
+    archive_test_step.dependOn(&run_archive_tests.step);
+
+    const alpm_query_tests = b.addTest(.{
+        .name = "alpm-query-test",
+        .root_module = mod,
+        .filters = &.{
+            "public ALPM query helpers expose typed results",
+            "compare_package_versions uses libalpm ordering",
+            "dependencyName strips constraints",
+            "is_cachyos exposes the detected manager state",
+            "get_required_packages returns NoHandle when the handle is null",
+            "get_required_packages rejects empty package and database names",
+            "get_required_packages returns owned local reverse dependencies",
+            "get_required_packages returns an empty result for an unknown package",
+            "get_required_packages rejects an unknown sync database",
+            "get_required_packages resolves a named sync database",
+            "fetchCallback accepts prepared cache entries and rejects missing artifacts",
+            "parses repositories, servers, siglevel and usage",
+            "hold package mutations rewrite HoldPkg and preserve shelly",
+            "Manager hold APIs mutate HoldPkg while retaining shelly",
+            "dependency query APIs resolve exact, versioned, and virtual remote packages",
+            "install_packages predownloads prepared repository packages before commit",
+            "install_local_packages installs multiple archives in a DB-only transaction",
+            "Manager.init applies configured libalpm options and callback contexts",
+            "ALPM queries honor shared cancellation",
+            "single-server repositories receive a three second setup timeout",
+            "multi-mirror repositories receive a one second setup timeout",
+            "database downloads defer file durability to the batch barrier",
+            "database batch barrier synchronizes its directory",
+            "process-wide address-family default is configurable",
+            "onDownloadEvent does not duplicate progress when a common operation is attached",
+        },
+    });
+    const run_alpm_query_tests = b.addRunArtifact(alpm_query_tests);
+    const alpm_query_test_step = b.step("alpm-query-test", "Run safe ALPM configuration and query API tests");
+    alpm_query_test_step.dependOn(&run_alpm_query_tests.step);
+
+    const required_packages_tests = b.addTest(.{
+        .name = "required-packages-test",
+        .root_module = mod,
+        .filters = &.{"get_required_packages"},
+    });
+    const run_required_packages_tests = b.addRunArtifact(required_packages_tests);
+    const required_packages_test_step = b.step(
+        "required-packages-test",
+        "Run isolated ALPM reverse-dependency query tests",
+    );
+    required_packages_test_step.dependOn(&run_required_packages_tests.step);
+
+    const alpm_sync_tests = b.addTest(.{
+        .name = "alpm-sync-test",
+        .root_module = mod,
+        .filters = &.{
+            "database signature downloads are reserved for required signatures",
+            "Manager.sync downloads the configured database into DBPath/sync",
+            "Manager.sync exposes cancellable logical database downloads during mirror failover",
+        },
+    });
+    const run_alpm_sync_tests = b.addRunArtifact(alpm_sync_tests);
+    const alpm_sync_test_step = b.step("alpm-sync-test", "Run the isolated ALPM database sync test");
+    alpm_sync_test_step.dependOn(&run_alpm_sync_tests.step);
+
+    const restart_tests = b.addTest(.{
+        .name = "restart-test",
+        .root_module = mod,
+        .filters = &.{
+            "restart parsing identifies deleted shared libraries and system services",
+            "restart report detects kernels and records structured service results",
+        },
+    });
+    const run_restart_tests = b.addRunArtifact(restart_tests);
+    const restart_test_step = b.step("restart-test", "Run safe post-upgrade restart detection tests");
+    restart_test_step.dependOn(&run_restart_tests.step);
+
+    const flatpak_tests = b.addTest(.{
+        .name = "flatpak-test",
+        .root_module = mod,
+        .filters = &.{
+            "Flatpak dispatcher forwards typed status and progress",
+            "parseStream parses a full component with description, icons, screenshots, releases, urls and verification",
+            "parseComponent falls back to <developer><name> when developer_name is absent",
+            "streaming parser skips localized payloads and associates addons by id",
+            "parseFile reads gzip-compressed AppStream catalogs",
+            "AppStream manager returns an owned typed catalog",
+            "installed Flatpak resolution matches IDs and friendly names",
+            "Flatpak manager exposes strict-parity operations",
+            "shared cancellation propagates to GLib cancellables",
+            "AppStream manager exposes one and all remote catalog retrieval",
+            "Flatpak remote operations honor shared cancellation",
+            "Flatpak remote operation-hooked public APIs compile",
+            "Flatpak AppStream operations honor shared cancellation",
+            "Flatpak AppStream operation-hooked public APIs compile",
+        },
+    });
+    const run_flatpak_tests = b.addRunArtifact(flatpak_tests);
+    const flatpak_test_step = b.step("flatpak-test", "Run safe Flatpak parity tests");
+    flatpak_test_step.dependOn(&run_flatpak_tests.step);
+
+    const aur_tests = b.addTest(.{
+        .name = "aur-test",
+        .root_module = mod,
+        .filters = &.{
+            "AUR dispatcher forwards package stages and build progress",
+            "AUR dispatcher returns provider selections",
+            "AUR handlers can be removed through the manager-facing dispatcher",
+            "AUR RPC URL and form encoding matches the C# requests",
+            "AUR suggestions are returned as owned strings",
+            "partial info failures preserve packages returned by earlier chunks",
+            "PKGBUILD validation combines post-install and homograph findings",
+            "installed AUR metadata uses local version and install reason",
+            "AUR update projection compares remote and installed versions",
+            "AUR git remote and VCS suffix parsing mirror the C# manager",
+            "helper cache identity recognizes installed split-package members",
+            "all requested PKGBUILDs are reviewed before the first build",
+            "AUR operation-hooked public APIs compile",
+            "build progress parser recognizes makepkg percentage lines",
+            "streaming process execution forwards stdout stderr and a final unterminated line",
+            "streaming process execution delivers output before the child exits",
+            "streaming process execution terminates when the shared operation is cancelled",
+        },
+    });
+    const run_aur_tests = b.addRunArtifact(aur_tests);
+    const aur_test_step = b.step("aur-test", "Run safe AUR manager and event tests");
+    aur_test_step.dependOn(&run_aur_tests.step);
+
+    const appimage_tests = b.addTest(.{
+        .name = "appimage-test",
+        .root_module = mod,
+        .filters = &.{
+            "AppImage dispatcher forwards typed status and download progress",
+            "AppImage classification is case insensitive and extension based",
+            "test isAppImage",
+            "get_update returns optional owned results for configured providers",
+            "get_updates returns an owned update list",
+            "AppImage update manager forwards downloader progress",
+            "AppImage updates honor shared cancellation",
+            "update: returns false when app not found in db",
+            "getAppImagesFromLocalDb maps C# AppImage V2 fields",
+            "getAppImagesFromLocalDb normalizes nullable C# strings",
+            "getAppImagesFromLocalDb maps every C# update type",
+            "getAppImagesFromLocalDb rejects unsupported C# update type",
+            "getAppImagesFromLocalDb migrates C# database and second load is native",
+            "getAppImagesFromLocalDb leaves native database unchanged",
+            "getAppImagesFromLocalDb leaves malformed C# database unchanged",
+            "removeAppImageFromLocalDb removes an orphaned entry by name",
+            "installAppImage preserves an existing install when staged validation fails",
+            "installAppImage atomically replaces a validated AppImage",
+            "installAppImage restores the previous binary when database commit fails",
+        },
+    });
+    const run_appimage_tests = b.addRunArtifact(appimage_tests);
+    const appimage_test_step = b.step("appimage-test", "Run safe AppImage parity tests");
+    appimage_test_step.dependOn(&run_appimage_tests.step);
 
     // Just like flags, top level steps are also listed in the `--help` menu.
     //

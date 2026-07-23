@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="ShellyAurPage" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="spacing">12</property>
+    <property name="margin-top">18</property>
+    <property name="margin-bottom">18</property>
+    <property name="margin-start">18</property>
+    <property name="margin-end">18</property>
+    <child>
+      <object class="GtkLabel" id="status_label">
+        <property name="label">aur — not loaded</property>
+        <property name="xalign">0</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkListBox" id="content_list">
+        <property name="vexpand">true</property>
+      </object>
+    </child>
+  </template>
+</interface>

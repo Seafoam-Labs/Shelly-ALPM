@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="ShellyTransactionPage" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <style>
+       <class name="background"/>
+     </style>
+    <child>
+      <object class="GtkOverlay" id="root_overlay">
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+        <style><class name="lockout-scrim"/></style>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">horizontal</property>
+                <property name="spacing">8</property>
+                <property name="margin-start">16</property>
+                <property name="margin-end">16</property>
+                <property name="margin-top">12</property>
+                <property name="margin-bottom">12</property>
+                <child>
+                  <object class="GtkLabel" id="title_label">
+                    <property name="halign">start</property>
+                    <property name="hexpand">true</property>
+                    <property name="xalign">0</property>
+                    <style><class name="detail-title"/></style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="terminal_toggle">
+                    <property name="icon-name">utilities-terminal-symbolic</property>
+                    <property name="tooltip-text">Toggle output</property>
+                    <signal name="clicked" handler="on_terminal_toggle" swapped="true"/>
+                    <style><class name="flat"/></style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="close_button">
+                    <property name="icon-name">window-close-symbolic</property>
+                    <property name="tooltip-text">Close</property>
+                    <property name="visible">false</property>
+                    <signal name="clicked" handler="on_close" swapped="true"/>
+                    <style><class name="flat"/></style>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkPaned" id="paned">
+                <property name="orientation">vertical</property>
+                <property name="vexpand">true</property>
+                <property name="wide-handle">true</property>
+                <property name="position">400</property>
+                <child>
+                  <object class="GtkScrolledWindow">
+                    <property name="hscrollbar-policy">never</property>
+                    <property name="vexpand">true</property>
+                    <child>
+                      <object class="GtkBox" id="rows_box">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">8</property>
+                        <property name="margin-start">16</property>
+                        <property name="margin-end">16</property>
+                        <property name="margin-top">8</property>
+                        <property name="margin-bottom">8</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkScrolledWindow" id="terminal_scroll">
+                    <property name="vexpand">true</property>
+                    <child>
+                      <object class="GtkTextView" id="terminal_view">
+                        <property name="editable">false</property>
+                        <property name="monospace">true</property>
+                        <property name="cursor-visible">false</property>
+                        <property name="left-margin">8</property>
+                        <property name="right-margin">8</property>
+                        <property name="top-margin">8</property>
+                        <property name="bottom-margin">8</property>
+                        <style><class name="terminal-output"/></style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child type="overlay">
+          <object class="GtkBox" id="question_layer">
+            <property name="visible">false</property>
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <style><class name="question-layer"/></style>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

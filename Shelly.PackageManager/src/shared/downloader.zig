@@ -1,4 +1,15 @@
 const std = @import("std");
+const operations = @import("operation_context");
+pub const HttpClient = @import("http_client.zig");
+
+pub const AddressFamilyPolicy = HttpClient.AddressFamilyPolicy;
+
+pub const FileDurability = enum {
+    /// Synchronize each completed temporary file before its atomic rename.
+    sync_before_rename,
+    /// The caller owns the durability barrier for a batch of atomic renames.
+    caller_managed,
+};
 
 pub const DownloadEventType = enum {
     Start,
@@ -14,9 +25,14 @@ pub const DownloadError = error{
     FileError,
     InvalidUrl,
     Timeout,
+    ConnectTimeout,
+    HeaderTimeout,
     RetryExceeded,
     SslError,
+    CertificateBundleError,
     NotModified,
+    FailedDownload,
+    Cancelled,
 };
 
 pub const SkippedReason = enum {
@@ -34,14 +50,99 @@ pub const DownloadProgress = struct {
 
 pub const DownloadConfiguration = struct {
     user_agent: ?[:0]const u8 = null,
+    /// Bounds DNS, TCP, and TLS request setup.
     timeout_in_seconds: u32 = 30,
+    /// Bounds sending the request and receiving the final response headers,
+    /// including redirects.
+    response_header_timeout_in_seconds: u32 = 30,
+    /// Defaults to IPv4-first Happy Eyeballs without disabling IPv6 fallback.
+    /// `ipv4_only` remains an explicit escape hatch for networks or VPNs that
+    /// advertise but blackhole IPv6.
+    address_family_policy: AddressFamilyPolicy = .prefer_ipv4,
     max_retries: u8 = 3,
     retry_delay_secs: u32 = 1,
     verify_ssl: bool = true,
     parallel_downloads: u8 = 10,
+    file_durability: FileDurability = .sync_before_rename,
 
     pub fn default() DownloadConfiguration {
         return .{ .user_agent = "ShellyPackageManager/2.0" };
+    }
+};
+
+fn initHttpClient(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    connect_timeout_seconds: u32,
+    address_family_policy: AddressFamilyPolicy,
+) HttpClient {
+    return .{
+        .allocator = allocator,
+        .io = io,
+        .connect_timeout = connectTimeout(connect_timeout_seconds),
+        .address_family_policy = address_family_policy,
+    };
+}
+
+/// Owns the HTTP connection pool and certificate bundle shared by all
+/// downloaders participating in one logical batch.
+pub const DownloadSession = struct {
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    http_client: HttpClient,
+
+    pub fn init(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        connect_timeout_seconds: u32,
+        address_family_policy: AddressFamilyPolicy,
+    ) DownloadSession {
+        return .{
+            .allocator = allocator,
+            .io = io,
+            .http_client = initHttpClient(
+                allocator,
+                io,
+                connect_timeout_seconds,
+                address_family_policy,
+            ),
+        };
+    }
+
+    pub fn deinit(self: *DownloadSession) void {
+        self.http_client.deinit();
+        self.* = undefined;
+    }
+
+    /// Returns a lightweight downloader borrowing this session. The session
+    /// must outlive the downloader and every request made through it.
+    pub fn downloader(self: *DownloadSession, config: DownloadConfiguration) CoreDownloader {
+        std.debug.assert(config.address_family_policy == self.http_client.address_family_policy);
+        return CoreDownloader.initWithSharedHttpClient(
+            self.allocator,
+            self.io,
+            config,
+            &self.http_client,
+        );
+    }
+};
+
+const HttpClientStorage = union(enum) {
+    owned: HttpClient,
+    shared: *HttpClient,
+
+    fn get(self: *HttpClientStorage) *HttpClient {
+        return switch (self.*) {
+            .owned => |*client| client,
+            .shared => |client| client,
+        };
+    }
+
+    fn deinit(self: *HttpClientStorage) void {
+        switch (self.*) {
+            .owned => |*client| client.deinit(),
+            .shared => {},
+        }
     }
 };
 
@@ -67,11 +168,15 @@ pub const CoreDownloader = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
     configuration: DownloadConfiguration,
-    http_client: std.http.Client,
+    http_client: HttpClientStorage,
     event_callback: ?DownloadEventCallback = null,
     event_context: ?*anyopaque = null,
-    /// When true, error-level logging is suppressed for best-effort downloads
-    /// (e.g. optional database signatures that may legitimately be absent).
+    operation_context: ?*operations.OperationContext = null,
+    parent_operation: ?*const operations.Operation = null,
+    active_operation: ?*operations.Operation = null,
+    /// When true, candidate failures and per-attempt operation lifecycle events
+    /// are suppressed. Progress may still flow to a logical parent download.
+    /// Used for mirrors that can fail over and optional signatures.
     quiet: bool = false,
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io, config: DownloadConfiguration) CoreDownloader {
@@ -79,7 +184,26 @@ pub const CoreDownloader = struct {
             .allocator = allocator,
             .io = io,
             .configuration = config,
-            .http_client = .{ .allocator = allocator, .io = io },
+            .http_client = .{ .owned = initHttpClient(
+                allocator,
+                io,
+                config.timeout_in_seconds,
+                config.address_family_policy,
+            ) },
+        };
+    }
+
+    fn initWithSharedHttpClient(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        config: DownloadConfiguration,
+        http_client: *HttpClient,
+    ) CoreDownloader {
+        return .{
+            .allocator = allocator,
+            .io = io,
+            .configuration = config,
+            .http_client = .{ .shared = http_client },
         };
     }
 
@@ -88,8 +212,41 @@ pub const CoreDownloader = struct {
         self.event_context = context;
     }
 
+    /// The context and optional parent operation are borrowed. They must remain
+    /// valid until the current synchronous download call returns.
+    pub fn setOperationContext(self: *CoreDownloader, context: ?*operations.OperationContext) void {
+        self.operation_context = context;
+    }
+
+    pub fn setParentOperation(self: *CoreDownloader, parent: ?*const operations.Operation) void {
+        self.parent_operation = parent;
+        if (parent) |operation| self.operation_context = operation.context;
+    }
+
     pub fn deinit(self: *CoreDownloader) void {
         self.http_client.deinit();
+    }
+
+    fn httpClient(self: *CoreDownloader) *HttpClient {
+        return self.http_client.get();
+    }
+
+    fn resetHttpClient(self: *CoreDownloader) void {
+        switch (self.http_client) {
+            .owned => |*client| {
+                client.deinit();
+                client.* = initHttpClient(
+                    self.allocator,
+                    self.io,
+                    self.configuration.timeout_in_seconds,
+                    self.configuration.address_family_policy,
+                );
+            },
+            // A shared client cannot be torn down while sibling downloads are
+            // active. The failed TLS request has already discarded its own
+            // connection, so its retry opens a fresh connection in the session.
+            .shared => {},
+        }
     }
 
     pub fn downloadToFile(
@@ -98,8 +255,48 @@ pub const CoreDownloader = struct {
         destination_path: []const u8,
         force: bool,
     ) DownloadResult {
+        var operation_storage: operations.Operation = undefined;
+        const has_operation = if (self.quiet) false else if (self.parent_operation) |parent| blk: {
+            operation_storage = parent.child(.{
+                .backend = .download,
+                .kind = .download,
+                .subject = destination_path,
+            });
+            break :blk true;
+        } else if (self.operation_context) |context| blk: {
+            operation_storage = context.begin(.{
+                .backend = .download,
+                .kind = .download,
+                .subject = destination_path,
+            });
+            break :blk true;
+        } else false;
+
+        const previous_operation = self.active_operation;
+        if (has_operation) self.active_operation = &operation_storage;
+        defer self.active_operation = previous_operation;
+
+        const result = self.downloadToFileImpl(url, destination_path, force);
+        if (has_operation) switch (result) {
+            .succes, .skipped => operation_storage.finish(.success),
+            .failure => |err| operation_storage.finish(if (err == DownloadError.Cancelled) .cancelled else .failed),
+        };
+        return result;
+    }
+
+    fn downloadToFileImpl(
+        self: *CoreDownloader,
+        url: []const u8,
+        destination_path: []const u8,
+        force: bool,
+    ) DownloadResult {
         var attempt: u8 = 0;
+        var tls_reset_used = false;
         while (true) : (attempt += 1) {
+            if (self.isCancelled()) {
+                self.emitEvent(.{ .event_type = .Error, .download_error = DownloadError.Cancelled, .destination_path = destination_path });
+                return .{ .failure = DownloadError.Cancelled };
+            }
             if (attempt > 0) {
                 self.io.sleep(
                     std.Io.Duration.fromSeconds(@intCast(self.configuration.retry_delay_secs)),
@@ -114,21 +311,32 @@ pub const CoreDownloader = struct {
                     self.emitEvent(.{ .event_type = .Skipped, .destination_path = destination_path });
                     return .{ .skipped = .{ .destination_path = destination_path, .reason = .NotModified } };
                 }
-                const can_retry = isRetryable(err) and attempt < self.configuration.max_retries;
-                if (!can_retry) {
-                    const final_err = if (isRetryable(err)) DownloadError.RetryExceeded else err;
-                    self.emitEvent(.{
-                        .event_type = .Error,
-                        .download_error = final_err,
-                        .destination_path = destination_path,
-                    });
-                    return .{ .failure = final_err };
+                switch (retryAction(err, attempt, self.configuration.max_retries, tls_reset_used)) {
+                    .retry => {},
+                    .reset_tls_and_retry => {
+                        // Recreate the client once so the next attempt gets a fresh
+                        // connection pool, CA bundle, and cached realtime value.
+                        tls_reset_used = true;
+                        self.resetHttpClient();
+                    },
+                    .stop => {
+                        // Preserve the final phase-specific error so callers
+                        // can distinguish setup, header, and body stalls.
+                        const final_err = err;
+                        self.emitEvent(.{
+                            .event_type = .Error,
+                            .download_error = final_err,
+                            .destination_path = destination_path,
+                        });
+                        return .{ .failure = final_err };
+                    },
                 }
             }
         }
     }
 
     fn performDownload(self: *CoreDownloader, url: []const u8, destination_path: []const u8, force: bool) DownloadError!void {
+        if (self.isCancelled()) return DownloadError.Cancelled;
         const uri = std.Uri.parse(url) catch return DownloadError.InvalidUrl;
 
         var ims_buf: [64]u8 = undefined;
@@ -143,15 +351,18 @@ pub const CoreDownloader = struct {
             } else |_| {}
         }
 
-        const user_agent: std.http.Client.Request.Headers.Value = if (self.configuration.user_agent) |agent|
+        const user_agent: HttpClient.Request.Headers.Value = if (self.configuration.user_agent) |agent|
             .{ .override = agent }
         else
             .default;
-        var req = self.http_client.request(.GET, uri, .{
-            .headers = .{ .user_agent = user_agent, .accept_encoding = .{ .override = "identity" } },
-            .extra_headers = extra_headers,
-            .redirect_behavior = .init(10),
-        }) catch |err| {
+        var req = requestWithSetupTimeout(
+            self.httpClient(),
+            self.io,
+            .GET,
+            uri,
+            downloadRequestOptions(user_agent, extra_headers),
+            connectTimeout(self.configuration.timeout_in_seconds),
+        ) catch |err| {
             self.logErr("HTTP request setup failed for {s}: {}", .{ url, err });
             return mapRequestError(err);
         };
@@ -160,15 +371,20 @@ pub const CoreDownloader = struct {
         req.accept_encoding[@intFromEnum(std.http.ContentEncoding.gzip)] = false;
         req.accept_encoding[@intFromEnum(std.http.ContentEncoding.deflate)] = false;
 
-        req.sendBodiless() catch |err| {
-            self.logErr("Failed to send request for {s}: {}", .{ url, err });
-            return DownloadError.NetworkError;
-        };
-
         var redirect_buffer: [8 * 1024]u8 = undefined;
-        var response = req.receiveHead(&redirect_buffer) catch |err| {
-            self.logErr("Failed to receive response head for {s}: {}", .{ url, err });
-            return mapReceiveHeadError(err);
+        var response = sendAndReceiveHeadWithTimeout(
+            &req,
+            self.io,
+            &redirect_buffer,
+            timeoutFromSeconds(self.configuration.response_header_timeout_in_seconds),
+        ) catch |err| {
+            const mapped = mapHeaderExchangeError(err);
+            if (mapped == DownloadError.HeaderTimeout) {
+                self.logErr("Timed out waiting for response headers from {s}", .{url});
+            } else {
+                self.logErr("Failed to receive response head for {s}: {}", .{ url, err });
+            }
+            return mapped;
         };
 
         const status = response.head.status;
@@ -198,11 +414,19 @@ pub const CoreDownloader = struct {
             },
         });
 
-        var file = std.Io.Dir.cwd().createFile(self.io, destination_path, .{}) catch |err| {
-            self.logErr("Failed to create file {s}: {}", .{ destination_path, err });
+        const part_path = makePartPath(self.allocator, self.io, destination_path) catch return DownloadError.FileError;
+        defer self.allocator.free(part_path);
+        var part_exists = false;
+        var file = std.Io.Dir.cwd().createFile(self.io, part_path, .{ .exclusive = true }) catch |err| {
+            self.logErr("Failed to create temporary file {s}: {}", .{ part_path, err });
             return DownloadError.FileError;
         };
-        defer file.close(self.io);
+        part_exists = true;
+        var file_open = true;
+        defer {
+            if (file_open) file.close(self.io);
+            if (part_exists) std.Io.Dir.cwd().deleteFile(self.io, part_path) catch {};
+        }
 
         const copy_buffer = self.allocator.alloc(u8, copy_buffer_size) catch return DownloadError.FileError;
         defer self.allocator.free(copy_buffer);
@@ -216,7 +440,8 @@ pub const CoreDownloader = struct {
         var last_reported: u64 = 0;
 
         while (true) {
-            const n = body_reader.readSliceShort(copy_buffer) catch {
+            if (self.isCancelled()) return DownloadError.Cancelled;
+            const n = readBody(body_reader, copy_buffer) catch {
                 self.logErr("Read failed while downloading {s}: {?}", .{ url, response.bodyErr() });
                 return DownloadError.NetworkError;
             };
@@ -237,6 +462,30 @@ pub const CoreDownloader = struct {
                 });
             }
         }
+
+        if (total) |expected| {
+            if (downloaded != expected) {
+                self.logErr(
+                    "Content-Length mismatch for {s}: expected {d} bytes, received {d}",
+                    .{ url, expected, downloaded },
+                );
+                return DownloadError.NetworkError;
+            }
+        }
+
+        if (self.configuration.file_durability == .sync_before_rename) {
+            file.sync(self.io) catch |err| {
+                self.logErr("Failed to sync temporary file {s}: {}", .{ part_path, err });
+                return DownloadError.FileError;
+            };
+        }
+        file.close(self.io);
+        file_open = false;
+        std.Io.Dir.cwd().rename(part_path, std.Io.Dir.cwd(), destination_path, self.io) catch |err| {
+            self.logErr("Failed to replace {s} with completed download: {}", .{ destination_path, err });
+            return DownloadError.FileError;
+        };
+        part_exists = false;
 
         self.emitEvent(.{
             .event_type = .Complete,
@@ -281,7 +530,38 @@ pub const CoreDownloader = struct {
     }
 
     fn emitEvent(self: *const CoreDownloader, event: DownloadEvent) void {
+        if (self.quiet and event.event_type == .Error) return;
         if (self.event_callback) |callback| callback(self.event_context, event);
+        const operation = self.active_operation orelse
+            (if (event.event_type == .Progress) self.parent_operation else null) orelse return;
+        switch (event.event_type) {
+            .Start => operation.status(.information, "Download started", "download.start", null),
+            .Progress => if (event.progress) |progress| operation.progress(.{
+                .stage = "download",
+                .completed = progress.bytes_downloaded,
+                .total = progress.bytes_total,
+                .percentage = @floatFromInt(progress.percent),
+                .bytes_completed = progress.bytes_downloaded,
+                .bytes_total = progress.bytes_total,
+                .bytes_per_second = progress.speed_bytes_per_sec,
+            }),
+            .Complete => operation.status(.success, "Download completed", "download.complete", null),
+            .Error => if (event.download_error) |download_error| operation.reportError(
+                download_error,
+                @errorName(download_error),
+                "download",
+                null,
+                false,
+            ),
+            .Skipped => operation.status(.information, "Download skipped", "download.skipped", null),
+        }
+    }
+
+    fn isCancelled(self: *const CoreDownloader) bool {
+        if (self.active_operation) |operation| return operation.isCancelled();
+        if (self.parent_operation) |operation| return operation.isCancelled();
+        if (self.operation_context) |context| return context.isCancelled();
+        return false;
     }
 
     /// Logs at error level unless `quiet` is set, used so best-effort downloads
@@ -290,6 +570,163 @@ pub const CoreDownloader = struct {
         if (!self.quiet) std.log.err(fmt, args);
     }
 };
+
+const RequestSetupRace = union(enum) {
+    request: HttpClient.RequestError!HttpClient.Request,
+    timeout: std.Io.Cancelable!void,
+};
+
+const HeaderExchangeError = HttpClient.Request.ReceiveHeadError || error{HeaderTimeout};
+
+const HeaderExchangeRace = union(enum) {
+    response: HttpClient.Request.ReceiveHeadError!HttpClient.Response,
+    timeout: std.Io.Cancelable!void,
+};
+
+fn sendAndReceiveHeadWithTimeout(
+    req: *HttpClient.Request,
+    io: std.Io,
+    redirect_buffer: []u8,
+    timeout: std.Io.Timeout,
+) HeaderExchangeError!HttpClient.Response {
+    if (timeout == .none) return sendAndReceiveHead(req, redirect_buffer);
+
+    var result_buffer: [2]HeaderExchangeRace = undefined;
+    var select = std.Io.Select(HeaderExchangeRace).init(io, &result_buffer);
+    var interrupt_on_cleanup = false;
+    // A timeout branch may sleep for seconds. Require real concurrency so a
+    // saturated async pool cannot run it inline ahead of a ready response.
+    select.concurrent(.response, sendAndReceiveHead, .{ req, redirect_buffer }) catch
+        return error.Unexpected;
+    defer {
+        if (interrupt_on_cleanup) req.interrupt();
+        while (select.cancel()) |_| {}
+        if (interrupt_on_cleanup) req.markConnectionClosing();
+    }
+    select.concurrent(.timeout, waitForRequestSetupTimeout, .{ io, timeout }) catch {
+        interrupt_on_cleanup = true;
+        return error.Unexpected;
+    };
+
+    return switch (try select.await()) {
+        .response => |result| result,
+        .timeout => |result| {
+            try result;
+            interrupt_on_cleanup = true;
+            return error.HeaderTimeout;
+        },
+    };
+}
+
+fn sendAndReceiveHead(
+    req: *HttpClient.Request,
+    redirect_buffer: []u8,
+) HttpClient.Request.ReceiveHeadError!HttpClient.Response {
+    try req.sendBodiless();
+    return req.receiveHead(redirect_buffer);
+}
+
+fn readBody(reader: *std.Io.Reader, buffer: []u8) std.Io.Reader.ShortError!usize {
+    var vectors: [1][]u8 = .{buffer};
+    while (true) {
+        const read = reader.readVec(&vectors) catch |err| switch (err) {
+            error.EndOfStream => return 0,
+            error.ReadFailed => return error.ReadFailed,
+        };
+        // Reader.readVec documents that zero does not indicate EOF. HTTP
+        // framing can make an internal state transition without yielding body
+        // bytes, so keep reading until data or EndOfStream is observed.
+        if (read != 0) return read;
+    }
+}
+
+/// Bounds DNS, TCP, and TLS initialization together. The response body is not
+/// part of this deadline, so a mirror that successfully starts responding can
+/// finish at normal transfer speed.
+fn requestWithSetupTimeout(
+    client: *HttpClient,
+    io: std.Io,
+    method: std.http.Method,
+    uri: std.Uri,
+    options: HttpClient.RequestOptions,
+    timeout: std.Io.Timeout,
+) HttpClient.RequestError!HttpClient.Request {
+    if (timeout == .none) return client.request(method, uri, options);
+
+    var result_buffer: [2]RequestSetupRace = undefined;
+    var select = std.Io.Select(RequestSetupRace).init(io, &result_buffer);
+    // Both sides must run beside the caller; `async` is allowed to run either
+    // branch inline when its worker pool is saturated.
+    select.concurrent(.request, beginRequest, .{ client, method, uri, options }) catch
+        return error.Unexpected;
+    defer while (select.cancel()) |remaining| closeRequestSetupRace(remaining);
+    select.concurrent(.timeout, waitForRequestSetupTimeout, .{ io, timeout }) catch
+        return error.Unexpected;
+
+    return switch (try select.await()) {
+        .request => |result| result,
+        .timeout => |result| {
+            try result;
+            return error.Timeout;
+        },
+    };
+}
+
+fn beginRequest(
+    client: *HttpClient,
+    method: std.http.Method,
+    uri: std.Uri,
+    options: HttpClient.RequestOptions,
+) HttpClient.RequestError!HttpClient.Request {
+    return client.request(method, uri, options);
+}
+
+fn waitForRequestSetupTimeout(io: std.Io, timeout: std.Io.Timeout) std.Io.Cancelable!void {
+    return timeout.sleep(io);
+}
+
+fn closeRequestSetupRace(completed: RequestSetupRace) void {
+    switch (completed) {
+        .request => |result| if (result) |request| {
+            var loser = request;
+            loser.deinit();
+        } else |_| {},
+        .timeout => {},
+    }
+}
+
+fn timeoutFromSeconds(seconds: u32) std.Io.Timeout {
+    if (seconds == 0) return .none;
+    return .{ .duration = .{
+        .clock = .awake,
+        .raw = .fromSeconds(seconds),
+    } };
+}
+
+fn connectTimeout(seconds: u32) std.Io.Timeout {
+    return timeoutFromSeconds(seconds);
+}
+
+fn makePartPath(allocator: std.mem.Allocator, io: std.Io, destination_path: []const u8) ![]u8 {
+    var random_bytes: [8]u8 = undefined;
+    io.random(&random_bytes);
+    const nonce = std.mem.readInt(u64, &random_bytes, .little);
+    return std.fmt.allocPrint(allocator, "{s}.part.{x}", .{ destination_path, nonce });
+}
+
+fn downloadRequestOptions(
+    user_agent: HttpClient.Request.Headers.Value,
+    extra_headers: []const std.http.Header,
+) HttpClient.RequestOptions {
+    return .{
+        .headers = .{ .user_agent = user_agent, .accept_encoding = .{ .override = "identity" } },
+        .extra_headers = extra_headers,
+        .redirect_behavior = .init(10),
+        // The HTTP client normalizes bodyless responses such as 304 before
+        // cleanup, allowing successful connections to return to the pool.
+        .keep_alive = true,
+    };
+}
 
 fn makeProgress(downloaded: u64, total: ?u64, speed: ?u64) DownloadProgress {
     const percent: u8 = if (total) |t|
@@ -333,20 +770,40 @@ fn formatHttpDate(buf: []u8, mtime_ns: i128) ?[]const u8 {
 
 fn isRetryable(err: DownloadError) bool {
     return switch (err) {
-        error.NetworkError, error.Timeout => true,
+        error.NetworkError,
+        error.Timeout,
+        error.ConnectTimeout,
+        error.HeaderTimeout,
+        => true,
         else => false,
     };
 }
 
-fn mapRequestError(err: std.http.Client.RequestError) DownloadError {
+const RetryAction = enum {
+    stop,
+    retry,
+    reset_tls_and_retry,
+};
+
+fn retryAction(err: DownloadError, attempt: u8, max_retries: u8, tls_reset_used: bool) RetryAction {
+    if (attempt >= max_retries) return .stop;
+    if (err == DownloadError.SslError and !tls_reset_used) return .reset_tls_and_retry;
+    if (isRetryable(err)) return .retry;
+    return .stop;
+}
+
+fn mapRequestError(err: HttpClient.RequestError) DownloadError {
     return switch (err) {
         error.UnsupportedUriScheme, error.UriMissingHost => DownloadError.InvalidUrl,
-        error.TlsInitializationFailed, error.CertificateBundleLoadFailure => DownloadError.SslError,
+        error.Canceled => DownloadError.Cancelled,
+        error.Timeout => DownloadError.ConnectTimeout,
+        error.TlsInitializationFailed => DownloadError.SslError,
+        error.CertificateBundleLoadFailure => DownloadError.CertificateBundleError,
         else => DownloadError.NetworkError,
     };
 }
 
-fn mapReceiveHeadError(err: std.http.Client.Request.ReceiveHeadError) DownloadError {
+fn mapReceiveHeadError(err: HttpClient.Request.ReceiveHeadError) DownloadError {
     return switch (err) {
         error.TooManyHttpRedirects,
         error.RedirectRequiresResend,
@@ -360,8 +817,17 @@ fn mapReceiveHeadError(err: std.http.Client.Request.ReceiveHeadError) DownloadEr
         error.HttpChunkTruncated,
         => DownloadError.HttpError,
         error.UnsupportedUriScheme => DownloadError.InvalidUrl,
-        error.TlsInitializationFailed, error.CertificateBundleLoadFailure => DownloadError.SslError,
+        error.Canceled => DownloadError.Cancelled,
+        error.TlsInitializationFailed => DownloadError.SslError,
+        error.CertificateBundleLoadFailure => DownloadError.CertificateBundleError,
         else => DownloadError.NetworkError,
+    };
+}
+
+fn mapHeaderExchangeError(err: HeaderExchangeError) DownloadError {
+    return switch (err) {
+        error.HeaderTimeout => DownloadError.HeaderTimeout,
+        else => mapReceiveHeadError(@errorCast(err)),
     };
 }
 
@@ -370,10 +836,57 @@ test "DownloadConfiguration.default() returns correct default values" {
     const config = DownloadConfiguration.default();
     try std.testing.expectEqualStrings("ShellyPackageManager/2.0", config.user_agent.?);
     try std.testing.expectEqual(@as(u32, 30), config.timeout_in_seconds);
+    try std.testing.expectEqual(@as(u32, 30), config.response_header_timeout_in_seconds);
+    try std.testing.expectEqual(AddressFamilyPolicy.prefer_ipv4, config.address_family_policy);
     try std.testing.expectEqual(@as(u8, 3), config.max_retries);
     try std.testing.expectEqual(@as(u32, 1), config.retry_delay_secs);
     try std.testing.expectEqual(true, config.verify_ssl);
     try std.testing.expectEqual(@as(u8, 10), config.parallel_downloads);
+    try std.testing.expectEqual(FileDurability.sync_before_rename, config.file_durability);
+}
+
+test "connect timeout uses the configured duration" {
+    const timeout = connectTimeout(30);
+    switch (timeout) {
+        .duration => |duration| {
+            try std.testing.expectEqual(std.Io.Clock.awake, duration.clock);
+            try std.testing.expectEqual(std.Io.Duration.fromSeconds(30), duration.raw);
+        },
+        else => return error.TestExpectedDuration,
+    }
+    try std.testing.expect(connectTimeout(0) == .none);
+}
+
+test "address-family policy is forwarded to the HTTP client" {
+    var downloader = CoreDownloader.init(std.testing.allocator, std.testing.io, .{
+        .address_family_policy = .ipv4_only,
+    });
+    defer downloader.deinit();
+
+    try std.testing.expectEqual(AddressFamilyPolicy.ipv4_only, downloader.httpClient().address_family_policy);
+}
+
+test "download requests participate in connection reuse" {
+    const options = downloadRequestOptions(.default, &.{});
+    try std.testing.expect(options.keep_alive);
+}
+
+test "download session lends one HTTP client without transferring ownership" {
+    var session = DownloadSession.init(
+        std.testing.allocator,
+        std.testing.io,
+        3,
+        .prefer_ipv4,
+    );
+    defer session.deinit();
+
+    var first = session.downloader(.{});
+    defer first.deinit();
+    var second = session.downloader(.{});
+    defer second.deinit();
+
+    try std.testing.expect(first.httpClient() == second.httpClient());
+    try std.testing.expect(first.httpClient() == &session.http_client);
 }
 
 test "makeProgress calculates progress correctly with total size" {
@@ -401,6 +914,8 @@ test "makeProgress calculates progress correctly without total size" {
 test "isRetryable returns true for NetworkError and Timeout" {
     try std.testing.expect(isRetryable(DownloadError.NetworkError));
     try std.testing.expect(isRetryable(DownloadError.Timeout));
+    try std.testing.expect(isRetryable(DownloadError.ConnectTimeout));
+    try std.testing.expect(isRetryable(DownloadError.HeaderTimeout));
 }
 
 test "isRetryable returns false for other errors" {
@@ -409,6 +924,26 @@ test "isRetryable returns false for other errors" {
     try std.testing.expect(!isRetryable(DownloadError.InvalidUrl));
     try std.testing.expect(!isRetryable(DownloadError.RetryExceeded));
     try std.testing.expect(!isRetryable(DownloadError.SslError));
+    try std.testing.expect(!isRetryable(DownloadError.CertificateBundleError));
+}
+
+test "retryAction resets TLS once before stopping" {
+    try std.testing.expectEqual(RetryAction.reset_tls_and_retry, retryAction(DownloadError.SslError, 0, 3, false));
+    try std.testing.expectEqual(RetryAction.stop, retryAction(DownloadError.SslError, 1, 3, true));
+    try std.testing.expectEqual(RetryAction.stop, retryAction(DownloadError.SslError, 0, 0, false));
+}
+
+test "retryAction retries transient errors without resetting TLS" {
+    try std.testing.expectEqual(RetryAction.retry, retryAction(DownloadError.NetworkError, 0, 3, false));
+    try std.testing.expectEqual(RetryAction.retry, retryAction(DownloadError.Timeout, 2, 3, false));
+    try std.testing.expectEqual(RetryAction.stop, retryAction(DownloadError.NetworkError, 3, 3, false));
+}
+
+test "retryAction does not retry certificate bundle failures" {
+    try std.testing.expectEqual(
+        RetryAction.stop,
+        retryAction(DownloadError.CertificateBundleError, 0, 3, false),
+    );
 }
 
 test "mapRequestError maps UnsupportedUriScheme and UriMissingHost to InvalidUrl" {
@@ -416,13 +951,18 @@ test "mapRequestError maps UnsupportedUriScheme and UriMissingHost to InvalidUrl
     try std.testing.expectEqual(DownloadError.InvalidUrl, mapRequestError(error.UriMissingHost));
 }
 
-test "mapRequestError maps TLS errors to SslError" {
+test "mapRequestError distinguishes TLS initialization from certificate bundle failures" {
     try std.testing.expectEqual(DownloadError.SslError, mapRequestError(error.TlsInitializationFailed));
-    try std.testing.expectEqual(DownloadError.SslError, mapRequestError(error.CertificateBundleLoadFailure));
+    try std.testing.expectEqual(DownloadError.CertificateBundleError, mapRequestError(error.CertificateBundleLoadFailure));
 }
 
 test "mapRequestError maps other errors to NetworkError" {
     try std.testing.expectEqual(DownloadError.NetworkError, mapRequestError(error.ConnectionRefused));
+}
+
+test "mapRequestError preserves setup timeouts and cancellation" {
+    try std.testing.expectEqual(DownloadError.ConnectTimeout, mapRequestError(error.Timeout));
+    try std.testing.expectEqual(DownloadError.Cancelled, mapRequestError(error.Canceled));
 }
 
 test "mapReceiveHeadError maps redirect and header errors to HttpError" {
@@ -437,13 +977,221 @@ test "mapReceiveHeadError maps UnsupportedUriScheme to InvalidUrl" {
     try std.testing.expectEqual(DownloadError.InvalidUrl, mapReceiveHeadError(error.UnsupportedUriScheme));
 }
 
-test "mapReceiveHeadError maps TLS errors to SslError" {
+test "mapReceiveHeadError distinguishes TLS initialization from certificate bundle failures" {
     try std.testing.expectEqual(DownloadError.SslError, mapReceiveHeadError(error.TlsInitializationFailed));
-    try std.testing.expectEqual(DownloadError.SslError, mapReceiveHeadError(error.CertificateBundleLoadFailure));
+    try std.testing.expectEqual(DownloadError.CertificateBundleError, mapReceiveHeadError(error.CertificateBundleLoadFailure));
 }
 
 test "mapReceiveHeadError maps other errors to NetworkError" {
     try std.testing.expectEqual(DownloadError.NetworkError, mapReceiveHeadError(error.ConnectionRefused));
+}
+
+const TestServerMode = enum {
+    stall_headers,
+    reuse_with_not_modified,
+};
+
+const TestHttpServer = struct {
+    io: std.Io,
+    server: std.Io.net.Server,
+    mode: TestServerMode,
+
+    fn init(io: std.Io, mode: TestServerMode) !TestHttpServer {
+        var address: std.Io.net.IpAddress = .{ .ip4 = .loopback(0) };
+        return .{
+            .io = io,
+            .server = try address.listen(io, .{ .reuse_address = true }),
+            .mode = mode,
+        };
+    }
+
+    fn deinit(self: *TestHttpServer) void {
+        self.server.deinit(self.io);
+    }
+
+    fn url(self: *const TestHttpServer, allocator: std.mem.Allocator) ![]u8 {
+        return std.fmt.allocPrint(
+            allocator,
+            "http://127.0.0.1:{d}/repository.db",
+            .{self.server.socket.address.getPort()},
+        );
+    }
+
+    fn serve(self: *TestHttpServer) !void {
+        var stream = try self.server.accept(self.io);
+        defer stream.close(self.io);
+
+        var write_buffer: [512]u8 = undefined;
+        var stream_writer = stream.writer(self.io, &write_buffer);
+        const writer = &stream_writer.interface;
+
+        switch (self.mode) {
+            .stall_headers => try self.io.sleep(std.Io.Duration.fromSeconds(10), .awake),
+            .reuse_with_not_modified => {
+                var read_buffer: [2048]u8 = undefined;
+                var stream_reader = stream.reader(self.io, &read_buffer);
+                const reader = &stream_reader.interface;
+
+                try consumeTestRequest(reader);
+                try writer.writeAll(
+                    "HTTP/1.1 200 OK\r\n" ++
+                        "Content-Length: 5\r\n" ++
+                        "Connection: keep-alive\r\n\r\n" ++
+                        "first",
+                );
+                try writer.flush();
+
+                try consumeTestRequest(reader);
+                // A 304 may advertise the selected representation's length,
+                // but no body follows the header block.
+                try writer.writeAll(
+                    "HTTP/1.1 304 Not Modified\r\n" ++
+                        "Content-Length: 5\r\n" ++
+                        "Connection: keep-alive\r\n\r\n",
+                );
+                try writer.flush();
+
+                try consumeTestRequest(reader);
+                try writer.writeAll(
+                    "HTTP/1.1 200 OK\r\n" ++
+                        "Content-Length: 5\r\n" ++
+                        "Connection: close\r\n\r\n" ++
+                        "third",
+                );
+                try writer.flush();
+            },
+        }
+    }
+};
+
+fn consumeTestRequest(reader: *std.Io.Reader) !void {
+    while (true) {
+        const line = (try reader.takeDelimiter('\n')) orelse return error.EndOfStream;
+        if (std.mem.eql(u8, line, "\r")) return;
+    }
+}
+
+fn testDestinationPath(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    temporary: *std.testing.TmpDir,
+) ![]u8 {
+    var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const absolute_length = try temporary.dir.realPath(io, &absolute_buffer);
+    return std.fs.path.join(allocator, &.{ absolute_buffer[0..absolute_length], "repository.db" });
+}
+
+fn timeoutTestConfiguration() DownloadConfiguration {
+    return .{
+        .timeout_in_seconds = 2,
+        .response_header_timeout_in_seconds = 1,
+        .max_retries = 0,
+        .retry_delay_secs = 0,
+    };
+}
+
+test "response header timeout interrupts a server that never responds" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var server = try TestHttpServer.init(io, .stall_headers);
+    defer server.deinit();
+    var server_future = try io.concurrent(TestHttpServer.serve, .{&server});
+    defer _ = server_future.cancel(io) catch {};
+
+    const url = try server.url(std.testing.allocator);
+    defer std.testing.allocator.free(url);
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const destination = try testDestinationPath(std.testing.allocator, io, &temporary);
+    defer std.testing.allocator.free(destination);
+
+    var downloader = CoreDownloader.init(std.testing.allocator, io, timeoutTestConfiguration());
+    defer downloader.deinit();
+    downloader.quiet = true;
+    const started = std.Io.Timestamp.now(io, .awake);
+    const result = downloader.downloadToFile(url, destination, true);
+    const elapsed = started.durationTo(std.Io.Timestamp.now(io, .awake));
+
+    switch (result) {
+        .failure => |err| try std.testing.expectEqual(DownloadError.HeaderTimeout, err),
+        else => return error.ExpectedHeaderTimeout,
+    }
+    try std.testing.expect(elapsed.nanoseconds < std.Io.Duration.fromSeconds(3).nanoseconds);
+}
+
+test "shared session reuses one connection across a bodyless 304 response" {
+    // Force `Io.async` to execute inline. Timeout races must use the stronger
+    // concurrent contract so their sleeping branches cannot stall fast I/O.
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{ .async_limit = .nothing });
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var server = try TestHttpServer.init(io, .reuse_with_not_modified);
+    defer server.deinit();
+    var server_future = try io.concurrent(TestHttpServer.serve, .{&server});
+    defer _ = server_future.cancel(io) catch {};
+
+    const url = try server.url(std.testing.allocator);
+    defer std.testing.allocator.free(url);
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const destination = try testDestinationPath(std.testing.allocator, io, &temporary);
+    defer std.testing.allocator.free(destination);
+
+    var session = DownloadSession.init(std.testing.allocator, io, 2, .prefer_ipv4);
+    defer session.deinit();
+    var config = timeoutTestConfiguration();
+    config.file_durability = .caller_managed;
+    const started = std.Io.Timestamp.now(io, .awake);
+
+    var first = session.downloader(config);
+    defer first.deinit();
+    switch (first.downloadToFile(url, destination, true)) {
+        .succes => {},
+        else => return error.ExpectedSuccessfulDownload,
+    }
+
+    var second = session.downloader(config);
+    defer second.deinit();
+    switch (second.downloadToFile(url, destination, false)) {
+        .skipped => |skipped| try std.testing.expectEqual(SkippedReason.NotModified, skipped.reason),
+        else => return error.ExpectedNotModified,
+    }
+
+    var third = session.downloader(config);
+    defer third.deinit();
+    switch (third.downloadToFile(url, destination, true)) {
+        .succes => {},
+        else => return error.ExpectedSuccessfulDownload,
+    }
+    const elapsed = started.durationTo(std.Io.Timestamp.now(io, .awake));
+
+    try server_future.await(io);
+    try std.testing.expect(elapsed.nanoseconds < std.Io.Duration.fromMilliseconds(1500).nanoseconds);
+    const contents = try std.Io.Dir.cwd().readFileAlloc(io, destination, std.testing.allocator, .limited(64));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings("third", contents);
+}
+
+test "quiet mirror candidates suppress error callbacks" {
+    var callback_called = false;
+    var downloader = CoreDownloader.init(std.testing.allocator, std.testing.io, .{});
+    defer downloader.deinit();
+    downloader.quiet = true;
+    downloader.setEventCallback(struct {
+        fn callback(context: ?*anyopaque, _: DownloadEvent) void {
+            const called: *bool = @ptrCast(@alignCast(context.?));
+            called.* = true;
+        }
+    }.callback, &callback_called);
+
+    downloader.emitEvent(.{
+        .event_type = .Error,
+        .download_error = DownloadError.NetworkError,
+    });
+    try std.testing.expect(!callback_called);
 }
 
 test "shouldEmitProgress emits on percentage change when total is known" {
@@ -519,4 +1267,103 @@ test "DownloadResult union variants are correctly defined" {
         },
         else => try std.testing.expect(false),
     }
+}
+
+test "quiet downloader forwards rich progress to its logical parent" {
+    const Capture = struct {
+        progress: ?operations.ProgressEvent = null,
+        statuses: usize = 0,
+        failures: usize = 0,
+
+        fn receive(data: ?*anyopaque, event: operations.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (event) {
+                .progress => |progress| self.progress = progress,
+                .status => self.statuses += 1,
+                .failure => self.failures += 1,
+                else => {},
+            }
+        }
+    };
+
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    var context = operations.OperationContext.init(std.testing.allocator, threaded.io());
+    defer context.deinit();
+    var capture: Capture = .{};
+    _ = try context.subscribe(.{ .function = Capture.receive, .data = &capture });
+    var parent = context.begin(.{ .backend = .download, .kind = .download, .subject = "demo.pkg.tar.zst" });
+    defer parent.finish(.success);
+
+    var downloader = CoreDownloader.init(std.testing.allocator, threaded.io(), .{});
+    defer downloader.deinit();
+    downloader.quiet = true;
+    downloader.setParentOperation(&parent);
+    downloader.emitEvent(.{ .event_type = .Start, .destination_path = "demo.pkg.tar.zst" });
+    downloader.emitEvent(.{
+        .event_type = .Progress,
+        .destination_path = "demo.pkg.tar.zst",
+        .progress = .{
+            .bytes_downloaded = 512,
+            .bytes_total = 1024,
+            .percent = 50,
+            .speed_bytes_per_sec = 256,
+        },
+    });
+    downloader.emitEvent(.{ .event_type = .Complete, .destination_path = "demo.pkg.tar.zst" });
+    downloader.emitEvent(.{ .event_type = .Error, .download_error = DownloadError.NetworkError });
+
+    const progress = capture.progress orelse return error.MissingProgress;
+    try std.testing.expectEqual(operations.Backend.download, progress.envelope.backend);
+    try std.testing.expectEqualStrings("download", progress.update.stage orelse return error.MissingStage);
+    try std.testing.expectEqual(@as(u64, 512), progress.update.bytes_completed.?);
+    try std.testing.expectEqual(@as(u64, 1024), progress.update.bytes_total.?);
+    try std.testing.expectEqual(@as(u64, 256), progress.update.bytes_per_second.?);
+    try std.testing.expectEqual(@as(f64, 50), progress.update.percentage.?);
+    try std.testing.expectEqual(@as(usize, 0), capture.statuses);
+    try std.testing.expectEqual(@as(usize, 0), capture.failures);
+}
+
+test "shared cancellation stops downloads before network access" {
+    const Capture = struct {
+        started: usize = 0,
+        failures: usize = 0,
+        completed: usize = 0,
+        completion: ?operations.CompletionStatus = null,
+
+        fn receive(data: ?*anyopaque, event: operations.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (event) {
+                .started => self.started += 1,
+                .failure => self.failures += 1,
+                .completed => |value| {
+                    self.completed += 1;
+                    self.completion = value.status;
+                },
+                else => {},
+            }
+        }
+    };
+
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    var context = operations.OperationContext.init(std.testing.allocator, threaded.io());
+    defer context.deinit();
+    var capture: Capture = .{};
+    _ = try context.subscribe(.{ .function = Capture.receive, .data = &capture });
+    context.cancel();
+
+    var downloader = CoreDownloader.init(std.testing.allocator, threaded.io(), .{});
+    defer downloader.deinit();
+    downloader.setOperationContext(&context);
+    const result = downloader.downloadToFile("https://example.invalid/package", "/tmp/shelly-cancelled-download", true);
+    switch (result) {
+        .failure => |err| try std.testing.expectEqual(DownloadError.Cancelled, err),
+        else => return error.ExpectedCancelledDownload,
+    }
+
+    try std.testing.expectEqual(@as(usize, 1), capture.started);
+    try std.testing.expectEqual(@as(usize, 1), capture.failures);
+    try std.testing.expectEqual(@as(usize, 1), capture.completed);
+    try std.testing.expectEqual(operations.CompletionStatus.cancelled, capture.completion.?);
 }

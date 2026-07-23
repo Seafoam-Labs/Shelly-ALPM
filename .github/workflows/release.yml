@@ -73,18 +73,22 @@ jobs:
           # Bundle Notifications into the UI directory
           cp build-notify/shelly-notifications publish/shelly-ui/
 
-      - name: Publish Shelly.Keys
+      - name: Install zig
         run: |
-          dotnet publish Shelly.Keys/Shelly.Keys.csproj -c Release -o publish/shelly-keys -p:InstructionSet=x86-64
-          # Bundle Keys into the UI directory so it ends up in Shelly-ALPM-linux-x64.tar.gz
-          cp publish/shelly-keys/shelly-keys publish/shelly-ui/
+          curl -L https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz | tar -xJ
+          sudo mv zig-x86_64-linux-0.16.0 /usr/lib/zig
+          sudo ln -sf /usr/lib/zig/zig /usr/bin/zig
 
-      - name: Package Shelly.Keys standalone
+      - name: Publish Shelly.Key
         run: |
-          cd publish/shelly-keys
-          rm -f *.dbg *.pdb
-          tar -czf ../Shelly-Keys-linux-x64.tar.gz .
-          cd ../..
+          cd Shelly.Key && zig build -p ../publish/shelly-key
+          # Bundle Key into the UI directory so it ends up in Shelly-ALPM-linux-x64.tar.gz
+          cp ../publish/shelly-key/bin/shelly-key ../publish/shelly-ui/
+
+      - name: Package Shelly.Key standalone
+        run: |
+          cd publish/shelly-key/bin
+          tar -czf ../../Shelly-Key-linux-x64.tar.gz .
 
       - name: Bundle Shelly-ALPM
         run: |
@@ -108,7 +112,7 @@ jobs:
           curl -sL "https://github.com/ZoeyErinBauer/Shelly-ALPM/archive/${VERSION}.tar.gz" -o "source-${VERSION}.tar.gz"
           sha256sum "source-${VERSION}.tar.gz" | sed "s/source-${VERSION}.tar.gz/${VERSION}.tar.gz/" > SHA256SUMS.txt
           # Add binary tarballs and completions checksums
-          sha256sum Shelly-ALPM-linux-x64.tar.gz Shelly-CLI-linux-x64.tar.gz Shelly-Keys-linux-x64.tar.gz shelly.fish _shelly >> SHA256SUMS.txt
+          sha256sum Shelly-ALPM-linux-x64.tar.gz Shelly-CLI-linux-x64.tar.gz Shelly-Key-linux-x64.tar.gz shelly.fish _shelly >> SHA256SUMS.txt
           rm "source-${VERSION}.tar.gz"
           cat SHA256SUMS.txt
 
@@ -118,7 +122,7 @@ jobs:
           files: |
             publish/Shelly-ALPM-linux-x64.tar.gz
             publish/Shelly-CLI-linux-x64.tar.gz
-            publish/Shelly-Keys-linux-x64.tar.gz
+            publish/Shelly-Key-linux-x64.tar.gz
             publish/shelly.fish
             publish/_shelly
             publish/SHA256SUMS.txt

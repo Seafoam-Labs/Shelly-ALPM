@@ -1,0 +1,167 @@
+.lockout-scrim {
+  background-color: alpha(black, 0.6);
+}
+
+.lockout-card {
+  background-color: @theme_bg_color;
+  border-radius: 12px;
+}
+
+.package-title {
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+.detail-title {
+  font-size: 1.3em;
+  font-weight: bold;
+}
+
+.detail-section-header {
+  font-size: 1.05em;
+  font-weight: bold;
+}
+
+.spec-row {
+  border-bottom: 1px solid alpha(@theme_fg_color, 0.1);
+}
+
+.spec-value {
+  font-weight: 600;
+}
+
+.pill {
+  background-color: alpha(@theme_fg_color, 0.08);
+  border-radius: 12px;
+  padding: 3px 10px;
+}
+
+.detail-title { font-size: 1.3em; font-weight: bold; }
+.detail-section-header { font-weight: bold; }
+.spec-value { font-weight: 600; }
+
+.nav-rail {
+  padding: 8px 4px;}
+
+.nav-btn {
+  padding: 10px 8px;
+  margin: 2px 4px;
+  border-radius: 8px;
+}
+
+.nav-btn:hover {
+  background-color: alpha(@theme_fg_color, 0.06);
+}
+
+.nav-selected label {
+  font-weight: bold;
+}
+
+.transaction-page {
+  background-color: @window_bg_color;
+}
+
+.trans-header {
+  font-size: 1.05em;
+  font-weight: bold;
+}
+
+.pkg-card {
+  background-color: alpha(@theme_fg_color, 0.04);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.pkg-name {
+  font-size: 1.0em;
+  font-weight: 600;
+}
+
+.pkg-status {
+  font-size: 0.85em;
+  font-weight: 500;
+  color: alpha(@theme_fg_color, 0.6);
+  padding: 4px 12px;
+  border-radius: 6px;
+  background-color: alpha(@theme_fg_color, 0.06);
+}
+
+.pkg-status.status-done {
+  color: @success_color;
+  background-color: alpha(@success_color, 0.1);
+}
+
+.pkg-status.status-failed {
+  color: @error_bg_color;
+  background-color: alpha(@error_bg_color, 0.1);
+}
+
+#question_layer, .question-layer {
+  background-color: alpha(black, 0.5);
+}
+
+.toast-revealer {
+  margin: 8px;
+}
+
+.toast-card {
+  background-color: alpha(@theme_fg_color, 0.92);
+  color: @theme_bg_color;
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow:
+    0 6px 14px alpha(black, 0.20),
+    0 2px 6px alpha(black, 0.18);
+}
+
+.toast-card label {
+  color: @theme_bg_color;
+}
+
+.toast-card button {
+  color: @theme_bg_color;
+}
+
+.toast-card.success {
+  background-color: alpha(@success_color, 0.95);
+}
+
+.toast-card.error {
+  background-color: alpha(@error_color, 0.95);
+}
+
+.toast-card.warning {
+  background-color: alpha(@warning_color, 0.95);
+}
+
+.spec-expander {
+    border-bottom: 1px solid alpha(currentColor, 0.1);
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-left: 0;
+    margin-left: 0;
+}
+
+.spec-expander > box {
+    padding-left: 0;
+    margin-left: 0;
+}
+
+.spec-expander title {
+    padding-left: 0;
+}
+
+.spec-expander label {
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.spec-expander arrow {
+    margin-left: 0;
+    padding-left: 0;
+    min-width: 16px;
+}
+
+.dep-row-static {
+    padding: 6px 8px;
+}

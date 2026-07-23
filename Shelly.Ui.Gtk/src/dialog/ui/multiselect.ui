@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="ShellyMultiSelectDialog" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="halign">center</property>
+    <property name="valign">center</property>
+    <child>
+      <object class="GtkFrame">
+        <property name="width-request">440</property>
+        <style><class name="lockout-card"/></style>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="spacing">12</property>
+            <property name="margin-start">24</property>
+            <property name="margin-end">24</property>
+            <property name="margin-top">24</property>
+            <property name="margin-bottom">24</property>
+
+            <child>
+              <object class="GtkLabel" id="title_label">
+                <property name="halign">start</property>
+                <property name="xalign">0</property>
+                <property name="wrap">true</property>
+                <style><class name="detail-title"/></style>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkScrolledWindow">
+                <property name="hscrollbar-policy">never</property>
+                <property name="vscrollbar-policy">automatic</property>
+                <property name="max-content-height">320</property>
+                <property name="propagate-natural-height">true</property>
+                <property name="vexpand">false</property>
+                <child>
+                  <object class="GtkBox" id="options_box">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">8</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">horizontal</property>
+                <property name="spacing">8</property>
+                <property name="homogeneous">true</property>
+                <property name="margin-top">8</property>
+                <child>
+                  <object class="GtkButton" id="confirm_button">
+                    <property name="label">Confirm</property>
+                    <signal name="clicked" handler="on_confirm" swapped="true"/>
+                    <style><class name="suggested-action"/></style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="cancel_button">
+                    <property name="label">Skip</property>
+                    <signal name="clicked" handler="on_cancel" swapped="true"/>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

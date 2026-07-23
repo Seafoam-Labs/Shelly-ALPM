@@ -1,7 +1,7 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgname=shelly-git
-pkgver=2.4.1.2
+pkgver=3.0.0
 pkgrel=1
 pkgdesc="Shelly: A Modern Arch Package Manager (git version)"
 arch=('x86_64')
@@ -32,62 +32,70 @@ optdepends=(
     'zsh: Zsh shell completions'
     'libstarfish: dependency viewer for arch packages'
 )
-makedepends=('dotnet-sdk-10.0' 'git' 'clang' 'gettext' 'vala' 'meson' 'ninja')
+makedepends=('git' 'zig' 'clang' 'gettext' 'vala' 'meson' 'ninja')
 
 source=("${pkgname}::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=development")
 
 sha256sums=('SKIP')
 
 pkgver() {
-  cd "$srcdir/${pkgname}"
-  git describe --long --tags 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' || \
-    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  cd "${srcdir}/${pkgname}"
+
+  printf '3.0.0+5r%s.g%s' \
+    "$(git rev-list --count HEAD)" \
+    "$(git rev-parse --short=7 HEAD)"
 }
 
 build() {
   cd "$srcdir/${pkgname}"
 
-  dotnet publish Shelly.Cli/Shelly.Cli.csproj -c Release -o out-cli --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
-  dotnet publish Shelly.Gtk/Shelly.Gtk.csproj -c Release -r linux-x64 -o out --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
+  (cd Shelly.Ui.Gtk && zig build \
+    --prefix "${srcdir}/${pkgname}/out" \
+    --cache-dir "${srcdir}/zig-cache" \
+    --global-cache-dir "${srcdir}/zig-global-cache" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSafe)
+
+  (cd Shelly.Cli.Zig && zig build \
+    --prefix "${srcdir}/${pkgname}/out-cli" \
+    --cache-dir "${srcdir}/zig-cache" \
+    --global-cache-dir "${srcdir}/zig-global-cache" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSmall)
+
+  (cd Shelly.Key && zig build \
+    --prefix "${srcdir}/${pkgname}/out-key" \
+    --cache-dir "${srcdir}/zig-cache" \
+    --global-cache-dir "${srcdir}/zig-global-cache" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSmall)
+
   meson setup --prefix=/usr build-notify Shelly.Notifications
   meson compile -C build-notify
-  dotnet publish Shelly.Keys/Shelly.Keys.csproj -c Release -r linux-x64 -o out-keys --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
 
-  # Generate shell completions from the freshly built CLI binary
-  ./out-cli/shelly completions fish > shelly.fish
-  ./out-cli/shelly completions zsh  > _shelly
+  ./out-cli/bin/shelly utility --completions bash > shelly.bash
+  ./out-cli/bin/shelly utility --completions fish > shelly.fish
+  ./out-cli/bin/shelly utility --completions zsh  > _shelly
 
-  # Compile translations
-  for po_file in Shelly.Gtk/po/*.po; do
-    if [ -f "$po_file" ]; then
-      lang=$(basename "$po_file" .po)
-      msgfmt "$po_file" -o "shelly-ui-${lang}.mo"
-    fi
+  for po_file in Shelly.Ui.Gtk/po/*.po; do
+    [ -f "$po_file" ] || continue
+    lang=$(basename "$po_file" .po)
+    msgfmt "$po_file" -o "shelly-ui-${lang}.mo"
   done
 
-  # Compile tray service translations
-    for po_file in Shelly.Notifications/po/*.po; do
-      if [ -f "$po_file" ]; then
-        lang=$(basename "$po_file" .po)
-        msgfmt "$po_file" -o "shelly-notifications-${lang}.mo"
-      fi
-    done
+  for po_file in Shelly.Notifications/po/*.po; do
+    [ -f "$po_file" ] || continue
+    lang=$(basename "$po_file" .po)
+    msgfmt "$po_file" -o "shelly-notifications-${lang}.mo"
+  done
 }
 
 package() {
   cd "$srcdir/${pkgname}"
-
-  # Install Shelly.Gtk binary
-  install -Dm755 out/shelly-ui "$pkgdir/usr/bin/shelly-ui"
-
-  # Install Shelly-Notifications binary
   install -Dm755 build-notify/shelly-notifications "$pkgdir/usr/bin/shelly-notifications"
-
-  # Install Shelly.Cli binary
-  install -Dm755 out-cli/shelly "$pkgdir/usr/bin/shelly"
-
-  # Install Shelly.Keys binary
-  install -Dm755 out-keys/shelly-keys "$pkgdir/usr/bin/shelly-keys"
+  install -Dm755 out/bin/Shelly_Ui_Gtk "$pkgdir/usr/bin/shelly-ui"
+  install -Dm755 out-cli/bin/shelly "$pkgdir/usr/bin/shelly"
+  install -Dm755 out-key/bin/shelly-key "$pkgdir/usr/bin/shelly-key"
 
   # Install desktop entry
   cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/com.shellyorg.shelly.desktop"
@@ -169,10 +177,8 @@ EOF
   install -Dm644 Shelly.Gtk/Assets/shellylogo-tray.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-tray.png"
   install -Dm644 Shelly.Gtk/Assets/shellylogo-update.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-update.png"
 
-  # Install fish shell completions
+  install -Dm644 shelly.bash "$pkgdir/usr/share/bash-completion/completions/shelly"
   install -Dm644 shelly.fish "$pkgdir/usr/share/fish/vendor_completions.d/shelly.fish"
-
-  # Install zsh shell completions
   install -Dm644 _shelly "$pkgdir/usr/share/zsh/site-functions/_shelly"
 
   # Install translations

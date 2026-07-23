@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellyUpdatePage" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <property name="spacing">14</property>
+    <property name="margin-top">20</property>
+    <property name="margin-bottom">20</property>
+    <property name="margin-start">20</property>
+    <property name="margin-end">20</property>
+    <child>
+      <object class="GtkBox">
+        <property name="spacing">12</property>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="hexpand">true</property>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Available Updates</property>
+                <property name="xalign">0</property>
+                <style>
+                  <class name="title-2"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="selected_label">
+                <property name="label" translatable="yes">7 of 7 updates included</property>
+                <property name="xalign">0</property>
+                <style>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="refresh_button">
+            <property name="valign">center</property>
+            <property name="tooltip-text" translatable="yes">Check all enabled sources again</property>
+            <signal name="clicked" handler="refresh_updates" swapped="true"/>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <child>
+                  <object class="GtkImage">
+                    <property name="icon-name">view-refresh-symbolic</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Check Again</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="upgrade_button">
+            <property name="valign">center</property>
+            <property name="tooltip-text" translatable="yes">Upgrade</property>
+            <signal name="clicked" handler="upgrade_button" swapped="true"/>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <child>
+                  <object class="GtkImage">
+                    <property name="icon-name">software-update-available-symbolic</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Upgrade</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox">
+        <property name="spacing">8</property>
+        <child>
+          <object class="GtkToggleButton" id="native_toggle">
+            <property name="label" translatable="yes">System</property>
+            <property name="active">true</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkToggleButton" id="aur_toggle">
+            <property name="label" translatable="yes">AUR</property>
+            <property name="active">true</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkToggleButton" id="flatpak_toggle">
+            <property name="label" translatable="yes">Flatpak</property>
+            <property name="active">true</property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkStack" id="updates_stack">
+        <property name="vexpand">true</property>
+        <property name="transition-type">crossfade</property>
+        <child>
+          <object class="GtkBox" id="loading_page">
+            <property name="orientation">vertical</property>
+            <property name="spacing">12</property>
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <child>
+              <object class="GtkSpinner" id="loading_spinner">
+                <property name="width-request">32</property>
+                <property name="height-request">32</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Checking for updates…</property>
+                <style><class name="dim-label"/></style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkScrolledWindow" id="list_page">
+            <property name="vexpand">true</property>
+            <property name="hscrollbar-policy">never</property>
+            <property name="min-content-height">260</property>
+            <child>
+              <object class="GtkListView" id="content_list">
+                <property name="margin-start">1</property>
+                <property name="margin-end">1</property>
+                <property name="margin-top">1</property>
+                <property name="margin-bottom">8</property>
+                <style><class name="rich-list"/></style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="empty_page">
+            <property name="orientation">vertical</property>
+            <property name="spacing">10</property>
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <child>
+              <object class="GtkImage">
+                <property name="icon-name">emblem-ok-symbolic</property>
+                <property name="pixel-size">48</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Your system is up to date</property>
+                <style><class name="title-3"/></style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="error_page">
+            <property name="orientation">vertical</property>
+            <property name="spacing">10</property>
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <child>
+              <object class="GtkImage">
+                <property name="icon-name">dialog-error-symbolic</property>
+                <property name="pixel-size">48</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="error_label">
+                <property name="label" translatable="yes">Could not check for updates</property>
+                <property name="wrap">true</property>
+                <property name="justify">center</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

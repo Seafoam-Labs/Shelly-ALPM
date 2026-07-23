@@ -82,6 +82,11 @@ This document tracks manual testing procedures for Shelly components that requir
 - [ ] `shelly --help` displays help information
 - [ ] `shelly --version` shows correct version
 - [ ] Command syntax errors show helpful messages
+- [ ] Running `shelly` with no arguments still displays and confirms the combined upgrade plan
+- [ ] `shelly firefox` searches standard repositories and the AUR, while recognized commands and shortcodes retain their normal behavior
+- [ ] Bare-value results count down toward `1`, with the closest match displayed last as `1` and selected by Enter
+- [ ] Entering `0` cancels SearchInstall without starting a transaction
+- [ ] Selecting a standard or AUR result enters the corresponding normal install workflow
 
 ### Package Operations
 - [ ] `shelly search <package>` returns results

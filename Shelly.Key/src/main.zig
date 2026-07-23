@@ -3,69 +3,208 @@ const Io = std.Io;
 
 const Shelly_Key = @import("Shelly_Key");
 
-pub fn main(init: std.process.Init) !void {
-    // Prints to stderr, unbuffered, ignoring potential errors.
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+fn run(init: std.process.Init) !void {
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
 
-    // This is appropriate for anything that lives as long as the process.
-    const arena: std.mem.Allocator = init.arena.allocator();
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout_file_writer: Io.File.Writer = .init(.stdout(), init.io, &stdout_buffer);
+    const stdout = &stdout_file_writer.interface;
+    defer stdout.flush() catch {};
 
-    // Accessing command line arguments:
-    const args = try init.minimal.args.toSlice(arena);
-    for (args) |arg| {
-        std.log.info("arg: {s}", .{arg});
+    const opts = try Shelly_Key.cli.parse(init.arena.allocator(), args);
+
+    switch (opts.command) {
+        .help => try Shelly_Key.cli.printHelp(stdout),
+        .init => try Shelly_Key.keyring.init(
+            init.io,
+            init.arena.allocator(),
+            args,
+            init.environ_map.get("PATH").?,
+            opts.init_path,
+            stdout,
+        ),
+        .updatedb => Shelly_Key.keyring.updatedb(
+            init.io,
+            init.arena.allocator(),
+            args,
+            init.environ_map.get("PATH").?,
+            opts.gpgdir,
+            stdout,
+        ) catch |err| switch (err) {
+            error.GpgFailed => {
+                stderrPrint(init.io, "error: failed to update trust database.", .{});
+                std.process.exit(1);
+            },
+            else => return err,
+        },
+        .list_keys => Shelly_Key.keyring.listKeys(
+            init.io,
+            opts.gpgdir,
+            opts.key_ids,
+        ) catch |err| switch (err) {
+            error.GpgFailed => {
+                stderrPrint(init.io, "error: gpg command failed.", .{});
+                std.process.exit(1);
+            },
+            else => return err,
+        },
+        .finger => Shelly_Key.keyring.finger(
+            init.io,
+            opts.gpgdir,
+            opts.key_ids,
+        ) catch |err| switch (err) {
+            error.GpgFailed => {
+                stderrPrint(init.io, "error: gpg command failed.", .{});
+                std.process.exit(1);
+            },
+            else => return err,
+        },
+        .list_sigs => Shelly_Key.keyring.listSigs(
+            init.io,
+            opts.gpgdir,
+            opts.key_ids,
+        ) catch |err| switch (err) {
+            error.GpgFailed => {
+                stderrPrint(init.io, "error: gpg command failed.", .{});
+                std.process.exit(1);
+            },
+            else => return err,
+        },
+        .export_keys => Shelly_Key.keyring.exportKeys(
+            init.io,
+            init.arena.allocator(),
+            opts.gpgdir,
+            opts.key_ids,
+        ) catch |err| switch (err) {
+            error.GpgFailed => {
+                stderrPrint(init.io, "error: gpg command failed.", .{});
+                std.process.exit(1);
+            },
+            else => return err,
+        },
+        .lsign_key => Shelly_Key.keyring.lsignKey(
+            init.io,
+            init.arena.allocator(),
+            args,
+            init.environ_map.get("PATH").?,
+            opts.gpgdir,
+            opts.key_ids,
+            stdout,
+        ) catch |err| switch (err) {
+            error.NoTargetsSpecified => {
+                stderrPrint(init.io, "error: no targets specified.", .{});
+                std.process.exit(1);
+            },
+            error.NoSecretKey => {
+                stderrPrint(init.io, "error: There is no secret key available to sign with.", .{});
+                stderrPrint(init.io, "Use 'shelly-key --init' to generate a default secret key.", .{});
+                std.process.exit(1);
+            },
+            error.GpgFailed => {
+                stderrPrint(init.io, "error: gpg command failed.", .{});
+                std.process.exit(1);
+            },
+            else => return err,
+        },
+        .populate => Shelly_Key.keyring.populate(
+            init.io,
+            init.arena.allocator(),
+            args,
+            init.environ_map,
+            opts.gpgdir,
+            opts.populate_from,
+            opts.populate_keyrings,
+            stdout,
+        ) catch |err| switch (err) {
+            error.TrustdbMissing => {
+                stderrPrint(
+                    init.io,
+                    "error: The pacman keyring at '{s}' is not initialized.",
+                    .{opts.gpgdir},
+                );
+                stderrPrint(
+                    init.io,
+                    "Run 'shelly-key --init {s}' first.",
+                    .{opts.gpgdir},
+                );
+                std.process.exit(1);
+            },
+            error.NoSecretKey => {
+                stderrPrint(init.io, "error: There is no secret key available to sign with.", .{});
+                stderrPrint(init.io, "Use 'shelly-key --init' to generate a default secret key.", .{});
+                std.process.exit(1);
+            },
+            error.NoKeyringsFound => {
+                stderrPrint(init.io, "error: No keyring files exist in {s}.", .{opts.populate_from});
+                std.process.exit(1);
+            },
+            error.PopulateFromMissing => {
+                stderrPrint(
+                    init.io,
+                    "error: The keyring source directory '{s}' does not exist.",
+                    .{opts.populate_from},
+                );
+                stderrPrint(
+                    init.io,
+                    "Check --populate-from or install a package that ships keyring files.",
+                    .{},
+                );
+                std.process.exit(1);
+            },
+            error.MissingKeyringFile => {
+                const base: std.Io.Dir = .cwd();
+                for (opts.populate_keyrings) |id| {
+                    const exists = Shelly_Key.keyfiles.keyringFileExists(
+                        base,
+                        init.io,
+                        opts.populate_from,
+                        id,
+                    ) catch false;
+                    if (!exists) {
+                        stderrPrint(
+                            init.io,
+                            "error: The keyring file {s}/{s}.gpg does not exist.",
+                            .{ opts.populate_from, id },
+                        );
+                    }
+                }
+                std.process.exit(1);
+            },
+            else => return err,
+        },
     }
-
-    // In order to do I/O operations need an `Io` instance.
-    const io = init.io;
-
-    // Stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
-    const stdout_writer = &stdout_file_writer.interface;
-
-    try Shelly_Key.printAnotherMessage(stdout_writer);
-
-    try stdout_writer.flush(); // Don't forget to flush!
 }
 
-test "simple test" {
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(i32) = .empty;
-    defer list.deinit(gpa); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(gpa, 42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
+fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) void {
+    var buf: [512]u8 = undefined;
+    const msg = std.fmt.bufPrint(&buf, fmt ++ "\n", args) catch return;
+    Io.File.stderr().writeStreamingAll(io, msg) catch return;
 }
 
-test "fuzz example" {
-    try std.testing.fuzz({}, testOne, .{});
-}
-
-fn testOne(context: void, smith: *std.testing.Smith) !void {
-    _ = context;
-    // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(u8) = .empty;
-    defer list.deinit(gpa);
-    while (!smith.eos()) switch (smith.value(enum { add_data, dup_data })) {
-        .add_data => {
-            const slice = try list.addManyAsSlice(gpa, smith.value(u4));
-            smith.bytes(slice);
+pub fn main(init: std.process.Init) !void {
+    run(init) catch |err| switch (err) {
+        error.UnknownArgument => {
+            stderrPrint(init.io, "error: unknown or invalid argument(s). See --help for usage.", .{});
+            std.process.exit(1);
         },
-        .dup_data => {
-            if (list.items.len == 0) continue;
-            if (list.items.len > std.math.maxInt(u32)) return error.SkipZigTest;
-            const len = smith.valueRangeAtMost(u32, 1, @min(32, list.items.len));
-            const off = smith.valueRangeAtMost(u32, 0, @intCast(list.items.len - len));
-            try list.appendSlice(gpa, list.items[off..][0..len]);
-            try std.testing.expectEqualSlices(
-                u8,
-                list.items[off..][0..len],
-                list.items[list.items.len - len ..],
-            );
+        error.MultipleOperations => {
+            stderrPrint(init.io, "error: multiple operations specified; run each operation separately.", .{});
+            std.process.exit(1);
         },
+        error.MissingArgumentValue => {
+            stderrPrint(init.io, "error: option requires an argument. See --help for usage.", .{});
+            std.process.exit(1);
+        },
+        error.NoElevator => {
+            stderrPrint(init.io, "error: no privilege elevator found (install sudo, doas, or pkexec)", .{});
+            std.process.exit(1);
+        },
+        error.ExecFailed => {
+            stderrPrint(init.io, "error: failed to re-exec with elevated privileges", .{});
+            std.process.exit(1);
+        },
+        // Unexpected errors (e.g. OutOfMemory) get the default stack trace.
+        else => return err,
     };
+    std.process.exit(0);
 }

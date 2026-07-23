@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellyFlatpakInstallLocalView" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="halign">center</property>
+        <property name="valign">start</property>
+        <property name="margin-top">36</property>
+        <property name="margin-start">12</property>
+        <property name="margin-end">12</property>
+        <property name="width-request">520</property>
+        <child>
+          <object class="GtkLabel">
+            <property name="label" translatable="yes">Install a local Flatpak</property>
+            <property name="halign">start</property>
+            <property name="margin-bottom">4</property>
+            <style>
+              <class name="title-2"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel">
+            <property name="label" translatable="yes">Choose a .flatpak bundle from your system and install it for the current user or system-wide.</property>
+            <property name="halign">start</property>
+            <property name="wrap">true</property>
+            <property name="xalign">0</property>
+            <property name="margin-bottom">16</property>
+            <style>
+              <class name="dim-label"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkFrame">
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">16</property>
+                <property name="margin-start">16</property>
+                <property name="margin-end">16</property>
+                <property name="margin-top">16</property>
+                <property name="margin-bottom">16</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">6</property>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Bundle</property>
+                        <property name="halign">start</property>
+                        <style>
+                          <class name="heading"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="choose_file_button">
+                        <property name="hexpand">true</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">horizontal</property>
+                            <property name="spacing">8</property>
+                            <child>
+                              <object class="GtkImage">
+                                <property name="icon-name">document-open-symbolic</property>
+                                <property name="pixel-size">16</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="chosen_file_label">
+                                <property name="label" translatable="yes">Choose file…</property>
+                                <property name="halign">start</property>
+                                <property name="hexpand">true</property>
+                                <property name="xalign">0</property>
+                                <property name="ellipsize">middle</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkSeparator">
+                    <property name="orientation">horizontal</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">horizontal</property>
+                    <property name="spacing">8</property>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Install for</property>
+                        <property name="halign">start</property>
+                        <property name="valign">center</property>
+                        <property name="hexpand">true</property>
+                        <property name="xalign">0</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkDropDown" id="scope_dropdown">
+                        <property name="enable-search">false</property>
+                        <property name="hexpand">false</property>
+                        <property name="model">
+                          <object class="GtkStringList">
+                            <items>
+                              <item translatable="yes">system</item>
+                              <item translatable="yes">user</item>
+                            </items>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">horizontal</property>
+            <property name="margin-top">16</property>
+            <child>
+              <object class="GtkButton" id="install_button">
+                <property name="label" translatable="yes">Install</property>
+                <property name="sensitive">false</property>
+                <property name="hexpand">true</property>
+                <style>
+                  <class name="suggested-action"/>
+                  <class name="pill"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="status_label">
+            <property name="label"></property>
+            <property name="halign">start</property>
+            <property name="wrap">true</property>
+            <property name="xalign">0</property>
+            <property name="visible">false</property>
+            <property name="margin-top">12</property>
+            <style>
+              <class name="dim-label"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

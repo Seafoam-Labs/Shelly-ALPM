@@ -1,6 +1,7 @@
 const std = @import("std");
 const bindings = @import("bindings.zig");
 const c = bindings.libalpm;
+const operation_api = @import("operation_context");
 
 pub const ProgressArgs = struct {
     progress_type: c_int,
@@ -15,7 +16,7 @@ pub const QuestionArgs = struct {
     question_type: c_int,
     options: []const []const u8,
     response: ?c_int = null,
-    provider_options: ?[]ProviderOption = null,
+    provider_options: ?[]const ProviderOption = null,
     dependency_name: ?[]const u8 = null,
 };
 
@@ -30,7 +31,7 @@ pub const ErrorArgs = struct {
 };
 
 pub const InformationalArgs = struct {
-    event_type: c_int,
+    event_type: bindings.libalpm.EventType,
     message: []const u8,
 };
 
@@ -94,6 +95,8 @@ pub const Dispatcher = struct {
     question_mutex: std.Io.Mutex,
     question_cv: std.Io.Condition,
     question_response: QuestionResponse,
+    operation: ?*operation_api.Operation,
+    common_question_response: ?operation_api.OwnedQuestionResponse,
 
     allocator: std.mem.Allocator,
 
@@ -112,10 +115,13 @@ pub const Dispatcher = struct {
             .question_mutex = .init,
             .question_cv = .init,
             .question_response = .{},
+            .operation = null,
+            .common_question_response = null,
         };
     }
 
     pub fn deinit(self: *Dispatcher) void {
+        if (self.common_question_response) |*response| response.deinit(self.allocator);
         self.progress.deinit(self.allocator);
         self.question.deinit(self.allocator);
         self.errorEvents.deinit(self.allocator);
@@ -125,6 +131,10 @@ pub const Dispatcher = struct {
         self.pacnew.deinit(self.allocator);
         self.pacsave.deinit(self.allocator);
         self.replaces.deinit(self.allocator);
+    }
+
+    pub fn setOperation(self: *Dispatcher, operation: ?*operation_api.Operation) void {
+        self.operation = operation;
     }
 
     pub fn addProgressHandler(self: *Dispatcher, handler: Handler(ProgressArgs).T) !usize {
@@ -263,10 +273,63 @@ pub const Dispatcher = struct {
     }
 
     pub fn raiseProgress(self: *Dispatcher, args: ProgressArgs) void {
+        if (self.operation) |operation| operation.progress(.{
+            .stage = "transaction",
+            .completed = @intCast(args.current),
+            .total = @intCast(args.howmany),
+            .percentage = @floatFromInt(std.math.clamp(args.percent, 0, 100)),
+            .message = args.pkg_name,
+            .native_code = args.progress_type,
+        });
         self.dispatch(ProgressArgs, &self.progress, args);
     }
 
     pub fn raiseQuestion(self: *Dispatcher, io: std.Io, args: QuestionArgs) QuestionResponse {
+        if (self.common_question_response) |*response| {
+            response.deinit(self.allocator);
+            self.common_question_response = null;
+        }
+
+        if (self.operation) |operation| {
+            const option_count = if (args.provider_options) |options| options.len else args.options.len;
+            const common_options_optional = self.allocator.alloc(operation_api.QuestionOption, option_count) catch null;
+            if (common_options_optional) |common_options| {
+                defer self.allocator.free(common_options);
+                if (args.provider_options) |options| {
+                    for (options, common_options) |option, *target| target.* = .{
+                        .id = option.name,
+                        .label = option.name,
+                        .description = option.description,
+                        .is_installed = option.is_installed,
+                    };
+                } else {
+                    for (args.options, common_options) |option, *target| target.* = .{
+                        .id = option,
+                        .label = option,
+                    };
+                }
+
+                const common_kind = commonQuestionKind(args);
+                var answer = operation.ask(.{
+                    .kind = common_kind,
+                    .prompt = args.question orelse "Continue?",
+                    .options = common_options,
+                    .dependency_name = args.dependency_name,
+                }) catch |err| {
+                    if (err == error.Cancelled) return .{ .answer = 0 };
+                    operation.reportError(err, "Failed to obtain an ALPM question response", "alpm", args.question_type, false);
+                    return .{};
+                };
+
+                const mapped = mapCommonQuestionResponse(common_kind, answer.response, common_options);
+                if (mapped) |response| {
+                    self.common_question_response = answer;
+                    return response;
+                }
+                answer.deinit(self.allocator);
+            }
+        }
+
         if (self.question.items.len == 0) return .{};
 
         const snap = self.allocator.dupe(Handler(QuestionArgs).T, self.question.items) catch self.question.items;
@@ -282,7 +345,10 @@ pub const Dispatcher = struct {
         for (snap) |h| h.call(args);
 
         self.question_mutex.lockUncancelable(io);
-        while (self.question_response.answer == null) {
+        while (self.question_response.answer == null and
+            self.question_response.choice == null and
+            self.question_response.pkg == null)
+        {
             self.question_cv.waitUncancelable(io, &self.question_mutex);
         }
         const response = self.question_response;
@@ -298,33 +364,128 @@ pub const Dispatcher = struct {
     }
 
     pub fn raiseError(self: *Dispatcher, args: ErrorArgs) void {
+        if (self.operation) |operation| operation.reportError(error.AlpmOperationFailed, args.message, "alpm", null, false);
         self.dispatch(ErrorArgs, &self.errorEvents, args);
     }
 
     pub fn raiseInformational(self: *Dispatcher, args: InformationalArgs) void {
+        if (self.operation) |operation| operation.status(.information, args.message, "alpm.information", @intFromEnum(args.event_type));
         self.dispatch(InformationalArgs, &self.informational, args);
     }
 
     pub fn raiseScriptlet(self: *Dispatcher, args: ScriptletArgs) void {
+        if (self.operation) |operation| operation.status(.information, args.line, "alpm.scriptlet", null);
         self.dispatch(ScriptletArgs, &self.scriptlet, args);
     }
 
     pub fn raiseHook(self: *Dispatcher, args: HookArgs) void {
+        if (self.operation) |operation| operation.progress(.{
+            .stage = "hook",
+            .completed = @intCast(args.position),
+            .total = @intCast(args.total),
+            .percentage = if (args.total == 0) 100 else @as(f64, @floatFromInt(args.position)) * 100.0 / @as(f64, @floatFromInt(args.total)),
+            .message = args.description,
+        });
         self.dispatch(HookArgs, &self.hook, args);
     }
 
     pub fn raisePacnew(self: *Dispatcher, args: PacnewArgs) void {
+        if (self.operation) |operation| operation.status(.warning, args.file orelse "A pacnew file was created", "alpm.pacnew", null);
         self.dispatch(PacnewArgs, &self.pacnew, args);
     }
 
     pub fn raisePacsave(self: *Dispatcher, args: PacsaveArgs) void {
+        if (self.operation) |operation| operation.status(.warning, args.file orelse "A pacsave file was created", "alpm.pacsave", null);
         self.dispatch(PacsaveArgs, &self.pacsave, args);
     }
 
     pub fn raiseReplaces(self: *Dispatcher, args: ReplacesArgs) void {
+        if (self.operation) |operation| {
+            const message = replacementMessage(self.allocator, args) catch null;
+            defer if (message) |value| self.allocator.free(value);
+            operation.status(.information, message orelse args.pkg_name, "alpm.replaces", null);
+        }
         self.dispatch(ReplacesArgs, &self.replaces, args);
     }
 };
+
+fn replacementMessage(allocator: std.mem.Allocator, args: ReplacesArgs) ![]u8 {
+    var output = std.Io.Writer.Allocating.init(allocator);
+    errdefer output.deinit();
+    try output.writer.print("{s}/{s} replaces ", .{ args.repository, args.pkg_name });
+    for (args.replaces, 0..) |replacement, index| {
+        if (index > 0) try output.writer.writeByte(',');
+        try output.writer.writeAll(replacement);
+    }
+    return output.toOwnedSlice();
+}
+
+fn commonQuestionKind(args: QuestionArgs) operation_api.QuestionKind {
+    const question_type = if (args.question_type < 0)
+        bindings.libalpm.QuestionType.unknown
+    else
+        bindings.libalpm.QuestionType.fromQuestionType(@intCast(args.question_type));
+
+    return switch (question_type) {
+        .select_provider => .select_provider,
+        .select_optional_dependencies => .select_optional_dependencies,
+        .unknown => if (args.provider_options != null)
+            .select_provider
+        else if (args.options.len != 0)
+            .select_one
+        else
+            .confirmation,
+        else => .confirmation,
+    };
+}
+
+fn mapCommonQuestionResponse(
+    kind: operation_api.QuestionKind,
+    response: operation_api.QuestionResponse,
+    options: []const operation_api.QuestionOption,
+) ?QuestionResponse {
+    return switch (kind) {
+        .confirmation => switch (response) {
+            .accepted => .{ .answer = 1 },
+            .declined => .{ .answer = 0 },
+            .choice => |choice| mapConfirmationChoice(choice, options),
+            .choices => |choices| if (choices.len == 0) .{} else mapConfirmationChoice(choices[0], options),
+            .default, .deferred => null,
+            .package => |pkg| .{ .pkg = pkg },
+        },
+        .select_optional_dependencies => switch (response) {
+            .choice => |choice| mapPackageChoice(choice, options),
+            .choices => |choices| if (choices.len == 0) .{} else mapPackageChoice(choices[0], options),
+            .package => |pkg| .{ .pkg = pkg },
+            .declined => .{},
+            .accepted => if (options.len == 0) .{} else .{ .pkg = options[0].id },
+            .default, .deferred => null,
+        },
+        else => switch (response) {
+            .accepted => .{ .answer = 1 },
+            .declined => .{ .answer = 0 },
+            .choice => |choice| mapIndexChoice(choice, options),
+            .choices => |choices| if (choices.len == 0) .{} else mapIndexChoice(choices[0], options),
+            .package => |pkg| .{ .pkg = pkg },
+            .default, .deferred => null,
+        },
+    };
+}
+
+fn mapConfirmationChoice(choice: usize, options: []const operation_api.QuestionOption) ?QuestionResponse {
+    if (choice >= options.len) return null;
+    return .{ .answer = @intFromBool(choice == 0) };
+}
+
+fn mapPackageChoice(choice: usize, options: []const operation_api.QuestionOption) ?QuestionResponse {
+    if (choice >= options.len) return null;
+    return .{ .pkg = options[choice].id };
+}
+
+fn mapIndexChoice(choice: usize, options: []const operation_api.QuestionOption) ?QuestionResponse {
+    if (choice >= options.len) return null;
+    return .{ .choice = std.math.cast(c_int, choice) orelse return null };
+}
 
 test {
     @import("std").testing.refAllDecls(@This());
@@ -626,6 +787,136 @@ test "question propagates full response" {
     if (!std.mem.eql(u8, pkg, "pkgname")) return error.TestFailed;
 }
 
+test "question accepts choice-only and package-only responses" {
+    var gpa = std.heap.ArenaAllocator.init(std.testing.allocator);
+    const allocator = gpa.allocator();
+    defer gpa.deinit();
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var disp = Dispatcher.init(allocator);
+    defer disp.deinit();
+
+    var ctx = QuestionResponseContext{
+        .disp = &disp,
+        .io = io,
+        .response = .{ .choice = 3 },
+    };
+    _ = disp.addQuestionHandler(.{
+        .function = questionResponseCallback,
+        .data = @ptrCast(&ctx),
+    }) catch unreachable;
+
+    var response = disp.raiseQuestion(io, .{
+        .question = "choose?",
+        .question_type = 1,
+        .options = &[_][]const u8{ "a", "b" },
+    });
+    if (response.answer != null) return error.TestFailed;
+    if (response.choice != 3) return error.TestFailed;
+    if (response.pkg != null) return error.TestFailed;
+
+    ctx.response = .{ .pkg = "selected-package" };
+    response = disp.raiseQuestion(io, .{
+        .question = "package?",
+        .question_type = 1,
+        .options = &[_][]const u8{"selected-package"},
+    });
+    if (response.answer != null) return error.TestFailed;
+    if (response.choice != null) return error.TestFailed;
+    const pkg = response.pkg orelse return error.TestFailed;
+    if (!std.mem.eql(u8, pkg, "selected-package")) return error.TestFailed;
+}
+
+test "common ALPM confirmation maps accepted and declined answers" {
+    const Responder = struct {
+        response: operation_api.QuestionResponse,
+        calls: usize = 0,
+
+        fn answer(data: ?*anyopaque, question: operation_api.Question) operation_api.QuestionResponse {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            std.testing.expect(question.kind == .confirmation) catch unreachable;
+            std.testing.expectEqualStrings("Continue?", question.prompt) catch unreachable;
+            self.calls += 1;
+            return self.response;
+        }
+    };
+
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    var context = operation_api.OperationContext.init(std.testing.allocator, threaded.io());
+    defer context.deinit();
+    var responder: Responder = .{ .response = .accepted };
+    context.setQuestionHandler(.{ .function = Responder.answer, .data = &responder });
+    var operation = context.begin(.{ .backend = .alpm, .kind = .install });
+    defer operation.finish(.success);
+    var dispatcher = Dispatcher.init(std.testing.allocator);
+    defer dispatcher.deinit();
+    dispatcher.setOperation(&operation);
+
+    const options = [_][]const u8{ "yes", "no" };
+    var response = dispatcher.raiseQuestion(threaded.io(), .{
+        .question = "Continue?",
+        .question_type = @intFromEnum(bindings.libalpm.QuestionType.install_ignore),
+        .options = &options,
+    });
+    try std.testing.expectEqual(@as(?c_int, 1), response.answer);
+
+    responder.response = .declined;
+    response = dispatcher.raiseQuestion(threaded.io(), .{
+        .question = "Continue?",
+        .question_type = @intFromEnum(bindings.libalpm.QuestionType.install_ignore),
+        .options = &options,
+    });
+    try std.testing.expectEqual(@as(?c_int, 0), response.answer);
+    try std.testing.expectEqual(@as(usize, 2), responder.calls);
+}
+
+test "common ALPM optional dependency choices map to package names" {
+    const Responder = struct {
+        saw_provider_metadata: bool = false,
+
+        fn answer(data: ?*anyopaque, question: operation_api.Question) operation_api.QuestionResponse {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            std.testing.expect(question.kind == .select_optional_dependencies) catch unreachable;
+            std.testing.expectEqual(@as(usize, 2), question.options.len) catch unreachable;
+            std.testing.expectEqualStrings("second description", question.options[1].description) catch unreachable;
+            std.testing.expect(question.options[1].is_installed) catch unreachable;
+            self.saw_provider_metadata = true;
+            return .{ .choice = 1 };
+        }
+    };
+
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    var context = operation_api.OperationContext.init(std.testing.allocator, threaded.io());
+    defer context.deinit();
+    var responder: Responder = .{};
+    context.setQuestionHandler(.{ .function = Responder.answer, .data = &responder });
+    var operation = context.begin(.{ .backend = .alpm, .kind = .install });
+    defer operation.finish(.success);
+    var dispatcher = Dispatcher.init(std.testing.allocator);
+    defer dispatcher.deinit();
+    dispatcher.setOperation(&operation);
+
+    const names = [_][]const u8{ "first-package", "second-package" };
+    const providers = [_]ProviderOption{
+        .{ .name = "first-package", .description = "first description", .is_installed = false },
+        .{ .name = "second-package", .description = "second description", .is_installed = true },
+    };
+    const response = dispatcher.raiseQuestion(threaded.io(), .{
+        .question = "Select an optional dependency",
+        .question_type = @intFromEnum(bindings.libalpm.QuestionType.select_optional_dependencies),
+        .options = &names,
+        .provider_options = &providers,
+    });
+
+    try std.testing.expectEqualStrings("second-package", response.pkg.?);
+    try std.testing.expect(responder.saw_provider_metadata);
+}
+
 test "question blocks until answered from another task" {
     var gpa = std.heap.ArenaAllocator.init(std.testing.allocator);
     const allocator = gpa.allocator();
@@ -673,7 +964,7 @@ test "informational, scriptlet and hook handlers dispatch" {
     _ = disp.addScriptletHandler(.{ .function = setBoolCallback(ScriptletArgs), .data = @ptrCast(&scriptlet_called) }) catch unreachable;
     _ = disp.addHookHandler(.{ .function = setBoolCallback(HookArgs), .data = @ptrCast(&hook_called) }) catch unreachable;
 
-    disp.raiseInformational(.{ .event_type = 0, .message = "info" });
+    disp.raiseInformational(.{ .event_type = .transaction_start, .message = "info" });
     disp.raiseScriptlet(.{ .line = "line" });
     disp.raiseHook(.{ .description = "hook", .position = 1, .total = 2 });
 
@@ -705,6 +996,19 @@ test "pacnew, pacsave and replaces handlers dispatch" {
     if (!pacnew_called) return error.TestFailed;
     if (!pacsave_called) return error.TestFailed;
     if (!replaces_called) return error.TestFailed;
+}
+
+test "replacement operation status matches the standard CLI message" {
+    const message = try replacementMessage(std.testing.allocator, .{
+        .pkg_name = "new-package",
+        .repository = "extra",
+        .replaces = &.{ "old-package", "older-package" },
+    });
+    defer std.testing.allocator.free(message);
+    try std.testing.expectEqualStrings(
+        "extra/new-package replaces old-package,older-package",
+        message,
+    );
 }
 
 test "handlers isolated per event type" {
@@ -779,6 +1083,18 @@ fn questionFullCallback(data: ?*anyopaque, args: QuestionArgs) void {
     _ = args;
     const ctx: *QuestionContext = @ptrCast(@alignCast(data));
     ctx.disp.respond(ctx.io, .{ .answer = 1, .pkg = "pkgname", .choice = 3 });
+}
+
+const QuestionResponseContext = struct {
+    disp: *Dispatcher,
+    io: std.Io,
+    response: QuestionResponse,
+};
+
+fn questionResponseCallback(data: ?*anyopaque, args: QuestionArgs) void {
+    _ = args;
+    const ctx: *QuestionResponseContext = @ptrCast(@alignCast(data));
+    ctx.disp.respond(ctx.io, ctx.response);
 }
 
 const AsyncQuestionContext = struct {

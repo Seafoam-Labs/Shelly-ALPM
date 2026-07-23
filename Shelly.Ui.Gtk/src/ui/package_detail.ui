@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <menu id="package_actions_menu">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Reinstall</attribute>
+        <attribute name="action">detail.reinstall</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Add Ignore</attribute>
+        <attribute name="action">detail.addignore</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Add Hold</attribute>
+        <attribute name="action">detail.addhold</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Make Explicit</attribute>
+        <attribute name="action">detail.addexplicit</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Mark Dependency</attribute>
+        <attribute name="action">detail.dependency</attribute>
+      </item>
+    </section>
+  </menu>
+  <template class="ShellyPackageDetail" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="hexpand">false</property>
+    <property name="width-request">340</property>
+    <child>
+      <object class="GtkScrolledWindow">
+        <property name="hscrollbar-policy">never</property>
+        <property name="vscrollbar-policy">automatic</property>
+        <property name="propagate-natural-width">false</property>
+        <property name="vexpand">true</property>
+        <property name="hexpand">false</property>
+        <child>
+          <object class="GtkBox" id="content_box">
+            <property name="orientation">vertical</property>
+            <property name="spacing">4</property>
+            <property name="halign">fill</property>
+            <property name="valign">start</property>
+            <property name="margin-top">20</property>
+            <property name="margin-bottom">20</property>
+            <property name="margin-start">20</property>
+            <property name="margin-end">20</property>
+            <style><class name="detail-content"/></style>
+            <child>
+              <object class="GtkButton" id="back_button">
+                <property name="icon-name">go-previous-symbolic</property>
+                <property name="halign">start</property>
+                <property name="valign">center</property>
+                <property name="visible">false</property>
+                <property name="margin-bottom">4</property>
+                <property name="tooltip-text" translatable="yes">Back</property>
+                <style><class name="flat"/></style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">horizontal</property>
+                <property name="margin-bottom">8</property>
+                <child>
+                  <object class="GtkImage" id="icon">
+                    <property name="pixel-size">64</property>
+                    <property name="halign">start</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkMenuButton" id="actions_button">
+                    <property name="icon-name">view-more-symbolic</property>
+                    <property name="halign">end</property>
+                    <property name="valign">start</property>
+                    <property name="hexpand">true</property>
+                    <property name="tooltip-text" translatable="yes">Package actions</property>
+                    <property name="menu-model">package_actions_menu</property>
+                    <style><class name="flat"/></style>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="name_label">
+                <property name="halign">start</property>
+                <property name="wrap">true</property>
+                <property name="xalign">0</property>
+                <style><class name="detail-title"/></style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="description_label">
+                <property name="halign">start</property>
+                <property name="wrap">true</property>
+                <property name="xalign">0</property>
+                <property name="margin-bottom">4</property>
+                <style><class name="dim-label"/></style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Information</property>
+                <property name="halign">start</property>
+                <property name="xalign">0</property>
+                <property name="margin-bottom">4</property>
+                <style><class name="detail-section-header"/></style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox" id="spec_box">
+                <property name="orientation">vertical</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox" id="sections_box">
+                <property name="orientation">vertical</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

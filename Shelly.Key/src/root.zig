@@ -1,18 +1,19 @@
-//! By convention, root.zig is the root source file when making a package.
-const std = @import("std");
-const Io = std.Io;
+pub const cli = @import("cli.zig");
+pub const gpg = @import("gpg.zig");
+pub const elevate = @import("helpers/elevate.zig");
+pub const fsutil = @import("helpers/fsutil.zig");
+pub const gpgconf = @import("keyring/gpgconf.zig");
+pub const keydir = @import("keyring/keydir.zig");
+pub const keyfiles = @import("keyring/keyfiles.zig");
+pub const keyring = @import("keyring/keyring.zig");
 
-/// This is a documentation comment to explain the `printAnotherMessage` function below.
-///
-/// Accepting an `Io.Writer` instance is a handy way to write reusable code.
-pub fn printAnotherMessage(writer: *Io.Writer) Io.Writer.Error!void {
-    try writer.print("Run `zig build test` to run the tests.\n", .{});
-}
-
-pub fn add(a: i32, b: i32) i32 {
-    return a + b;
-}
-
-test "basic add functionality" {
-    try std.testing.expect(add(3, 7) == 10);
+test {
+    _ = @import("cli.zig");
+    _ = @import("gpg.zig");
+    _ = @import("helpers/elevate.zig");
+    _ = @import("helpers/fsutil.zig");
+    _ = @import("keyring/gpgconf.zig");
+    _ = @import("keyring/keydir.zig");
+    _ = @import("keyring/keyfiles.zig");
+    _ = @import("keyring/keyring.zig");
 }

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-notifications 2.3.0.2\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-05-20 12:32-0400\n"
+"POT-Creation-Date: 2026-06-27 10:03+0000\n"
 "PO-Revision-Date: 2026-06-12 01:00-0300\n"
 "Last-Translator: tiago <tiagodecgo2@gmail.com>\n"
 "Language-Team: Spanish <es@tp.org.es>\n"
@@ -12,25 +12,6 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Poedit 3.9\n"
-
-msgid "Updates available: {0}"
-msgstr "Actualizaciones disponibles: {0}"
-
-msgid "Shelly Notifications started. Press Ctrl+C to exit."
-msgstr "Notificaciones de Shelly iniciadas. Presione Ctrl+C para salir."
-
-msgid ""
-"Warning: No StatusNotifierWatcher found. The tray icon will not be visible."
-msgstr ""
-"Advertencia: No se encontró un StatusNotifierWatcher. El icono de la "
-"bandeja no será visible."
-
-msgid ""
-"Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
-"installed."
-msgstr ""
-"Consejo: Si utiliza GNOME, asegúrese de tener instalada una extensión "
-"AppIndicator."
 
 msgid "Open Shelly"
 msgstr "Abrir Shelly"
@@ -47,6 +28,10 @@ msgstr "Última comprobación: Nunca"
 msgid "Exit"
 msgstr "Salir"
 
+#, csharp-format
+msgid "Updates available: {0}"
+msgstr "Actualizaciones disponibles: {0}"
+
 msgid "No updates available."
 msgstr "No hay actualizaciones disponibles."
 
@@ -59,8 +44,25 @@ msgstr "AUR"
 msgid "Standard"
 msgstr "Estándar"
 
+#, csharp-format
 msgid "Last check: {0}"
 msgstr "Última comprobación: {0}"
 
 msgid "Shelly Notifications"
 msgstr "Notificaciones de Shelly"
+
+msgid "Shelly Notifications started. Press Ctrl+C to exit."
+msgstr "Notificaciones de Shelly iniciadas. Presione Ctrl+C para salir."
+
+msgid ""
+"Warning: No StatusNotifierWatcher found. The tray icon will not be visible."
+msgstr ""
+"Advertencia: No se encontró un StatusNotifierWatcher. El icono de la bandeja "
+"no será visible."
+
+msgid ""
+"Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
+"installed."
+msgstr ""
+"Consejo: Si utiliza GNOME, asegúrese de tener instalada una extensión "
+"AppIndicator."

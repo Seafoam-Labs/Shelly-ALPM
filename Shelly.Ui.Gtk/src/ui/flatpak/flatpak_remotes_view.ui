@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellyFlatpakRemotesView" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <child>
+      <object class="GtkStack" id="remotes_stack">
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+
+        <child>
+          <object class="GtkBox" id="remotes_list_page">
+            <property name="orientation">vertical</property>
+            <property name="vexpand">true</property>
+            <property name="hexpand">true</property>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">horizontal</property>
+                <property name="margin-bottom">8</property>
+                <property name="margin-top">8</property>
+                <property name="margin-start">8</property>
+                <property name="margin-end">8</property>
+                <property name="spacing">8</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="hexpand">true</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="overlay_delete_remote_button">
+                    <property name="label" translatable="yes">Delete Selected Remote</property>
+                      <signal name="clicked" handler="remove_selected_remote" swapped="true"/>
+                    <style>
+                      <class name="destructive-action"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="overlay_add_remote_button">
+                    <property name="label" translatable="yes">Add Remote</property>
+                     <signal name="clicked" handler="add_remote" swapped="true"/>
+                    <style>
+                      <class name="suggested-action"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkSeparator">
+                <property name="orientation">horizontal</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkScrolledWindow">
+                <property name="overlay-scrolling">false</property>
+                <property name="vexpand">true</property>
+                <property name="hexpand">true</property>
+                <child>
+                  <object class="GtkListBox" id="list_remotes"/>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="add_remote_page">
+            <property name="orientation">vertical</property>
+            <property name="vexpand">true</property>
+            <property name="hexpand">true</property>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">horizontal</property>
+                <property name="margin-bottom">8</property>
+                <property name="margin-top">8</property>
+                <property name="margin-start">8</property>
+                <property name="margin-end">8</property>
+                <property name="spacing">8</property>
+                <child>
+                  <object class="GtkButton" id="overlay_add_remote_back_button">
+                    <property name="icon-name">go-previous-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">Back</property>
+                     <signal name="clicked" handler="back_to_list" swapped="true"/>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox">
+                    <property name="hexpand">true</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Add New Flatpak Remote</property>
+                    <style>
+                      <class name="title-2"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox">
+                    <property name="hexpand">true</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="overlay_add_remote_confirm_button">
+                    <property name="label" translatable="yes">Add</property>
+                         <signal name="clicked" handler="add_remote_confirm" swapped="true"/>
+                    <style>
+                      <class name="suggested-action"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkSeparator">
+                <property name="orientation">horizontal</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">16</property>
+                <property name="margin-top">48</property>
+                <property name="margin-bottom">48</property>
+                <property name="margin-start">128</property>
+                <property name="margin-end">128</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">4</property>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Remote Name</property>
+                        <property name="halign">start</property>
+                        <style>
+                          <class name="bold"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkEntry" id="overlay_add_remote_name_entry">
+                        <property name="placeholder-text" translatable="yes">e.g., flathub</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">4</property>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Remote URL</property>
+                        <property name="halign">start</property>
+                        <style>
+                          <class name="bold"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkEntry" id="overlay_add_remote_url_entry">
+                        <property name="placeholder-text" translatable="yes">e.g., https://flathub.org/repo/flathub.flatpakrepo</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">4</property>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Scope</property>
+                        <property name="halign">start</property>
+                        <style>
+                          <class name="bold"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkDropDown" id="overlay_add_remote_scope_dropdown">
+                        <property name="model">
+                          <object class="GtkStringList">
+                            <items>
+                              <item translatable="yes">user</item>
+                              <item translatable="yes">system</item>
+                            </items>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

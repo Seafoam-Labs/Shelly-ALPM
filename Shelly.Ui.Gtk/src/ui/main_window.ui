@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<interface>
+ <template class="ShellyWindow" parent="GtkApplicationWindow">
+  <property name="title">Shelly</property>
+  <property name="default-width">700</property>
+  <property name="default-height">450</property>
+  <child>
+    <object class="GtkOverlay" id="root_overlay">
+      <property name="hexpand">true</property>
+      <property name="vexpand">true</property>
+      <child>
+        <object class="GtkBox" id="shell_box">
+          <property name="hexpand">true</property>
+          <property name="vexpand">true</property>
+        </object>
+      </child>
+      <child type="overlay">
+        <object class="GtkBox" id="lockout_overlay">
+          <property name="visible">false</property>
+          <property name="hexpand">true</property>
+          <property name="vexpand">true</property>
+          <property name="halign">fill</property>
+          <property name="valign">fill</property>
+          <style>
+            <class name="lockout-scrim"/>
+          </style>
+          <child>
+            <object class="GtkBox" id="lockout_content">
+              <property name="orientation">vertical</property>
+              <property name="halign">fill</property>
+              <property name="valign">fill</property>
+              <property name="hexpand">true</property>
+              <property name="vexpand">true</property>
+            </object>
+          </child>
+        </object>
+      </child>
+    </object>
+  </child>
+</template>
+</interface>
