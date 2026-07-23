@@ -123,15 +123,15 @@
 }
 
 .toast-card.success {
-  background-color: alpha(#2ec27e, 0.95);
+  background-color: alpha(@success_color, 0.95);
 }
 
 .toast-card.error {
-  background-color: alpha(#e01b24, 0.95);
+  background-color: alpha(@error_color, 0.95);
 }
 
 .toast-card.warning {
-  background-color: alpha(#e5a50a, 0.95);
+  background-color: alpha(@warning_color, 0.95);
 }
 
 .spec-expander {
