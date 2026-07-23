@@ -15,6 +15,7 @@ const support = @import("support.zig");
 const datetime = @import("../helpers/datetime.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
+const options = @import("options");
 
 pub const SettingsPage = ShellySettingsPage;
 
@@ -163,6 +164,13 @@ pub const ShellySettingsPage = extern struct {
         const p = self.priv();
         if (p.loaded) return;
         p.loaded = true;
+
+        const version = std.fmt.allocPrintSentinel(std.heap.c_allocator, "{f}", .{options.version}, 0) catch |err| {
+            std.log.err("failed to format version: {s}", .{@errorName(err)});
+            return;
+        };
+        defer std.heap.c_allocator.free(version);
+        p.version_label.setLabel(version);
 
         const svc = obtainConfigService() catch |err| {
             std.log.warn("settings: could not open config service: {t}", .{err});

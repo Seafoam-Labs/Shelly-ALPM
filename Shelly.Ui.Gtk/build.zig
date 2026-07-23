@@ -1,5 +1,9 @@
 const std = @import("std");
 
+const versionString = @import("build.zig.zon").version;
+
+const version = std.SemanticVersion.parse(versionString) catch @panic("Bad version");
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -26,6 +30,9 @@ pub fn build(b: *std.Build) void {
     shelly_ui_gtk.addImport("gdk4", gobject.module("gdk4"));
     shelly_ui_gtk.addImport("ShellyHttp", shelly_http.module("ShellyHttp"));
 
+    const options = b.addOptions();
+    options.addOption(std.SemanticVersion, "version", version);
+
     const exe = b.addExecutable(.{
         .name = "Shelly_Ui_Gtk",
         .root_module = b.createModule(.{
@@ -34,9 +41,11 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "Shelly_Ui_Gtk", .module = shelly_ui_gtk },
+                .{ .name = "options", .module = options.createModule() },
             },
         }),
     });
+
     exe.root_module.addImport("ShellyHttp", shelly_http.module("ShellyHttp"));
     b.installArtifact(exe);
 
