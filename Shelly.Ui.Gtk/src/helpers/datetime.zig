@@ -25,6 +25,14 @@ pub fn formatTime(allocator: std.mem.Allocator, hour: i32, minute: i32) ![]u8 {
     );
 }
 
+/// Gets the date part of an ISO 8601 timestamp, e.g. `2024-01-15`.
+pub fn extractDate(allocator: std.mem.Allocator, raw: []const u8) ![:0]const u8 {
+    const trimmed = std.mem.trim(u8, raw, " \t\n\r");
+    const end = std.mem.indexOfScalar(u8, trimmed, 'T') orelse trimmed.len;
+    const slice = if (end >= 10) trimmed[0..10] else trimmed;
+    return allocator.dupeSentinel(u8, slice, 0);
+}
+
 test "parseTime ignores extra content after minutes" {
     const testing = std.testing;
 
@@ -176,4 +184,87 @@ test "formatTime produces zero-padded output" {
     const s = try formatTime(alloc, 1, 2);
     defer alloc.free(s);
     try testing.expectEqualStrings("01:02", s);
+}
+
+test "extractDate reduces ISO 8601 timestamp to date prefix" {
+    const testing = std.testing;
+    var alloc = std.testing.allocator;
+
+    const s = try extractDate(alloc, "2024-01-15T10:30:00Z");
+    defer alloc.free(s);
+    try testing.expectEqualStrings("2024-01-15", s);
+}
+
+test "extractDate trims whitespace around ISO timestamps" {
+    const testing = std.testing;
+    var alloc = std.testing.allocator;
+
+    const s = try extractDate(alloc, "  \t2024-01-15T10:30:00Z\n ");
+    defer alloc.free(s);
+    try testing.expectEqualStrings("2024-01-15", s);
+}
+
+test "extractDate keeps plain date strings unchanged" {
+    const testing = std.testing;
+    var alloc = std.testing.allocator;
+
+    const s = try extractDate(alloc, "2024-01-15");
+    defer alloc.free(s);
+    try testing.expectEqualStrings("2024-01-15", s);
+}
+
+test "extractDate falls back to original string for non-ISO input" {
+    const testing = std.testing;
+    var alloc = std.testing.allocator;
+
+    // no 'T' and longer than 10 chars — truncated to 10 characters
+    {
+        const s = try extractDate(alloc, "Jan 15, 2024");
+        defer alloc.free(s);
+        try testing.expectEqualStrings("Jan 15, 20", s);
+    }
+
+    // 'T' appears before position 10, so the string is not an ISO date
+    {
+        const s = try extractDate(alloc, "01T15");
+        defer alloc.free(s);
+        try testing.expectEqualStrings("01T15", s);
+    }
+
+    // no 'T' and shorter than 10 chars
+    {
+        const s = try extractDate(alloc, "short");
+        defer alloc.free(s);
+        try testing.expectEqualStrings("short", s);
+    }
+
+    {
+        const s = try extractDate(alloc, "");
+        defer alloc.free(s);
+        try testing.expectEqualStrings("", s);
+    }
+}
+
+test "extractDate truncates long strings without a time separator" {
+    const testing = std.testing;
+    var alloc = std.testing.allocator;
+
+    const s = try extractDate(alloc, "2024-01-15 extra content");
+    defer alloc.free(s);
+    try testing.expectEqualStrings("2024-01-15", s);
+}
+
+test "extractDate returns a null-terminated string" {
+    const testing = std.testing;
+    var alloc = std.testing.allocator;
+
+    const s: [:0]const u8 = try extractDate(alloc, "2024-01-15T10:30:00Z");
+    defer alloc.free(s);
+    try testing.expectEqual(@as(u8, 0), s[s.len]);
+}
+
+test "extractDate fails on allocation error" {
+    const testing = std.testing;
+    var failing = std.testing.FailingAllocator.init(testing.allocator, .{ .fail_index = 0 });
+    try testing.expectError(error.OutOfMemory, extractDate(failing.allocator(), "2024-01-15T10:30:00Z"));
 }

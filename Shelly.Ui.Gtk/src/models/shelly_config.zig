@@ -41,6 +41,7 @@ pub const ShellyConfig = struct {
     ShellyIconsEnabled: bool = true,
     ShellySearchEnabled: bool = false,
     StarFishEnabled: bool = false,
+    WebviewEnabled: bool = false,
 
     // Window & View
     WindowWidth: f64 = 800,

@@ -15,6 +15,8 @@ const support = @import("support.zig");
 const datetime = @import("../helpers/datetime.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
+const VersionHistoryDialog = @import("../dialog/page/version_history.zig").VersionHistoryDialog;
+const HistoryEntry = @import("../dialog/page/version_history.zig").Entry;
 const options = @import("options");
 
 pub const SettingsPage = ShellySettingsPage;
@@ -218,8 +220,108 @@ pub const ShellySettingsPage = extern struct {
         applyTrayVisibility(p);
     }
 
-    fn on_changelog_clicked(_: *gtk.Button, _: *Self) callconv(.c) void {
-        std.debug.print("settings: view changelog (not implemented yet)\n", .{});
+    fn showChangelog(self: *Self) !void {
+        var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+        defer arena.deinit();
+        const arena_alloc = arena.allocator();
+
+        var threaded: std.Io.Threaded = .init(arena_alloc, .{});
+        defer threaded.deinit();
+
+        var http_client: std.http.Client = .{ .allocator = arena_alloc, .io = threaded.io() };
+        defer http_client.deinit();
+
+        const url = "https://api.github.com/repos/Seafoam-Labs/Shelly-ALPM/releases";
+        var body: std.Io.Writer.Allocating = .init(arena_alloc);
+        defer body.deinit();
+
+        const fetch_result = http_client.fetch(.{
+            .location = .{ .url = url },
+            .response_writer = &body.writer,
+        }) catch |err| {
+            std.log.warn("settings: changelog fetch failed: {any}", .{err});
+            return err;
+        };
+        if (fetch_result.status != .ok) {
+            std.log.warn("settings: changelog fetch returned status {d}", .{@intFromEnum(fetch_result.status)});
+            return error.HttpRequestFailed;
+        }
+
+        const Release = struct {
+            tag_name: []const u8 = "",
+            body: []const u8 = "",
+            published_at: []const u8 = "",
+        };
+        const parsed = std.json.parseFromSlice(
+            []const Release,
+            arena_alloc,
+            body.written(),
+            .{ .ignore_unknown_fields = true, .allocate = .alloc_always },
+        ) catch |err| {
+            std.log.warn("settings: changelog JSON parse failed: {any}", .{err});
+            return err;
+        };
+        defer parsed.deinit();
+        const releases = parsed.value;
+
+        if (releases.len == 0) {
+            self.priv().toast.show(.info, "No changelog entries found");
+            return;
+        }
+
+        const c = std.heap.c_allocator;
+        var entries: std.ArrayListUnmanaged(HistoryEntry) = .empty;
+        defer {
+            for (entries.items) |e| {
+                c.free(e.version);
+                c.free(e.date);
+                c.free(e.note);
+            }
+            entries.deinit(c);
+        }
+
+        for (releases) |release| {
+            const version = c.dupeSentinel(u8, release.tag_name, 0) catch continue;
+            const date = datetime.extractDate(c, release.published_at) catch {
+                c.free(version);
+                continue;
+            };
+            const note = c.dupeSentinel(u8, if (release.body.len > 0) release.body else "No details for this release", 0) catch {
+                c.free(version);
+                c.free(date);
+                continue;
+            };
+            entries.append(c, .{ .version = version, .date = date, .note = note }) catch {
+                c.free(version);
+                c.free(date);
+                c.free(note);
+                continue;
+            };
+        }
+
+        if (entries.items.len == 0) {
+            self.priv().toast.show(.@"error", "Failed to load changelog");
+            return;
+        }
+
+        const owned = entries.toOwnedSlice(c) catch return;
+        const dlg = VersionHistoryDialog.new("Changelog", "Shelly", owned, &on_close_changelog, self);
+
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.showLockout(dlg.as(gtk.Widget));
+        }
+    }
+
+    fn on_changelog_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
+        self.showChangelog() catch |err| {
+            std.log.err("settings: failed to load changelog: {any}", .{err});
+            self.priv().toast.show(.@"error", "Failed to load changelog");
+        };
+    }
+
+    fn on_close_changelog(ctx: ?*anyopaque) void {
+        const self: *Self = @ptrCast(@alignCast(ctx.?));
+        if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
     }
 
     fn on_pick_tray_icon(_: *gtk.Button, self: *Self) callconv(.c) void {
@@ -653,6 +755,8 @@ fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.no_confirm_switch, cfg.NoConfirm);
     setSwitch(p.shelly_search_switch, cfg.ShellySearchEnabled);
     setSwitch(p.package_downgrade_switch, cfg.PackageDowngradeEnabled);
+    setSwitch(p.remove_cache_switch, cfg.PackageManagementRemoveConfigs);
+    setSwitch(p.webview_switch, cfg.WebviewEnabled);
 
     setButtonLabel(p.appimage_install_path_button, std.heap.c_allocator, cfg.AppImageInstallPath, "Select Directory");
 }
@@ -707,6 +811,8 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.NoConfirm = getSwitch(p.no_confirm_switch);
     cfg.ShellySearchEnabled = getSwitch(p.shelly_search_switch);
     cfg.PackageDowngradeEnabled = getSwitch(p.package_downgrade_switch);
+    cfg.PackageManagementRemoveConfigs = getSwitch(p.remove_cache_switch);
+    cfg.WebviewEnabled = getSwitch(p.webview_switch);
 }
 
 fn applyScheduleVisibility(p: *ShellySettingsPage.Private) void {
