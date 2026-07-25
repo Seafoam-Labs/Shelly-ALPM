@@ -1,6 +1,9 @@
 const std = @import("std");
 const Io = std.Io;
-const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
+const shelly_config = @import("../models/shelly_config.zig");
+const ShellyConfig = shelly_config.ShellyConfig;
+const ShellyTabs = shelly_config.ShellyTabs;
+const ViewType = shelly_config.ViewType;
 const xdg_paths = @import("xdg_paths.zig").xdg_paths;
 
 // TODO: Change me to config.json
@@ -71,30 +74,39 @@ pub const ConfigResolver = struct {
         ) catch |err| switch (err) {
             error.FileNotFound => {
                 try self.saveDefault(settings_path);
-                const default_json = try std.json.Stringify.valueAlloc(
-                    self.allocator,
-                    ShellyConfig{},
-                    .{ .whitespace = .indent_2 },
-                );
-                defer self.allocator.free(default_json);
-                self.parsed = try std.json.parseFromSlice(
-                    ShellyConfig,
-                    self.allocator,
-                    default_json,
-                    .{ .ignore_unknown_fields = true, .allocate = .alloc_always },
-                );
+                self.parsed = try self.parseJsonIntoConfig("{}");
                 return;
             },
             else => return err,
         };
         defer self.allocator.free(data);
 
-        self.parsed = try std.json.parseFromSlice(
-            ShellyConfig,
+        self.parsed = try self.parseJsonIntoConfig(data);
+    }
+
+    fn parseJsonIntoConfig(self: *ConfigResolver, json: []const u8) !std.json.Parsed(ShellyConfig) {
+        const opts: std.json.ParseOptions = .{
+            .ignore_unknown_fields = true,
+            .allocate = .alloc_always,
+        };
+
+        var value_parsed = try std.json.parseFromSlice(
+            std.json.Value,
             self.allocator,
-            data,
-            .{ .ignore_unknown_fields = true, .allocate = .alloc_always },
+            json,
+            opts,
         );
+        defer value_parsed.deinit();
+
+        var scratch = std.heap.ArenaAllocator.init(self.allocator);
+        defer scratch.deinit();
+
+        const config = parseTolerant(scratch.allocator(), value_parsed.value);
+
+        const normalized = try std.json.Stringify.valueAlloc(self.allocator, config, .{});
+        defer self.allocator.free(normalized);
+
+        return std.json.parseFromSlice(ShellyConfig, self.allocator, normalized, opts);
     }
 
     pub fn save(self: *ConfigResolver) !void {
@@ -154,6 +166,99 @@ pub const ConfigResolver = struct {
         try fw.flush();
     }
 };
+
+fn parseTolerant(allocator: std.mem.Allocator, source: std.json.Value) ShellyConfig {
+    var config: ShellyConfig = .{};
+
+    const obj = switch (source) {
+        .object => |o| o,
+        else => {
+            std.log.warn(
+                "shelly config: top-level JSON value is not an object; using defaults",
+                .{},
+            );
+            return config;
+        },
+    };
+
+    inline for (@typeInfo(ShellyConfig).@"struct".fields) |field| {
+        if (obj.get(field.name)) |v| {
+            if (coerceValue(field.type, allocator, v)) |value| {
+                @field(config, field.name) = value;
+            } else {
+                std.log.warn(
+                    "shelly config: ignoring invalid value for '{s}', using default",
+                    .{field.name},
+                );
+            }
+        }
+    }
+
+    return config;
+}
+
+fn coerceValue(
+    comptime T: type,
+    allocator: std.mem.Allocator,
+    v: std.json.Value,
+) ?T {
+    return switch (@typeInfo(T)) {
+        .bool => switch (v) {
+            .bool => |b| b,
+            else => null,
+        },
+        .int => switch (v) {
+            .integer => |i| std.math.cast(T, i),
+            else => null,
+        },
+        .float => switch (v) {
+            .float => |f| @as(T, f),
+            .integer => |i| @as(T, @floatFromInt(i)),
+            else => null,
+        },
+        .@"enum" => switch (v) {
+            .string => |s| std.meta.stringToEnum(T, s),
+            .integer => |i| blk: {
+                const tag_count = @typeInfo(T).@"enum".fields.len;
+                if (i >= 0 and i < tag_count) {
+                    break :blk @enumFromInt(@as(std.meta.Tag(T), @intCast(i)));
+                }
+                break :blk null;
+            },
+            else => null,
+        },
+        .pointer => |p| switch (p.size) {
+            .slice => coerceSlice(T, p.child, allocator, v),
+            else => null,
+        },
+        else => null,
+    };
+}
+
+fn coerceSlice(
+    comptime T: type,
+    comptime Child: type,
+    allocator: std.mem.Allocator,
+    v: std.json.Value,
+) ?T {
+    if (Child == u8) {
+        return switch (v) {
+            .string => |s| s,
+            else => null,
+        };
+    }
+
+    const arr = switch (v) {
+        .array => |a| a,
+        else => return null,
+    };
+
+    const items = allocator.alloc(Child, arr.items.len) catch return null;
+    for (arr.items, 0..) |elem, i| {
+        items[i] = coerceValue(Child, allocator, elem) orelse return null;
+    }
+    return items;
+}
 
 const testing = std.testing;
 
@@ -367,4 +472,115 @@ test "load propagates errors for malformed JSON" {
     defer svc.deinit();
 
     try testing.expectError(error.SyntaxError, svc.load());
+}
+
+test "load uses defaults for fields with wrong types" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    {
+        var sub_dir = try tmp.dir.createDirPathOpen(testing.io, "shelly", .{});
+        defer sub_dir.close(testing.io);
+        const file = try sub_dir.createFile(testing.io, "settings.json", .{});
+        defer file.close(testing.io);
+        var buf: [256]u8 = undefined;
+        var fw = file.writer(testing.io, &buf);
+        // `NewInstall` expects a bool but gets a string; `WindowWidth` expects
+        // an f64 but gets a bool. Both should fall back to their defaults while
+        // the `AurEnabled` is preserved.
+        try fw.interface.writeAll(
+            \\{"NewInstall":"oops","WindowWidth":true,"AurEnabled":true}
+        );
+        try fw.flush();
+    }
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const defaults: ShellyConfig = .{};
+    const cfg = try svc.get();
+    try testing.expectEqual(defaults.NewInstall, cfg.NewInstall);
+    try testing.expectEqual(defaults.WindowWidth, cfg.WindowWidth);
+    try testing.expectEqual(true, cfg.AurEnabled);
+}
+
+test "load uses default for unknown enum tag" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    {
+        var sub_dir = try tmp.dir.createDirPathOpen(testing.io, "shelly", .{});
+        defer sub_dir.close(testing.io);
+        const file = try sub_dir.createFile(testing.io, "settings.json", .{});
+        defer file.close(testing.io);
+        var buf: [256]u8 = undefined;
+        var fw = file.writer(testing.io, &buf);
+        try fw.interface.writeAll(
+            \\{"DefaultPageDropDown":"not_a_real_tab","PackageInstallView":"grid"}
+        );
+        try fw.flush();
+    }
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const cfg = try svc.get();
+    // Unknown tag -> default (.packages); valid tag still resolves.
+    try testing.expectEqual(ShellyTabs.packages, cfg.DefaultPageDropDown);
+    try testing.expectEqual(ViewType.grid, cfg.PackageInstallView);
+}
+
+test "load defaults when top-level JSON is not an object" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    {
+        var sub_dir = try tmp.dir.createDirPathOpen(testing.io, "shelly", .{});
+        defer sub_dir.close(testing.io);
+        const file = try sub_dir.createFile(testing.io, "settings.json", .{});
+        defer file.close(testing.io);
+        var buf: [64]u8 = undefined;
+        var fw = file.writer(testing.io, &buf);
+        try fw.interface.writeAll(
+            \\"just a string"
+        );
+        try fw.flush();
+    }
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const defaults: ShellyConfig = .{};
+    const cfg = try svc.get();
+    try testing.expectEqual(defaults.AurEnabled, cfg.AurEnabled);
+    try testing.expectEqual(defaults.WindowWidth, cfg.WindowWidth);
+}
+
+test "load accepts integer values for f64 fields" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    {
+        var sub_dir = try tmp.dir.createDirPathOpen(testing.io, "shelly", .{});
+        defer sub_dir.close(testing.io);
+        const file = try sub_dir.createFile(testing.io, "settings.json", .{});
+        defer file.close(testing.io);
+        var buf: [128]u8 = undefined;
+        var fw = file.writer(testing.io, &buf);
+        try fw.interface.writeAll(
+            \\{"WindowWidth":1280,"WindowHeight":720}
+        );
+        try fw.flush();
+    }
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const cfg = try svc.get();
+    try testing.expectEqual(@as(f64, 1280), cfg.WindowWidth);
+    try testing.expectEqual(@as(f64, 720), cfg.WindowHeight);
 }
