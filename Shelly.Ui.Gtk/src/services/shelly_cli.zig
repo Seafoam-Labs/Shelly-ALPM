@@ -6,6 +6,8 @@ const Flatpak = @import("../models/flatpak.zig").Flatpak;
 const AppstreamApp = @import("../models/flatpak.zig").AppstreamApp;
 const FlatpakSearchResponse = @import("../models/flatpak.zig").FlatpakSearchResponse;
 const CheckUpdates = @import("../models/sync.zig").CheckUpdates;
+const AppImage = @import("../models/appimage.zig").AppImage;
+const AppImageUpdate = @import("../models/appimage.zig").AppImageUpdate;
 const JsonPackFrame = @import("../helpers/ui_decode.zig").JsonPackFrame;
 const RunResult = std.process.RunResult;
 const AurPackage = @import("../models/aur_package.zig").AurPackage;
@@ -177,6 +179,22 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stderr);
 
         return JsonPackFrame.decodeLast([]AurPackage, self.allocator, result.stdout);
+    }
+
+    pub fn get_appimages(self: ShellyCli) !std.json.Parsed([]AppImage) {
+        const result = try self.run(&.{ "list", "appimage" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return JsonPackFrame.decode([]AppImage, self.allocator, result.stdout);
+    }
+
+    pub fn get_appimage_updates(self: ShellyCli) !std.json.Parsed([]AppImageUpdate) {
+        const result = try self.run(&.{ "list-updates", "appimage" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return JsonPackFrame.decode([]AppImageUpdate, self.allocator, result.stdout);
     }
 
     pub fn check_updates(self: ShellyCli) !std.json.Parsed(CheckUpdates) {

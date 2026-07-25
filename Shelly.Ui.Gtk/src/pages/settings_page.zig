@@ -167,7 +167,7 @@ pub const ShellySettingsPage = extern struct {
         if (p.loaded) return;
         p.loaded = true;
 
-        const version = std.fmt.allocPrintSentinel(std.heap.c_allocator, "{f}", .{options.version}, 0) catch |err| {
+        const version = std.fmt.allocPrintSentinel(std.heap.c_allocator, "v{f}", .{options.version}, 0) catch |err| {
             std.log.err("failed to format version: {s}", .{@errorName(err)});
             return;
         };

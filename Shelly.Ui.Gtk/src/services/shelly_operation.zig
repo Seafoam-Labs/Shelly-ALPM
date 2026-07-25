@@ -3,6 +3,7 @@ const bindings = @import("Shelly_Ui_Gtk");
 const glib = bindings.glib;
 const JsonPackFrame = @import("../helpers/ui_decode.zig").JsonPackFrame;
 const Scope = @import("../models/flatpak.zig").InstallLevel;
+const UpdateType = @import("../models/appimage.zig").UpdateType;
 const builtin = @import("builtin");
 
 pub const Event = union(enum) {
@@ -330,6 +331,55 @@ pub const ShellyCommands = struct {
         try argv.append(alloc, "install");
         try argv.append(alloc, "aur");
         for (names) |n| try argv.append(alloc, n);
+        return argv.toOwnedSlice(alloc);
+    }
+
+    pub fn install_appimage(alloc: std.mem.Allocator, path: []const u8) ![]const []const u8 {
+        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        try argv.append(alloc, "install");
+        try argv.append(alloc, "appimage");
+        if (path.len > 0) try argv.append(alloc, path);
+        return argv.toOwnedSlice(alloc);
+    }
+
+    pub fn remove_appimage(alloc: std.mem.Allocator, name: []const u8, remove_config: bool) ![]const []const u8 {
+        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        try argv.append(alloc, "remove");
+        try argv.append(alloc, "appimage");
+        if (name.len > 0) try argv.append(alloc, name);
+        if (remove_config) try argv.append(alloc, "--remove-config");
+        return argv.toOwnedSlice(alloc);
+    }
+
+    pub fn upgrade_appimages(alloc: std.mem.Allocator) ![]const []const u8 {
+        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        try argv.append(alloc, "upgrade");
+        try argv.append(alloc, "appimage");
+        return argv.toOwnedSlice(alloc);
+    }
+
+    pub fn sync_appimage(alloc: std.mem.Allocator, name: ?[]const u8) ![]const []const u8 {
+        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        try argv.append(alloc, "sync");
+        try argv.append(alloc, "appimage");
+        if (name) |n| if (n.len > 0) try argv.append(alloc, n);
+        return argv.toOwnedSlice(alloc);
+    }
+
+    pub fn configure_appimage(
+        alloc: std.mem.Allocator,
+        name: []const u8,
+        url: []const u8,
+        update_type: UpdateType,
+        prerelease: bool,
+    ) ![]const []const u8 {
+        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        try argv.append(alloc, "sync");
+        try argv.append(alloc, "appimage");
+        try argv.append(alloc, name);
+        try argv.append(alloc, url);
+        try argv.append(alloc, update_type.toCliString());
+        if (prerelease) try argv.append(alloc, "--prerelease");
         return argv.toOwnedSlice(alloc);
     }
 };
