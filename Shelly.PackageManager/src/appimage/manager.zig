@@ -365,56 +365,63 @@ pub const AppImageManager = struct {
         return reader.interface.allocRemaining(self.allocator, .unlimited);
     }
 
-    fn installIcon(self: AppImageManager, squashfs_root: []const u8, clean_name: []const u8, icon_value: []const u8) ![]const u8 {
-        var d = std.Io.Dir.cwd().openDir(self.io, squashfs_root, .{ .iterate = true }) catch return try self.allocator.dupe(u8, "");
-        defer d.close(self.io);
+    const IconSource = struct { path: []const u8, ext: []const u8 };
 
-        var found_path: ?[]const u8 = null;
-        var found_ext: []const u8 = ".png";
+    fn findIconSource(self: AppImageManager, squashfs_root: []const u8, icon_value: []const u8) !?IconSource {
+        var d = std.Io.Dir.cwd().openDir(self.io, squashfs_root, .{ .iterate = true }) catch return null;
+        defer d.close(self.io);
 
         var it = d.iterate();
         while (try it.next(self.io)) |entry| {
             if (entry.kind != .file) continue;
+
             const stem = std.fs.path.stem(entry.name);
-            if (std.mem.eql(u8, stem, icon_value)) {
-                found_path = try std.fs.path.join(self.allocator, &.{ squashfs_root, entry.name });
-                found_ext = std.fs.path.extension(entry.name);
-                break;
-            }
+            if (!std.mem.eql(u8, stem, icon_value)) continue;
+
+            const ext = std.fs.path.extension(entry.name);
+            if (!std.mem.eql(u8, ext, ".png") and !std.mem.eql(u8, ext, ".svg")) continue;
+
+            const path = try std.fs.path.join(self.allocator, &.{ squashfs_root, entry.name });
+            return IconSource{ .path = path, .ext = ext };
         }
-        defer if (found_path) |p| self.allocator.free(p);
 
-        const src_icon_path = found_path orelse blk: {
-            const diricon = try std.fs.path.join(self.allocator, &.{ squashfs_root, ".DirIcon" });
-            if (std.Io.Dir.cwd().statFile(self.io, diricon, .{})) |_| {
-                found_ext = ".png";
-                break :blk diricon;
-            } else |_| {
-                self.allocator.free(diricon);
-                return try self.allocator.dupe(u8, "");
-            }
-        };
+        const diricon = try std.fs.path.join(self.allocator, &.{ squashfs_root, ".DirIcon" });
+        if (std.Io.Dir.cwd().statFile(self.io, diricon, .{})) |_| {
+            return IconSource{ .path = diricon, .ext = ".png" };
+        } else |_| {
+            self.allocator.free(diricon);
+            return null;
+        }
+    }
 
-        const icon_sub_dir = if (std.mem.eql(u8, found_ext, ".svg"))
+    fn iconSubDir(ext: []const u8) []const u8 {
+        return if (std.mem.eql(u8, ext, ".svg"))
             "icons/hicolor/scalable/apps"
         else
             "icons/hicolor/256x256/apps";
+    }
+
+    fn installIcon(self: AppImageManager, squashfs_root: []const u8, clean_name: []const u8, icon_value: []const u8) ![]const u8 {
+        const source = (try self.findIconSource(squashfs_root, icon_value)) orelse
+            return try self.allocator.dupe(u8, "");
+        defer self.allocator.free(source.path);
 
         const data_home = try xdg_paths.xdgDataHome(self.allocator, self.environ);
         defer self.allocator.free(data_home);
-        const icon_dir = try std.fs.path.join(self.allocator, &.{ data_home, icon_sub_dir });
+
+        const icon_dir = try std.fs.path.join(self.allocator, &.{ data_home, iconSubDir(source.ext) });
         defer self.allocator.free(icon_dir);
         try std.Io.Dir.cwd().createDirPath(self.io, icon_dir);
 
         const lower_clean = try std.ascii.allocLowerString(self.allocator, clean_name);
         defer self.allocator.free(lower_clean);
 
-        const dest_icon_name = try std.fmt.allocPrint(self.allocator, "{s}{s}", .{ lower_clean, found_ext });
+        const dest_icon_name = try std.fmt.allocPrint(self.allocator, "{s}{s}", .{ lower_clean, source.ext });
         defer self.allocator.free(dest_icon_name);
         const dest_icon_path = try std.fs.path.join(self.allocator, &.{ icon_dir, dest_icon_name });
         defer self.allocator.free(dest_icon_path);
 
-        self.copyFile(src_icon_path, dest_icon_path) catch |err| {
+        self.copyFile(source.path, dest_icon_path) catch |err| {
             std.log.warn("Could not copy icon: {s}", .{@errorName(err)});
             return try self.allocator.dupe(u8, "");
         };
@@ -793,7 +800,7 @@ pub const AppImageManager = struct {
 
         const data_home = try xdg_paths.xdgDataHome(self.allocator, self.environ);
         defer self.allocator.free(data_home);
-        for ([_][]const u8{ "icons/hicolor/scalable/apps", "icons/hicolor/256x256/apps" }) |icon_sub_dir| {
+        for ([_][]const u8{ iconSubDir(".svg"), iconSubDir(".png") }) |icon_sub_dir| {
             const icon_dir = std.fs.path.join(self.allocator, &.{ data_home, icon_sub_dir }) catch continue;
             defer self.allocator.free(icon_dir);
             var d = std.Io.Dir.cwd().openDir(self.io, icon_dir, .{ .iterate = true }) catch continue;
