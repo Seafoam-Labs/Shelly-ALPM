@@ -17,6 +17,7 @@ const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const VersionHistoryDialog = @import("../dialog/page/version_history.zig").VersionHistoryDialog;
 const HistoryEntry = @import("../dialog/page/version_history.zig").Entry;
+const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
 const options = @import("options");
 
 pub const SettingsPage = ShellySettingsPage;
@@ -151,6 +152,13 @@ pub const ShellySettingsPage = extern struct {
             p.tray_switch.as(gobject.Object),
             *Self,
             &on_tray_notify,
+            self,
+            .{ .detail = "active" },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.aur_switch.as(gobject.Object),
+            *Self,
+            &on_aur_notify,
             self,
             .{ .detail = "active" },
         );
@@ -564,6 +572,44 @@ pub const ShellySettingsPage = extern struct {
     fn on_tray_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         applyTrayVisibility(self.priv());
         applyScheduleVisibility(self.priv());
+    }
+
+    fn on_aur_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        const active = gtk.Switch.getActive(p.aur_switch) != 0;
+        if (!active) return;
+
+        const svc = obtainConfigService() catch return;
+        const cfg = svc.get() catch return;
+
+        if (cfg.AurEnabled) return;
+        if (cfg.AurWarningConfirmed) return;
+
+        gtk.Switch.setActive(p.aur_switch, 0);
+
+        const dialog = ConfirmDialog.new(
+            "Enable AUR?",
+            "The Arch User Repository (AUR) is a community-driven repository. " ++
+                "Packages are user-produced and may contain risks. Do you want to enable it?",
+            &on_aur_confirmation_response,
+            self,
+        );
+        dialog.setButtons("Enable", "Cancel");
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.showLockout(dialog.as(gtk.Widget));
+        }
+    }
+
+    fn on_aur_confirmation_response(ctx: ?*anyopaque, confirmed: bool) void {
+        const self: *Self = @ptrCast(@alignCast(ctx.?));
+        if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
+        if (!confirmed) return;
+
+        updateConfigField(.AurWarningConfirmed, true);
+
+        const p = self.priv();
+        gtk.Switch.setActive(p.aur_switch, 1);
+        p.toast.show(.success, "AUR enabled");
     }
 
     const template_children = .{
