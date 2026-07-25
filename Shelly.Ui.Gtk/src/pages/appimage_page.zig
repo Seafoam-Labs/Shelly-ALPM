@@ -526,6 +526,7 @@ pub const AppImagePage = extern struct {
             .packages = names.items,
             .on_complete = &on_op_complete,
             .ctx = self,
+            .privileged = false,
         });
     }
 
@@ -570,6 +571,7 @@ pub const AppImagePage = extern struct {
             .packages = &.{},
             .on_complete = &on_op_complete,
             .ctx = self,
+            .privileged = false,
         });
     }
 
@@ -584,6 +586,7 @@ pub const AppImagePage = extern struct {
             .packages = &.{},
             .on_complete = &on_op_complete,
             .ctx = self,
+            .privileged = false,
         });
     }
 
@@ -606,6 +609,7 @@ pub const AppImagePage = extern struct {
             .packages = names.items,
             .on_complete = &on_op_complete,
             .ctx = self,
+            .privileged = false,
         });
     }
 
@@ -638,6 +642,7 @@ pub const AppImagePage = extern struct {
             .packages = names.items,
             .on_complete = &on_op_complete,
             .ctx = self,
+            .privileged = false,
         });
     }
 
@@ -678,6 +683,7 @@ pub const AppImagePage = extern struct {
             .packages = names.items,
             .on_complete = &on_op_complete,
             .ctx = self,
+            .privileged = false,
         });
     }
 

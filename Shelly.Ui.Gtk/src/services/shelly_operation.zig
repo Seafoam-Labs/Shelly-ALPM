@@ -5,6 +5,7 @@ const JsonPackFrame = @import("../helpers/ui_decode.zig").JsonPackFrame;
 const Scope = @import("../models/flatpak.zig").InstallLevel;
 const UpdateType = @import("../models/appimage.zig").UpdateType;
 const builtin = @import("builtin");
+const runtime = @import("runtime.zig");
 
 pub const Event = union(enum) {
     info: struct {
@@ -448,12 +449,8 @@ pub const ShellyOperation = struct {
     }
 
     fn spawn_and_read(self: *ShellyOperation, argv: []const []const u8) !void {
-        self.child = try std.process.spawn(self.io, .{
-            .argv = argv,
-            .stdin = .pipe,
-            .stdout = .pipe,
-            .stderr = .ignore,
-        });
+        // FIXME: Environment map is not propagated to the child process and has to be set manually when unprivileged.
+        self.child = try std.process.spawn(self.io, .{ .argv = argv, .stdin = .pipe, .stdout = .pipe, .stderr = .ignore, .environ_map = runtime.environ_map });
         self.reader = try std.Thread.spawn(.{}, reader_loop, .{self});
     }
 
