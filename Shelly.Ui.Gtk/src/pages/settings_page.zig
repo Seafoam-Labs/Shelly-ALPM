@@ -226,6 +226,10 @@ pub const ShellySettingsPage = extern struct {
 
         applyScheduleVisibility(p);
         applyTrayVisibility(p);
+
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.applyConfig();
+        }
     }
 
     fn showChangelog(self: *Self) !void {

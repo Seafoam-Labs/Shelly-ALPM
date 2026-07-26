@@ -12,6 +12,7 @@ const SupportPage = @import("pages/support.zig");
 const SettingsPage = @import("pages/settings_page.zig").SettingsPage;
 const TransactionPage = @import("pages/transaction_page.zig").TransactionPage;
 const TransactionRequest = @import("pages/transaction_page.zig").TransactionRequest;
+const runtime = @import("services/runtime.zig");
 
 const NavButton = struct {
     button: *gtk.Button,
@@ -72,6 +73,51 @@ pub const ShellyWindow = extern struct {
         p.collapsed = true;
         build_shell(self, readNavMode());
         populate_stack(self);
+        applyConfig(self);
+    }
+
+    pub fn applyConfig(self: *ShellyWindow) void {
+        const svc = runtime.config orelse return;
+        const cfg = svc.get() catch return;
+
+        setNavEnabled(self, "aur", cfg.AurEnabled);
+        setNavEnabled(self, "flatpak", cfg.FlatPackEnabled);
+        setNavEnabled(self, "appimage", cfg.AppImageEnabled);
+    }
+
+    fn setNavEnabled(self: *ShellyWindow, name: [:0]const u8, enabled: bool) void {
+        const p = self.private();
+
+        var nb_opt: ?*NavButton = null;
+        for (p.nav_buttons.items) |nb| {
+            if (std.mem.eql(u8, nb.name, name)) {
+                nb_opt = nb;
+                break;
+            }
+        }
+        const nb = nb_opt orelse return;
+        const visible: c_int = @intFromBool(enabled);
+
+        gtk.Widget.setVisible(nb.button.as(gtk.Widget), visible);
+
+        if (gtk.Stack.getChildByName(nb.stack, name)) |child| {
+            const page = gtk.Stack.getPage(nb.stack, child);
+            gtk.StackPage.setVisible(page, visible);
+        }
+
+        if (enabled) return;
+
+        const cn_opt = gtk.Stack.getVisibleChildName(nb.stack);
+        const is_active = if (cn_opt) |cn| std.mem.eql(u8, std.mem.span(cn), name) else false;
+        if (!is_active) return;
+
+        gtk.Stack.setVisibleChildName(nb.stack, "package");
+        for (p.nav_buttons.items) |n| {
+            if (std.mem.eql(u8, n.name, "package")) {
+                set_active_nav(self, n);
+                break;
+            }
+        }
     }
 
     fn readNavMode() NavMode {
