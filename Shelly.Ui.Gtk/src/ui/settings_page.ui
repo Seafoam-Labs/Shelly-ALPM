@@ -105,7 +105,7 @@
                                 <property name="spacing">12</property>
                                 <child>
                                   <object class="GtkLabel">
-                                    <property name="label" translatable="yes">Enable Recommended Page</property>
+                                    <property name="label" translatable="yes">Enable Recommended</property>
                                     <property name="halign">start</property>
                                     <property name="hexpand">true</property>
                                   </object>

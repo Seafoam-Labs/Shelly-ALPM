@@ -80,6 +80,7 @@ pub const PackagePage = extern struct {
         detail_revealer: *gtk.Revealer,
         detail: *PackageDetail,
 
+        show_recommended: bool,
         recommend_idx: u32,
         filtering_recommended: bool,
 
@@ -679,6 +680,8 @@ pub const PackagePage = extern struct {
         gtk.ToggleButton.setActive(p.list_view_button, @intFromBool(!use_grid));
         gtk.Widget.setVisible(p.detail_grid_hbox.as(gtk.Widget), @intFromBool(use_grid));
         gtk.Widget.setVisible(p.detail_hbox.as(gtk.Widget), @intFromBool(!use_grid));
+
+        p.show_recommended = cfg.RecommendedEnabled;
     }
 
     fn updateConfigField(
@@ -771,7 +774,7 @@ pub const PackagePage = extern struct {
         var it = set.keyIterator();
         while (it.next()) |k| list.append(alloc, k.*) catch {};
 
-        const recommend_categories = recommendations.load(alloc, threaded.io());
+        const recommend_categories = if (p.show_recommended) recommendations.load(alloc, threaded.io()) else &.{};
 
         post_result(page, parsed.value, list.items, arena_ptr, generation, recommend_categories);
     }
