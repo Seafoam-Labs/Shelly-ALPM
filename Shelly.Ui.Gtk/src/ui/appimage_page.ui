@@ -57,7 +57,7 @@
                                 <property name="spacing">6</property>
                                 <child>
                                   <object class="GtkImage">
-                                    <property name="icon-name">emblem-synchronizing-symbolic</property>
+                                    <property name="icon-name">update-symbolic</property>
                                   </object>
                                 </child>
                                 <child>

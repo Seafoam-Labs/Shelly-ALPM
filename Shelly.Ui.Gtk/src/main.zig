@@ -41,6 +41,11 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
         gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
 
+    if (gdk.Display.getDefault()) |display| {
+        const icon_theme = gtk.IconTheme.getForDisplay(display);
+        gtk.IconTheme.addResourcePath(icon_theme, "/com/shellyorg/shelly/icons");
+    }
+
     _ = runtime.setupConfig(std.heap.c_allocator) catch |err| {
         std.log.warn("settings: failed to load config service: {t}", .{err});
     };

@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
+  <gresource prefix="/com/shellyorg/shelly/icons/scalable/actions">
+    <file alias="flatpak-symbolic.svg" preprocess="xml-stripblanks">assets/icons/flatpak-symbolic.svg</file>
+    <file alias="arch-symbolic.svg" preprocess="xml-stripblanks">assets/icons/arch-symbolic.svg</file>
+    <file alias="update-symbolic.svg" preprocess="xml-stripblanks">assets/icons/update-symbolic.svg</file>
+  </gresource>
   <gresource prefix="/com/shellyorg/shelly">
     <file>ui/main_window.ui</file>
     <file>ui/settings_page.ui</file>
