@@ -771,7 +771,7 @@ pub const PackagePage = extern struct {
         var it = set.keyIterator();
         while (it.next()) |k| list.append(alloc, k.*) catch {};
 
-        const recommend_categories = recommendations.load(alloc);
+        const recommend_categories = recommendations.load(alloc, threaded.io());
 
         post_result(page, parsed.value, list.items, arena_ptr, generation, recommend_categories);
     }

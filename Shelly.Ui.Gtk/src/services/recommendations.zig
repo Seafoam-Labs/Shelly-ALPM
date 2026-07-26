@@ -1,15 +1,19 @@
 const std = @import("std");
 const HttpClient = @import("ShellyHttp");
-const runtime = @import("runtime.zig");
 const RecommendCategory = @import("../models/recommendation.zig").RecommendCategory;
 
 pub const url = "https://www.seafoam-labs.org/recommend.json";
 pub const max_size: usize = 1 * 1024 * 1024;
 
+const timeout: std.Io.Timeout = .{ .duration = .{
+    .raw = std.Io.Duration.fromMilliseconds(500),
+    .clock = .awake,
+} };
+
 const user_agent = "Shelly-ALPM/3";
 
-pub fn load(alloc: std.mem.Allocator) []const RecommendCategory {
-    var client: HttpClient = .{ .allocator = alloc, .io = runtime.io };
+pub fn load(alloc: std.mem.Allocator, io: std.Io) []const RecommendCategory {
+    var client: HttpClient = .{ .allocator = alloc, .io = io, .connect_timeout = timeout };
     defer client.deinit();
 
     var body: std.Io.Writer.Allocating = .init(alloc);
