@@ -362,25 +362,6 @@
                               </object>
                             </child>
                             <child>
-                              <object class="GtkBox">
-                                <property name="orientation">horizontal</property>
-                                <property name="spacing">12</property>
-                                <child>
-                                  <object class="GtkLabel">
-                                    <property name="label" translatable="yes">Use Sidebar Navigation</property>
-                                    <property name="tooltip-text" translatable="yes">If enabled, Shelly will use a sidebar vertical navigation instead of the top bar one.</property>
-                                    <property name="halign">start</property>
-                                    <property name="hexpand">true</property>
-                                  </object>
-                                </child>
-                                <child>
-                                  <object class="GtkSwitch" id="use_old_menu_switch">
-                                    <property name="halign">end</property>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
-                            <child>
                               <object class="GtkBox" id="symbolic_tray_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>

@@ -185,7 +185,8 @@ fn parseTolerant(allocator: std.mem.Allocator, source: std.json.Value) ShellyCon
     const obj = switch (source) {
         .object => |o| o,
         else => {
-            std.log.warn(
+            // TODO: Change to warn after https://codeberg.org/ziglang/zig/issues/35189
+            std.log.info(
                 "shelly config: top-level JSON value is not an object; using defaults",
                 .{},
             );
@@ -198,7 +199,8 @@ fn parseTolerant(allocator: std.mem.Allocator, source: std.json.Value) ShellyCon
             if (coerceValue(field.type, allocator, v)) |value| {
                 @field(config, field.name) = value;
             } else {
-                std.log.warn(
+                // TODO: Change to warn after https://codeberg.org/ziglang/zig/issues/35189
+                std.log.info(
                     "shelly config: ignoring invalid value for '{s}', using default",
                     .{field.name},
                 );
@@ -364,11 +366,11 @@ test "set replaces in-memory config" {
     var svc = makeService(&tmp);
     defer svc.deinit();
 
-    try svc.set(.{ .AurEnabled = true, .WindowWidth = 1024 });
+    try svc.set(.{ .AurEnabled = true, .TrayCheckIntervalHours = 48 });
 
     const cfg = try svc.get();
     try testing.expectEqual(true, cfg.AurEnabled);
-    try testing.expectEqual(@as(f64, 1024), cfg.WindowWidth);
+    try testing.expectEqual(@as(i32, 48), cfg.TrayCheckIntervalHours);
 }
 
 test "save persists modifications and survives reload" {
@@ -382,7 +384,7 @@ test "save persists modifications and survives reload" {
 
         const cfg = try svc.get();
         cfg.AurEnabled = true;
-        cfg.WindowWidth = 1280;
+        cfg.TrayCheckIntervalHours = 48;
 
         try svc.save();
     }
@@ -394,7 +396,7 @@ test "save persists modifications and survives reload" {
 
     const cfg = try svc.get();
     try testing.expectEqual(true, cfg.AurEnabled);
-    try testing.expectEqual(@as(f64, 1280), cfg.WindowWidth);
+    try testing.expectEqual(@as(i32, 48), cfg.TrayCheckIntervalHours);
 }
 
 test "load can be called repeatedly without leaking" {
@@ -407,13 +409,13 @@ test "load can be called repeatedly without leaking" {
     for (0..3) |_| {
         try svc.load();
         const cfg = try svc.get();
-        cfg.WindowWidth = 999;
+        cfg.TrayCheckIntervalHours = 999;
     }
 
     // Final reload should reflect whatever is on disk (defaults here).
     try svc.load();
     const cfg = try svc.get();
-    try testing.expectEqual(@as(f64, 800), cfg.WindowWidth);
+    try testing.expectEqual(@as(i32, 72), cfg.TrayCheckIntervalHours);
 }
 
 test "set then save round-trips nested enum fields" {
@@ -497,11 +499,11 @@ test "load uses defaults for fields with wrong types" {
         defer file.close(testing.io);
         var buf: [256]u8 = undefined;
         var fw = file.writer(testing.io, &buf);
-        // `NewInstall` expects a bool but gets a string; `WindowWidth` expects
-        // an f64 but gets a bool. Both should fall back to their defaults while
+        // `NewInstall` expects a bool but gets a string; `TrayCheckIntervalHours` expects
+        // an i32 but gets a string. Both should fall back to their defaults while
         // the `AurEnabled` is preserved.
         try fw.interface.writeAll(
-            \\{"NewInstall":"oops","WindowWidth":true,"AurEnabled":true}
+            \\{"NewInstall":"oops","TrayCheckIntervalHours":"oops","AurEnabled":true}
         );
         try fw.flush();
     }
@@ -513,7 +515,7 @@ test "load uses defaults for fields with wrong types" {
     const defaults: ShellyConfig = .{};
     const cfg = try svc.get();
     try testing.expectEqual(defaults.NewInstall, cfg.NewInstall);
-    try testing.expectEqual(defaults.WindowWidth, cfg.WindowWidth);
+    try testing.expectEqual(defaults.TrayCheckIntervalHours, cfg.TrayCheckIntervalHours);
     try testing.expectEqual(true, cfg.AurEnabled);
 }
 
@@ -568,7 +570,7 @@ test "load defaults when top-level JSON is not an object" {
     const defaults: ShellyConfig = .{};
     const cfg = try svc.get();
     try testing.expectEqual(defaults.AurEnabled, cfg.AurEnabled);
-    try testing.expectEqual(defaults.WindowWidth, cfg.WindowWidth);
+    try testing.expectEqual(defaults.TrayCheckIntervalHours, cfg.TrayCheckIntervalHours);
 }
 
 test "load accepts integer values for f64 fields" {
@@ -583,7 +585,7 @@ test "load accepts integer values for f64 fields" {
         var buf: [128]u8 = undefined;
         var fw = file.writer(testing.io, &buf);
         try fw.interface.writeAll(
-            \\{"WindowWidth":1280,"WindowHeight":720}
+            \\{"TrayCheckIntervalHours":48}
         );
         try fw.flush();
     }
@@ -593,6 +595,5 @@ test "load accepts integer values for f64 fields" {
     try svc.load();
 
     const cfg = try svc.get();
-    try testing.expectEqual(@as(f64, 1280), cfg.WindowWidth);
-    try testing.expectEqual(@as(f64, 720), cfg.WindowHeight);
+    try testing.expectEqual(@as(i32, 48), cfg.TrayCheckIntervalHours);
 }

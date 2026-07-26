@@ -62,7 +62,6 @@ pub const ShellySettingsPage = extern struct {
 
         // Look & Feel
         shelly_icons_switch: *gtk.Switch,
-        use_old_menu_switch: *gtk.Switch,
         symbolic_tray_box: *gtk.Box,
         symbolic_tray_switch: *gtk.Switch,
         tray_icon_button: *gtk.Button,
@@ -646,7 +645,6 @@ pub const ShellySettingsPage = extern struct {
 
         // Look & Feel
         .{ "shelly_icons_switch", @offsetOf(Private, "shelly_icons_switch") },
-        .{ "use_old_menu_switch", @offsetOf(Private, "use_old_menu_switch") },
         .{ "symbolic_tray_box", @offsetOf(Private, "symbolic_tray_box") },
         .{ "symbolic_tray_switch", @offsetOf(Private, "symbolic_tray_switch") },
         .{ "tray_icon_button", @offsetOf(Private, "tray_icon_button") },
@@ -708,7 +706,6 @@ const default_page_entries = [_]DefaultPageEntry{
     .{ .label = "Flatpak", .value = .flatpak },
     .{ .label = "AppImage", .value = .app_image },
     .{ .label = "Shelly Search", .value = .shelly_search },
-    .{ .label = "Recommend", .value = .recommend },
 };
 
 const language_entries = [_]struct {
@@ -792,7 +789,6 @@ fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
 
     // Look & Feel
     setSwitch(p.shelly_icons_switch, cfg.ShellyIconsEnabled);
-    setSwitch(p.use_old_menu_switch, cfg.UseOldMenu);
     setSwitch(p.symbolic_tray_switch, cfg.UseSymbolicTray);
 
     gtk.DropDown.setSelected(p.default_page_drop, @intFromEnum(cfg.DefaultPageDropDown));
@@ -849,7 +845,6 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
 
     // Look & Feel
     cfg.ShellyIconsEnabled = getSwitch(p.shelly_icons_switch);
-    cfg.UseOldMenu = getSwitch(p.use_old_menu_switch);
     cfg.UseSymbolicTray = getSwitch(p.symbolic_tray_switch);
 
     const idx = gtk.DropDown.getSelected(p.default_page_drop);

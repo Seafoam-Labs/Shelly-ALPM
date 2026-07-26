@@ -9,7 +9,6 @@ pub const ShellyTabs = enum(u8) {
     flatpak = 2,
     app_image = 3,
     shelly_search = 4,
-    recommend = 5,
 };
 
 pub const DayOfWeek = enum(u8) {
@@ -28,7 +27,6 @@ pub const ShellyConfig = struct {
     NewInstall: bool = true,
     NewInstallInitSettings: bool = false,
     NoConfirm: bool = false,
-    UseOldMenu: bool = false,
 
     // Feature Toggles
     AurEnabled: bool = false,
@@ -40,44 +38,31 @@ pub const ShellyConfig = struct {
     RecommendedEnabled: bool = true,
     ShellyIconsEnabled: bool = true,
     ShellySearchEnabled: bool = false,
-    StarFishEnabled: bool = false,
     WebviewEnabled: bool = false,
 
     // Window & View
-    WindowWidth: f64 = 800,
-    WindowHeight: f64 = 600,
-    DefaultView: []const u8 = "HomeScreen",
     DefaultPageDropDown: ShellyTabs = .packages,
 
-    // Package Views
+    // Package Page
     PackageInstallView: ViewType = .list,
-    PackageUpdateView: ViewType = .list,
-    PackageManageView: ViewType = .list,
 
-    // Package Management
     PackageManagementCascadeDelete: bool = true,
     PackageManagementRemoveConfigs: bool = false,
     PackageManagementRemoveOptionalDeps: bool = true,
     PackageManagementShowHidden: bool = false,
 
-    // Package Install
     PackageInstallUpgrade: bool = false,
     PackageInstallShowHidden: bool = false,
     PackageInstallShowExplicitOnly: bool = false,
     PackageInstallShowDetailPane: bool = false,
 
-    // Package Update
-    PackageUpdateShowHidden: bool = false,
-
-    // AUR Install
+    // AUR Page
     AurInstallUseChroot: bool = false,
     AurInstallRunChecks: bool = false,
 
-    // AUR Remove
     AurRemoveCascadeDelete: bool = true,
     AurRemoveShowHidden: bool = false,
 
-    // AUR Update
     AurUpdateRunChecks: bool = false,
     AurUpdateShowHidden: bool = false,
 
