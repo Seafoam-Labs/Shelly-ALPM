@@ -104,8 +104,8 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode(CliMessage, self.allocator, result.stdout);
     }
 
-    pub fn get_packages(self: ShellyCli) !std.json.Parsed([]Package) {
-        const result = try self.run(&.{"-Ssv"});
+    pub fn get_packages(self: ShellyCli, show_hidden: bool) !std.json.Parsed([]Package) {
+        const result = try self.run(&.{if (show_hidden) "-Ssvw" else "-Ssv"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
@@ -226,7 +226,7 @@ test "get_packages" {
 
     const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = threaded.io() };
 
-    const parsed = try cli.get_packages();
+    const parsed = try cli.get_packages(false);
 
     defer parsed.deinit();
 

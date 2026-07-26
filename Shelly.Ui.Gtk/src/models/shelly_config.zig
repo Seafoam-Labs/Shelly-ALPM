@@ -63,6 +63,8 @@ pub const ShellyConfig = struct {
     // Package Install
     PackageInstallUpgrade: bool = false,
     PackageInstallShowHidden: bool = false,
+    PackageInstallShowExplicitOnly: bool = false,
+    PackageInstallShowDetailPane: bool = false,
 
     // Package Update
     PackageUpdateShowHidden: bool = false,

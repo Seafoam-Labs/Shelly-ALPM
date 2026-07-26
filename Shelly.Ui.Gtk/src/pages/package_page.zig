@@ -14,6 +14,8 @@ const IconResolver = @import("../services/icon_resolver.zig").IconResolver;
 const Package = @import("../models/packages.zig").Package;
 const runtime = @import("../services/runtime.zig");
 const c_string = @import("../helpers/c_string.zig");
+const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
+const ViewType = @import("../models/shelly_config.zig").ViewType;
 
 const Event = @import("../services/shelly_operation.zig").Event;
 const PackageDetail = @import("package_detail.zig").PackageDetail;
@@ -52,16 +54,23 @@ pub const PackagePage = extern struct {
         install_button: *gtk.Button,
         cart_items_box: *gtk.Box,
         cart_label: *gtk.Label,
+        upgrade_check: *gtk.CheckButton,
+        show_hidden_check: *gtk.CheckButton,
+        show_explicit_only_check: *gtk.CheckButton,
+        show_detail_pane_check: *gtk.CheckButton,
         arena: ?*std.heap.ArenaAllocator,
         selected_group: [64]u8,
         selected_group_len: usize,
         generation: u64,
         show_installed_only: bool,
         show_explicit_only: bool,
+        show_hidden: bool,
+        show_detail_pane: bool,
 
         check_map_grid: std.AutoHashMapUnmanaged(*PackageObject, *gtk.CheckButton),
         check_map_column: std.AutoHashMapUnmanaged(*PackageObject, *gtk.CheckButton),
         loaded: bool,
+        applying_config: bool,
         resolver: IconResolver,
         search_text: [256]u8,
         search_len: usize,
@@ -104,9 +113,13 @@ pub const PackagePage = extern struct {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
         const p = self.priv();
         p.loaded = false;
+        p.applying_config = false;
         p.arena = null;
         p.generation = 0;
         p.show_installed_only = false;
+        p.show_explicit_only = false;
+        p.show_hidden = false;
+        p.show_detail_pane = false;
 
         p.check_map_grid = .empty;
         p.check_map_column = .empty;
@@ -153,12 +166,10 @@ pub const PackagePage = extern struct {
 
         p.resolver = IconResolver.init(std.heap.c_allocator);
 
-        const use_grid = true;
+        _ = gtk.CheckButton.signals.toggled.connect(p.upgrade_check, *Self, &on_upgrade_toggled, self, .{});
+        _ = gtk.CheckButton.signals.toggled.connect(p.show_hidden_check, *Self, &on_show_hidden_toggled, self, .{});
 
-        gtk.ToggleButton.setActive(p.grid_view_button, @intFromBool(use_grid));
-        gtk.ToggleButton.setActive(p.list_view_button, @intFromBool(!use_grid));
-        gtk.Widget.setVisible(p.detail_grid_hbox.as(gtk.Widget), @intFromBool(use_grid));
-        gtk.Widget.setVisible(p.detail_hbox.as(gtk.Widget), @intFromBool(!use_grid));
+        applyOptionsFromConfig(self);
 
         support.connectLifecycle(Self, self);
     }
@@ -587,13 +598,49 @@ pub const PackagePage = extern struct {
     pub fn onMap(self: *Self) void {
         const p = self.priv();
         if (p.loaded) return;
+        applyOptionsFromConfig(self);
         p.loaded = true;
         p.generation += 1;
         show_loading(self);
         self.update_selection_ui();
         _ = gtk.Widget.grabFocus(p.search_entry.as(gtk.Widget));
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation }) catch return;
+        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
         thread.detach();
+    }
+
+    fn applyOptionsFromConfig(self: *Self) void {
+        const svc = runtime.config orelse return;
+        const cfg = svc.get() catch return;
+        const p = self.priv();
+        p.applying_config = true;
+        defer p.applying_config = false;
+
+        p.show_hidden = cfg.PackageInstallShowHidden;
+        gtk.CheckButton.setActive(p.upgrade_check, @intFromBool(cfg.PackageInstallUpgrade));
+        gtk.CheckButton.setActive(p.show_hidden_check, @intFromBool(cfg.PackageInstallShowHidden));
+
+        p.show_explicit_only = cfg.PackageInstallShowExplicitOnly;
+        gtk.CheckButton.setActive(p.show_explicit_only_check, @intFromBool(cfg.PackageInstallShowExplicitOnly));
+
+        p.show_detail_pane = cfg.PackageInstallShowDetailPane;
+        gtk.CheckButton.setActive(p.show_detail_pane_check, @intFromBool(cfg.PackageInstallShowDetailPane));
+        gtk.Widget.setVisible(p.detail_revealer.as(gtk.Widget), if (cfg.PackageInstallShowDetailPane) 0 else 1);
+
+        const use_grid = cfg.PackageInstallView == .grid;
+        gtk.ToggleButton.setActive(p.grid_view_button, @intFromBool(use_grid));
+        gtk.ToggleButton.setActive(p.list_view_button, @intFromBool(!use_grid));
+        gtk.Widget.setVisible(p.detail_grid_hbox.as(gtk.Widget), @intFromBool(use_grid));
+        gtk.Widget.setVisible(p.detail_hbox.as(gtk.Widget), @intFromBool(!use_grid));
+    }
+
+    fn updateConfigField(
+        comptime field: std.meta.FieldEnum(ShellyConfig),
+        value: std.meta.fieldInfo(ShellyConfig, field).type,
+    ) void {
+        const svc = runtime.config orelse return;
+        svc.updateField(field, value) catch |err| {
+            std.log.err("package page: failed to update config: {t}", .{err});
+        };
     }
 
     extern fn malloc_trim(pad: usize) c_int;
@@ -618,7 +665,7 @@ pub const PackagePage = extern struct {
         _ = malloc_trim(0);
     }
 
-    fn load_worker(page: *Self, generation: u64) void {
+    fn load_worker(page: *Self, generation: u64, show_hidden: bool) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
         arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
 
@@ -636,7 +683,7 @@ pub const PackagePage = extern struct {
         //and looking to paralize this please consider
         //done sequentially as load times arnt heavily effected by it and its easier then paralizing atm.
         const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const parsed = cli.get_packages() catch |err| {
+        const parsed = cli.get_packages(show_hidden) catch |err| {
             std.debug.print("get_packages failed: {t}\n", .{err});
             arena_ptr.deinit();
             std.heap.c_allocator.destroy(arena_ptr);
@@ -775,6 +822,10 @@ pub const PackagePage = extern struct {
         .{ "install_button", @offsetOf(Private, "install_button") },
         .{ "cart_label", @offsetOf(Private, "cart_label") },
         .{ "cart_items_box", @offsetOf(Private, "cart_items_box") },
+        .{ "upgrade_check", @offsetOf(Private, "upgrade_check") },
+        .{ "show_hidden_check", @offsetOf(Private, "show_hidden_check") },
+        .{ "show_explicit_only", @offsetOf(Private, "show_explicit_only_check") },
+        .{ "show_detail_pane", @offsetOf(Private, "show_detail_pane_check") },
     };
 
     pub const Class = extern struct {
@@ -929,14 +980,35 @@ pub const PackagePage = extern struct {
 
     fn on_grid_view_toggled(self: *Self) callconv(.c) void {
         const p = self.priv();
+        if (p.applying_config) return;
+        if (gtk.ToggleButton.getActive(p.grid_view_button) == 0) return;
         gtk.Widget.setVisible(p.detail_grid_hbox.as(gtk.Widget), 1);
         gtk.Widget.setVisible(p.detail_hbox.as(gtk.Widget), 0);
+        updateConfigField(.PackageInstallView, ViewType.grid);
     }
 
     fn on_list_view_toggled(self: *Self) callconv(.c) void {
         const p = self.priv();
+        if (p.applying_config) return;
+        if (gtk.ToggleButton.getActive(p.list_view_button) == 0) return;
         gtk.Widget.setVisible(p.detail_hbox.as(gtk.Widget), 1);
         gtk.Widget.setVisible(p.detail_grid_hbox.as(gtk.Widget), 0);
+        updateConfigField(.PackageInstallView, ViewType.list);
+    }
+
+    fn on_upgrade_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.applying_config) return;
+        updateConfigField(.PackageInstallUpgrade, gtk.CheckButton.getActive(check) != 0);
+    }
+
+    fn on_show_hidden_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.applying_config) return;
+        const active = gtk.CheckButton.getActive(check) != 0;
+        p.show_hidden = active;
+        updateConfigField(.PackageInstallShowHidden, active);
+        if (p.loaded) self.reload();
     }
 
     fn on_installed_only_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
@@ -947,14 +1019,20 @@ pub const PackagePage = extern struct {
 
     fn on_explicit_only(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
         const p = self.priv();
-        p.show_explicit_only = gtk.CheckButton.getActive(check) != 0;
+        if (p.applying_config) return;
+        const active = gtk.CheckButton.getActive(check) != 0;
+        p.show_explicit_only = active;
+        updateConfigField(.PackageInstallShowExplicitOnly, active);
         gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
     }
 
     fn on_detail_pane(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
         const p = self.priv();
-        const active = gtk.CheckButton.getActive(check);
-        gtk.Widget.setVisible(p.detail_revealer.as(gtk.Widget), if (active != 0) 0 else 1);
+        if (p.applying_config) return;
+        const active = gtk.CheckButton.getActive(check) != 0;
+        p.show_detail_pane = active;
+        gtk.Widget.setVisible(p.detail_revealer.as(gtk.Widget), if (active) 0 else 1);
+        updateConfigField(.PackageInstallShowDetailPane, active);
     }
 
     fn confirm_remove(self: *Self) void {
@@ -1031,6 +1109,9 @@ pub const PackagePage = extern struct {
         argv.append(std.heap.c_allocator, "install") catch return;
         argv.append(std.heap.c_allocator, "standard") catch return;
         for (names.items) |name| argv.append(std.heap.c_allocator, name) catch return;
+        if (gtk.CheckButton.getActive(p.upgrade_check) != 0) {
+            argv.append(std.heap.c_allocator, "--upgrade") catch return;
+        }
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
@@ -1065,7 +1146,8 @@ pub const PackagePage = extern struct {
     fn reload(self: *Self) void {
         const p = self.priv();
         p.generation += 1;
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation }) catch return;
+        show_loading(self);
+        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
         thread.detach();
     }
 };

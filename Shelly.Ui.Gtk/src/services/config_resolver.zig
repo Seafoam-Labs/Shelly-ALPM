@@ -148,6 +148,18 @@ pub const ConfigResolver = struct {
         );
     }
 
+    pub fn updateField(
+        self: *ConfigResolver,
+        comptime field: std.meta.FieldEnum(ShellyConfig),
+        value: std.meta.fieldInfo(ShellyConfig, field).type,
+    ) !void {
+        const cfg = try self.get();
+        var updated = cfg.*;
+        @field(updated, @tagName(field)) = value;
+        try self.set(updated);
+        try self.save();
+    }
+
     fn saveDefault(self: *ConfigResolver, path: []const u8) !void {
         const dir_name = std.fs.path.dirname(path).?;
         var sub_dir = try self.config_dir.createDirPathOpen(self.io, dir_name, .{});

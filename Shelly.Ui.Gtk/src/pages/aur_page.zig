@@ -11,6 +11,7 @@ const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const AurPackage = @import("../models/aur_package.zig").AurPackage;
 const runtime = @import("../services/runtime.zig");
+const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 
 pub const AurPage = extern struct {
     parent_instance: Parent,
@@ -46,6 +47,7 @@ pub const AurPage = extern struct {
         arena: ?*std.heap.ArenaAllocator,
         generation: u64,
         loaded: bool,
+        applying_config: bool,
         installed_mode: bool,
         last_query: [256]u8,
         last_query_len: usize,
@@ -88,6 +90,7 @@ pub const AurPage = extern struct {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
         const p = self.priv();
         p.loaded = false;
+        p.applying_config = false;
         p.arena = null;
         p.generation = 0;
         p.installed_mode = false;
@@ -111,6 +114,9 @@ pub const AurPage = extern struct {
         gtk.ColumnViewColumn.setFactory(p.check_column, check_factory.as(gtk.ListItemFactory));
 
         _ = gtk.ColumnView.signals.activate.connect(p.package_grid, *Self, &on_row_activated, self, .{});
+
+        _ = gtk.CheckButton.signals.toggled.connect(p.chroot_check, *Self, &on_chroot_toggled, self, .{});
+        _ = gtk.CheckButton.signals.toggled.connect(p.run_checks_check, *Self, &on_run_checks_toggled, self, .{});
 
         self.update_selection_ui();
         support.connectLifecycle(Self, self);
@@ -449,8 +455,41 @@ pub const AurPage = extern struct {
         const p = self.priv();
         if (p.loaded) return;
         p.loaded = true;
+        applyOptionsFromConfig(self);
         self.update_selection_ui();
         _ = gtk.Widget.grabFocus(p.search_entry.as(gtk.Widget));
+    }
+
+    fn applyOptionsFromConfig(self: *Self) void {
+        const svc = runtime.config orelse return;
+        const cfg = svc.get() catch return;
+        const p = self.priv();
+        p.applying_config = true;
+        defer p.applying_config = false;
+        gtk.CheckButton.setActive(p.chroot_check, @intFromBool(cfg.AurInstallUseChroot));
+        gtk.CheckButton.setActive(p.run_checks_check, @intFromBool(cfg.AurInstallRunChecks));
+    }
+
+    fn on_chroot_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.applying_config) return;
+        updateConfigField(.AurInstallUseChroot, gtk.CheckButton.getActive(check) != 0);
+    }
+
+    fn on_run_checks_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.applying_config) return;
+        updateConfigField(.AurInstallRunChecks, gtk.CheckButton.getActive(check) != 0);
+    }
+
+    fn updateConfigField(
+        comptime field: std.meta.FieldEnum(ShellyConfig),
+        value: std.meta.fieldInfo(ShellyConfig, field).type,
+    ) void {
+        const svc = runtime.config orelse return;
+        svc.updateField(field, value) catch |err| {
+            std.log.err("aur page: failed to update config: {t}", .{err});
+        };
     }
 
     extern fn malloc_trim(pad: usize) c_int;
