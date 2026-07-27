@@ -9,6 +9,7 @@ pub const ShellyTabs = enum(u8) {
     flatpak = 2,
     app_image = 3,
     shelly_search = 4,
+    recommend = 5,
 };
 
 pub const DayOfWeek = enum(u8) {

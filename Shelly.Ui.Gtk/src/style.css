@@ -162,7 +162,6 @@
     min-width: 16px;
 }
 
-
 .drop-zone {
   border: 3px dashed @insensitive_fg_color;
   border-radius: 16px;

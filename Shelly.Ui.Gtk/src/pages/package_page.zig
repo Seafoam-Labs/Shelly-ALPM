@@ -16,8 +16,6 @@ const runtime = @import("../services/runtime.zig");
 const c_string = @import("../helpers/c_string.zig");
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const ViewType = @import("../models/shelly_config.zig").ViewType;
-const RecommendCategory = @import("../models/recommendation.zig").RecommendCategory;
-const recommendations = @import("../services/recommendations.zig");
 
 const Event = @import("../services/shelly_operation.zig").Event;
 const PackageDetail = @import("package_detail.zig").PackageDetail;
@@ -80,12 +78,6 @@ pub const PackagePage = extern struct {
         detail_revealer: *gtk.Revealer,
         detail: *PackageDetail,
 
-        show_recommended: bool,
-        recommend_idx: u32,
-        filtering_recommended: bool,
-
-        sort_model: *gtk.SortListModel,
-        sorter: *gtk.CustomSorter,
         var offset: c_int = 0;
     };
 
@@ -96,8 +88,6 @@ pub const PackagePage = extern struct {
         arena: *std.heap.ArenaAllocator,
         generation: u64,
         index: usize = 0,
-        recommend_categories: []const RecommendCategory = &.{},
-        recommend_rank_map: ?*std.StringHashMapUnmanaged(i32) = null,
     };
 
     pub const getGObjectType = gobject.ext.defineClass(Self, .{
@@ -131,8 +121,6 @@ pub const PackagePage = extern struct {
         p.show_explicit_only = false;
         p.show_hidden = false;
         p.show_detail_pane = false;
-        p.recommend_idx = std.math.maxInt(u32);
-        p.filtering_recommended = false;
 
         p.check_map_grid = .empty;
         p.check_map_column = .empty;
@@ -145,10 +133,7 @@ pub const PackagePage = extern struct {
 
         p.filter = gtk.CustomFilter.new(&filter_func, self, null);
         p.filter_model = gtk.FilterListModel.new(p.list_store.as(gio.ListModel), p.filter.as(gtk.Filter));
-
-        p.sorter = gtk.CustomSorter.new(&recommend_compare, self, null);
-        p.sort_model = gtk.SortListModel.new(p.filter_model.as(gio.ListModel), p.sorter.as(gtk.Sorter));
-        p.selection = gtk.SingleSelection.new(p.sort_model.as(gio.ListModel));
+        p.selection = gtk.SingleSelection.new(p.filter_model.as(gio.ListModel));
 
         gtk.ColumnView.setModel(p.column_view, p.selection.as(gtk.SelectionModel));
 
@@ -527,35 +512,11 @@ pub const PackagePage = extern struct {
         gobject.Object.setData(check.as(gobject.Object), "syncing", null);
     }
 
-    fn recommend_compare(
-        a: ?*const anyopaque,
-        b: ?*const anyopaque,
-        data: ?*anyopaque,
-    ) callconv(.c) c_int {
-        const self: *Self = @ptrCast(@alignCast(data.?));
-        const p = self.priv();
-
-        if (!p.filtering_recommended) return 0;
-
-        const obj_a: *gobject.Object = @ptrCast(@alignCast(@constCast(a.?)));
-        const obj_b: *gobject.Object = @ptrCast(@alignCast(@constCast(b.?)));
-        const pa = gobject.ext.cast(PackageObject, obj_a) orelse return 0;
-        const pb = gobject.ext.cast(PackageObject, obj_b) orelse return 0;
-
-        const ra = pa.getRecommendRank();
-        const rb = pb.getRecommendRank();
-        if (ra < rb) return -1;
-        if (ra > rb) return 1;
-        return 0;
-    }
-
     fn filter_func(item: *gobject.Object, data: ?*anyopaque) callconv(.c) c_int {
         const self: *Self = @ptrCast(@alignCast(data.?));
         const p = self.priv();
 
         const pkg = gobject.ext.cast(PackageObject, item) orelse return 0;
-
-        if (p.filtering_recommended and !pkg.isRecommended()) return 0;
 
         if (p.selected_group_len > 0) {
             const group = p.selected_group[0..p.selected_group_len];
@@ -622,11 +583,7 @@ pub const PackagePage = extern struct {
 
         const idx = gtk.DropDown.getSelected(p.grouping_selection);
 
-        const was_filtering_recommended = p.filtering_recommended;
-        p.filtering_recommended = p.recommend_idx != std.math.maxInt(u32) and idx == p.recommend_idx;
-        if (p.filtering_recommended) {
-            p.selected_group_len = 0;
-        } else if (idx == 0 or idx == std.math.maxInt(u32)) {
+        if (idx == 0 or idx == std.math.maxInt(u32)) {
             p.selected_group_len = 0;
         } else {
             const model = gtk.DropDown.getModel(p.grouping_selection) orelse return;
@@ -639,9 +596,6 @@ pub const PackagePage = extern struct {
         }
 
         gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
-        if (was_filtering_recommended != p.filtering_recommended) {
-            gtk.Sorter.changed(p.sorter.as(gtk.Sorter), .different);
-        }
     }
 
     pub fn onMap(self: *Self) void {
@@ -680,8 +634,6 @@ pub const PackagePage = extern struct {
         gtk.ToggleButton.setActive(p.list_view_button, @intFromBool(!use_grid));
         gtk.Widget.setVisible(p.detail_grid_hbox.as(gtk.Widget), @intFromBool(use_grid));
         gtk.Widget.setVisible(p.detail_hbox.as(gtk.Widget), @intFromBool(!use_grid));
-
-        p.show_recommended = cfg.RecommendedEnabled;
     }
 
     fn updateConfigField(
@@ -774,9 +726,7 @@ pub const PackagePage = extern struct {
         var it = set.keyIterator();
         while (it.next()) |k| list.append(alloc, k.*) catch {};
 
-        const recommend_categories = if (p.show_recommended) recommendations.load(alloc, threaded.io()) else &.{};
-
-        post_result(page, parsed.value, list.items, arena_ptr, generation, recommend_categories);
+        post_result(page, parsed.value, list.items, arena_ptr, generation);
     }
 
     fn post_result(
@@ -785,7 +735,6 @@ pub const PackagePage = extern struct {
         groups: []const []const u8,
         arena: *std.heap.ArenaAllocator,
         generation: u64,
-        recommend_categories: []const RecommendCategory,
     ) void {
         const result = std.heap.c_allocator.create(LoadResult) catch return;
         result.* = .{
@@ -794,7 +743,6 @@ pub const PackagePage = extern struct {
             .groups = groups,
             .arena = arena,
             .generation = generation,
-            .recommend_categories = recommend_categories,
         };
         _ = glib.idleAdd(&onLoadComplete, result);
     }
@@ -811,31 +759,9 @@ pub const PackagePage = extern struct {
 
         if (result.index == 0) {
             gio.ListStore.removeAll(p.list_store);
-            p.filtering_recommended = false;
-            p.recommend_idx = std.math.maxInt(u32);
 
             const strings = gtk.StringList.new(null);
             gtk.StringList.append(strings, "Any");
-            if (result.recommend_categories.len > 0) {
-                gtk.StringList.append(strings, "Recommendations");
-                p.recommend_idx = 1;
-
-                const alloc = result.arena.allocator();
-                const m = alloc.create(std.StringHashMapUnmanaged(i32)) catch null;
-                if (m) |map| {
-                    map.* = .empty;
-                    var rank: i32 = 0;
-                    for (result.recommend_categories) |cat| {
-                        for (cat.packages) |pkg_name| {
-                            if (!map.contains(pkg_name)) {
-                                map.put(alloc, pkg_name, rank) catch {};
-                            }
-                            rank += 1;
-                        }
-                    }
-                    result.recommend_rank_map = map;
-                }
-            }
             for (result.groups) |g| {
                 var buf: [128]u8 = undefined;
                 gtk.StringList.append(strings, c_string.cstr(&buf, g));
@@ -852,9 +778,6 @@ pub const PackagePage = extern struct {
         var i: usize = 0;
         for (result.packages[result.index..end]) |d| {
             const pkg = PackageObject.new(d);
-            if (result.recommend_rank_map) |map| {
-                if (map.get(d.Name)) |rank| pkg.setRecommendRank(rank);
-            }
             batch[i] = pkg.as(gobject.Object);
             i += 1;
         }

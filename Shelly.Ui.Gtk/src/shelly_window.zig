@@ -8,6 +8,7 @@ const AppImagePage = @import("pages/appimage_page.zig").AppImagePage;
 const PackagePage = @import("pages/package_page.zig").PackagePage;
 const AurPage = @import("pages/aur_page.zig").AurPage;
 const UpdatePage = @import("pages/update_page.zig").UpdatePage;
+const RecommendPage = @import("pages/recommend_page.zig").RecommendPage;
 const SupportPage = @import("pages/support.zig");
 const SettingsPage = @import("pages/settings_page.zig").SettingsPage;
 const TransactionPage = @import("pages/transaction_page.zig").TransactionPage;
@@ -82,6 +83,7 @@ pub const ShellyWindow = extern struct {
         const svc = runtime.config orelse return;
         const cfg = svc.get() catch return;
 
+        setNavEnabled(self, "recommend", cfg.RecommendedEnabled);
         setNavEnabled(self, "aur", cfg.AurEnabled);
         setNavEnabled(self, "flatpak", cfg.FlatPackEnabled);
         setNavEnabled(self, "appimage", cfg.AppImageEnabled);
@@ -209,6 +211,7 @@ pub const ShellyWindow = extern struct {
         _ = gtk.Button.signals.clicked.connect(chevron, *ShellyWindow, &on_chevron, self, .{});
         gtk.Box.append(rail, chevron.as(gtk.Widget));
 
+        add_nav_button(self, rail, stack, "recommend", RecommendPage.icon_name, RecommendPage.title);
         add_nav_button(self, rail, stack, "package", PackagePage.icon_name, PackagePage.title);
         add_nav_button(self, rail, stack, "aur", AurPage.icon_name, AurPage.title);
         add_nav_button(self, rail, stack, "flatpak", FlatpakPage.icon_name, FlatpakPage.title);
@@ -315,6 +318,10 @@ pub const ShellyWindow = extern struct {
 
     fn populate_stack(self: *ShellyWindow) void {
         const stack = self.private().content_stack;
+
+        const rp = RecommendPage.new();
+        const rp_page = gtk.Stack.addTitled(stack, rp.as(gtk.Widget), "recommend", RecommendPage.title);
+        gtk.StackPage.setIconName(rp_page, RecommendPage.icon_name);
 
         const pp = PackagePage.new();
         const pp_page = gtk.Stack.addTitled(stack, pp.as(gtk.Widget), "package", PackagePage.title);

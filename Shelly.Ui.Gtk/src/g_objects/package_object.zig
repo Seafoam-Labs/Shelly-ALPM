@@ -20,7 +20,6 @@ pub const PackageObject = extern struct {
         installed_size: i64,
         installed: bool,
         selected: bool,
-        recommend_rank: i32,
         var offset: c_int = 0;
     };
 
@@ -48,7 +47,6 @@ pub const PackageObject = extern struct {
         p.installed_size = 0;
         p.installed = false;
         p.selected = false;
-        p.recommend_rank = -1;
     }
 
     pub fn new(package: Package) *Self {
@@ -68,7 +66,6 @@ pub const PackageObject = extern struct {
         p.installed = package.Installed;
         p.explicit = package.Explicit;
         p.selected = false;
-        p.recommend_rank = -1;
 
         if (a.alloc([:0]const u8, package.Groups.len)) |g| {
             for (package.Groups, 0..) |src, i| g[i] = a.dupeZ(u8, src) catch "";
@@ -123,18 +120,6 @@ pub const PackageObject = extern struct {
 
     pub fn getGroups(self: *Self) []const [:0]const u8 {
         return self.priv().groups;
-    }
-
-    pub fn getRecommendRank(self: *Self) i32 {
-        return self.priv().recommend_rank;
-    }
-
-    pub fn setRecommendRank(self: *Self, rank: i32) void {
-        self.priv().recommend_rank = rank;
-    }
-
-    pub fn isRecommended(self: *Self) bool {
-        return self.priv().recommend_rank >= 0;
     }
 
     pub fn as(self: *Self, comptime T: type) *T {

@@ -701,6 +701,7 @@ const DefaultPageEntry = struct {
 };
 
 const default_page_entries = [_]DefaultPageEntry{
+    .{ .label = "Packages", .value = .recommend },
     .{ .label = "Packages", .value = .packages },
     .{ .label = "AUR", .value = .aur },
     .{ .label = "Flatpak", .value = .flatpak },
