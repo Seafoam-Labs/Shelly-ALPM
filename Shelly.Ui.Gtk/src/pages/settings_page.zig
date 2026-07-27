@@ -704,7 +704,7 @@ const DefaultPageEntry = struct {
 };
 
 const default_page_entries = [_]DefaultPageEntry{
-    .{ .label = "Packages", .value = .recommend },
+    .{ .label = "Recommended", .value = .recommend },
     .{ .label = "Packages", .value = .packages },
     .{ .label = "AUR", .value = .aur },
     .{ .label = "Flatpak", .value = .flatpak },
@@ -811,8 +811,8 @@ fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.shelly_icons_switch, cfg.ShellyIconsEnabled);
     setSwitch(p.symbolic_tray_switch, cfg.UseSymbolicTray);
 
-    gtk.DropDown.setSelected(p.default_page_drop, @intFromEnum(cfg.DefaultPageDropDown));
-    gtk.DropDown.setSelected(p.nav_mode_drop, @intFromEnum(cfg.NavMode));
+    gtk.DropDown.setSelected(p.default_page_drop, defaultPageIndex(cfg.DefaultPageDropDown));
+    gtk.DropDown.setSelected(p.nav_mode_drop, navModeIndex(cfg.NavMode));
     gtk.DropDown.setSelected(p.language_drop, languageIndex(cfg.Culture));
 
     setButtonLabel(p.tray_icon_button, std.heap.c_allocator, cfg.TrayIconPath, "Select Icon");
@@ -961,6 +961,20 @@ fn languageIndex(culture: ?[]const u8) c_uint {
             continue;
         }
         if (std.ascii.eqlIgnoreCase(value, entry.value)) return @intCast(i);
+    }
+    return 0;
+}
+
+fn defaultPageIndex(page: ShellyTabs) c_uint {
+    inline for (default_page_entries, 0..) |entry, i| {
+        if (entry.value == page) return @intCast(i);
+    }
+    return 0;
+}
+
+fn navModeIndex(mode: NavMode) c_uint {
+    inline for (nav_mode_entries, 0..) |entry, i| {
+        if (entry.value == mode) return @intCast(i);
     }
     return 0;
 }
