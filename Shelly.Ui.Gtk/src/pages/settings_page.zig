@@ -12,6 +12,8 @@ const ConfigResolver = @import("../services/config_resolver.zig").ConfigResolver
 const runtime = @import("../services/runtime.zig");
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
+const systemd_tray = @import("../services/systemd_tray.zig");
+const tray_service = @import("../services/tray_service.zig");
 const support = @import("support.zig");
 const datetime = @import("../helpers/datetime.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
@@ -154,6 +156,13 @@ pub const ShellySettingsPage = extern struct {
             p.tray_switch.as(gobject.Object),
             *Self,
             &on_tray_notify,
+            self,
+            .{ .detail = "active" },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.tray_auto_switch.as(gobject.Object),
+            *Self,
+            &on_tray_auto_notify,
             self,
             .{ .detail = "active" },
         );
@@ -576,8 +585,66 @@ pub const ShellySettingsPage = extern struct {
     }
 
     fn on_tray_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
-        applyTrayVisibility(self.priv());
-        applyScheduleVisibility(self.priv());
+        const p = self.priv();
+
+        applyTrayVisibility(p);
+        applyScheduleVisibility(p);
+
+        const active = gtk.Switch.getActive(p.tray_switch) != 0;
+
+        const svc = obtainConfigService() catch return;
+        const cfg = svc.get() catch return;
+
+        if (cfg.TrayEnabled == active) return;
+
+        if (active) {
+            tray_service.start();
+            p.toast.show(.success, translations._("Tray enabled"));
+        } else {
+            const stopped = tray_service.end(runtime.io);
+            if (stopped) {
+                p.toast.show(.success, translations._("Tray disabled"));
+            } else {
+                p.toast.show(.info, translations._("Tray disabled"));
+            }
+        }
+
+        updateConfigField(.TrayEnabled, active);
+    }
+
+    fn on_tray_auto_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        const active = gtk.Switch.getActive(p.tray_auto_switch) != 0;
+
+        const svc = obtainConfigService() catch return;
+        const cfg = svc.get() catch return;
+
+        if (cfg.TrayAutoStart == active) return;
+
+        var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+        defer arena.deinit();
+        var threaded: std.Io.Threaded = .init(arena.allocator(), .{});
+        defer threaded.deinit();
+
+        if (active) {
+            systemd_tray.addService(arena.allocator(), threaded.io()) catch |err| {
+                std.log.err("settings: failed to add systemd tray service: {t}", .{err});
+                gtk.Switch.setActive(p.tray_auto_switch, 0);
+                p.toast.show(.@"error", translations._("Failed to add systemd startup service"));
+                return;
+            };
+            p.toast.show(.success, translations._("Systemd startup service added."));
+        } else {
+            systemd_tray.removeService(arena.allocator(), threaded.io()) catch |err| {
+                std.log.err("settings: failed to remove systemd tray service: {t}", .{err});
+                gtk.Switch.setActive(p.tray_auto_switch, 1);
+                p.toast.show(.@"error", translations._("Failed to remove systemd startup service"));
+                return;
+            };
+            p.toast.show(.success, translations._("Systemd startup service removed."));
+        }
+
+        updateConfigField(.TrayAutoStart, active);
     }
 
     fn on_aur_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
