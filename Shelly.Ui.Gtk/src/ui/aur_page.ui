@@ -5,6 +5,7 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
+    <property name="margin-bottom">10</property>
 
     <child>
       <object class="GtkBox">
@@ -49,10 +50,6 @@
           </object>
         </child>
       </object>
-    </child>
-
-    <child>
-      <object class="GtkSeparator"/>
     </child>
 
     <child>
