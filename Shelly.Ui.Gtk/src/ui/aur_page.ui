@@ -190,7 +190,7 @@
           <object class="GtkCheckButton" id="show_detail_pane_check">
             <property name="label" translatable="yes">Hide Detail Pane</property>
             <property name="tooltip-text" translatable="yes">Hide the detail pane on the right</property>
-            <signal name="toggled" handler="on_detail_pane" swapped="true"/>
+            <signal name="toggled" handler="on_detail_pane"/>
           </object>
         </child>
       </object>

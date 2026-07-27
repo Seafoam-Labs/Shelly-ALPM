@@ -66,6 +66,7 @@ pub const ShellyConfig = struct {
     // AUR Page
     AurInstallUseChroot: bool = false,
     AurInstallRunChecks: bool = false,
+    AurInstallShowDetailPane: bool = false,
 
     AurRemoveCascadeDelete: bool = true,
     AurRemoveShowHidden: bool = false,
