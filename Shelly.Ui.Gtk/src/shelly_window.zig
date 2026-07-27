@@ -15,6 +15,7 @@ const TransactionPage = @import("pages/transaction_page.zig").TransactionPage;
 const TransactionRequest = @import("pages/transaction_page.zig").TransactionRequest;
 const runtime = @import("services/runtime.zig");
 const NavMode = @import("models/shelly_config.zig").NavMode;
+const ShellyTabs = @import("models/shelly_config.zig").ShellyTabs;
 
 const NavButton = struct {
     button: *gtk.Button,
@@ -90,6 +91,7 @@ pub const ShellyWindow = extern struct {
         setNavEnabled(self, "appimage", cfg.AppImageEnabled);
 
         self.changeNav(cfg.NavMode);
+        applyDefaultPage(self);
     }
 
     fn setNavEnabled(self: *ShellyWindow, name: [:0]const u8, enabled: bool) void {
@@ -166,9 +168,7 @@ pub const ShellyWindow = extern struct {
                 gtk.Orientable.setOrientation(p.shell_box.as(gtk.Orientable), .horizontal);
                 gtk.Box.append(p.shell_box, p.rail.?.as(gtk.Widget));
                 gtk.Box.append(p.shell_box, p.content_stack.as(gtk.Widget));
-                if (p.nav_buttons.items.len > 0) {
-                    set_active_nav(self, p.nav_buttons.items[0]);
-                }
+                sync_active_nav(self);
             },
             .topbar => {
                 const switcher = gtk.StackSwitcher.new();
@@ -303,6 +303,56 @@ pub const ShellyWindow = extern struct {
                 gtk.Widget.removeCssClass(nb.button.as(gtk.Widget), "nav-selected");
             }
         }
+    }
+
+    fn sync_active_nav(self: *ShellyWindow) void {
+        const p = self.private();
+        const current_name: []const u8 = blk: {
+            const cn_opt = gtk.Stack.getVisibleChildName(p.content_stack);
+            break :blk if (cn_opt) |cn| std.mem.span(cn) else "";
+        };
+        for (p.nav_buttons.items) |nb| {
+            if (std.mem.eql(u8, nb.name, current_name)) {
+                set_active_nav(self, nb);
+                return;
+            }
+        }
+        if (p.nav_buttons.items.len > 0) {
+            set_active_nav(self, p.nav_buttons.items[0]);
+        }
+    }
+
+    fn tabStackName(tab: ShellyTabs) ?[:0]const u8 {
+        return switch (tab) {
+            .packages => "package",
+            .aur => "aur",
+            .flatpak => "flatpak",
+            .app_image => "appimage",
+            .recommend => "recommend",
+            .shelly_search => null,
+        };
+    }
+
+    fn applyDefaultPage(self: *ShellyWindow) void {
+        const p = self.private();
+        const svc = runtime.config orelse {
+            sync_active_nav(self);
+            return;
+        };
+        const cfg = svc.get() catch {
+            sync_active_nav(self);
+            return;
+        };
+
+        if (tabStackName(cfg.DefaultPageDropDown)) |name| {
+            if (gtk.Stack.getChildByName(p.content_stack, name)) |child| {
+                const page = gtk.Stack.getPage(p.content_stack, child);
+                if (gtk.StackPage.getVisible(page) != 0) {
+                    gtk.Stack.setVisibleChildName(p.content_stack, name);
+                }
+            }
+        }
+        sync_active_nav(self);
     }
 
     fn on_settings(btn: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
