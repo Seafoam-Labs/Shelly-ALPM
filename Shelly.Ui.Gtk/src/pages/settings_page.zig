@@ -29,7 +29,7 @@ pub const ShellySettingsPage = extern struct {
     pub const Parent = gtk.Box;
 
     pub const title: [:0]const u8 = "Settings";
-    pub const icon_name: [:0]const u8 = "emblem-system-symbolic";
+    pub const icon_name: [:0]const u8 = "settings-symbolic";
     const resource_path = "/com/shellyorg/shelly/ui/settings_page.ui";
 
     const Private = struct {
