@@ -198,7 +198,7 @@ pub const FlatpakRemoveView = extern struct {
         if (path) |pp| {
             gtk.Image.setFromFile(icon, pp);
         } else {
-            gtk.Image.setFromIconName(icon, "application-x-executable");
+            gtk.Image.setFromIconName(icon, "package-x-generic");
         }
     }
 

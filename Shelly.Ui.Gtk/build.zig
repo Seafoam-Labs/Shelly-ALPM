@@ -66,6 +66,7 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/assets/icons/package-x-generic-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/settings-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/application-x-executable-symbolic.svg"));
+    gresource.addFileInput(b.path("src/assets/icons/software-update-available-symbolic.svg"));
     gresource.addFileInput(b.path("src/ui/main_window.ui"));
     gresource.addFileInput(b.path("src/ui/settings_page.ui"));
     gresource.addFileInput(b.path("src/ui/flatpak/flatpak_page.ui"));

@@ -269,7 +269,7 @@ pub const RecommendPage = extern struct {
         if (p.resolver.resolve(pkg.Name)) |path| {
             gtk.Image.setFromFile(image, path);
         } else {
-            gtk.Image.setFromIconName(image, "package-x-generic-symbolic");
+            gtk.Image.setFromIconName(image, "package-x-generic");
         }
         gtk.Image.setPixelSize(image, 48);
         gtk.Widget.setValign(image.as(gtk.Widget), .center);

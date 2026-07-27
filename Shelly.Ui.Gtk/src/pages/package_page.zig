@@ -441,7 +441,7 @@ pub const PackagePage = extern struct {
                 if (p.resolver.resolve(pkg.getName())) |path| {
                     gtk.Image.setFromFile(icon_image, path);
                 } else {
-                    gtk.Image.setFromIconName(icon_image, "application-x-executable");
+                    gtk.Image.setFromIconName(icon_image, "package-x-generic");
                 }
                 var name_buf: [256]u8 = undefined;
                 const markup = std.fmt.bufPrintZ(&name_buf, "<b>{s}</b>", .{pkg.getName()}) catch pkg.getName();

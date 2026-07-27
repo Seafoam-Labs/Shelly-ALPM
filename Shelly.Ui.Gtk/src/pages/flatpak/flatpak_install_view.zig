@@ -870,7 +870,7 @@ pub const FlatpakInstallView = extern struct {
     fn set_app_icon(icon: *gtk.Image, object: *AppstreamAppObject) void {
         const remotes = object.getRemotes();
         if (remotes.len == 0 or object.getId().len == 0) {
-            gtk.Image.setFromIconName(icon, "application-x-executable");
+            gtk.Image.setFromIconName(icon, "package-x-generic");
             return;
         }
 
@@ -887,7 +887,7 @@ pub const FlatpakInstallView = extern struct {
                 return;
             }
         }
-        gtk.Image.setFromIconName(icon, "application-x-executable");
+        gtk.Image.setFromIconName(icon, "package-x-generic");
     }
 
     fn load_apps(self: *Self, generation: u64) void {
