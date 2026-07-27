@@ -7,6 +7,7 @@ const glib = bindings.glib;
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const ShellyTabs = @import("../models/shelly_config.zig").ShellyTabs;
 const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
+const NavMode = @import("../models/shelly_config.zig").NavMode;
 const ConfigResolver = @import("../services/config_resolver.zig").ConfigResolver;
 const runtime = @import("../services/runtime.zig");
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
@@ -70,6 +71,7 @@ pub const ShellySettingsPage = extern struct {
         tray_updates_icon_clear_button: *gtk.Button,
         default_page_box: *gtk.Box,
         default_page_drop: *gtk.DropDown,
+        nav_mode_drop: *gtk.DropDown,
 
         // Advanced
         remove_cache_switch: *gtk.Switch,
@@ -653,6 +655,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "tray_updates_icon_clear_button", @offsetOf(Private, "tray_updates_icon_clear_button") },
         .{ "default_page_box", @offsetOf(Private, "default_page_box") },
         .{ "default_page_drop", @offsetOf(Private, "default_page_drop") },
+        .{ "nav_mode_drop", @offsetOf(Private, "nav_mode_drop") },
 
         // Advanced
         .{ "remove_cache_switch", @offsetOf(Private, "remove_cache_switch") },
@@ -709,6 +712,16 @@ const default_page_entries = [_]DefaultPageEntry{
     .{ .label = "Shelly Search", .value = .shelly_search },
 };
 
+const NavModeEntry = struct {
+    label: [:0]const u8,
+    value: NavMode,
+};
+
+const nav_mode_entries = [_]NavModeEntry{
+    .{ .label = "Sidebar", .value = .sidebar },
+    .{ .label = "Topbar", .value = .topbar },
+};
+
 const language_entries = [_]struct {
     label: [:0]const u8,
     value: [:0]const u8,
@@ -736,6 +749,12 @@ fn populateDropdowns(p: *ShellySettingsPage.Private) void {
         gtk.StringList.append(page_strings, entry.label);
     }
     gtk.DropDown.setModel(p.default_page_drop, page_strings.as(gio.ListModel));
+
+    const nav_strings = gtk.StringList.new(null);
+    inline for (nav_mode_entries) |entry| {
+        gtk.StringList.append(nav_strings, entry.label);
+    }
+    gtk.DropDown.setModel(p.nav_mode_drop, nav_strings.as(gio.ListModel));
 
     const lang_strings = gtk.StringList.new(null);
     inline for (language_entries) |entry| {
@@ -793,6 +812,7 @@ fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.symbolic_tray_switch, cfg.UseSymbolicTray);
 
     gtk.DropDown.setSelected(p.default_page_drop, @intFromEnum(cfg.DefaultPageDropDown));
+    gtk.DropDown.setSelected(p.nav_mode_drop, @intFromEnum(cfg.NavMode));
     gtk.DropDown.setSelected(p.language_drop, languageIndex(cfg.Culture));
 
     setButtonLabel(p.tray_icon_button, std.heap.c_allocator, cfg.TrayIconPath, "Select Icon");
@@ -851,6 +871,11 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     const idx = gtk.DropDown.getSelected(p.default_page_drop);
     if (idx != std.math.maxInt(u32) and idx < default_page_entries.len) {
         cfg.DefaultPageDropDown = default_page_entries[idx].value;
+    }
+
+    const nav_idx = gtk.DropDown.getSelected(p.nav_mode_drop);
+    if (nav_idx != std.math.maxInt(u32) and nav_idx < nav_mode_entries.len) {
+        cfg.NavMode = nav_mode_entries[nav_idx].value;
     }
 
     // Advanced
