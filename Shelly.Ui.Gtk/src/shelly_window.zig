@@ -196,7 +196,7 @@ pub const ShellyWindow = extern struct {
     fn apply_pending_nav(data: ?*anyopaque) callconv(.c) c_int {
         const self: *ShellyWindow = @ptrCast(@alignCast(data));
         self.changeNav(self.private().pending_nav);
-        return 0; // G_SOURCE_REMOVE
+        return 0;
     }
 
     pub fn changeNav(self: *ShellyWindow, mode: NavMode) void {
@@ -336,15 +336,7 @@ pub const ShellyWindow = extern struct {
         }
     }
 
-    fn add_nav_button(
-        self: *ShellyWindow,
-        parent_box: *gtk.Box,
-        stack: *gtk.Stack,
-        is_rail: bool,
-        name: [:0]const u8,
-        icon: [:0]const u8,
-        text: [:0]const u8,
-    ) void {
+    fn add_nav_button(self: *ShellyWindow, parent_box: *gtk.Box, stack: *gtk.Stack, is_rail: bool, name: [:0]const u8, icon: [:0]const u8, text: [:0]const u8) void {
         const p = self.private();
         const box = gtk.Box.new(.horizontal, 0);
         const img = gtk.Image.newFromIconName(icon);
@@ -549,8 +541,6 @@ pub const ShellyWindow = extern struct {
 
     fn finalize(self: *ShellyWindow) callconv(.c) void {
         const p = self.private();
-        // Buttons are owned by their chrome (rail/topnav) widget tree; we only
-        // free our NavButton bookkeeping structs here, not the widgets.
         for (p.nav_buttons.items) |nb| {
             std.heap.c_allocator.destroy(nb);
         }
