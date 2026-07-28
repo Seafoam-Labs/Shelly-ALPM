@@ -85,6 +85,7 @@ pub const ShellyWindow = extern struct {
         build_shell(self);
         populate_stack(self);
         applyConfig(self);
+        applyDefaultPage(self);
         showWelcomeIfFirstStart(self);
         _ = gtk.Window.signals.close_request.connect(self.as(gtk.Window), *ShellyWindow, &on_close_request, self, .{});
     }
@@ -99,7 +100,6 @@ pub const ShellyWindow = extern struct {
         setNavEnabled(self, "appimage", cfg.AppImageEnabled);
 
         self.changeNav(cfg.NavMode);
-        applyDefaultPage(self);
 
         if (cfg.WindowLastWidth > 0 and cfg.WindowLastHeight > 0) {
             gtk.Window.setDefaultSize(
@@ -424,7 +424,7 @@ pub const ShellyWindow = extern struct {
         };
     }
 
-    fn applyDefaultPage(self: *ShellyWindow) void {
+    pub fn applyDefaultPage(self: *ShellyWindow) void {
         const p = self.private();
         const svc = runtime.config orelse {
             sync_active_nav(self);
