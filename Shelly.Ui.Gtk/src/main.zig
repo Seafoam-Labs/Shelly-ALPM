@@ -9,6 +9,7 @@ const ShellyWindow = @import("shelly_window.zig").ShellyWindow;
 const runtime = @import("services/runtime.zig");
 const translations = @import("helpers/translations.zig");
 const tray_service = @import("services/tray_service.zig");
+const IconDownloadService = @import("services/icon_fetcher.zig").downloadIconsInBackground;
 
 pub fn main(init: std.process.Init) void {
     runtime.io = init.io;
@@ -17,6 +18,8 @@ pub fn main(init: std.process.Init) void {
     if (!translations.init()) {
         std.log.warn("translations: failed to initialize gettext", .{});
     }
+
+    IconDownloadService(std.heap.c_allocator, runtime.io);
 
     const app = gtk.Application.new("com.shellyorg.shelly", .{});
     defer app.unref();
