@@ -14,6 +14,7 @@ const UpdateObject = @import("../g_objects/update_object.zig").UpdateObject;
 const UpdateSource = @import("../g_objects/update_object.zig").UpdateSource;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const translations = @import("../helpers/translations.zig");
+const runtime = @import("../services/runtime.zig");
 
 pub const UpdatePage = extern struct {
     parent_instance: Parent,
@@ -110,7 +111,35 @@ pub const UpdatePage = extern struct {
         _ = gtk.ToggleButton.signals.toggled.connect(p.native_toggle, *Self, &on_source_toggled, self, .{});
         _ = gtk.ToggleButton.signals.toggled.connect(p.aur_toggle, *Self, &on_source_toggled, self, .{});
         _ = gtk.ToggleButton.signals.toggled.connect(p.flatpak_toggle, *Self, &on_source_toggled, self, .{});
+        applyConfig(self);
         support.connectLifecycle(Self, self);
+    }
+
+    fn applyConfig(self: *Self) void {
+        const p = self.priv();
+        const aur_enabled = sourceConfigEnabled(.aur);
+        const flatpak_enabled = sourceConfigEnabled(.flatpak);
+
+        if (!aur_enabled) {
+            gtk.ToggleButton.setActive(p.aur_toggle, 0);
+            gtk.Widget.setVisible(p.aur_toggle.as(gtk.Widget), 0);
+            gtk.Widget.setSensitive(p.aur_toggle.as(gtk.Widget), 0);
+        }
+        if (!flatpak_enabled) {
+            gtk.ToggleButton.setActive(p.flatpak_toggle, 0);
+            gtk.Widget.setVisible(p.flatpak_toggle.as(gtk.Widget), 0);
+            gtk.Widget.setSensitive(p.flatpak_toggle.as(gtk.Widget), 0);
+        }
+    }
+
+    fn sourceConfigEnabled(source: UpdateSource) bool {
+        const svc = runtime.config orelse return true;
+        const cfg = svc.get() catch return true;
+        return switch (source) {
+            .package => true,
+            .aur => cfg.AurEnabled,
+            .flatpak => cfg.FlatPackEnabled,
+        };
     }
 
     fn source_is_active(source: UpdateSource, native: bool, aur: bool, flatpak: bool) bool {
@@ -122,6 +151,7 @@ pub const UpdatePage = extern struct {
     }
 
     fn is_source_active(self: *Self, source: UpdateSource) bool {
+        if (!sourceConfigEnabled(source)) return false;
         const p = self.priv();
         return source_is_active(
             source,
@@ -195,20 +225,30 @@ pub const UpdatePage = extern struct {
     }
 
     fn flatten_updates(allocator: std.mem.Allocator, response: CheckUpdates) ![]UpdateItem {
-        const updates = try allocator.alloc(UpdateItem, response.count());
+        const aur_enabled = sourceConfigEnabled(.aur);
+        const flatpak_enabled = sourceConfigEnabled(.flatpak);
+
+        var total: usize = response.Packages.len;
+        if (aur_enabled) total += response.Aur.len;
+        if (flatpak_enabled) total += response.Flatpak.len;
+        const updates = try allocator.alloc(UpdateItem, total);
         var index: usize = 0;
 
         for (response.Packages) |package| {
             updates[index] = .{ .source = .package, .name = package.Name, .description = translations._("System package update"), .old_version = package.CurrentVersion, .new_version = package.NewVersion, .size = package.DownloadSize };
             index += 1;
         }
-        for (response.Aur) |package| {
-            updates[index] = .{ .source = .aur, .name = package.Name, .description = translations._("AUR package update"), .old_version = package.Version, .new_version = package.NewVersion, .size = package.DownloadSize };
-            index += 1;
+        if (aur_enabled) {
+            for (response.Aur) |package| {
+                updates[index] = .{ .source = .aur, .name = package.Name, .description = translations._("AUR package update"), .old_version = package.Version, .new_version = package.NewVersion, .size = package.DownloadSize };
+                index += 1;
+            }
         }
-        for (response.Flatpak) |package| {
-            updates[index] = .{ .source = .flatpak, .name = package.Name, .description = package.Id, .old_version = package.Version, .new_version = translations._("Installed"), .size = 0 };
-            index += 1;
+        if (flatpak_enabled) {
+            for (response.Flatpak) |package| {
+                updates[index] = .{ .source = .flatpak, .name = package.Name, .description = package.Id, .old_version = package.Version, .new_version = translations._("Installed"), .size = 0 };
+                index += 1;
+            }
         }
         return updates;
     }
