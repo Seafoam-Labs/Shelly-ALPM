@@ -31,7 +31,6 @@ pub const ShellyConfig = struct {
     // General
     Culture: []const u8 = "",
     NewInstall: bool = true,
-    NewInstallInitSettings: bool = false,
     NoConfirm: bool = false,
 
     // Feature Toggles
@@ -59,7 +58,6 @@ pub const ShellyConfig = struct {
     PackageManagementCascadeDelete: bool = true,
     PackageManagementRemoveConfigs: bool = false,
     PackageManagementRemoveOptionalDeps: bool = true,
-    PackageManagementShowHidden: bool = false,
 
     PackageInstallUpgrade: bool = false,
     PackageInstallShowHidden: bool = false,
@@ -73,7 +71,6 @@ pub const ShellyConfig = struct {
     AurInstallShowDetailPane: bool = false,
 
     AurRemoveCascadeDelete: bool = true,
-    AurRemoveShowHidden: bool = false,
 
     AurUpdateRunChecks: bool = false,
     AurUpdateShowHidden: bool = false,

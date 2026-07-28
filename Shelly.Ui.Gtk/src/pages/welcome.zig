@@ -261,7 +261,6 @@ pub const WelcomePage = extern struct {
         updated.NavMode = if (gtk.CheckButton.getActive(p.nav_topbar) != 0) NavMode.topbar else NavMode.sidebar;
         updated.TrayEnabled = gtk.Switch.getActive(p.tray_enabled) != 0;
         updated.NewInstall = false;
-        updated.NewInstallInitSettings = true;
 
         if (gtk.Switch.getActive(p.tray_enabled) != 0) {
             TrayService.start(runtime.io, std.heap.c_allocator);

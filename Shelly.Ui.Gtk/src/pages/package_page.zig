@@ -1107,6 +1107,20 @@ pub const PackagePage = extern struct {
         argv.append(std.heap.c_allocator, "standard") catch return;
         for (names.items) |name| argv.append(std.heap.c_allocator, name) catch return;
 
+        if (runtime.config) |cfg_service| {
+            if (cfg_service.get()) |cfg| {
+                if (!cfg.PackageManagementCascadeDelete) {
+                    argv.append(std.heap.c_allocator, "--no-cascade") catch return;
+                }
+                if (cfg.PackageManagementRemoveOptionalDeps) {
+                    argv.append(std.heap.c_allocator, "--opt-deps") catch return;
+                }
+                if (cfg.PackageManagementRemoveConfigs) {
+                    argv.append(std.heap.c_allocator, "--remove-config") catch return;
+                }
+            } else |_| {}
+        }
+
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
                 .title = translations._("Removing packages"),

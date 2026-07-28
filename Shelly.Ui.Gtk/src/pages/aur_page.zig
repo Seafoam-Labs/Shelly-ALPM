@@ -813,6 +813,14 @@ pub const AurPage = extern struct {
         argv.append(std.heap.c_allocator, "aur") catch return;
         for (names.items) |name| argv.append(std.heap.c_allocator, name) catch return;
 
+        if (runtime.config) |cfg_service| {
+            if (cfg_service.get()) |cfg| {
+                if (!cfg.AurRemoveCascadeDelete) {
+                    argv.append(std.heap.c_allocator, "--no-cascade") catch return;
+                }
+            } else |_| {}
+        }
+
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
                 .title = translations._("Removing AUR packages"),

@@ -208,7 +208,20 @@ pub const ShellyCli = struct {
     }
 
     pub fn check_updates(self: ShellyCli) !std.json.Parsed(CheckUpdates) {
-        const result = try self.run(&.{"-P"});
+        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        defer argv.deinit(self.allocator);
+
+        try argv.append(self.allocator, "-P");
+
+        if (runtime.config) |cfg_service| {
+            if (cfg_service.get()) |cfg| {
+                if (cfg.AurUpdateShowHidden) {
+                    try argv.append(self.allocator, "--show-hidden");
+                }
+            } else |_| {}
+        }
+
+        const result = try self.run(argv.items);
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 

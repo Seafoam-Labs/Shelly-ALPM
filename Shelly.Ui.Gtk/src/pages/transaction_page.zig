@@ -12,6 +12,7 @@ const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
 const PendingQuestion = @import("../services/shelly_operation.zig").PendingQuestion;
 const TransactionQuestion = @import("../services/shelly_operation.zig").TransactionQuestion;
 const TransactionPackage = @import("../services/shelly_operation.zig").TransactionPackage;
+const runtime = @import("../services/runtime.zig");
 const MultiSelectDialog = @import("../dialog/page/multiselect.zig").MultiSelectDialog;
 const PkgbuildReviewDialog = @import("../dialog/page/pkg_build.zig").PkgbuildReviewDialog;
 const PlanDialog = @import("../dialog/page/plan.zig").PlanDialog;
@@ -119,9 +120,14 @@ pub const TransactionPage = extern struct {
             p.rows.put(alloc, owned, row) catch {};
         }
 
-        const argv = alloc.alloc([]const u8, request.argv.len) catch return;
+        const add_no_confirm = shouldAddNoConfirm(request.argv);
+        const argv_len = request.argv.len + @as(usize, if (add_no_confirm) 1 else 0);
+        const argv = alloc.alloc([]const u8, argv_len) catch return;
         for (request.argv, 0..) |a, i| {
             argv[i] = alloc.dupe(u8, a) catch return;
+        }
+        if (add_no_confirm) {
+            argv[request.argv.len] = alloc.dupe(u8, "--no-confirm") catch return;
         }
 
         const op = std.heap.c_allocator.create(ShellyOperation) catch return;
@@ -146,6 +152,18 @@ pub const TransactionPage = extern struct {
             std.heap.c_allocator.destroy(op);
             p.operation = null;
         };
+    }
+
+    fn shouldAddNoConfirm(argv: []const []const u8) bool {
+        for (argv) |arg| {
+            if (std.mem.eql(u8, arg, "--no-confirm") or std.mem.eql(u8, arg, "-n")) {
+                return false;
+            }
+        }
+
+        const svc = runtime.config orelse return false;
+        const cfg = svc.get() catch return false;
+        return cfg.NoConfirm;
     }
 
     fn rowStageChanged(self: *Self, row: *PackageRow, stage: []const u8) bool {
