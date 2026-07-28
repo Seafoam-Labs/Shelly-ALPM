@@ -10,8 +10,6 @@ const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
 const NavMode = @import("../models/shelly_config.zig").NavMode;
 const ConfigResolver = @import("../services/config_resolver.zig").ConfigResolver;
 const runtime = @import("../services/runtime.zig");
-const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
-const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const systemd_tray = @import("../services/systemd_tray.zig");
 const tray_service = @import("../services/tray_service.zig");
 const support = @import("support.zig");
@@ -84,10 +82,6 @@ pub const ShellySettingsPage = extern struct {
         webview_switch: *gtk.Switch,
         appimage_install_path_box: *gtk.Box,
         appimage_install_path_button: *gtk.Button,
-        sync_button: *gtk.Button,
-        rm_db_lock_button: *gtk.Button,
-        fix_permissions_button: *gtk.Button,
-        purify_button: *gtk.Button,
 
         // Bottom action bar
         save_button: *gtk.Button,
@@ -143,11 +137,6 @@ pub const ShellySettingsPage = extern struct {
         _ = gtk.Button.signals.clicked.connect(p.tray_updates_icon_clear_button, *Self, &on_clear_tray_updates_icon, self, .{});
 
         _ = gtk.Button.signals.clicked.connect(p.appimage_install_path_button, *Self, &on_pick_appimage_install_path, self, .{});
-
-        _ = gtk.Button.signals.clicked.connect(p.sync_button, *Self, &on_sync_db, self, .{});
-        _ = gtk.Button.signals.clicked.connect(p.rm_db_lock_button, *Self, &on_remove_db_lock, self, .{});
-        _ = gtk.Button.signals.clicked.connect(p.fix_permissions_button, *Self, &on_fix_permissions, self, .{});
-        _ = gtk.Button.signals.clicked.connect(p.purify_button, *Self, &on_purify, self, .{});
 
         _ = gobject.Object.signals.notify.connect(
             p.daily_schedule.as(gobject.Object),
@@ -647,81 +636,6 @@ pub const ShellySettingsPage = extern struct {
         updateConfigField(.AppImageInstallPath, path_slice);
     }
 
-    fn on_sync_db(_: *gtk.Button, self: *Self) callconv(.c) void {
-        const argv = ShellyCommands.sync_db(std.heap.c_allocator) catch return;
-        defer std.mem.Allocator.free(std.heap.c_allocator, argv);
-
-        const win = support.getWindow(ShellyWindow, self) orelse return;
-        win.startTransaction(.{
-            .title = translations._("Refreshing package databases"),
-            .argv = argv,
-            .packages = &.{},
-            .on_complete = &on_transaction_complete,
-            .privileged = true,
-            .ctx = self,
-        });
-    }
-
-    fn on_remove_db_lock(_: *gtk.Button, self: *Self) callconv(.c) void {
-        var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-        defer arena.deinit();
-        var threaded: std.Io.Threaded = .init(arena.allocator(), .{});
-        defer threaded.deinit();
-
-        const cli = ShellyCli{ .allocator = arena.allocator(), .io = threaded.io() };
-        const parsed = cli.repair_db() catch |err| {
-            std.log.err("settings: repair-db failed: {any}", .{err});
-            return;
-        };
-        defer parsed.deinit();
-
-        const response = parsed.value;
-        if (response.isSuccess()) {
-            self.priv().toast.show(.success, translations._("Database lock removed successfully"));
-        } else {
-            self.priv().toast.show(.@"error", translations._("Failed to remove database lock"));
-        }
-    }
-
-    fn on_fix_permissions(_: *gtk.Button, self: *Self) callconv(.c) void {
-        const argv = ShellyCommands.fix_permissions(std.heap.c_allocator) catch return;
-        defer std.mem.Allocator.free(std.heap.c_allocator, argv);
-
-        const win = support.getWindow(ShellyWindow, self) orelse return;
-        win.startTransaction(.{
-            .title = translations._("Fixing permissions"),
-            .argv = argv,
-            .packages = &.{},
-            .on_complete = &on_transaction_complete,
-            .privileged = true,
-            .ctx = self,
-        });
-    }
-
-    fn on_purify(_: *gtk.Button, self: *Self) callconv(.c) void {
-        const argv = ShellyCommands.purify(std.heap.c_allocator) catch return;
-        defer std.mem.Allocator.free(std.heap.c_allocator, argv);
-
-        const win = support.getWindow(ShellyWindow, self) orelse return;
-        win.startTransaction(.{
-            .title = translations._("Purifying packages"),
-            .argv = argv,
-            .packages = &.{},
-            .on_complete = &on_transaction_complete,
-            .privileged = true,
-            .ctx = self,
-        });
-    }
-
-    fn on_transaction_complete(ctx: *anyopaque, success: bool) void {
-        const self: *Self = @ptrCast(@alignCast(ctx));
-        if (success) {
-            self.priv().toast.show(.success, translations._("Operation completed successfully"));
-        } else {
-            self.priv().toast.show(.@"error", translations._("Operation failed"));
-        }
-    }
-
     fn on_schedule_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         applyScheduleVisibility(self.priv());
         self.autosave();
@@ -890,10 +804,6 @@ pub const ShellySettingsPage = extern struct {
         .{ "webview_switch", @offsetOf(Private, "webview_switch") },
         .{ "appimage_install_path_box", @offsetOf(Private, "appimage_install_path_box") },
         .{ "appimage_install_path_button", @offsetOf(Private, "appimage_install_path_button") },
-        .{ "sync_button", @offsetOf(Private, "sync_button") },
-        .{ "rm_db_lock_button", @offsetOf(Private, "rm_db_lock_button") },
-        .{ "fix_permissions_button", @offsetOf(Private, "fix_permissions_button") },
-        .{ "purify_button", @offsetOf(Private, "purify_button") },
 
         // Bottom action bar
         .{ "save_button", @offsetOf(Private, "save_button") },
