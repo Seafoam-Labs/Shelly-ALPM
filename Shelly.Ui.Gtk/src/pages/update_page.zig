@@ -9,7 +9,6 @@ const size_helper = @import("../helpers/size_converts.zig").SizeConverter;
 
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
-const ShellyOperation = @import("../services/shelly_operation.zig").ShellyOperation;
 const CheckUpdates = @import("../models/sync.zig").CheckUpdates;
 const UpdateObject = @import("../g_objects/update_object.zig").UpdateObject;
 const UpdateSource = @import("../g_objects/update_object.zig").UpdateSource;
@@ -422,24 +421,33 @@ pub const UpdatePage = extern struct {
         update_summary(self);
     }
 
-    fn update_summary(self: *Self) void {
-        const p = self.priv();
-        var included: usize = 0;
-        const model = p.list_store.as(gio.ListModel);
+    fn forEachActiveUpdate(self: *Self, ctx: anytype, comptime f: fn (@TypeOf(ctx), *UpdateObject) void) void {
+        const model = self.priv().list_store.as(gio.ListModel);
         const count = gio.ListModel.getNItems(model);
         for (0..count) |index| {
             const item: *gobject.Object = @ptrCast(@alignCast(gio.ListModel.getItem(model, @intCast(index)) orelse continue));
+            defer item.unref();
             if (gobject.ext.cast(UpdateObject, item)) |update| {
-                if (self.is_source_active(update.getSource())) included += 1;
+                if (self.is_source_active(update.getSource())) f(ctx, update);
             }
-            item.unref();
         }
+    }
+
+    fn update_summary(self: *Self) void {
+        const p = self.priv();
+        var included: usize = 0;
+        const total = gio.ListModel.getNItems(p.list_store.as(gio.ListModel));
+        self.forEachActiveUpdate(&included, struct {
+            fn cb(count: *usize, _: *UpdateObject) void {
+                count.* += 1;
+            }
+        }.cb);
 
         var buffer: [96]u8 = undefined;
         const text = std.fmt.bufPrintZ(
             &buffer,
             "{d} {s} {d} {s}",
-            .{ included, translations._("of"), count, translations._("updates included") },
+            .{ included, translations._("of"), total, translations._("updates included") },
         ) catch translations._("Updates included");
         gtk.Label.setLabel(p.selected_label, text);
     }
@@ -460,25 +468,11 @@ pub const UpdatePage = extern struct {
         var names: std.ArrayListUnmanaged([]const u8) = .empty;
         defer names.deinit(std.heap.c_allocator);
 
-        const n = gio.ListModel.getNItems(p.list_store.as(gio.ListModel));
-        var i: u32 = 0;
-        while (i < n) : (i += 1) {
-            const obj = gio.ListModel.getObject(p.list_store.as(gio.ListModel), i) orelse continue;
-            const pkg = gobject.ext.cast(UpdateObject, obj) orelse continue;
-            if (standard) {
-                names.append(std.heap.c_allocator, pkg.getName()) catch continue;
-                continue;
+        self.forEachActiveUpdate(&names, struct {
+            fn cb(list: *std.ArrayListUnmanaged([]const u8), pkg: *UpdateObject) void {
+                list.append(std.heap.c_allocator, pkg.getName()) catch {};
             }
-
-            if (flatpak) {
-                names.append(std.heap.c_allocator, pkg.getName()) catch continue;
-                continue;
-            }
-            if (aur) {
-                names.append(std.heap.c_allocator, pkg.getName()) catch continue;
-                continue;
-            }
-        }
+        }.cb);
         if (names.items.len == 0) return;
 
         if (support.getWindow(ShellyWindow, self)) |win| {
