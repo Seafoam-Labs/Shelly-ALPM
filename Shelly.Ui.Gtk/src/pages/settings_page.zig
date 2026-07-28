@@ -65,6 +65,7 @@ pub const ShellySettingsPage = extern struct {
         update_minute_spin: *gtk.SpinButton,
 
         // Look & Feel
+        shelly_nav_switch: *gtk.Switch,
         shelly_icons_switch: *gtk.Switch,
         symbolic_tray_box: *gtk.Box,
         symbolic_tray_switch: *gtk.Switch,
@@ -170,6 +171,13 @@ pub const ShellySettingsPage = extern struct {
             p.aur_switch.as(gobject.Object),
             *Self,
             &on_aur_notify,
+            self,
+            .{ .detail = "active" },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.shelly_nav_switch.as(gobject.Object),
+            *Self,
+            &on_nav_switch,
             self,
             .{ .detail = "active" },
         );
@@ -672,6 +680,15 @@ pub const ShellySettingsPage = extern struct {
         }
     }
 
+    fn on_nav_switch(obj: *gobject.Object, _: *gobject.ParamSpec, self: *SettingsPage) callconv(.c) void {
+        const sw: *gtk.Switch = @ptrCast(@alignCast(obj));
+        const active = gtk.Switch.getActive(sw) != 0;
+        const mode: NavMode = if (active) .topbar else .sidebar;
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.requestNav(mode);
+        }
+    }
+
     fn on_aur_confirmation_response(ctx: ?*anyopaque, confirmed: bool) void {
         const self: *Self = @ptrCast(@alignCast(ctx.?));
         if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
@@ -713,6 +730,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "update_minute_spin", @offsetOf(Private, "update_minute_spin") },
 
         // Look & Feel
+        .{ "shelly_nav_switch", @offsetOf(Private, "shelly_nav_switch") },
         .{ "shelly_icons_switch", @offsetOf(Private, "shelly_icons_switch") },
         .{ "symbolic_tray_box", @offsetOf(Private, "symbolic_tray_box") },
         .{ "symbolic_tray_switch", @offsetOf(Private, "symbolic_tray_switch") },
@@ -901,6 +919,7 @@ fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     gtk.SpinButton.setValue(p.update_minute_spin, @floatFromInt(parsed_time.minute));
 
     // Look & Feel
+    setSwitch(p.shelly_nav_switch, if (cfg.NavMode == .topbar) true else false);
     setSwitch(p.shelly_icons_switch, cfg.ShellyIconsEnabled);
     setSwitch(p.symbolic_tray_switch, cfg.UseSymbolicTray);
 
@@ -958,6 +977,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     ) catch cfg.Time;
 
     // Look & Feel
+    cfg.NavMode = if (getSwitch(p.shelly_nav_switch)) NavMode.topbar else NavMode.sidebar;
     cfg.ShellyIconsEnabled = getSwitch(p.shelly_icons_switch);
     cfg.UseSymbolicTray = getSwitch(p.symbolic_tray_switch);
 

@@ -1,6 +1,7 @@
 const std = @import("std");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
+const glib = bindings.glib;
 const gio = bindings.gio;
 const gobject = bindings.gobject;
 const FlatpakPage = @import("pages/flatpak/flatpak_page.zig").FlatpakPage;
@@ -25,6 +26,7 @@ const NavButton = struct {
     stack: *gtk.Stack,
     name: [:0]const u8,
     window: *ShellyWindow,
+    is_rail: bool,
 };
 
 pub const ShellyWindow = extern struct {
@@ -41,11 +43,12 @@ pub const ShellyWindow = extern struct {
         lockout_content: *gtk.Box,
         content_stack: *gtk.Stack,
         rail: ?*gtk.Box,
-        switcher: ?*gtk.StackSwitcher,
+        topnav: ?*gtk.Box,
         chevron_img: ?*gtk.Image,
         nav_buttons: std.ArrayListUnmanaged(*NavButton),
         collapsed: bool,
         nav_mode: NavMode,
+        pending_nav: NavMode,
         var offset: c_int = 0;
     };
 
@@ -73,11 +76,12 @@ pub const ShellyWindow = extern struct {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
         const p = self.private();
         p.rail = null;
-        p.switcher = null;
+        p.topnav = null;
         p.chevron_img = null;
         p.nav_buttons = .empty;
         p.collapsed = true;
         p.nav_mode = .sidebar;
+        p.pending_nav = .sidebar;
         build_shell(self);
         populate_stack(self);
         applyConfig(self);
@@ -131,31 +135,27 @@ pub const ShellyWindow = extern struct {
 
     fn setNavEnabled(self: *ShellyWindow, name: [:0]const u8, enabled: bool) void {
         const p = self.private();
-
-        var nb_opt: ?*NavButton = null;
-        for (p.nav_buttons.items) |nb| {
-            if (std.mem.eql(u8, nb.name, name)) {
-                nb_opt = nb;
-                break;
-            }
-        }
-        const nb = nb_opt orelse return;
         const visible: c_int = @intFromBool(enabled);
+        var active_stack: ?*gtk.Stack = null;
 
-        gtk.Widget.setVisible(nb.button.as(gtk.Widget), visible);
-
-        if (gtk.Stack.getChildByName(nb.stack, name)) |child| {
-            const page = gtk.Stack.getPage(nb.stack, child);
-            gtk.StackPage.setVisible(page, visible);
+        for (p.nav_buttons.items) |nb| {
+            if (!std.mem.eql(u8, nb.name, name)) continue;
+            gtk.Widget.setVisible(nb.button.as(gtk.Widget), visible);
+            active_stack = nb.stack;
+            if (gtk.Stack.getChildByName(nb.stack, name)) |child| {
+                const page = gtk.Stack.getPage(nb.stack, child);
+                gtk.StackPage.setVisible(page, visible);
+            }
         }
 
         if (enabled) return;
 
-        const cn_opt = gtk.Stack.getVisibleChildName(nb.stack);
+        const stack = active_stack orelse return;
+        const cn_opt = gtk.Stack.getVisibleChildName(stack);
         const is_active = if (cn_opt) |cn| std.mem.eql(u8, std.mem.span(cn), name) else false;
         if (!is_active) return;
 
-        gtk.Stack.setVisibleChildName(nb.stack, "package");
+        gtk.Stack.setVisibleChildName(stack, "package");
         for (p.nav_buttons.items) |n| {
             if (std.mem.eql(u8, n.name, "package")) {
                 set_active_nav(self, n);
@@ -172,7 +172,14 @@ pub const ShellyWindow = extern struct {
         gtk.Widget.setVexpand(stack.as(gtk.Widget), 1);
         p.content_stack = stack;
 
-        layoutNav(self, readNavMode());
+        _ = build_rail(self, stack);
+        _ = build_topnav(self, stack);
+
+        gtk.Box.append(p.shell_box, p.rail.?.as(gtk.Widget));
+        gtk.Box.append(p.shell_box, p.topnav.?.as(gtk.Widget));
+        gtk.Box.append(p.shell_box, stack.as(gtk.Widget));
+
+        applyNavMode(self, readNavMode());
     }
 
     fn readNavMode() NavMode {
@@ -181,61 +188,50 @@ pub const ShellyWindow = extern struct {
         return cfg.NavMode;
     }
 
-    pub fn changeNav(self: *ShellyWindow, mode: NavMode) void {
-        if (self.private().nav_mode == mode) return;
-        layoutNav(self, mode);
+    pub fn requestNav(self: *ShellyWindow, mode: NavMode) void {
+        self.private().pending_nav = mode;
+        _ = glib.idleAdd(&apply_pending_nav, self);
     }
 
-    fn layoutNav(self: *ShellyWindow, mode: NavMode) void {
+    fn apply_pending_nav(data: ?*anyopaque) callconv(.c) c_int {
+        const self: *ShellyWindow = @ptrCast(@alignCast(data));
+        self.changeNav(self.private().pending_nav);
+        return 0; // G_SOURCE_REMOVE
+    }
+
+    pub fn changeNav(self: *ShellyWindow, mode: NavMode) void {
+        if (self.private().nav_mode == mode) return;
+        applyNavMode(self, mode);
+    }
+
+    fn applyNavMode(self: *ShellyWindow, mode: NavMode) void {
         const p = self.private();
         p.nav_mode = mode;
 
-        removeFromShell(p, p.content_stack.as(gtk.Widget));
-        if (p.rail) |rail| removeFromShell(p, rail.as(gtk.Widget));
-        if (p.switcher) |switcher| {
-            removeFromShell(p, switcher.as(gtk.Widget));
-            p.switcher = null;
-        }
+        const sidebar = mode == .sidebar;
+        gtk.Orientable.setOrientation(
+            p.shell_box.as(gtk.Orientable),
+            if (sidebar) .horizontal else .vertical,
+        );
+        gtk.Widget.setVisible(p.rail.?.as(gtk.Widget), @intFromBool(sidebar));
+        gtk.Widget.setVisible(p.topnav.?.as(gtk.Widget), @intFromBool(!sidebar));
 
-        switch (mode) {
-            .sidebar => {
-                if (p.rail == null) _ = build_rail(self, p.content_stack);
-                gtk.Orientable.setOrientation(p.shell_box.as(gtk.Orientable), .horizontal);
-                gtk.Box.append(p.shell_box, p.rail.?.as(gtk.Widget));
-                gtk.Box.append(p.shell_box, p.content_stack.as(gtk.Widget));
-                sync_active_nav(self);
-            },
-            .topbar => {
-                const switcher = gtk.StackSwitcher.new();
-                gtk.StackSwitcher.setStack(switcher, p.content_stack);
-                gtk.Orientable.setOrientation(switcher.as(gtk.Orientable), .horizontal);
-                p.switcher = switcher;
-                gtk.Orientable.setOrientation(p.shell_box.as(gtk.Orientable), .vertical);
-                gtk.Box.append(p.shell_box, switcher.as(gtk.Widget));
-                gtk.Box.append(p.shell_box, p.content_stack.as(gtk.Widget));
-            },
-        }
-    }
-
-    fn removeFromShell(p: *Private, child: *gtk.Widget) void {
-        const parent = gtk.Widget.getParent(child) orelse return;
-        if (parent == p.shell_box.as(gtk.Widget)) {
-            gtk.Box.remove(p.shell_box, child);
-        }
+        sync_active_nav(self);
     }
 
     fn build_rail(self: *ShellyWindow, stack: *gtk.Stack) *gtk.Box {
         const p = self.private();
-        const rail = gtk.Box.new(.vertical, 4);
+        const rail = gtk.Box.new(.vertical, 6);
         gtk.Widget.addCssClass(rail.as(gtk.Widget), "nav-rail");
-        // Hold our own reference: removeFromShell drops the shell's reference,
-        // which would destroy the rail when switching modes.
+        gtk.Widget.setMarginTop(rail.as(gtk.Widget), 8);
+        gtk.Widget.setMarginBottom(rail.as(gtk.Widget), 8);
+        gtk.Widget.setMarginStart(rail.as(gtk.Widget), 6);
+        gtk.Widget.setMarginEnd(rail.as(gtk.Widget), 6);
         p.rail = @ptrCast(rail.as(gobject.Object).ref());
 
         const chevron = gtk.Button.new();
         gtk.Widget.addCssClass(chevron.as(gtk.Widget), "flat");
         const chevron_img = gtk.Image.newFromIconName(if (p.collapsed) "go-next-symbolic" else "go-previous-symbolic");
-
         gtk.Widget.setSizeRequest(chevron_img.as(gtk.Widget), ICON_SLOT, -1);
         gtk.Widget.setHalign(chevron_img.as(gtk.Widget), .center);
         gtk.Button.setChild(chevron, chevron_img.as(gtk.Widget));
@@ -243,12 +239,17 @@ pub const ShellyWindow = extern struct {
         _ = gtk.Button.signals.clicked.connect(chevron, *ShellyWindow, &on_chevron, self, .{});
         gtk.Box.append(rail, chevron.as(gtk.Widget));
 
-        add_nav_button(self, rail, stack, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
-        add_nav_button(self, rail, stack, "package", PackagePage.icon_name, translations._(PackagePage.title));
-        add_nav_button(self, rail, stack, "aur", AurPage.icon_name, translations._(AurPage.title));
-        add_nav_button(self, rail, stack, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
-        add_nav_button(self, rail, stack, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
-        add_nav_button(self, rail, stack, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
+        const items = gtk.Box.new(.vertical, 6);
+        gtk.Widget.setMarginTop(items.as(gtk.Widget), 4);
+        gtk.Widget.setMarginBottom(items.as(gtk.Widget), 4);
+        gtk.Box.append(rail, items.as(gtk.Widget));
+
+        add_nav_button(self, items, stack, true, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
+        add_nav_button(self, items, stack, true, "package", PackagePage.icon_name, translations._(PackagePage.title));
+        add_nav_button(self, items, stack, true, "aur", AurPage.icon_name, translations._(AurPage.title));
+        add_nav_button(self, items, stack, true, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
+        add_nav_button(self, items, stack, true, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
+        add_nav_button(self, items, stack, true, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
 
         const sep = gtk.Box.new(.horizontal, 0);
         gtk.Widget.setVexpand(sep.as(gtk.Widget), 1);
@@ -257,27 +258,68 @@ pub const ShellyWindow = extern struct {
         const menu_button = gtk.MenuButton.new();
         gtk.Widget.addCssClass(menu_button.as(gtk.Widget), "flat");
         gtk.MenuButton.setIconName(menu_button, "open-menu-symbolic");
-
         const popover = gtk.Popover.new();
-
         const menu_box = gtk.Box.new(.vertical, 4);
-
         const utils_btn = gtk.Button.newWithLabel(translations._("Utilities"));
         gtk.Widget.addCssClass(utils_btn.as(gtk.Widget), "flat");
-        //    _ = gtk.Button.signals.clicked.connect(utils_btn, *ShellyWindow, &on_utils, self, .{});
         gtk.Box.append(menu_box, utils_btn.as(gtk.Widget));
-
         const sp_btn = gtk.Button.newWithLabel(translations._("Settings"));
         gtk.Widget.addCssClass(sp_btn.as(gtk.Widget), "flat");
         _ = gtk.Button.signals.clicked.connect(sp_btn, *ShellyWindow, &on_settings, self, .{});
         gtk.Box.append(menu_box, sp_btn.as(gtk.Widget));
-
         gtk.Popover.setChild(popover, menu_box.as(gtk.Widget));
         gtk.MenuButton.setPopover(menu_button, popover);
-
         gtk.Box.append(rail, menu_button.as(gtk.Widget));
-
         return rail;
+    }
+
+    fn build_topnav(self: *ShellyWindow, stack: *gtk.Stack) *gtk.Box {
+        const p = self.private();
+        const bar = gtk.Box.new(.horizontal, 4);
+        gtk.Widget.addCssClass(bar.as(gtk.Widget), "nav-topbar");
+        gtk.Widget.setHexpand(bar.as(gtk.Widget), 1);
+        gtk.Widget.setMarginTop(bar.as(gtk.Widget), 6);
+        gtk.Widget.setMarginBottom(bar.as(gtk.Widget), 6);
+        gtk.Widget.setMarginStart(bar.as(gtk.Widget), 6);
+        gtk.Widget.setMarginEnd(bar.as(gtk.Widget), 6);
+        p.topnav = @ptrCast(bar.as(gobject.Object).ref());
+
+        const left_spacer = gtk.Box.new(.horizontal, 0);
+        gtk.Widget.setHexpand(left_spacer.as(gtk.Widget), 1);
+        gtk.Box.append(bar, left_spacer.as(gtk.Widget));
+
+        const items = gtk.Box.new(.horizontal, 4);
+        gtk.Widget.addCssClass(items.as(gtk.Widget), "linked");
+        gtk.Box.append(bar, items.as(gtk.Widget));
+
+        add_nav_button(self, items, stack, false, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
+        add_nav_button(self, items, stack, false, "package", PackagePage.icon_name, translations._(PackagePage.title));
+        add_nav_button(self, items, stack, false, "aur", AurPage.icon_name, translations._(AurPage.title));
+        add_nav_button(self, items, stack, false, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
+        add_nav_button(self, items, stack, false, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
+        add_nav_button(self, items, stack, false, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
+
+        const right_spacer = gtk.Box.new(.horizontal, 0);
+        gtk.Widget.setHexpand(right_spacer.as(gtk.Widget), 1);
+        gtk.Box.append(bar, right_spacer.as(gtk.Widget));
+
+        const menu_button = gtk.MenuButton.new();
+        gtk.Widget.addCssClass(menu_button.as(gtk.Widget), "flat");
+        gtk.MenuButton.setIconName(menu_button, "view-more-symbolic");
+        const popover = gtk.Popover.new();
+        const menu_box = gtk.Box.new(.vertical, 4);
+        const utils_btn = gtk.Button.newWithLabel(translations._("Utilities"));
+        gtk.Widget.addCssClass(utils_btn.as(gtk.Widget), "flat");
+        gtk.Box.append(menu_box, utils_btn.as(gtk.Widget));
+        const sp_btn = gtk.Button.newWithLabel(translations._("Settings"));
+        gtk.Widget.addCssClass(sp_btn.as(gtk.Widget), "flat");
+        _ = gtk.Button.signals.clicked.connect(sp_btn, *ShellyWindow, &on_settings, self, .{});
+        gtk.Box.append(menu_box, sp_btn.as(gtk.Widget));
+        gtk.Popover.setChild(popover, menu_box.as(gtk.Widget));
+        gtk.MenuButton.setPopover(menu_button, popover);
+        gtk.Box.append(bar, menu_button.as(gtk.Widget));
+
+        return bar;
     }
 
     fn on_chevron(_: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
@@ -289,15 +331,24 @@ pub const ShellyWindow = extern struct {
         }
 
         for (p.nav_buttons.items) |nb| {
+            if (!nb.is_rail) continue;
             gtk.Revealer.setRevealChild(nb.revealer, @intFromBool(!p.collapsed));
         }
     }
 
-    fn add_nav_button(self: *ShellyWindow, rail: *gtk.Box, stack: *gtk.Stack, name: [:0]const u8, icon: [:0]const u8, text: [:0]const u8) void {
+    fn add_nav_button(
+        self: *ShellyWindow,
+        parent_box: *gtk.Box,
+        stack: *gtk.Stack,
+        is_rail: bool,
+        name: [:0]const u8,
+        icon: [:0]const u8,
+        text: [:0]const u8,
+    ) void {
         const p = self.private();
         const box = gtk.Box.new(.horizontal, 0);
-
         const img = gtk.Image.newFromIconName(icon);
+
         gtk.Widget.setSizeRequest(img.as(gtk.Widget), ICON_SLOT, -1);
         gtk.Widget.setHalign(img.as(gtk.Widget), .center);
         gtk.Box.append(box, img.as(gtk.Widget));
@@ -305,10 +356,16 @@ pub const ShellyWindow = extern struct {
         const label = gtk.Label.new(text);
         gtk.Widget.setMarginStart(label.as(gtk.Widget), LABEL_GAP);
         gtk.Widget.setHalign(label.as(gtk.Widget), .start);
+
         const revealer = gtk.Revealer.new();
-        gtk.Revealer.setTransitionType(revealer, .slide_right);
+        if (is_rail) {
+            gtk.Revealer.setTransitionType(revealer, .slide_right);
+            gtk.Revealer.setRevealChild(revealer, @intFromBool(!p.collapsed));
+        } else {
+            gtk.Revealer.setTransitionType(revealer, .none);
+            gtk.Revealer.setRevealChild(revealer, 1);
+        }
         gtk.Revealer.setChild(revealer, label.as(gtk.Widget));
-        gtk.Revealer.setRevealChild(revealer, @intFromBool(!p.collapsed));
         gtk.Box.append(box, revealer.as(gtk.Widget));
 
         const btn = gtk.Button.new();
@@ -317,11 +374,18 @@ pub const ShellyWindow = extern struct {
         gtk.Widget.addCssClass(btn.as(gtk.Widget), "nav-btn");
 
         const nb = std.heap.c_allocator.create(NavButton) catch unreachable;
-        nb.* = .{ .button = btn, .revealer = revealer, .stack = stack, .name = name, .window = self };
+        nb.* = .{
+            .button = btn,
+            .revealer = revealer,
+            .stack = stack,
+            .name = name,
+            .window = self,
+            .is_rail = is_rail,
+        };
         p.nav_buttons.append(std.heap.c_allocator, nb) catch unreachable;
-
         _ = gtk.Button.signals.clicked.connect(btn, *NavButton, &on_nav_click, nb, .{});
-        gtk.Box.append(rail, btn.as(gtk.Widget));
+
+        gtk.Box.append(parent_box, btn.as(gtk.Widget));
     }
 
     fn on_nav_click(_: *gtk.Button, nb: *NavButton) callconv(.c) void {
@@ -332,7 +396,7 @@ pub const ShellyWindow = extern struct {
     fn set_active_nav(self: *ShellyWindow, active: *NavButton) void {
         const p = self.private();
         for (p.nav_buttons.items) |nb| {
-            if (nb == active) {
+            if (std.mem.eql(u8, nb.name, active.name)) {
                 gtk.Widget.addCssClass(nb.button.as(gtk.Widget), "nav-selected");
             } else {
                 gtk.Widget.removeCssClass(nb.button.as(gtk.Widget), "nav-selected");
@@ -446,6 +510,7 @@ pub const ShellyWindow = extern struct {
         }
         gtk.Widget.setVisible(p.lockout_overlay.as(gtk.Widget), 0);
     }
+
     pub fn startTransaction(self: *ShellyWindow, request: TransactionRequest) void {
         const tp = TransactionPage.new();
         self.showLockout(tp.as(gtk.Widget));
@@ -484,7 +549,14 @@ pub const ShellyWindow = extern struct {
 
     fn finalize(self: *ShellyWindow) callconv(.c) void {
         const p = self.private();
+        // Buttons are owned by their chrome (rail/topnav) widget tree; we only
+        // free our NavButton bookkeeping structs here, not the widgets.
+        for (p.nav_buttons.items) |nb| {
+            std.heap.c_allocator.destroy(nb);
+        }
+        p.nav_buttons.deinit(std.heap.c_allocator);
         if (p.rail) |rail| rail.as(gobject.Object).unref();
+        if (p.topnav) |topnav| topnav.as(gobject.Object).unref();
         gobject.Object.virtual_methods.finalize.call(Class.parent, self.as(Parent));
     }
 };

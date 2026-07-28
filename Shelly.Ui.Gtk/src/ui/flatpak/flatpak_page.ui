@@ -10,6 +10,7 @@
         <property name="orientation">horizontal</property>
         <property name="vexpand">true</property>
         <property name="hexpand">true</property>
+          <property name="margin-start">2</property>
         <property name="margin-end">9</property>
         <property name="margin-bottom">9</property>
         <child>

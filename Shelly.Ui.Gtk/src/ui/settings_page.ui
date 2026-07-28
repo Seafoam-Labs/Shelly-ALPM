@@ -348,6 +348,25 @@
                                 <property name="spacing">12</property>
                                 <child>
                                   <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Use Horizonal Navigation</property>
+                                    <property name="tooltip-text" translatable="yes">If enabled, Shelly will use horizontal navigation.</property>
+                                    <property name="halign">start</property>
+                                    <property name="hexpand">true</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSwitch" id="shelly_nav_switch">
+                                    <property name="halign">end</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkLabel">
                                     <property name="label" translatable="yes">Icons Enabled</property>
                                     <property name="tooltip-text" translatable="yes">If enabled, Shelly will use appstream icons in the package list and details pages.</property>
                                     <property name="halign">start</property>
