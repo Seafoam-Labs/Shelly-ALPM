@@ -457,7 +457,7 @@ pub const ShellyWindow = extern struct {
     fn populate_stack(self: *ShellyWindow) void {
         const stack = self.private().content_stack;
 
-        const rp = WelcomePage.new();
+        const rp = RecommendPage.new();
         const rp_page = gtk.Stack.addTitled(stack, rp.as(gtk.Widget), "recommend", RecommendPage.title);
         gtk.StackPage.setIconName(rp_page, RecommendPage.icon_name);
 
