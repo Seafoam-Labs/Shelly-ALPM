@@ -117,7 +117,7 @@ Shelly can also be built manually from source.
 
 The project currently uses Zig for building. Make sure all required build dependencies are installed before compiling.
 
-Alternatively, you can use:
+You can build and install Shelly automatically using the provided script:
 
 ```bash
 sudo ./local-install.sh
