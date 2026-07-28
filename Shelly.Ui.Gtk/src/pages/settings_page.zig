@@ -742,17 +742,23 @@ pub const ShellySettingsPage = extern struct {
 
         if (active) {
             tray_service.start(runtime.io, std.heap.c_allocator);
+            updateConfigField(.TrayEnabled, active);
             p.toast.show(.success, translations._("Tray enabled"));
         } else {
             const stopped = tray_service.end(runtime.io, std.heap.c_allocator);
-            if (stopped) {
-                p.toast.show(.success, translations._("Tray disabled"));
-            } else {
-                p.toast.show(.info, translations._("Tray disabled"));
-            }
-        }
+            updateConfigField(.TrayEnabled, active);
 
-        updateConfigField(.TrayEnabled, active);
+            systemd_tray.removeService(std.heap.c_allocator, runtime.io) catch |err| {
+                std.log.err("failed to remove systemd tray service: {s}", .{@errorName(err)});
+                p.toast.show(.@"error", translations._("Tray disabled, but autostart service remains"));
+                return;
+            };
+
+            p.toast.show(if (stopped) .success else .info, translations._("Tray disabled"));
+
+            gtk.Switch.setActive(p.tray_auto_switch, 0);
+            updateConfigField(.TrayAutoStart, active);
+        }
     }
 
     fn on_tray_auto_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
