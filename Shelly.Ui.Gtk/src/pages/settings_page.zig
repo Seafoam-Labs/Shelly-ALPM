@@ -605,10 +605,10 @@ pub const ShellySettingsPage = extern struct {
         if (cfg.TrayEnabled == active) return;
 
         if (active) {
-            tray_service.start();
+            tray_service.start(runtime.io, std.heap.c_allocator);
             p.toast.show(.success, translations._("Tray enabled"));
         } else {
-            const stopped = tray_service.end(runtime.io);
+            const stopped = tray_service.end(runtime.io, std.heap.c_allocator);
             if (stopped) {
                 p.toast.show(.success, translations._("Tray disabled"));
             } else {

@@ -39,18 +39,18 @@ pub fn main(init: std.process.Init) void {
 
     const status = gio.Application.run(gapp, 0, null);
 
-    tryStopTray();
+    tryStopTray(runtime.io, std.heap.c_allocator);
 
     runtime.teardownConfig(std.heap.c_allocator);
     std.process.exit(@intCast(status));
 }
 
-fn tryStopTray() void {
+fn tryStopTray(io: std.Io, alloc: std.mem.Allocator) void {
     var autostart_managed = false;
     if (runtime.config) |svc| {
         if (svc.get() catch null) |cfg| autostart_managed = cfg.TrayAutoStart;
     }
-    if (!autostart_managed) _ = tray_service.end(runtime.io);
+    if (!autostart_managed) _ = tray_service.end(io, alloc);
 }
 
 fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
@@ -76,18 +76,18 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
         std.log.warn("settings: failed to load config service: {t}", .{err});
     };
 
-    tryStartTray();
+    tryStartTray(runtime.io, std.heap.c_allocator);
 
     const window = ShellyWindow.new(app);
     gtk.Window.present(gobject.ext.as(gtk.Window, window));
 }
 
-fn tryStartTray() void {
+fn tryStartTray(io: std.Io, alloc: std.mem.Allocator) void {
     if (runtime.config) |svc| {
         const cfg = svc.get() catch return;
         if (!cfg.TrayEnabled) return;
     }
-    tray_service.start();
+    tray_service.start(io, alloc);
 }
 
 test {

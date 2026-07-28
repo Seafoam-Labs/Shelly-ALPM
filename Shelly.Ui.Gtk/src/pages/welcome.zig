@@ -255,8 +255,7 @@ pub const WelcomePage = extern struct {
         var updated = cfg.*;
         updated.AurEnabled = gtk.CheckButton.getActive(p.source_aur) != 0;
         updated.AurWarningConfirmed = updated.AurEnabled;
-        updated
-            .FlatPackEnabled = gtk.CheckButton.getActive(p.source_flatpak) != 0;
+        updated.FlatPackEnabled = gtk.CheckButton.getActive(p.source_flatpak) != 0;
         updated.AppImageEnabled = gtk.CheckButton.getActive(p.source_appimage) != 0;
         updated.RecommendedEnabled = gtk.CheckButton.getActive(p.source_recommended) != 0;
         updated.NavMode = if (gtk.CheckButton.getActive(p.nav_topbar) != 0) NavMode.topbar else NavMode.sidebar;
@@ -265,7 +264,7 @@ pub const WelcomePage = extern struct {
         updated.NewInstallInitSettings = true;
 
         if (gtk.Switch.getActive(p.tray_enabled) != 0) {
-            TrayService.start();
+            TrayService.start(runtime.io, std.heap.c_allocator);
         }
 
         svc.set(updated) catch |err| {
