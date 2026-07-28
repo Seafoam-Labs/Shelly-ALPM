@@ -46,11 +46,11 @@ pub fn main(init: std.process.Init) void {
 }
 
 fn tryStopTray(io: std.Io, alloc: std.mem.Allocator) void {
-    var autostart_managed = false;
+    var should_stop = true;
     if (runtime.config) |svc| {
-        if (svc.get() catch null) |cfg| autostart_managed = cfg.TrayAutoStart;
+        if (svc.get() catch null) |cfg| should_stop = !cfg.TrayEnabled;
     }
-    if (!autostart_managed) _ = tray_service.end(io, alloc);
+    if (should_stop) _ = tray_service.end(io, alloc);
 }
 
 fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
@@ -91,7 +91,7 @@ fn tryStartTray(io: std.Io, alloc: std.mem.Allocator) void {
 }
 
 test {
-    // _ = @import("services/icon_resolver.zig");
+    _ = @import("services/icon_resolver.zig");
     _ = @import("services/config_resolver.zig");
     _ = @import("services/shelly_cli.zig");
     _ = @import("services/tray_service.zig");
