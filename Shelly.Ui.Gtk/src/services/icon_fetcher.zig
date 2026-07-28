@@ -23,7 +23,7 @@ pub const IconDownloadService = struct {
         return .{ .allocator = allocator, .io = io };
     }
 
-    fn downloadAndUnpackIcons(self: *IconDownloadService) !bool {
+    fn download_unpack_icons(self: *IconDownloadService) !bool {
         const a = self.allocator;
         const io = self.io;
 
@@ -34,7 +34,7 @@ pub const IconDownloadService = struct {
         var dir = try Io.Dir.cwd().createDirPathOpen(io, icon_folder, .{});
         defer dir.close(io);
 
-        const release_json = try self.httpGet(RELEASE_URL);
+        const release_json = try self.http_get(RELEASE_URL);
         defer a.free(release_json);
 
         const parsed = try std.json.parseFromSlice(Release, a, release_json, .{
@@ -73,10 +73,10 @@ pub const IconDownloadService = struct {
             release.tarball_url;
         if (download_url.len == 0) return false;
 
-        const tar_gz = try self.httpGet(download_url);
+        const tar_gz = try self.http_get(download_url);
         defer a.free(tar_gz);
 
-        try unpackTarGz(io, dir, tar_gz);
+        try unpack(io, dir, tar_gz);
 
         if (chosen) |asset| {
             if (asset.digest.len > 0) {
@@ -87,7 +87,7 @@ pub const IconDownloadService = struct {
         return true;
     }
 
-    fn httpGet(self: *IconDownloadService, url: []const u8) ![]u8 {
+    fn http_get(self: *IconDownloadService, url: []const u8) ![]u8 {
         const a = self.allocator;
         var client = std.http.Client{ .allocator = a, .io = self.io };
         defer client.deinit();
@@ -112,7 +112,7 @@ pub const IconDownloadService = struct {
     }
 };
 
-fn unpackTarGz(io: Io, dir: Io.Dir, tar_gz: []const u8) !void {
+fn unpack(io: Io, dir: Io.Dir, tar_gz: []const u8) !void {
     var src = Io.Reader.fixed(tar_gz);
     var window: [flate.max_window_len]u8 = undefined;
     var dec = flate.Decompress.init(&src, .gzip, &window);
@@ -120,16 +120,16 @@ fn unpackTarGz(io: Io, dir: Io.Dir, tar_gz: []const u8) !void {
 }
 
 pub fn downloadIconsInBackground(allocator: std.mem.Allocator, io: Io) void {
-    const thread = std.Thread.spawn(.{}, downloadWorker, .{ allocator, io }) catch |e| {
+    const thread = std.Thread.spawn(.{}, worker, .{ allocator, io }) catch |e| {
         std.debug.print("[icons] spawn failed: {any}\n", .{e});
         return;
     };
     thread.detach();
 }
 
-fn downloadWorker(allocator: std.mem.Allocator, io: Io) void {
+fn worker(allocator: std.mem.Allocator, io: Io) void {
     var svc = IconDownloadService.init(allocator, io);
-    _ = svc.downloadAndUnpackIcons() catch |e| {
+    _ = svc.download_unpack_icons() catch |e| {
         std.debug.print("[icons] download failed: {any}\n", .{e});
     };
 }
