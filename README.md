@@ -73,16 +73,13 @@ paru -Rns shelly
 Upcoming features and development targets:
 
 - **Repository Modification**: Allow modification of supported repositories (In progress).
-- **Package Import**: Allow for import of a previously existing package list to bring the system back to a saved package
-  state. (Not yet started)
-- **Multi Language Support**: Translation layer for supporting languages outside english
 - **Offline Updates**: Similar functionality to pacman-offline script
 - **Layout Customization**: Allow for customization of the individual user experience.
 
 ## Prerequisites
 
 - **Arch Linux** (or an Arch-based distribution)
-- **.NET 10.0 SDK** (for building)
+- **zig 0.16.0** (for building)
 - **vala** (for building)
 - **libalpm** (provided by `pacman`)
 
@@ -97,11 +94,12 @@ Upcoming features and development targets:
 
 ### Using PKGBUILD
 
-Since Shelly is designed for Arch Linux, you can build and install it using the provided `PKGBUILD`:
+Since Shelly is designed for Arch Linux, you can build and install it using the provided git `PKGBUILD`:
 
 ```bash
-git clone https://github.com/ZoeyErinBauer/Shelly-ALPM.git
+git clone https://github.com/Seafoam-Labs/Shelly-ALPM.git
 cd Shelly-ALPM
+cp PKGBUILD-git PKGBUILD
 makepkg -si
 ```
 
@@ -121,16 +119,6 @@ To build both optional configurations and verify their ELF boundaries:
 ```bash
 scripts/test-flatpak-separation.sh
 ```
-
-alternatively, you can run
-
-```bash
-sudo ./local-install.sh
-```
-
-This will build and perform the functions of install.sh
-
-The binary will be located in the `/opt/shelly` directory.
 
 ## Usage
 
