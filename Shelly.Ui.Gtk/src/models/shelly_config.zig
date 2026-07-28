@@ -54,7 +54,7 @@ pub const ShellyConfig = struct {
     WindowLastHeight: i32 = 0,
 
     // Package Page
-    PackageInstallView: ViewType = .list,
+    PackageInstallView: ViewType = .grid,
 
     PackageManagementCascadeDelete: bool = true,
     PackageManagementRemoveConfigs: bool = false,
@@ -79,7 +79,7 @@ pub const ShellyConfig = struct {
     AurUpdateShowHidden: bool = false,
 
     // Tray
-    TrayEnabled: bool = true,
+    TrayEnabled: bool = false,
     TrayAutoStart: bool = false,
     TrayCheckIntervalHours: i32 = 72,
     UseSymbolicTray: bool = true,
