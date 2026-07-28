@@ -2,8 +2,8 @@ const std = @import("std");
 const time = @import("zig-time");
 
 pub const libalpm = struct {
-    // Raw libalpm symbols come from the committed translate-c dump (`alpm.zig`),
-    // exposed as the `alpm_c` module by build.zig.
+    // Raw libalpm symbols are generated from `alpm_include.h` during the build
+    // and exposed as the `alpm_c` module by build.zig.
     pub const alpm = @import("alpm_c");
 
     pub fn str(ptr: [*c]const u8) ?[:0]const u8 {

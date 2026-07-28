@@ -21,17 +21,18 @@ pub fn build(b: *std.Build) void {
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
 
-    // libalpm is exposed via a committed, statically generated binding
-    // (`src/alpm/alpm.zig`), same approach as flatpak. Regenerate from the
-    // src/alpm directory with:
-    //   zig translate-c -lc $(pkg-config --cflags libalpm) alpm_include.h > alpm.zig
-    // Actual linking of the system library happens on the consuming module below.
-    const alpm_c = b.createModule(.{
-        .root_source_file = b.path("src/alpm/alpm.zig"),
+    // Generate the raw libalpm bindings from the installed system headers.
+    // Zig caches the generated module and regenerates it when its inputs change.
+    const translate_alpm = b.addTranslateC(.{
+        .root_source_file = b.path("src/alpm/alpm_include.h"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
+    translate_alpm.linkSystemLibrary("alpm", .{
+        .use_pkg_config = .force,
+    });
+    const alpm_c = translate_alpm.createModule();
 
     const operation_context_mod = b.createModule(.{
         .root_source_file = b.path("src/shared/operation_context.zig"),
@@ -62,7 +63,6 @@ pub fn build(b: *std.Build) void {
     });
     mod.addImport("alpm_c", alpm_c);
     mod.addImport("operation_context", operation_context_mod);
-    mod.linkSystemLibrary("alpm", .{});
     mod.linkSystemLibrary("archive", .{});
 
     // PackageManager imports only the backend's data-only protocol module.
@@ -294,7 +294,6 @@ pub fn build(b: *std.Build) void {
     });
     cache_test_module.addImport("alpm_c", alpm_c);
     cache_test_module.addImport("operation_context", operation_context_mod);
-    cache_test_module.linkSystemLibrary("alpm", .{});
     const cache_tests = b.addTest(.{ .name = "cache-test", .root_module = cache_test_module });
     const run_cache_tests = b.addRunArtifact(cache_tests);
     const cache_test_step = b.step("cache-test", "Run safe package-cache tests");
