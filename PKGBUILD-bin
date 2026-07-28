@@ -27,12 +27,12 @@ depends=(
     'json-glib'
 )
 optdepends=(
-    'flatpak: For supporting flatpak implementation.'
     'fish: Fish shell completions'
     'zsh: Zsh shell completions'
     'libstarfish: dependency viewer for arch packages'
+    'flatpak: flatpak support'
+    'fuse2: run AppImages that require FUSE 2'
 )
-
 source=(
     "Shelly-ALPM-linux-x64-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/releases/download/v${pkgver}/Shelly-ALPM-linux-x64.tar.gz"
 )

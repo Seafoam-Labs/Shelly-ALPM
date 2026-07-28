@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellyUtilitiesPage" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <child>
+      <object class="GtkOverlay" id="page_overlay">
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="margin-start">20</property>
+            <property name="margin-end">20</property>
+            <property name="margin-top">20</property>
+            <property name="margin-bottom">20</property>
+            <property name="spacing">15</property>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">4</property>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Utilities</property>
+                    <style>
+                      <class name="title-2"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Maintenance and repair tools for your Shelly installation.</property>
+                    <property name="wrap">true</property>
+                    <style>
+                      <class name="dim-label"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkScrolledWindow">
+                <property name="hscrollbar-policy">never</property>
+                <property name="vexpand">true</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">12</property>
+                    <property name="halign">center</property>
+                    <property name="hexpand">true</property>
+                    <property name="width-request">600</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">12</property>
+                        <property name="hexpand">true</property>
+                        <style>
+                          <class name="utility-row"/>
+                        </style>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">2</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Force Database Update</property>
+                                <property name="halign">start</property>
+                                <style>
+                                  <class name="pkg-name"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Force a synchronization of the package database.</property>
+                                <property name="halign">start</property>
+                                <property name="wrap">true</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="sync_button">
+                            <property name="label" translatable="yes">Run</property>
+                            <property name="halign">end</property>
+                            <property name="valign">center</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">12</property>
+                        <property name="hexpand">true</property>
+                        <style>
+                          <class name="utility-row"/>
+                        </style>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">2</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Remove db.lck</property>
+                                <property name="halign">start</property>
+                                <style>
+                                  <class name="pkg-name"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Removes the db.lck file if it was left behind by an interrupted alpm process.</property>
+                                <property name="halign">start</property>
+                                <property name="wrap">true</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="rm_db_lock_button">
+                            <property name="label" translatable="yes">Run</property>
+                            <property name="halign">end</property>
+                            <property name="valign">center</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">12</property>
+                        <property name="hexpand">true</property>
+                        <style>
+                          <class name="utility-row"/>
+                        </style>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">2</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Fix Permissions</property>
+                                <property name="halign">start</property>
+                                <style>
+                                  <class name="pkg-name"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Restores correct user ownership of Shelly configuration and cache folders if they were accidentally created by root.</property>
+                                <property name="halign">start</property>
+                                <property name="wrap">true</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="fix_permissions_button">
+                            <property name="label" translatable="yes">Run</property>
+                            <property name="halign">end</property>
+                            <property name="valign">center</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">12</property>
+                        <property name="hexpand">true</property>
+                        <style>
+                          <class name="utility-row"/>
+                        </style>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">2</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Purify Packages</property>
+                                <property name="halign">start</property>
+                                <style>
+                                  <class name="pkg-name"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Remove corrupted/orphaned packages.</property>
+                                <property name="halign">start</property>
+                                <property name="wrap">true</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="purify_button">
+                            <property name="label" translatable="yes">Run</property>
+                            <property name="halign">end</property>
+                            <property name="valign">center</property>
+                            <style>
+                              <class name="destructive-action"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">12</property>
+                        <property name="hexpand">true</property>
+                        <style>
+                          <class name="utility-row"/>
+                        </style>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">2</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">start</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Clean Package Cache</property>
+                                <property name="halign">start</property>
+                                <style>
+                                  <class name="pkg-name"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Removes old cached package versions, keeping the selected number per package.</property>
+                                <property name="halign">start</property>
+                                <property name="wrap">true</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">horizontal</property>
+                            <property name="spacing">6</property>
+                            <property name="halign">end</property>
+                            <property name="valign">center</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Keep</property>
+                                <property name="valign">center</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkSpinButton" id="cache_keep_spin">
+                                <property name="valign">center</property>
+                                <property name="tooltip-text" translatable="yes">Number of cached versions to keep per package</property>
+                                <property name="digits">0</property>
+                                <property name="numeric">true</property>
+                                <property name="wrap">true</property>
+                                <property name="adjustment">
+                                  <object class="GtkAdjustment">
+                                    <property name="lower">0</property>
+                                    <property name="upper">10</property>
+                                    <property name="step-increment">1</property>
+                                    <property name="page-increment">1</property>
+                                    <property name="value">3</property>
+                                  </object>
+                                </property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="clean_cache_button">
+                            <property name="label" translatable="yes">Run</property>
+                            <property name="halign">end</property>
+                            <property name="valign">center</property>
+                            <style>
+                              <class name="destructive-action"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

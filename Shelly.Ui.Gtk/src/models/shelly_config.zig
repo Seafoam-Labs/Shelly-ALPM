@@ -31,7 +31,6 @@ pub const ShellyConfig = struct {
     // General
     Culture: []const u8 = "",
     NewInstall: bool = true,
-    NewInstallInitSettings: bool = false,
     NoConfirm: bool = false,
 
     // Feature Toggles
@@ -54,16 +53,16 @@ pub const ShellyConfig = struct {
     WindowLastHeight: i32 = 0,
 
     // Package Page
-    PackageInstallView: ViewType = .list,
+    PackageInstallView: ViewType = .grid,
 
     PackageManagementCascadeDelete: bool = true,
     PackageManagementRemoveConfigs: bool = false,
     PackageManagementRemoveOptionalDeps: bool = true,
-    PackageManagementShowHidden: bool = false,
 
     PackageInstallUpgrade: bool = false,
     PackageInstallShowHidden: bool = false,
     PackageInstallShowExplicitOnly: bool = false,
+    PackageInstallShowDependsOnly: bool = false,
     PackageInstallShowDetailPane: bool = false,
 
     // AUR Page
@@ -72,13 +71,12 @@ pub const ShellyConfig = struct {
     AurInstallShowDetailPane: bool = false,
 
     AurRemoveCascadeDelete: bool = true,
-    AurRemoveShowHidden: bool = false,
 
     AurUpdateRunChecks: bool = false,
     AurUpdateShowHidden: bool = false,
 
     // Tray
-    TrayEnabled: bool = true,
+    TrayEnabled: bool = false,
     TrayAutoStart: bool = false,
     TrayCheckIntervalHours: i32 = 72,
     UseSymbolicTray: bool = true,

@@ -272,6 +272,14 @@
                     </object>
                 </child>
                 <child>
+                    <object class="GtkCheckButton" id="show_depends_only">
+                        <property name="label" translatable="yes">Show Dependency Only</property>
+                        <property name="tooltip-text" translatable="yes">Show dependency packages on;y</property>
+                        <signal name="toggled" handler="on_depends_only"/>
+                        <property name="active">false</property>
+                    </object>
+                </child>
+                <child>
                     <object class="GtkCheckButton" id="show_detail_pane">
                         <property name="label" translatable="yes">Hide Detail Pane</property>
                         <property name="tooltip-text" translatable="yes">Hide Detail Pane</property>

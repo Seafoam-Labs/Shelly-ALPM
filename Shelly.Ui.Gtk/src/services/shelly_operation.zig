@@ -4,6 +4,7 @@ const glib = bindings.glib;
 const JsonPackFrame = @import("../helpers/ui_decode.zig").JsonPackFrame;
 const Scope = @import("../models/flatpak.zig").InstallLevel;
 const UpdateType = @import("../models/appimage.zig").UpdateType;
+const TrayDBus = @import("dbus.zig").TrayDBus;
 const builtin = @import("builtin");
 const runtime = @import("runtime.zig");
 
@@ -293,7 +294,8 @@ pub const ShellyCommands = struct {
         if (name.len > 0) try argv.append(alloc, name);
         try argv.append(alloc, "--remote-url");
         try argv.append(alloc, url);
-        if (std.mem.eql(u8, scope, "system")) try argv.append(alloc, "--system");
+        if (!std.mem.eql(u8, scope, "system")) try argv.append(alloc, "--system");
+        if (!std.mem.eql(u8, scope, "system")) try argv.append(alloc, "false");
         return argv.toOwnedSlice(alloc);
     }
 
@@ -329,6 +331,15 @@ pub const ShellyCommands = struct {
         try argv.append(alloc, "purify");
         try argv.append(alloc, "standard");
         try argv.append(alloc, "--orphans");
+        return argv.toOwnedSlice(alloc);
+    }
+
+    pub fn clean_cache(alloc: std.mem.Allocator, keep_str: []const u8) ![]const []const u8 {
+        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        try argv.append(alloc, "purify");
+        try argv.append(alloc, "standard");
+        try argv.append(alloc, "--cache");
+        try argv.append(alloc, keep_str);
         return argv.toOwnedSlice(alloc);
     }
 
@@ -498,6 +509,9 @@ pub const ShellyOperation = struct {
             .exited => |c| @intCast(c),
             else => 255,
         };
+        var tray = TrayDBus{};
+        defer tray.deinit();
+        tray.updatesMadeInUi();
         post_done(self, code);
     }
 

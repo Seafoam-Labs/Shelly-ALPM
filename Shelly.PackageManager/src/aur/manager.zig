@@ -655,6 +655,7 @@ pub const Manager = struct {
             var plan = try self.prepareInstall(package_name);
             errdefer plan.deinit(self.allocator);
             try plans.append(self.allocator, plan);
+            self.raisePackageProgress(.aur_download_done, package_name, current, package_names.len, "");
         }
 
         // Discovery is deliberately completed for the whole operation before
@@ -683,6 +684,7 @@ pub const Manager = struct {
                 self.raisePackageProgress(.aur_package_failed, package_name, current, package_names.len, "Failed to build package with makepkg");
                 continue;
             }
+            self.raisePackageProgress(.aur_build_done, package_name, current, package_names.len, "");
             const package_files = try builder.selectBuiltPackageFiles(self.allocator, self.io(), prepared.cache_path, package_name);
             defer builder.deinitPaths(self.allocator, package_files);
             if (package_files.len == 0) {
@@ -692,6 +694,7 @@ pub const Manager = struct {
             self.raisePackageProgress(.aur_install_start, package_name, current, package_names.len, "");
             const install_paths: []const []const u8 = @ptrCast(package_files);
             try self.alpm.install_local_packages(install_paths, .{});
+            self.raisePackageProgress(.aur_install_done, package_name, current, package_names.len, "");
             self.updateVcsStoreForPackage(package_name, prepared.pkgbuild_path) catch |err|
                 self.raiseBestEffortFailure(package_name, "Failed to update VCS metadata", err);
             self.installSelectedOptionalDependencies(package_name, selected_optional) catch |err|
@@ -700,6 +703,7 @@ pub const Manager = struct {
                 self.raisePackageProgress(.aur_cleanup_start, package_name, current, package_names.len, "Removing build-only dependencies");
                 const build_names: []const []const u8 = @ptrCast(build_only);
                 self.removeRepoPackages(build_names, .{}, true) catch {};
+                self.raisePackageProgress(.aur_cleanup_done, package_name, current, package_names.len, "");
             }
             self.cleanBuildArtifacts(prepared.cache_path);
             self.raisePackageProgress(.aur_package_completed, package_name, current, package_names.len, "");
@@ -838,6 +842,7 @@ pub const Manager = struct {
         self.raisePackageProgress(.aur_download_start, package_name, 1, 1, "");
         var prepared = try self.preparePackageForBuild(package_name, commit);
         defer prepared.deinit(self.allocator);
+        self.raisePackageProgress(.aur_download_done, package_name, 1, 1, "");
         try self.alpm.sync(false);
         const build_only = try dependency_resolver.collectBuildOnlyDependencies(self.allocator, &prepared.info, self.no_check, self.dependencyBackend());
         defer builder.deinitPaths(self.allocator, build_only);
@@ -859,6 +864,7 @@ pub const Manager = struct {
             self.raisePackageProgress(.aur_package_failed, package_name, 1, 1, "Failed to build package with makepkg");
             return error.BuildFailed;
         }
+        self.raisePackageProgress(.aur_build_done, package_name, 1, 1, "");
         const package_files = try builder.selectBuiltPackageFiles(self.allocator, self.io(), prepared.cache_path, package_name);
         defer builder.deinitPaths(self.allocator, package_files);
         if (package_files.len == 0) {
@@ -868,10 +874,12 @@ pub const Manager = struct {
         self.raisePackageProgress(.aur_install_start, package_name, 1, 1, "");
         const install_paths: []const []const u8 = @ptrCast(package_files);
         try self.alpm.install_local_packages(install_paths, .{});
+        self.raisePackageProgress(.aur_install_done, package_name, 1, 1, "");
         if (build_only.len > 0) {
             self.raisePackageProgress(.aur_cleanup_start, package_name, 1, 1, "Removing build-only dependencies");
             const build_names: []const []const u8 = @ptrCast(build_only);
             self.removeRepoPackages(build_names, .{}, true) catch {};
+            self.raisePackageProgress(.aur_cleanup_done, package_name, 1, 1, "");
         }
         self.raisePackageProgress(.aur_package_completed, package_name, 1, 1, "");
     }
@@ -955,13 +963,24 @@ pub const Manager = struct {
             _ = self.currently_installing_dependencies.remove(dependency.package_base);
             self.allocator.free(key);
         }
-        if (!(try self.buildPreparedPackage(dependency, false))) return error.BuildFailed;
+        self.raisePackageProgress(.aur_build_start, dependency.package_name, 1, 1, "Building AUR dependency with makepkg");
+        if (!(try self.buildPreparedPackage(dependency, false))) {
+            self.raisePackageProgress(.aur_package_failed, dependency.package_name, 1, 1, "Failed to build AUR dependency with makepkg");
+            return error.BuildFailed;
+        }
+        self.raisePackageProgress(.aur_build_done, dependency.package_name, 1, 1, "");
         const cache_path = if (std.ascii.eqlIgnoreCase(self.makepkg_config.package_destination, "/home/packages")) dependency.cache_path else self.makepkg_config.package_destination;
         const files = try builder.selectBuiltPackageFiles(self.allocator, self.io(), cache_path, dependency.package_name);
         defer builder.deinitPaths(self.allocator, files);
-        if (files.len == 0) return error.NoBuiltPackages;
+        if (files.len == 0) {
+            self.raisePackageProgress(.aur_package_failed, dependency.package_name, 1, 1, "No matching package files produced for AUR dependency");
+            return error.NoBuiltPackages;
+        }
+        self.raisePackageProgress(.aur_install_start, dependency.package_name, 1, 1, "Installing AUR dependency");
         const install_paths: []const []const u8 = @ptrCast(files);
         try self.alpm.install_local_packages(install_paths, .{ .alldeps = true });
+        self.raisePackageProgress(.aur_install_done, dependency.package_name, 1, 1, "");
+        self.raisePackageProgress(.aur_package_completed, dependency.package_name, 1, 1, "");
     }
 
     fn installRepoPackages(self: *Self, names: []const []u8, flags: TransFlag) !void {

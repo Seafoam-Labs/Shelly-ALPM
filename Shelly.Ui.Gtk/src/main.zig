@@ -9,6 +9,7 @@ const ShellyWindow = @import("shelly_window.zig").ShellyWindow;
 const runtime = @import("services/runtime.zig");
 const translations = @import("helpers/translations.zig");
 const tray_service = @import("services/tray_service.zig");
+const IconDownloadService = @import("services/icon_fetcher.zig").downloadIconsInBackground;
 
 pub fn main(init: std.process.Init) void {
     runtime.io = init.io;
@@ -17,6 +18,8 @@ pub fn main(init: std.process.Init) void {
     if (!translations.init()) {
         std.log.warn("translations: failed to initialize gettext", .{});
     }
+
+    IconDownloadService(std.heap.c_allocator, runtime.io);
 
     const app = gtk.Application.new("com.shellyorg.shelly", .{});
     defer app.unref();
@@ -39,18 +42,18 @@ pub fn main(init: std.process.Init) void {
 
     const status = gio.Application.run(gapp, 0, null);
 
-    tryStopTray();
+    tryStopTray(runtime.io, std.heap.c_allocator);
 
     runtime.teardownConfig(std.heap.c_allocator);
     std.process.exit(@intCast(status));
 }
 
-fn tryStopTray() void {
-    var autostart_managed = false;
+fn tryStopTray(io: std.Io, alloc: std.mem.Allocator) void {
+    var should_stop = true;
     if (runtime.config) |svc| {
-        if (svc.get() catch null) |cfg| autostart_managed = cfg.TrayAutoStart;
+        if (svc.get() catch null) |cfg| should_stop = !cfg.TrayEnabled;
     }
-    if (!autostart_managed) _ = tray_service.end(runtime.io);
+    if (should_stop) _ = tray_service.end(io, alloc);
 }
 
 fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
@@ -76,22 +79,22 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
         std.log.warn("settings: failed to load config service: {t}", .{err});
     };
 
-    tryStartTray();
+    tryStartTray(runtime.io, std.heap.c_allocator);
 
     const window = ShellyWindow.new(app);
     gtk.Window.present(gobject.ext.as(gtk.Window, window));
 }
 
-fn tryStartTray() void {
+fn tryStartTray(io: std.Io, alloc: std.mem.Allocator) void {
     if (runtime.config) |svc| {
         const cfg = svc.get() catch return;
         if (!cfg.TrayEnabled) return;
     }
-    tray_service.start();
+    tray_service.start(io, alloc);
 }
 
 test {
-    // _ = @import("services/icon_resolver.zig");
+    _ = @import("services/icon_resolver.zig");
     _ = @import("services/config_resolver.zig");
     _ = @import("services/shelly_cli.zig");
     _ = @import("services/tray_service.zig");

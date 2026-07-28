@@ -9,6 +9,7 @@ const support = @import("support.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
+const runtime = @import("../services/runtime.zig");
 const AppImage = @import("../models/appimage.zig").AppImage;
 const AppImageUpdate = @import("../models/appimage.zig").AppImageUpdate;
 const UpdateType = @import("../models/appimage.zig").UpdateType;
@@ -673,7 +674,14 @@ pub const AppImagePage = extern struct {
         const index = p.selected_index orelse return;
         const app = p.apps[index];
 
-        const argv = ShellyCommands.remove_appimage(std.heap.c_allocator, app.Name, false) catch return;
+        var remove_config = false;
+        if (runtime.config) |cfg_service| {
+            if (cfg_service.get()) |cfg| {
+                remove_config = cfg.PackageManagementRemoveConfigs;
+            } else |_| {}
+        }
+
+        const argv = ShellyCommands.remove_appimage(std.heap.c_allocator, app.Name, remove_config) catch return;
         defer std.heap.c_allocator.free(argv);
 
         var names: std.ArrayListUnmanaged([]const u8) = .empty;

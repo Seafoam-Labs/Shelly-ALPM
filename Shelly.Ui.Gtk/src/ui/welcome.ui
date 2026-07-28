@@ -1,0 +1,496 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellyWelcomePage" parent="GtkBox">
+    <style>
+      <class name="welcome-screen"/>
+    </style>
+    <property name="orientation">vertical</property>
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <property name="spacing">0</property>
+    <property name="margin-top">0</property>
+    <property name="margin-bottom">0</property>
+    <property name="margin-start">0</property>
+    <property name="margin-end">0</property>
+
+    <child>
+      <object class="GtkStack" id="welcome_stack">
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+        <property name="transition-type">slide-left-right</property>
+
+        <child>
+          <object class="GtkBox" id="page_welcome">
+            <property name="orientation">vertical</property>
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
+            <property name="spacing">24</property>
+            <property name="margin-top">40</property>
+            <property name="margin-bottom">40</property>
+            <property name="margin-start">48</property>
+            <property name="margin-end">48</property>
+            <property name="valign">center</property>
+
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">horizontal</property>
+                <property name="spacing">16</property>
+                <property name="halign">center</property>
+                <property name="valign">center</property>
+                <child>
+                  <object class="GtkImage" id="welcome_image">
+                    <property name="icon-name">shelly</property>
+                    <property name="pixel-size">48</property>
+                    <property name="valign">center</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="welcome_title">
+                    <property name="label" translatable="yes">Welcome to Shelly v3</property>
+                    <property name="halign">start</property>
+                    <property name="valign">center</property>
+                    <property name="css-classes">title-1</property>
+                    <property name="wrap">true</property>
+                    <property name="max-width-chars">40</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkLabel" id="welcome_blurb">
+                <property name="label" translatable="yes">Shelly is a modern package manager for Arch Linux. Configure your sources and preferences to get started. We have recently rewritte both the GUI and CLI in zig with a new modified UI off our previous designs.</property>
+                <property name="halign">center</property>
+                <property name="css-classes">body</property>
+                <property name="wrap">true</property>
+                <property name="max-width-chars">50</property>
+                <property name="justify">center</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkSpinner" id="welcome_spinner">
+                <property name="visible">false</property>
+                <property name="halign">center</property>
+              </object>
+            </child>
+          </object>
+        </child>
+
+        <child>
+          <object class="GtkBox" id="page_sources">
+            <property name="orientation">vertical</property>
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
+            <property name="spacing">16</property>
+            <property name="margin-top">24</property>
+            <property name="margin-bottom">24</property>
+            <property name="margin-start">48</property>
+            <property name="margin-end">48</property>
+            <property name="valign">center</property>
+
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Select Your Sources</property>
+                <property name="halign">center</property>
+                <property name="css-classes">title-2</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Choose which package sources you want to browse. You can always change this later in settings.</property>
+                <property name="halign">center</property>
+                <property name="justify">center</property>
+                <property name="css-classes">body</property>
+                <property name="wrap">true</property>
+                <property name="max-width-chars">55</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">6</property>
+                <property name="halign">center</property>
+                <property name="width-request">400</property>
+
+                <child>
+                  <object class="GtkBox">
+                    <property name="spacing">12</property>
+                    <property name="margin-start">8</property>
+                    <property name="margin-end">8</property>
+                    <property name="margin-top">8</property>
+                    <property name="margin-bottom">8</property>
+                    <child>
+                      <object class="GtkCheckButton" id="source_aur"/>
+                    </child>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">applications-system-symbolic</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">AUR</property>
+                            <property name="css-classes">heading</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Arch User Repository community packages</property>
+                            <property name="css-classes">dim-label</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="GtkBox">
+                    <property name="spacing">12</property>
+                    <property name="margin-start">8</property>
+                    <property name="margin-end">8</property>
+                    <property name="margin-top">8</property>
+                    <property name="margin-bottom">8</property>
+                    <child>
+                      <object class="GtkCheckButton" id="source_flatpak"/>
+                    </child>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">system-run-symbolic</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Flatpak</property>
+                            <property name="css-classes">heading</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Sandboxed universal Linux applications</property>
+                            <property name="css-classes">dim-label</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="GtkBox">
+                    <property name="spacing">12</property>
+                    <property name="margin-start">8</property>
+                    <property name="margin-end">8</property>
+                    <property name="margin-top">8</property>
+                    <property name="margin-bottom">8</property>
+                    <child>
+                      <object class="GtkCheckButton" id="source_appimage"/>
+                    </child>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">application-x-executable-symbolic</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">AppImage</property>
+                            <property name="css-classes">heading</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Portable self-contained application bundles</property>
+                            <property name="css-classes">dim-label</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="GtkBox">
+                    <property name="spacing">12</property>
+                    <property name="margin-start">8</property>
+                    <property name="margin-end">8</property>
+                    <property name="margin-top">8</property>
+                    <property name="margin-bottom">8</property>
+                    <child>
+                      <object class="GtkCheckButton" id="source_recommended"/>
+                    </child>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">starred-symbolic</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Recommended</property>
+                            <property name="css-classes">heading</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Curated picks based on your installed software</property>
+                            <property name="css-classes">dim-label</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+
+        <child>
+          <object class="GtkBox" id="page_appearance">
+            <property name="orientation">vertical</property>
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
+            <property name="spacing">16</property>
+            <property name="margin-top">24</property>
+            <property name="margin-bottom">24</property>
+            <property name="margin-start">48</property>
+            <property name="margin-end">48</property>
+            <property name="valign">center</property>
+
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Look and Feel</property>
+                <property name="halign">center</property>
+                <property name="css-classes">title-2</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Customize how Shelly looks and behaves. All of these can be changed later in preferences.</property>
+                <property name="halign">center</property>
+                <property name="justify">center</property>
+                <property name="css-classes">body</property>
+                <property name="wrap">true</property>
+                <property name="max-width-chars">55</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">6</property>
+                <property name="margin-top">10</property>
+                <property name="halign">center</property>
+                <property name="width-request">400</property>
+
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">6</property>
+                    <property name="margin-start">8</property>
+                    <property name="margin-end">8</property>
+                    <property name="margin-top">8</property>
+                    <property name="margin-bottom">8</property>
+
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Navigation Style</property>
+                        <property name="halign">start</property>
+                        <property name="css-classes">heading</property>
+                        <property name="margin-bottom">2</property>
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">12</property>
+                        <property name="margin-start">8</property>
+                        <property name="margin-end">8</property>
+                        <property name="margin-top">8</property>
+                        <property name="margin-bottom">8</property>
+                        <child>
+                          <object class="GtkCheckButton" id="nav_sidebar">
+                            <property name="active">true</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="icon-name">sidebar-show-symbolic</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Sidebar</property>
+                                <property name="css-classes">heading</property>
+                                <property name="halign">start</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Vertical icon rail on the left</property>
+                                <property name="css-classes">dim-label</property>
+                                <property name="halign">start</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">12</property>
+                        <property name="margin-start">8</property>
+                        <property name="margin-end">8</property>
+                        <property name="margin-top">8</property>
+                        <property name="margin-bottom">8</property>
+                        <child>
+                          <object class="GtkCheckButton" id="nav_topbar">
+                            <property name="group">nav_sidebar</property>
+                            <property name="halign">start</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="icon-name">go-top-symbolic</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Top Bar</property>
+                                <property name="css-classes">heading</property>
+                                <property name="halign">start</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Horizontal tab switcher at the top</property>
+                                <property name="css-classes">dim-label</property>
+                                <property name="halign">start</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">6</property>
+                    <property name="margin-start">8</property>
+                    <property name="margin-end">8</property>
+                    <property name="margin-top">8</property>
+                    <property name="margin-bottom">8</property>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">System Tray</property>
+                        <property name="css-classes">heading</property>
+                        <property name="halign">start</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">12</property>
+                        <property name="margin-top">12</property>
+                        <property name="halign">start</property>
+                        <child>
+                          <object class="GtkSwitch" id="tray_enabled">
+                            <property name="active">true</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Run in system tray when minimized</property>
+                            <property name="css-classes">dim-label</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+              </object>
+            </child>
+          </object>
+        </child>
+
+      </object>
+    </child>
+
+    <child>
+      <object class="GtkBox" id="nav_bar">
+        <property name="spacing">8</property>
+        <property name="margin-top">16</property>
+        <property name="margin-bottom">16</property>
+        <property name="margin-start">48</property>
+        <property name="margin-end">48</property>
+        <property name="halign">center</property>
+        <property name="valign">end</property>
+        <style>
+          <class name="linked"/>
+        </style>
+
+        <child>
+          <object class="GtkButton" id="btn_back">
+            <property name="label" translatable="yes">Back</property>
+            <property name="sensitive">false</property>
+            <property name="css-classes">flat</property>
+            <signal name="clicked" handler="on_back" swapped="true"/>
+          </object>
+        </child>
+
+        <child>
+          <object class="GtkButton" id="btn_next">
+            <property name="label" translatable="yes">Next</property>
+            <property name="css-classes">suggested-action</property>
+            <signal name="clicked" handler="on_next" swapped="true"/>
+          </object>
+        </child>
+
+        <child>
+          <object class="GtkButton" id="btn_finish">
+            <property name="visible">false</property>
+            <property name="label" translatable="yes">Start Shelly</property>
+            <property name="css-classes">suggested-action</property>
+            <signal name="clicked" handler="on_finish" swapped="true"/>
+          </object>
+        </child>
+      </object>
+    </child>
+
+  </template>
+</interface>

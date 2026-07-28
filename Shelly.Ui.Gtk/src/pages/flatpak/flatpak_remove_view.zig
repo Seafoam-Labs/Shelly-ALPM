@@ -208,7 +208,14 @@ pub const FlatpakRemoveView = extern struct {
         const obj = gtk.ListItem.getItem(list_item) orelse return;
         const pkg = gobject.ext.cast(FlatpakObject, obj) orelse return;
 
-        const argv = ShellyCommands.remove_flatpak(std.heap.c_allocator, pkg.getId(), false) catch return;
+        var remove_config = false;
+        if (runtime.config) |cfg_service| {
+            if (cfg_service.get()) |cfg| {
+                remove_config = cfg.PackageManagementRemoveConfigs;
+            } else |_| {}
+        }
+
+        const argv = ShellyCommands.remove_flatpak(std.heap.c_allocator, pkg.getId(), remove_config) catch return;
         defer std.heap.c_allocator.free(argv);
 
         var names: std.ArrayListUnmanaged([]const u8) = .empty;

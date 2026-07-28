@@ -112,6 +112,7 @@ pub const PackageDetail = extern struct {
     fn show_package_internal(self: *Self, name: []const u8, is_installed: bool, icon_path: ?[:0]const u8) void {
         const p = self.priv();
         const len = @min(name.len, p.pending_name.len);
+        @memset(&p.pending_name, 0);
         @memcpy(p.pending_name[0..len], name[0..len]);
         p.pending_len = len;
         if (icon_path) |path| {
@@ -435,7 +436,7 @@ pub const PackageDetail = extern struct {
         defer argv.deinit(std.heap.c_allocator);
         argv.append(std.heap.c_allocator, "install") catch return;
         argv.append(std.heap.c_allocator, "standard") catch return;
-        argv.append(std.heap.c_allocator, &p.pending_name) catch return;
+        argv.append(std.heap.c_allocator, p.pending_name[0..p.pending_len]) catch return;
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
@@ -456,7 +457,8 @@ pub const PackageDetail = extern struct {
         defer argv.deinit(std.heap.c_allocator);
         argv.append(std.heap.c_allocator, "mark") catch return;
         argv.append(std.heap.c_allocator, "ignore") catch return;
-        argv.append(std.heap.c_allocator, &p.pending_name) catch return;
+        argv.append(std.heap.c_allocator, "--add") catch return;
+        argv.append(std.heap.c_allocator, p.pending_name[0..p.pending_len]) catch return;
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
@@ -477,7 +479,8 @@ pub const PackageDetail = extern struct {
         defer argv.deinit(std.heap.c_allocator);
         argv.append(std.heap.c_allocator, "mark") catch return;
         argv.append(std.heap.c_allocator, "hold") catch return;
-        argv.append(std.heap.c_allocator, &p.pending_name) catch return;
+        argv.append(std.heap.c_allocator, "--add") catch return;
+        argv.append(std.heap.c_allocator, p.pending_name[0..p.pending_len]) catch return;
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
@@ -497,7 +500,7 @@ pub const PackageDetail = extern struct {
         defer argv.deinit(std.heap.c_allocator);
         argv.append(std.heap.c_allocator, "mark") catch return;
         argv.append(std.heap.c_allocator, "explicit") catch return;
-        argv.append(std.heap.c_allocator, &p.pending_name) catch return;
+        argv.append(std.heap.c_allocator, p.pending_name[0..p.pending_len]) catch return;
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
@@ -517,7 +520,7 @@ pub const PackageDetail = extern struct {
         defer argv.deinit(std.heap.c_allocator);
         argv.append(std.heap.c_allocator, "mark") catch return;
         argv.append(std.heap.c_allocator, "dependency") catch return;
-        argv.append(std.heap.c_allocator, &p.pending_name) catch return;
+        argv.append(std.heap.c_allocator, p.pending_name[0..p.pending_len]) catch return;
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{

@@ -60,6 +60,7 @@ pub const PackagePage = extern struct {
         upgrade_check: *gtk.CheckButton,
         show_hidden_check: *gtk.CheckButton,
         show_explicit_only_check: *gtk.CheckButton,
+        show_depends_only_check: *gtk.CheckButton,
         show_detail_pane_check: *gtk.CheckButton,
         arena: ?*std.heap.ArenaAllocator,
         selected_group: [64]u8,
@@ -67,6 +68,7 @@ pub const PackagePage = extern struct {
         generation: u64,
         show_installed_only: bool,
         show_explicit_only: bool,
+        show_depends_only: bool,
         show_hidden: bool,
         show_detail_pane: bool,
 
@@ -137,6 +139,8 @@ pub const PackagePage = extern struct {
         p.filter = gtk.CustomFilter.new(&filter_func, self, null);
         p.filter_model = gtk.FilterListModel.new(p.list_store.as(gio.ListModel), p.filter.as(gtk.Filter));
         p.selection = gtk.SingleSelection.new(p.filter_model.as(gio.ListModel));
+        gtk.SingleSelection.setAutoselect(p.selection, 0);
+        gtk.SingleSelection.setCanUnselect(p.selection, 1);
 
         gtk.ColumnView.setModel(p.column_view, p.selection.as(gtk.SelectionModel));
 
@@ -332,6 +336,7 @@ pub const PackagePage = extern struct {
         const c = struct {
             fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, self_setup: *Self) callconv(.c) void {
                 const list_item = gobject.ext.cast(gtk.ListItem, item) orelse return;
+                gtk.ListItem.setActivatable(list_item, 1);
 
                 const content_grid = gtk.Grid.new();
                 gtk.Widget.setMarginStart(content_grid.as(gtk.Widget), 10);
@@ -534,6 +539,8 @@ pub const PackagePage = extern struct {
         }
 
         if (p.show_installed_only and !pkg.isInstalled()) return 0;
+
+        if (p.show_depends_only and pkg.isExplicit()) return 0;
 
         if (p.show_explicit_only and !pkg.isExplicit()) return 0;
 
@@ -794,6 +801,9 @@ pub const PackagePage = extern struct {
         result.arena.deinit();
         std.heap.c_allocator.destroy(result.arena);
         std.heap.c_allocator.destroy(result);
+
+        _ = gtk.SelectionModel.selectItem(p.selection.as(gtk.SelectionModel), 0, 1);
+
         hide_loading(page);
         return 0;
     }
@@ -856,6 +866,7 @@ pub const PackagePage = extern struct {
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_grid_view_toggled", @ptrCast(&on_grid_view_toggled));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_list_view_toggled", @ptrCast(&on_list_view_toggled));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_explicit_only", @ptrCast(&on_explicit_only));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_depends_only", @ptrCast(&on_depends_only));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_installed_only_toggled", @ptrCast(&on_installed_only_toggled));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_detail_pane", @ptrCast(&on_detail_pane));
         }
@@ -1038,6 +1049,15 @@ pub const PackagePage = extern struct {
         gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
     }
 
+    fn on_depends_only(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.applying_config) return;
+        const active = gtk.CheckButton.getActive(check) != 0;
+        p.show_depends_only = active;
+        updateConfigField(.PackageInstallShowDependsOnly, active);
+        gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
+    }
+
     fn on_detail_pane(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
         const p = self.priv();
         if (p.applying_config) return;
@@ -1086,6 +1106,20 @@ pub const PackagePage = extern struct {
         argv.append(std.heap.c_allocator, "remove") catch return;
         argv.append(std.heap.c_allocator, "standard") catch return;
         for (names.items) |name| argv.append(std.heap.c_allocator, name) catch return;
+
+        if (runtime.config) |cfg_service| {
+            if (cfg_service.get()) |cfg| {
+                if (!cfg.PackageManagementCascadeDelete) {
+                    argv.append(std.heap.c_allocator, "--no-cascade") catch return;
+                }
+                if (cfg.PackageManagementRemoveOptionalDeps) {
+                    argv.append(std.heap.c_allocator, "--opt-deps") catch return;
+                }
+                if (cfg.PackageManagementRemoveConfigs) {
+                    argv.append(std.heap.c_allocator, "--remove-config") catch return;
+                }
+            } else |_| {}
+        }
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{

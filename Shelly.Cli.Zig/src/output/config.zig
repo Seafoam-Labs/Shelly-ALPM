@@ -424,6 +424,11 @@ fn writeSimpleProgressFrame(
 }
 
 fn progressPercentage(update: Zigalpm.operation.ProgressUpdate) u8 {
+    if (update.native_code) |native_code| switch (native_code) {
+        512, 514, 516, 518 => return 0,
+        513, 515, 517, 519, 520, 521 => return 100,
+        else => {},
+    };
     if (update.percentage) |percentage| {
         if (std.math.isNan(percentage) or percentage <= 0) return 0;
         if (percentage >= 100) return 100;
@@ -460,6 +465,10 @@ fn progressType(progress: Zigalpm.operation.ProgressEvent) []const u8 {
         200 => "MakepkgBuild",
         201 => "MakepkgPackage",
         202 => "AurDownload",
+        512, 513 => "AurDownload",
+        514, 515 => "MakepkgBuild",
+        516, 517 => "AddStart",
+        518, 519 => "RemoveStart",
         else => fallbackProgressType(progress.envelope.kind),
     };
     return fallbackProgressType(progress.envelope.kind);
@@ -480,8 +489,41 @@ fn fallbackProgressType(kind: Zigalpm.operation.OperationKind) []const u8 {
 fn progressMessage(stage: ?[]const u8) ?[]const u8 {
     const value = stage orelse return null;
     if (std.ascii.eqlIgnoreCase(value, "transaction") or
-        std.ascii.eqlIgnoreCase(value, "download")) return null;
+        std.ascii.eqlIgnoreCase(value, "download") or
+        std.mem.startsWith(u8, value, "aur_")) return null;
     return value;
+}
+
+test "AUR lifecycle progress uses stage semantics instead of package position" {
+    const build_start: Zigalpm.operation.ProgressEvent = .{
+        .envelope = .{
+            .operation_id = 1,
+            .parent_id = null,
+            .backend = .aur,
+            .kind = .install,
+            .subject = "demo",
+        },
+        .update = .{
+            .stage = "aur_build_start",
+            .completed = 1,
+            .total = 1,
+            .native_code = 514,
+        },
+    };
+    try std.testing.expectEqualStrings("MakepkgBuild", progressType(build_start));
+    try std.testing.expectEqual(@as(u8, 0), progressPercentage(build_start.update));
+    try std.testing.expect(progressMessage(build_start.update.stage) == null);
+
+    var build_done = build_start;
+    build_done.update.stage = "aur_build_done";
+    build_done.update.native_code = 515;
+    try std.testing.expectEqual(@as(u8, 100), progressPercentage(build_done.update));
+
+    var install_start = build_start;
+    install_start.update.stage = "aur_install_start";
+    install_start.update.native_code = 516;
+    try std.testing.expectEqualStrings("AddStart", progressType(install_start));
+    try std.testing.expectEqual(@as(u8, 0), progressPercentage(install_start.update));
 }
 
 pub fn writeErrorFrame(context: *runtime.RuntimeContext, message: []const u8) !void {

@@ -23,12 +23,14 @@ makedepends=(
   'git'
   'pkgconf'
   'zig>=0.16.0'
+  'flatpak'
 )
 optdepends=(
   'base-devel: build and install AUR packages'
   'devtools: build AUR packages in a clean chroot'
   'desktop-file-utils: update AppImage desktop entries'
   'fuse2: run AppImages that require FUSE 2'
+  'flatpak: flatpak support'
   'gtk-update-icon-cache: update AppImage icons'
   'opendoas: alternative privilege elevator to sudo'
   'plocate: locate-based pacfile discovery'

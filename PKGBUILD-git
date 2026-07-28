@@ -25,14 +25,15 @@ depends=(
     'gnupg'
     'zstd'
     'json-glib'
-    'flatpak'
 )
 optdepends=(
     'fish: Fish shell completions'
     'zsh: Zsh shell completions'
     'libstarfish: dependency viewer for arch packages'
+    'flatpak: flatpak support'
+    'fuse2: run AppImages that require FUSE 2'
 )
-makedepends=('git' 'zig>=0.16' 'clang' 'gettext' 'vala' 'meson' 'ninja')
+makedepends=('git' 'zig>=0.16' 'clang' 'gettext' 'vala' 'meson' 'ninja' 'flatpak')
 
 source=("${pkgname}::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=development")
 

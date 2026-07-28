@@ -27,12 +27,13 @@ depends=(
     'json-glib'
 )
 optdepends=(
-    'flatpak: For supporting flatpak implementation.'
     'fish: Fish shell completions'
     'zsh: Zsh shell completions'
     'libstarfish: dependency viewer for arch packages'
+    'flatpak: flatpak support'
+    'fuse2: run AppImages that require FUSE 2'
 )
-makedepends=('dotnet-sdk-10.0' 'zig' 'clang' 'gettext' 'vala' 'meson' 'ninja')
+makedepends=('git' 'zig>=0.16' 'clang' 'gettext' 'vala' 'meson' 'ninja' 'flatpak')
 
 # Source tarball from GitHub release
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/archive/v${pkgver}.tar.gz")
@@ -40,48 +41,54 @@ source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALP
 sha256sums=('5ee0f766be084f50d8967cb2f1e0fee0d1d8d652bae98a0bf38bcdc38305b8b5')
 
 build() {
-  cd "$srcdir/Shelly-ALPM-${pkgver}"
+  cd "$srcdir/${pkgname}"
 
-  dotnet publish Shelly.Cli/Shelly.Cli.csproj -c Release -o out-cli --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
-  dotnet publish Shelly.Gtk/Shelly.Gtk.csproj -c Release -r linux-x64 -o out --nologo -p:InstructionSet=${INSTRUCTIONS:=x86-64}
+  (cd Shelly.Ui.Gtk && zig build --verbose \
+    --prefix "${srcdir}/${pkgname}/out" \
+    --cache-dir "${srcdir}/zig-cache" \
+    --global-cache-dir "${srcdir}/zig-global-cache" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSafe)
+
+  (cd Shelly.Cli.Zig && zig build --verbose \
+    --prefix "${srcdir}/${pkgname}/out-cli" \
+    --cache-dir "${srcdir}/zig-cache" \
+    --global-cache-dir "${srcdir}/zig-global-cache" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSmall)
+
+  (cd Shelly.Key && zig build --verbose \
+    --prefix "${srcdir}/${pkgname}/out-key" \
+    --cache-dir "${srcdir}/zig-cache" \
+    --global-cache-dir "${srcdir}/zig-global-cache" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSmall)
+
   meson setup --prefix=/usr build-notify Shelly.Notifications
   meson compile -C build-notify
-  (cd Shelly.Key && zig build --verbose -p ../out-key)
 
-  # Generate shell completions from the freshly built CLI binary
-  ./out-cli/shelly completions fish > shelly.fish
-  ./out-cli/shelly completions zsh  > _shelly
+  ./out-cli/bin/shelly utility --completions bash > shelly.bash
+  ./out-cli/bin/shelly utility --completions fish > shelly.fish
+  ./out-cli/bin/shelly utility --completions zsh  > _shelly
 
-  # Compile translations
-  for po_file in Shelly.Gtk/po/*.po; do
-    if [ -f "$po_file" ]; then
-      lang=$(basename "$po_file" .po)
-      msgfmt "$po_file" -o "shelly-ui-${lang}.mo"
-    fi
+  for po_file in Shelly.Ui.Gtk/po/*.po; do
+    [ -f "$po_file" ] || continue
+    lang=$(basename "$po_file" .po)
+    msgfmt "$po_file" -o "shelly-ui-${lang}.mo"
   done
 
-  # Compile tray service translations
-    for po_file in Shelly.Notifications/po/*.po; do
-      if [ -f "$po_file" ]; then
-        lang=$(basename "$po_file" .po)
-        msgfmt "$po_file" -o "shelly-notifications-${lang}.mo"
-      fi
-    done
+  for po_file in Shelly.Notifications/po/*.po; do
+    [ -f "$po_file" ] || continue
+    lang=$(basename "$po_file" .po)
+    msgfmt "$po_file" -o "shelly-notifications-${lang}.mo"
+  done
 }
 
 package() {
-  cd "$srcdir/Shelly-ALPM-${pkgver}"
-
-  # Install Shelly.Gtk binary
-  install -Dm755 out/shelly-ui "$pkgdir/usr/bin/shelly-ui"
-
-  # Install Shelly-Notifications binary
+  cd "$srcdir/${pkgname}"
   install -Dm755 build-notify/shelly-notifications "$pkgdir/usr/bin/shelly-notifications"
-
-  # Install Shelly.Cli binary
-  install -Dm755 out-cli/shelly "$pkgdir/usr/bin/shelly"
-
-  # Install Shelly.Key binary
+  install -Dm755 out/bin/Shelly_Ui_Gtk "$pkgdir/usr/bin/shelly-ui"
+  install -Dm755 out-cli/bin/shelly "$pkgdir/usr/bin/shelly"
   install -Dm755 out-key/bin/shelly-key "$pkgdir/usr/bin/shelly-key"
 
   # Install desktop entry
@@ -155,18 +162,15 @@ EOF
 EOF
 
   # Install icon
-  install -Dm644 Shelly.Gtk/Assets/shellylogo.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly.png"
-  install -Dm644 Shelly.Gtk/Assets/shellylogo-tray.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-tray.png"
-  install -Dm644 Shelly.Gtk/Assets/shellylogo-update.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-update.png"
-  install -Dm644 Shelly.Gtk/Assets/svg/flatpak-symbolic.svg "$pkgdir/usr/share/icons/hicolor/symbolic/apps/flatpak-symbolic.svg"
-  install -Dm644 Shelly.Gtk/Assets/svg/arch-symbolic.svg "$pkgdir/usr/share/icons/hicolor/symbolic/apps/arch-symbolic.svg"
-  install -Dm644 Shelly.Gtk/Assets/svg/shelly-updates-symbolic.svg "$pkgdir/usr/share/icons/hicolor/symbolic/apps/shelly-updates-symbolic.svg"
-  install -Dm644 Shelly.Gtk/Assets/svg/shelly-shell-symbolic.svg "$pkgdir/usr/share/icons/hicolor/symbolic/apps/shelly-shell-symbolic.svg"
+  install -Dm644 assets/shellylogo.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly.png"
+  install -Dm644 assets/shelly-updates-symbolic.svg "$pkgdir/usr/share/icons/hicolor/symbolic/apps/shelly-updates-symbolic.svg"
+  install -Dm644 assets/shelly-shell-symbolic.svg "$pkgdir/usr/share/icons/hicolor/symbolic/apps/shelly-shell-symbolic.svg"
 
-  # Install fish shell completions
+  install -Dm644 assets/shellylogo-tray.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-tray.png"
+  install -Dm644 assets/shellylogo-update.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-update.png"
+
+  install -Dm644 shelly.bash "$pkgdir/usr/share/bash-completion/completions/shelly"
   install -Dm644 shelly.fish "$pkgdir/usr/share/fish/vendor_completions.d/shelly.fish"
-
-  # Install zsh shell completions
   install -Dm644 _shelly "$pkgdir/usr/share/zsh/site-functions/_shelly"
 
   # Install translations

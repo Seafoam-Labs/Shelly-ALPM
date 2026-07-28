@@ -12,6 +12,7 @@ const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
 const PendingQuestion = @import("../services/shelly_operation.zig").PendingQuestion;
 const TransactionQuestion = @import("../services/shelly_operation.zig").TransactionQuestion;
 const TransactionPackage = @import("../services/shelly_operation.zig").TransactionPackage;
+const runtime = @import("../services/runtime.zig");
 const MultiSelectDialog = @import("../dialog/page/multiselect.zig").MultiSelectDialog;
 const PkgbuildReviewDialog = @import("../dialog/page/pkg_build.zig").PkgbuildReviewDialog;
 const PlanDialog = @import("../dialog/page/plan.zig").PlanDialog;
@@ -32,6 +33,7 @@ const PackageRow = struct {
     status_label: *gtk.Label,
     progress: *gtk.ProgressBar,
     stage: ?[]const u8 = null,
+    pulse_source: c_uint = 0,
 };
 
 pub const TransactionPage = extern struct {
@@ -118,9 +120,14 @@ pub const TransactionPage = extern struct {
             p.rows.put(alloc, owned, row) catch {};
         }
 
-        const argv = alloc.alloc([]const u8, request.argv.len) catch return;
+        const add_no_confirm = shouldAddNoConfirm(request.argv);
+        const argv_len = request.argv.len + @as(usize, if (add_no_confirm) 1 else 0);
+        const argv = alloc.alloc([]const u8, argv_len) catch return;
         for (request.argv, 0..) |a, i| {
             argv[i] = alloc.dupe(u8, a) catch return;
+        }
+        if (add_no_confirm) {
+            argv[request.argv.len] = alloc.dupe(u8, "--no-confirm") catch return;
         }
 
         const op = std.heap.c_allocator.create(ShellyOperation) catch return;
@@ -147,6 +154,18 @@ pub const TransactionPage = extern struct {
         };
     }
 
+    fn shouldAddNoConfirm(argv: []const []const u8) bool {
+        for (argv) |arg| {
+            if (std.mem.eql(u8, arg, "--no-confirm") or std.mem.eql(u8, arg, "-n")) {
+                return false;
+            }
+        }
+
+        const svc = runtime.config orelse return false;
+        const cfg = svc.get() catch return false;
+        return cfg.NoConfirm;
+    }
+
     fn rowStageChanged(self: *Self, row: *PackageRow, stage: []const u8) bool {
         if (!stageChanged(row.stage, stage)) return false;
 
@@ -158,6 +177,8 @@ pub const TransactionPage = extern struct {
     fn reset(self: *Self) void {
         const p = self.priv();
         p.cancelled = false;
+        var rows = p.rows.valueIterator();
+        while (rows.next()) |row| stopRowPulse(row.*);
         while (gtk.Widget.getFirstChild(p.rows_box.as(gtk.Widget))) |c| {
             gtk.Box.remove(p.rows_box, c);
         }
@@ -263,11 +284,28 @@ pub const TransactionPage = extern struct {
                 if (ensure_row_named(self, pr.package_name, display_name)) |row| {
                     const stage = nonEmpty(pr.stage) orelse pr.progress_type;
                     if (rowStageChanged(self, row, stage)) {
+                        stopRowPulse(row);
                         gtk.ProgressBar.setFraction(row.progress, 0.0);
                     }
 
+                    if (isAurPackageFailed(pr.stage)) {
+                        mark_row_failed(row);
+                        return;
+                    }
+                    if (isAurPackageCompleted(pr.stage)) {
+                        mark_row_done(row);
+                        return;
+                    }
+                    if (isAurBuildStart(pr.progress_type, pr.stage)) {
+                        setLabel(row.status_label, translations._("Building"));
+                        startRowPulse(row);
+                        return;
+                    }
+
+                    stopRowPulse(row);
                     gtk.ProgressBar.setFraction(row.progress, progressFraction(
                         pr.progress_type,
+                        pr.stage,
                         pr.percent,
                         pr.current_download,
                         pr.total_download,
@@ -336,11 +374,15 @@ pub const TransactionPage = extern struct {
 
     fn progressFraction(
         progress_type: []const u8,
+        stage: ?[]const u8,
         percent: i64,
         current: i64,
         total: i64,
     ) f64 {
-        if (isDownloadProgress(progress_type) and total > 0) {
+        if (isDownloadProgress(progress_type) and
+            !isAurLifecycleStage(stage) and
+            total > 0)
+        {
             const safe_current = @max(current, 0);
             const fraction = @as(f64, @floatFromInt(safe_current)) /
                 @as(f64, @floatFromInt(total));
@@ -369,13 +411,52 @@ pub const TransactionPage = extern struct {
         return self.priv().rows.get(name);
     }
 
+    fn isAurLifecycleStage(stage: ?[]const u8) bool {
+        const value = stage orelse return false;
+        return std.mem.startsWith(u8, value, "aur_");
+    }
+
+    fn isAurBuildStart(progress_type: []const u8, stage: ?[]const u8) bool {
+        return std.mem.eql(u8, progress_type, "MakepkgBuild") and
+            if (stage) |value| std.mem.eql(u8, value, "aur_build_start") else false;
+    }
+
+    fn isAurPackageFailed(stage: ?[]const u8) bool {
+        return if (stage) |value| std.mem.eql(u8, value, "aur_package_failed") else false;
+    }
+
+    fn isAurPackageCompleted(stage: ?[]const u8) bool {
+        return if (stage) |value| std.mem.eql(u8, value, "aur_package_completed") else false;
+    }
+
+    fn startRowPulse(row: *PackageRow) void {
+        if (row.pulse_source != 0) return;
+        gtk.ProgressBar.pulse(row.progress);
+        row.pulse_source = glib.timeoutAdd(100, &onRowPulse, row);
+    }
+
+    fn stopRowPulse(row: *PackageRow) void {
+        if (row.pulse_source == 0) return;
+        _ = glib.Source.remove(row.pulse_source);
+        row.pulse_source = 0;
+    }
+
+    fn onRowPulse(data: ?*anyopaque) callconv(.c) c_int {
+        const row: *PackageRow = @ptrCast(@alignCast(data.?));
+        if (row.pulse_source == 0) return 0;
+        gtk.ProgressBar.pulse(row.progress);
+        return 1;
+    }
+
     fn mark_row_done(row: *PackageRow) void {
+        stopRowPulse(row);
         gtk.Label.setLabel(row.status_label, translations._("Done"));
         gtk.ProgressBar.setFraction(row.progress, 1.0);
         gtk.Widget.addCssClass(row.status_label.as(gtk.Widget), "status-done");
     }
 
     fn mark_row_failed(row: *PackageRow) void {
+        stopRowPulse(row);
         gtk.Label.setLabel(row.status_label, translations._("Failed"));
         gtk.ProgressBar.setFraction(row.progress, 1.0);
         gtk.Widget.addCssClass(row.status_label.as(gtk.Widget), "status-failed");
@@ -402,8 +483,10 @@ pub const TransactionPage = extern struct {
             }
         } else {
             var it = p.rows.valueIterator();
-            while (it.next()) |row_ptr|
+            while (it.next()) |row_ptr| {
+                stopRowPulse(row_ptr.*);
                 gtk.Label.setLabel(row_ptr.*.status_label, translations._("Cancelled"));
+            }
         }
 
         if (p.on_complete) |cb| {
@@ -776,6 +859,8 @@ pub const TransactionPage = extern struct {
 
     fn finalize(self: *Self) callconv(.c) void {
         const p = self.priv();
+        var rows = p.rows.valueIterator();
+        while (rows.next()) |row| stopRowPulse(row.*);
         if (p.operation) |op| {
             op.cancel();
             if (op.reader) |t| t.join();
@@ -803,19 +888,23 @@ test "transaction progress helpers preserve determinate percentages" {
 
     try std.testing.expectEqual(
         @as(f64, 0.5),
-        TransactionPage.progressFraction("PackageDownload", 10, 50, 100),
+        TransactionPage.progressFraction("PackageDownload", null, 10, 50, 100),
     );
     try std.testing.expectEqual(
         @as(f64, 1.0),
-        TransactionPage.progressFraction("DatabaseDownload", 10, 150, 100),
+        TransactionPage.progressFraction("DatabaseDownload", null, 10, 150, 100),
     );
     try std.testing.expectEqual(
         @as(f64, 0.0),
-        TransactionPage.progressFraction("AurDownload", 10, -1, 100),
+        TransactionPage.progressFraction("AurDownload", null, 10, -1, 100),
     );
     try std.testing.expectEqual(
         @as(f64, 0.37),
-        TransactionPage.progressFraction("AddStart", 37, 0, 0),
+        TransactionPage.progressFraction("AddStart", null, 37, 0, 0),
+    );
+    try std.testing.expectEqual(
+        @as(f64, 0.0),
+        TransactionPage.progressFraction("AurDownload", "aur_download_start", 0, 1, 1),
     );
 }
 
@@ -828,6 +917,15 @@ test "transaction rows detect progress stage changes" {
     try std.testing.expect(TransactionPage.stageChanged(null, "download"));
     try std.testing.expect(!TransactionPage.stageChanged("download", "download"));
     try std.testing.expect(TransactionPage.stageChanged("download", "transaction"));
+}
+
+test "AUR build lifecycle selects indeterminate and terminal row states" {
+    try std.testing.expect(TransactionPage.isAurLifecycleStage("aur_build_start"));
+    try std.testing.expect(!TransactionPage.isAurLifecycleStage("makepkg_build"));
+    try std.testing.expect(TransactionPage.isAurBuildStart("MakepkgBuild", "aur_build_start"));
+    try std.testing.expect(!TransactionPage.isAurBuildStart("MakepkgBuild", "makepkg_build"));
+    try std.testing.expect(TransactionPage.isAurPackageFailed("aur_package_failed"));
+    try std.testing.expect(TransactionPage.isAurPackageCompleted("aur_package_completed"));
 }
 
 test "progress console lines include backend stage and percentage" {

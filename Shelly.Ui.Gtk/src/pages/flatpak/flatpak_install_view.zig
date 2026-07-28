@@ -454,6 +454,7 @@ pub const FlatpakInstallView = extern struct {
         const strings = gtk.StringList.new(null);
         defer strings.as(gobject.Object).unref();
         const remotes = app.getRemotes();
+        std.log.debug("remotes {d}", .{remotes.len});
         for (remotes) |remote| {
             var buffer: [512]u8 = undefined;
             const label = std.fmt.bufPrintZ(
@@ -929,6 +930,8 @@ pub const FlatpakInstallView = extern struct {
         const io = threaded.io();
 
         const cli: ShellyCli = .{ .allocator = alloc, .io = io };
+        cli.sync_remote_appstream_flatpak() catch {};
+        std.log.debug("sync_remote_appstream_flatpak completed", .{});
         result.parsed = cli.get_remote_appstream_apps() catch {
             result.failed = true;
             _ = glib.idleAdd(&load_complete, result);
