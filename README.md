@@ -90,35 +90,52 @@ Upcoming features and development targets:
 
 ## Installation
 
-### Using PKGBUILD
+### Using PKGBUILD (Arch Linux)
 
-Since Shelly is designed for Arch Linux, you can build and install it using the provided `PKGBUILD`:
+Since Shelly is designed for Arch Linux, the recommended installation method is using the provided PKGBUILD files.
+
+For the latest development version, use `PKGBUILD-git`:
 
 ```bash
-git clone https://github.com/ZoeyErinBauer/Shelly-ALPM.git
+git clone https://github.com/Seafoam-Labs/Shelly-ALPM.git
 cd Shelly-ALPM
+cp PKGBUILD-git PKGBUILD
 makepkg -si
+```
+
+`PKGBUILD-git` follows the latest development branch and includes the newest changes.
+
+If you previously installed Shelly manually using `local-install.sh`, remove the previous installation first to avoid conflicts with files managed by `pacman`:
+
+```bash
+sudo ./uninstall.sh
 ```
 
 ### Manual Build
 
-You can also build the project manually using the .NET CLI:
+Shelly can also be built manually from source.
 
-```bash
-dotnet publish Shelly.Gtk/Shelly.Gtk.csproj -c Release -o publish/shelly-ui
-dotnet publish Shelly-CLI/Shelly-CLI.csproj -c Release -o publish/shelly-cli
-dotnet publish Shelly-CLI/Shelly-CLI.csproj -c Release -o publish/shelly-notifications
-```
+The project currently uses Zig for building. Make sure all required build dependencies are installed before compiling.
 
-alternatively, you can run
+Alternatively, you can use:
 
 ```bash
 sudo ./local-install.sh
 ```
 
-This will build and perform the functions of install.sh
+This will build Shelly and perform the installation steps automatically.
 
-The binary will be located in the `/opt/shelly` directory.
+The binary files will be installed in:
+
+```
+/opt/shelly
+```
+
+To remove a manual installation:
+
+```bash
+sudo ./uninstall.sh
+```
 
 ## Usage
 
