@@ -99,6 +99,8 @@ pub const ShellySettingsPage = extern struct {
 
         toast: *Toast,
         loaded: bool,
+        save_guard: bool,
+        save_source: c_uint,
 
         var offset: c_int = 0;
     };
@@ -127,6 +129,8 @@ pub const ShellySettingsPage = extern struct {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
         const p = self.priv();
         p.loaded = false;
+        p.save_guard = false;
+        p.save_source = 0;
 
         populateDropdowns(p);
 
@@ -181,6 +185,75 @@ pub const ShellySettingsPage = extern struct {
             .{ .detail = "selected" },
         );
 
+        const autosave_switches = .{
+            p.flatpak_switch,
+            p.recommended_switch,
+            p.appimage_switch,
+            p.shelly_icons_switch,
+            p.symbolic_tray_switch,
+            p.no_confirm_switch,
+            p.shelly_search_switch,
+            p.package_downgrade_switch,
+            p.remove_cache_switch,
+            p.webview_switch,
+        };
+        inline for (autosave_switches) |s| {
+            _ = gobject.Object.signals.notify.connect(
+                s.as(gobject.Object),
+                *Self,
+                &on_autosave_notify,
+                self,
+                .{ .detail = "active" },
+            );
+        }
+        _ = gobject.Object.signals.notify.connect(
+            p.aur_switch.as(gobject.Object),
+            *Self,
+            &on_autosave_notify,
+            self,
+            .{ .detail = "active", .after = true },
+        );
+
+        _ = gobject.Object.signals.notify.connect(
+            p.default_page_drop.as(gobject.Object),
+            *Self,
+            &on_autosave_notify,
+            self,
+            .{ .detail = "selected" },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.language_drop.as(gobject.Object),
+            *Self,
+            &on_autosave_notify,
+            self,
+            .{ .detail = "selected" },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.nav_mode_drop.as(gobject.Object),
+            *Self,
+            &on_autosave_notify,
+            self,
+            .{ .detail = "selected", .after = true },
+        );
+
+        const day_checks = .{
+            p.day_sun_check,
+            p.day_mon_check,
+            p.day_tue_check,
+            p.day_wed_check,
+            p.day_thu_check,
+            p.day_fri_check,
+            p.day_sat_check,
+        };
+        inline for (day_checks) |c| {
+            _ = gtk.CheckButton.signals.toggled.connect(c, *Self, &on_autosave_toggled, self, .{});
+        }
+
+        const spins = .{ p.tray_interval_spin, p.update_hour_spin, p.update_minute_spin };
+        inline for (spins) |s| {
+            _ = gtk.SpinButton.signals.value_changed.connect(s, *Self, &on_autosave_value_changed, self, .{});
+        }
+
         support.connectLifecycle(Self, self);
 
         const toast = Toast.new();
@@ -209,15 +282,19 @@ pub const ShellySettingsPage = extern struct {
             return;
         };
 
-        populateFromConfig(p, cfg);
+        p.save_guard = true;
+        applyConfig(p, cfg);
+        p.save_guard = false;
         applyScheduleVisibility(p);
         applyTrayVisibility(p);
     }
 
     pub fn onUnmap(self: *Self) void {
-        self.save() catch |err| {
-            std.log.err("settings: save failed: {t}", .{err});
-        };
+        const p = self.priv();
+        if (p.save_source != 0) {
+            _ = glib.Source.remove(p.save_source);
+            p.save_source = 0;
+        }
     }
 
     fn on_save_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
@@ -247,7 +324,65 @@ pub const ShellySettingsPage = extern struct {
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.applyConfig();
+            win.applyDefaultPage();
         }
+    }
+
+    fn autosave(self: *Self) void {
+        const p = self.priv();
+        if (p.save_guard or !p.loaded) return;
+
+        if (p.save_source != 0) {
+            _ = glib.Source.remove(p.save_source);
+            p.save_source = 0;
+        }
+
+        const svc = obtainConfigService() catch return;
+        const cfg = svc.get() catch return;
+
+        var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+        defer arena.deinit();
+
+        var updated = cfg.*;
+        collectIntoConfig(p, arena.allocator(), &updated);
+        svc.set(updated) catch {
+            p.toast.show(.@"error", translations._("Failed to save settings"));
+            return;
+        };
+        svc.save() catch {
+            p.toast.show(.@"error", translations._("Failed to save settings"));
+            return;
+        };
+
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.applyConfig();
+        }
+    }
+
+    fn scheduleAutosave(self: *Self) void {
+        const p = self.priv();
+        if (p.save_guard or !p.loaded) return;
+        if (p.save_source != 0) return;
+        p.save_source = glib.timeoutAdd(300, &on_autosave_timeout, self);
+    }
+
+    fn on_autosave_timeout(data: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(data.?));
+        self.priv().save_source = 0;
+        self.autosave();
+        return 0;
+    }
+
+    fn on_autosave_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        self.autosave();
+    }
+
+    fn on_autosave_toggled(_: *gtk.CheckButton, self: *Self) callconv(.c) void {
+        self.autosave();
+    }
+
+    fn on_autosave_value_changed(_: *gtk.SpinButton, self: *Self) callconv(.c) void {
+        self.scheduleAutosave();
     }
 
     fn showChangelog(self: *Self) !void {
@@ -589,6 +724,7 @@ pub const ShellySettingsPage = extern struct {
 
     fn on_schedule_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         applyScheduleVisibility(self.priv());
+        self.autosave();
     }
 
     fn on_tray_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
@@ -893,7 +1029,7 @@ fn updateConfigField(
     };
 }
 
-fn populateFromConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
+fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.aur_switch, cfg.AurEnabled);
     setSwitch(p.flatpak_switch, cfg.FlatPackEnabled);
     setSwitch(p.recommended_switch, cfg.RecommendedEnabled);
