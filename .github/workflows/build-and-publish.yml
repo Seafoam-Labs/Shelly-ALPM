@@ -19,20 +19,50 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig flatpak base-devel gtk4 clang glibc git libarchive vala meson ninja json-glib
+          pacman -S --needed --noconfirm zig flatpak base-devel gtk4 clang glibc git libarchive vala meson ninja json-glib ripgrep
 
       # Checkout only after git is installed
       - uses: actions/checkout@v6
 
-      - name: Build cli & test
+      - name: Build and test Flatpak backend
+        run: |
+          cd Shelly.Flatpak.Backend
+          zig build
+          zig build test
+          zig build abi-test
+          zig build integration-test
+
+      - name: Build and test PackageManager
+        run: |
+          cd Shelly.PackageManager
+          zig build
+          zig build test
+          zig build flatpak-test
+
+      - name: Build CLI and test
         run: |
           cd Shelly.Cli.Zig
           zig build
           zig build test
 
-      - name: Build gtk gui & test
+      - name: Verify optional Flatpak boundary
+        run: |
+          scripts/check-flatpak-separation.sh \
+            Shelly.Cli.Zig/zig-out/bin/shelly \
+            Shelly.Flatpak.Backend/zig-out/lib/libshelly-flatpak-backend.so.1
+          Shelly.Cli.Zig/zig-out/bin/shelly --help >/dev/null
+          Shelly.Cli.Zig/zig-out/bin/shelly --version >/dev/null
+          Shelly.Cli.Zig/zig-out/bin/shelly utility --completions bash >/dev/null
+
+      - name: Build GTK GUI and test
         run: |
           cd Shelly.Ui.Gtk
+          zig build
+          zig build test
+
+      - name: Build TUI and test
+        run: |
+          cd Shelly.Tui
           zig build
           zig build test
 
@@ -46,3 +76,6 @@ jobs:
         run: |
           meson setup build-notify Shelly.Notifications
           meson compile -C build-notify
+
+      - name: Validate Arch package recipes
+        run: bash -n PKGBUILD PKGBUILD-git PKGBUILD-bin PKGBUILD-cli

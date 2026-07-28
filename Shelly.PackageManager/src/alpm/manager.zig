@@ -226,6 +226,19 @@ pub const Manager = struct {
         // for update checking. Symlink the real local database into the temp
         // path so ALPM can see installed packages when checking for updates.
         if (self.temp_root_path.len != 0) {
+            const configured_db_path = std.fs.path.resolve(
+                self.allocator,
+                &.{self.config.database_path},
+            ) catch return InitError.InitFailed;
+            defer self.allocator.free(configured_db_path);
+            const resolved_temp_root = std.fs.path.resolve(
+                self.allocator,
+                &.{self.temp_root_path},
+            ) catch return InitError.InitFailed;
+            defer self.allocator.free(resolved_temp_root);
+            if (std.mem.eql(u8, configured_db_path, resolved_temp_root))
+                return InitError.InitFailed;
+
             // "{DBPath}/local" for the *real* database, captured before we repoint DBPath.
             const real_local_db = blk: {
                 const s = std.fmt.allocPrint(self.allocator, "{s}/local", .{self.config.database_path}) catch {

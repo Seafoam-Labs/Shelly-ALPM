@@ -243,18 +243,24 @@ fn collectState(_: ?*anyopaque, context: *runtime.RuntimeContext) !State {
         }
     }
 
-    {
+    flatpak_collection: {
         var manager = Zigalpm.FlatpakManager{
             .allocator = context.allocator,
             .io = context.io,
         };
         defer manager.deinit();
-        const installed = try manager.list_installed_applications();
-        defer Zigalpm.flatpak.manager.InstalledApplication.deinitSlice(context.allocator, installed);
+        const installed = manager.list_installed_applications() catch |err| {
+            if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+                try output.writeWarning(context, message);
+                break :flatpak_collection;
+            }
+            return err;
+        };
+        defer Zigalpm.flatpak.InstalledApplication.deinitSlice(context.allocator, installed);
         for (installed) |application| {
             try flatpaks.append(context.allocator, .{
                 .id = try context.allocator.dupe(u8, application.id),
-                .kind = application.kind,
+                .kind = @intFromEnum(application.kind),
             });
         }
     }

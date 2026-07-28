@@ -17,20 +17,59 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig flatpak base-devel gtk4 clang glibc git gettext libarchive curl vala meson ninja json-glib
+          pacman -S --needed --noconfirm zig flatpak base-devel gtk4 clang glibc git gettext libarchive curl vala meson ninja json-glib ripgrep
 
       # Checkout only after git is installed in the container.
       - uses: actions/checkout@v6
+
+      - name: Build and test Flatpak backend
+        run: |
+          (cd Shelly.Flatpak.Backend && zig build \
+            --prefix ../publish/build-flatpak-backend \
+            -Dcpu=baseline \
+            -Doptimize=ReleaseSafe)
+          (cd Shelly.Flatpak.Backend && zig build test)
+          (cd Shelly.Flatpak.Backend && zig build abi-test)
+          (cd Shelly.Flatpak.Backend && zig build integration-test)
+
+      - name: Test PackageManager
+        run: |
+          (cd Shelly.PackageManager && zig build test)
+          (cd Shelly.PackageManager && zig build flatpak-test)
+
+      - name: Publish Flatpak backend
+        run: |
+          mkdir -p publish/shelly-flatpak-backend
+          install -Dm755 \
+            publish/build-flatpak-backend/lib/libshelly-flatpak-backend.so.1.0.0 \
+            publish/shelly-flatpak-backend/libshelly-flatpak-backend.so.1.0.0
+          ln -s libshelly-flatpak-backend.so.1.0.0 \
+            publish/shelly-flatpak-backend/libshelly-flatpak-backend.so.1
+          tar -czf publish/Shelly-Flatpak-Backend-linux-x64.tar.gz \
+            -C publish/shelly-flatpak-backend .
 
       - name: Publish Shelly.Cli
         run: |
           mkdir -p publish/shelly-cli
           (cd Shelly.Cli.Zig && zig build --prefix ../publish/build-cli -Dcpu=baseline -Doptimize=ReleaseSmall)
+          (cd Shelly.Cli.Zig && zig build test)
           install -Dm755 publish/build-cli/bin/shelly publish/shelly-cli/shelly
           # Generate completion scripts from the freshly built binary.
           publish/shelly-cli/shelly utility --completions fish > publish/shelly-cli/shelly.fish
           publish/shelly-cli/shelly utility --completions zsh  > publish/shelly-cli/_shelly
           tar -czf publish/Shelly-CLI-linux-x64.tar.gz -C publish/shelly-cli .
+
+      - name: Verify optional Flatpak boundary
+        run: |
+          scripts/check-flatpak-separation.sh \
+            publish/shelly-cli/shelly \
+            publish/shelly-flatpak-backend/libshelly-flatpak-backend.so.1
+
+      - name: Test TUI consumer
+        run: |
+          cd Shelly.Tui
+          zig build
+          zig build test
 
       - name: Publish Shelly.Gtk
         run: |
@@ -103,7 +142,7 @@ jobs:
           curl -sL "https://github.com/ZoeyErinBauer/Shelly-ALPM/archive/${VERSION}.tar.gz" -o "source-${VERSION}.tar.gz"
           sha256sum "source-${VERSION}.tar.gz" | sed "s/source-${VERSION}.tar.gz/${VERSION}.tar.gz/" > SHA256SUMS.txt
           # Add binary tarballs and completions checksums.
-          sha256sum Shelly-ALPM-linux-x64.tar.gz Shelly-CLI-linux-x64.tar.gz Shelly-Key-linux-x64.tar.gz shelly.fish _shelly >> SHA256SUMS.txt
+          sha256sum Shelly-ALPM-linux-x64.tar.gz Shelly-CLI-linux-x64.tar.gz Shelly-Flatpak-Backend-linux-x64.tar.gz Shelly-Key-linux-x64.tar.gz shelly.fish _shelly >> SHA256SUMS.txt
           rm "source-${VERSION}.tar.gz"
           cat SHA256SUMS.txt
 
@@ -113,6 +152,7 @@ jobs:
           files: |
             publish/Shelly-ALPM-linux-x64.tar.gz
             publish/Shelly-CLI-linux-x64.tar.gz
+            publish/Shelly-Flatpak-Backend-linux-x64.tar.gz
             publish/Shelly-Key-linux-x64.tar.gz
             publish/shelly.fish
             publish/_shelly

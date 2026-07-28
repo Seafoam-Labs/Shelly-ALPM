@@ -92,7 +92,7 @@ pub const libflatpak = struct {
         }
 
         pub fn kind(self: Flatpak) i32 {
-            return flatpak.flatpak_ref_get_kind(self.ptr);
+            return @intCast(flatpak.flatpak_ref_get_kind(self.ptr));
         }
 
         pub fn get_scope(self: Flatpak) Scope {

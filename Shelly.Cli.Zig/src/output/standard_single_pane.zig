@@ -78,6 +78,11 @@ pub fn output(
             try renderer.finishCancelled();
             return true;
         }
+        if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+            try renderer.reportError(message);
+            try renderer.finish(false);
+            return false;
+        }
         const message = try std.fmt.allocPrint(context.allocator, "{t}", .{err});
         defer context.allocator.free(message);
         try renderer.reportError(message);

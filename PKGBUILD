@@ -1,64 +1,46 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
-pkgname=shelly
+pkgbase=shelly
+pkgname=('shelly' 'shelly-flatpak-backend')
 pkgver=2.4.1.4
 pkgrel=1
-pkgdesc="Shelly: A Modern Arch Package Manager"
 arch=('x86_64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
 license=('GPL-3.0-only')
-provides=('shelly')
-conflicts=('shelly-git' 'shelly-bin')
-depends=(
-    'pacman'
-    'gtk4'
-    'glib2'
-    'sudo'
-    'tar'
-    'bash'
-    'git'
-    'hicolor-icon-theme'
-    'dbus'
-    'glibc'
-    'libarchive'
-    'dconf'
-    'gnupg'
-    'zstd'
-    'json-glib'
-)
-optdepends=(
-    'fish: Fish shell completions'
-    'zsh: Zsh shell completions'
-    'libstarfish: dependency viewer for arch packages'
-    'flatpak: flatpak support'
-    'fuse2: run AppImages that require FUSE 2'
-)
 makedepends=('git' 'zig>=0.16' 'clang' 'gettext' 'vala' 'meson' 'ninja' 'flatpak')
 
 # Source tarball from GitHub release
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/archive/v${pkgver}.tar.gz")
 
 sha256sums=('5ee0f766be084f50d8967cb2f1e0fee0d1d8d652bae98a0bf38bcdc38305b8b5')
+_source_dir="Shelly-ALPM-${pkgver}"
 
 build() {
-  cd "$srcdir/${pkgname}"
+  cd "$srcdir/${_source_dir}"
+
+  (cd Shelly.Flatpak.Backend && zig build --verbose \
+    --prefix "${srcdir}/${_source_dir}/out-flatpak-backend" \
+    --cache-dir "${srcdir}/zig-cache" \
+    --global-cache-dir "${srcdir}/zig-global-cache" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSafe)
 
   (cd Shelly.Ui.Gtk && zig build --verbose \
-    --prefix "${srcdir}/${pkgname}/out" \
+    --prefix "${srcdir}/${_source_dir}/out" \
     --cache-dir "${srcdir}/zig-cache" \
     --global-cache-dir "${srcdir}/zig-global-cache" \
     -Dcpu=baseline \
     -Doptimize=ReleaseSafe)
 
   (cd Shelly.Cli.Zig && zig build --verbose \
-    --prefix "${srcdir}/${pkgname}/out-cli" \
+    --prefix "${srcdir}/${_source_dir}/out-cli" \
     --cache-dir "${srcdir}/zig-cache" \
     --global-cache-dir "${srcdir}/zig-global-cache" \
     -Dcpu=baseline \
     -Doptimize=ReleaseSmall)
 
   (cd Shelly.Key && zig build --verbose \
-    --prefix "${srcdir}/${pkgname}/out-key" \
+    --prefix "${srcdir}/${_source_dir}/out-key" \
     --cache-dir "${srcdir}/zig-cache" \
     --global-cache-dir "${srcdir}/zig-global-cache" \
     -Dcpu=baseline \
@@ -84,8 +66,53 @@ build() {
   done
 }
 
-package() {
-  cd "$srcdir/${pkgname}"
+check() {
+  cd "$srcdir/${_source_dir}"
+
+  (cd Shelly.Flatpak.Backend && zig build test abi-test integration-test \
+    --cache-dir "${srcdir}/zig-cache" \
+    --global-cache-dir "${srcdir}/zig-global-cache")
+  (cd Shelly.PackageManager && zig build flatpak-test \
+    --cache-dir "${srcdir}/zig-cache" \
+    --global-cache-dir "${srcdir}/zig-global-cache")
+  (cd Shelly.Cli.Zig && zig build test \
+    --cache-dir "${srcdir}/zig-cache" \
+    --global-cache-dir "${srcdir}/zig-global-cache")
+  scripts/check-flatpak-separation.sh \
+    out-cli/bin/shelly \
+    out-flatpak-backend/lib/libshelly-flatpak-backend.so.1
+}
+
+package_shelly() {
+  pkgdesc="Shelly: A Modern Arch Package Manager"
+  provides=('shelly')
+  conflicts=('shelly-git' 'shelly-bin')
+  depends=(
+      'pacman'
+      'gtk4'
+      'glib2'
+      'sudo'
+      'tar'
+      'bash'
+      'git'
+      'hicolor-icon-theme'
+      'dbus'
+      'glibc'
+      'libarchive'
+      'dconf'
+      'gnupg'
+      'zstd'
+      'json-glib'
+  )
+  optdepends=(
+      'fish: Fish shell completions'
+      'zsh: Zsh shell completions'
+      'libstarfish: dependency viewer for arch packages'
+      'shelly-flatpak-backend: Flatpak package management support'
+      'fuse2: run AppImages that require FUSE 2'
+  )
+
+  cd "$srcdir/${_source_dir}"
   install -Dm755 build-notify/shelly-notifications "$pkgdir/usr/bin/shelly-notifications"
   install -Dm755 out/bin/Shelly_Ui_Gtk "$pkgdir/usr/bin/shelly-ui"
   install -Dm755 out-cli/bin/shelly "$pkgdir/usr/bin/shelly"
@@ -234,4 +261,18 @@ done
 update-desktop-database "$LOCAL_APPS_DIR" 2>/dev/null || true
 echo "Flatpak desktop entries patched with Shelly integration."
 SCRIPT
+}
+
+package_shelly-flatpak-backend() {
+  pkgdesc="Optional native Flatpak backend for Shelly"
+  depends=("shelly=${pkgver}-${pkgrel}" 'flatpak')
+  provides=("shelly-flatpak-backend=${pkgver}")
+  conflicts=('shelly-flatpak-backend-git' 'shelly-flatpak-backend-bin')
+
+  cd "$srcdir/${_source_dir}"
+  install -Dm755 \
+    out-flatpak-backend/lib/libshelly-flatpak-backend.so.1.0.0 \
+    "$pkgdir/usr/lib/shelly/libshelly-flatpak-backend.so.1.0.0"
+  ln -s libshelly-flatpak-backend.so.1.0.0 \
+    "$pkgdir/usr/lib/shelly/libshelly-flatpak-backend.so.1"
 }

@@ -9,3 +9,5 @@ Shelly-UI.sln.DotSettings.user
 .zig-cache/
 zig-out/
 zig-pkg/
+.codex-zig-cache/
+.codex-zig-global-cache/

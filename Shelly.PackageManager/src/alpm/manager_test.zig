@@ -309,13 +309,44 @@ test "Manager.init registers the configured sync database" {
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     try testing.expect(mgr.is_initialized);
     try testing.expect(mgr.handle != null);
     // applyConfig must have registered the [core] repository as a sync db.
     try testing.expect(mgr.sync_dbs.items.len >= 1);
+}
+
+test "Manager.init rejects a temp root that aliases DBPath without deleting the local database" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.addLocalPackage(allocator, "shelly-alias-guard", "1.0-1");
+
+    try testing.expectError(
+        error.InitFailed,
+        Manager.init(
+            allocator,
+            testing.environ,
+            workspace.config_path,
+            false,
+            workspace.db_path,
+        ),
+    );
+
+    const desc_path = try std.fmt.allocPrint(
+        allocator,
+        "{s}/local/shelly-alias-guard-1.0-1/desc",
+        .{workspace.db_path},
+    );
+    defer allocator.free(desc_path);
+    _ = try std.Io.Dir.cwd().statFile(io, desc_path, .{});
 }
 
 test "Manager.sync downloads the configured database into DBPath/sync" {
@@ -328,7 +359,7 @@ test "Manager.sync downloads the configured database into DBPath/sync" {
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     // Force the download so the result never depends on a pre-existing cache.
@@ -356,7 +387,7 @@ test "Manager.sync exposes cancellable logical database downloads during mirror 
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     var context = operations.OperationContext.init(allocator, io);
@@ -392,7 +423,7 @@ test "get_single_installed_package returns null for a non-existent package" {
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     // A fresh temporary database has no installed packages.
@@ -407,27 +438,18 @@ test "get_single_installed_package returns a package when it exists" {
     defer threaded.deinit();
     const io = threaded.io();
 
-    // Use the real system database to find an actually installed package.
-    const sys_config = "/etc/pacman.conf";
-    const sys_db = "/var/lib/pacman";
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.addLocalPackage(allocator, "shelly-installed-query", "1.0-1");
 
-    // Skip gracefully if the system database is unavailable.
-    const stat = std.Io.Dir.cwd().statFile(io, sys_db, .{}) catch {
-        return; // no system database — skip
-    };
-    _ = stat;
-
-    const mgr = Manager.init(allocator, testing.environ, sys_config, false, sys_db) catch {
-        return; // config parse or init failure — skip
-    };
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
-    // `pacman` is installed on virtually every Arch-based system.
-    const result = try mgr.get_single_installed_package("pacman");
-    const pkg = result orelse return; // skip if pacman is somehow absent
+    const result = try mgr.get_single_installed_package("shelly-installed-query");
+    const pkg = result orelse return error.TestFailed;
 
     const name = pkg.name() orelse return error.TestFailed;
-    try testing.expectEqualStrings("pacman", name);
+    try testing.expectEqualStrings("shelly-installed-query", name);
 }
 
 // ---------------------------------------------------------------------------
@@ -632,7 +654,7 @@ test "get_installed_packages returns an empty list when no packages are installe
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     const packages = try mgr.get_installed_packages();
@@ -651,7 +673,7 @@ test "ALPM queries honor shared cancellation" {
     defer workspace.cleanup(allocator);
     var context = operations.OperationContext.init(allocator, io);
     defer context.deinit();
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
     mgr.setOperationContext(&context);
 
@@ -659,40 +681,27 @@ test "ALPM queries honor shared cancellation" {
     try testing.expectError(error.Cancelled, mgr.get_installed_packages());
 }
 
-test "get_installed_packages lists packages from the system database" {
+test "get_installed_packages lists packages from a temporary database" {
     const allocator = testing.allocator;
 
     var threaded: std.Io.Threaded = .init(allocator, .{});
     defer threaded.deinit();
     const io = threaded.io();
 
-    // Use the real system database, skipping gracefully when it is unavailable.
-    const sys_config = "/etc/pacman.conf";
-    const sys_db = "/var/lib/pacman";
-    _ = std.Io.Dir.cwd().statFile(io, sys_db, .{}) catch return;
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.addLocalPackage(allocator, "shelly-installed-first", "1.0-1");
+    try workspace.addLocalPackage(allocator, "shelly-installed-second", "2.0-1");
 
-    const mgr = Manager.init(allocator, testing.environ, sys_config, false, sys_db) catch return;
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     const packages = try mgr.get_installed_packages();
     defer libalpm.OwnedPackage.deinitSlice(allocator, packages);
 
-    // A real system always has packages installed, each exposing a name.
-    try testing.expect(packages.len > 0);
-    for (packages) |package| {
-        _ = package.name() orelse return error.TestFailed;
-    }
-
-    // `pacman` is installed on every Arch-based system.
-    var found_pacman = false;
-    for (packages) |package| {
-        const name = package.name() orelse continue;
-        if (std.mem.eql(u8, name, "pacman")) {
-            found_pacman = true;
-            break;
-        }
-    }
-    try testing.expect(found_pacman);
+    try testing.expectEqual(@as(usize, 2), packages.len);
+    try testing.expect(containsPackage(packages, "shelly-installed-first"));
+    try testing.expect(containsPackage(packages, "shelly-installed-second"));
 }
 
 test "get_single_installed_package matches an entry from get_installed_packages" {
@@ -702,16 +711,16 @@ test "get_single_installed_package matches an entry from get_installed_packages"
     defer threaded.deinit();
     const io = threaded.io();
 
-    const sys_config = "/etc/pacman.conf";
-    const sys_db = "/var/lib/pacman";
-    _ = std.Io.Dir.cwd().statFile(io, sys_db, .{}) catch return;
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.addLocalPackage(allocator, "shelly-installed-match", "1.0-1");
 
-    const mgr = Manager.init(allocator, testing.environ, sys_config, false, sys_db) catch return;
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     const packages = try mgr.get_installed_packages();
     defer libalpm.OwnedPackage.deinitSlice(allocator, packages);
-    if (packages.len == 0) return;
+    try testing.expectEqual(@as(usize, 1), packages.len);
 
     // Package names are null-terminated slices, so they can be looked up directly.
     const first_name = packages[0].name() orelse return error.TestFailed;
@@ -744,7 +753,7 @@ test "get_foreign_packages returns an empty list when no packages are installed"
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     const foreign = try mgr.get_foreign_packages();
@@ -761,11 +770,13 @@ test "get_foreign_packages excludes packages provided by a sync database" {
     defer threaded.deinit();
     const io = threaded.io();
 
-    const sys_config = "/etc/pacman.conf";
-    const sys_db = "/var/lib/pacman";
-    _ = std.Io.Dir.cwd().statFile(io, sys_db, .{}) catch return;
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.addLocalPackage(allocator, "local-only", "1.0-1");
+    try workspace.addLocalPackage(allocator, "remote-provider", "1.0-1");
+    try workspace.createSyncDatabase(allocator);
 
-    const mgr = Manager.init(allocator, testing.environ, sys_config, false, sys_db) catch return;
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     const installed = try mgr.get_installed_packages();
@@ -774,25 +785,10 @@ test "get_foreign_packages excludes packages provided by a sync database" {
     const foreign = try mgr.get_foreign_packages();
     defer libalpm.OwnedPackage.deinitSlice(allocator, foreign);
 
-    // Foreign packages are always a subset of the installed packages.
-    try testing.expect(foreign.len <= installed.len);
-
-    // Every foreign package is nonetheless installed, so it resolves locally.
-    for (foreign) |package| {
-        const name = package.name() orelse return error.TestFailed;
-        const local = try mgr.get_single_installed_package(name);
-        try testing.expect(local != null);
-    }
-
-    // If some packages were matched to a sync database, the sync caches are
-    // loaded and repository packages must be excluded. `pacman` ships from the
-    // official [core] repository, so it must never be reported as foreign.
-    if (foreign.len < installed.len) {
-        for (foreign) |package| {
-            const name = package.name() orelse continue;
-            try testing.expect(!std.mem.eql(u8, name, "pacman"));
-        }
-    }
+    try testing.expectEqual(@as(usize, 2), installed.len);
+    try testing.expectEqual(@as(usize, 1), foreign.len);
+    try testing.expect(containsPackage(foreign, "local-only"));
+    try testing.expect(!containsPackage(foreign, "remote-provider"));
 }
 
 // ---------------------------------------------------------------------------
@@ -1061,7 +1057,7 @@ test "get_available_packages returns an empty list when no sync databases are po
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     // init registers the sync database but does not download it, so there are
@@ -1082,7 +1078,7 @@ test "get_available_packages returns packages after a successful sync" {
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     // Download the remote database so packages become available.
@@ -1108,7 +1104,7 @@ test "toggle_hidden_packages flips state and returns the new value" {
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     try testing.expectEqual(false, mgr.show_hidden_packages);
@@ -1144,7 +1140,7 @@ test "install_packages rejects an empty package list" {
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     var package_names = [_][:0]const u8{};
@@ -1164,7 +1160,7 @@ test "install_packages rejects malformed repository-qualified targets" {
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     const malformed = [_][:0]const u8{ "/package", "repository/" };
@@ -1187,7 +1183,7 @@ test "install_packages returns PackageFetchFailed when a target cannot be resolv
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     var unqualified = [_][:0]const u8{"shelly-package-that-does-not-exist"};
@@ -1467,7 +1463,7 @@ test "remove_packages rejects an empty package list" {
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     var package_names = [_][:0]const u8{};
@@ -1487,7 +1483,7 @@ test "remove_packages returns NoPackageFound for an unknown target" {
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     var capture = ErrorCapture{};
@@ -1511,7 +1507,7 @@ test "remove_packages cancels removal of a held package without confirmation" {
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     var capture = ErrorCapture{};
@@ -1578,7 +1574,7 @@ test "get_updates_available returns an empty list when no packages are installed
     var workspace = try SyncTestWorkspace.create(allocator, io);
     defer workspace.cleanup(allocator);
 
-    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, workspace.db_path);
+    const mgr = try Manager.init(allocator, testing.environ, workspace.config_path, false, null);
     defer mgr.deinit();
 
     // A fresh temporary database has no installed packages, so there are no

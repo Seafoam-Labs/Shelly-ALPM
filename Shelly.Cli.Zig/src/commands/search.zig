@@ -83,7 +83,7 @@ const FlatpakPackage = struct {
     download_size: u64 = 0,
     installed_size: u64 = 0,
     permissions: []const []const u8 = &.{},
-    scope: Zigalpm.flatpak.bindings.libflatpak.Scope = .UNKNOWN,
+    scope: Zigalpm.flatpak.Scope = .unknown,
 };
 
 const StandardMode = enum { packages, repositories, groups, detail };
@@ -182,6 +182,8 @@ fn executeWithRunner(
     }
 
     const result = runner.call(runner.data, context, invocation) catch |err| {
+        if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message|
+            return writeFailure(context, invocation, message);
         const message = switch (err) {
             error.NoPackageSpecified => "No package specified",
             error.PackageNotFound => try std.fmt.allocPrint(
@@ -501,20 +503,20 @@ fn enrichFlatpakRemoteInfo(
     var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     for (packages) |*package| {
-        if (package.scope == .UNKNOWN or package.remote.len == 0 or package.id.len == 0) continue;
+        if (package.scope == .unknown or package.remote.len == 0 or package.id.len == 0) continue;
         const remote = try context.allocator.dupeZ(u8, package.remote);
         defer context.allocator.free(remote);
         const id = try context.allocator.dupeZ(u8, package.id);
         defer context.allocator.free(id);
-        const info = manager.get_remote_ref_info_flatpak(
+        var info = manager.get_remote_ref_info_flatpak(
             remote,
             id,
             "stable",
             package.scope,
         ) catch continue;
         defer info.deinit(context.allocator);
-        package.download_size = info.download_size();
-        package.installed_size = info.installed_size();
+        package.download_size = info.download_size;
+        package.installed_size = info.installed_size;
         package.permissions = try copySentinelStrings(context.allocator, info.permissions);
     }
 }

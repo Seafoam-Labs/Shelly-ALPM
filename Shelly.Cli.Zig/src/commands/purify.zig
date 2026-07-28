@@ -455,9 +455,9 @@ fn cacheTargetAlreadyPresent(
 
 fn scopeName(scope: anytype) []const u8 {
     return switch (scope) {
-        .SYSTEM => "system",
-        .USER => "user",
-        .UNKNOWN => "unknown",
+        .system => "system",
+        .user => "user",
+        .unknown => "unknown",
     };
 }
 
@@ -528,6 +528,17 @@ fn writePlanFailure(
     backend: Backend,
     err: anyerror,
 ) !void {
+    if (backend == .flatpak) {
+        if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+            if (invocation.globals.ui_mode)
+                try output.writeErrorFrame(context, message)
+            else if (invocation.globals.json)
+                try context.stderr.print("{s}\n", .{message})
+            else
+                try output.writeFailure(context, message);
+            return;
+        }
+    }
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Unable to build the {s} purify plan: {t}",

@@ -1,8 +1,7 @@
 const std = @import("std");
 const operations = @import("operation_context");
-const rawflatpak = @import("bindings.zig").libflatpak.flatpak;
 
-/// Values intentionally match the C# FlatpakEventEnum ordering.
+/// Values intentionally match the historical Flatpak event ordering.
 pub const EventType = enum(u8) {
     information,
     warning,
@@ -45,7 +44,6 @@ pub const ProgressHandler = struct {
     }
 };
 
-/// A cancellation callback may be shared with transaction and HTTP work.
 pub const Cancellation = struct {
     pub const Fn = *const fn (data: ?*anyopaque) bool;
 
@@ -73,36 +71,78 @@ pub const Dispatcher = struct {
         self.* = undefined;
     }
 
-    pub fn addStatusHandler(self: *Dispatcher, handler: StatusHandler) !usize {
+    pub fn addStatusHandler(
+        self: *Dispatcher,
+        handler: StatusHandler,
+    ) !usize {
         try self.statuses.append(self.allocator, handler);
         return self.statuses.items.len - 1;
     }
 
-    pub fn removeStatusHandler(self: *Dispatcher, token: usize) void {
+    pub fn removeStatusHandler(
+        self: *Dispatcher,
+        token: usize,
+    ) void {
         removeHandler(StatusHandler, &self.statuses, token);
     }
 
-    pub fn addProgressHandler(self: *Dispatcher, handler: ProgressHandler) !usize {
+    pub fn addProgressHandler(
+        self: *Dispatcher,
+        handler: ProgressHandler,
+    ) !usize {
         try self.progress.append(self.allocator, handler);
         return self.progress.items.len - 1;
     }
 
-    pub fn removeProgressHandler(self: *Dispatcher, token: usize) void {
+    pub fn removeProgressHandler(
+        self: *Dispatcher,
+        token: usize,
+    ) void {
         removeHandler(ProgressHandler, &self.progress, token);
     }
 
-    pub fn setOperation(self: *Dispatcher, operation: ?*operations.Operation) void {
+    pub fn setOperation(
+        self: *Dispatcher,
+        operation: ?*operations.Operation,
+    ) void {
         self.operation = operation;
     }
 
     pub fn raiseStatus(self: *Dispatcher, args: StatusArgs) void {
         if (self.operation) |operation| switch (args.event_type) {
-            .information => operation.status(.information, args.message, "flatpak.status", null),
-            .warning => operation.status(.warning, args.message, "flatpak.warning", null),
-            .success => operation.status(.success, args.message, "flatpak.success", null),
-            .err => operation.reportError(error.FlatpakOperationFailed, args.message, "flatpak", null, false),
+            .information => operation.status(
+                .information,
+                args.message,
+                "flatpak.status",
+                null,
+            ),
+            .warning => operation.status(
+                .warning,
+                args.message,
+                "flatpak.warning",
+                null,
+            ),
+            .success => operation.status(
+                .success,
+                args.message,
+                "flatpak.success",
+                null,
+            ),
+            .err => operation.reportError(
+                error.FlatpakOperationFailed,
+                args.message,
+                "flatpak",
+                null,
+                false,
+            ),
         };
-        dispatch(self, StatusArgs, StatusHandler, self.statuses.items, args);
+        dispatch(
+            self,
+            StatusArgs,
+            StatusHandler,
+            self.statuses.items,
+            args,
+        );
     }
 
     pub fn raiseProgress(self: *Dispatcher, args: ProgressArgs) void {
@@ -111,7 +151,13 @@ pub const Dispatcher = struct {
             .percentage = @floatFromInt(args.percentage),
             .message = args.name,
         });
-        dispatch(self, ProgressArgs, ProgressHandler, self.progress.items, args);
+        dispatch(
+            self,
+            ProgressArgs,
+            ProgressHandler,
+            self.progress.items,
+            args,
+        );
     }
 
     fn dispatch(
@@ -130,18 +176,22 @@ pub const Dispatcher = struct {
         for (snapshot) |handler| handler.call(args);
     }
 
-    fn removeHandler(comptime HandlerType: type, handlers: *std.ArrayList(HandlerType), token: usize) void {
+    fn removeHandler(
+        comptime HandlerType: type,
+        handlers: *std.ArrayList(HandlerType),
+        token: usize,
+    ) void {
         if (token >= handlers.items.len) return;
         _ = handlers.swapRemove(token);
     }
 };
 
-/// Lifecycle adapter shared by the primary, remote, and AppStream managers.
 pub const OperationScope = struct {
     dispatcher: ?*Dispatcher,
     operation: ?operations.Operation = null,
     previous: ?*operations.Operation = null,
     attached: bool = false,
+    failure_reported: std.atomic.Value(bool) = .init(false),
 
     pub fn init(
         context: ?*operations.OperationContext,
@@ -154,88 +204,74 @@ pub const OperationScope = struct {
         if (dispatcher) |value| scope.previous = value.operation;
         const effective_parent = parent orelse scope.previous;
         if (effective_parent) |active_parent| {
-            scope.operation = active_parent.child(.{ .backend = .flatpak, .kind = kind, .subject = subject });
+            scope.operation = active_parent.child(.{
+                .backend = .flatpak,
+                .kind = kind,
+                .subject = subject,
+            });
         } else if (context) |operation_context| {
-            scope.operation = operation_context.begin(.{ .backend = .flatpak, .kind = kind, .subject = subject });
+            scope.operation = operation_context.begin(.{
+                .backend = .flatpak,
+                .kind = kind,
+                .subject = subject,
+            });
         }
         return scope;
     }
 
     pub fn attach(self: *OperationScope) void {
         if (self.dispatcher) |dispatcher| {
-            if (self.operation) |*operation| dispatcher.setOperation(operation);
+            if (self.operation) |*operation|
+                dispatcher.setOperation(operation);
         }
         self.attached = true;
     }
 
-    pub fn checkCancelled(self: *const OperationScope) error{Cancelled}!void {
-        if (self.operation) |*operation| try operation.checkCancelled();
-    }
-
-    pub fn status(self: *const OperationScope, level: operations.StatusLevel, message: []const u8, code: ?[]const u8) void {
-        if (self.operation) |*operation| operation.status(level, message, code, null);
-    }
-
-    pub fn progress(self: *const OperationScope, update: operations.ProgressUpdate) void {
-        if (self.operation) |*operation| operation.progress(update);
-    }
-
-    pub fn reportError(self: *const OperationScope, err: anyerror, message: []const u8, native_code: ?i64) void {
-        if (self.operation) |*operation| operation.reportError(err, message, "flatpak", native_code, false);
+    pub fn checkCancelled(
+        self: *const OperationScope,
+    ) error{Cancelled}!void {
+        if (self.operation) |*operation|
+            try operation.checkCancelled();
     }
 
     pub fn fail(self: *OperationScope) void {
-        if (self.operation) |*operation| operation.reportError(
-            if (operation.isCancelled()) error.Cancelled else error.FlatpakOperationFailed,
-            if (operation.isCancelled()) "Flatpak operation cancelled" else "Flatpak operation failed",
-            "flatpak",
-            null,
-            false,
-        );
-        self.finish(if (self.operation) |*operation| if (operation.isCancelled()) .cancelled else .failed else .failed);
+        if (!self.failure_reported.swap(true, .acq_rel)) {
+            if (self.operation) |*operation| operation.reportError(
+                if (operation.isCancelled())
+                    error.Cancelled
+                else
+                    error.FlatpakOperationFailed,
+                if (operation.isCancelled())
+                    "Flatpak operation cancelled"
+                else
+                    "Flatpak operation failed",
+                "flatpak",
+                null,
+                false,
+            );
+        }
+        self.finish(if (self.operation) |*operation|
+            if (operation.isCancelled()) .cancelled else .failed
+        else
+            .failed);
     }
 
-    pub fn finish(self: *OperationScope, status_value: operations.CompletionStatus) void {
-        if (self.operation) |*operation| operation.finish(status_value);
+    pub fn finish(
+        self: *OperationScope,
+        status: operations.CompletionStatus,
+    ) void {
+        if (self.operation) |*operation| operation.finish(status);
         if (self.attached) {
-            if (self.dispatcher) |dispatcher| dispatcher.setOperation(self.previous);
+            if (self.dispatcher) |dispatcher|
+                dispatcher.setOperation(self.previous);
             self.attached = false;
         }
     }
 
-    pub fn childParent(self: *OperationScope) ?*const operations.Operation {
+    pub fn childParent(
+        self: *OperationScope,
+    ) ?*const operations.Operation {
         return if (self.operation) |*operation| operation else null;
-    }
-};
-
-/// Connects context cancellation to a GLib cancellable for blocking Flatpak
-/// APIs. The bridge borrows both values and must be deinitialized first.
-pub const CancellationBridge = struct {
-    context: ?*operations.OperationContext = null,
-    subscription: ?operations.SubscriptionId = null,
-
-    pub fn init(context: ?*operations.OperationContext, cancellable: *rawflatpak.GCancellable) !CancellationBridge {
-        var bridge: CancellationBridge = .{ .context = context };
-        if (context) |operation_context| {
-            bridge.subscription = try operation_context.subscribeCancellation(.{
-                .function = cancelGlib,
-                .data = cancellable,
-            });
-            if (operation_context.isCancelled()) rawflatpak.g_cancellable_cancel(cancellable);
-        }
-        return bridge;
-    }
-
-    pub fn deinit(self: *CancellationBridge) void {
-        if (self.context) |context| {
-            if (self.subscription) |subscription| _ = context.unsubscribeCancellation(subscription);
-        }
-        self.* = undefined;
-    }
-
-    fn cancelGlib(data: ?*anyopaque) void {
-        const cancellable: *rawflatpak.GCancellable = @ptrCast(@alignCast(data orelse return));
-        rawflatpak.g_cancellable_cancel(cancellable);
     }
 };
 
@@ -258,12 +294,23 @@ test "Flatpak dispatcher forwards typed status and progress" {
     var dispatcher = Dispatcher.init(std.testing.allocator);
     defer dispatcher.deinit();
     var capture: Capture = .{};
-    _ = try dispatcher.addStatusHandler(.{ .function = Capture.status, .data = &capture });
-    _ = try dispatcher.addProgressHandler(.{ .function = Capture.update, .data = &capture });
-
-    dispatcher.raiseStatus(.{ .event_type = .success, .message = "installed" });
-    dispatcher.raiseProgress(.{ .name = "org.example.App", .status = "Downloading", .percentage = 42 });
-
+    _ = try dispatcher.addStatusHandler(.{
+        .function = Capture.status,
+        .data = &capture,
+    });
+    _ = try dispatcher.addProgressHandler(.{
+        .function = Capture.update,
+        .data = &capture,
+    });
+    dispatcher.raiseStatus(.{
+        .event_type = .success,
+        .message = "installed",
+    });
+    dispatcher.raiseProgress(.{
+        .name = "org.example.App",
+        .status = "Downloading",
+        .percentage = 42,
+    });
     try std.testing.expectEqual(EventType.success, capture.event_type.?);
     try std.testing.expectEqual(@as(u8, 42), capture.percentage.?);
 }

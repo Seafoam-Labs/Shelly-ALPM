@@ -1,54 +1,13 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const xml = @import("zig-xml");
+const types = @import("types.zig");
 
-pub const AppstreamIcon = struct {
-    type: []const u8,
-    url: []const u8,
-    width: ?i32 = null,
-    height: ?i32 = null,
-    scale: ?i32 = null,
-};
-
-pub const AppstreamImage = struct {
-    type: []const u8,
-    url: []const u8,
-    width: ?i32 = null,
-    height: ?i32 = null,
-};
-
-pub const AppstreamScreenshot = struct {
-    is_default: bool,
-    caption: []const u8,
-    images: []const AppstreamImage,
-};
-
-pub const AppstreamRelease = struct {
-    version: []const u8,
-    type: []const u8,
-    timestamp: ?i64 = null,
-    description: []const u8,
-};
-
-pub const AppstreamApp = struct {
-    type: []const u8,
-    id: []const u8,
-    name: []const u8,
-    summary: []const u8,
-    project_license: []const u8,
-    developer_name: []const u8,
-    extends: ?[]const u8,
-    description: []const u8,
-    categories: []const []const u8,
-    keywords: []const []const u8,
-    urls: std.StringArrayHashMapUnmanaged([]const u8),
-    icons: []const AppstreamIcon,
-    screenshots: []const AppstreamScreenshot,
-    releases: []const AppstreamRelease,
-    is_verified: bool,
-    verification_method: ?[]const u8,
-    addons: []AppstreamApp,
-};
+pub const AppstreamIcon = types.AppstreamIcon;
+pub const AppstreamImage = types.AppstreamImage;
+pub const AppstreamScreenshot = types.AppstreamScreenshot;
+pub const AppstreamRelease = types.AppstreamRelease;
+pub const AppstreamApp = types.AppstreamApp;
 
 pub const AppstreamParser = struct {
     arena: Allocator,

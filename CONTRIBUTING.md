@@ -14,7 +14,8 @@ Shelly is organized into several interconnected projects:
 | **Shelly-UI**            | The main Avalonia-based desktop application providing a graphical interface for package management             |
 | **Shelly-CLI**           | Command-line interface for terminal-based package management, also used by Shelly-UI for privileged operations |
 | **Shelly-Notifications** | Application to handle tray services and notifications. Communicates with Shelly-UI.                            |
-| **PackageManager**       | Core library containing libalpm bindings, AUR integration, and Flatpak support                                 |
+| **Shelly.PackageManager** | Core libalpm/AUR/AppImage library and backend-neutral Flatpak facade                                          |
+| **Shelly.Flatpak.Backend** | Optional ABI-versioned shared library containing generated libflatpak bindings and native operations          |
 | **Shelly.Utilities**     | Shared utility classes and extensions used across projects                                                     |
 
 ### Test Projects
@@ -74,7 +75,8 @@ Shelly is organized into several interconnected projects:
 4. **PackageManager → System**:
     - Directly interfaces with `libalpm` for native package operations
     - Calls AUR API for package searches and metadata
-    - Invokes Flatpak CLI for Flatpak management
+    - Lazily loads `/usr/lib/shelly/libshelly-flatpak-backend.so.1` for
+      Flatpak operations; PackageManager itself does not link libflatpak
 
 5. Shelly-UI should never directly interact with the PackageManager library. All operations should be performed via the
    CLI. Shelly-notifications can interact with the PackageManager library if necessary.
@@ -132,23 +134,45 @@ Shelly-ALPM/
 ## Building the Project
 
 ```bash
-# Build all projects
-dotnet build
+# Exercise the optional-backend boundary, CLI, and core-only smoke tests
+scripts/test-flatpak-separation.sh
 
-# Build specific project
-dotnet build Shelly-UI/Shelly-UI.csproj
+# Build individual native projects
+(cd Shelly.Flatpak.Backend && zig build)
+(cd Shelly.PackageManager && zig build)
+(cd Shelly.Cli.Zig && zig build)
+(cd Shelly.Ui.Gtk && zig build)
 ```
 
 ## Running Tests
 
 ```bash
-# Run all tests
-dotnet test
-
-# Run specific test project
-dotnet test PackageManager.Tests/PackageManager.Tests.csproj
-dotnet test Shelly-UI.Tests/Shelly-UI.Tests.csproj
+(cd Shelly.Flatpak.Backend && zig build test)
+(cd Shelly.Flatpak.Backend && zig build abi-test)
+(cd Shelly.Flatpak.Backend && zig build parity-test)
+(cd Shelly.Flatpak.Backend && zig build integration-test)
+(cd Shelly.PackageManager && zig build test)
+(cd Shelly.PackageManager && zig build flatpak-test)
+(cd Shelly.Cli.Zig && zig build test)
 ```
+
+## Flatpak backend contributions
+
+All generated libflatpak declarations, GObject pointers, and native Flatpak
+calls must remain under `Shelly.Flatpak.Backend`. Consumers use owned records
+from `Shelly.PackageManager/src/flatpak/types.zig`; never expose a generated
+binding type in a public PackageManager declaration.
+
+Protocol schema 1 rejects unknown and duplicate fields. Add a new operation by
+updating the wire inventory, backend dispatch, PackageManager facade, fake
+backend coverage, and parity tests together. Run
+`scripts/check-flatpak-separation.sh` before submitting a change.
+
+An incompatible C table change requires an ABI version and SONAME bump. An
+incompatible JSON change requires a schema bump. Update the exact
+base/backend package dependency in the same release. The complete ownership,
+threading, discovery, and bump procedure is in
+[`docs/flatpak-backend-abi.md`](docs/flatpak-backend-abi.md).
 
 ## Development Guidelines
 

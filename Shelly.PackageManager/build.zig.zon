@@ -32,6 +32,9 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        .@"shelly-flatpak-backend" = .{
+            .path = "../Shelly.Flatpak.Backend",
+        },
         .goose = .{
             .url = "git+https://github.com/luxluth/goose.git?ref=master#387de965800bf0f6116d51f45a9412cba0801975",
             .hash = "goose-1.0.0-e9MzMGKcAgD7vlp_acJYt6g430wQcrAxUKWHEEF0_Hcc",

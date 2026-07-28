@@ -63,6 +63,35 @@ pub fn writeInfoFrame(context: *runtime.RuntimeContext, message: []const u8) !vo
     try writeAlpmInfoFrame(context, "InformationalOutput", message);
 }
 
+pub fn writeWarningFrame(context: *runtime.RuntimeContext, message: []const u8) !void {
+    var payload = std.Io.Writer.Allocating.init(context.allocator);
+    defer payload.deinit();
+    var json: std.json.Stringify = .{ .writer = &payload.writer };
+    try json.beginObject();
+    try json.objectField("$kind");
+    try json.write("alpm.info");
+    try json.objectField("EventType");
+    try json.write("WarningOutput");
+    try json.objectField("Message");
+    try json.write(message);
+    try json.objectField("PackageName");
+    try json.write(null);
+    try json.objectField("CurrentIndex");
+    try json.write(null);
+    try json.objectField("TotalCount");
+    try json.write(null);
+    try json.objectField("Source");
+    try json.write("Flatpak");
+    try json.objectField("Level");
+    try json.write("Warning");
+    try json.objectField("TimeStamp");
+    const time = try timestamp(context);
+    defer context.allocator.free(time);
+    try json.write(time);
+    try json.endObject();
+    try writeFrame(context, payload.writer.buffered());
+}
+
 pub fn writeAlpmInfoFrame(
     context: *runtime.RuntimeContext,
     event_type: []const u8,
@@ -561,6 +590,10 @@ pub fn writeFailure(context: *runtime.RuntimeContext, message: []const u8) !void
     } else {
         try context.stdout.print("{s}\n", .{message});
     }
+}
+
+pub fn writeWarning(context: *runtime.RuntimeContext, message: []const u8) !void {
+    try context.stderr.print("warning: {s}\n", .{message});
 }
 
 pub fn writeFrame(context: *runtime.RuntimeContext, payload: []const u8) !void {

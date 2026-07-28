@@ -128,6 +128,12 @@ fn executeUi(
     try ui_operation.flush(context);
 
     runner.call(runner.data, context, &operation_context, invocation) catch |err| {
+        if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+            try output.writeErrorFrame(context, message);
+            try output.writeAlpmInfoFrame(context, "TransactionFailed", "Sync failed.");
+            try ui_operation.flush(context);
+            return 1;
+        }
         const message = try std.fmt.allocPrint(context.allocator, "Sync failed: {t}", .{err});
         defer context.allocator.free(message);
         try output.writeErrorFrame(context, message);
@@ -288,8 +294,8 @@ fn runRealFlatpakRemoteMutation(
     const operation = invocation.positionals[1];
     const name = try context.allocator.dupeZ(u8, invocation.positionals[2]);
     defer context.allocator.free(name);
-    const scope: Zigalpm.flatpak.bindings.libflatpak.Scope =
-        if (booleanOption(invocation, "--system", true)) .SYSTEM else .USER;
+    const scope: Zigalpm.flatpak.Scope =
+        if (booleanOption(invocation, "--system", true)) .system else .user;
     var manager = Zigalpm.flatpak.RemoteManager{
         .allocator = context.allocator,
         .io = context.io,

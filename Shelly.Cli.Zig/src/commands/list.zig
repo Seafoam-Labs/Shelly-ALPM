@@ -220,7 +220,7 @@ fn dispatchFlatpakRemote(
 
 const ConfiguredRemote = struct {
     name: []const u8,
-    scope: Zigalpm.flatpak.bindings.libflatpak.Scope,
+    scope: Zigalpm.flatpak.Scope,
     url: []const u8,
 };
 
@@ -236,13 +236,16 @@ fn dispatchConfiguredFlatpakRemotes(
         try writeConfiguredRemoteFailure(context, invocation, err);
         return 1;
     };
-    defer context.allocator.free(native_remotes);
+    defer Zigalpm.flatpak.Remote.deinitSlice(
+        context.allocator,
+        native_remotes,
+    );
     const remotes = try context.allocator.alloc(ConfiguredRemote, native_remotes.len);
     defer context.allocator.free(remotes);
     for (native_remotes, remotes) |remote, *item| item.* = .{
-        .name = remote.name() orelse "",
-        .scope = remote.get_scope(),
-        .url = remote.url() orelse "",
+        .name = remote.name,
+        .scope = remote.scope,
+        .url = remote.url,
     };
 
     if (invocation.globals.ui_mode) {
@@ -264,6 +267,13 @@ fn writeConfiguredRemoteFailure(
     invocation: *const parser.Invocation,
     err: anyerror,
 ) !void {
+    if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+        if (invocation.globals.ui_mode)
+            try output.writeErrorFrame(context, message)
+        else
+            try output.writeFailure(context, message);
+        return;
+    }
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Unable to list configured Flatpak remotes: {t}",
@@ -303,12 +313,12 @@ fn writeConfiguredRemotesPlain(
         try context.stdout.writeAll("Remotes:\n");
     for (remotes) |remote| {
         const scope = switch (remote.scope) {
-            .SYSTEM => "System",
-            .USER => "User",
-            .UNKNOWN => "Unknown",
+            .system => "System",
+            .user => "User",
+            .unknown => "Unknown",
         };
         if (ansi) {
-            const color = if (remote.scope == .SYSTEM) "\x1b[32m" else "\x1b[33m";
+            const color = if (remote.scope == .system) "\x1b[32m" else "\x1b[33m";
             try context.stdout.print("{s} {s}({s})\x1b[0m\n", .{ remote.name, color, scope });
         } else {
             try context.stdout.print("{s} ({s})\n", .{ remote.name, scope });
@@ -322,6 +332,13 @@ fn writeRemoteQueryFailure(
     query: []const u8,
     err: anyerror,
 ) !void {
+    if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+        if (invocation.globals.ui_mode)
+            try output.writeErrorFrame(context, message)
+        else
+            try output.writeFailure(context, message);
+        return;
+    }
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Unable to read Flatpak AppStream catalog '{s}': {t}",
@@ -354,7 +371,7 @@ fn writeRemoteResult(
 
 const AppstreamRemote = struct {
     name: []const u8,
-    scope: Zigalpm.flatpak.bindings.libflatpak.Scope,
+    scope: Zigalpm.flatpak.Scope,
 };
 
 const MergedAppstreamApp = struct {
@@ -519,6 +536,17 @@ fn writeQueryFailure(
     backend: Backend,
     err: anyerror,
 ) !void {
+    if (backend == .flatpak) {
+        if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+            if (invocation.globals.ui_mode)
+                try output.writeErrorFrame(context, message)
+            else if (invocation.globals.json)
+                try context.stderr.print("{s}\n", .{message})
+            else
+                try output.writeFailure(context, message);
+            return;
+        }
+    }
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Unable to list installed {s} objects: {t}",
@@ -1054,7 +1082,7 @@ fn runFlatpak(context: *runtime.RuntimeContext) !Result {
     const allocator = arena.allocator();
     const items = try allocator.alloc(FlatpakItem, native_items.len);
     for (native_items, items) |native, *item| {
-        const kind = if (native.kind == 0) "app" else "runtime";
+        const kind = if (native.kind == .app) "app" else "runtime";
         const ref = try std.fmt.allocPrint(
             allocator,
             "{s}/{s}/{s}/{s}",
@@ -1068,7 +1096,7 @@ fn runFlatpak(context: *runtime.RuntimeContext) !Result {
             .branch = try allocator.dupe(u8, native.branch),
             .latest_commit = try allocator.dupe(u8, native.latest_commit),
             .summary = try allocator.dupe(u8, native.summary),
-            .kind = native.kind,
+            .kind = @intFromEnum(native.kind),
             .remote = try allocator.dupe(u8, native.origin),
             .install_level = @intFromEnum(native.scope),
             .installed_size = native.installed_size,
@@ -1372,8 +1400,8 @@ test "Flatpak remote mode parses configured remotes and AppStream queries" {
 
 test "configured Flatpak remotes use compatibility JSON fields and scopes" {
     const remotes = [_]ConfiguredRemote{
-        .{ .name = "flathub", .scope = .SYSTEM, .url = "https://dl.flathub.org/repo/" },
-        .{ .name = "flathub-beta", .scope = .USER, .url = "https://flathub.org/beta-repo/" },
+        .{ .name = "flathub", .scope = .system, .url = "https://dl.flathub.org/repo/" },
+        .{ .name = "flathub-beta", .scope = .user, .url = "https://flathub.org/beta-repo/" },
     };
     var rendered = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer rendered.deinit();
@@ -1418,7 +1446,7 @@ test "Flatpak all-remote AppStream JSON merges IDs and records scopes" {
             .owner_allocator = std.testing.allocator,
             .arena_state = undefined,
             .remote_name = "flathub",
-            .scope = .SYSTEM,
+            .scope = .system,
             .arch = "x86_64",
             .path = "",
             .apps = &first_apps,
@@ -1427,7 +1455,7 @@ test "Flatpak all-remote AppStream JSON merges IDs and records scopes" {
             .owner_allocator = std.testing.allocator,
             .arena_state = undefined,
             .remote_name = "flathub-user",
-            .scope = .USER,
+            .scope = .user,
             .arch = "x86_64",
             .path = "",
             .apps = &second_apps,
@@ -1469,7 +1497,7 @@ test "Flatpak named-remote AppStream JSON uses UI framing" {
         .owner_allocator = std.testing.allocator,
         .arena_state = undefined,
         .remote_name = "flathub",
-        .scope = .SYSTEM,
+        .scope = .system,
         .arch = "x86_64",
         .path = "",
         .apps = &apps,

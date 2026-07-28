@@ -207,6 +207,12 @@ fn buildAllUpgradePlan(
         try context.stdout.flush();
 
         var result = collector.call(collector.data, context, backend) catch |err| {
+            if (backend == .flatpak) {
+                if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+                    try output.writeWarning(context, message);
+                    continue;
+                }
+            }
             try context.stdout.print("Error collecting {s} upgrades: {t}\n", .{
                 backend.displayName(),
                 err,
@@ -532,6 +538,12 @@ fn executeUi(
     try ui_operation.flush(context);
 
     runSelected(runner, context, &operation_context, invocation) catch |err| {
+        if (Zigalpm.flatpak.errors.unavailableMessage(err)) |unavailable| {
+            try output.writeErrorFrame(context, unavailable);
+            try output.writeAlpmInfoFrame(context, "TransactionFailed", failureMessage(invocation));
+            try ui_operation.flush(context);
+            return 1;
+        }
         const message = try std.fmt.allocPrint(context.allocator, "Upgrade failed: {t}", .{err});
         defer context.allocator.free(message);
         try output.writeErrorFrame(context, message);
@@ -566,6 +578,12 @@ fn runSelected(
     for (all_backends) |backend| {
         if (!backendEnabled(invocation, backend)) continue;
         runner.call(runner.data, context, operation_context, backend, invocation) catch |err| {
+            if (backend == .flatpak) {
+                if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+                    reportBackendSkipped(operation_context, message);
+                    continue;
+                }
+            }
             failed = true;
             try reportBackendFailure(context, operation_context, backend, err);
         };
@@ -811,6 +829,19 @@ fn reportBackendFailure(
     });
     operation.reportError(err, message, "upgrade", null, true);
     operation.finish(.failed);
+}
+
+fn reportBackendSkipped(
+    operation_context: *Zigalpm.OperationContext,
+    reason: []const u8,
+) void {
+    var operation = operation_context.begin(.{
+        .backend = .flatpak,
+        .kind = .update,
+        .subject = "Flatpak",
+    });
+    operation.status(.warning, reason, "flatpak.backend_unavailable", null);
+    operation.finish(.success);
 }
 
 fn emitStatus(
@@ -1335,6 +1366,65 @@ test "upgrade all continues after a failed backend and returns failure" {
     try std.testing.expectEqualSlices(Backend, &all_backends, calls.items);
     try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "AUR upgrade step failed") != null);
     try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), ":: Transaction failed.") != null);
+}
+
+test "upgrade all treats an unavailable Flatpak backend as a warning" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    const outcome = try parser.parse(
+        arena.allocator(),
+        &manifest,
+        &.{ "upgrade", "all", "--no-confirm" },
+    );
+    try std.testing.expect(outcome == .dispatch);
+
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var calls: std.ArrayList(Backend) = .empty;
+    defer calls.deinit(std.testing.allocator);
+    const runner: Runner = .{
+        .data = &calls,
+        .call = struct {
+            fn run(
+                data: ?*anyopaque,
+                _: *runtime.RuntimeContext,
+                _: *Zigalpm.OperationContext,
+                backend: Backend,
+                _: *const parser.Invocation,
+            ) !void {
+                const captured: *std.ArrayList(Backend) =
+                    @ptrCast(@alignCast(data.?));
+                try captured.append(std.testing.allocator, backend);
+                if (backend == .flatpak)
+                    return error.FlatpakBackendUnavailable;
+            }
+        }.run,
+    };
+
+    try std.testing.expectEqual(
+        @as(u8, 0),
+        try executeWithRunner(&context, &outcome.dispatch, runner),
+    );
+    try std.testing.expectEqualSlices(Backend, &all_backends, calls.items);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        stdout.writer.buffered(),
+        "Install shelly-flatpak-backend and Flatpak",
+    ) != null);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        stdout.writer.buffered(),
+        ":: Transaction complete.",
+    ) != null);
 }
 
 test "upgrade UI mode emits backend percentage frames" {

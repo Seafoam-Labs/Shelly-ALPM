@@ -4,6 +4,12 @@ const events = @import("events.zig");
 const xdg_paths = @import("../shared/xdg_paths.zig").xdg_paths;
 const operation_api = @import("operation_context");
 
+const DatabaseCommitFn = *const fn (
+    io: std.Io,
+    staging_path: []const u8,
+    destination_path: []const u8,
+) anyerror!void;
+
 const LegacyAppImage = struct {
     Name: []const u8 = "",
     DesktopName: []const u8 = "",
@@ -30,6 +36,7 @@ pub const AppImageManager = struct {
     dispatcher: ?*events.Dispatcher = null,
     operation_context: ?*operation_api.OperationContext = null,
     owned_dispatcher: ?*events.Dispatcher = null,
+    database_commit: DatabaseCommitFn = commitDatabase,
 
     pub fn setEventDispatcher(self: *AppImageManager, dispatcher: ?*events.Dispatcher) void {
         self.dispatcher = dispatcher orelse self.owned_dispatcher;
@@ -717,7 +724,7 @@ pub const AppImageManager = struct {
             try file.sync(self.io);
         }
 
-        try std.Io.Dir.rename(.cwd(), staging_path, .cwd(), self.local_db_path, self.io);
+        try self.database_commit(self.io, staging_path, self.local_db_path);
     }
 
     fn uniqueSiblingPath(self: AppImageManager, target_path: []const u8, label: []const u8) ![]u8 {
@@ -1212,15 +1219,20 @@ fn expectOnlyInstalledAppImage(directory: []const u8, expected_name: []const u8)
     try std.testing.expectEqual(@as(usize, 1), count);
 }
 
-fn setTestPathMode(path: []const u8, mode: []const u8) !void {
-    var process = try std.process.spawn(std.testing.io, .{
-        .argv = &.{ "chmod", mode, path },
-        .stdin = .ignore,
-        .stdout = .ignore,
-        .stderr = .ignore,
-    });
-    const term = try process.wait(std.testing.io);
-    if (term != .exited or term.exited != 0) return error.ChmodFailed;
+fn commitDatabase(
+    io: std.Io,
+    staging_path: []const u8,
+    destination_path: []const u8,
+) !void {
+    try std.Io.Dir.rename(.cwd(), staging_path, .cwd(), destination_path, io);
+}
+
+fn failDatabaseCommit(
+    _: std.Io,
+    _: []const u8,
+    _: []const u8,
+) anyerror!void {
+    return error.InjectedDatabaseCommitFailure;
 }
 
 const validTestAppImage =
@@ -1373,7 +1385,7 @@ test "installAppImage restores the previous binary when database commit fails" {
     try writeTestAppImageDb(installed_path, "existing-binary\n");
     var environ = try createTestAppImageEnviron(std.testing.allocator, root);
     defer environ.block.deinit(std.testing.allocator);
-    const manager = AppImageManager{
+    var manager = AppImageManager{
         .allocator = std.testing.allocator,
         .io = std.testing.io,
         .environ = environ,
@@ -1387,8 +1399,7 @@ test "installAppImage restores the previous binary when database commit fails" {
         .path = installed_path,
     });
 
-    try setTestPathMode(db_dir_path, "0555");
-    defer setTestPathMode(db_dir_path, "0755") catch {};
+    manager.database_commit = failDatabaseCommit;
 
     try std.testing.expect(!try manager.installAppImage(source_path));
 
