@@ -28,6 +28,8 @@ pub const ShellyUtilitiesPage = extern struct {
         rm_db_lock_button: *gtk.Button,
         fix_permissions_button: *gtk.Button,
         purify_button: *gtk.Button,
+        clean_cache_button: *gtk.Button,
+        cache_keep_spin: *gtk.SpinButton,
 
         toast: *Toast,
 
@@ -62,6 +64,7 @@ pub const ShellyUtilitiesPage = extern struct {
         _ = gtk.Button.signals.clicked.connect(p.rm_db_lock_button, *Self, &on_remove_db_lock, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.fix_permissions_button, *Self, &on_fix_permissions, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.purify_button, *Self, &on_purify, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.clean_cache_button, *Self, &on_clean_cache, self, .{});
 
         support.connectLifecycle(Self, self);
 
@@ -140,6 +143,26 @@ pub const ShellyUtilitiesPage = extern struct {
         });
     }
 
+    fn on_clean_cache(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const keep: usize = @intCast(gtk.SpinButton.getValueAsInt(self.priv().cache_keep_spin));
+
+        var keep_buf: [16]u8 = undefined;
+        const keep_str = std.fmt.bufPrint(&keep_buf, "{d}", .{keep}) catch return;
+
+        const argv = ShellyCommands.clean_cache(std.heap.c_allocator, keep_str) catch return;
+        defer std.mem.Allocator.free(std.heap.c_allocator, argv);
+
+        const win = support.getWindow(ShellyWindow, self) orelse return;
+        win.startTransaction(.{
+            .title = translations._("Cleaning package cache"),
+            .argv = argv,
+            .packages = &.{},
+            .on_complete = &on_transaction_complete,
+            .privileged = true,
+            .ctx = self,
+        });
+    }
+
     fn on_transaction_complete(ctx: *anyopaque, success: bool) void {
         const self: *Self = @ptrCast(@alignCast(ctx));
         if (success) {
@@ -155,6 +178,8 @@ pub const ShellyUtilitiesPage = extern struct {
         .{ "rm_db_lock_button", @offsetOf(Private, "rm_db_lock_button") },
         .{ "fix_permissions_button", @offsetOf(Private, "fix_permissions_button") },
         .{ "purify_button", @offsetOf(Private, "purify_button") },
+        .{ "clean_cache_button", @offsetOf(Private, "clean_cache_button") },
+        .{ "cache_keep_spin", @offsetOf(Private, "cache_keep_spin") },
     };
 
     pub const Class = extern struct {
