@@ -707,35 +707,37 @@ pub const Manager = struct {
                 }
                 try packages.append(self.allocator, found orelse return TransactionError.PackageFetchFailed);
             } else {
+                var current_packages: std.ArrayList(*rawLibalpm.alpm_pkg_t) = .empty;
+                defer current_packages.deinit(self.allocator);
                 var node = sync_databases;
-                var found_any = false;
                 while (node != null) : (node = node.*.next) {
                     const db_data: ?*anyopaque = node.*.data;
                     const db_ptr: *rawLibalpm.alpm_db_t = @ptrCast(@alignCast(db_data orelse continue));
                     const database = libalpm.Database.from(db_ptr) orelse continue;
                     if (!database.allowUsage(.install)) continue;
                     if (rawLibalpm.alpm_db_get_pkg(db_ptr, target.ptr)) |pkg| {
-                        try packages.append(self.allocator, pkg);
-                        found_any = true;
+                        if (current_packages.items.len > 0) current_packages.clearRetainingCapacity();
+                        current_packages.append(self.allocator, pkg) catch return TransactionError.OutOfMemory;
                         break;
                     }
+                    if (current_packages.items.len != 0) continue;
                     if (rawLibalpm.alpm_db_get_group(db_ptr, target.ptr)) |group| {
                         var pkg_node = group.*.packages;
                         while (pkg_node != null) : (pkg_node = pkg_node.*.next) {
                             const pkg_data: ?*anyopaque = pkg_node.*.data;
                             const pkg: *rawLibalpm.alpm_pkg_t = @ptrCast(@alignCast(pkg_data orelse continue));
-                            try packages.append(self.allocator, pkg);
+                            current_packages.append(self.allocator, pkg) catch return TransactionError.OutOfMemory;
                         }
-                        found_any = true;
-                        break;
                     }
+
+                    if (current_packages.items.len != 0) continue;
                     if (rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(db_ptr), target.ptr)) |pkg| {
-                        try packages.append(self.allocator, pkg);
-                        found_any = true;
-                        break;
+                        current_packages.append(self.allocator, pkg) catch return TransactionError.OutOfMemory;
                     }
                 }
-                if (!found_any) return TransactionError.PackageFetchFailed;
+                for (current_packages.items) |pkg| {
+                    packages.append(self.allocator, pkg) catch return TransactionError.OutOfMemory;
+                }
             }
         }
         if (packages.items.len == 0) return TransactionError.PackageFetchFailed;
