@@ -512,7 +512,14 @@ pub const AppImagePage = extern struct {
             return;
         }
 
-        const argv = ShellyCommands.install_appimage(std.heap.c_allocator, path) catch return;
+        var install_path: []const u8 = "";
+        if (runtime.config) |cfg_service| {
+            if (cfg_service.get()) |cfg| {
+                install_path = cfg.AppImageInstallPath;
+            } else |_| {}
+        }
+
+        const argv = ShellyCommands.install_appimage(std.heap.c_allocator, path, install_path) catch return;
         defer std.heap.c_allocator.free(argv);
 
         var names: std.ArrayListUnmanaged([]const u8) = .empty;
