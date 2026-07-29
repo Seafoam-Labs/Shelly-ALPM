@@ -254,11 +254,16 @@ pub const ShellyCommands = struct {
     }
 
     pub fn install_flatpak(alloc: std.mem.Allocator, names: []const u8, remote: Scope) ![]const []const u8 {
+        return install_flatpak_ex(alloc, names, remote, false);
+    }
+
+    pub fn install_flatpak_ex(alloc: std.mem.Allocator, names: []const u8, remote: Scope, is_runtime: bool) ![]const []const u8 {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
         try argv.append(alloc, "install");
         try argv.append(alloc, "flatpak");
         if (names.len > 0) try argv.append(alloc, names);
         if (remote == .user) try argv.append(alloc, "--user");
+        if (is_runtime) try argv.append(alloc, "--runtime");
         return argv.toOwnedSlice(alloc);
     }
 
@@ -870,4 +875,20 @@ test "progress percentages are clamped to the GTK protocol range" {
     try std.testing.expectEqual(@as(i64, 37), clampPercent(37));
     try std.testing.expectEqual(@as(i64, 100), clampPercent(100));
     try std.testing.expectEqual(@as(i64, 100), clampPercent(101));
+}
+
+test "flatpak install argv adds --user only for user scope" {
+    const system_argv = try ShellyCommands.install_flatpak(std.testing.allocator, "org.example.App", .system);
+    defer std.testing.allocator.free(system_argv);
+    try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App" }, system_argv);
+
+    const user_argv = try ShellyCommands.install_flatpak(std.testing.allocator, "org.example.App", .user);
+    defer std.testing.allocator.free(user_argv);
+    try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App", "--user" }, user_argv);
+}
+
+test "flatpak addon install argv marks addon refs as runtimes" {
+    const argv = try ShellyCommands.install_flatpak_ex(std.testing.allocator, "org.example.App.Plugin", .user, true);
+    defer std.testing.allocator.free(argv);
+    try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App.Plugin", "--user", "--runtime" }, argv);
 }

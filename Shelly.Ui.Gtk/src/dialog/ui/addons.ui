@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellyAddonsDialog" parent="GtkBox">
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <property name="halign">center</property>
+    <property name="valign">center</property>
+    <child>
+      <object class="GtkFrame">
+        <property name="halign">center</property>
+        <property name="valign">center</property>
+        <property name="width-request">520</property>
+        <style>
+          <class name="lockout-card"/>
+        </style>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="spacing">8</property>
+            <property name="margin-start">20</property>
+            <property name="margin-end">20</property>
+            <property name="margin-top">10</property>
+            <property name="margin-bottom">10</property>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">4</property>
+                <child>
+                  <object class="GtkLabel" id="title_label">
+                    <property name="wrap">true</property>
+                    <property name="justify">center</property>
+                    <style>
+                      <class name="title-2"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="subtitle_label">
+                    <property name="wrap">true</property>
+                    <property name="justify">center</property>
+                    <property name="max-width-chars">44</property>
+                    <style>
+                      <class name="dim-label"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStack" id="addons_stack">
+                <property name="transition-type">crossfade</property>
+                <property name="vhomogeneous">false</property>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">list</property>
+                    <property name="child">
+                      <object class="GtkScrolledWindow">
+                        <property name="hscrollbar-policy">never</property>
+                        <property name="propagate-natural-height">true</property>
+                        <property name="max-content-height">340</property>
+                        <child>
+                          <object class="GtkListBox" id="addons_list">
+                            <property name="selection-mode">none</property>
+                            <property name="show-separators">true</property>
+                            <style>
+                              <class name="boxed-list"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">empty</property>
+                    <property name="child">
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">10</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <property name="margin-top">24</property>
+                        <property name="margin-bottom">24</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="icon-name">package-x-generic-symbolic</property>
+                            <property name="pixel-size">48</property>
+                            <style><class name="dim-label"/></style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">No installable addons available</property>
+                            <property name="wrap">true</property>
+                            <property name="justify">center</property>
+                            <property name="max-width-chars">40</property>
+                            <style><class name="title-3"/></style>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">12</property>
+                <property name="halign">center</property>
+                <property name="homogeneous">true</property>
+                <property name="margin-top">8</property>
+                <child>
+                  <object class="GtkButton" id="close_button">
+                    <property name="label" translatable="yes">Close</property>
+                    <signal name="clicked" handler="on_close" swapped="true"/>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>
