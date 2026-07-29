@@ -249,6 +249,7 @@ fn runStandard(
         available = true;
         detail = query != null and std.mem.trim(u8, query.?, " \t\r\n").len != 0;
     }
+    if (detail) available = true;
     if (group) available = true;
 
     const manager = try Zigalpm.AlpmManager.init(
