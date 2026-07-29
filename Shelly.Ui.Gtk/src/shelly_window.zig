@@ -291,8 +291,7 @@ pub const ShellyWindow = extern struct {
         gtk.Widget.setHexpand(left_spacer.as(gtk.Widget), 1);
         gtk.Box.append(bar, left_spacer.as(gtk.Widget));
 
-        const items = gtk.Box.new(.horizontal, 4);
-        gtk.Widget.addCssClass(items.as(gtk.Widget), "linked");
+        const items = gtk.Box.new(.horizontal, 0);
         gtk.Box.append(bar, items.as(gtk.Widget));
 
         add_nav_button(self, items, stack, false, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));

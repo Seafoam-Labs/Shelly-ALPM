@@ -20,20 +20,19 @@ pub fn main(init: std.process.Init) void {
     if (!translations.init()) {
         std.log.warn("translations: failed to initialize gettext", .{});
     }
-
     IconDownloadService(std.heap.c_allocator, runtime.io);
 
     const app = gtk.Application.new("com.shellyorg.shelly", .{});
     defer app.unref();
-
     const gapp = gobject.ext.as(gio.Application, app);
 
-    const registered = gio.Application.register(gapp, null, null);
-    std.debug.print("registered = {}\n", .{registered});
-    std.debug.print("is_remote = {}\n", .{
-        gio.Application.getIsRemote(gapp),
-    });
-
+    _ = gio.Application.signals.startup.connect(
+        app,
+        ?*anyopaque,
+        &startup,
+        null,
+        .{},
+    );
     _ = gio.Application.signals.activate.connect(
         app,
         ?*anyopaque,
@@ -43,9 +42,7 @@ pub fn main(init: std.process.Init) void {
     );
 
     const status = gio.Application.run(gapp, 0, null);
-
     tryStopTray(runtime.io, std.heap.c_allocator);
-
     runtime.teardownConfig(std.heap.c_allocator);
     std.process.exit(@intCast(status));
 }
@@ -56,6 +53,25 @@ fn tryStopTray(io: std.Io, alloc: std.mem.Allocator) void {
         if (svc.get() catch null) |cfg| should_stop = !cfg.TrayEnabled;
     }
     if (should_stop) _ = tray_service.end(io, alloc);
+}
+
+fn quitActivated(_: *gio.SimpleAction, _: ?*glib.Variant, app: *gtk.Application) callconv(.c) void {
+    app.as(gio.Application).quit();
+}
+
+fn startup(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
+    const quit_action = gio.SimpleAction.new("quit", null);
+    defer quit_action.unref();
+    _ = gio.SimpleAction.signals.activate.connect(
+        quit_action,
+        *gtk.Application,
+        &quitActivated,
+        app,
+        .{},
+    );
+    app.as(gio.ActionMap).addAction(quit_action.as(gio.Action));
+    const accels = [_:null]?[*:0]const u8{ "<Control>q", "<Control>w", null };
+    gtk.Application.setAccelsForAction(app, "app.quit", &accels);
 }
 
 fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {

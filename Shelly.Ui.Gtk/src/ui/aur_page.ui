@@ -23,13 +23,12 @@
             <style><class name="spaced-search"/></style>
           </object>
         </child>
-        <child>
-          <object class="GtkToggleButton" id="installed_toggle">
-            <property name="label" translatable="yes">Installed</property>
-            <property name="valign">center</property>
-            <property name="tooltip-text" translatable="yes">Show only packages already installed on this system</property>
-            <signal name="toggled" handler="on_installed_toggled" swapped="true"/>
-          </object>
+         <child>
+            <object class="GtkCheckButton" id="installed_toggle">
+                <property name="label" translatable="yes">Installed Only</property>
+                <property name="tooltip-text" translatable="yes">Show only installed packages</property>
+                <signal name="toggled" handler="on_installed_toggled" swapped="true"/>
+            </object>
         </child>
         <child>
           <object class="GtkBox"><property name="hexpand">true</property></object>

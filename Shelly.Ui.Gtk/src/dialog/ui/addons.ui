@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface domain="shelly-ui">
   <requires lib="gtk" version="4.0"/>
-  <template class="ShellyPermissionsDialog" parent="GtkBox">
+  <template class="ShellyAddonsDialog" parent="GtkBox">
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
     <property name="halign">center</property>
@@ -48,7 +48,7 @@
               </object>
             </child>
             <child>
-              <object class="GtkStack" id="permissions_stack">
+              <object class="GtkStack" id="addons_stack">
                 <property name="transition-type">crossfade</property>
                 <property name="vhomogeneous">false</property>
                 <child>
@@ -60,7 +60,7 @@
                         <property name="propagate-natural-height">true</property>
                         <property name="max-content-height">340</property>
                         <child>
-                          <object class="GtkListBox" id="permissions_list">
+                          <object class="GtkListBox" id="addons_list">
                             <property name="selection-mode">none</property>
                             <property name="show-separators">true</property>
                             <style>
@@ -85,14 +85,14 @@
                         <property name="margin-bottom">24</property>
                         <child>
                           <object class="GtkImage">
-                            <property name="icon-name">security-high-symbolic</property>
+                            <property name="icon-name">package-x-generic-symbolic</property>
                             <property name="pixel-size">48</property>
                             <style><class name="dim-label"/></style>
                           </object>
                         </child>
                         <child>
-                          <object class="GtkLabel" id="empty_label">
-                            <property name="label" translatable="yes">No special permissions requested</property>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">No installable addons available</property>
                             <property name="wrap">true</property>
                             <property name="justify">center</property>
                             <property name="max-width-chars">40</property>

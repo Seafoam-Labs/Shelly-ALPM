@@ -18,7 +18,7 @@ public class ConfigReader : Object {
 
     private string config_path () {
         return Path.build_filename (
-                                    Environment.get_user_config_dir (), "shelly", "config.json"
+                                    Environment.get_user_config_dir (), "shelly", "settings.json"
         );
     }
 

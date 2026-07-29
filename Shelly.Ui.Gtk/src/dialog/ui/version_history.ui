@@ -119,6 +119,17 @@
                   <object class="GtkButton" id="close_button">
                     <property name="label" translatable="yes">Close</property>
                     <signal name="clicked" handler="on_close" swapped="true"/>
+                    <child>
+                      <object class="GtkShortcutController">
+                        <property name="scope">managed</property>
+                        <child>
+                          <object class="GtkShortcut">
+                            <property name="trigger">Escape</property>
+                            <property name="action">activate</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>

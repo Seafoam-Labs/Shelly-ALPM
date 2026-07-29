@@ -12,10 +12,8 @@ source=(
     "Shelly-Flatpak-Backend-linux-x64-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/releases/download/v${pkgver}/Shelly-Flatpak-Backend-linux-x64.tar.gz"
 )
 
-sha256sums=(
-  'b50a6ebe6c5308b58e706951d22f2ab1d12db3d8cc83e6aae8bc6e3eab8ea2e5'
-  'SKIP'
-)
+sha256sums=('1c696140104d7f51eaa5fe6488b32f4a0d441944c1f127ad9507399b156f8ce6'
+            '46907ce81348430aefbb27cd865cc2470aba9087d352a5f1c3cfb9d576f34f16')
 
 package_shelly-bin() {
   pkgdesc="Shelly: A Modern Arch Package Manager (prebuilt binary)"
@@ -129,14 +127,10 @@ EOF
 EOF
 
   # Install icon
-  install -Dm644 "$srcdir/Assets/shellylogo.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly.png"
-  install -Dm644 "$srcdir/Assets/svg/flatpak-symbolic.svg" "$pkgdir/usr/share/icons/hicolor/symbolic/apps/flatpak-symbolic.svg"
-  install -Dm644 "$srcdir/Assets/svg/arch-symbolic.svg" "$pkgdir/usr/share/icons/hicolor/symbolic/apps/arch-symbolic.svg"
-  install -Dm644 "$srcdir/Assets/svg/shelly-updates-symbolic.svg" "$pkgdir/usr/share/icons/hicolor/symbolic/apps/shelly-updates-symbolic.svg"
-  install -Dm644 "$srcdir/Assets/svg/shelly-shell-symbolic.svg" "$pkgdir/usr/share/icons/hicolor/symbolic/apps/shelly-shell-symbolic.svg"
+  install -Dm644 "$srcdir/shellylogo.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly.png"
 
-  install -Dm644 "$srcdir/Assets/shellylogo-tray.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-tray.png"
-  install -Dm644 "$srcdir/Assets/shellylogo-update.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-update.png"
+  install -Dm644 "$srcdir/shellylogo-tray.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-tray.png"
+  install -Dm644 "$srcdir/shellylogo-update.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-update.png"
 
   # Install fish shell completions
   install -Dm644 "$srcdir/shelly.fish" "$pkgdir/usr/share/fish/vendor_completions.d/shelly.fish"

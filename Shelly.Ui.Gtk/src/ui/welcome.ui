@@ -60,7 +60,7 @@
 
             <child>
               <object class="GtkLabel" id="welcome_blurb">
-                <property name="label" translatable="yes">Shelly is a modern package manager for Arch Linux. Configure your sources and preferences to get started. We have recently rewritte both the GUI and CLI in zig with a new modified UI off our previous designs.</property>
+                <property name="label" translatable="yes">Shelly is a modern package manager for Arch Linux. Configure your sources and preferences to get started.</property>
                 <property name="halign">center</property>
                 <property name="css-classes">body</property>
                 <property name="wrap">true</property>
@@ -254,7 +254,7 @@
                         </child>
                         <child>
                           <object class="GtkLabel">
-                            <property name="label" translatable="yes">Curated picks based on your installed software</property>
+                            <property name="label" translatable="yes">Curated picks from Shelly</property>
                             <property name="css-classes">dim-label</property>
                             <property name="halign">start</property>
                           </object>

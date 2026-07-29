@@ -25,6 +25,7 @@
     <file>dialog/ui/plan_dialog.ui</file>
     <file>dialog/ui/multiselect.ui</file>
     <file>dialog/ui/permissions.ui</file>
+    <file>dialog/ui/addons.ui</file>
     <file>dialog/ui/preview_pkgbuild.ui</file>
     <file>ui/appimage_page.ui</file>
     <file>ui/welcome.ui</file>

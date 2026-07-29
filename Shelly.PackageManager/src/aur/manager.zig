@@ -1198,6 +1198,7 @@ pub const Manager = struct {
         var info = try (pkgbuild_parser.PkgbuildParser{
             .allocator = self.allocator,
             .io = self.io(),
+            .selected_package_name = package_name,
         }).parser(pkgbuild_path);
         errdefer info.deinit(self.allocator);
         try requireReviewInputs(self.allocator, self.io(), cache_path, &info);

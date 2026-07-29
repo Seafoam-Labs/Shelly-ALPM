@@ -3,17 +3,18 @@
 pkgbase=shelly
 pkgname=('shelly' 'shelly-flatpak-backend')
 pkgver=3.0.0+9
-pkgrel=1
+pkgrel=2
 arch=('x86_64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
 license=('GPL-3.0-only')
-makedepends=('git' 'zig>=0.16' 'clang' 'gettext' 'vala' 'meson' 'ninja' 'flatpak')
+makedepends=('git' 'pkgconf' 'gtk4' 'zig>=0.16' 'clang' 'gettext' 'vala' 'meson' 'ninja' 'flatpak' 'ripgrep')
 
 # Source tarball from GitHub release
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/archive/v${pkgver}.tar.gz")
 
 sha256sums=('5ee0f766be084f50d8967cb2f1e0fee0d1d8d652bae98a0bf38bcdc38305b8b5')
-_source_dir="Shelly-ALPM-${pkgver}"
+# GitHub replaces "+" with "-" in archive top-level directory names.
+_source_dir="Shelly-ALPM-${pkgver//+/-}"
 
 build() {
   cd "$srcdir/${_source_dir}"
@@ -266,7 +267,7 @@ SCRIPT
 
 package_shelly-flatpak-backend() {
   pkgdesc="Optional native Flatpak backend for Shelly"
-  depends=("shelly=${pkgver}-${pkgrel}" 'flatpak')
+  depends=("shelly=${pkgver}" 'flatpak')
   provides=("shelly-flatpak-backend=${pkgver}")
   conflicts=('shelly-flatpak-backend-git' 'shelly-flatpak-backend-bin')
 

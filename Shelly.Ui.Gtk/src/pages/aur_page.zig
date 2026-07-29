@@ -30,7 +30,7 @@ pub const AurPage = extern struct {
         list_store: *gio.ListStore,
         selection: *gtk.SingleSelection,
         search_entry: *gtk.SearchEntry,
-        installed_toggle: *gtk.ToggleButton,
+        installed_toggle: *gtk.CheckButton,
         install_button: *gtk.Button,
         grid_overlay: *gtk.Overlay,
         loading_box: *gtk.Box,
@@ -698,7 +698,7 @@ pub const AurPage = extern struct {
         const p = self.priv();
 
         if (p.installed_mode) {
-            gtk.ToggleButton.setActive(p.installed_toggle, 0);
+            gtk.CheckButton.setActive(p.installed_toggle, 0);
         }
 
         const text = self.search_text();
@@ -719,7 +719,7 @@ pub const AurPage = extern struct {
 
     fn on_installed_toggled(self: *Self) callconv(.c) void {
         const p = self.priv();
-        p.installed_mode = gtk.ToggleButton.getActive(p.installed_toggle) != 0;
+        p.installed_mode = gtk.CheckButton.getActive(p.installed_toggle) != 0;
 
         if (p.installed_mode) {
             self.start_load(.installed);

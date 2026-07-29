@@ -332,6 +332,7 @@ pub const UpdatePage = extern struct {
                 gtk.Widget.setSensitive(p.flatpak_toggle.as(gtk.Widget), 1);
                 gtk.Widget.setVisible(p.loading_spinner.as(gtk.Widget), 0);
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 1);
+                gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
                 self.update_source_labels();
                 gtk.Spinner.stop(p.loading_spinner);
             },
