@@ -112,25 +112,29 @@ fn tryStartTray(io: std.Io, alloc: std.mem.Allocator) void {
 }
 
 fn setupGnomeThemePreference() void {
-    const desktop = std.posix.getenv("XDG_CURRENT_DESKTOP") orelse return;
+    const desktop = runtime.environ_map.get("XDG_CURRENT_DESKTOP") orelse return;
+
+    std.debug.print("desktop = {s}\n", .{desktop});
 
     if (!std.mem.containsAtLeast(u8, desktop, 1, "GNOME")) {
         return;
     }
 
     const settings = gio.Settings.new("org.gnome.desktop.interface");
-    defer settings.unref();
+    
 
     const scheme = settings.getString("color-scheme");
-    defer scheme.free();
+    defer scheme.stringFree();
+    
+    const prefer_dark = std.mem.eql(u8, std.mem.span(scheme), "prefer-dark");
 
-    const prefer_dark = std.mem.eql(u8, scheme, "prefer-dark");
+    std.debug.print("prefer_dark = {}\n", .{prefer_dark});
 
-    std.posix.setenv(
+    _ = glib.setenv(
         "GTK_APPLICATION_PREFER_DARK_THEME",
         if (prefer_dark) "1" else "0",
-        true,
-    ) catch {};
+        1,
+    );
 }
 
 test {
