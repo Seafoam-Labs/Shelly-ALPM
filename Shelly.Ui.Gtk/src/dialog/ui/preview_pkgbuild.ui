@@ -16,7 +16,6 @@
         <property name="margin-end">16</property>
         <property name="margin-top">16</property>
         <property name="margin-bottom">16</property>
-
         <child>
           <object class="GtkLabel" id="heading_label">
             <property name="xalign">0</property>
@@ -24,27 +23,29 @@
             <style><class name="title-3"/></style>
           </object>
         </child>
-
         <child>
           <object class="GtkOverlay">
             <property name="vexpand">true</property>
             <property name="hexpand">true</property>
             <child>
-              <object class="GtkScrolledWindow">
-                <property name="hscrollbar-policy">automatic</property>
-                <property name="vscrollbar-policy">automatic</property>
-                <property name="vexpand">true</property>
-                <property name="hexpand">true</property>
+              <object class="GtkFrame">
                 <child>
-                  <object class="GtkBox" id="diff_box">
-                    <property name="orientation">vertical</property>
-                    <property name="halign">fill</property>
+                  <object class="GtkScrolledWindow">
+                    <property name="hscrollbar-policy">automatic</property>
+                    <property name="vscrollbar-policy">automatic</property>
+                    <property name="vexpand">true</property>
                     <property name="hexpand">true</property>
+                    <child>
+                      <object class="GtkBox" id="diff_box">
+                        <property name="orientation">vertical</property>
+                        <property name="halign">fill</property>
+                        <property name="hexpand">true</property>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>
             </child>
-
             <child type="overlay">
               <object class="GtkSpinner" id="loading_spinner">
                 <property name="visible">false</property>
@@ -52,7 +53,6 @@
                 <property name="valign">center</property>
               </object>
             </child>
-
             <child type="overlay">
               <object class="GtkLabel" id="error_label">
                 <property name="visible">false</property>
@@ -64,7 +64,6 @@
             </child>
           </object>
         </child>
-
         <child>
           <object class="GtkBox">
             <property name="spacing">8</property>

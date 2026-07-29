@@ -70,6 +70,10 @@ pub const PkgbuildReviewDialog = extern struct {
 
     pub fn showPreview(self: *Self, name: []const u8) void {
         std.debug.print("showPreview: {s}\n", .{name});
+        const p = self.priv();
+        var buf: [512]u8 = undefined;
+        const heading = std.fmt.bufPrint(&buf, "Preview PKGBUILD for {s}", .{name}) catch "Review PKGBUILD";
+        gtk.Label.setLabel(p.heading_label, heading);
         self.start_load(name);
     }
 
@@ -223,6 +227,7 @@ pub const PkgbuildReviewDialog = extern struct {
     }
 
     const template_children = .{
+        .{ "heading_label", @offsetOf(Private, "heading_label")},
         .{ "diff_box", @offsetOf(Private, "diff_box") },
         .{ "cancel_button", @offsetOf(Private, "cancel_button") },
         .{ "loading_spinner", @offsetOf(Private, "loading_spinner") },
