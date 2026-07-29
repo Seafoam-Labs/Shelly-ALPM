@@ -121,11 +121,9 @@ fn setupGnomeThemePreference() void {
     }
 
     const settings = gio.Settings.new("org.gnome.desktop.interface");
-    
 
     const scheme = settings.getString("color-scheme");
-    defer scheme.stringFree();
-    
+
     const prefer_dark = std.mem.eql(u8, std.mem.span(scheme), "prefer-dark");
 
     std.debug.print("prefer_dark = {}\n", .{prefer_dark});
