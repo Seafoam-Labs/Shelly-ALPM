@@ -355,10 +355,18 @@ pub const ShellyCommands = struct {
         return argv.toOwnedSlice(alloc);
     }
 
-    pub fn install_appimage(alloc: std.mem.Allocator, path: []const u8) ![]const []const u8 {
+    pub fn install_appimage(
+        alloc: std.mem.Allocator,
+        path: []const u8,
+        install_path: []const u8,
+    ) ![]const []const u8 {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
         try argv.append(alloc, "install");
         try argv.append(alloc, "appimage");
+        if (install_path.len > 0) {
+            try argv.append(alloc, "--install-path");
+            try argv.append(alloc, install_path);
+        }
         if (path.len > 0) try argv.append(alloc, path);
         return argv.toOwnedSlice(alloc);
     }

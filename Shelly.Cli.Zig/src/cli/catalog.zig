@@ -1062,6 +1062,12 @@ fn optionDefinitions(comptime action: []const u8, comptime type_name: []const u8
         flag("--bundle", &.{"-u"}, "Treat the package operand as a local Flatpak bundle"),
         flag("--repair", &.{"-f"}, "Repair an installed Flatpak while preserving configuration"),
     };
+    if (pathIs(action, type_name, "install", "appimage")) return &.{stringOption(
+        "--install-path",
+        &.{},
+        "Directory to install the AppImage into; overrides the configured AppImageInstallPath",
+        false,
+    )};
 
     if (pathIs(action, type_name, "upgrade", "standard")) return &.{flag(
         "--all",

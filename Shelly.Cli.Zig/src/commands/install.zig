@@ -683,7 +683,8 @@ fn runAppImage(
 
     const configuration = config_manager.Manager.init(context).read() catch
         try config_model.Config.defaults(context.allocator);
-    const install_directory = stringValue(&configuration, "AppImageInstallPath") orelse
+    const install_directory = optionValue(invocation, "--install-path") orelse
+        stringValue(&configuration, "AppImageInstallPath") orelse
         try xdg.binHome(context);
     const local_db_path = try std.fs.path.join(
         context.allocator,
