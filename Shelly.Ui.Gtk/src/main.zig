@@ -15,6 +15,8 @@ pub fn main(init: std.process.Init) void {
     runtime.io = init.io;
     runtime.environ_map = init.environ_map;
 
+    setupGnomeThemePreference();
+
     if (!translations.init()) {
         std.log.warn("translations: failed to initialize gettext", .{});
     }
@@ -91,6 +93,28 @@ fn tryStartTray(io: std.Io, alloc: std.mem.Allocator) void {
         if (!cfg.TrayEnabled) return;
     }
     tray_service.start(io, alloc);
+}
+
+fn setupGnomeThemePreference() void {
+    const desktop = std.posix.getenv("XDG_CURRENT_DESKTOP") orelse return;
+
+    if (!std.mem.containsAtLeast(u8, desktop, 1, "GNOME")) {
+        return;
+    }
+
+    const settings = gio.Settings.new("org.gnome.desktop.interface");
+    defer settings.unref();
+
+    const scheme = settings.getString("color-scheme");
+    defer scheme.free();
+
+    const prefer_dark = std.mem.eql(u8, scheme, "prefer-dark");
+
+    std.posix.setenv(
+        "GTK_APPLICATION_PREFER_DARK_THEME",
+        if (prefer_dark) "1" else "0",
+        true,
+    ) catch {};
 }
 
 test {
