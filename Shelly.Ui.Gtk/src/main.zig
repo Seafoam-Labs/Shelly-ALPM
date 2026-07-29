@@ -14,6 +14,9 @@ const IconDownloadService = @import("services/icon_fetcher.zig").downloadIconsIn
 pub fn main(init: std.process.Init) void {
     runtime.io = init.io;
     runtime.environ_map = init.environ_map;
+
+    setupGnomeThemePreference();
+
     if (!translations.init()) {
         std.log.warn("translations: failed to initialize gettext", .{});
     }
@@ -106,6 +109,30 @@ fn tryStartTray(io: std.Io, alloc: std.mem.Allocator) void {
         if (!cfg.TrayEnabled) return;
     }
     tray_service.start(io, alloc);
+}
+
+fn setupGnomeThemePreference() void {
+    const desktop = runtime.environ_map.get("XDG_CURRENT_DESKTOP") orelse return;
+
+    std.debug.print("desktop = {s}\n", .{desktop});
+
+    if (!std.mem.containsAtLeast(u8, desktop, 1, "GNOME")) {
+        return;
+    }
+
+    const settings = gio.Settings.new("org.gnome.desktop.interface");
+
+    const scheme = settings.getString("color-scheme");
+
+    const prefer_dark = std.mem.eql(u8, std.mem.span(scheme), "prefer-dark");
+
+    std.debug.print("prefer_dark = {}\n", .{prefer_dark});
+
+    _ = glib.setenv(
+        "GTK_APPLICATION_PREFER_DARK_THEME",
+        if (prefer_dark) "1" else "0",
+        1,
+    );
 }
 
 test {
