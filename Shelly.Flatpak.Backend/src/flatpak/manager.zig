@@ -1509,6 +1509,34 @@ pub const Manager = struct {
     ) void {
         _ = rawflatpak.g_signal_connect_data(transaction, "new-operation", @ptrCast(&onNewOperation), context, null, 0);
         _ = rawflatpak.g_signal_connect_data(transaction, "ready", @ptrCast(&onReady), context, null, 0);
+        _ = rawflatpak.g_signal_connect_data(transaction, "operation-error", @ptrCast(&onOperationError), context, null, 0);
+    }
+
+    /// Mirror flatpak's CLI: non-fatal operation errors (e.g. an addon that was
+    /// already removed as a related ref earlier in the same transaction) are
+    /// reported as warnings instead of aborting the whole transaction.
+    fn onOperationError(
+        _: *rawflatpak.FlatpakTransaction,
+        operation: ?*rawflatpak.FlatpakTransactionOperation,
+        g_error: [*c]const rawflatpak.GError,
+        detail: rawflatpak.FlatpakTransactionErrorDetails,
+        user_data: ?*anyopaque,
+    ) callconv(.c) rawflatpak.gboolean {
+        const context: *TransactionCallbackContext = @ptrCast(@alignCast(user_data orelse return 0));
+        const non_fatal = (detail & rawflatpak.FLATPAK_TRANSACTION_ERROR_DETAILS_NON_FATAL) != 0;
+        if (!non_fatal) return 0;
+
+        const ref_ptr = if (operation) |op| rawflatpak.flatpak_transaction_operation_get_ref(op) else null;
+        const ref_name = if (ref_ptr == null) "" else std.mem.span(ref_ptr);
+        const message = if (g_error != null and g_error.*.message != null)
+            std.mem.span(g_error.*.message)
+        else
+            "Flatpak operation failed";
+        if (context.dispatcher) |dispatcher| dispatcher.raiseStatus(.{
+            .event_type = .warning,
+            .message = if (ref_name.len > 0) ref_name else message,
+        });
+        return 1;
     }
 
     fn onProgressChanged(
