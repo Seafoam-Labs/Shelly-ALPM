@@ -545,11 +545,11 @@ pub const variants = [_]Variant{
         .action_code = 'S',
         .type_code = 'a',
         .help = .{
-            .description = "Search the AUR RPC, fetch exact package PKGBUILDs, or append high-confidence standard repository matches.",
+            .description = "Search the AUR RPC, fetch exact package PKGBUILDs, append high-confidence standard repository matches, or show complete metadata for one AUR package.",
             .implementation = "Zigalpm.AurManager.searchPackages / fetchPkgbuild; Zigalpm.AlpmManager.get_available_packages when --standard is passed",
             .arguments = &.{.{
                 .name = "query",
-                .description = "Search words joined for an AUR RPC query, or exact AUR package names when --pkgbuild is passed",
+                .description = "Search words joined for an AUR RPC query, or exact AUR package names when --pkgbuild or --detail is passed",
             }},
             .options = &.{
                 .{
@@ -559,6 +559,10 @@ pub const variants = [_]Variant{
                 .{
                     .name = "--pkgbuild",
                     .description = "Fetch and display the PKGBUILD for each exact AUR package name",
+                },
+                .{
+                    .name = "--detail",
+                    .description = "Show complete metadata for one exact AUR package name",
                 },
             },
         },
@@ -1034,6 +1038,7 @@ fn optionDefinitions(comptime action: []const u8, comptime type_name: []const u8
             &.{"-p"},
             "Fetch and display each exact AUR package PKGBUILD",
         ),
+        flag("--detail", &.{ "--info", "-d" }, "Show complete metadata for one exact AUR package name"),
     };
     if (pathIs(action, type_name, "search", "flatpak")) return &.{
         integerOption("--limit", &.{}, "Maximum results per page"),

@@ -6,7 +6,6 @@ const ShellyTabs = shelly_config.ShellyTabs;
 const ViewType = shelly_config.ViewType;
 const xdg_paths = @import("xdg_paths.zig").xdg_paths;
 
-// TODO: Change me to config.json
 const settings_path = "shelly/settings.json";
 
 /// Maximum size accepted when reading the settings file (1 MiB).

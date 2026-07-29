@@ -108,6 +108,7 @@ const AurResult = struct {
     packages: []const AurPackage = &.{},
     standard_packages: []const StandardPackage = &.{},
     pkgbuilds: ?[]const PackageBuild = null,
+    detail: ?AurPackage = null,
 };
 
 const FlatpakResult = struct {
@@ -150,6 +151,12 @@ fn executeWithRunner(
     runner: Runner,
 ) !u8 {
     if (std.mem.eql(u8, invocation.command.path, aur_command_path)) {
+        if (optionEnabled(invocation, "--detail")) {
+            if (optionEnabled(invocation, "--pkgbuild"))
+                return writeFailure(context, invocation, "Cannot combine --detail with --pkgbuild.");
+            if (optionEnabled(invocation, "--standard"))
+                return writeFailure(context, invocation, "Cannot combine --detail with --standard.");
+        }
         if (optionEnabled(invocation, "--pkgbuild")) {
             if (optionEnabled(invocation, "--standard"))
                 return writeFailure(context, invocation, "Cannot combine --pkgbuild with --standard.");
@@ -424,10 +431,11 @@ fn runAur(
         return .{ .pkgbuilds = builds };
     }
 
+    const detail = optionEnabled(invocation, "--detail");
     const query = try joinedQuery(context.allocator, invocation.positionals);
 
     var standard_packages: std.ArrayList(StandardPackage) = .empty;
-    if (optionEnabled(invocation, "--standard")) {
+    if (optionEnabled(invocation, "--standard") and !detail) {
         const values = try manager.alpm.get_available_packages();
         defer Zigalpm.alpm.OwnedPackage.deinitSlice(context.allocator, values);
         for (values) |value| {
@@ -443,6 +451,15 @@ fn runAur(
     const packages = try context.allocator.alloc(AurPackage, values.len);
     for (values, packages) |value, *destination|
         destination.* = try copyAurPackage(context.allocator, value);
+
+    if (detail) {
+        for (packages) |package| {
+            if (std.ascii.eqlIgnoreCase(package.name, query))
+                return .{ .detail = package };
+        }
+        return error.PackageNotFound;
+    }
+
     return .{
         .packages = packages,
         .standard_packages = try standard_packages.toOwnedSlice(context.allocator),
@@ -622,6 +639,24 @@ fn renderAur(
     result: AurResult,
 ) !void {
     if (result.pkgbuilds) |builds| return renderPkgbuilds(context, invocation, builds);
+    if (result.detail) |package| {
+        if (invocation.globals.ui_mode) {
+            var payload = std.Io.Writer.Allocating.init(context.allocator);
+            defer payload.deinit();
+            const single = [_]AurPackage{package};
+            try writeAurPackagesJson(&payload.writer, &single);
+            try output.writeFrame(context, payload.writer.buffered());
+            return;
+        }
+        if (invocation.globals.json) {
+            const single = [_]AurPackage{package};
+            try writeAurPackagesJson(context.stdout, &single);
+            try context.stdout.writeByte('\n');
+            return;
+        }
+        try writeAurPackageDetail(context, package);
+        return;
+    }
     if (invocation.globals.ui_mode) {
         var payload = std.Io.Writer.Allocating.init(context.allocator);
         defer payload.deinit();
@@ -782,6 +817,37 @@ fn writePackageDetail(context: *runtime.RuntimeContext, package: StandardPackage
         "\x1b[38;2;0;0;255m",
     );
     try coloredLine(context, "Install Reason", package.install_reason, "\x1b[38;2;0;0;255m");
+}
+
+fn writeAurPackageDetail(context: *runtime.RuntimeContext, package: AurPackage) !void {
+    const name_color = "\x1b[38;2;0;128;0m";
+    const value_color = "\x1b[38;2;0;0;255m";
+    try coloredLine(context, "Name", package.name, name_color);
+    try coloredLine(context, "PackageBase", package.package_base, value_color);
+    try coloredLine(context, "Version", package.version, value_color);
+    try coloredLine(context, "Description", package.description orelse "", value_color);
+    try coloredLine(context, "URL", package.url orelse "", value_color);
+    try coloredLine(context, "Maintainer", package.maintainer orelse "Orphaned", value_color);
+    try coloredLine(context, "Votes", try std.fmt.allocPrint(context.allocator, "{d}", .{package.num_votes}), value_color);
+    try coloredLine(context, "Popularity", try std.fmt.allocPrint(context.allocator, "{d:.2}", .{package.popularity}), value_color);
+    try coloredLine(
+        context,
+        "Out Of Date",
+        if (package.out_of_date) |when| try formatLongDate(context.allocator, when) else "No",
+        value_color,
+    );
+    try coloredLine(context, "Licenses", try joined(context.allocator, package.licenses orelse &.{}), value_color);
+    try coloredLine(context, "Groups", try joined(context.allocator, package.groups orelse &.{}), value_color);
+    try coloredLine(context, "Provides", try joined(context.allocator, package.provides orelse &.{}), value_color);
+    try coloredLine(context, "Depends On", try joined(context.allocator, package.depends orelse &.{}), value_color);
+    try coloredLine(context, "Make Depends", try joined(context.allocator, package.make_depends orelse &.{}), value_color);
+    try coloredLine(context, "Optional Depends", try joined(context.allocator, package.optional_depends orelse &.{}), value_color);
+    try coloredLine(context, "Check Depends", try joined(context.allocator, package.check_depends orelse &.{}), value_color);
+    try coloredLine(context, "Conflicts With", try joined(context.allocator, package.conflicts orelse &.{}), value_color);
+    try coloredLine(context, "Replaces", try joined(context.allocator, package.replaces orelse &.{}), value_color);
+    try coloredLine(context, "Keywords", try joined(context.allocator, package.keywords orelse &.{}), value_color);
+    try coloredLine(context, "First Submitted", try formatLongDate(context.allocator, package.first_submitted), value_color);
+    try coloredLine(context, "Last Modified", try formatLongDate(context.allocator, package.last_modified), value_color);
 }
 
 fn coloredLine(
@@ -1501,6 +1567,53 @@ test "AUR pkgbuild search displays fetched content and structured output" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\"PkgBuild\":null") != null);
 }
 
+test "AUR detail search renders package metadata and structured output" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    const runner: Runner = .{ .call = struct {
+        fn run(_: ?*anyopaque, _: *runtime.RuntimeContext, invocation: *const parser.Invocation) !Result {
+            try std.testing.expect(optionEnabled(invocation, "--detail"));
+            return .{ .aur = .{
+                .detail = .{ .name = "yay", .version = "12", .package_base = "yay", .maintainer = "dev" },
+            } };
+        }
+    }.run };
+
+    var outcome = try parser.parse(
+        arena.allocator(),
+        &manifest,
+        &.{ "search", "aur", "--detail", "yay" },
+    );
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&context, &outcome.dispatch, runner));
+    var rendered = stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Name: yay") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "PackageBase: yay") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Maintainer: dev") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Total results") == null);
+
+    stdout.writer.end = 0;
+    outcome = try parser.parse(
+        arena.allocator(),
+        &manifest,
+        &.{ "search", "aur", "-d", "yay", "--json" },
+    );
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&context, &outcome.dispatch, runner));
+    rendered = stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"Name\":\"yay\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"PackageBase\":\"yay\"") != null);
+}
+
 test "search validates AUR query length and positive pagination before backend execution" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1532,6 +1645,22 @@ test "search validates AUR query length and positive pagination before backend e
     );
     try std.testing.expectEqual(@as(u8, 1), try executeWithRunner(&context, &conflicting_aur.dispatch, runner));
     try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "Cannot combine --pkgbuild with --standard") != null);
+    stdout.writer.end = 0;
+    const detail_pkgbuild = try parser.parse(
+        arena.allocator(),
+        &manifest,
+        &.{ "search", "aur", "--detail", "--pkgbuild", "yay" },
+    );
+    try std.testing.expectEqual(@as(u8, 1), try executeWithRunner(&context, &detail_pkgbuild.dispatch, runner));
+    try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "Cannot combine --detail with --pkgbuild") != null);
+    stdout.writer.end = 0;
+    const detail_standard = try parser.parse(
+        arena.allocator(),
+        &manifest,
+        &.{ "search", "aur", "--detail", "--standard", "yay" },
+    );
+    try std.testing.expectEqual(@as(u8, 1), try executeWithRunner(&context, &detail_standard.dispatch, runner));
+    try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "Cannot combine --detail with --standard") != null);
     stdout.writer.end = 0;
     const bad_page = try parser.parse(arena.allocator(), &manifest, &.{ "search", "flatpak", "editor", "--page", "0" });
     try std.testing.expectEqual(@as(u8, 1), try executeWithRunner(&context, &bad_page.dispatch, runner));
