@@ -374,6 +374,33 @@ pub const libalpm = struct {
         install_date_value: ?i64,
 
         pub fn init(allocator: std.mem.Allocator, package: Package) std.mem.Allocator.Error!OwnedPackage {
+            return initInternal(allocator, package, false, false);
+        }
+
+        /// Like `init`, but additionally computes the reverse-dependency
+        /// collections (`RequiredBy` / `OptionalFor`) when requested.
+        ///
+        /// These are opt-in because `alpm_pkg_compute_requiredby` and
+        /// `alpm_pkg_compute_optionalfor` each walk the full dependency graph
+        /// for every package they're computed for, which turns a plain list
+        /// into an expensive O(n^2) operation. Callers should only pass
+        /// `true` when they actually intend to display the corresponding
+        /// column.
+        pub fn initWithReverseDeps(
+            allocator: std.mem.Allocator,
+            package: Package,
+            compute_required_by: bool,
+            compute_optional_for: bool,
+        ) std.mem.Allocator.Error!OwnedPackage {
+            return initInternal(allocator, package, compute_required_by, compute_optional_for);
+        }
+
+        fn initInternal(
+            allocator: std.mem.Allocator,
+            package: Package,
+            compute_required_by: bool,
+            compute_optional_for: bool,
+        ) std.mem.Allocator.Error!OwnedPackage {
             const name_value = try allocator.dupeZ(u8, package.name() orelse "");
             errdefer allocator.free(name_value);
 
@@ -406,13 +433,21 @@ pub const libalpm = struct {
             errdefer freeStrings(allocator, optional_depends_value);
             const conflicts_value = try dupeDependencies(allocator, package.conflicts());
             errdefer freeStrings(allocator, conflicts_value);
-            // Keep parity with the C# DTO, whose ToDto implementation currently
-            // leaves these two reverse-dependency collections empty. Computing
-            // them for every repository package also turns a search into an
-            // expensive dependency-graph walk.
-            const required_by_value = try allocator.alloc([:0]u8, 0);
+            // These two reverse-dependency collections are only computed on
+            // request: `alpm_pkg_compute_requiredby` /
+            // `alpm_pkg_compute_optionalfor` each walk the full local
+            // dependency graph, so eagerly computing them for every package
+            // would turn a plain list or search into an expensive
+            // dependency-graph walk.
+            const required_by_value = if (compute_required_by)
+                try dupeStrings(allocator, package.required_by())
+            else
+                try allocator.alloc([:0]u8, 0);
             errdefer freeStrings(allocator, required_by_value);
-            const optional_for_value = try allocator.alloc([:0]u8, 0);
+            const optional_for_value = if (compute_optional_for)
+                try dupeStrings(allocator, package.optional_for())
+            else
+                try allocator.alloc([:0]u8, 0);
             errdefer freeStrings(allocator, optional_for_value);
 
             return .{

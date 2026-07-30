@@ -140,6 +140,8 @@ const Runner = struct {
         context: *runtime.RuntimeContext,
         backend: Backend,
         show_hidden: bool,
+        required_by_column: bool,
+        optional_for_column: bool,
     ) anyerror!Result,
 };
 
@@ -165,6 +167,8 @@ fn dispatchWithRunner(
         context,
         backend,
         optionEnabled(invocation, "--show-hidden"),
+        optionEnabled(invocation, "--required-by-column"),
+        optionEnabled(invocation, "--optional-for-column"),
     ) catch |err| {
         try writeQueryFailure(context, invocation, backend, err);
         return 1;
@@ -575,7 +579,9 @@ fn writeJson(
         .standard => |set| {
             const selected = try selectedStandard(allocator, invocation, set.items);
             defer allocator.free(selected);
-            for (selected) |item| try writeStandardJson(&json, item);
+            const required_by_column = optionEnabled(invocation, "--required-by-column");
+            const optional_for_column = optionEnabled(invocation, "--optional-for-column");
+            for (selected) |item| try writeStandardJson(&json, item, required_by_column, optional_for_column);
         },
         .appimage => |set| for (set.items) |item| try writeAppImageJson(&json, item),
         .aur => |set| {
@@ -592,7 +598,12 @@ fn writeJson(
     try json.endArray();
 }
 
-fn writeStandardJson(json: *std.json.Stringify, item: StandardItem) !void {
+fn writeStandardJson(
+    json: *std.json.Stringify,
+    item: StandardItem,
+    required_by_column: bool,
+    optional_for_column: bool,
+) !void {
     try json.beginObject();
     try field(json, "Name", item.name);
     try field(json, "Version", item.version);
@@ -621,8 +632,8 @@ fn writeStandardJson(json: *std.json.Stringify, item: StandardItem) !void {
     try json.write(try formatIsoDateTime(&build_date_buffer, item.build_date));
     try field(json, "DownloadSize", item.download_size);
     try field(json, "InstalledSize", item.installed_size);
-    try field(json, "RequiredBy", item.required_by);
-    try field(json, "OptionalFor", item.optional_for);
+    if (required_by_column) try field(json, "RequiredBy", item.required_by);
+    if (optional_for_column) try field(json, "OptionalFor", item.optional_for);
     try json.endObject();
 }
 
@@ -726,23 +737,41 @@ fn writeStandardPlain(
     defer storage.deinit();
     const allocator = storage.allocator();
     const selected = try selectedStandard(allocator, invocation, items);
-    const rows = try allocator.alloc([]const []const u8, selected.len);
     const size_display = try loadSizeDisplay(context);
-    for (selected, rows) |item, *cells| cells.* = try row(allocator, &.{
-        item.name,
-        item.repository,
-        item.version,
-        try formatSignedSize(allocator, size_display, item.installed_size),
-        truncate(item.description, 50),
-    });
+    const required_by_column = optionEnabled(invocation, "--required-by-column");
+    const optional_for_column = optionEnabled(invocation, "--optional-for-column");
+
+    var headers: std.ArrayList([]const u8) = .empty;
+    try headers.appendSlice(allocator, &.{ "Name", "Repository", "Version", "Size", "Description" });
+    if (required_by_column) try headers.append(allocator, "RequiredBy");
+    if (optional_for_column) try headers.append(allocator, "OptionalFor");
+
+    const rows = try allocator.alloc([]const []const u8, selected.len);
+    for (selected, rows) |item, *cells| {
+        var values: std.ArrayList([]const u8) = .empty;
+        try values.appendSlice(allocator, &.{
+            item.name,
+            item.repository,
+            item.version,
+            try formatSignedSize(allocator, size_display, item.installed_size),
+            truncate(item.description, 50),
+        });
+        if (required_by_column) try values.append(allocator, try joinNames(allocator, item.required_by));
+        if (optional_for_column) try values.append(allocator, try joinNames(allocator, item.optional_for));
+        cells.* = try row(allocator, values.items);
+    }
     try table.write(
         context.allocator,
         context.stdout,
-        &.{ "Name", "Repository", "Version", "Size", "Description" },
+        headers.items,
         rows,
         output.supportsAnsi(context),
     );
     try coloredTotal(context, try std.fmt.allocPrint(allocator, "Total: {d} packages", .{selected.len}));
+}
+
+fn joinNames(allocator: std.mem.Allocator, values: []const []const u8) ![]const u8 {
+    return std.mem.join(allocator, ", ", values);
 }
 
 fn writeAppImagePlain(context: *runtime.RuntimeContext, items: []const AppImageItem) !void {
@@ -910,16 +939,23 @@ fn runReal(
     context: *runtime.RuntimeContext,
     backend: Backend,
     show_hidden: bool,
+    required_by_column: bool,
+    optional_for_column: bool,
 ) !Result {
     return switch (backend) {
-        .standard => runStandard(context, show_hidden),
+        .standard => runStandard(context, show_hidden, required_by_column, optional_for_column),
         .appimage => runAppImage(context),
         .aur => runAur(context, show_hidden),
         .flatpak => runFlatpak(context),
     };
 }
 
-fn runStandard(context: *runtime.RuntimeContext, show_hidden: bool) !Result {
+fn runStandard(
+    context: *runtime.RuntimeContext,
+    show_hidden: bool,
+    required_by_column: bool,
+    optional_for_column: bool,
+) !Result {
     const manager = try Zigalpm.AlpmManager.init(
         context.allocator,
         context.environ,
@@ -929,7 +965,7 @@ fn runStandard(context: *runtime.RuntimeContext, show_hidden: bool) !Result {
     );
     defer manager.deinit();
     if (show_hidden and !manager.show_hidden_packages) _ = manager.toggle_hidden_packages();
-    const native_items = try manager.get_installed_packages();
+    const native_items = try manager.get_installed_packages_ex(required_by_column, optional_for_column);
     defer Zigalpm.alpm.OwnedPackage.deinitSlice(context.allocator, native_items);
 
     const arena = try createArena(context.allocator);
@@ -1193,7 +1229,7 @@ test "list routes long and requested uppercase short forms to package backends o
         const runner: Runner = .{
             .data = &observed,
             .call = struct {
-                fn run(data: ?*anyopaque, _: *runtime.RuntimeContext, backend: Backend, _: bool) !Result {
+                fn run(data: ?*anyopaque, _: *runtime.RuntimeContext, backend: Backend, _: bool, _: bool, _: bool) !Result {
                     const capture: *?Backend = @ptrCast(@alignCast(data.?));
                     capture.* = backend;
                     return switch (backend) {
@@ -1226,7 +1262,7 @@ test "standard install-reason filters apply to structured output" {
         .{ .name = "explicit-package", .version = "2", .install_reason = "Explicit" },
     };
     const runner: Runner = .{ .data = @constCast(&items), .call = struct {
-        fn run(data: ?*anyopaque, _: *runtime.RuntimeContext, _: Backend, show_hidden: bool) !Result {
+        fn run(data: ?*anyopaque, _: *runtime.RuntimeContext, _: Backend, show_hidden: bool, _: bool, _: bool) !Result {
             try std.testing.expect(show_hidden);
             const values: *const [2]StandardItem = @ptrCast(@alignCast(data.?));
             return .{ .standard = .{ .items = values } };
@@ -1264,7 +1300,7 @@ test "AUR filters apply to JSON and UI structured output" {
         .{ .name = "explicit-package", .version = "2", .explicit = true },
     };
     const runner: Runner = .{ .data = @constCast(&items), .call = struct {
-        fn run(data: ?*anyopaque, _: *runtime.RuntimeContext, _: Backend, _: bool) !Result {
+        fn run(data: ?*anyopaque, _: *runtime.RuntimeContext, _: Backend, _: bool, _: bool, _: bool) !Result {
             const values: *const [2]AurItem = @ptrCast(@alignCast(data.?));
             return .{ .aur = .{ .items = values } };
         }
