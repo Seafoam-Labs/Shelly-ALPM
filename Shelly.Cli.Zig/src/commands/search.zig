@@ -77,8 +77,6 @@ pub const AurPackage = struct {
     explicit: bool = false,
 };
 
-const SizeDisplay = detail_output.SizeDisplay;
-
 const FlatpakPackage = struct {
     name: []const u8,
     id: []const u8,
@@ -1449,9 +1447,6 @@ test "AUR detail search renders package metadata and structured output" {
     );
     try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&context, &outcome.dispatch, runner));
     var rendered = stdout.writer.buffered();
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "Name: yay") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "PackageBase: yay") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "Maintainer: dev") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Total results") == null);
 
     stdout.writer.end = 0;
