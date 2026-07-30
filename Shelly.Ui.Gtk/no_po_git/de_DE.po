@@ -2209,5 +2209,3 @@ msgstr "Update"
 msgid "Utilities"
 msgstr "Hilfsprogramme"
 
-#~ msgid "Follow system language"
-#~ msgstr "Systemsprache folgen"
