@@ -1,17 +1,26 @@
 const std = @import("std");
 const Zigalpm = @import("Zigalpm");
-const config_manager = @import("../config/manager.zig");
 const output = @import("../output/config.zig");
+const detail_output = @import("../output/detail.zig");
+const format = @import("../output/format.zig");
 const table = @import("../output/table.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const spec = @import("../cli/spec.zig");
 
+const joined = format.joined;
+const nonNegative = format.nonNegative;
+const loadSizeDisplay = format.loadSizeDisplay;
+const formatSize = format.formatSize;
+const formatDateTime = format.formatDateTime;
+const formatLongDate = format.formatLongDate;
+const formatIsoDateTime = format.formatIsoDateTime;
+
 const standard_command_path = "shelly search standard";
 const aur_command_path = "shelly search aur";
 const flatpak_command_path = "shelly search flatpak";
 
-const StandardPackage = struct {
+pub const StandardPackage = struct {
     name: []const u8,
     version: []const u8,
     size: i64 = 0,
@@ -39,7 +48,7 @@ const LocalPackage = struct {
     size: u64,
 };
 
-const AurPackage = struct {
+pub const AurPackage = struct {
     id: i64 = 0,
     name: []const u8,
     package_base_id: i64 = 0,
@@ -66,6 +75,8 @@ const AurPackage = struct {
     keywords: ?[]const []const u8 = null,
     explicit: bool = false,
 };
+
+const SizeDisplay = detail_output.SizeDisplay;
 
 const FlatpakPackage = struct {
     name: []const u8,
@@ -790,76 +801,11 @@ fn renderFlatpak(
 }
 
 fn writePackageDetail(context: *runtime.RuntimeContext, package: StandardPackage) !void {
-    const size_display = try loadSizeDisplay(context);
-    try coloredLine(context, "Name", package.name, "\x1b[38;2;0;128;0m");
-    try coloredLine(context, "Version", package.version, "\x1b[38;2;0;0;255m");
-    try coloredLine(context, "Description", package.description, "\x1b[38;2;0;0;255m");
-    try coloredLine(context, "URL", package.url, "\x1b[38;2;0;0;255m");
-    try coloredLine(context, "Licenses", try joined(context.allocator, package.licenses), "\x1b[38;2;0;0;255m");
-    try coloredLine(context, "Groups", try joined(context.allocator, package.groups), "\x1b[38;2;0;0;255m");
-    try coloredLine(context, "Provides", try joined(context.allocator, package.provides), "\x1b[38;2;0;0;255m");
-    try coloredLine(context, "Depends On", try joined(context.allocator, package.depends), "\x1b[38;2;0;0;255m");
-    try coloredLine(context, "Optional Depends", try joined(context.allocator, package.optional_depends), "\x1b[38;2;0;0;255m");
-    try coloredLine(context, "Required By", try joined(context.allocator, package.required_by), "\x1b[38;2;0;0;255m");
-    try coloredLine(context, "Conflicts With", try joined(context.allocator, package.conflicts), "\x1b[38;2;0;0;255m");
-    try coloredLine(context, "Replaces", try joined(context.allocator, package.replaces), "\x1b[38;2;0;0;255m");
-    try coloredLine(
-        context,
-        "Installed Size",
-        try formatSize(context.allocator, size_display, nonNegative(package.installed_size)),
-        "\x1b[38;2;0;0;255m",
-    );
-    try coloredLine(context, "Build Date", try formatLongDate(context.allocator, package.build_date), "\x1b[38;2;0;0;255m");
-    try coloredLine(
-        context,
-        "Install Date",
-        if (package.install_date) |date| try formatLongDate(context.allocator, date) else "Not Installed",
-        "\x1b[38;2;0;0;255m",
-    );
-    try coloredLine(context, "Install Reason", package.install_reason, "\x1b[38;2;0;0;255m");
+    return detail_output.writePackageDetail(context, package);
 }
 
 fn writeAurPackageDetail(context: *runtime.RuntimeContext, package: AurPackage) !void {
-    const name_color = "\x1b[38;2;0;128;0m";
-    const value_color = "\x1b[38;2;0;0;255m";
-    try coloredLine(context, "Name", package.name, name_color);
-    try coloredLine(context, "PackageBase", package.package_base, value_color);
-    try coloredLine(context, "Version", package.version, value_color);
-    try coloredLine(context, "Description", package.description orelse "", value_color);
-    try coloredLine(context, "URL", package.url orelse "", value_color);
-    try coloredLine(context, "Maintainer", package.maintainer orelse "Orphaned", value_color);
-    try coloredLine(context, "Votes", try std.fmt.allocPrint(context.allocator, "{d}", .{package.num_votes}), value_color);
-    try coloredLine(context, "Popularity", try std.fmt.allocPrint(context.allocator, "{d:.2}", .{package.popularity}), value_color);
-    try coloredLine(
-        context,
-        "Out Of Date",
-        if (package.out_of_date) |when| try formatLongDate(context.allocator, when) else "No",
-        value_color,
-    );
-    try coloredLine(context, "Licenses", try joined(context.allocator, package.licenses orelse &.{}), value_color);
-    try coloredLine(context, "Groups", try joined(context.allocator, package.groups orelse &.{}), value_color);
-    try coloredLine(context, "Provides", try joined(context.allocator, package.provides orelse &.{}), value_color);
-    try coloredLine(context, "Depends On", try joined(context.allocator, package.depends orelse &.{}), value_color);
-    try coloredLine(context, "Make Depends", try joined(context.allocator, package.make_depends orelse &.{}), value_color);
-    try coloredLine(context, "Optional Depends", try joined(context.allocator, package.optional_depends orelse &.{}), value_color);
-    try coloredLine(context, "Check Depends", try joined(context.allocator, package.check_depends orelse &.{}), value_color);
-    try coloredLine(context, "Conflicts With", try joined(context.allocator, package.conflicts orelse &.{}), value_color);
-    try coloredLine(context, "Replaces", try joined(context.allocator, package.replaces orelse &.{}), value_color);
-    try coloredLine(context, "Keywords", try joined(context.allocator, package.keywords orelse &.{}), value_color);
-    try coloredLine(context, "First Submitted", try formatLongDate(context.allocator, package.first_submitted), value_color);
-    try coloredLine(context, "Last Modified", try formatLongDate(context.allocator, package.last_modified), value_color);
-}
-
-fn coloredLine(
-    context: *runtime.RuntimeContext,
-    label: []const u8,
-    value: []const u8,
-    color: []const u8,
-) !void {
-    if (output.supportsAnsi(context))
-        try context.stdout.print("{s}{s}: {s}\x1b[0m\n", .{ color, label, value })
-    else
-        try context.stdout.print("{s}: {s}\n", .{ label, value });
+    return detail_output.writeAurPackageDetail(context, package);
 }
 
 fn writeStandardResultJson(writer: *std.Io.Writer, result: StandardResult) !void {
@@ -1267,103 +1213,12 @@ fn joinedQuery(allocator: std.mem.Allocator, values: []const []const u8) ![]cons
     return std.mem.join(allocator, " ", values);
 }
 
-fn joined(allocator: std.mem.Allocator, values: []const []const u8) ![]const u8 {
-    return std.mem.join(allocator, ",", values);
-}
-
 fn row(allocator: std.mem.Allocator, values: []const []const u8) ![]const []const u8 {
     return allocator.dupe([]const u8, values);
 }
 
 fn truncate(value: []const u8, maximum: usize) []const u8 {
     return if (value.len <= maximum) value else value[0..maximum];
-}
-
-fn nonNegative(value: i64) u64 {
-    return if (value <= 0) 0 else @intCast(value);
-}
-
-const SizeDisplay = enum { bytes, megabytes, gigabytes };
-
-fn loadSizeDisplay(context: *runtime.RuntimeContext) !SizeDisplay {
-    const manager = config_manager.Manager.init(context);
-    const config = manager.read() catch return .megabytes;
-    const value = config.values.get("FileSizeDisplay") orelse return .megabytes;
-    if (value != .string) return .megabytes;
-    if (std.ascii.eqlIgnoreCase(value.string, "Bytes")) return .bytes;
-    if (std.ascii.eqlIgnoreCase(value.string, "Gigabytes")) return .gigabytes;
-    return .megabytes;
-}
-
-fn formatSize(allocator: std.mem.Allocator, display: SizeDisplay, bytes: u64) ![]const u8 {
-    return switch (display) {
-        .bytes => std.fmt.allocPrint(allocator, "{d} B", .{bytes}),
-        .megabytes => std.fmt.allocPrint(allocator, "{d:.2} MiB", .{@as(f64, @floatFromInt(bytes)) / 1048576.0}),
-        .gigabytes => std.fmt.allocPrint(allocator, "{d:.2} GiB", .{@as(f64, @floatFromInt(bytes)) / 1073741824.0}),
-    };
-}
-
-fn formatDateTime(allocator: std.mem.Allocator, seconds: i64) ![]const u8 {
-    if (seconds < 0) return allocator.dupe(u8, "1970-01-01 00:00:00");
-    const epoch: std.time.epoch.EpochSeconds = .{ .secs = @intCast(seconds) };
-    const year_day = epoch.getEpochDay().calculateYearDay();
-    const month_day = year_day.calculateMonthDay();
-    const day_seconds = epoch.getDaySeconds();
-    return std.fmt.allocPrint(
-        allocator,
-        "{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}",
-        .{
-            year_day.year,
-            month_day.month.numeric(),
-            month_day.day_index + 1,
-            day_seconds.getHoursIntoDay(),
-            day_seconds.getMinutesIntoHour(),
-            day_seconds.getSecondsIntoMinute(),
-        },
-    );
-}
-
-fn formatLongDate(allocator: std.mem.Allocator, seconds: i64) ![]const u8 {
-    if (seconds < 0) return allocator.dupe(u8, "Thursday, January 1, 1970");
-    const epoch: std.time.epoch.EpochSeconds = .{ .secs = @intCast(seconds) };
-    const epoch_day = epoch.getEpochDay();
-    const year_day = epoch_day.calculateYearDay();
-    const month_day = year_day.calculateMonthDay();
-    const weekdays = [_][]const u8{ "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
-    const months = [_][]const u8{
-        "January", "February", "March",     "April",   "May",      "June",
-        "July",    "August",   "September", "October", "November", "December",
-    };
-    return std.fmt.allocPrint(
-        allocator,
-        "{s}, {s} {d}, {d}",
-        .{
-            weekdays[(epoch_day.day + 4) % 7],
-            months[month_day.month.numeric() - 1],
-            month_day.day_index + 1,
-            year_day.year,
-        },
-    );
-}
-
-fn formatIsoDateTime(buffer: []u8, seconds: i64) ![]const u8 {
-    if (seconds < 0) return std.fmt.bufPrint(buffer, "1970-01-01T00:00:00", .{});
-    const epoch: std.time.epoch.EpochSeconds = .{ .secs = @intCast(seconds) };
-    const year_day = epoch.getEpochDay().calculateYearDay();
-    const month_day = year_day.calculateMonthDay();
-    const day_seconds = epoch.getDaySeconds();
-    return std.fmt.bufPrint(
-        buffer,
-        "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}",
-        .{
-            year_day.year,
-            month_day.month.numeric(),
-            month_day.day_index + 1,
-            day_seconds.getHoursIntoDay(),
-            day_seconds.getMinutesIntoHour(),
-            day_seconds.getSecondsIntoMinute(),
-        },
-    );
 }
 
 test "search routes all action-first types through one handler" {

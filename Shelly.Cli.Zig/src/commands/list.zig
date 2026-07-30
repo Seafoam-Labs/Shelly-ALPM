@@ -2,6 +2,7 @@ const std = @import("std");
 const Zigalpm = @import("Zigalpm");
 const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
+const format = @import("../output/format.zig");
 const output = @import("../output/config.zig");
 const table = @import("../output/table.zig");
 const parser = @import("../cli/parser.zig");
@@ -893,24 +894,10 @@ fn sortedFlatpaks(allocator: std.mem.Allocator, items: []const FlatpakItem) ![]F
     return sorted;
 }
 
-const SizeDisplay = enum { bytes, megabytes, gigabytes };
-
-fn loadSizeDisplay(context: *runtime.RuntimeContext) !SizeDisplay {
-    const configuration = config_manager.Manager.init(context).read() catch return .megabytes;
-    const value = configuration.values.get("FileSizeDisplay") orelse return .megabytes;
-    if (value != .string) return .megabytes;
-    if (std.ascii.eqlIgnoreCase(value.string, "Bytes")) return .bytes;
-    if (std.ascii.eqlIgnoreCase(value.string, "Gigabytes")) return .gigabytes;
-    return .megabytes;
-}
-
-fn formatSize(allocator: std.mem.Allocator, display: SizeDisplay, bytes: u64) ![]const u8 {
-    return switch (display) {
-        .bytes => std.fmt.allocPrint(allocator, "{d} B", .{bytes}),
-        .megabytes => std.fmt.allocPrint(allocator, "{d:.2} MiB", .{@as(f64, @floatFromInt(bytes)) / 1048576.0}),
-        .gigabytes => std.fmt.allocPrint(allocator, "{d:.2} GiB", .{@as(f64, @floatFromInt(bytes)) / 1073741824.0}),
-    };
-}
+const SizeDisplay = format.SizeDisplay;
+const loadSizeDisplay = format.loadSizeDisplay;
+const formatSize = format.formatSize;
+const formatIsoDateTime = format.formatIsoDateTime;
 
 fn formatSignedSize(allocator: std.mem.Allocator, display: SizeDisplay, bytes: i64) ![]const u8 {
     return formatSize(allocator, display, if (bytes <= 0) 0 else @intCast(bytes));
@@ -1149,26 +1136,6 @@ fn ignoredStandardPackage(manager: *Zigalpm.AlpmManager, name: []const u8) bool 
         if (std.mem.eql(u8, ignored, name)) return true;
     }
     return false;
-}
-
-fn formatIsoDateTime(buffer: []u8, seconds: i64) ![]const u8 {
-    if (seconds < 0) return std.fmt.bufPrint(buffer, "1970-01-01T00:00:00", .{});
-    const epoch: std.time.epoch.EpochSeconds = .{ .secs = @intCast(seconds) };
-    const year_day = epoch.getEpochDay().calculateYearDay();
-    const month_day = year_day.calculateMonthDay();
-    const day_seconds = epoch.getDaySeconds();
-    return std.fmt.bufPrint(
-        buffer,
-        "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}",
-        .{
-            year_day.year,
-            month_day.month.numeric(),
-            month_day.day_index + 1,
-            day_seconds.getHoursIntoDay(),
-            day_seconds.getMinutesIntoHour(),
-            day_seconds.getSecondsIntoMinute(),
-        },
-    );
 }
 
 fn parseTestArguments(

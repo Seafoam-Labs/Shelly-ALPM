@@ -1,6 +1,7 @@
 const std = @import("std");
 const Zigalpm = @import("Zigalpm");
 const output = @import("../output/config.zig");
+const format = @import("../output/format.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const spec = @import("../cli/spec.zig");
@@ -394,22 +395,9 @@ fn exportFileName(
 
     const seconds = std.Io.Clock.real.now(context.io).toSeconds();
     if (seconds < 0) return error.InvalidTimestamp;
-    const epoch: std.time.epoch.EpochSeconds = .{ .secs = @intCast(seconds) };
-    const year_day = epoch.getEpochDay().calculateYearDay();
-    const month_day = year_day.calculateMonthDay();
-    const day_seconds = epoch.getDaySeconds();
-    return std.fmt.allocPrint(
-        context.allocator,
-        "{d:0>4}{d:0>2}{d:0>2}{d:0>2}{d:0>2}{d:0>2}_shelly.toml",
-        .{
-            year_day.year,
-            month_day.month.numeric(),
-            month_day.day_index + 1,
-            day_seconds.getHoursIntoDay(),
-            day_seconds.getMinutesIntoHour(),
-            day_seconds.getSecondsIntoMinute(),
-        },
-    );
+    const stamp = try format.formatCompactDateTime(context.allocator, seconds);
+    defer context.allocator.free(stamp);
+    return std.fmt.allocPrint(context.allocator, "{s}_shelly.toml", .{stamp});
 }
 
 fn exportPath(

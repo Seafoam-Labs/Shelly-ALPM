@@ -3,6 +3,7 @@ const Zigalpm = @import("Zigalpm");
 const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
 const output = @import("../output/config.zig");
+const format = @import("../output/format.zig");
 const standard_single_pane = @import("../output/standard_single_pane.zig");
 const ui_operation = @import("../output/ui_operation.zig");
 const list_updates = @import("list_updates.zig");
@@ -933,7 +934,7 @@ fn openingMessage(allocator: std.mem.Allocator, invocation: *const parser.Invoca
                 "Installing AUR package {s} at commit {s}",
                 .{ invocation.positionals[0], invocation.positionals[1] },
             );
-        const names = try joined(allocator, invocation.positionals);
+        const names = try format.joined(allocator, invocation.positionals);
         defer allocator.free(names);
         if (std.mem.eql(u8, invocation.command.path, standard_command_path))
             return std.fmt.allocPrint(allocator, "Installing packages: {s}", .{names});
@@ -1076,10 +1077,6 @@ fn stringValue(configuration: *const config_model.Config, key: []const u8) ?[]co
     const value = configuration.values.get(key) orelse return null;
     if (value != .string or value.string.len == 0) return null;
     return value.string;
-}
-
-fn joined(allocator: std.mem.Allocator, values: []const []const u8) ![]const u8 {
-    return std.mem.join(allocator, ", ", values);
 }
 
 fn isInstallPath(path: []const u8) bool {

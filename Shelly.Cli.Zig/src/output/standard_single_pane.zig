@@ -3,6 +3,7 @@ const Zigalpm = @import("Zigalpm");
 const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
 const output_config = @import("config.zig");
+const fmt = @import("format.zig");
 const review_output = @import("review.zig");
 const runtime = @import("../runtime/context.zig");
 
@@ -16,11 +17,7 @@ const Color = enum {
     gray,
 };
 
-const SizeDisplay = enum {
-    bytes,
-    megabytes,
-    gigabytes,
-};
+const SizeDisplay = fmt.SizeDisplay;
 
 const ProgressStyle = enum {
     blocks,
@@ -678,7 +675,7 @@ fn loadSettings(context: *runtime.RuntimeContext) !Settings {
     const manager = config_manager.Manager.init(context);
     const config = manager.read() catch try config_model.Config.defaults(context.allocator);
     return .{
-        .size_display = parseSizeDisplay(stringValue(&config, "FileSizeDisplay") orelse "Megabytes"),
+        .size_display = fmt.parseSizeDisplay(stringValue(&config, "FileSizeDisplay") orelse "Megabytes"),
         .progress_style = parseProgressStyle(stringValue(&config, "ProgressBarStyle") orelse "Blocks"),
         .bar_width = integerValue(&config, "ProgressBarWidth") orelse 20,
     };
@@ -695,12 +692,6 @@ fn integerValue(config: *const config_model.Config, key: []const u8) ?usize {
         .integer => |integer| if (integer > 0) @intCast(integer) else null,
         else => null,
     };
-}
-
-fn parseSizeDisplay(value: []const u8) SizeDisplay {
-    if (std.ascii.eqlIgnoreCase(value, "Bytes")) return .bytes;
-    if (std.ascii.eqlIgnoreCase(value, "Gigabytes")) return .gigabytes;
-    return .megabytes;
 }
 
 fn parseProgressStyle(value: []const u8) ProgressStyle {

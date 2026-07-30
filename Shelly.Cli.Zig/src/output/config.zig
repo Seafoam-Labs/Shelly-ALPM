@@ -3,6 +3,7 @@ const Zigalpm = @import("Zigalpm");
 const model = @import("../config/model.zig");
 const runtime = @import("../runtime/context.zig");
 const xdg = @import("../runtime/xdg.zig");
+const format = @import("format.zig");
 const review_output = @import("review.zig");
 
 pub fn writeListPlain(
@@ -616,20 +617,5 @@ pub fn supportsAnsi(context: *const runtime.RuntimeContext) bool {
 fn timestamp(context: *runtime.RuntimeContext) ![]const u8 {
     const seconds = std.Io.Clock.real.now(context.io).toSeconds();
     if (seconds < 0) return error.InvalidTimestamp;
-    const epoch_seconds: std.time.epoch.EpochSeconds = .{ .secs = @intCast(seconds) };
-    const year_day = epoch_seconds.getEpochDay().calculateYearDay();
-    const month_day = year_day.calculateMonthDay();
-    const day_seconds = epoch_seconds.getDaySeconds();
-    return std.fmt.allocPrint(
-        context.allocator,
-        "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}+00:00",
-        .{
-            year_day.year,
-            month_day.month.numeric(),
-            month_day.day_index + 1,
-            day_seconds.getHoursIntoDay(),
-            day_seconds.getMinutesIntoHour(),
-            day_seconds.getSecondsIntoMinute(),
-        },
-    );
+    return format.formatIsoDateTimeUtc(context.allocator, seconds);
 }
