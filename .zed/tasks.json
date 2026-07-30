@@ -12,4 +12,13 @@
     "cwd": "$ZED_WORKTREE_ROOT/Shelly.PackageManager",
     "show_command": true,
   },
+  {
+    "label": "GTK UI Build",
+    "command": "./build.sh",
+    "args": ["--build-only", "-Doptimize=Debug"],
+    "cwd": "$ZED_WORKTREE_ROOT/Shelly.Ui.Gtk",
+    "use_new_terminal": false,
+    "reveal_target": "dock",
+    "allow_concurrent_runs": false,
+  },
 ]

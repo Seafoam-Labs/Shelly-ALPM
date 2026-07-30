@@ -7,4 +7,13 @@
     "build": "Package Manager Build Test",
     "cwd": "$ZED_WORKTREE_ROOT/Shelly.PackageManager",
   },
+  {
+    // Requires env to work. Launch Zed from the terminal first for breakpoints to work.
+    "adapter": "CodeLLDB",
+    "label": "GTK UI Debug",
+    "request": "launch",
+    "program": "$ZED_WORKTREE_ROOT/Shelly.Ui.Gtk/zig-out/bin/Shelly_Ui_Gtk",
+    "build": "GTK UI Build",
+    "cwd": "$ZED_WORKTREE_ROOT/Shelly.Ui.Gtk",
+  },
 ]
