@@ -15,8 +15,6 @@ pub fn main(init: std.process.Init) void {
     runtime.io = init.io;
     runtime.environ_map = init.environ_map;
 
-    setupGnomeThemePreference();
-
     if (!translations.init()) {
         std.log.warn("translations: failed to initialize gettext", .{});
     }
@@ -99,6 +97,8 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
 
     tryStartTray(runtime.io, std.heap.c_allocator);
 
+     setupGnomeThemePreference();
+
     const window = ShellyWindow.new(app);
     gtk.Window.present(gobject.ext.as(gtk.Window, window));
 }
@@ -127,6 +127,20 @@ fn setupGnomeThemePreference() void {
     const prefer_dark = std.mem.eql(u8, std.mem.span(scheme), "prefer-dark");
 
     std.debug.print("prefer_dark = {}\n", .{prefer_dark});
+
+    if (prefer_dark) {
+        const gtk_settings = gtk.Settings.getDefault() orelse {
+            std.debug.print("Failed to fetch GtkSettings layout.\n", .{});
+            return;
+        };
+        const base_object = @as(*gobject.Object, @ptrCast(@alignCast(gtk_settings)));
+        var value = std.mem.zeroes(gobject.Value);
+        const bool_type = gobject.typeFromName("gboolean");
+        _ = value.init(bool_type);
+        value.setBoolean(1);
+        base_object.setProperty("gtk-application-prefer-dark-theme", &value);
+    }
+
 
     _ = glib.setenv(
         "GTK_APPLICATION_PREFER_DARK_THEME",
