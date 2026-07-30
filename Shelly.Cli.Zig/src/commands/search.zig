@@ -15,6 +15,7 @@ const formatSize = format.formatSize;
 const formatDateTime = format.formatDateTime;
 const formatLongDate = format.formatLongDate;
 const formatIsoDateTime = format.formatIsoDateTime;
+const truncate = format.truncate;
 
 const standard_command_path = "shelly search standard";
 const aur_command_path = "shelly search aur";
@@ -1215,10 +1216,6 @@ fn joinedQuery(allocator: std.mem.Allocator, values: []const []const u8) ![]cons
 
 fn row(allocator: std.mem.Allocator, values: []const []const u8) ![]const []const u8 {
     return allocator.dupe([]const u8, values);
-}
-
-fn truncate(value: []const u8, maximum: usize) []const u8 {
-    return if (value.len <= maximum) value else value[0..maximum];
 }
 
 test "search routes all action-first types through one handler" {
