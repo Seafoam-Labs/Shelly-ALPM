@@ -343,7 +343,7 @@ pub const FlatpakInstallView = extern struct {
             if (remote.Scope == .user) "user" else "system",
         });
 
-        const argv = ShellyCommands.install_flatpak(std.heap.c_allocator, app.getId(), remote.Scope) catch return;
+        const argv = ShellyCommands.install_flatpak(std.heap.c_allocator, app.getId(), remote.Scope, remote.Name) catch return;
         defer std.mem.Allocator.free(std.heap.c_allocator, argv);
 
         var names: std.ArrayListUnmanaged([]const u8) = .empty;
@@ -398,13 +398,14 @@ pub const FlatpakInstallView = extern struct {
         if (p.disposed) return;
         const app = p.selected_app orelse return;
 
-        const scope = resolve_addon_scope(addon, app.getRemotes());
-        std.log.info("Flatpak addon install: addon={s} scope={s}", .{
+        const addon_remote = resolve_addon_remote(addon, app.getRemotes());
+        std.log.info("Flatpak addon install: addon={s} remote={s} scope={s}", .{
             addon.Id,
-            if (scope == .user) "user" else "system",
+            if (addon_remote.name.len > 0) addon_remote.name else "(default)",
+            if (addon_remote.scope == .user) "user" else "system",
         });
 
-        const argv = ShellyCommands.install_flatpak_ex(std.heap.c_allocator, addon.Id, scope, true) catch return;
+        const argv = ShellyCommands.install_flatpak_ex(std.heap.c_allocator, addon.Id, addon_remote.scope, addon_remote.name, true) catch return;
         defer std.mem.Allocator.free(std.heap.c_allocator, argv);
 
         var names: std.ArrayListUnmanaged([]const u8) = .empty;
@@ -1243,15 +1244,22 @@ test "Flatpak details capitalize AppStream URL type labels" {
     try std.testing.expectEqualStrings("", FlatpakInstallView.format_url_type(&buffer, ""));
 }
 
-fn resolve_addon_scope(addon: *const flatpak.AppstreamApp, parent_remotes: []const flatpak.Remote) flatpak.InstallLevel {
+const AddonRemote = struct {
+    name: []const u8 = "",
+    scope: flatpak.InstallLevel = .system,
+};
+
+fn resolve_addon_remote(addon: *const flatpak.AppstreamApp, parent_remotes: []const flatpak.Remote) AddonRemote {
     for (addon.Remotes) |remote| {
         for (parent_remotes) |parent_remote| {
-            if (std.mem.eql(u8, remote.Name, parent_remote.Name)) return remote.Scope;
+            if (std.mem.eql(u8, remote.Name, parent_remote.Name)) {
+                return .{ .name = remote.Name, .scope = remote.Scope };
+            }
         }
     }
-    if (addon.Remotes.len > 0) return addon.Remotes[0].Scope;
-    if (parent_remotes.len > 0) return parent_remotes[0].Scope;
-    return .system;
+    if (addon.Remotes.len > 0) return .{ .name = addon.Remotes[0].Name, .scope = addon.Remotes[0].Scope };
+    if (parent_remotes.len > 0) return .{ .name = parent_remotes[0].Name, .scope = parent_remotes[0].Scope };
+    return .{};
 }
 
 test "Flatpak addon scope resolution prefers matching parent remote" {
@@ -1264,14 +1272,25 @@ test "Flatpak addon scope resolution prefers matching parent remote" {
         .Id = "org.example.App.Locale",
         .Remotes = &.{.{ .Name = "flathub-beta", .Scope = .user }},
     };
-    try std.testing.expectEqual(flatpak.InstallLevel.user, resolve_addon_scope(&matching, &parent_remotes));
+    const matching_resolved = resolve_addon_remote(&matching, &parent_remotes);
+    try std.testing.expectEqualStrings("flathub-beta", matching_resolved.name);
+    try std.testing.expectEqual(flatpak.InstallLevel.user, matching_resolved.scope);
 
     const addon_only = flatpak.AppstreamApp{
         .Id = "org.example.App.Locale",
         .Remotes = &.{.{ .Name = "custom", .Scope = .user }},
     };
-    try std.testing.expectEqual(flatpak.InstallLevel.user, resolve_addon_scope(&addon_only, &parent_remotes));
+    const addon_only_resolved = resolve_addon_remote(&addon_only, &parent_remotes);
+    try std.testing.expectEqualStrings("custom", addon_only_resolved.name);
+    try std.testing.expectEqual(flatpak.InstallLevel.user, addon_only_resolved.scope);
 
     const no_addon_remotes = flatpak.AppstreamApp{ .Id = "org.example.App.Locale" };
-    try std.testing.expectEqual(flatpak.InstallLevel.system, resolve_addon_scope(&no_addon_remotes, &parent_remotes));
+    const no_addon_resolved = resolve_addon_remote(&no_addon_remotes, &parent_remotes);
+    try std.testing.expectEqualStrings("flathub", no_addon_resolved.name);
+    try std.testing.expectEqual(flatpak.InstallLevel.system, no_addon_resolved.scope);
+
+    const empty = flatpak.AppstreamApp{ .Id = "org.example.App.Locale" };
+    const empty_resolved = resolve_addon_remote(&empty, &.{});
+    try std.testing.expectEqualStrings("", empty_resolved.name);
+    try std.testing.expectEqual(flatpak.InstallLevel.system, empty_resolved.scope);
 }

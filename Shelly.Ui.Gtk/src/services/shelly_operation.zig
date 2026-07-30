@@ -253,16 +253,20 @@ pub const ShellyCommands = struct {
         return argv.toOwnedSlice(alloc);
     }
 
-    pub fn install_flatpak(alloc: std.mem.Allocator, names: []const u8, remote: Scope) ![]const []const u8 {
-        return install_flatpak_ex(alloc, names, remote, false);
+    pub fn install_flatpak(alloc: std.mem.Allocator, names: []const u8, remote: Scope, remote_name: []const u8) ![]const []const u8 {
+        return install_flatpak_ex(alloc, names, remote, remote_name, false);
     }
 
-    pub fn install_flatpak_ex(alloc: std.mem.Allocator, names: []const u8, remote: Scope, is_runtime: bool) ![]const []const u8 {
+    pub fn install_flatpak_ex(alloc: std.mem.Allocator, names: []const u8, remote: Scope, remote_name: []const u8, is_runtime: bool) ![]const []const u8 {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
         try argv.append(alloc, "install");
         try argv.append(alloc, "flatpak");
         if (names.len > 0) try argv.append(alloc, names);
         if (remote == .user) try argv.append(alloc, "--user");
+        if (remote_name.len > 0) {
+            try argv.append(alloc, "--remote");
+            try argv.append(alloc, remote_name);
+        }
         if (is_runtime) try argv.append(alloc, "--runtime");
         return argv.toOwnedSlice(alloc);
     }
@@ -886,17 +890,27 @@ test "progress percentages are clamped to the GTK protocol range" {
 }
 
 test "flatpak install argv adds --user only for user scope" {
-    const system_argv = try ShellyCommands.install_flatpak(std.testing.allocator, "org.example.App", .system);
+    const system_argv = try ShellyCommands.install_flatpak(std.testing.allocator, "org.example.App", .system, "");
     defer std.testing.allocator.free(system_argv);
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App" }, system_argv);
 
-    const user_argv = try ShellyCommands.install_flatpak(std.testing.allocator, "org.example.App", .user);
+    const user_argv = try ShellyCommands.install_flatpak(std.testing.allocator, "org.example.App", .user, "");
     defer std.testing.allocator.free(user_argv);
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App", "--user" }, user_argv);
 }
 
+test "flatpak install argv passes --remote when a remote name is supplied" {
+    const argv = try ShellyCommands.install_flatpak(std.testing.allocator, "org.example.App", .system, "flathub");
+    defer std.testing.allocator.free(argv);
+    try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App", "--remote", "flathub" }, argv);
+
+    const with_user = try ShellyCommands.install_flatpak_ex(std.testing.allocator, "org.example.App", .user, "flathub-beta", false);
+    defer std.testing.allocator.free(with_user);
+    try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App", "--user", "--remote", "flathub-beta" }, with_user);
+}
+
 test "flatpak addon install argv marks addon refs as runtimes" {
-    const argv = try ShellyCommands.install_flatpak_ex(std.testing.allocator, "org.example.App.Plugin", .user, true);
+    const argv = try ShellyCommands.install_flatpak_ex(std.testing.allocator, "org.example.App.Plugin", .user, "", true);
     defer std.testing.allocator.free(argv);
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App.Plugin", "--user", "--runtime" }, argv);
 }
