@@ -1,6 +1,7 @@
 const std = @import("std");
 const Zigalpm = @import("Zigalpm");
 const output = @import("../output/config.zig");
+const colors = @import("../output/colors.zig");
 const detail_output = @import("../output/detail.zig");
 const format = @import("../output/format.zig");
 const table = @import("../output/table.zig");
@@ -739,16 +740,10 @@ fn renderPkgbuilds(
 
     for (builds) |build| {
         const pkgbuild = build.pkgbuild orelse {
-            if (output.supportsAnsi(context))
-                try context.stdout.print("\x1b[31mFailed to get PKGBUILD for: {s}\x1b[0m\n", .{build.name})
-            else
-                try context.stdout.print("Failed to get PKGBUILD for: {s}\n", .{build.name});
+            try colors.printLine(context, .err, "Failed to get PKGBUILD for: {s}", .{build.name});
             continue;
         };
-        if (output.supportsAnsi(context))
-            try context.stdout.print("\x1b[33mPackage build for: {s}\x1b[0m\n", .{build.name})
-        else
-            try context.stdout.print("Package build for: {s}\n", .{build.name});
+        try colors.printLine(context, .warning, "Package build for: {s}", .{build.name});
         try context.stdout.writeAll(pkgbuild);
         if (!std.mem.endsWith(u8, pkgbuild, "\n")) try context.stdout.writeByte('\n');
     }

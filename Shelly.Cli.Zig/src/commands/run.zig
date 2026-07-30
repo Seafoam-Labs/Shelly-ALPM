@@ -3,6 +3,7 @@ const Zigalpm = @import("Zigalpm");
 const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
 const output = @import("../output/config.zig");
+const colors = @import("../output/colors.zig");
 const table = @import("../output/table.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
@@ -536,10 +537,8 @@ fn writeOpening(
     defer context.allocator.free(message);
     if (invocation.globals.ui_mode) {
         try output.writeAlpmInfoFrame(context, "TransactionStart", message);
-    } else if (output.supportsAnsi(context)) {
-        try context.stdout.print("\x1b[38;2;255;255;0m{s}\x1b[0m\n", .{message});
     } else {
-        try context.stdout.print("{s}\n", .{message});
+        try colors.printLine(context, .warning, "{s}", .{message});
     }
 }
 

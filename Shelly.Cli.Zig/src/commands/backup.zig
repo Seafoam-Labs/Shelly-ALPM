@@ -1,6 +1,7 @@
 const std = @import("std");
 const Zigalpm = @import("Zigalpm");
 const output = @import("../output/config.zig");
+const colors = @import("../output/colors.zig");
 const format = @import("../output/format.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
@@ -425,17 +426,11 @@ fn writeExportFile(
 }
 
 fn writeSuccess(context: *runtime.RuntimeContext, path: []const u8) !void {
-    if (output.supportsAnsi(context))
-        try context.stdout.print("\x1b[34mBackup exported to: {s}\x1b[0m\n", .{path})
-    else
-        try context.stdout.print("Backup exported to: {s}\n", .{path});
+    try colors.printLine(context, .heading, "Backup exported to: {s}", .{path});
 }
 
 fn writeImportSuccess(context: *runtime.RuntimeContext, path: []const u8) !void {
-    if (output.supportsAnsi(context))
-        try context.stdout.print("\x1b[34mBackup imported from: {s}\x1b[0m\n", .{path})
-    else
-        try context.stdout.print("Backup imported from: {s}\n", .{path});
+    try colors.printLine(context, .heading, "Backup imported from: {s}", .{path});
 }
 
 fn writeFailure(

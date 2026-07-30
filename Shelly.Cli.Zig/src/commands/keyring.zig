@@ -1,5 +1,6 @@
 const std = @import("std");
 const output = @import("../output/config.zig");
+const colors = @import("../output/colors.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const elevation = @import("../runtime/elevation.zig");
@@ -159,10 +160,8 @@ fn writeOpening(
 ) !void {
     if (invocation.globals.ui_mode) {
         try output.writeAlpmInfoFrame(context, "TransactionStart", message);
-    } else if (output.supportsAnsi(context)) {
-        try context.stdout.print("\x1b[38;2;255;255;0m{s}\x1b[0m\n", .{message});
     } else {
-        try context.stdout.print("{s}\n", .{message});
+        try colors.printLine(context, .warning, "{s}", .{message});
     }
 }
 

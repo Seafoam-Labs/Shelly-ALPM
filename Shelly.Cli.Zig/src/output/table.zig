@@ -1,4 +1,5 @@
 const std = @import("std");
+const colors = @import("colors.zig");
 
 /// Render the same compact box table used by the C# CLI's BasicTable helper.
 pub fn write(
@@ -24,9 +25,9 @@ pub fn write(
     try writer.writeAll("│");
     for (headers, 0..) |header, index| {
         try writer.writeByte(' ');
-        if (color_headers) try writer.writeAll("\x1b[38;2;128;128;0m");
+        if (color_headers) try writer.writeAll(colors.colorCode(.warning));
         try writer.writeAll(header);
-        if (color_headers) try writer.writeAll("\x1b[0m");
+        if (color_headers) try writer.writeAll(colors.reset);
         try writer.splatByteAll(' ', widths[index] - header.len + 1);
         try writer.writeAll("│");
     }

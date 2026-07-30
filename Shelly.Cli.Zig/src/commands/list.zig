@@ -4,6 +4,7 @@ const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
 const format = @import("../output/format.zig");
 const output = @import("../output/config.zig");
+const colors = @import("../output/colors.zig");
 const table = @import("../output/table.zig");
 const parser = @import("../cli/parser.zig");
 const shortcodes = @import("../cli/shortcodes.zig");
@@ -309,7 +310,7 @@ fn writeConfiguredRemotesPlain(
 ) !void {
     const ansi = output.supportsAnsi(context);
     if (ansi)
-        try context.stdout.writeAll("\x1b[38;2;0;0;255mRemotes:\x1b[0m\n")
+        try context.stdout.print("{s}Remotes:{s}\n", .{ colors.colorCode(.heading), colors.reset })
     else
         try context.stdout.writeAll("Remotes:\n");
     for (remotes) |remote| {
@@ -319,8 +320,8 @@ fn writeConfiguredRemotesPlain(
             .unknown => "Unknown",
         };
         if (ansi) {
-            const color = if (remote.scope == .system) "\x1b[32m" else "\x1b[33m";
-            try context.stdout.print("{s} {s}({s})\x1b[0m\n", .{ remote.name, color, scope });
+            const color: colors.Color = if (remote.scope == .system) .success else .warning;
+            try context.stdout.print("{s} {s}({s}){s}\n", .{ remote.name, colors.colorCode(color), scope, colors.reset });
         } else {
             try context.stdout.print("{s} ({s})\n", .{ remote.name, scope });
         }
@@ -828,10 +829,7 @@ fn writeFlatpakPlain(context: *runtime.RuntimeContext, items: []const FlatpakIte
 }
 
 fn coloredTotal(context: *runtime.RuntimeContext, message: []const u8) !void {
-    if (output.supportsAnsi(context))
-        try context.stdout.print("\x1b[38;2;0;0;255m{s}\x1b[0m\n", .{message})
-    else
-        try context.stdout.print("{s}\n", .{message});
+    try colors.printLine(context, .heading, "{s}", .{message});
 }
 
 fn row(allocator: std.mem.Allocator, values: []const []const u8) ![]const []const u8 {

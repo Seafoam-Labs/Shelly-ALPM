@@ -3,19 +3,11 @@ const Zigalpm = @import("Zigalpm");
 const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
 const output_config = @import("config.zig");
+const colors = @import("colors.zig");
+const Color = colors.Color;
 const fmt = @import("format.zig");
 const review_output = @import("review.zig");
 const runtime = @import("../runtime/context.zig");
-
-const Color = enum {
-    white,
-    green,
-    yellow,
-    red,
-    cyan,
-    dark_magenta,
-    gray,
-};
 
 const SizeDisplay = fmt.SizeDisplay;
 
@@ -235,9 +227,9 @@ pub const Renderer = struct {
         if (std.mem.eql(u8, code, "alpm.scriptlet")) {
             const line = std.mem.trimEnd(u8, status.message, " \t\r\n");
             if (line.len == 0) {
-                try self.writeColoredLine(.dark_magenta, "Running scriptlet...", .{});
+                try self.writeColoredLine(.magenta, "Running scriptlet...", .{});
             } else {
-                try self.writeColoredLine(.dark_magenta, "Scriptlet: {s}", .{line});
+                try self.writeColoredLine(.magenta, "Scriptlet: {s}", .{line});
             }
         } else if (std.mem.eql(u8, code, "alpm.pacnew")) {
             try self.writeColoredLine(.yellow, ":: pacnew stored @ {s}{s}", .{
@@ -281,9 +273,9 @@ pub const Renderer = struct {
             if (std.mem.eql(u8, stage, "hook")) {
                 const line = update.message orelse "";
                 if (line.len == 0) {
-                    try self.writeColoredLine(.dark_magenta, "Running hook...", .{});
+                    try self.writeColoredLine(.magenta, "Running hook...", .{});
                 } else {
-                    try self.writeColoredLine(.dark_magenta, "Hook: {s}", .{line});
+                    try self.writeColoredLine(.magenta, "Hook: {s}", .{line});
                 }
                 return;
             }
@@ -462,9 +454,9 @@ pub const Renderer = struct {
 
     fn writeColoredLine(self: *Renderer, color: Color, comptime format: []const u8, args: anytype) !void {
         if (self.animate) try self.clearBars();
-        if (output_config.supportsAnsi(self.context)) try self.context.stdout.writeAll(colorCode(color));
+        if (output_config.supportsAnsi(self.context)) try self.context.stdout.writeAll(colors.colorCode(color));
         try self.context.stdout.print(format, args);
-        if (output_config.supportsAnsi(self.context)) try self.context.stdout.writeAll("\x1b[0m");
+        if (output_config.supportsAnsi(self.context)) try self.context.stdout.writeAll(colors.reset);
         try self.context.stdout.writeByte('\n');
         if (self.animate) try self.drawBars();
     }
@@ -885,18 +877,6 @@ fn renderBar(
             }
         },
     }
-}
-
-fn colorCode(color: Color) []const u8 {
-    return switch (color) {
-        .white => "\x1b[37m",
-        .green => "\x1b[32m",
-        .yellow => "\x1b[33m",
-        .red => "\x1b[31m",
-        .cyan => "\x1b[36m",
-        .dark_magenta => "\x1b[35m",
-        .gray => "\x1b[90m",
-    };
 }
 
 fn automaticResponse(kind: Zigalpm.OperationQuestionKind) Zigalpm.OperationQuestionResponse {

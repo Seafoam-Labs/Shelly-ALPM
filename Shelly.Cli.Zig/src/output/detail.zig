@@ -2,6 +2,7 @@ const std = @import("std");
 
 const format = @import("format.zig");
 const output = @import("config.zig");
+const colors = @import("colors.zig");
 const runtime = @import("../runtime/context.zig");
 
 const StandardPackage = @import("../commands/search.zig").StandardPackage;
@@ -13,9 +14,6 @@ const FieldWriter = struct {
     context: *runtime.RuntimeContext,
     label_width: usize,
 
-    // Standard ANSI 16-color palette: these are remapped by the terminal theme.
-    const blue = "\x1b[34m";
-    const reset = "\x1b[0m";
     const separator = " : ";
 
     pub fn init(context: *runtime.RuntimeContext, label_width: usize) FieldWriter {
@@ -25,10 +23,10 @@ const FieldWriter = struct {
     fn render(self: *FieldWriter, label: []const u8, value: []const u8) !void {
         const writer = self.context.stdout;
         const use_color = output.supportsAnsi(self.context);
-        if (use_color) try writer.writeAll(blue);
+        if (use_color) try writer.writeAll(colors.colorCode(.heading));
         try writer.writeAll(label);
         if (self.label_width > label.len) try writer.splatByteAll(' ', self.label_width - label.len);
-        if (use_color) try writer.writeAll(reset);
+        if (use_color) try writer.writeAll(colors.reset);
         try writer.writeAll(separator);
         try writer.writeAll(value);
         try writer.writeByte('\n');
@@ -250,7 +248,7 @@ test "writePackageDetail aligns labels and renders every standard package field"
     try expectField(rendered, "Install Date", "Not Installed");
     try expectField(rendered, "Install Reason", "Explicit");
     // Test harness stdio is not a tty, so no ANSI escapes are emitted.
-    try std.testing.expect(std.mem.indexOf(u8, rendered, FieldWriter.blue) == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, colors.colorCode(.heading)) == null);
 }
 
 test "writePackageDetail renders empty list fields as None" {

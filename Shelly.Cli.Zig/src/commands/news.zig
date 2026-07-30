@@ -1,6 +1,7 @@
 const std = @import("std");
 const Zigalpm = @import("Zigalpm");
 const output = @import("../output/config.zig");
+const colors = @import("../output/colors.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const spec = @import("../cli/spec.zig");
@@ -536,10 +537,10 @@ fn writeJson(writer: *std.Io.Writer, feed: []const NewsItem) !void {
 fn writePlain(context: *runtime.RuntimeContext, feed: []const NewsItem) !void {
     for (feed) |item| {
         try context.stdout.writeByte('\n');
-        try writeColored(context, item.title, "33");
-        try writeColored(context, item.pub_date, "90");
-        try writeColored(context, item.link, "34");
-        try writeColored(context, item.description, "37");
+        try writeColored(context, item.title, .warning);
+        try writeColored(context, item.pub_date, .dim);
+        try writeColored(context, item.link, .heading);
+        try writeColored(context, item.description, .white);
         try context.stdout.writeByte('\n');
     }
 }
@@ -547,12 +548,9 @@ fn writePlain(context: *runtime.RuntimeContext, feed: []const NewsItem) !void {
 fn writeColored(
     context: *runtime.RuntimeContext,
     value: []const u8,
-    ansi_code: []const u8,
+    color: colors.Color,
 ) !void {
-    if (output.supportsAnsi(context))
-        try context.stdout.print("\x1b[{s}m{s}\x1b[0m\n", .{ ansi_code, value })
-    else
-        try context.stdout.print("{s}\n", .{value});
+    try colors.printLine(context, color, "{s}", .{value});
 }
 
 fn writeFailure(

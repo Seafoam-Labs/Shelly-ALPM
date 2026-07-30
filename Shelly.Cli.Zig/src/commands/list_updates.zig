@@ -4,6 +4,7 @@ const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
 const format = @import("../output/format.zig");
 const output = @import("../output/config.zig");
+const colors = @import("../output/colors.zig");
 const table = @import("../output/table.zig");
 const parser = @import("../cli/parser.zig");
 const shortcodes = @import("../cli/shortcodes.zig");
@@ -502,7 +503,7 @@ fn writePlain(context: *runtime.RuntimeContext, result: *const Result) !void {
 }
 
 fn writeStandardPlain(context: *runtime.RuntimeContext, updates: []const StandardUpdate) !void {
-    if (updates.len == 0) return writeColoredLine(context, "0;255;0", "All packages are up to date!");
+    if (updates.len == 0) return writeColoredLine(context, .success, "All packages are up to date!");
 
     var storage = std.heap.ArenaAllocator.init(context.allocator);
     defer storage.deinit();
@@ -528,11 +529,11 @@ fn writeStandardPlain(context: *runtime.RuntimeContext, updates: []const Standar
     );
     try context.stdout.writeByte('\n');
     const message = try std.fmt.allocPrint(allocator, "{d} standard packages can be updated", .{updates.len});
-    try writeColoredLine(context, "255;255;0", message);
+    try writeColoredLine(context, .warning, message);
 }
 
 fn writeAurPlain(context: *runtime.RuntimeContext, updates: []const AurUpdate) !void {
-    if (updates.len == 0) return writeColoredLine(context, "255;255;0", "All AUR packages are up to date.");
+    if (updates.len == 0) return writeColoredLine(context, .warning, "All AUR packages are up to date.");
 
     var storage = std.heap.ArenaAllocator.init(context.allocator);
     defer storage.deinit();
@@ -559,11 +560,11 @@ fn writeAurPlain(context: *runtime.RuntimeContext, updates: []const AurUpdate) !
         output.supportsAnsi(context),
     );
     const message = try std.fmt.allocPrint(allocator, "AUR Total: {d} packages need updates", .{updates.len});
-    try writeColoredLine(context, "255;255;0", message);
+    try writeColoredLine(context, .warning, message);
 }
 
 fn writeAppImagePlain(context: *runtime.RuntimeContext, updates: []const AppImageUpdate) !void {
-    if (updates.len == 0) return writeColoredLine(context, "255;255;0", "No appimage updates available");
+    if (updates.len == 0) return writeColoredLine(context, .warning, "No appimage updates available");
     for (updates) |update| {
         const message = try std.fmt.allocPrint(
             context.allocator,
@@ -571,7 +572,7 @@ fn writeAppImagePlain(context: *runtime.RuntimeContext, updates: []const AppImag
             .{ update.name, update.version },
         );
         defer context.allocator.free(message);
-        try writeColoredLine(context, "255;255;0", message);
+        try writeColoredLine(context, .warning, message);
     }
 }
 
@@ -601,19 +602,15 @@ fn writeFlatpakPlain(context: *runtime.RuntimeContext, updates: []const FlatpakU
     );
     try context.stdout.writeByte('\n');
     const message = try std.fmt.allocPrint(allocator, "Flatpak Total: {d} packages", .{updates.len});
-    try writeColoredLine(context, "255;255;0", message);
+    try writeColoredLine(context, .warning, message);
 }
 
 fn writeColoredLine(
     context: *runtime.RuntimeContext,
-    color: []const u8,
+    color: colors.Color,
     message: []const u8,
 ) !void {
-    if (output.supportsAnsi(context)) {
-        try context.stdout.print("\x1b[38;2;{s}m{s}\x1b[0m\n", .{ color, message });
-    } else {
-        try context.stdout.print("{s}\n", .{message});
-    }
+    try colors.printLine(context, color, "{s}", .{message});
 }
 
 fn sortedStandard(allocator: std.mem.Allocator, updates: []const StandardUpdate) ![]StandardUpdate {

@@ -3,6 +3,7 @@ const Zigalpm = @import("Zigalpm");
 const install = @import("install.zig");
 const parser = @import("../cli/parser.zig");
 const output = @import("../output/config.zig");
+const colors = @import("../output/colors.zig");
 const runtime = @import("../runtime/context.zig");
 
 const command_path = "shelly";
@@ -334,7 +335,7 @@ fn promptSelection(
     for (candidates, 0..) |candidate, index| {
         const number = candidates.len - index;
         const most_likely = index + 1 == candidates.len;
-        if (most_likely and use_color) try context.stdout.writeAll("\x1b[32m");
+        if (most_likely and use_color) try context.stdout.writeAll(colors.colorCode(.highlight));
         try context.stdout.print("{d}) {s} — ", .{ number, candidate.name });
         switch (candidate.source) {
             .standard => try context.stdout.writeAll("standard"),
@@ -344,7 +345,7 @@ fn promptSelection(
         if (candidate.description.len > 0)
             try context.stdout.print(" — {s}", .{truncate(candidate.description, 80)});
         if (most_likely) try context.stdout.writeAll(" [Most likely match]");
-        if (most_likely and use_color) try context.stdout.writeAll("\x1b[0m");
+        if (most_likely and use_color) try context.stdout.writeAll(colors.reset);
         try context.stdout.writeByte('\n');
     }
     try context.stdout.writeAll("0) Cancel\n");
