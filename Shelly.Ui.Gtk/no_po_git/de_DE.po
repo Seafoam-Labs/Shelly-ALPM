@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
 "POT-Creation-Date: 2026-07-03 00:26+0000\n"
-"PO-Revision-Date: 2026-07-27 22:16+0200\n"
+"PO-Revision-Date: 2026-07-31 22:11+0200\n"
 "Last-Translator: helge1o1o1@gmail.com\n"
 "Language-Team: Deutschland (Deutsch) helge1o1o1@gmail.com\n"
 "Language: de\n"
@@ -624,7 +624,7 @@ msgid "Force a synchronization of the package database."
 msgstr "Synchronisierung der Paketdatenbank erzwingen."
 
 msgid "Remove db.lck"
-msgstr "db.lock entfernen"
+msgstr "Entfernt db.lock"
 
 msgid ""
 "Removes the db.lck file if it was left behind by an interrupted alpm process."
@@ -2208,4 +2208,3 @@ msgstr "Update"
 
 msgid "Utilities"
 msgstr "Hilfsprogramme"
-
