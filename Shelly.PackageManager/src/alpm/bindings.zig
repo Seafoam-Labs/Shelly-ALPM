@@ -382,12 +382,39 @@ pub const libalpm = struct {
         depends_value: [][:0]u8,
         optional_depends_value: [][:0]u8,
         conflicts_value: [][:0]u8,
-        required_by_value: [][:0]u8,
-        optional_for_value: [][:0]u8,
+        required_by_value: [][]const u8,
+        optional_for_value: [][]const u8,
         build_date_value: i64,
         install_date_value: ?i64,
 
         pub fn init(allocator: std.mem.Allocator, package: Package) std.mem.Allocator.Error!OwnedPackage {
+            return initInternal(allocator, package, false, false);
+        }
+
+        /// Like `init`, but additionally computes the reverse-dependency
+        /// collections (`RequiredBy` / `OptionalFor`) when requested, via
+        /// `Package.owned_required_by` / `Package.owned_optional_for`.
+        ///
+        /// These are opt-in because `alpm_pkg_compute_requiredby` and
+        /// `alpm_pkg_compute_optionalfor` each walk the full local dependency
+        /// graph for every package they're computed for, which turns a plain
+        /// list into an expensive O(n^2) operation. Callers should only pass
+        /// `true` for the column they actually intend to display.
+        pub fn initWithReverseDeps(
+            allocator: std.mem.Allocator,
+            package: Package,
+            compute_required_by: bool,
+            compute_optional_for: bool,
+        ) std.mem.Allocator.Error!OwnedPackage {
+            return initInternal(allocator, package, compute_required_by, compute_optional_for);
+        }
+
+        fn initInternal(
+            allocator: std.mem.Allocator,
+            package: Package,
+            compute_required_by: bool,
+            compute_optional_for: bool,
+        ) std.mem.Allocator.Error!OwnedPackage {
             const name_value = try allocator.dupeZ(u8, package.name() orelse "");
             errdefer allocator.free(name_value);
 
@@ -420,14 +447,25 @@ pub const libalpm = struct {
             errdefer freeStrings(allocator, optional_depends_value);
             const conflicts_value = try dupeDependencies(allocator, package.conflicts());
             errdefer freeStrings(allocator, conflicts_value);
-            // Keep parity with the C# DTO, whose ToDto implementation currently
-            // leaves these two reverse-dependency collections empty. Computing
-            // them for every repository package also turns a search into an
-            // expensive dependency-graph walk.
-            const required_by_value = try allocator.alloc([:0]u8, 0);
-            errdefer freeStrings(allocator, required_by_value);
-            const optional_for_value = try allocator.alloc([:0]u8, 0);
-            errdefer freeStrings(allocator, optional_for_value);
+            // These two reverse-dependency collections are only computed on
+            // request: `alpm_pkg_compute_requiredby` /
+            // `alpm_pkg_compute_optionalfor` each walk the full local
+            // dependency graph, so eagerly computing them for every package
+            // would turn a plain list or search into an expensive
+            // dependency-graph walk. `owned_required_by`/`owned_optional_for`
+            // free libalpm's internally-computed list before returning, so
+            // unlike the raw `.required_by()`/`.optional_for()` iterators
+            // they don't leak on every call.
+            const required_by_value: [][]const u8 = if (compute_required_by)
+                try package.owned_required_by(allocator)
+            else
+                try allocator.alloc([]const u8, 0);
+            errdefer freeOwnedStrings(allocator, required_by_value);
+            const optional_for_value: [][]const u8 = if (compute_optional_for)
+                try package.owned_optional_for(allocator)
+            else
+                try allocator.alloc([]const u8, 0);
+            errdefer freeOwnedStrings(allocator, optional_for_value);
 
             return .{
                 .name_value = name_value,
@@ -496,6 +534,11 @@ pub const libalpm = struct {
             allocator.free(values);
         }
 
+        fn freeOwnedStrings(allocator: std.mem.Allocator, values: [][]const u8) void {
+            for (values) |value| allocator.free(value);
+            allocator.free(values);
+        }
+
         pub fn deinit(self: *OwnedPackage, allocator: std.mem.Allocator) void {
             allocator.free(self.name_value);
             allocator.free(self.version_value);
@@ -510,8 +553,8 @@ pub const libalpm = struct {
             freeStrings(allocator, self.depends_value);
             freeStrings(allocator, self.optional_depends_value);
             freeStrings(allocator, self.conflicts_value);
-            freeStrings(allocator, self.required_by_value);
-            freeStrings(allocator, self.optional_for_value);
+            freeOwnedStrings(allocator, self.required_by_value);
+            freeOwnedStrings(allocator, self.optional_for_value);
             self.* = undefined;
         }
 
@@ -588,11 +631,11 @@ pub const libalpm = struct {
             return self.conflicts_value;
         }
 
-        pub fn required_by(self: OwnedPackage) []const [:0]u8 {
+        pub fn required_by(self: OwnedPackage) []const []const u8 {
             return self.required_by_value;
         }
 
-        pub fn optional_for(self: OwnedPackage) []const [:0]u8 {
+        pub fn optional_for(self: OwnedPackage) []const []const u8 {
             return self.optional_for_value;
         }
 

@@ -442,6 +442,20 @@ pub const Manager = struct {
     }
 
     pub fn get_installed_packages(self: *Manager) TransactionError![]libalpm.OwnedPackage {
+        return self.get_installed_packages_ex(false, false);
+    }
+
+    /// Like `get_installed_packages`, but lets the caller opt into computing
+    /// the `RequiredBy` / `OptionalFor` reverse-dependency columns.
+    ///
+    /// Each is an independently expensive dependency-graph walk performed
+    /// once per package, so only pass `true` for the ones the caller
+    /// actually intends to display.
+    pub fn get_installed_packages_ex(
+        self: *Manager,
+        compute_required_by: bool,
+        compute_optional_for: bool,
+    ) TransactionError![]libalpm.OwnedPackage {
         if (self.handle == null) return TransactionError.NoHandle;
         var operation_scope = OperationScope.init(self, .search, null);
         operation_scope.attach();
@@ -459,7 +473,12 @@ pub const Manager = struct {
         while (pkg_ptr != null) : (pkg_ptr = pkg_ptr.?.*.next) {
             const package_ptr = pkg_ptr.?.data orelse continue;
             const package = libalpm.Package.from(package_ptr) orelse continue;
-            var owned_package = libalpm.OwnedPackage.init(self.allocator, package) catch return TransactionError.OutOfMemory;
+            var owned_package = libalpm.OwnedPackage.initWithReverseDeps(
+                self.allocator,
+                package,
+                compute_required_by,
+                compute_optional_for,
+            ) catch return TransactionError.OutOfMemory;
             package_list.append(self.allocator, owned_package) catch {
                 owned_package.deinit(self.allocator);
                 return TransactionError.OutOfMemory;

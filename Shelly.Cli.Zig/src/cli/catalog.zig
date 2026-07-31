@@ -1193,6 +1193,16 @@ fn optionDefinitions(comptime action: []const u8, comptime type_name: []const u8
         flag("--show-hidden", &.{"-w"}, "Include hidden packages"),
         flag("--explicitOnly", &.{"-e"}, "List explicitly installed packages only"),
         flag("--dependencyOnly", &.{"-d"}, "List dependency-installed packages only"),
+        flag(
+            "--required-by-column",
+            &.{},
+            "Compute and include the RequiredBy column (expensive: walks the local dependency graph)",
+        ),
+        flag(
+            "--optional-for-column",
+            &.{},
+            "Compute and include the OptionalFor column (expensive: walks the local dependency graph)",
+        ),
     };
     if (pathIs(action, type_name, "list", "aur")) return &.{
         flag("--show-hidden", &.{}, "Include hidden packages"),
