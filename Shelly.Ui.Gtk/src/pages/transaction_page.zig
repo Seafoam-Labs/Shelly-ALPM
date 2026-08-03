@@ -34,6 +34,12 @@ const PackageRow = struct {
     progress: *gtk.ProgressBar,
     stage: ?[]const u8 = null,
     pulse_source: c_uint = 0,
+    // Download speed tracking
+    download_start_ms: u64 = 0,
+    download_last_bytes: i64 = 0,
+    download_last_ms: u64 = 0,
+    // Reusable buffer for status label text
+    status_buf: [128]u8 = undefined,
 };
 
 pub const TransactionPage = extern struct {
@@ -315,7 +321,16 @@ pub const TransactionPage = extern struct {
                         pr.current_download,
                         pr.total_download,
                     ));
-                    setLabel(row.status_label, nonEmpty(pr.message) orelse phase_label(pr.progress_type));
+                    const status_text = downloadStatusLabel(
+                        row,
+                        pr.progress_type,
+                        pr.stage,
+                        pr.percent,
+                        pr.current_download,
+                        pr.total_download,
+                        pr.message,
+                    );
+                    setLabel(row.status_label, status_text);
                 }
             },
             .flatpak_progress => |pr| {
@@ -400,6 +415,58 @@ pub const TransactionPage = extern struct {
         return std.mem.eql(u8, progress_type, "PackageDownload") or
             std.mem.eql(u8, progress_type, "DatabaseDownload") or
             std.mem.eql(u8, progress_type, "AurDownload");
+    }
+
+    fn downloadStatusLabel(
+        row: *PackageRow,
+        progress_type: []const u8,
+        stage: ?[]const u8,
+        percent: i64,
+        current_download: i64,
+        total_download: i64,
+        message: ?[]const u8,
+    ) []const u8 {
+        if (isDownloadProgress(progress_type) and
+            !isAurLifecycleStage(stage) and
+            total_download > 0)
+        {
+            const now_ms = std.time.milliTimestamp();
+            if (row.download_start_ms == 0) {
+                row.download_start_ms = now_ms;
+                row.download_last_bytes = current_download;
+                row.download_last_ms = now_ms;
+            }
+            const elapsed_ms = now_ms - row.download_last_ms;
+            if (elapsed_ms >= 200) {
+                const bytes_delta = current_download - row.download_last_bytes;
+                const speed_bps = if (elapsed_ms > 0)
+                    @as(f64, @floatFromInt(bytes_delta)) / @as(f64, @floatFromInt(elapsed_ms)) * 1000.0
+                else
+                    0.0;
+                row.download_last_bytes = current_download;
+                row.download_last_ms = now_ms;
+                const base = nonEmpty(message) orelse phase_label(progress_type);
+                return std.fmt.bufPrintZ(&row.status_buf, "{s} ({d}%) @ {s}", .{ base, percent, formatSpeedInline(speed_bps) }) catch base;
+            }
+        } else {
+            row.download_start_ms = 0;
+            row.download_last_bytes = 0;
+            row.download_last_ms = 0;
+        }
+        return nonEmpty(message) orelse phase_label(progress_type);
+    }
+
+    fn formatSpeedInline(bytes_per_second: f64) []const u8 {
+        if (bytes_per_second < 0) return "0 B/s";
+        const units = [_][]const u8{ "B/s", "KB/s", "MB/s", "GB/s" };
+        var val = bytes_per_second;
+        var i: usize = 0;
+        while (val >= 1024.0 and i < units.len - 1) {
+            val /= 1024.0;
+            i += 1;
+        }
+        var buf: [32]u8 = undefined;
+        return std.fmt.bufPrint(&buf, "{:.1} {s}", .{ val, units[i] }) catch "0 B/s";
     }
 
     fn stageChanged(previous: ?[]const u8, current: []const u8) bool {
