@@ -296,9 +296,9 @@ pub const ShellySettingsPage = extern struct {
         };
 
         p.save_guard = true;
+        defer p.save_guard = false;
         applyConfig(p, cfg);
         populatePageDropdown(p, cfg);
-        p.save_guard = false;
 
         applyScheduleVisibility(p);
         applyTrayVisibility(p);
@@ -363,6 +363,14 @@ pub const ShellySettingsPage = extern struct {
 
         var updated = cfg.*;
         collectIntoConfig(p, arena.allocator(), &updated);
+
+        const page_drop_stale =
+            updated.RecommendedEnabled != cfg.RecommendedEnabled or
+            updated.AurEnabled != cfg.AurEnabled or
+            updated.FlatPackEnabled != cfg.FlatPackEnabled or
+            updated.AppImageEnabled != cfg.AppImageEnabled or
+            updated.ShellySearchEnabled != cfg.ShellySearchEnabled;
+
         svc.set(updated) catch {
             p.toast.show(.@"error", translations._("Failed to save settings"));
             return;
@@ -376,8 +384,10 @@ pub const ShellySettingsPage = extern struct {
         _ = translations.initWithLocale(lang_value);
 
         p.save_guard = true;
-        populatePageDropdown(p, cfg);
-        p.save_guard = false;
+        defer p.save_guard = false;
+        if (page_drop_stale) {
+            populatePageDropdown(p, &updated);
+        }
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.applyConfig();
@@ -547,8 +557,8 @@ pub const ShellySettingsPage = extern struct {
     fn restoreSupportSwitch(self: *Self, feature: SupportFeature, enabled: bool) void {
         const p = self.priv();
         p.save_guard = true;
+        defer p.save_guard = false;
         setSwitch(supportSwitch(p, feature), enabled);
-        p.save_guard = false;
     }
 
     fn supportSwitch(p: *Private, feature: SupportFeature) *gtk.Switch {
