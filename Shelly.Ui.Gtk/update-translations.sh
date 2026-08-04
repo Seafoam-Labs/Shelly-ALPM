@@ -11,6 +11,9 @@ source_dir="src"
 po_dir="po"
 pot_file="$po_dir/shelly-ui.pot"
 
+rm -f "$pot_file"
+touch "$pot_file"
+
 for tool in find xgettext msgcat msguniq; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "error: required gettext tool '$tool' was not found" >&2
@@ -85,11 +88,10 @@ while IFS= read -r -d '' po_file; do
     msguniq --use-first --output-file="$normalized_po" "$po_file"
     # Append extracted messages without obsoleting PO-only legacy entries.
     # --use-first preserves every existing translation.
-    msgcat \
-        --use-first \
+    msgmerge \
         --no-location \
         --output-file="$updated_po" \
-        "$normalized_po" \
+        "$po_file" \
         "$extracted_pot"
     mv -- "$updated_po" "$po_file"
     ((po_count += 1))
