@@ -304,7 +304,6 @@ pub const UpdatePage = extern struct {
         std.heap.c_allocator.destroy(result);
 
         set_load(page, .Loaded);
-        update_summary(page);
         return 0;
     }
 
@@ -335,17 +334,18 @@ pub const UpdatePage = extern struct {
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
                 self.update_source_labels();
                 gtk.Spinner.stop(p.loading_spinner);
+                self.update_summary();
             },
             .Fail => {
                 gtk.Label.setLabel(p.error_label, translations._("Could not run shelly check-updates. Check the CLI output and try again."));
                 gtk.Stack.setVisibleChild(p.updates_stack, p.error_page.as(gtk.Widget));
-                gtk.Label.setLabel(p.selected_label, translations._("Update check failed"));
+                gtk.Label.setLabel(p.selected_label, translations._("Could not check for updates"));
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
                 gtk.Spinner.stop(p.loading_spinner);
             },
             .NoUpdates => {
-                self.update_source_labels();
+                gtk.Label.setLabel(p.selected_label, translations._("Your system is up to date"));
                 gtk.Stack.setVisibleChild(p.updates_stack, p.empty_page.as(gtk.Widget));
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
