@@ -885,7 +885,7 @@ pub const TransactionPage = extern struct {
                 pending.operation.cancel();
             };
         } else {
-            pending.operation.answerOptDeps(pending.questionId(), &.{}) catch {
+            pending.operation.answerProvider(pending.questionId(), 0) catch {
                 pending.operation.cancel();
             };
         }
