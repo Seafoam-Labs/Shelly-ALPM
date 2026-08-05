@@ -91,7 +91,7 @@ while IFS= read -r -d '' po_file; do
     msgmerge \
         --no-location \
         --output-file="$updated_po" \
-        "$po_file" \
+        "$normalized_po" \
         "$extracted_pot"
     mv -- "$updated_po" "$po_file"
     ((po_count += 1))
