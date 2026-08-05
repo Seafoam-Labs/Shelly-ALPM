@@ -313,36 +313,35 @@ pub const UpdatePage = extern struct {
         switch (state) {
             .Loading => {
                 gtk.Label.setLabel(p.selected_label, translations._("Checking for updates…"));
-                gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 0);
-                gtk.Widget.setSensitive(p.native_toggle.as(gtk.Widget), 0);
-                gtk.Widget.setSensitive(p.aur_toggle.as(gtk.Widget), 0);
-                gtk.Widget.setSensitive(p.flatpak_toggle.as(gtk.Widget), 0);
-                gtk.Widget.setVisible(p.loading_spinner.as(gtk.Widget), 1);
-                gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
-                self.update_source_labels();
                 gtk.Spinner.start(p.loading_spinner);
                 gtk.Stack.setVisibleChild(p.updates_stack, p.loading_page.as(gtk.Widget));
-                return;
+                gtk.Widget.setSensitive(p.aur_toggle.as(gtk.Widget), 0);
+                gtk.Widget.setSensitive(p.flatpak_toggle.as(gtk.Widget), 0);
+                gtk.Widget.setSensitive(p.native_toggle.as(gtk.Widget), 0);
+                gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 0);
+                gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
+                gtk.Widget.setVisible(p.loading_spinner.as(gtk.Widget), 1);
+                self.update_source_labels();
             },
             .Loaded => {
+                gtk.Spinner.stop(p.loading_spinner);
                 gtk.Stack.setVisibleChild(p.updates_stack, p.list_page.as(gtk.Widget));
-                gtk.Widget.setSensitive(p.native_toggle.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.aur_toggle.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.flatpak_toggle.as(gtk.Widget), 1);
-                gtk.Widget.setVisible(p.loading_spinner.as(gtk.Widget), 0);
-                gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 1);
+                gtk.Widget.setSensitive(p.native_toggle.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
+                gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 1);
+                gtk.Widget.setVisible(p.loading_spinner.as(gtk.Widget), 0);
                 self.update_source_labels();
-                gtk.Spinner.stop(p.loading_spinner);
                 self.update_summary();
             },
             .Fail => {
                 gtk.Label.setLabel(p.error_label, translations._("Could not run shelly check-updates. Check the CLI output and try again."));
-                gtk.Stack.setVisibleChild(p.updates_stack, p.error_page.as(gtk.Widget));
                 gtk.Label.setLabel(p.selected_label, translations._("Could not check for updates"));
+                gtk.Spinner.stop(p.loading_spinner);
+                gtk.Stack.setVisibleChild(p.updates_stack, p.error_page.as(gtk.Widget));
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
-                gtk.Spinner.stop(p.loading_spinner);
             },
             .NoUpdates => {
                 gtk.Label.setLabel(p.selected_label, translations._("Your system is up to date"));
