@@ -57,6 +57,7 @@ pub const ReverseDependencyOptions = libalpm.ReverseDependencyOptions;
 
 pub const IgnorePackageError = configuration.IgnorePackageError;
 pub const HoldPackageError = configuration.HoldPackageError;
+pub const RepositoryError = configuration.RepositoryError;
 
 /// A package that satisfies a dependency in a configured sync database.
 /// `real_name` is borrowed from libalpm and remains valid while the manager's
@@ -1909,6 +1910,52 @@ pub const Manager = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         return configuration.Configuration.get_held_packages(&self.config, self.allocator);
+    }
+
+    /// Adds a repository to the configuration and appends its `[name]` section
+    /// to the config file. `sig_level` and `usage` are raw config strings such
+    /// as "Required DatabaseOptional" and "Sync Search"; empty strings omit the
+    /// directive and keep the `Repository` defaults.
+    pub fn add_repository(
+        self: *Manager,
+        name: []const u8,
+        servers: []const []const u8,
+        sig_level: []const u8,
+        usage: []const u8,
+    ) RepositoryError!void {
+        var operation_scope = OperationScope.init(self, .configure, name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try configuration.Configuration.add_repository(
+            &self.config,
+            self.io(),
+            self.allocator,
+            self.config_path,
+            name,
+            servers,
+            sig_level,
+            usage,
+        );
+    }
+
+    /// Removes every repository named `name` from the configuration and deletes
+    /// its section from the config file. Unknown names leave everything untouched.
+    pub fn remove_repository(
+        self: *Manager,
+        name: []const u8,
+    ) RepositoryError!void {
+        var operation_scope = OperationScope.init(self, .configure, name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try configuration.Configuration.remove_repository(
+            &self.config,
+            self.io(),
+            self.allocator,
+            self.config_path,
+            name,
+        );
     }
 
     /// Returns repository names borrowed from the parsed configuration in
