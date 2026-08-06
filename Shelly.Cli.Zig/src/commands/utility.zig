@@ -7,6 +7,7 @@ const pacfiles = @import("pacfiles.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const elevation = @import("../runtime/elevation.zig");
+const repository = @import("repository.zig");
 const spec = @import("../cli/spec.zig");
 const xdg = @import("../runtime/xdg.zig");
 
@@ -42,6 +43,7 @@ pub fn dispatch(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
 ) !?u8 {
+    if (try repository.dispatch(context, invocation)) |exit_code| return exit_code;
     if (!std.mem.eql(u8, invocation.command.path, command_path)) return null;
 
     const selection = selectOperation(invocation);

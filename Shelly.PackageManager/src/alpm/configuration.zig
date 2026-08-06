@@ -343,7 +343,6 @@ pub const Configuration = struct {
         if (find_repository(config, normalized) != null)
             return RepositoryError.DuplicateRepository;
 
-        // `Repository` fields are plain slices, so no sentinel duping is needed.
         const arena_allocator = config.arena.allocator();
         var repository = Repository{ .name = try arena_allocator.dupe(u8, normalized) };
         for (servers) |server| {

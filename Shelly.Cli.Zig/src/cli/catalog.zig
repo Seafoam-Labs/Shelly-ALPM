@@ -13,6 +13,7 @@ const mark = @import("catalog/mark.zig");
 const news = @import("catalog/news.zig");
 const purify = @import("catalog/purify.zig");
 const remove = @import("catalog/remove.zig");
+const repository = @import("catalog/repository.zig");
 const run = @import("catalog/run.zig");
 const search = @import("catalog/search.zig");
 const sync = @import("catalog/sync.zig");
@@ -74,6 +75,7 @@ pub const variants = search.variants ++
     utility.variants ++
     purify.variants ++
     remove.variants ++
+    repository.variants ++
     sync.variants ++
     update.variants ++
     config.variants ++
