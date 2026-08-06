@@ -304,7 +304,7 @@
                 <child>
                     <object class="GtkCheckButton" id="show_depends_only">
                         <property name="label" translatable="yes">Show Dependency Only</property>
-                        <property name="tooltip-text" translatable="yes">Show dependency packages on;y</property>
+                        <property name="tooltip-text" translatable="yes">Show dependency packages only</property>
                         <signal name="toggled" handler="on_depends_only"/>
                         <property name="active">false</property>
                     </object>
