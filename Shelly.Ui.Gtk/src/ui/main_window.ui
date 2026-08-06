@@ -3,7 +3,7 @@
  <template class="ShellyWindow" parent="GtkApplicationWindow">
   <property name="title" translatable="yes">Shelly</property>
   <property name="default-width">700</property>
-  <property name="default-height">450</property>
+  <property name="default-height">600</property>
   <child>
     <object class="GtkOverlay" id="root_overlay">
       <property name="hexpand">true</property>
