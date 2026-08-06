@@ -5,13 +5,12 @@
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
     <style>
-       <class name="background"/>
-     </style>
+      <class name="background"/>
+    </style>
     <child>
       <object class="GtkOverlay" id="root_overlay">
         <property name="hexpand">true</property>
         <property name="vexpand">true</property>
-        <style><class name="lockout-scrim"/></style>
         <child>
           <object class="GtkBox">
             <property name="orientation">vertical</property>
@@ -42,24 +41,24 @@
                   </object>
                 </child>
                 <child>
-                <object class="GtkButton" id="close_button">
-                  <property name="icon-name">window-close-symbolic</property>
-                  <property name="tooltip-text" translatable="yes">Close</property>
-                  <property name="visible">false</property>
-                  <signal name="clicked" handler="on_close" swapped="true"/>
-                  <style><class name="flat"/></style>
-                  <child>
-                    <object class="GtkShortcutController">
-                      <property name="scope">managed</property>
-                      <child>
-                        <object class="GtkShortcut">
-                          <property name="trigger">Escape</property>
-                          <property name="action">activate</property>
-                        </object>
-                      </child>
-                    </object>
-                  </child>
-                </object>
+                  <object class="GtkButton" id="close_button">
+                    <property name="icon-name">window-close-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">Close</property>
+                    <property name="visible">false</property>
+                    <signal name="clicked" handler="on_close" swapped="true"/>
+                    <style><class name="flat"/></style>
+                    <child>
+                      <object class="GtkShortcutController">
+                        <property name="scope">managed</property>
+                        <child>
+                          <object class="GtkShortcut">
+                            <property name="trigger">Escape</property>
+                            <property name="action">activate</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
                 </child>
               </object>
             </child>
@@ -119,7 +118,16 @@
           </object>
         </child>
         <child type="overlay">
+          <object class="GtkBox" id="question_scrim">
+            <property name="visible">false</property>
+            <property name="can-target">true</property>
+            <style><class name="lockout-scrim"/></style>
+          </object>
+        </child>
+        <child type="overlay">
           <object class="GtkBox" id="question_layer">
+            <property name="orientation">vertical</property>
+            <property name="spacing">12</property>
             <property name="visible">false</property>
             <property name="halign">center</property>
             <property name="valign">center</property>
