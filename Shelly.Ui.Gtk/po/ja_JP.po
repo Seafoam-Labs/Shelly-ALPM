@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-05 12:25+0300\n"
-"PO-Revision-Date: 2026-07-03 21:14+0900\n"
+"POT-Creation-Date: 2026-08-06 20:50+0900\n"
+"PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
 "Language: ja_JP\n"
@@ -13,28 +13,28 @@ msgstr ""
 "X-Generator: Poedit 3.9\n"
 
 msgid "No installable addons available"
-msgstr ""
+msgstr "インストール可能なアドオンはありません"
 
 msgid "Close"
 msgstr "閉じる"
 
 msgid "Confirm"
-msgstr "承認"
+msgstr "確認"
 
 msgid "Skip"
-msgstr ""
+msgstr "スキップ"
 
 msgid "No special permissions requested"
-msgstr ""
+msgstr "特別な権限は要求されません"
 
 msgid "Review PKGBUILD changes"
-msgstr "PKGBUILD の変更点を検査"
+msgstr "PKGBUILD の変更内容を確認"
 
 msgid "Changes"
-msgstr "変更点"
+msgstr "変更内容"
 
 msgid "Warnings"
-msgstr ""
+msgstr "警告"
 
 msgid ""
 "These commands fetch and execute code outside of shelly and libalpm's "
@@ -44,13 +44,13 @@ msgstr ""
 "続行する前に内容を確認してください。"
 
 msgid "Source Files"
-msgstr ""
+msgstr "ソースファイル"
 
 msgid "Cancel"
 msgstr "キャンセル"
 
 msgid "polkit is required"
-msgstr ""
+msgstr "polkit が必要です"
 
 msgid ""
 "Shelly's GUI needs <b>polkit</b> installed and running to authorize "
@@ -61,9 +61,16 @@ msgid ""
 "<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
 "Polkit</a>"
 msgstr ""
+"Shelly の GUI で特権操作を承認するには、<b>polkit</b> がインストールされてい"
+"て実行中である必要がありますが、システムバス上で見つかりませんでした。\n"
+"\n"
+"インストールして有効にした後、再試行してください。\n"
+"\n"
+"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
+"Polkit</a>"
 
 msgid "Review PKGBUILD"
-msgstr ""
+msgstr "PKGBUILD を確認"
 
 msgid "Search..."
 msgstr "検索..."
@@ -104,10 +111,10 @@ msgid "Size on Disk"
 msgstr "ディスク上のサイズ"
 
 msgid "Update Strategy"
-msgstr "アップデート戦略"
+msgstr "アップデート方法"
 
 msgid "Update URL / Repository Info"
-msgstr "アップデート取得先の URL / リポジトリ"
+msgstr "アップデート取得元の URL / リポジトリ"
 
 msgid "Get more information about Update URL / Repository Info"
 msgstr "URL / リポジトリ情報の更新についてもっと知る"
@@ -117,9 +124,11 @@ msgstr "例: owner/repo または https://..."
 
 msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
 msgstr ""
+"無効な形式です。owner/repo（例: seafoam-labs/shelly-alpm）を使用してくださ"
+"い。"
 
 msgid "Allow Prerelease"
-msgstr "プレリリースを許可"
+msgstr "正式公開前のものを許可"
 
 msgid "Installation Path"
 msgstr "インストールパス"
@@ -137,19 +146,19 @@ msgid "Remove"
 msgstr "削除"
 
 msgid "Information"
-msgstr ""
+msgstr "情報"
 
 msgid "Preview Pkgbuild"
-msgstr ""
+msgstr "PKGBUILD をプレビュー"
 
 msgid "Search the AUR by name or keyword"
-msgstr ""
+msgstr "名前やキーワードで AUR を検索する"
 
 msgid "Installed Only"
-msgstr ""
+msgstr "インストール済みのみ"
 
 msgid "Show only installed packages"
-msgstr ""
+msgstr "インストール済みパッケージのみを表示"
 
 msgid "Additional Options"
 msgstr "その他のオプション"
@@ -167,39 +176,43 @@ msgid "Popularity"
 msgstr "人気度"
 
 msgid "Search the AUR"
-msgstr ""
+msgstr "AUR を検索"
 
 msgid "The AUR has no browsable index type a package name to begin."
 msgstr ""
+"AUR には参照可能なインデックスがありません。開始するにはパッケージ名を入力し"
+"てください。"
 
 msgid "Run checks"
 msgstr "チェックを実行"
 
 msgid "Run the --check function during package build"
-msgstr ""
+msgstr "パッケージのビルド中に --check 関数を実行する"
 
 msgid "Hide Detail Pane"
-msgstr ""
+msgstr "詳細ペインを隠す"
 
 msgid "Hide the detail pane on the right"
-msgstr ""
+msgstr "右側の詳細ペインを隠す"
 
 msgid "Install a local Flatpak"
-msgstr ""
+msgstr "ローカル Flatpak をインストール"
 
 msgid ""
 "Choose a .flatpak bundle from your system and install it for the current "
 "user or system-wide."
 msgstr ""
+"ローカルの .flatpak バンドルを選択し、現在のユーザー用またはシステム全体用に"
+"インストールします。"
 
 msgid "Bundle"
-msgstr ""
+msgstr "バンドル"
 
 msgid "Choose file…"
-msgstr ""
+msgstr "ファイルを選択…"
 
 msgid "Install for"
-msgstr ""
+msgstr "インストール範囲"
 
 msgid "system"
 msgstr "システム"
@@ -220,7 +233,7 @@ msgid "Addons"
 msgstr "アドオン"
 
 msgid "Install source"
-msgstr ""
+msgstr "ソースをインストール"
 
 msgid "Author"
 msgstr "作者"
@@ -238,7 +251,7 @@ msgid "Summary"
 msgstr "概要"
 
 msgid "Show more"
-msgstr "もっと表示"
+msgstr "さらに表示"
 
 msgid "App Permissions"
 msgstr "アプリの権限"
@@ -250,16 +263,16 @@ msgid "Search packages..."
 msgstr "パッケージを検索..."
 
 msgid "Browse"
-msgstr ""
+msgstr "参照"
 
 msgid "Manage"
 msgstr "管理"
 
 msgid "Manage Remote Refs"
-msgstr "リモート参照先を管理"
+msgstr "参照するリモートを管理"
 
 msgid "Install Local"
-msgstr "ローカルをインストール"
+msgstr "ローカルからインストール"
 
 msgid "Delete Selected Remote"
 msgstr "選択したリモートを削除"
@@ -280,7 +293,7 @@ msgid "e.g., flathub"
 msgstr "例: flathub"
 
 msgid "Remote URL"
-msgstr "リモートの URL"
+msgstr "リモート URL"
 
 msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
 msgstr "例: https://flathub.org/repo/flathub.flatpakrepo"
@@ -298,25 +311,25 @@ msgid "Repairs Flatpak Installation (Experimental)"
 msgstr "Flatpak インストールを修復する (実験的)"
 
 msgid "Shelly"
-msgstr ""
+msgstr "Shelly"
 
 msgid "Reinstall"
-msgstr ""
+msgstr "再インストール"
 
 msgid "Add Ignore"
-msgstr ""
+msgstr "アップデートしないパッケージに追加"
 
 msgid "Add Hold"
-msgstr ""
+msgstr "削除しないパッケージに追加"
 
 msgid "Make Explicit"
-msgstr ""
+msgstr "明示的なパッケージに変更"
 
 msgid "Mark Dependency"
-msgstr ""
+msgstr "依存によるパッケージに変更"
 
 msgid "Package actions"
-msgstr ""
+msgstr "パッケージ操作"
 
 msgid "Package Group Filter"
 msgstr "パッケージグループフィルター"
@@ -340,12 +353,12 @@ msgid "Repository"
 msgstr "リポジトリ"
 
 msgid "Install Date"
-msgstr ""
+msgstr "インストール日時"
 
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
-"パッケージの読み込み中に問題が発生しました。DB のロックがあるか確認してくださ"
-"い。"
+"パッケージの読み込み中に問題が発生しました。DB がロックされていないか確認して"
+"ください。"
 
 msgid "Perform Upgrade"
 msgstr "アップグレードを実行"
@@ -354,31 +367,32 @@ msgid "Perform a full system upgrade with install (-u)"
 msgstr "インストール (-u) を使用してシステム全体のアップグレードを実行する"
 
 msgid "Show Hidden"
-msgstr "隠しパッケージを表示"
+msgstr "アップデートしないパッケージを表示"
 
 msgid "Show packages in the IgnorePkg list from pacman.conf"
 msgstr "pacman.conf の IgnorePkg リストにあるパッケージを表示する"
 
 msgid "Show Explicit Only"
-msgstr ""
+msgstr "明示的なパッケージのみを表示"
 
 msgid "Show only explicitly installed packages"
-msgstr ""
+msgstr "明示的にインストールしたパッケージのみを表示する"
 
 msgid "Show Dependency Only"
-msgstr ""
+msgstr "依存によるパッケージのみを表示"
 
-msgid "Show dependency packages on;y"
-msgstr ""
+#| msgid "Show dependency packages on;y"
+msgid "Show dependency packages only"
+msgstr "依存によるパッケージのみを表示する"
 
 msgid "Recommended Packages"
-msgstr ""
+msgstr "おすすめパッケージ"
 
 msgid "Curated suggestions from Seafoam Labs"
-msgstr ""
+msgstr "Seafoam Labs が厳選したおすすめです"
 
 msgid "Refresh the recommended packages list from the network"
-msgstr ""
+msgstr "ネットワークからおすすめパッケージのリストを更新する"
 
 msgid "Loading Recommended Packages..."
 msgstr "おすすめパッケージを読み込み中..."
@@ -403,7 +417,7 @@ msgid "Enable Flatpak"
 msgstr "Flatpak を有効にする"
 
 msgid "Enable Recommended"
-msgstr ""
+msgstr "おすすめを有効にする"
 
 msgid "Enable AppImage"
 msgstr "AppImage を有効にする"
@@ -448,7 +462,7 @@ msgid "Update Time (24h):"
 msgstr "アップデート時刻 (24時間制):"
 
 msgid ":"
-msgstr ""
+msgstr ":"
 
 msgid "Look & Feel"
 msgstr "ルック＆フィール"
@@ -483,13 +497,13 @@ msgid "Clear"
 msgstr "クリア"
 
 msgid "Tray Updates Icon"
-msgstr "要アップデート時のトレイアイコン"
+msgstr "アップデートがあるときのトレイアイコン"
 
 msgid "Default page"
 msgstr "デフォルトのページ"
 
 msgid "Navigation style"
-msgstr ""
+msgstr "ナビゲーションスタイル"
 
 msgid "Advanced"
 msgstr "上級者向け"
@@ -498,7 +512,7 @@ msgid "Remove Cache on Uninstall"
 msgstr "アンインストール時にキャッシュを削除する"
 
 msgid "No Confirm"
-msgstr "承認なしで実行する"
+msgstr "確認なしで実行する"
 
 msgid "Enable Shelly Search"
 msgstr "Shelly 検索を有効にする"
@@ -513,40 +527,40 @@ msgid "AppImage Install Path"
 msgstr "AppImage のインストールパス"
 
 msgid "Select Directory"
-msgstr "ディレクトリーを選択"
+msgstr "ディレクトリを選択"
 
 msgid "View Changelog"
-msgstr "Changelog を見る"
+msgstr "変更履歴を見る"
 
 msgid "v0.0.0"
-msgstr ""
+msgstr "v0.0.0"
 
 msgid "GitHub"
 msgstr "GitHub"
 
 msgid "Community fluxer"
-msgstr "コミュニティー fluxer"
+msgstr "コミュニティー Fluxer"
 
 msgid "Sponsor"
 msgstr "スポンサー"
 
 msgid "Toggle output"
-msgstr ""
+msgstr "出力を切り替える"
 
 msgid "Available Updates"
 msgstr "利用可能なアップデート"
 
 msgid "7 of 7 updates included"
-msgstr ""
+msgstr "7 of 7 アップデートが含まれます"
 
 msgid "Check all enabled sources again"
-msgstr ""
+msgstr "有効なすべてのソースを再度確認する"
 
 msgid "Check Again"
-msgstr ""
+msgstr "再度確認"
 
 msgid "Upgrade"
-msgstr ""
+msgstr "アップグレード"
 
 msgid "System"
 msgstr "システム"
@@ -558,19 +572,19 @@ msgid "Flatpak"
 msgstr "Flatpak"
 
 msgid "Checking for updates…"
-msgstr ""
+msgstr "アップデートを確認中…"
 
 msgid "Your system is up to date"
-msgstr ""
+msgstr "お使いのシステムは最新です"
 
 msgid "Could not check for updates"
-msgstr ""
+msgstr "アップデートを確認できませんでした"
 
 msgid "Utilities"
-msgstr ""
+msgstr "ユーティリティ"
 
 msgid "Maintenance and repair tools for your Shelly installation."
-msgstr ""
+msgstr "Shelly インストールのメンテナンスと修復を行うツール。"
 
 msgid "Force Database Update"
 msgstr "強制的にデータベースをアップデート"
@@ -579,7 +593,7 @@ msgid "Force a synchronization of the package database."
 msgstr "パッケージデータベースの同期を強制します。"
 
 msgid "Run"
-msgstr ""
+msgstr "実行"
 
 msgid "Remove db.lck"
 msgstr "db.lck を削除"
@@ -595,8 +609,8 @@ msgid ""
 "Restores correct user ownership of Shelly configuration and cache folders if "
 "they were accidentally created by root."
 msgstr ""
-"Shelly の設定フォルダーとキャッシュフォルダーが誤って root によって作成された"
-"場合、正しいユーザー所有権を復元します。"
+"Shelly の設定フォルダとキャッシュフォルダが誤って root によって作成された場"
+"合、正しいユーザー所有権を復元します。"
 
 msgid "Purify Packages"
 msgstr "パッケージをクリーンアップ"
@@ -605,158 +619,166 @@ msgid "Remove corrupted/orphaned packages."
 msgstr "破損/孤立したパッケージを削除します。"
 
 msgid "Clean Package Cache"
-msgstr ""
+msgstr "パッケージのキャッシュをクリア"
 
 msgid ""
 "Removes old cached package versions, keeping the selected number per package."
 msgstr ""
+"選択した数のバージョンをパッケージごとに保持して、古いキャッシュを削除しま"
+"す。"
 
 msgid "Keep"
-msgstr ""
+msgstr "保持"
 
 msgid "Number of cached versions to keep per package"
-msgstr ""
+msgstr "パッケージごとに保持するキャッシュのバージョン数"
 
 msgid "Welcome to Shelly v3"
-msgstr ""
+msgstr "Shelly v3 へようこそ"
 
 msgid ""
 "Shelly is a modern package manager for Arch Linux. Configure your sources "
 "and preferences to get started."
 msgstr ""
+"Shelly は Arch Linux 向けのモダンなパッケージマネージャーです。最初にソースと"
+"設定をカスタマイズしてください。"
 
 msgid "Select Your Sources"
-msgstr ""
+msgstr "使用するソースを選択"
 
 msgid ""
 "Choose which package sources you want to browse. You can always change this "
 "later in settings."
 msgstr ""
+"閲覧するパッケージソースを選択してください。これは後からいつでも設定で変更で"
+"きます。"
 
 msgid "Arch User Repository community packages"
-msgstr ""
+msgstr "Arch User Repository のコミュニティーパッケージ"
 
 msgid "Sandboxed universal Linux applications"
-msgstr ""
+msgstr "サンドボックス化されたユニバーサル Linux アプリケーション"
 
 msgid "AppImage"
 msgstr "AppImage"
 
 msgid "Portable self-contained application bundles"
-msgstr ""
+msgstr "ポータブルで独立したアプリケーションバンドル"
 
 msgid "Recommended"
 msgstr "おすすめ"
 
 msgid "Curated picks from Shelly"
-msgstr ""
+msgstr "Shelly が厳選したアイテム"
 
 msgid "Look and Feel"
-msgstr ""
+msgstr "ルック＆フィール"
 
 msgid ""
 "Customize how Shelly looks and behaves. All of these can be changed later in "
 "preferences."
 msgstr ""
+"Shelly の外観や動作をカスタマイズします。これらはすべて後から設定で変更できま"
+"す。"
 
 msgid "Navigation Style"
-msgstr ""
+msgstr "ナビゲーションスタイル"
 
 msgid "Sidebar"
-msgstr ""
+msgstr "サイドバー"
 
 msgid "Vertical icon rail on the left"
-msgstr ""
+msgstr "縦並びのアイコンを左に表示する"
 
 msgid "Top Bar"
-msgstr ""
+msgstr "トップバー"
 
 msgid "Horizontal tab switcher at the top"
-msgstr ""
+msgstr "横並びのタブを上に表示する"
 
 msgid "System Tray"
-msgstr ""
+msgstr "システムトレイ"
 
 msgid "Run in system tray when minimized"
-msgstr ""
+msgstr "最小化時にシステムトレイで実行する"
 
 msgid "Next"
-msgstr ""
+msgstr "次へ"
 
 msgid "Start Shelly"
-msgstr ""
+msgstr "Shelly を起動"
 
 msgid "Filesystem"
-msgstr ""
+msgstr "ファイルシステム"
 
 msgid "Devices"
-msgstr ""
+msgstr "デバイス"
 
 msgid "Sockets"
-msgstr ""
+msgstr "ソケット"
 
 msgid "Shared"
-msgstr ""
+msgstr "共有"
 
 msgid "Environment"
-msgstr ""
+msgstr "環境"
 
 msgid "Session bus"
-msgstr ""
+msgstr "セッションバス"
 
 msgid "System bus"
-msgstr ""
+msgstr "システムバス"
 
 msgid "Other"
-msgstr ""
+msgstr "その他"
 
 msgid "Review PKGBUILD changes for"
-msgstr ""
+msgstr "PKGBUILD の変更内容を確認"
 
 msgid "Review Changes"
-msgstr "変更点を検査"
+msgstr "変更内容を確認"
 
 msgid "Security scan completed -"
-msgstr ""
+msgstr "セキュリティスキャン完了 -"
 
 msgid "warning(s) found."
-msgstr ""
+msgstr "個の警告が見つかりました。"
 
 msgid "Security scan completed - warnings found."
-msgstr ""
+msgstr "セキュリティスキャン完了 - 警告が見つかりました。"
 
 msgid "Security scan completed - no issues found."
-msgstr "セキュリティースキャン完了 - 問題は見つかりませんでした。"
+msgstr "セキュリティスキャン完了 - 問題は見つかりませんでした。"
 
 msgid "used in"
-msgstr ""
+msgstr "次で使用"
 
 msgid "Warning"
-msgstr ""
+msgstr "警告"
 
 msgid "Install Anyway"
 msgstr "とにかくインストール"
 
 msgid "package(s)"
-msgstr ""
+msgstr "個のパッケージ"
 
 msgid "to"
-msgstr ""
+msgstr "to"
 
 msgid "download"
-msgstr ""
+msgstr "ダウンロード"
 
 msgid "net"
-msgstr ""
+msgstr "使用"
 
 msgid "Dismiss"
-msgstr ""
+msgstr "却下"
 
 msgid "None"
 msgstr "なし"
 
 msgid "Static URL"
-msgstr ""
+msgstr "静的 URL"
 
 msgid "GitLab"
 msgstr "GitLab"
@@ -768,10 +790,10 @@ msgid "Forgejo"
 msgstr "Forgejo"
 
 msgid "Update Available"
-msgstr ""
+msgstr "アップデートがあります"
 
 msgid "Version ?"
-msgstr ""
+msgstr "バージョン？"
 
 msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgstr ""
@@ -785,51 +807,53 @@ msgid ""
 "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
 "repo/releases"
 msgstr ""
+"無効な Forgejo URL です。http(s)://host/owner/repo または http(s)://host/"
+"owner/repo/releases を使用してください"
 
 msgid "Choose an AppImage file"
-msgstr ""
+msgstr "AppImage ファイルを選択"
 
 msgid "AppImage files"
-msgstr ""
+msgstr "AppImage ファイル"
 
 msgid "Only .AppImage files can be installed"
-msgstr ""
+msgstr ".AppImage ファイルのみインストール可能です"
 
 msgid "Installing AppImage"
-msgstr ""
+msgstr "AppImage をインストール中"
 
 msgid "No AppImages need to be upgraded"
 msgstr "アップグレードする必要のある AppImage はありません"
 
 msgid "Upgrading AppImages"
-msgstr ""
+msgstr "AppImage をアップグレード中"
 
 msgid "Syncing AppImages"
-msgstr ""
+msgstr "AppImage を同期中"
 
 msgid "Syncing AppImage"
-msgstr ""
+msgstr "AppImage を同期中"
 
 msgid "Saving update configuration"
-msgstr ""
+msgstr "アップデート設定を保存中"
 
 msgid "Configuration files will be kept."
-msgstr ""
+msgstr "設定ファイルは保持されます。"
 
 msgid "Remove this AppImage?"
-msgstr ""
+msgstr "この AppImage を削除しますか？"
 
 msgid "Remove AppImage"
-msgstr ""
+msgstr "AppImage を削除"
 
 msgid "Removing AppImage"
-msgstr ""
+msgstr "AppImage を削除中"
 
 msgid "Operation completed successfully"
-msgstr ""
+msgstr "操作が正常に完了しました"
 
 msgid "Operation failed"
-msgstr ""
+msgstr "操作に失敗しました"
 
 msgid "Maintainer"
 msgstr "メンテナー"
@@ -841,7 +865,7 @@ msgid "First Submitted"
 msgstr "初回登録日時"
 
 msgid "URL"
-msgstr ""
+msgstr "URL"
 
 msgid "Licenses"
 msgstr "ライセンス"
@@ -850,130 +874,136 @@ msgid "Depends"
 msgstr "次が必要"
 
 msgid "Optional Depends"
-msgstr ""
+msgstr "オプションとして必要"
 
 msgid "Make Depends"
 msgstr "ビルドに必要"
 
 msgid "Section"
-msgstr ""
+msgstr "セクション"
 
 msgid "The AUR has no browsable index — type a package name to begin."
 msgstr ""
+"AURには閲覧可能なインデックスがありません — パッケージ名を入力して開始してく"
+"ださい。"
 
 msgid "No packages found"
-msgstr ""
+msgstr "パッケージが見つかりません"
 
 msgid "Try a shorter or more general keyword."
-msgstr ""
+msgstr "キーワードを短くするか一般的なものを試してください。"
 
 msgid "Could not reach the AUR"
-msgstr ""
+msgstr "AUR に接続できませんでした"
 
 msgid "Check your connection and try again."
-msgstr ""
+msgstr "接続を確認して、もう一度試してください。"
 
 msgid "Flagged out of date"
-msgstr ""
+msgstr "古いと報告されている"
 
 msgid "Installed"
-msgstr "インストール済み"
+msgstr "インストール時"
 
 msgid "Remove Selected"
 msgstr "選択したものを削除"
 
 msgid "Select one or more packages"
-msgstr ""
+msgstr "1個以上のパッケージを選択してください"
 
 msgid "Package(s)"
-msgstr ""
+msgstr "個のパッケージ"
 
 msgid "Remove Packages"
-msgstr ""
+msgstr "パッケージを削除"
 
 msgid "Remove the selected AUR packages?"
-msgstr ""
+msgstr "選択した AUR パッケージを削除しますか？"
 
 msgid "Build from AUR"
-msgstr ""
+msgstr "AUR からビルド"
 
 msgid "Build and install the selected packages? This may take a while."
 msgstr ""
+"選択したパッケージをビルドしてインストールしますか？これには時間がかかる場合"
+"があります。"
 
 msgid "Build"
-msgstr ""
+msgstr "ビルド"
 
 msgid "Installing AUR packages"
-msgstr ""
+msgstr "AUR パッケージをインストール中"
 
 msgid "Removing AUR packages"
-msgstr ""
+msgstr "AUR パッケージを削除中"
 
 msgid "Choose a Flatpak file"
-msgstr ""
+msgstr "Flatpak ファイルを選択"
 
 msgid "Flatpak files"
-msgstr ""
+msgstr "Flatpak ファイル"
 
 msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
 msgstr ""
+"サポートされていないファイル形式です。.flatpak または .flatpakref ファイルを"
+"選択してください。"
 
 msgid "Installing local flatpak"
-msgstr ""
+msgstr "ローカル Flatpak をインストール中"
 
 msgid "Installation failed."
-msgstr ""
+msgstr "インストールに失敗しました。"
 
 msgid "Installation complete."
-msgstr ""
+msgstr "インストールが完了しました。"
 
 msgid "Choose file..."
-msgstr ""
+msgstr "ファイルを選択..."
 
 msgid "Verified"
-msgstr ""
+msgstr "認証済み"
 
 msgid "Show less"
 msgstr "少なく表示"
 
 msgid "Installing flatpak"
-msgstr ""
+msgstr "Flatpak をインストール中"
 
 msgid "Permissions"
-msgstr ""
+msgstr "権限"
 
 msgid "Available Addons"
 msgstr "利用可能なアドオン"
 
 msgid "Installing flatpak addon"
-msgstr ""
+msgstr "Flatpak アドオンをインストール中"
 
 msgid "Unknown developer"
-msgstr ""
+msgstr "不明な開発者"
 
 msgid "Unknown"
 msgstr "不明"
 
 msgid "Version: Unknown"
-msgstr ""
+msgstr "バージョン: 不明"
 
 msgid "Size: Loading..."
-msgstr ""
+msgstr "サイズ: ロード中..."
 
 msgid "Size: Unknown"
-msgstr ""
+msgstr "サイズ: 不明"
 
 msgid "License"
-msgstr ""
+msgstr "ライセンス"
 
 msgid "License: Unknown"
-msgstr ""
+msgstr "ライセンス: 不明"
 
 msgid "No summary available"
-msgstr ""
+msgstr "要約はありません"
 
 msgid "Size: Unavailable"
-msgstr ""
+msgstr "サイズ: 利用不可"
 
 msgid "Download"
 msgstr "ダウンロード"
@@ -982,58 +1012,58 @@ msgid "No description available."
 msgstr "説明がありません。"
 
 msgid "Unable to load screenshot"
-msgstr ""
+msgstr "スクリーンショットを読み込めません"
 
 msgid "Unable to download screenshot"
-msgstr ""
+msgstr "スクリーンショットをダウンロードできません"
 
 msgid "Unable to display screenshot"
-msgstr ""
+msgstr "スクリーンショットを表示できません"
 
 msgid "Open link in browser"
-msgstr ""
+msgstr "ブラウザでリンクを開く"
 
 msgid "Homepage"
-msgstr ""
+msgstr "ホームページ"
 
 msgid "Bug tracker"
-msgstr ""
+msgstr "バグトラッカー"
 
 msgid "Donation"
-msgstr ""
+msgstr "寄付"
 
 msgid "FAQ"
-msgstr ""
+msgstr "FAQ"
 
 msgid "Help"
-msgstr ""
+msgstr "ヘルプ"
 
 msgid "Vcs-browser"
-msgstr ""
+msgstr "Vcs-browser"
 
 msgid "Contact"
-msgstr ""
+msgstr "コンタクト"
 
 msgid "Translate"
-msgstr ""
+msgstr "翻訳"
 
 msgid "Unable to allocate memory while loading Flatpak data."
-msgstr ""
+msgstr "Flatpak データの読み込み中にメモリを割り当てられませんでした。"
 
 msgid "Unable to start the Flatpak data loader."
-msgstr ""
+msgstr "Flatpak データローダーを起動できません。"
 
 msgid "Unable to load Flatpak applications."
-msgstr ""
+msgstr "Flatpak アプリケーションを読み込めません。"
 
 msgid "No Flatpak applications are available."
-msgstr ""
+msgstr "利用可能な Flatpak アプリケーションはありません。"
 
 msgid "Discover"
-msgstr ""
+msgstr "見つける"
 
 msgid "Categories"
-msgstr ""
+msgstr "カテゴリー"
 
 msgid "All Applications"
 msgstr "すべてのアプリケーション"
@@ -1072,16 +1102,16 @@ msgid "Science"
 msgstr "科学"
 
 msgid "Utility"
-msgstr "ユーティリティー"
+msgstr "ユーティリティ"
 
 msgid "Removing Remote"
-msgstr ""
+msgstr "リモートを削除中"
 
 msgid "Adding Remote"
-msgstr ""
+msgstr "リモートを追加中"
 
 msgid "Removing Flatpak"
-msgstr ""
+msgstr "Flatpak を削除中"
 
 msgid "Loading..."
 msgstr "読み込み中..."
@@ -1090,13 +1120,13 @@ msgid "Installed Size"
 msgstr "インストール時のサイズ"
 
 msgid "Download Size"
-msgstr ""
+msgstr "ダウンロード時のサイズ"
 
 msgid "Build Date"
 msgstr "ビルド日時"
 
 msgid "Install Reason"
-msgstr ""
+msgstr "インストール理由"
 
 msgid "Provides"
 msgstr "次を提供"
@@ -1108,86 +1138,88 @@ msgid "Required By"
 msgstr "次に必要"
 
 msgid "Reinstalling package"
-msgstr ""
+msgstr "パッケージを再インストール中"
 
 msgid "Adding to package ignore"
-msgstr ""
+msgstr "アップデートしないパッケージに追加中"
 
 msgid "Adding to package to hold"
-msgstr ""
+msgstr "削除しないパッケージに追加中"
 
 msgid "Making Package Explicit"
-msgstr ""
+msgstr "明示的なパッケージに変更中"
 
 msgid "Making Package Dependency"
-msgstr ""
+msgstr "依存によるパッケージに変更中"
 
 msgid "Package is already installed"
 msgstr "パッケージは既にインストールされています"
 
 msgid "Remove from selection"
-msgstr ""
+msgstr "選択から削除"
 
 msgid "remove"
-msgstr ""
+msgstr "削除"
 
 msgid "install"
-msgstr ""
+msgstr "インストール"
 
 msgid "No packages selected"
-msgstr ""
+msgstr "パッケージが選択されていません"
 
 msgid "Selected"
-msgstr ""
+msgstr "個を選択"
 
 msgid "Mixed selection"
-msgstr ""
+msgstr "矛盾した選択"
 
 msgid ""
 "Select only installed packages to remove, or only available ones to install."
 msgstr ""
+"削除する場合はインストール済みパッケージのみを、インストールする場合は未イン"
+"ストールパッケージのみを選択してください。"
 
 msgid "Remove the selected packages?"
-msgstr ""
+msgstr "選択したパッケージを削除しますか？"
 
 msgid "Removing packages"
-msgstr ""
+msgstr "パッケージを削除中"
 
 msgid "Installing packages"
-msgstr ""
+msgstr "パッケージをインストール中"
 
 msgid "Failed to save settings"
-msgstr ""
+msgstr "設定の保存に失敗しました"
 
 msgid "Settings saved"
-msgstr ""
+msgstr "設定を保存しました"
 
 msgid "Installing Flatpak support"
-msgstr ""
+msgstr "Flatpak サポートをインストール中"
 
 msgid "Installing AppImage support"
-msgstr ""
+msgstr "AppImage サポートをインストール中"
 
 msgid "Failed to start Flatpak support installation"
-msgstr ""
+msgstr "Flatpak サポートのインストールを開始できませんでした"
 
 msgid "Failed to start AppImage support installation"
-msgstr ""
+msgstr "AppImage サポートのインストールを開始できませんでした"
 
 msgid "Flatpak support installation failed"
-msgstr ""
+msgstr "Flatpak サポートのインストールに失敗しました"
 
 msgid "AppImage support installation failed"
-msgstr ""
+msgstr "AppImage サポートのインストールに失敗しました"
 
 msgid "Flatpak support enabled"
-msgstr ""
+msgstr "Flatpak サポートを有効にしました"
 
 msgid "AppImage support enabled"
-msgstr ""
+msgstr "AppImage サポートを有効にしました"
 
 msgid "No changelog entries found"
-msgstr "変更履歴エントリーが見つかりませんでした"
+msgstr "変更履歴のエントリーが見つかりませんでした"
 
 msgid "No details for this release"
 msgstr "このリリースの詳細情報はありません"
@@ -1196,40 +1228,40 @@ msgid "Failed to load changelog"
 msgstr "変更履歴の読み込みに失敗しました"
 
 msgid "Changelog"
-msgstr ""
+msgstr "変更履歴"
 
 msgid "Select Tray Icon"
-msgstr ""
+msgstr "トレイアイコンを選択"
 
 msgid "Select Icon"
-msgstr ""
+msgstr "アイコンを選択"
 
 msgid "Select Tray Updates Icon"
-msgstr ""
+msgstr "アップデートがあるときのトレイアイコンを選択"
 
 msgid "Select AppImage Install Directory"
-msgstr "AppImage のインストールディレクトリーを選択"
+msgstr "AppImage のインストールディレクトリを選択"
 
 msgid "Tray enabled"
-msgstr ""
+msgstr "トレイを有効にしました"
 
 msgid "Tray disabled, but autostart service remains"
-msgstr ""
+msgstr "トレイを無効にしましたが、自動起動サービスは残っています"
 
 msgid "Tray disabled"
-msgstr ""
+msgstr "トレイを無効にしました"
 
 msgid "Failed to add systemd startup service"
-msgstr ""
+msgstr "systemd 起動サービスの追加に失敗しました"
 
 msgid "Systemd startup service added."
-msgstr "Systemd 起動サービスが追加されました。"
+msgstr "systemd 起動サービスが追加されました。"
 
 msgid "Failed to remove systemd startup service"
-msgstr ""
+msgstr "systemd 起動サービスの削除に失敗しました"
 
 msgid "Systemd startup service removed."
-msgstr "Systemd 起動サービスが削除されました。"
+msgstr "systemd 起動サービスが削除されました。"
 
 msgid "Enable AUR?"
 msgstr "AUR を有効にしますか？"
@@ -1243,55 +1275,55 @@ msgstr ""
 "すか？"
 
 msgid "Enable"
-msgstr ""
+msgstr "有効"
 
 msgid "AUR enabled"
-msgstr ""
+msgstr "AUR を有効にしました"
 
 msgid "System Default"
-msgstr ""
+msgstr "システムのデフォルト"
 
 msgid "English"
-msgstr ""
+msgstr "English"
 
 msgid "Bulgarian"
-msgstr ""
+msgstr "Bulgarian"
 
 msgid "Català"
-msgstr ""
+msgstr "Català"
 
 msgid "Deutsch"
-msgstr ""
+msgstr "Deutsch"
 
 msgid "Español"
-msgstr ""
+msgstr "Español"
 
 msgid "Français"
-msgstr ""
+msgstr "Français"
 
 msgid "Magyar"
-msgstr ""
+msgstr "Magyar"
 
 msgid "日本語"
-msgstr ""
+msgstr "日本語"
 
 msgid "Polski"
-msgstr ""
+msgstr "Polski"
 
 msgid "Português (Brasil)"
-msgstr ""
+msgstr "Português (Brasil)"
 
 msgid "Português (Portugal)"
-msgstr ""
+msgstr "Português (Portugal)"
 
 msgid "Русский"
-msgstr ""
+msgstr "Русский"
 
 msgid "Türkçe"
-msgstr ""
+msgstr "Türkçe"
 
 msgid "中文（简体）"
-msgstr ""
+msgstr "中文（简体）"
 
 msgid "Packages"
 msgstr "パッケージ"
@@ -1300,58 +1332,58 @@ msgid "Shelly Search"
 msgstr "Shelly 検索"
 
 msgid "Update"
-msgstr ""
+msgstr "アップデート"
 
 msgid "Failed to start operation."
-msgstr ""
+msgstr "操作の開始に失敗しました。"
 
 msgid "Pending"
-msgstr ""
+msgstr "保留中"
 
 msgid "Synchronizing databases"
-msgstr ""
+msgstr "データベースを同期中"
 
 msgid "Building"
-msgstr ""
+msgstr "ビルド中"
 
 msgid "Downloading"
-msgstr ""
+msgstr "ダウンロード中"
 
 msgid "Packaging"
-msgstr ""
+msgstr "パッケージを作成中"
 
 msgid "Installing"
-msgstr ""
+msgstr "インストール中"
 
 msgid "Upgrading"
-msgstr ""
+msgstr "アップグレード中"
 
 msgid "Downgrading"
-msgstr ""
+msgstr "ダウングレード中"
 
 msgid "Reinstalling"
-msgstr ""
+msgstr "再インストール中"
 
 msgid "Removing"
-msgstr ""
+msgstr "削除中"
 
 msgid "Working"
-msgstr ""
+msgstr "作業中"
 
 msgid "Done"
-msgstr ""
+msgstr "完了"
 
 msgid "Failed"
-msgstr ""
+msgstr "失敗"
 
 msgid "Finished"
-msgstr ""
+msgstr "完了"
 
 msgid "exit"
-msgstr ""
+msgstr "終了"
 
 msgid "Cancelled"
-msgstr ""
+msgstr "キャンセル"
 
 msgid "Yes"
 msgstr "はい"
@@ -1360,68 +1392,75 @@ msgid "No"
 msgstr "いいえ"
 
 msgid "System package update"
-msgstr ""
+msgstr "システムパッケージのアップデート"
 
 msgid "AUR package update"
-msgstr ""
+msgstr "AUR パッケージのアップデート"
 
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
+"Shelly の check-updates を実行できませんでした。CLI の出力を確認して、再度試"
+"してください。"
 
 msgid "Update this package"
-msgstr ""
+msgstr "このパッケージをアップデート"
 
 msgid "of"
-msgstr ""
+msgstr "of"
 
 msgid "updates included"
-msgstr ""
+msgstr "アップデートがあります"
 
 msgid "Updates included"
-msgstr ""
+msgstr "アップデートが含まれます"
 
 msgid "Upgrading packages"
-msgstr ""
+msgstr "パッケージをアップグレード中"
 
 msgid "Refreshing package databases"
-msgstr ""
+msgstr "パッケージデータベースを更新中"
 
 msgid "Database lock removed successfully"
-msgstr ""
+msgstr "データベースのロックが正常に解除されました"
 
 msgid "Failed to remove database lock"
-msgstr ""
+msgstr "データベースのロック解除に失敗しました"
 
 msgid "Fixing permissions"
-msgstr ""
+msgstr "権限を修正中"
 
 msgid "Purifying packages"
-msgstr ""
+msgstr "パッケージをクリーンアップ中"
 
 msgid "Cleaning package cache"
-msgstr ""
+msgstr "パッケージキャッシュをクリーニング"
 
 msgid "Welcome"
-msgstr ""
+msgstr "ようこそ"
 
 msgid ""
 "The Arch User Repository is community-maintained. Packages are not "
 "officially vetted — only enable if you trust what you install."
 msgstr ""
+"Arch User Repository はコミュニティーによって維持されています。パッケージは公"
+"式に審査されていません — インストールするものを信頼できる場合のみ有効にしてく"
+"ださい。"
 
 msgid "Enable Recommended?"
-msgstr ""
+msgstr "おすすめを有効にしますか？"
 
 msgid ""
 "Recommended shows curated package suggestions based on your installed "
 "software. Package data is fetched from external sources."
 msgstr ""
+"おすすめは厳選したパッケージをインストール済みのソフトに基づいて提案します。"
+"パッケージデータは外部のソースから取得されます。"
 
 msgid "Installing Flatpak and AppImage support"
-msgstr ""
+msgstr "Flatpak と AppImage サポートをインストール中"
 
 msgid "Settings"
 msgstr "設定"
 
 msgid "Package"
-msgstr ""
+msgstr "パッケージ"
