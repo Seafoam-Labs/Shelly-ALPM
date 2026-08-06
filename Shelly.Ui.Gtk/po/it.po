@@ -12,6 +12,178 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 3.9\n"
 
+msgid "No installable addons available"
+msgstr ""
+
+msgid "Close"
+msgstr "Chiudi"
+
+msgid "Confirm"
+msgstr "Conferma"
+
+msgid "Skip"
+msgstr ""
+
+msgid "No special permissions requested"
+msgstr ""
+
+msgid "Review PKGBUILD changes"
+msgstr "Esamina le modifiche al PKGBUILD"
+
+msgid "Changes"
+msgstr ""
+
+msgid "Warnings"
+msgstr ""
+
+msgid ""
+"These commands fetch and execute code outside of shelly and libalpm's "
+"control. Review them before continuing."
+msgstr ""
+
+msgid "Source Files"
+msgstr ""
+
+msgid "Cancel"
+msgstr "Annulla"
+
+msgid "polkit is required"
+msgstr ""
+
+msgid ""
+"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
+"privileged actions, but it wasn't found on the system bus.\n"
+"\n"
+"Install and enable it, then retry.\n"
+"\n"
+"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
+"Polkit</a>"
+msgstr ""
+
+msgid "Review PKGBUILD"
+msgstr ""
+
+msgid "Search..."
+msgstr "Cerca..."
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr ""
+"Sincronizza i metadata per tutte le AppImage. Utile se l'AppImage si è auto-"
+"aggiornata."
+
+msgid "Sync All"
+msgstr "Sincronizza tutto"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "Aggiorna tutte le AppImages alle loro ultime versioni"
+
+msgid "Upgrade All"
+msgstr "Aggiorna tutto"
+
+msgid "Install a new AppImage from a file"
+msgstr "Installa una nuova AppImage da un file"
+
+msgid "Install AppImage"
+msgstr "Installa AppImage"
+
+msgid "Drop AppImage here to install"
+msgstr "Trascina qui l'AppImage da installare"
+
+msgid "App Name"
+msgstr "Nome applicazione"
+
+msgid "Version"
+msgstr "Versione"
+
+msgid "Description goes here..."
+msgstr "Inserire la descrizione qui..."
+
+msgid "Size on Disk"
+msgstr "Spazio su disco"
+
+msgid "Update Strategy"
+msgstr "Strategia di aggiornamento"
+
+msgid "Update URL / Repository Info"
+msgstr "Aggiorna Indirizzo / Informazioni Repository"
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr ""
+"Ottieni maggiori informazioni su Aggiorna Indirizzo / Informazioni sul "
+"Repository"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "ad es. proprietario/repository o https://..."
+
+msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+msgstr ""
+
+msgid "Allow Prerelease"
+msgstr "Consenti pre-release"
+
+msgid "Installation Path"
+msgstr "Percorso di installazione"
+
+msgid "Launch Flags"
+msgstr "Parametri di avvio"
+
+msgid "Save"
+msgstr "Salva"
+
+msgid "Sync"
+msgstr "Sincronizza"
+
+msgid "Remove"
+msgstr "Rimuovi"
+
+msgid "Information"
+msgstr ""
+
+msgid "Preview Pkgbuild"
+msgstr ""
+
+msgid "Search the AUR by name or keyword"
+msgstr ""
+
+msgid "Installed Only"
+msgstr ""
+
+msgid "Show only installed packages"
+msgstr ""
+
+msgid "Additional Options"
+msgstr "Opzioni aggiuntive"
+
+msgid "Install Selected"
+msgstr "Installa selezionato"
+
+msgid "Name"
+msgstr "Nome"
+
+msgid "Votes"
+msgstr "Voti"
+
+msgid "Popularity"
+msgstr "Popolarità"
+
+msgid "Search the AUR"
+msgstr ""
+
+msgid "The AUR has no browsable index type a package name to begin."
+msgstr ""
+
+msgid "Run checks"
+msgstr "Esegui controlli"
+
+msgid "Run the --check function during package build"
+msgstr ""
+
+msgid "Hide Detail Pane"
+msgstr ""
+
+msgid "Hide the detail pane on the right"
+msgstr ""
+
 msgid "Install a local Flatpak"
 msgstr ""
 
@@ -38,74 +210,17 @@ msgstr "utente"
 msgid "Install"
 msgstr "Installa"
 
-msgid "Additional Options"
-msgstr "Opzioni aggiuntive"
-
-msgid "Show Runtimes"
-msgstr ""
-
-msgid "Flatpak Repair"
-msgstr "Ripara Flatpak"
-
-msgid "Repairs Flatpak Installation (Experimental)"
-msgstr "Ripara installazione Flatpak (sperimentale)"
-
-msgid "Search packages..."
-msgstr "Cerca pacchetti..."
-
-msgid "Browse"
-msgstr ""
-
-msgid "Manage"
-msgstr "Gestisci"
-
-msgid "Manage Remote Refs"
-msgstr "Gestisci ref remoti"
-
-msgid "Install Local"
-msgstr "Installa locale"
-
-msgid "Delete Selected Remote"
-msgstr "Elimina repository remoto selezionato"
-
-msgid "Add Remote"
-msgstr "Aggiungi repository remoto"
+msgid "Loading Flatpak Data..."
+msgstr "Caricamento dei dati Flatpak in corso..."
 
 msgid "Back"
 msgstr "Indietro"
-
-msgid "Add New Flatpak Remote"
-msgstr "Aggiungi nuovo repository remoto Flatpak"
-
-msgid "Add"
-msgstr "Aggiungi"
-
-msgid "Remote Name"
-msgstr "Nome repository remoto"
-
-msgid "e.g., flathub"
-msgstr "ad es., flathub"
-
-msgid "Remote URL"
-msgstr "Indirizzo repository remoto"
-
-msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr "ad es., https://flathub.org/repo/flathub.flatpakrepo"
-
-msgid "Scope"
-msgstr "Ambito"
-
-msgid "Loading Flatpak Data..."
-msgstr "Caricamento dei dati Flatpak in corso..."
 
 msgid "Addons"
 msgstr "Componenti aggiuntivi"
 
 msgid "Install source"
 msgstr ""
-
-msgid "App Name"
-msgstr "Nome applicazione"
 
 msgid "Author"
 msgstr "Autore"
@@ -131,6 +246,60 @@ msgstr "Permessi dell'applicazione"
 msgid "Version History"
 msgstr "Cronologia versioni"
 
+msgid "Search packages..."
+msgstr "Cerca pacchetti..."
+
+msgid "Browse"
+msgstr ""
+
+msgid "Manage"
+msgstr "Gestisci"
+
+msgid "Manage Remote Refs"
+msgstr "Gestisci ref remoti"
+
+msgid "Install Local"
+msgstr "Installa locale"
+
+msgid "Delete Selected Remote"
+msgstr "Elimina repository remoto selezionato"
+
+msgid "Add Remote"
+msgstr "Aggiungi repository remoto"
+
+msgid "Add New Flatpak Remote"
+msgstr "Aggiungi nuovo repository remoto Flatpak"
+
+msgid "Add"
+msgstr "Aggiungi"
+
+msgid "Remote Name"
+msgstr "Nome repository remoto"
+
+msgid "e.g., flathub"
+msgstr "ad es., flathub"
+
+msgid "Remote URL"
+msgstr "Indirizzo repository remoto"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "ad es., https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "Ambito"
+
+msgid "Show Runtimes"
+msgstr ""
+
+msgid "Flatpak Repair"
+msgstr "Ripara Flatpak"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Ripara installazione Flatpak (sperimentale)"
+
+msgid "Shelly"
+msgstr ""
+
 msgid "Reinstall"
 msgstr ""
 
@@ -149,7 +318,58 @@ msgstr ""
 msgid "Package actions"
 msgstr ""
 
-msgid "Information"
+msgid "Package Group Filter"
+msgstr "Filtro gruppo pacchetto"
+
+msgid "Selected Packages"
+msgstr ""
+
+msgid "0 Selected"
+msgstr ""
+
+msgid "Grid View"
+msgstr ""
+
+msgid "List View"
+msgstr ""
+
+msgid "Size"
+msgstr "Dimensione"
+
+msgid "Repository"
+msgstr "Repository"
+
+msgid "Install Date"
+msgstr ""
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
+msgstr ""
+"Si è verificato un problema nel caricamento dei pacchetti. Controlla se è "
+"presente un blocco del database."
+
+msgid "Perform Upgrade"
+msgstr "Effettua aggiornamento"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr ""
+"Effettua un aggiornamento completo di sistema insieme all'installazione (-u)"
+
+msgid "Show Hidden"
+msgstr "Mostra nascosti"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "Mostra i pacchetti nella lista IgnorePkg da pacman.conf"
+
+msgid "Show Explicit Only"
+msgstr ""
+
+msgid "Show only explicitly installed packages"
+msgstr ""
+
+msgid "Show Dependency Only"
+msgstr ""
+
+msgid "Show dependency packages on;y"
 msgstr ""
 
 msgid "Recommended Packages"
@@ -170,12 +390,6 @@ msgid ""
 msgstr ""
 "Nessun suggerimento trovato. Per favore controlla la tua connessione a "
 "internet e prova di nuovo."
-
-msgid "Preview Pkgbuild"
-msgstr ""
-
-msgid "Shelly"
-msgstr ""
 
 msgid "General"
 msgstr "Generale"
@@ -298,9 +512,6 @@ msgstr "Percorso di installazione AppImage"
 msgid "Select Directory"
 msgstr "Seleziona cartella"
 
-msgid "Save"
-msgstr "Salva"
-
 msgid "View Changelog"
 msgstr "Visualizza registro delle modifiche"
 
@@ -315,6 +526,42 @@ msgstr "Fluxer della comunità"
 
 msgid "Sponsor"
 msgstr "Sponsor"
+
+msgid "Toggle output"
+msgstr ""
+
+msgid "Available Updates"
+msgstr "Aggiornamenti disponibili"
+
+msgid "7 of 7 updates included"
+msgstr ""
+
+msgid "Check all enabled sources again"
+msgstr ""
+
+msgid "Check Again"
+msgstr ""
+
+msgid "Upgrade"
+msgstr ""
+
+msgid "System"
+msgstr "Sistema"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Checking for updates…"
+msgstr ""
+
+msgid "Your system is up to date"
+msgstr ""
+
+msgid "Could not check for updates"
+msgstr ""
 
 msgid "Utilities"
 msgstr ""
@@ -365,45 +612,6 @@ msgid "Keep"
 msgstr ""
 
 msgid "Number of cached versions to keep per package"
-msgstr ""
-
-msgid "Toggle output"
-msgstr ""
-
-msgid "Close"
-msgstr "Chiudi"
-
-msgid "Available Updates"
-msgstr "Aggiornamenti disponibili"
-
-msgid "7 of 7 updates included"
-msgstr ""
-
-msgid "Check all enabled sources again"
-msgstr ""
-
-msgid "Check Again"
-msgstr ""
-
-msgid "Upgrade"
-msgstr ""
-
-msgid "System"
-msgstr "Sistema"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "Checking for updates…"
-msgstr ""
-
-msgid "Your system is up to date"
-msgstr ""
-
-msgid "Could not check for updates"
 msgstr ""
 
 msgid "Welcome to Shelly v3"
@@ -475,217 +683,6 @@ msgstr ""
 msgid "Start Shelly"
 msgstr ""
 
-msgid "Search..."
-msgstr "Cerca..."
-
-msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr ""
-"Sincronizza i metadata per tutte le AppImage. Utile se l'AppImage si è auto-"
-"aggiornata."
-
-msgid "Sync All"
-msgstr "Sincronizza tutto"
-
-msgid "Upgrade all AppImages to their latest versions"
-msgstr "Aggiorna tutte le AppImages alle loro ultime versioni"
-
-msgid "Upgrade All"
-msgstr "Aggiorna tutto"
-
-msgid "Install a new AppImage from a file"
-msgstr "Installa una nuova AppImage da un file"
-
-msgid "Install AppImage"
-msgstr "Installa AppImage"
-
-msgid "Drop AppImage here to install"
-msgstr "Trascina qui l'AppImage da installare"
-
-msgid "Version"
-msgstr "Versione"
-
-msgid "Description goes here..."
-msgstr "Inserire la descrizione qui..."
-
-msgid "Size on Disk"
-msgstr "Spazio su disco"
-
-msgid "Update Strategy"
-msgstr "Strategia di aggiornamento"
-
-msgid "Update URL / Repository Info"
-msgstr "Aggiorna Indirizzo / Informazioni Repository"
-
-msgid "Get more information about Update URL / Repository Info"
-msgstr ""
-"Ottieni maggiori informazioni su Aggiorna Indirizzo / Informazioni sul "
-"Repository"
-
-msgid "e.g. owner/repo or https://..."
-msgstr "ad es. proprietario/repository o https://..."
-
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
-msgstr ""
-
-msgid "Allow Prerelease"
-msgstr "Consenti pre-release"
-
-msgid "Installation Path"
-msgstr "Percorso di installazione"
-
-msgid "Launch Flags"
-msgstr "Parametri di avvio"
-
-msgid "Sync"
-msgstr "Sincronizza"
-
-msgid "Remove"
-msgstr "Rimuovi"
-
-msgid "Search the AUR by name or keyword"
-msgstr ""
-
-msgid "Installed Only"
-msgstr ""
-
-msgid "Show only installed packages"
-msgstr ""
-
-msgid "Install Selected"
-msgstr "Installa selezionato"
-
-msgid "Name"
-msgstr "Nome"
-
-msgid "Votes"
-msgstr "Voti"
-
-msgid "Popularity"
-msgstr "Popolarità"
-
-msgid "Search the AUR"
-msgstr ""
-
-msgid "The AUR has no browsable index type a package name to begin."
-msgstr ""
-
-msgid "Run checks"
-msgstr "Esegui controlli"
-
-msgid "Run the --check function during package build"
-msgstr ""
-
-msgid "Hide Detail Pane"
-msgstr ""
-
-msgid "Hide the detail pane on the right"
-msgstr ""
-
-msgid "Package Group Filter"
-msgstr "Filtro gruppo pacchetto"
-
-msgid "Selected Packages"
-msgstr ""
-
-msgid "0 Selected"
-msgstr ""
-
-msgid "Grid View"
-msgstr ""
-
-msgid "List View"
-msgstr ""
-
-msgid "Size"
-msgstr "Dimensione"
-
-msgid "Repository"
-msgstr "Repository"
-
-#, fuzzy
-msgid "Install Date"
-msgstr "Installa "
-
-msgid "Had an issue loading your packages. Check if you have a db lock."
-msgstr ""
-"Si è verificato un problema nel caricamento dei pacchetti. Controlla se è "
-"presente un blocco del database."
-
-msgid "Perform Upgrade"
-msgstr "Effettua aggiornamento"
-
-msgid "Perform a full system upgrade with install (-u)"
-msgstr ""
-"Effettua un aggiornamento completo di sistema insieme all'installazione (-u)"
-
-msgid "Show Hidden"
-msgstr "Mostra nascosti"
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr "Mostra i pacchetti nella lista IgnorePkg da pacman.conf"
-
-msgid "Show Explicit Only"
-msgstr ""
-
-msgid "Show only explicitly installed packages"
-msgstr ""
-
-msgid "Show Dependency Only"
-msgstr ""
-
-msgid "Show dependency packages on;y"
-msgstr ""
-
-msgid "Confirm"
-msgstr "Conferma"
-
-msgid "Cancel"
-msgstr "Annulla"
-
-#, fuzzy
-msgid "No installable addons available"
-msgstr "Nessuna notizia disponibile"
-
-msgid "No special permissions requested"
-msgstr ""
-
-#, fuzzy
-msgid "polkit is required"
-msgstr "Riavvio necessario"
-
-msgid ""
-"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
-"privileged actions, but it wasn't found on the system bus.\n"
-"\n"
-"Install and enable it, then retry.\n"
-"\n"
-"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
-"Polkit</a>"
-msgstr ""
-
-msgid "Skip"
-msgstr ""
-
-msgid "Review PKGBUILD changes"
-msgstr "Esamina le modifiche al PKGBUILD"
-
-msgid "Changes"
-msgstr ""
-
-msgid "Warnings"
-msgstr ""
-
-msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
-"control. Review them before continuing."
-msgstr ""
-
-msgid "Source Files"
-msgstr ""
-
-msgid "Review PKGBUILD"
-msgstr ""
-
 msgid "Filesystem"
 msgstr ""
 
@@ -752,6 +749,163 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
+msgid "None"
+msgstr "Nessuno"
+
+msgid "Static URL"
+msgstr ""
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+msgid "Update Available"
+msgstr ""
+
+msgid "Version ?"
+msgstr ""
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr ""
+"Formato non valido. Usa il formato proprietario/repository (ad es. seafoam-"
+"labs/shelly-alpm)"
+
+msgid "Invalid URL. Must start with http:// or https://"
+msgstr "Indirizzo non valido. Deve iniziare con http:// o https://"
+
+msgid ""
+"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
+"repo/releases"
+msgstr ""
+
+msgid "Choose an AppImage file"
+msgstr ""
+
+msgid "AppImage files"
+msgstr ""
+
+msgid "Only .AppImage files can be installed"
+msgstr ""
+
+msgid "Installing AppImage"
+msgstr ""
+
+msgid "No AppImages need to be upgraded"
+msgstr "Nessuna AppImage richiede un aggiornamento"
+
+msgid "Upgrading AppImages"
+msgstr ""
+
+msgid "Syncing AppImages"
+msgstr ""
+
+msgid "Syncing AppImage"
+msgstr ""
+
+msgid "Saving update configuration"
+msgstr ""
+
+msgid "Configuration files will be kept."
+msgstr ""
+
+msgid "Remove this AppImage?"
+msgstr ""
+
+msgid "Remove AppImage"
+msgstr ""
+
+msgid "Removing AppImage"
+msgstr ""
+
+msgid "Operation completed successfully"
+msgstr ""
+
+msgid "Operation failed"
+msgstr ""
+
+msgid "Maintainer"
+msgstr "Manutentore"
+
+msgid "Last Modified"
+msgstr "Ultima modifica"
+
+msgid "First Submitted"
+msgstr "Prima presentazione"
+
+msgid "URL"
+msgstr ""
+
+msgid "Licenses"
+msgstr "Licenze"
+
+msgid "Depends"
+msgstr "Dipendenze"
+
+msgid "Optional Depends"
+msgstr ""
+
+msgid "Make Depends"
+msgstr "Dipendenze di compilazione"
+
+msgid "Section"
+msgstr ""
+
+msgid "The AUR has no browsable index — type a package name to begin."
+msgstr ""
+
+msgid "No packages found"
+msgstr ""
+
+msgid "Try a shorter or more general keyword."
+msgstr ""
+
+msgid "Could not reach the AUR"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr ""
+
+msgid "Flagged out of date"
+msgstr ""
+
+msgid "Installed"
+msgstr "Installati"
+
+msgid "Remove Selected"
+msgstr "Rimuovi selezionato"
+
+msgid "Select one or more packages"
+msgstr ""
+
+msgid "Package(s)"
+msgstr ""
+
+msgid "Remove Packages"
+msgstr ""
+
+msgid "Remove the selected AUR packages?"
+msgstr ""
+
+msgid "Build from AUR"
+msgstr ""
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+
+msgid "Build"
+msgstr ""
+
+msgid "Installing AUR packages"
+msgstr ""
+
+msgid "Removing AUR packages"
+msgstr ""
+
 msgid "Choose a Flatpak file"
 msgstr ""
 
@@ -773,60 +927,6 @@ msgstr ""
 msgid "Choose file..."
 msgstr ""
 
-msgid "Removing Remote"
-msgstr ""
-
-msgid "Adding Remote"
-msgstr ""
-
-msgid "Removing Flatpak"
-msgstr ""
-
-msgid "Discover"
-msgstr ""
-
-msgid "Categories"
-msgstr ""
-
-msgid "All Applications"
-msgstr "Tutte le applicazioni"
-
-msgid "Most Wanted"
-msgstr "Più ricercate"
-
-msgid "Recently Added"
-msgstr "Aggiunte di recente"
-
-msgid "Recently Updated"
-msgstr "Aggiornate di recente"
-
-msgid "Audio & Video"
-msgstr "Audio e video"
-
-msgid "Development"
-msgstr "Sviluppo"
-
-msgid "Education"
-msgstr "Educazione"
-
-msgid "Game"
-msgstr "Giochi"
-
-msgid "Graphics"
-msgstr "Grafica"
-
-msgid "Network"
-msgstr "Rete"
-
-msgid "Office"
-msgstr "Ufficio"
-
-msgid "Science"
-msgstr "Scienza"
-
-msgid "Utility"
-msgstr "Utilità"
-
 msgid "Verified"
 msgstr ""
 
@@ -842,12 +942,8 @@ msgstr ""
 msgid "Available Addons"
 msgstr "Componenti aggiuntivi disponibili"
 
-#, fuzzy
 msgid "Installing flatpak addon"
-msgstr "Componente aggiuntivo Flatpak installato"
-
-msgid "Installed"
-msgstr "Installati"
+msgstr ""
 
 msgid "Unknown developer"
 msgstr ""
@@ -930,90 +1026,58 @@ msgstr ""
 msgid "No Flatpak applications are available."
 msgstr ""
 
-msgid "Refreshing package databases"
+msgid "Discover"
 msgstr ""
 
-msgid "Database lock removed successfully"
+msgid "Categories"
 msgstr ""
 
-msgid "Failed to remove database lock"
+msgid "All Applications"
+msgstr "Tutte le applicazioni"
+
+msgid "Most Wanted"
+msgstr "Più ricercate"
+
+msgid "Recently Added"
+msgstr "Aggiunte di recente"
+
+msgid "Recently Updated"
+msgstr "Aggiornate di recente"
+
+msgid "Audio & Video"
+msgstr "Audio e video"
+
+msgid "Development"
+msgstr "Sviluppo"
+
+msgid "Education"
+msgstr "Educazione"
+
+msgid "Game"
+msgstr "Giochi"
+
+msgid "Graphics"
+msgstr "Grafica"
+
+msgid "Network"
+msgstr "Rete"
+
+msgid "Office"
+msgstr "Ufficio"
+
+msgid "Science"
+msgstr "Scienza"
+
+msgid "Utility"
+msgstr "Utilità"
+
+msgid "Removing Remote"
 msgstr ""
 
-msgid "Fixing permissions"
+msgid "Adding Remote"
 msgstr ""
 
-msgid "Purifying packages"
-msgstr ""
-
-msgid "Cleaning package cache"
-msgstr ""
-
-msgid "Operation completed successfully"
-msgstr ""
-
-msgid "Operation failed"
-msgstr ""
-
-msgid "Welcome"
-msgstr ""
-
-msgid "Enable AUR?"
-msgstr "Abilitare l'AUR?"
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-
-msgid "Enable"
-msgstr ""
-
-msgid "Enable Recommended?"
-msgstr ""
-
-msgid ""
-"Recommended shows curated package suggestions based on your installed "
-"software. Package data is fetched from external sources."
-msgstr ""
-
-#, fuzzy
-msgid "Installing Flatpak and AppImage support"
-msgstr "Impossibile installare Flatpak"
-
-#, fuzzy
-msgid "Installing Flatpak support"
-msgstr "Abilita supporto Flatpak"
-
-#, fuzzy
-msgid "Installing AppImage support"
-msgstr "Installazione AppImage..."
-
-msgid "Maintainer"
-msgstr "Manutentore"
-
-msgid "Last Modified"
-msgstr "Ultima modifica"
-
-msgid "First Submitted"
-msgstr "Prima presentazione"
-
-#, fuzzy
-msgid "URL"
-msgstr "Indirizzo:"
-
-msgid "Licenses"
-msgstr "Licenze"
-
-msgid "Depends"
-msgstr "Dipendenze"
-
-msgid "Optional Depends"
-msgstr ""
-
-msgid "Make Depends"
-msgstr "Dipendenze di compilazione"
-
-msgid "Section"
+msgid "Removing Flatpak"
 msgstr ""
 
 msgid "Loading..."
@@ -1055,127 +1119,6 @@ msgstr ""
 msgid "Making Package Dependency"
 msgstr ""
 
-msgid "None"
-msgstr "Nessuno"
-
-msgid "Static URL"
-msgstr ""
-
-msgid "GitLab"
-msgstr "GitLab"
-
-msgid "Codeberg"
-msgstr "Codeberg"
-
-msgid "Forgejo"
-msgstr "Forgejo"
-
-msgid "Update Available"
-msgstr ""
-
-msgid "Version ?"
-msgstr ""
-
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
-msgstr ""
-"Formato non valido. Usa il formato proprietario/repository (ad es. seafoam-"
-"labs/shelly-alpm)"
-
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "Indirizzo non valido. Deve iniziare con http:// o https://"
-
-msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
-msgstr ""
-
-msgid "Choose an AppImage file"
-msgstr ""
-
-msgid "AppImage files"
-msgstr ""
-
-msgid "Only .AppImage files can be installed"
-msgstr ""
-
-msgid "Installing AppImage"
-msgstr ""
-
-msgid "No AppImages need to be upgraded"
-msgstr "Nessuna AppImage richiede un aggiornamento"
-
-msgid "Upgrading AppImages"
-msgstr ""
-
-msgid "Syncing AppImages"
-msgstr ""
-
-msgid "Syncing AppImage"
-msgstr ""
-
-msgid "Saving update configuration"
-msgstr ""
-
-msgid "Configuration files will be kept."
-msgstr ""
-
-msgid "Remove this AppImage?"
-msgstr ""
-
-msgid "Remove AppImage"
-msgstr ""
-
-msgid "Removing AppImage"
-msgstr ""
-
-msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
-
-msgid "No packages found"
-msgstr ""
-
-msgid "Try a shorter or more general keyword."
-msgstr ""
-
-msgid "Could not reach the AUR"
-msgstr ""
-
-msgid "Check your connection and try again."
-msgstr ""
-
-msgid "Flagged out of date"
-msgstr ""
-
-msgid "Remove Selected"
-msgstr "Rimuovi selezionato"
-
-msgid "Select one or more packages"
-msgstr ""
-
-msgid "Package(s)"
-msgstr ""
-
-msgid "Remove Packages"
-msgstr ""
-
-msgid "Remove the selected AUR packages?"
-msgstr ""
-
-msgid "Build from AUR"
-msgstr ""
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-
-msgid "Build"
-msgstr ""
-
-msgid "Installing AUR packages"
-msgstr ""
-
-msgid "Removing AUR packages"
-msgstr ""
-
 msgid "Package is already installed"
 msgstr "Il pacchetto è già installato"
 
@@ -1208,6 +1151,152 @@ msgid "Removing packages"
 msgstr ""
 
 msgid "Installing packages"
+msgstr ""
+
+msgid "Failed to save settings"
+msgstr ""
+
+msgid "Settings saved"
+msgstr ""
+
+msgid "Installing Flatpak support"
+msgstr ""
+
+msgid "Installing AppImage support"
+msgstr ""
+
+msgid "Failed to start Flatpak support installation"
+msgstr ""
+
+msgid "Failed to start AppImage support installation"
+msgstr ""
+
+msgid "Flatpak support installation failed"
+msgstr ""
+
+msgid "AppImage support installation failed"
+msgstr ""
+
+msgid "Flatpak support enabled"
+msgstr ""
+
+msgid "AppImage support enabled"
+msgstr ""
+
+msgid "No changelog entries found"
+msgstr "Nessuna voce del registro delle modifiche trovata"
+
+msgid "No details for this release"
+msgstr "Nessun dettaglio per questo rilascio"
+
+msgid "Failed to load changelog"
+msgstr "Impossibile caricare il registro delle modifiche"
+
+msgid "Changelog"
+msgstr ""
+
+msgid "Select Tray Icon"
+msgstr ""
+
+msgid "Select Icon"
+msgstr ""
+
+msgid "Select Tray Updates Icon"
+msgstr ""
+
+msgid "Select AppImage Install Directory"
+msgstr "Seleziona la cartella di installazione AppImage"
+
+msgid "Tray enabled"
+msgstr ""
+
+msgid "Tray disabled, but autostart service remains"
+msgstr ""
+
+msgid "Tray disabled"
+msgstr ""
+
+msgid "Failed to add systemd startup service"
+msgstr ""
+
+msgid "Systemd startup service added."
+msgstr "Servizio di avvio systemd aggiunto."
+
+msgid "Failed to remove systemd startup service"
+msgstr ""
+
+msgid "Systemd startup service removed."
+msgstr "Servizio di avvio systemd rimosso."
+
+msgid "Enable AUR?"
+msgstr "Abilitare l'AUR?"
+
+msgid ""
+"The Arch User Repository (AUR) is a community-driven repository. Packages "
+"are user-produced and may contain risks. Do you want to enable it?"
+msgstr ""
+"L'Arch User Repository (AUR) è un repository gestito dalla comunità. I "
+"pacchetti sono prodotti dagli utenti e possono contenere rischi. Vuoi "
+"abilitarlo?"
+
+msgid "Enable"
+msgstr ""
+
+msgid "AUR enabled"
+msgstr ""
+
+msgid "System Default"
+msgstr ""
+
+msgid "English"
+msgstr ""
+
+msgid "Bulgarian"
+msgstr ""
+
+msgid "Català"
+msgstr ""
+
+msgid "Deutsch"
+msgstr ""
+
+msgid "Español"
+msgstr ""
+
+msgid "Français"
+msgstr ""
+
+msgid "Magyar"
+msgstr ""
+
+msgid "日本語"
+msgstr ""
+
+msgid "Polski"
+msgstr ""
+
+msgid "Português (Brasil)"
+msgstr ""
+
+msgid "Português (Portugal)"
+msgstr ""
+
+msgid "Русский"
+msgstr ""
+
+msgid "Türkçe"
+msgstr ""
+
+msgid "中文（简体）"
+msgstr ""
+
+msgid "Packages"
+msgstr "Pacchetti"
+
+msgid "Shelly Search"
+msgstr "Ricerca Shelly"
+
+msgid "Update"
 msgstr ""
 
 msgid "Failed to start operation."
@@ -1267,146 +1356,6 @@ msgstr "Sì"
 msgid "No"
 msgstr "No"
 
-msgid "Failed to save settings"
-msgstr ""
-
-msgid "Settings saved"
-msgstr ""
-
-#, fuzzy
-msgid "Failed to start Flatpak support installation"
-msgstr "Impossibile riparare installazione Flatpak"
-
-#, fuzzy
-msgid "Failed to start AppImage support installation"
-msgstr "Impossibile riparare installazione Flatpak"
-
-#, fuzzy
-msgid "Flatpak support installation failed"
-msgstr "Impossibile installare il pacchetto"
-
-#, fuzzy
-msgid "AppImage support installation failed"
-msgstr "Impossibile installare il pacchetto"
-
-#, fuzzy
-msgid "Flatpak support enabled"
-msgstr "Abilita supporto Flatpak"
-
-#, fuzzy
-msgid "AppImage support enabled"
-msgstr "Abilita supporto AppImage"
-
-msgid "No changelog entries found"
-msgstr "Nessuna voce del registro delle modifiche trovata"
-
-msgid "No details for this release"
-msgstr "Nessun dettaglio per questo rilascio"
-
-msgid "Failed to load changelog"
-msgstr "Impossibile caricare il registro delle modifiche"
-
-msgid "Changelog"
-msgstr ""
-
-msgid "Select Tray Icon"
-msgstr ""
-
-msgid "Select Icon"
-msgstr ""
-
-msgid "Select Tray Updates Icon"
-msgstr ""
-
-msgid "Select AppImage Install Directory"
-msgstr "Seleziona la cartella di installazione AppImage"
-
-msgid "Tray enabled"
-msgstr ""
-
-msgid "Tray disabled, but autostart service remains"
-msgstr ""
-
-msgid "Tray disabled"
-msgstr ""
-
-msgid "Failed to add systemd startup service"
-msgstr ""
-
-msgid "Systemd startup service added."
-msgstr "Servizio di avvio systemd aggiunto."
-
-msgid "Failed to remove systemd startup service"
-msgstr ""
-
-msgid "Systemd startup service removed."
-msgstr "Servizio di avvio systemd rimosso."
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"L'Arch User Repository (AUR) è un repository gestito dalla comunità. I "
-"pacchetti sono prodotti dagli utenti e possono contenere rischi. Vuoi "
-"abilitarlo?"
-
-msgid "AUR enabled"
-msgstr ""
-
-msgid "System Default"
-msgstr ""
-
-msgid "English"
-msgstr ""
-
-msgid "Bulgarian"
-msgstr ""
-
-msgid "Català"
-msgstr ""
-
-msgid "Deutsch"
-msgstr ""
-
-msgid "Español"
-msgstr ""
-
-msgid "Français"
-msgstr ""
-
-msgid "Magyar"
-msgstr ""
-
-msgid "日本語"
-msgstr ""
-
-msgid "Polski"
-msgstr ""
-
-msgid "Português (Brasil)"
-msgstr ""
-
-msgid "Português (Portugal)"
-msgstr ""
-
-msgid "Русский"
-msgstr ""
-
-msgid "Türkçe"
-msgstr ""
-
-msgid "中文（简体）"
-msgstr ""
-
-msgid "Packages"
-msgstr "Pacchetti"
-
-msgid "Shelly Search"
-msgstr "Ricerca Shelly"
-
-msgid "Update"
-msgstr ""
-
 msgid "System package update"
 msgstr ""
 
@@ -1416,9 +1365,8 @@ msgstr ""
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 
-#, fuzzy
 msgid "Update this package"
-msgstr "Aggiorna i pacchetti?"
+msgstr ""
 
 msgid "of"
 msgstr ""
@@ -1430,6 +1378,43 @@ msgid "Updates included"
 msgstr ""
 
 msgid "Upgrading packages"
+msgstr ""
+
+msgid "Refreshing package databases"
+msgstr ""
+
+msgid "Database lock removed successfully"
+msgstr ""
+
+msgid "Failed to remove database lock"
+msgstr ""
+
+msgid "Fixing permissions"
+msgstr ""
+
+msgid "Purifying packages"
+msgstr ""
+
+msgid "Cleaning package cache"
+msgstr ""
+
+msgid "Welcome"
+msgstr ""
+
+msgid ""
+"The Arch User Repository is community-maintained. Packages are not "
+"officially vetted — only enable if you trust what you install."
+msgstr ""
+
+msgid "Enable Recommended?"
+msgstr ""
+
+msgid ""
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
+msgstr ""
+
+msgid "Installing Flatpak and AppImage support"
 msgstr ""
 
 msgid "Settings"

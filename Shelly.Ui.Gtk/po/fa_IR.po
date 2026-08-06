@@ -17,6 +17,178 @@ msgstr ""
 "X-Generator: Lokalize 26.04.2\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
+msgid "No installable addons available"
+msgstr ""
+
+msgid "Close"
+msgstr "بستن"
+
+msgid "Confirm"
+msgstr "تایید"
+
+msgid "Skip"
+msgstr ""
+
+msgid "No special permissions requested"
+msgstr ""
+
+msgid "Review PKGBUILD changes"
+msgstr "بررسی تغییرات PKGBUILD"
+
+msgid "Changes"
+msgstr ""
+
+msgid "Warnings"
+msgstr ""
+
+msgid ""
+"These commands fetch and execute code outside of shelly and libalpm's "
+"control. Review them before continuing."
+msgstr ""
+"این دستورات کد را خارج از کنترل Shelly و libalpm دریافت و اجرا می‌کنند. پیش "
+"از ادامه آن‌ها را بررسی کنید."
+
+msgid "Source Files"
+msgstr ""
+
+msgid "Cancel"
+msgstr "صرف‌نظر"
+
+msgid "polkit is required"
+msgstr ""
+
+msgid ""
+"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
+"privileged actions, but it wasn't found on the system bus.\n"
+"\n"
+"Install and enable it, then retry.\n"
+"\n"
+"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
+"Polkit</a>"
+msgstr ""
+
+msgid "Review PKGBUILD"
+msgstr ""
+
+msgid "Search..."
+msgstr "جست‌وجو...."
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr ""
+"فرادادهٔ همهٔ AppImageها را همگام‌سازی می‌کند. اگر AppImage خودش را به‌روزرسانی "
+"کرده باشد، این گزینه مفید است."
+
+msgid "Sync All"
+msgstr "همگام‌سازی همه"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "به‌روزرسانی تمامی AppImageها به آخرین نگارش"
+
+msgid "Upgrade All"
+msgstr "به‌روزرسانی همه"
+
+msgid "Install a new AppImage from a file"
+msgstr "نصب یک AppImage جدید از پروندهٔ"
+
+msgid "Install AppImage"
+msgstr "نصب AppImage"
+
+msgid "Drop AppImage here to install"
+msgstr "پروندهٔ AppImage را به اینجا بکشید تا نصب شود"
+
+msgid "App Name"
+msgstr "نام برنامه"
+
+msgid "Version"
+msgstr "نگارش"
+
+msgid "Description goes here..."
+msgstr "توضیحات در اینجا...."
+
+msgid "Size on Disk"
+msgstr "اندازه روی دیسک"
+
+msgid "Update Strategy"
+msgstr "نحوه به‌روزرسانی"
+
+msgid "Update URL / Repository Info"
+msgstr "پیوند به‌روزرسانی / اطلاعات مخزن"
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr "دریافت اطلاعات بیشتر دربارهٔ پیوند به‌روزرسانی / اطلاعات مخزن"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "برای نمونه: مالک/مخزن یا https://..."
+
+msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+msgstr ""
+
+msgid "Allow Prerelease"
+msgstr "اجازه دادن به نگارش‌های پیش‌انتشار"
+
+msgid "Installation Path"
+msgstr "مسیر نصب"
+
+msgid "Launch Flags"
+msgstr "پرچم اجرایی"
+
+msgid "Save"
+msgstr "ذخیره"
+
+msgid "Sync"
+msgstr "همگام‌سازی"
+
+msgid "Remove"
+msgstr "حذف"
+
+msgid "Information"
+msgstr ""
+
+msgid "Preview Pkgbuild"
+msgstr ""
+
+msgid "Search the AUR by name or keyword"
+msgstr ""
+
+msgid "Installed Only"
+msgstr ""
+
+msgid "Show only installed packages"
+msgstr ""
+
+msgid "Additional Options"
+msgstr "تنظیمات بیشتر"
+
+msgid "Install Selected"
+msgstr "نصب انتخاب شده"
+
+msgid "Name"
+msgstr "نام"
+
+msgid "Votes"
+msgstr "آراء"
+
+msgid "Popularity"
+msgstr "محبوبیت"
+
+msgid "Search the AUR"
+msgstr ""
+
+msgid "The AUR has no browsable index type a package name to begin."
+msgstr ""
+
+msgid "Run checks"
+msgstr "اجرای بررسی‌ها"
+
+msgid "Run the --check function during package build"
+msgstr ""
+
+msgid "Hide Detail Pane"
+msgstr ""
+
+msgid "Hide the detail pane on the right"
+msgstr ""
+
 msgid "Install a local Flatpak"
 msgstr ""
 
@@ -43,74 +215,17 @@ msgstr "کاربر"
 msgid "Install"
 msgstr "نصب"
 
-msgid "Additional Options"
-msgstr "تنظیمات بیشتر"
-
-msgid "Show Runtimes"
-msgstr "نمایش پیش‌نیازها"
-
-msgid "Flatpak Repair"
-msgstr "تعمیر فلت‌پک"
-
-msgid "Repairs Flatpak Installation (Experimental)"
-msgstr "تعمیر نصب فلت‌پک (آزمایشی)"
-
-msgid "Search packages..."
-msgstr "جست‌جوی بسته‌ها..."
-
-msgid "Browse"
-msgstr ""
-
-msgid "Manage"
-msgstr "مدیریت"
-
-msgid "Manage Remote Refs"
-msgstr "مدیریت مراجع راه‌دور"
-
-msgid "Install Local"
-msgstr "نصب محلی"
-
-msgid "Delete Selected Remote"
-msgstr "حذف مخزن انتخاب شده"
-
-msgid "Add Remote"
-msgstr "افزودن مخزن"
+msgid "Loading Flatpak Data..."
+msgstr "درحال بارگزاری اطلاعات فلت‌پک...."
 
 msgid "Back"
 msgstr "بازگشت"
-
-msgid "Add New Flatpak Remote"
-msgstr "افزودن مخزن فلت‌پک جدید"
-
-msgid "Add"
-msgstr "افزودن"
-
-msgid "Remote Name"
-msgstr "نام مخزن"
-
-msgid "e.g., flathub"
-msgstr "برای مثال: فلت‌هاب"
-
-msgid "Remote URL"
-msgstr "نشانی مخزن"
-
-msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr "برای مثال: https://flathub.org/repo/flathub.flatpakrepo"
-
-msgid "Scope"
-msgstr "دامنه"
-
-msgid "Loading Flatpak Data..."
-msgstr "درحال بارگزاری اطلاعات فلت‌پک...."
 
 msgid "Addons"
 msgstr "افزونه‌ها"
 
 msgid "Install source"
 msgstr ""
-
-msgid "App Name"
-msgstr "نام برنامه"
 
 msgid "Author"
 msgstr "ناشر"
@@ -136,6 +251,60 @@ msgstr "مجوزهای برنامه"
 msgid "Version History"
 msgstr "تاریخچه نگارش"
 
+msgid "Search packages..."
+msgstr "جست‌جوی بسته‌ها..."
+
+msgid "Browse"
+msgstr ""
+
+msgid "Manage"
+msgstr "مدیریت"
+
+msgid "Manage Remote Refs"
+msgstr "مدیریت مراجع راه‌دور"
+
+msgid "Install Local"
+msgstr "نصب محلی"
+
+msgid "Delete Selected Remote"
+msgstr "حذف مخزن انتخاب شده"
+
+msgid "Add Remote"
+msgstr "افزودن مخزن"
+
+msgid "Add New Flatpak Remote"
+msgstr "افزودن مخزن فلت‌پک جدید"
+
+msgid "Add"
+msgstr "افزودن"
+
+msgid "Remote Name"
+msgstr "نام مخزن"
+
+msgid "e.g., flathub"
+msgstr "برای مثال: فلت‌هاب"
+
+msgid "Remote URL"
+msgstr "نشانی مخزن"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "برای مثال: https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "دامنه"
+
+msgid "Show Runtimes"
+msgstr "نمایش پیش‌نیازها"
+
+msgid "Flatpak Repair"
+msgstr "تعمیر فلت‌پک"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "تعمیر نصب فلت‌پک (آزمایشی)"
+
+msgid "Shelly"
+msgstr ""
+
 msgid "Reinstall"
 msgstr ""
 
@@ -154,7 +323,57 @@ msgstr ""
 msgid "Package actions"
 msgstr ""
 
-msgid "Information"
+msgid "Package Group Filter"
+msgstr "صافی گروه بسته‌ها"
+
+msgid "Selected Packages"
+msgstr "بسته‌های انتخاب شده"
+
+msgid "0 Selected"
+msgstr "0 انتخاب شده"
+
+msgid "Grid View"
+msgstr "نمای شبکه‌ای"
+
+msgid "List View"
+msgstr "نمای لیست"
+
+msgid "Size"
+msgstr "اندازه"
+
+msgid "Repository"
+msgstr "مخزن"
+
+msgid "Install Date"
+msgstr ""
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
+msgstr ""
+"در هنگام بازکردن بسته‌های شما خطایی رخ داد. بررسی کنید که آیا دیتابیس قفل شده "
+"است."
+
+msgid "Perform Upgrade"
+msgstr "اجرای به‌روزرسانی"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "اجرای به‌روزرسانی کامل سامانه به‌همراه نصب (-u)"
+
+msgid "Show Hidden"
+msgstr "نمایش مخفی‌ها"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "نمایش بسته‌های موجود در فهرست IgnorePkg از pacman.conf"
+
+msgid "Show Explicit Only"
+msgstr ""
+
+msgid "Show only explicitly installed packages"
+msgstr ""
+
+msgid "Show Dependency Only"
+msgstr ""
+
+msgid "Show dependency packages on;y"
 msgstr ""
 
 msgid "Recommended Packages"
@@ -175,12 +394,6 @@ msgid ""
 msgstr ""
 "هیچ پیشنهادی یافت نشد. لطفاً اتصال اینترنت خود را بررسی کنید و دوباره تلاش "
 "کنید."
-
-msgid "Preview Pkgbuild"
-msgstr ""
-
-msgid "Shelly"
-msgstr ""
 
 msgid "General"
 msgstr "عمومی"
@@ -307,9 +520,6 @@ msgstr "مسیر نصب AppImage"
 msgid "Select Directory"
 msgstr "انتخاب مسیر"
 
-msgid "Save"
-msgstr "ذخیره"
-
 msgid "View Changelog"
 msgstr "مشاهده تغییرات"
 
@@ -324,6 +534,42 @@ msgstr "فلوکسر جامعه"
 
 msgid "Sponsor"
 msgstr "حامی"
+
+msgid "Toggle output"
+msgstr ""
+
+msgid "Available Updates"
+msgstr "به‌روزرسانی‌های موجود"
+
+msgid "7 of 7 updates included"
+msgstr ""
+
+msgid "Check all enabled sources again"
+msgstr ""
+
+msgid "Check Again"
+msgstr ""
+
+msgid "Upgrade"
+msgstr ""
+
+msgid "System"
+msgstr "سامانه"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Flatpak"
+msgstr "فلت‌پک"
+
+msgid "Checking for updates…"
+msgstr ""
+
+msgid "Your system is up to date"
+msgstr ""
+
+msgid "Could not check for updates"
+msgstr ""
 
 msgid "Utilities"
 msgstr ""
@@ -376,45 +622,6 @@ msgid "Keep"
 msgstr ""
 
 msgid "Number of cached versions to keep per package"
-msgstr ""
-
-msgid "Toggle output"
-msgstr ""
-
-msgid "Close"
-msgstr "بستن"
-
-msgid "Available Updates"
-msgstr "به‌روزرسانی‌های موجود"
-
-msgid "7 of 7 updates included"
-msgstr ""
-
-msgid "Check all enabled sources again"
-msgstr ""
-
-msgid "Check Again"
-msgstr ""
-
-msgid "Upgrade"
-msgstr ""
-
-msgid "System"
-msgstr "سامانه"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "فلت‌پک"
-
-msgid "Checking for updates…"
-msgstr ""
-
-msgid "Your system is up to date"
-msgstr ""
-
-msgid "Could not check for updates"
 msgstr ""
 
 msgid "Welcome to Shelly v3"
@@ -486,216 +693,6 @@ msgstr ""
 msgid "Start Shelly"
 msgstr ""
 
-msgid "Search..."
-msgstr "جست‌وجو...."
-
-msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr ""
-"فرادادهٔ همهٔ AppImageها را همگام‌سازی می‌کند. اگر AppImage خودش را به‌روزرسانی "
-"کرده باشد، این گزینه مفید است."
-
-msgid "Sync All"
-msgstr "همگام‌سازی همه"
-
-msgid "Upgrade all AppImages to their latest versions"
-msgstr "به‌روزرسانی تمامی AppImageها به آخرین نگارش"
-
-msgid "Upgrade All"
-msgstr "به‌روزرسانی همه"
-
-msgid "Install a new AppImage from a file"
-msgstr "نصب یک AppImage جدید از پروندهٔ"
-
-msgid "Install AppImage"
-msgstr "نصب AppImage"
-
-msgid "Drop AppImage here to install"
-msgstr "پروندهٔ AppImage را به اینجا بکشید تا نصب شود"
-
-msgid "Version"
-msgstr "نگارش"
-
-msgid "Description goes here..."
-msgstr "توضیحات در اینجا...."
-
-msgid "Size on Disk"
-msgstr "اندازه روی دیسک"
-
-msgid "Update Strategy"
-msgstr "نحوه به‌روزرسانی"
-
-msgid "Update URL / Repository Info"
-msgstr "پیوند به‌روزرسانی / اطلاعات مخزن"
-
-msgid "Get more information about Update URL / Repository Info"
-msgstr "دریافت اطلاعات بیشتر دربارهٔ پیوند به‌روزرسانی / اطلاعات مخزن"
-
-msgid "e.g. owner/repo or https://..."
-msgstr "برای نمونه: مالک/مخزن یا https://..."
-
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
-msgstr ""
-
-msgid "Allow Prerelease"
-msgstr "اجازه دادن به نگارش‌های پیش‌انتشار"
-
-msgid "Installation Path"
-msgstr "مسیر نصب"
-
-msgid "Launch Flags"
-msgstr "پرچم اجرایی"
-
-msgid "Sync"
-msgstr "همگام‌سازی"
-
-msgid "Remove"
-msgstr "حذف"
-
-msgid "Search the AUR by name or keyword"
-msgstr ""
-
-msgid "Installed Only"
-msgstr ""
-
-msgid "Show only installed packages"
-msgstr ""
-
-msgid "Install Selected"
-msgstr "نصب انتخاب شده"
-
-msgid "Name"
-msgstr "نام"
-
-msgid "Votes"
-msgstr "آراء"
-
-msgid "Popularity"
-msgstr "محبوبیت"
-
-msgid "Search the AUR"
-msgstr ""
-
-msgid "The AUR has no browsable index type a package name to begin."
-msgstr ""
-
-msgid "Run checks"
-msgstr "اجرای بررسی‌ها"
-
-msgid "Run the --check function during package build"
-msgstr ""
-
-msgid "Hide Detail Pane"
-msgstr ""
-
-msgid "Hide the detail pane on the right"
-msgstr ""
-
-msgid "Package Group Filter"
-msgstr "صافی گروه بسته‌ها"
-
-msgid "Selected Packages"
-msgstr "بسته‌های انتخاب شده"
-
-msgid "0 Selected"
-msgstr "0 انتخاب شده"
-
-msgid "Grid View"
-msgstr "نمای شبکه‌ای"
-
-msgid "List View"
-msgstr "نمای لیست"
-
-msgid "Size"
-msgstr "اندازه"
-
-msgid "Repository"
-msgstr "مخزن"
-
-#, fuzzy
-msgid "Install Date"
-msgstr "نصب"
-
-msgid "Had an issue loading your packages. Check if you have a db lock."
-msgstr ""
-"در هنگام بازکردن بسته‌های شما خطایی رخ داد. بررسی کنید که آیا دیتابیس قفل شده "
-"است."
-
-msgid "Perform Upgrade"
-msgstr "اجرای به‌روزرسانی"
-
-msgid "Perform a full system upgrade with install (-u)"
-msgstr "اجرای به‌روزرسانی کامل سامانه به‌همراه نصب (-u)"
-
-msgid "Show Hidden"
-msgstr "نمایش مخفی‌ها"
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr "نمایش بسته‌های موجود در فهرست IgnorePkg از pacman.conf"
-
-msgid "Show Explicit Only"
-msgstr ""
-
-msgid "Show only explicitly installed packages"
-msgstr ""
-
-msgid "Show Dependency Only"
-msgstr ""
-
-msgid "Show dependency packages on;y"
-msgstr ""
-
-msgid "Confirm"
-msgstr "تایید"
-
-msgid "Cancel"
-msgstr "صرف‌نظر"
-
-#, fuzzy
-msgid "No installable addons available"
-msgstr "هیچ خبری نیست"
-
-msgid "No special permissions requested"
-msgstr ""
-
-#, fuzzy
-msgid "polkit is required"
-msgstr "راه‌اندازی مجدد نیاز است"
-
-msgid ""
-"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
-"privileged actions, but it wasn't found on the system bus.\n"
-"\n"
-"Install and enable it, then retry.\n"
-"\n"
-"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
-"Polkit</a>"
-msgstr ""
-
-msgid "Skip"
-msgstr ""
-
-msgid "Review PKGBUILD changes"
-msgstr "بررسی تغییرات PKGBUILD"
-
-msgid "Changes"
-msgstr ""
-
-msgid "Warnings"
-msgstr ""
-
-msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
-"control. Review them before continuing."
-msgstr ""
-"این دستورات کد را خارج از کنترل Shelly و libalpm دریافت و اجرا می‌کنند. پیش "
-"از ادامه آن‌ها را بررسی کنید."
-
-msgid "Source Files"
-msgstr ""
-
-msgid "Review PKGBUILD"
-msgstr ""
-
 msgid "Filesystem"
 msgstr ""
 
@@ -762,6 +759,163 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
+msgid "None"
+msgstr "هیچ‌کدام"
+
+msgid "Static URL"
+msgstr ""
+
+msgid "GitLab"
+msgstr "گیت‌لب"
+
+msgid "Codeberg"
+msgstr "کدبرگ"
+
+msgid "Forgejo"
+msgstr "فورجیو"
+
+msgid "Update Available"
+msgstr ""
+
+msgid "Version ?"
+msgstr ""
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr ""
+"قالب نامعتبر است. از قالب مالک/مخزن استفاده کنید (برای نمونه: seafoam-labs/"
+"shelly-alpm)."
+
+msgid "Invalid URL. Must start with http:// or https://"
+msgstr "پیوند نامعتبر است. باید با http:// یا https:// شروع شود."
+
+msgid ""
+"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
+"repo/releases"
+msgstr ""
+
+msgid "Choose an AppImage file"
+msgstr ""
+
+msgid "AppImage files"
+msgstr ""
+
+msgid "Only .AppImage files can be installed"
+msgstr ""
+
+msgid "Installing AppImage"
+msgstr ""
+
+msgid "No AppImages need to be upgraded"
+msgstr "هیچ AppImageای نیاز به به‌روزرسانی ندارد"
+
+msgid "Upgrading AppImages"
+msgstr ""
+
+msgid "Syncing AppImages"
+msgstr ""
+
+msgid "Syncing AppImage"
+msgstr ""
+
+msgid "Saving update configuration"
+msgstr ""
+
+msgid "Configuration files will be kept."
+msgstr ""
+
+msgid "Remove this AppImage?"
+msgstr ""
+
+msgid "Remove AppImage"
+msgstr ""
+
+msgid "Removing AppImage"
+msgstr ""
+
+msgid "Operation completed successfully"
+msgstr ""
+
+msgid "Operation failed"
+msgstr ""
+
+msgid "Maintainer"
+msgstr "نگهدارنده"
+
+msgid "Last Modified"
+msgstr "آخرین تغییر"
+
+msgid "First Submitted"
+msgstr "اولین ثبت"
+
+msgid "URL"
+msgstr ""
+
+msgid "Licenses"
+msgstr "مجوزها"
+
+msgid "Depends"
+msgstr "نیازمندی‌ها:"
+
+msgid "Optional Depends"
+msgstr ""
+
+msgid "Make Depends"
+msgstr "نیازمندی‌های ساخت:"
+
+msgid "Section"
+msgstr ""
+
+msgid "The AUR has no browsable index — type a package name to begin."
+msgstr ""
+
+msgid "No packages found"
+msgstr ""
+
+msgid "Try a shorter or more general keyword."
+msgstr ""
+
+msgid "Could not reach the AUR"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr ""
+
+msgid "Flagged out of date"
+msgstr ""
+
+msgid "Installed"
+msgstr "نصب شده‌ها"
+
+msgid "Remove Selected"
+msgstr "حذف انتخاب شده"
+
+msgid "Select one or more packages"
+msgstr ""
+
+msgid "Package(s)"
+msgstr ""
+
+msgid "Remove Packages"
+msgstr ""
+
+msgid "Remove the selected AUR packages?"
+msgstr ""
+
+msgid "Build from AUR"
+msgstr ""
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+
+msgid "Build"
+msgstr ""
+
+msgid "Installing AUR packages"
+msgstr ""
+
+msgid "Removing AUR packages"
+msgstr ""
+
 msgid "Choose a Flatpak file"
 msgstr ""
 
@@ -783,60 +937,6 @@ msgstr ""
 msgid "Choose file..."
 msgstr ""
 
-msgid "Removing Remote"
-msgstr ""
-
-msgid "Adding Remote"
-msgstr ""
-
-msgid "Removing Flatpak"
-msgstr ""
-
-msgid "Discover"
-msgstr ""
-
-msgid "Categories"
-msgstr ""
-
-msgid "All Applications"
-msgstr "تمامی برنامه‌ها"
-
-msgid "Most Wanted"
-msgstr "بیشترین درخواست‌ها"
-
-msgid "Recently Added"
-msgstr "به‌تازگی افزوده شده"
-
-msgid "Recently Updated"
-msgstr "به‌تازگی به‌روز شده"
-
-msgid "Audio & Video"
-msgstr "صدا و تصویر"
-
-msgid "Development"
-msgstr "توسعه"
-
-msgid "Education"
-msgstr "آموزشی"
-
-msgid "Game"
-msgstr "بازی"
-
-msgid "Graphics"
-msgstr "گرافیک"
-
-msgid "Network"
-msgstr "شبکه"
-
-msgid "Office"
-msgstr "اداری"
-
-msgid "Science"
-msgstr "علم"
-
-msgid "Utility"
-msgstr "ابزار"
-
 msgid "Verified"
 msgstr ""
 
@@ -852,12 +952,8 @@ msgstr ""
 msgid "Available Addons"
 msgstr "افزونه‌های موجود"
 
-#, fuzzy
 msgid "Installing flatpak addon"
-msgstr "درحال نصب افزونه فلت‌پک"
-
-msgid "Installed"
-msgstr "نصب شده‌ها"
+msgstr ""
 
 msgid "Unknown developer"
 msgstr ""
@@ -940,90 +1036,58 @@ msgstr ""
 msgid "No Flatpak applications are available."
 msgstr ""
 
-msgid "Refreshing package databases"
+msgid "Discover"
 msgstr ""
 
-msgid "Database lock removed successfully"
+msgid "Categories"
 msgstr ""
 
-msgid "Failed to remove database lock"
+msgid "All Applications"
+msgstr "تمامی برنامه‌ها"
+
+msgid "Most Wanted"
+msgstr "بیشترین درخواست‌ها"
+
+msgid "Recently Added"
+msgstr "به‌تازگی افزوده شده"
+
+msgid "Recently Updated"
+msgstr "به‌تازگی به‌روز شده"
+
+msgid "Audio & Video"
+msgstr "صدا و تصویر"
+
+msgid "Development"
+msgstr "توسعه"
+
+msgid "Education"
+msgstr "آموزشی"
+
+msgid "Game"
+msgstr "بازی"
+
+msgid "Graphics"
+msgstr "گرافیک"
+
+msgid "Network"
+msgstr "شبکه"
+
+msgid "Office"
+msgstr "اداری"
+
+msgid "Science"
+msgstr "علم"
+
+msgid "Utility"
+msgstr "ابزار"
+
+msgid "Removing Remote"
 msgstr ""
 
-msgid "Fixing permissions"
+msgid "Adding Remote"
 msgstr ""
 
-msgid "Purifying packages"
-msgstr ""
-
-msgid "Cleaning package cache"
-msgstr ""
-
-msgid "Operation completed successfully"
-msgstr ""
-
-msgid "Operation failed"
-msgstr ""
-
-msgid "Welcome"
-msgstr ""
-
-msgid "Enable AUR?"
-msgstr "فعال‌سازی AUR؟"
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-
-msgid "Enable"
-msgstr ""
-
-msgid "Enable Recommended?"
-msgstr ""
-
-msgid ""
-"Recommended shows curated package suggestions based on your installed "
-"software. Package data is fetched from external sources."
-msgstr ""
-
-#, fuzzy
-msgid "Installing Flatpak and AppImage support"
-msgstr "نصب فلت‌پک با خطا مواجه شد"
-
-#, fuzzy
-msgid "Installing Flatpak support"
-msgstr "فعال‌سازی پشتیبانی Flatpak"
-
-#, fuzzy
-msgid "Installing AppImage support"
-msgstr "درحال نصب AppImageها..."
-
-msgid "Maintainer"
-msgstr "نگهدارنده"
-
-msgid "Last Modified"
-msgstr "آخرین تغییر"
-
-msgid "First Submitted"
-msgstr "اولین ثبت"
-
-#, fuzzy
-msgid "URL"
-msgstr "نشانی:"
-
-msgid "Licenses"
-msgstr "مجوزها"
-
-msgid "Depends"
-msgstr "نیازمندی‌ها:"
-
-msgid "Optional Depends"
-msgstr ""
-
-msgid "Make Depends"
-msgstr "نیازمندی‌های ساخت:"
-
-msgid "Section"
+msgid "Removing Flatpak"
 msgstr ""
 
 msgid "Loading..."
@@ -1065,127 +1129,6 @@ msgstr ""
 msgid "Making Package Dependency"
 msgstr ""
 
-msgid "None"
-msgstr "هیچ‌کدام"
-
-msgid "Static URL"
-msgstr ""
-
-msgid "GitLab"
-msgstr "گیت‌لب"
-
-msgid "Codeberg"
-msgstr "کدبرگ"
-
-msgid "Forgejo"
-msgstr "فورجیو"
-
-msgid "Update Available"
-msgstr ""
-
-msgid "Version ?"
-msgstr ""
-
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
-msgstr ""
-"قالب نامعتبر است. از قالب مالک/مخزن استفاده کنید (برای نمونه: seafoam-labs/"
-"shelly-alpm)."
-
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "پیوند نامعتبر است. باید با http:// یا https:// شروع شود."
-
-msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
-msgstr ""
-
-msgid "Choose an AppImage file"
-msgstr ""
-
-msgid "AppImage files"
-msgstr ""
-
-msgid "Only .AppImage files can be installed"
-msgstr ""
-
-msgid "Installing AppImage"
-msgstr ""
-
-msgid "No AppImages need to be upgraded"
-msgstr "هیچ AppImageای نیاز به به‌روزرسانی ندارد"
-
-msgid "Upgrading AppImages"
-msgstr ""
-
-msgid "Syncing AppImages"
-msgstr ""
-
-msgid "Syncing AppImage"
-msgstr ""
-
-msgid "Saving update configuration"
-msgstr ""
-
-msgid "Configuration files will be kept."
-msgstr ""
-
-msgid "Remove this AppImage?"
-msgstr ""
-
-msgid "Remove AppImage"
-msgstr ""
-
-msgid "Removing AppImage"
-msgstr ""
-
-msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
-
-msgid "No packages found"
-msgstr ""
-
-msgid "Try a shorter or more general keyword."
-msgstr ""
-
-msgid "Could not reach the AUR"
-msgstr ""
-
-msgid "Check your connection and try again."
-msgstr ""
-
-msgid "Flagged out of date"
-msgstr ""
-
-msgid "Remove Selected"
-msgstr "حذف انتخاب شده"
-
-msgid "Select one or more packages"
-msgstr ""
-
-msgid "Package(s)"
-msgstr ""
-
-msgid "Remove Packages"
-msgstr ""
-
-msgid "Remove the selected AUR packages?"
-msgstr ""
-
-msgid "Build from AUR"
-msgstr ""
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-
-msgid "Build"
-msgstr ""
-
-msgid "Installing AUR packages"
-msgstr ""
-
-msgid "Removing AUR packages"
-msgstr ""
-
 msgid "Package is already installed"
 msgstr "بسته درحال حاضر نصب شده است"
 
@@ -1218,6 +1161,151 @@ msgid "Removing packages"
 msgstr ""
 
 msgid "Installing packages"
+msgstr ""
+
+msgid "Failed to save settings"
+msgstr ""
+
+msgid "Settings saved"
+msgstr ""
+
+msgid "Installing Flatpak support"
+msgstr ""
+
+msgid "Installing AppImage support"
+msgstr ""
+
+msgid "Failed to start Flatpak support installation"
+msgstr ""
+
+msgid "Failed to start AppImage support installation"
+msgstr ""
+
+msgid "Flatpak support installation failed"
+msgstr ""
+
+msgid "AppImage support installation failed"
+msgstr ""
+
+msgid "Flatpak support enabled"
+msgstr ""
+
+msgid "AppImage support enabled"
+msgstr ""
+
+msgid "No changelog entries found"
+msgstr "هیچ تغییراتی پیدا نشد"
+
+msgid "No details for this release"
+msgstr "هیچ توضیحی برای این عرضه وجود ندارد"
+
+msgid "Failed to load changelog"
+msgstr "بارگزاری تغییرات شکست خورد"
+
+msgid "Changelog"
+msgstr ""
+
+msgid "Select Tray Icon"
+msgstr ""
+
+msgid "Select Icon"
+msgstr ""
+
+msgid "Select Tray Updates Icon"
+msgstr ""
+
+msgid "Select AppImage Install Directory"
+msgstr "انتخاب مسیر نصب AppImage"
+
+msgid "Tray enabled"
+msgstr ""
+
+msgid "Tray disabled, but autostart service remains"
+msgstr ""
+
+msgid "Tray disabled"
+msgstr ""
+
+msgid "Failed to add systemd startup service"
+msgstr ""
+
+msgid "Systemd startup service added."
+msgstr "سرویس اجرای اولیه سیستم‌دی افزوده شد."
+
+msgid "Failed to remove systemd startup service"
+msgstr ""
+
+msgid "Systemd startup service removed."
+msgstr "سرویس اجرای اولیه سیستم‌دی حذف شد."
+
+msgid "Enable AUR?"
+msgstr "فعال‌سازی AUR؟"
+
+msgid ""
+"The Arch User Repository (AUR) is a community-driven repository. Packages "
+"are user-produced and may contain risks. Do you want to enable it?"
+msgstr ""
+"مخزن کاربران آرچ (AUR) یک مخزن جامعه‌محور است. بسته‌ها توسط کاربران تولید "
+"می‌شوند و ممکن است خطراتی داشته باشند. آیا می‌خواهید آن را فعال کنید؟"
+
+msgid "Enable"
+msgstr ""
+
+msgid "AUR enabled"
+msgstr ""
+
+msgid "System Default"
+msgstr ""
+
+msgid "English"
+msgstr ""
+
+msgid "Bulgarian"
+msgstr ""
+
+msgid "Català"
+msgstr ""
+
+msgid "Deutsch"
+msgstr ""
+
+msgid "Español"
+msgstr ""
+
+msgid "Français"
+msgstr ""
+
+msgid "Magyar"
+msgstr ""
+
+msgid "日本語"
+msgstr ""
+
+msgid "Polski"
+msgstr ""
+
+msgid "Português (Brasil)"
+msgstr ""
+
+msgid "Português (Portugal)"
+msgstr ""
+
+msgid "Русский"
+msgstr ""
+
+msgid "Türkçe"
+msgstr ""
+
+msgid "中文（简体）"
+msgstr ""
+
+msgid "Packages"
+msgstr "بسته‌ها"
+
+msgid "Shelly Search"
+msgstr "جست‌جوگر Shelly"
+
+msgid "Update"
 msgstr ""
 
 msgid "Failed to start operation."
@@ -1277,144 +1365,6 @@ msgstr "بله"
 msgid "No"
 msgstr "نه"
 
-msgid "Failed to save settings"
-msgstr ""
-
-msgid "Settings saved"
-msgstr ""
-
-#, fuzzy
-msgid "Failed to start Flatpak support installation"
-msgstr "تعمیر نصب فلت‌پک شکست خورد"
-
-#, fuzzy
-msgid "Failed to start AppImage support installation"
-msgstr "تعمیر نصب فلت‌پک شکست خورد"
-
-#, fuzzy
-msgid "Flatpak support installation failed"
-msgstr "نصب فلت‌پک تعمیر شده"
-
-msgid "AppImage support installation failed"
-msgstr ""
-
-#, fuzzy
-msgid "Flatpak support enabled"
-msgstr "فعال‌سازی پشتیبانی Flatpak"
-
-#, fuzzy
-msgid "AppImage support enabled"
-msgstr "فعال‌سازی پشتیبانی AppImage"
-
-msgid "No changelog entries found"
-msgstr "هیچ تغییراتی پیدا نشد"
-
-msgid "No details for this release"
-msgstr "هیچ توضیحی برای این عرضه وجود ندارد"
-
-msgid "Failed to load changelog"
-msgstr "بارگزاری تغییرات شکست خورد"
-
-msgid "Changelog"
-msgstr ""
-
-msgid "Select Tray Icon"
-msgstr ""
-
-msgid "Select Icon"
-msgstr ""
-
-msgid "Select Tray Updates Icon"
-msgstr ""
-
-msgid "Select AppImage Install Directory"
-msgstr "انتخاب مسیر نصب AppImage"
-
-msgid "Tray enabled"
-msgstr ""
-
-msgid "Tray disabled, but autostart service remains"
-msgstr ""
-
-msgid "Tray disabled"
-msgstr ""
-
-msgid "Failed to add systemd startup service"
-msgstr ""
-
-msgid "Systemd startup service added."
-msgstr "سرویس اجرای اولیه سیستم‌دی افزوده شد."
-
-msgid "Failed to remove systemd startup service"
-msgstr ""
-
-msgid "Systemd startup service removed."
-msgstr "سرویس اجرای اولیه سیستم‌دی حذف شد."
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"مخزن کاربران آرچ (AUR) یک مخزن جامعه‌محور است. بسته‌ها توسط کاربران تولید "
-"می‌شوند و ممکن است خطراتی داشته باشند. آیا می‌خواهید آن را فعال کنید؟"
-
-msgid "AUR enabled"
-msgstr ""
-
-msgid "System Default"
-msgstr ""
-
-msgid "English"
-msgstr ""
-
-msgid "Bulgarian"
-msgstr ""
-
-msgid "Català"
-msgstr ""
-
-msgid "Deutsch"
-msgstr ""
-
-msgid "Español"
-msgstr ""
-
-msgid "Français"
-msgstr ""
-
-msgid "Magyar"
-msgstr ""
-
-msgid "日本語"
-msgstr ""
-
-msgid "Polski"
-msgstr ""
-
-msgid "Português (Brasil)"
-msgstr ""
-
-msgid "Português (Portugal)"
-msgstr ""
-
-msgid "Русский"
-msgstr ""
-
-msgid "Türkçe"
-msgstr ""
-
-msgid "中文（简体）"
-msgstr ""
-
-msgid "Packages"
-msgstr "بسته‌ها"
-
-msgid "Shelly Search"
-msgstr "جست‌جوگر Shelly"
-
-msgid "Update"
-msgstr ""
-
 msgid "System package update"
 msgstr ""
 
@@ -1424,9 +1374,8 @@ msgstr ""
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 
-#, fuzzy
 msgid "Update this package"
-msgstr "به‌روزرسانی بسته‌ها؟"
+msgstr ""
 
 msgid "of"
 msgstr ""
@@ -1438,6 +1387,43 @@ msgid "Updates included"
 msgstr ""
 
 msgid "Upgrading packages"
+msgstr ""
+
+msgid "Refreshing package databases"
+msgstr ""
+
+msgid "Database lock removed successfully"
+msgstr ""
+
+msgid "Failed to remove database lock"
+msgstr ""
+
+msgid "Fixing permissions"
+msgstr ""
+
+msgid "Purifying packages"
+msgstr ""
+
+msgid "Cleaning package cache"
+msgstr ""
+
+msgid "Welcome"
+msgstr ""
+
+msgid ""
+"The Arch User Repository is community-maintained. Packages are not "
+"officially vetted — only enable if you trust what you install."
+msgstr ""
+
+msgid "Enable Recommended?"
+msgstr ""
+
+msgid ""
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
+msgstr ""
+
+msgid "Installing Flatpak and AppImage support"
 msgstr ""
 
 msgid "Settings"

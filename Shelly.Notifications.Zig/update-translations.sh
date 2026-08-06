@@ -12,16 +12,16 @@
 #   3. Optionally compiles .po -> .mo and installs them.
 #
 # Usage:
-#   ./update-translations.sh                # extract + merge all existing .po
-#   ./update-translations.sh --new es       # also create po/es.po if missing
-#   ./update-translations.sh --compile      # build .mo files into build/locale
-#   ./update-translations.sh --install      # install .mo into $PREFIX/share/locale
+#   ./update-translations.sh                      # extract + merge all existing .po
+#   ./update-translations.sh --new es             # also create po/es.po if missing
+#   ./update-translations.sh --compile            # build .mo files into build/locale
+#   ./update-translations.sh --install            # install .mo into $PREFIX/share/locale
 #   ./update-translations.sh --new de --compile   # combine flags
 #
 set -euo pipefail
 
-project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-cd -- "$project_dir"
+script_path="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/$(basename -- "${BASH_SOURCE[0]}")"
+cd -- "$(dirname -- "$script_path")"
 
 # ---- Config -----------------------------------------------------------------
 DOMAIN="shelly-notifications"
@@ -52,7 +52,7 @@ while [[ $# -gt 0 ]]; do
         --accept-fuzzy) FUZZY_MODE="accept"; shift ;;  # un-fuzzy, keep the guessed text
         --keep-fuzzy)   FUZZY_MODE="keep";   shift ;;  # leave #, fuzzy markers as-is
         -h|--help)
-            sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
+            sed -n '2,/^set -euo/p' "$script_path" | sed '$d'; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 1 ;;
     esac
 done

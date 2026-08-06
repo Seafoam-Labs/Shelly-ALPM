@@ -15,6 +15,182 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Weblate 2026.7\n"
 
+msgid "No installable addons available"
+msgstr ""
+
+msgid "Close"
+msgstr "Itxi"
+
+msgid "Confirm"
+msgstr "Berretsi"
+
+msgid "Skip"
+msgstr "Eskapatu"
+
+msgid "No special permissions requested"
+msgstr "Ez da baimen berezirik eskatu"
+
+msgid "Review PKGBUILD changes"
+msgstr "Berrikusi PKGBUILD aldaketak"
+
+msgid "Changes"
+msgstr "Aldaketak"
+
+msgid "Warnings"
+msgstr "Oharrak"
+
+msgid ""
+"These commands fetch and execute code outside of shelly and libalpm's "
+"control. Review them before continuing."
+msgstr ""
+"Komando hauek shelly eta libalpm-en kontroletik kanpoko kodea lortu eta "
+"exekutatzen dute. Berrikusi itzazu aurrera jarraitu aurretik."
+
+msgid "Source Files"
+msgstr "Jatorrizko fitxategiak"
+
+msgid "Cancel"
+msgstr "Utzi"
+
+msgid "polkit is required"
+msgstr ""
+
+msgid ""
+"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
+"privileged actions, but it wasn't found on the system bus.\n"
+"\n"
+"Install and enable it, then retry.\n"
+"\n"
+"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
+"Polkit</a>"
+msgstr ""
+
+msgid "Review PKGBUILD"
+msgstr "Berrikusi PKGBUILD"
+
+msgid "Search..."
+msgstr "Bilatu..."
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr ""
+"Sinkronizatu AppImage guztien metadatuak. Erabilgarria AppImage bere burua "
+"eguneratu bada."
+
+msgid "Sync All"
+msgstr "Sinkronizatu denak"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "Bertsio-berritu AppImage guztiak beraien azken bertsioetara"
+
+msgid "Upgrade All"
+msgstr "Bertsio-berritu denak"
+
+msgid "Install a new AppImage from a file"
+msgstr "Instalatu AppImage berri bat fitxategi batetik"
+
+msgid "Install AppImage"
+msgstr "Instalatu AppImage"
+
+msgid "Drop AppImage here to install"
+msgstr "Jaregin AppImage hemen instalatzeko"
+
+msgid "App Name"
+msgstr "Aplikazioaren izena"
+
+msgid "Version"
+msgstr "Bertsioa"
+
+msgid "Description goes here..."
+msgstr "Deskribapena hemen joango da..."
+
+msgid "Size on Disk"
+msgstr "Tamaina diskoan"
+
+msgid "Update Strategy"
+msgstr "Eguneratze-estrategia"
+
+msgid "Update URL / Repository Info"
+msgstr "Eguneratzeko URLa / Biltegiaren informazioa"
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr ""
+"Lortu informazio gehiago eguneratze-URLari / biltegiaren informazioari buruz"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "adib. jabea/biltegia edo https://..."
+
+msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+msgstr ""
+"Formatu baliogabea. Erabili jabea/biltegia (adib. seafoam-labs/shelly-alpm)"
+
+msgid "Allow Prerelease"
+msgstr "Onartu aurre-bertsioak"
+
+msgid "Installation Path"
+msgstr "Instalazio-bidea"
+
+msgid "Launch Flags"
+msgstr "Abiarazteko banderak"
+
+msgid "Save"
+msgstr "Gorde"
+
+msgid "Sync"
+msgstr "Sinkronizatu"
+
+msgid "Remove"
+msgstr "Kendu"
+
+msgid "Information"
+msgstr "Informazioa"
+
+msgid "Preview Pkgbuild"
+msgstr "Aurreikusi Pkgbuild"
+
+msgid "Search the AUR by name or keyword"
+msgstr "Bilatu AURen izenez edo gako-hitzez"
+
+msgid "Installed Only"
+msgstr "Instalatutakoak bakarrik"
+
+msgid "Show only installed packages"
+msgstr "Erakutsi instalatutako paketeak bakarrik"
+
+msgid "Additional Options"
+msgstr "Aukera gehigarriak"
+
+msgid "Install Selected"
+msgstr "Instalatu hautatutakoak"
+
+msgid "Name"
+msgstr "Izena"
+
+msgid "Votes"
+msgstr "Botoak"
+
+msgid "Popularity"
+msgstr "Ospea"
+
+msgid "Search the AUR"
+msgstr "Bilatu AURen"
+
+msgid "The AUR has no browsable index type a package name to begin."
+msgstr ""
+"AURek ez du arakatu daitekeen indexaziorik, idatzi pakete baten izena "
+"hasteko."
+
+msgid "Run checks"
+msgstr "Exekutatu egiaztapenak"
+
+msgid "Run the --check function during package build"
+msgstr "Exekutatu --check funtzioa paketea eraikitzean"
+
+msgid "Hide Detail Pane"
+msgstr "Ezkutatu xehetasunen panela"
+
+msgid "Hide the detail pane on the right"
+msgstr "Ezkutatu eskuineko xehetasun-panela"
+
 msgid "Install a local Flatpak"
 msgstr "Instalatu tokiko Flatpak bat"
 
@@ -43,74 +219,17 @@ msgstr "erabiltzailea"
 msgid "Install"
 msgstr "Instalatu"
 
-msgid "Additional Options"
-msgstr "Aukera gehigarriak"
-
-msgid "Show Runtimes"
-msgstr "Erakutsi exekuzio-inguruneak"
-
-msgid "Flatpak Repair"
-msgstr "Flatpak-en konponketa"
-
-msgid "Repairs Flatpak Installation (Experimental)"
-msgstr "Flatpak instalazioa konpontzen du (Esperimentala)"
-
-msgid "Search packages..."
-msgstr "Bilatu paketeak..."
-
-msgid "Browse"
-msgstr "Arakatu"
-
-msgid "Manage"
-msgstr "Kudeatu"
-
-msgid "Manage Remote Refs"
-msgstr "Kudeatu urruneko erreferentziak"
-
-msgid "Install Local"
-msgstr "Instalatu tokikoa"
-
-msgid "Delete Selected Remote"
-msgstr "Ezabatu hautatutako urruneko jatorria"
-
-msgid "Add Remote"
-msgstr "Gehitu urruneko jatorria"
+msgid "Loading Flatpak Data..."
+msgstr "Flatpak datuak kargatzen..."
 
 msgid "Back"
 msgstr "Atzera"
-
-msgid "Add New Flatpak Remote"
-msgstr "Gehitu Flatpak urruneko jatorri berria"
-
-msgid "Add"
-msgstr "Gehitu"
-
-msgid "Remote Name"
-msgstr "Urrunekoaren izena"
-
-msgid "e.g., flathub"
-msgstr "adib., flathub"
-
-msgid "Remote URL"
-msgstr "Urrunekoaren URLa"
-
-msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr "adib., https://flathub.org/repo/flathub.flatpakrepo"
-
-msgid "Scope"
-msgstr "Eremua"
-
-msgid "Loading Flatpak Data..."
-msgstr "Flatpak datuak kargatzen..."
 
 msgid "Addons"
 msgstr "Gehigarriak"
 
 msgid "Install source"
 msgstr "Instalazio-jatorria"
-
-msgid "App Name"
-msgstr "Aplikazioaren izena"
 
 msgid "Author"
 msgstr "Egilea"
@@ -136,6 +255,60 @@ msgstr "Aplikazioaren baimenak"
 msgid "Version History"
 msgstr "Bertsioen historia"
 
+msgid "Search packages..."
+msgstr "Bilatu paketeak..."
+
+msgid "Browse"
+msgstr "Arakatu"
+
+msgid "Manage"
+msgstr "Kudeatu"
+
+msgid "Manage Remote Refs"
+msgstr "Kudeatu urruneko erreferentziak"
+
+msgid "Install Local"
+msgstr "Instalatu tokikoa"
+
+msgid "Delete Selected Remote"
+msgstr "Ezabatu hautatutako urruneko jatorria"
+
+msgid "Add Remote"
+msgstr "Gehitu urruneko jatorria"
+
+msgid "Add New Flatpak Remote"
+msgstr "Gehitu Flatpak urruneko jatorri berria"
+
+msgid "Add"
+msgstr "Gehitu"
+
+msgid "Remote Name"
+msgstr "Urrunekoaren izena"
+
+msgid "e.g., flathub"
+msgstr "adib., flathub"
+
+msgid "Remote URL"
+msgstr "Urrunekoaren URLa"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "adib., https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "Eremua"
+
+msgid "Show Runtimes"
+msgstr "Erakutsi exekuzio-inguruneak"
+
+msgid "Flatpak Repair"
+msgstr "Flatpak-en konponketa"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Flatpak instalazioa konpontzen du (Esperimentala)"
+
+msgid "Shelly"
+msgstr "Shelly"
+
 msgid "Reinstall"
 msgstr "Berriro instalatu"
 
@@ -154,8 +327,58 @@ msgstr "Markatu menpekotasun gisa"
 msgid "Package actions"
 msgstr "Pakete-ekintzak"
 
-msgid "Information"
-msgstr "Informazioa"
+msgid "Package Group Filter"
+msgstr "Pakete-taldearen iragazkia"
+
+msgid "Selected Packages"
+msgstr "Hautatutako paketeak"
+
+msgid "0 Selected"
+msgstr "0 hautatuta"
+
+msgid "Grid View"
+msgstr "Sareta-ikuspegia"
+
+msgid "List View"
+msgstr "Zerrenda-ikuspegia"
+
+msgid "Size"
+msgstr "Tamaina"
+
+msgid "Repository"
+msgstr "Biltegia"
+
+msgid "Install Date"
+msgstr ""
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
+msgstr ""
+"Arazo bat egon da paketeak kargatzean. Egiaztatu datu-basea blokeatuta "
+"dagoen (db lock)."
+
+msgid "Perform Upgrade"
+msgstr "Gauzatu bertsio-berritzea"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "Gauzatu sistemaren bertsio-berritze osoa instalatuz (-u)"
+
+msgid "Show Hidden"
+msgstr "Erakutsi ezkutuak"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "Erakutsi pacman.conf fitxategiko IgnorePkg zerrendako paketeak"
+
+msgid "Show Explicit Only"
+msgstr "Erakutsi esplizituki instalatutakoak bakarrik"
+
+msgid "Show only explicitly installed packages"
+msgstr "Erakutsi esplizituki instalatutako paketeak bakarrik"
+
+msgid "Show Dependency Only"
+msgstr "Erakutsi menpekotasunak soilik"
+
+msgid "Show dependency packages on;y"
+msgstr "Erakutsi menpekotasun-paketeak soilik"
 
 msgid "Recommended Packages"
 msgstr "Gomendatutako paketeak"
@@ -175,12 +398,6 @@ msgid ""
 msgstr ""
 "Ez da gomendiorik aurkitu. Mesedez, egiaztatu zure interneteko konexioa eta "
 "saiatu berriro."
-
-msgid "Preview Pkgbuild"
-msgstr "Aurreikusi Pkgbuild"
-
-msgid "Shelly"
-msgstr "Shelly"
 
 msgid "General"
 msgstr "Orokorra"
@@ -307,9 +524,6 @@ msgstr "AppImage-ren instalazio-bidea"
 msgid "Select Directory"
 msgstr "Hautatu direktorioa"
 
-msgid "Save"
-msgstr "Gorde"
-
 msgid "View Changelog"
 msgstr "Ikusizkoztatu aldaketen erregistroa"
 
@@ -324,6 +538,42 @@ msgstr "Komunitatearen fluxer-a"
 
 msgid "Sponsor"
 msgstr "Babeslea"
+
+msgid "Toggle output"
+msgstr "Txandakatu irteera"
+
+msgid "Available Updates"
+msgstr "Eguneraketa eskuragarriak"
+
+msgid "7 of 7 updates included"
+msgstr "7tik 7 eguneraketa barne hartuta"
+
+msgid "Check all enabled sources again"
+msgstr "Egiaztatu berriro gaitutako jatorri guztiak"
+
+msgid "Check Again"
+msgstr "Egiaztatu berriro"
+
+msgid "Upgrade"
+msgstr "Bertsio-berritu"
+
+msgid "System"
+msgstr "Sistema"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Checking for updates…"
+msgstr "Eguneraketak bilatzen…"
+
+msgid "Your system is up to date"
+msgstr "Zure sistema eguneratuta dago"
+
+msgid "Could not check for updates"
+msgstr "Ezin izan dira eguneraketak egiaztatu"
 
 msgid "Utilities"
 msgstr "Utilitateak"
@@ -378,56 +628,13 @@ msgstr "Mantendu"
 msgid "Number of cached versions to keep per package"
 msgstr "Pakete bakoitzeko cachean mantentzeko bertsio-kopurua"
 
-msgid "Toggle output"
-msgstr "Txandakatu irteera"
-
-msgid "Close"
-msgstr "Itxi"
-
-msgid "Available Updates"
-msgstr "Eguneraketa eskuragarriak"
-
-msgid "7 of 7 updates included"
-msgstr "7tik 7 eguneraketa barne hartuta"
-
-msgid "Check all enabled sources again"
-msgstr "Egiaztatu berriro gaitutako jatorri guztiak"
-
-msgid "Check Again"
-msgstr "Egiaztatu berriro"
-
-msgid "Upgrade"
-msgstr "Bertsio-berritu"
-
-msgid "System"
-msgstr "Sistema"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "Checking for updates…"
-msgstr "Eguneraketak bilatzen…"
-
-msgid "Your system is up to date"
-msgstr "Zure sistema eguneratuta dago"
-
-msgid "Could not check for updates"
-msgstr "Ezin izan dira eguneraketak egiaztatu"
-
 msgid "Welcome to Shelly v3"
 msgstr "Ongi etorri Shelly v3-ra"
 
-#, fuzzy
 msgid ""
 "Shelly is a modern package manager for Arch Linux. Configure your sources "
 "and preferences to get started."
 msgstr ""
-"Shelly Arch Linux-erako pakete-kudeatzaile modernoa da. Konfiguratu zure "
-"iturriak eta hobespenak hasteko. Orain dela gutxi berridatzi ditugu GUI eta "
-"CLI zig-n, aurreko diseinuetan oinarritutako UI berri batekin."
 
 msgid "Select Your Sources"
 msgstr "Hautatu zure iturriak"
@@ -493,220 +700,6 @@ msgstr "Hurrengoa"
 
 msgid "Start Shelly"
 msgstr "Abiarazi Shelly"
-
-msgid "Search..."
-msgstr "Bilatu..."
-
-msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr ""
-"Sinkronizatu AppImage guztien metadatuak. Erabilgarria AppImage bere burua "
-"eguneratu bada."
-
-msgid "Sync All"
-msgstr "Sinkronizatu denak"
-
-msgid "Upgrade all AppImages to their latest versions"
-msgstr "Bertsio-berritu AppImage guztiak beraien azken bertsioetara"
-
-msgid "Upgrade All"
-msgstr "Bertsio-berritu denak"
-
-msgid "Install a new AppImage from a file"
-msgstr "Instalatu AppImage berri bat fitxategi batetik"
-
-msgid "Install AppImage"
-msgstr "Instalatu AppImage"
-
-msgid "Drop AppImage here to install"
-msgstr "Jaregin AppImage hemen instalatzeko"
-
-msgid "Version"
-msgstr "Bertsioa"
-
-msgid "Description goes here..."
-msgstr "Deskribapena hemen joango da..."
-
-msgid "Size on Disk"
-msgstr "Tamaina diskoan"
-
-msgid "Update Strategy"
-msgstr "Eguneratze-estrategia"
-
-msgid "Update URL / Repository Info"
-msgstr "Eguneratzeko URLa / Biltegiaren informazioa"
-
-msgid "Get more information about Update URL / Repository Info"
-msgstr ""
-"Lortu informazio gehiago eguneratze-URLari / biltegiaren informazioari buruz"
-
-msgid "e.g. owner/repo or https://..."
-msgstr "adib. jabea/biltegia edo https://..."
-
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
-msgstr ""
-"Formatu baliogabea. Erabili jabea/biltegia (adib. seafoam-labs/shelly-alpm)"
-
-msgid "Allow Prerelease"
-msgstr "Onartu aurre-bertsioak"
-
-msgid "Installation Path"
-msgstr "Instalazio-bidea"
-
-msgid "Launch Flags"
-msgstr "Abiarazteko banderak"
-
-msgid "Sync"
-msgstr "Sinkronizatu"
-
-msgid "Remove"
-msgstr "Kendu"
-
-msgid "Search the AUR by name or keyword"
-msgstr "Bilatu AURen izenez edo gako-hitzez"
-
-msgid "Installed Only"
-msgstr "Instalatutakoak bakarrik"
-
-msgid "Show only installed packages"
-msgstr "Erakutsi instalatutako paketeak bakarrik"
-
-msgid "Install Selected"
-msgstr "Instalatu hautatutakoak"
-
-msgid "Name"
-msgstr "Izena"
-
-msgid "Votes"
-msgstr "Botoak"
-
-msgid "Popularity"
-msgstr "Ospea"
-
-msgid "Search the AUR"
-msgstr "Bilatu AURen"
-
-msgid "The AUR has no browsable index type a package name to begin."
-msgstr ""
-"AURek ez du arakatu daitekeen indexaziorik, idatzi pakete baten izena "
-"hasteko."
-
-msgid "Run checks"
-msgstr "Exekutatu egiaztapenak"
-
-msgid "Run the --check function during package build"
-msgstr "Exekutatu --check funtzioa paketea eraikitzean"
-
-msgid "Hide Detail Pane"
-msgstr "Ezkutatu xehetasunen panela"
-
-msgid "Hide the detail pane on the right"
-msgstr "Ezkutatu eskuineko xehetasun-panela"
-
-msgid "Package Group Filter"
-msgstr "Pakete-taldearen iragazkia"
-
-msgid "Selected Packages"
-msgstr "Hautatutako paketeak"
-
-msgid "0 Selected"
-msgstr "0 hautatuta"
-
-msgid "Grid View"
-msgstr "Sareta-ikuspegia"
-
-msgid "List View"
-msgstr "Zerrenda-ikuspegia"
-
-msgid "Size"
-msgstr "Tamaina"
-
-msgid "Repository"
-msgstr "Biltegia"
-
-#, fuzzy
-msgid "Install Date"
-msgstr "Instalatu "
-
-msgid "Had an issue loading your packages. Check if you have a db lock."
-msgstr ""
-"Arazo bat egon da paketeak kargatzean. Egiaztatu datu-basea blokeatuta "
-"dagoen (db lock)."
-
-msgid "Perform Upgrade"
-msgstr "Gauzatu bertsio-berritzea"
-
-msgid "Perform a full system upgrade with install (-u)"
-msgstr "Gauzatu sistemaren bertsio-berritze osoa instalatuz (-u)"
-
-msgid "Show Hidden"
-msgstr "Erakutsi ezkutuak"
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr "Erakutsi pacman.conf fitxategiko IgnorePkg zerrendako paketeak"
-
-msgid "Show Explicit Only"
-msgstr "Erakutsi esplizituki instalatutakoak bakarrik"
-
-msgid "Show only explicitly installed packages"
-msgstr "Erakutsi esplizituki instalatutako paketeak bakarrik"
-
-msgid "Show Dependency Only"
-msgstr "Erakutsi menpekotasunak soilik"
-
-msgid "Show dependency packages on;y"
-msgstr "Erakutsi menpekotasun-paketeak soilik"
-
-msgid "Confirm"
-msgstr "Berretsi"
-
-msgid "Cancel"
-msgstr "Utzi"
-
-#, fuzzy
-msgid "No installable addons available"
-msgstr "Ez dago berririk eskuragarri"
-
-msgid "No special permissions requested"
-msgstr "Ez da baimen berezirik eskatu"
-
-#, fuzzy
-msgid "polkit is required"
-msgstr "Berrabiaraztea beharrezkoa da"
-
-msgid ""
-"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
-"privileged actions, but it wasn't found on the system bus.\n"
-"\n"
-"Install and enable it, then retry.\n"
-"\n"
-"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
-"Polkit</a>"
-msgstr ""
-
-msgid "Skip"
-msgstr "Eskapatu"
-
-msgid "Review PKGBUILD changes"
-msgstr "Berrikusi PKGBUILD aldaketak"
-
-msgid "Changes"
-msgstr "Aldaketak"
-
-msgid "Warnings"
-msgstr "Oharrak"
-
-msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
-"control. Review them before continuing."
-msgstr ""
-"Komando hauek shelly eta libalpm-en kontroletik kanpoko kodea lortu eta "
-"exekutatzen dute. Berrikusi itzazu aurrera jarraitu aurretik."
-
-msgid "Source Files"
-msgstr "Jatorrizko fitxategiak"
-
-msgid "Review PKGBUILD"
-msgstr "Berrikusi PKGBUILD"
 
 msgid "Filesystem"
 msgstr "Fitxategi-sistema"
@@ -774,6 +767,168 @@ msgstr "sarea"
 msgid "Dismiss"
 msgstr "Baztertu"
 
+msgid "None"
+msgstr "Batek ere ez"
+
+msgid "Static URL"
+msgstr "URL estatikoa"
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+msgid "Update Available"
+msgstr "Eguneraketa eskuragarri"
+
+msgid "Version ?"
+msgstr "Bertsioa ?"
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr ""
+"Formatu baliogabea. Erabili jabea/biltegia (adib. seafoam-labs/shelly-alpm)"
+
+msgid "Invalid URL. Must start with http:// or https://"
+msgstr "URL baliogabea. http:// edo https:// erabiliz hasi behar da"
+
+msgid ""
+"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
+"repo/releases"
+msgstr ""
+"Forgejo URL baliogabea. Erabili http(s)://host/owner/repo edo http(s)://host/"
+"owner/repo/releases"
+
+msgid "Choose an AppImage file"
+msgstr "Hautatu AppImage fitxategi bat"
+
+msgid "AppImage files"
+msgstr "AppImage fitxategiak"
+
+msgid "Only .AppImage files can be installed"
+msgstr ".AppImage fitxategiak bakarrik instalatu daitezke"
+
+msgid "Installing AppImage"
+msgstr "AppImage instalatzen"
+
+msgid "No AppImages need to be upgraded"
+msgstr "Ez dago bertsio-berritu beharreko AppImage-rik"
+
+msgid "Upgrading AppImages"
+msgstr "AppImage-ak bertsio-berritzen"
+
+msgid "Syncing AppImages"
+msgstr "AppImage-ak sinkronizatzen"
+
+msgid "Syncing AppImage"
+msgstr "AppImage sinkronizatzen"
+
+msgid "Saving update configuration"
+msgstr "Eguneratze-konfigurazioa gordetzen"
+
+msgid "Configuration files will be kept."
+msgstr "Konfigurazio-fitxategiak mantendu egingo dira."
+
+msgid "Remove this AppImage?"
+msgstr "Kendu AppImage hau?"
+
+msgid "Remove AppImage"
+msgstr "Kendu AppImage-a"
+
+msgid "Removing AppImage"
+msgstr "AppImage-a kentzen"
+
+msgid "Operation completed successfully"
+msgstr "Eragiketa ondo osatu da"
+
+msgid "Operation failed"
+msgstr "Eragiketak huts egin du"
+
+msgid "Maintainer"
+msgstr "Mantenitzailea"
+
+msgid "Last Modified"
+msgstr "Azken aldaketa"
+
+msgid "First Submitted"
+msgstr "Lehen aldiz bidalia"
+
+msgid "URL"
+msgstr ""
+
+msgid "Licenses"
+msgstr "Lizentziak"
+
+msgid "Depends"
+msgstr "Menderakotasunak"
+
+msgid "Optional Depends"
+msgstr "Aukerako menpekotasunak"
+
+msgid "Make Depends"
+msgstr "Eraikitze-menderakotasunak"
+
+msgid "Section"
+msgstr "Atala"
+
+msgid "The AUR has no browsable index — type a package name to begin."
+msgstr ""
+"AURek ez du arakatu daitekeen indexaziorik — idatzi pakete baten izena "
+"hasteko."
+
+msgid "No packages found"
+msgstr "Ez da paketerik aurkitu"
+
+msgid "Try a shorter or more general keyword."
+msgstr "Saiatu gako-hitz laburrago edo orokorrago batekin."
+
+msgid "Could not reach the AUR"
+msgstr "Ezin izan da AURera iritsi"
+
+msgid "Check your connection and try again."
+msgstr "Egiaztatu zure konexioa eta saiatu berriro."
+
+msgid "Flagged out of date"
+msgstr "Eguneratu gabe gisa markatuta"
+
+msgid "Installed"
+msgstr "Instalatuta"
+
+msgid "Remove Selected"
+msgstr "Kendu hautatutakoak"
+
+msgid "Select one or more packages"
+msgstr "Hautatu pakete bat edo gehiago"
+
+msgid "Package(s)"
+msgstr "Paketea(k)"
+
+msgid "Remove Packages"
+msgstr "Kendu paketeak"
+
+msgid "Remove the selected AUR packages?"
+msgstr "Kendu hautatutako AUR paketeak?"
+
+msgid "Build from AUR"
+msgstr "Eraiki AURtik"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+"Eraiki eta instalatu hautatutako paketeak? Honek denbora pixka bat har "
+"dezake."
+
+msgid "Build"
+msgstr "Eraiki"
+
+msgid "Installing AUR packages"
+msgstr "AUR paketeak instalatzen"
+
+msgid "Removing AUR packages"
+msgstr "AUR paketeak kentzen"
+
 msgid "Choose a Flatpak file"
 msgstr "Hautatu Flatpak fitxategi bat"
 
@@ -797,60 +952,6 @@ msgstr "Instalazioa osatu da."
 msgid "Choose file..."
 msgstr "Hautatu fitxategia..."
 
-msgid "Removing Remote"
-msgstr "Urruneko jatorria kentzen"
-
-msgid "Adding Remote"
-msgstr "Urruneko jatorria gehitzen"
-
-msgid "Removing Flatpak"
-msgstr "Flatpak kentzen"
-
-msgid "Discover"
-msgstr "Ezagutu"
-
-msgid "Categories"
-msgstr "Kategoriak"
-
-msgid "All Applications"
-msgstr "Aplikazio guztiak"
-
-msgid "Most Wanted"
-msgstr "Bilatuenak"
-
-msgid "Recently Added"
-msgstr "Gehitutako azkenak"
-
-msgid "Recently Updated"
-msgstr "Eguneratutako azkenak"
-
-msgid "Audio & Video"
-msgstr "Audioa eta bideoa"
-
-msgid "Development"
-msgstr "Garapena"
-
-msgid "Education"
-msgstr "Hezkuntza"
-
-msgid "Game"
-msgstr "Jokoak"
-
-msgid "Graphics"
-msgstr "Grafikoak"
-
-msgid "Network"
-msgstr "Sarea"
-
-msgid "Office"
-msgstr "Bulegoa"
-
-msgid "Science"
-msgstr "Zientzia"
-
-msgid "Utility"
-msgstr "Utilitateak"
-
 msgid "Verified"
 msgstr "Egiaztatuta"
 
@@ -866,12 +967,8 @@ msgstr "Baimenak"
 msgid "Available Addons"
 msgstr "Gehigarri eskuragarriak"
 
-#, fuzzy
 msgid "Installing flatpak addon"
-msgstr "Flatpak instalatzen"
-
-msgid "Installed"
-msgstr "Instalatuta"
+msgstr ""
 
 msgid "Unknown developer"
 msgstr "Garatzaile ezezaguna"
@@ -954,95 +1051,59 @@ msgstr "Ezin izan dira Flatpak aplikazioak kargatu."
 msgid "No Flatpak applications are available."
 msgstr "Ez dago Flatpak aplikaziorik eskuragarri."
 
-msgid "Refreshing package databases"
-msgstr "Paketeen datu-baseak freskatzen"
+msgid "Discover"
+msgstr "Ezagutu"
 
-msgid "Database lock removed successfully"
-msgstr "Datu-basearen blokeoa ondo kendu da"
+msgid "Categories"
+msgstr "Kategoriak"
 
-msgid "Failed to remove database lock"
-msgstr "Ezin izan da datu-basearen blokeoa kendu"
+msgid "All Applications"
+msgstr "Aplikazio guztiak"
 
-msgid "Fixing permissions"
-msgstr "Baimenak bideratzen"
+msgid "Most Wanted"
+msgstr "Bilatuenak"
 
-msgid "Purifying packages"
-msgstr "Paketeak garbitzen"
+msgid "Recently Added"
+msgstr "Gehitutako azkenak"
 
-msgid "Cleaning package cache"
-msgstr "Pakete-cachea garbitzen"
+msgid "Recently Updated"
+msgstr "Eguneratutako azkenak"
 
-msgid "Operation completed successfully"
-msgstr "Eragiketa ondo osatu da"
+msgid "Audio & Video"
+msgstr "Audioa eta bideoa"
 
-msgid "Operation failed"
-msgstr "Eragiketak huts egin du"
+msgid "Development"
+msgstr "Garapena"
 
-msgid "Welcome"
-msgstr "Ongi etorri"
+msgid "Education"
+msgstr "Hezkuntza"
 
-msgid "Enable AUR?"
-msgstr "Gaitu AUR?"
+msgid "Game"
+msgstr "Jokoak"
 
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-"Arch User Repository komunitateak mantentzen du. Paketeak ez dira ofizialki "
-"egiaztatzen — soilik gaitu instalatzen duzunaz fidatzen bazara."
+msgid "Graphics"
+msgstr "Grafikoak"
 
-msgid "Enable"
-msgstr "Gaitu"
+msgid "Network"
+msgstr "Sarea"
 
-msgid "Enable Recommended?"
-msgstr "Gaitu gomendatutakoak?"
+msgid "Office"
+msgstr "Bulegoa"
 
-msgid ""
-"Recommended shows curated package suggestions based on your installed "
-"software. Package data is fetched from external sources."
-msgstr ""
-"Gomendatuek zure instalatutako softwarean oinarritutako pakete-iradokizunak "
-"erakusten dituzte. Pakete-datuak kanpoko iturrietatik eskuratzen dira."
+msgid "Science"
+msgstr "Zientzia"
 
-#, fuzzy
-msgid "Installing Flatpak and AppImage support"
-msgstr "Flatpak instalatzeak huts egin du"
+msgid "Utility"
+msgstr "Utilitateak"
 
-#, fuzzy
-msgid "Installing Flatpak support"
-msgstr "Flatpak instalatzen"
+msgid "Removing Remote"
+msgstr "Urruneko jatorria kentzen"
 
-#, fuzzy
-msgid "Installing AppImage support"
-msgstr "AppImage instalatzen"
+msgid "Adding Remote"
+msgstr "Urruneko jatorria gehitzen"
 
-msgid "Maintainer"
-msgstr "Mantenitzailea"
-
-msgid "Last Modified"
-msgstr "Azken aldaketa"
-
-msgid "First Submitted"
-msgstr "Lehen aldiz bidalia"
-
-#, fuzzy
-msgid "URL"
-msgstr "URLa:"
-
-msgid "Licenses"
-msgstr "Lizentziak"
-
-msgid "Depends"
-msgstr "Menderakotasunak"
-
-msgid "Optional Depends"
-msgstr "Aukerako menpekotasunak"
-
-msgid "Make Depends"
-msgstr "Eraikitze-menderakotasunak"
-
-msgid "Section"
-msgstr "Atala"
+msgid "Removing Flatpak"
+msgstr "Flatpak kentzen"
 
 msgid "Loading..."
 msgstr "Kargatzen..."
@@ -1083,132 +1144,6 @@ msgstr "Paketea esplizitu egiten"
 msgid "Making Package Dependency"
 msgstr "Paketea menpekotasun egiten"
 
-msgid "None"
-msgstr "Batek ere ez"
-
-msgid "Static URL"
-msgstr "URL estatikoa"
-
-msgid "GitLab"
-msgstr "GitLab"
-
-msgid "Codeberg"
-msgstr "Codeberg"
-
-msgid "Forgejo"
-msgstr "Forgejo"
-
-msgid "Update Available"
-msgstr "Eguneraketa eskuragarri"
-
-msgid "Version ?"
-msgstr "Bertsioa ?"
-
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
-msgstr ""
-"Formatu baliogabea. Erabili jabea/biltegia (adib. seafoam-labs/shelly-alpm)"
-
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "URL baliogabea. http:// edo https:// erabiliz hasi behar da"
-
-msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
-msgstr ""
-"Forgejo URL baliogabea. Erabili http(s)://host/owner/repo edo http(s)://host/"
-"owner/repo/releases"
-
-msgid "Choose an AppImage file"
-msgstr "Hautatu AppImage fitxategi bat"
-
-msgid "AppImage files"
-msgstr "AppImage fitxategiak"
-
-msgid "Only .AppImage files can be installed"
-msgstr ".AppImage fitxategiak bakarrik instalatu daitezke"
-
-msgid "Installing AppImage"
-msgstr "AppImage instalatzen"
-
-msgid "No AppImages need to be upgraded"
-msgstr "Ez dago bertsio-berritu beharreko AppImage-rik"
-
-msgid "Upgrading AppImages"
-msgstr "AppImage-ak bertsio-berritzen"
-
-msgid "Syncing AppImages"
-msgstr "AppImage-ak sinkronizatzen"
-
-msgid "Syncing AppImage"
-msgstr "AppImage sinkronizatzen"
-
-msgid "Saving update configuration"
-msgstr "Eguneratze-konfigurazioa gordetzen"
-
-msgid "Configuration files will be kept."
-msgstr "Konfigurazio-fitxategiak mantendu egingo dira."
-
-msgid "Remove this AppImage?"
-msgstr "Kendu AppImage hau?"
-
-msgid "Remove AppImage"
-msgstr "Kendu AppImage-a"
-
-msgid "Removing AppImage"
-msgstr "AppImage-a kentzen"
-
-msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
-"AURek ez du arakatu daitekeen indexaziorik — idatzi pakete baten izena "
-"hasteko."
-
-msgid "No packages found"
-msgstr "Ez da paketerik aurkitu"
-
-msgid "Try a shorter or more general keyword."
-msgstr "Saiatu gako-hitz laburrago edo orokorrago batekin."
-
-msgid "Could not reach the AUR"
-msgstr "Ezin izan da AURera iritsi"
-
-msgid "Check your connection and try again."
-msgstr "Egiaztatu zure konexioa eta saiatu berriro."
-
-msgid "Flagged out of date"
-msgstr "Eguneratu gabe gisa markatuta"
-
-msgid "Remove Selected"
-msgstr "Kendu hautatutakoak"
-
-msgid "Select one or more packages"
-msgstr "Hautatu pakete bat edo gehiago"
-
-msgid "Package(s)"
-msgstr "Paketea(k)"
-
-msgid "Remove Packages"
-msgstr "Kendu paketeak"
-
-msgid "Remove the selected AUR packages?"
-msgstr "Kendu hautatutako AUR paketeak?"
-
-msgid "Build from AUR"
-msgstr "Eraiki AURtik"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-"Eraiki eta instalatu hautatutako paketeak? Honek denbora pixka bat har "
-"dezake."
-
-msgid "Build"
-msgstr "Eraiki"
-
-msgid "Installing AUR packages"
-msgstr "AUR paketeak instalatzen"
-
-msgid "Removing AUR packages"
-msgstr "AUR paketeak kentzen"
-
 msgid "Package is already installed"
 msgstr "Paketea dagoeneko instalatuta dago"
 
@@ -1245,92 +1180,35 @@ msgstr "Paketeak kentzen"
 msgid "Installing packages"
 msgstr "Paketeak instalatzen"
 
-msgid "Failed to start operation."
-msgstr "Ezin izan da eragiketa abiarazi."
-
-msgid "Pending"
-msgstr "Zorrotz / Zazke"
-
-msgid "Synchronizing databases"
-msgstr "Datu-baseak sinkronizatzen"
-
-msgid "Building"
-msgstr "Eraikitzen"
-
-msgid "Downloading"
-msgstr "Deskargatzen"
-
-msgid "Packaging"
-msgstr "Paketatzen"
-
-msgid "Installing"
-msgstr "Instalatzen"
-
-msgid "Upgrading"
-msgstr "Bertsio-berritzen"
-
-msgid "Downgrading"
-msgstr "Bertsioa jaisten"
-
-msgid "Reinstalling"
-msgstr "Berriro instalatzen"
-
-msgid "Removing"
-msgstr "Kentzen"
-
-msgid "Working"
-msgstr "Lanean"
-
-msgid "Done"
-msgstr "Eginda"
-
-msgid "Failed"
-msgstr "Huts egin du"
-
-msgid "Finished"
-msgstr "Amaituta"
-
-msgid "exit"
-msgstr "irten"
-
-msgid "Cancelled"
-msgstr "Ezeztatuta"
-
-msgid "Yes"
-msgstr "Bai"
-
-msgid "No"
-msgstr "Ez"
-
 msgid "Failed to save settings"
 msgstr "Ezin izan dira ezarpenak gorde"
 
 msgid "Settings saved"
 msgstr "Ezarpenak gorde dira"
 
-#, fuzzy
+msgid "Installing Flatpak support"
+msgstr ""
+
+msgid "Installing AppImage support"
+msgstr ""
+
 msgid "Failed to start Flatpak support installation"
-msgstr "Ezin izan da Flatpak instalazioa konpondu"
+msgstr ""
 
-#, fuzzy
 msgid "Failed to start AppImage support installation"
-msgstr "Ezin izan da Flatpak instalazioa konpondu"
+msgstr ""
 
-#, fuzzy
 msgid "Flatpak support installation failed"
-msgstr "Instalazioak huts egin du."
+msgstr ""
 
-#, fuzzy
 msgid "AppImage support installation failed"
-msgstr "Instalazioak huts egin du."
+msgstr ""
 
-#, fuzzy
 msgid "Flatpak support enabled"
-msgstr "Gaitu Flatpak babesa"
+msgstr ""
 
-#, fuzzy
 msgid "AppImage support enabled"
-msgstr "Gaitu AppImage babesa"
+msgstr ""
 
 msgid "No changelog entries found"
 msgstr "Ez da aldaketa-erregistrorik aurkitu"
@@ -1378,6 +1256,9 @@ msgstr "Huts egin du systemd abiarazte-zerbitzua kentzean"
 msgid "Systemd startup service removed."
 msgstr "Systemd hasierako zerbitzua kenduta."
 
+msgid "Enable AUR?"
+msgstr "Gaitu AUR?"
+
 msgid ""
 "The Arch User Repository (AUR) is a community-driven repository. Packages "
 "are user-produced and may contain risks. Do you want to enable it?"
@@ -1385,6 +1266,9 @@ msgstr ""
 "Arch Erabiltzaileen Biltegia (AUR) komunitateak kudeatutako biltegi bat da. "
 "Paketeak erabiltzaileek sortuak dira eta arriskuak izan ditzakete. Gaitu "
 "nahi duzu?"
+
+msgid "Enable"
+msgstr "Gaitu"
 
 msgid "AUR enabled"
 msgstr "AUR gaituta"
@@ -1443,6 +1327,63 @@ msgstr "Shelly bilaketa"
 msgid "Update"
 msgstr "Eguneratu"
 
+msgid "Failed to start operation."
+msgstr "Ezin izan da eragiketa abiarazi."
+
+msgid "Pending"
+msgstr "Zorrotz / Zazke"
+
+msgid "Synchronizing databases"
+msgstr "Datu-baseak sinkronizatzen"
+
+msgid "Building"
+msgstr "Eraikitzen"
+
+msgid "Downloading"
+msgstr "Deskargatzen"
+
+msgid "Packaging"
+msgstr "Paketatzen"
+
+msgid "Installing"
+msgstr "Instalatzen"
+
+msgid "Upgrading"
+msgstr "Bertsio-berritzen"
+
+msgid "Downgrading"
+msgstr "Bertsioa jaisten"
+
+msgid "Reinstalling"
+msgstr "Berriro instalatzen"
+
+msgid "Removing"
+msgstr "Kentzen"
+
+msgid "Working"
+msgstr "Lanean"
+
+msgid "Done"
+msgstr "Eginda"
+
+msgid "Failed"
+msgstr "Huts egin du"
+
+msgid "Finished"
+msgstr "Amaituta"
+
+msgid "exit"
+msgstr "irten"
+
+msgid "Cancelled"
+msgstr "Ezeztatuta"
+
+msgid "Yes"
+msgstr "Bai"
+
+msgid "No"
+msgstr "Ez"
+
 msgid "System package update"
 msgstr "Sistemako paketeen eguneraketa"
 
@@ -1454,9 +1395,8 @@ msgstr ""
 "Ezin izan da shelly check-updates exekutatu. Egiaztatu CLI irteera eta "
 "saiatu berriro."
 
-#, fuzzy
 msgid "Update this package"
-msgstr "Eguneratu paketeak?"
+msgstr ""
 
 msgid "of"
 msgstr "itzat"
@@ -1469,6 +1409,47 @@ msgstr "Sartutako eguneraketak"
 
 msgid "Upgrading packages"
 msgstr "Paketeak bertsio-berritzen"
+
+msgid "Refreshing package databases"
+msgstr "Paketeen datu-baseak freskatzen"
+
+msgid "Database lock removed successfully"
+msgstr "Datu-basearen blokeoa ondo kendu da"
+
+msgid "Failed to remove database lock"
+msgstr "Ezin izan da datu-basearen blokeoa kendu"
+
+msgid "Fixing permissions"
+msgstr "Baimenak bideratzen"
+
+msgid "Purifying packages"
+msgstr "Paketeak garbitzen"
+
+msgid "Cleaning package cache"
+msgstr "Pakete-cachea garbitzen"
+
+msgid "Welcome"
+msgstr "Ongi etorri"
+
+msgid ""
+"The Arch User Repository is community-maintained. Packages are not "
+"officially vetted — only enable if you trust what you install."
+msgstr ""
+"Arch User Repository komunitateak mantentzen du. Paketeak ez dira ofizialki "
+"egiaztatzen — soilik gaitu instalatzen duzunaz fidatzen bazara."
+
+msgid "Enable Recommended?"
+msgstr "Gaitu gomendatutakoak?"
+
+msgid ""
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
+msgstr ""
+"Gomendatuek zure instalatutako softwarean oinarritutako pakete-iradokizunak "
+"erakusten dituzte. Pakete-datuak kanpoko iturrietatik eskuratzen dira."
+
+msgid "Installing Flatpak and AppImage support"
+msgstr ""
 
 msgid "Settings"
 msgstr "Ezarpenak"

@@ -11,6 +11,174 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+msgid "No installable addons available"
+msgstr ""
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Confirm"
+msgstr "确认"
+
+msgid "Skip"
+msgstr ""
+
+msgid "No special permissions requested"
+msgstr ""
+
+msgid "Review PKGBUILD changes"
+msgstr ""
+
+msgid "Changes"
+msgstr ""
+
+msgid "Warnings"
+msgstr ""
+
+msgid ""
+"These commands fetch and execute code outside of shelly and libalpm's "
+"control. Review them before continuing."
+msgstr ""
+
+msgid "Source Files"
+msgstr ""
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "polkit is required"
+msgstr ""
+
+msgid ""
+"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
+"privileged actions, but it wasn't found on the system bus.\n"
+"\n"
+"Install and enable it, then retry.\n"
+"\n"
+"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
+"Polkit</a>"
+msgstr ""
+
+msgid "Review PKGBUILD"
+msgstr ""
+
+msgid "Search..."
+msgstr "搜索..."
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr "同步所有 AppImage 的元数据。适用于 AppImage 自行更新后的情况。"
+
+msgid "Sync All"
+msgstr "全部同步"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "将所有 AppImage 升级到最新版本"
+
+msgid "Upgrade All"
+msgstr "全部升级"
+
+msgid "Install a new AppImage from a file"
+msgstr "从文件安装新的 AppImage"
+
+msgid "Install AppImage"
+msgstr "安装 AppImage"
+
+msgid "Drop AppImage here to install"
+msgstr ""
+
+msgid "App Name"
+msgstr "应用名称"
+
+msgid "Version"
+msgstr "版本"
+
+msgid "Description goes here..."
+msgstr "在此输入描述..."
+
+msgid "Size on Disk"
+msgstr "磁盘占用"
+
+msgid "Update Strategy"
+msgstr "更新策略"
+
+msgid "Update URL / Repository Info"
+msgstr "更新 URL / 仓库信息"
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr ""
+
+msgid "e.g. owner/repo or https://..."
+msgstr ""
+
+msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+msgstr ""
+
+msgid "Allow Prerelease"
+msgstr ""
+
+msgid "Installation Path"
+msgstr "安装路径"
+
+msgid "Launch Flags"
+msgstr ""
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Sync"
+msgstr "同步"
+
+msgid "Remove"
+msgstr "移除"
+
+msgid "Information"
+msgstr ""
+
+msgid "Preview Pkgbuild"
+msgstr ""
+
+msgid "Search the AUR by name or keyword"
+msgstr ""
+
+msgid "Installed Only"
+msgstr ""
+
+msgid "Show only installed packages"
+msgstr ""
+
+msgid "Additional Options"
+msgstr ""
+
+msgid "Install Selected"
+msgstr "安装所选"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "Votes"
+msgstr "推荐票"
+
+msgid "Popularity"
+msgstr "流行度"
+
+msgid "Search the AUR"
+msgstr ""
+
+msgid "The AUR has no browsable index type a package name to begin."
+msgstr ""
+
+msgid "Run checks"
+msgstr "运行检查"
+
+msgid "Run the --check function during package build"
+msgstr ""
+
+msgid "Hide Detail Pane"
+msgstr ""
+
+msgid "Hide the detail pane on the right"
+msgstr ""
+
 msgid "Install a local Flatpak"
 msgstr ""
 
@@ -37,74 +205,17 @@ msgstr "用户"
 msgid "Install"
 msgstr "安装"
 
-msgid "Additional Options"
-msgstr ""
-
-msgid "Show Runtimes"
-msgstr ""
-
-msgid "Flatpak Repair"
-msgstr ""
-
-msgid "Repairs Flatpak Installation (Experimental)"
-msgstr ""
-
-msgid "Search packages..."
-msgstr "搜索软件包..."
-
-msgid "Browse"
-msgstr ""
-
-msgid "Manage"
-msgstr "管理"
-
-msgid "Manage Remote Refs"
-msgstr "管理远程引用"
-
-msgid "Install Local"
-msgstr "本地安装"
-
-msgid "Delete Selected Remote"
-msgstr "删除所选远程仓库"
-
-msgid "Add Remote"
-msgstr "添加远程仓库"
+msgid "Loading Flatpak Data..."
+msgstr "正在加载 Flatpak 数据..."
 
 msgid "Back"
 msgstr "返回"
-
-msgid "Add New Flatpak Remote"
-msgstr "添加新的 Flatpak 远程仓库"
-
-msgid "Add"
-msgstr "添加"
-
-msgid "Remote Name"
-msgstr "远程仓库名称"
-
-msgid "e.g., flathub"
-msgstr "例如：flathub"
-
-msgid "Remote URL"
-msgstr "远程仓库 URL"
-
-msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr "例如：https://flathub.org/repo/flathub.flatpakrepo"
-
-msgid "Scope"
-msgstr "作用域"
-
-msgid "Loading Flatpak Data..."
-msgstr "正在加载 Flatpak 数据..."
 
 msgid "Addons"
 msgstr "附加组件"
 
 msgid "Install source"
 msgstr ""
-
-msgid "App Name"
-msgstr "应用名称"
 
 msgid "Author"
 msgstr "作者"
@@ -130,6 +241,60 @@ msgstr ""
 msgid "Version History"
 msgstr "版本历史"
 
+msgid "Search packages..."
+msgstr "搜索软件包..."
+
+msgid "Browse"
+msgstr ""
+
+msgid "Manage"
+msgstr "管理"
+
+msgid "Manage Remote Refs"
+msgstr "管理远程引用"
+
+msgid "Install Local"
+msgstr "本地安装"
+
+msgid "Delete Selected Remote"
+msgstr "删除所选远程仓库"
+
+msgid "Add Remote"
+msgstr "添加远程仓库"
+
+msgid "Add New Flatpak Remote"
+msgstr "添加新的 Flatpak 远程仓库"
+
+msgid "Add"
+msgstr "添加"
+
+msgid "Remote Name"
+msgstr "远程仓库名称"
+
+msgid "e.g., flathub"
+msgstr "例如：flathub"
+
+msgid "Remote URL"
+msgstr "远程仓库 URL"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "例如：https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "作用域"
+
+msgid "Show Runtimes"
+msgstr ""
+
+msgid "Flatpak Repair"
+msgstr ""
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr ""
+
+msgid "Shelly"
+msgstr ""
+
 msgid "Reinstall"
 msgstr ""
 
@@ -148,7 +313,55 @@ msgstr ""
 msgid "Package actions"
 msgstr ""
 
-msgid "Information"
+msgid "Package Group Filter"
+msgstr "软件包分组筛选"
+
+msgid "Selected Packages"
+msgstr ""
+
+msgid "0 Selected"
+msgstr ""
+
+msgid "Grid View"
+msgstr ""
+
+msgid "List View"
+msgstr ""
+
+msgid "Size"
+msgstr "大小"
+
+msgid "Repository"
+msgstr "仓库"
+
+msgid "Install Date"
+msgstr ""
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
+msgstr ""
+
+msgid "Perform Upgrade"
+msgstr "执行升级"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "执行完整系统升级并安装 (-u)"
+
+msgid "Show Hidden"
+msgstr "显示隐藏"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "显示 pacman.conf 中 IgnorePkg 列表内的软件包"
+
+msgid "Show Explicit Only"
+msgstr ""
+
+msgid "Show only explicitly installed packages"
+msgstr ""
+
+msgid "Show Dependency Only"
+msgstr ""
+
+msgid "Show dependency packages on;y"
 msgstr ""
 
 msgid "Recommended Packages"
@@ -167,12 +380,6 @@ msgid ""
 "No recommendations found. Please check your internet connection and try "
 "again."
 msgstr "未找到推荐内容。请检查网络连接后重试。"
-
-msgid "Preview Pkgbuild"
-msgstr ""
-
-msgid "Shelly"
-msgstr ""
 
 msgid "General"
 msgstr "常规"
@@ -295,9 +502,6 @@ msgstr ""
 msgid "Select Directory"
 msgstr ""
 
-msgid "Save"
-msgstr "保存"
-
 msgid "View Changelog"
 msgstr "查看变更日志"
 
@@ -312,6 +516,42 @@ msgstr "社区 Fluxer"
 
 msgid "Sponsor"
 msgstr "赞助"
+
+msgid "Toggle output"
+msgstr ""
+
+msgid "Available Updates"
+msgstr "可用更新"
+
+msgid "7 of 7 updates included"
+msgstr ""
+
+msgid "Check all enabled sources again"
+msgstr ""
+
+msgid "Check Again"
+msgstr ""
+
+msgid "Upgrade"
+msgstr ""
+
+msgid "System"
+msgstr "系统"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Checking for updates…"
+msgstr ""
+
+msgid "Your system is up to date"
+msgstr ""
+
+msgid "Could not check for updates"
+msgstr ""
 
 msgid "Utilities"
 msgstr ""
@@ -361,45 +601,6 @@ msgid "Keep"
 msgstr ""
 
 msgid "Number of cached versions to keep per package"
-msgstr ""
-
-msgid "Toggle output"
-msgstr ""
-
-msgid "Close"
-msgstr "关闭"
-
-msgid "Available Updates"
-msgstr "可用更新"
-
-msgid "7 of 7 updates included"
-msgstr ""
-
-msgid "Check all enabled sources again"
-msgstr ""
-
-msgid "Check Again"
-msgstr ""
-
-msgid "Upgrade"
-msgstr ""
-
-msgid "System"
-msgstr "系统"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "Checking for updates…"
-msgstr ""
-
-msgid "Your system is up to date"
-msgstr ""
-
-msgid "Could not check for updates"
 msgstr ""
 
 msgid "Welcome to Shelly v3"
@@ -471,210 +672,6 @@ msgstr ""
 msgid "Start Shelly"
 msgstr ""
 
-msgid "Search..."
-msgstr "搜索..."
-
-msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr "同步所有 AppImage 的元数据。适用于 AppImage 自行更新后的情况。"
-
-msgid "Sync All"
-msgstr "全部同步"
-
-msgid "Upgrade all AppImages to their latest versions"
-msgstr "将所有 AppImage 升级到最新版本"
-
-msgid "Upgrade All"
-msgstr "全部升级"
-
-msgid "Install a new AppImage from a file"
-msgstr "从文件安装新的 AppImage"
-
-msgid "Install AppImage"
-msgstr "安装 AppImage"
-
-msgid "Drop AppImage here to install"
-msgstr ""
-
-msgid "Version"
-msgstr "版本"
-
-msgid "Description goes here..."
-msgstr "在此输入描述..."
-
-msgid "Size on Disk"
-msgstr "磁盘占用"
-
-msgid "Update Strategy"
-msgstr "更新策略"
-
-msgid "Update URL / Repository Info"
-msgstr "更新 URL / 仓库信息"
-
-msgid "Get more information about Update URL / Repository Info"
-msgstr ""
-
-msgid "e.g. owner/repo or https://..."
-msgstr ""
-
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
-msgstr ""
-
-msgid "Allow Prerelease"
-msgstr ""
-
-msgid "Installation Path"
-msgstr "安装路径"
-
-msgid "Launch Flags"
-msgstr ""
-
-msgid "Sync"
-msgstr "同步"
-
-msgid "Remove"
-msgstr "移除"
-
-msgid "Search the AUR by name or keyword"
-msgstr ""
-
-msgid "Installed Only"
-msgstr ""
-
-msgid "Show only installed packages"
-msgstr ""
-
-msgid "Install Selected"
-msgstr "安装所选"
-
-msgid "Name"
-msgstr "名称"
-
-msgid "Votes"
-msgstr "推荐票"
-
-msgid "Popularity"
-msgstr "流行度"
-
-msgid "Search the AUR"
-msgstr ""
-
-msgid "The AUR has no browsable index type a package name to begin."
-msgstr ""
-
-msgid "Run checks"
-msgstr "运行检查"
-
-msgid "Run the --check function during package build"
-msgstr ""
-
-msgid "Hide Detail Pane"
-msgstr ""
-
-msgid "Hide the detail pane on the right"
-msgstr ""
-
-msgid "Package Group Filter"
-msgstr "软件包分组筛选"
-
-msgid "Selected Packages"
-msgstr ""
-
-msgid "0 Selected"
-msgstr ""
-
-msgid "Grid View"
-msgstr ""
-
-msgid "List View"
-msgstr ""
-
-msgid "Size"
-msgstr "大小"
-
-msgid "Repository"
-msgstr "仓库"
-
-#, fuzzy
-msgid "Install Date"
-msgstr "安装 "
-
-msgid "Had an issue loading your packages. Check if you have a db lock."
-msgstr ""
-
-msgid "Perform Upgrade"
-msgstr "执行升级"
-
-msgid "Perform a full system upgrade with install (-u)"
-msgstr "执行完整系统升级并安装 (-u)"
-
-msgid "Show Hidden"
-msgstr "显示隐藏"
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr "显示 pacman.conf 中 IgnorePkg 列表内的软件包"
-
-msgid "Show Explicit Only"
-msgstr ""
-
-msgid "Show only explicitly installed packages"
-msgstr ""
-
-msgid "Show Dependency Only"
-msgstr ""
-
-msgid "Show dependency packages on;y"
-msgstr ""
-
-msgid "Confirm"
-msgstr "确认"
-
-msgid "Cancel"
-msgstr "取消"
-
-#, fuzzy
-msgid "No installable addons available"
-msgstr "无最近新闻"
-
-msgid "No special permissions requested"
-msgstr ""
-
-#, fuzzy
-msgid "polkit is required"
-msgstr "需要重启"
-
-msgid ""
-"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
-"privileged actions, but it wasn't found on the system bus.\n"
-"\n"
-"Install and enable it, then retry.\n"
-"\n"
-"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
-"Polkit</a>"
-msgstr ""
-
-msgid "Skip"
-msgstr ""
-
-msgid "Review PKGBUILD changes"
-msgstr ""
-
-msgid "Changes"
-msgstr ""
-
-msgid "Warnings"
-msgstr ""
-
-msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
-"control. Review them before continuing."
-msgstr ""
-
-msgid "Source Files"
-msgstr ""
-
-msgid "Review PKGBUILD"
-msgstr ""
-
 msgid "Filesystem"
 msgstr ""
 
@@ -741,6 +738,161 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
+msgid "None"
+msgstr "无"
+
+msgid "Static URL"
+msgstr ""
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+msgid "Update Available"
+msgstr ""
+
+msgid "Version ?"
+msgstr ""
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr ""
+
+msgid "Invalid URL. Must start with http:// or https://"
+msgstr ""
+
+msgid ""
+"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
+"repo/releases"
+msgstr ""
+
+msgid "Choose an AppImage file"
+msgstr ""
+
+msgid "AppImage files"
+msgstr ""
+
+msgid "Only .AppImage files can be installed"
+msgstr ""
+
+msgid "Installing AppImage"
+msgstr ""
+
+msgid "No AppImages need to be upgraded"
+msgstr "没有需要升级的 AppImage"
+
+msgid "Upgrading AppImages"
+msgstr ""
+
+msgid "Syncing AppImages"
+msgstr ""
+
+msgid "Syncing AppImage"
+msgstr ""
+
+msgid "Saving update configuration"
+msgstr ""
+
+msgid "Configuration files will be kept."
+msgstr ""
+
+msgid "Remove this AppImage?"
+msgstr ""
+
+msgid "Remove AppImage"
+msgstr ""
+
+msgid "Removing AppImage"
+msgstr ""
+
+msgid "Operation completed successfully"
+msgstr ""
+
+msgid "Operation failed"
+msgstr ""
+
+msgid "Maintainer"
+msgstr "维护者"
+
+msgid "Last Modified"
+msgstr "最后修改"
+
+msgid "First Submitted"
+msgstr "首次提交"
+
+msgid "URL"
+msgstr ""
+
+msgid "Licenses"
+msgstr "许可证"
+
+msgid "Depends"
+msgstr "依赖"
+
+msgid "Optional Depends"
+msgstr ""
+
+msgid "Make Depends"
+msgstr "构建依赖"
+
+msgid "Section"
+msgstr ""
+
+msgid "The AUR has no browsable index — type a package name to begin."
+msgstr ""
+
+msgid "No packages found"
+msgstr ""
+
+msgid "Try a shorter or more general keyword."
+msgstr ""
+
+msgid "Could not reach the AUR"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr ""
+
+msgid "Flagged out of date"
+msgstr ""
+
+msgid "Installed"
+msgstr "已安装"
+
+msgid "Remove Selected"
+msgstr "移除所选"
+
+msgid "Select one or more packages"
+msgstr ""
+
+msgid "Package(s)"
+msgstr ""
+
+msgid "Remove Packages"
+msgstr ""
+
+msgid "Remove the selected AUR packages?"
+msgstr ""
+
+msgid "Build from AUR"
+msgstr ""
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+
+msgid "Build"
+msgstr ""
+
+msgid "Installing AUR packages"
+msgstr ""
+
+msgid "Removing AUR packages"
+msgstr ""
+
 msgid "Choose a Flatpak file"
 msgstr ""
 
@@ -762,60 +914,6 @@ msgstr ""
 msgid "Choose file..."
 msgstr ""
 
-msgid "Removing Remote"
-msgstr ""
-
-msgid "Adding Remote"
-msgstr ""
-
-msgid "Removing Flatpak"
-msgstr ""
-
-msgid "Discover"
-msgstr ""
-
-msgid "Categories"
-msgstr ""
-
-msgid "All Applications"
-msgstr "所有应用程序"
-
-msgid "Most Wanted"
-msgstr "最受欢迎"
-
-msgid "Recently Added"
-msgstr "最近添加"
-
-msgid "Recently Updated"
-msgstr "最近更新"
-
-msgid "Audio & Video"
-msgstr "音频与视频"
-
-msgid "Development"
-msgstr "开发"
-
-msgid "Education"
-msgstr "教育"
-
-msgid "Game"
-msgstr "游戏"
-
-msgid "Graphics"
-msgstr "图形"
-
-msgid "Network"
-msgstr "网络"
-
-msgid "Office"
-msgstr "办公"
-
-msgid "Science"
-msgstr "科学"
-
-msgid "Utility"
-msgstr "工具"
-
 msgid "Verified"
 msgstr ""
 
@@ -831,12 +929,8 @@ msgstr ""
 msgid "Available Addons"
 msgstr "可用附加组件"
 
-#, fuzzy
 msgid "Installing flatpak addon"
-msgstr "已安装 Flatpak 附加组件"
-
-msgid "Installed"
-msgstr "已安装"
+msgstr ""
 
 msgid "Unknown developer"
 msgstr ""
@@ -919,90 +1013,58 @@ msgstr ""
 msgid "No Flatpak applications are available."
 msgstr ""
 
-msgid "Refreshing package databases"
+msgid "Discover"
 msgstr ""
 
-msgid "Database lock removed successfully"
+msgid "Categories"
 msgstr ""
 
-msgid "Failed to remove database lock"
+msgid "All Applications"
+msgstr "所有应用程序"
+
+msgid "Most Wanted"
+msgstr "最受欢迎"
+
+msgid "Recently Added"
+msgstr "最近添加"
+
+msgid "Recently Updated"
+msgstr "最近更新"
+
+msgid "Audio & Video"
+msgstr "音频与视频"
+
+msgid "Development"
+msgstr "开发"
+
+msgid "Education"
+msgstr "教育"
+
+msgid "Game"
+msgstr "游戏"
+
+msgid "Graphics"
+msgstr "图形"
+
+msgid "Network"
+msgstr "网络"
+
+msgid "Office"
+msgstr "办公"
+
+msgid "Science"
+msgstr "科学"
+
+msgid "Utility"
+msgstr "工具"
+
+msgid "Removing Remote"
 msgstr ""
 
-msgid "Fixing permissions"
+msgid "Adding Remote"
 msgstr ""
 
-msgid "Purifying packages"
-msgstr ""
-
-msgid "Cleaning package cache"
-msgstr ""
-
-msgid "Operation completed successfully"
-msgstr ""
-
-msgid "Operation failed"
-msgstr ""
-
-msgid "Welcome"
-msgstr ""
-
-msgid "Enable AUR?"
-msgstr "启用 AUR？"
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-
-msgid "Enable"
-msgstr ""
-
-msgid "Enable Recommended?"
-msgstr ""
-
-msgid ""
-"Recommended shows curated package suggestions based on your installed "
-"software. Package data is fetched from external sources."
-msgstr ""
-
-#, fuzzy
-msgid "Installing Flatpak and AppImage support"
-msgstr "安装 Flatpak 失败"
-
-#, fuzzy
-msgid "Installing Flatpak support"
-msgstr "启用 Flatpak 支持"
-
-#, fuzzy
-msgid "Installing AppImage support"
-msgstr "正在安装 AppImage..."
-
-msgid "Maintainer"
-msgstr "维护者"
-
-msgid "Last Modified"
-msgstr "最后修改"
-
-msgid "First Submitted"
-msgstr "首次提交"
-
-#, fuzzy
-msgid "URL"
-msgstr "URL："
-
-msgid "Licenses"
-msgstr "许可证"
-
-msgid "Depends"
-msgstr "依赖"
-
-msgid "Optional Depends"
-msgstr ""
-
-msgid "Make Depends"
-msgstr "构建依赖"
-
-msgid "Section"
+msgid "Removing Flatpak"
 msgstr ""
 
 msgid "Loading..."
@@ -1044,125 +1106,6 @@ msgstr ""
 msgid "Making Package Dependency"
 msgstr ""
 
-msgid "None"
-msgstr "无"
-
-msgid "Static URL"
-msgstr ""
-
-msgid "GitLab"
-msgstr "GitLab"
-
-msgid "Codeberg"
-msgstr "Codeberg"
-
-msgid "Forgejo"
-msgstr "Forgejo"
-
-msgid "Update Available"
-msgstr ""
-
-msgid "Version ?"
-msgstr ""
-
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
-msgstr ""
-
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr ""
-
-msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
-msgstr ""
-
-msgid "Choose an AppImage file"
-msgstr ""
-
-msgid "AppImage files"
-msgstr ""
-
-msgid "Only .AppImage files can be installed"
-msgstr ""
-
-msgid "Installing AppImage"
-msgstr ""
-
-msgid "No AppImages need to be upgraded"
-msgstr "没有需要升级的 AppImage"
-
-msgid "Upgrading AppImages"
-msgstr ""
-
-msgid "Syncing AppImages"
-msgstr ""
-
-msgid "Syncing AppImage"
-msgstr ""
-
-msgid "Saving update configuration"
-msgstr ""
-
-msgid "Configuration files will be kept."
-msgstr ""
-
-msgid "Remove this AppImage?"
-msgstr ""
-
-msgid "Remove AppImage"
-msgstr ""
-
-msgid "Removing AppImage"
-msgstr ""
-
-msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
-
-msgid "No packages found"
-msgstr ""
-
-msgid "Try a shorter or more general keyword."
-msgstr ""
-
-msgid "Could not reach the AUR"
-msgstr ""
-
-msgid "Check your connection and try again."
-msgstr ""
-
-msgid "Flagged out of date"
-msgstr ""
-
-msgid "Remove Selected"
-msgstr "移除所选"
-
-msgid "Select one or more packages"
-msgstr ""
-
-msgid "Package(s)"
-msgstr ""
-
-msgid "Remove Packages"
-msgstr ""
-
-msgid "Remove the selected AUR packages?"
-msgstr ""
-
-msgid "Build from AUR"
-msgstr ""
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-
-msgid "Build"
-msgstr ""
-
-msgid "Installing AUR packages"
-msgstr ""
-
-msgid "Removing AUR packages"
-msgstr ""
-
 msgid "Package is already installed"
 msgstr "软件包已安装"
 
@@ -1195,6 +1138,151 @@ msgid "Removing packages"
 msgstr ""
 
 msgid "Installing packages"
+msgstr ""
+
+msgid "Failed to save settings"
+msgstr ""
+
+msgid "Settings saved"
+msgstr ""
+
+msgid "Installing Flatpak support"
+msgstr ""
+
+msgid "Installing AppImage support"
+msgstr ""
+
+msgid "Failed to start Flatpak support installation"
+msgstr ""
+
+msgid "Failed to start AppImage support installation"
+msgstr ""
+
+msgid "Flatpak support installation failed"
+msgstr ""
+
+msgid "AppImage support installation failed"
+msgstr ""
+
+msgid "Flatpak support enabled"
+msgstr ""
+
+msgid "AppImage support enabled"
+msgstr ""
+
+msgid "No changelog entries found"
+msgstr "未找到变更日志条目"
+
+msgid "No details for this release"
+msgstr "此版本无详细信息"
+
+msgid "Failed to load changelog"
+msgstr "加载变更日志失败"
+
+msgid "Changelog"
+msgstr ""
+
+msgid "Select Tray Icon"
+msgstr ""
+
+msgid "Select Icon"
+msgstr ""
+
+msgid "Select Tray Updates Icon"
+msgstr ""
+
+msgid "Select AppImage Install Directory"
+msgstr ""
+
+msgid "Tray enabled"
+msgstr ""
+
+msgid "Tray disabled, but autostart service remains"
+msgstr ""
+
+msgid "Tray disabled"
+msgstr ""
+
+msgid "Failed to add systemd startup service"
+msgstr ""
+
+msgid "Systemd startup service added."
+msgstr "已添加 systemd 启动服务"
+
+msgid "Failed to remove systemd startup service"
+msgstr ""
+
+msgid "Systemd startup service removed."
+msgstr "已删除 systemd 启动服务"
+
+msgid "Enable AUR?"
+msgstr "启用 AUR？"
+
+msgid ""
+"The Arch User Repository (AUR) is a community-driven repository. Packages "
+"are user-produced and may contain risks. Do you want to enable it?"
+msgstr ""
+"Arch 用户仓库 (AUR) 是一个社区驱动的仓库。软件包由用户制作，可能包含风险。是"
+"否启用？"
+
+msgid "Enable"
+msgstr ""
+
+msgid "AUR enabled"
+msgstr ""
+
+msgid "System Default"
+msgstr ""
+
+msgid "English"
+msgstr ""
+
+msgid "Bulgarian"
+msgstr ""
+
+msgid "Català"
+msgstr ""
+
+msgid "Deutsch"
+msgstr ""
+
+msgid "Español"
+msgstr ""
+
+msgid "Français"
+msgstr ""
+
+msgid "Magyar"
+msgstr ""
+
+msgid "日本語"
+msgstr ""
+
+msgid "Polski"
+msgstr ""
+
+msgid "Português (Brasil)"
+msgstr ""
+
+msgid "Português (Portugal)"
+msgstr ""
+
+msgid "Русский"
+msgstr ""
+
+msgid "Türkçe"
+msgstr ""
+
+msgid "中文（简体）"
+msgstr ""
+
+msgid "Packages"
+msgstr "软件包"
+
+msgid "Shelly Search"
+msgstr "Shelly 搜索"
+
+msgid "Update"
 msgstr ""
 
 msgid "Failed to start operation."
@@ -1254,145 +1342,6 @@ msgstr "是"
 msgid "No"
 msgstr "否"
 
-msgid "Failed to save settings"
-msgstr ""
-
-msgid "Settings saved"
-msgstr ""
-
-#, fuzzy
-msgid "Failed to start Flatpak support installation"
-msgstr "导出 AUR 安装日志失败"
-
-#, fuzzy
-msgid "Failed to start AppImage support installation"
-msgstr "导出 AUR 安装日志失败"
-
-#, fuzzy
-msgid "Flatpak support installation failed"
-msgstr "软件包安装失败"
-
-#, fuzzy
-msgid "AppImage support installation failed"
-msgstr "软件包安装失败"
-
-#, fuzzy
-msgid "Flatpak support enabled"
-msgstr "启用 Flatpak 支持"
-
-#, fuzzy
-msgid "AppImage support enabled"
-msgstr "启用 AppImage 支持"
-
-msgid "No changelog entries found"
-msgstr "未找到变更日志条目"
-
-msgid "No details for this release"
-msgstr "此版本无详细信息"
-
-msgid "Failed to load changelog"
-msgstr "加载变更日志失败"
-
-msgid "Changelog"
-msgstr ""
-
-msgid "Select Tray Icon"
-msgstr ""
-
-msgid "Select Icon"
-msgstr ""
-
-msgid "Select Tray Updates Icon"
-msgstr ""
-
-msgid "Select AppImage Install Directory"
-msgstr ""
-
-msgid "Tray enabled"
-msgstr ""
-
-msgid "Tray disabled, but autostart service remains"
-msgstr ""
-
-msgid "Tray disabled"
-msgstr ""
-
-msgid "Failed to add systemd startup service"
-msgstr ""
-
-msgid "Systemd startup service added."
-msgstr "已添加 systemd 启动服务"
-
-msgid "Failed to remove systemd startup service"
-msgstr ""
-
-msgid "Systemd startup service removed."
-msgstr "已删除 systemd 启动服务"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"Arch 用户仓库 (AUR) 是一个社区驱动的仓库。软件包由用户制作，可能包含风险。是"
-"否启用？"
-
-msgid "AUR enabled"
-msgstr ""
-
-msgid "System Default"
-msgstr ""
-
-msgid "English"
-msgstr ""
-
-msgid "Bulgarian"
-msgstr ""
-
-msgid "Català"
-msgstr ""
-
-msgid "Deutsch"
-msgstr ""
-
-msgid "Español"
-msgstr ""
-
-msgid "Français"
-msgstr ""
-
-msgid "Magyar"
-msgstr ""
-
-msgid "日本語"
-msgstr ""
-
-msgid "Polski"
-msgstr ""
-
-msgid "Português (Brasil)"
-msgstr ""
-
-msgid "Português (Portugal)"
-msgstr ""
-
-msgid "Русский"
-msgstr ""
-
-msgid "Türkçe"
-msgstr ""
-
-msgid "中文（简体）"
-msgstr ""
-
-msgid "Packages"
-msgstr "软件包"
-
-msgid "Shelly Search"
-msgstr "Shelly 搜索"
-
-msgid "Update"
-msgstr ""
-
 msgid "System package update"
 msgstr ""
 
@@ -1402,9 +1351,8 @@ msgstr ""
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 
-#, fuzzy
 msgid "Update this package"
-msgstr "更新软件包？"
+msgstr ""
 
 msgid "of"
 msgstr ""
@@ -1416,6 +1364,43 @@ msgid "Updates included"
 msgstr ""
 
 msgid "Upgrading packages"
+msgstr ""
+
+msgid "Refreshing package databases"
+msgstr ""
+
+msgid "Database lock removed successfully"
+msgstr ""
+
+msgid "Failed to remove database lock"
+msgstr ""
+
+msgid "Fixing permissions"
+msgstr ""
+
+msgid "Purifying packages"
+msgstr ""
+
+msgid "Cleaning package cache"
+msgstr ""
+
+msgid "Welcome"
+msgstr ""
+
+msgid ""
+"The Arch User Repository is community-maintained. Packages are not "
+"officially vetted — only enable if you trust what you install."
+msgstr ""
+
+msgid "Enable Recommended?"
+msgstr ""
+
+msgid ""
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
+msgstr ""
+
+msgid "Installing Flatpak and AppImage support"
 msgstr ""
 
 msgid "Settings"

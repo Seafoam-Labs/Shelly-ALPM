@@ -15,6 +15,174 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Weblate 2026.7\n"
 
+msgid "No installable addons available"
+msgstr ""
+
+msgid "Close"
+msgstr ""
+
+msgid "Confirm"
+msgstr ""
+
+msgid "Skip"
+msgstr ""
+
+msgid "No special permissions requested"
+msgstr ""
+
+msgid "Review PKGBUILD changes"
+msgstr ""
+
+msgid "Changes"
+msgstr ""
+
+msgid "Warnings"
+msgstr ""
+
+msgid ""
+"These commands fetch and execute code outside of shelly and libalpm's "
+"control. Review them before continuing."
+msgstr ""
+
+msgid "Source Files"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "polkit is required"
+msgstr ""
+
+msgid ""
+"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
+"privileged actions, but it wasn't found on the system bus.\n"
+"\n"
+"Install and enable it, then retry.\n"
+"\n"
+"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
+"Polkit</a>"
+msgstr ""
+
+msgid "Review PKGBUILD"
+msgstr ""
+
+msgid "Search..."
+msgstr ""
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr ""
+
+msgid "Sync All"
+msgstr ""
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr ""
+
+msgid "Upgrade All"
+msgstr ""
+
+msgid "Install a new AppImage from a file"
+msgstr ""
+
+msgid "Install AppImage"
+msgstr ""
+
+msgid "Drop AppImage here to install"
+msgstr ""
+
+msgid "App Name"
+msgstr ""
+
+msgid "Version"
+msgstr ""
+
+msgid "Description goes here..."
+msgstr ""
+
+msgid "Size on Disk"
+msgstr ""
+
+msgid "Update Strategy"
+msgstr ""
+
+msgid "Update URL / Repository Info"
+msgstr ""
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr ""
+
+msgid "e.g. owner/repo or https://..."
+msgstr ""
+
+msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+msgstr ""
+
+msgid "Allow Prerelease"
+msgstr ""
+
+msgid "Installation Path"
+msgstr ""
+
+msgid "Launch Flags"
+msgstr ""
+
+msgid "Save"
+msgstr ""
+
+msgid "Sync"
+msgstr ""
+
+msgid "Remove"
+msgstr ""
+
+msgid "Information"
+msgstr ""
+
+msgid "Preview Pkgbuild"
+msgstr ""
+
+msgid "Search the AUR by name or keyword"
+msgstr ""
+
+msgid "Installed Only"
+msgstr ""
+
+msgid "Show only installed packages"
+msgstr ""
+
+msgid "Additional Options"
+msgstr ""
+
+msgid "Install Selected"
+msgstr ""
+
+msgid "Name"
+msgstr ""
+
+msgid "Votes"
+msgstr ""
+
+msgid "Popularity"
+msgstr ""
+
+msgid "Search the AUR"
+msgstr ""
+
+msgid "The AUR has no browsable index type a package name to begin."
+msgstr ""
+
+msgid "Run checks"
+msgstr ""
+
+msgid "Run the --check function during package build"
+msgstr ""
+
+msgid "Hide Detail Pane"
+msgstr ""
+
+msgid "Hide the detail pane on the right"
+msgstr ""
+
 msgid "Install a local Flatpak"
 msgstr ""
 
@@ -41,73 +209,16 @@ msgstr ""
 msgid "Install"
 msgstr ""
 
-msgid "Additional Options"
-msgstr ""
-
-msgid "Show Runtimes"
-msgstr ""
-
-msgid "Flatpak Repair"
-msgstr ""
-
-msgid "Repairs Flatpak Installation (Experimental)"
-msgstr ""
-
-msgid "Search packages..."
-msgstr ""
-
-msgid "Browse"
-msgstr ""
-
-msgid "Manage"
-msgstr ""
-
-msgid "Manage Remote Refs"
-msgstr ""
-
-msgid "Install Local"
-msgstr ""
-
-msgid "Delete Selected Remote"
-msgstr ""
-
-msgid "Add Remote"
+msgid "Loading Flatpak Data..."
 msgstr ""
 
 msgid "Back"
-msgstr ""
-
-msgid "Add New Flatpak Remote"
-msgstr ""
-
-msgid "Add"
-msgstr ""
-
-msgid "Remote Name"
-msgstr ""
-
-msgid "e.g., flathub"
-msgstr ""
-
-msgid "Remote URL"
-msgstr ""
-
-msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr ""
-
-msgid "Scope"
-msgstr ""
-
-msgid "Loading Flatpak Data..."
 msgstr ""
 
 msgid "Addons"
 msgstr ""
 
 msgid "Install source"
-msgstr ""
-
-msgid "App Name"
 msgstr ""
 
 msgid "Author"
@@ -134,6 +245,60 @@ msgstr ""
 msgid "Version History"
 msgstr ""
 
+msgid "Search packages..."
+msgstr ""
+
+msgid "Browse"
+msgstr ""
+
+msgid "Manage"
+msgstr ""
+
+msgid "Manage Remote Refs"
+msgstr ""
+
+msgid "Install Local"
+msgstr ""
+
+msgid "Delete Selected Remote"
+msgstr ""
+
+msgid "Add Remote"
+msgstr ""
+
+msgid "Add New Flatpak Remote"
+msgstr ""
+
+msgid "Add"
+msgstr ""
+
+msgid "Remote Name"
+msgstr ""
+
+msgid "e.g., flathub"
+msgstr ""
+
+msgid "Remote URL"
+msgstr ""
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr ""
+
+msgid "Scope"
+msgstr ""
+
+msgid "Show Runtimes"
+msgstr ""
+
+msgid "Flatpak Repair"
+msgstr ""
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr ""
+
+msgid "Shelly"
+msgstr ""
+
 msgid "Reinstall"
 msgstr ""
 
@@ -152,7 +317,55 @@ msgstr ""
 msgid "Package actions"
 msgstr ""
 
-msgid "Information"
+msgid "Package Group Filter"
+msgstr ""
+
+msgid "Selected Packages"
+msgstr ""
+
+msgid "0 Selected"
+msgstr ""
+
+msgid "Grid View"
+msgstr ""
+
+msgid "List View"
+msgstr ""
+
+msgid "Size"
+msgstr ""
+
+msgid "Repository"
+msgstr ""
+
+msgid "Install Date"
+msgstr ""
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
+msgstr ""
+
+msgid "Perform Upgrade"
+msgstr ""
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr ""
+
+msgid "Show Hidden"
+msgstr ""
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr ""
+
+msgid "Show Explicit Only"
+msgstr ""
+
+msgid "Show only explicitly installed packages"
+msgstr ""
+
+msgid "Show Dependency Only"
+msgstr ""
+
+msgid "Show dependency packages on;y"
 msgstr ""
 
 msgid "Recommended Packages"
@@ -170,12 +383,6 @@ msgstr ""
 msgid ""
 "No recommendations found. Please check your internet connection and try "
 "again."
-msgstr ""
-
-msgid "Preview Pkgbuild"
-msgstr ""
-
-msgid "Shelly"
 msgstr ""
 
 msgid "General"
@@ -299,9 +506,6 @@ msgstr ""
 msgid "Select Directory"
 msgstr ""
 
-msgid "Save"
-msgstr ""
-
 msgid "View Changelog"
 msgstr ""
 
@@ -315,6 +519,42 @@ msgid "Community fluxer"
 msgstr ""
 
 msgid "Sponsor"
+msgstr ""
+
+msgid "Toggle output"
+msgstr ""
+
+msgid "Available Updates"
+msgstr ""
+
+msgid "7 of 7 updates included"
+msgstr ""
+
+msgid "Check all enabled sources again"
+msgstr ""
+
+msgid "Check Again"
+msgstr ""
+
+msgid "Upgrade"
+msgstr ""
+
+msgid "System"
+msgstr ""
+
+msgid "AUR"
+msgstr ""
+
+msgid "Flatpak"
+msgstr ""
+
+msgid "Checking for updates…"
+msgstr ""
+
+msgid "Your system is up to date"
+msgstr ""
+
+msgid "Could not check for updates"
 msgstr ""
 
 msgid "Utilities"
@@ -364,45 +604,6 @@ msgid "Keep"
 msgstr ""
 
 msgid "Number of cached versions to keep per package"
-msgstr ""
-
-msgid "Toggle output"
-msgstr ""
-
-msgid "Close"
-msgstr ""
-
-msgid "Available Updates"
-msgstr ""
-
-msgid "7 of 7 updates included"
-msgstr ""
-
-msgid "Check all enabled sources again"
-msgstr ""
-
-msgid "Check Again"
-msgstr ""
-
-msgid "Upgrade"
-msgstr ""
-
-msgid "System"
-msgstr ""
-
-msgid "AUR"
-msgstr ""
-
-msgid "Flatpak"
-msgstr ""
-
-msgid "Checking for updates…"
-msgstr ""
-
-msgid "Your system is up to date"
-msgstr ""
-
-msgid "Could not check for updates"
 msgstr ""
 
 msgid "Welcome to Shelly v3"
@@ -474,207 +675,6 @@ msgstr ""
 msgid "Start Shelly"
 msgstr ""
 
-msgid "Search..."
-msgstr ""
-
-msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr ""
-
-msgid "Sync All"
-msgstr ""
-
-msgid "Upgrade all AppImages to their latest versions"
-msgstr ""
-
-msgid "Upgrade All"
-msgstr ""
-
-msgid "Install a new AppImage from a file"
-msgstr ""
-
-msgid "Install AppImage"
-msgstr ""
-
-msgid "Drop AppImage here to install"
-msgstr ""
-
-msgid "Version"
-msgstr ""
-
-msgid "Description goes here..."
-msgstr ""
-
-msgid "Size on Disk"
-msgstr ""
-
-msgid "Update Strategy"
-msgstr ""
-
-msgid "Update URL / Repository Info"
-msgstr ""
-
-msgid "Get more information about Update URL / Repository Info"
-msgstr ""
-
-msgid "e.g. owner/repo or https://..."
-msgstr ""
-
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
-msgstr ""
-
-msgid "Allow Prerelease"
-msgstr ""
-
-msgid "Installation Path"
-msgstr ""
-
-msgid "Launch Flags"
-msgstr ""
-
-msgid "Sync"
-msgstr ""
-
-msgid "Remove"
-msgstr ""
-
-msgid "Search the AUR by name or keyword"
-msgstr ""
-
-msgid "Installed Only"
-msgstr ""
-
-msgid "Show only installed packages"
-msgstr ""
-
-msgid "Install Selected"
-msgstr ""
-
-msgid "Name"
-msgstr ""
-
-msgid "Votes"
-msgstr ""
-
-msgid "Popularity"
-msgstr ""
-
-msgid "Search the AUR"
-msgstr ""
-
-msgid "The AUR has no browsable index type a package name to begin."
-msgstr ""
-
-msgid "Run checks"
-msgstr ""
-
-msgid "Run the --check function during package build"
-msgstr ""
-
-msgid "Hide Detail Pane"
-msgstr ""
-
-msgid "Hide the detail pane on the right"
-msgstr ""
-
-msgid "Package Group Filter"
-msgstr ""
-
-msgid "Selected Packages"
-msgstr ""
-
-msgid "0 Selected"
-msgstr ""
-
-msgid "Grid View"
-msgstr ""
-
-msgid "List View"
-msgstr ""
-
-msgid "Size"
-msgstr ""
-
-msgid "Repository"
-msgstr ""
-
-msgid "Install Date"
-msgstr ""
-
-msgid "Had an issue loading your packages. Check if you have a db lock."
-msgstr ""
-
-msgid "Perform Upgrade"
-msgstr ""
-
-msgid "Perform a full system upgrade with install (-u)"
-msgstr ""
-
-msgid "Show Hidden"
-msgstr ""
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr ""
-
-msgid "Show Explicit Only"
-msgstr ""
-
-msgid "Show only explicitly installed packages"
-msgstr ""
-
-msgid "Show Dependency Only"
-msgstr ""
-
-msgid "Show dependency packages on;y"
-msgstr ""
-
-msgid "Confirm"
-msgstr ""
-
-msgid "Cancel"
-msgstr ""
-
-msgid "No installable addons available"
-msgstr ""
-
-msgid "No special permissions requested"
-msgstr ""
-
-msgid "polkit is required"
-msgstr ""
-
-msgid ""
-"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
-"privileged actions, but it wasn't found on the system bus.\n"
-"\n"
-"Install and enable it, then retry.\n"
-"\n"
-"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
-"Polkit</a>"
-msgstr ""
-
-msgid "Skip"
-msgstr ""
-
-msgid "Review PKGBUILD changes"
-msgstr ""
-
-msgid "Changes"
-msgstr ""
-
-msgid "Warnings"
-msgstr ""
-
-msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
-"control. Review them before continuing."
-msgstr ""
-
-msgid "Source Files"
-msgstr ""
-
-msgid "Review PKGBUILD"
-msgstr ""
-
 msgid "Filesystem"
 msgstr ""
 
@@ -741,6 +741,161 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
+msgid "None"
+msgstr ""
+
+msgid "Static URL"
+msgstr ""
+
+msgid "GitLab"
+msgstr ""
+
+msgid "Codeberg"
+msgstr ""
+
+msgid "Forgejo"
+msgstr ""
+
+msgid "Update Available"
+msgstr ""
+
+msgid "Version ?"
+msgstr ""
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr ""
+
+msgid "Invalid URL. Must start with http:// or https://"
+msgstr ""
+
+msgid ""
+"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
+"repo/releases"
+msgstr ""
+
+msgid "Choose an AppImage file"
+msgstr ""
+
+msgid "AppImage files"
+msgstr ""
+
+msgid "Only .AppImage files can be installed"
+msgstr ""
+
+msgid "Installing AppImage"
+msgstr ""
+
+msgid "No AppImages need to be upgraded"
+msgstr ""
+
+msgid "Upgrading AppImages"
+msgstr ""
+
+msgid "Syncing AppImages"
+msgstr ""
+
+msgid "Syncing AppImage"
+msgstr ""
+
+msgid "Saving update configuration"
+msgstr ""
+
+msgid "Configuration files will be kept."
+msgstr ""
+
+msgid "Remove this AppImage?"
+msgstr ""
+
+msgid "Remove AppImage"
+msgstr ""
+
+msgid "Removing AppImage"
+msgstr ""
+
+msgid "Operation completed successfully"
+msgstr ""
+
+msgid "Operation failed"
+msgstr ""
+
+msgid "Maintainer"
+msgstr ""
+
+msgid "Last Modified"
+msgstr ""
+
+msgid "First Submitted"
+msgstr ""
+
+msgid "URL"
+msgstr ""
+
+msgid "Licenses"
+msgstr ""
+
+msgid "Depends"
+msgstr ""
+
+msgid "Optional Depends"
+msgstr ""
+
+msgid "Make Depends"
+msgstr ""
+
+msgid "Section"
+msgstr ""
+
+msgid "The AUR has no browsable index — type a package name to begin."
+msgstr ""
+
+msgid "No packages found"
+msgstr ""
+
+msgid "Try a shorter or more general keyword."
+msgstr ""
+
+msgid "Could not reach the AUR"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr ""
+
+msgid "Flagged out of date"
+msgstr ""
+
+msgid "Installed"
+msgstr ""
+
+msgid "Remove Selected"
+msgstr ""
+
+msgid "Select one or more packages"
+msgstr ""
+
+msgid "Package(s)"
+msgstr ""
+
+msgid "Remove Packages"
+msgstr ""
+
+msgid "Remove the selected AUR packages?"
+msgstr ""
+
+msgid "Build from AUR"
+msgstr ""
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+
+msgid "Build"
+msgstr ""
+
+msgid "Installing AUR packages"
+msgstr ""
+
+msgid "Removing AUR packages"
+msgstr ""
+
 msgid "Choose a Flatpak file"
 msgstr ""
 
@@ -762,60 +917,6 @@ msgstr ""
 msgid "Choose file..."
 msgstr ""
 
-msgid "Removing Remote"
-msgstr ""
-
-msgid "Adding Remote"
-msgstr ""
-
-msgid "Removing Flatpak"
-msgstr ""
-
-msgid "Discover"
-msgstr ""
-
-msgid "Categories"
-msgstr ""
-
-msgid "All Applications"
-msgstr ""
-
-msgid "Most Wanted"
-msgstr ""
-
-msgid "Recently Added"
-msgstr ""
-
-msgid "Recently Updated"
-msgstr ""
-
-msgid "Audio & Video"
-msgstr ""
-
-msgid "Development"
-msgstr ""
-
-msgid "Education"
-msgstr ""
-
-msgid "Game"
-msgstr ""
-
-msgid "Graphics"
-msgstr ""
-
-msgid "Network"
-msgstr ""
-
-msgid "Office"
-msgstr ""
-
-msgid "Science"
-msgstr ""
-
-msgid "Utility"
-msgstr ""
-
 msgid "Verified"
 msgstr ""
 
@@ -832,9 +933,6 @@ msgid "Available Addons"
 msgstr ""
 
 msgid "Installing flatpak addon"
-msgstr ""
-
-msgid "Installed"
 msgstr ""
 
 msgid "Unknown developer"
@@ -918,86 +1016,58 @@ msgstr ""
 msgid "No Flatpak applications are available."
 msgstr ""
 
-msgid "Refreshing package databases"
+msgid "Discover"
 msgstr ""
 
-msgid "Database lock removed successfully"
+msgid "Categories"
 msgstr ""
 
-msgid "Failed to remove database lock"
+msgid "All Applications"
 msgstr ""
 
-msgid "Fixing permissions"
+msgid "Most Wanted"
 msgstr ""
 
-msgid "Purifying packages"
+msgid "Recently Added"
 msgstr ""
 
-msgid "Cleaning package cache"
+msgid "Recently Updated"
 msgstr ""
 
-msgid "Operation completed successfully"
+msgid "Audio & Video"
 msgstr ""
 
-msgid "Operation failed"
+msgid "Development"
 msgstr ""
 
-msgid "Welcome"
+msgid "Education"
 msgstr ""
 
-msgid "Enable AUR?"
+msgid "Game"
 msgstr ""
 
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
+msgid "Graphics"
 msgstr ""
 
-msgid "Enable"
+msgid "Network"
 msgstr ""
 
-msgid "Enable Recommended?"
+msgid "Office"
 msgstr ""
 
-msgid ""
-"Recommended shows curated package suggestions based on your installed "
-"software. Package data is fetched from external sources."
+msgid "Science"
 msgstr ""
 
-msgid "Installing Flatpak and AppImage support"
+msgid "Utility"
 msgstr ""
 
-msgid "Installing Flatpak support"
+msgid "Removing Remote"
 msgstr ""
 
-msgid "Installing AppImage support"
+msgid "Adding Remote"
 msgstr ""
 
-msgid "Maintainer"
-msgstr ""
-
-msgid "Last Modified"
-msgstr ""
-
-msgid "First Submitted"
-msgstr ""
-
-msgid "URL"
-msgstr ""
-
-msgid "Licenses"
-msgstr ""
-
-msgid "Depends"
-msgstr ""
-
-msgid "Optional Depends"
-msgstr ""
-
-msgid "Make Depends"
-msgstr ""
-
-msgid "Section"
+msgid "Removing Flatpak"
 msgstr ""
 
 msgid "Loading..."
@@ -1039,125 +1109,6 @@ msgstr ""
 msgid "Making Package Dependency"
 msgstr ""
 
-msgid "None"
-msgstr ""
-
-msgid "Static URL"
-msgstr ""
-
-msgid "GitLab"
-msgstr ""
-
-msgid "Codeberg"
-msgstr ""
-
-msgid "Forgejo"
-msgstr ""
-
-msgid "Update Available"
-msgstr ""
-
-msgid "Version ?"
-msgstr ""
-
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
-msgstr ""
-
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr ""
-
-msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
-msgstr ""
-
-msgid "Choose an AppImage file"
-msgstr ""
-
-msgid "AppImage files"
-msgstr ""
-
-msgid "Only .AppImage files can be installed"
-msgstr ""
-
-msgid "Installing AppImage"
-msgstr ""
-
-msgid "No AppImages need to be upgraded"
-msgstr ""
-
-msgid "Upgrading AppImages"
-msgstr ""
-
-msgid "Syncing AppImages"
-msgstr ""
-
-msgid "Syncing AppImage"
-msgstr ""
-
-msgid "Saving update configuration"
-msgstr ""
-
-msgid "Configuration files will be kept."
-msgstr ""
-
-msgid "Remove this AppImage?"
-msgstr ""
-
-msgid "Remove AppImage"
-msgstr ""
-
-msgid "Removing AppImage"
-msgstr ""
-
-msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
-
-msgid "No packages found"
-msgstr ""
-
-msgid "Try a shorter or more general keyword."
-msgstr ""
-
-msgid "Could not reach the AUR"
-msgstr ""
-
-msgid "Check your connection and try again."
-msgstr ""
-
-msgid "Flagged out of date"
-msgstr ""
-
-msgid "Remove Selected"
-msgstr ""
-
-msgid "Select one or more packages"
-msgstr ""
-
-msgid "Package(s)"
-msgstr ""
-
-msgid "Remove Packages"
-msgstr ""
-
-msgid "Remove the selected AUR packages?"
-msgstr ""
-
-msgid "Build from AUR"
-msgstr ""
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-
-msgid "Build"
-msgstr ""
-
-msgid "Installing AUR packages"
-msgstr ""
-
-msgid "Removing AUR packages"
-msgstr ""
-
 msgid "Package is already installed"
 msgstr ""
 
@@ -1192,67 +1143,16 @@ msgstr ""
 msgid "Installing packages"
 msgstr ""
 
-msgid "Failed to start operation."
-msgstr ""
-
-msgid "Pending"
-msgstr ""
-
-msgid "Synchronizing databases"
-msgstr ""
-
-msgid "Building"
-msgstr ""
-
-msgid "Downloading"
-msgstr ""
-
-msgid "Packaging"
-msgstr ""
-
-msgid "Installing"
-msgstr ""
-
-msgid "Upgrading"
-msgstr ""
-
-msgid "Downgrading"
-msgstr ""
-
-msgid "Reinstalling"
-msgstr ""
-
-msgid "Removing"
-msgstr ""
-
-msgid "Working"
-msgstr ""
-
-msgid "Done"
-msgstr ""
-
-msgid "Failed"
-msgstr ""
-
-msgid "Finished"
-msgstr ""
-
-msgid "exit"
-msgstr ""
-
-msgid "Cancelled"
-msgstr ""
-
-msgid "Yes"
-msgstr ""
-
-msgid "No"
-msgstr ""
-
 msgid "Failed to save settings"
 msgstr ""
 
 msgid "Settings saved"
+msgstr ""
+
+msgid "Installing Flatpak support"
+msgstr ""
+
+msgid "Installing AppImage support"
 msgstr ""
 
 msgid "Failed to start Flatpak support installation"
@@ -1318,9 +1218,15 @@ msgstr ""
 msgid "Systemd startup service removed."
 msgstr ""
 
+msgid "Enable AUR?"
+msgstr ""
+
 msgid ""
 "The Arch User Repository (AUR) is a community-driven repository. Packages "
 "are user-produced and may contain risks. Do you want to enable it?"
+msgstr ""
+
+msgid "Enable"
 msgstr ""
 
 msgid "AUR enabled"
@@ -1380,6 +1286,63 @@ msgstr ""
 msgid "Update"
 msgstr ""
 
+msgid "Failed to start operation."
+msgstr ""
+
+msgid "Pending"
+msgstr ""
+
+msgid "Synchronizing databases"
+msgstr ""
+
+msgid "Building"
+msgstr ""
+
+msgid "Downloading"
+msgstr ""
+
+msgid "Packaging"
+msgstr ""
+
+msgid "Installing"
+msgstr ""
+
+msgid "Upgrading"
+msgstr ""
+
+msgid "Downgrading"
+msgstr ""
+
+msgid "Reinstalling"
+msgstr ""
+
+msgid "Removing"
+msgstr ""
+
+msgid "Working"
+msgstr ""
+
+msgid "Done"
+msgstr ""
+
+msgid "Failed"
+msgstr ""
+
+msgid "Finished"
+msgstr ""
+
+msgid "exit"
+msgstr ""
+
+msgid "Cancelled"
+msgstr ""
+
+msgid "Yes"
+msgstr ""
+
+msgid "No"
+msgstr ""
+
 msgid "System package update"
 msgstr ""
 
@@ -1402,6 +1365,43 @@ msgid "Updates included"
 msgstr ""
 
 msgid "Upgrading packages"
+msgstr ""
+
+msgid "Refreshing package databases"
+msgstr ""
+
+msgid "Database lock removed successfully"
+msgstr ""
+
+msgid "Failed to remove database lock"
+msgstr ""
+
+msgid "Fixing permissions"
+msgstr ""
+
+msgid "Purifying packages"
+msgstr ""
+
+msgid "Cleaning package cache"
+msgstr ""
+
+msgid "Welcome"
+msgstr ""
+
+msgid ""
+"The Arch User Repository is community-maintained. Packages are not "
+"officially vetted — only enable if you trust what you install."
+msgstr ""
+
+msgid "Enable Recommended?"
+msgstr ""
+
+msgid ""
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
+msgstr ""
+
+msgid "Installing Flatpak and AppImage support"
 msgstr ""
 
 msgid "Settings"

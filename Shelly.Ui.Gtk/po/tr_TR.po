@@ -12,6 +12,177 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Weblate 2026.7.dev0\n"
 
+msgid "No installable addons available"
+msgstr ""
+
+msgid "Close"
+msgstr "Kapat"
+
+msgid "Confirm"
+msgstr "Onayla"
+
+msgid "Skip"
+msgstr ""
+
+msgid "No special permissions requested"
+msgstr ""
+
+msgid "Review PKGBUILD changes"
+msgstr "PKGBUILD Değişikliklerini Gözden Geçir"
+
+msgid "Changes"
+msgstr ""
+
+msgid "Warnings"
+msgstr ""
+
+msgid ""
+"These commands fetch and execute code outside of shelly and libalpm's "
+"control. Review them before continuing."
+msgstr ""
+
+msgid "Source Files"
+msgstr ""
+
+msgid "Cancel"
+msgstr "İptal"
+
+msgid "polkit is required"
+msgstr ""
+
+msgid ""
+"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
+"privileged actions, but it wasn't found on the system bus.\n"
+"\n"
+"Install and enable it, then retry.\n"
+"\n"
+"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
+"Polkit</a>"
+msgstr ""
+
+msgid "Review PKGBUILD"
+msgstr ""
+
+msgid "Search..."
+msgstr "Ara..."
+
+#
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr ""
+"Tüm AppImage'lar için üst verileri eşitle. AppImage kendini güncellediyse "
+"kullanışlıdır."
+
+msgid "Sync All"
+msgstr "Tümünü Eşitle"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "Tüm AppImage'ları en son sürümlerine yükselt"
+
+msgid "Upgrade All"
+msgstr "Tümünü Yükselt"
+
+msgid "Install a new AppImage from a file"
+msgstr "Dosyadan yeni bir AppImage kur"
+
+msgid "Install AppImage"
+msgstr "AppImage Kur"
+
+msgid "Drop AppImage here to install"
+msgstr "Kurmak için AppImage'ı buraya bırak"
+
+msgid "App Name"
+msgstr "Uygulama Adı"
+
+msgid "Version"
+msgstr "Sürüm"
+
+msgid "Description goes here..."
+msgstr "Açıklama buraya gelecek..."
+
+msgid "Size on Disk"
+msgstr "Diskteki Boyut"
+
+msgid "Update Strategy"
+msgstr "Güncelleme Stratejisi"
+
+msgid "Update URL / Repository Info"
+msgstr "Güncelleme URL'si / Depo Bilgisi"
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr "Güncelleme URL'si / Depo Bilgisi hakkında daha fazla bilgi al"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "örn. sahip/depo veya https://..."
+
+msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+msgstr ""
+
+msgid "Allow Prerelease"
+msgstr "Ön Sürümlere İzin Ver"
+
+msgid "Installation Path"
+msgstr "Kurulum Yolu"
+
+msgid "Launch Flags"
+msgstr "Başlatma Parametreleri"
+
+msgid "Save"
+msgstr "Kaydet"
+
+msgid "Sync"
+msgstr "Eşitle"
+
+msgid "Remove"
+msgstr "Kaldır"
+
+msgid "Information"
+msgstr ""
+
+msgid "Preview Pkgbuild"
+msgstr ""
+
+msgid "Search the AUR by name or keyword"
+msgstr ""
+
+msgid "Installed Only"
+msgstr ""
+
+msgid "Show only installed packages"
+msgstr ""
+
+msgid "Additional Options"
+msgstr "Ek Seçenekler"
+
+msgid "Install Selected"
+msgstr "Seçilenleri Kur"
+
+msgid "Name"
+msgstr "Ad"
+
+msgid "Votes"
+msgstr "Oylar"
+
+msgid "Popularity"
+msgstr "Popülerlik"
+
+msgid "Search the AUR"
+msgstr ""
+
+msgid "The AUR has no browsable index type a package name to begin."
+msgstr ""
+
+msgid "Run checks"
+msgstr "Kontrolleri Çalıştır"
+
+msgid "Run the --check function during package build"
+msgstr ""
+
+msgid "Hide Detail Pane"
+msgstr ""
+
+msgid "Hide the detail pane on the right"
+msgstr ""
+
 msgid "Install a local Flatpak"
 msgstr ""
 
@@ -38,74 +209,17 @@ msgstr "kullanıcı"
 msgid "Install"
 msgstr "Kur"
 
-msgid "Additional Options"
-msgstr "Ek Seçenekler"
-
-msgid "Show Runtimes"
-msgstr ""
-
-msgid "Flatpak Repair"
-msgstr "Flatpak Onarımı"
-
-msgid "Repairs Flatpak Installation (Experimental)"
-msgstr "Flatpak Kurulumunu Onarır (Deneysel)"
-
-msgid "Search packages..."
-msgstr "Paket ara..."
-
-msgid "Browse"
-msgstr ""
-
-msgid "Manage"
-msgstr "Yönet"
-
-msgid "Manage Remote Refs"
-msgstr "Uzak Referansları Yönet"
-
-msgid "Install Local"
-msgstr "Yerel Kur"
-
-msgid "Delete Selected Remote"
-msgstr "Seçili Uzak Kaynağı Sil"
-
-msgid "Add Remote"
-msgstr "Uzak Kaynak Ekle"
+msgid "Loading Flatpak Data..."
+msgstr "Flatpak Verileri Yükleniyor..."
 
 msgid "Back"
 msgstr "Geri"
-
-msgid "Add New Flatpak Remote"
-msgstr "Yeni Flatpak Uzak Kaynağı Ekle"
-
-msgid "Add"
-msgstr "Ekle"
-
-msgid "Remote Name"
-msgstr "Uzak Kaynak Adı"
-
-msgid "e.g., flathub"
-msgstr "örn., flathub"
-
-msgid "Remote URL"
-msgstr "Uzak Kaynak URL'si"
-
-msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr "örn., https://flathub.org/repo/flathub.flatpakrepo"
-
-msgid "Scope"
-msgstr "Kapsam"
-
-msgid "Loading Flatpak Data..."
-msgstr "Flatpak Verileri Yükleniyor..."
 
 msgid "Addons"
 msgstr "Eklentiler"
 
 msgid "Install source"
 msgstr ""
-
-msgid "App Name"
-msgstr "Uygulama Adı"
 
 msgid "Author"
 msgstr "Yazar"
@@ -131,6 +245,60 @@ msgstr "Uygulama İzinleri"
 msgid "Version History"
 msgstr "Sürüm Geçmişi"
 
+msgid "Search packages..."
+msgstr "Paket ara..."
+
+msgid "Browse"
+msgstr ""
+
+msgid "Manage"
+msgstr "Yönet"
+
+msgid "Manage Remote Refs"
+msgstr "Uzak Referansları Yönet"
+
+msgid "Install Local"
+msgstr "Yerel Kur"
+
+msgid "Delete Selected Remote"
+msgstr "Seçili Uzak Kaynağı Sil"
+
+msgid "Add Remote"
+msgstr "Uzak Kaynak Ekle"
+
+msgid "Add New Flatpak Remote"
+msgstr "Yeni Flatpak Uzak Kaynağı Ekle"
+
+msgid "Add"
+msgstr "Ekle"
+
+msgid "Remote Name"
+msgstr "Uzak Kaynak Adı"
+
+msgid "e.g., flathub"
+msgstr "örn., flathub"
+
+msgid "Remote URL"
+msgstr "Uzak Kaynak URL'si"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "örn., https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "Kapsam"
+
+msgid "Show Runtimes"
+msgstr ""
+
+msgid "Flatpak Repair"
+msgstr "Flatpak Onarımı"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Flatpak Kurulumunu Onarır (Deneysel)"
+
+msgid "Shelly"
+msgstr ""
+
 msgid "Reinstall"
 msgstr ""
 
@@ -149,7 +317,55 @@ msgstr ""
 msgid "Package actions"
 msgstr ""
 
-msgid "Information"
+msgid "Package Group Filter"
+msgstr "Paket Grubu Filtresi"
+
+msgid "Selected Packages"
+msgstr ""
+
+msgid "0 Selected"
+msgstr ""
+
+msgid "Grid View"
+msgstr ""
+
+msgid "List View"
+msgstr ""
+
+msgid "Size"
+msgstr "Boyut"
+
+msgid "Repository"
+msgstr "Depo"
+
+msgid "Install Date"
+msgstr ""
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
+msgstr ""
+
+msgid "Perform Upgrade"
+msgstr "Yükseltme Gerçekleştir"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "Kurulum ile tam bir sistem yükseltmesi gerçekleştir (-u)"
+
+msgid "Show Hidden"
+msgstr "Gizlileri Göster"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "pacman.conf içindeki IgnorePkg listesinde yer alan paketleri göster"
+
+msgid "Show Explicit Only"
+msgstr ""
+
+msgid "Show only explicitly installed packages"
+msgstr ""
+
+msgid "Show Dependency Only"
+msgstr ""
+
+msgid "Show dependency packages on;y"
 msgstr ""
 
 msgid "Recommended Packages"
@@ -167,12 +383,6 @@ msgstr "Önerilen Paketler Yükleniyor..."
 msgid ""
 "No recommendations found. Please check your internet connection and try "
 "again."
-msgstr ""
-
-msgid "Preview Pkgbuild"
-msgstr ""
-
-msgid "Shelly"
 msgstr ""
 
 msgid "General"
@@ -297,9 +507,6 @@ msgstr "AppImage Kurulum Yolu"
 msgid "Select Directory"
 msgstr "Dizin Seç"
 
-msgid "Save"
-msgstr "Kaydet"
-
 msgid "View Changelog"
 msgstr "Değişiklik Günlüğünü Görüntüle"
 
@@ -314,6 +521,42 @@ msgstr "Topluluk Katkıcısı"
 
 msgid "Sponsor"
 msgstr "Sponsor"
+
+msgid "Toggle output"
+msgstr ""
+
+msgid "Available Updates"
+msgstr "Mevcut Güncellemeler"
+
+msgid "7 of 7 updates included"
+msgstr ""
+
+msgid "Check all enabled sources again"
+msgstr ""
+
+msgid "Check Again"
+msgstr ""
+
+msgid "Upgrade"
+msgstr ""
+
+msgid "System"
+msgstr "Sistem"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Checking for updates…"
+msgstr ""
+
+msgid "Your system is up to date"
+msgstr ""
+
+msgid "Could not check for updates"
+msgstr ""
 
 msgid "Utilities"
 msgstr ""
@@ -365,45 +608,6 @@ msgid "Keep"
 msgstr ""
 
 msgid "Number of cached versions to keep per package"
-msgstr ""
-
-msgid "Toggle output"
-msgstr ""
-
-msgid "Close"
-msgstr "Kapat"
-
-msgid "Available Updates"
-msgstr "Mevcut Güncellemeler"
-
-msgid "7 of 7 updates included"
-msgstr ""
-
-msgid "Check all enabled sources again"
-msgstr ""
-
-msgid "Check Again"
-msgstr ""
-
-msgid "Upgrade"
-msgstr ""
-
-msgid "System"
-msgstr "Sistem"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "Checking for updates…"
-msgstr ""
-
-msgid "Your system is up to date"
-msgstr ""
-
-msgid "Could not check for updates"
 msgstr ""
 
 msgid "Welcome to Shelly v3"
@@ -475,213 +679,6 @@ msgstr ""
 msgid "Start Shelly"
 msgstr ""
 
-msgid "Search..."
-msgstr "Ara..."
-
-#
-msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr ""
-"Tüm AppImage'lar için üst verileri eşitle. AppImage kendini güncellediyse "
-"kullanışlıdır."
-
-msgid "Sync All"
-msgstr "Tümünü Eşitle"
-
-msgid "Upgrade all AppImages to their latest versions"
-msgstr "Tüm AppImage'ları en son sürümlerine yükselt"
-
-msgid "Upgrade All"
-msgstr "Tümünü Yükselt"
-
-msgid "Install a new AppImage from a file"
-msgstr "Dosyadan yeni bir AppImage kur"
-
-msgid "Install AppImage"
-msgstr "AppImage Kur"
-
-msgid "Drop AppImage here to install"
-msgstr "Kurmak için AppImage'ı buraya bırak"
-
-msgid "Version"
-msgstr "Sürüm"
-
-msgid "Description goes here..."
-msgstr "Açıklama buraya gelecek..."
-
-msgid "Size on Disk"
-msgstr "Diskteki Boyut"
-
-msgid "Update Strategy"
-msgstr "Güncelleme Stratejisi"
-
-msgid "Update URL / Repository Info"
-msgstr "Güncelleme URL'si / Depo Bilgisi"
-
-msgid "Get more information about Update URL / Repository Info"
-msgstr "Güncelleme URL'si / Depo Bilgisi hakkında daha fazla bilgi al"
-
-msgid "e.g. owner/repo or https://..."
-msgstr "örn. sahip/depo veya https://..."
-
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
-msgstr ""
-
-msgid "Allow Prerelease"
-msgstr "Ön Sürümlere İzin Ver"
-
-msgid "Installation Path"
-msgstr "Kurulum Yolu"
-
-msgid "Launch Flags"
-msgstr "Başlatma Parametreleri"
-
-msgid "Sync"
-msgstr "Eşitle"
-
-msgid "Remove"
-msgstr "Kaldır"
-
-msgid "Search the AUR by name or keyword"
-msgstr ""
-
-msgid "Installed Only"
-msgstr ""
-
-msgid "Show only installed packages"
-msgstr ""
-
-msgid "Install Selected"
-msgstr "Seçilenleri Kur"
-
-msgid "Name"
-msgstr "Ad"
-
-msgid "Votes"
-msgstr "Oylar"
-
-msgid "Popularity"
-msgstr "Popülerlik"
-
-msgid "Search the AUR"
-msgstr ""
-
-msgid "The AUR has no browsable index type a package name to begin."
-msgstr ""
-
-msgid "Run checks"
-msgstr "Kontrolleri Çalıştır"
-
-msgid "Run the --check function during package build"
-msgstr ""
-
-msgid "Hide Detail Pane"
-msgstr ""
-
-msgid "Hide the detail pane on the right"
-msgstr ""
-
-msgid "Package Group Filter"
-msgstr "Paket Grubu Filtresi"
-
-msgid "Selected Packages"
-msgstr ""
-
-msgid "0 Selected"
-msgstr ""
-
-msgid "Grid View"
-msgstr ""
-
-msgid "List View"
-msgstr ""
-
-msgid "Size"
-msgstr "Boyut"
-
-msgid "Repository"
-msgstr "Depo"
-
-#, fuzzy
-msgid "Install Date"
-msgstr "Kur "
-
-msgid "Had an issue loading your packages. Check if you have a db lock."
-msgstr ""
-
-msgid "Perform Upgrade"
-msgstr "Yükseltme Gerçekleştir"
-
-msgid "Perform a full system upgrade with install (-u)"
-msgstr "Kurulum ile tam bir sistem yükseltmesi gerçekleştir (-u)"
-
-msgid "Show Hidden"
-msgstr "Gizlileri Göster"
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr "pacman.conf içindeki IgnorePkg listesinde yer alan paketleri göster"
-
-msgid "Show Explicit Only"
-msgstr ""
-
-msgid "Show only explicitly installed packages"
-msgstr ""
-
-msgid "Show Dependency Only"
-msgstr ""
-
-msgid "Show dependency packages on;y"
-msgstr ""
-
-msgid "Confirm"
-msgstr "Onayla"
-
-msgid "Cancel"
-msgstr "İptal"
-
-#, fuzzy
-msgid "No installable addons available"
-msgstr "Haber yok"
-
-msgid "No special permissions requested"
-msgstr ""
-
-#, fuzzy
-msgid "polkit is required"
-msgstr "Yeniden Başlatma Gerekiyor"
-
-msgid ""
-"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
-"privileged actions, but it wasn't found on the system bus.\n"
-"\n"
-"Install and enable it, then retry.\n"
-"\n"
-"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
-"Polkit</a>"
-msgstr ""
-
-msgid "Skip"
-msgstr ""
-
-msgid "Review PKGBUILD changes"
-msgstr "PKGBUILD Değişikliklerini Gözden Geçir"
-
-msgid "Changes"
-msgstr ""
-
-msgid "Warnings"
-msgstr ""
-
-msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
-"control. Review them before continuing."
-msgstr ""
-
-msgid "Source Files"
-msgstr ""
-
-msgid "Review PKGBUILD"
-msgstr ""
-
 msgid "Filesystem"
 msgstr ""
 
@@ -748,6 +745,161 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
+msgid "None"
+msgstr "Hiçbiri"
+
+msgid "Static URL"
+msgstr ""
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+msgid "Update Available"
+msgstr ""
+
+msgid "Version ?"
+msgstr ""
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr "Geçersiz biçim. sahip/depo kullanın (örn. seafoam-labs/shelly-alpm)"
+
+msgid "Invalid URL. Must start with http:// or https://"
+msgstr ""
+
+msgid ""
+"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
+"repo/releases"
+msgstr ""
+
+msgid "Choose an AppImage file"
+msgstr ""
+
+msgid "AppImage files"
+msgstr ""
+
+msgid "Only .AppImage files can be installed"
+msgstr ""
+
+msgid "Installing AppImage"
+msgstr ""
+
+msgid "No AppImages need to be upgraded"
+msgstr "Yükseltilmesi gereken AppImage yok"
+
+msgid "Upgrading AppImages"
+msgstr ""
+
+msgid "Syncing AppImages"
+msgstr ""
+
+msgid "Syncing AppImage"
+msgstr ""
+
+msgid "Saving update configuration"
+msgstr ""
+
+msgid "Configuration files will be kept."
+msgstr ""
+
+msgid "Remove this AppImage?"
+msgstr ""
+
+msgid "Remove AppImage"
+msgstr ""
+
+msgid "Removing AppImage"
+msgstr ""
+
+msgid "Operation completed successfully"
+msgstr ""
+
+msgid "Operation failed"
+msgstr ""
+
+msgid "Maintainer"
+msgstr "Sürdürücü"
+
+msgid "Last Modified"
+msgstr "Son Değiştirilme"
+
+msgid "First Submitted"
+msgstr "İlk Gönderim"
+
+msgid "URL"
+msgstr ""
+
+msgid "Licenses"
+msgstr "Lisanslar"
+
+msgid "Depends"
+msgstr "Bağımlılıklar"
+
+msgid "Optional Depends"
+msgstr ""
+
+msgid "Make Depends"
+msgstr "Derleme Bağımlılıkları"
+
+msgid "Section"
+msgstr ""
+
+msgid "The AUR has no browsable index — type a package name to begin."
+msgstr ""
+
+msgid "No packages found"
+msgstr ""
+
+msgid "Try a shorter or more general keyword."
+msgstr ""
+
+msgid "Could not reach the AUR"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr ""
+
+msgid "Flagged out of date"
+msgstr ""
+
+msgid "Installed"
+msgstr "Kurulu"
+
+msgid "Remove Selected"
+msgstr "Seçilenleri Kaldır"
+
+msgid "Select one or more packages"
+msgstr ""
+
+msgid "Package(s)"
+msgstr ""
+
+msgid "Remove Packages"
+msgstr ""
+
+msgid "Remove the selected AUR packages?"
+msgstr ""
+
+msgid "Build from AUR"
+msgstr ""
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+
+msgid "Build"
+msgstr ""
+
+msgid "Installing AUR packages"
+msgstr ""
+
+msgid "Removing AUR packages"
+msgstr ""
+
 msgid "Choose a Flatpak file"
 msgstr ""
 
@@ -769,60 +921,6 @@ msgstr ""
 msgid "Choose file..."
 msgstr ""
 
-msgid "Removing Remote"
-msgstr ""
-
-msgid "Adding Remote"
-msgstr ""
-
-msgid "Removing Flatpak"
-msgstr ""
-
-msgid "Discover"
-msgstr ""
-
-msgid "Categories"
-msgstr ""
-
-msgid "All Applications"
-msgstr "Tüm Uygulamalar"
-
-msgid "Most Wanted"
-msgstr "En Çok İstenenler"
-
-msgid "Recently Added"
-msgstr "Son Eklenenler"
-
-msgid "Recently Updated"
-msgstr "Son Güncellenenler"
-
-msgid "Audio & Video"
-msgstr "Ses ve Video"
-
-msgid "Development"
-msgstr "Geliştirme"
-
-msgid "Education"
-msgstr "Eğitim"
-
-msgid "Game"
-msgstr "Oyun"
-
-msgid "Graphics"
-msgstr "Grafik"
-
-msgid "Network"
-msgstr "Ağ"
-
-msgid "Office"
-msgstr "Ofis"
-
-msgid "Science"
-msgstr "Bilim"
-
-msgid "Utility"
-msgstr "Araç"
-
 msgid "Verified"
 msgstr ""
 
@@ -838,12 +936,8 @@ msgstr ""
 msgid "Available Addons"
 msgstr "Mevcut Eklentiler"
 
-#, fuzzy
 msgid "Installing flatpak addon"
-msgstr "Flatpak eklentisi kuruldu"
-
-msgid "Installed"
-msgstr "Kurulu"
+msgstr ""
 
 msgid "Unknown developer"
 msgstr ""
@@ -927,90 +1021,58 @@ msgstr ""
 msgid "No Flatpak applications are available."
 msgstr ""
 
-msgid "Refreshing package databases"
+msgid "Discover"
 msgstr ""
 
-msgid "Database lock removed successfully"
+msgid "Categories"
 msgstr ""
 
-msgid "Failed to remove database lock"
+msgid "All Applications"
+msgstr "Tüm Uygulamalar"
+
+msgid "Most Wanted"
+msgstr "En Çok İstenenler"
+
+msgid "Recently Added"
+msgstr "Son Eklenenler"
+
+msgid "Recently Updated"
+msgstr "Son Güncellenenler"
+
+msgid "Audio & Video"
+msgstr "Ses ve Video"
+
+msgid "Development"
+msgstr "Geliştirme"
+
+msgid "Education"
+msgstr "Eğitim"
+
+msgid "Game"
+msgstr "Oyun"
+
+msgid "Graphics"
+msgstr "Grafik"
+
+msgid "Network"
+msgstr "Ağ"
+
+msgid "Office"
+msgstr "Ofis"
+
+msgid "Science"
+msgstr "Bilim"
+
+msgid "Utility"
+msgstr "Araç"
+
+msgid "Removing Remote"
 msgstr ""
 
-msgid "Fixing permissions"
+msgid "Adding Remote"
 msgstr ""
 
-msgid "Purifying packages"
-msgstr ""
-
-msgid "Cleaning package cache"
-msgstr ""
-
-msgid "Operation completed successfully"
-msgstr ""
-
-msgid "Operation failed"
-msgstr ""
-
-msgid "Welcome"
-msgstr ""
-
-msgid "Enable AUR?"
-msgstr "AUR Etkinleştirilsin mi?"
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-
-msgid "Enable"
-msgstr ""
-
-msgid "Enable Recommended?"
-msgstr ""
-
-msgid ""
-"Recommended shows curated package suggestions based on your installed "
-"software. Package data is fetched from external sources."
-msgstr ""
-
-#, fuzzy
-msgid "Installing Flatpak and AppImage support"
-msgstr "Flatpak kurulumu başarısız"
-
-#, fuzzy
-msgid "Installing Flatpak support"
-msgstr "Flatpak Desteğini Etkinleştir"
-
-#, fuzzy
-msgid "Installing AppImage support"
-msgstr "AppImage Kuruluyor..."
-
-msgid "Maintainer"
-msgstr "Sürdürücü"
-
-msgid "Last Modified"
-msgstr "Son Değiştirilme"
-
-msgid "First Submitted"
-msgstr "İlk Gönderim"
-
-#, fuzzy
-msgid "URL"
-msgstr "URL:"
-
-msgid "Licenses"
-msgstr "Lisanslar"
-
-msgid "Depends"
-msgstr "Bağımlılıklar"
-
-msgid "Optional Depends"
-msgstr ""
-
-msgid "Make Depends"
-msgstr "Derleme Bağımlılıkları"
-
-msgid "Section"
+msgid "Removing Flatpak"
 msgstr ""
 
 msgid "Loading..."
@@ -1053,125 +1115,6 @@ msgstr ""
 msgid "Making Package Dependency"
 msgstr ""
 
-msgid "None"
-msgstr "Hiçbiri"
-
-msgid "Static URL"
-msgstr ""
-
-msgid "GitLab"
-msgstr "GitLab"
-
-msgid "Codeberg"
-msgstr "Codeberg"
-
-msgid "Forgejo"
-msgstr "Forgejo"
-
-msgid "Update Available"
-msgstr ""
-
-msgid "Version ?"
-msgstr ""
-
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
-msgstr "Geçersiz biçim. sahip/depo kullanın (örn. seafoam-labs/shelly-alpm)"
-
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr ""
-
-msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
-msgstr ""
-
-msgid "Choose an AppImage file"
-msgstr ""
-
-msgid "AppImage files"
-msgstr ""
-
-msgid "Only .AppImage files can be installed"
-msgstr ""
-
-msgid "Installing AppImage"
-msgstr ""
-
-msgid "No AppImages need to be upgraded"
-msgstr "Yükseltilmesi gereken AppImage yok"
-
-msgid "Upgrading AppImages"
-msgstr ""
-
-msgid "Syncing AppImages"
-msgstr ""
-
-msgid "Syncing AppImage"
-msgstr ""
-
-msgid "Saving update configuration"
-msgstr ""
-
-msgid "Configuration files will be kept."
-msgstr ""
-
-msgid "Remove this AppImage?"
-msgstr ""
-
-msgid "Remove AppImage"
-msgstr ""
-
-msgid "Removing AppImage"
-msgstr ""
-
-msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
-
-msgid "No packages found"
-msgstr ""
-
-msgid "Try a shorter or more general keyword."
-msgstr ""
-
-msgid "Could not reach the AUR"
-msgstr ""
-
-msgid "Check your connection and try again."
-msgstr ""
-
-msgid "Flagged out of date"
-msgstr ""
-
-msgid "Remove Selected"
-msgstr "Seçilenleri Kaldır"
-
-msgid "Select one or more packages"
-msgstr ""
-
-msgid "Package(s)"
-msgstr ""
-
-msgid "Remove Packages"
-msgstr ""
-
-msgid "Remove the selected AUR packages?"
-msgstr ""
-
-msgid "Build from AUR"
-msgstr ""
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-
-msgid "Build"
-msgstr ""
-
-msgid "Installing AUR packages"
-msgstr ""
-
-msgid "Removing AUR packages"
-msgstr ""
-
 msgid "Package is already installed"
 msgstr "Paket zaten kurulu"
 
@@ -1206,92 +1149,35 @@ msgstr ""
 msgid "Installing packages"
 msgstr ""
 
-msgid "Failed to start operation."
-msgstr ""
-
-msgid "Pending"
-msgstr ""
-
-msgid "Synchronizing databases"
-msgstr ""
-
-msgid "Building"
-msgstr ""
-
-msgid "Downloading"
-msgstr ""
-
-msgid "Packaging"
-msgstr ""
-
-msgid "Installing"
-msgstr ""
-
-msgid "Upgrading"
-msgstr ""
-
-msgid "Downgrading"
-msgstr ""
-
-msgid "Reinstalling"
-msgstr ""
-
-msgid "Removing"
-msgstr ""
-
-msgid "Working"
-msgstr ""
-
-msgid "Done"
-msgstr ""
-
-msgid "Failed"
-msgstr ""
-
-msgid "Finished"
-msgstr ""
-
-msgid "exit"
-msgstr ""
-
-msgid "Cancelled"
-msgstr ""
-
-msgid "Yes"
-msgstr "Evet"
-
-msgid "No"
-msgstr "Hayır"
-
 msgid "Failed to save settings"
 msgstr ""
 
 msgid "Settings saved"
 msgstr ""
 
-#, fuzzy
+msgid "Installing Flatpak support"
+msgstr ""
+
+msgid "Installing AppImage support"
+msgstr ""
+
 msgid "Failed to start Flatpak support installation"
-msgstr "Flatpak kurulumu onarılamadı"
+msgstr ""
 
-#, fuzzy
 msgid "Failed to start AppImage support installation"
-msgstr "Flatpak kurulumu onarılamadı"
+msgstr ""
 
-#, fuzzy
 msgid "Flatpak support installation failed"
-msgstr "Paket kurulumu başarısız"
+msgstr ""
 
-#, fuzzy
 msgid "AppImage support installation failed"
-msgstr "Paket kurulumu başarısız"
+msgstr ""
 
-#, fuzzy
 msgid "Flatpak support enabled"
-msgstr "Flatpak Desteğini Etkinleştir"
+msgstr ""
 
-#, fuzzy
 msgid "AppImage support enabled"
-msgstr "AppImage Desteğini Etkinleştir"
+msgstr ""
 
 msgid "No changelog entries found"
 msgstr "Değişiklik günlüğü girdisi bulunamadı"
@@ -1339,9 +1225,15 @@ msgstr ""
 msgid "Systemd startup service removed."
 msgstr "Systemd başlangıç hizmeti kaldırıldı."
 
+msgid "Enable AUR?"
+msgstr "AUR Etkinleştirilsin mi?"
+
 msgid ""
 "The Arch User Repository (AUR) is a community-driven repository. Packages "
 "are user-produced and may contain risks. Do you want to enable it?"
+msgstr ""
+
+msgid "Enable"
 msgstr ""
 
 msgid "AUR enabled"
@@ -1401,6 +1293,63 @@ msgstr "Shelly Arama"
 msgid "Update"
 msgstr ""
 
+msgid "Failed to start operation."
+msgstr ""
+
+msgid "Pending"
+msgstr ""
+
+msgid "Synchronizing databases"
+msgstr ""
+
+msgid "Building"
+msgstr ""
+
+msgid "Downloading"
+msgstr ""
+
+msgid "Packaging"
+msgstr ""
+
+msgid "Installing"
+msgstr ""
+
+msgid "Upgrading"
+msgstr ""
+
+msgid "Downgrading"
+msgstr ""
+
+msgid "Reinstalling"
+msgstr ""
+
+msgid "Removing"
+msgstr ""
+
+msgid "Working"
+msgstr ""
+
+msgid "Done"
+msgstr ""
+
+msgid "Failed"
+msgstr ""
+
+msgid "Finished"
+msgstr ""
+
+msgid "exit"
+msgstr ""
+
+msgid "Cancelled"
+msgstr ""
+
+msgid "Yes"
+msgstr "Evet"
+
+msgid "No"
+msgstr "Hayır"
+
 msgid "System package update"
 msgstr ""
 
@@ -1410,9 +1359,8 @@ msgstr ""
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 
-#, fuzzy
 msgid "Update this package"
-msgstr "Paketler Güncellensin mi?"
+msgstr ""
 
 msgid "of"
 msgstr ""
@@ -1424,6 +1372,43 @@ msgid "Updates included"
 msgstr ""
 
 msgid "Upgrading packages"
+msgstr ""
+
+msgid "Refreshing package databases"
+msgstr ""
+
+msgid "Database lock removed successfully"
+msgstr ""
+
+msgid "Failed to remove database lock"
+msgstr ""
+
+msgid "Fixing permissions"
+msgstr ""
+
+msgid "Purifying packages"
+msgstr ""
+
+msgid "Cleaning package cache"
+msgstr ""
+
+msgid "Welcome"
+msgstr ""
+
+msgid ""
+"The Arch User Repository is community-maintained. Packages are not "
+"officially vetted — only enable if you trust what you install."
+msgstr ""
+
+msgid "Enable Recommended?"
+msgstr ""
+
+msgid ""
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
+msgstr ""
+
+msgid "Installing Flatpak and AppImage support"
 msgstr ""
 
 msgid "Settings"
