@@ -354,13 +354,45 @@ pub const Configuration = struct {
         package_names: []const [:0]const u8,
     ) PackageDirectiveError!void {
         const contents = Io.Dir.cwd().readFileAlloc(io, config_path, allocator, .unlimited) catch |err| switch (err) {
-            error.OutOfMemory => return PackageDirectiveError.OutOfMemory,
-            else => return PackageDirectiveError.ConfigReadFailed,
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return error.ConfigReadFailed,
         };
         defer allocator.free(contents);
 
-        var lines: std.ArrayList([]const u8) = .empty;
+        var lines = try split_lines(allocator, contents);
         defer lines.deinit(allocator);
+
+        const section = find_options_section(lines.items);
+        const first_directive_line = find_directive_line(lines.items, section, directive);
+
+        var unique_names: std.ArrayList([:0]const u8) = .empty;
+        defer unique_names.deinit(allocator);
+        for (package_names) |package_name| {
+            if (package_name.len == 0 or contains_package_name(unique_names.items, package_name)) continue;
+            try unique_names.append(allocator, package_name);
+        }
+
+        var output: std.ArrayList(u8) = .empty;
+        defer output.deinit(allocator);
+
+        var insert_index = lines.items.len;
+        if (first_directive_line) |line_index| {
+            insert_index = line_index;
+        } else if (section.start) |start| {
+            insert_index = start + 1;
+        }
+
+        try append_lines_skipping_directives(&output, allocator, lines.items[0..insert_index], 0, section, directive);
+        if (section.start == null) try append_config_line(&output, allocator, "[options]");
+        try append_package_directive_line(&output, allocator, directive, unique_names.items);
+        try append_lines_skipping_directives(&output, allocator, lines.items[insert_index..], insert_index, section, directive);
+
+        try write_config_file(io, config_path, output.items);
+    }
+
+    fn split_lines(allocator: Allocator, contents: []const u8) Allocator.Error!std.ArrayList([]const u8) {
+        var lines: std.ArrayList([]const u8) = .empty;
+        errdefer lines.deinit(allocator);
 
         var line_start: usize = 0;
         while (line_start < contents.len) {
@@ -371,83 +403,54 @@ pub const Configuration = struct {
             line_start = if (newline) |position| position + 1 else contents.len;
         }
 
-        var options_start: ?usize = null;
-        var options_end = lines.items.len;
-        for (lines.items, 0..) |line, index| {
+        return lines;
+    }
+
+    const OptionsSection = struct {
+        start: ?usize,
+        end: usize,
+
+        fn contains_line(self: OptionsSection, line_index: usize) bool {
+            const start = self.start orelse return false;
+            return line_index > start and line_index < self.end;
+        }
+    };
+
+    fn find_options_section(lines: []const []const u8) OptionsSection {
+        var section = OptionsSection{ .start = null, .end = lines.len };
+        for (lines, 0..) |line, index| {
             const name = config_section_name(line) orelse continue;
-            if (options_start == null) {
-                if (equalIgnoreCase(name, "options")) options_start = index;
+            if (section.start == null) {
+                if (equalIgnoreCase(name, "options")) section.start = index;
             } else {
-                options_end = index;
+                section.end = index;
                 break;
             }
         }
+        return section;
+    }
 
-        var first_directive_line: ?usize = null;
-        if (options_start) |start| {
-            for (lines.items[start + 1 .. options_end], start + 1..) |line, index| {
-                if (is_package_directive_line(line, directive)) {
-                    first_directive_line = index;
-                    break;
-                }
-            }
+    fn find_directive_line(
+        lines: []const []const u8,
+        section: OptionsSection,
+        directive: []const u8,
+    ) ?usize {
+        const start = section.start orelse return null;
+        for (lines[start + 1 .. section.end], start + 1..) |line, index| {
+            if (is_package_directive_line(line, directive)) return index;
         }
+        return null;
+    }
 
-        var normalized_names: std.ArrayList([:0]const u8) = .empty;
-        defer normalized_names.deinit(allocator);
-        for (package_names) |package_name| {
-            if (package_name.len == 0 or contains_package_name(normalized_names.items, package_name)) continue;
-            try normalized_names.append(allocator, package_name);
-        }
-
-        var rewritten: std.ArrayList(u8) = .empty;
-        defer rewritten.deinit(allocator);
-
-        for (lines.items, 0..) |line, index| {
-            if (options_start) |start| {
-                const in_options = index > start and index < options_end;
-                if (in_options and is_package_directive_line(line, directive)) {
-                    if (first_directive_line.? == index) {
-                        try append_package_directive_line(
-                            &rewritten,
-                            allocator,
-                            directive,
-                            normalized_names.items,
-                        );
-                    }
-                    continue;
-                }
-            }
-
-            try append_config_line(&rewritten, allocator, line);
-            if (options_start != null and first_directive_line == null and options_start.? == index) {
-                try append_package_directive_line(
-                    &rewritten,
-                    allocator,
-                    directive,
-                    normalized_names.items,
-                );
-            }
-        }
-
-        if (options_start == null) {
-            try append_config_line(&rewritten, allocator, "[options]");
-            try append_package_directive_line(
-                &rewritten,
-                allocator,
-                directive,
-                normalized_names.items,
-            );
-        }
-
+    fn write_config_file(io: Io, config_path: []const u8, contents: []const u8) PackageDirectiveError!void {
         var file = Io.Dir.cwd().createFile(io, config_path, .{}) catch
-            return PackageDirectiveError.ConfigWriteFailed;
+            return error.ConfigWriteFailed;
         defer file.close(io);
 
         var write_buffer: [4096]u8 = undefined;
         var writer = file.writer(io, &write_buffer);
-        writer.interface.writeAll(rewritten.items) catch return PackageDirectiveError.ConfigWriteFailed;
-        writer.interface.flush() catch return PackageDirectiveError.ConfigWriteFailed;
+        writer.interface.writeAll(contents) catch return error.ConfigWriteFailed;
+        writer.interface.flush() catch return error.ConfigWriteFailed;
     }
 
     fn normalize_package_name(package_name: []const u8) ?[]const u8 {
@@ -489,9 +492,23 @@ pub const Configuration = struct {
         output: *std.ArrayList(u8),
         allocator: Allocator,
         line: []const u8,
-    ) IgnorePackageError!void {
+    ) PackageDirectiveError!void {
         try output.appendSlice(allocator, line);
         try output.append(allocator, '\n');
+    }
+
+    fn append_lines_skipping_directives(
+        output: *std.ArrayList(u8),
+        allocator: Allocator,
+        lines: []const []const u8,
+        start_index: usize,
+        section: OptionsSection,
+        directive: []const u8,
+    ) PackageDirectiveError!void {
+        for (lines, start_index..) |line, index| {
+            if (section.contains_line(index) and is_package_directive_line(line, directive)) continue;
+            try append_config_line(output, allocator, line);
+        }
     }
 
     fn append_package_directive_line(
