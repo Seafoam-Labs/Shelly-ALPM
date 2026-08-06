@@ -1,8 +1,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-03 05:41+0900\n"
+"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
+"POT-Creation-Date: 2026-08-05 12:25+0300\n"
 "PO-Revision-Date: 2026-07-03 21:14+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
@@ -12,150 +12,22 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 3.9\n"
 
-msgid "Loading..."
-msgstr "読み込み中..."
-
-msgid "Recent Operations"
-msgstr "最近の操作"
-
-msgid "History"
-msgstr "履歴"
-
-msgid "No recent activity"
-msgstr "最近のアクティビティなし"
-
-msgid "Session log is too large to display"
-msgstr "セッションログが大きすぎて表示できません"
-
-msgid "Session Log"
-msgstr "セッションログ"
-
-msgid "Copy Log"
-msgstr "ログをコピー"
-
-msgid "Log copied to clipboard"
-msgstr "ログがクリップボードにコピーされました"
-
-#, csharp-format
-msgid "Available Updates ({0})"
-msgstr "利用可能なアップデート ({0})"
-
-#, csharp-format
-msgid "Updates ({0})"
-msgstr "アップデート ({0})"
-
-msgid "All packages are up to date"
-msgstr "すべてのパッケージは最新です"
-
-msgid "just now"
-msgstr "たった今"
-
-#, csharp-format
-msgid "{0} min ago"
-msgstr "{0} 分前"
-
-#, csharp-format
-msgid "{0}h ago"
-msgstr "{0} 時間前"
-
-msgid "yesterday"
-msgstr "昨日"
-
-#, csharp-format
-msgid "{0}d ago"
-msgstr "{0} 日前"
-
-msgid "Any"
-msgstr "すべて"
-
-msgid "Loading Recommended Packages..."
-msgstr "おすすめパッケージを読み込み中..."
-
-msgid "Welcome to Shelly"
-msgstr "Shelly へようこそ"
-
-msgid "Let's get you set up with some basic configurations."
-msgstr "基本設定のセットアップを始めましょう。"
-
-msgid "Enable AUR Support"
-msgstr "AUR サポートを有効にする"
+msgid "Install a local Flatpak"
+msgstr ""
 
 msgid ""
-"Access the Arch User Repository for a vast collection of community-"
-"maintained packages. AUR packages can contain malicous software, so please "
-"use caution when using the AUR."
+"Choose a .flatpak bundle from your system and install it for the current "
+"user or system-wide."
 msgstr ""
-"Arch User Repository にアクセスすると、コミュニティーが管理する膨大なパッケー"
-"ジコレクションを利用できます。AUR パッケージには悪意のあるソフトウェアが含ま"
-"れている可能性があるため、AUR を使用する際は注意してください。"
 
-msgid "Enable Flatpak Support"
-msgstr "Flatpak サポートを有効にする"
-
-msgid "Enable support for Flatpak applications from Flathub and other remotes."
+msgid "Bundle"
 msgstr ""
-"Flathub や他のリモートからの Flatpak アプリケーションのサポートを有効にしま"
-"す。"
 
-msgid "Enable AppImage Support"
-msgstr "AppImage サポートを有効にする"
-
-msgid "Manage and configure updates for AppImage applications easily."
-msgstr "AppImage アプリケーションのアップデートを簡単に管理・設定します。"
-
-msgid "Enable Tray Icon"
-msgstr "トレイアイコンを有効にする"
-
-msgid ""
-"Show a status icon in your system tray for quick access and notifications."
+msgid "Choose file…"
 msgstr ""
-"システムトレイにステータスアイコンを表示して、すばやくアクセスしたり通知を受"
-"け取ったりできるようにします。"
 
-msgid "Tray Icon Autostart"
-msgstr "トレイアイコンの自動起動"
-
-msgid "Allow the tray service to autostart."
-msgstr "トレイサービスの自動起動を許可します。"
-
-msgid "Vertical Navigation"
-msgstr "垂直ナビゲーション"
-
-msgid "Change navigation style to vertical or horizontal style."
-msgstr "ナビゲーションスタイルを縦または横に変更します。"
-
-msgid "Finish Setup"
-msgstr "セットアップを完了"
-
-msgid ""
-"Any required installations will run after the Finish button has been "
-"accepted."
-msgstr "完了ボタンをクリックすると必要なインストール処理を実行します。"
-
-msgid "These options and others can be configured later in settings."
+msgid "Install for"
 msgstr ""
-"これらのオプションやその他のオプションは、設定画面で後から変更できます。"
-
-msgid "Search packages..."
-msgstr "パッケージを検索..."
-
-msgid "Reload"
-msgstr "再読み込み"
-
-msgid "Install"
-msgstr "インストール"
-
-msgid "Updates"
-msgstr "アップデート"
-
-msgid "Manage"
-msgstr "管理"
-
-msgid "Manage Remote Refs"
-msgstr "リモート参照先を管理"
-
-msgid "Install local flatpak"
-msgstr "ローカル Flatpak をインストール"
 
 msgid "system"
 msgstr "システム"
@@ -163,17 +35,74 @@ msgstr "システム"
 msgid "user"
 msgstr "ユーザー"
 
-msgid "Loading Flatpak Data..."
-msgstr "Flatpak のデータを読み込み中..."
+msgid "Install"
+msgstr "インストール"
+
+msgid "Additional Options"
+msgstr "その他のオプション"
+
+msgid "Show Runtimes"
+msgstr "ランタイムを表示"
+
+msgid "Flatpak Repair"
+msgstr "Flatpak を修復"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Flatpak インストールを修復する (実験的)"
+
+msgid "Search packages..."
+msgstr "パッケージを検索..."
+
+msgid "Browse"
+msgstr ""
+
+msgid "Manage"
+msgstr "管理"
+
+msgid "Manage Remote Refs"
+msgstr "リモート参照先を管理"
+
+msgid "Install Local"
+msgstr "ローカルをインストール"
+
+msgid "Delete Selected Remote"
+msgstr "選択したリモートを削除"
+
+msgid "Add Remote"
+msgstr "リモートを追加"
 
 msgid "Back"
 msgstr "戻る"
 
+msgid "Add New Flatpak Remote"
+msgstr "新しい Flatpak リモートを追加"
+
+msgid "Add"
+msgstr "追加"
+
+msgid "Remote Name"
+msgstr "リモート名"
+
+msgid "e.g., flathub"
+msgstr "例: flathub"
+
+msgid "Remote URL"
+msgstr "リモートの URL"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "例: https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "範囲"
+
+msgid "Loading Flatpak Data..."
+msgstr "Flatpak のデータを読み込み中..."
+
 msgid "Addons"
 msgstr "アドオン"
 
-msgid "Group Filter"
-msgstr "グループフィルター"
+msgid "Install source"
+msgstr ""
 
 msgid "App Name"
 msgstr "アプリ名"
@@ -202,359 +131,51 @@ msgstr "アプリの権限"
 msgid "Version History"
 msgstr "バージョン履歴"
 
-msgid "Delete Selected Remote"
-msgstr "選択したリモートを削除"
+msgid "Reinstall"
+msgstr ""
 
-msgid "Add Remote"
-msgstr "リモートを追加"
+msgid "Add Ignore"
+msgstr ""
 
-msgid "Add New Flatpak Remote"
-msgstr "新しい Flatpak リモートを追加"
+msgid "Add Hold"
+msgstr ""
 
-msgid "Add"
-msgstr "追加"
+msgid "Make Explicit"
+msgstr ""
 
-msgid "Remote Name"
-msgstr "リモート名"
+msgid "Mark Dependency"
+msgstr ""
 
-msgid "e.g., flathub"
-msgstr "例: flathub"
+msgid "Package actions"
+msgstr ""
 
-msgid "Remote URL"
-msgstr "リモートの URL"
+msgid "Information"
+msgstr ""
 
-msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr "例: https://flathub.org/repo/flathub.flatpakrepo"
+msgid "Recommended Packages"
+msgstr ""
 
-msgid "Scope"
-msgstr "範囲"
+msgid "Curated suggestions from Seafoam Labs"
+msgstr ""
 
-msgid "Update All"
-msgstr "すべてアップデート"
+msgid "Refresh the recommended packages list from the network"
+msgstr ""
 
-msgid "Additional Options"
-msgstr "その他のオプション"
-
-msgid "Show Runtimes"
-msgstr "ランタイムを表示"
-
-msgid "Flatpak Repair"
-msgstr "Flatpak を修復"
-
-msgid "Repairs Flatpak Installation (Experimental)"
-msgstr "Flatpak インストールを修復する (実験的)"
-
-msgid "Updating..."
-msgstr "アップデート中..."
-
-msgid "Please wait while we update your system."
-msgstr "システムを更新しています。お待ちください。"
-
-msgid "Install Package(s)"
-msgstr "パッケージをインストール"
-
-msgid "Remove Package(s)"
-msgstr "パッケージを削除"
-
-msgid "Name"
-msgstr "名前"
-
-msgid "Description"
-msgstr "説明"
-
-msgid "Version"
-msgstr "バージョン"
-
-msgid "Last Updated"
-msgstr "最終更新日時"
-
-msgid "Repository"
-msgstr "リポジトリ"
-
-msgid "Update Aur Package(s)"
-msgstr "AUR パッケージをアップデート"
-
-msgid "Old Version"
-msgstr "旧バージョン"
-
-msgid "Run checks"
-msgstr "チェックを実行"
+msgid "Loading Recommended Packages..."
+msgstr "おすすめパッケージを読み込み中..."
 
 msgid ""
-"Run the --check function during package build (installs checkdepends)\n"
-"                        "
+"No recommendations found. Please check your internet connection and try "
+"again."
 msgstr ""
-"パッケージビルド中に --check 機能を実行します (checkdepends をインストール)\n"
-"                        "
+"おすすめが見つかりませんでした。インターネット接続を確認して、もう一度お試し"
+"ください。"
 
-msgid "Show Hidden"
-msgstr "隠しパッケージを表示"
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr "pacman.conf の IgnorePkg リストにあるパッケージを表示する"
-
-msgid "refresh"
-msgstr "更新"
-
-msgid "Remove Aur Package(s)"
-msgstr "AUR パッケージを削除"
-
-msgid "Clean Uninstall"
-msgstr "クリーンアンインストール"
-
-msgid "Install Aur Package(s)"
-msgstr "AUR パッケージをインストール"
-
-msgid "Votes"
-msgstr "投票数"
-
-msgid "Popularity"
-msgstr "人気度"
-
-msgid "Use chroot"
-msgstr "chroot を使用"
-
-msgid "Build packages in a clean chroot environment"
-msgstr "クリーンな chroot 環境でパッケージをビルドする"
-
-msgid "Run the --check function during package build (installs checkdepends)"
+msgid "Preview Pkgbuild"
 msgstr ""
-"パッケージビルド中に --check 機能を実行します (checkdepends をインストールし"
-"ます)。"
 
-msgid "Update Package(s)"
-msgstr "パッケージをアップデート"
-
-msgid "Manage Package(s)"
-msgstr "パッケージを管理"
-
-msgid "Install AUR"
-msgstr "AUR をインストール"
-
-msgid "Update AUR"
-msgstr "AUR をアップデート"
-
-msgid "Remove AUR"
-msgstr "AUR を削除"
-
-msgid "Install Flatpak"
-msgstr "Flatpak をインストール"
-
-msgid "Update Flatpak"
-msgstr "Flatpak をアップデート"
-
-msgid "Remove Flatpak"
-msgstr "Flatpak を削除"
-
-msgid "Manage AppImage(s)"
-msgstr "AppImage を管理"
-
-msgid "Cache Cleaner"
-msgstr "キャッシュクリーナー"
-
-msgid "Arch News"
-msgstr "Arch ニュース"
-
-msgid "Settings"
-msgstr "設定"
-
-msgid "About"
-msgstr "About"
-
-msgid "Toggle Sidebar"
-msgstr "サイドバーを切り替え"
-
-msgid "Show Recommended"
-msgstr "おすすめを表示"
-
-msgid "Recommend"
-msgstr "おすすめ"
-
-msgid "Show Packages"
-msgstr "パッケージを表示"
-
-msgid "Packages"
-msgstr "パッケージ"
-
-msgid "Show AUR"
-msgstr "AUR を表示"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Show Flat"
-msgstr "Flat を表示"
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "Show AppImage"
-msgstr "AppImage を表示"
-
-msgid "AppImage"
-msgstr "AppImage"
-
-msgid "Show Shelly Searchs"
-msgstr "Shelly 検索を表示"
-
-msgid "Shelly Search"
-msgstr "Shelly 検索"
-
-msgid "Available Updates"
-msgstr "利用可能なアップデート"
-
-msgid "Upgrade All"
-msgstr "すべてアップグレード"
-
-msgid "Package Group Filter"
-msgstr "パッケージグループフィルター"
-
-msgid "Install Local Packages"
-msgstr "ローカルパッケージをインストールする"
-
-msgid "Install Local"
-msgstr "ローカルをインストール"
-
-msgid "Selected Packages"
-msgstr "選択したパッケージ"
-
-msgid "0 Selected"
-msgstr "0 個を選択"
-
-msgid "Grid View"
-msgstr "グリッド表示"
-
-msgid "List View"
-msgstr "リスト表示"
-
-msgid "Install Selected"
-msgstr "選択したものをインストール"
-
-msgid "Size"
-msgstr "サイズ"
-
-msgid "Had an issue loading your packages. Check if you have a db lock."
+msgid "Shelly"
 msgstr ""
-"パッケージの読み込み中に問題が発生しました。DB のロックがあるか確認してくださ"
-"い。"
-
-msgid "Perform Upgrade"
-msgstr "アップグレードを実行"
-
-msgid "Perform a full system upgrade with install (-u)"
-msgstr "インストール (-u) を使用してシステム全体のアップグレードを実行する"
-
-msgid "Sync"
-msgstr "同期"
-
-msgid "Remove Local Packages"
-msgstr "ローカルパッケージを削除する"
-
-msgid "Remove Local"
-msgstr "ローカルを削除"
-
-msgid "Downgrade Selected"
-msgstr "選択したものをダウングレード"
-
-msgid "Downgrade selected packages one by one"
-msgstr "選択したパッケージを1個ずつダウングレードする"
-
-msgid "Remove Selected"
-msgstr "選択したものを削除"
-
-msgid "Package Name"
-msgstr "パッケージ名"
-
-msgid "Remove Configs"
-msgstr "設定を削除"
-
-msgid "Remove Optional Deps"
-msgstr "オプションパッケージを削除"
-
-msgid ""
-"Also remove orphaned optional dependencies installed with these packages."
-msgstr ""
-"これらと一緒にインストールした、孤立するオプションパッケージも削除する。"
-
-msgid "Update Selected"
-msgstr "選択したものをアップデート"
-
-msgid "Size Difference"
-msgstr "サイズ増減"
-
-msgid "Search..."
-msgstr "検索..."
-
-msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr ""
-"すべての AppImage のメタデータを同期します。AppImage を自動更新する場合に便利"
-"です。"
-
-msgid "Sync All"
-msgstr "すべて同期"
-
-msgid "Upgrade all AppImages to their latest versions"
-msgstr "すべての AppImage を最新バージョンにアップグレードします"
-
-msgid "Install a new AppImage from a file"
-msgstr "ファイルから新しい AppImage をインストールする"
-
-msgid "Install AppImage"
-msgstr "AppImage をインストール"
-
-msgid "Drop AppImage here to install"
-msgstr "ここに AppImage をドロップしてインストール"
-
-msgid "AppImage Migration"
-msgstr "AppImage の移行"
-
-msgid ""
-"To continue managing your AppImages with shelly a confirmation is required "
-"to switch to the new v2 implementation."
-msgstr ""
-"Shelly で AppImage の管理を続けるには、新しい v2 実装に切り替えるための確認が"
-"必要です。"
-
-msgid "Migrate Now"
-msgstr "今すぐ移行"
-
-msgid "Description goes here..."
-msgstr "ここに説明文が入ります..."
-
-msgid "Size on Disk"
-msgstr "ディスク上のサイズ"
-
-msgid "Update Strategy"
-msgstr "アップデート戦略"
-
-msgid "Update URL / Repository Info"
-msgstr "アップデート取得先の URL / リポジトリ"
-
-msgid "Get more information about Update URL / Repository Info"
-msgstr "URL / リポジトリ情報の更新についてもっと知る"
-
-msgid "e.g. owner/repo or https://..."
-msgstr "例: owner/repo または https://..."
-
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
-msgstr ""
-"無効な形式です。オーナー/リポジトリを使用してください (例: seafoam-labs/"
-"shelly-alpm)"
-
-msgid "Allow Prerelease"
-msgstr "プレリリースを許可"
-
-msgid "Installation Path"
-msgstr "インストールパス"
-
-msgid "Launch Flags"
-msgstr "起動フラグ"
-
-msgid "Save"
-msgstr "保存"
-
-msgid "Remove"
-msgstr "削除"
 
 msgid "General"
 msgstr "全般"
@@ -568,11 +189,14 @@ msgstr "言語"
 msgid "Enable Flatpak"
 msgstr "Flatpak を有効にする"
 
-msgid "Enable Recommended Page"
-msgstr "おすすめページを有効にする"
+msgid "Enable Recommended"
+msgstr ""
 
 msgid "Enable AppImage"
 msgstr "AppImage を有効にする"
+
+msgid "Enable Tray Icon"
+msgstr "トレイアイコンを有効にする"
 
 msgid "Add Tray To Auto Start"
 msgstr "トレイを自動起動に追加する"
@@ -610,6 +234,9 @@ msgstr "土"
 msgid "Update Time (24h):"
 msgstr "アップデート時刻 (24時間制):"
 
+msgid ":"
+msgstr ""
+
 msgid "Look & Feel"
 msgstr "ルック＆フィール"
 
@@ -622,16 +249,6 @@ msgid ""
 msgstr ""
 "有効にすると、Shelly はパッケージ一覧や詳細ページで AppStream アイコンを使用"
 "します。"
-
-msgid "Use Sidebar Navigation"
-msgstr "サイドバーナビゲーションを使用する"
-
-msgid ""
-"If enabled, Shelly will use a sidebar vertical navigation instead of the top "
-"bar one."
-msgstr ""
-"有効にすると、Shelly はトップバーの代わりにサイドバーの垂直ナビゲーションを使"
-"用します。"
 
 msgid "Use Symbolic Tray Icon"
 msgstr "シンボリックトレイアイコンを使用する"
@@ -658,6 +275,9 @@ msgstr "要アップデート時のトレイアイコン"
 msgid "Default page"
 msgstr "デフォルトのページ"
 
+msgid "Navigation style"
+msgstr ""
+
 msgid "Advanced"
 msgstr "上級者向け"
 
@@ -682,8 +302,29 @@ msgstr "AppImage のインストールパス"
 msgid "Select Directory"
 msgstr "ディレクトリーを選択"
 
-msgid "Parallel Downloads"
-msgstr "並列ダウンロード"
+msgid "Save"
+msgstr "保存"
+
+msgid "View Changelog"
+msgstr "Changelog を見る"
+
+msgid "v0.0.0"
+msgstr ""
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "Community fluxer"
+msgstr "コミュニティー fluxer"
+
+msgid "Sponsor"
+msgstr "スポンサー"
+
+msgid "Utilities"
+msgstr ""
+
+msgid "Maintenance and repair tools for your Shelly installation."
+msgstr ""
 
 msgid "Force Database Update"
 msgstr "強制的にデータベースをアップデート"
@@ -691,18 +332,15 @@ msgstr "強制的にデータベースをアップデート"
 msgid "Force a synchronization of the package database."
 msgstr "パッケージデータベースの同期を強制します。"
 
+msgid "Run"
+msgstr ""
+
 msgid "Remove db.lck"
 msgstr "db.lck を削除"
 
 msgid ""
 "Removes the db.lck file if it was left behind by an interrupted alpm process."
 msgstr "中断された ALPM プロセスによって残された db.lck ファイルを削除します。"
-
-msgid "View Pacfiles"
-msgstr "Pacfile を表示"
-
-msgid "View the contents of stored pacfiles."
-msgstr "保存された Pacfile の内容を表示します。"
 
 msgid "Fix Permissions"
 msgstr "権限を修正"
@@ -720,307 +358,441 @@ msgstr "パッケージをクリーンアップ"
 msgid "Remove corrupted/orphaned packages."
 msgstr "破損/孤立したパッケージを削除します。"
 
-msgid "View Changelog"
-msgstr "Changelog を見る"
-
-msgid "GitHub"
-msgstr "GitHub"
-
-msgid "Community fluxer"
-msgstr "コミュニティー fluxer"
-
-msgid "Sponsor"
-msgstr "スポンサー"
-
-msgid "Remove corrupted packages"
-msgstr "壊れたパッケージを削除する"
-
-msgid "Select AppImage Install Directory"
-msgstr "AppImage のインストールディレクトリーを選択"
-
-msgid "Restart Shelly to apply the selected language."
-msgstr "選択した言語を適用するには Shelly を再起動してください。"
-
-msgid "Select Icon File"
-msgstr "アイコンファイルを選択"
-
-msgid "Image Files"
-msgstr "画像ファイル"
-
-msgid "Systemd startup service added."
-msgstr "Systemd 起動サービスが追加されました。"
-
-msgid "Systemd startup service removed."
-msgstr "Systemd 起動サービスが削除されました。"
-
-msgid "Enable AUR?"
-msgstr "AUR を有効にしますか？"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
+msgid "Clean Package Cache"
 msgstr ""
-"Arch User Repository (AUR) はコミュニティ主導のリポジトリです。パッケージは"
-"ユーザーによって作成されており、リスクが含まれる可能性があります。有効にしま"
-"すか？"
-
-msgid "Missing Flatpak"
-msgstr "Flatpak がありません"
-
-msgid "Would you like to install this this now?"
-msgstr "これを今すぐインストールしますか？"
-
-msgid "Installing flatpak..."
-msgstr "Flatpak をインストール中..."
-
-msgid "Reboot required to complete installation."
-msgstr "インストールを完了するには再起動が必要です。"
-
-msgid "Missing Starfish"
-msgstr "Starfish がありません"
-
-msgid "Installing starfish..."
-msgstr "Starfish をインストール中..."
-
-msgid "Synchronizing databases..."
-msgstr "データベースを同期中..."
-
-msgid "Database lock removed"
-msgstr "データベースのロックを解除しました"
-
-msgid "Shelly folder ownership restored"
-msgstr "Shelly フォルダの所有権が復元されました"
-
-msgid "Failed to fix folder permissions"
-msgstr "フォルダー権限の修正に失敗しました"
-
-msgid "Error fixing folder permissions"
-msgstr "フォルダー権限の修正時にエラー"
-
-msgid "Purified Corruption"
-msgstr "破損を修正"
-
-msgid "No corrupted packages found"
-msgstr "破損したパッケージは見つかりませんでした"
-
-msgid "No pacfiles found"
-msgstr "Pacfile が見つかりませんでした"
-
-msgid "Pacfiles Found"
-msgstr "Pacfile が見つかりました"
-
-msgid "Copy content"
-msgstr "コンテンツをコピー"
-
-msgid "Copied to clipboard"
-msgstr "クリップボードにコピーされました"
-
-msgid "Overlay not available"
-msgstr "オーバーレイは利用できません"
-
-msgid "No changelog entries found"
-msgstr "変更履歴エントリーが見つかりませんでした"
-
-msgid "Unknown"
-msgstr "不明"
-
-msgid "No details for this release"
-msgstr "このリリースの詳細情報はありません"
-
-msgid "Unknown date"
-msgstr "日時不明"
-
-msgid "Failed to load changelog"
-msgstr "変更履歴の読み込みに失敗しました"
-
-msgid "<span size='large'>System packages are up to date</span>"
-msgstr "<span size='large'>システムパッケージは最新です</span>"
-
-msgid "Close details"
-msgstr "詳細を閉じる"
-
-msgid "Current"
-msgstr "現在"
-
-msgid "New"
-msgstr "新規"
-
-msgid "Download"
-msgstr "ダウンロード"
-
-msgid "Size Diff"
-msgstr "サイズ増減"
-
-msgid "URL:"
-msgstr "URL:"
-
-msgid "Depends"
-msgstr "次が必要"
-
-msgid "Optional Deps"
-msgstr "オプションで必要"
-
-msgid "Licenses"
-msgstr "ライセンス"
-
-msgid "Provides"
-msgstr "次を提供"
-
-msgid "Conflicts"
-msgstr "次と競合"
-
-msgid "Groups"
-msgstr "グループ"
-
-msgid "Partial Update Warning"
-msgstr "部分的なアップデートについての警告"
 
 msgid ""
-"It is not advised you do partial system updates. Are you sure you want to "
-"continue?"
-msgstr "部分的なシステムアップデートは推奨されません。本当に続行しますか？"
-
-msgid "Update Packages?"
-msgstr "パッケージをアップデートしますか？"
-
-msgid ""
-"It is unadvised to not update all packages at once. Are you sure you want to "
-"continue?"
+"Removes old cached package versions, keeping the selected number per package."
 msgstr ""
-"すべてのパッケージを一度に更新しないことは推奨されません。本当に続行します"
-"か？"
 
-msgid "Reboot Required"
-msgstr "再起動が必要です"
+msgid "Keep"
+msgstr ""
+
+msgid "Number of cached versions to keep per package"
+msgstr ""
+
+msgid "Toggle output"
+msgstr ""
+
+msgid "Close"
+msgstr "閉じる"
+
+msgid "Available Updates"
+msgstr "利用可能なアップデート"
+
+msgid "7 of 7 updates included"
+msgstr ""
+
+msgid "Check all enabled sources again"
+msgstr ""
+
+msgid "Check Again"
+msgstr ""
+
+msgid "Upgrade"
+msgstr ""
+
+msgid "System"
+msgstr "システム"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Checking for updates…"
+msgstr ""
+
+msgid "Your system is up to date"
+msgstr ""
+
+msgid "Could not check for updates"
+msgstr ""
+
+msgid "Welcome to Shelly v3"
+msgstr ""
 
 msgid ""
-"A full system reboot is required for updates to take effect.\n"
-"\n"
-"Would you like to reboot now?"
+"Shelly is a modern package manager for Arch Linux. Configure your sources "
+"and preferences to get started."
 msgstr ""
-"アップデートを有効にするにはシステム全体の再起動が必要です。\n"
-"\n"
-"今すぐ再起動しますか？"
 
-msgid "Service Restart Failures"
-msgstr "サービス再起動の失敗"
+msgid "Select Your Sources"
+msgstr ""
 
-#, csharp-format
 msgid ""
-"The following services failed to restart automatically:\n"
-"{0}"
+"Choose which package sources you want to browse. You can always change this "
+"later in settings."
 msgstr ""
-"以下のサービスが自動的に再起動されませんでした:\n"
-"{0}"
 
-#, csharp-format
-msgid "Updated {0} Package(s)"
-msgstr "{0} 個のパッケージをアップデートしました"
+msgid "Arch User Repository community packages"
+msgstr ""
 
-msgid "Required By"
-msgstr "次に必要"
+msgid "Sandboxed universal Linux applications"
+msgstr ""
 
-msgid "Build Date"
-msgstr "ビルド日時"
+msgid "AppImage"
+msgstr "AppImage"
 
-msgid "Install As"
-msgstr "次としてインストール"
-
-#, csharp-format
-msgid "Package Files ({0})"
-msgstr "パッケージ内のファイル ({0})"
-
-#, csharp-format
-msgid "{0} Selected"
-msgstr "{0} 個を選択"
-
-msgid "Remove Packages?"
-msgstr "パッケージを削除しますか？"
-
-msgid "Removing..."
-msgstr "削除中..."
-
-#, csharp-format
-msgid "Removed {0} Package(s)"
-msgstr "{0} 個のパッケージを削除しました"
-
-#, csharp-format
-msgid "No downgrade options found for {0}"
-msgstr "{0} のダウングレードオプションは見つかりませんでした"
-
-#, csharp-format
-msgid "Downgrading {0}..."
-msgstr "{0} をダウングレード中..."
-
-#, csharp-format
-msgid "Downgraded {0} Package(s)"
-msgstr "{0} 個のパッケージをダウングレード"
-
-msgid "Package is already installed"
-msgstr "パッケージは既にインストールされています"
-
-msgid "Installed Size"
-msgstr "インストール時のサイズ"
-
-msgid "View Dependency Graph"
-msgstr "依存関係グラフを表示"
-
-msgid "Failed to load packages."
-msgstr "パッケージの読み込みに失敗しました。"
-
-msgid "--- Packages to Upgrade ---"
-msgstr "--- アップグレードするパッケージ ---"
-
-msgid "Install Packages?"
-msgstr "パッケージをインストールしますか？"
-
-msgid "Installing..."
-msgstr "インストール中..."
-
-#, csharp-format
-msgid "Installed {0} Package(s)"
-msgstr "{0} 個のパッケージをインストールしました"
-
-msgid "Install Local Package"
-msgstr "ローカルパッケージをインストール"
-
-msgid "Local package files (\"*.gz\", \"*.zst\")"
-msgstr "ローカルパッケージファイル (\"*.gz\", \"*.zst\")"
-
-msgid "Installing local package..."
-msgstr "ローカルパッケージをインストール中..."
-
-msgid "Installed local package"
-msgstr "ローカルパッケージをインストールしました"
-
-msgid "Failed to install local package."
-msgstr "ローカルパッケージのインストールに失敗しました。"
-
-msgid "Show less"
-msgstr "少なく表示"
-
-msgid "Name and URL are required"
-msgstr "名前と URL が必要です"
-
-msgid "URL must end with .flatpakrepo"
-msgstr "URL は .flatpakrepo で終わる必要があります"
-
-#, csharp-format
-msgid "Failed to add remote: {0}"
-msgstr "リモートの追加に失敗しました: {0}"
-
-#, csharp-format
-msgid "Added Remote: {0}"
-msgstr "リモートを追加しました: {0}"
-
-msgid "Removed Remote"
-msgstr "リモートを削除しました"
-
-msgid "All Applications"
-msgstr "すべてのアプリケーション"
+msgid "Portable self-contained application bundles"
+msgstr ""
 
 msgid "Recommended"
 msgstr "おすすめ"
+
+msgid "Curated picks from Shelly"
+msgstr ""
+
+msgid "Look and Feel"
+msgstr ""
+
+msgid ""
+"Customize how Shelly looks and behaves. All of these can be changed later in "
+"preferences."
+msgstr ""
+
+msgid "Navigation Style"
+msgstr ""
+
+msgid "Sidebar"
+msgstr ""
+
+msgid "Vertical icon rail on the left"
+msgstr ""
+
+msgid "Top Bar"
+msgstr ""
+
+msgid "Horizontal tab switcher at the top"
+msgstr ""
+
+msgid "System Tray"
+msgstr ""
+
+msgid "Run in system tray when minimized"
+msgstr ""
+
+msgid "Next"
+msgstr ""
+
+msgid "Start Shelly"
+msgstr ""
+
+msgid "Search..."
+msgstr "検索..."
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr ""
+"すべての AppImage のメタデータを同期します。AppImage を自動更新する場合に便利"
+"です。"
+
+msgid "Sync All"
+msgstr "すべて同期"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "すべての AppImage を最新バージョンにアップグレードします"
+
+msgid "Upgrade All"
+msgstr "すべてアップグレード"
+
+msgid "Install a new AppImage from a file"
+msgstr "ファイルから新しい AppImage をインストールする"
+
+msgid "Install AppImage"
+msgstr "AppImage をインストール"
+
+msgid "Drop AppImage here to install"
+msgstr "ここに AppImage をドロップしてインストール"
+
+msgid "Version"
+msgstr "バージョン"
+
+msgid "Description goes here..."
+msgstr "ここに説明文が入ります..."
+
+msgid "Size on Disk"
+msgstr "ディスク上のサイズ"
+
+msgid "Update Strategy"
+msgstr "アップデート戦略"
+
+msgid "Update URL / Repository Info"
+msgstr "アップデート取得先の URL / リポジトリ"
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr "URL / リポジトリ情報の更新についてもっと知る"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "例: owner/repo または https://..."
+
+msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+msgstr ""
+
+msgid "Allow Prerelease"
+msgstr "プレリリースを許可"
+
+msgid "Installation Path"
+msgstr "インストールパス"
+
+msgid "Launch Flags"
+msgstr "起動フラグ"
+
+msgid "Sync"
+msgstr "同期"
+
+msgid "Remove"
+msgstr "削除"
+
+msgid "Search the AUR by name or keyword"
+msgstr ""
+
+msgid "Installed Only"
+msgstr ""
+
+msgid "Show only installed packages"
+msgstr ""
+
+msgid "Install Selected"
+msgstr "選択したものをインストール"
+
+msgid "Name"
+msgstr "名前"
+
+msgid "Votes"
+msgstr "投票数"
+
+msgid "Popularity"
+msgstr "人気度"
+
+msgid "Search the AUR"
+msgstr ""
+
+msgid "The AUR has no browsable index type a package name to begin."
+msgstr ""
+
+msgid "Run checks"
+msgstr "チェックを実行"
+
+msgid "Run the --check function during package build"
+msgstr ""
+
+msgid "Hide Detail Pane"
+msgstr ""
+
+msgid "Hide the detail pane on the right"
+msgstr ""
+
+msgid "Package Group Filter"
+msgstr "パッケージグループフィルター"
+
+msgid "Selected Packages"
+msgstr "選択したパッケージ"
+
+msgid "0 Selected"
+msgstr "0 個を選択"
+
+msgid "Grid View"
+msgstr "グリッド表示"
+
+msgid "List View"
+msgstr "リスト表示"
+
+msgid "Size"
+msgstr "サイズ"
+
+msgid "Repository"
+msgstr "リポジトリ"
+
+#, fuzzy
+msgid "Install Date"
+msgstr "インストール "
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
+msgstr ""
+"パッケージの読み込み中に問題が発生しました。DB のロックがあるか確認してくださ"
+"い。"
+
+msgid "Perform Upgrade"
+msgstr "アップグレードを実行"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "インストール (-u) を使用してシステム全体のアップグレードを実行する"
+
+msgid "Show Hidden"
+msgstr "隠しパッケージを表示"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "pacman.conf の IgnorePkg リストにあるパッケージを表示する"
+
+msgid "Show Explicit Only"
+msgstr ""
+
+msgid "Show only explicitly installed packages"
+msgstr ""
+
+msgid "Show Dependency Only"
+msgstr ""
+
+msgid "Show dependency packages on;y"
+msgstr ""
+
+msgid "Confirm"
+msgstr "承認"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+#, fuzzy
+msgid "No installable addons available"
+msgstr "詳細がありません"
+
+msgid "No special permissions requested"
+msgstr ""
+
+#, fuzzy
+msgid "polkit is required"
+msgstr "再起動が必要です"
+
+msgid ""
+"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
+"privileged actions, but it wasn't found on the system bus.\n"
+"\n"
+"Install and enable it, then retry.\n"
+"\n"
+"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
+"Polkit</a>"
+msgstr ""
+
+msgid "Skip"
+msgstr ""
+
+msgid "Review PKGBUILD changes"
+msgstr "PKGBUILD の変更点を検査"
+
+msgid "Changes"
+msgstr "変更点"
+
+msgid "Warnings"
+msgstr ""
+
+msgid ""
+"These commands fetch and execute code outside of shelly and libalpm's "
+"control. Review them before continuing."
+msgstr ""
+"これらのコマンドは、Shelly と libalpm の制御外でコードを取得して実行します。"
+"続行する前に内容を確認してください。"
+
+msgid "Source Files"
+msgstr ""
+
+msgid "Review PKGBUILD"
+msgstr ""
+
+msgid "Filesystem"
+msgstr ""
+
+msgid "Devices"
+msgstr ""
+
+msgid "Sockets"
+msgstr ""
+
+msgid "Shared"
+msgstr ""
+
+msgid "Environment"
+msgstr ""
+
+msgid "Session bus"
+msgstr ""
+
+msgid "System bus"
+msgstr ""
+
+msgid "Other"
+msgstr ""
+
+msgid "Review PKGBUILD changes for"
+msgstr ""
+
+msgid "Review Changes"
+msgstr "変更点を検査"
+
+msgid "Security scan completed -"
+msgstr ""
+
+msgid "warning(s) found."
+msgstr ""
+
+msgid "Security scan completed - warnings found."
+msgstr ""
+
+msgid "Security scan completed - no issues found."
+msgstr "セキュリティースキャン完了 - 問題は見つかりませんでした。"
+
+msgid "used in"
+msgstr ""
+
+msgid "Warning"
+msgstr ""
+
+msgid "Install Anyway"
+msgstr "とにかくインストール"
+
+msgid "package(s)"
+msgstr ""
+
+msgid "to"
+msgstr ""
+
+msgid "download"
+msgstr ""
+
+msgid "net"
+msgstr ""
+
+msgid "Dismiss"
+msgstr ""
+
+msgid "Choose a Flatpak file"
+msgstr ""
+
+msgid "Flatpak files"
+msgstr ""
+
+msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+msgstr ""
+
+msgid "Installing local flatpak"
+msgstr ""
+
+msgid "Installation failed."
+msgstr ""
+
+msgid "Installation complete."
+msgstr ""
+
+msgid "Choose file..."
+msgstr ""
+
+msgid "Removing Remote"
+msgstr ""
+
+msgid "Adding Remote"
+msgstr ""
+
+msgid "Removing Flatpak"
+msgstr ""
+
+msgid "Discover"
+msgstr ""
+
+msgid "Categories"
+msgstr ""
+
+msgid "All Applications"
+msgstr "すべてのアプリケーション"
 
 msgid "Most Wanted"
 msgstr "最も人気"
@@ -1055,673 +827,14 @@ msgstr "オフィス"
 msgid "Science"
 msgstr "科学"
 
-msgid "System"
-msgstr "システム"
-
 msgid "Utility"
 msgstr "ユーティリティー"
 
-#, csharp-format
-msgid "Version: {0}"
-msgstr "バージョン: {0}"
-
-#, csharp-format
-msgid "License: {0}"
-msgstr "ライセンス: {0}"
-
-msgid "Installed"
-msgstr "インストール済み"
-
-#, csharp-format
-msgid "Size: {0}"
-msgstr "サイズ: {0}"
-
-msgid "No links available"
-msgstr "リンクがありません"
-
-msgid "Install Flatpak Ref"
-msgstr "Flatpak をインストール"
-
-msgid "Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""
-msgstr "ローカル Flatpak ファイル (\"*.FlatpakRef\", \"*.flatpak\")"
-
-msgid "Installing selected local flatpak file..."
-msgstr "選択したローカル Flatpak ファイルをインストール中..."
-
-msgid "Installing Flatpak failed"
-msgstr "Flatpak のインストールに失敗しました"
-
-msgid "Installed Flatpak"
-msgstr "Flatpak をインストールしました"
-
-msgid "Install Package?"
-msgstr "パッケージをインストールしますか？"
-
-#, csharp-format
-msgid "Installing {0}..."
-msgstr "{0} をインストール中..."
-
-msgid "Installed Flatpak addon"
-msgstr "Flatpak アドオンをインストールしました"
-
-msgid "Available Addons"
-msgstr "利用可能なアドオン"
-
-#, csharp-format
-msgid "Version {0}"
-msgstr "バージョン {0}"
-
-msgid "No details available"
-msgstr "詳細がありません"
-
-msgid "Permission Changes"
-msgstr "権限の変更"
-
-msgid "<span size='large'>Flatpaks are up to date</span>"
-msgstr "<span size='large'>Flatpak パッケージは最新です</span>"
-
-msgid "Updating Flatpak packages..."
-msgstr "Flatpak パッケージをアップデート中..."
-
-#, csharp-format
-msgid "Failed to update packages: {0}"
-msgstr "パッケージのアップデートに失敗しました: {0}"
-
-msgid "Updated all Flatpak(s)"
-msgstr "すべての Flatpak をアップデートしました"
-
-msgid "Repaired Flatpak installation"
-msgstr "Flatpak のインストールを修復しました"
-
-msgid "Failed to repair Flatpak installation"
-msgstr "Flatpak インストールの修復に失敗しました"
-
-#, csharp-format
-msgid "Removing {0}..."
-msgstr "{0} を削除中..."
-
-#, csharp-format
-msgid "Failed to remove package {0}: {1}"
-msgstr "パッケージ {0} の削除に失敗しました: {1}"
-
-msgid "Removed Package(s)"
-msgstr "パッケージを削除しました"
-
-msgid "Out of Date"
-msgstr "期限切れした日時"
-
-msgid "Maintainer"
-msgstr "メンテナー"
-
-msgid "Orphaned"
-msgstr "孤立"
-
-msgid "Last Modified"
-msgstr "最終更新日時"
-
-msgid "First Submitted"
-msgstr "初回登録日時"
-
-msgid "Make Depends"
-msgstr "ビルドに必要"
-
-msgid "Check Depends"
-msgstr "必要なものを確認"
-
-msgid "Keywords"
-msgstr "キーワード"
-
-msgid "Replaces"
-msgstr "次を置換"
-
-msgid "<span size='large'>Search for AUR packages</span>"
-msgstr "<span size='large'>AUR パッケージを検索</span>"
-
-msgid "Package Build"
-msgstr "パッケージビルド"
-
-msgid "Preview PKGBUILD"
-msgstr "PKGBUILD をプレビュー"
-
-msgid "Displays Package Build"
-msgstr "パッケージビルドを表示"
-
-msgid "AUR:"
-msgstr "AUR:"
-
-msgid "<span size='large'>AUR packages are up to date</span>"
-msgstr "<span size='large'>AUR パッケージは最新です</span>"
-
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
-msgstr ""
-"おすすめが見つかりませんでした。インターネット接続を確認して、もう一度お試し"
-"ください。"
-
-msgid "Remove "
-msgstr "削除 "
-
-msgid "Removing package..."
-msgstr "パッケージを削除中..."
-
-msgid "Package removed successfully"
-msgstr "パッケージを正常に削除しました"
-
-msgid "Install "
-msgstr "インストール "
-
-msgid "Installing package..."
-msgstr "パッケージをインストール中..."
-
-msgid "Package installed successfully"
-msgstr "パッケージを正常にインストールしました"
-
-msgid "Reboot required after flatpak installation."
-msgstr "Flatpak のインストール後に再起動が必要です。"
-
-msgid "Failed to install flatpak"
-msgstr "Flatpak のインストールに失敗しました"
-
-msgid "What's New"
-msgstr "新着情報"
-
-msgid "Close"
-msgstr "閉じる"
-
-msgid "Cache directory does not exist"
-msgstr "キャッシュディレクトリーが存在しません"
-
-msgid "Cleaning package cache..."
-msgstr "パッケージキャッシュをクリーンアップ..."
-
-msgid "Package cache cleaned successfully"
-msgstr "パッケージキャッシュのクリーンアップが正常に完了しました"
-
-#, csharp-format
-msgid "Cache clean failed: {0}"
-msgstr "キャッシュのクリーンアップが失敗しました: {0}"
-
-#, csharp-format
-msgid "Downgrade: {0}"
-msgstr "ダウングレード: {0}"
-
-msgid "Select version:"
-msgstr "バージョンを選択:"
-
-msgid "Add to IgnorePkg list"
-msgstr "IgnorePkg リストに追加"
-
-msgid "Downgrade"
-msgstr "ダウングレード"
-
-msgid "Cancel"
-msgstr "キャンセル"
-
-msgid "Keep Config"
-msgstr "設定を保持"
-
-msgid "Keep user data and configuration"
-msgstr "ユーザーデータと設定を保持する"
-
-msgid "Delete Config"
-msgstr "設定を削除"
-
-msgid "Delete user data and configuration"
-msgstr "ユーザーデータと設定を削除する"
-
-msgid "Keep Config?"
-msgstr "設定を保持しますか？"
-
-msgid "Confirm"
-msgstr "承認"
-
-msgid "installed"
-msgstr "インストール済み"
-
-msgid "Select"
-msgstr "選択"
-
-msgid "Select All"
-msgstr "すべて選択"
-
-msgid "already installed"
-msgstr "既にインストール済み"
-
-msgid "No"
-msgstr "いいえ"
-
-msgid "Yes"
-msgstr "はい"
-
-msgid "Install Ignored Package?"
-msgstr "無視されたパッケージをインストールしますか？"
-
-msgid "Replace Package?"
-msgstr "パッケージを置き換えますか？"
-
-msgid "Package Conflict Detected"
-msgstr "パッケージの競合が検出されました"
-
-msgid "Corrupted Package Found"
-msgstr "壊れたパッケージが見つかりました"
-
-msgid "Import PGP Key?"
-msgstr "PGP キーをインポートしますか？"
-
-msgid "Select Provider"
-msgstr "プロバイダーを選択"
-
-msgid "Select Optional Dependencies"
-msgstr "オプションパッケージを選択"
-
-msgid "System Question"
-msgstr "システムの質問"
-
-msgid "Authentication Required"
-msgstr "認証が必要です"
-
-#, csharp-format
-msgid "Password needed to execute: {0}."
-msgstr "実行にはパスワードが必要です: {0}."
-
-msgid "Authenticate"
-msgstr "認証"
-
-msgid "Incorrect password. Try again."
-msgstr "パスワードが違います。もう一度お試しください。"
-
-#, csharp-format
-msgid ""
-"Cache directory: {0}\n"
-"Total cached files: {1} ({2})"
-msgstr ""
-"キャッシュディレクトリー: {0}\n"
-"キャッシュファイル総数: {1} ({2})"
-
-msgid "Keep versions:"
-msgstr "保持するバージョン数:"
-
-msgid "Uninstalled only"
-msgstr "アンインストールのみ"
-
-msgid "Clean"
-msgstr "削除"
-
-msgid "No candidates for removal."
-msgstr "削除対象がありません。"
-
-#, csharp-format
-msgid "{0} files, {1} would be freed"
-msgstr "{0} 個のファイル, {1} が解放されます"
-
-msgid "Operation Complete"
-msgstr "操作が完了しました"
-
-msgid "Review PKGBUILD changes"
-msgstr "PKGBUILD の変更点を検査"
-
-#, csharp-format
-msgid "Review PKGBUILD changes for {0}"
-msgstr "{0} PKGBUILD の変更点を検査"
-
-msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
-"control. Review them before continuing."
-msgstr ""
-"これらのコマンドは、Shelly と libalpm の制御外でコードを取得して実行します。"
-"続行する前に内容を確認してください。"
-
-#, csharp-format
-msgid "Warnings ({0})"
-msgstr "警告 ({0})"
-
-msgid "Changes"
-msgstr "変更点"
-
-msgid "Review Changes"
-msgstr "変更点を検査"
-
-msgid "Install Anyway"
-msgstr "とにかくインストール"
-
-#, csharp-format
-msgid "{0} used in {1}"
-msgstr "{1} で使用される {0}"
-
-#, csharp-format
-msgid "Security scan completed - {0} warning(s) found."
-msgstr "セキュリティースキャン完了 - {0} 件の警告が見つかりました。"
-
-msgid "Security scan completed - no issues found."
-msgstr "セキュリティースキャン完了 - 問題は見つかりませんでした。"
-
-msgid "Shelly is an Arch Linux package manager"
-msgstr "Shelly は Arch Linux のパッケージマネージャーです"
-
-msgid "Seafoam Labs Website"
-msgstr "Seafoam Labs ウェブサイト"
-
-msgid "Project Leads"
-msgstr "プロジェクトリーダー"
-
-msgid "Maintainers"
-msgstr "メンテナー"
-
-msgid "Arch Linux News"
-msgstr "Arch Linux ニュース"
-
-msgid "No news available"
-msgstr "ニュースはありません"
-
-msgid "Package Statistics"
-msgstr "パッケージ統計"
-
-msgid "Total Aur"
-msgstr "AUR 総数"
-
-msgid "Total Packages"
-msgstr "パッケージ総数"
-
-msgid "Total Flatpak"
-msgstr "Flatpak 総数"
-
-msgid "Up to date"
-msgstr "最新版"
-
-msgid "Calculating"
-msgstr "計算中"
-
-msgid "Searching..."
-msgstr "検索中..."
-
-#, csharp-format
-msgid "Search error: {0}"
-msgstr "検索エラー: {0}"
-
-#, csharp-format
-msgid "Failed to install packages: {0}"
-msgstr "パッケージのインストールに失敗しました: {0}"
-
-#, csharp-format
-msgid "Install for {0} package(s) was unsuccessful."
-msgstr "{0} 個のパッケージのインストールに失敗しました。"
-
-#, csharp-format
-msgid "Failed to remove packages: {0}"
-msgstr "パッケージの削除に失敗しました: {0}"
-
-msgid "None"
-msgstr "なし"
-
-msgid "StaticUrl"
-msgstr "StaticUrl"
-
-msgid "GitLab"
-msgstr "GitLab"
-
-msgid "Codeberg"
-msgstr "Codeberg"
-
-msgid "Forgejo"
-msgstr "Forgejo"
-
-#, csharp-format
-msgid "Update Available: {0}"
-msgstr "アップデートが利用可能: {0}"
-
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "無効なURLです。http:// または https:// で始める必要があります"
-
-msgid "Select AppImage to Install"
-msgstr "インストールする AppImage を選択"
-
-msgid "AppImage Files"
-msgstr "AppImage ファイル"
-
-msgid "No AppImages need to be upgraded"
-msgstr "アップグレードする必要のある AppImage はありません"
-
-msgid "Running updates..."
-msgstr "アップデートを実行中..."
-
-msgid "Updating AppImages..."
-msgstr "AppImage をアップデート中..."
-
-msgid "All AppImages updated successfully!"
-msgstr "すべての AppImage が正常に更新されました！"
-
-#, csharp-format
-msgid "Failed to update AppImages: {0}"
-msgstr "AppImage の更新に失敗しました: {0}"
-
-#, csharp-format
-msgid "Configuration saved for {0}"
-msgstr "{0} の設定を保存しました"
-
-#, csharp-format
-msgid "Failed to save configuration: {0}"
-msgstr "設定の保存に失敗しました: {0}"
-
-#, csharp-format
-msgid "Syncing {0}..."
-msgstr "{0} を同期中..."
-
-#, csharp-format
-msgid "Synced {0}"
-msgstr "{0} を同期しました"
-
-#, csharp-format
-msgid "Failed to sync: {0}"
-msgstr "同期に失敗しました: {0}"
-
-msgid "Syncing all AppImages ..."
-msgstr "すべての AppImage を同期中..."
-
-msgid "Synced"
-msgstr "同期しました"
-
-#, csharp-format
-msgid "{0} removed successfully!"
-msgstr "{0} が正常に削除されました！"
-
-#, csharp-format
-msgid "Failed to remove {0}: {1}"
-msgstr "{0} の削除に失敗しました: {1}"
-
-msgid "Only AppImage files are supported"
-msgstr "AppImage ファイルのみサポートされています"
-
-msgid "Migrating AppImages to V2..."
-msgstr "AppImage を V2 に移行中..."
-
-msgid "Migration successful!"
-msgstr "移行が成功しました！"
-
-#, csharp-format
-msgid "Migration failed: {0}"
-msgstr "移行が失敗しました: {0}"
-
-msgid "Installing AppImage..."
-msgstr "AppImage をインストール中..."
-
-#, csharp-format
-msgid "{0} installed successfully!"
-msgstr "{0} が正常にインストールされました！"
-
-#, csharp-format
-msgid "Failed to install {0}: {1}"
-msgstr "{0} のインストールに失敗しました: {1}"
-
-msgid "color-scheme"
-msgstr "配色"
-
-msgid "Install source"
-msgstr ""
-
-msgid "Install a local Flatpak"
-msgstr ""
-
-msgid ""
-"Choose a .flatpak bundle from your system and install it for the current "
-"user or system-wide."
-msgstr ""
-
-msgid "Bundle"
-msgstr ""
-
-msgid "Choose file…"
-msgstr ""
-
-msgid "Install for"
-msgstr ""
-
-msgid "Browse"
-msgstr ""
-
-msgid "Shelly"
-msgstr ""
-
-msgid "Reinstall"
-msgstr ""
-
-msgid "Add Ignore"
-msgstr ""
-
-msgid "Add Hold"
-msgstr ""
-
-msgid "Make Explicit"
-msgstr ""
-
-msgid "Mark Dependency"
-msgstr ""
-
-msgid "Package actions"
-msgstr ""
-
-msgid "Information"
-msgstr ""
-
-msgid "7 of 7 updates included"
-msgstr ""
-
-msgid "Check all enabled sources again"
-msgstr ""
-
-msgid "Check Again"
-msgstr ""
-
-msgid "Upgrade"
-msgstr ""
-
-msgid "Checking for updates…"
-msgstr ""
-
-msgid "Your system is up to date"
-msgstr ""
-
-msgid "Could not check for updates"
-msgstr ""
-
-msgid "Installed Only"
-msgstr ""
-
-msgid "Show only installed packages"
-msgstr ""
-
-msgid "Show Explicit Only"
-msgstr ""
-
-msgid "Show only explicitly installed packages"
-msgstr ""
-
-msgid "Hide Detail Pane"
-msgstr ""
-
-msgid "Toggle output"
-msgstr ""
-
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
-msgstr ""
-
-msgid "Enable Recommended"
-msgstr ""
-
-msgid ":"
-msgstr ""
-
-msgid "v0.0.0"
-msgstr ""
-
-msgid "Search the AUR by name or keyword"
-msgstr ""
-
-msgid "Show only packages already installed on this system"
-msgstr ""
-
-msgid "Search the AUR"
-msgstr ""
-
-msgid "The AUR has no browsable index type a package name to begin."
-msgstr ""
-
-msgid "Run the --check function during package build"
-msgstr ""
-
-msgid "Hide the detail pane on the right"
-msgstr ""
-
-msgid "Skip"
-msgstr ""
-
-msgid "No special permissions requested"
-msgstr ""
-
-msgid "Warnings"
-msgstr ""
-
-msgid "Source Files"
-msgstr ""
-
-msgid "Removing Remote"
-msgstr ""
-
-msgid "Adding Remote"
-msgstr ""
-
-msgid "Removing Flatpak"
-msgstr ""
-
-msgid "Choose a Flatpak file"
-msgstr ""
-
-msgid "Flatpak files"
-msgstr ""
-
-msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
-msgstr ""
-
-msgid "Installing local flatpak"
-msgstr ""
-
-msgid "Installation failed."
-msgstr ""
-
-msgid "Installation complete."
-msgstr ""
-
-msgid "Choose file..."
-msgstr ""
-
-msgid "Discover"
-msgstr ""
-
-msgid "Categories"
-msgstr ""
-
 msgid "Verified"
 msgstr ""
+
+msgid "Show less"
+msgstr "少なく表示"
 
 msgid "Installing flatpak"
 msgstr ""
@@ -1729,8 +842,21 @@ msgstr ""
 msgid "Permissions"
 msgstr ""
 
+msgid "Available Addons"
+msgstr "利用可能なアドオン"
+
+#, fuzzy
+msgid "Installing flatpak addon"
+msgstr "Flatpak アドオンをインストールしました"
+
+msgid "Installed"
+msgstr "インストール済み"
+
 msgid "Unknown developer"
 msgstr ""
+
+msgid "Unknown"
+msgstr "不明"
 
 msgid "Version: Unknown"
 msgstr ""
@@ -1752,6 +878,12 @@ msgstr ""
 
 msgid "Size: Unavailable"
 msgstr ""
+
+msgid "Download"
+msgstr "ダウンロード"
+
+msgid "No description available."
+msgstr "説明がありません。"
 
 msgid "Unable to load screenshot"
 msgstr ""
@@ -1801,17 +933,115 @@ msgstr ""
 msgid "No Flatpak applications are available."
 msgstr ""
 
-msgid "Download Size"
+msgid "Refreshing package databases"
 msgstr ""
 
-msgid "Install Reason"
+msgid "Database lock removed successfully"
 msgstr ""
+
+msgid "Failed to remove database lock"
+msgstr ""
+
+msgid "Fixing permissions"
+msgstr ""
+
+msgid "Purifying packages"
+msgstr ""
+
+msgid "Cleaning package cache"
+msgstr ""
+
+msgid "Operation completed successfully"
+msgstr ""
+
+msgid "Operation failed"
+msgstr ""
+
+msgid "Welcome"
+msgstr ""
+
+msgid "Enable AUR?"
+msgstr "AUR を有効にしますか？"
+
+msgid ""
+"The Arch User Repository is community-maintained. Packages are not "
+"officially vetted — only enable if you trust what you install."
+msgstr ""
+
+msgid "Enable"
+msgstr ""
+
+msgid "Enable Recommended?"
+msgstr ""
+
+msgid ""
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
+msgstr ""
+
+#, fuzzy
+msgid "Installing Flatpak and AppImage support"
+msgstr "Flatpak のインストールに失敗しました"
+
+#, fuzzy
+msgid "Installing Flatpak support"
+msgstr "Flatpak サポートを有効にする"
+
+#, fuzzy
+msgid "Installing AppImage support"
+msgstr "AppImage をインストール中..."
+
+msgid "Maintainer"
+msgstr "メンテナー"
+
+msgid "Last Modified"
+msgstr "最終更新日時"
+
+msgid "First Submitted"
+msgstr "初回登録日時"
+
+#, fuzzy
+msgid "URL"
+msgstr "URL:"
+
+msgid "Licenses"
+msgstr "ライセンス"
+
+msgid "Depends"
+msgstr "次が必要"
 
 msgid "Optional Depends"
 msgstr ""
 
+msgid "Make Depends"
+msgstr "ビルドに必要"
+
 msgid "Section"
 msgstr ""
+
+msgid "Loading..."
+msgstr "読み込み中..."
+
+msgid "Installed Size"
+msgstr "インストール時のサイズ"
+
+msgid "Download Size"
+msgstr ""
+
+msgid "Build Date"
+msgstr "ビルド日時"
+
+msgid "Install Reason"
+msgstr ""
+
+msgid "Provides"
+msgstr "次を提供"
+
+msgid "Conflicts"
+msgstr "次と競合"
+
+msgid "Required By"
+msgstr "次に必要"
 
 msgid "Reinstalling package"
 msgstr ""
@@ -1828,6 +1058,161 @@ msgstr ""
 msgid "Making Package Dependency"
 msgstr ""
 
+msgid "None"
+msgstr "なし"
+
+msgid "Static URL"
+msgstr ""
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+msgid "Update Available"
+msgstr ""
+
+msgid "Version ?"
+msgstr ""
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr ""
+"無効な形式です。オーナー/リポジトリを使用してください (例: seafoam-labs/"
+"shelly-alpm)"
+
+msgid "Invalid URL. Must start with http:// or https://"
+msgstr "無効なURLです。http:// または https:// で始める必要があります"
+
+msgid ""
+"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
+"repo/releases"
+msgstr ""
+
+msgid "Choose an AppImage file"
+msgstr ""
+
+msgid "AppImage files"
+msgstr ""
+
+msgid "Only .AppImage files can be installed"
+msgstr ""
+
+msgid "Installing AppImage"
+msgstr ""
+
+msgid "No AppImages need to be upgraded"
+msgstr "アップグレードする必要のある AppImage はありません"
+
+msgid "Upgrading AppImages"
+msgstr ""
+
+msgid "Syncing AppImages"
+msgstr ""
+
+msgid "Syncing AppImage"
+msgstr ""
+
+msgid "Saving update configuration"
+msgstr ""
+
+msgid "Configuration files will be kept."
+msgstr ""
+
+msgid "Remove this AppImage?"
+msgstr ""
+
+msgid "Remove AppImage"
+msgstr ""
+
+msgid "Removing AppImage"
+msgstr ""
+
+msgid "The AUR has no browsable index — type a package name to begin."
+msgstr ""
+
+msgid "No packages found"
+msgstr ""
+
+msgid "Try a shorter or more general keyword."
+msgstr ""
+
+msgid "Could not reach the AUR"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr ""
+
+msgid "Flagged out of date"
+msgstr ""
+
+msgid "Remove Selected"
+msgstr "選択したものを削除"
+
+msgid "Select one or more packages"
+msgstr ""
+
+msgid "Package(s)"
+msgstr ""
+
+msgid "Remove Packages"
+msgstr ""
+
+msgid "Remove the selected AUR packages?"
+msgstr ""
+
+msgid "Build from AUR"
+msgstr ""
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+
+msgid "Build"
+msgstr ""
+
+msgid "Installing AUR packages"
+msgstr ""
+
+msgid "Removing AUR packages"
+msgstr ""
+
+msgid "Package is already installed"
+msgstr "パッケージは既にインストールされています"
+
+msgid "Remove from selection"
+msgstr ""
+
+msgid "remove"
+msgstr ""
+
+msgid "install"
+msgstr ""
+
+msgid "No packages selected"
+msgstr ""
+
+msgid "Selected"
+msgstr ""
+
+msgid "Mixed selection"
+msgstr ""
+
+msgid ""
+"Select only installed packages to remove, or only available ones to install."
+msgstr ""
+
+msgid "Remove the selected packages?"
+msgstr ""
+
+msgid "Removing packages"
+msgstr ""
+
+msgid "Installing packages"
+msgstr ""
+
 msgid "Failed to start operation."
 msgstr ""
 
@@ -1837,10 +1222,10 @@ msgstr ""
 msgid "Synchronizing databases"
 msgstr ""
 
-msgid "Downloading"
+msgid "Building"
 msgstr ""
 
-msgid "Building"
+msgid "Downloading"
 msgstr ""
 
 msgid "Packaging"
@@ -1879,123 +1264,50 @@ msgstr ""
 msgid "Cancelled"
 msgstr ""
 
-msgid "Static URL"
-msgstr ""
+msgid "Yes"
+msgstr "はい"
 
-msgid "Update Available"
-msgstr ""
-
-msgid "Version ?"
-msgstr ""
-
-msgid "Choose an AppImage file"
-msgstr ""
-
-msgid "AppImage files"
-msgstr ""
-
-msgid "Only .AppImage files can be installed"
-msgstr ""
-
-msgid "Installing AppImage"
-msgstr ""
-
-msgid "Upgrading AppImages"
-msgstr ""
-
-msgid "Syncing AppImages"
-msgstr ""
-
-msgid "Syncing AppImage"
-msgstr ""
-
-msgid "Saving update configuration"
-msgstr ""
-
-msgid "Configuration files will be kept."
-msgstr ""
-
-msgid "Remove this AppImage?"
-msgstr ""
-
-msgid "Remove AppImage"
-msgstr ""
-
-msgid "Removing AppImage"
-msgstr ""
-
-msgid "Operation completed successfully"
-msgstr ""
-
-msgid "Operation failed"
-msgstr ""
-
-msgid "System package update"
-msgstr ""
-
-msgid "AUR package update"
-msgstr ""
-
-msgid "Could not run shelly check-updates. Check the CLI output and try again."
-msgstr ""
-
-msgid "Update check failed"
-msgstr ""
-
-msgid "of"
-msgstr ""
-
-msgid "updates included"
-msgstr ""
-
-msgid "Updates included"
-msgstr ""
-
-msgid "Upgrading packages"
-msgstr ""
-
-msgid "Recommendations"
-msgstr ""
-
-msgid "Remove from selection"
-msgstr ""
-
-msgid "remove"
-msgstr ""
-
-msgid "install"
-msgstr ""
-
-msgid "No packages selected"
-msgstr ""
-
-msgid "Selected"
-msgstr ""
-
-msgid "Mixed selection"
-msgstr ""
-
-msgid ""
-"Select only installed packages to remove, or only available ones to install."
-msgstr ""
-
-msgid "Remove Packages"
-msgstr ""
-
-msgid "Remove the selected packages?"
-msgstr ""
-
-msgid "Removing packages"
-msgstr ""
-
-msgid "Installing packages"
-msgstr ""
+msgid "No"
+msgstr "いいえ"
 
 msgid "Failed to save settings"
 msgstr ""
 
 msgid "Settings saved"
 msgstr ""
+
+#, fuzzy
+msgid "Failed to start Flatpak support installation"
+msgstr "Flatpak インストールの修復に失敗しました"
+
+#, fuzzy
+msgid "Failed to start AppImage support installation"
+msgstr "Flatpak インストールの修復に失敗しました"
+
+#, fuzzy
+msgid "Flatpak support installation failed"
+msgstr "パッケージのインストールに失敗しました"
+
+#, fuzzy
+msgid "AppImage support installation failed"
+msgstr "パッケージのインストールに失敗しました"
+
+#, fuzzy
+msgid "Flatpak support enabled"
+msgstr "Flatpak サポートを有効にする"
+
+#, fuzzy
+msgid "AppImage support enabled"
+msgstr "AppImage サポートを有効にする"
+
+msgid "No changelog entries found"
+msgstr "変更履歴エントリーが見つかりませんでした"
+
+msgid "No details for this release"
+msgstr "このリリースの詳細情報はありません"
+
+msgid "Failed to load changelog"
+msgstr "変更履歴の読み込みに失敗しました"
 
 msgid "Changelog"
 msgstr ""
@@ -2009,23 +1321,37 @@ msgstr ""
 msgid "Select Tray Updates Icon"
 msgstr ""
 
-msgid "Refreshing package databases"
+msgid "Select AppImage Install Directory"
+msgstr "AppImage のインストールディレクトリーを選択"
+
+msgid "Tray enabled"
 msgstr ""
 
-msgid "Database lock removed successfully"
+msgid "Tray disabled, but autostart service remains"
 msgstr ""
 
-msgid "Failed to remove database lock"
+msgid "Tray disabled"
 msgstr ""
 
-msgid "Fixing permissions"
+msgid "Failed to add systemd startup service"
 msgstr ""
 
-msgid "Purifying packages"
+msgid "Systemd startup service added."
+msgstr "Systemd 起動サービスが追加されました。"
+
+msgid "Failed to remove systemd startup service"
 msgstr ""
 
-msgid "Enable"
+msgid "Systemd startup service removed."
+msgstr "Systemd 起動サービスが削除されました。"
+
+msgid ""
+"The Arch User Repository (AUR) is a community-driven repository. Packages "
+"are user-produced and may contain risks. Do you want to enable it?"
 msgstr ""
+"Arch User Repository (AUR) はコミュニティ主導のリポジトリです。パッケージは"
+"ユーザーによって作成されており、リスクが含まれる可能性があります。有効にしま"
+"すか？"
 
 msgid "AUR enabled"
 msgstr ""
@@ -2075,365 +1401,42 @@ msgstr ""
 msgid "中文（简体）"
 msgstr ""
 
-msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
+msgid "Packages"
+msgstr "パッケージ"
 
-msgid "No packages found"
-msgstr ""
-
-msgid "Try a shorter or more general keyword."
-msgstr ""
-
-msgid "Could not reach the AUR"
-msgstr ""
-
-msgid "Check your connection and try again."
-msgstr ""
-
-msgid "Flagged out of date"
-msgstr ""
-
-msgid "Select one or more packages"
-msgstr ""
-
-msgid "Package(s)"
-msgstr ""
-
-msgid "Remove the selected AUR packages?"
-msgstr ""
-
-msgid "Build from AUR"
-msgstr ""
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-
-msgid "Build"
-msgstr ""
-
-msgid "Installing AUR packages"
-msgstr ""
-
-msgid "Removing AUR packages"
-msgstr ""
-
-msgid "Dismiss"
-msgstr ""
-
-msgid "Filesystem"
-msgstr ""
-
-msgid "Devices"
-msgstr ""
-
-msgid "Sockets"
-msgstr ""
-
-msgid "Shared"
-msgstr ""
-
-msgid "Environment"
-msgstr ""
-
-msgid "Session bus"
-msgstr ""
-
-msgid "System bus"
-msgstr ""
-
-msgid "Other"
-msgstr ""
-
-msgid "Review PKGBUILD changes for"
-msgstr ""
-
-msgid "Security scan completed -"
-msgstr ""
-
-msgid "warning(s) found."
-msgstr ""
-
-msgid "Security scan completed - warnings found."
-msgstr ""
-
-msgid "used in"
-msgstr ""
-
-msgid "Warning"
-msgstr ""
-
-msgid "package(s)"
-msgstr ""
-
-msgid "to"
-msgstr ""
-
-msgid "download"
-msgstr ""
-
-msgid "net"
-msgstr ""
-
-msgid "Package"
-msgstr ""
+msgid "Shelly Search"
+msgstr "Shelly 検索"
 
 msgid "Update"
 msgstr ""
 
-msgid "Utilities"
+msgid "System package update"
 msgstr ""
 
-msgid "Recommended Packages"
+msgid "AUR package update"
 msgstr ""
 
-msgid "Curated suggestions from Seafoam Labs"
+msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 
-msgid "Refresh the recommended packages list from the network"
+#, fuzzy
+msgid "Update this package"
+msgstr "パッケージをアップデートしますか？"
+
+msgid "of"
 msgstr ""
 
-msgid "Preview Pkgbuild"
+msgid "updates included"
 msgstr ""
 
-msgid "Show Dependency Only"
+msgid "Updates included"
 msgstr ""
 
-msgid "Show dependency packages on;y"
+msgid "Upgrading packages"
 msgstr ""
 
-msgid "Welcome to Shelly v3"
+msgid "Settings"
+msgstr "設定"
+
+msgid "Package"
 msgstr ""
-
-msgid ""
-"Shelly is a modern package manager for Arch Linux. Configure your sources "
-"and preferences to get started. We have recently rewritte both the GUI and "
-"CLI in zig with a new modified UI off our previous designs."
-msgstr ""
-
-msgid "Select Your Sources"
-msgstr ""
-
-msgid ""
-"Choose which package sources you want to browse. You can always change this "
-"later in settings."
-msgstr ""
-
-msgid "Arch User Repository community packages"
-msgstr ""
-
-msgid "Sandboxed universal Linux applications"
-msgstr ""
-
-msgid "Portable self-contained application bundles"
-msgstr ""
-
-msgid "Curated picks based on your installed software"
-msgstr ""
-
-msgid "Look and Feel"
-msgstr ""
-
-msgid ""
-"Customize how Shelly looks and behaves. All of these can be changed later in "
-"preferences."
-msgstr ""
-
-msgid "Navigation Style"
-msgstr ""
-
-msgid "Sidebar"
-msgstr ""
-
-msgid "Vertical icon rail on the left"
-msgstr ""
-
-msgid "Top Bar"
-msgstr ""
-
-msgid "Horizontal tab switcher at the top"
-msgstr ""
-
-msgid "System Tray"
-msgstr ""
-
-msgid "Run in system tray when minimized"
-msgstr ""
-
-msgid "Next"
-msgstr ""
-
-msgid "Start Shelly"
-msgstr ""
-
-msgid "Navigation style"
-msgstr ""
-
-msgid "Maintenance and repair tools for your Shelly installation."
-msgstr ""
-
-msgid "Run"
-msgstr ""
-
-msgid "Clean Package Cache"
-msgstr ""
-
-msgid ""
-"Removes old cached package versions, keeping the selected number per package."
-msgstr ""
-
-msgid "Keep"
-msgstr ""
-
-msgid "Number of cached versions to keep per package"
-msgstr ""
-
-msgid "Review PKGBUILD"
-msgstr ""
-
-msgid "Tray enabled"
-msgstr ""
-
-msgid "Tray disabled, but autostart service remains"
-msgstr ""
-
-msgid "Tray disabled"
-msgstr ""
-
-msgid "Failed to add systemd startup service"
-msgstr ""
-
-msgid "Failed to remove systemd startup service"
-msgstr ""
-
-msgid "Cleaning package cache"
-msgstr ""
-
-msgid "Welcome"
-msgstr ""
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-
-msgid "Enable Recommended?"
-msgstr ""
-
-msgid ""
-"Recommended shows curated package suggestions based on your installed "
-"software. Package data is fetched from external sources."
-msgstr ""
-
-#~ msgid "Happy pride month!"
-#~ msgstr "ハッピープライド月間！"
-
-#~ msgid "You found Chel's hidden page."
-#~ msgstr "チェルの隠しページを見つけました。"
-
-#~ msgid "Follow system language"
-#~ msgstr "システムの言語に従う"
-
-#~ msgid "No description available."
-#~ msgstr "説明がありません。"
-
-#~ msgid "Export AUR install log"
-#~ msgstr "AUR インストールログをエクスポート"
-
-#~ msgid "Log Files (*.log)"
-#~ msgstr "ログファイル (*.log)"
-
-#~ msgid "Exported AUR install log"
-#~ msgstr "エクスポートされた AUR インストールログ"
-
-#~ msgid "Failed to export AUR install log"
-#~ msgstr "AUR インストールログのエクスポートに失敗しました"
-
-#~ msgid "package"
-#~ msgstr "パッケージ"
-
-#~ msgid "packages"
-#~ msgstr "パッケージ"
-
-#~ msgid "AUR installation failed"
-#~ msgstr "AUR のインストールに失敗しました"
-
-#, csharp-format
-#~ msgid ""
-#~ "Shelly couldn't finish building or installing the selected AUR {0}. "
-#~ "Export the logs and attach them to your report so the team can check "
-#~ "whether the issue came from the PKGBUILD or from Shelly."
-#~ msgstr ""
-#~ "Shelly は選択した AUR {0} のビルドまたはインストールを完了できませんでし"
-#~ "た。ログをエクスポートしてレポートに添付し、この問題が PKGBUILD に起因する"
-#~ "ものか Shelly に起因するものかをチームが確認できるようにしてください。"
-
-#~ msgid "Recent output"
-#~ msgstr "最近の出力"
-
-#~ msgid "Export Logs"
-#~ msgstr "ログをエクスポート"
-
-#~ msgid "Fingerprint Disable Instructions"
-#~ msgstr "フィンガープリントの無効化手順"
-
-#~ msgid "Disable fingerprint authentication for sudo"
-#~ msgstr "sudo のフィンガープリント認証を無効にする"
-
-#~ msgid "1. Inspect"
-#~ msgstr "1. 確認する"
-
-#~ msgid "2. Disable for sudo"
-#~ msgstr "2. sudo では無効にする"
-
-#~ msgid "3. Re-enable later"
-#~ msgstr "3. 後で再度有効にする"
-
-#~ msgid "Copy"
-#~ msgstr "コピー"
-
-#, csharp-format
-#~ msgid "PKGBUILD Diff - {0}"
-#~ msgstr "PKGBUILD の差分 - {0}"
-
-#~ msgid "Review the PKGBUILD changes before continuing."
-#~ msgstr "続行する前に PKGBUILD の変更を確認してください。"
-
-#~ msgid "Package installation failed"
-#~ msgstr "パッケージのインストールに失敗しました"
-
-#, csharp-format
-#~ msgid ""
-#~ "Shelly couldn't finish building or installing the selected {0}. Export "
-#~ "the logs and attach them to your report so the team can check whether the "
-#~ "issue came from the PKGBUILD or from Shelly."
-#~ msgstr ""
-#~ "Shelly は選択した {0} のビルドまたはインストールを完了できませんでした。ロ"
-#~ "グをエクスポートしてレポートに添付し、この問題が PKGBUILD に起因するもの"
-#~ "か Shelly に起因するものかをチームが確認できるようにしてください。"
-
-#~ msgid "Export Shelly install log"
-#~ msgstr "Shelly のインストールログをエクスポート"
-
-#~ msgid "Exported Shelly install log"
-#~ msgstr "エクスポートされた Shelly のインストールログ"
-
-#~ msgid "Failed to export Shelly install log"
-#~ msgstr "Shelly のインストールログのエクスポートに失敗しました"
-
-#~ msgid "No packages found."
-#~ msgstr "パッケージが見つかりませんでした。"
-
-#~ msgid "Displaying Package Build {0}"
-#~ msgstr "パッケージビルド {0} を表示しています"
-
-#~ msgid ""
-#~ "Both tray icons must be set for use, if not it will default to standard "
-#~ "shelly icons. Changing tray icons requires a restart of shelly-"
-#~ "notifications."
-#~ msgstr ""
-#~ "両方のトレイアイコンを使用するよう設定する必要があります。設定されていない"
-#~ "場合は標準の shelly アイコンがデフォルトとなります。トレイアイコンを変更す"
-#~ "るには shelly-notifications を再起動する必要があります。"
-
-#~ msgid "Unable to load package data. You may have a db.lck."
-#~ msgstr "パッケージデータを読み込めません。db.lck があるかもしれません。"

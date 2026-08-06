@@ -2,10 +2,10 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-05-14 18:41-0400\n"
+"POT-Creation-Date: 2026-08-05 12:25+0300\n"
 "PO-Revision-Date: 2026-06-30 10:06+0400\n"
-"Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\\n"
-"Language-Team: Russian (Russia) <anton@azdanov.dev>\n"
+"Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\\nLanguage-Team: "
+"Russian (Russia) <anton@azdanov.dev>\n"
 "Language: ru_RU\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -15,882 +15,24 @@ msgstr ""
 "X-Generator: Poedit 3.8\n"
 "X-Poedit-SourceCharset: UTF-8\n"
 
-msgid "Any"
-msgstr "Любой"
-
-msgid "Loading..."
-msgstr "Загрузка..."
-
-msgid "Recent Operations"
-msgstr "Недавние операции"
-
-msgid "History"
-msgstr "История"
-
-msgid "No recent activity"
-msgstr "Нет недавней активности"
-
-msgid "Session log is too large to display"
-msgstr "Журнал сеанса слишком большой для отображения"
-
-msgid "Session Log"
-msgstr "Журнал сеанса"
-
-msgid "Copy Log"
-msgstr "Копировать журнал"
-
-msgid "Log copied to clipboard"
-msgstr "Журнал скопирован в буфер обмена"
-
-msgid "Available Updates ({0})"
-msgstr "Доступные обновления ({0})"
-
-msgid "Updates ({0})"
-msgstr "Обновления ({0})"
-
-msgid "All packages are up to date"
-msgstr "Все пакеты обновлены"
-
-msgid "just now"
-msgstr "только что"
-
-msgid "{0} min ago"
-msgstr "{0} мин назад"
-
-msgid "{0}h ago"
-msgstr "{0} ч назад"
-
-msgid "yesterday"
-msgstr "вчера"
-
-msgid "{0}d ago"
-msgstr "{0} дн. назад"
-
-msgid "<span size='large'>Search for AUR packages</span>"
-msgstr "<span size='large'>Поиск пакетов AUR</span>"
-
-msgid "Install Packages?"
-msgstr "Установить пакеты?"
-
-msgid "Installing..."
-msgstr "Установка..."
-
-msgid "No packages found."
-msgstr "Пакеты не найдены."
-
-msgid "Displaying Package Build {0}"
-msgstr "Отображение PKGBUILD {0}"
-
-msgid "Installed {0} Package(s)"
-msgstr "Установлено пакетов: {0}"
-
-msgid "Export AUR install log"
-msgstr "Экспортировать журнал установки AUR"
-
-msgid "Log Files (*.log)"
-msgstr "Файлы журналов (*.log)"
-
-msgid "Exported AUR install log"
-msgstr "Журнал установки AUR экспортирован"
-
-msgid "Failed to export AUR install log"
-msgstr "Не удалось экспортировать журнал установки AUR"
-
-msgid "Package Build"
-msgstr "PKGBUILD"
-
-msgid "Preview PKGBUILD"
-msgstr "Предпросмотр PKGBUILD"
-
-msgid "Displays Package Build"
-msgstr "Показывает PKGBUILD"
-
-msgid "Close details"
-msgstr "Закрыть подробности"
-
-msgid "Version"
-msgstr "Версия"
-
-msgid "Votes"
-msgstr "Голоса"
-
-msgid "Popularity"
-msgstr "Популярность"
-
-msgid "Out of Date"
-msgstr "Устаревший"
-
-msgid "Maintainer"
-msgstr "Сопровождающий"
-
-msgid "Orphaned"
-msgstr "Осиротевший"
-
-msgid "Last Modified"
-msgstr "Последнее изменение"
-
-msgid "First Submitted"
-msgstr "Первое добавление"
-
-msgid "URL:"
-msgstr "URL-адрес:"
-
-msgid "AUR:"
-msgstr "AUR:"
-
-msgid "Depends"
-msgstr "Зависимости"
-
-msgid "Make Depends"
-msgstr "Зависимости сборки"
-
-msgid "Check Depends"
-msgstr "Зависимости проверки"
-
-msgid "Optional Deps"
-msgstr "Опциональные зависимости"
-
-msgid "Licenses"
-msgstr "Лицензии"
-
-msgid "Keywords"
-msgstr "Ключевые слова"
-
-msgid "Provides"
-msgstr "Предоставляет"
-
-msgid "Conflicts"
-msgstr "Конфликты"
-
-msgid "Groups"
-msgstr "Группы"
-
-msgid "Replaces"
-msgstr "Заменяет"
-
-msgid "Remove Packages?"
-msgstr "Удалить пакеты?"
-
-msgid "Removing..."
-msgstr "Удаление..."
-
-msgid "Removed {0} Package(s)"
-msgstr "Удалено пакетов: {0}"
-
-msgid "<span size='large'>AUR packages are up to date</span>"
-msgstr "<span size='large'>Пакеты AUR обновлены</span>"
-
-msgid "Update Packages?"
-msgstr "Обновить пакеты?"
-
-msgid "Updated {0} Package(s)"
-msgstr "Обновлено пакетов: {0}"
-
-msgid "Shelly is an Arch Linux package manager"
-msgstr "Shelly - менеджер пакетов для Arch Linux"
-
-msgid "Seafoam Labs Website"
-msgstr "Сайт Seafoam Labs"
-
-msgid "Project Leads"
-msgstr "Руководители проекта"
-
-msgid "Maintainers"
-msgstr "Сопровождающие"
-
-msgid "Select"
-msgstr "Выбрать"
-
-msgid "Select All"
-msgstr "Выбрать всё"
-
-msgid "Confirm"
-msgstr "Подтвердить"
-
-msgid "No"
-msgstr "Нет"
-
-msgid "Yes"
-msgstr "Да"
-
-msgid "Install Ignored Package?"
-msgstr "Установить игнорируемый пакет?"
-
-msgid "Replace Package?"
-msgstr "Заменить пакет?"
-
-msgid "Package Conflict Detected"
-msgstr "Обнаружен конфликт пакетов"
-
-msgid "Corrupted Package Found"
-msgstr "Обнаружен повреждённый пакет"
-
-msgid "Import PGP Key?"
-msgstr "Импортировать ключ PGP?"
-
-msgid "Select Provider"
-msgstr "Выберите поставщика"
-
-msgid "Select Optional Dependencies"
-msgstr "Выберите опциональные зависимости"
-
-msgid "System Question"
-msgstr "Системный вопрос"
-
-msgid "Arch Linux News"
-msgstr "Новости Arch Linux"
-
-msgid "No news available"
-msgstr "Новости отсутствуют"
-
-msgid "package"
-msgstr "пакет"
-
-msgid "packages"
-msgstr "пакеты"
-
-msgid "AUR installation failed"
-msgstr "Не удалось установить AUR"
+msgid "Install a local Flatpak"
+msgstr "Установить локальный Flatpak"
 
 msgid ""
-"Shelly couldn't finish building or installing the selected AUR {0}. Export "
-"the logs and attach them to your report so the team can check whether the "
-"issue came from the PKGBUILD or from Shelly."
+"Choose a .flatpak bundle from your system and install it for the current "
+"user or system-wide."
 msgstr ""
-"Shelly не удалось завершить сборку или установку выбранного AUR {0}. "
-"Экспортируйте журналы и приложите их к отчёту, чтобы команда могла "
-"проверить, связана ли проблема с PKGBUILD или с Shelly."
+"Выберите пакет .flatpak из вашей системы и установите его для текущего "
+"пользователя или для всей системы."
 
-msgid "Packages"
-msgstr "Пакеты"
+msgid "Bundle"
+msgstr "Пакет"
 
-msgid "Recent output"
-msgstr "Недавний вывод"
+msgid "Choose file…"
+msgstr "Выберите файл…"
 
-msgid "Close"
-msgstr "Закрыть"
-
-msgid "Export Logs"
-msgstr "Экспортировать журналы"
-
-msgid "Cache directory does not exist"
-msgstr "Каталог кэша не существует"
-
-msgid "Cleaning package cache..."
-msgstr "Очистка кэша пакетов..."
-
-msgid "Package cache cleaned successfully"
-msgstr "Кэш пакетов успешно очищен"
-
-msgid "Cache clean failed: {0}"
-msgstr "Не удалось очистить кэш: {0}"
-
-msgid "Fingerprint Disable Instructions"
-msgstr "Инструкции по отключению отпечатка пальца"
-
-msgid "Disable fingerprint authentication for sudo"
-msgstr "Отключить аутентификацию по отпечатку пальца для sudo"
-
-msgid "1. Inspect"
-msgstr "1. Проверить"
-
-msgid "2. Disable for sudo"
-msgstr "2. Отключить для sudo"
-
-msgid "3. Re-enable later"
-msgstr "3. Повторно включить позже"
-
-msgid "Copy"
-msgstr "Копировать"
-
-msgid "Operation Complete"
-msgstr "Операция завершена"
-
-msgid "Cancel"
-msgstr "Отмена"
-
-msgid "Authentication Required"
-msgstr "Требуется аутентификация"
-
-msgid "Password needed to execute: {0}."
-msgstr "Для выполнения требуется пароль: {0}."
-
-msgid "Authenticate"
-msgstr "Подтвердить"
-
-msgid "Incorrect password. Try again."
-msgstr "Неверный пароль. Попробуйте снова."
-
-msgid "What's New"
-msgstr "Что нового"
-
-msgid "Version History"
-msgstr "История версий"
-
-msgid "Version {0}"
-msgstr "Версия {0}"
-
-msgid "Package installation failed"
-msgstr "Не удалось установить пакет"
-
-msgid ""
-"Shelly couldn't finish building or installing the selected {0}. Export the "
-"logs and attach them to your report so the team can check whether the issue "
-"came from the PKGBUILD or from Shelly."
-msgstr ""
-"Shelly не удалось завершить сборку или установку выбранного {0}. "
-"Экспортируйте журналы и приложите их к отчёту, чтобы команда могла "
-"проверить, связана ли проблема с PKGBUILD или с Shelly."
-
-msgid "Cache Cleaner"
-msgstr "Очистка кэша"
-
-msgid ""
-"Cache directory: {0}\n"
-"Total cached files: {1} ({2})"
-msgstr ""
-"Каталог кэша: {0}\n"
-"Всего файлов в кэше: {1} ({2})"
-
-msgid "Keep versions:"
-msgstr "Оставить версий:"
-
-msgid "Uninstalled only"
-msgstr "Только удаленные"
-
-msgid "Clean"
-msgstr "Очистить"
-
-msgid "No candidates for removal."
-msgstr "Нет кандидатов на удаление."
-
-msgid "{0} files, {1} would be freed"
-msgstr "{0} файлов, будет освобождено {1}"
-
-msgid "Name and URL are required"
-msgstr "Требуются имя и URL"
-
-msgid "URL must end with .flatpakrepo"
-msgstr "URL должен оканчиваться на .flatpakrepo"
-
-msgid "Failed to add remote: {0}"
-msgstr "Не удалось добавить удалённый источник: {0}"
-
-msgid "Added Remote: {0}"
-msgstr "Добавлен удалённый источник: {0}"
-
-msgid "Removed Remote"
-msgstr "Удалённый источник удалён"
-
-msgid "All Applications"
-msgstr "Все приложения"
-
-msgid "Recommended"
-msgstr "Рекомендуемые"
-
-msgid "Most Wanted"
-msgstr "Самые востребованные"
-
-msgid "Recently Added"
-msgstr "Недавно добавленные"
-
-msgid "Recently Updated"
-msgstr "Недавно обновлённые"
-
-msgid "Audio & Video"
-msgstr "Аудио и видео"
-
-msgid "Development"
-msgstr "Разработка"
-
-msgid "Education"
-msgstr "Образование"
-
-msgid "Game"
-msgstr "Игры"
-
-msgid "Graphics"
-msgstr "Графика"
-
-msgid "Network"
-msgstr "Сеть"
-
-msgid "Office"
-msgstr "Офис"
-
-msgid "Science"
-msgstr "Наука"
-
-msgid "System"
-msgstr "Система"
-
-msgid "Utility"
-msgstr "Утилиты"
-
-msgid "Version: {0}"
-msgstr "Версия: {0}"
-
-msgid "License: {0}"
-msgstr "Лицензия: {0}"
-
-msgid "Installed"
-msgstr "Установлено"
-
-msgid "Install"
-msgstr "Установить"
-
-msgid "Size: {0}"
-msgstr "Размер: {0}"
-
-msgid "No links available"
-msgstr "Ссылки недоступны"
-
-msgid "Install Flatpak Ref"
-msgstr "Установить Flatpak Ref"
-
-msgid "Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""
-msgstr "Локальные файлы Flatpak (\"*.FlatpakRef\", \"*.flatpak\")"
-
-msgid "Installing selected local flatpak file..."
-msgstr "Установка выбранного локального файла flatpak..."
-
-msgid "Installing Flatpak failed"
-msgstr "Не удалось установить Flatpak"
-
-msgid "Installed Flatpak"
-msgstr "Flatpak установлен"
-
-msgid "Install Package?"
-msgstr "Установить пакет?"
-
-msgid "Installing {0}..."
-msgstr "Установка {0}..."
-
-msgid "Installed Flatpak addon"
-msgstr "Дополнение Flatpak установлено"
-
-msgid "Available Addons"
-msgstr "Доступные дополнения"
-
-msgid "No details available"
-msgstr "Подробности недоступны"
-
-msgid "Keep Config"
-msgstr "Сохранить конфигурацию"
-
-msgid "Keep user data and configuration"
-msgstr "Сохранить пользовательские данные и конфигурацию"
-
-msgid "Delete Config"
-msgstr "Удалить конфигурацию"
-
-msgid "Delete user data and configuration"
-msgstr "Удалить пользовательские данные и конфигурацию"
-
-msgid "Keep Config?"
-msgstr "Сохранить конфигурацию?"
-
-msgid "Removing {0}..."
-msgstr "Удаление {0}..."
-
-msgid "Failed to remove package {0}: {1}"
-msgstr "Не удалось удалить пакет {0}: {1}"
-
-msgid "Removed Package(s)"
-msgstr "Пакеты удалены"
-
-msgid "Permission Changes"
-msgstr "Изменения разрешений"
-
-msgid "Updating Flatpak packages..."
-msgstr "Обновление пакетов Flatpak..."
-
-msgid "Failed to update packages: {0}"
-msgstr "Не удалось обновить пакеты: {0}"
-
-msgid "Updated all Flatpak(s)"
-msgstr "Все Flatpak обновлены"
-
-msgid "<span size='large'>System packages are up to date</span>"
-msgstr "<span size='large'>Системные пакеты обновлены</span>"
-
-msgid "Current"
-msgstr "Текущая"
-
-msgid "New"
-msgstr "Новая"
-
-msgid "Download"
-msgstr "Скачивание"
-
-msgid "Size Diff"
-msgstr "Разница в размере"
-
-msgid "Repository"
-msgstr "Репозиторий"
-
-msgid "Size"
-msgstr "Размер"
-
-msgid "Partial Update Warning"
-msgstr "Предупреждение о частичном обновлении"
-
-msgid ""
-"It is not advised you do partial system updates. Are you sure you want to "
-"continue?"
-msgstr ""
-"Не рекомендуется выполнять частичные обновления системы. Вы уверены, что "
-"хотите продолжить?"
-
-msgid ""
-"It is unadvised to not update all packages at once. Are you sure you want to "
-"continue?"
-msgstr ""
-"Не рекомендуется обновлять не все пакеты сразу. Вы уверены, что хотите "
-"продолжить?"
-
-msgid "Updating..."
-msgstr "Обновление..."
-
-msgid "Reboot Required"
-msgstr "Требуется перезагрузка"
-
-msgid ""
-"A full system reboot is required for updates to take effect.\n"
-"\n"
-"Would you like to reboot now?"
-msgstr ""
-"Чтобы обновления вступили в силу, требуется полная перезагрузка системы.\n"
-"\n"
-"Перезагрузить сейчас?"
-
-msgid "Service Restart Failures"
-msgstr "Не удалось перезапустить службы"
-
-msgid ""
-"The following services failed to restart automatically:\n"
-"{0}"
-msgstr ""
-"Следующие службы не удалось перезапустить автоматически:\n"
-"{0}"
-
-msgid "--- Packages to Upgrade ---"
-msgstr "--- Пакеты для обновления ---"
-
-msgid "Export Shelly install log"
-msgstr "Экспортировать журнал установки Shelly"
-
-msgid "Exported Shelly install log"
-msgstr "Журнал установки Shelly экспортирован"
-
-msgid "Failed to export Shelly install log"
-msgstr "Не удалось экспортировать журнал установки Shelly"
-
-msgid "Install Local Package"
-msgstr "Установить локальный пакет"
-
-msgid "Local package files (\"*.gz\", \"*.zst\")"
-msgstr "Локальные файлы пакетов (\"*.gz\", \"*.zst\")"
-
-msgid "Installing local package..."
-msgstr "Установка локального пакета..."
-
-msgid "Installed local package"
-msgstr "Локальный пакет установлен"
-
-msgid "Package Files ({0})"
-msgstr "Файлы пакетов ({0})"
-
-msgid "Remove corrupted packages"
-msgstr "Удалить повреждённые пакеты"
-
-msgid "Select File"
-msgstr "Выбрать файл"
-
-msgid "Recommend"
-msgstr "Рекомендуемые"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "AppImage"
-msgstr "AppImage"
-
-msgid "Shelly Search"
-msgstr "Поиск Shelly"
-
-msgid "Select Icon File"
-msgstr "Выбрать файл значка"
-
-msgid "Image Files"
-msgstr "Файлы изображений"
-
-msgid "Enable AUR?"
-msgstr "Включить AUR?"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"Arch User Repository (AUR) - это репозиторий, поддерживаемый сообществом. "
-"Пакеты создаются пользователями и могут быть небезопасны. Хотите включить "
-"его?"
-
-msgid "Missing Flatpak"
-msgstr "Flatpak отсутствует"
-
-msgid "Would you like to install this this now?"
-msgstr "Хотите установить это сейчас?"
-
-msgid "Installing flatpak..."
-msgstr "Установка flatpak..."
-
-msgid "Reboot required to complete installation."
-msgstr "Для завершения установки требуется перезагрузка."
-
-msgid "Synchronizing databases..."
-msgstr "Синхронизация баз данных..."
-
-msgid "Database lock removed"
-msgstr "Блокировка базы данных удалена"
-
-msgid "Shelly folder ownership restored"
-msgstr "Восстановлены права на папку Shelly"
-
-msgid "Failed to fix folder permissions"
-msgstr "Не удалось исправить разрешения папки"
-
-msgid "Error fixing folder permissions"
-msgstr "Ошибка при исправлении разрешений папки"
-
-msgid "Purified Corruption"
-msgstr "Повреждения устранены"
-
-msgid "No corrupted packages found"
-msgstr "Повреждённые пакеты не найдены"
-
-msgid "No pacfiles found"
-msgstr "Файлы pacnew/pacsave не найдены"
-
-msgid "Pacfiles Found"
-msgstr "Найдены pac-файлы"
-
-msgid "Copy content"
-msgstr "Копировать содержимое"
-
-msgid "Copied to clipboard"
-msgstr "Скопировано в буфер обмена"
-
-msgid "Overlay not available"
-msgstr "Наложение недоступно"
-
-msgid "No changelog entries found"
-msgstr "Записи журнала изменений не найдены"
-
-msgid "Unknown"
-msgstr "Неизвестно"
-
-msgid "No details for this release"
-msgstr "Нет подробностей для этого выпуска"
-
-msgid "Unknown date"
-msgstr "Неизвестная дата"
-
-msgid "Failed to load changelog"
-msgstr "Не удалось загрузить журнал изменений"
-
-msgid "None"
-msgstr "Нет"
-
-msgid "StaticUrl"
-msgstr "StaticUrl"
-
-msgid "GitHub"
-msgstr "GitHub"
-
-msgid "GitLab"
-msgstr "GitLab"
-
-msgid "Codeberg"
-msgstr "Codeberg"
-
-msgid "Forgejo"
-msgstr "Forgejo"
-
-msgid "Select AppImage to Install"
-msgstr "Выберите AppImage для установки"
-
-msgid "AppImage Files"
-msgstr "Файлы AppImage"
-
-msgid "Installing AppImage..."
-msgstr "Установка AppImage..."
-
-msgid "{0} installed successfully!"
-msgstr "{0} успешно установлен!"
-
-msgid "Failed to install {0}: {1}"
-msgstr "Не удалось установить {0}: {1}"
-
-msgid "No AppImages need to be upgraded"
-msgstr "Нет AppImage, требующих обновления"
-
-msgid "Running updates..."
-msgstr "Выполняются обновления..."
-
-msgid "Updating AppImages..."
-msgstr "Обновление AppImage..."
-
-msgid "All AppImages updated successfully!"
-msgstr "Все AppImage успешно обновлены!"
-
-msgid "Failed to update AppImages: {0}"
-msgstr "Не удалось обновить AppImage: {0}"
-
-msgid "Configuration saved for {0}"
-msgstr "Конфигурация сохранена для {0}"
-
-msgid "Failed to save configuration: {0}"
-msgstr "Не удалось сохранить конфигурацию: {0}"
-
-msgid "Syncing {0}..."
-msgstr "Синхронизация {0}..."
-
-msgid "Synced {0}"
-msgstr "{0} синхронизирован"
-
-msgid "Failed to sync: {0}"
-msgstr "Не удалось синхронизировать: {0}"
-
-msgid "Syncing all AppImages ..."
-msgstr "Синхронизация всех AppImage ..."
-
-msgid "Synced"
-msgstr "Синхронизировано"
-
-msgid "{0} removed successfully!"
-msgstr "{0} успешно удалён!"
-
-msgid "Failed to remove {0}: {1}"
-msgstr "Не удалось удалить {0}: {1}"
-
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
-msgstr ""
-"Рекомендации не найдены. Проверьте подключение к интернету и попробуйте ещё "
-"раз."
-
-msgid "Already installed"
-msgstr "Уже установлено"
-
-msgid "Install "
-msgstr "Установить "
-
-msgid "Package is already installed"
-msgstr "Пакет уже установлен"
-
-msgid "Installing package..."
-msgstr "Установка пакета..."
-
-msgid "Package installed successfully"
-msgstr "Пакет успешно установлен"
-
-msgid "Reboot required after flatpak installation."
-msgstr "После установки flatpak требуется перезагрузка."
-
-msgid "Failed to install flatpak"
-msgstr "Не удалось установить flatpak"
-
-msgid "Searching..."
-msgstr "Поиск..."
-
-msgid "Search error: {0}"
-msgstr "Ошибка поиска: {0}"
-
-msgid "Failed to install packages: {0}"
-msgstr "Не удалось установить пакеты: {0}"
-
-msgid "Install for {0} package(s) was unsuccessful."
-msgstr "Не удалось установить {0} пакет(ов)."
-
-msgid "Failed to remove packages: {0}"
-msgstr "Не удалось удалить пакеты: {0}"
-
-msgid "color-scheme"
-msgstr "цветовая-схема"
-
-msgid "Updates"
-msgstr "Обновления"
-
-msgid "Manage"
-msgstr "Управление"
-
-msgid "Remove"
-msgstr "Удалить"
-
-msgid "Search packages..."
-msgstr "Поиск пакетов..."
-
-msgid "Use chroot"
-msgstr "Использовать chroot"
-
-msgid "Build packages in a clean chroot environment"
-msgstr "Собрать пакет(ы) в чистом окружении chroot"
-
-msgid "Run checks"
-msgstr "Выполнить checks"
-
-msgid "Run the --check function during package build (installs checkdepends)"
-msgstr ""
-"Выполнить функцию --check во время сборки пакета (устанавливает checkdepends)"
-
-msgid "Install Aur Package(s)"
-msgstr "Установить пакет(ы) AUR"
-
-msgid "Name"
-msgstr "Имя"
-
-msgid "refresh"
-msgstr "обновить"
-
-msgid "Clean Uninstall"
-msgstr "Полное удаление"
-
-msgid "Show Hidden"
-msgstr "Показать скрытые"
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr "Показывать пакеты из списка IgnorePkg в pacman.conf"
-
-msgid "Remove Aur Package(s)"
-msgstr "Удалить пакет(ы) AUR"
-
-msgid ""
-"Run the --check function during package build (installs checkdepends)\n"
-"                        "
-msgstr ""
-"Выполнить функцию --check во время сборки пакета (устанавливает "
-"checkdepends)\n"
-"                        "
-
-msgid "Update Aur Package(s)"
-msgstr "Обновить пакет(ы) AUR"
-
-msgid "Please wait while we update your system."
-msgstr "Подождите, пока мы обновляем вашу систему."
-
-msgid "Reload"
-msgstr "Перезагрузить"
-
-msgid "Manage Remote Refs"
-msgstr "Настроить удаленные источники"
-
-msgid "Install local flatpak"
-msgstr "Установить локальный flatpak"
+msgid "Install for"
+msgstr "Установить для"
 
 msgid "system"
 msgstr "система"
@@ -898,44 +40,44 @@ msgstr "система"
 msgid "user"
 msgstr "пользователь"
 
-msgid "Loading Flatpak Data..."
-msgstr "Загрузка данных Flatpak..."
+msgid "Install"
+msgstr "Установить"
 
-msgid "Back"
-msgstr "Назад"
+msgid "Additional Options"
+msgstr "Дополнительные параметры"
 
-msgid "Addons"
-msgstr "Дополнения"
+msgid "Show Runtimes"
+msgstr "Показать среды выполнения"
 
-msgid "Group Filter"
-msgstr "Фильтр групп"
+msgid "Flatpak Repair"
+msgstr "Восстановление Flatpak"
 
-msgid "App Name"
-msgstr "Название приложения"
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Восстанавливает установку Flatpak (экспериментально)"
 
-msgid "Author"
-msgstr "Автор"
+msgid "Search packages..."
+msgstr "Поиск пакетов..."
 
-msgid "Version: -"
-msgstr "Версия: -"
+msgid "Browse"
+msgstr "Обзор"
 
-msgid "Size: -"
-msgstr "Размер: -"
+msgid "Manage"
+msgstr "Управление"
 
-msgid "License: -"
-msgstr "Лицензия: -"
+msgid "Manage Remote Refs"
+msgstr "Настроить удаленные источники"
 
-msgid "Summary"
-msgstr "Описание"
-
-msgid "No description available."
-msgstr "Описание недоступно."
+msgid "Install Local"
+msgstr "Установить локальный"
 
 msgid "Delete Selected Remote"
 msgstr "Удалить выбранный удалённый источник"
 
 msgid "Add Remote"
 msgstr "Добавить удалённый источник"
+
+msgid "Back"
+msgstr "Назад"
 
 msgid "Add New Flatpak Remote"
 msgstr "Добавить новый удалённый источник Flatpak"
@@ -958,53 +100,87 @@ msgstr "например, https://flathub.org/repo/flathub.flatpakrepo"
 msgid "Scope"
 msgstr "Область"
 
-msgid "Remove Selected"
-msgstr "Удалить выбранное"
+msgid "Loading Flatpak Data..."
+msgstr "Загрузка данных Flatpak..."
 
-msgid "Update All"
-msgstr "Обновить всё"
+msgid "Addons"
+msgstr "Дополнения"
 
-msgid "Package Group Filter"
-msgstr "Фильтр групп пакетов"
+msgid "Install source"
+msgstr "Источник установки"
 
-msgid "Install Local Packages"
-msgstr "Установить локальные пакеты"
+msgid "App Name"
+msgstr "Название приложения"
 
-msgid "Install Local"
-msgstr "Установить локальный"
+msgid "Author"
+msgstr "Автор"
 
-msgid "Perform Upgrade"
-msgstr "Выполнить обновление"
+msgid "Version: -"
+msgstr "Версия: -"
 
-msgid "Perform a full system upgrade with install (-u)"
-msgstr "Выполнить полное обновление системы с установкой (-u)"
+msgid "Size: -"
+msgstr "Размер: -"
 
-msgid "Install Selected"
-msgstr "Установить выбранное"
+msgid "License: -"
+msgstr "Лицензия: -"
 
-msgid "Sync"
-msgstr "Синхронизировать"
+msgid "Summary"
+msgstr "Описание"
 
-msgid "Update Selected"
-msgstr "Обновить выбранное"
+msgid "Show more"
+msgstr "Показать ещё"
 
-msgid "Package Name"
-msgstr "Имя пакета"
+msgid "App Permissions"
+msgstr "Разрешения приложения"
 
-msgid "Size Difference"
-msgstr "Разница в размере"
+msgid "Version History"
+msgstr "История версий"
 
-msgid "Old Version"
-msgstr "Старая версия"
+msgid "Reinstall"
+msgstr "Переустановить"
 
-msgid "Remove Local Packages"
-msgstr "Удалить локальные пакеты"
+msgid "Add Ignore"
+msgstr "Добавить в игнорируемые"
 
-msgid "Remove Local"
-msgstr "Удалить локальный"
+msgid "Add Hold"
+msgstr "Добавить в удерживаемые"
 
-msgid "Remove Configs"
-msgstr "Удалить конфигурации"
+msgid "Make Explicit"
+msgstr "Сделать явным"
+
+msgid "Mark Dependency"
+msgstr "Отметить как зависимость"
+
+msgid "Package actions"
+msgstr "Действия с пакетами"
+
+msgid "Information"
+msgstr "Информация"
+
+msgid "Recommended Packages"
+msgstr "Рекомендуемые пакеты"
+
+msgid "Curated suggestions from Seafoam Labs"
+msgstr "Отобранные рекомендации от Seafoam Labs"
+
+msgid "Refresh the recommended packages list from the network"
+msgstr "Обновить список рекомендуемых пакетов из сети"
+
+msgid "Loading Recommended Packages..."
+msgstr "Загрузка рекомендуемых пакетов..."
+
+msgid ""
+"No recommendations found. Please check your internet connection and try "
+"again."
+msgstr ""
+"Рекомендации не найдены. Проверьте подключение к интернету и попробуйте ещё "
+"раз."
+
+msgid "Preview Pkgbuild"
+msgstr "Предпросмотр PKGBUILD"
+
+msgid "Shelly"
+msgstr "Shelly"
 
 msgid "General"
 msgstr "Общие"
@@ -1012,17 +188,23 @@ msgstr "Общие"
 msgid "Enable AUR"
 msgstr "Включить AUR"
 
+msgid "Language"
+msgstr "Язык"
+
 msgid "Enable Flatpak"
 msgstr "Включить Flatpak"
 
-msgid "Enable Recommended Page"
-msgstr "Включить страницу рекомендаций"
+msgid "Enable Recommended"
+msgstr "Включить рекомендации"
 
 msgid "Enable AppImage"
 msgstr "Включить AppImage"
 
 msgid "Enable Tray Icon"
 msgstr "Включить значок в трее"
+
+msgid "Add Tray To Auto Start"
+msgstr "Добавить значок трея в автозапуск"
 
 msgid "Use weekly schedule"
 msgstr "Использовать недельное расписание"
@@ -1057,25 +239,37 @@ msgstr "Сб"
 msgid "Update Time (24h):"
 msgstr "Время обновления (24 ч):"
 
+msgid ":"
+msgstr ":"
+
 msgid "Look & Feel"
 msgstr "Внешний вид"
 
 msgid "Icons Enabled"
 msgstr "Значки включены"
 
+msgid ""
+"If enabled, Shelly will use appstream icons in the package list and details "
+"pages."
+msgstr ""
+"Если включено, Shelly будет использовать значки appstream в списке пакетов и "
+"на страницах с подробностями."
+
 msgid "Use Symbolic Tray Icon"
 msgstr "Использовать символический значок трея"
 
 msgid ""
-"Both tray icons must be set for use, if not it will default to standard "
-"shelly icons. Changing tray icons requires a restart of shelly-notifications."
+"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"one."
 msgstr ""
-"Для использования должны быть заданы оба значка трея, иначе будут "
-"использоваться стандартные значки Shelly. Изменение значков трея требует "
-"перезапуска shelly-notifications."
+"Если включено, Shelly будет использовать символический SVG-значок вместо "
+"стандартного растрового."
 
 msgid "Tray Icon"
 msgstr "Значок трея"
+
+msgid "Select File"
+msgstr "Выбрать файл"
 
 msgid "Clear"
 msgstr "Очистить"
@@ -1086,11 +280,14 @@ msgstr "Значок обновлений в трее"
 msgid "Default page"
 msgstr "Страница по умолчанию"
 
-msgid "Use Sidebar Navigation"
-msgstr "Использовать боковую навигацию"
+msgid "Navigation style"
+msgstr "Стиль навигации"
 
 msgid "Advanced"
 msgstr "Дополнительно"
+
+msgid "Remove Cache on Uninstall"
+msgstr "Очищать кэш при удалении"
 
 msgid "No Confirm"
 msgstr "Без подтверждения"
@@ -1098,20 +295,57 @@ msgstr "Без подтверждения"
 msgid "Enable Shelly Search"
 msgstr "Включить поиск Shelly"
 
+msgid "Enable Package Downgrade"
+msgstr "Включить понижение версии пакетов"
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Включить визуализацию WebView (экспериментально)"
 
-msgid "Parallel Downloads"
-msgstr "Параллельные скачивания"
+msgid "AppImage Install Path"
+msgstr "Путь установки AppImage"
+
+msgid "Select Directory"
+msgstr "Выбрать каталог"
+
+msgid "Save"
+msgstr "Сохранить"
+
+msgid "View Changelog"
+msgstr "Обзор журнала изменений"
+
+msgid "v0.0.0"
+msgstr "v0.0.0"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "Community fluxer"
+msgstr "Сообщество Fluxer"
+
+msgid "Sponsor"
+msgstr "Поддержать"
+
+msgid "Utilities"
+msgstr "Инструменты"
+
+msgid "Maintenance and repair tools for your Shelly installation."
+msgstr "Инструменты обслуживания и восстановления для вашей установки Shelly."
 
 msgid "Force Database Update"
 msgstr "Принудительно обновить базу данных"
 
-msgid "Remove db.lock"
-msgstr "Удалить db.lock"
+msgid "Force a synchronization of the package database."
+msgstr "Принудительно синхронизировать базу данных пакетов."
 
-msgid "View Pacfiles"
-msgstr "Просмотреть pac-файлы"
+msgid "Run"
+msgstr "Выполнить"
+
+msgid "Remove db.lck"
+msgstr "Удалить db.lck"
+
+msgid ""
+"Removes the db.lck file if it was left behind by an interrupted alpm process."
+msgstr "Удаляет файл db.lck, если он был оставлен прерванным процессом alpm."
 
 msgid "Fix Permissions"
 msgstr "Исправить разрешения"
@@ -1120,23 +354,145 @@ msgid ""
 "Restores correct user ownership of Shelly configuration and cache folders if "
 "they were accidentally created by root."
 msgstr ""
-"Восстанавливает верные права пользователя для папок конфигурации и "
-"кэша Shelly, если они были случайно созданы от имени root."
+"Восстанавливает верные права пользователя для папок конфигурации и кэша "
+"Shelly, если они были случайно созданы от имени root."
 
 msgid "Purify Packages"
 msgstr "Очистить пакеты"
 
-msgid "Save"
-msgstr "Сохранить"
+msgid "Remove corrupted/orphaned packages."
+msgstr "Удалить повреждённые/осиротевшие пакеты."
 
-msgid "View Changelog"
-msgstr "Обзор журнала изменений"
+msgid "Clean Package Cache"
+msgstr "Очистить кэш пакетов"
 
-msgid "Community fluxer"
-msgstr "Сообщество Fluxer"
+msgid ""
+"Removes old cached package versions, keeping the selected number per package."
+msgstr ""
+"Удаляет старые кэшированные версии пакетов, сохраняя выбранное количество на "
+"пакет."
 
-msgid "Sponsor"
-msgstr "Поддержать"
+msgid "Keep"
+msgstr "Хранить"
+
+msgid "Number of cached versions to keep per package"
+msgstr "Количество кэшированных версий для хранения на пакет"
+
+msgid "Toggle output"
+msgstr "Переключить вывод"
+
+msgid "Close"
+msgstr "Закрыть"
+
+msgid "Available Updates"
+msgstr "Доступные обновления"
+
+msgid "7 of 7 updates included"
+msgstr "7 из 7 обновлений включены"
+
+msgid "Check all enabled sources again"
+msgstr "Проверить все включённые источники снова"
+
+msgid "Check Again"
+msgstr "Проверить снова"
+
+msgid "Upgrade"
+msgstr "Обновить"
+
+msgid "System"
+msgstr "Система"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Checking for updates…"
+msgstr "Проверяются обновления…"
+
+msgid "Your system is up to date"
+msgstr "Ваша система обновлена"
+
+msgid "Could not check for updates"
+msgstr "Не удалось проверить обновления"
+
+msgid "Welcome to Shelly v3"
+msgstr "Добро пожаловать в Shelly v3"
+
+#, fuzzy
+msgid ""
+"Shelly is a modern package manager for Arch Linux. Configure your sources "
+"and preferences to get started."
+msgstr ""
+"Shelly — современный менеджер пакетов для Arch Linux. Настройте источники и "
+"предпочтения, чтобы начать работу. Мы недавно переписали как GUI, так и CLI "
+"на Zig с новым изменённым интерфейсом на основе предыдущих разработок."
+
+msgid "Select Your Sources"
+msgstr "Выберите источники"
+
+msgid ""
+"Choose which package sources you want to browse. You can always change this "
+"later in settings."
+msgstr ""
+"Выберите источники пакетов, которые вы хотите просматривать. Вы всегда "
+"сможете изменить это позже в настройках."
+
+msgid "Arch User Repository community packages"
+msgstr "Пакеты сообщества Arch User Repository"
+
+msgid "Sandboxed universal Linux applications"
+msgstr "Изолированные универсальные приложения Linux"
+
+msgid "AppImage"
+msgstr "AppImage"
+
+msgid "Portable self-contained application bundles"
+msgstr "Переносимые автономные пакеты приложений"
+
+msgid "Recommended"
+msgstr "Рекомендуемые"
+
+msgid "Curated picks from Shelly"
+msgstr ""
+
+msgid "Look and Feel"
+msgstr "Внешний вид"
+
+msgid ""
+"Customize how Shelly looks and behaves. All of these can be changed later in "
+"preferences."
+msgstr ""
+"Настройте внешний вид и поведение Shelly. Все эти параметры можно изменить "
+"позже в настройках."
+
+msgid "Navigation Style"
+msgstr "Стиль навигации"
+
+msgid "Sidebar"
+msgstr "Боковая панель"
+
+msgid "Vertical icon rail on the left"
+msgstr "Вертикальная панель значков слева"
+
+msgid "Top Bar"
+msgstr "Верхняя панель"
+
+msgid "Horizontal tab switcher at the top"
+msgstr "Горизонтальный переключатель вкладок сверху"
+
+msgid "System Tray"
+msgstr "Системный трей"
+
+msgid "Run in system tray when minimized"
+msgstr "Запускать в системном трее при сворачивании"
+
+msgid "Next"
+msgstr "Далее"
+
+msgid "Start Shelly"
+msgstr "Запустить Shelly"
 
 msgid "Search..."
 msgstr "Поиск..."
@@ -1161,6 +517,12 @@ msgstr "Установить новый AppImage из файла"
 msgid "Install AppImage"
 msgstr "Установить AppImage"
 
+msgid "Drop AppImage here to install"
+msgstr "Перетащите AppImage сюда для установки"
+
+msgid "Version"
+msgstr "Версия"
+
 msgid "Description goes here..."
 msgstr "Здесь будет описание..."
 
@@ -1173,222 +535,73 @@ msgstr "Стратегия обновления"
 msgid "Update URL / Repository Info"
 msgstr "URL обновления / информация о репозитории"
 
-msgid "e.g. repo or https://..."
-msgstr "например, repo или https://..."
+msgid "Get more information about Update URL / Repository Info"
+msgstr "Подробнее об URL обновления / информации о репозитории"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "например, владелец/репо или https://..."
+
+msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+msgstr ""
+"Неверный формат. Используйте владелец/репо (например, seafoam-labs/shelly-"
+"alpm)"
+
+msgid "Allow Prerelease"
+msgstr "Разрешить предварительные версии"
 
 msgid "Installation Path"
 msgstr "Путь установки"
 
-msgid "Install Package(s)"
-msgstr "Установить пакет(ы)"
+msgid "Launch Flags"
+msgstr "Флаги запуска"
 
-msgid "Update Package(s)"
-msgstr "Обновить пакет(ы)"
+msgid "Sync"
+msgstr "Синхронизировать"
 
-msgid "Manage Package(s)"
-msgstr "Управление пакет(ами)"
+msgid "Remove"
+msgstr "Удалить"
 
-msgid "Install AUR"
-msgstr "Установить AUR"
-
-msgid "Update AUR"
-msgstr "Обновить AUR"
-
-msgid "Remove AUR"
-msgstr "Удалить AUR"
-
-msgid "Install Flatpak"
-msgstr "Установить Flatpak"
-
-msgid "Update Flatpak"
-msgstr "Обновить Flatpak"
-
-msgid "Remove Flatpak"
-msgstr "Удалить Flatpak"
-
-msgid "Manage AppImage(s)"
-msgstr "Управление AppImage"
-
-msgid "Arch News"
-msgstr "Новости Arch"
-
-msgid "Settings"
-msgstr "Настройки"
-
-msgid "About"
-msgstr "О программе"
-
-msgid "Toggle Sidebar"
-msgstr "Переключить боковую панель"
-
-msgid "Available Updates"
-msgstr "Доступные обновления"
-
-msgid "Welcome to Shelly"
-msgstr "Добро пожаловать в Shelly"
-
-msgid "Let's get you set up with some basic configurations."
-msgstr "Давайте настроим несколько основных параметров."
-
-msgid "Enable AUR Support"
-msgstr "Включить поддержку AUR"
-
-msgid ""
-"Access the Arch User Repository for a vast collection of community-"
-"maintained packages. AUR packages can contain malicious software, so please "
-"use caution when using the AUR."
-msgstr ""
-"Получите доступ к Arch User Repository с огромной коллекцией пакетов, "
-"поддерживаемых сообществом. Пакеты AUR могут содержать вредоносное ПО, "
-"поэтому используйте AUR с осторожностью."
-
-msgid "Enable Flatpak Support"
-msgstr "Включить поддержку Flatpak"
-
-msgid "Enable support for Flatpak applications from Flathub and other remotes."
-msgstr "Включить поддержку приложений Flatpak из Flathub и других источников."
-
-msgid "Enable AppImage Support"
-msgstr "Включить поддержку AppImage"
-
-msgid "Manage and configure updates for AppImage applications easily."
-msgstr "Легко управляйте и настраивайте обновления для приложений AppImage."
-
-msgid ""
-"Show a status icon in your system tray for quick access and notifications."
-msgstr ""
-"Показывать значок состояния в системном трее для быстрого доступа и "
-"уведомлений."
-
-msgid "Vertical Navigation"
-msgstr "Вертикальная навигация"
-
-msgid "Change navigation style to vertical or horizontal style."
-msgstr "Изменить стиль навигации на вертикальный или горизонтальный."
-
-msgid "Finish Setup"
-msgstr "Завершить настройку"
-
-msgid ""
-"Any required installations will run after the Finish button has been "
-"accepted."
-msgstr ""
-"Все необходимые установки будут запущены после нажатия кнопки Завершить."
-
-msgid "These options and others can be configured later in settings."
-msgstr "Эти и другие параметры можно настроить позже в настройках."
-
-msgid "Remove Package(s)"
-msgstr "Удалить пакет(ы)"
-
-msgid "Description"
-msgstr "Описание"
-
-msgid "Last Updated"
-msgstr "Последнее обновление"
-
-msgid "Remove Optional Deps"
-msgstr "Удалить опциональные зависимости"
-
-msgid ""
-"Also remove orphaned optional dependencies installed with these packages."
-msgstr ""
-"Также удалить осиротевшие опциональные зависимости, установленные с этими "
-"пакетами."
-
-msgid "Additional Options"
-msgstr "Дополнительные параметры"
-
-msgid "Show Runtimes"
-msgstr "Показать среды выполнения"
-
-msgid "Flatpak Repair"
-msgstr "Восстановление Flatpak"
-
-msgid "Repairs Flatpak Installation (Experimental)"
-msgstr "Восстанавливает установку Flatpak (экспериментально)"
-
-msgid "Install source"
-msgstr "Источник установки"
-
-msgid "Show more"
-msgstr "Показать ещё"
-
-msgid "App Permissions"
-msgstr "Разрешения приложения"
-
-msgid "Install a local Flatpak"
-msgstr "Установить локальный Flatpak"
-
-msgid ""
-"Choose a .flatpak bundle from your system and install it for the current "
-"user or system-wide."
-msgstr ""
-"Выберите пакет .flatpak из вашей системы и установите его для текущего "
-"пользователя или для всей системы."
-
-msgid "Bundle"
-msgstr "Пакет"
-
-msgid "Choose file…"
-msgstr "Выберите файл…"
-
-msgid "Install for"
-msgstr "Установить для"
-
-msgid "Browse"
-msgstr "Обзор"
-
-msgid "Shelly"
-msgstr "Shelly"
-
-msgid "Reinstall"
-msgstr "Переустановить"
-
-msgid "Add Ignore"
-msgstr "Добавить в игнорируемые"
-
-msgid "Add Hold"
-msgstr "Добавить в удерживаемые"
-
-msgid "Make Explicit"
-msgstr "Сделать явным"
-
-msgid "Mark Dependency"
-msgstr "Отметить как зависимость"
-
-msgid "Package actions"
-msgstr "Действия с пакетами"
-
-msgid "Information"
-msgstr "Информация"
-
-msgid "7 of 7 updates included"
-msgstr "7 из 7 обновлений включены"
-
-msgid "Check all enabled sources again"
-msgstr "Проверить все включённые источники снова"
-
-msgid "Check Again"
-msgstr "Проверить снова"
-
-msgid "Upgrade"
-msgstr "Обновить"
-
-msgid "Checking for updates…"
-msgstr "Проверяются обновления…"
-
-msgid "Your system is up to date"
-msgstr "Ваша система обновлена"
-
-msgid "Could not check for updates"
-msgstr "Не удалось проверить обновления"
+msgid "Search the AUR by name or keyword"
+msgstr "Поиск в AUR по имени или ключевому слову"
 
 msgid "Installed Only"
 msgstr "Только установленные"
 
 msgid "Show only installed packages"
 msgstr "Показывать только установленные пакеты"
+
+msgid "Install Selected"
+msgstr "Установить выбранное"
+
+msgid "Name"
+msgstr "Имя"
+
+msgid "Votes"
+msgstr "Голоса"
+
+msgid "Popularity"
+msgstr "Популярность"
+
+msgid "Search the AUR"
+msgstr "Поиск в AUR"
+
+msgid "The AUR has no browsable index type a package name to begin."
+msgstr "В AUR нет индекса для просмотра — введите имя пакета для начала."
+
+msgid "Run checks"
+msgstr "Выполнить checks"
+
+msgid "Run the --check function during package build"
+msgstr "Выполнить функцию --check во время сборки пакета"
+
+msgid "Hide Detail Pane"
+msgstr "Скрыть панель подробностей"
+
+msgid "Hide the detail pane on the right"
+msgstr "Скрыть панель подробностей справа"
+
+msgid "Package Group Filter"
+msgstr "Фильтр групп пакетов"
 
 msgid "Selected Packages"
 msgstr "Выбранные пакеты"
@@ -1402,10 +615,32 @@ msgstr "Сетка"
 msgid "List View"
 msgstr "Список"
 
+msgid "Size"
+msgstr "Размер"
+
+msgid "Repository"
+msgstr "Репозиторий"
+
+#, fuzzy
+msgid "Install Date"
+msgstr "Установить "
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Возникла проблема при загрузке пакетов. Проверьте, нет ли блокировки базы "
 "данных."
+
+msgid "Perform Upgrade"
+msgstr "Выполнить обновление"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "Выполнить полное обновление системы с установкой (-u)"
+
+msgid "Show Hidden"
+msgstr "Показать скрытые"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "Показывать пакеты из списка IgnorePkg в pacman.conf"
 
 msgid "Show Explicit Only"
 msgstr "Только явные"
@@ -1413,108 +648,41 @@ msgstr "Только явные"
 msgid "Show only explicitly installed packages"
 msgstr "Показывать только явно установленные пакеты"
 
-msgid "Hide Detail Pane"
-msgstr "Скрыть панель подробностей"
+msgid "Show Dependency Only"
+msgstr "Только зависимости"
 
-msgid "Toggle output"
-msgstr "Переключить вывод"
+msgid "Show dependency packages on;y"
+msgstr "Показывать только пакеты зависимостей"
 
-msgid "Drop AppImage here to install"
-msgstr "Перетащите AppImage сюда для установки"
+msgid "Confirm"
+msgstr "Подтвердить"
 
-msgid "Get more information about Update URL / Repository Info"
-msgstr "Подробнее об URL обновления / информации о репозитории"
+msgid "Cancel"
+msgstr "Отмена"
 
-msgid "e.g. owner/repo or https://..."
-msgstr "например, владелец/репо или https://..."
-
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
-msgstr "Неверный формат. Используйте владелец/репо (например, seafoam-labs/shelly-alpm)"
-
-msgid "Allow Prerelease"
-msgstr "Разрешить предварительные версии"
-
-msgid "Launch Flags"
-msgstr "Флаги запуска"
-
-msgid "Language"
-msgstr "Язык"
-
-msgid "Enable Recommended"
-msgstr "Включить рекомендации"
-
-msgid "Add Tray To Auto Start"
-msgstr "Добавить значок трея в автозапуск"
-
-msgid ":"
-msgstr ":"
-
-msgid ""
-"If enabled, Shelly will use appstream icons in the package list and details "
-"pages."
-msgstr ""
-"Если включено, Shelly будет использовать значки appstream в списке пакетов и "
-"на страницах с подробностями."
-
-msgid ""
-"If enabled, Shelly will use a symbolic svg icon instead of the default image "
-"one."
-msgstr ""
-"Если включено, Shelly будет использовать символический SVG-значок вместо "
-"стандартного растрового."
-
-msgid "Remove Cache on Uninstall"
-msgstr "Очищать кэш при удалении"
-
-msgid "Enable Package Downgrade"
-msgstr "Включить понижение версии пакетов"
-
-msgid "AppImage Install Path"
-msgstr "Путь установки AppImage"
-
-msgid "Select Directory"
-msgstr "Выбрать каталог"
-
-msgid "Force a synchronization of the package database."
-msgstr "Принудительно синхронизировать базу данных пакетов."
-
-msgid "Remove db.lck"
-msgstr "Удалить db.lck"
-
-msgid ""
-"Removes the db.lck file if it was left behind by an interrupted alpm process."
-msgstr ""
-"Удаляет файл db.lck, если он был оставлен прерванным процессом alpm."
-
-msgid "Remove corrupted/orphaned packages."
-msgstr "Удалить повреждённые/осиротевшие пакеты."
-
-msgid "v0.0.0"
-msgstr "v0.0.0"
-
-msgid "Search the AUR by name or keyword"
-msgstr "Поиск в AUR по имени или ключевому слову"
-
-msgid "Show only packages already installed on this system"
-msgstr "Показывать только пакеты, уже установленные в этой системе"
-
-msgid "Search the AUR"
-msgstr "Поиск в AUR"
-
-msgid "The AUR has no browsable index type a package name to begin."
-msgstr "В AUR нет индекса для просмотра — введите имя пакета для начала."
-
-msgid "Run the --check function during package build"
-msgstr "Выполнить функцию --check во время сборки пакета"
-
-msgid "Hide the detail pane on the right"
-msgstr "Скрыть панель подробностей справа"
-
-msgid "Skip"
-msgstr "Пропустить"
+#, fuzzy
+msgid "No installable addons available"
+msgstr "Новости отсутствуют"
 
 msgid "No special permissions requested"
 msgstr "Специальные разрешения не запрашиваются"
+
+#, fuzzy
+msgid "polkit is required"
+msgstr "Требуется перезагрузка"
+
+msgid ""
+"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
+"privileged actions, but it wasn't found on the system bus.\n"
+"\n"
+"Install and enable it, then retry.\n"
+"\n"
+"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
+"Polkit</a>"
+msgstr ""
+
+msgid "Skip"
+msgstr "Пропустить"
 
 msgid "Review PKGBUILD changes"
 msgstr "Просмотреть изменения в PKGBUILD"
@@ -1535,464 +703,8 @@ msgstr ""
 msgid "Source Files"
 msgstr "Исходные файлы"
 
-msgid "Removing Remote"
-msgstr "Удаление источника"
-
-msgid "Adding Remote"
-msgstr "Добавление источника"
-
-msgid "Removing Flatpak"
-msgstr "Удаление Flatpak"
-
-msgid "Choose a Flatpak file"
-msgstr "Выберите файл Flatpak"
-
-msgid "Flatpak files"
-msgstr "Файлы Flatpak"
-
-msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
-msgstr "Неподдерживаемый тип файла. Выберите файл .flatpak или .flatpakref."
-
-msgid "Installing local flatpak"
-msgstr "Установка локального flatpak"
-
-msgid "Installation failed."
-msgstr "Установка не удалась."
-
-msgid "Installation complete."
-msgstr "Установка завершена."
-
-msgid "Choose file..."
-msgstr "Выберите файл..."
-
-msgid "Discover"
-msgstr "Обзор"
-
-msgid "Categories"
-msgstr "Категории"
-
-msgid "Verified"
-msgstr "Подтверждено"
-
-msgid "Show less"
-msgstr "Показать меньше"
-
-msgid "Installing flatpak"
-msgstr "Установка flatpak"
-
-msgid "Permissions"
-msgstr "Разрешения"
-
-msgid "Unknown developer"
-msgstr "Неизвестный разработчик"
-
-msgid "Version: Unknown"
-msgstr "Версия: неизвестна"
-
-msgid "Size: Loading..."
-msgstr "Размер: загрузка..."
-
-msgid "Size: Unknown"
-msgstr "Размер: неизвестен"
-
-msgid "License"
-msgstr "Лицензия"
-
-msgid "License: Unknown"
-msgstr "Лицензия: неизвестна"
-
-msgid "No summary available"
-msgstr "Краткое описание недоступно"
-
-msgid "Size: Unavailable"
-msgstr "Размер: недоступен"
-
-msgid "Unable to load screenshot"
-msgstr "Не удалось загрузить снимок экрана"
-
-msgid "Unable to download screenshot"
-msgstr "Не удалось скачать снимок экрана"
-
-msgid "Unable to display screenshot"
-msgstr "Не удалось отобразить снимок экрана"
-
-msgid "Open link in browser"
-msgstr "Открыть ссылку в браузере"
-
-msgid "Homepage"
-msgstr "Домашняя страница"
-
-msgid "Bug tracker"
-msgstr "Трекер ошибок"
-
-msgid "Donation"
-msgstr "Пожертвование"
-
-msgid "FAQ"
-msgstr "ЧАВО"
-
-msgid "Help"
-msgstr "Помощь"
-
-msgid "Vcs-browser"
-msgstr "Обозреватель VCS"
-
-msgid "Contact"
-msgstr "Контакты"
-
-msgid "Translate"
-msgstr "Перевод"
-
-msgid "Unable to allocate memory while loading Flatpak data."
-msgstr "Не удалось выделить память при загрузке данных Flatpak."
-
-msgid "Unable to start the Flatpak data loader."
-msgstr "Не удалось запустить загрузчик данных Flatpak."
-
-msgid "Unable to load Flatpak applications."
-msgstr "Не удалось загрузить приложения Flatpak."
-
-msgid "No Flatpak applications are available."
-msgstr "Нет доступных приложений Flatpak."
-
-msgid "Installed Size"
-msgstr "Размер установки"
-
-msgid "Download Size"
-msgstr "Размер скачивания"
-
-msgid "Build Date"
-msgstr "Дата сборки"
-
-msgid "Install Reason"
-msgstr "Причина установки"
-
-msgid "Optional Depends"
-msgstr "Опциональные зависимости"
-
-msgid "Required By"
-msgstr "Требуется для"
-
-msgid "Section"
-msgstr "Раздел"
-
-msgid "Reinstalling package"
-msgstr "Переустановка пакета"
-
-msgid "Adding to package ignore"
-msgstr "Добавление в игнорируемые пакеты"
-
-msgid "Adding to package to hold"
-msgstr "Добавление в удерживаемые пакеты"
-
-msgid "Making Package Explicit"
-msgstr "Делает пакет явным"
-
-msgid "Making Package Dependency"
-msgstr "Делает пакет зависимостью"
-
-msgid "Failed to start operation."
-msgstr "Не удалось начать операцию."
-
-msgid "Pending"
-msgstr "Ожидание"
-
-msgid "Synchronizing databases"
-msgstr "Синхронизация баз данных"
-
-msgid "Downloading"
-msgstr "Скачивание"
-
-msgid "Building"
-msgstr "Сборка"
-
-msgid "Packaging"
-msgstr "Упаковка"
-
-msgid "Installing"
-msgstr "Установка"
-
-msgid "Upgrading"
-msgstr "Обновление"
-
-msgid "Downgrading"
-msgstr "Понижение версии"
-
-msgid "Reinstalling"
-msgstr "Переустановка"
-
-msgid "Removing"
-msgstr "Удаление"
-
-msgid "Working"
-msgstr "Выполнение"
-
-msgid "Done"
-msgstr "Готово"
-
-msgid "Failed"
-msgstr "Ошибка"
-
-msgid "Finished"
-msgstr "Завершено"
-
-msgid "exit"
-msgstr "выход"
-
-msgid "Cancelled"
-msgstr "Отменено"
-
-msgid "Static URL"
-msgstr "Статический URL"
-
-msgid "Update Available"
-msgstr "Доступно обновление"
-
-msgid "Version ?"
-msgstr "Версия ?"
-
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
-msgstr "Неверный формат. Используйте владелец/репо (например, seafoam-labs/shelly-alpm)"
-
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "Неверный URL. Должен начинаться с http:// или https://"
-
-msgid "Choose an AppImage file"
-msgstr "Выберите файл AppImage"
-
-msgid "AppImage files"
-msgstr "Файлы AppImage"
-
-msgid "Only .AppImage files can be installed"
-msgstr "Можно установить только файлы .AppImage"
-
-msgid "Installing AppImage"
-msgstr "Установка AppImage"
-
-msgid "Upgrading AppImages"
-msgstr "Обновление AppImage"
-
-msgid "Syncing AppImages"
-msgstr "Синхронизация AppImage"
-
-msgid "Syncing AppImage"
-msgstr "Синхронизация AppImage"
-
-msgid "Saving update configuration"
-msgstr "Сохранение конфигурации обновления"
-
-msgid "Configuration files will be kept."
-msgstr "Файлы конфигурации будут сохранены."
-
-msgid "Remove this AppImage?"
-msgstr "Удалить этот AppImage?"
-
-msgid "Remove AppImage"
-msgstr "Удалить AppImage"
-
-msgid "Removing AppImage"
-msgstr "Удаление AppImage"
-
-msgid "Operation completed successfully"
-msgstr "Операция успешно завершена"
-
-msgid "Operation failed"
-msgstr "Операция не удалась"
-
-msgid "System package update"
-msgstr "Обновление системного пакета"
-
-msgid "AUR package update"
-msgstr "Обновление пакета AUR"
-
-msgid "Could not run shelly check-updates. Check the CLI output and try again."
-msgstr "Не удалось выполнить shelly check-updates. Проверьте вывод CLI и попробуйте снова."
-
-msgid "Update check failed"
-msgstr "Проверка обновлений не удалась"
-
-msgid "of"
-msgstr "из"
-
-msgid "updates included"
-msgstr "обновлений включено"
-
-msgid "Updates included"
-msgstr "Обновления включены"
-
-msgid "Upgrading packages"
-msgstr "Обновление пакетов"
-
-msgid "Recommendations"
-msgstr "Рекомендации"
-
-msgid "Remove from selection"
-msgstr "Удалить из выбора"
-
-msgid "remove"
-msgstr "удалить"
-
-msgid "install"
-msgstr "установить"
-
-msgid "No packages selected"
-msgstr "Пакеты не выбраны"
-
-msgid "Selected"
-msgstr "Выбрано"
-
-msgid "Mixed selection"
-msgstr "Смешанный выбор"
-
-msgid ""
-"Select only installed packages to remove, or only available ones to install."
-msgstr ""
-"Выберите только установленные пакеты для удаления или только доступные для "
-"установки."
-
-msgid "Remove Packages"
-msgstr "Удалить пакеты"
-
-msgid "Remove the selected packages?"
-msgstr "Удалить выбранные пакеты?"
-
-msgid "Removing packages"
-msgstr "Удаление пакетов"
-
-msgid "Installing packages"
-msgstr "Установка пакетов"
-
-msgid "Failed to save settings"
-msgstr "Не удалось сохранить настройки"
-
-msgid "Settings saved"
-msgstr "Настройки сохранены"
-
-msgid "Changelog"
-msgstr "Журнал изменений"
-
-msgid "Select Tray Icon"
-msgstr "Выбрать значок трея"
-
-msgid "Select Icon"
-msgstr "Выбрать значок"
-
-msgid "Select Tray Updates Icon"
-msgstr "Выбрать значок обновлений в трее"
-
-msgid "Select AppImage Install Directory"
-msgstr "Выбрать каталог установки AppImage"
-
-msgid "Refreshing package databases"
-msgstr "Обновление баз данных пакетов"
-
-msgid "Database lock removed successfully"
-msgstr "Блокировка базы данных успешно удалена"
-
-msgid "Failed to remove database lock"
-msgstr "Не удалось удалить блокировку базы данных"
-
-msgid "Fixing permissions"
-msgstr "Исправление разрешений"
-
-msgid "Purifying packages"
-msgstr "Очистка пакетов"
-
-msgid "Enable"
-msgstr "Включить"
-
-msgid "AUR enabled"
-msgstr "AUR включён"
-
-msgid "System Default"
-msgstr "Системный язык"
-
-msgid "English"
-msgstr "Английский"
-
-msgid "Bulgarian"
-msgstr "Болгарский"
-
-msgid "Català"
-msgstr "Каталанский"
-
-msgid "Deutsch"
-msgstr "Немецкий"
-
-msgid "Español"
-msgstr "Испанский"
-
-msgid "Français"
-msgstr "Французский"
-
-msgid "Magyar"
-msgstr "Венгерский"
-
-msgid "日本語"
-msgstr "Японский"
-
-msgid "Polski"
-msgstr "Польский"
-
-msgid "Português (Brasil)"
-msgstr "Португальский (Бразилия)"
-
-msgid "Português (Portugal)"
-msgstr "Португальский (Португалия)"
-
-msgid "Русский"
-msgstr "Русский"
-
-msgid "Türkçe"
-msgstr "Турецкий"
-
-msgid "中文（简体）"
-msgstr "Китайский (упрощённый)"
-
-msgid "The AUR has no browsable index — type a package name to begin."
-msgstr "В AUR нет индекса для просмотра — введите имя пакета, чтобы начать."
-
-msgid "No packages found"
-msgstr "Пакеты не найдены"
-
-msgid "Try a shorter or more general keyword."
-msgstr "Попробуйте более короткое или общее ключевое слово."
-
-msgid "Could not reach the AUR"
-msgstr "Не удалось подключиться к AUR"
-
-msgid "Check your connection and try again."
-msgstr "Проверьте подключение и попробуйте снова."
-
-msgid "Flagged out of date"
-msgstr "Отмечен как устаревший"
-
-msgid "Select one or more packages"
-msgstr "Выберите один или несколько пакетов"
-
-msgid "Package(s)"
-msgstr "Пакет(ы)"
-
-msgid "Remove the selected AUR packages?"
-msgstr "Удалить выбранные пакеты AUR?"
-
-msgid "Build from AUR"
-msgstr "Собрать из AUR"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr "Собрать и установить выбранные пакеты? Это может занять некоторое время."
-
-msgid "Build"
-msgstr "Собрать"
-
-msgid "Installing AUR packages"
-msgstr "Установка пакетов AUR"
-
-msgid "Removing AUR packages"
-msgstr "Удаление пакетов AUR"
-
-msgid "Dismiss"
-msgstr "Отклонить"
+msgid "Review PKGBUILD"
+msgstr "Просмотреть PKGBUILD"
 
 msgid "Filesystem"
 msgstr "Файловая система"
@@ -2057,133 +769,584 @@ msgstr "скачать"
 msgid "net"
 msgstr "сеть"
 
-msgid "Package"
-msgstr "Пакет"
+msgid "Dismiss"
+msgstr "Отклонить"
 
-msgid "Update"
-msgstr "Обновить"
+msgid "Choose a Flatpak file"
+msgstr "Выберите файл Flatpak"
 
-msgid "Utilities"
-msgstr "Инструменты"
+msgid "Flatpak files"
+msgstr "Файлы Flatpak"
 
-msgid "Recommended Packages"
-msgstr "Рекомендуемые пакеты"
+msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+msgstr "Неподдерживаемый тип файла. Выберите файл .flatpak или .flatpakref."
 
-msgid "Curated suggestions from Seafoam Labs"
-msgstr "Отобранные рекомендации от Seafoam Labs"
+msgid "Installing local flatpak"
+msgstr "Установка локального flatpak"
 
-msgid "Refresh the recommended packages list from the network"
-msgstr "Обновить список рекомендуемых пакетов из сети"
+msgid "Installation failed."
+msgstr "Установка не удалась."
 
-msgid "Loading Recommended Packages..."
-msgstr "Загрузка рекомендуемых пакетов..."
+msgid "Installation complete."
+msgstr "Установка завершена."
 
-msgid "Preview Pkgbuild"
-msgstr "Предпросмотр PKGBUILD"
+msgid "Choose file..."
+msgstr "Выберите файл..."
 
-msgid "Show Dependency Only"
-msgstr "Только зависимости"
+msgid "Removing Remote"
+msgstr "Удаление источника"
 
-msgid "Show dependency packages on;y"
-msgstr "Показывать только пакеты зависимостей"
+msgid "Adding Remote"
+msgstr "Добавление источника"
 
-msgid "Welcome to Shelly v3"
-msgstr "Добро пожаловать в Shelly v3"
+msgid "Removing Flatpak"
+msgstr "Удаление Flatpak"
+
+msgid "Discover"
+msgstr "Обзор"
+
+msgid "Categories"
+msgstr "Категории"
+
+msgid "All Applications"
+msgstr "Все приложения"
+
+msgid "Most Wanted"
+msgstr "Самые востребованные"
+
+msgid "Recently Added"
+msgstr "Недавно добавленные"
+
+msgid "Recently Updated"
+msgstr "Недавно обновлённые"
+
+msgid "Audio & Video"
+msgstr "Аудио и видео"
+
+msgid "Development"
+msgstr "Разработка"
+
+msgid "Education"
+msgstr "Образование"
+
+msgid "Game"
+msgstr "Игры"
+
+msgid "Graphics"
+msgstr "Графика"
+
+msgid "Network"
+msgstr "Сеть"
+
+msgid "Office"
+msgstr "Офис"
+
+msgid "Science"
+msgstr "Наука"
+
+msgid "Utility"
+msgstr "Утилиты"
+
+msgid "Verified"
+msgstr "Подтверждено"
+
+msgid "Show less"
+msgstr "Показать меньше"
+
+msgid "Installing flatpak"
+msgstr "Установка flatpak"
+
+msgid "Permissions"
+msgstr "Разрешения"
+
+msgid "Available Addons"
+msgstr "Доступные дополнения"
+
+#, fuzzy
+msgid "Installing flatpak addon"
+msgstr "Установка flatpak"
+
+msgid "Installed"
+msgstr "Установлено"
+
+msgid "Unknown developer"
+msgstr "Неизвестный разработчик"
+
+msgid "Unknown"
+msgstr "Неизвестно"
+
+msgid "Version: Unknown"
+msgstr "Версия: неизвестна"
+
+msgid "Size: Loading..."
+msgstr "Размер: загрузка..."
+
+msgid "Size: Unknown"
+msgstr "Размер: неизвестен"
+
+msgid "License"
+msgstr "Лицензия"
+
+msgid "License: Unknown"
+msgstr "Лицензия: неизвестна"
+
+msgid "No summary available"
+msgstr "Краткое описание недоступно"
+
+msgid "Size: Unavailable"
+msgstr "Размер: недоступен"
+
+msgid "Download"
+msgstr "Скачивание"
+
+msgid "No description available."
+msgstr "Описание недоступно."
+
+msgid "Unable to load screenshot"
+msgstr "Не удалось загрузить снимок экрана"
+
+msgid "Unable to download screenshot"
+msgstr "Не удалось скачать снимок экрана"
+
+msgid "Unable to display screenshot"
+msgstr "Не удалось отобразить снимок экрана"
+
+msgid "Open link in browser"
+msgstr "Открыть ссылку в браузере"
+
+msgid "Homepage"
+msgstr "Домашняя страница"
+
+msgid "Bug tracker"
+msgstr "Трекер ошибок"
+
+msgid "Donation"
+msgstr "Пожертвование"
+
+msgid "FAQ"
+msgstr "ЧАВО"
+
+msgid "Help"
+msgstr "Помощь"
+
+msgid "Vcs-browser"
+msgstr "Обозреватель VCS"
+
+msgid "Contact"
+msgstr "Контакты"
+
+msgid "Translate"
+msgstr "Перевод"
+
+msgid "Unable to allocate memory while loading Flatpak data."
+msgstr "Не удалось выделить память при загрузке данных Flatpak."
+
+msgid "Unable to start the Flatpak data loader."
+msgstr "Не удалось запустить загрузчик данных Flatpak."
+
+msgid "Unable to load Flatpak applications."
+msgstr "Не удалось загрузить приложения Flatpak."
+
+msgid "No Flatpak applications are available."
+msgstr "Нет доступных приложений Flatpak."
+
+msgid "Refreshing package databases"
+msgstr "Обновление баз данных пакетов"
+
+msgid "Database lock removed successfully"
+msgstr "Блокировка базы данных успешно удалена"
+
+msgid "Failed to remove database lock"
+msgstr "Не удалось удалить блокировку базы данных"
+
+msgid "Fixing permissions"
+msgstr "Исправление разрешений"
+
+msgid "Purifying packages"
+msgstr "Очистка пакетов"
+
+msgid "Cleaning package cache"
+msgstr "Очистка кэша пакетов"
+
+msgid "Operation completed successfully"
+msgstr "Операция успешно завершена"
+
+msgid "Operation failed"
+msgstr "Операция не удалась"
+
+msgid "Welcome"
+msgstr "Добро пожаловать"
+
+msgid "Enable AUR?"
+msgstr "Включить AUR?"
 
 msgid ""
-"Shelly is a modern package manager for Arch Linux. Configure your sources "
-"and preferences to get started. We have recently rewritte both the GUI and "
-"CLI in zig with a new modified UI off our previous designs."
+"The Arch User Repository is community-maintained. Packages are not "
+"officially vetted — only enable if you trust what you install."
 msgstr ""
-"Shelly — современный менеджер пакетов для Arch Linux. Настройте источники и "
-"предпочтения, чтобы начать работу. Мы недавно переписали как GUI, так и CLI "
-"на Zig с новым изменённым интерфейсом на основе предыдущих разработок."
+"Arch User Repository поддерживается сообществом. Пакеты официально не "
+"проверяются — включайте, только если доверяете тому, что устанавливаете."
 
-msgid "Select Your Sources"
-msgstr "Выберите источники"
+msgid "Enable"
+msgstr "Включить"
+
+msgid "Enable Recommended?"
+msgstr "Включить рекомендации?"
 
 msgid ""
-"Choose which package sources you want to browse. You can always change this "
-"later in settings."
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
 msgstr ""
-"Выберите источники пакетов, которые вы хотите просматривать. Вы всегда "
-"сможете изменить это позже в настройках."
+"Рекомендации показывают отобранные предложения пакетов на основе вашего "
+"установленного ПО. Данные о пакетах загружаются из внешних источников."
 
-msgid "Arch User Repository community packages"
-msgstr "Пакеты сообщества Arch User Repository"
+#, fuzzy
+msgid "Installing Flatpak and AppImage support"
+msgstr "Не удалось установить Flatpak"
 
-msgid "Sandboxed universal Linux applications"
-msgstr "Изолированные универсальные приложения Linux"
+#, fuzzy
+msgid "Installing Flatpak support"
+msgstr "Установка flatpak"
 
-msgid "Portable self-contained application bundles"
-msgstr "Переносимые автономные пакеты приложений"
+#, fuzzy
+msgid "Installing AppImage support"
+msgstr "Установка AppImage"
 
-msgid "Curated picks based on your installed software"
-msgstr "Отобранные варианты на основе вашего установленного ПО"
+msgid "Maintainer"
+msgstr "Сопровождающий"
 
-msgid "Look and Feel"
-msgstr "Внешний вид"
+msgid "Last Modified"
+msgstr "Последнее изменение"
+
+msgid "First Submitted"
+msgstr "Первое добавление"
+
+#, fuzzy
+msgid "URL"
+msgstr "URL-адрес:"
+
+msgid "Licenses"
+msgstr "Лицензии"
+
+msgid "Depends"
+msgstr "Зависимости"
+
+msgid "Optional Depends"
+msgstr "Опциональные зависимости"
+
+msgid "Make Depends"
+msgstr "Зависимости сборки"
+
+msgid "Section"
+msgstr "Раздел"
+
+msgid "Loading..."
+msgstr "Загрузка..."
+
+msgid "Installed Size"
+msgstr "Размер установки"
+
+msgid "Download Size"
+msgstr "Размер скачивания"
+
+msgid "Build Date"
+msgstr "Дата сборки"
+
+msgid "Install Reason"
+msgstr "Причина установки"
+
+msgid "Provides"
+msgstr "Предоставляет"
+
+msgid "Conflicts"
+msgstr "Конфликты"
+
+msgid "Required By"
+msgstr "Требуется для"
+
+msgid "Reinstalling package"
+msgstr "Переустановка пакета"
+
+msgid "Adding to package ignore"
+msgstr "Добавление в игнорируемые пакеты"
+
+msgid "Adding to package to hold"
+msgstr "Добавление в удерживаемые пакеты"
+
+msgid "Making Package Explicit"
+msgstr "Делает пакет явным"
+
+msgid "Making Package Dependency"
+msgstr "Делает пакет зависимостью"
+
+msgid "None"
+msgstr "Нет"
+
+msgid "Static URL"
+msgstr "Статический URL"
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+msgid "Update Available"
+msgstr "Доступно обновление"
+
+msgid "Version ?"
+msgstr "Версия ?"
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr ""
+"Неверный формат. Используйте владелец/репо (например, seafoam-labs/shelly-"
+"alpm)"
+
+msgid "Invalid URL. Must start with http:// or https://"
+msgstr "Неверный URL. Должен начинаться с http:// или https://"
 
 msgid ""
-"Customize how Shelly looks and behaves. All of these can be changed later in "
-"preferences."
+"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
+"repo/releases"
 msgstr ""
-"Настройте внешний вид и поведение Shelly. Все эти параметры можно изменить "
-"позже в настройках."
 
-msgid "Navigation Style"
-msgstr "Стиль навигации"
+msgid "Choose an AppImage file"
+msgstr "Выберите файл AppImage"
 
-msgid "Sidebar"
-msgstr "Боковая панель"
+msgid "AppImage files"
+msgstr "Файлы AppImage"
 
-msgid "Vertical icon rail on the left"
-msgstr "Вертикальная панель значков слева"
+msgid "Only .AppImage files can be installed"
+msgstr "Можно установить только файлы .AppImage"
 
-msgid "Top Bar"
-msgstr "Верхняя панель"
+msgid "Installing AppImage"
+msgstr "Установка AppImage"
 
-msgid "Horizontal tab switcher at the top"
-msgstr "Горизонтальный переключатель вкладок сверху"
+msgid "No AppImages need to be upgraded"
+msgstr "Нет AppImage, требующих обновления"
 
-msgid "System Tray"
-msgstr "Системный трей"
+msgid "Upgrading AppImages"
+msgstr "Обновление AppImage"
 
-msgid "Run in system tray when minimized"
-msgstr "Запускать в системном трее при сворачивании"
+msgid "Syncing AppImages"
+msgstr "Синхронизация AppImage"
 
-msgid "Next"
-msgstr "Далее"
+msgid "Syncing AppImage"
+msgstr "Синхронизация AppImage"
 
-msgid "Start Shelly"
-msgstr "Запустить Shelly"
+msgid "Saving update configuration"
+msgstr "Сохранение конфигурации обновления"
 
-msgid "Navigation style"
-msgstr "Стиль навигации"
+msgid "Configuration files will be kept."
+msgstr "Файлы конфигурации будут сохранены."
 
-msgid "Maintenance and repair tools for your Shelly installation."
-msgstr "Инструменты обслуживания и восстановления для вашей установки Shelly."
+msgid "Remove this AppImage?"
+msgstr "Удалить этот AppImage?"
 
-msgid "Run"
-msgstr "Выполнить"
+msgid "Remove AppImage"
+msgstr "Удалить AppImage"
 
-msgid "Clean Package Cache"
-msgstr "Очистить кэш пакетов"
+msgid "Removing AppImage"
+msgstr "Удаление AppImage"
+
+msgid "The AUR has no browsable index — type a package name to begin."
+msgstr "В AUR нет индекса для просмотра — введите имя пакета, чтобы начать."
+
+msgid "No packages found"
+msgstr "Пакеты не найдены"
+
+msgid "Try a shorter or more general keyword."
+msgstr "Попробуйте более короткое или общее ключевое слово."
+
+msgid "Could not reach the AUR"
+msgstr "Не удалось подключиться к AUR"
+
+msgid "Check your connection and try again."
+msgstr "Проверьте подключение и попробуйте снова."
+
+msgid "Flagged out of date"
+msgstr "Отмечен как устаревший"
+
+msgid "Remove Selected"
+msgstr "Удалить выбранное"
+
+msgid "Select one or more packages"
+msgstr "Выберите один или несколько пакетов"
+
+msgid "Package(s)"
+msgstr "Пакет(ы)"
+
+msgid "Remove Packages"
+msgstr "Удалить пакеты"
+
+msgid "Remove the selected AUR packages?"
+msgstr "Удалить выбранные пакеты AUR?"
+
+msgid "Build from AUR"
+msgstr "Собрать из AUR"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+"Собрать и установить выбранные пакеты? Это может занять некоторое время."
+
+msgid "Build"
+msgstr "Собрать"
+
+msgid "Installing AUR packages"
+msgstr "Установка пакетов AUR"
+
+msgid "Removing AUR packages"
+msgstr "Удаление пакетов AUR"
+
+msgid "Package is already installed"
+msgstr "Пакет уже установлен"
+
+msgid "Remove from selection"
+msgstr "Удалить из выбора"
+
+msgid "remove"
+msgstr "удалить"
+
+msgid "install"
+msgstr "установить"
+
+msgid "No packages selected"
+msgstr "Пакеты не выбраны"
+
+msgid "Selected"
+msgstr "Выбрано"
+
+msgid "Mixed selection"
+msgstr "Смешанный выбор"
 
 msgid ""
-"Removes old cached package versions, keeping the selected number per package."
+"Select only installed packages to remove, or only available ones to install."
 msgstr ""
-"Удаляет старые кэшированные версии пакетов, сохраняя выбранное количество на "
-"пакет."
+"Выберите только установленные пакеты для удаления или только доступные для "
+"установки."
 
-msgid "Keep"
-msgstr "Хранить"
+msgid "Remove the selected packages?"
+msgstr "Удалить выбранные пакеты?"
 
-msgid "Number of cached versions to keep per package"
-msgstr "Количество кэшированных версий для хранения на пакет"
+msgid "Removing packages"
+msgstr "Удаление пакетов"
 
-msgid "Review PKGBUILD"
-msgstr "Просмотреть PKGBUILD"
+msgid "Installing packages"
+msgstr "Установка пакетов"
+
+msgid "Failed to start operation."
+msgstr "Не удалось начать операцию."
+
+msgid "Pending"
+msgstr "Ожидание"
+
+msgid "Synchronizing databases"
+msgstr "Синхронизация баз данных"
+
+msgid "Building"
+msgstr "Сборка"
+
+msgid "Downloading"
+msgstr "Скачивание"
+
+msgid "Packaging"
+msgstr "Упаковка"
+
+msgid "Installing"
+msgstr "Установка"
+
+msgid "Upgrading"
+msgstr "Обновление"
+
+msgid "Downgrading"
+msgstr "Понижение версии"
+
+msgid "Reinstalling"
+msgstr "Переустановка"
+
+msgid "Removing"
+msgstr "Удаление"
+
+msgid "Working"
+msgstr "Выполнение"
+
+msgid "Done"
+msgstr "Готово"
+
+msgid "Failed"
+msgstr "Ошибка"
+
+msgid "Finished"
+msgstr "Завершено"
+
+msgid "exit"
+msgstr "выход"
+
+msgid "Cancelled"
+msgstr "Отменено"
+
+msgid "Yes"
+msgstr "Да"
+
+msgid "No"
+msgstr "Нет"
+
+msgid "Failed to save settings"
+msgstr "Не удалось сохранить настройки"
+
+msgid "Settings saved"
+msgstr "Настройки сохранены"
+
+#, fuzzy
+msgid "Failed to start Flatpak support installation"
+msgstr "Не удалось начать операцию."
+
+#, fuzzy
+msgid "Failed to start AppImage support installation"
+msgstr "Не удалось начать операцию."
+
+#, fuzzy
+msgid "Flatpak support installation failed"
+msgstr "Не удалось установить пакет"
+
+#, fuzzy
+msgid "AppImage support installation failed"
+msgstr "Не удалось установить пакет"
+
+#, fuzzy
+msgid "Flatpak support enabled"
+msgstr "Включить поддержку Flatpak"
+
+#, fuzzy
+msgid "AppImage support enabled"
+msgstr "Включить поддержку AppImage"
+
+msgid "No changelog entries found"
+msgstr "Записи журнала изменений не найдены"
+
+msgid "No details for this release"
+msgstr "Нет подробностей для этого выпуска"
+
+msgid "Failed to load changelog"
+msgstr "Не удалось загрузить журнал изменений"
+
+msgid "Changelog"
+msgstr "Журнал изменений"
+
+msgid "Select Tray Icon"
+msgstr "Выбрать значок трея"
+
+msgid "Select Icon"
+msgstr "Выбрать значок"
+
+msgid "Select Tray Updates Icon"
+msgstr "Выбрать значок обновлений в трее"
+
+msgid "Select AppImage Install Directory"
+msgstr "Выбрать каталог установки AppImage"
 
 msgid "Tray enabled"
 msgstr "Трей включён"
@@ -2206,25 +1369,100 @@ msgstr "Не удалось удалить службу автозапуска s
 msgid "Systemd startup service removed."
 msgstr "Служба автозапуска systemd удалена."
 
-msgid "Cleaning package cache"
-msgstr "Очистка кэша пакетов"
-
-msgid "Welcome"
-msgstr "Добро пожаловать"
-
 msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
+"The Arch User Repository (AUR) is a community-driven repository. Packages "
+"are user-produced and may contain risks. Do you want to enable it?"
 msgstr ""
-"Arch User Repository поддерживается сообществом. Пакеты официально не "
-"проверяются — включайте, только если доверяете тому, что устанавливаете."
+"Arch User Repository (AUR) - это репозиторий, поддерживаемый сообществом. "
+"Пакеты создаются пользователями и могут быть небезопасны. Хотите включить "
+"его?"
 
-msgid "Enable Recommended?"
-msgstr "Включить рекомендации?"
+msgid "AUR enabled"
+msgstr "AUR включён"
 
-msgid ""
-"Recommended shows curated package suggestions based on your installed "
-"software. Package data is fetched from external sources."
+msgid "System Default"
+msgstr "Системный язык"
+
+msgid "English"
+msgstr "Английский"
+
+msgid "Bulgarian"
+msgstr "Болгарский"
+
+msgid "Català"
+msgstr "Каталанский"
+
+msgid "Deutsch"
+msgstr "Немецкий"
+
+msgid "Español"
+msgstr "Испанский"
+
+msgid "Français"
+msgstr "Французский"
+
+msgid "Magyar"
+msgstr "Венгерский"
+
+msgid "日本語"
+msgstr "Японский"
+
+msgid "Polski"
+msgstr "Польский"
+
+msgid "Português (Brasil)"
+msgstr "Португальский (Бразилия)"
+
+msgid "Português (Portugal)"
+msgstr "Португальский (Португалия)"
+
+msgid "Русский"
+msgstr "Русский"
+
+msgid "Türkçe"
+msgstr "Турецкий"
+
+msgid "中文（简体）"
+msgstr "Китайский (упрощённый)"
+
+msgid "Packages"
+msgstr "Пакеты"
+
+msgid "Shelly Search"
+msgstr "Поиск Shelly"
+
+msgid "Update"
+msgstr "Обновить"
+
+msgid "System package update"
+msgstr "Обновление системного пакета"
+
+msgid "AUR package update"
+msgstr "Обновление пакета AUR"
+
+msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
-"Рекомендации показывают отобранные предложения пакетов на основе вашего "
-"установленного ПО. Данные о пакетах загружаются из внешних источников."
+"Не удалось выполнить shelly check-updates. Проверьте вывод CLI и попробуйте "
+"снова."
+
+#, fuzzy
+msgid "Update this package"
+msgstr "Обновить пакеты?"
+
+msgid "of"
+msgstr "из"
+
+msgid "updates included"
+msgstr "обновлений включено"
+
+msgid "Updates included"
+msgstr "Обновления включены"
+
+msgid "Upgrading packages"
+msgstr "Обновление пакетов"
+
+msgid "Settings"
+msgstr "Настройки"
+
+msgid "Package"
+msgstr "Пакет"

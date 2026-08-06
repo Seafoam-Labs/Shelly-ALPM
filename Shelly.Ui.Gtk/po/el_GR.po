@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-07-03 00:26+0000\n"
+"POT-Creation-Date: 2026-08-05 12:25+0300\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -15,237 +15,24 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 3.9\n"
 
-msgid "Loading..."
-msgstr "Φόρτωση..."
-
-msgid "Recent Operations"
-msgstr "Πρόσφατες ενέργειες"
-
-msgid "History"
-msgstr "Ιστορικό"
-
-msgid "No recent activity"
-msgstr "Καμία πρόσφατη δραστηριότητα"
-
-msgid "Session log is too large to display"
-msgstr "Το αρχείο καταγραφής της συνεδρίας είναι πολύ μεγάλο για να εμφανιστεί"
-
-msgid "Session Log"
-msgstr "Αρχείο καταγραφής συνεδρίας"
-
-msgid "Copy Log"
-msgstr "Αντιγραφή αρχείου καταγραφής"
-
-msgid "Log copied to clipboard"
-msgstr "Το αρχείο καταγραφής αντιγράφηκε στο πρόχειρο"
-
-#, csharp-format
-msgid "Available Updates ({0})"
-msgstr "Διαθέσιμες ενημερώσεις ({0})"
-
-#, csharp-format
-msgid "Updates ({0})"
-msgstr "Ενημερώσεις ({0})"
-
-msgid "All packages are up to date"
-msgstr "Όλα τα πακέτα είναι ενημερωμένα"
-
-msgid "just now"
-msgstr "μόλις τώρα"
-
-#, csharp-format
-msgid "{0} min ago"
-msgstr "πριν από {0} λεπτά"
-
-#, csharp-format
-msgid "{0}h ago"
-msgstr "πριν από {0} ώρες"
-
-msgid "yesterday"
-msgstr "χθες"
-
-#, csharp-format
-msgid "{0}d ago"
-msgstr "πριν από {0} ημέρες"
-
-msgid "Any"
-msgstr "Οποιοδήποτε"
-
-msgid "color-scheme"
-msgstr "color-scheme"
-
-msgid "Install"
-msgstr "Εγκατάσταση"
-
-msgid "Updates"
-msgstr "Ενημερώσεις"
-
-msgid "Manage"
-msgstr "Διαχείριση"
-
-msgid "Remove"
-msgstr "Κατάργηση"
-
-msgid "Search packages..."
-msgstr "Αναζήτηση πακέτων..."
-
-msgid "Additional Options"
-msgstr "Πρόσθετες επιλογές"
-
-msgid "Install Aur Package(s)"
-msgstr "Εγκατάσταση πακέτων AUR"
-
-msgid "Name"
-msgstr "Όνομα"
-
-msgid "Votes"
-msgstr "Ψήφοι"
-
-msgid "Popularity"
-msgstr "Δημοτικότητα"
-
-msgid "Version"
-msgstr "Έκδοση"
-
-msgid "Use chroot"
-msgstr "Χρήση chroot"
-
-msgid "Build packages in a clean chroot environment"
-msgstr "Δημιουργία πακέτων σε καθαρό περιβάλλον chroot"
-
-msgid "Run checks"
-msgstr "Εκτέλεση ελέγχων"
-
-msgid "Run the --check function during package build (installs checkdepends)"
-msgstr ""
-"Εκτέλεση της λειτουργίας --check κατά τη δημιουργία του πακέτου (προσθέτει "
-"τα checkdepends)"
-
-msgid "refresh"
-msgstr "ανανέωση"
-
-msgid "Remove Aur Package(s)"
-msgstr "Κατάργηση πακέτων AUR"
-
-msgid "Clean Uninstall"
-msgstr "Καθαρή απεγκατάσταση"
-
-msgid "Show Hidden"
-msgstr "Εμφάνιση κρυφών πακέτων"
-
-msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr "Εμφάνιση πακέτων της λίστας IgnorePkg από το pacman.conf"
-
-msgid "Update Aur Package(s)"
-msgstr "Ενημέρωση πακέτων AUR"
-
-msgid "Old Version"
-msgstr "Παλιά έκδοση"
-
-msgid ""
-"Run the --check function during package build (installs checkdepends)\n"
-"                        "
-msgstr ""
-"Εκτέλεση της λειτουργίας --check κατά τη δημιουργία του πακέτου (εγκαθιστά "
-"το checkdepends)\n"
-"                        "
-
-msgid "Search..."
-msgstr "Αναζήτηση..."
-
-msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr ""
-"Συγχρονισμός μεταδεδομένων για όλα τα AppImages. Χρήσιμο αν το AppImage "
-"ενημερώθηκε μόνο του."
-
-msgid "Sync All"
-msgstr "Συγχρονισμός όλων"
-
-msgid "Upgrade all AppImages to their latest versions"
-msgstr "Αναβάθμιση όλων των AppImages στις τελευταίες τους εκδόσεις"
-
-msgid "Upgrade All"
-msgstr "Αναβάθμιση όλων"
-
-msgid "Install a new AppImage from a file"
-msgstr "Εγκατάσταση νέου AppImage από αρχείο"
-
-msgid "Install AppImage"
-msgstr "Εγκατάσταση AppImage"
-
-msgid "Drop AppImage here to install"
-msgstr "Σύρετε το AppImage εδώ για εγκατάσταση"
-
-msgid "AppImage Migration"
-msgstr "Μετατροπή των AppImage"
-
-msgid ""
-"To continue managing your AppImages with shelly a confirmation is required "
-"to switch to the new v2 implementation."
-msgstr ""
-"Για να συνεχίσετε τη διαχείριση των AppImages σας με το shelly, απαιτείται "
-"επιβεβαίωση για τη μετάβαση στη νέα υλοποίηση v2."
-
-msgid "Migrate Now"
-msgstr "Μεταφορά τώρα"
-
-msgid "App Name"
-msgstr "Όνομα εφαρμογής"
-
-msgid "Description goes here..."
-msgstr "Η περιγραφή πηγαίνει εδώ..."
-
-msgid "Size on Disk"
-msgstr "Μέγεθος στον δίσκο"
-
-msgid "Update Strategy"
-msgstr "Στρατηγική ενημέρωσης"
-
-msgid "Update URL / Repository Info"
-msgstr "URL αποθετηρίου / Πληροφορίες αποθετηρίου"
-
-msgid "Get more information about Update URL / Repository Info"
-msgstr ""
-"Λήψη περισσότερων πληροφοριών σχετικά με το URL ενημέρωσης / Πληροφορίες "
-"αποθετηρίου"
-
-msgid "e.g. owner/repo or https://..."
-msgstr "π.χ. κάτοχος/αποθετήριο ή https://..."
-
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
-msgstr ""
-"Μη έγκυρη μορφή. Χρησιμοποιήστε κάτοχος/αποθετήριο (π.χ. seafoam-labs/shelly-"
-"alpm)"
-
-msgid "Allow Prerelease"
-msgstr "Να επιτρέπονται οι δοκιμαστικές εκδόσεις"
-
-msgid "Installation Path"
-msgstr "Διαδρομή εγκατάστασης"
-
-msgid "Launch Flags"
-msgstr "Παράμετροι εκκίνησης"
-
-msgid "Save"
-msgstr "Αποθήκευση"
-
-msgid "Sync"
-msgstr "Συγχρονισμός"
-
-msgid "Updating..."
-msgstr "Ενημέρωση..."
-
-msgid "Please wait while we update your system."
-msgstr "Παρακαλώ περιμένετε όσο ενημερώνουμε το σύστημά σας."
-
-msgid "Reload"
-msgstr "Επαναφόρτωση"
-
-msgid "Manage Remote Refs"
-msgstr "Διαχείριση αποθετηρίων"
-
-msgid "Install local flatpak"
+msgid "Install a local Flatpak"
 msgstr "Εγκατάσταση τοπικού flatpak"
+
+msgid ""
+"Choose a .flatpak bundle from your system and install it for the current "
+"user or system-wide."
+msgstr ""
+"Επιλέξτε ένα πακέτο .flatpak από το σύστημά σας και εγκαταστήστε το για τον "
+"τρέχοντα χρήστη ή για όλο το σύστημα."
+
+msgid "Bundle"
+msgstr "Πακέτο"
+
+msgid "Choose file…"
+msgstr "Επιλογή αρχείου…"
+
+msgid "Install for"
+msgstr "Εγκατάσταση σαν"
 
 msgid "system"
 msgstr "σύστημα"
@@ -253,17 +40,77 @@ msgstr "σύστημα"
 msgid "user"
 msgstr "χρήστης"
 
-msgid "Loading Flatpak Data..."
-msgstr "Φόρτωση δεδομένων Flatpak..."
+msgid "Install"
+msgstr "Εγκατάσταση"
+
+msgid "Additional Options"
+msgstr "Πρόσθετες επιλογές"
+
+msgid "Show Runtimes"
+msgstr "Εμφάνιση περιβαλλόντων εκτέλεσης"
+
+msgid "Flatpak Repair"
+msgstr "Επιδιόρθωση Flatpak"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Επιδιορθώνει την εγκατάσταση Flatpak (Πειραματικό)"
+
+msgid "Search packages..."
+msgstr "Αναζήτηση πακέτων..."
+
+msgid "Browse"
+msgstr "Περιήγηση"
+
+msgid "Manage"
+msgstr "Διαχείριση"
+
+msgid "Manage Remote Refs"
+msgstr "Διαχείριση αποθετηρίων"
+
+msgid "Install Local"
+msgstr "Εγκατάσταση τοπικών"
+
+msgid "Delete Selected Remote"
+msgstr "Διαγραφή επιλεγμένου απομακρυσμένου αποθετηρίου"
+
+msgid "Add Remote"
+msgstr "Προσθήκη απομακρυσμένου αποθετηρίου"
 
 msgid "Back"
 msgstr "Πίσω"
 
+msgid "Add New Flatpak Remote"
+msgstr "Προσθήκη νέου απομακρυσμένου αποθετηρίου Flatpak"
+
+msgid "Add"
+msgstr "Προσθήκη"
+
+msgid "Remote Name"
+msgstr "Όνομα απομακρυσμένου αποθετηρίου"
+
+msgid "e.g., flathub"
+msgstr "π.χ., flathub"
+
+msgid "Remote URL"
+msgstr "URL απομακρυσμένου αποθετηρίου"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "π.χ., https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "Εμβέλεια"
+
+msgid "Loading Flatpak Data..."
+msgstr "Φόρτωση δεδομένων Flatpak..."
+
 msgid "Addons"
 msgstr "Πρόσθετα"
 
-msgid "Group Filter"
-msgstr "Φίλτρο ομάδων"
+msgid "Install source"
+msgstr "Πηγή εγκατάστασης"
+
+msgid "App Name"
+msgstr "Όνομα εφαρμογής"
 
 msgid "Author"
 msgstr "Δημιουργός"
@@ -289,208 +136,51 @@ msgstr "Δικαιώματα εφαρμογής"
 msgid "Version History"
 msgstr "Ιστορικό εκδόσεων"
 
-msgid "Delete Selected Remote"
-msgstr "Διαγραφή επιλεγμένου απομακρυσμένου αποθετηρίου"
+msgid "Reinstall"
+msgstr "Επανεγκατάσταση"
 
-msgid "Add Remote"
-msgstr "Προσθήκη απομακρυσμένου αποθετηρίου"
+msgid "Add Ignore"
+msgstr "Προσθήκη παράβλεψης"
 
-msgid "Add New Flatpak Remote"
-msgstr "Προσθήκη νέου απομακρυσμένου αποθετηρίου Flatpak"
+msgid "Add Hold"
+msgstr "Προσθήκη συγκράτησης"
 
-msgid "Add"
-msgstr "Προσθήκη"
+msgid "Make Explicit"
+msgstr "Ορισμός ως ρητά εγκατεστημένο"
 
-msgid "Remote Name"
-msgstr "Όνομα απομακρυσμένου αποθετηρίου"
+msgid "Mark Dependency"
+msgstr "Σήμανση Εξάρτησης"
 
-msgid "e.g., flathub"
-msgstr "π.χ., flathub"
+msgid "Package actions"
+msgstr "Ενέργειες πακέτου"
 
-msgid "Remote URL"
-msgstr "URL απομακρυσμένου αποθετηρίου"
+msgid "Information"
+msgstr "Πληροφορίες"
 
-msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr "π.χ., https://flathub.org/repo/flathub.flatpakrepo"
+msgid "Recommended Packages"
+msgstr "Προτεινόμενα Πακέτα"
 
-msgid "Scope"
-msgstr "Εμβέλεια"
+msgid "Curated suggestions from Seafoam Labs"
+msgstr "Επιλεγμένες προτάσεις από τη Seafoam Labs"
 
-msgid "Show Runtimes"
-msgstr "Εμφάνιση περιβαλλόντων εκτέλεσης"
-
-msgid "Flatpak Repair"
-msgstr "Επιδιόρθωση Flatpak"
-
-msgid "Repairs Flatpak Installation (Experimental)"
-msgstr "Επιδιορθώνει την εγκατάσταση Flatpak (Πειραματικό)"
-
-msgid "Update All"
-msgstr "Ενημέρωση όλων"
-
-msgid "Install Package(s)"
-msgstr "Εγκατάσταση πακέτων"
-
-msgid "Update Package(s)"
-msgstr "Ενημέρωση πακέτων"
-
-msgid "Manage Package(s)"
-msgstr "Διαχείριση πακέτων"
-
-msgid "Install AUR"
-msgstr "Εγκατάσταση από το AUR"
-
-msgid "Update AUR"
-msgstr "Ενημέρωση από το AUR"
-
-msgid "Remove AUR"
-msgstr "Κατάργηση από το AUR"
-
-msgid "Install Flatpak"
-msgstr "Εγκατάσταση Flatpak"
-
-msgid "Update Flatpak"
-msgstr "Ενημέρωση Flatpak"
-
-msgid "Remove Flatpak"
-msgstr "Κατάργηση Flatpak"
-
-msgid "Manage AppImage(s)"
-msgstr "Διαχείριση AppImage"
-
-msgid "Cache Cleaner"
-msgstr "Καθαρισμός προσωρινής μνήμης"
-
-msgid "Arch News"
-msgstr "Νέα του Arch"
-
-msgid "Settings"
-msgstr "Ρυθμίσεις"
-
-msgid "About"
-msgstr "Σχετικά"
-
-msgid "Toggle Sidebar"
-msgstr "Εναλλαγή πλευρικής στήλης"
-
-msgid "Show Recommended"
-msgstr "Εμφάνιση προτεινόμενων"
-
-msgid "Recommend"
-msgstr "Πρόταση"
-
-msgid "Show Packages"
-msgstr "Εμφάνιση πακέτων"
-
-msgid "Packages"
-msgstr "Πακέτα"
-
-msgid "Show AUR"
-msgstr "Εμφάνιση AUR"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Show Flat"
-msgstr "Εμφάνιση Flat"
-
-msgid "Flatpak"
-msgstr "Flatpak"
-
-msgid "Show AppImage"
-msgstr "Εμφάνιση AppImage"
-
-msgid "AppImage"
-msgstr "AppImage"
-
-msgid "Show Shelly Searchs"
-msgstr "Εμφάνιση αναζητήσεων του Shelly"
-
-msgid "Shelly Search"
-msgstr "Αναζήτηση Shelly"
-
-msgid "Available Updates"
-msgstr "Διαθέσιμες ενημερώσεις"
-
-msgid "Package Group Filter"
-msgstr "Φίλτρο ομάδων πακέτων"
-
-msgid "Remove Local Packages"
-msgstr "Κατάργηση τοπικών πακέτων"
-
-msgid "Remove Local"
-msgstr "Κατάργηση τοπικών"
-
-msgid "Selected Packages"
-msgstr "Επιλεγμένα πακέτα"
-
-msgid "0 Selected"
-msgstr "0 Επιλεγμένα"
-
-msgid "Grid View"
-msgstr "Προβολή πλέγματος"
-
-msgid "List View"
-msgstr "Προβολή λίστας"
-
-msgid "Downgrade Selected"
-msgstr "Υποβάθμιση επιλεγμένων"
-
-msgid "Downgrade selected packages one by one"
-msgstr "Υποβάθμιση των επιλεγμένων πακέτων ένα προς ένα"
-
-msgid "Remove Selected"
-msgstr "Κατάργηση επιλεγμένων"
-
-msgid "Package Name"
-msgstr "Όνομα πακέτου"
-
-msgid "Size"
-msgstr "Μέγεθος"
-
-msgid "Had an issue loading your packages. Check if you have a db lock."
-msgstr ""
-"Παρουσιάστηκε πρόβλημα κατά τη φόρτωση των πακέτων σας. Ελέγξτε αν υπάρχει "
-"κλείδωμα της βάσης δεδομένων (db lock)."
-
-msgid "Remove Configs"
-msgstr "Κατάργηση ρυθμίσεων"
-
-msgid "Remove Optional Deps"
-msgstr "Κατάργηση προαιρετικών εξαρτήσεων"
-
-msgid ""
-"Also remove orphaned optional dependencies installed with these packages."
-msgstr ""
-"Επίσης, κατάργηση των ορφανών προαιρετικών εξαρτήσεων που εγκαταστάθηκαν "
-"μαζί με αυτά τα πακέτα."
-
-msgid "Install Local Packages"
-msgstr "Εγκατάσταση τοπικών πακέτων"
-
-msgid "Install Local"
-msgstr "Εγκατάσταση τοπικών"
-
-msgid "Install Selected"
-msgstr "Εγκατάσταση επιλεγμένων"
-
-msgid "Repository"
-msgstr "Αποθετήριο"
-
-msgid "Perform Upgrade"
-msgstr "Εκτέλεση αναβάθμισης"
-
-msgid "Perform a full system upgrade with install (-u)"
-msgstr "Εκτέλεση πλήρους αναβάθμισης συστήματος με εγκατάσταση (-u)"
-
-msgid "Update Selected"
-msgstr "Ενημέρωση επιλεγμένων"
-
-msgid "Size Difference"
-msgstr "Διαφορά μεγέθους"
+msgid "Refresh the recommended packages list from the network"
+msgstr "Ανανέωση της λίστας προτεινόμενων πακέτων από το δίκτυο"
 
 msgid "Loading Recommended Packages..."
 msgstr "Φόρτωση προτεινόμενων πακέτων..."
+
+msgid ""
+"No recommendations found. Please check your internet connection and try "
+"again."
+msgstr ""
+"Δεν βρέθηκαν προτάσεις. Παρακαλούμε ελέγξτε τη σύνδεσή σας στο διαδίκτυο και "
+"δοκιμάστε ξανά."
+
+msgid "Preview Pkgbuild"
+msgstr "Προεπισκόπηση Pkgbuild"
+
+msgid "Shelly"
+msgstr "Shelly"
 
 msgid "General"
 msgstr "Γενικά"
@@ -504,8 +194,8 @@ msgstr "Γλώσσα"
 msgid "Enable Flatpak"
 msgstr "Ενεργοποίηση Flatpak"
 
-msgid "Enable Recommended Page"
-msgstr "Ενεργοποίηση σελίδας προτεινόμενων"
+msgid "Enable Recommended"
+msgstr "Ενεργοποίηση Προτεινόμενων"
 
 msgid "Enable AppImage"
 msgstr "Ενεργοποίηση AppImage"
@@ -549,6 +239,9 @@ msgstr "Σάβ"
 msgid "Update Time (24h):"
 msgstr "Ώρα ενημέρωσης (24ωρη):"
 
+msgid ":"
+msgstr ":"
+
 msgid "Look & Feel"
 msgstr "Εμφάνιση & Αίσθηση"
 
@@ -561,16 +254,6 @@ msgid ""
 msgstr ""
 "Αν ενεργοποιηθεί, το Shelly θα χρησιμοποιεί εικονίδια appstream στη λίστα "
 "πακέτων και στις σελίδες λεπτομερειών."
-
-msgid "Use Sidebar Navigation"
-msgstr "Χρήση πλευρικής πλοήγησης"
-
-msgid ""
-"If enabled, Shelly will use a sidebar vertical navigation instead of the top "
-"bar one."
-msgstr ""
-"Αν ενεργοποιηθεί, το Shelly θα χρησιμοποιεί κάθετη πλοήγηση στην πλευρική "
-"στήλη αντί για την επάνω γραμμή."
 
 msgid "Use Symbolic Tray Icon"
 msgstr "Χρήση συμβολικού εικονιδίου στην περιοχή ειδοποιήσεων"
@@ -597,6 +280,9 @@ msgstr "Εικονίδιο ενημερώσεων στο tray"
 msgid "Default page"
 msgstr "Προεπιλεγμένη σελίδα"
 
+msgid "Navigation style"
+msgstr "Μέθοδος πλοήγησης"
+
 msgid "Advanced"
 msgstr "Για προχωρημένους"
 
@@ -621,14 +307,38 @@ msgstr "Διαδρομή εγκατάστασης AppImage"
 msgid "Select Directory"
 msgstr "Επιλογή φακέλου"
 
-msgid "Parallel Downloads"
-msgstr "Παράλληλες λήψεις"
+msgid "Save"
+msgstr "Αποθήκευση"
+
+msgid "View Changelog"
+msgstr "Προβολή αρχείου αλλαγών"
+
+msgid "v0.0.0"
+msgstr "v0.0.0"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "Community fluxer"
+msgstr "Κοινότητα fluxer"
+
+msgid "Sponsor"
+msgstr "Χορηγός"
+
+msgid "Utilities"
+msgstr "Βοηθήματα"
+
+msgid "Maintenance and repair tools for your Shelly installation."
+msgstr "Εργαλεία συντήρησης και επισκευής για την εγκατάσταση του Shelly."
 
 msgid "Force Database Update"
 msgstr "Αναγκαστική ενημέρωση βάσης δεδομένων"
 
 msgid "Force a synchronization of the package database."
 msgstr "Αναγκαστικός συγχρονισμός της βάσης δεδομένων."
+
+msgid "Run"
+msgstr "Εκτέλεση"
 
 msgid "Remove db.lck"
 msgstr "Κατάργηση του db.lck"
@@ -638,12 +348,6 @@ msgid ""
 msgstr ""
 "Καταργεί το αρχείο db.lck αν αυτό παρέμεινε από μια διαδικασία alpm που "
 "διακόπηκε."
-
-msgid "View Pacfiles"
-msgstr "Προβολή αρχείων Pacfile"
-
-msgid "View the contents of stored pacfiles."
-msgstr "Προβολή των περιεχομένων των αποθηκευμένων αρχείων pacfile."
 
 msgid "Fix Permissions"
 msgstr "Διόρθωση δικαιωμάτων"
@@ -661,446 +365,340 @@ msgstr "Εκκαθάριση πακέτων"
 msgid "Remove corrupted/orphaned packages."
 msgstr "Κατάργηση κατεστραμμένων/ορφανών πακέτων."
 
-msgid "View Changelog"
-msgstr "Προβολή αρχείου αλλαγών"
-
-msgid "GitHub"
-msgstr "GitHub"
-
-msgid "Community fluxer"
-msgstr "Κοινότητα fluxer"
-
-msgid "Sponsor"
-msgstr "Χορηγός"
-
-msgid "Welcome to Shelly"
-msgstr "Καλώς ορίσατε στο Shelly"
-
-msgid "Let's get you set up with some basic configurations."
-msgstr "Ας προχωρήσουμε στη ρύθμιση ορισμένων βασικών παραμέτρων."
-
-msgid "Enable AUR Support"
-msgstr "Ενεργοποίηση υποστήριξης AUR"
+msgid "Clean Package Cache"
+msgstr "Καθαρισμός προσωρινής μνήμης πακέτων"
 
 msgid ""
-"Access the Arch User Repository for a vast collection of community-"
-"maintained packages. AUR packages can contain malicous software, so please "
-"use caution when using the AUR."
+"Removes old cached package versions, keeping the selected number per package."
 msgstr ""
-"Αποκτήστε πρόσβαση στο Arch User Repository για μια τεράστια συλλογή πακέτων "
-"που συντηρούνται από την κοινότητα. Τα πακέτα AUR ενδέχεται να περιέχουν "
-"κακόβουλο λογισμικό, επομένως παρακαλούμε να είστε προσεκτικοί κατά τη χρήση "
-"του AUR."
+"Αφαιρεί παλιές αποθηκευμένες εκδόσεις πακέτων, διατηρώντας τον επιλεγμένο "
+"αριθμό ανά πακέτο."
 
-msgid "Enable Flatpak Support"
-msgstr "Ενεργοποίηση υποστήριξης Flatpak"
+msgid "Keep"
+msgstr "Διατήρηση"
 
-msgid "Enable support for Flatpak applications from Flathub and other remotes."
-msgstr ""
-"Ενεργοποίηση υποστήριξης για εφαρμογές Flatpak από το Flathub και άλλα "
-"απομακρυσμένα αποθετήρια."
+msgid "Number of cached versions to keep per package"
+msgstr "Αριθμός εκδόσεων που θα διατηρούνται ανά πακέτο"
 
-msgid "Enable AppImage Support"
-msgstr "Ενεργοποίηση υποστήριξης AppImage"
-
-msgid "Manage and configure updates for AppImage applications easily."
-msgstr ""
-"Διαχειριστείτε και διαμορφώστε εύκολα τις ενημερώσεις για εφαρμογές AppImage."
-
-msgid ""
-"Show a status icon in your system tray for quick access and notifications."
-msgstr ""
-"Εμφάνιση εικονιδίου κατάστασης στην περιοχή ειδοποιήσεων του συστήματος για "
-"γρήγορη πρόσβαση και ειδοποιήσεις."
-
-msgid "Tray Icon Autostart"
-msgstr "Αυτόματη εκκίνηση εικονιδίου στην περιοχή ειδοποιήσεων"
-
-msgid "Allow the tray service to autostart."
-msgstr ""
-"Να επιτρέπεται η αυτόματη εκκίνηση της υπηρεσίας του εικονιδίου περιοχής "
-"ειδοποιήσεων."
-
-msgid "Vertical Navigation"
-msgstr "Κάθετη πλοήγηση"
-
-msgid "Change navigation style to vertical or horizontal style."
-msgstr "Αλλαγή του στυλ πλοήγησης σε κάθετο ή οριζόντιο."
-
-msgid "Finish Setup"
-msgstr "Ολοκλήρωση εγκατάστασης"
-
-msgid ""
-"Any required installations will run after the Finish button has been "
-"accepted."
-msgstr ""
-"Οποιεσδήποτε απαιτούμενες εγκαταστάσεις θα εκτελεστούν αφού πατηθεί το "
-"κουμπί Ολοκλήρωση."
-
-msgid "These options and others can be configured later in settings."
-msgstr ""
-"Αυτές οι επιλογές, καθώς και άλλες, μπορούν να ρυθμιστούν αργότερα στις "
-"ρυθμίσεις."
-
-msgid "Remove Package(s)"
-msgstr "Κατάργηση πακέτων"
-
-msgid "Description"
-msgstr "Περιγραφή"
-
-msgid "Last Updated"
-msgstr "Τελευταία ενημέρωση"
-
-msgid "<span size='large'>Search for AUR packages</span>"
-msgstr "<span size='large'>Αναζήτηση για πακέτα AUR</span>"
-
-msgid "Installed"
-msgstr "Εγκατεστημένο"
-
-msgid "Install Packages?"
-msgstr "Εγκατάσταση πακέτων;"
-
-msgid "Installing..."
-msgstr "Εγκατάσταση..."
-
-#, csharp-format
-msgid "Installed {0} Package(s)"
-msgstr "Εγκαταστάθηκαν {0} πακέτα"
-
-msgid "Package Build"
-msgstr "Δημιουργία πακέτου"
-
-msgid "Preview PKGBUILD"
-msgstr "Προεπισκόπηση PKGBUILD"
-
-msgid "Displays Package Build"
-msgstr "Εμφανίζει τη δημιουργία του πακέτου"
-
-msgid "Close details"
-msgstr "Κλείσιμο λεπτομερειών"
-
-msgid "Out of Date"
-msgstr "Παρωχημένο"
-
-msgid "Maintainer"
-msgstr "Συντηρητής"
-
-msgid "Orphaned"
-msgstr "Ορφανό"
-
-msgid "Last Modified"
-msgstr "Τελευταία τροποποίηση"
-
-msgid "First Submitted"
-msgstr "Πρώτη υποβολή"
-
-msgid "URL:"
-msgstr "URL:"
-
-msgid "AUR:"
-msgstr "AUR:"
-
-msgid "Depends"
-msgstr "Εξαρτήσεις"
-
-msgid "Make Depends"
-msgstr "Εξαρτήσεις δημιουργίας"
-
-msgid "Check Depends"
-msgstr "Έλεγχος εξαρτήσεων"
-
-msgid "Optional Deps"
-msgstr "Προαιρετικές εξαρτήσεις"
-
-msgid "Licenses"
-msgstr "Άδειες χρήσης"
-
-msgid "Keywords"
-msgstr "Λέξεις-κλειδιά"
-
-msgid "Provides"
-msgstr "Παρέχει"
-
-msgid "Conflicts"
-msgstr "Συγκρούσεις"
-
-msgid "Groups"
-msgstr "Ομάδες"
-
-msgid "Replaces"
-msgstr "Αντικαθιστά"
-
-msgid "Remove Packages?"
-msgstr "Κατάργηση πακέτων;"
-
-msgid "Removing..."
-msgstr "Κατάργηση..."
-
-#, csharp-format
-msgid "Removed {0} Package(s)"
-msgstr "Καταργήθηκαν {0} πακέτα"
-
-msgid "<span size='large'>AUR packages are up to date</span>"
-msgstr "<span size='large'>Τα πακέτα AUR είναι ενημερωμένα</span>"
-
-msgid "Update Packages?"
-msgstr "Ενημέρωση πακέτων;"
-
-#, csharp-format
-msgid "Updated {0} Package(s)"
-msgstr "Ενημερώθηκαν {0} πακέτα"
-
-msgid "None"
-msgstr "Κανένα"
-
-msgid "StaticUrl"
-msgstr "Στατικό URL"
-
-msgid "GitLab"
-msgstr "GitLab"
-
-msgid "Codeberg"
-msgstr "Codeberg"
-
-msgid "Forgejo"
-msgstr "Forgejo"
-
-#, csharp-format
-msgid "Update Available: {0}"
-msgstr "Διαθέσιμη ενημέρωση: {0}"
-
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "Μη έγκυρο URL. Πρέπει να ξεκινά με http:// ή https://"
-
-msgid "Select AppImage to Install"
-msgstr "Επιλογή AppImage για εγκατάσταση"
-
-msgid "AppImage Files"
-msgstr "Αρχεία AppImage"
-
-msgid "No AppImages need to be upgraded"
-msgstr "Δεν χρειάζεται αναβάθμιση κανένα AppImage"
-
-msgid "Running updates..."
-msgstr "Εκτέλεση ενημερώσεων..."
-
-msgid "Updating AppImages..."
-msgstr "Ενημέρωση των AppImages..."
-
-msgid "All AppImages updated successfully!"
-msgstr "Όλα τα AppImages ενημερώθηκαν επιτυχώς!"
-
-#, csharp-format
-msgid "Failed to update AppImages: {0}"
-msgstr "Αποτυχία ενημέρωσης των AppImages: {0}"
-
-#, csharp-format
-msgid "Version {0}"
-msgstr "Έκδοση {0}"
-
-#, csharp-format
-msgid "Configuration saved for {0}"
-msgstr "Οι ρυθμίσεις αποθηκεύτηκαν για το {0}"
-
-#, csharp-format
-msgid "Failed to save configuration: {0}"
-msgstr "Αποτυχία αποθήκευσης ρυθμίσεων: {0}"
-
-#, csharp-format
-msgid "Syncing {0}..."
-msgstr "Συγχρονισμός του {0}..."
-
-#, csharp-format
-msgid "Synced {0}"
-msgstr "Συγχρονίστηκε το {0}"
-
-#, csharp-format
-msgid "Failed to sync: {0}"
-msgstr "Αποτυχία συγχρονισμού: {0}"
-
-msgid "Syncing all AppImages ..."
-msgstr "Συγχρονισμός όλων των AppImages..."
-
-msgid "Synced"
-msgstr "Συγχρονίστηκε"
-
-#, csharp-format
-msgid "Removing {0}..."
-msgstr "Κατάργηση του {0}..."
-
-#, csharp-format
-msgid "{0} removed successfully!"
-msgstr "Το {0} καταργήθηκε επιτυχώς!"
-
-#, csharp-format
-msgid "Failed to remove {0}: {1}"
-msgstr "Αποτυχία κατάργησης του {0}: {1}"
-
-msgid "Only AppImage files are supported"
-msgstr "Υποστηρίζονται μόνο αρχεία AppImage"
-
-msgid "Migrating AppImages to V2..."
-msgstr "Μετατροπή των AppImages σε V2..."
-
-msgid "Migration successful!"
-msgstr "Η μετατροπή ήταν επιτυχής!"
-
-#, csharp-format
-msgid "Migration failed: {0}"
-msgstr "Αποτυχία μετατροπής: {0}"
-
-msgid "Installing AppImage..."
-msgstr "Εγκατάσταση AppImage..."
-
-#, csharp-format
-msgid "{0} installed successfully!"
-msgstr "Το {0} εγκαταστάθηκε επιτυχώς!"
-
-#, csharp-format
-msgid "Failed to install {0}: {1}"
-msgstr "Αποτυχία εγκατάστασης του {0}: {1}"
-
-msgid "Shelly is an Arch Linux package manager"
-msgstr "Το Shelly είναι ένας διαχειριστής πακέτων για το Arch Linux"
-
-msgid "Seafoam Labs Website"
-msgstr "Ιστότοπος της Seafoam Labs"
-
-msgid "Project Leads"
-msgstr "Επικεφαλής έργου"
-
-msgid "Maintainers"
-msgstr "Συντηρητές"
-
-msgid "installed"
-msgstr "εγκατεστημένο"
-
-msgid "Select"
-msgstr "Επιλογή"
-
-msgid "Select All"
-msgstr "Επιλογή όλων"
-
-msgid "already installed"
-msgstr "ήδη εγκατεστημένο"
-
-msgid "Confirm"
-msgstr "Επιβεβαίωση"
-
-msgid "No"
-msgstr "Όχι"
-
-msgid "Yes"
-msgstr "Ναι"
-
-msgid "Install Ignored Package?"
-msgstr "Εγκατάσταση αγνοημένου πακέτου;"
-
-msgid "Replace Package?"
-msgstr "Αντικατάσταση πακέτου;"
-
-msgid "Package Conflict Detected"
-msgstr "Ανιχνεύθηκε σύγκρουση πακέτων"
-
-msgid "Corrupted Package Found"
-msgstr "Βρέθηκε κατεστραμμένο πακέτο"
-
-msgid "Import PGP Key?"
-msgstr "Εισαγωγή κλειδιού PGP;"
-
-msgid "Select Provider"
-msgstr "Επιλογή παρόχου"
-
-msgid "Select Optional Dependencies"
-msgstr "Επιλογή προαιρετικών εξαρτήσεων"
-
-msgid "System Question"
-msgstr "Ερώτηση συστήματος"
-
-msgid "Arch Linux News"
-msgstr "Νέα του Arch Linux"
-
-msgid "No news available"
-msgstr "Δεν υπάρχουν διαθέσιμα νέα"
-
-#, csharp-format
-msgid ""
-"Cache directory: {0}\n"
-"Total cached files: {1} ({2})"
-msgstr ""
-"Κατάλογος προσωρινής μνήμης: {0}\n"
-"Συνολικά αποθηκευμένα αρχεία: {1} ({2})"
-
-msgid "Keep versions:"
-msgstr "Διατήρηση εκδόσεων:"
-
-msgid "Uninstalled only"
-msgstr "Μόνο τα απεγκατεστημένα"
-
-msgid "Cancel"
-msgstr "Ακύρωση"
-
-msgid "Clean"
-msgstr "Καθαρισμός"
-
-msgid "No candidates for removal."
-msgstr "Δεν υπάρχουν υποψήφια πακέτα προς κατάργηση."
-
-#, csharp-format
-msgid "{0} files, {1} would be freed"
-msgstr "{0} αρχεία, θα ελευθερωθούν {1}"
-
-msgid "Cache directory does not exist"
-msgstr "Ο κατάλογος της προσωρινής μνήμης δεν υπάρχει"
-
-msgid "Cleaning package cache..."
-msgstr "Καθαρισμός της προσωρινής μνήμης των πακέτων..."
-
-msgid "Package cache cleaned successfully"
-msgstr "Η προσωρινή μνήμη των πακέτων καθαρίστηκε επιτυχώς"
-
-#, csharp-format
-msgid "Cache clean failed: {0}"
-msgstr "Αποτυχία καθαρισμού προσωρινής μνήμης: {0}"
-
-#, csharp-format
-msgid "Downgrade: {0}"
-msgstr "Υποβάθμιση: {0}"
-
-msgid "Select version:"
-msgstr "Επιλογή έκδοσης:"
-
-msgid "Add to IgnorePkg list"
-msgstr "Προσθήκη στη λίστα IgnorePkg"
-
-msgid "Downgrade"
-msgstr "Υποβάθμιση"
+msgid "Toggle output"
+msgstr "Εναλλαγή προβολής εξόδου"
 
 msgid "Close"
 msgstr "Κλείσιμο"
 
-msgid "Operation Complete"
-msgstr "Η λειτουργία ολοκληρώθηκε"
+msgid "Available Updates"
+msgstr "Διαθέσιμες ενημερώσεις"
 
-msgid "Authentication Required"
-msgstr "Απαιτείται ταυτοποίηση"
+msgid "7 of 7 updates included"
+msgstr "Περιλαμβάνονται 7 από τις 7 ενημερώσεις"
 
-#, csharp-format
-msgid "Password needed to execute: {0}."
-msgstr "Απαιτείται κωδικός για την εκτέλεση: {0}."
+msgid "Check all enabled sources again"
+msgstr "Έλεγχος όλων των ενεργοποιημένων πηγών ξανά"
 
-msgid "Authenticate"
-msgstr "Ταυτοποίηση"
+msgid "Check Again"
+msgstr "Έλεγχος ξανά"
 
-msgid "Incorrect password. Try again."
-msgstr "Λανθασμένος κωδικός πρόσβασης. Δοκιμάστε ξανά."
+msgid "Upgrade"
+msgstr "Αναβάθμιση"
+
+msgid "System"
+msgstr "Σύστημα"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Checking for updates…"
+msgstr "Γίνεται έλεγχος για ενημερώσεις…"
+
+msgid "Your system is up to date"
+msgstr "Το σύστημα είναι ενημερωμένο"
+
+msgid "Could not check for updates"
+msgstr "Δεν ήταν δυνατός ο έλεγχος για ενημερώσεις"
+
+msgid "Welcome to Shelly v3"
+msgstr "Καλώς ορίσατε στο Shelly v3"
+
+#, fuzzy
+msgid ""
+"Shelly is a modern package manager for Arch Linux. Configure your sources "
+"and preferences to get started."
+msgstr ""
+"Το Shelly είναι ένας σύγχρονος διαχειριστής πακέτων για το Arch Linux. "
+"Ρυθμίστε τις πηγές και τις προτιμήσεις σας για να ξεκινήσετε. Πρόσφατα "
+"ξαναγράψαμε τόσο το GUI όσο και το CLI σε Zig, με μια νέα τροποποιημένη "
+"σχεδίαση βασισμένη στα προηγούμενα σχέδιά μας."
+
+msgid "Select Your Sources"
+msgstr "Επιλέξτε τις πηγές σας"
+
+msgid ""
+"Choose which package sources you want to browse. You can always change this "
+"later in settings."
+msgstr ""
+"Επιλέξτε ποιες πηγές πακέτων θέλετε να περιηγηθείτε. Μπορείτε πάντα να το "
+"αλλάξετε αυτό αργότερα στις ρυθμίσεις."
+
+msgid "Arch User Repository community packages"
+msgstr "Πακέτα κοινότητας Arch User Repository"
+
+msgid "Sandboxed universal Linux applications"
+msgstr "Απομονωμένες (Sandboxed) καθολικές εφαρμογές Linux"
+
+msgid "AppImage"
+msgstr "AppImage"
+
+msgid "Portable self-contained application bundles"
+msgstr "Φορητά, αυτοτελή πακέτα εφαρμογών"
+
+msgid "Recommended"
+msgstr "Προτεινόμενα"
+
+msgid "Curated picks from Shelly"
+msgstr ""
+
+msgid "Look and Feel"
+msgstr "Eμφάνιση και Aίσθηση"
+
+msgid ""
+"Customize how Shelly looks and behaves. All of these can be changed later in "
+"preferences."
+msgstr ""
+"Προσαρμόστε την εμφανιση και τη συμπεριφορά του Shelly. Όλα αυτά μπορούν να "
+"αλλαχθούν αργότερα στις προτιμήσεις."
+
+msgid "Navigation Style"
+msgstr "Στυλ πλοήγησης"
+
+msgid "Sidebar"
+msgstr "Πλευρική στήλη"
+
+msgid "Vertical icon rail on the left"
+msgstr "Κατακόρυφη ράβδος εικονιδίων στα αριστερά"
+
+msgid "Top Bar"
+msgstr "Επάνω μπάρα"
+
+msgid "Horizontal tab switcher at the top"
+msgstr "Οριζόντια εναλλαγή καρτελών στο πάνω μέρος"
+
+msgid "System Tray"
+msgstr "Περιοχή Ειδοποιήσεων"
+
+msgid "Run in system tray when minimized"
+msgstr "Εκτέλεση στην περιοχή ειδοποιήσεων κατά την ελαχιστοποίηση"
+
+msgid "Next"
+msgstr "Επόμενο"
+
+msgid "Start Shelly"
+msgstr "Έναρξη Shelly"
+
+msgid "Search..."
+msgstr "Αναζήτηση..."
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr ""
+"Συγχρονισμός μεταδεδομένων για όλα τα AppImages. Χρήσιμο αν το AppImage "
+"ενημερώθηκε μόνο του."
+
+msgid "Sync All"
+msgstr "Συγχρονισμός όλων"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "Αναβάθμιση όλων των AppImages στις τελευταίες τους εκδόσεις"
+
+msgid "Upgrade All"
+msgstr "Αναβάθμιση όλων"
+
+msgid "Install a new AppImage from a file"
+msgstr "Εγκατάσταση νέου AppImage από αρχείο"
+
+msgid "Install AppImage"
+msgstr "Εγκατάσταση AppImage"
+
+msgid "Drop AppImage here to install"
+msgstr "Σύρετε το AppImage εδώ για εγκατάσταση"
+
+msgid "Version"
+msgstr "Έκδοση"
+
+msgid "Description goes here..."
+msgstr "Η περιγραφή πηγαίνει εδώ..."
+
+msgid "Size on Disk"
+msgstr "Μέγεθος στον δίσκο"
+
+msgid "Update Strategy"
+msgstr "Στρατηγική ενημέρωσης"
+
+msgid "Update URL / Repository Info"
+msgstr "URL αποθετηρίου / Πληροφορίες αποθετηρίου"
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr ""
+"Λήψη περισσότερων πληροφοριών σχετικά με το URL ενημέρωσης / Πληροφορίες "
+"αποθετηρίου"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "π.χ. κάτοχος/αποθετήριο ή https://..."
+
+msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+msgstr ""
+"Μη έγκυρη μορφή. Χρησιμοποιήστε κάτοχος/αποθετήριο (π.χ. seafoam-labs/shelly-"
+"alpm)"
+
+msgid "Allow Prerelease"
+msgstr "Να επιτρέπονται οι δοκιμαστικές εκδόσεις"
+
+msgid "Installation Path"
+msgstr "Διαδρομή εγκατάστασης"
+
+msgid "Launch Flags"
+msgstr "Παράμετροι εκκίνησης"
+
+msgid "Sync"
+msgstr "Συγχρονισμός"
+
+msgid "Remove"
+msgstr "Κατάργηση"
+
+msgid "Search the AUR by name or keyword"
+msgstr "Αναζήτηση στο AUR κατά όνομα ή λέξη-κλειδί"
+
+msgid "Installed Only"
+msgstr "Μόνο εγκατεστημένα"
+
+msgid "Show only installed packages"
+msgstr "Εμφάνιση μόνο εγκατεστημένων πακέτων"
+
+msgid "Install Selected"
+msgstr "Εγκατάσταση επιλεγμένων"
+
+msgid "Name"
+msgstr "Όνομα"
+
+msgid "Votes"
+msgstr "Ψήφοι"
+
+msgid "Popularity"
+msgstr "Δημοτικότητα"
+
+msgid "Search the AUR"
+msgstr "Αναζήτηση στο AUR"
+
+msgid "The AUR has no browsable index type a package name to begin."
+msgstr ""
+"Το AUR δεν διαθέτει ευρετήριο για περιήγηση, πληκτρολογήστε το όνομα ενός "
+"πακέτου για να ξεκινήσετε."
+
+msgid "Run checks"
+msgstr "Εκτέλεση ελέγχων"
+
+msgid "Run the --check function during package build"
+msgstr "Εκτέλεση της λειτουργίας --check κατά τη δημιουργία του πακέτου"
+
+msgid "Hide Detail Pane"
+msgstr "Απόκρυψη πίνακα λεπτομερειών"
+
+msgid "Hide the detail pane on the right"
+msgstr "Απόκρυψη πίνακα λεπτομερειών στα δεξιά"
+
+msgid "Package Group Filter"
+msgstr "Φίλτρο ομάδων πακέτων"
+
+msgid "Selected Packages"
+msgstr "Επιλεγμένα πακέτα"
+
+msgid "0 Selected"
+msgstr "0 Επιλεγμένα"
+
+msgid "Grid View"
+msgstr "Προβολή πλέγματος"
+
+msgid "List View"
+msgstr "Προβολή λίστας"
+
+msgid "Size"
+msgstr "Μέγεθος"
+
+msgid "Repository"
+msgstr "Αποθετήριο"
+
+#, fuzzy
+msgid "Install Date"
+msgstr "Εγκατάσταση "
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
+msgstr ""
+"Παρουσιάστηκε πρόβλημα κατά τη φόρτωση των πακέτων σας. Ελέγξτε αν υπάρχει "
+"κλείδωμα της βάσης δεδομένων (db lock)."
+
+msgid "Perform Upgrade"
+msgstr "Εκτέλεση αναβάθμισης"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "Εκτέλεση πλήρους αναβάθμισης συστήματος με εγκατάσταση (-u)"
+
+msgid "Show Hidden"
+msgstr "Εμφάνιση κρυφών πακέτων"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "Εμφάνιση πακέτων της λίστας IgnorePkg από το pacman.conf"
+
+msgid "Show Explicit Only"
+msgstr "Εμφάνιση μόνο ρητών"
+
+msgid "Show only explicitly installed packages"
+msgstr "Εμφάνιση μόνο ρητά εγκατεστημένων πακέτων"
+
+msgid "Show Dependency Only"
+msgstr "Εμφάνιση μόνο εξαρτήσεων"
+
+msgid "Show dependency packages on;y"
+msgstr "Εμφάνιση μόνο πακέτων εξαρτήσεων"
+
+msgid "Confirm"
+msgstr "Επιβεβαίωση"
+
+msgid "Cancel"
+msgstr "Ακύρωση"
+
+#, fuzzy
+msgid "No installable addons available"
+msgstr "Δεν υπάρχουν διαθέσιμα νέα"
+
+msgid "No special permissions requested"
+msgstr "Δεν ζητήθηκαν ειδικές άδειες"
+
+#, fuzzy
+msgid "polkit is required"
+msgstr "Απαιτείται επανεκκίνηση"
+
+msgid ""
+"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
+"privileged actions, but it wasn't found on the system bus.\n"
+"\n"
+"Install and enable it, then retry.\n"
+"\n"
+"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
+"Polkit</a>"
+msgstr ""
+
+msgid "Skip"
+msgstr "Παράβλεψη"
 
 msgid "Review PKGBUILD changes"
 msgstr "Έλεγχος αλλαγών του PKGBUILD"
 
-#, csharp-format
-msgid "Review PKGBUILD changes for {0}"
-msgstr "Έλεγχος αλλαγών του PKGBUILD για το {0}"
+msgid "Changes"
+msgstr "Αλλαγές"
+
+msgid "Warnings"
+msgstr "Προειδοποιήσεις"
 
 msgid ""
 "These commands fetch and execute code outside of shelly and libalpm's "
@@ -1109,73 +707,117 @@ msgstr ""
 "Αυτές οι εντολές ανακτούν και εκτελούν κώδικα εκτός του ελέγχου του shelly "
 "και του libalpm. Ελέγξτε τις πριν συνεχίσετε."
 
-#, csharp-format
-msgid "Warnings ({0})"
-msgstr "Προειδοποιήσεις ({0})"
+msgid "Source Files"
+msgstr "Πηγαία αρχεία"
 
-msgid "Changes"
-msgstr "Αλλαγές"
+msgid "Review PKGBUILD"
+msgstr "Ανασκόπηση PKGBUILD"
+
+msgid "Filesystem"
+msgstr "Σύστημα αρχείων"
+
+msgid "Devices"
+msgstr "Συσκευές"
+
+msgid "Sockets"
+msgstr "Υποδοχές"
+
+msgid "Shared"
+msgstr "Κοινόχρηστα"
+
+msgid "Environment"
+msgstr "Περιβάλλον"
+
+msgid "Session bus"
+msgstr "Δίαυλος συνεδρίας"
+
+msgid "System bus"
+msgstr "Δίαυλος συστήματος"
+
+msgid "Other"
+msgstr "Άλλο"
+
+msgid "Review PKGBUILD changes for"
+msgstr "Επιθεώρηση αλλαγών PKGBUILD για"
 
 msgid "Review Changes"
 msgstr "Έλεγχος αλλαγών"
 
-msgid "Install Anyway"
-msgstr "Εγκατάσταση οπωσδήποτε"
+msgid "Security scan completed -"
+msgstr "Ο έλεγχος ασφαλείας ολοκληρώθηκε -"
 
-#, csharp-format
-msgid "{0} used in {1}"
-msgstr "Το {0} χρησιμοποιείται στο {1}"
+msgid "warning(s) found."
+msgstr "εντοπίστηκε προειδοποίηση(εις)."
 
-#, csharp-format
-msgid "Security scan completed - {0} warning(s) found."
-msgstr "Ο έλεγχος ασφαλείας ολοκληρώθηκε - βρέθηκαν {0} προειδοποιήσεις."
+msgid "Security scan completed - warnings found."
+msgstr "Ο έλεγχος ασφαλείας ολοκληρώθηκε - βρέθηκαν προειδοποιήσεις."
 
 msgid "Security scan completed - no issues found."
 msgstr "Ο έλεγχος ασφαλείας ολοκληρώθηκε - δεν βρέθηκαν ζητήματα."
 
-msgid "What's New"
-msgstr "Τι νέο υπάρχει"
+msgid "used in"
+msgstr "χρησιμοποιείται σε"
 
-msgid "Keep Config"
-msgstr "Διατήρηση ρυθμίσεων"
+msgid "Warning"
+msgstr "Προειδοποίηση"
 
-msgid "Keep user data and configuration"
-msgstr "Διατήρηση των δεδομένων χρήστη και των ρυθμίσεων"
+msgid "Install Anyway"
+msgstr "Εγκατάσταση οπωσδήποτε"
 
-msgid "Delete Config"
-msgstr "Διαγραφή ρυθμίσεων"
+msgid "package(s)"
+msgstr "πακέτο(α)"
 
-msgid "Delete user data and configuration"
-msgstr "Διαγραφή των δεδομένων χρήστη και των ρυθμίσεων"
+msgid "to"
+msgstr "σε"
 
-msgid "Keep Config?"
-msgstr "Διατήρηση ρυθμίσεων;"
+msgid "download"
+msgstr "λήψη"
 
-msgid "Show less"
-msgstr "Εμφάνιση λιγότερων"
+msgid "net"
+msgstr "καθαρό"
 
-msgid "Name and URL are required"
-msgstr "Το όνομα και το URL είναι υποχρεωτικά"
+msgid "Dismiss"
+msgstr "Παράβλεψη"
 
-msgid "URL must end with .flatpakrepo"
-msgstr "Το URL πρέπει να καταλήγει σε .flatpakrepo"
+msgid "Choose a Flatpak file"
+msgstr "Επιλέξτε ένα αρχείο Flatpak"
 
-#, csharp-format
-msgid "Failed to add remote: {0}"
-msgstr "Αποτυχία προσθήκης απομακρυσμένου αποθετηρίου: {0}"
+msgid "Flatpak files"
+msgstr "Αρχεία flatpak"
 
-#, csharp-format
-msgid "Added Remote: {0}"
-msgstr "Προστέθηκε το απομακρυσμένο αποθετήριο: {0}"
+msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+msgstr ""
+"Μη υποστηριζόμενος τύπος αρχείου. Επιλέξτε αρχείο .flatpak ή .flatpakref."
 
-msgid "Removed Remote"
-msgstr "Το απομακρυσμένο αποθετήριο καταργήθηκε"
+msgid "Installing local flatpak"
+msgstr "Εγκατάσταση τοπικού flatpak"
+
+msgid "Installation failed."
+msgstr "Η εγκατάσταση απέτυχε."
+
+msgid "Installation complete."
+msgstr "Η εγκατάσταση ολοκληρώθηκε."
+
+msgid "Choose file..."
+msgstr "Επιλογή αρχείου..."
+
+msgid "Removing Remote"
+msgstr "Αφαίρεση αποθετηρίου"
+
+msgid "Adding Remote"
+msgstr "Προσθήκη αποθετηρίου"
+
+msgid "Removing Flatpak"
+msgstr "Αφαίρεση Flatpak"
+
+msgid "Discover"
+msgstr "Εξερευνήστε"
+
+msgid "Categories"
+msgstr "Κατηγορίες"
 
 msgid "All Applications"
 msgstr "Όλες οι εφαρμογές"
-
-msgid "Recommended"
-msgstr "Προτεινόμενα"
 
 msgid "Most Wanted"
 msgstr "Τα πιο δημοφιλή"
@@ -1210,544 +852,14 @@ msgstr "Γραφείο"
 msgid "Science"
 msgstr "Επιστήμη"
 
-msgid "System"
-msgstr "Σύστημα"
-
 msgid "Utility"
 msgstr "Βοηθήματα"
 
-#, csharp-format
-msgid "Version: {0}"
-msgstr "Έκδοση: {0}"
-
-#, csharp-format
-msgid "License: {0}"
-msgstr "Άδεια: {0}"
-
-#, csharp-format
-msgid "Size: {0}"
-msgstr "Μέγεθος: {0}"
-
-msgid "No links available"
-msgstr "Δεν υπάρχουν διαθέσιμοι σύνδεσμοι"
-
-msgid "Install Flatpak Ref"
-msgstr "Εγκατάσταση αρχείου Flatpak Ref"
-
-msgid "Local Flatpak files (\"*.FlatpakRef\", \"*.flatpak)\""
-msgstr "Τοπικά αρχεία Flatpak (\"*.FlatpakRef\", \"*.flatpak)\""
-
-msgid "Installing selected local flatpak file..."
-msgstr "Εγκατάσταση του επιλεγμένου τοπικού αρχείου flatpak..."
-
-msgid "Installing Flatpak failed"
-msgstr "Η εγκατάσταση του Flatpak απέτυχε"
-
-msgid "Installed Flatpak"
-msgstr "Το Flatpak εγκαταστάθηκε"
-
-msgid "Install Package?"
-msgstr "Εγκατάσταση πακέτου;"
-
-#, csharp-format
-msgid "Installing {0}..."
-msgstr "Εγκατάσταση του {0}..."
-
-msgid "Installed Flatpak addon"
-msgstr "Το πρόσθετο Flatpak εγκαταστάθηκε"
-
-msgid "Available Addons"
-msgstr "Διαθέσιμα πρόσθετα"
-
-msgid "No details available"
-msgstr "Δεν υπάρχουν διαθέσιμες λεπτομέρειες"
-
-msgid "Repaired Flatpak installation"
-msgstr "Η εγκατάσταση Flatpak επιδιορθώθηκε"
-
-msgid "Failed to repair Flatpak installation"
-msgstr "Αποτυχία επιδιόρθωσης της εγκατάστασης Flatpak"
-
-#, csharp-format
-msgid "Failed to remove package {0}: {1}"
-msgstr "Αποτυχία κατάργησης του πακέτου {0}: {1}"
-
-msgid "Removed Package(s)"
-msgstr "Τα πακέτα καταργήθηκαν"
-
-msgid "Permission Changes"
-msgstr "Αλλαγές δικαιωμάτων"
-
-msgid "<span size='large'>Flatpaks are up to date</span>"
-msgstr "<span size='large'>Τα Flatpaks είναι ενημερωμένα</span>"
-
-msgid "Updating Flatpak packages..."
-msgstr "Ενημέρωση των πακέτων Flatpak..."
-
-#, csharp-format
-msgid "Failed to update packages: {0}"
-msgstr "Αποτυχία ενημέρωσης των πακέτων: {0}"
-
-msgid "Updated all Flatpak(s)"
-msgstr "Όλα τα Flatpaks ενημερώθηκαν"
-
-msgid "Package is already installed"
-msgstr "Το πακέτο είναι ήδη εγκατεστημένο"
-
-#, csharp-format
-msgid "{0} Selected"
-msgstr "{0} Επιλέχθηκαν"
-
-msgid "Installed Size"
-msgstr "Εγκατεστημένο μέγεθος"
-
-msgid "Build Date"
-msgstr "Ημερομηνία δημιουργίας"
-
-msgid "Required By"
-msgstr "Απαιτείται από"
-
-msgid "View Dependency Graph"
-msgstr "Προβολή γραφήματος εξαρτήσεων"
-
-msgid "Failed to load packages."
-msgstr "Αποτυχία φόρτωσης πακέτων."
-
-msgid "--- Packages to Upgrade ---"
-msgstr "--- Πακέτα προς αναβάθμιση ---"
-
-msgid "Install Local Package"
-msgstr "Εγκατάσταση τοπικού πακέτου"
-
-msgid "Local package files (\"*.gz\", \"*.zst\")"
-msgstr "Τοπικά αρχεία πακέτων (\"*.gz\", \"*.zst\")"
-
-msgid "Installing local package..."
-msgstr "Εγκατάσταση τοπικού πακέτου..."
-
-msgid "Installed local package"
-msgstr "Το τοπικό πακέτο εγκαταστάθηκε"
-
-msgid "Failed to install local package."
-msgstr "Αποτυχία εγκατάστασης τοπικού πακέτου."
-
-msgid "Install As"
-msgstr "Εγκατάσταση ως"
-
-#, csharp-format
-msgid "Package Files ({0})"
-msgstr "Αρχεία πακέτου ({0})"
-
-#, csharp-format
-msgid "No downgrade options found for {0}"
-msgstr "Δεν βρέθηκαν επιλογές υποβάθμισης για το {0}"
-
-#, csharp-format
-msgid "Downgrading {0}..."
-msgstr "Υποβάθμιση του {0}..."
-
-#, csharp-format
-msgid "Downgraded {0} Package(s)"
-msgstr "Υποβαθμίστηκαν {0} πακέτα"
-
-msgid "<span size='large'>System packages are up to date</span>"
-msgstr "<span size='large'>Τα πακέτα του συστήματος είναι ενημερωμένα</span>"
-
-msgid "Current"
-msgstr "Τρέχουσα"
-
-msgid "New"
-msgstr "Νέα"
-
-msgid "Download"
-msgstr "Λήψη"
-
-msgid "Size Diff"
-msgstr "Διαφορά μεγέθους"
-
-msgid "Partial Update Warning"
-msgstr "Προειδοποίηση μερικής ενημέρωσης"
-
-msgid ""
-"It is not advised you do partial system updates. Are you sure you want to "
-"continue?"
-msgstr ""
-"Δεν συνιστάται η εκτέλεση μερικών ενημερώσεων συστήματος. Είστε βέβαιοι ότι "
-"θέλετε να συνεχίσετε;"
-
-msgid ""
-"It is unadvised to not update all packages at once. Are you sure you want to "
-"continue?"
-msgstr ""
-"Δεν συνιστάται να μην ενημερώνετε όλα τα πακέτα ταυτόχρονα. Είστε βέβαιοι "
-"ότι θέλετε να συνεχίσετε;"
-
-msgid "Reboot Required"
-msgstr "Απαιτείται επανεκκίνηση"
-
-msgid ""
-"A full system reboot is required for updates to take effect.\n"
-"\n"
-"Would you like to reboot now?"
-msgstr ""
-"Απαιτείται πλήρης επανεκκίνηση του συστήματος για να εφαρμοστούν οι "
-"ενημερώσεις.\n"
-"\n"
-"Θέλετε να κάνετε επανεκκίνηση τώρα;"
-
-msgid "Service Restart Failures"
-msgstr "Αποτυχίες επανεκκίνησης υπηρεσιών"
-
-#, csharp-format
-msgid ""
-"The following services failed to restart automatically:\n"
-"{0}"
-msgstr ""
-"Οι ακόλουθες υπηρεσίες απέτυχαν να επανεκκινήσουν αυτόματα:\n"
-"{0}"
-
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
-msgstr ""
-"Δεν βρέθηκαν προτάσεις. Παρακαλούμε ελέγξτε τη σύνδεσή σας στο διαδίκτυο και "
-"δοκιμάστε ξανά."
-
-msgid "Remove "
-msgstr "Κατάργηση "
-
-msgid "Removing package..."
-msgstr "Κατάργηση πακέτου..."
-
-msgid "Package removed successfully"
-msgstr "Το πακέτο καταργήθηκε επιτυχώς"
-
-msgid "Install "
-msgstr "Εγκατάσταση "
-
-msgid "Installing package..."
-msgstr "Εγκατάσταση πακέτου..."
-
-msgid "Package installed successfully"
-msgstr "Το πακέτο εγκαταστάθηκε επιτυχώς"
-
-msgid "Remove corrupted packages"
-msgstr "Κατάργηση κατεστραμμένων πακέτων"
-
-msgid "Select AppImage Install Directory"
-msgstr "Επιλογή φακέλου εγκατάστασης AppImage"
-
-msgid "Restart Shelly to apply the selected language."
-msgstr "Επανεκκινήστε το Shelly για να εφαρμοστεί η επιλεγμένη γλώσσα."
-
-msgid "Select Icon File"
-msgstr "Επιλογή εικονιδίου"
-
-msgid "Image Files"
-msgstr "Αρχεία εικόνας"
-
-msgid "Systemd startup service added."
-msgstr "Η υπηρεσία εκκίνησης Systemd προστέθηκε."
-
-msgid "Systemd startup service removed."
-msgstr "Η υπηρεσία εκκίνησης Systemd καταργήθηκε."
-
-msgid "Enable AUR?"
-msgstr "Ενεργοποίηση του AUR;"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"Το Arch User Repository (AUR) είναι ένα αποθετήριο που συντηρείται από την "
-"κοινότητα. Τα πακέτα παράγονται από χρήστες και ενδέχεται να εγκλείουν "
-"κινδύνους. Θέλετε να το ενεργοποιήσετε;"
-
-msgid "Missing Flatpak"
-msgstr "Λείπει το Flatpak"
-
-msgid "Would you like to install this this now?"
-msgstr "Θέλετε να το εγκαταστήσετε τώρα;"
-
-msgid "Installing flatpak..."
-msgstr "Εγκατάσταση flatpak..."
-
-msgid "Reboot required to complete installation."
-msgstr "Απαιτείται επανεκκίνηση για την ολοκλήρωση της εγκατάστασης."
-
-msgid "Missing Starfish"
-msgstr "Λείπει το Starfish"
-
-msgid "Installing starfish..."
-msgstr "Εγκατάσταση starfish..."
-
-msgid "Synchronizing databases..."
-msgstr "Συγχρονισμός βάσεων δεδομένων..."
-
-msgid "Database lock removed"
-msgstr "Το κλείδωμα της βάσης δεδομένων αφαιρέθηκε"
-
-msgid "Shelly folder ownership restored"
-msgstr "Η ιδιοκτησία του φακέλου του Shelly αποκαταστάθηκε"
-
-msgid "Failed to fix folder permissions"
-msgstr "Αποτυχία διόρθωσης δικαιωμάτων φακέλου"
-
-msgid "Error fixing folder permissions"
-msgstr "Σφάλμα κατά τη διόρθωση δικαιωμάτων φακέλου"
-
-msgid "Purified Corruption"
-msgstr "Η εξυγίανση ολοκληρώθηκε"
-
-msgid "No corrupted packages found"
-msgstr "Δεν βρέθηκαν κατεστραμμένα πακέτα"
-
-msgid "No pacfiles found"
-msgstr "Δεν βρέθηκαν αρχεία pacfile"
-
-msgid "Pacfiles Found"
-msgstr "Βρέθηκαν αρχεία pacfile"
-
-msgid "Copy content"
-msgstr "Αντιγραφή περιεχομένου"
-
-msgid "Copied to clipboard"
-msgstr "Αντιγράφηκε στο πρόχειρο"
-
-msgid "Overlay not available"
-msgstr "Η επικάλυψη (overlay) δεν είναι διαθέσιμη"
-
-msgid "No changelog entries found"
-msgstr "Δεν βρέθηκαν καταχωρήσεις στο αρχείο αλλαγών"
-
-msgid "Unknown"
-msgstr "Άγνωστο"
-
-msgid "No details for this release"
-msgstr "Δεν υπάρχουν λεπτομέρειες για αυτήν την έκδοση"
-
-msgid "Unknown date"
-msgstr "Άγνωστη ημερομηνία"
-
-msgid "Failed to load changelog"
-msgstr "Αποτυχία φόρτωσης του αρχείου αλλαγών"
-
-msgid "Reboot required after flatpak installation."
-msgstr "Απαιτείται επανεκκίνηση μετά την εγκατάσταση του flatpak."
-
-msgid "Failed to install flatpak"
-msgstr "Αποτυχία εγκατάστασης του flatpak"
-
-msgid "Searching..."
-msgstr "Αναζήτηση..."
-
-#, csharp-format
-msgid "Search error: {0}"
-msgstr "Σφάλμα αναζήτησης: {0}"
-
-#, csharp-format
-msgid "Failed to install packages: {0}"
-msgstr "Αποτυχία εγκατάστασης πακέτων: {0}"
-
-#, csharp-format
-msgid "Install for {0} package(s) was unsuccessful."
-msgstr "Η εγκατάσταση για {0} πακέτα δεν ήταν επιτυχής."
-
-#, csharp-format
-msgid "Failed to remove packages: {0}"
-msgstr "Αποτυχία κατάργησης πακέτων: {0}"
-
-msgid "Package Statistics"
-msgstr "Στατιστικά πακέτων"
-
-msgid "Total Aur"
-msgstr "Σύνολο AUR"
-
-msgid "Total Packages"
-msgstr "Συνολικά πακέτα"
-
-msgid "Total Flatpak"
-msgstr "Σύνολο Flatpak"
-
-msgid "Up to date"
-msgstr "Ενημερωμένο"
-
-msgid "Calculating"
-msgstr "Γίνεται υπολογισμός"
-
-msgid "Install source"
-msgstr "Πηγή εγκατάστασης"
-
-msgid "Install a local Flatpak"
-msgstr "Εγκατάσταση τοπικού flatpak"
-
-msgid ""
-"Choose a .flatpak bundle from your system and install it for the current "
-"user or system-wide."
-msgstr ""
-"Επιλέξτε ένα πακέτο .flatpak από το σύστημά σας και εγκαταστήστε το για τον "
-"τρέχοντα χρήστη ή για όλο το σύστημα."
-
-msgid "Bundle"
-msgstr "Πακέτο"
-
-msgid "Choose file…"
-msgstr "Επιλογή αρχείου…"
-
-msgid "Install for"
-msgstr "Εγκατάσταση σαν"
-
-msgid "Browse"
-msgstr "Περιήγηση"
-
-msgid "Shelly"
-msgstr "Shelly"
-
-msgid "Reinstall"
-msgstr "Επανεγκατάσταση"
-
-msgid "Add Ignore"
-msgstr "Προσθήκη παράβλεψης"
-
-msgid "Add Hold"
-msgstr "Προσθήκη συγκράτησης"
-
-msgid "Make Explicit"
-msgstr "Ορισμός ως ρητά εγκατεστημένο"
-
-msgid "Mark Dependency"
-msgstr "Σήμανση Εξάρτησης"
-
-msgid "Package actions"
-msgstr "Ενέργειες πακέτου"
-
-msgid "Information"
-msgstr "Πληροφορίες"
-
-msgid "7 of 7 updates included"
-msgstr "Περιλαμβάνονται 7 από τις 7 ενημερώσεις"
-
-msgid "Check all enabled sources again"
-msgstr "Έλεγχος όλων των ενεργοποιημένων πηγών ξανά"
-
-msgid "Check Again"
-msgstr "Έλεγχος ξανά"
-
-msgid "Upgrade"
-msgstr "Αναβάθμιση"
-
-msgid "Checking for updates…"
-msgstr "Γίνεται έλεγχος για ενημερώσεις…"
-
-msgid "Your system is up to date"
-msgstr "Το σύστημα είναι ενημερωμένο"
-
-msgid "Could not check for updates"
-msgstr "Δεν ήταν δυνατός ο έλεγχος για ενημερώσεις"
-
-msgid "Installed Only"
-msgstr "Μόνο εγκατεστημένα"
-
-msgid "Show only installed packages"
-msgstr "Εμφάνιση μόνο εγκατεστημένων πακέτων"
-
-msgid "Show Explicit Only"
-msgstr "Εμφάνιση μόνο ρητών"
-
-msgid "Show only explicitly installed packages"
-msgstr "Εμφάνιση μόνο ρητά εγκατεστημένων πακέτων"
-
-msgid "Hide Detail Pane"
-msgstr "Απόκρυψη πίνακα λεπτομερειών"
-
-msgid "Toggle output"
-msgstr "Εναλλαγή προβολής εξόδου"
-
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
-msgstr ""
-"Μη έγκυρη μορφή. Χρησιμοποιήστε κάτοχος/αποθετήριο (π.χ. seafoam-labs/shelly-"
-"alpm)"
-
-msgid "Enable Recommended"
-msgstr "Ενεργοποίηση Προτεινόμενων"
-
-msgid ":"
-msgstr ":"
-
-msgid "v0.0.0"
-msgstr "v0.0.0"
-
-msgid "Search the AUR by name or keyword"
-msgstr "Αναζήτηση στο AUR κατά όνομα ή λέξη-κλειδί"
-
-msgid "Show only packages already installed on this system"
-msgstr "Εμφάνιση μόνο εγκατεστημένων πακέτων"
-
-msgid "Search the AUR"
-msgstr "Αναζήτηση στο AUR"
-
-msgid "The AUR has no browsable index type a package name to begin."
-msgstr ""
-"Το AUR δεν διαθέτει ευρετήριο για περιήγηση, πληκτρολογήστε το όνομα ενός "
-"πακέτου για να ξεκινήσετε."
-
-msgid "Run the --check function during package build"
-msgstr "Εκτέλεση της λειτουργίας --check κατά τη δημιουργία του πακέτου"
-
-msgid "Hide the detail pane on the right"
-msgstr "Απόκρυψη πίνακα λεπτομερειών στα δεξιά"
-
-msgid "Skip"
-msgstr "Παράβλεψη"
-
-msgid "No special permissions requested"
-msgstr "Δεν ζητήθηκαν ειδικές άδειες"
-
-msgid "Warnings"
-msgstr "Προειδοποιήσεις"
-
-msgid "Source Files"
-msgstr "Πηγαία αρχεία"
-
-msgid "Removing Remote"
-msgstr "Αφαίρεση αποθετηρίου"
-
-msgid "Adding Remote"
-msgstr "Προσθήκη αποθετηρίου"
-
-msgid "Removing Flatpak"
-msgstr "Αφαίρεση Flatpak"
-
-msgid "Choose a Flatpak file"
-msgstr "Επιλέξτε ένα αρχείο Flatpak"
-
-msgid "Flatpak files"
-msgstr "Αρχεία flatpak"
-
-msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
-msgstr ""
-"Μη υποστηριζόμενος τύπος αρχείου. Επιλέξτε αρχείο .flatpak ή .flatpakref."
-
-msgid "Installing local flatpak"
-msgstr "Εγκατάσταση τοπικού flatpak"
-
-msgid "Installation failed."
-msgstr "Η εγκατάσταση απέτυχε."
-
-msgid "Installation complete."
-msgstr "Η εγκατάσταση ολοκληρώθηκε."
-
-msgid "Choose file..."
-msgstr "Επιλογή αρχείου..."
-
-msgid "Discover"
-msgstr "Εξερευνήστε"
-
-msgid "Categories"
-msgstr "Κατηγορίες"
-
 msgid "Verified"
 msgstr "Επαληθευμένο"
+
+msgid "Show less"
+msgstr "Εμφάνιση λιγότερων"
 
 msgid "Installing flatpak"
 msgstr "Εγκατάσταση flatpak"
@@ -1755,8 +867,21 @@ msgstr "Εγκατάσταση flatpak"
 msgid "Permissions"
 msgstr "Άδειες"
 
+msgid "Available Addons"
+msgstr "Διαθέσιμα πρόσθετα"
+
+#, fuzzy
+msgid "Installing flatpak addon"
+msgstr "Εγκατάσταση flatpak"
+
+msgid "Installed"
+msgstr "Εγκατεστημένο"
+
 msgid "Unknown developer"
 msgstr "Άγνωστος δημιουργός"
+
+msgid "Unknown"
+msgstr "Άγνωστο"
 
 msgid "Version: Unknown"
 msgstr "Έκδοση: Άγνωστη"
@@ -1778,6 +903,9 @@ msgstr "Δεν υπάρχει διαθέσιμη σύνοψη"
 
 msgid "Size: Unavailable"
 msgstr "Μέγεθος: Μη διαθέσιμο"
+
+msgid "Download"
+msgstr "Λήψη"
 
 msgid "No description available."
 msgstr "Δεν υπάρχει διαθέσιμη περιγραφή."
@@ -1830,17 +958,120 @@ msgstr "Αδυναμία φόρτωσης εφαρμογών Flatpak."
 msgid "No Flatpak applications are available."
 msgstr "Δεν υπάρχουν διαθέσιμες εφαρμογές Flatpak."
 
-msgid "Download Size"
-msgstr "Μέγεθος Λήψης"
+msgid "Refreshing package databases"
+msgstr "Ανανέωση βάσεων δεδομένων πακέτων"
 
-msgid "Install Reason"
-msgstr "Λόγος Εγκατάστασης"
+msgid "Database lock removed successfully"
+msgstr "Το κλείδωμα της βάσης αφαιρέθηκε με επιτυχία"
+
+msgid "Failed to remove database lock"
+msgstr "Αποτυχία αφαίρεσης του κλειδώματος της βάσης"
+
+msgid "Fixing permissions"
+msgstr "Διόρθωση αδειών"
+
+msgid "Purifying packages"
+msgstr "Καθαρισμός πακέτων"
+
+msgid "Cleaning package cache"
+msgstr "Καθαρισμός cache πακέτων"
+
+msgid "Operation completed successfully"
+msgstr "Η λειτουργία ολοκληρώθηκε με επιτυχία"
+
+msgid "Operation failed"
+msgstr "Η λειτουργία απέτυχε"
+
+msgid "Welcome"
+msgstr "Καλώς ορίσατε"
+
+msgid "Enable AUR?"
+msgstr "Ενεργοποίηση του AUR;"
+
+msgid ""
+"The Arch User Repository is community-maintained. Packages are not "
+"officially vetted — only enable if you trust what you install."
+msgstr ""
+"Το Arch User Repository συντηρείται από την κοινότητα. Τα πακέτα δεν "
+"ελέγχονται επίσημα — ενεργοποιήστε το μόνο αν εμπιστεύεστε ό,τι εγκαθιστάτε."
+
+msgid "Enable"
+msgstr "Ενεργοποίηση"
+
+msgid "Enable Recommended?"
+msgstr "Ενεργοποίηση προτεινόμενων;"
+
+msgid ""
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
+msgstr ""
+"Η ενότητα «Προτεινόμενα» εμφανίζει επιλεγμένες προτάσεις πακέτων με βάση το "
+"εγκατεστημένο λογισμικό σας. Τα δεδομένα των πακέτων λαμβάνονται από "
+"εξωτερικές πηγές."
+
+#, fuzzy
+msgid "Installing Flatpak and AppImage support"
+msgstr "Η εγκατάσταση του Flatpak απέτυχε"
+
+#, fuzzy
+msgid "Installing Flatpak support"
+msgstr "Εγκατάσταση flatpak"
+
+#, fuzzy
+msgid "Installing AppImage support"
+msgstr "Εγκατάσταση AppImage"
+
+msgid "Maintainer"
+msgstr "Συντηρητής"
+
+msgid "Last Modified"
+msgstr "Τελευταία τροποποίηση"
+
+msgid "First Submitted"
+msgstr "Πρώτη υποβολή"
+
+#, fuzzy
+msgid "URL"
+msgstr "URL:"
+
+msgid "Licenses"
+msgstr "Άδειες χρήσης"
+
+msgid "Depends"
+msgstr "Εξαρτήσεις"
 
 msgid "Optional Depends"
 msgstr "Προαιρετικές εξαρτήσεις"
 
+msgid "Make Depends"
+msgstr "Εξαρτήσεις δημιουργίας"
+
 msgid "Section"
 msgstr "Ενότητα"
+
+msgid "Loading..."
+msgstr "Φόρτωση..."
+
+msgid "Installed Size"
+msgstr "Εγκατεστημένο μέγεθος"
+
+msgid "Download Size"
+msgstr "Μέγεθος Λήψης"
+
+msgid "Build Date"
+msgstr "Ημερομηνία δημιουργίας"
+
+msgid "Install Reason"
+msgstr "Λόγος Εγκατάστασης"
+
+msgid "Provides"
+msgstr "Παρέχει"
+
+msgid "Conflicts"
+msgstr "Συγκρούσεις"
+
+msgid "Required By"
+msgstr "Απαιτείται από"
 
 msgid "Reinstalling package"
 msgstr "Επανεγκατάσταση πακέτου"
@@ -1857,6 +1088,167 @@ msgstr "Ορισμός πακέτου ως ρητού"
 msgid "Making Package Dependency"
 msgstr "Ορισμός πακέτου ως εξάρτησης"
 
+msgid "None"
+msgstr "Κανένα"
+
+msgid "Static URL"
+msgstr "Στατικό URL"
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+msgid "Update Available"
+msgstr "Διαθέσιμη Eνημέρωση"
+
+msgid "Version ?"
+msgstr "Έκδοση ;"
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr ""
+"Μη έγκυρη μορφή. Χρησιμοποιήστε κάτοχος/αποθετήριο (π.χ. seafoam-labs/shelly-"
+"alpm)"
+
+msgid "Invalid URL. Must start with http:// or https://"
+msgstr "Μη έγκυρο URL. Πρέπει να ξεκινά με http:// ή https://"
+
+msgid ""
+"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
+"repo/releases"
+msgstr ""
+
+msgid "Choose an AppImage file"
+msgstr "Επιλέξτε ένα αρχείο AppImage"
+
+msgid "AppImage files"
+msgstr "Αρχεία AppImage"
+
+msgid "Only .AppImage files can be installed"
+msgstr "Υποστηρίζονται μόνο αρχεία .AppImage"
+
+msgid "Installing AppImage"
+msgstr "Εγκατάσταση AppImage"
+
+msgid "No AppImages need to be upgraded"
+msgstr "Δεν χρειάζεται αναβάθμιση κανένα AppImage"
+
+msgid "Upgrading AppImages"
+msgstr "Αναβάθμιση AppImages"
+
+msgid "Syncing AppImages"
+msgstr "Συγχρονισμός AppImages"
+
+msgid "Syncing AppImage"
+msgstr "Συγχρονισμός AppImage"
+
+msgid "Saving update configuration"
+msgstr "Aποθήκευση ρυθμίσεων ενημέρωσης"
+
+msgid "Configuration files will be kept."
+msgstr "Τα αρχεία ρυθμίσεων θα διατηρηθούν."
+
+msgid "Remove this AppImage?"
+msgstr "Να αφαιρεθεί αυτό το AppImage;"
+
+msgid "Remove AppImage"
+msgstr "Αφαίρεση AppImage"
+
+msgid "Removing AppImage"
+msgstr "Κατάργηση AppImage"
+
+msgid "The AUR has no browsable index — type a package name to begin."
+msgstr ""
+"Το AUR δεν διαθέτει ευρετήριο για περιήγηση — πληκτρολογήστε το όνομα ενός "
+"πακέτου για να ξεκινήσετε."
+
+msgid "No packages found"
+msgstr "Δεν βρέθηκαν πακέτα"
+
+msgid "Try a shorter or more general keyword."
+msgstr "Δοκιμάστε μια μικρότερη ή πιο γενική λέξη-κλειδί."
+
+msgid "Could not reach the AUR"
+msgstr "Αδυναμία σύνδεσης στο AUR"
+
+msgid "Check your connection and try again."
+msgstr "Ελέγξτε τη σύνδεσή σας και δοκιμάστε ξανά."
+
+msgid "Flagged out of date"
+msgstr "Επισημάνθηκε ως παρωχημένο"
+
+msgid "Remove Selected"
+msgstr "Κατάργηση επιλεγμένων"
+
+msgid "Select one or more packages"
+msgstr "Επιλέξτε ένα ή περισσότερα πακέτα"
+
+msgid "Package(s)"
+msgstr "Πακέτο(α)"
+
+msgid "Remove Packages"
+msgstr "Κατάργηση Πακέτων"
+
+msgid "Remove the selected AUR packages?"
+msgstr "Αφαίρεση των επιλεγμένων πακέτων AUR;"
+
+msgid "Build from AUR"
+msgstr "Κατασκευή από το AUR"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+"Κατασκευή και εγκατάσταση των επιλεγμένων πακέτων; Αυτό μπορεί να διαρκέσει "
+"λίγο."
+
+msgid "Build"
+msgstr "Κατασκευή"
+
+msgid "Installing AUR packages"
+msgstr "Εγκατάσταση πακέτων AUR"
+
+msgid "Removing AUR packages"
+msgstr "Αφαίρεση πακέτων AUR"
+
+msgid "Package is already installed"
+msgstr "Το πακέτο είναι ήδη εγκατεστημένο"
+
+msgid "Remove from selection"
+msgstr "Αφαίρεση από την επιλογή"
+
+msgid "remove"
+msgstr "αφαίρεση"
+
+msgid "install"
+msgstr "εγκατάσταση"
+
+msgid "No packages selected"
+msgstr "Δεν υπάρχουν επιλεγμένα πακέτα"
+
+msgid "Selected"
+msgstr "Επιλεγμένα"
+
+msgid "Mixed selection"
+msgstr "Μικτή επιλογή"
+
+msgid ""
+"Select only installed packages to remove, or only available ones to install."
+msgstr ""
+"Επιλέξτε μόνο εγκατεστημένα πακέτα για αφαίρεση, ή μόνο διαθέσιμα για "
+"εγκατάσταση."
+
+msgid "Remove the selected packages?"
+msgstr "Κατάργηση των επιλεγμένων πακέτων;"
+
+msgid "Removing packages"
+msgstr "Κατάργηση πακέτων"
+
+msgid "Installing packages"
+msgstr "Εγκατάσταση πακέτων"
+
 msgid "Failed to start operation."
 msgstr "Αποτυχία εκκίνησης της διεργασίας."
 
@@ -1866,11 +1258,11 @@ msgstr "Σε εκκρεμότητα"
 msgid "Synchronizing databases"
 msgstr "Συγχρονισμός βάσεων δεδομένων"
 
-msgid "Downloading"
-msgstr "Λήψη"
-
 msgid "Building"
 msgstr "Κατασκευή"
+
+msgid "Downloading"
+msgstr "Λήψη"
 
 msgid "Packaging"
 msgstr "Πακετάρισμα"
@@ -1908,127 +1300,50 @@ msgstr "έξοδος"
 msgid "Cancelled"
 msgstr "Ακυρώθηκε"
 
-msgid "Static URL"
-msgstr "Στατικό URL"
+msgid "Yes"
+msgstr "Ναι"
 
-msgid "Update Available"
-msgstr "Διαθέσιμη Eνημέρωση"
-
-msgid "Version ?"
-msgstr "Έκδοση ;"
-
-msgid "Choose an AppImage file"
-msgstr "Επιλέξτε ένα αρχείο AppImage"
-
-msgid "AppImage files"
-msgstr "Αρχεία AppImage"
-
-msgid "Only .AppImage files can be installed"
-msgstr "Υποστηρίζονται μόνο αρχεία .AppImage"
-
-msgid "Installing AppImage"
-msgstr "Εγκατάσταση AppImage"
-
-msgid "Upgrading AppImages"
-msgstr "Αναβάθμιση AppImages"
-
-msgid "Syncing AppImages"
-msgstr "Συγχρονισμός AppImages"
-
-msgid "Syncing AppImage"
-msgstr "Συγχρονισμός AppImage"
-
-msgid "Saving update configuration"
-msgstr "Aποθήκευση ρυθμίσεων ενημέρωσης"
-
-msgid "Configuration files will be kept."
-msgstr "Τα αρχεία ρυθμίσεων θα διατηρηθούν."
-
-msgid "Remove this AppImage?"
-msgstr "Να αφαιρεθεί αυτό το AppImage;"
-
-msgid "Remove AppImage"
-msgstr "Αφαίρεση AppImage"
-
-msgid "Removing AppImage"
-msgstr "Κατάργηση AppImage"
-
-msgid "Operation completed successfully"
-msgstr "Η λειτουργία ολοκληρώθηκε με επιτυχία"
-
-msgid "Operation failed"
-msgstr "Η λειτουργία απέτυχε"
-
-msgid "System package update"
-msgstr "Ενημέρωση πακέτου συστήματος"
-
-msgid "AUR package update"
-msgstr "Ενημέρωση πακέτου AUR"
-
-msgid "Could not run shelly check-updates. Check the CLI output and try again."
-msgstr ""
-"Αδυναμία εκτέλεσης της εντολής shelly check-updates. Ελέγξτε την γραμμή "
-"εντολών και δοκιμάστε ξανά."
-
-msgid "Update check failed"
-msgstr "Ο έλεγχος ενημερώσεων απέτυχε"
-
-msgid "of"
-msgstr "του"
-
-msgid "updates included"
-msgstr "περιλαμβάνονται ενημερώσεις"
-
-msgid "Updates included"
-msgstr "Περιλαμβάνονται ενημερώσεις"
-
-msgid "Upgrading packages"
-msgstr "Αναβάθμιση πακέτων"
-
-msgid "Recommendations"
-msgstr "Προτάσεις"
-
-msgid "Remove from selection"
-msgstr "Αφαίρεση από την επιλογή"
-
-msgid "remove"
-msgstr "αφαίρεση"
-
-msgid "install"
-msgstr "εγκατάσταση"
-
-msgid "No packages selected"
-msgstr "Δεν υπάρχουν επιλεγμένα πακέτα"
-
-msgid "Selected"
-msgstr "Επιλεγμένα"
-
-msgid "Mixed selection"
-msgstr "Μικτή επιλογή"
-
-msgid ""
-"Select only installed packages to remove, or only available ones to install."
-msgstr ""
-"Επιλέξτε μόνο εγκατεστημένα πακέτα για αφαίρεση, ή μόνο διαθέσιμα για "
-"εγκατάσταση."
-
-msgid "Remove Packages"
-msgstr "Κατάργηση Πακέτων"
-
-msgid "Remove the selected packages?"
-msgstr "Κατάργηση των επιλεγμένων πακέτων;"
-
-msgid "Removing packages"
-msgstr "Κατάργηση πακέτων"
-
-msgid "Installing packages"
-msgstr "Εγκατάσταση πακέτων"
+msgid "No"
+msgstr "Όχι"
 
 msgid "Failed to save settings"
 msgstr "Αποτυχία αποθήκευσης ρυθμίσεων"
 
 msgid "Settings saved"
 msgstr "Οι ρυθμίσεις αποθηκεύτηκαν"
+
+#, fuzzy
+msgid "Failed to start Flatpak support installation"
+msgstr "Αποτυχία επιδιόρθωσης της εγκατάστασης Flatpak"
+
+#, fuzzy
+msgid "Failed to start AppImage support installation"
+msgstr "Αποτυχία επιδιόρθωσης της εγκατάστασης Flatpak"
+
+#, fuzzy
+msgid "Flatpak support installation failed"
+msgstr "Η εγκατάσταση απέτυχε."
+
+#, fuzzy
+msgid "AppImage support installation failed"
+msgstr "Η εγκατάσταση απέτυχε."
+
+#, fuzzy
+msgid "Flatpak support enabled"
+msgstr "Ενεργοποίηση υποστήριξης Flatpak"
+
+#, fuzzy
+msgid "AppImage support enabled"
+msgstr "Ενεργοποίηση υποστήριξης AppImage"
+
+msgid "No changelog entries found"
+msgstr "Δεν βρέθηκαν καταχωρήσεις στο αρχείο αλλαγών"
+
+msgid "No details for this release"
+msgstr "Δεν υπάρχουν λεπτομέρειες για αυτήν την έκδοση"
+
+msgid "Failed to load changelog"
+msgstr "Αποτυχία φόρτωσης του αρχείου αλλαγών"
 
 msgid "Changelog"
 msgstr "Αρχείο αλλαγών"
@@ -2042,23 +1357,39 @@ msgstr "Επιλογή εικονιδίου"
 msgid "Select Tray Updates Icon"
 msgstr "Επιλογή εικονιδίου ενημερώσεων περιοχής ειδοποιήσεων"
 
-msgid "Refreshing package databases"
-msgstr "Ανανέωση βάσεων δεδομένων πακέτων"
+msgid "Select AppImage Install Directory"
+msgstr "Επιλογή φακέλου εγκατάστασης AppImage"
 
-msgid "Database lock removed successfully"
-msgstr "Το κλείδωμα της βάσης αφαιρέθηκε με επιτυχία"
+msgid "Tray enabled"
+msgstr "Περιοχή ειδοποιήσεων ενεργή"
 
-msgid "Failed to remove database lock"
-msgstr "Αποτυχία αφαίρεσης του κλειδώματος της βάσης"
+msgid "Tray disabled, but autostart service remains"
+msgstr ""
+"Η περιοχή ειδοποιήσεων απενεργοποιήθηκε, αλλά η υπηρεσία αυτόματης εκκίνησης "
+"παραμένει"
 
-msgid "Fixing permissions"
-msgstr "Διόρθωση αδειών"
+msgid "Tray disabled"
+msgstr "Περιοχή ειδοποιήσεων ανενεργή"
 
-msgid "Purifying packages"
-msgstr "Καθαρισμός πακέτων"
+msgid "Failed to add systemd startup service"
+msgstr "Αποτυχία προσθήκης της υπηρεσίας εκκίνησης στο systemd"
 
-msgid "Enable"
-msgstr "Ενεργοποίηση"
+msgid "Systemd startup service added."
+msgstr "Η υπηρεσία εκκίνησης Systemd προστέθηκε."
+
+msgid "Failed to remove systemd startup service"
+msgstr "Αποτυχία αφαίρεσης της υπηρεσίας εκκίνησης στο systemd"
+
+msgid "Systemd startup service removed."
+msgstr "Η υπηρεσία εκκίνησης Systemd καταργήθηκε."
+
+msgid ""
+"The Arch User Repository (AUR) is a community-driven repository. Packages "
+"are user-produced and may contain risks. Do you want to enable it?"
+msgstr ""
+"Το Arch User Repository (AUR) είναι ένα αποθετήριο που συντηρείται από την "
+"κοινότητα. Τα πακέτα παράγονται από χρήστες και ενδέχεται να εγκλείουν "
+"κινδύνους. Θέλετε να το ενεργοποιήσετε;"
 
 msgid "AUR enabled"
 msgstr "AUR ενεργοποιημένο"
@@ -2108,272 +1439,44 @@ msgstr "Τουρκικά"
 msgid "中文（简体）"
 msgstr "Κινεζικά (Απλοποιημένα)"
 
-msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
-"Το AUR δεν διαθέτει ευρετήριο για περιήγηση — πληκτρολογήστε το όνομα ενός "
-"πακέτου για να ξεκινήσετε."
+msgid "Packages"
+msgstr "Πακέτα"
 
-msgid "No packages found"
-msgstr "Δεν βρέθηκαν πακέτα"
-
-msgid "Try a shorter or more general keyword."
-msgstr "Δοκιμάστε μια μικρότερη ή πιο γενική λέξη-κλειδί."
-
-msgid "Could not reach the AUR"
-msgstr "Αδυναμία σύνδεσης στο AUR"
-
-msgid "Check your connection and try again."
-msgstr "Ελέγξτε τη σύνδεσή σας και δοκιμάστε ξανά."
-
-msgid "Flagged out of date"
-msgstr "Επισημάνθηκε ως παρωχημένο"
-
-msgid "Select one or more packages"
-msgstr "Επιλέξτε ένα ή περισσότερα πακέτα"
-
-msgid "Package(s)"
-msgstr "Πακέτο(α)"
-
-msgid "Remove the selected AUR packages?"
-msgstr "Αφαίρεση των επιλεγμένων πακέτων AUR;"
-
-msgid "Build from AUR"
-msgstr "Κατασκευή από το AUR"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-"Κατασκευή και εγκατάσταση των επιλεγμένων πακέτων; Αυτό μπορεί να διαρκέσει "
-"λίγο."
-
-msgid "Build"
-msgstr "Κατασκευή"
-
-msgid "Installing AUR packages"
-msgstr "Εγκατάσταση πακέτων AUR"
-
-msgid "Removing AUR packages"
-msgstr "Αφαίρεση πακέτων AUR"
-
-msgid "Dismiss"
-msgstr "Παράβλεψη"
-
-msgid "Filesystem"
-msgstr "Σύστημα αρχείων"
-
-msgid "Devices"
-msgstr "Συσκευές"
-
-msgid "Sockets"
-msgstr "Υποδοχές"
-
-msgid "Shared"
-msgstr "Κοινόχρηστα"
-
-msgid "Environment"
-msgstr "Περιβάλλον"
-
-msgid "Session bus"
-msgstr "Δίαυλος συνεδρίας"
-
-msgid "System bus"
-msgstr "Δίαυλος συστήματος"
-
-msgid "Other"
-msgstr "Άλλο"
-
-msgid "Review PKGBUILD changes for"
-msgstr "Επιθεώρηση αλλαγών PKGBUILD για"
-
-msgid "Security scan completed -"
-msgstr "Ο έλεγχος ασφαλείας ολοκληρώθηκε -"
-
-msgid "warning(s) found."
-msgstr "εντοπίστηκε προειδοποίηση(εις)."
-
-msgid "Security scan completed - warnings found."
-msgstr "Ο έλεγχος ασφαλείας ολοκληρώθηκε - βρέθηκαν προειδοποιήσεις."
-
-msgid "used in"
-msgstr "χρησιμοποιείται σε"
-
-msgid "Warning"
-msgstr "Προειδοποίηση"
-
-msgid "package(s)"
-msgstr "πακέτο(α)"
-
-msgid "to"
-msgstr "σε"
-
-msgid "download"
-msgstr "λήψη"
-
-msgid "net"
-msgstr "καθαρό"
-
-msgid "Package"
-msgstr "Πακέτο"
+msgid "Shelly Search"
+msgstr "Αναζήτηση Shelly"
 
 msgid "Update"
 msgstr "Ενημέρωση"
 
-msgid "Utilities"
-msgstr "Βοηθήματα"
+msgid "System package update"
+msgstr "Ενημέρωση πακέτου συστήματος"
 
-msgid "Recommended Packages"
-msgstr "Προτεινόμενα Πακέτα"
+msgid "AUR package update"
+msgstr "Ενημέρωση πακέτου AUR"
 
-msgid "Curated suggestions from Seafoam Labs"
-msgstr "Επιλεγμένες προτάσεις από τη Seafoam Labs"
-
-msgid "Refresh the recommended packages list from the network"
-msgstr "Ανανέωση της λίστας προτεινόμενων πακέτων από το δίκτυο"
-
-msgid "Preview Pkgbuild"
-msgstr "Προεπισκόπηση Pkgbuild"
-
-msgid "Show Dependency Only"
-msgstr "Εμφάνιση μόνο εξαρτήσεων"
-
-msgid "Show dependency packages on;y"
-msgstr "Εμφάνιση μόνο πακέτων εξαρτήσεων"
-
-msgid "Welcome to Shelly v3"
-msgstr "Καλώς ορίσατε στο Shelly v3"
-
-msgid ""
-"Shelly is a modern package manager for Arch Linux. Configure your sources "
-"and preferences to get started. We have recently rewritte both the GUI and "
-"CLI in zig with a new modified UI off our previous designs."
+msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
-"Το Shelly είναι ένας σύγχρονος διαχειριστής πακέτων για το Arch Linux. "
-"Ρυθμίστε τις πηγές και τις προτιμήσεις σας για να ξεκινήσετε. Πρόσφατα "
-"ξαναγράψαμε τόσο το GUI όσο και το CLI σε Zig, με μια νέα τροποποιημένη "
-"σχεδίαση βασισμένη στα προηγούμενα σχέδιά μας."
+"Αδυναμία εκτέλεσης της εντολής shelly check-updates. Ελέγξτε την γραμμή "
+"εντολών και δοκιμάστε ξανά."
 
-msgid "Select Your Sources"
-msgstr "Επιλέξτε τις πηγές σας"
+#, fuzzy
+msgid "Update this package"
+msgstr "Ενημέρωση πακέτων;"
 
-msgid ""
-"Choose which package sources you want to browse. You can always change this "
-"later in settings."
-msgstr ""
-"Επιλέξτε ποιες πηγές πακέτων θέλετε να περιηγηθείτε. Μπορείτε πάντα να το "
-"αλλάξετε αυτό αργότερα στις ρυθμίσεις."
+msgid "of"
+msgstr "του"
 
-msgid "Arch User Repository community packages"
-msgstr "Πακέτα κοινότητας Arch User Repository"
+msgid "updates included"
+msgstr "περιλαμβάνονται ενημερώσεις"
 
-msgid "Sandboxed universal Linux applications"
-msgstr "Απομονωμένες (Sandboxed) καθολικές εφαρμογές Linux"
+msgid "Updates included"
+msgstr "Περιλαμβάνονται ενημερώσεις"
 
-msgid "Portable self-contained application bundles"
-msgstr "Φορητά, αυτοτελή πακέτα εφαρμογών"
+msgid "Upgrading packages"
+msgstr "Αναβάθμιση πακέτων"
 
-msgid "Curated picks based on your installed software"
-msgstr "Επιλεγμένες προτάσεις με βάση το εγκατεστημένο λογισμικό σας"
+msgid "Settings"
+msgstr "Ρυθμίσεις"
 
-msgid "Look and Feel"
-msgstr "Eμφάνιση και Aίσθηση"
-
-msgid ""
-"Customize how Shelly looks and behaves. All of these can be changed later in "
-"preferences."
-msgstr ""
-"Προσαρμόστε την εμφανιση και τη συμπεριφορά του Shelly. Όλα αυτά μπορούν να "
-"αλλαχθούν αργότερα στις προτιμήσεις."
-
-msgid "Navigation Style"
-msgstr "Στυλ πλοήγησης"
-
-msgid "Sidebar"
-msgstr "Πλευρική στήλη"
-
-msgid "Vertical icon rail on the left"
-msgstr "Κατακόρυφη ράβδος εικονιδίων στα αριστερά"
-
-msgid "Top Bar"
-msgstr "Επάνω μπάρα"
-
-msgid "Horizontal tab switcher at the top"
-msgstr "Οριζόντια εναλλαγή καρτελών στο πάνω μέρος"
-
-msgid "System Tray"
-msgstr "Περιοχή Ειδοποιήσεων"
-
-msgid "Run in system tray when minimized"
-msgstr "Εκτέλεση στην περιοχή ειδοποιήσεων κατά την ελαχιστοποίηση"
-
-msgid "Next"
-msgstr "Επόμενο"
-
-msgid "Start Shelly"
-msgstr "Έναρξη Shelly"
-
-msgid "Navigation style"
-msgstr "Μέθοδος πλοήγησης"
-
-msgid "Maintenance and repair tools for your Shelly installation."
-msgstr "Εργαλεία συντήρησης και επισκευής για την εγκατάσταση του Shelly."
-
-msgid "Run"
-msgstr "Εκτέλεση"
-
-msgid "Clean Package Cache"
-msgstr "Καθαρισμός προσωρινής μνήμης πακέτων"
-
-msgid ""
-"Removes old cached package versions, keeping the selected number per package."
-msgstr ""
-"Αφαιρεί παλιές αποθηκευμένες εκδόσεις πακέτων, διατηρώντας τον επιλεγμένο "
-"αριθμό ανά πακέτο."
-
-msgid "Keep"
-msgstr "Διατήρηση"
-
-msgid "Number of cached versions to keep per package"
-msgstr "Αριθμός εκδόσεων που θα διατηρούνται ανά πακέτο"
-
-msgid "Review PKGBUILD"
-msgstr "Ανασκόπηση PKGBUILD"
-
-msgid "Tray enabled"
-msgstr "Περιοχή ειδοποιήσεων ενεργή"
-
-msgid "Tray disabled, but autostart service remains"
-msgstr ""
-"Η περιοχή ειδοποιήσεων απενεργοποιήθηκε, αλλά η υπηρεσία αυτόματης εκκίνησης "
-"παραμένει"
-
-msgid "Tray disabled"
-msgstr "Περιοχή ειδοποιήσεων ανενεργή"
-
-msgid "Failed to add systemd startup service"
-msgstr "Αποτυχία προσθήκης της υπηρεσίας εκκίνησης στο systemd"
-
-msgid "Failed to remove systemd startup service"
-msgstr "Αποτυχία αφαίρεσης της υπηρεσίας εκκίνησης στο systemd"
-
-msgid "Cleaning package cache"
-msgstr "Καθαρισμός cache πακέτων"
-
-msgid "Welcome"
-msgstr "Καλώς ορίσατε"
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-"Το Arch User Repository συντηρείται από την κοινότητα. Τα πακέτα δεν "
-"ελέγχονται επίσημα — ενεργοποιήστε το μόνο αν εμπιστεύεστε ό,τι εγκαθιστάτε."
-
-msgid "Enable Recommended?"
-msgstr "Ενεργοποίηση προτεινόμενων;"
-
-msgid ""
-"Recommended shows curated package suggestions based on your installed "
-"software. Package data is fetched from external sources."
-msgstr ""
-"Η ενότητα «Προτεινόμενα» εμφανίζει επιλεγμένες προτάσεις πακέτων με βάση το "
-"εγκατεστημένο λογισμικό σας. Τα δεδομένα των πακέτων λαμβάνονται από "
-"εξωτερικές πηγές."
+msgid "Package"
+msgstr "Πακέτο"
