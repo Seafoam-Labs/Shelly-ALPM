@@ -4,21 +4,24 @@
 # for the shelly-notifications tray.
 #
 # What it does:
-#   1. Extracts translatable strings from src/ into po/<DOMAIN>.pot
-#   2. Merges the fresh .pot into every existing po/<lang>.po
-#      (keeps existing translations, adds new strings, marks removed ones)
-#   3. Optionally prunes obsolete/untranslated entries
-#   4. Optionally compiles .po -> .mo and installs them
+#   1. Extracts translatable strings from src/ into po/<DOMAIN>.pot, rebasing
+#      the template on the sources while keeping the existing header.
+#   2. Merges the template into every existing po/<lang>.po, keeping all
+#      existing translations and dropping messages that no longer appear in
+#      the sources (obsolete entries are pruned).
+#   3. Optionally compiles .po -> .mo and installs them.
 #
 # Usage:
 #   ./update-translations.sh                # extract + merge all existing .po
 #   ./update-translations.sh --new es       # also create po/es.po if missing
-#   ./update-translations.sh --prune        # drop obsolete (#~) entries after merge
 #   ./update-translations.sh --compile      # build .mo files into build/locale
 #   ./update-translations.sh --install      # install .mo into $PREFIX/share/locale
-#   ./update-translations.sh --new de --prune --compile   # combine flags
+#   ./update-translations.sh --new de --compile   # combine flags
 #
 set -euo pipefail
+
+project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd -- "$project_dir"
 
 # ---- Config -----------------------------------------------------------------
 DOMAIN="shelly-notifications"
@@ -37,7 +40,6 @@ BUGS_ADDRESS="https://github.com/Seafoam-Labs/conch/issues"
 # -----------------------------------------------------------------------------
 
 NEW_LANGS=()
-DO_PRUNE=0
 DO_COMPILE=0
 DO_INSTALL=0
 FUZZY_MODE="clear"   # keep | accept | clear  (default: clear -> no fuzzy, untranslated)
@@ -45,49 +47,75 @@ FUZZY_MODE="clear"   # keep | accept | clear  (default: clear -> no fuzzy, untra
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --new)     NEW_LANGS+=("$2"); shift 2 ;;
-        --prune)   DO_PRUNE=1; shift ;;
         --compile) DO_COMPILE=1; shift ;;
         --install) DO_INSTALL=1; DO_COMPILE=1; shift ;;   # install implies compile
         --accept-fuzzy) FUZZY_MODE="accept"; shift ;;  # un-fuzzy, keep the guessed text
         --keep-fuzzy)   FUZZY_MODE="keep";   shift ;;  # leave #, fuzzy markers as-is
         -h|--help)
-            sed -n '2,30p' "$0"; exit 0 ;;
+            sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 1 ;;
     esac
 done
 
-for tool in xgettext msgmerge msgfmt msginit msgattrib; do
+# Fail fast on missing dependencies, before touching any files.
+for tool in find xgettext msgmerge msgfmt msginit msgattrib; do
     command -v "$tool" >/dev/null 2>&1 || {
         echo "error: '$tool' not found. Install the 'gettext' package." >&2
         exit 1
     }
 done
 
+# Zig isn't a native xgettext language; --language=C + --keyword pick up the
+# trans("...") alias for translations._ used by this project. Add more
+# --keyword flags here if you introduce other translation helpers
+# (e.g. ngettext).
+mapfile -d '' -t ZIG_FILES < <(
+    find "$SRC_DIR" -type f -name '*.zig' -print0 | sort -z
+)
+
+if ((${#ZIG_FILES[@]} == 0)); then
+    echo "error: no Zig source files were found under $SRC_DIR" >&2
+    exit 1
+fi
+
 mkdir -p "$PO_DIR"
+temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/shelly-notifications-gettext.XXXXXX")"
+trap 'rm -rf -- "$temp_dir"' EXIT
 
 # ---- 1. Extract strings -> .pot ---------------------------------------------
 echo ">> Extracting translatable strings from ${SRC_DIR}/ ..."
-# Zig isn't a native xgettext language; --language=C + --keyword=_ picks up
-# our _("...") wrapper. Add more --keyword flags here if you introduce other
-# translation helpers (e.g. ngettext).
-mapfile -t ZIG_FILES < <(find "$SRC_DIR" -name '*.zig' | sort)
+extracted_pot="$temp_dir/extracted.pot"
 
 xgettext \
     --language=C \
     --keyword=_ \
     --keyword=trans \
     --from-code=UTF-8 \
+    --force-po \
+    --no-location \
     --add-comments=TRANSLATORS \
-    --sort-output \
     --package-name="$PKG_NAME" \
     --package-version="$PKG_VERSION" \
     --msgid-bugs-address="$BUGS_ADDRESS" \
-    --output="$POT" \
+    --output="$extracted_pot" \
     "${ZIG_FILES[@]}"
 
-# Count how many strings were extracted.
-POT_COUNT=$(grep -c '^msgid "' "$POT" || true)
-echo "   ${POT}: ${POT_COUNT} message(s)"
+stats="$(msgfmt --statistics --output-file=/dev/null "$extracted_pot" 2>&1 || true)"
+echo "   extracted: ${stats}"
+
+if [[ -f "$POT" ]]; then
+    # Rebase the template on the freshly extracted sources while keeping the
+    # existing header (translations-service metadata). msgmerge copies the
+    # header from its PO input; msgattrib then drops the messages that no
+    # longer appear in the sources.
+    merged_pot="$temp_dir/merged.pot"
+    msgmerge --no-location "$POT" "$extracted_pot" \
+        | msgattrib --no-obsolete --output-file="$merged_pot"
+    mv -- "$merged_pot" "$POT"
+else
+    mv -- "$extracted_pot" "$POT"
+fi
+echo ">> Updated ${POT}."
 
 # ---- 2. Create any requested new language .po files -------------------------
 for lang in "${NEW_LANGS[@]:-}"; do
@@ -115,51 +143,44 @@ if [[ ${#PO_FILES[@]} -eq 0 ]]; then
 else
     for po in "${PO_FILES[@]}"; do
         echo ">> Merging into ${po} ..."
-        # --update: modify in place; --backup=none: no .po~ files.
-        # msgmerge keeps existing translations, adds new msgids, and marks
-        # strings that disappeared from source as obsolete (#~ ...).
-        msgmerge \
-            --update \
-            --backup=none \
-            --sort-output \
-            --previous \
-            "$po" "$POT"
+        merged="$temp_dir/$(basename -- "$po").merged"
 
-        # Handle fuzzy entries (msgmerge's guessed translations from similar old
-        # strings). msgfmt skips fuzzy by default, so these never reach the .mo.
+        # Merge the template into the catalog, keeping every existing
+        # translation. Messages that no longer appear in the sources are
+        # dropped, and --previous records the old msgid next to fuzzy guesses.
+        msgmerge \
+            --no-location \
+            --previous \
+            "$po" "$POT" \
+            | msgattrib --no-obsolete --output-file="$merged"
+
+        # Handle fuzzy entries (msgmerge's guessed translations from similar
+        # old strings). msgfmt skips fuzzy by default, so these never reach
+        # the .mo.
         case "$FUZZY_MODE" in
             clear)
-                # Remove the fuzzy flag AND blank the guessed text, so the entry
-                # is cleanly untranslated (no #, fuzzy, empty msgstr) for a human
-                # to fill in. This is the default.
-                echo "   clearing fuzzy entries in ${po} (-> untranslated) ..."
-                tmp="$(mktemp)"
-                msgattrib --clear-fuzzy --empty "$po" --output-file="$tmp"
-                mv "$tmp" "$po"
+                # Remove the fuzzy flag AND blank the guessed text, so the
+                # entry is cleanly untranslated (no #, fuzzy, empty msgstr)
+                # for a human to fill in. This is the default.
+                echo "   clearing fuzzy entries (-> untranslated) ..."
+                msgattrib --clear-fuzzy --empty "$merged" --output-file="$merged.tmp"
+                mv -- "$merged.tmp" "$merged"
                 ;;
             accept)
-                # Remove the fuzzy flag but KEEP the guessed translation as final.
-                echo "   accepting fuzzy guesses in ${po} ..."
-                tmp="$(mktemp)"
-                msgattrib --clear-fuzzy "$po" --output-file="$tmp"
-                mv "$tmp" "$po"
+                # Remove the fuzzy flag but KEEP the guessed translation.
+                echo "   accepting fuzzy guesses ..."
+                msgattrib --clear-fuzzy "$merged" --output-file="$merged.tmp"
+                mv -- "$merged.tmp" "$merged"
                 ;;
             keep)
                 : # leave #, fuzzy markers untouched
                 ;;
         esac
 
-        if [[ "$DO_PRUNE" -eq 1 ]]; then
-            echo "   pruning obsolete entries from ${po} ..."
-            # --no-obsolete drops the #~ obsolete block (strings no longer in
-            # source). Existing real translations are kept.
-            tmp="$(mktemp)"
-            msgattrib --no-obsolete "$po" --output-file="$tmp"
-            mv "$tmp" "$po"
-        fi
+        mv -- "$merged" "$po"
 
         # Report translation status for this language.
-        stats=$(msgfmt --statistics --output-file=/dev/null "$po" 2>&1 || true)
+        stats="$(msgfmt --statistics --output-file=/dev/null "$po" 2>&1 || true)"
         echo "   ${po}: ${stats}"
     done
 fi

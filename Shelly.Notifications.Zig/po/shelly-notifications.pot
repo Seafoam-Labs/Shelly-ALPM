@@ -8,51 +8,41 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly Notifications 0.0.1\n"
 "Report-Msgid-Bugs-To: https://github.com/Seafoam-Labs/conch/issues\n"
-"POT-Creation-Date: 2026-08-02 10:37-0400\n"
+"POT-Creation-Date: 2026-08-03 19:39+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/main.zig:459
-msgid "Check for updates"
+msgid "updates available"
 msgstr ""
 
-#: src/main.zig:518
-msgid "Exit"
-msgstr ""
-
-#: src/main.zig:611
-msgid "Last Check:"
-msgstr ""
-
-#: src/main.zig:463
-msgid "Last Check: Never"
-msgstr ""
-
-#: src/main.zig:600
-msgid "Last Check: never"
-msgstr ""
-
-#: src/main.zig:472
-msgid "No updates"
-msgstr ""
-
-#: src/main.zig:455
-msgid "Open Shelly"
-msgstr ""
-
-#: src/main.zig:457
-msgid "Update Packages"
-msgstr ""
-
-#: src/main.zig:276
 msgid "Updates available"
 msgstr ""
 
-#: src/main.zig:275
-msgid "updates available"
+msgid "Open Shelly"
+msgstr ""
+
+msgid "Update Packages"
+msgstr ""
+
+msgid "Check for updates"
+msgstr ""
+
+msgid "Last Check: Never"
+msgstr ""
+
+msgid "No updates"
+msgstr ""
+
+msgid "Exit"
+msgstr ""
+
+msgid "Last Check: never"
+msgstr ""
+
+msgid "Last Check:"
 msgstr ""

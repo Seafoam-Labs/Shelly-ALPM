@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: Notifications\n"
 "Report-Msgid-Bugs-To: https://github.com/Seafoam-Labs/conch/issues\n"
-"POT-Creation-Date: 2026-08-02 10:37-0400\n"
+"POT-Creation-Date: 2026-08-03 19:39+0300\n"
 "PO-Revision-Date: 2026-07-13 14:55+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -15,71 +15,32 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 3.9\n"
 
-#: src/main.zig:459
-msgid "Check for updates"
-msgstr ""
-
-#: src/main.zig:518
-msgid "Exit"
-msgstr "Έξοδος"
-
-#: src/main.zig:611
-msgid "Last Check:"
-msgstr ""
-
-#: src/main.zig:463
-msgid "Last Check: Never"
-msgstr ""
-
-#: src/main.zig:600
-msgid "Last Check: never"
-msgstr ""
-
-#: src/main.zig:472
-msgid "No updates"
-msgstr ""
-
-#: src/main.zig:455
-msgid "Open Shelly"
-msgstr "Άνοιγμα Shelly"
-
-#: src/main.zig:457
-msgid "Update Packages"
-msgstr "Ενημέρωση πακέτων"
-
-#: src/main.zig:276
-msgid "Updates available"
-msgstr ""
-
-#: src/main.zig:275
 msgid "updates available"
 msgstr ""
 
-#~ msgid "AUR"
-#~ msgstr "AUR"
+msgid "Updates available"
+msgstr ""
 
-#~ msgid "Flatpak"
-#~ msgstr "Flatpak"
+msgid "Open Shelly"
+msgstr "Άνοιγμα Shelly"
 
-#~ msgid "Shelly Notifications"
-#~ msgstr "Ειδοποιήσεις Shelly"
+msgid "Update Packages"
+msgstr "Ενημέρωση πακέτων"
 
-#~ msgid "Shelly Notifications started. Press Ctrl+C to exit."
-#~ msgstr "Οι ειδοποιήσεις Shelly ξεκίνησαν. Πιέστε Ctrl+C για έξοδο."
+msgid "Check for updates"
+msgstr ""
 
-#~ msgid "Standard"
-#~ msgstr "Τυπικό"
+msgid "Last Check: Never"
+msgstr ""
 
-#~ msgid ""
-#~ "Tip: If you are using GNOME, ensure you have an 'AppIndicator' extension "
-#~ "installed."
-#~ msgstr ""
-#~ "Συμβουλή: Εάν χρησιμοποιείτε GNOME, βεβαιωθείτε ότι έχετε εγκατεστημένη "
-#~ "την επέκταση 'AppIndicator'."
+msgid "No updates"
+msgstr ""
 
-#~ msgid ""
-#~ "Warning: No StatusNotifierWatcher found. The tray icon will not be "
-#~ "visible."
-#~ msgstr ""
-#~ "Προειδοποίηση: Δεν βρέθηκε το StatusNotifierWatcher. Το εικονίδιο της "
-#~ "περιοχής ειδοποιήσεων δεν θα είναι ορατό."
+msgid "Exit"
+msgstr "Έξοδος"
+
+msgid "Last Check: never"
+msgstr ""
+
+msgid "Last Check:"
+msgstr ""
