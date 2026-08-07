@@ -378,6 +378,11 @@ pub const TransactionPage = extern struct {
         if (std.mem.eql(u8, progress_type, "DowngradeStart")) return translations._("Downgrading");
         if (std.mem.eql(u8, progress_type, "ReinstallStart")) return translations._("Reinstalling");
         if (std.mem.eql(u8, progress_type, "RemoveStart")) return translations._("Removing");
+        if (std.mem.eql(u8, progress_type, "KeyringStart")) return translations._("Checking keyring");
+        if (std.mem.eql(u8, progress_type, "IntegrityStart")) return translations._("Checking integrity");
+        if (std.mem.eql(u8, progress_type, "LoadStart")) return translations._("Loading packages");
+        if (std.mem.eql(u8, progress_type, "ConflictsStart")) return translations._("Checking conflicts");
+        if (std.mem.eql(u8, progress_type, "DiskspaceStart")) return translations._("Checking disk space");
         return translations._("Working");
     }
 
@@ -489,6 +494,14 @@ pub const TransactionPage = extern struct {
         append_terminal(self, msg);
 
         setLabel(p.title_label, "Done");
+
+        const final_status = if (p.cancelled)
+            translations._("Cancelled")
+        else if (exit_code == 0)
+            translations._("Done")
+        else
+            translations._("Failed");
+        setLabel(p.status_label, final_status);
 
         gtk.Widget.setVisible(p.close_button.as(gtk.Widget), 1);
         p.finished = true;
@@ -1028,6 +1041,20 @@ test "transaction progress helpers preserve determinate percentages" {
 test "database downloads use independent downloading rows" {
     try std.testing.expect(!TransactionPage.is_transaction_phase("DatabaseDownload"));
     try std.testing.expectEqualStrings("Downloading", TransactionPage.phase_label("DatabaseDownload"));
+}
+
+test "transaction preparation phases map to descriptive labels" {
+    try std.testing.expect(TransactionPage.is_transaction_phase("KeyringStart"));
+    try std.testing.expect(TransactionPage.is_transaction_phase("IntegrityStart"));
+    try std.testing.expect(TransactionPage.is_transaction_phase("LoadStart"));
+    try std.testing.expect(TransactionPage.is_transaction_phase("ConflictsStart"));
+    try std.testing.expect(TransactionPage.is_transaction_phase("DiskspaceStart"));
+
+    try std.testing.expectEqualStrings("Checking keyring", TransactionPage.phase_label("KeyringStart"));
+    try std.testing.expectEqualStrings("Checking integrity", TransactionPage.phase_label("IntegrityStart"));
+    try std.testing.expectEqualStrings("Loading packages", TransactionPage.phase_label("LoadStart"));
+    try std.testing.expectEqualStrings("Checking conflicts", TransactionPage.phase_label("ConflictsStart"));
+    try std.testing.expectEqualStrings("Checking disk space", TransactionPage.phase_label("DiskspaceStart"));
 }
 
 test "transaction rows detect progress stage changes" {
