@@ -517,13 +517,15 @@ pub const ShellyOperation = struct {
             }
         }
 
-        const term = self.child.wait(self.io) catch {
+        const term = self.child.wait(self.io) catch |err| {
+            std.debug.print("reader_loop: wait error: {t}\n", .{err});
             post_done(self, 255);
             return;
         };
         const code: u8 = switch (term) {
-            .exited => |c| @intCast(c),
-            else => 255,
+            .exited => |code| code,
+            .signal => |signal| @truncate(128 + @intFromEnum(signal)),
+            .stopped, .unknown => 1,
         };
 
         post_done(self, code);
