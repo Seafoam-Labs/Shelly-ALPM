@@ -1373,6 +1373,8 @@ pub const PkgbuildParser = struct {
             try vars.put(key_owned, value_owned);
         }
 
+        try self.inject_array_pkgname(content, &vars);
+
         var pass: usize = 0;
         while (pass < 10) : (pass += 1) {
             var changed = false;
@@ -1401,6 +1403,34 @@ pub const PkgbuildParser = struct {
         }
 
         return vars;
+    }
+
+    fn inject_array_pkgname(
+        self: PkgbuildParser,
+        content: []const u8,
+        vars: *std.StringHashMap([]const u8),
+    ) !void {
+        if (vars.contains("pkgname")) return;
+
+        const names = try self.parse_array(content, "pkgname");
+        defer {
+            for (names) |name| self.allocator.free(name);
+            self.allocator.free(names);
+        }
+        if (names.len == 0) return;
+
+        const value: []const u8 = if (self.selected_package_name) |package_name|
+            for (names) |name| {
+                if (std.mem.eql(u8, name, package_name)) break package_name;
+            } else return
+        else
+            names[0];
+
+        const owned_key = try self.allocator.dupe(u8, "pkgname");
+        errdefer self.allocator.free(owned_key);
+        const owned_value = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(owned_value);
+        try vars.put(owned_key, owned_value);
     }
 
     fn is_word(c: u8) bool {
@@ -3764,6 +3794,150 @@ test "build_var_hashmap: lines that do not match key=value are ignored" {
     try std.testing.expectEqualStrings("app", vars.get("pkgname").?);
 }
 
+test "inject_array_pkgname: no-op when vars already contains pkgname" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    const existing_key = try std.testing.allocator.dupe(u8, "pkgname");
+    const existing_value = try std.testing.allocator.dupe(u8, "already-set");
+    try vars.put(existing_key, existing_value);
+
+    try parser.inject_array_pkgname("pkgname=(foo bar)\n", &vars);
+
+    try std.testing.expectEqual(@as(usize, 1), vars.count());
+    try std.testing.expectEqualStrings("already-set", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: missing pkgname array leaves vars untouched" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgver=1.0\narch=(x86_64)\n", &vars);
+
+    try std.testing.expect(!vars.contains("pkgname"));
+}
+
+test "inject_array_pkgname: empty pkgname array leaves vars untouched" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=()\n", &vars);
+
+    try std.testing.expect(!vars.contains("pkgname"));
+}
+
+test "inject_array_pkgname: null selected_package_name uses names[0]" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expectEqualStrings("alpha", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: null selected_package_name with single-element array" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(solo)\n", &vars);
+
+    try std.testing.expectEqualStrings("solo", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: selected_package_name matching names[0] uses that name" {
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "alpha",
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expectEqualStrings("alpha", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: selected_package_name matching a non-first name uses that name" {
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "beta",
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expectEqualStrings("beta", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: selected_package_name matching the last name uses that name" {
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "gamma",
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expectEqualStrings("gamma", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: selected_package_name with no match returns without inserting" {
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "delta",
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expect(!vars.contains("pkgname"));
+}
+
+test "inject_array_pkgname: selected_package_name match is case-sensitive" {
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "Beta",
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expect(!vars.contains("pkgname"));
+}
+
+test "inject_array_pkgname: stored value is independent of the selected_package_name buffer" {
+    var name_buffer: [4]u8 = undefined;
+    @memcpy(name_buffer[0..], "beta");
+
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = name_buffer[0..],
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    name_buffer[0] = 'x';
+
+    try std.testing.expectEqualStrings("beta", vars.get("pkgname").?);
+}
+
 test "match_operator_len: greater-than returns length 1" {
     try std.testing.expectEqual(@as(?usize, 1), PkgbuildParser.match_operator_len(">", 0));
 }
@@ -4479,6 +4653,178 @@ test "parser_content: selected split package resolves package-scoped install fil
 
     try std.testing.expectEqualStrings("dms-shell-git.install", info.install_file.?);
     try std.testing.expectEqualStrings("echo \"installed\"", info.post_install.?);
+}
+
+test "parser_content: pkgname resolves when pkgbase is also present" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "rustdesk-bin.install",
+        .data = "post_install() {\n  echo \"installed\"\n}",
+    });
+    const base_dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(base_dir);
+
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "rustdesk-bin",
+    };
+    const content =
+        \\pkgbase=rustdesk-bin
+        \\pkgname=(rustdesk-bin)
+        \\pkgver=1.4.9
+        \\pkgrel=1
+        \\pkgdesc="Yet another remote desktop software, written in Rust."
+        \\url="https://github.com/rustdesk/rustdesk"
+        \\license=('AGPL-3.0-only')
+        \\arch=('x86_64' 'aarch64')
+        \\provides=("${pkgname%-bin}")
+        \\conflicts=("${pkgname%-bin}")
+        \\depends=(
+        \\    'gtk3'
+        \\    'xdotool'
+        \\    'libxcb'
+        \\)
+        \\options=('!strip' '!lto' '!debug')
+        \\install=$pkgname.install
+        \\
+        \\package() {
+        \\    install -d "${pkgdir}/usr/share/" "${pkgdir}/usr/bin/"
+        \\    cp -r "${srcdir}/usr/share/rustdesk/" "${pkgdir}/usr/share/"
+        \\
+        \\    ln -s "/usr/share/rustdesk/rustdesk" "${pkgdir}/usr/bin/rustdesk"
+        \\
+        \\    install -Dm 644 "${srcdir}/usr/share/rustdesk/files/rustdesk.desktop" "${pkgdir}/usr/share/applications/rustdesk.desktop"
+        \\
+        \\    # Remove useless files
+        \\    rm -r "${pkgdir}/usr/share/rustdesk/files/"
+        \\}
+    ;
+    var info = try parser.parser_content(content, base_dir);
+    defer info.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("rustdesk-bin", info.pkg_name.?);
+    try std.testing.expectEqualStrings("1.4.9", info.pkg_version.?);
+    try std.testing.expectEqualStrings("1", info.pkg_rel.?);
+    try std.testing.expectEqualStrings("rustdesk-bin.install", info.install_file.?);
+    try std.testing.expectEqualStrings("echo \"installed\"", info.post_install.?);
+
+    try std.testing.expectEqual(@as(usize, 1), info.provides.?.len);
+    try std.testing.expectEqualStrings("rustdesk", info.provides.?[0]);
+
+    try std.testing.expectEqual(@as(usize, 3), info.depends.?.len);
+    try std.testing.expectEqualStrings("gtk3", info.depends.?[0]);
+    try std.testing.expectEqualStrings("xdotool", info.depends.?[1]);
+    try std.testing.expectEqualStrings("libxcb", info.depends.?[2]);
+}
+
+test "parser_content: pkgbase with split pkgname array resolves per selected package" {
+    const content =
+        \\pkgbase=adwaita-qt
+        \\pkgname=(adwaita-qt5 adwaita-qt6)
+        \\pkgver=1.4.2
+        \\pkgrel=1
+        \\pkgdesc='A style to bend Qt applications to look like they belong into GNOME Shell'
+        \\arch=(x86_64)
+        \\url='https://github.com/FedoraQt/adwaita-qt'
+        \\license=(GPL)
+        \\makedepends=(cmake qt5-x11extras qt6-base)
+        \\source=(https://github.com/FedoraQt/adwaita-qt/archive/$pkgver/$pkgname-$pkgver.tar.gz)
+        \\sha256sums=('cd5fd71c46271d70c08ad44562e57c34e787d6a8650071db115910999a335ba8')
+        \\
+        \\build() {
+        \\  cmake -B build-qt5 -S $pkgbase-$pkgver \
+        \\    -DCMAKE_INSTALL_PREFIX=/usr \
+        \\    -DUSE_QT6=OFF
+        \\  cmake --build build-qt5
+        \\
+        \\  cmake -B build-qt6 -S $pkgbase-$pkgver \
+        \\    -DCMAKE_INSTALL_PREFIX=/usr \
+        \\    -DUSE_QT6=ON
+        \\  cmake --build build-qt6
+        \\}
+        \\
+        \\package_adwaita-qt5() {
+        \\  pkgdesc='A style to bend Qt5 applications to look like they belong into GNOME Shell'
+        \\  depends=(qt5-x11extras)
+        \\  replaces=(adwaita-qt)
+        \\
+        \\  DESTDIR="$pkgdir" cmake --install build-qt5
+        \\}
+        \\
+        \\package_adwaita-qt6() {
+        \\  pkgdesc='A style to bend Qt6 applications to look like they belong into GNOME Shell'
+        \\  depends=(qt6-base)
+        \\
+        \\  DESTDIR="$pkgdir" cmake --install build-qt6
+        \\}
+    ;
+
+    var info_qt5 = try (PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "adwaita-qt5",
+    }).parser_content(content, null);
+    defer info_qt5.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("adwaita-qt5", info_qt5.pkg_name.?);
+    try std.testing.expectEqualStrings("adwaita-qt", info_qt5.variables.get("pkgbase").?);
+    try std.testing.expectEqualStrings("1.4.2", info_qt5.pkg_version.?);
+    try std.testing.expectEqualStrings("1", info_qt5.pkg_rel.?);
+    try std.testing.expectEqualStrings(
+        "A style to bend Qt applications to look like they belong into GNOME Shell",
+        info_qt5.pkg_desc.?,
+    );
+    try std.testing.expectEqualStrings("https://github.com/FedoraQt/adwaita-qt", info_qt5.url.?);
+
+    try std.testing.expectEqual(@as(usize, 1), info_qt5.source.?.len);
+    try std.testing.expectEqualStrings(
+        "https://github.com/FedoraQt/adwaita-qt/archive/1.4.2/adwaita-qt5-1.4.2.tar.gz",
+        info_qt5.source.?[0],
+    );
+
+    try std.testing.expectEqual(@as(usize, 1), info_qt5.arch.?.len);
+    try std.testing.expectEqualStrings("x86_64", info_qt5.arch.?[0]);
+    try std.testing.expectEqual(@as(usize, 1), info_qt5.license.?.len);
+    try std.testing.expectEqualStrings("GPL", info_qt5.license.?[0]);
+
+    try std.testing.expectEqual(@as(usize, 3), info_qt5.make_depends.?.len);
+    try std.testing.expectEqualStrings("cmake", info_qt5.make_depends.?[0]);
+    try std.testing.expectEqualStrings("qt5-x11extras", info_qt5.make_depends.?[1]);
+    try std.testing.expectEqualStrings("qt6-base", info_qt5.make_depends.?[2]);
+    try std.testing.expectEqual(@as(usize, 3), info_qt5.parsed_make_depends.?.len);
+    try std.testing.expectEqualStrings("qt5-x11extras", info_qt5.parsed_make_depends.?[1].name);
+
+    try std.testing.expectEqual(@as(usize, 1), info_qt5.sha_256_sums.?.len);
+    try std.testing.expectEqualStrings(
+        "cd5fd71c46271d70c08ad44562e57c34e787d6a8650071db115910999a335ba8",
+        info_qt5.sha_256_sums.?[0],
+    );
+
+    try std.testing.expectEqual(@as(usize, 0), info_qt5.depends.?.len);
+
+    try std.testing.expect(info_qt5.install_file == null);
+    try std.testing.expect(info_qt5.post_install == null);
+
+    var info_qt6 = try (PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "adwaita-qt6",
+    }).parser_content(content, null);
+    defer info_qt6.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("adwaita-qt6", info_qt6.pkg_name.?);
+    try std.testing.expectEqualStrings("adwaita-qt", info_qt6.variables.get("pkgbase").?);
+    try std.testing.expectEqualStrings(
+        "A style to bend Qt applications to look like they belong into GNOME Shell",
+        info_qt6.pkg_desc.?,
+    );
+    try std.testing.expectEqual(@as(usize, 1), info_qt6.source.?.len);
+    try std.testing.expectEqualStrings(
+        "https://github.com/FedoraQt/adwaita-qt/archive/1.4.2/adwaita-qt6-1.4.2.tar.gz",
+        info_qt6.source.?[0],
+    );
 }
 
 test "parser_content: selected split package install overrides global and sibling values" {
