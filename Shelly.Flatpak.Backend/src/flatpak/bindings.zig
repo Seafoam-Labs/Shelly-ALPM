@@ -210,6 +210,14 @@ pub const libflatpak = struct {
             return flatpak.flatpak_installed_ref_get_installed_size(self.installedRef());
         }
 
+        pub fn eol(self: InstalledFlatpak) ?[:0]const u8 {
+            return str(flatpak.flatpak_installed_ref_get_eol(self.installedRef()));
+        }
+
+        pub fn eol_rebase(self: InstalledFlatpak) ?[:0]const u8 {
+            return str(flatpak.flatpak_installed_ref_get_eol_rebase(self.installedRef()));
+        }
+
         pub fn kind(self: InstalledFlatpak) i32 {
             return @intCast(flatpak.flatpak_ref_get_kind(self.ptr));
         }
