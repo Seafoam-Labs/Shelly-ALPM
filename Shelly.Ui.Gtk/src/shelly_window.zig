@@ -402,9 +402,69 @@ pub const ShellyWindow = extern struct {
         gtk.Box.append(parent_box, btn.as(gtk.Widget));
     }
 
+    fn is_searchable_name(name: []const u8) bool {
+        return std.mem.eql(u8, name, "package") or
+            std.mem.eql(u8, name, "aur") or
+            std.mem.eql(u8, name, "flatpak") or
+            std.mem.eql(u8, name, "appimage");
+    }
+
+    const SearchablePage = union(enum) {
+        package: *PackagePage,
+        aur: *AurPage,
+        flatpak: *FlatpakPage,
+        appimage: *AppImagePage,
+    };
+
+    fn searchable_page(stack: *gtk.Stack, name: [:0]const u8) ?SearchablePage {
+        const child = gtk.Stack.getChildByName(stack, name) orelse return null;
+        if (std.mem.eql(u8, name, "package")) {
+            return .{ .package = gobject.ext.cast(PackagePage, child) orelse return null };
+        }
+        if (std.mem.eql(u8, name, "aur")) {
+            return .{ .aur = gobject.ext.cast(AurPage, child) orelse return null };
+        }
+        if (std.mem.eql(u8, name, "flatpak")) {
+            return .{ .flatpak = gobject.ext.cast(FlatpakPage, child) orelse return null };
+        }
+        if (std.mem.eql(u8, name, "appimage")) {
+            return .{ .appimage = gobject.ext.cast(AppImagePage, child) orelse return null };
+        }
+        return null;
+    }
+
     fn on_nav_click(_: *gtk.Button, nb: *NavButton) callconv(.c) void {
-        gtk.Stack.setVisibleChildName(nb.stack, nb.name);
+        const stack = nb.stack;
+        const dest_name = nb.name;
+        const current_z = gtk.Stack.getVisibleChildName(stack);
+        const current_name: [:0]const u8 = if (current_z) |cn| std.mem.span(cn) else "";
+
+        if (std.mem.eql(u8, current_name, dest_name)) return;
+
+        var query_buf: [256]u8 = undefined;
+        var query_len: usize = 0;
+        if (is_searchable_name(current_name) and is_searchable_name(dest_name)) {
+            if (searchable_page(stack, current_name)) |page| {
+                const q = switch (page) {
+                    inline else => |p| p.search_text(),
+                };
+                if (q.len > 0) {
+                    query_len = @min(q.len, query_buf.len);
+                    @memcpy(query_buf[0..query_len], q[0..query_len]);
+                }
+            }
+        }
+
+        gtk.Stack.setVisibleChildName(stack, dest_name);
         set_active_nav(nb.window, nb);
+
+        if (query_len > 0) {
+            if (searchable_page(stack, dest_name)) |page| {
+                switch (page) {
+                    inline else => |p| p.apply_search(query_buf[0..query_len]),
+                }
+            }
+        }
     }
 
     fn set_active_nav(self: *ShellyWindow, active: *NavButton) void {
