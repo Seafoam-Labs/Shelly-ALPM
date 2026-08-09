@@ -53,6 +53,10 @@ pub const ShellyWindow = extern struct {
         collapsed: bool,
         nav_mode: NavMode,
         pending_nav: NavMode,
+        /// Last query seen on a searchable sidebar page. Survives hops through
+        /// Update/Recommend/settings so Package → Updates → AUR still carries it.
+        last_search_query: [256]u8,
+        last_search_len: usize,
         var offset: c_int = 0;
     };
 
@@ -86,6 +90,7 @@ pub const ShellyWindow = extern struct {
         p.collapsed = true;
         p.nav_mode = .sidebar;
         p.pending_nav = .sidebar;
+        p.last_search_len = 0;
         build_shell(self);
         populate_stack(self);
         applyConfig(self);
@@ -433,38 +438,46 @@ pub const ShellyWindow = extern struct {
         return null;
     }
 
+    fn remember_search_from_current(self: *ShellyWindow) void {
+        const p = self.private();
+        const current_z = gtk.Stack.getVisibleChildName(p.content_stack) orelse return;
+        const current_name: [:0]const u8 = std.mem.span(current_z);
+        if (!is_searchable_name(current_name)) return;
+
+        const page = searchable_page(p.content_stack, current_name) orelse return;
+        const q = switch (page) {
+            inline else => |pg| pg.search_text(),
+        };
+        const len = @min(q.len, p.last_search_query.len);
+        @memcpy(p.last_search_query[0..len], q[0..len]);
+        p.last_search_len = len;
+    }
+
+    fn apply_remembered_search(self: *ShellyWindow, dest_name: [:0]const u8) void {
+        const p = self.private();
+        if (p.last_search_len == 0) return;
+        if (!is_searchable_name(dest_name)) return;
+
+        const page = searchable_page(p.content_stack, dest_name) orelse return;
+        switch (page) {
+            inline else => |pg| pg.apply_search(p.last_search_query[0..p.last_search_len]),
+        }
+    }
+
     fn on_nav_click(_: *gtk.Button, nb: *NavButton) callconv(.c) void {
-        const stack = nb.stack;
+        const self = nb.window;
         const dest_name = nb.name;
-        const current_z = gtk.Stack.getVisibleChildName(stack);
+        const current_z = gtk.Stack.getVisibleChildName(nb.stack);
         const current_name: [:0]const u8 = if (current_z) |cn| std.mem.span(cn) else "";
 
         if (std.mem.eql(u8, current_name, dest_name)) return;
 
-        var query_buf: [256]u8 = undefined;
-        var query_len: usize = 0;
-        if (is_searchable_name(current_name) and is_searchable_name(dest_name)) {
-            if (searchable_page(stack, current_name)) |page| {
-                const q = switch (page) {
-                    inline else => |p| p.search_text(),
-                };
-                if (q.len > 0) {
-                    query_len = @min(q.len, query_buf.len);
-                    @memcpy(query_buf[0..query_len], q[0..query_len]);
-                }
-            }
-        }
+        remember_search_from_current(self);
 
-        gtk.Stack.setVisibleChildName(stack, dest_name);
-        set_active_nav(nb.window, nb);
+        gtk.Stack.setVisibleChildName(nb.stack, dest_name);
+        set_active_nav(self, nb);
 
-        if (query_len > 0) {
-            if (searchable_page(stack, dest_name)) |page| {
-                switch (page) {
-                    inline else => |p| p.apply_search(query_buf[0..query_len]),
-                }
-            }
-        }
+        apply_remembered_search(self, dest_name);
     }
 
     fn set_active_nav(self: *ShellyWindow, active: *NavButton) void {
@@ -531,6 +544,7 @@ pub const ShellyWindow = extern struct {
 
     fn on_settings(btn: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
         const p = self.private();
+        remember_search_from_current(self);
         gtk.Stack.setVisibleChildName(p.content_stack, "settings");
         if (gtk.Widget.getAncestor(btn.as(gtk.Widget), gtk.Popover.getGObjectType())) |pop| {
             gtk.Popover.popdown(@ptrCast(@alignCast(pop)));
@@ -539,6 +553,7 @@ pub const ShellyWindow = extern struct {
 
     fn on_utilities(btn: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
         const p = self.private();
+        remember_search_from_current(self);
         gtk.Stack.setVisibleChildName(p.content_stack, "utilities");
         if (gtk.Widget.getAncestor(btn.as(gtk.Widget), gtk.Popover.getGObjectType())) |pop| {
             gtk.Popover.popdown(@ptrCast(@alignCast(pop)));
