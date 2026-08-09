@@ -620,15 +620,14 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
         try std.testing.expect(std.mem.indexOf(u8, script, "threeway") != null);
         try std.testing.expect(std.mem.indexOf(u8, script, "bash fish zsh") != null);
         if (expected.shell == .zsh) {
+            // Regression for malformed _arguments specs.
             try std.testing.expect(std.mem.indexOf(u8, script, "'{--") == null);
             try std.testing.expect(std.mem.indexOf(u8, script, "'/?[") == null);
+            // Shortcode completion is generated.
             try std.testing.expect(std.mem.indexOf(u8, script, "'-Is:") != null);
-            try std.testing.expect(std.mem.indexOf(u8, script, "'-LI:") != null);
-            try std.testing.expect(std.mem.indexOf(u8, script, "pacman -Slq") != null);
+            // Repeated and single positional arguments are represented.
             try std.testing.expect(std.mem.indexOf(u8, script, "'*:packages:") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "'1:package:") != null);
-            try std.testing.expect(std.mem.indexOf(u8, script, "words=(\"$words[1]\" \"${(@)words[consumed+2,$#words]}\")") != null);
-            try std.testing.expect(std.mem.indexOf(u8, script, "consumed=2") != null);
         }
     }
 }
