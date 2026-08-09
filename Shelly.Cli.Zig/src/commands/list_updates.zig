@@ -81,6 +81,8 @@ pub const FlatpakUpdate = struct {
     installed_size: u64,
     ref: []const u8,
     full_ref: []const u8,
+    eol: []const u8 = "",
+    eol_rebase: []const u8 = "",
 };
 
 fn ResultSet(comptime T: type) type {
@@ -489,6 +491,8 @@ fn writeFlatpakJson(json: *std.json.Stringify, update: FlatpakUpdate) !void {
     try field(json, "InstalledSize", update.installed_size);
     try field(json, "Ref", update.ref);
     try field(json, "FullRef", update.full_ref);
+    try field(json, "Eol", update.eol);
+    try field(json, "EolRebase", update.eol_rebase);
     try json.endObject();
 }
 
@@ -843,6 +847,8 @@ fn runFlatpak(context: *runtime.RuntimeContext) !Result {
                 "{s}:{s}",
                 .{ native.origin, ref },
             ),
+            .eol = if (native.eol) |value| try allocator.dupe(u8, value) else "",
+            .eol_rebase = if (native.eol_rebase) |value| try allocator.dupe(u8, value) else "",
         };
     }
     return .{ .flatpak = .{ .items = updates, .arena = arena } };
@@ -1594,4 +1600,53 @@ test "Flatpak list-updates sorts compatibility JSON and renders table" {
     const plain_zeta_index = std.mem.indexOf(u8, plain, "org.zeta.App") orelse return error.MissingZeta;
     try std.testing.expect(plain_alpha_index < plain_zeta_index);
     try std.testing.expect(std.mem.indexOf(u8, plain, "Total: 2 packages") != null);
+}
+
+test "Flatpak list-updates renders EOL annotations in JSON output" {
+    var output_buffer = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer output_buffer.deinit();
+
+    const updates = [_]FlatpakUpdate{
+        .{
+            .id = "dev.bragefuglseth.Keypunch",
+            .name = "Keypunch",
+            .version = "1.0",
+            .arch = "x86_64",
+            .branch = "stable",
+            .latest_commit = "abc",
+            .summary = "Typing tutor",
+            .kind = 0,
+            .remote = "flathub",
+            .install_level = 1,
+            .permissions = &.{},
+            .installed_size = 1024,
+            .ref = "app/dev.bragefuglseth.Keypunch/x86_64/stable",
+            .full_ref = "flathub:app/dev.bragefuglseth.Keypunch/x86_64/stable",
+            .eol = "Deprecated.",
+            .eol_rebase = "no.bragefuglseth.Keypunch",
+        },
+        .{
+            .id = "org.example.Dead",
+            .name = "Dead",
+            .version = "2.0",
+            .arch = "x86_64",
+            .branch = "stable",
+            .latest_commit = "def",
+            .summary = "Dead app",
+            .kind = 0,
+            .remote = "flathub",
+            .install_level = 1,
+            .permissions = &.{},
+            .installed_size = 512,
+            .ref = "app/org.example.Dead/x86_64/stable",
+            .full_ref = "flathub:app/org.example.Dead/x86_64/stable",
+            .eol = "No longer maintained",
+        },
+    };
+    const result: Result = .{ .flatpak = .{ .items = &updates } };
+    try writeJson(std.testing.allocator, &output_buffer.writer, &result);
+    const rendered = output_buffer.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"Eol\":\"Deprecated.\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"EolRebase\":\"no.bragefuglseth.Keypunch\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"Eol\":\"No longer maintained\"") != null);
 }

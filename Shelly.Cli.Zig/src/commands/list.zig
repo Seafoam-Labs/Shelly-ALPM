@@ -110,6 +110,8 @@ pub const FlatpakItem = struct {
     installed_size: u64 = 0,
     ref: []const u8 = "",
     full_ref: []const u8 = "",
+    eol: []const u8 = "",
+    eol_rebase: []const u8 = "",
 };
 
 fn ResultSet(comptime T: type) type {
@@ -709,6 +711,8 @@ fn writeFlatpakJson(json: *std.json.Stringify, item: FlatpakItem) !void {
     try field(json, "InstalledSize", item.installed_size);
     try field(json, "Ref", item.ref);
     try field(json, "FullRef", item.full_ref);
+    try field(json, "Eol", item.eol);
+    try field(json, "EolRebase", item.eol_rebase);
     try json.endObject();
 }
 
@@ -1137,6 +1141,8 @@ fn runFlatpak(context: *runtime.RuntimeContext) !Result {
             .installed_size = native.installed_size,
             .ref = ref,
             .full_ref = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ native.origin, ref }),
+            .eol = if (native.eol) |value| try allocator.dupe(u8, value) else "",
+            .eol_rebase = if (native.eol_rebase) |value| try allocator.dupe(u8, value) else "",
         };
     }
     return .{ .flatpak = .{ .items = items, .arena = arena } };
@@ -1482,6 +1488,48 @@ test "AppImage and Flatpak lists emit compatibility JSON and stable ordering" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "a.app").? < std.mem.indexOf(u8, rendered, "z.app").?);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\"Permissions\":[]") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\"InstallLevel\":0") != null);
+}
+
+test "Flatpak list renders EOL fields in JSON output" {
+    var output_buffer = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer output_buffer.deinit();
+    var invocation: parser.Invocation = undefined;
+    invocation.options = &.{};
+
+    const flatpaks = [_]FlatpakItem{
+        .{
+            .id = "dev.bragefuglseth.Keypunch",
+            .name = "Keypunch",
+            .version = "1.0",
+            .arch = "x86_64",
+            .branch = "stable",
+            .eol = "Deprecated.",
+            .eol_rebase = "no.bragefuglseth.Keypunch",
+        },
+        .{
+            .id = "org.example.Dead",
+            .name = "Dead",
+            .version = "2.0",
+            .arch = "x86_64",
+            .branch = "stable",
+            .eol = "No longer maintained",
+        },
+        .{
+            .id = "org.example.Alive",
+            .name = "Alive",
+            .version = "3.0",
+            .arch = "x86_64",
+            .branch = "stable",
+        },
+    };
+    const result: Result = .{ .flatpak = .{ .items = &flatpaks } };
+    try writeJson(std.testing.allocator, &output_buffer.writer, &invocation, &result);
+    const rendered = output_buffer.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"Eol\":\"Deprecated.\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"EolRebase\":\"no.bragefuglseth.Keypunch\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"Eol\":\"No longer maintained\"") != null);
+    // Non-EOL refs emit empty EOL fields rather than null.
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"Eol\":\"\"") != null);
 }
 
 test "Flatpak remote mode parses configured remotes and AppStream queries" {
