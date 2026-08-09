@@ -263,6 +263,7 @@ fn renderZsh(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
         \\
         \\_shelly() {
         \\    local action selector
+        \\    integer consumed=0
         \\    action=$words[2]
         \\    selector=
         \\    if (( CURRENT == 2 )); then
@@ -297,7 +298,7 @@ fn renderZsh(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
         const action_code = command.actionCode orelse continue;
         var codes: [16]u8 = undefined;
         for (collectTypeCodes(command, &codes)) |type_code| {
-            try writer.print("        -{c}{c}*) action={s}; selector={s} ;;\n", .{
+            try writer.print("        -{c}{c}*) action={s}; selector={s}; consumed=1 ;;\n", .{
                 action_code,
                 type_code,
                 parentActionName(command),
@@ -333,6 +334,7 @@ fn renderZsh(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
                     \\                    return
                     \\                fi
                     \\                selector=$words[3]
+                    \\                consumed=2
                     \\            fi
                     \\            case $selector in
                     \\
@@ -343,11 +345,11 @@ fn renderZsh(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
                     try writeZshArguments(manifest, other, writer);
                     try writer.writeAll(" ;;\n");
                 }
-                try writer.writeAll("                *) ");
+                try writer.print("                *) [[ $selector != {s} ]] && consumed=1; ", .{child.name});
                 try writeZshArguments(manifest, child, writer);
                 try writer.writeAll(" ;;\n            esac\n");
             } else {
-                try writer.writeAll("            ");
+                try writer.writeAll("            (( consumed == 0 )) && consumed=1; ");
                 try writeZshArguments(manifest, child, writer);
                 try writer.writeByte('\n');
             }
@@ -365,6 +367,7 @@ fn renderZsh(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
                 \\                    return
                 \\                fi
                 \\                selector=$words[3]
+                \\                consumed=2
                 \\            fi
                 \\            case $selector in
                 \\
@@ -392,7 +395,9 @@ fn writeZshArguments(
     command: *const spec.Command,
     writer: *std.Io.Writer,
 ) !void {
-    try writer.writeAll("_arguments");
+    try writer.writeAll(
+        \\(( consumed > 0 )) && { words=("$words[1]" "${(@)words[consumed+2,$#words]}"); (( CURRENT -= consumed )); }; _arguments
+    );
     for (command.options) |option| {
         if (option.hidden) continue;
         try writer.writeAll(" ");
@@ -622,6 +627,8 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
             try std.testing.expect(std.mem.indexOf(u8, script, "pacman -Slq") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "'*:packages:") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "'1:package:") != null);
+            try std.testing.expect(std.mem.indexOf(u8, script, "words=(\"$words[1]\" \"${(@)words[consumed+2,$#words]}\")") != null);
+            try std.testing.expect(std.mem.indexOf(u8, script, "consumed=2") != null);
         }
     }
 }
