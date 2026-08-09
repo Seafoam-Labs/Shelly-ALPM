@@ -145,10 +145,8 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode([]AppstreamApp, self.allocator, result.stdout);
     }
 
-    pub fn get_flatpak_remote_info(self: ShellyCli, remote: []const u8, id: []const u8, branch: []const u8) !std.json.Parsed(FlatpakSearchResponse) {
+    pub fn get_flatpak_remote_info(self: ShellyCli, id: []const u8) !std.json.Parsed(FlatpakSearchResponse) {
         const result = try self.run(&.{ "search", "flatpak", id });
-        _ = remote;
-        _ = branch;
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 

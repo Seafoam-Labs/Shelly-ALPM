@@ -141,17 +141,6 @@ pub const Manager = struct {
         }
         defer rawflatpak.g_object_unref(installation);
 
-        const arch = std.mem.span(rawflatpak.flatpak_get_default_arch());
-        const ref_str = try std.fmt.allocPrint(
-            self.allocator,
-            "{s}/{s}/{s}/{s}",
-            .{ if (runtime) "runtime" else "app", flatpak_id, arch, branch },
-        );
-        defer self.allocator.free(ref_str);
-
-        const ref_string = try self.allocator.dupeSentinel(u8, ref_str, 0);
-        defer self.allocator.free(ref_string);
-
         const trans_ptr = rawflatpak.flatpak_transaction_new_for_installation(installation, cancellable, &g_error);
         if (trans_ptr == null or g_error != null) {
             self.emitGError(g_error, "Failed to create the Flatpak transaction");
@@ -163,6 +152,27 @@ pub const Manager = struct {
             self.emitGError(g_error, "Failed to update the Flatpak remote");
             return error.RemoteUpdateFailed;
         }
+
+        const resolved_branch: [:0]u8 = blk: {
+            if (branch.len > 0) break :blk try self.allocator.dupeZ(u8, branch);
+            const kind: c_int = if (runtime) rawflatpak.FLATPAK_REF_KIND_RUNTIME else rawflatpak.FLATPAK_REF_KIND_APP;
+            break :blk (try self.resolve_remote_branch(installation, remote_name, flatpak_id, kind, cancellable)) orelse {
+                self.emitGError(g_error, "Failed to resolve the Flatpak branch from the remote");
+                return error.AddInstallFailed;
+            };
+        };
+        defer self.allocator.free(resolved_branch);
+
+        const arch = std.mem.span(rawflatpak.flatpak_get_default_arch());
+        const ref_str = try std.fmt.allocPrint(
+            self.allocator,
+            "{s}/{s}/{s}/{s}",
+            .{ if (runtime) "runtime" else "app", flatpak_id, arch, resolved_branch },
+        );
+        defer self.allocator.free(ref_str);
+
+        const ref_string = try self.allocator.dupeSentinel(u8, ref_str, 0);
+        defer self.allocator.free(ref_string);
 
         if (rawflatpak.flatpak_transaction_add_install(trans_ptr, remote_name, ref_string, null, &g_error) == 0) {
             self.emitGError(g_error, "Failed to add the Flatpak installation operation");
@@ -684,7 +694,22 @@ pub const Manager = struct {
         }
         defer rawflatpak.g_object_unref(installation);
 
-        const remote_ref_ptr = rawflatpak.flatpak_installation_fetch_remote_ref_sync(installation, cStr(remote_name), 0, cStr(flatpak_name), rawflatpak.flatpak_get_default_arch(), cStr(branch), cancellable, &g_error);
+        const resolved_branch: [:0]u8 = blk: {
+            if (branch.len > 0) break :blk try self.allocator.dupeZ(u8, branch);
+            break :blk (try self.resolve_remote_branch(
+                installation,
+                remote_name,
+                flatpak_name,
+                rawflatpak.FLATPAK_REF_KIND_APP,
+                cancellable,
+            )) orelse {
+                self.emitGError(g_error, "Failed to resolve the Flatpak branch from the remote");
+                return error.FetchRemoteRefFailed;
+            };
+        };
+        defer self.allocator.free(resolved_branch);
+
+        const remote_ref_ptr = rawflatpak.flatpak_installation_fetch_remote_ref_sync(installation, cStr(remote_name), 0, cStr(flatpak_name), rawflatpak.flatpak_get_default_arch(), resolved_branch.ptr, cancellable, &g_error);
         if (remote_ref_ptr == null) {
             self.emitGError(g_error, "Failed to fetch the Flatpak remote reference");
             return error.FetchRemoteRefFailed;
@@ -982,6 +1007,63 @@ pub const Manager = struct {
         }
 
         return permissions.toOwnedSlice(self.allocator);
+    }
+
+    fn resolve_remote_branch(
+        self: Manager,
+        installation: [*c]rawflatpak.FlatpakInstallation,
+        remote_name: [:0]const u8,
+        flatpak_name: [:0]const u8,
+        kind: c_int,
+        cancellable: *rawflatpak.GCancellable,
+    ) !?[:0]u8 {
+        var g_error: ?*rawflatpak.GError = null;
+        defer if (g_error) |e| rawflatpak.g_error_free(e);
+
+        var preferred: ?[:0]u8 = null;
+        defer if (preferred) |value| self.allocator.free(value);
+        const remote_ptr = rawflatpak.flatpak_installation_get_remote_by_name(installation, remote_name, cancellable, &g_error);
+        if (remote_ptr != null) {
+            defer rawflatpak.g_object_unref(remote_ptr);
+            const default_branch_ptr = rawflatpak.flatpak_remote_get_default_branch(remote_ptr);
+            if (default_branch_ptr != null) {
+                const default_branch = std.mem.span(default_branch_ptr);
+                if (default_branch.len > 0) {
+                    preferred = try self.allocator.dupeZ(u8, default_branch);
+                }
+            }
+        }
+        if (g_error) |e| {
+            rawflatpak.g_error_free(e);
+            g_error = null;
+        }
+
+        const refs_ptr = rawflatpak.flatpak_installation_list_remote_refs_sync_full(installation, remote_name, rawflatpak.FLATPAK_QUERY_FLAGS_NONE, cancellable, &g_error);
+        if (refs_ptr == null) return null;
+        defer rawflatpak.g_ptr_array_unref(refs_ptr);
+
+        var first_match: ?[:0]const u8 = null;
+        var stable_match: ?[:0]const u8 = null;
+        var preferred_match: ?[:0]const u8 = null;
+
+        var j: usize = 0;
+        while (j < refs_ptr.*.len) : (j += 1) {
+            const raw_ref: *rawflatpak.FlatpakRef = @ptrCast(@alignCast(refs_ptr.*.pdata[j]));
+            if (@as(c_int, @intCast(rawflatpak.flatpak_ref_get_kind(raw_ref))) != kind) continue;
+            const name_ptr = rawflatpak.flatpak_ref_get_name(raw_ref);
+            if (name_ptr == null or !std.mem.eql(u8, std.mem.span(name_ptr), flatpak_name)) continue;
+            const branch_ptr = rawflatpak.flatpak_ref_get_branch(raw_ref);
+            if (branch_ptr == null) continue;
+            const ref_branch = std.mem.span(branch_ptr);
+            if (first_match == null) first_match = ref_branch;
+            if (std.mem.eql(u8, ref_branch, "stable")) stable_match = ref_branch;
+            if (preferred) |value| {
+                if (std.mem.eql(u8, ref_branch, value)) preferred_match = ref_branch;
+            }
+        }
+
+        const chosen = preferred_match orelse stable_match orelse first_match orelse return null;
+        return try self.allocator.dupeZ(u8, chosen);
     }
 
     fn get_all_flatpaks_by_remote(self: Manager, remote: [:0]const u8, scope: flatpak.Scope, installation: [*c]rawflatpak.FlatpakInstallation) ![]flatpak.Flatpak {
@@ -1986,6 +2068,15 @@ test "test getRemoteRefInfo" {
     const manager = Manager{ .allocator = std.testing.allocator, .io = std.testing.io };
     const result = try manager.get_remote_ref_info_flatpak("flathub", "it.mijorus.gearlever", "stable", flatpak.Scope.SYSTEM);
     defer result.deinit(std.testing.allocator);
+    try std.testing.expect(result.permissions.len > 1);
+}
+
+test "test getRemoteRefInfo resolves an empty branch from the remote" {
+    const manager = Manager{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const result = try manager.get_remote_ref_info_flatpak("flathub", "it.mijorus.gearlever", "", flatpak.Scope.SYSTEM);
+    defer result.deinit(std.testing.allocator);
+    const branch_name = result.branch() orelse return error.TestUnexpectedResult;
+    try std.testing.expect(branch_name.len > 0);
     try std.testing.expect(result.permissions.len > 1);
 }
 

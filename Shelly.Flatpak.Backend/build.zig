@@ -167,6 +167,7 @@ pub fn build(b: *std.Build) void {
             "test searchremoteref",
             "test getAllFlatpaksFromRemotes",
             "test getRemoteRefInfo",
+            "test getRemoteRefInfo resolves an empty branch from the remote",
         },
     });
     const run_live_tests = b.addRunArtifact(live_tests);

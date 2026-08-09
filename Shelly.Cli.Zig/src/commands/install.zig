@@ -700,7 +700,7 @@ fn runFlatpak(
     defer context.allocator.free(id_z);
     const remote_z = try context.allocator.dupeZ(u8, selected_remote);
     defer context.allocator.free(remote_z);
-    const branch_z = try context.allocator.dupeZ(u8, optionValue(invocation, "--branch") orelse "stable");
+    const branch_z = try context.allocator.dupeZ(u8, optionValue(invocation, "--branch") orelse "");
     defer context.allocator.free(branch_z);
 
     var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };

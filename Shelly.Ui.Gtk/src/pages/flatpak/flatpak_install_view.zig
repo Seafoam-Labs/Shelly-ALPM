@@ -39,7 +39,6 @@ pub const FlatpakInstallView = extern struct {
 
     const resource_path = "/com/shellyorg/shelly/ui/flatpak/flatpak_install_view.ui";
     const batch_size = 128;
-    const default_branch = "stable";
 
     const Private = struct {
         content_stack: *gtk.Stack,
@@ -612,7 +611,7 @@ pub const FlatpakInstallView = extern struct {
         var threaded: std.Io.Threaded = .init(std.heap.c_allocator, .{});
         defer threaded.deinit();
         const cli: ShellyCli = .{ .allocator = std.heap.c_allocator, .io = threaded.io() };
-        const parsed = cli.get_flatpak_remote_info(load.remote, load.app_id, default_branch) catch {
+        const parsed = cli.get_flatpak_remote_info(load.app_id) catch {
             load.failed = true;
             _ = glib.idleAdd(&remote_info_complete, load);
             return;
@@ -624,10 +623,11 @@ pub const FlatpakInstallView = extern struct {
             _ = glib.idleAdd(&remote_info_complete, load);
             return;
         }
-        load.download_size = parsed.value.hits[0].download_size;
-        load.installed_size = parsed.value.hits[0].installed_size;
+        const hit = selectRemoteHit(parsed.value.hits, load.remote);
+        load.download_size = hit.download_size;
+        load.installed_size = hit.installed_size;
 
-        const perms = parsed.value.hits[0].permissions;
+        const perms = hit.permissions;
         if (perms.len > 0) {
             const owned_perms_slices = std.heap.c_allocator.alloc([]const u8, perms.len) catch {
                 load.failed = true;
@@ -1237,6 +1237,13 @@ fn firstScreenshotUrl(screenshot: flatpak.AppstreamScreenshot) ?[:0]const u8 {
     return null;
 }
 
+fn selectRemoteHit(hits: []const flatpak.Hit, remote: []const u8) flatpak.Hit {
+    for (hits) |hit| {
+        if (std.mem.eql(u8, hit.remote, remote)) return hit;
+    }
+    return hits[0];
+}
+
 test "Flatpak details split descriptions only when additional lines exist" {
     try std.testing.expectEqual(@as(?usize, 13), descriptionSplitIndex("one\ntwo\nthree\nfour"));
     try std.testing.expectEqual(@as(?usize, null), descriptionSplitIndex("one\ntwo\nthree"));
@@ -1267,6 +1274,21 @@ test "Flatpak details capitalize AppStream URL type labels" {
     try std.testing.expectEqualStrings("Homepage", FlatpakInstallView.format_url_type(&buffer, "homepage"));
     try std.testing.expectEqualStrings("Vcs-browser", FlatpakInstallView.format_url_type(&buffer, "vcs-browser"));
     try std.testing.expectEqualStrings("", FlatpakInstallView.format_url_type(&buffer, ""));
+}
+
+test "Flatpak details prefer the search hit published on the selected remote" {
+    const hits = [_]flatpak.Hit{
+        .{ .remote = "flathub", .download_size = 1, .installed_size = 2 },
+        .{ .remote = "kdeapps", .download_size = 3, .installed_size = 4 },
+    };
+
+    const selected = selectRemoteHit(&hits, "kdeapps");
+    try std.testing.expectEqual(@as(i64, 3), selected.download_size);
+    try std.testing.expectEqual(@as(i64, 4), selected.installed_size);
+
+    const fallback = selectRemoteHit(&hits, "unknown");
+    try std.testing.expectEqual(@as(i64, 1), fallback.download_size);
+    try std.testing.expectEqual(@as(i64, 2), fallback.installed_size);
 }
 
 const AddonRemote = struct {
