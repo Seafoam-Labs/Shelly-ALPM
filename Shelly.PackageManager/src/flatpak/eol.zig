@@ -1,5 +1,6 @@
 const std = @import("std");
 const types = @import("types.zig");
+const operations = @import("operation_context");
 
 pub const ParsedRef = struct {
     kind: types.RefKind,
@@ -73,25 +74,6 @@ pub fn refLabel(
     return std.fmt.allocPrint(allocator, "{s} {s}", .{ id, branch });
 }
 
-pub fn rebasePrompt(
-    allocator: std.mem.Allocator,
-    old_id: []const u8,
-    old_branch: []const u8,
-    new_id: []const u8,
-    new_branch: []const u8,
-    question: []const u8,
-) ![]u8 {
-    const old_label = try refLabel(allocator, old_id, old_branch);
-    defer allocator.free(old_label);
-    const new_label = try refLabel(allocator, new_id, new_branch);
-    defer allocator.free(new_label);
-    return std.fmt.allocPrint(
-        allocator,
-        "{s} is end-of-life, replaced by {s}. {s}",
-        .{ old_label, new_label, question },
-    );
-}
-
 pub fn eolOnlyWarning(
     allocator: std.mem.Allocator,
     id: []const u8,
@@ -111,17 +93,6 @@ pub fn eolOnlyWarning(
     return std.fmt.allocPrint(allocator, "{s} is end-of-life.", .{label});
 }
 
-pub fn unchangedWarning(
-    allocator: std.mem.Allocator,
-    id: []const u8,
-) ![]u8 {
-    return std.fmt.allocPrint(
-        allocator,
-        "{s} left unchanged; it remains end-of-life.",
-        .{id},
-    );
-}
-
 pub fn rebasedMessage(
     allocator: std.mem.Allocator,
     old_id: []const u8,
@@ -132,6 +103,22 @@ pub fn rebasedMessage(
         "Rebased {s} to {s}; app data migrated.",
         .{ old_id, new_id },
     );
+}
+
+pub fn emitStatus(
+    operation_context: *operations.OperationContext,
+    kind: operations.OperationKind,
+    level: operations.StatusLevel,
+    subject: []const u8,
+    message: []const u8,
+) void {
+    var operation = operation_context.begin(.{
+        .backend = .flatpak,
+        .kind = kind,
+        .subject = subject,
+    });
+    operation.status(level, message, "flatpak.eol", null);
+    operation.finish(.success);
 }
 
 test "parseRef accepts canonical app and runtime refs" {
@@ -184,20 +171,6 @@ test "parseRebaseTarget rejects empty and malformed markers" {
 }
 
 test "message helpers render branch-aware labels" {
-    const prompt = try rebasePrompt(
-        std.testing.allocator,
-        "dev.bragefuglseth.Keypunch",
-        "stable",
-        "no.bragefuglseth.Keypunch",
-        "stable",
-        "Replace and migrate app data?",
-    );
-    defer std.testing.allocator.free(prompt);
-    try std.testing.expectEqualStrings(
-        "dev.bragefuglseth.Keypunch stable is end-of-life, replaced by no.bragefuglseth.Keypunch stable. Replace and migrate app data?",
-        prompt,
-    );
-
     const branchless = try refLabel(std.testing.allocator, "org.example.App", "");
     defer std.testing.allocator.free(branchless);
     try std.testing.expectEqualStrings("org.example.App", branchless);
@@ -210,11 +183,18 @@ test "message helpers render branch-aware labels" {
     defer std.testing.allocator.free(eol_no_reason);
     try std.testing.expectEqualStrings("org.example.Dead stable is end-of-life.", eol_no_reason);
 
-    const unchanged = try unchangedWarning(std.testing.allocator, "org.example.Dead");
-    defer std.testing.allocator.free(unchanged);
-    try std.testing.expectEqualStrings("org.example.Dead left unchanged; it remains end-of-life.", unchanged);
-
     const rebased = try rebasedMessage(std.testing.allocator, "org.example.Old", "org.example.New");
     defer std.testing.allocator.free(rebased);
     try std.testing.expectEqualStrings("Rebased org.example.Old to org.example.New; app data migrated.", rebased);
+}
+
+test "emitStatus reports flatpak end-of-life without prompting" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    var context = operations.OperationContext.init(std.testing.allocator, threaded.io());
+    defer context.deinit();
+
+    emitStatus(&context, .update, .warning, "org.example.App", "end-of-life notice");
+    emitStatus(&context, .install, .information, "org.example.App", "installing replacement");
+    emitStatus(&context, .update, .success, "org.example.App", "Rebased to org.example.New");
 }

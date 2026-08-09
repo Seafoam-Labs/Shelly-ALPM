@@ -15,7 +15,6 @@ const elevation = @import("../runtime/elevation.zig");
 const xdg = @import("../runtime/xdg.zig");
 const spec = @import("../cli/spec.zig");
 const news = @import("news.zig");
-const flatpak_eol = @import("flatpak/eol.zig");
 
 const standard_command_path = "shelly upgrade standard";
 const all_command_path = "shelly upgrade all";
@@ -681,7 +680,7 @@ fn rebaseEolFlatpaks(
                     reason,
                 );
                 defer context.allocator.free(warning);
-                flatpak_eol.emitEolStatus(operation_context, .update, .warning, status.id, warning);
+                Zigalpm.flatpak.eol.emitStatus(operation_context, .update, .warning, status.id, warning);
             }
             continue;
         };
@@ -694,7 +693,7 @@ fn rebaseEolFlatpaks(
                 status.eol,
             );
             defer context.allocator.free(warning);
-            flatpak_eol.emitEolStatus(operation_context, .update, .warning, status.id, warning);
+            Zigalpm.flatpak.eol.emitStatus(operation_context, .update, .warning, status.id, warning);
             continue;
         };
 
@@ -705,32 +704,10 @@ fn rebaseEolFlatpaks(
                 context.allocator,
                 .app,
                 target.id,
-                flatpak_eol.archFromReference(status.reference) orelse "x86_64",
+                if (Zigalpm.flatpak.eol.parseRef(status.reference)) |parsed| parsed.arch else "x86_64",
                 target.branch,
             );
         defer context.allocator.free(new_ref);
-
-        const accepted = try flatpak_eol.promptRebase(
-            context,
-            operation_context,
-            .update,
-            status.id,
-            status.id,
-            status.branch,
-            target.id,
-            target.branch,
-            "Replace and migrate app data?",
-        );
-
-        if (!accepted) {
-            const warning = try Zigalpm.flatpak.eol.unchangedWarning(
-                context.allocator,
-                status.id,
-            );
-            defer context.allocator.free(warning);
-            flatpak_eol.emitEolStatus(operation_context, .update, .warning, status.id, warning);
-            continue;
-        }
 
         const rebase_ok = manager.rebase_flatpak(
             status.reference,
@@ -747,7 +724,7 @@ fn rebaseEolFlatpaks(
                     .{status.id},
                 );
                 defer context.allocator.free(warning);
-                flatpak_eol.emitEolStatus(operation_context, .update, .warning, status.id, warning);
+                Zigalpm.flatpak.eol.emitStatus(operation_context, .update, .warning, status.id, warning);
                 continue;
             },
         };
@@ -758,7 +735,7 @@ fn rebaseEolFlatpaks(
                 .{status.id},
             );
             defer context.allocator.free(warning);
-            flatpak_eol.emitEolStatus(operation_context, .update, .warning, status.id, warning);
+            Zigalpm.flatpak.eol.emitStatus(operation_context, .update, .warning, status.id, warning);
             continue;
         }
 
@@ -768,7 +745,7 @@ fn rebaseEolFlatpaks(
             target.id,
         );
         defer context.allocator.free(message);
-        flatpak_eol.emitEolStatus(operation_context, .update, .success, status.id, message);
+        Zigalpm.flatpak.eol.emitStatus(operation_context, .update, .success, status.id, message);
     }
 }
 
@@ -1641,7 +1618,7 @@ fn makeEolStatus(
     };
 }
 
-test "Flatpak upgrade rebases all EOL refs with replacements on accept" {
+test "Flatpak upgrade rebases all EOL refs with replacements automatically" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var stdout = std.Io.Writer.Discarding.init(&.{});
@@ -1654,11 +1631,6 @@ test "Flatpak upgrade rebases all EOL refs with replacements on accept" {
     };
     var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
-    operations.setQuestionHandler(.{ .function = struct {
-        fn answer(_: ?*anyopaque, _: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
-            return .accepted;
-        }
-    }.answer });
 
     const statuses = [_]Zigalpm.flatpak.EolStatus{
         makeEolStatus("dev.bragefuglseth.Keypunch", "stable", null, "no.bragefuglseth.Keypunch"),
@@ -1684,39 +1656,6 @@ test "Flatpak upgrade rebases all EOL refs with replacements on accept" {
     try std.testing.expectEqualStrings("dev.bragefuglseth.Keypunch", manager.rebase_previous_ids.items[0]);
 }
 
-test "Flatpak upgrade skips rebases the user declines" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    var stdout = std.Io.Writer.Discarding.init(&.{});
-    var stderr = std.Io.Writer.Discarding.init(&.{});
-    var context: runtime.RuntimeContext = .{
-        .allocator = arena.allocator(),
-        .io = std.testing.io,
-        .stdout = &stdout.writer,
-        .stderr = &stderr.writer,
-    };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
-    defer operations.deinit();
-    operations.setQuestionHandler(.{ .function = struct {
-        fn answer(_: ?*anyopaque, _: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
-            return .declined;
-        }
-    }.answer });
-
-    const statuses = [_]Zigalpm.flatpak.EolStatus{
-        makeEolStatus("dev.bragefuglseth.Keypunch", "stable", null, "no.bragefuglseth.Keypunch"),
-    };
-
-    var manager: EolUpgradeTestManager = .{
-        .allocator = arena.allocator(),
-        .statuses = &statuses,
-    };
-    defer manager.deinit();
-
-    try rebaseEolFlatpaks(&context, &operations, &manager);
-    try std.testing.expectEqual(@as(usize, 0), manager.rebase_called);
-}
-
 test "Flatpak upgrade warns and continues when a rebase fails" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1730,11 +1669,6 @@ test "Flatpak upgrade warns and continues when a rebase fails" {
     };
     var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
-    operations.setQuestionHandler(.{ .function = struct {
-        fn answer(_: ?*anyopaque, _: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
-            return .accepted;
-        }
-    }.answer });
 
     const statuses = [_]Zigalpm.flatpak.EolStatus{
         makeEolStatus("dev.bragefuglseth.Keypunch", "stable", null, "no.bragefuglseth.Keypunch"),

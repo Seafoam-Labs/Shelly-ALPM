@@ -7,7 +7,6 @@ const ui_operation = @import("../output/ui_operation.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const elevation = @import("../runtime/elevation.zig");
-const flatpak_eol = @import("flatpak/eol.zig");
 
 const standard_command_path = "shelly update standard";
 const aur_command_path = "shelly update aur";
@@ -263,42 +262,20 @@ fn updateFlatpakTarget(
     defer detection.deinit(context.allocator);
 
     if (detection.rebase) |rebase| {
-        const accepted = try flatpak_eol.promptRebase(
-            context,
-            operation_context,
-            .update,
-            application.id,
-            application.id,
-            application.branch,
-            rebase.new_id,
-            rebase.new_branch,
-            "Replace and migrate app data?",
-        );
-
-        if (accepted) {
-            if (!try manager.rebase_flatpak(
-                rebase.old_ref,
-                rebase.new_ref,
-                rebase.remote,
-                rebase.scope,
-                &.{application.id},
-            )) return UpdateError.BackendFailed;
-            const message = try Zigalpm.flatpak.eol.rebasedMessage(
-                context.allocator,
-                application.id,
-                rebase.new_id,
-            );
-            defer context.allocator.free(message);
-            flatpak_eol.emitEolStatus(operation_context, .update, .success, application.id, message);
-            return;
-        }
-
-        const warning = try Zigalpm.flatpak.eol.unchangedWarning(
+        if (!try manager.rebase_flatpak(
+            rebase.old_ref,
+            rebase.new_ref,
+            rebase.remote,
+            rebase.scope,
+            &.{application.id},
+        )) return UpdateError.BackendFailed;
+        const message = try Zigalpm.flatpak.eol.rebasedMessage(
             context.allocator,
             application.id,
+            rebase.new_id,
         );
-        defer context.allocator.free(warning);
-        flatpak_eol.emitEolStatus(operation_context, .update, .warning, application.id, warning);
+        defer context.allocator.free(message);
+        Zigalpm.flatpak.eol.emitStatus(operation_context, .update, .success, application.id, message);
         return;
     }
 
@@ -310,7 +287,7 @@ fn updateFlatpakTarget(
             reason,
         );
         defer context.allocator.free(warning);
-        flatpak_eol.emitEolStatus(operation_context, .update, .warning, application.id, warning);
+        Zigalpm.flatpak.eol.emitStatus(operation_context, .update, .warning, application.id, warning);
     }
     if (!try manager.update_installed_flatpak(target, null))
         return UpdateError.BackendFailed;
@@ -734,7 +711,7 @@ fn makeEolRebaseDetection(new_id: []const u8, new_branch: []const u8) Zigalpm.fl
     };
 }
 
-test "Flatpak update EOL rebase prompts and dispatches on accept" {
+test "Flatpak update EOL rebase dispatches to the replacement" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var stdout = std.Io.Writer.Discarding.init(&.{});
@@ -747,11 +724,6 @@ test "Flatpak update EOL rebase prompts and dispatches on accept" {
     };
     var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
-    operations.setQuestionHandler(.{ .function = struct {
-        fn answer(_: ?*anyopaque, _: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
-            return .accepted;
-        }
-    }.answer });
 
     var manager: EolUpdateTestManager = .{
         .allocator = arena.allocator(),
@@ -767,36 +739,6 @@ test "Flatpak update EOL rebase prompts and dispatches on accept" {
     try std.testing.expectEqualStrings("flathub", manager.rebase_remote.?);
     try std.testing.expectEqual(@as(usize, 1), manager.rebase_previous_ids.len);
     try std.testing.expectEqualStrings("dev.bragefuglseth.Keypunch", manager.rebase_previous_ids[0]);
-}
-
-test "Flatpak update EOL rebase leaves the ref unchanged on decline" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    var stdout = std.Io.Writer.Discarding.init(&.{});
-    var stderr = std.Io.Writer.Discarding.init(&.{});
-    var context: runtime.RuntimeContext = .{
-        .allocator = arena.allocator(),
-        .io = std.testing.io,
-        .stdout = &stdout.writer,
-        .stderr = &stderr.writer,
-    };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
-    defer operations.deinit();
-    operations.setQuestionHandler(.{ .function = struct {
-        fn answer(_: ?*anyopaque, _: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
-            return .declined;
-        }
-    }.answer });
-
-    var manager: EolUpdateTestManager = .{
-        .allocator = arena.allocator(),
-        .application = makeInstalledApplication("dev.bragefuglseth.Keypunch", "stable"),
-        .detection = makeEolRebaseDetection("no.bragefuglseth.Keypunch", "stable"),
-    };
-
-    try updateFlatpakTarget(&context, &operations, &manager, "dev.bragefuglseth.Keypunch");
-    try std.testing.expect(!manager.rebase_called);
-    try std.testing.expect(!manager.update_called);
 }
 
 test "Flatpak update EOL-only warns and proceeds with the normal update" {

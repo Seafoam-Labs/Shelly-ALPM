@@ -13,7 +13,6 @@ const runtime = @import("../runtime/context.zig");
 const elevation = @import("../runtime/elevation.zig");
 const xdg = @import("../runtime/xdg.zig");
 const spec = @import("../cli/spec.zig");
-const flatpak_eol = @import("flatpak/eol.zig");
 
 const standard_command_path = "shelly install standard";
 const appimage_command_path = "shelly install appimage";
@@ -687,7 +686,7 @@ fn resolveFlatpakEolInstallTarget(
                 reason,
             );
             defer context.allocator.free(warning);
-            flatpak_eol.emitEolStatus(operation_context, .install, .warning, selected_id, warning);
+            Zigalpm.flatpak.eol.emitStatus(operation_context, .install, .warning, selected_id, warning);
         }
         return null;
     };
@@ -700,38 +699,24 @@ fn resolveFlatpakEolInstallTarget(
             remote_ref.eol,
         );
         defer context.allocator.free(warning);
-        flatpak_eol.emitEolStatus(operation_context, .install, .warning, selected_id, warning);
+        Zigalpm.flatpak.eol.emitStatus(operation_context, .install, .warning, selected_id, warning);
         return null;
     };
 
-    const accepted = try flatpak_eol.promptRebase(
-        context,
-        operation_context,
-        .install,
-        selected_id,
-        selected_id,
-        requested_branch,
-        target.id,
-        target.branch,
-        "Install the replacement instead?",
-    );
+    const owned_id = try context.allocator.dupe(u8, target.id);
+    errdefer context.allocator.free(owned_id);
+    const owned_branch = try context.allocator.dupe(u8, target.branch);
+    errdefer context.allocator.free(owned_branch);
 
-    if (accepted) {
-        const owned_id = try context.allocator.dupe(u8, target.id);
-        errdefer context.allocator.free(owned_id);
-        const owned_branch = try context.allocator.dupe(u8, target.branch);
-        errdefer context.allocator.free(owned_branch);
-        return .{ .id = owned_id, .branch = owned_branch };
-    }
-
-    const warning = try std.fmt.allocPrint(
+    const notice = try std.fmt.allocPrint(
         context.allocator,
-        "{s} is end-of-life; installing it as requested.",
-        .{selected_id},
+        "{s} is end-of-life; installing replacement {s} instead.",
+        .{ selected_id, target.id },
     );
-    defer context.allocator.free(warning);
-    flatpak_eol.emitEolStatus(operation_context, .install, .warning, selected_id, warning);
-    return null;
+    defer context.allocator.free(notice);
+    Zigalpm.flatpak.eol.emitStatus(operation_context, .install, .information, selected_id, notice);
+
+    return .{ .id = owned_id, .branch = owned_branch };
 }
 
 fn runFlatpak(
@@ -1809,7 +1794,7 @@ fn makeEolRemoteRef(eol: ?[]const u8, eol_rebase: ?[]const u8) Zigalpm.flatpak.t
     };
 }
 
-test "Flatpak install EOL detection prompts and accepts the replacement" {
+test "Flatpak install EOL detection redirects to the replacement" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var stdout = std.Io.Writer.Discarding.init(&.{});
@@ -1822,11 +1807,6 @@ test "Flatpak install EOL detection prompts and accepts the replacement" {
     };
     var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
-    operations.setQuestionHandler(.{ .function = struct {
-        fn answer(_: ?*anyopaque, _: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
-            return .accepted;
-        }
-    }.answer });
 
     var manager: EolInstallTestManager = .{
         .allocator = arena.allocator(),
@@ -1847,43 +1827,6 @@ test "Flatpak install EOL detection prompts and accepts the replacement" {
     try std.testing.expect(replacement != null);
     try std.testing.expectEqualStrings("no.bragefuglseth.Keypunch", replacement.?.id);
     try std.testing.expectEqualStrings("stable", replacement.?.branch);
-}
-
-test "Flatpak install EOL detection honors a declined prompt" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    var stdout = std.Io.Writer.Discarding.init(&.{});
-    var stderr = std.Io.Writer.Discarding.init(&.{});
-    var context: runtime.RuntimeContext = .{
-        .allocator = arena.allocator(),
-        .io = std.testing.io,
-        .stdout = &stdout.writer,
-        .stderr = &stderr.writer,
-    };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
-    defer operations.deinit();
-    operations.setQuestionHandler(.{ .function = struct {
-        fn answer(_: ?*anyopaque, _: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
-            return .declined;
-        }
-    }.answer });
-
-    var manager: EolInstallTestManager = .{
-        .allocator = arena.allocator(),
-        .remote_ref = makeEolRemoteRef(null, "no.bragefuglseth.Keypunch"),
-    };
-    _ = &manager;
-
-    const replacement = try resolveFlatpakEolInstallTarget(
-        &context,
-        &operations,
-        manager,
-        "dev.bragefuglseth.Keypunch",
-        "flathub",
-        "stable",
-        .system,
-    );
-    try std.testing.expect(replacement == null);
 }
 
 test "Flatpak install EOL detection warns and proceeds for eol-only refs" {
@@ -1963,11 +1906,6 @@ test "Flatpak install EOL detection accepts full-ref replacement markers" {
     };
     var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
-    operations.setQuestionHandler(.{ .function = struct {
-        fn answer(_: ?*anyopaque, _: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
-            return .accepted;
-        }
-    }.answer });
 
     var manager: EolInstallTestManager = .{
         .allocator = arena.allocator(),
