@@ -15,6 +15,7 @@ const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const AurPackageDetail = @import("aur_package_detail.zig").PackageDetail;
 const translations = @import("../helpers/translations.zig");
 const sorters = @import("../helpers/sorters.zig");
+const c_string = @import("../helpers/c_string.zig");
 
 pub const AurPage = extern struct {
     parent_instance: Parent,
@@ -545,6 +546,15 @@ pub const AurPage = extern struct {
 
     pub fn onUnmap(_: *Self) void {}
 
+    pub fn search_text(self: *Self) []const u8 {
+        return std.mem.span(gtk.Editable.getText(self.priv().search_entry.as(gtk.Editable)));
+    }
+
+    pub fn apply_search(self: *Self, query: []const u8) void {
+        c_string.setEditableText(self.priv().search_entry.as(gtk.Editable), query);
+        self.run_search_from_entry();
+    }
+
     fn start_load(self: *Self, mode: Mode) void {
         const p = self.priv();
         p.generation += 1;
@@ -682,16 +692,18 @@ pub const AurPage = extern struct {
         return 0;
     }
 
-    fn search_text(self: *Self) [:0]const u8 {
-        const p = self.priv();
-        return std.mem.span(gtk.Editable.getText(p.search_entry.as(gtk.Editable)));
+    fn on_search_activate(self: *Self) callconv(.c) void {
+        self.run_search_from_entry();
     }
 
-    fn on_search_activate(self: *Self) callconv(.c) void {
+    fn run_search_from_entry(self: *Self) void {
         const p = self.priv();
 
         if (p.installed_mode) {
+            p.applying_config = true;
             gtk.CheckButton.setActive(p.installed_toggle, 0);
+            p.applying_config = false;
+            p.installed_mode = false;
         }
 
         const text = self.search_text();
@@ -700,6 +712,11 @@ pub const AurPage = extern struct {
             gio.ListStore.removeAll(p.list_store);
             self.update_selection_ui();
             self.set_state(.prompt);
+            return;
+        }
+
+        const n_items = gio.ListModel.getNItems(p.list_store.as(gio.ListModel));
+        if (n_items > 0 and std.mem.eql(u8, text, p.last_query[0..p.last_query_len])) {
             return;
         }
 
@@ -712,6 +729,7 @@ pub const AurPage = extern struct {
 
     fn on_installed_toggled(self: *Self) callconv(.c) void {
         const p = self.priv();
+        if (p.applying_config) return;
         p.installed_mode = gtk.CheckButton.getActive(p.installed_toggle) != 0;
 
         if (p.installed_mode) {

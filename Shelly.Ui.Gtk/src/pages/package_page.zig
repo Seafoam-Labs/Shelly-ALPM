@@ -706,6 +706,20 @@ pub const PackagePage = extern struct {
 
     pub fn onUnmap(_: *Self) void {}
 
+    pub fn search_text(self: *Self) []const u8 {
+        const p = self.priv();
+        return std.mem.span(gtk.Editable.getText(p.search_entry.as(gtk.Editable)));
+    }
+
+    pub fn apply_search(self: *Self, query: []const u8) void {
+        const p = self.priv();
+        c_string.setEditableText(p.search_entry.as(gtk.Editable), query);
+        const len = @min(query.len, p.search_text.len);
+        @memcpy(p.search_text[0..len], query[0..len]);
+        p.search_len = len;
+        gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
+    }
+
     fn load_worker(page: *Self, generation: u64, show_hidden: bool) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
         arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);

@@ -12,6 +12,7 @@ const FlatpakRemotesView = @import("flatpak_remotes_view.zig").FlatpakRemotesVie
 const FlatpakInstallLocalView = @import("flatpak_install_local_view.zig").FlatpakInstallLocalView;
 const Category = @import("../../models/flatpak.zig").Category;
 const translations = @import("../../helpers/translations.zig");
+const c_string = @import("../../helpers/c_string.zig");
 
 pub const FlatpakPage = extern struct {
     parent_instance: Parent,
@@ -258,6 +259,18 @@ pub const FlatpakPage = extern struct {
     }
 
     pub fn onUnmap(_: *Self) void {}
+
+    pub fn search_text(self: *Self) []const u8 {
+        const p = self.priv();
+        return std.mem.span(gtk.Editable.getText(p.search_entry.as(gtk.Editable)));
+    }
+
+    pub fn apply_search(self: *Self, query: []const u8) void {
+        const p = self.priv();
+        c_string.setEditableText(p.search_entry.as(gtk.Editable), query);
+        p.install_view.apply_search(query);
+        p.remove_view.applySearch(query);
+    }
 
     const template_children = .{
         .{ "main_content_stack", @offsetOf(Private, "main_content_stack") },
