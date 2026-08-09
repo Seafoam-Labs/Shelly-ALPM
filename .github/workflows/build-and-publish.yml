@@ -60,7 +60,7 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig base-devel glibc git libarchive
+          pacman -S --needed --noconfirm zig flatpak base-devel glibc git libarchive
       - uses: actions/checkout@v6
       - name: Build and test Flatpak backend
         run: |
