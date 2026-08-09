@@ -261,20 +261,7 @@ pub const FlatpakRemoveView = extern struct {
         thread.detach();
     }
 
-    pub fn onUnmap(self: *Self) void {
-        const p = self.priv();
-        if (!p.loaded) return;
-        p.loaded = false;
-
-        gio.ListStore.removeAll(p.list_store);
-        p.generation += 1;
-
-        if (p.arena) |a| {
-            a.deinit();
-            std.heap.c_allocator.destroy(a);
-            p.arena = null;
-        }
-    }
+    pub fn onUnmap(_: *Self) void {}
 
     fn load_worker(page: *Self, generation: u64) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;

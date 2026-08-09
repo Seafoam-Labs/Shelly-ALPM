@@ -704,27 +704,7 @@ pub const PackagePage = extern struct {
         };
     }
 
-    extern fn malloc_trim(pad: usize) c_int;
-
-    //Unmap stuff we owned
-    pub fn onUnmap(self: *Self) void {
-        const p = self.priv();
-        if (!p.loaded) return;
-        p.loaded = false;
-
-        gio.ListStore.removeAll(p.list_store);
-
-        if (p.arena) |a| {
-            a.deinit();
-            std.heap.c_allocator.destroy(a);
-            p.arena = null;
-        }
-
-        p.resolver.deinit();
-        p.resolver = IconResolver.init(std.heap.c_allocator);
-
-        _ = malloc_trim(0);
-    }
+    pub fn onUnmap(_: *Self) void {}
 
     fn load_worker(page: *Self, generation: u64, show_hidden: bool) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;

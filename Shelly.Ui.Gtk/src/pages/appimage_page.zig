@@ -193,22 +193,7 @@ pub const AppImagePage = extern struct {
         thread.detach();
     }
 
-    pub fn onUnmap(self: *Self) void {
-        const p = self.priv();
-        if (!p.loaded) return;
-        p.loaded = false;
-
-        gtk.ListBox.removeAll(p.app_list);
-
-        if (p.arena) |a| {
-            a.deinit();
-            std.heap.c_allocator.destroy(a);
-            p.arena = null;
-        }
-        p.apps = &.{};
-        p.updates = &.{};
-        p.selected_index = null;
-    }
+    pub fn onUnmap(_: *Self) void {}
 
     fn reload(self: *Self) void {
         const p = self.priv();

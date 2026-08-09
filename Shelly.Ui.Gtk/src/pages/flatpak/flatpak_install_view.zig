@@ -29,7 +29,6 @@ const translations = @import("../../helpers/translations.zig");
 extern fn g_get_user_data_dir() [*:0]const u8;
 extern fn g_file_test(filename: [*:0]const u8, flags: c_uint) c_int;
 extern fn g_strndup(str: [*]const u8, len: usize) [*:0]u8;
-extern fn malloc_trim(pad: usize) c_int;
 
 pub const FlatpakInstallView = extern struct {
     parent_instance: Parent,
@@ -182,16 +181,7 @@ pub const FlatpakInstallView = extern struct {
         self.load_apps(p.load_generation);
     }
 
-    pub fn onUnmap(self: *Self) void {
-        const p = self.priv();
-        if (!p.loaded) return;
-        p.loaded = false;
-        p.load_generation +%= 1;
-        gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), 0);
-        self.show_list();
-        if (p.model) |model| gio.ListStore.removeAll(model);
-        _ = malloc_trim(0);
-    }
+    pub fn onUnmap(_: *Self) void {}
 
     fn setup_grid(self: *Self) void {
         const p = self.priv();

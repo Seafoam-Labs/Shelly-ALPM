@@ -543,24 +543,7 @@ pub const AurPage = extern struct {
         };
     }
 
-    extern fn malloc_trim(pad: usize) c_int;
-
-    pub fn onUnmap(self: *Self) void {
-        const p = self.priv();
-        if (!p.loaded) return;
-        p.loaded = false;
-
-        p.generation += 1;
-        gio.ListStore.removeAll(p.list_store);
-
-        if (p.arena) |a| {
-            a.deinit();
-            std.heap.c_allocator.destroy(a);
-            p.arena = null;
-        }
-
-        _ = malloc_trim(0);
-    }
+    pub fn onUnmap(_: *Self) void {}
 
     fn start_load(self: *Self, mode: Mode) void {
         const p = self.priv();
