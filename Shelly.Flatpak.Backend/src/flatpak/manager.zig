@@ -621,6 +621,8 @@ pub const Manager = struct {
 
         var remote_eol: ?[]const u8 = null;
         var remote_rebase: ?[]const u8 = null;
+        defer if (remote_eol) |value| self.allocator.free(value);
+        defer if (remote_rebase) |value| self.allocator.free(value);
         if (origin.len > 0) {
             const id_z = try self.allocator.dupeZ(u8, id);
             defer self.allocator.free(id_z);
@@ -640,8 +642,14 @@ pub const Manager = struct {
             );
             if (remote_ref_ptr) |ptr| {
                 defer rawflatpak.g_object_unref(ptr);
-                remote_eol = flatpak.str(rawflatpak.flatpak_remote_ref_get_eol(ptr));
-                remote_rebase = flatpak.str(rawflatpak.flatpak_remote_ref_get_eol_rebase(ptr));
+                remote_eol = if (flatpak.str(rawflatpak.flatpak_remote_ref_get_eol(ptr))) |value|
+                    try self.allocator.dupe(u8, value)
+                else
+                    null;
+                remote_rebase = if (flatpak.str(rawflatpak.flatpak_remote_ref_get_eol_rebase(ptr))) |value|
+                    try self.allocator.dupe(u8, value)
+                else
+                    null;
             } else {
                 if (g_error) |e| rawflatpak.g_error_free(e);
                 g_error = null;
@@ -663,15 +671,9 @@ pub const Manager = struct {
         errdefer self.allocator.free(branch_owned);
         const origin_owned = try self.allocator.dupeSentinel(u8, origin, 0);
         errdefer self.allocator.free(origin_owned);
-        const eol_owned = if (eol) |value|
-            try self.allocator.dupeSentinel(u8, value, 0)
-        else
-            null;
+        const eol_owned = if (eol) |value| try self.allocator.dupeSentinel(u8, value, 0) else null;
         errdefer if (eol_owned) |value| self.allocator.free(value);
-        const eol_rebase_owned = if (eol_rebase) |value|
-            try self.allocator.dupeSentinel(u8, value, 0)
-        else
-            null;
+        const eol_rebase_owned = if (eol_rebase) |value| try self.allocator.dupeSentinel(u8, value, 0) else null;
         errdefer if (eol_rebase_owned) |value| self.allocator.free(value);
 
         try statuses.append(self.allocator, .{
