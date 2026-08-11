@@ -2380,7 +2380,10 @@ fn requireReviewedFile(
         return error.UnsafePkgbuildSourcePath;
     const path = try std.fs.path.join(allocator, &.{ cache_path, file_name });
     defer allocator.free(path);
-    const status = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
+    const status = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
+        error.FileNotFound => return error.MissingPkgbuildSourceFile,
+        else => return err,
+    };
     if (status.kind != .file) return error.UnsafePkgbuildSourcePath;
     const canonical_root = try std.Io.Dir.cwd().realPathFileAlloc(io, cache_path, allocator);
     defer allocator.free(canonical_root);
@@ -2760,7 +2763,7 @@ test "review digest covers exact local source contents and missing sources fail 
 
     try temporary.dir.deleteFile(std.testing.io, "install.sh");
     try std.testing.expectError(
-        error.FileNotFound,
+        error.MissingPkgbuildSourceFile,
         requireReviewInputs(std.testing.allocator, std.testing.io, cache_path, &info),
     );
     try temporary.dir.symLink(std.testing.io, "PKGBUILD", "install.sh", .{});
