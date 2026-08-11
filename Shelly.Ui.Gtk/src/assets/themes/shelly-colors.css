@@ -1,0 +1,75 @@
+@define-color accent_bg_color    #3584e4;
+@define-color accent_fg_color    #ffffff;
+@define-color window_bg_color    #fafafb;
+@define-color window_fg_color    rgb(0 0 6 / 80%);
+@define-color view_bg_color      #ffffff;
+@define-color view_fg_color      rgb(0 0 6 / 80%);
+@define-color headerbar_bg_color #ffffff;
+@define-color headerbar_fg_color rgb(0 0 6 / 80%);
+@define-color sidebar_bg_color   #ebebed;
+@define-color sidebar_fg_color   rgb(0 0 6 / 80%);
+@define-color card_bg_color      #ffffff;
+@define-color card_fg_color      rgb(0 0 6 / 80%);
+@define-color popover_bg_color   #ffffff;
+@define-color popover_fg_color   rgb(0 0 6 / 80%);
+@define-color dialog_bg_color    #fafafb;
+@define-color dialog_fg_color    rgb(0 0 6 / 80%);
+
+:root {
+  --accent-bg-color: @accent_bg_color;
+  --accent-fg-color: @accent_fg_color;
+  --accent-color: @accent_bg_color;
+  --window-bg-color: @window_bg_color;
+  --window-fg-color: @window_fg_color;
+  --view-bg-color: @view_bg_color;
+  --view-fg-color: @view_fg_color;
+  --headerbar-bg-color: @headerbar_bg_color;
+  --headerbar-fg-color: @headerbar_fg_color;
+  --sidebar-bg-color: @sidebar_bg_color;
+  --sidebar-fg-color: @sidebar_fg_color;
+  --card-bg-color: @card_bg_color;
+  --card-fg-color: @card_fg_color;
+  --popover-bg-color: @popover_bg_color;
+  --popover-fg-color: @popover_fg_color;
+  --dialog-bg-color: @dialog_bg_color;
+  --dialog-fg-color: @dialog_fg_color;
+}
+
+@media (prefers-color-scheme: dark) {
+  @define-color accent_bg_color    #3584e4;
+  @define-color accent_fg_color    #ffffff;
+  @define-color window_bg_color    #222226;
+  @define-color window_fg_color    white;
+  @define-color view_bg_color      #1d1d20;
+  @define-color view_fg_color      white;
+  @define-color headerbar_bg_color #2e2e32;
+  @define-color headerbar_fg_color white;
+  @define-color sidebar_bg_color   #2e2e32;
+  @define-color sidebar_fg_color   white;
+  @define-color card_bg_color      rgb(255 255 255 / 8%);
+  @define-color card_fg_color      white;
+  @define-color popover_bg_color   #36363a;
+  @define-color popover_fg_color   white;
+  @define-color dialog_bg_color    #36363a;
+  @define-color dialog_fg_color    white;
+
+  :root {
+    --accent-bg-color: @accent_bg_color;
+    --accent-fg-color: @accent_fg_color;
+    --accent-color: @accent_bg_color;
+    --window-bg-color: @window_bg_color;
+    --window-fg-color: @window_fg_color;
+    --view-bg-color: @view_bg_color;
+    --view-fg-color: @view_fg_color;
+    --headerbar-bg-color: @headerbar_bg_color;
+    --headerbar-fg-color: @headerbar_fg_color;
+    --sidebar-bg-color: @sidebar_bg_color;
+    --sidebar-fg-color: @sidebar_fg_color;
+    --card-bg-color: @card_bg_color;
+    --card-fg-color: @card_fg_color;
+    --popover-bg-color: @popover_bg_color;
+    --popover-fg-color: @popover_fg_color;
+    --dialog-bg-color: @dialog_bg_color;
+    --dialog-fg-color: @dialog_fg_color;
+  }
+}
