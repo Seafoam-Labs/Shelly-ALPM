@@ -1652,15 +1652,15 @@ pub const PkgbuildParser = struct {
             if (c == '"') {
                 const start = i + 1;
                 const end = std.mem.indexOfScalarPos(u8, cleaned, start, '"') orelse cleaned.len;
-                try items.append(allocator, try allocator.dupe(u8, cleaned[start..end]));
                 i = if (end < cleaned.len) end + 1 else cleaned.len;
+                i = try append_quoted_item(allocator, &items, cleaned[start..end], cleaned, i);
                 continue;
             }
             if (c == '\'') {
                 const start = i + 1;
                 const end = std.mem.indexOfScalarPos(u8, cleaned, start, '\'') orelse cleaned.len;
-                try items.append(allocator, try allocator.dupe(u8, cleaned[start..end]));
                 i = if (end < cleaned.len) end + 1 else cleaned.len;
+                i = try append_quoted_item(allocator, &items, cleaned[start..end], cleaned, i);
                 continue;
             }
             if (std.ascii.isWhitespace(c)) {
@@ -1669,10 +1669,62 @@ pub const PkgbuildParser = struct {
             }
             const start = i;
             while (i < cleaned.len and !std.ascii.isWhitespace(cleaned[i])) : (i += 1) {}
-            try items.append(allocator, try allocator.dupe(u8, cleaned[start..i]));
+            try append_bare_item(allocator, &items, cleaned[start..i]);
         }
 
         return items.toOwnedSlice(allocator);
+    }
+
+    fn append_quoted_item(
+        allocator: std.mem.Allocator,
+        items: *std.ArrayList([]const u8),
+        base: []const u8,
+        cleaned: []const u8,
+        pos: usize,
+    ) !usize {
+        if (pos < cleaned.len and cleaned[pos] == '{') {
+            if (std.mem.indexOfScalarPos(u8, cleaned, pos + 1, '}')) |close| {
+                const inner = cleaned[pos + 1 .. close];
+                if (std.mem.indexOfScalar(u8, inner, ',') != null) {
+                    try append_brace_expansion(allocator, items, base, inner, "");
+                    return close + 1;
+                }
+                try items.append(allocator, try std.fmt.allocPrint(allocator, "{s}{{{s}}}", .{ base, inner }));
+                return close + 1;
+            }
+        }
+        try items.append(allocator, try allocator.dupe(u8, base));
+        return pos;
+    }
+
+    fn append_bare_item(
+        allocator: std.mem.Allocator,
+        items: *std.ArrayList([]const u8),
+        token: []const u8,
+    ) !void {
+        if (std.mem.indexOfScalar(u8, token, '{')) |open| {
+            if (std.mem.indexOfScalarPos(u8, token, open + 1, '}')) |close| {
+                const inner = token[open + 1 .. close];
+                if (std.mem.indexOfScalar(u8, inner, ',') != null) {
+                    try append_brace_expansion(allocator, items, token[0..open], inner, token[close + 1 ..]);
+                    return;
+                }
+            }
+        }
+        try items.append(allocator, try allocator.dupe(u8, token));
+    }
+
+    fn append_brace_expansion(
+        allocator: std.mem.Allocator,
+        items: *std.ArrayList([]const u8),
+        prefix: []const u8,
+        inner: []const u8,
+        suffix: []const u8,
+    ) !void {
+        var alternatives = std.mem.splitScalar(u8, inner, ',');
+        while (alternatives.next()) |alternative| {
+            try items.append(allocator, try std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ prefix, alternative, suffix }));
+        }
     }
 
     fn free_vars(allocator: std.mem.Allocator, vars: *std.StringHashMap([]const u8)) void {
@@ -1739,6 +1791,324 @@ pub const PkgbuildParser = struct {
         return result.toOwnedSlice(self.allocator);
     }
 };
+
+test "parse_array: brace expansion after double-quoted item" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const items = try parser.parse_array("source=(\"https://example.com/pkg.tar.gz\"{,.asc})\n", "source");
+    defer {
+        for (items) |item| std.testing.allocator.free(item);
+        std.testing.allocator.free(items);
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), items.len);
+    try std.testing.expectEqualStrings("https://example.com/pkg.tar.gz", items[0]);
+    try std.testing.expectEqualStrings("https://example.com/pkg.tar.gz.asc", items[1]);
+}
+
+test "parse_array: brace expansion after single-quoted item" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const items = try parser.parse_array("source=('https://example.com/pkg.tar.gz'{,.sig})\n", "source");
+    defer {
+        for (items) |item| std.testing.allocator.free(item);
+        std.testing.allocator.free(items);
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), items.len);
+    try std.testing.expectEqualStrings("https://example.com/pkg.tar.gz", items[0]);
+    try std.testing.expectEqualStrings("https://example.com/pkg.tar.gz.sig", items[1]);
+}
+
+test "parse_array: brace expansion inside bare item" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const items = try parser.parse_array("source=(file{,.asc} doc.{pdf,html})\n", "source");
+    defer {
+        for (items) |item| std.testing.allocator.free(item);
+        std.testing.allocator.free(items);
+    }
+
+    try std.testing.expectEqual(@as(usize, 4), items.len);
+    try std.testing.expectEqualStrings("file", items[0]);
+    try std.testing.expectEqualStrings("file.asc", items[1]);
+    try std.testing.expectEqualStrings("doc.pdf", items[2]);
+    try std.testing.expectEqualStrings("doc.html", items[3]);
+}
+
+test "parse_array: brace expansion supports more than two alternatives" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const items = try parser.parse_array("source=(\"archive\"{.tar.gz,.tar.xz,.zip})\n", "source");
+    defer {
+        for (items) |item| std.testing.allocator.free(item);
+        std.testing.allocator.free(items);
+    }
+
+    try std.testing.expectEqual(@as(usize, 3), items.len);
+    try std.testing.expectEqualStrings("archive.tar.gz", items[0]);
+    try std.testing.expectEqualStrings("archive.tar.xz", items[1]);
+    try std.testing.expectEqualStrings("archive.zip", items[2]);
+}
+
+test "parse_array: brace group without comma stays literal" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const items = try parser.parse_array("source=(\"backup\"{old} note{1})\n", "source");
+    defer {
+        for (items) |item| std.testing.allocator.free(item);
+        std.testing.allocator.free(items);
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), items.len);
+    try std.testing.expectEqualStrings("backup{old}", items[0]);
+    try std.testing.expectEqualStrings("note{1}", items[1]);
+}
+
+test "append_brace_expansion: joins prefix and suffix to each alternative in order" {
+    var items: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (items.items) |it| std.testing.allocator.free(it);
+        items.deinit(std.testing.allocator);
+    }
+
+    try PkgbuildParser.append_brace_expansion(std.testing.allocator, &items, "doc.", "pdf,html", "");
+
+    try std.testing.expectEqual(@as(usize, 2), items.items.len);
+    try std.testing.expectEqualStrings("doc.pdf", items.items[0]);
+    try std.testing.expectEqualStrings("doc.html", items.items[1]);
+}
+
+test "append_brace_expansion: applies suffix to every alternative" {
+    var items: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (items.items) |it| std.testing.allocator.free(it);
+        items.deinit(std.testing.allocator);
+    }
+
+    try PkgbuildParser.append_brace_expansion(std.testing.allocator, &items, "pkg", ".tar.gz,.tar.xz", ".sig");
+
+    try std.testing.expectEqual(@as(usize, 2), items.items.len);
+    try std.testing.expectEqualStrings("pkg.tar.gz.sig", items.items[0]);
+    try std.testing.expectEqualStrings("pkg.tar.xz.sig", items.items[1]);
+}
+
+test "append_brace_expansion: empty alternative yields prefix/suffix only" {
+    var items: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (items.items) |it| std.testing.allocator.free(it);
+        items.deinit(std.testing.allocator);
+    }
+
+    try PkgbuildParser.append_brace_expansion(std.testing.allocator, &items, "pkg.tar.gz", ",.asc", "");
+
+    try std.testing.expectEqual(@as(usize, 2), items.items.len);
+    try std.testing.expectEqualStrings("pkg.tar.gz", items.items[0]);
+    try std.testing.expectEqualStrings("pkg.tar.gz.asc", items.items[1]);
+}
+
+test "append_bare_item: inline brace group with comma expands with prefix and suffix" {
+    var items: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (items.items) |it| std.testing.allocator.free(it);
+        items.deinit(std.testing.allocator);
+    }
+
+    try PkgbuildParser.append_bare_item(std.testing.allocator, &items, "file{,.asc}");
+
+    try std.testing.expectEqual(@as(usize, 2), items.items.len);
+    try std.testing.expectEqualStrings("file", items.items[0]);
+    try std.testing.expectEqualStrings("file.asc", items.items[1]);
+}
+
+test "append_bare_item: suffix after closing brace is appended to each expansion" {
+    var items: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (items.items) |it| std.testing.allocator.free(it);
+        items.deinit(std.testing.allocator);
+    }
+
+    try PkgbuildParser.append_bare_item(std.testing.allocator, &items, "doc.{pdf,html}.in");
+
+    try std.testing.expectEqual(@as(usize, 2), items.items.len);
+    try std.testing.expectEqualStrings("doc.pdf.in", items.items[0]);
+    try std.testing.expectEqualStrings("doc.html.in", items.items[1]);
+}
+
+test "append_bare_item: token without brace group is appended verbatim" {
+    var items: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (items.items) |it| std.testing.allocator.free(it);
+        items.deinit(std.testing.allocator);
+    }
+
+    try PkgbuildParser.append_bare_item(std.testing.allocator, &items, "plain.txt");
+
+    try std.testing.expectEqual(@as(usize, 1), items.items.len);
+    try std.testing.expectEqualStrings("plain.txt", items.items[0]);
+}
+
+test "append_bare_item: brace group without comma stays literal" {
+    var items: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (items.items) |it| std.testing.allocator.free(it);
+        items.deinit(std.testing.allocator);
+    }
+
+    try PkgbuildParser.append_bare_item(std.testing.allocator, &items, "note{1}");
+
+    try std.testing.expectEqual(@as(usize, 1), items.items.len);
+    try std.testing.expectEqualStrings("note{1}", items.items[0]);
+}
+
+test "append_brace_expansion: nested brace group is not recursively expanded" {
+    var items: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (items.items) |it| std.testing.allocator.free(it);
+        items.deinit(std.testing.allocator);
+    }
+
+    // The inner `{c}` is treated as literal text; only the top-level comma splits.
+    try PkgbuildParser.append_brace_expansion(std.testing.allocator, &items, "x", "a,b{c}", "");
+
+    try std.testing.expectEqual(@as(usize, 2), items.items.len);
+    try std.testing.expectEqualStrings("xa", items.items[0]);
+    try std.testing.expectEqualStrings("xb{c}", items.items[1]);
+}
+
+test "append_quoted_item: brace group with comma after quoted item expands" {
+    var items: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (items.items) |it| std.testing.allocator.free(it);
+        items.deinit(std.testing.allocator);
+    }
+
+    const cleaned = "\"pkg.tar.gz\"{,.asc}";
+    // `pos` points just past the closing quote, at the opening brace.
+    const pos = cleaned.len - "{,.asc}".len;
+    const new_pos = try PkgbuildParser.append_quoted_item(
+        std.testing.allocator,
+        &items,
+        "pkg.tar.gz",
+        cleaned,
+        pos,
+    );
+
+    try std.testing.expectEqual(@as(usize, 2), items.items.len);
+    try std.testing.expectEqualStrings("pkg.tar.gz", items.items[0]);
+    try std.testing.expectEqualStrings("pkg.tar.gz.asc", items.items[1]);
+    // New position is just past the closing brace.
+    try std.testing.expectEqual(cleaned.len, new_pos);
+}
+
+test "append_quoted_item: brace group without comma is joined literally" {
+    var items: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (items.items) |it| std.testing.allocator.free(it);
+        items.deinit(std.testing.allocator);
+    }
+
+    const cleaned = "\"backup\"{old}";
+    const pos = cleaned.len - "{old}".len;
+    const new_pos = try PkgbuildParser.append_quoted_item(
+        std.testing.allocator,
+        &items,
+        "backup",
+        cleaned,
+        pos,
+    );
+
+    try std.testing.expectEqual(@as(usize, 1), items.items.len);
+    try std.testing.expectEqualStrings("backup{old}", items.items[0]);
+    try std.testing.expectEqual(cleaned.len, new_pos);
+}
+
+test "append_quoted_item: no brace group appends base and returns original position" {
+    var items: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (items.items) |it| std.testing.allocator.free(it);
+        items.deinit(std.testing.allocator);
+    }
+
+    const cleaned = "\"plain\" tail";
+    const pos: usize = "\"plain\"".len;
+    const new_pos = try PkgbuildParser.append_quoted_item(
+        std.testing.allocator,
+        &items,
+        "plain",
+        cleaned,
+        pos,
+    );
+
+    try std.testing.expectEqual(@as(usize, 1), items.items.len);
+    try std.testing.expectEqualStrings("plain", items.items[0]);
+    // Position is returned unchanged so the caller continues scanning the tail.
+    try std.testing.expectEqual(pos, new_pos);
+}
+
+test "parser_content: dropbox PKGBUILD expands trailing {,.asc} signature source" {
+    // Regression test for https://aur.archlinux.org/packages/dropbox: the
+    // final source entry is a quoted URL followed by `{,.asc}`. The literal
+    // `{,.asc}` fragment used to be parsed as its own local source file and
+    // fail review with FileNotFound.
+    const dropbox_pkgbuild =
+        \\pkgname=dropbox
+        \\pkgver=264.4.3421
+        \\pkgrel=1
+        \\pkgdesc="A free service that lets you bring your photos, docs, and videos anywhere and share them easily."
+        \\arch=("x86_64")
+        \\url="https://www.dropbox.com"
+        \\license=(custom:Dropbox)
+        \\depends=("libsm" "libxslt")
+        \\makedepends=("gendesk")
+        \\options=('!strip')
+        \\
+        \\source=("DropboxGlyph_Blue.svg"
+        \\        "terms.txt"
+        \\        "dropbox.service"
+        \\        "dropbox@.service"
+        \\        "https://edge.dropboxstatic.com/dbx-releng/client/dropbox-lnx.x86_64-$pkgver.tar.gz"{,.asc})
+        \\
+        \\sha256sums=('9ba76205ec5838db85d822f23cfd7e2112fd2757e8031d8374709f102143c548'
+        \\            '1610ff57e8b20ee7a37682c3cc505da4ddc9cec2bd7234c90c0f2073657521d2'
+        \\            '6c67a9c8c95c08fafafd2f1d828074b13e3347b05d2e4f4bf4e62746115d7477'
+        \\            '98581e65a91ae1f19ed42edcdaaa52e102298b5da0d71b50089393d364474d3d'
+        \\            '4aa06821de43b5e1cf4f27f83cb5f0bca82d01107c758091d7895f0d723f5411'
+        \\            'SKIP')
+        \\
+    ;
+
+    var parser: PkgbuildParser = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+    };
+    var info = try parser.parser_content(dropbox_pkgbuild, null);
+    defer info.deinit(std.testing.allocator);
+
+    const source = info.source.?;
+    try std.testing.expectEqual(@as(usize, 6), source.len);
+    try std.testing.expectEqualStrings("DropboxGlyph_Blue.svg", source[0]);
+    try std.testing.expectEqualStrings("terms.txt", source[1]);
+    try std.testing.expectEqualStrings("dropbox.service", source[2]);
+    try std.testing.expectEqualStrings("dropbox@.service", source[3]);
+    try std.testing.expectEqualStrings(
+        "https://edge.dropboxstatic.com/dbx-releng/client/dropbox-lnx.x86_64-264.4.3421.tar.gz",
+        source[4],
+    );
+    try std.testing.expectEqualStrings(
+        "https://edge.dropboxstatic.com/dbx-releng/client/dropbox-lnx.x86_64-264.4.3421.tar.gz.asc",
+        source[5],
+    );
+    for (source) |entry| {
+        try std.testing.expect(std.mem.indexOfScalar(u8, entry, '{') == null);
+    }
+
+    const local_files = info.local_source_files.?;
+    try std.testing.expectEqual(@as(usize, 4), local_files.len);
+    try std.testing.expectEqualStrings("DropboxGlyph_Blue.svg", local_files[0]);
+    try std.testing.expectEqualStrings("terms.txt", local_files[1]);
+    try std.testing.expectEqualStrings("dropbox.service", local_files[2]);
+    try std.testing.expectEqualStrings("dropbox@.service", local_files[3]);
+
+    const sums = info.sha_256_sums.?;
+    try std.testing.expectEqual(@as(usize, 6), sums.len);
+    try std.testing.expectEqualStrings("SKIP", sums[5]);
+}
 
 test "parse_variable: bare token stops at whitespace" {
     const content = "pkgver=1.2.3 extra stuff\n";
