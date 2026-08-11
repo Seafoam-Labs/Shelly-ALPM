@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-05 12:25+0300\n"
+"POT-Creation-Date: 2026-08-10 23:33+0300\n"
 "PO-Revision-Date: 2026-06-23 19:13+0200\n"
 "Last-Translator: csnyder@seafoamlabs.org\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
@@ -56,8 +56,8 @@ msgid ""
 "\n"
 "Install and enable it, then retry.\n"
 "\n"
-"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
-"Polkit</a>"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
+"labs.org/shelly-alpm/docs/polkit</a>"
 msgstr ""
 
 msgid "Review PKGBUILD"
@@ -369,7 +369,7 @@ msgstr ""
 msgid "Show Dependency Only"
 msgstr ""
 
-msgid "Show dependency packages on;y"
+msgid "Show dependency packages only"
 msgstr ""
 
 msgid "Recommended Packages"
@@ -1330,6 +1330,21 @@ msgid "Reinstalling"
 msgstr ""
 
 msgid "Removing"
+msgstr ""
+
+msgid "Checking keyring"
+msgstr ""
+
+msgid "Checking integrity"
+msgstr ""
+
+msgid "Loading packages"
+msgstr ""
+
+msgid "Checking conflicts"
+msgstr ""
+
+msgid "Checking disk space"
 msgstr ""
 
 msgid "Working"

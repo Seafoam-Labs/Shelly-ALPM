@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-05 12:25+0300\n"
+"POT-Creation-Date: 2026-08-10 23:33+0300\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -61,8 +61,8 @@ msgid ""
 "\n"
 "Install and enable it, then retry.\n"
 "\n"
-"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
-"Polkit</a>"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
+"labs.org/shelly-alpm/docs/polkit</a>"
 msgstr ""
 
 msgid "Review PKGBUILD"
@@ -377,7 +377,7 @@ msgstr "Erakutsi esplizituki instalatutako paketeak bakarrik"
 msgid "Show Dependency Only"
 msgstr "Erakutsi menpekotasunak soilik"
 
-msgid "Show dependency packages on;y"
+msgid "Show dependency packages only"
 msgstr "Erakutsi menpekotasun-paketeak soilik"
 
 msgid "Recommended Packages"
@@ -1359,6 +1359,21 @@ msgstr "Berriro instalatzen"
 
 msgid "Removing"
 msgstr "Kentzen"
+
+msgid "Checking keyring"
+msgstr ""
+
+msgid "Checking integrity"
+msgstr ""
+
+msgid "Loading packages"
+msgstr ""
+
+msgid "Checking conflicts"
+msgstr ""
+
+msgid "Checking disk space"
+msgstr ""
 
 msgid "Working"
 msgstr "Lanean"

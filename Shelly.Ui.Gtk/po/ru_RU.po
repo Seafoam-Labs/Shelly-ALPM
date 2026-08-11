@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-05 12:25+0300\n"
+"POT-Creation-Date: 2026-08-10 23:33+0300\n"
 "PO-Revision-Date: 2026-06-30 10:06+0400\n"
 "Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\\nLanguage-Team: "
 "Russian (Russia) <anton@azdanov.dev>\n"
@@ -61,8 +61,8 @@ msgid ""
 "\n"
 "Install and enable it, then retry.\n"
 "\n"
-"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
-"Polkit</a>"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
+"labs.org/shelly-alpm/docs/polkit</a>"
 msgstr ""
 
 msgid "Review PKGBUILD"
@@ -375,7 +375,7 @@ msgstr "Показывать только явно установленные п
 msgid "Show Dependency Only"
 msgstr "Только зависимости"
 
-msgid "Show dependency packages on;y"
+msgid "Show dependency packages only"
 msgstr "Показывать только пакеты зависимостей"
 
 msgid "Recommended Packages"
@@ -1350,6 +1350,21 @@ msgstr "Переустановка"
 
 msgid "Removing"
 msgstr "Удаление"
+
+msgid "Checking keyring"
+msgstr ""
+
+msgid "Checking integrity"
+msgstr ""
+
+msgid "Loading packages"
+msgstr ""
+
+msgid "Checking conflicts"
+msgstr ""
+
+msgid "Checking disk space"
+msgstr ""
 
 msgid "Working"
 msgstr "Выполнение"
