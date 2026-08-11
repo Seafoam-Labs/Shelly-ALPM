@@ -1,3 +1,5 @@
+const theme = @import("../helpers/theme.zig").Theme;
+
 pub const ViewType = enum(u8) {
     grid = 0,
     list = 1,
@@ -26,6 +28,13 @@ pub const DayOfWeek = enum(u8) {
     thursday = 4,
     friday = 5,
     saturday = 6,
+};
+
+pub const ColorMode = enum(u8) {
+    none = 0,
+    default = 1,
+    ocean = 2,
+    sunset = 3,
 };
 
 pub const ShellyConfig = struct {
@@ -76,6 +85,8 @@ pub const ShellyConfig = struct {
 
     AurUpdateRunChecks: bool = false,
     AurUpdateShowHidden: bool = false,
+
+    Theme: ColorMode = .none,
 
     // Tray
     TrayEnabled: bool = false,

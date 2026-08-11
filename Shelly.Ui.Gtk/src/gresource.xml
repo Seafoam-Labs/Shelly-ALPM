@@ -39,5 +39,9 @@
     <file>ui/update_page.ui</file>
     <file>ui/recommend_page.ui</file>
     <file>style.css</file>
+    <file>assets/themes/shelly-base.css</file>
+    <file>assets/themes/shelly-colors.css</file>
+    <file>assets/themes/shelly-ocean.css</file>
+    <file>assets/themes/shelly-sunset.css</file>
   </gresource>
 </gresources>

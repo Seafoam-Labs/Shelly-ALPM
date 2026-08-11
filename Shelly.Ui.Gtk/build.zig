@@ -68,6 +68,10 @@ pub fn build(b: *std.Build) void {
     gresource.addFileArg(b.path("src/gresource.xml"));
 
     gresource.addFileInput(b.path("src/style.css"));
+    gresource.addFileInput(b.path("src/assets/themes/shelly-ocean.css"));
+    gresource.addFileInput(b.path("src/assets/themes/shelly-sunset.css"));
+    gresource.addFileInput(b.path("src/assets/themes/shelly-base.css"));
+    gresource.addFileInput(b.path("src/assets/themes/shelly-colors.css"));
     gresource.addFileInput(b.path("src/assets/icons/flatpak-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/arch-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/update-symbolic.svg"));
