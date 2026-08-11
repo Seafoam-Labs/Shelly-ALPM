@@ -603,8 +603,11 @@ pub const PkgbuildParser = struct {
                 continue;
             }
             cursor += 1;
-            var offset: i32 = undefined;
-            var matched_offset = false;
+            // Bash permits the offset to be omitted when a length is present:
+            // `${parameter::length}` is equivalent to
+            // `${parameter:0:length}`.
+            var offset: i32 = 0;
+            var matched_offset = cursor < input.len and input[cursor] == ':';
             {
                 const ws_end = scan_whitespace(input, cursor);
                 const digit_end = scan_digits(input, ws_end);
@@ -1310,12 +1313,36 @@ pub const PkgbuildParser = struct {
     }
 
     fn split_source_entry(entry: []const u8) split_entry {
-        const idx = std.ascii.indexOfIgnoreCase(entry, "::");
+        const idx = find_source_rename_delimiter(entry);
         if (idx) |i| {
             return split_entry{ .file_name = entry[0..i], .location = entry[i + 2 ..] };
         } else {
             return split_entry{ .file_name = "", .location = entry };
         }
+    }
+
+    fn find_source_rename_delimiter(entry: []const u8) ?usize {
+        var parameter_depth: usize = 0;
+        var pos: usize = 0;
+        while (pos + 1 < entry.len) {
+            if (entry[pos] == '\\') {
+                pos += @min(@as(usize, 2), entry.len - pos);
+                continue;
+            }
+            if (entry[pos] == '$' and entry[pos + 1] == '{') {
+                parameter_depth += 1;
+                pos += 2;
+                continue;
+            }
+            if (parameter_depth > 0) {
+                if (entry[pos] == '}') parameter_depth -= 1;
+                pos += 1;
+                continue;
+            }
+            if (entry[pos] == ':' and entry[pos + 1] == ':') return pos;
+            pos += 1;
+        }
+        return null;
     }
 
     fn parse_kvp(line: []const u8) ?kvp {
@@ -1373,6 +1400,8 @@ pub const PkgbuildParser = struct {
             try vars.put(key_owned, value_owned);
         }
 
+        try self.inject_array_pkgname(content, &vars);
+
         var pass: usize = 0;
         while (pass < 10) : (pass += 1) {
             var changed = false;
@@ -1401,6 +1430,34 @@ pub const PkgbuildParser = struct {
         }
 
         return vars;
+    }
+
+    fn inject_array_pkgname(
+        self: PkgbuildParser,
+        content: []const u8,
+        vars: *std.StringHashMap([]const u8),
+    ) !void {
+        if (vars.contains("pkgname")) return;
+
+        const names = try self.parse_array(content, "pkgname");
+        defer {
+            for (names) |name| self.allocator.free(name);
+            self.allocator.free(names);
+        }
+        if (names.len == 0) return;
+
+        const value: []const u8 = if (self.selected_package_name) |package_name|
+            for (names) |name| {
+                if (std.mem.eql(u8, name, package_name)) break package_name;
+            } else return
+        else
+            names[0];
+
+        const owned_key = try self.allocator.dupe(u8, "pkgname");
+        errdefer self.allocator.free(owned_key);
+        const owned_value = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(owned_value);
+        try vars.put(owned_key, owned_value);
     }
 
     fn is_word(c: u8) bool {
@@ -1609,6 +1666,130 @@ pub const PkgbuildParser = struct {
         return .{ .body = try sb.toOwnedSlice(allocator), .end = i };
     }
 
+    const ArrayWordQuote = enum {
+        none,
+        single,
+        double,
+    };
+
+    const BraceGroup = struct {
+        open: usize,
+        close: usize,
+    };
+
+    const max_brace_expansions = 256;
+    const max_brace_expansion_depth = 32;
+
+    fn find_expandable_brace_group(word: []const u8, expandable: []const bool) ?BraceGroup {
+        std.debug.assert(word.len == expandable.len);
+
+        var parameter_brace_depth: usize = 0;
+        var open: usize = 0;
+        while (open < word.len) : (open += 1) {
+            if (parameter_brace_depth == 0 and
+                open + 1 < word.len and
+                word[open] == '$' and
+                word[open + 1] == '{' and
+                expandable[open] and
+                expandable[open + 1])
+            {
+                parameter_brace_depth = 1;
+                open += 1;
+                continue;
+            }
+            if (parameter_brace_depth > 0) {
+                if (expandable[open]) switch (word[open]) {
+                    '{' => parameter_brace_depth += 1,
+                    '}' => parameter_brace_depth -= 1,
+                    else => {},
+                };
+                continue;
+            }
+            if (word[open] != '{' or !expandable[open]) continue;
+
+            var depth: usize = 1;
+            var has_alternative = false;
+            var cursor = open + 1;
+            while (cursor < word.len) : (cursor += 1) {
+                if (!expandable[cursor]) continue;
+                switch (word[cursor]) {
+                    '{' => depth += 1,
+                    '}' => {
+                        depth -= 1;
+                        if (depth == 0) {
+                            if (has_alternative) return .{ .open = open, .close = cursor };
+                            break;
+                        }
+                    },
+                    ',' => if (depth == 1) {
+                        has_alternative = true;
+                    },
+                    else => {},
+                }
+            }
+        }
+        return null;
+    }
+
+    fn append_expanded_array_word(
+        allocator: std.mem.Allocator,
+        items: *std.ArrayList([]const u8),
+        word: []const u8,
+        expandable: []const bool,
+        depth: usize,
+        expansion_count: *usize,
+    ) !void {
+        if (depth > max_brace_expansion_depth) return error.BraceExpansionTooDeep;
+        const group = find_expandable_brace_group(word, expandable) orelse {
+            if (expansion_count.* >= max_brace_expansions) return error.TooManyBraceExpansions;
+            const owned = try allocator.dupe(u8, word);
+            errdefer allocator.free(owned);
+            try items.append(allocator, owned);
+            expansion_count.* += 1;
+            return;
+        };
+
+        var alternative_start = group.open + 1;
+        var nested_depth: usize = 0;
+        var cursor = alternative_start;
+        while (cursor <= group.close) : (cursor += 1) {
+            var is_separator = cursor == group.close;
+            if (!is_separator and expandable[cursor]) {
+                switch (word[cursor]) {
+                    '{' => nested_depth += 1,
+                    '}' => if (nested_depth > 0) {
+                        nested_depth -= 1;
+                    },
+                    ',' => is_separator = nested_depth == 0,
+                    else => {},
+                }
+            }
+            if (!is_separator) continue;
+
+            var candidate: std.ArrayList(u8) = .empty;
+            defer candidate.deinit(allocator);
+            var candidate_expandable: std.ArrayList(bool) = .empty;
+            defer candidate_expandable.deinit(allocator);
+
+            try candidate.appendSlice(allocator, word[0..group.open]);
+            try candidate_expandable.appendSlice(allocator, expandable[0..group.open]);
+            try candidate.appendSlice(allocator, word[alternative_start..cursor]);
+            try candidate_expandable.appendSlice(allocator, expandable[alternative_start..cursor]);
+            try candidate.appendSlice(allocator, word[group.close + 1 ..]);
+            try candidate_expandable.appendSlice(allocator, expandable[group.close + 1 ..]);
+
+            try append_expanded_array_word(
+                allocator,
+                items,
+                candidate.items,
+                candidate_expandable.items,
+                depth + 1,
+                expansion_count,
+            );
+            alternative_start = cursor + 1;
+        }
+    }
+
     fn scan_array_items(allocator: std.mem.Allocator, cleaned: []const u8) ![][]const u8 {
         var items: std.ArrayList([]const u8) = .empty;
         errdefer {
@@ -1618,28 +1799,74 @@ pub const PkgbuildParser = struct {
 
         var i: usize = 0;
         while (i < cleaned.len) {
-            const c = cleaned[i];
-            if (c == '"') {
-                const start = i + 1;
-                const end = std.mem.indexOfScalarPos(u8, cleaned, start, '"') orelse cleaned.len;
-                try items.append(allocator, try allocator.dupe(u8, cleaned[start..end]));
-                i = if (end < cleaned.len) end + 1 else cleaned.len;
-                continue;
-            }
-            if (c == '\'') {
-                const start = i + 1;
-                const end = std.mem.indexOfScalarPos(u8, cleaned, start, '\'') orelse cleaned.len;
-                try items.append(allocator, try allocator.dupe(u8, cleaned[start..end]));
-                i = if (end < cleaned.len) end + 1 else cleaned.len;
-                continue;
-            }
-            if (std.ascii.isWhitespace(c)) {
+            while (i < cleaned.len and std.ascii.isWhitespace(cleaned[i])) : (i += 1) {}
+            if (i >= cleaned.len) break;
+
+            var word: std.ArrayList(u8) = .empty;
+            defer word.deinit(allocator);
+            var expandable: std.ArrayList(bool) = .empty;
+            defer expandable.deinit(allocator);
+            var quote: ArrayWordQuote = .none;
+            var word_started = false;
+
+            while (i < cleaned.len) {
+                const c = cleaned[i];
+                if (quote == .none and std.ascii.isWhitespace(c)) break;
+
+                if (c == '\'' and quote != .double) {
+                    word_started = true;
+                    quote = if (quote == .single) .none else .single;
+                    i += 1;
+                    continue;
+                }
+                if (c == '"' and quote != .single) {
+                    word_started = true;
+                    quote = if (quote == .double) .none else .double;
+                    i += 1;
+                    continue;
+                }
+                if (c == '\\' and quote != .single) {
+                    word_started = true;
+                    if (i + 1 >= cleaned.len) {
+                        try word.append(allocator, c);
+                        try expandable.append(allocator, false);
+                        i += 1;
+                        continue;
+                    }
+                    const escaped = cleaned[i + 1];
+                    if (escaped == '\n') {
+                        i += 2;
+                        continue;
+                    }
+                    if (quote == .double and escaped != '$' and escaped != '`' and escaped != '"' and escaped != '\\') {
+                        try word.append(allocator, c);
+                        try expandable.append(allocator, false);
+                        i += 1;
+                        continue;
+                    }
+                    try word.append(allocator, escaped);
+                    try expandable.append(allocator, false);
+                    i += 2;
+                    continue;
+                }
+
+                word_started = true;
+                try word.append(allocator, c);
+                try expandable.append(allocator, quote == .none);
                 i += 1;
-                continue;
             }
-            const start = i;
-            while (i < cleaned.len and !std.ascii.isWhitespace(cleaned[i])) : (i += 1) {}
-            try items.append(allocator, try allocator.dupe(u8, cleaned[start..i]));
+
+            if (word_started) {
+                var expansion_count: usize = 0;
+                try append_expanded_array_word(
+                    allocator,
+                    &items,
+                    word.items,
+                    expandable.items,
+                    0,
+                    &expansion_count,
+                );
+            }
         }
 
         return items.toOwnedSlice(allocator);
@@ -2691,6 +2918,27 @@ test "split_source_entry: multiple separators" {
     try std.testing.expectEqualStrings("key::value", result.location);
 }
 
+test "split_source_entry: ignores separator inside parameter expansion" {
+    const source = "https://files.pythonhosted.org/packages/source/${_name::1}/${_name}/archive.tar.gz";
+    const result = PkgbuildParser.split_source_entry(source);
+    try std.testing.expectEqualStrings("", result.file_name);
+    try std.testing.expectEqualStrings(source, result.location);
+}
+
+test "split_source_entry: finds outer separator before parameter expansion" {
+    const location = "https://example.com/${name::1}/archive.tar.gz";
+    const result = PkgbuildParser.split_source_entry("renamed.tar.gz::" ++ location);
+    try std.testing.expectEqualStrings("renamed.tar.gz", result.file_name);
+    try std.testing.expectEqualStrings(location, result.location);
+}
+
+test "split_source_entry: ignores separator inside nested parameter expansions" {
+    const source = "https://example.com/${outer:-${inner::1}}/archive.tar.gz";
+    const result = PkgbuildParser.split_source_entry(source);
+    try std.testing.expectEqualStrings("", result.file_name);
+    try std.testing.expectEqualStrings(source, result.location);
+}
+
 test "split_source_entry: case insensitive separator" {
     // :: has no alphabetic characters, so case doesn't matter,
     // but this confirms the function handles the input as-is
@@ -3492,6 +3740,39 @@ test "replace_substring_expansion: offset and length" {
     try std.testing.expectEqualStrings("hello", result);
 }
 
+test "replace_substring_expansion: omitted offset starts at zero" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars: std.StringHashMap([]const u8) = .init(std.testing.allocator);
+    defer vars.deinit();
+    try vars.put("word", "hello world");
+
+    const first = try parser.replace_substring_expansion("${word::1}", &vars);
+    defer parser.allocator.free(first);
+    try std.testing.expectEqualStrings("h", first);
+
+    const prefix = try parser.replace_substring_expansion("${word::5}", &vars);
+    defer parser.allocator.free(prefix);
+    try std.testing.expectEqualStrings("hello", prefix);
+
+    const empty = try parser.replace_substring_expansion("${word::0}", &vars);
+    defer parser.allocator.free(empty);
+    try std.testing.expectEqualStrings("", empty);
+
+    const clamped = try parser.replace_substring_expansion("${word::100}", &vars);
+    defer parser.allocator.free(clamped);
+    try std.testing.expectEqualStrings("hello world", clamped);
+}
+
+test "replace_substring_expansion: omitted offset supports negative length" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars: std.StringHashMap([]const u8) = .init(std.testing.allocator);
+    defer vars.deinit();
+    try vars.put("word", "hello world");
+    const result = try parser.replace_substring_expansion("${word::-1}", &vars);
+    defer parser.allocator.free(result);
+    try std.testing.expectEqualStrings("hello worl", result);
+}
+
 test "replace_substring_expansion: negative offset counts from the end" {
     const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
     var vars: std.StringHashMap([]const u8) = .init(std.testing.allocator);
@@ -3531,6 +3812,15 @@ test "replace_substring_expansion: variable not found keeps original text" {
     try std.testing.expectEqualStrings("${missing:0:3}", result);
 }
 
+test "replace_substring_expansion: unknown variable with omitted offset is preserved" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars: std.StringHashMap([]const u8) = .init(std.testing.allocator);
+    defer vars.deinit();
+    const result = try parser.replace_substring_expansion("${missing::1}", &vars);
+    defer parser.allocator.free(result);
+    try std.testing.expectEqualStrings("${missing::1}", result);
+}
+
 test "replace_substring_expansion: no colon after var name is not a match" {
     const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
     var vars: std.StringHashMap([]const u8) = .init(std.testing.allocator);
@@ -3560,6 +3850,59 @@ test "replace_substring_expansion: multiple expansions in one string" {
     const result = try parser.replace_substring_expansion("${a:0:3} and ${b:3}", &vars);
     defer parser.allocator.free(result);
     try std.testing.expectEqualStrings("abc and 456", result);
+}
+
+test "parser_content resolves python-sabctools source as remote" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var info = try parser.parser_content(
+        \\pkgname=python-sabctools
+        \\_name=sabctools
+        \\pkgver=9.6.3
+        \\pkgrel=1
+        \\source=("https://files.pythonhosted.org/packages/source/${_name::1}/${_name}/${_name}-${pkgver}.tar.gz")
+    , null);
+    defer info.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), info.source.?.len);
+    try std.testing.expectEqualStrings(
+        "https://files.pythonhosted.org/packages/source/s/sabctools/sabctools-9.6.3.tar.gz",
+        info.source.?[0],
+    );
+    try std.testing.expectEqual(@as(usize, 0), info.local_source_files.?.len);
+    try std.testing.expectEqual(@as(usize, 0), info.local_source_contents.count());
+}
+
+test "parser_content expands Dropbox archive and signature sources" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var info = try parser.parser_content(
+        \\pkgname=dropbox
+        \\pkgver=258.4.3749
+        \\pkgrel=1
+        \\source=("DropboxGlyph_Blue.svg"
+        \\        "terms.txt"
+        \\        "dropbox.service"
+        \\        "dropbox@.service"
+        \\        "https://edge.dropboxstatic.com/dbx-releng/client/dropbox-lnx.x86_64-$pkgver.tar.gz"{,.asc})
+    , null);
+    defer info.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 6), info.source.?.len);
+    try std.testing.expectEqualStrings(
+        "https://edge.dropboxstatic.com/dbx-releng/client/dropbox-lnx.x86_64-258.4.3749.tar.gz",
+        info.source.?[4],
+    );
+    try std.testing.expectEqualStrings(
+        "https://edge.dropboxstatic.com/dbx-releng/client/dropbox-lnx.x86_64-258.4.3749.tar.gz.asc",
+        info.source.?[5],
+    );
+    try std.testing.expectEqual(@as(usize, 4), info.local_source_files.?.len);
+    try std.testing.expectEqualStrings("DropboxGlyph_Blue.svg", info.local_source_files.?[0]);
+    try std.testing.expectEqualStrings("terms.txt", info.local_source_files.?[1]);
+    try std.testing.expectEqualStrings("dropbox.service", info.local_source_files.?[2]);
+    try std.testing.expectEqualStrings("dropbox@.service", info.local_source_files.?[3]);
+    for (info.local_source_files.?) |file_name| {
+        try std.testing.expect(!std.mem.eql(u8, file_name, "{,.asc}"));
+    }
 }
 
 test "resolve_string: plain braced variable" {
@@ -3762,6 +4105,150 @@ test "build_var_hashmap: lines that do not match key=value are ignored" {
 
     try std.testing.expectEqual(@as(usize, 1), vars.count());
     try std.testing.expectEqualStrings("app", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: no-op when vars already contains pkgname" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    const existing_key = try std.testing.allocator.dupe(u8, "pkgname");
+    const existing_value = try std.testing.allocator.dupe(u8, "already-set");
+    try vars.put(existing_key, existing_value);
+
+    try parser.inject_array_pkgname("pkgname=(foo bar)\n", &vars);
+
+    try std.testing.expectEqual(@as(usize, 1), vars.count());
+    try std.testing.expectEqualStrings("already-set", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: missing pkgname array leaves vars untouched" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgver=1.0\narch=(x86_64)\n", &vars);
+
+    try std.testing.expect(!vars.contains("pkgname"));
+}
+
+test "inject_array_pkgname: empty pkgname array leaves vars untouched" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=()\n", &vars);
+
+    try std.testing.expect(!vars.contains("pkgname"));
+}
+
+test "inject_array_pkgname: null selected_package_name uses names[0]" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expectEqualStrings("alpha", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: null selected_package_name with single-element array" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(solo)\n", &vars);
+
+    try std.testing.expectEqualStrings("solo", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: selected_package_name matching names[0] uses that name" {
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "alpha",
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expectEqualStrings("alpha", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: selected_package_name matching a non-first name uses that name" {
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "beta",
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expectEqualStrings("beta", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: selected_package_name matching the last name uses that name" {
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "gamma",
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expectEqualStrings("gamma", vars.get("pkgname").?);
+}
+
+test "inject_array_pkgname: selected_package_name with no match returns without inserting" {
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "delta",
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expect(!vars.contains("pkgname"));
+}
+
+test "inject_array_pkgname: selected_package_name match is case-sensitive" {
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "Beta",
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    try std.testing.expect(!vars.contains("pkgname"));
+}
+
+test "inject_array_pkgname: stored value is independent of the selected_package_name buffer" {
+    var name_buffer: [4]u8 = undefined;
+    @memcpy(name_buffer[0..], "beta");
+
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = name_buffer[0..],
+    };
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer PkgbuildParser.free_vars(std.testing.allocator, &vars);
+
+    try parser.inject_array_pkgname("pkgname=(alpha beta gamma)\n", &vars);
+
+    name_buffer[0] = 'x';
+
+    try std.testing.expectEqualStrings("beta", vars.get("pkgname").?);
 }
 
 test "match_operator_len: greater-than returns length 1" {
@@ -4142,7 +4629,7 @@ test "parse_array: closing paren inside quotes is not treated as array end" {
     try std.testing.expectEqualStrings("bar", items[1]);
 }
 
-test "parse_array: escaped characters are preserved literally" {
+test "parse_array: escaped whitespace remains in the same word" {
     const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
     const items = try parser.parse_array("depends=(foo\\ bar baz)\n", "depends");
     defer {
@@ -4150,10 +4637,112 @@ test "parse_array: escaped characters are preserved literally" {
         std.testing.allocator.free(items);
     }
 
+    try std.testing.expectEqual(@as(usize, 2), items.len);
+    try std.testing.expectEqualStrings("foo bar", items[0]);
+    try std.testing.expectEqualStrings("baz", items[1]);
+}
+
+test "parse_array: adjacent quoted and unquoted segments form one word" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const items = try parser.parse_array(
+        "source=(\"archive-\"$pkgver'.tar.gz' plain\"-suffix\")\n",
+        "source",
+    );
+    defer {
+        for (items) |item| std.testing.allocator.free(item);
+        std.testing.allocator.free(items);
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), items.len);
+    try std.testing.expectEqualStrings("archive-$pkgver.tar.gz", items[0]);
+    try std.testing.expectEqualStrings("plain-suffix", items[1]);
+}
+
+test "parse_array: unquoted brace alternatives expand with empty alternatives" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const items = try parser.parse_array(
+        "source=(\"https://example.invalid/archive-$pkgver.tar.gz\"{,.asc})\n",
+        "source",
+    );
+    defer {
+        for (items) |item| std.testing.allocator.free(item);
+        std.testing.allocator.free(items);
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), items.len);
+    try std.testing.expectEqualStrings("https://example.invalid/archive-$pkgver.tar.gz", items[0]);
+    try std.testing.expectEqualStrings("https://example.invalid/archive-$pkgver.tar.gz.asc", items[1]);
+}
+
+test "parse_array: quoted and escaped braces remain literal" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const items = try parser.parse_array(
+        "source=(\"quoted{a,b}\" 'single{c,d}' escaped\\{e,f\\})\n",
+        "source",
+    );
+    defer {
+        for (items) |item| std.testing.allocator.free(item);
+        std.testing.allocator.free(items);
+    }
+
     try std.testing.expectEqual(@as(usize, 3), items.len);
-    try std.testing.expectEqualStrings("foo\\", items[0]);
-    try std.testing.expectEqualStrings("bar", items[1]);
-    try std.testing.expectEqualStrings("baz", items[2]);
+    try std.testing.expectEqualStrings("quoted{a,b}", items[0]);
+    try std.testing.expectEqualStrings("single{c,d}", items[1]);
+    try std.testing.expectEqualStrings("escaped{e,f}", items[2]);
+}
+
+test "parse_array: parameter braces are not alternatives but an escaped dollar permits them" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const items = try parser.parse_array(
+        "source=(${value:-a,b} ${value:-{a,b}} \\${a,b})\n",
+        "source",
+    );
+    defer {
+        for (items) |item| std.testing.allocator.free(item);
+        std.testing.allocator.free(items);
+    }
+
+    try std.testing.expectEqual(@as(usize, 4), items.len);
+    try std.testing.expectEqualStrings("${value:-a,b}", items[0]);
+    try std.testing.expectEqualStrings("${value:-{a,b}}", items[1]);
+    try std.testing.expectEqualStrings("$a", items[2]);
+    try std.testing.expectEqualStrings("$b", items[3]);
+}
+
+test "parse_array: malformed brace groups remain literal" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const items = try parser.parse_array("source=(missing{ab}comma unclosed{a,b)\n", "source");
+    defer {
+        for (items) |item| std.testing.allocator.free(item);
+        std.testing.allocator.free(items);
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), items.len);
+    try std.testing.expectEqualStrings("missing{ab}comma", items[0]);
+    try std.testing.expectEqualStrings("unclosed{a,b", items[1]);
+}
+
+test "parse_array: multiple brace groups expand as a cartesian product" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const items = try parser.parse_array("source=(pkg-{one,two}.{sig,txt})\n", "source");
+    defer {
+        for (items) |item| std.testing.allocator.free(item);
+        std.testing.allocator.free(items);
+    }
+
+    try std.testing.expectEqual(@as(usize, 4), items.len);
+    try std.testing.expectEqualStrings("pkg-one.sig", items[0]);
+    try std.testing.expectEqualStrings("pkg-one.txt", items[1]);
+    try std.testing.expectEqualStrings("pkg-two.sig", items[2]);
+    try std.testing.expectEqualStrings("pkg-two.txt", items[3]);
+}
+
+test "parse_array: brace expansion count is bounded" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    try std.testing.expectError(
+        error.TooManyBraceExpansions,
+        parser.parse_array("source=({a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b})\n", "source"),
+    );
 }
 
 test "parse_array: += appends to an existing declaration across matches" {
@@ -4479,6 +5068,178 @@ test "parser_content: selected split package resolves package-scoped install fil
 
     try std.testing.expectEqualStrings("dms-shell-git.install", info.install_file.?);
     try std.testing.expectEqualStrings("echo \"installed\"", info.post_install.?);
+}
+
+test "parser_content: pkgname resolves when pkgbase is also present" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "rustdesk-bin.install",
+        .data = "post_install() {\n  echo \"installed\"\n}",
+    });
+    const base_dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(base_dir);
+
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "rustdesk-bin",
+    };
+    const content =
+        \\pkgbase=rustdesk-bin
+        \\pkgname=(rustdesk-bin)
+        \\pkgver=1.4.9
+        \\pkgrel=1
+        \\pkgdesc="Yet another remote desktop software, written in Rust."
+        \\url="https://github.com/rustdesk/rustdesk"
+        \\license=('AGPL-3.0-only')
+        \\arch=('x86_64' 'aarch64')
+        \\provides=("${pkgname%-bin}")
+        \\conflicts=("${pkgname%-bin}")
+        \\depends=(
+        \\    'gtk3'
+        \\    'xdotool'
+        \\    'libxcb'
+        \\)
+        \\options=('!strip' '!lto' '!debug')
+        \\install=$pkgname.install
+        \\
+        \\package() {
+        \\    install -d "${pkgdir}/usr/share/" "${pkgdir}/usr/bin/"
+        \\    cp -r "${srcdir}/usr/share/rustdesk/" "${pkgdir}/usr/share/"
+        \\
+        \\    ln -s "/usr/share/rustdesk/rustdesk" "${pkgdir}/usr/bin/rustdesk"
+        \\
+        \\    install -Dm 644 "${srcdir}/usr/share/rustdesk/files/rustdesk.desktop" "${pkgdir}/usr/share/applications/rustdesk.desktop"
+        \\
+        \\    # Remove useless files
+        \\    rm -r "${pkgdir}/usr/share/rustdesk/files/"
+        \\}
+    ;
+    var info = try parser.parser_content(content, base_dir);
+    defer info.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("rustdesk-bin", info.pkg_name.?);
+    try std.testing.expectEqualStrings("1.4.9", info.pkg_version.?);
+    try std.testing.expectEqualStrings("1", info.pkg_rel.?);
+    try std.testing.expectEqualStrings("rustdesk-bin.install", info.install_file.?);
+    try std.testing.expectEqualStrings("echo \"installed\"", info.post_install.?);
+
+    try std.testing.expectEqual(@as(usize, 1), info.provides.?.len);
+    try std.testing.expectEqualStrings("rustdesk", info.provides.?[0]);
+
+    try std.testing.expectEqual(@as(usize, 3), info.depends.?.len);
+    try std.testing.expectEqualStrings("gtk3", info.depends.?[0]);
+    try std.testing.expectEqualStrings("xdotool", info.depends.?[1]);
+    try std.testing.expectEqualStrings("libxcb", info.depends.?[2]);
+}
+
+test "parser_content: pkgbase with split pkgname array resolves per selected package" {
+    const content =
+        \\pkgbase=adwaita-qt
+        \\pkgname=(adwaita-qt5 adwaita-qt6)
+        \\pkgver=1.4.2
+        \\pkgrel=1
+        \\pkgdesc='A style to bend Qt applications to look like they belong into GNOME Shell'
+        \\arch=(x86_64)
+        \\url='https://github.com/FedoraQt/adwaita-qt'
+        \\license=(GPL)
+        \\makedepends=(cmake qt5-x11extras qt6-base)
+        \\source=(https://github.com/FedoraQt/adwaita-qt/archive/$pkgver/$pkgname-$pkgver.tar.gz)
+        \\sha256sums=('cd5fd71c46271d70c08ad44562e57c34e787d6a8650071db115910999a335ba8')
+        \\
+        \\build() {
+        \\  cmake -B build-qt5 -S $pkgbase-$pkgver \
+        \\    -DCMAKE_INSTALL_PREFIX=/usr \
+        \\    -DUSE_QT6=OFF
+        \\  cmake --build build-qt5
+        \\
+        \\  cmake -B build-qt6 -S $pkgbase-$pkgver \
+        \\    -DCMAKE_INSTALL_PREFIX=/usr \
+        \\    -DUSE_QT6=ON
+        \\  cmake --build build-qt6
+        \\}
+        \\
+        \\package_adwaita-qt5() {
+        \\  pkgdesc='A style to bend Qt5 applications to look like they belong into GNOME Shell'
+        \\  depends=(qt5-x11extras)
+        \\  replaces=(adwaita-qt)
+        \\
+        \\  DESTDIR="$pkgdir" cmake --install build-qt5
+        \\}
+        \\
+        \\package_adwaita-qt6() {
+        \\  pkgdesc='A style to bend Qt6 applications to look like they belong into GNOME Shell'
+        \\  depends=(qt6-base)
+        \\
+        \\  DESTDIR="$pkgdir" cmake --install build-qt6
+        \\}
+    ;
+
+    var info_qt5 = try (PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "adwaita-qt5",
+    }).parser_content(content, null);
+    defer info_qt5.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("adwaita-qt5", info_qt5.pkg_name.?);
+    try std.testing.expectEqualStrings("adwaita-qt", info_qt5.variables.get("pkgbase").?);
+    try std.testing.expectEqualStrings("1.4.2", info_qt5.pkg_version.?);
+    try std.testing.expectEqualStrings("1", info_qt5.pkg_rel.?);
+    try std.testing.expectEqualStrings(
+        "A style to bend Qt applications to look like they belong into GNOME Shell",
+        info_qt5.pkg_desc.?,
+    );
+    try std.testing.expectEqualStrings("https://github.com/FedoraQt/adwaita-qt", info_qt5.url.?);
+
+    try std.testing.expectEqual(@as(usize, 1), info_qt5.source.?.len);
+    try std.testing.expectEqualStrings(
+        "https://github.com/FedoraQt/adwaita-qt/archive/1.4.2/adwaita-qt5-1.4.2.tar.gz",
+        info_qt5.source.?[0],
+    );
+
+    try std.testing.expectEqual(@as(usize, 1), info_qt5.arch.?.len);
+    try std.testing.expectEqualStrings("x86_64", info_qt5.arch.?[0]);
+    try std.testing.expectEqual(@as(usize, 1), info_qt5.license.?.len);
+    try std.testing.expectEqualStrings("GPL", info_qt5.license.?[0]);
+
+    try std.testing.expectEqual(@as(usize, 3), info_qt5.make_depends.?.len);
+    try std.testing.expectEqualStrings("cmake", info_qt5.make_depends.?[0]);
+    try std.testing.expectEqualStrings("qt5-x11extras", info_qt5.make_depends.?[1]);
+    try std.testing.expectEqualStrings("qt6-base", info_qt5.make_depends.?[2]);
+    try std.testing.expectEqual(@as(usize, 3), info_qt5.parsed_make_depends.?.len);
+    try std.testing.expectEqualStrings("qt5-x11extras", info_qt5.parsed_make_depends.?[1].name);
+
+    try std.testing.expectEqual(@as(usize, 1), info_qt5.sha_256_sums.?.len);
+    try std.testing.expectEqualStrings(
+        "cd5fd71c46271d70c08ad44562e57c34e787d6a8650071db115910999a335ba8",
+        info_qt5.sha_256_sums.?[0],
+    );
+
+    try std.testing.expectEqual(@as(usize, 0), info_qt5.depends.?.len);
+
+    try std.testing.expect(info_qt5.install_file == null);
+    try std.testing.expect(info_qt5.post_install == null);
+
+    var info_qt6 = try (PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "adwaita-qt6",
+    }).parser_content(content, null);
+    defer info_qt6.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("adwaita-qt6", info_qt6.pkg_name.?);
+    try std.testing.expectEqualStrings("adwaita-qt", info_qt6.variables.get("pkgbase").?);
+    try std.testing.expectEqualStrings(
+        "A style to bend Qt applications to look like they belong into GNOME Shell",
+        info_qt6.pkg_desc.?,
+    );
+    try std.testing.expectEqual(@as(usize, 1), info_qt6.source.?.len);
+    try std.testing.expectEqualStrings(
+        "https://github.com/FedoraQt/adwaita-qt/archive/1.4.2/adwaita-qt6-1.4.2.tar.gz",
+        info_qt6.source.?[0],
+    );
 }
 
 test "parser_content: selected split package install overrides global and sibling values" {

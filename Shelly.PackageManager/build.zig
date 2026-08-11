@@ -570,6 +570,13 @@ pub fn build(b: *std.Build) void {
             "installAppImage creates a missing directory beneath a symlinked parent",
             "installAppImage reads desktop metadata and icons through standard AppImage symlinks",
             "installAppImage restores the previous binary when database commit fails",
+            "update: automated update refreshes desktop name and exec path",
+            "update: preserves GitHub provider configuration",
+            "update: preserves stable desktop filename when display name changes",
+            "update: preserves Exec= field codes",
+            "update: failed database commit rolls back binary and desktop",
+            "update: no embedded desktop file uses fallback entry",
+            "update: sync and automated update produce equivalent metadata",
         },
     });
     const run_appimage_tests = b.addRunArtifact(appimage_tests);

@@ -179,7 +179,11 @@ pub const RecommendPage = extern struct {
         arena: *std.heap.ArenaAllocator,
         generation: u64,
     ) void {
-        const result = std.heap.c_allocator.create(LoadResult) catch return;
+        const result = std.heap.c_allocator.create(LoadResult) catch {
+            arena.deinit();
+            std.heap.c_allocator.destroy(arena);
+            return;
+        };
         result.* = .{
             .page = page,
             .categories = categories,

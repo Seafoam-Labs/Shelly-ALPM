@@ -278,7 +278,7 @@ pub const FlatpakRemoveView = extern struct {
 
     fn load_worker(page: *Self, generation: u64) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
-        arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
 
         const alloc = arena_ptr.allocator();
 
@@ -295,7 +295,11 @@ pub const FlatpakRemoveView = extern struct {
     }
 
     fn post_result(page: *Self, packages: []Flatpak, arena: *std.heap.ArenaAllocator, generation: u64) void {
-        const result = std.heap.c_allocator.create(LoadResult) catch return;
+        const result = std.heap.c_allocator.create(LoadResult) catch {
+            arena.deinit();
+            std.heap.c_allocator.destroy(arena);
+            return;
+        };
         result.* = .{
             .page = page,
             .packages = packages,

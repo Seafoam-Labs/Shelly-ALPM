@@ -1,13 +1,19 @@
 const std = @import("std");
-const zz = @import("zigzag");
+const vaxis = @import("vaxis");
+const vxfw = vaxis.vxfw;
 const Shelly_Tui = @import("Shelly_Tui");
 const Model = Shelly_Tui.model.Model;
 
-const Io = std.Io;
-
 pub fn main(init: std.process.Init) !void {
-    var program = zz.Program(Model).init(init.gpa, init.io, init.environ_map);
-    defer program.deinit();
+    // ShellyCli reads io and the environment map from the runtime globals.
+    Shelly_Tui.runtime.setup(init);
 
-    try program.run();
+    const model = try Model.init(init.gpa);
+    defer model.deinit();
+
+    var buffer: [1024]u8 = undefined;
+    var app: vxfw.App = try .init(init.io, init.gpa, init.environ_map, &buffer);
+    defer app.deinit();
+
+    try app.run(model.widget(), .{});
 }

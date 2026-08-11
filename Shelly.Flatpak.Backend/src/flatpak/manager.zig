@@ -20,6 +20,8 @@ pub const InstalledApplication = struct {
     kind: i32,
     installed_size: u64,
     scope: flatpak.Scope,
+    eol: ?[:0]u8 = null,
+    eol_rebase: ?[:0]u8 = null,
 
     pub fn deinit(self: *InstalledApplication, allocator: std.mem.Allocator) void {
         allocator.free(self.id);
@@ -30,6 +32,8 @@ pub const InstalledApplication = struct {
         allocator.free(self.version);
         allocator.free(self.latest_commit);
         allocator.free(self.origin);
+        if (self.eol) |value| allocator.free(value);
+        if (self.eol_rebase) |value| allocator.free(value);
         self.* = undefined;
     }
 
@@ -75,6 +79,31 @@ pub const UnusedDependency = struct {
     pub fn deinitSlice(allocator: std.mem.Allocator, dependencies: []UnusedDependency) void {
         for (dependencies) |*dependency| dependency.deinit(allocator);
         allocator.free(dependencies);
+    }
+};
+
+pub const EolStatus = struct {
+    reference: [:0]u8,
+    id: [:0]u8,
+    branch: [:0]u8,
+    origin: [:0]u8,
+    scope: flatpak.Scope,
+    eol: ?[:0]u8 = null,
+    eol_rebase: ?[:0]u8 = null,
+
+    pub fn deinit(self: *EolStatus, allocator: std.mem.Allocator) void {
+        allocator.free(self.reference);
+        allocator.free(self.id);
+        allocator.free(self.branch);
+        allocator.free(self.origin);
+        if (self.eol) |value| allocator.free(value);
+        if (self.eol_rebase) |value| allocator.free(value);
+        self.* = undefined;
+    }
+
+    pub fn deinitSlice(allocator: std.mem.Allocator, statuses: []EolStatus) void {
+        for (statuses) |*status| status.deinit(allocator);
+        allocator.free(statuses);
     }
 };
 
@@ -141,17 +170,6 @@ pub const Manager = struct {
         }
         defer rawflatpak.g_object_unref(installation);
 
-        const arch = std.mem.span(rawflatpak.flatpak_get_default_arch());
-        const ref_str = try std.fmt.allocPrint(
-            self.allocator,
-            "{s}/{s}/{s}/{s}",
-            .{ if (runtime) "runtime" else "app", flatpak_id, arch, branch },
-        );
-        defer self.allocator.free(ref_str);
-
-        const ref_string = try self.allocator.dupeSentinel(u8, ref_str, 0);
-        defer self.allocator.free(ref_string);
-
         const trans_ptr = rawflatpak.flatpak_transaction_new_for_installation(installation, cancellable, &g_error);
         if (trans_ptr == null or g_error != null) {
             self.emitGError(g_error, "Failed to create the Flatpak transaction");
@@ -163,6 +181,27 @@ pub const Manager = struct {
             self.emitGError(g_error, "Failed to update the Flatpak remote");
             return error.RemoteUpdateFailed;
         }
+
+        const resolved_branch: [:0]u8 = blk: {
+            if (branch.len > 0) break :blk try self.allocator.dupeZ(u8, branch);
+            const kind: c_int = if (runtime) rawflatpak.FLATPAK_REF_KIND_RUNTIME else rawflatpak.FLATPAK_REF_KIND_APP;
+            break :blk (try self.resolve_remote_branch(installation, remote_name, flatpak_id, kind, cancellable)) orelse {
+                self.emitGError(g_error, "Failed to resolve the Flatpak branch from the remote");
+                return error.AddInstallFailed;
+            };
+        };
+        defer self.allocator.free(resolved_branch);
+
+        const arch = std.mem.span(rawflatpak.flatpak_get_default_arch());
+        const ref_str = try std.fmt.allocPrint(
+            self.allocator,
+            "{s}/{s}/{s}/{s}",
+            .{ if (runtime) "runtime" else "app", flatpak_id, arch, resolved_branch },
+        );
+        defer self.allocator.free(ref_str);
+
+        const ref_string = try self.allocator.dupeSentinel(u8, ref_str, 0);
+        defer self.allocator.free(ref_string);
 
         if (rawflatpak.flatpak_transaction_add_install(trans_ptr, remote_name, ref_string, null, &g_error) == 0) {
             self.emitGError(g_error, "Failed to add the Flatpak installation operation");
@@ -442,6 +481,212 @@ pub const Manager = struct {
         return self.finishTransaction(result, g_error, "Flatpak update completed");
     }
 
+    pub fn rebase_flatpak(
+        self: Manager,
+        old_ref: [:0]const u8,
+        new_ref: [:0]const u8,
+        remote_name: [:0]const u8,
+        scope: flatpak.Scope,
+        previous_ids: []const [:0]const u8,
+    ) !bool {
+        if (previous_ids.len == 0) {
+            self.emitStatus(.err, "Cannot rebase without at least one previous application ID");
+            return error.InvalidRef;
+        }
+
+        var operation_scope = OperationScope.init(self, .update, old_ref);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
+        const cancellable: *rawflatpak.GCancellable = rawflatpak.g_cancellable_new();
+        var g_error: ?*rawflatpak.GError = null;
+        defer rawflatpak.g_object_unref(cancellable);
+        defer if (g_error) |e| rawflatpak.g_error_free(e);
+        var cancellation_bridge = try CancellationBridge.init(self, cancellable);
+        defer cancellation_bridge.deinit();
+
+        const installation = if (scope == flatpak.Scope.SYSTEM)
+            rawflatpak.flatpak_installation_new_system(cancellable, &g_error)
+        else
+            rawflatpak.flatpak_installation_new_user(cancellable, &g_error);
+        if (installation == null or g_error != null) {
+            self.emitGError(g_error, "Failed to open the Flatpak installation");
+            return error.InstallationCreateFailed;
+        }
+        defer rawflatpak.g_object_unref(installation);
+
+        const trans_ptr = rawflatpak.flatpak_transaction_new_for_installation(installation, cancellable, &g_error);
+        if (trans_ptr == null or g_error != null) {
+            self.emitGError(g_error, "Failed to create the Flatpak transaction");
+            return error.TransactionCreateFailed;
+        }
+        defer rawflatpak.g_object_unref(trans_ptr);
+
+        const previous_ids_c = try self.allocator.allocSentinel([*c]const u8, previous_ids.len, null);
+        defer self.allocator.free(previous_ids_c);
+        for (previous_ids, previous_ids_c) |id, *out| out.* = id.ptr;
+
+        if (rawflatpak.flatpak_transaction_add_rebase_and_uninstall(
+            trans_ptr,
+            remote_name,
+            new_ref,
+            old_ref,
+            null,
+            previous_ids_c.ptr,
+            &g_error,
+        ) == 0) {
+            self.emitGError(g_error, "Failed to add the Flatpak rebase operation");
+            return error.AddRebaseFailed;
+        }
+
+        var callback_context = self.transactionCallbackContext(cancellable);
+        connectTransactionCallbacks(trans_ptr, &callback_context);
+
+        const result = rawflatpak.flatpak_transaction_run(trans_ptr, cancellable, &g_error);
+        return self.finishTransaction(
+            result,
+            g_error,
+            "Flatpak rebase completed; app data migrated to the new ID",
+        );
+    }
+
+    pub fn list_eol_flatpak(self: Manager) ![]EolStatus {
+        var operation_scope = OperationScope.init(self, .search, null);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
+
+        var statuses: std.ArrayList(EolStatus) = .empty;
+        errdefer EolStatus.deinitSlice(self.allocator, statuses.items);
+
+        try self.appendEolStatuses(&statuses, .SYSTEM);
+        try self.appendEolStatuses(&statuses, .USER);
+        return statuses.toOwnedSlice(self.allocator);
+    }
+
+    fn appendEolStatuses(
+        self: Manager,
+        statuses: *std.ArrayList(EolStatus),
+        scope: flatpak.Scope,
+    ) !void {
+        const cancellable: *rawflatpak.GCancellable = rawflatpak.g_cancellable_new();
+        var g_error: ?*rawflatpak.GError = null;
+        defer rawflatpak.g_object_unref(cancellable);
+        defer if (g_error) |e| rawflatpak.g_error_free(e);
+
+        const installation = if (scope == flatpak.Scope.SYSTEM)
+            rawflatpak.flatpak_installation_new_system(cancellable, &g_error)
+        else
+            rawflatpak.flatpak_installation_new_user(cancellable, &g_error);
+        if (installation == null or g_error != null) {
+            return;
+        }
+        defer rawflatpak.g_object_unref(installation);
+
+        const installed_refs_ptr = rawflatpak.flatpak_installation_list_installed_refs(installation, cancellable, &g_error);
+        if (installed_refs_ptr == null or g_error != null) return;
+        defer rawflatpak.g_ptr_array_unref(installed_refs_ptr);
+
+        var j: usize = 0;
+        while (j < installed_refs_ptr.*.len) : (j += 1) {
+            const raw: *rawflatpak.FlatpakRef = @ptrCast(@alignCast(installed_refs_ptr.*.pdata[j]));
+            try self.appendEolStatusForRef(statuses, installation, raw, scope);
+        }
+    }
+
+    fn appendEolStatusForRef(
+        self: Manager,
+        statuses: *std.ArrayList(EolStatus),
+        installation: [*c]rawflatpak.FlatpakInstallation,
+        ref: *rawflatpak.FlatpakRef,
+        scope: flatpak.Scope,
+    ) !void {
+        const installed: *rawflatpak.FlatpakInstalledRef = @ptrCast(ref);
+        const cancellable: *rawflatpak.GCancellable = rawflatpak.g_cancellable_new();
+        var g_error: ?*rawflatpak.GError = null;
+        defer rawflatpak.g_object_unref(cancellable);
+        defer if (g_error) |e| rawflatpak.g_error_free(e);
+
+        const id = spanOrEmpty(rawflatpak.flatpak_ref_get_name(ref));
+        const branch = spanOrEmpty(rawflatpak.flatpak_ref_get_branch(ref));
+        const origin = spanOrEmpty(rawflatpak.flatpak_installed_ref_get_origin(installed));
+
+        const ref_arch_ptr = rawflatpak.flatpak_ref_get_arch(ref);
+        const arch: [:0]const u8 = if (ref_arch_ptr != null)
+            std.mem.span(ref_arch_ptr)
+        else
+            std.mem.span(rawflatpak.flatpak_get_default_arch());
+
+        var remote_eol: ?[]const u8 = null;
+        var remote_rebase: ?[]const u8 = null;
+        defer if (remote_eol) |value| self.allocator.free(value);
+        defer if (remote_rebase) |value| self.allocator.free(value);
+        if (origin.len > 0) {
+            const id_z = try self.allocator.dupeZ(u8, id);
+            defer self.allocator.free(id_z);
+            const branch_z = try self.allocator.dupeZ(u8, branch);
+            defer self.allocator.free(branch_z);
+            const origin_z = try self.allocator.dupeZ(u8, origin);
+            defer self.allocator.free(origin_z);
+            const remote_ref_ptr = rawflatpak.flatpak_installation_fetch_remote_ref_sync(
+                installation,
+                origin_z.ptr,
+                0,
+                id_z.ptr,
+                arch,
+                branch_z.ptr,
+                cancellable,
+                &g_error,
+            );
+            if (remote_ref_ptr) |ptr| {
+                defer rawflatpak.g_object_unref(ptr);
+                remote_eol = if (flatpak.str(rawflatpak.flatpak_remote_ref_get_eol(ptr))) |value|
+                    try self.allocator.dupe(u8, value)
+                else
+                    null;
+                remote_rebase = if (flatpak.str(rawflatpak.flatpak_remote_ref_get_eol_rebase(ptr))) |value|
+                    try self.allocator.dupe(u8, value)
+                else
+                    null;
+            } else {
+                if (g_error) |e| rawflatpak.g_error_free(e);
+                g_error = null;
+            }
+        }
+
+        const installed_eol = flatpak.str(rawflatpak.flatpak_installed_ref_get_eol(installed));
+        const installed_rebase = flatpak.str(rawflatpak.flatpak_installed_ref_get_eol_rebase(installed));
+
+        const eol = remote_eol orelse installed_eol;
+        const eol_rebase = remote_rebase orelse installed_rebase;
+        if (eol == null and eol_rebase == null) return;
+
+        const reference = try flatpak.refToString(self.allocator, ref);
+        errdefer self.allocator.free(reference);
+        const id_owned = try self.allocator.dupeSentinel(u8, id, 0);
+        errdefer self.allocator.free(id_owned);
+        const branch_owned = try self.allocator.dupeSentinel(u8, branch, 0);
+        errdefer self.allocator.free(branch_owned);
+        const origin_owned = try self.allocator.dupeSentinel(u8, origin, 0);
+        errdefer self.allocator.free(origin_owned);
+        const eol_owned = if (eol) |value| try self.allocator.dupeSentinel(u8, value, 0) else null;
+        errdefer if (eol_owned) |value| self.allocator.free(value);
+        const eol_rebase_owned = if (eol_rebase) |value| try self.allocator.dupeSentinel(u8, value, 0) else null;
+        errdefer if (eol_rebase_owned) |value| self.allocator.free(value);
+
+        try statuses.append(self.allocator, .{
+            .reference = reference,
+            .id = id_owned,
+            .branch = branch_owned,
+            .origin = origin_owned,
+            .scope = scope,
+            .eol = eol_owned,
+            .eol_rebase = eol_rebase_owned,
+        });
+    }
+
     pub fn launch_flatpak(self: Manager, flatpak_id: [:0]const u8) !bool {
         var operation_scope = OperationScope.init(self, .launch, flatpak_id);
         operation_scope.attach();
@@ -684,7 +929,22 @@ pub const Manager = struct {
         }
         defer rawflatpak.g_object_unref(installation);
 
-        const remote_ref_ptr = rawflatpak.flatpak_installation_fetch_remote_ref_sync(installation, cStr(remote_name), 0, cStr(flatpak_name), rawflatpak.flatpak_get_default_arch(), cStr(branch), cancellable, &g_error);
+        const resolved_branch: [:0]u8 = blk: {
+            if (branch.len > 0) break :blk try self.allocator.dupeZ(u8, branch);
+            break :blk (try self.resolve_remote_branch(
+                installation,
+                remote_name,
+                flatpak_name,
+                rawflatpak.FLATPAK_REF_KIND_APP,
+                cancellable,
+            )) orelse {
+                self.emitGError(g_error, "Failed to resolve the Flatpak branch from the remote");
+                return error.FetchRemoteRefFailed;
+            };
+        };
+        defer self.allocator.free(resolved_branch);
+
+        const remote_ref_ptr = rawflatpak.flatpak_installation_fetch_remote_ref_sync(installation, cStr(remote_name), 0, cStr(flatpak_name), rawflatpak.flatpak_get_default_arch(), resolved_branch.ptr, cancellable, &g_error);
         if (remote_ref_ptr == null) {
             self.emitGError(g_error, "Failed to fetch the Flatpak remote reference");
             return error.FetchRemoteRefFailed;
@@ -984,6 +1244,63 @@ pub const Manager = struct {
         return permissions.toOwnedSlice(self.allocator);
     }
 
+    fn resolve_remote_branch(
+        self: Manager,
+        installation: [*c]rawflatpak.FlatpakInstallation,
+        remote_name: [:0]const u8,
+        flatpak_name: [:0]const u8,
+        kind: c_int,
+        cancellable: *rawflatpak.GCancellable,
+    ) !?[:0]u8 {
+        var g_error: ?*rawflatpak.GError = null;
+        defer if (g_error) |e| rawflatpak.g_error_free(e);
+
+        var preferred: ?[:0]u8 = null;
+        defer if (preferred) |value| self.allocator.free(value);
+        const remote_ptr = rawflatpak.flatpak_installation_get_remote_by_name(installation, remote_name, cancellable, &g_error);
+        if (remote_ptr != null) {
+            defer rawflatpak.g_object_unref(remote_ptr);
+            const default_branch_ptr = rawflatpak.flatpak_remote_get_default_branch(remote_ptr);
+            if (default_branch_ptr != null) {
+                const default_branch = std.mem.span(default_branch_ptr);
+                if (default_branch.len > 0) {
+                    preferred = try self.allocator.dupeZ(u8, default_branch);
+                }
+            }
+        }
+        if (g_error) |e| {
+            rawflatpak.g_error_free(e);
+            g_error = null;
+        }
+
+        const refs_ptr = rawflatpak.flatpak_installation_list_remote_refs_sync_full(installation, remote_name, rawflatpak.FLATPAK_QUERY_FLAGS_NONE, cancellable, &g_error);
+        if (refs_ptr == null) return null;
+        defer rawflatpak.g_ptr_array_unref(refs_ptr);
+
+        var first_match: ?[:0]const u8 = null;
+        var stable_match: ?[:0]const u8 = null;
+        var preferred_match: ?[:0]const u8 = null;
+
+        var j: usize = 0;
+        while (j < refs_ptr.*.len) : (j += 1) {
+            const raw_ref: *rawflatpak.FlatpakRef = @ptrCast(@alignCast(refs_ptr.*.pdata[j]));
+            if (@as(c_int, @intCast(rawflatpak.flatpak_ref_get_kind(raw_ref))) != kind) continue;
+            const name_ptr = rawflatpak.flatpak_ref_get_name(raw_ref);
+            if (name_ptr == null or !std.mem.eql(u8, std.mem.span(name_ptr), flatpak_name)) continue;
+            const branch_ptr = rawflatpak.flatpak_ref_get_branch(raw_ref);
+            if (branch_ptr == null) continue;
+            const ref_branch = std.mem.span(branch_ptr);
+            if (first_match == null) first_match = ref_branch;
+            if (std.mem.eql(u8, ref_branch, "stable")) stable_match = ref_branch;
+            if (preferred) |value| {
+                if (std.mem.eql(u8, ref_branch, value)) preferred_match = ref_branch;
+            }
+        }
+
+        const chosen = preferred_match orelse stable_match orelse first_match orelse return null;
+        return try self.allocator.dupeZ(u8, chosen);
+    }
+
     fn get_all_flatpaks_by_remote(self: Manager, remote: [:0]const u8, scope: flatpak.Scope, installation: [*c]rawflatpak.FlatpakInstallation) ![]flatpak.Flatpak {
         const cancellable: *rawflatpak.GCancellable = rawflatpak.g_cancellable_new();
         var g_error: ?*rawflatpak.GError = null;
@@ -1246,6 +1563,14 @@ pub const Manager = struct {
         );
         errdefer self.allocator.free(result.latest_commit);
         result.origin = try self.allocator.dupeSentinel(u8, spanOrEmpty(rawflatpak.flatpak_installed_ref_get_origin(installed)), 0);
+        if (flatpak.str(rawflatpak.flatpak_installed_ref_get_eol(installed))) |value| {
+            result.eol = try self.allocator.dupeSentinel(u8, value, 0);
+            errdefer self.allocator.free(result.eol.?);
+        }
+        if (flatpak.str(rawflatpak.flatpak_installed_ref_get_eol_rebase(installed))) |value| {
+            result.eol_rebase = try self.allocator.dupeSentinel(u8, value, 0);
+            errdefer self.allocator.free(result.eol_rebase.?);
+        }
         return result;
     }
 
@@ -1875,6 +2200,8 @@ test "Flatpak manager exposes strict-parity operations" {
     _ = Manager.upgrade_flatpaks;
     _ = Manager.install_from_ref_flatpak;
     _ = Manager.install_from_bundle_flatpak;
+    _ = Manager.rebase_flatpak;
+    _ = Manager.list_eol_flatpak;
 
     // Taking a function pointer does not analyze the function body in Zig.
     // Keep these calls behind a runtime-false guard so this test compiles the
@@ -1986,6 +2313,15 @@ test "test getRemoteRefInfo" {
     const manager = Manager{ .allocator = std.testing.allocator, .io = std.testing.io };
     const result = try manager.get_remote_ref_info_flatpak("flathub", "it.mijorus.gearlever", "stable", flatpak.Scope.SYSTEM);
     defer result.deinit(std.testing.allocator);
+    try std.testing.expect(result.permissions.len > 1);
+}
+
+test "test getRemoteRefInfo resolves an empty branch from the remote" {
+    const manager = Manager{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const result = try manager.get_remote_ref_info_flatpak("flathub", "it.mijorus.gearlever", "", flatpak.Scope.SYSTEM);
+    defer result.deinit(std.testing.allocator);
+    const branch_name = result.branch() orelse return error.TestUnexpectedResult;
+    try std.testing.expect(branch_name.len > 0);
     try std.testing.expect(result.permissions.len > 1);
 }
 

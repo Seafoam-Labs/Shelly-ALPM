@@ -12,7 +12,7 @@ makedepends=('git' 'pkgconf' 'gtk4' 'zig>=0.16' 'clang' 'gettext' 'flatpak' 'rip
 # Source tarball from GitHub release
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/archive/v${pkgver}.tar.gz")
 
-sha256sums=('0c2b93ac85f838f2d45d6f10cc7b7d5a8e09603dfaf2964d1fc8ba246c3e3e79')
+sha256sums=('80ee02aeabf10e97d8a33856464167c8001fbc1201656e5074e7c8f057d5b408')
 # GitHub replaces "+" with "-" in archive top-level directory names.
 _source_dir="Shelly-ALPM-${pkgver//+/-}"
 

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-05 12:25+0300\n"
+"POT-Creation-Date: 2026-08-10 23:33+0300\n"
 "PO-Revision-Date: 2026-07-29 17:32+0000\n"
 "Last-Translator: Tiago Centurion <tiagodecgo2@gmail.com>\n"
 "Language-Team: Spanish <https://hosted.weblate.org/projects/shelly-alpm/"
@@ -15,7 +15,7 @@ msgstr ""
 "X-Generator: Weblate 2026.8.dev0\n"
 
 msgid "No installable addons available"
-msgstr ""
+msgstr "No hay complementos instalables disponibles"
 
 msgid "Close"
 msgstr "Cerrar"
@@ -33,7 +33,7 @@ msgid "Review PKGBUILD changes"
 msgstr "Vista previa de los cambios de PKGBUILD"
 
 msgid "Changes"
-msgstr "Gambios"
+msgstr "Cambios"
 
 msgid "Warnings"
 msgstr "Advertencias"
@@ -52,7 +52,7 @@ msgid "Cancel"
 msgstr "Cancelar"
 
 msgid "polkit is required"
-msgstr ""
+msgstr "Se requiere polkit"
 
 msgid ""
 "Shelly's GUI needs <b>polkit</b> installed and running to authorize "
@@ -60,12 +60,12 @@ msgid ""
 "\n"
 "Install and enable it, then retry.\n"
 "\n"
-"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
-"Polkit</a>"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
+"labs.org/shelly-alpm/docs/polkit</a>"
 msgstr ""
 
 msgid "Review PKGBUILD"
-msgstr ""
+msgstr "Revisar PKGBUILD"
 
 msgid "Search..."
 msgstr "Buscar..."
@@ -378,11 +378,11 @@ msgstr "Mostrar sólo paquetes instalados explícitamente"
 msgid "Show Dependency Only"
 msgstr ""
 
-msgid "Show dependency packages on;y"
+msgid "Show dependency packages only"
 msgstr ""
 
 msgid "Recommended Packages"
-msgstr ""
+msgstr "Paquetes recomendados"
 
 msgid "Curated suggestions from Seafoam Labs"
 msgstr "Sugerencias seleccionadas de Seafoam Labs"
@@ -632,7 +632,7 @@ msgid "Number of cached versions to keep per package"
 msgstr "Cantidad de versiones en caché a conservar por paquete"
 
 msgid "Welcome to Shelly v3"
-msgstr ""
+msgstr "Bienvenido a Shelly v3"
 
 msgid ""
 "Shelly is a modern package manager for Arch Linux. Configure your sources "
@@ -681,7 +681,7 @@ msgid "Navigation Style"
 msgstr "Estilo de navegación"
 
 msgid "Sidebar"
-msgstr ""
+msgstr "Barra lateral"
 
 msgid "Vertical icon rail on the left"
 msgstr "Barra de íconos vertical a la izquierda"
@@ -693,16 +693,16 @@ msgid "Horizontal tab switcher at the top"
 msgstr "Cambiador de pestañas horizontal en la parte superior"
 
 msgid "System Tray"
-msgstr ""
+msgstr "Bandeja del sistema"
 
 msgid "Run in system tray when minimized"
-msgstr ""
+msgstr "Ejecutar en la bandeja del sistema cuando sea minimizado"
 
 msgid "Next"
 msgstr "Siguiente"
 
 msgid "Start Shelly"
-msgstr ""
+msgstr "Iniciar Shelly"
 
 msgid "Filesystem"
 msgstr "Sistema de archivos"
@@ -906,7 +906,7 @@ msgid "Select one or more packages"
 msgstr "Seleccione uno o más paquetes"
 
 msgid "Package(s)"
-msgstr ""
+msgstr "Paquete(s)"
 
 msgid "Remove Packages"
 msgstr "Eliminar paquetes"
@@ -1187,28 +1187,28 @@ msgid "Settings saved"
 msgstr "Ajustes guardados"
 
 msgid "Installing Flatpak support"
-msgstr ""
+msgstr "Instalando soporte para Flatpak"
 
 msgid "Installing AppImage support"
-msgstr ""
+msgstr "Instalando soporte para AppImage"
 
 msgid "Failed to start Flatpak support installation"
-msgstr ""
+msgstr "Error al iniciar la instalación de soporte para Flatpak"
 
 msgid "Failed to start AppImage support installation"
-msgstr ""
+msgstr "Error al iniciar la instalación de soporte para AppImage"
 
 msgid "Flatpak support installation failed"
-msgstr ""
+msgstr "La instalación de soporte para Flatpak ha fallado"
 
 msgid "AppImage support installation failed"
-msgstr ""
+msgstr "La instalación de soporte para AppImage ha fallado"
 
 msgid "Flatpak support enabled"
-msgstr ""
+msgstr "Soporte para Flatpak activado"
 
 msgid "AppImage support enabled"
-msgstr ""
+msgstr "Soporte para AppImage activado"
 
 msgid "No changelog entries found"
 msgstr "No se encontraron entradas en el registro de cambios"
@@ -1359,6 +1359,21 @@ msgstr "Reinstalando"
 msgid "Removing"
 msgstr "Eliminando"
 
+msgid "Checking keyring"
+msgstr ""
+
+msgid "Checking integrity"
+msgstr ""
+
+msgid "Loading packages"
+msgstr ""
+
+msgid "Checking conflicts"
+msgstr ""
+
+msgid "Checking disk space"
+msgstr ""
+
 msgid "Working"
 msgstr "Trabajando"
 
@@ -1395,7 +1410,7 @@ msgstr ""
 "intentarlo."
 
 msgid "Update this package"
-msgstr ""
+msgstr "Actualizar este paquete"
 
 msgid "of"
 msgstr "de"
@@ -1436,7 +1451,7 @@ msgid ""
 msgstr ""
 
 msgid "Enable Recommended?"
-msgstr ""
+msgstr "Activar Recomendados?"
 
 msgid ""
 "Recommended shows curated package suggestions based on your installed "
@@ -1447,7 +1462,7 @@ msgstr ""
 "externas."
 
 msgid "Installing Flatpak and AppImage support"
-msgstr ""
+msgstr "Instalando soporte para Flatpak y AppImage"
 
 msgid "Settings"
 msgstr "Configuración"

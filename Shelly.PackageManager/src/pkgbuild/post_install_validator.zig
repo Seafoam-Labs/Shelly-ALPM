@@ -1022,3 +1022,69 @@ test "validate: post_install with command substitution is warning" {
     try std.testing.expect(result.has_findings);
     try std.testing.expectEqual(shared_validator.ValidationSeverity.warning, result.findings.items[0].severity);
 }
+
+test "validate: install script produces expected findings" {
+    const install_script =
+        \\# Colored makepkg-like functions
+        \\_all_off="$(tput sgr0)"
+        \\_bold="${_all_off}$(tput bold)"
+        \\_green="${_bold}$(tput setaf 2)"
+        \\note() {
+        \\  printf "${_green}==>${_bold} %s${_all_off}\n" "$1"
+        \\}
+        \\
+        \\post_install() {
+        \\  note "The Acme Agent daemon is not started automatically."
+        \\  note "To start it on boot, run 'sudo systemctl enable --now acme-agent' in a terminal."
+        \\}
+        \\
+        \\post_upgrade() {
+        \\  # Remind the user to enable the service if it is not enabled yet
+        \\  systemctl -q is-enabled acme-agent.service || post_install
+        \\
+        \\  # Mark the service for restart (handled by the 30-systemd-restart-marked.hook pacman hook)
+        \\  ! systemctl -q is-active acme-agent.service || systemctl set-property acme-agent.service Markers=needs-restart
+        \\}
+        \\
+        \\pre_remove() {
+        \\  if systemctl -q is-active acme-agent.service; then
+        \\    note "The Acme Agent service may still be running after removal."
+        \\    note "To stop it, run 'sudo systemctl stop acme-agent' in a terminal."
+        \\  fi
+        \\}
+    ;
+    const allocator = std.testing.allocator;
+    const script = try allocator.dupe(u8, install_script);
+    var pkg = try make_test_pkgbuild(allocator, script);
+    defer deinit_test_pkgbuild(&pkg, allocator);
+
+    const validator = PostInstallValidator{ .allocator = allocator };
+    var result = try validator.validate(pkg);
+    defer result.deinit(std.testing.allocator);
+
+    // 3 warnings for the $(tput ...) color assignments and 2 critical sudo
+    // findings (false positives: sudo only appears inside note() strings).
+    try std.testing.expectEqual(@as(usize, 5), result.findings.items.len);
+    try std.testing.expect(result.has_findings);
+
+    var warning: usize = 0;
+    var critical: usize = 0;
+    for (result.findings.items) |finding| {
+        switch (finding.severity) {
+            .warning => warning += 1,
+            .critical => critical += 1,
+            .info => {},
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 3), warning);
+    try std.testing.expectEqual(@as(usize, 2), critical);
+
+    for (result.findings.items) |finding| {
+        if (finding.severity == shared_validator.ValidationSeverity.critical) {
+            try std.testing.expectEqualStrings("sudo", finding.tool);
+        } else {
+            try std.testing.expectEqualStrings("<dynamic-command>", finding.tool);
+        }
+        try std.testing.expectEqualStrings("post_install", finding.hook);
+    }
+}

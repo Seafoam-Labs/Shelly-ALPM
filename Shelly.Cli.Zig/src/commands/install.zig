@@ -617,6 +617,17 @@ fn runAppImage(
     operation_context: *Zigalpm.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
+    if (elevation.isRoot()) {
+        const args = try appimageInstallArgs(context.allocator, invocation);
+        defer context.allocator.free(args);
+        if (try elevation.runAsInvokingUser(context, args)) |exit_code| {
+            if (exit_code != 0) return InstallError.BackendFailed;
+            return;
+        }
+        // A direct root invocation has no user to re-launch as. Continue
+        // with root's own user-scoped AppImage store in that case.
+    }
+
     const location = invocation.positionals[0];
     std.Io.Dir.cwd().access(context.io, location, .{}) catch return error.FileNotFound;
     if (!Zigalpm.AppImageManager.isAppImage(location)) return error.NotAnAppImage;
@@ -643,11 +654,100 @@ fn runAppImage(
     if (!try manager.installAppImage(location)) return InstallError.BackendFailed;
 }
 
+fn appimageInstallArgs(
+    allocator: std.mem.Allocator,
+    invocation: *const parser.Invocation,
+) ![]const []const u8 {
+    var args: std.ArrayList([]const u8) = .empty;
+    errdefer args.deinit(allocator);
+    try args.appendSlice(allocator, &.{ "install", "appimage" });
+    if (invocation.globals.no_confirm)
+        try args.append(allocator, "--no-confirm");
+    if (invocation.globals.json)
+        try args.append(allocator, "--json");
+    if (invocation.globals.ui_mode)
+        try args.append(allocator, "--ui-mode");
+    if (optionValue(invocation, "--install-path")) |install_path|
+        try args.appendSlice(allocator, &.{ "--install-path", install_path });
+    for (invocation.positionals) |positional| try args.append(allocator, positional);
+    return args.toOwnedSlice(allocator);
+}
+
 const FlatpakCandidate = struct {
     id: []const u8,
     name: []const u8,
     remote: []const u8,
 };
+
+const EolInstallReplacement = struct {
+    id: []u8,
+    branch: []u8,
+
+    fn deinit(self: *EolInstallReplacement, allocator: std.mem.Allocator) void {
+        allocator.free(self.id);
+        allocator.free(self.branch);
+        self.* = undefined;
+    }
+};
+
+fn resolveFlatpakEolInstallTarget(
+    context: *runtime.RuntimeContext,
+    operation_context: *Zigalpm.OperationContext,
+    manager: anytype,
+    selected_id: []const u8,
+    selected_remote: []const u8,
+    requested_branch: []const u8,
+    requested_scope: Zigalpm.flatpak.Scope,
+) !?EolInstallReplacement {
+    var remote_ref = manager.get_remote_ref_info_flatpak(
+        selected_remote,
+        selected_id,
+        requested_branch,
+        requested_scope,
+    ) catch return null;
+    defer remote_ref.deinit(context.allocator);
+
+    const marker = remote_ref.eol_rebase orelse {
+        if (remote_ref.eol) |reason| {
+            const warning = try Zigalpm.flatpak.eol.eolOnlyWarning(
+                context.allocator,
+                selected_id,
+                requested_branch,
+                reason,
+            );
+            defer context.allocator.free(warning);
+            Zigalpm.flatpak.eol.emitStatus(operation_context, .install, .warning, selected_id, warning);
+        }
+        return null;
+    };
+
+    const target = Zigalpm.flatpak.eol.parseRebaseTarget(marker, requested_branch) orelse {
+        const warning = try Zigalpm.flatpak.eol.eolOnlyWarning(
+            context.allocator,
+            selected_id,
+            requested_branch,
+            remote_ref.eol,
+        );
+        defer context.allocator.free(warning);
+        Zigalpm.flatpak.eol.emitStatus(operation_context, .install, .warning, selected_id, warning);
+        return null;
+    };
+
+    const owned_id = try context.allocator.dupe(u8, target.id);
+    errdefer context.allocator.free(owned_id);
+    const owned_branch = try context.allocator.dupe(u8, target.branch);
+    errdefer context.allocator.free(owned_branch);
+
+    const notice = try std.fmt.allocPrint(
+        context.allocator,
+        "{s} is end-of-life; installing replacement {s} instead.",
+        .{ selected_id, target.id },
+    );
+    defer context.allocator.free(notice);
+    Zigalpm.flatpak.eol.emitStatus(operation_context, .install, .information, selected_id, notice);
+
+    return .{ .id = owned_id, .branch = owned_branch };
+}
 
 fn runFlatpak(
     context: *runtime.RuntimeContext,
@@ -696,17 +796,36 @@ fn runFlatpak(
     }
     if (selected_remote.len == 0) return InstallError.NoFlatpakRemote;
 
-    const id_z = try context.allocator.dupeZ(u8, selected_id);
-    defer context.allocator.free(id_z);
-    const remote_z = try context.allocator.dupeZ(u8, selected_remote);
-    defer context.allocator.free(remote_z);
-    const branch_z = try context.allocator.dupeZ(u8, optionValue(invocation, "--branch") orelse "stable");
-    defer context.allocator.free(branch_z);
+    const requested_branch = optionValue(invocation, "--branch") orelse "";
 
     var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     try manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null) catch {};
+
+    var eol_replacement: ?EolInstallReplacement = null;
+    if (!optionEnabled(invocation, "--runtime")) {
+        eol_replacement = resolveFlatpakEolInstallTarget(
+            context,
+            operation_context,
+            manager,
+            selected_id,
+            selected_remote,
+            requested_branch,
+            requested_scope,
+        ) catch null;
+    }
+    defer if (eol_replacement) |*replacement| replacement.deinit(context.allocator);
+
+    const install_id = if (eol_replacement) |replacement| replacement.id else selected_id;
+    const install_branch = if (eol_replacement) |replacement| replacement.branch else requested_branch;
+
+    const id_z = try context.allocator.dupeZ(u8, install_id);
+    defer context.allocator.free(id_z);
+    const remote_z = try context.allocator.dupeZ(u8, selected_remote);
+    defer context.allocator.free(remote_z);
+    const branch_z = try context.allocator.dupeZ(u8, install_branch);
+    defer context.allocator.free(branch_z);
     if (!try manager.install_flatpak(
         id_z,
         remote_z,
@@ -1665,4 +1784,202 @@ test "Flatpak candidate selection uses the shared question response" {
     });
     try std.testing.expectEqualStrings("org.demo.Two", selected.id);
     try std.testing.expectEqualStrings("flathub-beta", selected.remote);
+}
+
+const EolInstallTestManager = struct {
+    allocator: std.mem.Allocator,
+    remote_ref: ?Zigalpm.flatpak.types.RemoteRef = null,
+    fetch_error: bool = false,
+
+    pub fn get_remote_ref_info_flatpak(
+        self: @This(),
+        _: []const u8,
+        _: []const u8,
+        _: []const u8,
+        _: Zigalpm.flatpak.Scope,
+    ) !Zigalpm.flatpak.types.RemoteRef {
+        if (self.fetch_error) return error.TestFetchFailure;
+        const source = self.remote_ref orelse return error.TestFetchFailure;
+        return Zigalpm.flatpak.types.RemoteRef.fromWire(self.allocator, .{
+            .remote_name = source.remote_name,
+            .installed_size = source.installed_size,
+            .download_size = source.download_size,
+            .eol = source.eol,
+            .eol_rebase = source.eol_rebase,
+            .scope = Zigalpm.flatpak.types.Scope.toWire(source.scope),
+            .permissions = &.{},
+        });
+    }
+};
+
+fn makeEolRemoteRef(eol: ?[]const u8, eol_rebase: ?[]const u8) Zigalpm.flatpak.types.RemoteRef {
+    return .{
+        .remote_name = @constCast("flathub"),
+        .installed_size = 0,
+        .download_size = 0,
+        .eol = if (eol) |value| @constCast(value) else null,
+        .eol_rebase = if (eol_rebase) |value| @constCast(value) else null,
+        .scope = .system,
+        .permissions = &.{},
+    };
+}
+
+test "Flatpak install EOL detection redirects to the replacement" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var stdout = std.Io.Writer.Discarding.init(&.{});
+    var stderr = std.Io.Writer.Discarding.init(&.{});
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    defer operations.deinit();
+
+    var manager: EolInstallTestManager = .{
+        .allocator = arena.allocator(),
+        .remote_ref = makeEolRemoteRef(null, "no.bragefuglseth.Keypunch"),
+    };
+    _ = &manager;
+
+    var replacement = try resolveFlatpakEolInstallTarget(
+        &context,
+        &operations,
+        manager,
+        "dev.bragefuglseth.Keypunch",
+        "flathub",
+        "stable",
+        .system,
+    );
+    defer if (replacement) |*value| value.deinit(context.allocator);
+    try std.testing.expect(replacement != null);
+    try std.testing.expectEqualStrings("no.bragefuglseth.Keypunch", replacement.?.id);
+    try std.testing.expectEqualStrings("stable", replacement.?.branch);
+}
+
+test "Flatpak install EOL detection warns and proceeds for eol-only refs" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var stdout = std.Io.Writer.Discarding.init(&.{});
+    var stderr = std.Io.Writer.Discarding.init(&.{});
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    defer operations.deinit();
+
+    var manager: EolInstallTestManager = .{
+        .allocator = arena.allocator(),
+        .remote_ref = makeEolRemoteRef("No longer maintained", null),
+    };
+    _ = &manager;
+
+    const replacement = try resolveFlatpakEolInstallTarget(
+        &context,
+        &operations,
+        manager,
+        "org.example.Dead",
+        "flathub",
+        "stable",
+        .system,
+    );
+    try std.testing.expect(replacement == null);
+}
+
+test "Flatpak install EOL detection treats remote fetch errors as advisory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var stdout = std.Io.Writer.Discarding.init(&.{});
+    var stderr = std.Io.Writer.Discarding.init(&.{});
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    defer operations.deinit();
+
+    var manager: EolInstallTestManager = .{
+        .allocator = arena.allocator(),
+        .fetch_error = true,
+    };
+    _ = &manager;
+
+    const replacement = try resolveFlatpakEolInstallTarget(
+        &context,
+        &operations,
+        manager,
+        "org.example.App",
+        "flathub",
+        "stable",
+        .system,
+    );
+    try std.testing.expect(replacement == null);
+}
+
+test "Flatpak install EOL detection accepts full-ref replacement markers" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var stdout = std.Io.Writer.Discarding.init(&.{});
+    var stderr = std.Io.Writer.Discarding.init(&.{});
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    defer operations.deinit();
+
+    var manager: EolInstallTestManager = .{
+        .allocator = arena.allocator(),
+        .remote_ref = makeEolRemoteRef(null, "app/no.bragefuglseth.Keypunch/x86_64/beta"),
+    };
+    _ = &manager;
+
+    var replacement = try resolveFlatpakEolInstallTarget(
+        &context,
+        &operations,
+        manager,
+        "dev.bragefuglseth.Keypunch",
+        "flathub",
+        "stable",
+        .system,
+    );
+    defer if (replacement) |*value| value.deinit(context.allocator);
+    try std.testing.expect(replacement != null);
+    try std.testing.expectEqualStrings("no.bragefuglseth.Keypunch", replacement.?.id);
+    try std.testing.expectEqualStrings("beta", replacement.?.branch);
+}
+
+test "appimage install relaunch forwards positionals and install-path" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+
+    const plain_outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "install", "appimage", "/tmp/demo.AppImage",
+    });
+    try std.testing.expect(plain_outcome == .dispatch);
+    const plain_args = try appimageInstallArgs(std.testing.allocator, &plain_outcome.dispatch);
+    defer std.testing.allocator.free(plain_args);
+    const expected_plain = [_][]const u8{ "install", "appimage", "/tmp/demo.AppImage" };
+    try std.testing.expectEqualSlices([]const u8, &expected_plain, plain_args);
+
+    const full_outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "install", "appimage", "--no-confirm", "--install-path", "/opt/appimages", "/tmp/demo.AppImage",
+    });
+    try std.testing.expect(full_outcome == .dispatch);
+    const full_args = try appimageInstallArgs(std.testing.allocator, &full_outcome.dispatch);
+    defer std.testing.allocator.free(full_args);
+    const expected_full = [_][]const u8{
+        "install", "appimage", "--no-confirm", "--install-path", "/opt/appimages", "/tmp/demo.AppImage",
+    };
+    try std.testing.expectEqualSlices([]const u8, &expected_full, full_args);
 }

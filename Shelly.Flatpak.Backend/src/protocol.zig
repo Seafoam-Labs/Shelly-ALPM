@@ -351,6 +351,19 @@ test "all request argument families round-trip under schema one" {
         .path = "/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml.gz",
     });
     try expectRoundTrip(wire.ListInstalledArguments, .{ .mode = .refs });
+    try expectRoundTrip(wire.RebaseArguments, .{
+        .old_ref = "app/dev.bragefuglseth.Keypunch/x86_64/stable",
+        .new_ref = "app/no.bragefuglseth.Keypunch/x86_64/stable",
+        .remote = "flathub",
+        .scope = .system,
+    });
+    try expectRoundTrip(wire.RebaseArguments, .{
+        .old_ref = "app/dev.bragefuglseth.Keypunch/x86_64/stable",
+        .new_ref = "app/no.bragefuglseth.Keypunch/x86_64/stable",
+        .remote = "flathub",
+        .scope = .system,
+        .previous_ids = &.{"dev.bragefuglseth.Keypunch"},
+    });
 }
 
 test "backend-neutral result records round-trip without native pointers" {
@@ -367,6 +380,21 @@ test "backend-neutral result records round-trip without native pointers" {
         .installed_size = 42,
         .scope = .user,
     });
+    try expectRoundTrip(wire.InstalledApplication, .{
+        .id = "dev.bragefuglseth.Keypunch",
+        .name = "Keypunch",
+        .arch = "x86_64",
+        .branch = "stable",
+        .summary = "Practice typing",
+        .version = "1.0",
+        .latest_commit = "deadbeef",
+        .origin = "flathub",
+        .kind = .app,
+        .installed_size = 1024,
+        .scope = .system,
+        .eol = "Deprecated, please use the new ID.",
+        .eol_rebase = "no.bragefuglseth.Keypunch",
+    });
     try expectRoundTrip(wire.InstalledRef, .{
         .id = "org.example.App",
         .name = "Example",
@@ -381,6 +409,25 @@ test "backend-neutral result records round-trip without native pointers" {
         .kind = .app,
         .scope = .system,
         .permissions = &.{ "network", "wayland" },
+        .eol = "Deprecated.",
+        .eol_rebase = "org.example.NewApp",
+    });
+    try expectRoundTrip(wire.EolStatus, .{
+        .reference = "app/dev.bragefuglseth.Keypunch/x86_64/stable",
+        .id = "dev.bragefuglseth.Keypunch",
+        .branch = "stable",
+        .origin = "flathub",
+        .scope = .system,
+        .eol = "Deprecated.",
+        .eol_rebase = "no.bragefuglseth.Keypunch",
+    });
+    try expectRoundTrip(wire.EolStatus, .{
+        .reference = "app/org.example.Dead/x86_64/stable",
+        .id = "org.example.Dead",
+        .branch = "stable",
+        .origin = "flathub",
+        .scope = .user,
+        .eol = "No longer maintained.",
     });
     try expectRoundTrip(wire.Remote, .{
         .name = "flathub",

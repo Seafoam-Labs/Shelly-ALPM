@@ -610,7 +610,11 @@ pub const AurPage = extern struct {
     }
 
     fn post_result(page: *Self, packages: []AurPackage, arena: *std.heap.ArenaAllocator, generation: u64) void {
-        const result = std.heap.c_allocator.create(LoadResult) catch return;
+        const result = std.heap.c_allocator.create(LoadResult) catch {
+            arena.deinit();
+            std.heap.c_allocator.destroy(arena);
+            return;
+        };
         result.* = .{
             .page = page,
             .packages = packages,

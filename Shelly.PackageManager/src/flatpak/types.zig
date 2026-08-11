@@ -51,6 +51,8 @@ pub const InstalledApplication = struct {
     kind: RefKind,
     installed_size: u64,
     scope: Scope,
+    eol: ?[]u8 = null,
+    eol_rebase: ?[]u8 = null,
 
     pub fn fromWire(
         allocator: std.mem.Allocator,
@@ -75,6 +77,10 @@ pub const InstalledApplication = struct {
         errdefer allocator.free(latest_commit);
         const origin = try allocator.dupe(u8, value.origin);
         errdefer allocator.free(origin);
+        const eol = if (value.eol) |text| try allocator.dupe(u8, text) else null;
+        errdefer if (eol) |text| allocator.free(text);
+        const eol_rebase = if (value.eol_rebase) |text| try allocator.dupe(u8, text) else null;
+        errdefer if (eol_rebase) |text| allocator.free(text);
         return .{
             .id = id,
             .name = name,
@@ -87,6 +93,8 @@ pub const InstalledApplication = struct {
             .kind = .fromWire(value.kind),
             .installed_size = value.installed_size,
             .scope = .fromWire(value.scope),
+            .eol = eol,
+            .eol_rebase = eol_rebase,
         };
     }
 
@@ -102,6 +110,8 @@ pub const InstalledApplication = struct {
         allocator.free(self.version);
         allocator.free(self.latest_commit);
         allocator.free(self.origin);
+        if (self.eol) |value| allocator.free(value);
+        if (self.eol_rebase) |value| allocator.free(value);
         self.* = undefined;
     }
 
@@ -128,6 +138,8 @@ pub const InstalledRef = struct {
     kind: RefKind,
     scope: Scope,
     permissions: [][]u8,
+    eol: ?[]u8 = null,
+    eol_rebase: ?[]u8 = null,
 
     pub fn fromWire(
         allocator: std.mem.Allocator,
@@ -156,6 +168,10 @@ pub const InstalledRef = struct {
         errdefer allocator.free(latest_commit);
         const permissions = try dupeStrings(allocator, value.permissions);
         errdefer freeStrings(allocator, permissions);
+        const eol = if (value.eol) |text| try allocator.dupe(u8, text) else null;
+        errdefer if (eol) |text| allocator.free(text);
+        const eol_rebase = if (value.eol_rebase) |text| try allocator.dupe(u8, text) else null;
+        errdefer if (eol_rebase) |text| allocator.free(text);
         return .{
             .id = id,
             .name = name,
@@ -170,6 +186,8 @@ pub const InstalledRef = struct {
             .kind = .fromWire(value.kind),
             .scope = .fromWire(value.scope),
             .permissions = permissions,
+            .eol = eol,
+            .eol_rebase = eol_rebase,
         };
     }
 
@@ -187,6 +205,8 @@ pub const InstalledRef = struct {
         allocator.free(self.summary);
         allocator.free(self.latest_commit);
         freeStrings(allocator, self.permissions);
+        if (self.eol) |value| allocator.free(value);
+        if (self.eol_rebase) |value| allocator.free(value);
         self.* = undefined;
     }
 
@@ -413,6 +433,61 @@ pub const UnusedDependency = struct {
     pub fn deinitSlice(
         allocator: std.mem.Allocator,
         values: []UnusedDependency,
+    ) void {
+        for (values) |*value| value.deinit(allocator);
+        allocator.free(values);
+    }
+};
+
+pub const EolStatus = struct {
+    reference: []u8,
+    id: []u8,
+    branch: []u8,
+    origin: []u8,
+    scope: Scope,
+    eol: ?[]u8,
+    eol_rebase: ?[]u8,
+
+    pub fn fromWire(
+        allocator: std.mem.Allocator,
+        value: wire.EolStatus,
+    ) !EolStatus {
+        const reference = try allocator.dupe(u8, value.reference);
+        errdefer allocator.free(reference);
+        const id = try allocator.dupe(u8, value.id);
+        errdefer allocator.free(id);
+        const branch = try allocator.dupe(u8, value.branch);
+        errdefer allocator.free(branch);
+        const origin = try allocator.dupe(u8, value.origin);
+        errdefer allocator.free(origin);
+        const eol = if (value.eol) |text| try allocator.dupe(u8, text) else null;
+        errdefer if (eol) |text| allocator.free(text);
+        const eol_rebase = if (value.eol_rebase) |text| try allocator.dupe(u8, text) else null;
+        errdefer if (eol_rebase) |text| allocator.free(text);
+        return .{
+            .reference = reference,
+            .id = id,
+            .branch = branch,
+            .origin = origin,
+            .scope = .fromWire(value.scope),
+            .eol = eol,
+            .eol_rebase = eol_rebase,
+        };
+    }
+
+    pub fn deinit(self: *EolStatus, allocator: std.mem.Allocator) void {
+        allocator.free(self.reference);
+        allocator.free(self.id);
+        allocator.free(self.branch);
+        allocator.free(self.origin);
+        if (self.eol) |value| allocator.free(value);
+        if (self.eol_rebase) |value| allocator.free(value);
+        self.* = undefined;
+    }
+
+    pub fn deinitSlice(
+        allocator: std.mem.Allocator,
+        values: []EolStatus,
     ) void {
         for (values) |*value| value.deinit(allocator);
         allocator.free(values);

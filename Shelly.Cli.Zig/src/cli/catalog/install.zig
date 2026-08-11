@@ -73,7 +73,7 @@ pub const variants = [_]types.Variant{
         .options = &.{
             flag("--user", &.{}, "Install into the invoking user's Flatpak installation instead of the system installation"),
             stringOption("--remote", &.{"-r"}, "Install from this remote instead of resolving a remote from cached AppStream metadata", false),
-            stringOption("--branch", &.{"-b"}, "Install this branch; defaults to stable", false),
+            stringOption("--branch", &.{"-b"}, "Install this branch; defaults to the branch the remote publishes for the package", false),
             flag("--runtime", &.{}, "Build a runtime ref instead of an application ref"),
             flag("--ref-file", &.{"-e"}, "Treat the package operand as a local .flatpakref file"),
             flag("--bundle", &.{"-u"}, "Treat the package operand as a local Flatpak bundle"),

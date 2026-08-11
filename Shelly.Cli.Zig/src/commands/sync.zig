@@ -146,6 +146,18 @@ fn runRealAppImageSync(
     operation_context: *Zigalpm.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
+    if (elevation.isRoot()) {
+        const args = try appimageSyncArgs(context.allocator, invocation);
+        defer context.allocator.free(args);
+        if (try elevation.runAsInvokingUser(context, args)) |exit_code| {
+            if (exit_code != 0) return error.AppImageMetadataSyncFailed;
+            return;
+        }
+        // A direct root invocation has no user to re-launch as. In that
+        // case, continue with root's own user-scoped AppImage store; only
+        // return early when a child was actually launched above.
+    }
+
     const configure_updates = optionEnabled(invocation, "--configure-updates") or
         invocation.positionals.len == 3;
     if (optionEnabled(invocation, "--configure-updates") and invocation.positionals.len != 3)
@@ -324,6 +336,27 @@ fn optionEnabled(invocation: *const parser.Invocation, name: []const u8) bool {
         return !std.ascii.eqlIgnoreCase(value, "false");
     }
     return false;
+}
+
+fn appimageSyncArgs(
+    allocator: std.mem.Allocator,
+    invocation: *const parser.Invocation,
+) ![]const []const u8 {
+    var args: std.ArrayList([]const u8) = .empty;
+    errdefer args.deinit(allocator);
+    try args.appendSlice(allocator, &.{ "sync", "appimage" });
+    if (invocation.globals.no_confirm)
+        try args.append(allocator, "--no-confirm");
+    if (invocation.globals.json)
+        try args.append(allocator, "--json");
+    if (invocation.globals.ui_mode)
+        try args.append(allocator, "--ui-mode");
+    if (optionEnabled(invocation, "--configure-updates"))
+        try args.append(allocator, "--configure-updates");
+    if (optionEnabled(invocation, "--prerelease"))
+        try args.append(allocator, "--prerelease");
+    for (invocation.positionals) |positional| try args.append(allocator, positional);
+    return args.toOwnedSlice(allocator);
 }
 
 fn optionValue(invocation: *const parser.Invocation, name: []const u8) ?[]const u8 {
@@ -1065,4 +1098,32 @@ test "sync UI mode emits transaction frames" {
     try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &outcome.dispatch, Download{}));
     try std.testing.expectEqual(@as(usize, 3), std.mem.count(u8, tc.stdout.writer.buffered(), "[JSON]"));
     try std.testing.expectEqual(@as(usize, 0), tc.stderr.writer.buffered().len);
+}
+
+test "appimage sync relaunch forwards positionals and configure-updates options" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+
+    const plain_outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "sync", "appimage", "Editor",
+    });
+    try std.testing.expect(plain_outcome == .dispatch);
+    const plain_args = try appimageSyncArgs(std.testing.allocator, &plain_outcome.dispatch);
+    defer std.testing.allocator.free(plain_args);
+    const expected_plain = [_][]const u8{ "sync", "appimage", "Editor" };
+    try std.testing.expectEqualSlices([]const u8, &expected_plain, plain_args);
+
+    const full_outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "sync",   "appimage",                            "--no-confirm", "--configure-updates", "--prerelease",
+        "Editor", "https://example.com/Editor.AppImage", "github",
+    });
+    try std.testing.expect(full_outcome == .dispatch);
+    const full_args = try appimageSyncArgs(std.testing.allocator, &full_outcome.dispatch);
+    defer std.testing.allocator.free(full_args);
+    const expected_full = [_][]const u8{
+        "sync",   "appimage",                            "--no-confirm", "--configure-updates", "--prerelease",
+        "Editor", "https://example.com/Editor.AppImage", "github",
+    };
+    try std.testing.expectEqualSlices([]const u8, &expected_full, full_args);
 }

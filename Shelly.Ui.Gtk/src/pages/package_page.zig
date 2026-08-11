@@ -711,6 +711,7 @@ pub const PackagePage = extern struct {
         const p = self.priv();
         if (!p.loaded) return;
         p.loaded = false;
+        p.generation += 1;
 
         gio.ListStore.removeAll(p.list_store);
 
@@ -795,7 +796,11 @@ pub const PackagePage = extern struct {
         arena: *std.heap.ArenaAllocator,
         generation: u64,
     ) void {
-        const result = std.heap.c_allocator.create(LoadResult) catch return;
+        const result = std.heap.c_allocator.create(LoadResult) catch {
+            arena.deinit();
+            std.heap.c_allocator.destroy(arena);
+            return;
+        };
         result.* = .{
             .page = page,
             .packages = packages,

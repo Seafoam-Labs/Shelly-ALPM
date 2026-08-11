@@ -7,6 +7,8 @@ const UpdateType = @import("../models/appimage.zig").UpdateType;
 const builtin = @import("builtin");
 const runtime = @import("runtime.zig");
 
+const log = std.log.scoped(.shelly_operation);
+
 pub const Event = union(enum) {
     info: struct {
         event_type: []const u8,
@@ -457,10 +459,6 @@ pub const ShellyOperation = struct {
         @memcpy(full[1 .. 1 + args.len], args);
         full[full.len - 1] = "--ui-mode";
 
-        for (full) |arg| {
-            std.debug.print("{s}\n", .{arg});
-        }
-
         return full;
     }
 
@@ -481,6 +479,15 @@ pub const ShellyOperation = struct {
     }
 
     fn spawn_and_read(self: *ShellyOperation, argv: []const []const u8) !void {
+        if (builtin.mode == .Debug) {
+            if (std.mem.join(self.allocator, " ", argv)) |command| {
+                defer self.allocator.free(command);
+                log.debug("argv: {s}", .{command});
+            } else |_| {
+                log.debug("argv: {d} arguments", .{argv.len});
+            }
+        }
+
         // FIXME: Environment map is not propagated to the child process and has to be set manually when unprivileged.
         self.child = try std.process.spawn(self.io, .{ .argv = argv, .stdin = .pipe, .stdout = .pipe, .stderr = .ignore, .environ_map = runtime.environ_map });
         self.reader = try std.Thread.spawn(.{}, reader_loop, .{self});
@@ -517,13 +524,15 @@ pub const ShellyOperation = struct {
             }
         }
 
-        const term = self.child.wait(self.io) catch {
+        const term = self.child.wait(self.io) catch |err| {
+            log.debug("reader_loop: wait error: {t}", .{err});
             post_done(self, 255);
             return;
         };
         const code: u8 = switch (term) {
-            .exited => |c| @intCast(c),
-            else => 255,
+            .exited => |code| code,
+            .signal => |signal| @truncate(128 + @intFromEnum(signal)),
+            .stopped, .unknown => 1,
         };
 
         post_done(self, code);

@@ -109,6 +109,11 @@ pub const PackageDetail = extern struct {
 
         add_url_spec_row(p.spec_box, translations._("URL"), if (package.Url) |u| c_string.cstr(&buf, u) else "");
 
+        const allocator = (p.arena orelse return).allocator();
+
+        const combined = std.mem.concat(allocator, u8, &.{ "aur.archlinux.org/packages/", package.Name }) catch "";
+        add_url_spec_row(p.spec_box, translations._("AUR"), c_string.cstr(&buf, combined));
+
         const alloc = (p.arena orelse return).allocator();
         add_spec_list(p.spec_box, alloc, translations._("Licenses"), if (package.License) |license| license else &.{});
 

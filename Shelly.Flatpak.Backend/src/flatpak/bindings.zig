@@ -119,6 +119,11 @@ pub const libflatpak = struct {
             return str(flatpak.flatpak_remote_ref_get_remote_name(self.ptr));
         }
 
+        pub fn branch(self: RemoteRef) ?[:0]const u8 {
+            const ref: *flatpak.FlatpakRef = @ptrCast(self.ptr);
+            return str(flatpak.flatpak_ref_get_branch(ref));
+        }
+
         pub fn installed_size(self: RemoteRef) u64 {
             return flatpak.flatpak_remote_ref_get_installed_size(self.ptr);
         }
@@ -203,6 +208,14 @@ pub const libflatpak = struct {
 
         pub fn installed_size(self: InstalledFlatpak) u64 {
             return flatpak.flatpak_installed_ref_get_installed_size(self.installedRef());
+        }
+
+        pub fn eol(self: InstalledFlatpak) ?[:0]const u8 {
+            return str(flatpak.flatpak_installed_ref_get_eol(self.installedRef()));
+        }
+
+        pub fn eol_rebase(self: InstalledFlatpak) ?[:0]const u8 {
+            return str(flatpak.flatpak_installed_ref_get_eol_rebase(self.installedRef()));
         }
 
         pub fn kind(self: InstalledFlatpak) i32 {

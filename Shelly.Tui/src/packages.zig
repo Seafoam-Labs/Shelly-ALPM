@@ -23,4 +23,34 @@ pub const Package = struct {
     Installed: bool = false,
 };
 
+/// AUR package as emitted by `shelly search aur --ui-mode`. Field names
+/// mirror the CLI's PascalCase JSON keys, not the AUR RPC names.
+pub const AurPackage = struct {
+    Id: i64 = 0,
+    Name: []const u8 = "",
+    PackageBaseId: i64 = 0,
+    PackageBase: []const u8 = "",
+    Version: []const u8 = "",
+    Description: ?[]const u8 = null,
+    Url: ?[]const u8 = null,
+    NumVotes: i64 = 0,
+    Popularity: f64 = 0,
+    OutOfDate: ?i64 = null,
+    Maintainer: ?[]const u8 = null,
+    FirstSubmitted: i64 = 0,
+    LastModified: i64 = 0,
+    UrlPath: ?[]const u8 = null,
+    Depends: ?[]const []const u8 = null,
+    MakeDepends: ?[]const []const u8 = null,
+    OptDepends: ?[]const []const u8 = null,
+    CheckDepends: ?[]const []const u8 = null,
+    Conflicts: ?[]const []const u8 = null,
+    Provides: ?[]const []const u8 = null,
+    Replaces: ?[]const []const u8 = null,
+    Groups: ?[]const []const u8 = null,
+    License: ?[]const []const u8 = null,
+    Keywords: ?[]const []const u8 = null,
+    Explicit: bool = false,
+};
+
 const FileNode = struct { Name: []const u8, Files: []const FileNode };

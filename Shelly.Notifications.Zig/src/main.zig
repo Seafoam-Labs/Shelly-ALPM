@@ -462,11 +462,9 @@ fn buildMenu(ctx: ?*anyopaque, arena: std.mem.Allocator) !Tree {
 
     const count = updates.total();
     if (count == 0) {
-        tray_index += 1;
         try addItem(arena, &items, &tray_index, trans("No updates"), false, true, .normal);
     } else {
         if (updates.repo.items.len > 0) {
-            tray_index += 1;
             try addItemWithSubmenu(
                 @TypeOf(updates.repo.items[0]),
                 arena,
@@ -480,7 +478,6 @@ fn buildMenu(ctx: ?*anyopaque, arena: std.mem.Allocator) !Tree {
         }
 
         if (updates.aur.items.len > 0) {
-            tray_index += 1;
             try addItemWithSubmenu(
                 @TypeOf(updates.aur.items[0]),
                 arena,
@@ -494,7 +491,6 @@ fn buildMenu(ctx: ?*anyopaque, arena: std.mem.Allocator) !Tree {
         }
 
         if (updates.flatpak.items.len > 0) {
-            tray_index += 1;
             try addItemWithSubmenu(
                 @TypeOf(updates.flatpak.items[0]),
                 arena,
@@ -551,6 +547,7 @@ fn addItemWithSubmenu(
 ) !void {
     var children = std.ArrayList(MenuItem).empty;
     defer children.deinit(arena);
+    id.* += 1;
 
     for (source) |pkg| {
         const child_label = try labelFn(arena, pkg);
@@ -564,7 +561,6 @@ fn addItemWithSubmenu(
         .children = try children.toOwnedSlice(arena),
         .label = label,
     });
-    id.* += 1;
 }
 
 fn onEvent(ctx: ?*anyopaque, id: i32) void {

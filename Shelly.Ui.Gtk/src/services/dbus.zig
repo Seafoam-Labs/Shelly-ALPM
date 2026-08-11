@@ -4,13 +4,28 @@ const gio = bindings.gio;
 const gobject = bindings.gobject;
 const glib = bindings.glib;
 
-const TrayService: [:0]const u8 = "org.shelly.Notifications";
-const TrayPath: [:0]const u8 = "/org/shelly/Notifications";
-const TrayInterface: [:0]const u8 = "org.shelly.Notifications";
+const TrayPath: [:0]const u8 = "/org/shellyorg/Notifications";
+const TrayInterface: [:0]const u8 = "com.shellyorg.shelly";
+
+const POLKIT_NAME: [:0]const u8 = "org.freedesktop.PolicyKit1";
+const POLKIT_AUTH_PATH: [:0]const u8 = "/org/freedesktop/PolicyKit1/Authority";
+const POLKIT_AUTH_IFACE: [:0]const u8 = "org.freedesktop.PolicyKit1.Authority";
+const PROBE_PATH: [:0]const u8 = "/org/shelly/AuthAgentProbe";
+
+const LOGIND_NAME: [:0]const u8 = "org.freedesktop.login1";
+const LOGIND_PATH: [:0]const u8 = "/org/freedesktop/login1";
+const LOGIND_MANAGER_IFACE: [:0]const u8 = "org.freedesktop.login1.Manager";
+
+pub const PolkitStatus = enum {
+    ready,
+    no_daemon,
+    no_agent,
+    unknown,
+};
 
 pub const DBus = struct {
-    connection: ?*gio.DBusConnection = null, // session
-    system_connection: ?*gio.DBusConnection = null, // system
+    connection: ?*gio.DBusConnection = null,
+    system_connection: ?*gio.DBusConnection = null,
 
     pub fn deinit(self: *DBus) void {
         if (self.connection) |c| c.unref();
@@ -18,7 +33,7 @@ pub const DBus = struct {
     }
 
     pub fn updatesMadeInUi(self: *DBus) void {
-        self.callTray("UpdatesMadeInUi");
+        self.emitTray("Refresh");
     }
 
     fn ensureBus(self: *DBus, slot: *?*gio.DBusConnection, bus: gio.BusType) ?*gio.DBusConnection {
@@ -43,29 +58,36 @@ pub const DBus = struct {
         return self.ensureBus(&self.system_connection, .system);
     }
 
-    fn callTray(self: *DBus, method: [:0]const u8) void {
+    fn emitTray(self: *DBus, signal: [:0]const u8) void {
         const conn = self.ensureConnection() orelse return;
-        gio.DBusConnection.call(
+        var err: ?*glib.Error = null;
+        _ = gio.DBusConnection.emitSignal(
             conn,
-            TrayService,
+            null,
             TrayPath,
             TrayInterface,
-            method,
-            null, // parameters
-            null, // reply_type
-            .{}, // flags (G_DBUS_CALL_FLAGS_NONE)
-            -1, // timeout (default)
-            null, // cancellable
-            null, // callback (null = ignore result)
-            null, // user_data
+            signal,
+            null,
+            &err,
         );
+        if (err) |e| {
+            std.log.warn("emit_signal failed: {s}", .{e.f_message orelse "unknown"});
+            glib.Error.free(e);
+        }
+    }
+
+    pub fn checkPolkitStatus(self: *DBus) PolkitStatus {
+        if (!self.polkitAvailable()) return .no_daemon;
+        return switch (self.authAgentPresent()) {
+            .present => .ready,
+            .absent => .no_agent,
+            .unknown => .unknown,
+        };
     }
 
     pub fn polkitAvailable(self: *DBus) bool {
         const conn = self.ensureSystemConnection() orelse return false;
-
-        const params = glib.Variant.new("(s)", "org.freedesktop.PolicyKit1");
-
+        const params = glib.Variant.new("(s)", POLKIT_NAME.ptr);
         var call_err: ?*glib.Error = null;
         const result = conn.callSync(
             "org.freedesktop.DBus",
@@ -84,20 +106,185 @@ pub const DBus = struct {
             glib.Error.free(e);
             return false;
         }
-
-        if (call_err) |e| {
-            std.log.warn("NameHasOwner failed: {s}", .{e.f_message orelse "unknown"});
-            glib.Error.free(e);
-            return false;
-        }
         const res = result orelse return false;
         defer res.unref();
-
         const child = res.getChildValue(0);
         defer child.unref();
-
-        std.log.debug("NameHasOwner result: {}", .{child.getBoolean()});
-
+        std.log.debug("NameHasOwner(PolicyKit1) = {}", .{child.getBoolean()});
         return child.getBoolean() != 0;
+    }
+
+    const AgentPresence = enum { present, absent, unknown };
+
+    fn authAgentPresent(self: *DBus) AgentPresence {
+        const conn = self.ensureSystemConnection() orelse return .unknown;
+
+        var sid_buf: [64]u8 = undefined;
+        const sid = self.currentSessionId(&sid_buf) orelse {
+            std.log.warn("could not resolve session id; cannot probe polkit agent", .{});
+            return .unknown;
+        };
+
+        const subject = buildUnixSessionSubject(sid) orelse return .unknown;
+
+        const params = glib.Variant.new(
+            "(@(sa{sv})ss)",
+            subject,
+            "en_US.UTF-8",
+            PROBE_PATH.ptr,
+        );
+
+        var err: ?*glib.Error = null;
+        const result = conn.callSync(
+            POLKIT_NAME,
+            POLKIT_AUTH_PATH,
+            POLKIT_AUTH_IFACE,
+            "RegisterAuthenticationAgent",
+            params,
+            null,
+            .{},
+            -1,
+            null,
+            &err,
+        );
+
+        if (err) |e| {
+            glib.Error.free(e);
+
+            return .present;
+        }
+
+        if (result) |r| r.unref();
+        self.unregisterProbeAgent(sid);
+        return .absent;
+    }
+
+    fn unregisterProbeAgent(self: *DBus, sid: []const u8) void {
+        const conn = self.ensureSystemConnection() orelse return;
+        const subject = buildUnixSessionSubject(sid) orelse return;
+        const params = glib.Variant.new("(@(sa{sv})s)", subject, PROBE_PATH.ptr);
+        var err: ?*glib.Error = null;
+        const r = conn.callSync(
+            POLKIT_NAME,
+            POLKIT_AUTH_PATH,
+            POLKIT_AUTH_IFACE,
+            "UnregisterAuthenticationAgent",
+            params,
+            null,
+            .{},
+            -1,
+            null,
+            &err,
+        );
+        if (err) |e| {
+            std.log.warn("UnregisterAuthenticationAgent probe failed: {s}", .{e.f_message orelse "unknown"});
+            glib.Error.free(e);
+        }
+        if (r) |res| res.unref();
+    }
+
+    fn buildUnixSessionSubject(sid: []const u8) ?*glib.Variant {
+        const builder = glib.VariantBuilder.new(glib.VariantType.new("a{sv}"));
+
+        builder.add("{sv}", "session-id", glib.Variant.new("s", sid.ptr));
+        const dict = builder.end();
+
+        return glib.Variant.new("(s@a{sv})", "unix-session", dict);
+    }
+
+    fn currentSessionId(self: *DBus, buf: []u8) ?[]const u8 {
+        if (std.c.getenv("XDG_SESSION_ID")) |env_ptr| {
+            const env = std.mem.span(env_ptr);
+            if (env.len > 0 and env.len < buf.len) {
+                @memcpy(buf[0..env.len], env);
+                buf[env.len] = 0;
+                return buf[0..env.len :0];
+            }
+        }
+        return self.sessionIdFromLogind(buf);
+    }
+
+    fn sessionIdFromLogind(self: *DBus, buf: []u8) ?[]const u8 {
+        const conn = self.ensureSystemConnection() orelse return null;
+        const pid: u32 = @intCast(std.os.linux.getpid());
+
+        const params = glib.Variant.new("(u)", pid);
+        var err: ?*glib.Error = null;
+        const result = conn.callSync(
+            LOGIND_NAME,
+            LOGIND_PATH,
+            LOGIND_MANAGER_IFACE,
+            "GetSessionByPID",
+            params,
+            glib.VariantType.new("(o)"),
+            .{},
+            -1,
+            null,
+            &err,
+        );
+        if (err) |e| {
+            std.log.warn("logind GetSessionByPID failed: {s}", .{e.f_message orelse "unknown"});
+            glib.Error.free(e);
+            return null;
+        }
+        const res = result orelse return null;
+        defer res.unref();
+
+        const path_v = res.getChildValue(0);
+        defer path_v.unref();
+
+        var len: usize = 0;
+        const path_c = path_v.getString(&len);
+        const session_path = path_c[0..len];
+
+        return self.sessionIdProperty(session_path, buf);
+    }
+
+    fn sessionIdProperty(self: *DBus, session_path: []const u8, buf: []u8) ?[]const u8 {
+        const conn = self.ensureSystemConnection() orelse return null;
+
+        var path_buf: [256]u8 = undefined;
+        if (session_path.len >= path_buf.len) return null;
+        @memcpy(path_buf[0..session_path.len], session_path);
+        path_buf[session_path.len] = 0;
+        const path_z = path_buf[0..session_path.len :0];
+
+        const params = glib.Variant.new(
+            "(ss)",
+            "org.freedesktop.login1.Session",
+            "Id",
+        );
+        var err: ?*glib.Error = null;
+        const result = conn.callSync(
+            LOGIND_NAME,
+            path_z,
+            "org.freedesktop.DBus.Properties",
+            "Get",
+            params,
+            glib.VariantType.new("(v)"),
+            .{},
+            -1,
+            null,
+            &err,
+        );
+        if (err) |e| {
+            std.log.warn("logind Session.Id get failed: {s}", .{e.f_message orelse "unknown"});
+            glib.Error.free(e);
+            return null;
+        }
+        const res = result orelse return null;
+        defer res.unref();
+
+        const variant = res.getChildValue(0);
+        defer variant.unref();
+        const inner = variant.getVariant();
+        defer inner.unref();
+
+        var len: usize = 0;
+        const id_c = inner.getString(&len);
+        if (len == 0 or len >= buf.len) return null;
+        @memcpy(buf[0..len], id_c[0..len]);
+        buf[len] = 0;
+        return buf[0..len :0];
     }
 };

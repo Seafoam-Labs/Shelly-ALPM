@@ -540,7 +540,8 @@ fn enrichFlatpakRemoteInfo(
         var info = manager.get_remote_ref_info_flatpak(
             remote,
             id,
-            "stable",
+            // Empty branch: let the backend resolve the branch.
+            "",
             package.scope,
         ) catch continue;
         defer info.deinit(context.allocator);

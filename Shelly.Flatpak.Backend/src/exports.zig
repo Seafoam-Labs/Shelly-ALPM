@@ -217,6 +217,10 @@ fn dispatch(
         return getAllRemoteCatalogs(state, request);
     if (std.mem.eql(u8, method, wire.Method.load_catalog))
         return loadCatalog(state, request);
+    if (std.mem.eql(u8, method, wire.Method.rebase))
+        return rebase(state, request);
+    if (std.mem.eql(u8, method, wire.Method.list_eol))
+        return listEol(state, request);
     return error.UnknownMethod;
 }
 
@@ -401,6 +405,8 @@ fn listInstalledApplications(
         .kind = kindFromNative(value.kind),
         .installed_size = value.installed_size,
         .scope = scopeToWire(value.scope),
+        .eol = value.eol,
+        .eol_rebase = value.eol_rebase,
     };
     return successResponse(request.operation_id, result);
 }
@@ -438,6 +444,8 @@ fn findInstalled(state: *State, request: wire.RequestEnvelope) ![]u8 {
         .kind = kindFromNative(application.kind),
         .installed_size = application.installed_size,
         .scope = scopeToWire(application.scope),
+        .eol = application.eol,
+        .eol_rebase = application.eol_rebase,
     } else null;
     return successResponse(request.operation_id, result);
 }
@@ -462,12 +470,24 @@ fn listUpdates(state: *State, request: wire.RequestEnvelope) ![]u8 {
     defer for (result[0..initialized]) |value| {
         allocator.free(value.reference);
         allocator.free(value.permissions);
+        if (value.eol) |text| allocator.free(text);
+        if (value.eol_rebase) |text| allocator.free(text);
     };
     for (values, result) |value, *output| {
         const reference = try native.refToString(allocator, value.ptr);
         errdefer allocator.free(reference);
         const permissions = try permissionView(value.permissions);
         errdefer allocator.free(permissions);
+        const eol = if (value.eol()) |text|
+            try allocator.dupe(u8, text)
+        else
+            null;
+        errdefer if (eol) |text| allocator.free(text);
+        const eol_rebase = if (value.eol_rebase()) |text|
+            try allocator.dupe(u8, text)
+        else
+            null;
+        errdefer if (eol_rebase) |text| allocator.free(text);
         output.* = .{
             .id = value.id(),
             .name = value.name(),
@@ -482,6 +502,8 @@ fn listUpdates(state: *State, request: wire.RequestEnvelope) ![]u8 {
             .kind = kindFromNative(value.kind()),
             .scope = scopeToWire(value.get_scope()),
             .permissions = permissions,
+            .eol = eol,
+            .eol_rebase = eol_rebase,
         };
         initialized += 1;
     }
@@ -757,6 +779,62 @@ fn loadCatalog(state: *State, request: wire.RequestEnvelope) ![]u8 {
     return successResponse(request.operation_id, location);
 }
 
+fn rebase(state: *State, request: wire.RequestEnvelope) ![]u8 {
+    var args = try parseArgs(wire.RebaseArguments, request);
+    defer args.deinit();
+    const old_ref = try allocator.dupeZ(u8, args.value.old_ref);
+    defer allocator.free(old_ref);
+    const new_ref = try allocator.dupeZ(u8, args.value.new_ref);
+    defer allocator.free(new_ref);
+    const remote = try allocator.dupeZ(u8, args.value.remote);
+    defer allocator.free(remote);
+
+    var previous_ids = try allocator.alloc([:0]const u8, args.value.previous_ids.len);
+    defer allocator.free(previous_ids);
+    var initialized: usize = 0;
+    defer for (previous_ids[0..initialized]) |value| allocator.free(value);
+    for (args.value.previous_ids) |value| {
+        previous_ids[initialized] = try allocator.dupeZ(u8, value);
+        initialized += 1;
+    }
+
+    var manager = managerFor(state);
+    defer manager.deinit();
+    const result = try manager.rebase_flatpak(
+        old_ref,
+        new_ref,
+        remote,
+        scopeFromWire(args.value.scope),
+        previous_ids,
+    );
+    return successResponse(
+        request.operation_id,
+        wire.BoolResult{ .value = result },
+    );
+}
+
+fn listEol(state: *State, request: wire.RequestEnvelope) ![]u8 {
+    var args = try parseArgs(wire.EmptyArguments, request);
+    defer args.deinit();
+    var manager = managerFor(state);
+    defer manager.deinit();
+    const values = try manager.list_eol_flatpak();
+    defer native_manager.EolStatus.deinitSlice(allocator, values);
+
+    const result = try allocator.alloc(wire.EolStatus, values.len);
+    defer allocator.free(result);
+    for (values, result) |value, *output| output.* = .{
+        .reference = value.reference,
+        .id = value.id,
+        .branch = value.branch,
+        .origin = value.origin,
+        .scope = scopeToWire(value.scope),
+        .eol = value.eol,
+        .eol_rebase = value.eol_rebase,
+    };
+    return successResponse(request.operation_id, result);
+}
+
 fn managerFor(state: *State) native_manager.Manager {
     var manager: native_manager.Manager = .{
         .allocator = allocator,
@@ -898,6 +976,8 @@ fn errorCode(err: anyerror) []const u8 {
         error.RemoteNotFound => "flatpak.remote_not_found",
         error.CatalogNotFound => "flatpak.catalog_not_found",
         error.FlatpakNotFound => "flatpak.not_found",
+        error.FlatpakOriginMissing => "flatpak.origin_missing",
+        error.FlatpakScopeUnknown => "flatpak.scope_unknown",
         error.UnknownMethod => "protocol.unknown_method",
         error.UnsupportedSchema => "protocol.unsupported_schema",
         error.InvalidMessageSize => "protocol.message_too_large",
@@ -912,6 +992,8 @@ fn errorMessage(err: anyerror) []const u8 {
         error.RemoteNotFound => "The requested Flatpak remote was not found.",
         error.CatalogNotFound => "The requested AppStream catalog was not found.",
         error.FlatpakNotFound => "The requested Flatpak application was not found.",
+        error.FlatpakOriginMissing => "The installed Flatpak is missing its origin remote.",
+        error.FlatpakScopeUnknown => "The installed Flatpak has an unknown installation scope.",
         error.UnknownMethod => "The Flatpak backend does not support the requested operation.",
         error.UnsupportedSchema => "The Flatpak request uses an unsupported wire schema.",
         error.InvalidMessageSize => "The Flatpak request exceeds the protocol size limit.",

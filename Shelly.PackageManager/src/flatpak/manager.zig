@@ -5,6 +5,7 @@ const types = @import("types.zig");
 const events = @import("events.zig");
 const client_api = @import("client.zig");
 const appstreams = @import("appstream_manager.zig");
+pub const eol = @import("eol.zig");
 
 const wire = protocol.wire;
 
@@ -12,6 +13,36 @@ pub const InstalledApplication = types.InstalledApplication;
 pub const InstalledRef = types.InstalledRef;
 pub const RunningInstance = types.RunningInstance;
 pub const UnusedDependency = types.UnusedDependency;
+pub const EolStatus = types.EolStatus;
+
+pub const EolRebase = struct {
+    old_ref: []u8,
+    new_ref: []u8,
+    new_id: []u8,
+    new_branch: []u8,
+    remote: []u8,
+    scope: types.Scope,
+
+    pub fn deinit(self: *EolRebase, allocator: std.mem.Allocator) void {
+        allocator.free(self.old_ref);
+        allocator.free(self.new_ref);
+        allocator.free(self.new_id);
+        allocator.free(self.new_branch);
+        allocator.free(self.remote);
+        self.* = undefined;
+    }
+};
+
+pub const EolDetection = struct {
+    reason: ?[]u8,
+    rebase: ?EolRebase,
+
+    pub fn deinit(self: *EolDetection, allocator: std.mem.Allocator) void {
+        if (self.reason) |value| allocator.free(value);
+        if (self.rebase) |*value| value.deinit(allocator);
+        self.* = undefined;
+    }
+};
 
 pub const Manager = struct {
     allocator: std.mem.Allocator,
@@ -144,6 +175,126 @@ pub const Manager = struct {
             .update,
             flatpak_id,
         );
+    }
+
+    pub fn rebase_flatpak(
+        self: Manager,
+        old_ref: []const u8,
+        new_ref: []const u8,
+        remote: []const u8,
+        scope: types.Scope,
+        previous_ids: []const []const u8,
+    ) !bool {
+        return self.callBool(
+            wire.Method.rebase,
+            wire.RebaseArguments{
+                .old_ref = old_ref,
+                .new_ref = new_ref,
+                .remote = remote,
+                .scope = scope.toWire(),
+                .previous_ids = previous_ids,
+            },
+            .update,
+            old_ref,
+        );
+    }
+
+    pub fn list_eol_flatpak(self: Manager) ![]types.EolStatus {
+        var parsed = try self.call(
+            []wire.EolStatus,
+            wire.Method.list_eol,
+            wire.EmptyArguments{},
+            .search,
+            null,
+        );
+        defer parsed.deinit();
+        return cloneSlice(types.EolStatus, self.allocator, parsed.value);
+    }
+
+    pub fn detect_eol_flatpak(
+        self: Manager,
+        application: *const types.InstalledApplication,
+    ) !?EolDetection {
+        var reason: ?[]u8 = null;
+        var marker: ?[]u8 = null;
+        errdefer {
+            if (reason) |value| self.allocator.free(value);
+            if (marker) |value| self.allocator.free(value);
+        }
+
+        var authoritative = false;
+        if (application.origin.len > 0) {
+            if (self.get_remote_ref_info_flatpak(
+                application.origin,
+                application.id,
+                application.branch,
+                application.scope,
+            )) |remote_ref_value| {
+                var remote_ref = remote_ref_value;
+                defer remote_ref.deinit(self.allocator);
+                authoritative = true;
+                if (remote_ref.eol) |text| reason = try self.allocator.dupe(u8, text);
+                if (remote_ref.eol_rebase) |text| marker = try self.allocator.dupe(u8, text);
+            } else |_| {
+                // Unreachable remote: fall back to the markers recorded on the installed ref.
+            }
+        }
+        if (!authoritative) {
+            if (application.eol) |text| reason = try self.allocator.dupe(u8, text);
+            if (application.eol_rebase) |text| marker = try self.allocator.dupe(u8, text);
+        }
+        if (reason == null and marker == null) return null;
+
+        var rebase: ?EolRebase = null;
+        errdefer if (rebase) |*value| value.deinit(self.allocator);
+        if (marker) |value| {
+            if (eol.parseRebaseTarget(value, application.branch)) |target| {
+                rebase = try self.buildEolRebase(application, target);
+            }
+            self.allocator.free(value);
+            marker = null;
+        }
+        return .{ .reason = reason, .rebase = rebase };
+    }
+
+    fn buildEolRebase(
+        self: Manager,
+        application: *const types.InstalledApplication,
+        target: eol.RebaseTarget,
+    ) !EolRebase {
+        const old_ref = try eol.buildRef(
+            self.allocator,
+            application.kind,
+            application.id,
+            application.arch,
+            application.branch,
+        );
+        errdefer self.allocator.free(old_ref);
+        const new_id = try self.allocator.dupe(u8, target.id);
+        errdefer self.allocator.free(new_id);
+        const new_ref = if (target.reference) |reference|
+            try self.allocator.dupe(u8, reference)
+        else
+            try eol.buildRef(
+                self.allocator,
+                application.kind,
+                new_id,
+                application.arch,
+                target.branch,
+            );
+        errdefer self.allocator.free(new_ref);
+        const new_branch = try self.allocator.dupe(u8, target.branch);
+        errdefer self.allocator.free(new_branch);
+        const remote = try self.allocator.dupe(u8, application.origin);
+        errdefer self.allocator.free(remote);
+        return .{
+            .old_ref = old_ref,
+            .new_ref = new_ref,
+            .new_id = new_id,
+            .new_branch = new_branch,
+            .remote = remote,
+            .scope = application.scope,
+        };
     }
 
     pub fn uninstall_installed_flatpak(
@@ -504,4 +655,7 @@ test "Flatpak manager exposes strict-parity operations" {
     _ = Manager.get_remote_ref_info_flatpak;
     _ = Manager.launch_flatpak;
     _ = Manager.kill_flatpak;
+    _ = Manager.rebase_flatpak;
+    _ = Manager.list_eol_flatpak;
+    _ = Manager.detect_eol_flatpak;
 }

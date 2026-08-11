@@ -31,6 +31,8 @@ pub const Method = struct {
     pub const get_remote_catalog = "get_remote_catalog";
     pub const get_all_remote_catalogs = "get_all_remote_catalogs";
     pub const load_catalog = "load_catalog";
+    pub const rebase = "rebase";
+    pub const list_eol = "list_eol";
 };
 
 pub const Scope = enum(u8) {
@@ -180,6 +182,24 @@ pub const LoadCatalogArguments = struct {
     path: []const u8,
 };
 
+pub const RebaseArguments = struct {
+    old_ref: []const u8,
+    new_ref: []const u8,
+    remote: []const u8,
+    scope: Scope,
+    previous_ids: []const []const u8 = &.{},
+};
+
+pub const EolStatus = struct {
+    reference: []const u8,
+    id: []const u8,
+    branch: []const u8,
+    origin: []const u8,
+    scope: Scope,
+    eol: ?[]const u8 = null,
+    eol_rebase: ?[]const u8 = null,
+};
+
 pub const InstalledListMode = enum(u8) {
     applications,
     refs,
@@ -201,6 +221,8 @@ pub const InstalledApplication = struct {
     kind: RefKind,
     installed_size: u64,
     scope: Scope,
+    eol: ?[]const u8 = null,
+    eol_rebase: ?[]const u8 = null,
 };
 
 pub const InstalledRef = struct {
@@ -217,6 +239,8 @@ pub const InstalledRef = struct {
     kind: RefKind,
     scope: Scope,
     permissions: []const []const u8 = &.{},
+    eol: ?[]const u8 = null,
+    eol_rebase: ?[]const u8 = null,
 };
 
 pub const Ref = struct {

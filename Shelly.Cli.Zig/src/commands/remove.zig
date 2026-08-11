@@ -195,6 +195,17 @@ fn runAppImage(
     operation_context: *Zigalpm.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
+    if (elevation.isRoot()) {
+        const args = try appimageRemoveArgs(context.allocator, invocation);
+        defer context.allocator.free(args);
+        if (try elevation.runAsInvokingUser(context, args)) |exit_code| {
+            if (exit_code != 0) return RemoveError.BackendFailed;
+            return;
+        }
+        // A direct root invocation has no user to re-launch as. Continue
+        // with root's own user-scoped AppImage store in that case.
+    }
+
     const configuration = config_manager.Manager.init(context).read() catch
         try config_model.Config.defaults(context.allocator);
     const fallback_directory = try xdg.binHome(context);
@@ -461,6 +472,25 @@ fn optionEnabled(invocation: *const parser.Invocation, name: []const u8) bool {
         return !std.ascii.eqlIgnoreCase(value, "false");
     }
     return false;
+}
+
+fn appimageRemoveArgs(
+    allocator: std.mem.Allocator,
+    invocation: *const parser.Invocation,
+) ![]const []const u8 {
+    var args: std.ArrayList([]const u8) = .empty;
+    errdefer args.deinit(allocator);
+    try args.appendSlice(allocator, &.{ "remove", "appimage" });
+    if (invocation.globals.no_confirm)
+        try args.append(allocator, "--no-confirm");
+    if (invocation.globals.json)
+        try args.append(allocator, "--json");
+    if (invocation.globals.ui_mode)
+        try args.append(allocator, "--ui-mode");
+    if (optionEnabled(invocation, "--remove-config"))
+        try args.append(allocator, "--remove-config");
+    for (invocation.positionals) |positional| try args.append(allocator, positional);
+    return args.toOwnedSlice(allocator);
 }
 
 fn needsElevation(invocation: *const parser.Invocation) bool {
@@ -839,4 +869,29 @@ test "flatpak config cleanup uses the canonical application id" {
     cleanupFlatpakConfig(&context, "org.example.Canonical");
     try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(std.testing.io, canonical, .{}));
     try std.Io.Dir.cwd().access(std.testing.io, friendly, .{});
+}
+
+test "appimage remove relaunch forwards positionals and remove-config" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+
+    const plain_outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "appimage", "Editor",
+    });
+    try std.testing.expect(plain_outcome == .dispatch);
+    const plain_args = try appimageRemoveArgs(std.testing.allocator, &plain_outcome.dispatch);
+    defer std.testing.allocator.free(plain_args);
+    const expected_plain = [_][]const u8{ "remove", "appimage", "Editor" };
+    try std.testing.expectEqualSlices([]const u8, &expected_plain, plain_args);
+
+    const full_outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "appimage", "--no-confirm", "--remove-config", "Editor",
+    });
+    try std.testing.expect(full_outcome == .dispatch);
+    const full_args = try appimageRemoveArgs(std.testing.allocator, &full_outcome.dispatch);
+    defer std.testing.allocator.free(full_args);
+    const expected_full = [_][]const u8{ "remove", "appimage", "--no-confirm", "--remove-config", "Editor" };
+    try std.testing.expectEqualSlices([]const u8, &expected_full, full_args);
 }

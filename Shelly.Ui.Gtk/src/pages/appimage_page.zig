@@ -188,15 +188,14 @@ pub const AppImagePage = extern struct {
         const p = self.priv();
         if (p.loaded) return;
         p.loaded = true;
-        p.generation += 1;
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation }) catch return;
-        thread.detach();
+        self.reload();
     }
 
     pub fn onUnmap(self: *Self) void {
         const p = self.priv();
         if (!p.loaded) return;
         p.loaded = false;
+        p.generation += 1;
 
         gtk.ListBox.removeAll(p.app_list);
 
@@ -242,7 +241,11 @@ pub const AppImagePage = extern struct {
     }
 
     fn post_result(page: *Self, apps: []AppImage, updates: []AppImageUpdate, arena: *std.heap.ArenaAllocator, generation: u64) void {
-        const result = std.heap.c_allocator.create(LoadResult) catch return;
+        const result = std.heap.c_allocator.create(LoadResult) catch {
+            arena.deinit();
+            std.heap.c_allocator.destroy(arena);
+            return;
+        };
         result.* = .{
             .page = page,
             .apps = apps,

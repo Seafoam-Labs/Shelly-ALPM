@@ -186,7 +186,7 @@ pub const FlatpakPage = extern struct {
 
         for (std.enums.values(Category)) |app| {
             const row = gtk.ListBoxRow.new();
-            const enum_num = @intFromEnum(app);
+            const enum_num: usize = @intFromEnum(app);
             gobject.Object.setData(
                 row.as(gobject.Object),
                 "category-index",
@@ -221,6 +221,7 @@ pub const FlatpakPage = extern struct {
         return switch (category) {
             .@"All Applications" => "view-grid-symbolic",
             .Recommended => "starred-symbolic",
+            .Verified => "security-high-symbolic",
             .@"Most Wanted" => "user-bookmarks-symbolic",
             .@"Recently Added" => "list-add-symbolic",
             .@"Recently Updated" => "view-refresh-symbolic",
@@ -241,6 +242,7 @@ pub const FlatpakPage = extern struct {
         return switch (category) {
             .@"All Applications" => translations._("All Applications"),
             .Recommended => translations._("Recommended"),
+            .Verified => translations._("Verified"),
             .@"Most Wanted" => translations._("Most Wanted"),
             .@"Recently Added" => translations._("Recently Added"),
             .@"Recently Updated" => translations._("Recently Updated"),
@@ -270,7 +272,6 @@ pub const FlatpakPage = extern struct {
         .{ "nav_remove_row", @offsetOf(Private, "nav_remove_row") },
         .{ "nav_remote_row", @offsetOf(Private, "nav_remote_row") },
         .{ "nav_install_local", @offsetOf(Private, "nav_install_local") },
-
         .{ "search_entry", @offsetOf(Private, "search_entry") },
         .{ "category_list", @offsetOf(Private, "category_list") },
     };

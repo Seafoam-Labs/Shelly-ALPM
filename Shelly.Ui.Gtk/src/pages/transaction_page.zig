@@ -19,6 +19,8 @@ const PlanDialog = @import("../dialog/page/plan.zig").PlanDialog;
 const ProviderDialog = @import("../dialog/page/provider.zig").ProviderDialog;
 const translations = @import("../helpers/translations.zig");
 
+const log = std.log.scoped(.transaction_page);
+
 pub const TransactionRequest = struct {
     title: []const u8,
     argv: []const []const u8,
@@ -92,7 +94,7 @@ pub const TransactionPage = extern struct {
     fn init(self: *Self, _: *Class) callconv(.c) void {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
         const p = self.priv();
-        std.debug.print("terminal_view={*} rows_box={*}\n", .{ p.terminal_view, p.rows_box });
+        log.debug("terminal_view={*} rows_box={*}", .{ p.terminal_view, p.rows_box });
 
         p.on_complete = null;
         p.on_complete_ctx = null;
@@ -378,6 +380,11 @@ pub const TransactionPage = extern struct {
         if (std.mem.eql(u8, progress_type, "DowngradeStart")) return translations._("Downgrading");
         if (std.mem.eql(u8, progress_type, "ReinstallStart")) return translations._("Reinstalling");
         if (std.mem.eql(u8, progress_type, "RemoveStart")) return translations._("Removing");
+        if (std.mem.eql(u8, progress_type, "KeyringStart")) return translations._("Checking keyring");
+        if (std.mem.eql(u8, progress_type, "IntegrityStart")) return translations._("Checking integrity");
+        if (std.mem.eql(u8, progress_type, "LoadStart")) return translations._("Loading packages");
+        if (std.mem.eql(u8, progress_type, "ConflictsStart")) return translations._("Checking conflicts");
+        if (std.mem.eql(u8, progress_type, "DiskspaceStart")) return translations._("Checking disk space");
         return translations._("Working");
     }
 
@@ -490,6 +497,14 @@ pub const TransactionPage = extern struct {
 
         setLabel(p.title_label, "Done");
 
+        const final_status = if (p.cancelled)
+            translations._("Cancelled")
+        else if (exit_code == 0)
+            translations._("Done")
+        else
+            translations._("Failed");
+        setLabel(p.status_label, final_status);
+
         gtk.Widget.setVisible(p.close_button.as(gtk.Widget), 1);
         p.finished = true;
 
@@ -512,10 +527,10 @@ pub const TransactionPage = extern struct {
         }
 
         if (p.on_complete) |cb| {
-            std.debug.print("on_complete set, ctx={}\n", .{p.on_complete_ctx != null});
+            log.debug("on_complete set, ctx={}", .{p.on_complete_ctx != null});
             if (p.on_complete_ctx) |c| cb(c, exit_code == 0 and !p.cancelled);
         } else {
-            std.debug.print("on_complete is NULL\n", .{});
+            log.debug("on_complete is NULL", .{});
         }
 
         if (p.operation) |op| {
@@ -721,7 +736,7 @@ pub const TransactionPage = extern struct {
 
     fn handle_question(self: *Self, pending: *PendingQuestion) void {
         const p = self.priv();
-        std.debug.print("handle_question: question_layer={*}\n", .{p.question_layer});
+        log.debug("handle_question: question_layer={*}", .{p.question_layer});
 
         switch (pending.request) {
             .yes_no => |q| {
@@ -743,7 +758,7 @@ pub const TransactionPage = extern struct {
                 gtk.Widget.setVisible(dialog.as(gtk.Widget), 1);
                 gtk.Widget.setHalign(p.question_layer.as(gtk.Widget), .center);
                 gtk.Widget.setValign(p.question_layer.as(gtk.Widget), .center);
-                std.debug.print("dialog widget: {*}, visible={}\n", .{ dialog, gtk.Widget.getVisible(dialog.as(gtk.Widget)) });
+                log.debug("dialog widget: {*}, visible={}", .{ dialog, gtk.Widget.getVisible(dialog.as(gtk.Widget)) });
             },
             .select_many => |q| {
                 pending.on_dismiss = &dismiss_question;
@@ -761,7 +776,7 @@ pub const TransactionPage = extern struct {
                 gtk.Widget.setVisible(p.question_layer.as(gtk.Widget), 1);
             },
             .select_one => |q| {
-                std.debug.print("select_one: {s}\n", .{q.prompt});
+                log.debug("select_one: {s}", .{q.prompt});
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
 
@@ -1028,6 +1043,20 @@ test "transaction progress helpers preserve determinate percentages" {
 test "database downloads use independent downloading rows" {
     try std.testing.expect(!TransactionPage.is_transaction_phase("DatabaseDownload"));
     try std.testing.expectEqualStrings("Downloading", TransactionPage.phase_label("DatabaseDownload"));
+}
+
+test "transaction preparation phases map to descriptive labels" {
+    try std.testing.expect(TransactionPage.is_transaction_phase("KeyringStart"));
+    try std.testing.expect(TransactionPage.is_transaction_phase("IntegrityStart"));
+    try std.testing.expect(TransactionPage.is_transaction_phase("LoadStart"));
+    try std.testing.expect(TransactionPage.is_transaction_phase("ConflictsStart"));
+    try std.testing.expect(TransactionPage.is_transaction_phase("DiskspaceStart"));
+
+    try std.testing.expectEqualStrings("Checking keyring", TransactionPage.phase_label("KeyringStart"));
+    try std.testing.expectEqualStrings("Checking integrity", TransactionPage.phase_label("IntegrityStart"));
+    try std.testing.expectEqualStrings("Loading packages", TransactionPage.phase_label("LoadStart"));
+    try std.testing.expectEqualStrings("Checking conflicts", TransactionPage.phase_label("ConflictsStart"));
+    try std.testing.expectEqualStrings("Checking disk space", TransactionPage.phase_label("DiskspaceStart"));
 }
 
 test "transaction rows detect progress stage changes" {

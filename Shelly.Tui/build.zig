@@ -83,14 +83,14 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    const zigzag = b.dependency("zigzag", .{
+    const vaxis = b.dependency("vaxis", .{
         .target = target,
         .optimize = optimize,
     });
-    const zigzag_module = zigzag.module("zigzag");
+    const vaxis_module = vaxis.module("vaxis");
 
-    mod.addImport("zigzag", zigzag_module);
-    exe.root_module.addImport("zigzag", zigzag_module);
+    mod.addImport("vaxis", vaxis_module);
+    exe.root_module.addImport("vaxis", vaxis_module);
 
     const zigalpm_dependency = b.dependency("zigalpm", .{
         .target = target,

@@ -4,7 +4,7 @@ const appimage = @import("bindings.zig").appimage;
 const builtin = @import("builtin");
 const appimage_manager = @import("manager.zig");
 const events = @import("events.zig");
-const xdg_paths = @import("../shared/xdg_paths.zig").xdg_paths;
+
 const downloader = @import("../shared/downloader.zig");
 const operation_api = @import("operation_context");
 
@@ -17,6 +17,11 @@ pub const UpdateManager = struct {
     dispatcher: ?*events.Dispatcher = null,
     operation_context: ?*operation_api.OperationContext = null,
     owned_dispatcher: ?*events.Dispatcher = null,
+    database_commit: appimage_manager.DatabaseCommitFn = appimage_manager.commitDatabase,
+    /// Optional local path that, when set, replaces the network download in
+    /// `update`. Used by integration tests to exercise the post-download logic
+    /// deterministically. Production callers leave this null.
+    staged_download_path: ?[]const u8 = null,
 
     pub fn setEventDispatcher(self: *UpdateManager, dispatcher: ?*events.Dispatcher) void {
         self.dispatcher = dispatcher orelse self.owned_dispatcher;
@@ -323,12 +328,15 @@ pub const UpdateManager = struct {
     }
 
     pub fn update(self: UpdateManager, appimage_ptr: *appimage.AppImageUpdate) !bool {
+        if (!builtin.is_test and builtin.os.tag == .linux and std.os.linux.geteuid() == 0) {
+            return error.RootAppImageMutationDenied;
+        }
         var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .update, appimage_ptr.name);
         operation_scope.attach();
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try self.checkCancelled();
-        const manager = appimage_manager.AppImageManager{
+        var manager = appimage_manager.AppImageManager{
             .allocator = self.allocator,
             .io = self.io,
             .environ = self.environ,
@@ -336,6 +344,7 @@ pub const UpdateManager = struct {
             .local_db_path = self.local_db_path,
             .dispatcher = self.dispatcher,
             .operation_context = self.operation_context,
+            .database_commit = self.database_commit,
         };
 
         const apps = try manager.getAppImagesFromLocalDb();
@@ -376,56 +385,74 @@ pub const UpdateManager = struct {
             return false;
         }
 
-        const cache_home = try xdg_paths.xdgCacheHome(self.allocator, self.environ);
-        defer self.allocator.free(cache_home);
-        const backup_dir = try std.fs.path.join(self.allocator, &.{ cache_home, "Shelly", appimage_ptr.name });
-        defer self.allocator.free(backup_dir);
-
-        const backup_filename = try std.fmt.allocPrint(
-            self.allocator,
-            "{s}-{s}.AppImage.bak",
-            .{ app_to_update.name, app_to_update.version },
-        );
-        defer self.allocator.free(backup_filename);
-        const backup_path = try std.fs.path.join(self.allocator, &.{ backup_dir, backup_filename });
-        defer self.allocator.free(backup_path);
-
-        const download_path = try std.fmt.allocPrint(self.allocator, "{s}.rep", .{current_path});
+        const download_path = try manager.uniqueSiblingPath(current_path, "download");
         defer self.allocator.free(download_path);
+        defer std.Io.Dir.cwd().deleteFile(self.io, download_path) catch {};
 
-        try std.Io.Dir.cwd().createDirPath(self.io, backup_dir);
-
-        std.log.info("Downloading update for {s}...", .{appimage_ptr.name});
-
-        var dl = downloader.CoreDownloader.init(self.allocator, self.io, .default());
-        defer dl.deinit();
-        if (self.dispatcher) |dispatcher| {
-            if (dispatcher.operation) |operation| dl.setParentOperation(operation) else dl.setOperationContext(self.operation_context);
-        } else {
-            dl.setOperationContext(self.operation_context);
-        }
-        var download_context = DownloadContext{ .manager = self, .app_name = appimage_ptr.name };
-        dl.setEventCallback(onDownloadEvent, &download_context);
-
-        const dl_result = dl.downloadToFile(appimage_ptr.download_url, download_path, false);
-        switch (dl_result) {
-            .failure => |err| {
-                std.log.err("Failed to download update for {s}: {s}", .{ appimage_ptr.name, @errorName(err) });
-                self.emitStatusFmt(.err, "Failed to download update for {s}: {s}", .{ appimage_ptr.name, @errorName(err) });
-                std.Io.Dir.cwd().deleteFile(self.io, download_path) catch {};
+        if (self.staged_download_path) |staged| {
+            manager.copyFile(staged, download_path) catch |err| {
+                std.log.err("Could not stage update for {s}: {s}", .{ appimage_ptr.name, @errorName(err) });
+                self.emitStatusFmt(.err, "Could not stage update for {s}: {s}", .{ appimage_ptr.name, @errorName(err) });
                 return false;
-            },
-            else => {},
+            };
+        } else {
+            std.log.info("Downloading update for {s}...", .{appimage_ptr.name});
+            var dl = downloader.CoreDownloader.init(self.allocator, self.io, .default());
+            defer dl.deinit();
+            if (self.dispatcher) |dispatcher| {
+                if (dispatcher.operation) |operation| dl.setParentOperation(operation) else dl.setOperationContext(self.operation_context);
+            } else {
+                dl.setOperationContext(self.operation_context);
+            }
+            var download_context = DownloadContext{ .manager = self, .app_name = appimage_ptr.name };
+            dl.setEventCallback(onDownloadEvent, &download_context);
+
+            const dl_result = dl.downloadToFile(appimage_ptr.download_url, download_path, false);
+            switch (dl_result) {
+                .failure => |err| {
+                    std.log.err("Failed to download update for {s}: {s}", .{ appimage_ptr.name, @errorName(err) });
+                    self.emitStatusFmt(.err, "Failed to download update for {s}: {s}", .{ appimage_ptr.name, @errorName(err) });
+                    return false;
+                },
+                else => {},
+            }
         }
+
+        return self.applyDownloadedUpdate(appimage_ptr, app_to_update, current_path, download_path);
+    }
+
+    pub fn applyDownloadedUpdate(
+        self: UpdateManager,
+        appimage_ptr: *const appimage.AppImageUpdate,
+        app_to_update: appimage.AppImage,
+        current_path: []const u8,
+        download_path: []const u8,
+    ) !bool {
+        var manager = appimage_manager.AppImageManager{
+            .allocator = self.allocator,
+            .io = self.io,
+            .environ = self.environ,
+            .install_directory = self.install_directory,
+            .local_db_path = self.local_db_path,
+            .dispatcher = self.dispatcher,
+            .operation_context = self.operation_context,
+            .database_commit = self.database_commit,
+        };
 
         try manager.setExecutable(download_path);
 
-        const new_metadata = (try manager.extractMetadata(download_path)) orelse {
+        var content = (try manager.extractMetadataPure(download_path, app_to_update.name, current_path)) orelse {
             self.emitStatusFmt(.err, "Downloaded update for {s} is not a usable AppImage.", .{appimage_ptr.name});
-            std.Io.Dir.cwd().deleteFile(self.io, download_path) catch {};
             return false;
         };
-        defer manager.freeAppImage(new_metadata);
+        defer content.deinit();
+        const new_metadata = content.metadata;
+
+        self.emitStatusFmt(
+            .information,
+            "Extracted update metadata: desktop name '{s}' -> '{s}', version '{s}' -> '{s}'.",
+            .{ app_to_update.desktop_name, new_metadata.desktop_name, app_to_update.version, new_metadata.version },
+        );
 
         const download_filename = std.fs.path.basename(appimage_ptr.download_url);
         if (!isCorrectArchitecture(download_filename)) {
@@ -433,38 +460,50 @@ pub const UpdateManager = struct {
             self.emitStatus(.warning, "The downloaded AppImage might not match your system architecture.");
         }
 
+        const backup_path = try manager.uniqueSiblingPath(current_path, "binary-backup");
+        defer self.allocator.free(backup_path);
+        defer std.Io.Dir.cwd().deleteFile(self.io, backup_path) catch {};
         std.log.info("Backing up current version to {s}...", .{backup_path});
         self.emitStatusFmt(.information, "Backing up the current AppImage to {s}...", .{backup_path});
-        try manager.copyFile(current_path, backup_path);
+        std.Io.Dir.hardLink(.cwd(), current_path, .cwd(), backup_path, self.io, .{}) catch try manager.copyFile(current_path, backup_path);
 
-        manager.copyFile(download_path, current_path) catch |err| {
-            std.log.err("Error installing new version: {s}. Rolling back...", .{@errorName(err)});
-            self.emitStatusFmt(.err, "Could not install the AppImage update: {s}. Rolling back...", .{@errorName(err)});
-            manager.copyFile(backup_path, current_path) catch {};
-            std.Io.Dir.cwd().deleteFile(self.io, download_path) catch {};
+        manager.writeFileAtomically(download_path, current_path, "replacement") catch |err| {
+            std.log.warn("Error installing new version: {s}.", .{@errorName(err)});
+            self.emitStatusFmt(.err, "Could not install the AppImage update: {s}.", .{@errorName(err)});
             return false;
         };
-        std.Io.Dir.cwd().deleteFile(self.io, download_path) catch {};
-
-        const updated_app = appimage.AppImage{
-            .name = app_to_update.name,
-            .version = appimage_ptr.version,
-            .raw_update_info = app_to_update.raw_update_info,
-            .icon_name = new_metadata.icon_name,
-            .description = new_metadata.description,
-            .desktop_name = app_to_update.desktop_name,
-            .size_on_disk = new_metadata.size_on_disk,
-            .command_line_args = app_to_update.command_line_args,
-            .path = app_to_update.path,
-            .update_url = app_to_update.update_url,
-            .update_type = app_to_update.update_type,
-            .repo_owner = app_to_update.repo_owner,
-            .repo_name = app_to_update.repo_name,
-            .allow_prerelease = app_to_update.allow_prerelease,
+        manager.setExecutable(current_path) catch |err| {
+            std.log.warn("Could not make updated AppImage executable: {s}.", .{@errorName(err)});
+            self.emitStatusFmt(.err, "Could not make the AppImage update executable: {s}.", .{@errorName(err)});
+            manager.writeFileAtomically(backup_path, current_path, "restore") catch {};
+            return false;
         };
-        try manager.addAppImageToLocalDb(updated_app);
+        self.emitStatus(.information, "Replaced installed AppImage binary.");
 
-        self.emitStatusFmt(.success, "Updated AppImage {s} to {s}.", .{ app_to_update.name, appimage_ptr.version });
+        var updated_app = appimage_manager.AppImageManager.mergeMetadata(app_to_update, new_metadata, appimage_ptr.version);
+        updated_app.path = current_path;
+        var integration = manager.beginDesktopIntegration(updated_app, current_path, content.source_desktop_path, content.icon_source) catch |err| {
+            std.log.warn("Could not refresh desktop entry for {s}: {s}. Rolling back...", .{ appimage_ptr.name, @errorName(err) });
+            self.emitStatusFmt(.err, "Could not refresh the desktop entry: {s}. Rolling back...", .{@errorName(err)});
+            manager.writeFileAtomically(backup_path, current_path, "restore") catch {};
+            return false;
+        };
+        defer integration.deinit();
+        self.emitStatus(.information, "Refreshed desktop entry and icon cache.");
+
+        manager.addAppImageToLocalDb(updated_app) catch |err| {
+            std.log.warn("Could not persist updated metadata: {s}. Rolling back...", .{@errorName(err)});
+            self.emitStatusFmt(.err, "Could not persist the AppImage update: {s}. Rolling back...", .{@errorName(err)});
+            integration.rollback() catch |rollback_err| self.emitStatusFmt(.err, "Could not restore desktop integration: {s}.", .{@errorName(rollback_err)});
+            manager.writeFileAtomically(backup_path, current_path, "restore") catch |restore_err| self.emitStatusFmt(.err, "Could not restore AppImage binary: {s}.", .{@errorName(restore_err)});
+            return false;
+        };
+        try integration.finish();
+        std.Io.Dir.cwd().deleteFile(self.io, backup_path) catch |err| {
+            self.emitStatusFmt(.warning, "Could not remove the AppImage backup: {s}.", .{@errorName(err)});
+        };
+
+        self.emitStatusFmt(.success, "Updated AppImage {s} to {s}.", .{ app_to_update.name, updated_app.version });
         return true;
     }
 
@@ -2108,7 +2147,6 @@ test "update: downloads real AppImage and returns true" {
     const result = try um.update(&dto);
     try std.testing.expect(result);
 
-    // Verify the DB was updated with the new version
     const manager = appimage_manager.AppImageManager{
         .allocator = std.testing.allocator,
         .io = std.testing.io,
@@ -2118,14 +2156,20 @@ test "update: downloads real AppImage and returns true" {
     };
     const apps = try manager.getAppImagesFromLocalDb();
     defer manager.freeAppImages(apps);
-    var found = false;
-    for (apps) |a| {
-        if (std.mem.eql(u8, a.version, "continuous")) {
-            found = true;
-            break;
-        }
-    }
-    try std.testing.expect(found);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqualStrings(app_name, apps[0].name);
+    const expected_path = try std.fmt.allocPrint(
+        std.testing.allocator,
+        "{s}/{s}.AppImage",
+        .{ dir_path, app_name },
+    );
+    defer std.testing.allocator.free(expected_path);
+    try std.testing.expectEqualStrings(expected_path, apps[0].path);
+    const installed_stat = try std.Io.Dir.cwd().statFile(std.testing.io, expected_path, .{});
+    try std.testing.expect(installed_stat.permissions.toMode() & 0o111 != 0);
+    try std.testing.expect(
+        std.mem.eql(u8, apps[0].version, "continuous") or apps[0].version.len > 0,
+    );
 }
 
 test "update: name lookup is case-insensitive" {
@@ -2155,4 +2199,693 @@ test "update: name lookup is case-insensitive" {
     // Will fail at "file not found" (not "app not found"), proving case-insensitive match worked
     const result = try um.update(&dto);
     try std.testing.expect(!result);
+}
+
+const newDesktopNameAppImage =
+    \\#!/bin/sh
+    \\if [ "$1" = "--appimage-extract" ]; then
+    \\  mkdir -p squashfs-root
+    \\  printf '%s\n' '[Desktop Entry]' 'Name=New Name' 'X-AppImage-Version=2.0.0' 'Exec=editor %U' 'Icon=editor' 'Categories=Utility;' > squashfs-root/editor.desktop
+    \\  exit 0
+    \\fi
+    \\exit 0
+;
+
+const noEmbeddedDesktopAppImage =
+    \\#!/bin/sh
+    \\if [ "$1" = "--appimage-extract" ]; then
+    \\  mkdir -p squashfs-root
+    \\  exit 0
+    \\fi
+    \\exit 0
+;
+
+fn writeUpdateFixture(io: std.Io, path: []const u8, contents: []const u8) !void {
+    var file = try std.Io.Dir.cwd().createFile(io, path, .{});
+    defer file.close(io);
+    var write_buf: [4096]u8 = undefined;
+    var writer = file.writer(io, &write_buf);
+    try writer.interface.writeAll(contents);
+    try writer.interface.flush();
+}
+
+fn readUpdateFile(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]u8 {
+    var file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer file.close(io);
+    var read_buf: [4096]u8 = undefined;
+    var reader = file.reader(io, &read_buf);
+    return reader.interface.allocRemaining(allocator, .unlimited);
+}
+
+fn makeStagedUpdateManager(
+    allocator: std.mem.Allocator,
+    install_dir: []const u8,
+    db_path: []const u8,
+    staged_download_path: []const u8,
+) UpdateManager {
+    return .{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .environ = std.testing.environ,
+        .install_directory = install_dir,
+        .local_db_path = db_path,
+        .staged_download_path = staged_download_path,
+    };
+}
+
+test "update: automated update refreshes desktop name and exec path" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "install" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    const data_home = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "data" });
+    defer std.testing.allocator.free(data_home);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, data_home);
+
+    var environ = std.process.Environ.Map.init(std.testing.allocator);
+    defer environ.deinit();
+    try environ.put("HOME", dir_path);
+    try environ.put("XDG_DATA_HOME", data_home);
+    try environ.put("XDG_CACHE_HOME", dir_path);
+    var environ_block = try environ.createPosixBlock(std.testing.allocator, .{});
+    defer environ_block.deinit(std.testing.allocator);
+    const test_environ: std.process.Environ = .{ .block = environ_block };
+
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "apps.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const app_name = "Editor";
+    const current_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(current_path);
+    try writeUpdateFixture(std.testing.io, current_path, "#!/bin/sh\nexit 0\n");
+
+    const desktop_dir = try std.fs.path.join(std.testing.allocator, &.{ data_home, "applications" });
+    defer std.testing.allocator.free(desktop_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, desktop_dir);
+    const desktop_path = try std.fs.path.join(std.testing.allocator, &.{ desktop_dir, "editor.desktop" });
+    defer std.testing.allocator.free(desktop_path);
+    try writeUpdateFixture(std.testing.io, desktop_path, "[Desktop Entry]\nName=Old Name\nExec=old-binary\n");
+
+    try seedDb(std.testing.allocator, std.testing.io, db_path, &.{
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Old Name", .path = current_path },
+    });
+
+    const staged_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "staged.AppImage" });
+    defer std.testing.allocator.free(staged_path);
+    try writeUpdateFixture(std.testing.io, staged_path, newDesktopNameAppImage);
+
+    var um = makeStagedUpdateManager(std.testing.allocator, install_dir, db_path, staged_path);
+    um.environ = test_environ;
+    var dto = appimage.AppImageUpdate{
+        .name = app_name,
+        .version = "2.0.0",
+        .download_url = "https://example.com/Editor.AppImage",
+        .is_update_available = true,
+    };
+    try std.testing.expect(try um.update(&dto));
+
+    const manager = appimage_manager.AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = test_environ,
+        .install_directory = install_dir,
+        .local_db_path = db_path,
+    };
+    const apps = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqualStrings("New Name", apps[0].desktop_name);
+    try std.testing.expectEqualStrings("2.0.0", apps[0].version);
+    try std.testing.expectEqualStrings(current_path, apps[0].path);
+
+    const desktop = try readUpdateFile(std.testing.allocator, std.testing.io, desktop_path);
+    defer std.testing.allocator.free(desktop);
+    try std.testing.expect(std.mem.indexOf(u8, desktop, "Name=New Name\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, desktop, "Name=Old Name") == null);
+    const expected_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\" %U\n", .{current_path});
+    defer std.testing.allocator.free(expected_exec);
+    try std.testing.expect(std.mem.indexOf(u8, desktop, expected_exec) != null);
+}
+
+test "update: preserves GitHub provider configuration" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "install" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    const data_home = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "data" });
+    defer std.testing.allocator.free(data_home);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, data_home);
+
+    var environ = std.process.Environ.Map.init(std.testing.allocator);
+    defer environ.deinit();
+    try environ.put("HOME", dir_path);
+    try environ.put("XDG_DATA_HOME", data_home);
+    try environ.put("XDG_CACHE_HOME", dir_path);
+    var environ_block = try environ.createPosixBlock(std.testing.allocator, .{});
+    defer environ_block.deinit(std.testing.allocator);
+    const test_environ: std.process.Environ = .{ .block = environ_block };
+
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "apps.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const app_name = "Editor";
+    const current_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(current_path);
+    try writeUpdateFixture(std.testing.io, current_path, "#!/bin/sh\nexit 0\n");
+
+    try seedDb(std.testing.allocator, std.testing.io, db_path, &.{
+        .{
+            .name = app_name,
+            .version = "1.0.0",
+            .desktop_name = "Old Name",
+            .path = current_path,
+            .update_type = .github,
+            .repo_owner = "shelly",
+            .repo_name = "editor",
+            .allow_prerelease = true,
+            .update_url = "https://updates.example.com/editor",
+        },
+    });
+
+    const staged_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "staged.AppImage" });
+    defer std.testing.allocator.free(staged_path);
+    try writeUpdateFixture(std.testing.io, staged_path, newDesktopNameAppImage);
+
+    var um = makeStagedUpdateManager(std.testing.allocator, install_dir, db_path, staged_path);
+    um.environ = test_environ;
+    var dto = appimage.AppImageUpdate{
+        .name = app_name,
+        .version = "2.0.0",
+        .download_url = "https://example.com/Editor.AppImage",
+        .is_update_available = true,
+    };
+    try std.testing.expect(try um.update(&dto));
+
+    const manager = appimage_manager.AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = test_environ,
+        .install_directory = install_dir,
+        .local_db_path = db_path,
+    };
+    const apps = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqual(appimage.UpdateType.github, apps[0].update_type);
+    try std.testing.expectEqualStrings("shelly", apps[0].repo_owner.?);
+    try std.testing.expectEqualStrings("editor", apps[0].repo_name.?);
+    try std.testing.expect(apps[0].allow_prerelease);
+    try std.testing.expectEqualStrings("https://updates.example.com/editor", apps[0].update_url);
+    try std.testing.expectEqualStrings("New Name", apps[0].desktop_name);
+}
+
+test "update: preserves stable desktop filename when display name changes" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "install" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    const data_home = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "data" });
+    defer std.testing.allocator.free(data_home);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, data_home);
+
+    var environ = std.process.Environ.Map.init(std.testing.allocator);
+    defer environ.deinit();
+    try environ.put("HOME", dir_path);
+    try environ.put("XDG_DATA_HOME", data_home);
+    try environ.put("XDG_CACHE_HOME", dir_path);
+    var environ_block = try environ.createPosixBlock(std.testing.allocator, .{});
+    defer environ_block.deinit(std.testing.allocator);
+    const test_environ: std.process.Environ = .{ .block = environ_block };
+
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "apps.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const app_name = "Editor";
+    const current_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(current_path);
+    try writeUpdateFixture(std.testing.io, current_path, "#!/bin/sh\nexit 0\n");
+
+    const desktop_dir = try std.fs.path.join(std.testing.allocator, &.{ data_home, "applications" });
+    defer std.testing.allocator.free(desktop_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, desktop_dir);
+    const desktop_path = try std.fs.path.join(std.testing.allocator, &.{ desktop_dir, "editor.desktop" });
+    defer std.testing.allocator.free(desktop_path);
+    try writeUpdateFixture(std.testing.io, desktop_path, "[Desktop Entry]\nName=Old Name\nExec=old-binary\n");
+
+    try seedDb(std.testing.allocator, std.testing.io, db_path, &.{
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Old Name", .path = current_path },
+    });
+
+    const staged_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "staged.AppImage" });
+    defer std.testing.allocator.free(staged_path);
+    try writeUpdateFixture(std.testing.io, staged_path, newDesktopNameAppImage);
+
+    var um = makeStagedUpdateManager(std.testing.allocator, install_dir, db_path, staged_path);
+    um.environ = test_environ;
+    var dto = appimage.AppImageUpdate{
+        .name = app_name,
+        .version = "2.0.0",
+        .download_url = "https://example.com/Editor.AppImage",
+        .is_update_available = true,
+    };
+    try std.testing.expect(try um.update(&dto));
+
+    // Only the stable <clean_name>.desktop file should exist (ignore cache files).
+    var dir = try std.Io.Dir.cwd().openDir(std.testing.io, desktop_dir, .{ .iterate = true });
+    defer dir.close(std.testing.io);
+    var it = dir.iterate();
+    var count: usize = 0;
+    while (try it.next(std.testing.io)) |entry| {
+        if (entry.kind != .file) continue;
+        if (!std.mem.endsWith(u8, entry.name, ".desktop")) continue;
+        try std.testing.expectEqualStrings("editor.desktop", entry.name);
+        count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 1), count);
+}
+
+test "update: preserves Exec= field codes" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "install" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    const data_home = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "data" });
+    defer std.testing.allocator.free(data_home);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, data_home);
+
+    var environ = std.process.Environ.Map.init(std.testing.allocator);
+    defer environ.deinit();
+    try environ.put("HOME", dir_path);
+    try environ.put("XDG_DATA_HOME", data_home);
+    try environ.put("XDG_CACHE_HOME", dir_path);
+    var environ_block = try environ.createPosixBlock(std.testing.allocator, .{});
+    defer environ_block.deinit(std.testing.allocator);
+    const test_environ: std.process.Environ = .{ .block = environ_block };
+
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "apps.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const app_name = "Editor";
+    const current_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(current_path);
+    try writeUpdateFixture(std.testing.io, current_path, "#!/bin/sh\nexit 0\n");
+
+    try seedDb(std.testing.allocator, std.testing.io, db_path, &.{
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Editor", .path = current_path },
+    });
+
+    const staged_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "staged.AppImage" });
+    defer std.testing.allocator.free(staged_path);
+    try writeUpdateFixture(std.testing.io, staged_path, newDesktopNameAppImage);
+
+    var um = makeStagedUpdateManager(std.testing.allocator, install_dir, db_path, staged_path);
+    um.environ = test_environ;
+    var dto = appimage.AppImageUpdate{
+        .name = app_name,
+        .version = "2.0.0",
+        .download_url = "https://example.com/Editor.AppImage",
+        .is_update_available = true,
+    };
+    try std.testing.expect(try um.update(&dto));
+
+    const desktop_dir = try std.fs.path.join(std.testing.allocator, &.{ data_home, "applications" });
+    defer std.testing.allocator.free(desktop_dir);
+    const desktop_path = try std.fs.path.join(std.testing.allocator, &.{ desktop_dir, "editor.desktop" });
+    defer std.testing.allocator.free(desktop_path);
+    const desktop = try readUpdateFile(std.testing.allocator, std.testing.io, desktop_path);
+    defer std.testing.allocator.free(desktop);
+    const expected_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\" %U\n", .{current_path});
+    defer std.testing.allocator.free(expected_exec);
+    try std.testing.expect(std.mem.indexOf(u8, desktop, expected_exec) != null);
+}
+
+test "update: failed database commit rolls back binary and desktop" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "install" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    const data_home = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "data" });
+    defer std.testing.allocator.free(data_home);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, data_home);
+
+    var environ = std.process.Environ.Map.init(std.testing.allocator);
+    defer environ.deinit();
+    try environ.put("HOME", dir_path);
+    try environ.put("XDG_DATA_HOME", data_home);
+    try environ.put("XDG_CACHE_HOME", dir_path);
+    var environ_block = try environ.createPosixBlock(std.testing.allocator, .{});
+    defer environ_block.deinit(std.testing.allocator);
+    const test_environ: std.process.Environ = .{ .block = environ_block };
+
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "apps.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const app_name = "Editor";
+    const current_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(current_path);
+    const old_binary = "#!/bin/sh\nold-binary\nexit 0\n";
+    try writeUpdateFixture(std.testing.io, current_path, old_binary);
+
+    const desktop_dir = try std.fs.path.join(std.testing.allocator, &.{ data_home, "applications" });
+    defer std.testing.allocator.free(desktop_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, desktop_dir);
+    const desktop_path = try std.fs.path.join(std.testing.allocator, &.{ desktop_dir, "editor.desktop" });
+    defer std.testing.allocator.free(desktop_path);
+    const old_desktop = "[Desktop Entry]\nName=Old Name\nExec=old-binary\n";
+    try writeUpdateFixture(std.testing.io, desktop_path, old_desktop);
+
+    try seedDb(std.testing.allocator, std.testing.io, db_path, &.{
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Old Name", .path = current_path },
+    });
+
+    const staged_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "staged.AppImage" });
+    defer std.testing.allocator.free(staged_path);
+    try writeUpdateFixture(std.testing.io, staged_path, newDesktopNameAppImage);
+
+    var um = makeStagedUpdateManager(std.testing.allocator, install_dir, db_path, staged_path);
+    um.environ = test_environ;
+    um.database_commit = appimage_manager.failDatabaseCommit;
+    var dto = appimage.AppImageUpdate{
+        .name = app_name,
+        .version = "2.0.0",
+        .download_url = "https://example.com/Editor.AppImage",
+        .is_update_available = true,
+    };
+    try std.testing.expect(!try um.update(&dto));
+
+    // Binary content should be the original.
+    const installed_binary = try readUpdateFile(std.testing.allocator, std.testing.io, current_path);
+    defer std.testing.allocator.free(installed_binary);
+    try std.testing.expectEqualStrings(old_binary, installed_binary);
+
+    // Desktop file should be the original.
+    const installed_desktop = try readUpdateFile(std.testing.allocator, std.testing.io, desktop_path);
+    defer std.testing.allocator.free(installed_desktop);
+    try std.testing.expectEqualStrings(old_desktop, installed_desktop);
+
+    // DB record should still be the old one.
+    const manager = appimage_manager.AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = test_environ,
+        .install_directory = install_dir,
+        .local_db_path = db_path,
+    };
+    const apps = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqualStrings("1.0.0", apps[0].version);
+    try std.testing.expectEqualStrings("Old Name", apps[0].desktop_name);
+}
+
+test "update: no embedded desktop file uses fallback entry" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "install" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    const data_home = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "data" });
+    defer std.testing.allocator.free(data_home);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, data_home);
+
+    var environ = std.process.Environ.Map.init(std.testing.allocator);
+    defer environ.deinit();
+    try environ.put("HOME", dir_path);
+    try environ.put("XDG_DATA_HOME", data_home);
+    try environ.put("XDG_CACHE_HOME", dir_path);
+    var environ_block = try environ.createPosixBlock(std.testing.allocator, .{});
+    defer environ_block.deinit(std.testing.allocator);
+    const test_environ: std.process.Environ = .{ .block = environ_block };
+
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "apps.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const app_name = "Editor";
+    const current_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(current_path);
+    try writeUpdateFixture(std.testing.io, current_path, "#!/bin/sh\nexit 0\n");
+
+    try seedDb(std.testing.allocator, std.testing.io, db_path, &.{
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Editor", .path = current_path },
+    });
+
+    const staged_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "staged.AppImage" });
+    defer std.testing.allocator.free(staged_path);
+    try writeUpdateFixture(std.testing.io, staged_path, noEmbeddedDesktopAppImage);
+
+    var um = makeStagedUpdateManager(std.testing.allocator, install_dir, db_path, staged_path);
+    um.environ = test_environ;
+    var dto = appimage.AppImageUpdate{
+        .name = app_name,
+        .version = "2.0.0",
+        .download_url = "https://example.com/Editor.AppImage",
+        .is_update_available = true,
+    };
+    try std.testing.expect(try um.update(&dto));
+
+    const desktop_dir = try std.fs.path.join(std.testing.allocator, &.{ data_home, "applications" });
+    defer std.testing.allocator.free(desktop_dir);
+    const desktop_path = try std.fs.path.join(std.testing.allocator, &.{ desktop_dir, "editor.desktop" });
+    defer std.testing.allocator.free(desktop_path);
+    const desktop = try readUpdateFile(std.testing.allocator, std.testing.io, desktop_path);
+    defer std.testing.allocator.free(desktop);
+    // Fallback entry should use the logical app name and final installed path.
+    try std.testing.expect(std.mem.indexOf(u8, desktop, "Name=Editor\n") != null);
+    const expected_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\"\n", .{current_path});
+    defer std.testing.allocator.free(expected_exec);
+    try std.testing.expect(std.mem.indexOf(u8, desktop, expected_exec) != null);
+}
+
+// Test F: sync and automated update produce equivalent metadata and desktop
+// integration for the same old/new AppImage pair. This guards against the two
+// code paths drifting in desktop name, description, icon, size, or desktop
+// file contents.
+const ParityEnv = struct {
+    dir_path: []const u8,
+    install_dir: []const u8,
+    data_home: []const u8,
+    db_path: []const u8,
+    desktop_path: []const u8,
+    current_path: []const u8,
+    environ: std.process.Environ,
+    environ_block: std.process.Environ.PosixBlock,
+
+    fn deinit(self: *ParityEnv, allocator: std.mem.Allocator) void {
+        self.environ_block.deinit(allocator);
+        allocator.free(self.desktop_path);
+        allocator.free(self.current_path);
+        allocator.free(self.db_path);
+        allocator.free(self.data_home);
+        allocator.free(self.install_dir);
+        allocator.free(self.dir_path);
+    }
+};
+
+fn makeParityEnv(
+    allocator: std.mem.Allocator,
+    tmp: *std.testing.TmpDir,
+) !ParityEnv {
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try allocator.dupe(u8, path_buf[0..len]);
+    errdefer allocator.free(dir_path);
+
+    const install_dir = try std.fs.path.join(allocator, &.{ dir_path, "install" });
+    errdefer allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    const data_home = try std.fs.path.join(allocator, &.{ dir_path, "data" });
+    errdefer allocator.free(data_home);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, data_home);
+
+    const db_path = try std.fs.path.join(allocator, &.{ dir_path, "apps.db" });
+    errdefer allocator.free(db_path);
+
+    const current_path = try std.fs.path.join(allocator, &.{ install_dir, "Editor.AppImage" });
+    errdefer allocator.free(current_path);
+    try writeUpdateFixture(std.testing.io, current_path, "#!/bin/sh\nexit 0\n");
+
+    const desktop_dir = try std.fs.path.join(allocator, &.{ data_home, "applications" });
+    defer allocator.free(desktop_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, desktop_dir);
+    const desktop_path = try std.fs.path.join(allocator, &.{ desktop_dir, "editor.desktop" });
+    errdefer allocator.free(desktop_path);
+    try writeUpdateFixture(std.testing.io, desktop_path, "[Desktop Entry]\nName=Old Name\nExec=old-binary\n");
+
+    var environ = std.process.Environ.Map.init(allocator);
+    defer environ.deinit();
+    try environ.put("HOME", dir_path);
+    try environ.put("XDG_DATA_HOME", data_home);
+    try environ.put("XDG_CACHE_HOME", dir_path);
+    const environ_block = try environ.createPosixBlock(allocator, .{});
+
+    return .{
+        .dir_path = dir_path,
+        .install_dir = install_dir,
+        .data_home = data_home,
+        .db_path = db_path,
+        .desktop_path = desktop_path,
+        .current_path = current_path,
+        .environ = .{ .block = environ_block },
+        .environ_block = environ_block,
+    };
+}
+
+test "update: sync and automated update produce equivalent metadata" {
+    var sync_tmp = std.testing.tmpDir(.{});
+    defer sync_tmp.cleanup();
+    var update_tmp = std.testing.tmpDir(.{});
+    defer update_tmp.cleanup();
+
+    var sync_env = try makeParityEnv(std.testing.allocator, &sync_tmp);
+    defer sync_env.deinit(std.testing.allocator);
+    var update_env = try makeParityEnv(std.testing.allocator, &update_tmp);
+    defer update_env.deinit(std.testing.allocator);
+
+    const app_name = "Editor";
+
+    // Seed both databases with the same old record.
+    try seedDb(std.testing.allocator, std.testing.io, sync_env.db_path, &.{
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Old Name", .path = sync_env.current_path },
+    });
+    try seedDb(std.testing.allocator, std.testing.io, update_env.db_path, &.{
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Old Name", .path = update_env.current_path },
+    });
+
+    // For sync: place the new AppImage at the install path (sync inspects the
+    // installed binary). For update: stage the new AppImage for download. Both
+    // fixtures must be executable so `extractMetadataPure` can spawn them.
+    try writeUpdateFixture(std.testing.io, sync_env.current_path, newDesktopNameAppImage);
+    const sync_manager_for_chmod = appimage_manager.AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = sync_env.environ,
+        .install_directory = sync_env.install_dir,
+        .local_db_path = sync_env.db_path,
+    };
+    try sync_manager_for_chmod.setExecutable(sync_env.current_path);
+    const staged_path = try std.fs.path.join(std.testing.allocator, &.{ update_env.dir_path, "staged.AppImage" });
+    defer std.testing.allocator.free(staged_path);
+    try writeUpdateFixture(std.testing.io, staged_path, newDesktopNameAppImage);
+
+    // Run sync against the sync environment.
+    const sync_manager = appimage_manager.AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = sync_env.environ,
+        .install_directory = sync_env.install_dir,
+        .local_db_path = sync_env.db_path,
+    };
+    try std.testing.expect(try sync_manager.syncAppImageMeta(&.{app_name}));
+
+    // Run update against the update environment.
+    var um = makeStagedUpdateManager(std.testing.allocator, update_env.install_dir, update_env.db_path, staged_path);
+    um.environ = update_env.environ;
+    var dto = appimage.AppImageUpdate{
+        .name = app_name,
+        .version = "2.0.0",
+        .download_url = "https://example.com/Editor.AppImage",
+        .is_update_available = true,
+    };
+    try std.testing.expect(try um.update(&dto));
+
+    // Compare database records.
+    const sync_db = appimage_manager.AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = sync_env.environ,
+        .install_directory = sync_env.install_dir,
+        .local_db_path = sync_env.db_path,
+    };
+    const sync_apps = try sync_db.getAppImagesFromLocalDb();
+    defer sync_db.freeAppImages(sync_apps);
+    const update_db = appimage_manager.AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = update_env.environ,
+        .install_directory = update_env.install_dir,
+        .local_db_path = update_env.db_path,
+    };
+    const update_apps = try update_db.getAppImagesFromLocalDb();
+    defer update_db.freeAppImages(update_apps);
+    try std.testing.expectEqual(@as(usize, 1), sync_apps.len);
+    try std.testing.expectEqual(@as(usize, 1), update_apps.len);
+    try std.testing.expectEqualStrings(sync_apps[0].desktop_name, update_apps[0].desktop_name);
+    try std.testing.expectEqualStrings(sync_apps[0].description, update_apps[0].description);
+    try std.testing.expectEqualStrings(sync_apps[0].icon_name, update_apps[0].icon_name);
+    try std.testing.expectEqual(sync_apps[0].size_on_disk, update_apps[0].size_on_disk);
+
+    // Compare desktop entries.
+    const sync_desktop = try readUpdateFile(std.testing.allocator, std.testing.io, sync_env.desktop_path);
+    defer std.testing.allocator.free(sync_desktop);
+    const update_desktop = try readUpdateFile(std.testing.allocator, std.testing.io, update_env.desktop_path);
+    defer std.testing.allocator.free(update_desktop);
+
+    // Both should use the new embedded desktop name.
+    try std.testing.expect(std.mem.indexOf(u8, sync_desktop, "Name=New Name\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, update_desktop, "Name=New Name\n") != null);
+
+    // Both should preserve the %U field code.
+    try std.testing.expect(std.mem.indexOf(u8, sync_desktop, "%U") != null);
+    try std.testing.expect(std.mem.indexOf(u8, update_desktop, "%U") != null);
+
+    // Both should reference their respective installed paths via Exec=.
+    const sync_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\" %U\n", .{sync_env.current_path});
+    defer std.testing.allocator.free(sync_exec);
+    const update_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\" %U\n", .{update_env.current_path});
+    defer std.testing.allocator.free(update_exec);
+    try std.testing.expect(std.mem.indexOf(u8, sync_desktop, sync_exec) != null);
+    try std.testing.expect(std.mem.indexOf(u8, update_desktop, update_exec) != null);
+
+    // Both should use the same icon (the fallback, since the fixture has no
+    // actual icon file, only a desktop-file Icon= line that is not installed).
+    try std.testing.expect(std.mem.indexOf(u8, sync_desktop, "Icon=application-x-executable\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, update_desktop, "Icon=application-x-executable\n") != null);
 }

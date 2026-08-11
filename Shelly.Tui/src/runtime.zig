@@ -1,5 +1,5 @@
 const std = @import("std");
-const xdg_paths = @import("xdg_paths.zig");
+const xdg_paths = @import("xdg_paths.zig").xdg_paths;
 
 // src/shellpers/runtime.zig
 pub var io: std.Io = undefined;

@@ -1,6 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 const Package = @import("packages.zig").Package;
+const AurPackage = @import("packages.zig").AurPackage;
 const Remote = @import("flatpak.zig").Remote;
 const Flatpak = @import("flatpak.zig").Flatpak;
 const AppstreamApp = @import("flatpak.zig").AppstreamApp;
@@ -16,6 +17,18 @@ pub const ShellyCli = struct {
     io: Io,
 
     fn run(self: ShellyCli, args: []const []const u8) !RunResult {
+        return self.runInner(args, false);
+    }
+
+    /// Mutating operations report failures silently because debug output
+    /// would corrupt the alternate screen. `std.process.run` already gives
+    /// the child an ignored stdin, so an unexpected prompt fails fast
+    /// instead of hanging the TUI.
+    fn runSilently(self: ShellyCli, args: []const []const u8) !RunResult {
+        return self.runInner(args, true);
+    }
+
+    fn runInner(self: ShellyCli, args: []const []const u8, comptime silent: bool) !RunResult {
         const shelly_bin = if (builtin.mode == .Debug)
             "../Shelly.Cli.Zig/zig-out/bin/shelly"
         else
@@ -34,9 +47,11 @@ pub const ShellyCli = struct {
         errdefer self.allocator.free(result.stdout);
         errdefer self.allocator.free(result.stderr);
         if (result.term != .exited or result.term.exited != 0) {
-            std.debug.print("failed: term={any} stderr='{s}' stdout='{s}'\n", .{
-                result.term, result.stderr, result.stdout[0..@min(500, result.stdout.len)],
-            });
+            if (!silent) {
+                std.debug.print("failed: term={any} stderr='{s}' stdout='{s}'\n", .{
+                    result.term, result.stderr, result.stdout[0..@min(500, result.stdout.len)],
+                });
+            }
             return error.CommandFailed;
         }
 
@@ -97,6 +112,36 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
         return JsonPackFrame.decodeLast(Package, self.allocator, result.stdout);
+    }
+
+    /// Searches the AUR via the CLI. The caller owns the parsed result.
+    pub fn search_aur(self: ShellyCli, query: []const u8) !std.json.Parsed([]AurPackage) {
+        const result = try self.run(&.{ "search", "aur", query });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        var it = JsonPackFrame.frames(result.stdout);
+        while (it.next()) |payload| {
+            const json = try JsonPackFrame.decodeBase64(self.allocator, payload);
+            defer self.allocator.free(json);
+            // Skip info/error frames, decode the first data frame
+            if (std.mem.indexOf(u8, json, "\"$kind\"") != null) continue;
+            return std.json.parseFromSlice([]AurPackage, self.allocator, json, .{
+                .ignore_unknown_fields = true,
+                .allocate = .alloc_always,
+            });
+        }
+        return error.NoDataFrame;
+    }
+
+    pub const InstallBackend = enum { standard, aur };
+
+    /// Installs a package through the CLI without prompting. Fails with
+    /// error.CommandFailed when the CLI exits non-zero.
+    pub fn install_package(self: ShellyCli, backend: InstallBackend, name: []const u8) !void {
+        const result = try self.runSilently(&.{ "install", @tagName(backend), name, "--no-confirm" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
     }
 
     pub fn check_updates(self: ShellyCli) !std.json.Parsed(CheckUpdates) {

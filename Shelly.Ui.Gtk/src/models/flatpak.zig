@@ -3,6 +3,7 @@ const std = @import("std");
 pub const Category = enum {
     @"All Applications",
     Recommended,
+    Verified,
     @"Most Wanted",
     @"Recently Added",
     @"Recently Updated",

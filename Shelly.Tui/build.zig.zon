@@ -31,12 +31,15 @@
     // `zig build --fetch` can be used to fetch all dependencies of a package, recursively.
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
-    .dependencies = .{ .zigzag = .{
-        .url = "git+https://github.com/meszmate/zigzag?ref=main#226dd3f8a1550082cf8d9b0f76035adeec95620f",
-        .hash = "zigzag-0.1.2-YXwYS_kJEgA3GRXhR4qLp6PfG0-RKpyQq-DxJLLqlF0a",
-    }, .zigalpm = .{
-        .path = "../Shelly.PackageManager",
-    } },
+    .dependencies = .{
+        .vaxis = .{
+            .url = "git+https://github.com/rockorager/libvaxis#82cec0db8fc57c32f2ce4c1c3fc377052f4c86ba",
+            .hash = "vaxis-0.6.0-BWNV_KwYCgB-L5MNRY8I8HGbKDE6KOxDPAVSaZ8-3lJ8",
+        },
+        .zigalpm = .{
+            .path = "../Shelly.PackageManager",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",

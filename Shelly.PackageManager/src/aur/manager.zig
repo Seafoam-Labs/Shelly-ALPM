@@ -2770,6 +2770,54 @@ test "review digest covers exact local source contents and missing sources fail 
     );
 }
 
+test "Dropbox brace-expanded signature is not treated as a local review input" {
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    try temporary.dir.writeFile(std.testing.io, .{
+        .sub_path = "PKGBUILD",
+        .data =
+        \\pkgname=dropbox
+        \\pkgver=258.4.3749
+        \\pkgrel=1
+        \\source=("DropboxGlyph_Blue.svg"
+        \\        "terms.txt"
+        \\        "dropbox.service"
+        \\        "dropbox@.service"
+        \\        "https://edge.dropboxstatic.com/dbx-releng/client/dropbox-lnx.x86_64-$pkgver.tar.gz"{,.asc})
+        \\
+        ,
+    });
+    const local_files = [_][]const u8{
+        "DropboxGlyph_Blue.svg",
+        "terms.txt",
+        "dropbox.service",
+        "dropbox@.service",
+    };
+    for (local_files) |file_name| {
+        try temporary.dir.writeFile(std.testing.io, .{
+            .sub_path = file_name,
+            .data = "reviewable text\n",
+        });
+    }
+
+    const cache_path = try temporary.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(cache_path);
+    const pkgbuild_path = try std.fs.path.join(std.testing.allocator, &.{ cache_path, "PKGBUILD" });
+    defer std.testing.allocator.free(pkgbuild_path);
+    var info = try (pkgbuild_parser.PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+    }).parser(pkgbuild_path);
+    defer info.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, local_files.len), info.local_source_files.?.len);
+    for (info.local_source_files.?, local_files) |actual, expected| {
+        try std.testing.expectEqualStrings(expected, actual);
+        try std.testing.expect(info.local_source_contents.contains(expected));
+    }
+    try requireReviewInputs(std.testing.allocator, std.testing.io, cache_path, &info);
+}
+
 test "fixture checkout cannot invoke fake makepkg before review and integrity gates pass" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;

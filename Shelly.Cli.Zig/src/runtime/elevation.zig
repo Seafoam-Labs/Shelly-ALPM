@@ -59,12 +59,30 @@ pub fn runAsInvokingUser(
     defer context.allocator.free(executable);
     const home_environment = try std.fmt.allocPrint(context.allocator, "HOME={s}", .{home});
     defer context.allocator.free(home_environment);
-    const xdg_environment = try std.fmt.allocPrint(
+    const config_environment = try std.fmt.allocPrint(
+        context.allocator,
+        "XDG_CONFIG_HOME={s}/.config",
+        .{home},
+    );
+    defer context.allocator.free(config_environment);
+    const data_environment = try std.fmt.allocPrint(
         context.allocator,
         "XDG_DATA_HOME={s}/.local/share",
         .{home},
     );
-    defer context.allocator.free(xdg_environment);
+    defer context.allocator.free(data_environment);
+    const cache_environment = try std.fmt.allocPrint(
+        context.allocator,
+        "XDG_CACHE_HOME={s}/.cache",
+        .{home},
+    );
+    defer context.allocator.free(cache_environment);
+    const bin_environment = try std.fmt.allocPrint(
+        context.allocator,
+        "XDG_BIN_HOME={s}/.local/bin",
+        .{home},
+    );
+    defer context.allocator.free(bin_environment);
     const runtime_environment = try std.fmt.allocPrint(
         context.allocator,
         "XDG_RUNTIME_DIR=/run/user/{s}",
@@ -83,7 +101,10 @@ pub fn runAsInvokingUser(
         identity.username,
         safe_executable,
         home_environment,
-        xdg_environment,
+        config_environment,
+        data_environment,
+        cache_environment,
+        bin_environment,
         runtime_environment,
         bus_environment,
         arguments,
@@ -149,22 +170,29 @@ fn buildInvokingUserArguments(
     user: []const u8,
     executable: []const u8,
     home_environment: []const u8,
-    xdg_environment: []const u8,
+    config_environment: []const u8,
+    data_environment: []const u8,
+    cache_environment: []const u8,
+    bin_environment: []const u8,
     runtime_environment: []const u8,
     bus_environment: []const u8,
     arguments: []const []const u8,
 ) ![]const []const u8 {
-    const result = try allocator.alloc([]const u8, arguments.len + 9);
+    const result = try allocator.alloc([]const u8, arguments.len + 13);
     result[0] = elevator;
     result[1] = "-u";
     result[2] = user;
     result[3] = "env";
-    result[4] = home_environment;
-    result[5] = xdg_environment;
-    result[6] = runtime_environment;
-    result[7] = bus_environment;
-    result[8] = executable;
-    @memcpy(result[9..], arguments);
+    result[4] = "-i";
+    result[5] = home_environment;
+    result[6] = config_environment;
+    result[7] = data_environment;
+    result[8] = cache_environment;
+    result[9] = bin_environment;
+    result[10] = runtime_environment;
+    result[11] = bus_environment;
+    result[12] = executable;
+    @memcpy(result[13..], arguments);
     return result;
 }
 
@@ -318,7 +346,7 @@ test "elevation child status maps to shell exit codes" {
     try std.testing.expectError(error.ElevationFailed, exitCode(.{ .unknown = 1 }));
 }
 
-test "calling-user arguments preserve Flatpak user storage" {
+test "calling-user arguments use a clean invoking-user environment" {
     const arguments = [_][]const u8{ "upgrade", "flatpak", "--no-confirm" };
     const actual = try buildInvokingUserArguments(
         std.testing.allocator,
@@ -326,7 +354,10 @@ test "calling-user arguments preserve Flatpak user storage" {
         "tester",
         "/usr/bin/shelly",
         "HOME=/home/tester",
+        "XDG_CONFIG_HOME=/home/tester/.config",
         "XDG_DATA_HOME=/home/tester/.local/share",
+        "XDG_CACHE_HOME=/home/tester/.cache",
+        "XDG_BIN_HOME=/home/tester/.local/bin",
         "XDG_RUNTIME_DIR=/run/user/1000",
         "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
         &arguments,
@@ -338,8 +369,12 @@ test "calling-user arguments preserve Flatpak user storage" {
         "-u",
         "tester",
         "env",
+        "-i",
         "HOME=/home/tester",
+        "XDG_CONFIG_HOME=/home/tester/.config",
         "XDG_DATA_HOME=/home/tester/.local/share",
+        "XDG_CACHE_HOME=/home/tester/.cache",
+        "XDG_BIN_HOME=/home/tester/.local/bin",
         "XDG_RUNTIME_DIR=/run/user/1000",
         "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
         "/usr/bin/shelly",
