@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellyFlatpakRemoveDialog" parent="GtkBox">
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <property name="halign">center</property>
+    <property name="valign">center</property>
+    <child>
+      <object class="GtkFrame">
+        <property name="halign">center</property>
+        <property name="valign">center</property>
+        <property name="width-request">460</property>
+        <style>
+          <class name="lockout-card"/>
+        </style>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="spacing">18</property>
+            <property name="margin-start">24</property>
+            <property name="margin-end">24</property>
+            <property name="margin-top">26</property>
+            <property name="margin-bottom">24</property>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">4</property>
+                <child>
+                  <object class="GtkLabel" id="title_label">
+                    <property name="wrap">true</property>
+                    <property name="justify">center</property>
+                    <style>
+                      <class name="title-2"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="message_label">
+                    <property name="wrap">true</property>
+                    <property name="justify">center</property>
+                    <property name="max-width-chars">44</property>
+                    <style>
+                      <class name="dim-label"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkListBox">
+                <property name="selection-mode">none</property>
+                <property name="show-separators">true</property>
+                <style>
+                  <class name="boxed-list"/>
+                </style>
+                <child>
+                  <object class="GtkListBoxRow">
+                    <property name="activatable">false</property>
+                    <property name="selectable">false</property>
+                    <child>
+                      <object class="GtkCheckButton" id="keep_config_radio">
+                        <property name="active">true</property>
+                        <property name="hexpand">true</property>
+                        <property name="valign">center</property>
+                        <property name="margin-start">10</property>
+                        <property name="margin-end">10</property>
+                        <property name="margin-top">10</property>
+                        <property name="margin-bottom">10</property>
+                        <property name="child">
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">2</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Keep configuration</property>
+                                <property name="halign">start</property>
+                                <style>
+                                  <class name="heading"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">App data and settings will be kept.</property>
+                                <property name="halign">start</property>
+                                <property name="wrap">true</property>
+                                <property name="max-width-chars">42</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                  <class name="caption"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkListBoxRow">
+                    <property name="activatable">false</property>
+                    <property name="selectable">false</property>
+                    <child>
+                      <object class="GtkCheckButton" id="remove_config_radio">
+                        <property name="group">keep_config_radio</property>
+                        <property name="hexpand">true</property>
+                        <property name="valign">center</property>
+                        <property name="margin-start">10</property>
+                        <property name="margin-end">10</property>
+                        <property name="margin-top">10</property>
+                        <property name="margin-bottom">10</property>
+                        <property name="child">
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">2</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">Remove configuration</property>
+                                <property name="halign">start</property>
+                                <style>
+                                  <class name="heading"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label" translatable="yes">App data will be permanently removed.</property>
+                                <property name="halign">start</property>
+                                <style>
+                                  <class name="dim-label"/>
+                                  <class name="caption"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">12</property>
+                <property name="halign">center</property>
+                <property name="homogeneous">true</property>
+                <property name="margin-top">4</property>
+                <child>
+                <object class="GtkButton" id="confirm_button">
+                  <property name="label" translatable="yes">Confirm</property>
+                  <property name="receives-default">true</property>
+                  <signal name="clicked" handler="on_confirm" swapped="true"/>
+                  <style><class name="suggested-action"/></style>
+                  <child>
+                    <object class="GtkShortcutController">
+                      <property name="scope">managed</property>
+                      <child>
+                        <object class="GtkShortcut">
+                          <property name="trigger">Return|KP_Enter</property>
+                          <property name="action">activate</property>
+                        </object>
+                      </child>
+                    </object>
+                  </child>
+                </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="cancel_button">
+                    <property name="label" translatable="yes">Cancel</property>
+                    <signal name="clicked" handler="on_cancel" swapped="true"/>
+                    <child>
+                      <object class="GtkShortcutController">
+                        <property name="scope">managed</property>
+                        <child>
+                          <object class="GtkShortcut">
+                            <property name="trigger">Escape</property>
+                            <property name="action">activate</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

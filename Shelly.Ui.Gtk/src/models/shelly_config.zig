@@ -77,6 +77,9 @@ pub const ShellyConfig = struct {
     AurUpdateRunChecks: bool = false,
     AurUpdateShowHidden: bool = false,
 
+    // Search Page
+    SearchShowDetailPane: bool = false,
+
     // Tray
     TrayEnabled: bool = false,
     TrayAutoStart: bool = false,

@@ -180,6 +180,56 @@ pub const ShellyCli = struct {
         return JsonPackFrame.decodeLast([]AurPackage, self.allocator, result.stdout);
     }
 
+    const StandardSearchWrapper = struct {
+        Packages: []Package = &.{},
+    };
+
+    pub fn search_standard(self: ShellyCli, query: []const u8) !std.json.Parsed([]Package) {
+        const result = try self.run(&.{ "search", "standard", "--available", "--installed", query });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        var it = JsonPackFrame.frames(result.stdout);
+        while (it.next()) |payload| {
+            const json = JsonPackFrame.decodeBase64(self.allocator, payload) catch continue;
+            defer self.allocator.free(json);
+
+            if (std.mem.indexOf(u8, json, "\"$kind\"") != null) continue;
+
+            const options = std.json.ParseOptions{ .ignore_unknown_fields = true, .allocate = .alloc_always };
+            const trimmed = std.mem.trim(u8, json, " \t\r\n");
+            if (std.mem.startsWith(u8, trimmed, "[")) {
+                return std.json.parseFromSlice([]Package, self.allocator, json, options);
+            }
+
+            const wrapper = try std.json.parseFromSlice(StandardSearchWrapper, self.allocator, json, options);
+            return .{ .arena = wrapper.arena, .value = wrapper.value.Packages };
+        }
+
+        return error.NoDataFrame;
+    }
+
+    pub fn search_flatpak(self: ShellyCli, query: []const u8) !std.json.Parsed(FlatpakSearchResponse) {
+        const result = try self.run(&.{ "search", "flatpak", query, "--limit", "50" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        var it = JsonPackFrame.frames(result.stdout);
+        while (it.next()) |payload| {
+            const json = JsonPackFrame.decodeBase64(self.allocator, payload) catch continue;
+            defer self.allocator.free(json);
+
+            if (std.mem.indexOf(u8, json, "\"$kind\"") != null) continue;
+
+            return std.json.parseFromSlice(FlatpakSearchResponse, self.allocator, json, .{
+                .ignore_unknown_fields = true,
+                .allocate = .alloc_always,
+            });
+        }
+
+        return error.NoDataFrame;
+    }
+
     pub fn list_aur_installed(self: ShellyCli) !std.json.Parsed([]AurPackage) {
         const result = try self.run(&.{
             "list",

@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellySearchPage" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <property name="margin-bottom">10</property>
+
+    <child>
+      <object class="GtkBox">
+        <property name="halign">fill</property>
+        <property name="margin-bottom">10</property>
+        <property name="margin-top">10</property>
+        <property name="margin-start">10</property>
+        <property name="margin-end">10</property>
+        <property name="spacing">5</property>
+        <child>
+          <object class="GtkSearchEntry" id="search_entry">
+            <property name="placeholder-text" translatable="yes">Search standard repositories, AUR and Flatpak</property>
+            <property name="width-request">200</property>
+            <signal name="activate" handler="on_search_activate" swapped="true"/>
+            <style><class name="spaced-search"/></style>
+            <child>
+                <object class="GtkShortcutController">
+                    <property name="scope">managed</property>
+                    <child>
+                        <object class="GtkShortcut">
+                            <property name="trigger">&lt;Control&gt;f</property>
+                            <property name="action">action(search.focus)</property>
+                        </object>
+                    </child>
+                </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="valign">center</property>
+            <property name="spacing">8</property>
+            <child>
+              <object class="GtkToggleButton" id="standard_toggle">
+                <property name="label" translatable="yes">Standard</property>
+                <property name="active">true</property>
+                <property name="tooltip-text" translatable="yes">Show results from the configured ALPM sync databases</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="aur_toggle">
+                <property name="label" translatable="yes">AUR</property>
+                <property name="active">true</property>
+                <property name="tooltip-text" translatable="yes">Show results from the Arch User Repository</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="flatpak_toggle">
+                <property name="label" translatable="yes">Flatpak</property>
+                <property name="active">true</property>
+                <property name="tooltip-text" translatable="yes">Show results from the configured Flatpak remotes</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox"><property name="hexpand">true</property></object>
+        </child>
+        <child>
+          <object class="GtkMenuButton" id="options_menu">
+            <property name="icon-name">view-more-symbolic</property>
+            <property name="tooltip-text" translatable="yes">Additional Options</property>
+            <property name="popover">options_popover</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="install_button">
+            <property name="label" translatable="yes">Install Selected</property>
+            <property name="sensitive">false</property>
+            <signal name="clicked" handler="on_install_clicked" swapped="true"/>
+            <style><class name="suggested-action"/></style>
+          </object>
+        </child>
+      </object>
+    </child>
+
+    <child>
+      <object class="GtkBox" id="views_and_results_hbox">
+        <property name="hexpand">true</property>
+        <property name="orientation">horizontal</property>
+        <property name="vexpand">true</property>
+
+        <child>
+          <object class="GtkOverlay" id="grid_overlay">
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
+            <property name="child">
+              <object class="GtkScrolledWindow">
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
+                <property name="overlay-scrolling">false</property>
+                <child>
+                  <object class="GtkColumnView" id="package_grid">
+                    <property name="hexpand">true</property>
+                    <property name="vexpand">true</property>
+                    <property name="show-column-separators">false</property>
+                    <property name="show-row-separators">false</property>
+                    <child>
+                      <object class="GtkColumnViewColumn" id="check_column">
+                        <property name="title"></property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkColumnViewColumn" id="name_column">
+                        <property name="title" translatable="yes">Name</property>
+                        <property name="expand">true</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkColumnViewColumn" id="source_column">
+                        <property name="title" translatable="yes">Source</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkColumnViewColumn" id="version_column">
+                        <property name="title" translatable="yes">Version</property>
+                        <property name="expand">true</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </property>
+            <child type="overlay">
+              <object class="GtkBox" id="loading_box">
+                <property name="orientation">vertical</property>
+                <property name="spacing">12</property>
+                <property name="halign">center</property>
+                <property name="valign">center</property>
+                <property name="visible">false</property>
+                <child>
+                  <object class="GtkSpinner" id="loading_spinner">
+                    <property name="width-request">32</property>
+                    <property name="height-request">32</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child type="overlay">
+              <object class="GtkBox" id="placeholder_box">
+                <property name="orientation">vertical</property>
+                <property name="spacing">10</property>
+                <property name="halign">center</property>
+                <property name="valign">center</property>
+                <property name="margin-start">40</property>
+                <property name="margin-end">40</property>
+                <child>
+                  <object class="GtkImage" id="placeholder_icon">
+                    <property name="icon-name">system-search-symbolic</property>
+                    <property name="pixel-size">48</property>
+                    <style><class name="dim-label"/></style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="placeholder_title">
+                    <property name="label" translatable="yes">Search everywhere</property>
+                    <style><class name="title-3"/></style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="placeholder_subtitle">
+                    <property name="label" translatable="yes">Search standard repositories, the AUR and Flatpak at once. Type a name to begin.</property>
+                    <property name="wrap">true</property>
+                    <property name="justify">center</property>
+                    <property name="max-width-chars">40</property>
+                    <style><class name="dim-label"/></style>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+
+        <child>
+          <object class="GtkRevealer" id="detail_revealer">
+            <property name="reveal-child">false</property>
+            <property name="transition-type">slide-left</property>
+            <property name="hexpand">false</property>
+            <property name="halign">end</property>
+            <child>
+              <object class="GtkStack" id="detail_stack">
+                <property name="transition-type">crossfade</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+
+  <object class="GtkPopover" id="options_popover">
+    <property name="child">
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="spacing">8</property>
+        <property name="margin-top">8</property>
+        <property name="margin-bottom">8</property>
+        <property name="margin-start">12</property>
+        <property name="margin-end">12</property>
+        <child>
+          <object class="GtkCheckButton" id="show_detail_pane_check">
+            <property name="label" translatable="yes">Hide Detail Pane</property>
+            <property name="tooltip-text" translatable="yes">Hide the detail pane on the right</property>
+            <signal name="toggled" handler="on_detail_pane"/>
+          </object>
+        </child>
+      </object>
+    </property>
+  </object>
+</interface>

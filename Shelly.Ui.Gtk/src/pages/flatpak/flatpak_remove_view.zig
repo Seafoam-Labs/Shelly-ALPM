@@ -14,6 +14,7 @@ const ShellyCli = @import("../../services/shelly_cli.zig").ShellyCli;
 const FlatpakObject = @import("../../g_objects/flatpak_object.zig").FlatpakObject;
 const ShellyWindow = @import("../../shelly_window.zig").ShellyWindow;
 const ShellyCommands = @import("../../services/shelly_operation.zig").ShellyCommands;
+const FlatpakRemoveDialog = @import("../../dialog/page/flatpak_remove_dialog.zig").FlatpakRemoveDialog;
 const translations = @import("../../helpers/translations.zig");
 
 pub const FlatpakRemoveView = extern struct {
@@ -35,6 +36,7 @@ pub const FlatpakRemoveView = extern struct {
         show_runtimes: bool,
         generation: u64,
         loaded: bool,
+        pending_pkg: ?*FlatpakObject,
         search_text: [256]u8,
         search_len: usize,
         var offset: c_int = 0;
@@ -74,6 +76,7 @@ pub const FlatpakRemoveView = extern struct {
         p.arena = null;
         p.generation = 0;
         p.show_runtimes = false;
+        p.pending_pkg = null;
         p.search_len = 0;
 
         p.list_store = gio.ListStore.new(FlatpakObject.getGObjectType());
@@ -208,6 +211,11 @@ pub const FlatpakRemoveView = extern struct {
         const obj = gtk.ListItem.getItem(list_item) orelse return;
         const pkg = gobject.ext.cast(FlatpakObject, obj) orelse return;
 
+        const p = self.priv();
+        if (p.pending_pkg != null) return;
+        p.pending_pkg = pkg;
+        _ = pkg.as(gobject.Object).ref();
+
         var remove_config = false;
         if (runtime.config) |cfg_service| {
             if (cfg_service.get()) |cfg| {
@@ -215,7 +223,42 @@ pub const FlatpakRemoveView = extern struct {
             } else |_| {}
         }
 
-        const argv = ShellyCommands.remove_flatpak(std.heap.c_allocator, pkg.getId(), remove_config) catch return;
+        var buf: [512]u8 = undefined;
+        const message = std.fmt.bufPrintSentinel(
+            &buf,
+            "{s} {s}?",
+            .{ translations._("Remove"), pkg.getName() },
+            0,
+        ) catch translations._("Remove this Flatpak?");
+
+        const dialog = FlatpakRemoveDialog.new(translations._("Remove Flatpak"), message, &on_remove_response, self);
+        dialog.setButtons(translations._("Remove"), translations._("Cancel"));
+        dialog.setDefaultRemoveConfig(remove_config);
+
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.showLockout(dialog.as(gtk.Widget));
+            dialog.focusConfirm();
+        } else {
+            self.clearPending();
+        }
+    }
+
+    fn on_remove_response(ctx: ?*anyopaque, confirmed: bool, remove_config: bool) void {
+        const self: *FlatpakRemoveView = @ptrCast(@alignCast(ctx.?));
+        if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
+
+        const p = self.priv();
+        const pkg = p.pending_pkg orelse return;
+
+        if (!confirmed) {
+            self.clearPending();
+            return;
+        }
+
+        const argv = ShellyCommands.remove_flatpak(std.heap.c_allocator, pkg.getId(), remove_config) catch {
+            self.clearPending();
+            return;
+        };
         defer std.heap.c_allocator.free(argv);
 
         var names: std.ArrayListUnmanaged([]const u8) = .empty;
@@ -231,6 +274,16 @@ pub const FlatpakRemoveView = extern struct {
                 .privileged = false,
                 .ctx = self,
             });
+        }
+
+        self.clearPending();
+    }
+
+    fn clearPending(self: *Self) void {
+        const p = self.priv();
+        if (p.pending_pkg) |pkg| {
+            pkg.as(gobject.Object).unref();
+            p.pending_pkg = null;
         }
     }
 
@@ -265,6 +318,8 @@ pub const FlatpakRemoveView = extern struct {
         const p = self.priv();
         if (!p.loaded) return;
         p.loaded = false;
+
+        self.clearPending();
 
         gio.ListStore.removeAll(p.list_store);
         p.generation += 1;

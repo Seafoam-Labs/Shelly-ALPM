@@ -8,6 +8,7 @@ const FlatpakPage = @import("pages/flatpak/flatpak_page.zig").FlatpakPage;
 const AppImagePage = @import("pages/appimage_page.zig").AppImagePage;
 const PackagePage = @import("pages/package_page.zig").PackagePage;
 const AurPage = @import("pages/aur_page.zig").AurPage;
+const ShellySearchPage = @import("pages/search_page.zig").ShellySearchPage;
 const UpdatePage = @import("pages/update_page.zig").UpdatePage;
 const RecommendPage = @import("pages/recommend_page.zig").RecommendPage;
 const WelcomePage = @import("pages/welcome.zig").WelcomePage;
@@ -103,6 +104,7 @@ pub const ShellyWindow = extern struct {
         setNavEnabled(self, "aur", cfg.AurEnabled);
         setNavEnabled(self, "flatpak", cfg.FlatPackEnabled);
         setNavEnabled(self, "appimage", cfg.AppImageEnabled);
+        setNavEnabled(self, "search", cfg.ShellySearchEnabled);
 
         self.changeNav(cfg.NavMode);
 
@@ -271,6 +273,7 @@ pub const ShellyWindow = extern struct {
         add_nav_button(self, items, stack, true, "aur", AurPage.icon_name, translations._(AurPage.title));
         add_nav_button(self, items, stack, true, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
         add_nav_button(self, items, stack, true, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
+        add_nav_button(self, items, stack, true, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
         add_nav_button(self, items, stack, true, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
 
         const sep = gtk.Box.new(.horizontal, 0);
@@ -319,6 +322,7 @@ pub const ShellyWindow = extern struct {
         add_nav_button(self, items, stack, false, "aur", AurPage.icon_name, translations._(AurPage.title));
         add_nav_button(self, items, stack, false, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
         add_nav_button(self, items, stack, false, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
+        add_nav_button(self, items, stack, false, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
         add_nav_button(self, items, stack, false, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
 
         const right_spacer = gtk.Box.new(.horizontal, 0);
@@ -444,7 +448,7 @@ pub const ShellyWindow = extern struct {
             .app_image => "appimage",
             .recommend => "recommend",
             .update => "update",
-            .shelly_search => null,
+            .shelly_search => "search",
         };
     }
 
@@ -508,6 +512,10 @@ pub const ShellyWindow = extern struct {
         const au = AurPage.new();
         const au_page = gtk.Stack.addTitled(stack, au.as(gtk.Widget), "aur", translations._("AUR"));
         gtk.StackPage.setIconName(au_page, AurPage.icon_name);
+
+        const ss = ShellySearchPage.new();
+        const ss_page = gtk.Stack.addTitled(stack, ss.as(gtk.Widget), "search", translations._(ShellySearchPage.title));
+        gtk.StackPage.setIconName(ss_page, ShellySearchPage.icon_name);
 
         const up = UpdatePage.new();
         const up_page = gtk.Stack.addTitled(stack, up.as(gtk.Widget), "update", translations._("Update"));

@@ -84,6 +84,36 @@ pub const Hit = struct {
     download_size: i64 = 0,
     installed_size: i64 = 0,
     permissions: []const []const u8 = &.{},
+
+    pub fn clone(allocator: std.mem.Allocator, source: Hit) !Hit {
+        return .{
+            .name = try allocator.dupe(u8, source.name),
+            .keywords = try cloneStrings(allocator, source.keywords),
+            .summary = try allocator.dupe(u8, source.summary),
+            .description = try allocator.dupe(u8, source.description),
+            .id = try allocator.dupe(u8, source.id),
+            .type = try allocator.dupe(u8, source.type),
+            .project_license = try allocator.dupe(u8, source.project_license),
+            .app_id = try allocator.dupe(u8, source.app_id),
+            .main_categories = try cloneStrings(allocator, source.main_categories),
+            .developer_name = try allocator.dupe(u8, source.developer_name),
+            .verification_verified = source.verification_verified,
+            .verification_method = if (source.verification_method) |value| try allocator.dupe(u8, value) else null,
+            .remote = try allocator.dupe(u8, source.remote),
+            .download_size = source.download_size,
+            .installed_size = source.installed_size,
+            .permissions = try cloneStrings(allocator, source.permissions),
+        };
+    }
+
+    fn cloneStrings(
+        allocator: std.mem.Allocator,
+        source: []const []const u8,
+    ) ![]const []const u8 {
+        const result = try allocator.alloc([]const u8, source.len);
+        for (source, 0..) |value, index| result[index] = try allocator.dupe(u8, value);
+        return result;
+    }
 };
 
 pub const AppstreamIcon = struct {

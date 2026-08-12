@@ -20,6 +20,7 @@
     <file>ui/flatpak/flatpak_remotes_view.ui</file>
     <file>ui/flatpak/flatpak_install_local.ui</file>
     <file>dialog/ui/yn.ui</file>
+    <file>dialog/ui/flatpak_remove.ui</file>
     <file>dialog/ui/pkg_build.ui</file>
     <file>dialog/ui/version_history.ui</file>
     <file>dialog/ui/plan_dialog.ui</file>
@@ -34,8 +35,10 @@
     <file>ui/transaction_page.ui</file>
     <file>ui/package_page.ui</file>
     <file>ui/aur_page.ui</file>
+    <file>ui/search_page.ui</file>
     <file>ui/package_detail.ui</file>
     <file>ui/aur_package_detail.ui</file>
+    <file>ui/flatpak_package_detail.ui</file>
     <file>ui/update_page.ui</file>
     <file>ui/recommend_page.ui</file>
     <file>style.css</file>

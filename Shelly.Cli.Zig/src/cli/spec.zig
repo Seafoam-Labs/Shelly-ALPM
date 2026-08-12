@@ -18,6 +18,7 @@ pub const Command = struct {
     implementation: ?[]const u8 = null,
     actionCode: ?u8 = null,
     typeCode: ?u8 = null,
+    aliasTypeCodes: []const u8 = &.{},
     bareActionCode: bool = false,
     defaultForAction: bool = false,
 
@@ -94,6 +95,7 @@ pub const Manifest = struct {
                     .implementation = candidate.implementation,
                     .actionCode = candidate.action.code(),
                     .typeCode = candidate.type_code,
+                    .aliasTypeCodes = candidate.alias_type_codes,
                     .bareActionCode = candidate.bare_action_code,
                     .defaultForAction = candidate.default_for_action,
                 });
