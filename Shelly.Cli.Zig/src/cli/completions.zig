@@ -30,6 +30,26 @@ fn renderBash(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
     try writer.writeAll(
         \\# Bash completions for shelly
         \\# Auto-generated from the native Shelly CLI catalog. Do not edit.
+        \\_shelly_packages_standard_sync() {
+        \\    pacman -Slq 2>/dev/null
+        \\}
+        \\
+        \\_shelly_packages_standard_local() {
+        \\    pacman -Qq 2>/dev/null
+        \\}
+        \\
+        \\_shelly_packages_aur_local() {
+        \\    pacman -Qqm 2>/dev/null
+        \\}
+        \\
+        \\_shelly_packages_flatpak_remote() {
+        \\    flatpak remote-ls --app --columns=application 2>/dev/null
+        \\}
+        \\
+        \\_shelly_packages_flatpak_local() {
+        \\    flatpak list --app --columns=application 2>/dev/null
+        \\}
+        \\
         \\_shelly() {
         \\    local cur prev action selector
         \\    COMPREPLY=()
@@ -67,13 +87,13 @@ fn renderBash(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
             try writer.writeAll("            case \"$selector\" in\n");
             for (manifest.commands) |*candidate| {
                 if (!isChildOf(candidate, action) or candidate == child) continue;
-                try writer.print("                {s}) COMPREPLY=( $(compgen -W '", .{candidate.name});
-                try writeEffectiveOptionWords(manifest, candidate, writer);
-                try writer.writeAll("' -- \"$cur\") ) ;;\n");
+                try writer.print("                {s})\n", .{candidate.name});
+                try writeBashArguments(manifest, candidate, "                    ", writer);
+                try writer.writeAll("                    ;;\n");
             }
-            try writer.writeAll("                *) COMPREPLY=( $(compgen -W '");
-            try writeEffectiveOptionWords(manifest, child, writer);
-            try writer.writeAll("' -- \"$cur\") ) ;;\n            esac\n");
+            try writer.writeAll("                *)\n");
+            try writeBashArguments(manifest, child, "                    ", writer);
+            try writer.writeAll("                    ;;\n            esac\n");
         } else {
             try writer.writeAll("            if (( COMP_CWORD == 2 )); then\n                COMPREPLY=( $(compgen -W '");
             try writeChildNames(manifest, action, writer);
@@ -81,9 +101,9 @@ fn renderBash(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
             try writer.writeAll("            case \"$selector\" in\n");
             for (manifest.commands) |*child| {
                 if (!isChildOf(child, action)) continue;
-                try writer.print("                {s}) COMPREPLY=( $(compgen -W '", .{child.name});
-                try writeEffectiveOptionWords(manifest, child, writer);
-                try writer.writeAll("' -- \"$cur\") ) ;;\n");
+                try writer.print("                {s})\n", .{child.name});
+                try writeBashArguments(manifest, child, "                    ", writer);
+                try writer.writeAll("                    ;;\n");
             }
             try writer.writeAll("            esac\n");
         }
@@ -95,6 +115,30 @@ fn renderBash(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
         \\complete -F _shelly shelly
         \\
     );
+}
+
+fn writeBashArguments(
+    manifest: *const spec.Manifest,
+    command: *const spec.Command,
+    indent: []const u8,
+    writer: *std.Io.Writer,
+) !void {
+    try writer.print("{s}if [[ \"$cur\" == -* ]]; then\n", .{indent});
+    try writer.print("{s}    COMPREPLY=( $(compgen -W '", .{indent});
+    try writeEffectiveOptionWords(manifest, command, writer);
+    try writer.writeAll("' -- \"$cur\") )\n");
+    if (command.arguments.len > 0) {
+        if (packageCompleter(command)) |helper| {
+            if (bashPackageCompleter(helper)) |bash_helper| {
+                try writer.print("{s}else\n", .{indent});
+                try writer.print("{s}    COMPREPLY=( $(compgen -W \"$({s})\" -- \"$cur\") )\n", .{ indent, bash_helper });
+            }
+        } else if (isAppimageInstall(command)) {
+            try writer.print("{s}else\n", .{indent});
+            try writer.print("{s}    COMPREPLY=( $(compgen -f -X '!*.AppImage' -- \"$cur\") )\n", .{indent});
+        }
+    }
+    try writer.print("{s}fi\n", .{indent});
 }
 
 fn writeBashChoiceCases(
@@ -130,6 +174,26 @@ fn renderFish(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
     try writer.writeAll(
         \\# Fish completions for shelly
         \\# Auto-generated from the native Shelly CLI catalog. Do not edit.
+        \\function __shelly_packages_standard_sync
+        \\    pacman -Slq 2>/dev/null
+        \\end
+        \\
+        \\function __shelly_packages_standard_local
+        \\    pacman -Qq 2>/dev/null
+        \\end
+        \\
+        \\function __shelly_packages_aur_local
+        \\    pacman -Qqm 2>/dev/null
+        \\end
+        \\
+        \\function __shelly_packages_flatpak_remote
+        \\    flatpak remote-ls --app --columns=application 2>/dev/null
+        \\end
+        \\
+        \\function __shelly_packages_flatpak_local
+        \\    flatpak list --app --columns=application 2>/dev/null
+        \\end
+        \\
         \\complete -c shelly -f
         \\
     );
@@ -167,6 +231,7 @@ fn renderFish(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
                 try condition.writer.print("; and not __fish_seen_subcommand_from {s}", .{other.name});
             }
             for (child.options) |option| try writeFishOption(option, condition.writer.buffered(), writer);
+            try writeFishPositional(child, condition.writer.buffered(), writer);
         }
         for (manifest.commands) |*child| {
             if (!isChildOf(child, action) or child == default_child) continue;
@@ -174,7 +239,21 @@ fn renderFish(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
             defer condition.deinit();
             try condition.writer.print("__fish_seen_subcommand_from {s}; and __fish_seen_subcommand_from {s}", .{ action.name, child.name });
             for (child.options) |option| try writeFishOption(option, condition.writer.buffered(), writer);
+            try writeFishPositional(child, condition.writer.buffered(), writer);
         }
+    }
+}
+
+fn writeFishPositional(command: *const spec.Command, condition: []const u8, writer: *std.Io.Writer) !void {
+    if (command.arguments.len == 0) return;
+    if (packageCompleter(command)) |helper| {
+        if (fishPackageCompleter(helper)) |fish_helper| {
+            try writer.print("complete -c shelly -f -n '{s}' -a '({s})'\n", .{ condition, fish_helper });
+        }
+        return;
+    }
+    if (isAppimageInstall(command)) {
+        try writer.print("complete -c shelly -f -n '{s}' -a '(__fish_complete_suffix .AppImage)'\n", .{condition});
     }
 }
 
@@ -503,6 +582,24 @@ fn packageCompleter(command: *const spec.Command) ?[]const u8 {
     return null;
 }
 
+fn bashPackageCompleter(helper: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, helper, "_shelly_packages_standard_sync")) return "_shelly_packages_standard_sync";
+    if (std.mem.eql(u8, helper, "_shelly_packages_standard_local")) return "_shelly_packages_standard_local";
+    if (std.mem.eql(u8, helper, "_shelly_packages_aur_local")) return "_shelly_packages_aur_local";
+    if (std.mem.eql(u8, helper, "_shelly_packages_flatpak_remote")) return "_shelly_packages_flatpak_remote";
+    if (std.mem.eql(u8, helper, "_shelly_packages_flatpak_local")) return "_shelly_packages_flatpak_local";
+    return null;
+}
+
+fn fishPackageCompleter(helper: []const u8) ?[]const u8 {
+    if (std.mem.eql(u8, helper, "_shelly_packages_standard_sync")) return "__shelly_packages_standard_sync";
+    if (std.mem.eql(u8, helper, "_shelly_packages_standard_local")) return "__shelly_packages_standard_local";
+    if (std.mem.eql(u8, helper, "_shelly_packages_aur_local")) return "__shelly_packages_aur_local";
+    if (std.mem.eql(u8, helper, "_shelly_packages_flatpak_remote")) return "__shelly_packages_flatpak_remote";
+    if (std.mem.eql(u8, helper, "_shelly_packages_flatpak_local")) return "__shelly_packages_flatpak_local";
+    return null;
+}
+
 fn isAppimageInstall(command: *const spec.Command) bool {
     return std.mem.eql(u8, command.path, "shelly install appimage");
 }
@@ -619,6 +716,16 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
         try std.testing.expect(std.mem.indexOf(u8, script, "pacfiles") != null);
         try std.testing.expect(std.mem.indexOf(u8, script, "threeway") != null);
         try std.testing.expect(std.mem.indexOf(u8, script, "bash fish zsh") != null);
+        if (expected.shell == .bash) {
+            try std.testing.expect(std.mem.indexOf(u8, script, "_shelly_packages_standard_sync") != null);
+            try std.testing.expect(std.mem.indexOf(u8, script, "_shelly_packages_flatpak_local") != null);
+            try std.testing.expect(std.mem.indexOf(u8, script, "compgen -f -X '!*.AppImage'") != null);
+        }
+        if (expected.shell == .fish) {
+            try std.testing.expect(std.mem.indexOf(u8, script, "function __shelly_packages_standard_sync") != null);
+            try std.testing.expect(std.mem.indexOf(u8, script, "function __shelly_packages_flatpak_local") != null);
+            try std.testing.expect(std.mem.indexOf(u8, script, "(__fish_complete_suffix .AppImage)") != null);
+        }
         if (expected.shell == .zsh) {
             // Regression for malformed _arguments specs.
             try std.testing.expect(std.mem.indexOf(u8, script, "'{--") == null);
