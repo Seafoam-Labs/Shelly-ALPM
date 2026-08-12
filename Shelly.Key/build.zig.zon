@@ -1,6 +1,6 @@
 .{
     .name = .Shelly_Key,
-    .version = "3.0.3",
+    .version = "3.0.4",
     .fingerprint = 0xd70998ff6ec3b771, // Changing this has security and trust implications.
     .minimum_zig_version = "0.16.0",
     .dependencies = .{},
