@@ -13,7 +13,7 @@ msgstr ""
 "X-Generator: Poedit 3.9\n"
 
 msgid "No installable addons available"
-msgstr ""
+msgstr "Keine installierbaren Add-ons verfügbar"
 
 msgid "Close"
 msgstr "Schließen"
@@ -64,7 +64,7 @@ msgid "Source Files"
 msgstr "Quelldateien"
 
 msgid "polkit is required"
-msgstr ""
+msgstr "polkit erforderlich"
 
 msgid ""
 "Shelly's GUI needs <b>polkit</b> installed and running to authorize "
@@ -75,6 +75,13 @@ msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
 "labs.org/shelly-alpm/docs/polkit</a>"
 msgstr ""
+"Shellys GUI benötigt <b>polkit</b>, um privilegierte Aktionen zu "
+"autorisieren. Polkit wurde jedoch nicht im Systembus gefunden.\n"
+"\n"
+"Installiere und aktiviere es und versuche es erneut.\n"
+"\n"
+"<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/title/"
+"Polkit</a>"
 
 msgid "Review PKGBUILD"
 msgstr "PKGBUILD überprüfen"
@@ -361,7 +368,7 @@ msgid "Repository"
 msgstr "Repository"
 
 msgid "Install Date"
-msgstr ""
+msgstr "Installationsdatum"
 
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
@@ -678,6 +685,8 @@ msgid ""
 "Shelly is a modern package manager for Arch Linux. Configure your sources "
 "and preferences to get started."
 msgstr ""
+"Shelly ist ein moderner Paketmanager für Arch Linux. Konfiguriere deine "
+"Quellen und Einstellungen, um loszulegen."
 
 msgid "Select Your Sources"
 msgstr "Wähle deine Quellen aus"
@@ -705,7 +714,7 @@ msgid "Recommended"
 msgstr "Empfohlen"
 
 msgid "Curated picks from Shelly"
-msgstr ""
+msgstr "Ausgewählte Empfehlungen von Shelly"
 
 msgid "Look and Feel"
 msgstr "Optik und Handhabung"
@@ -841,6 +850,8 @@ msgid ""
 "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
 "repo/releases"
 msgstr ""
+"Ungültige Forgejo-URL. Verwende http(s)://host/owner/repo oder http(s)://"
+"host/owner/repo/releases"
 
 msgid "Choose an AppImage file"
 msgstr "Eine AppImage-Datei auswählen"
@@ -897,7 +908,7 @@ msgid "First Submitted"
 msgstr "Erstmals eingereicht"
 
 msgid "URL"
-msgstr ""
+msgstr "URL"
 
 msgid "Licenses"
 msgstr "Lizenzen"
@@ -1007,7 +1018,7 @@ msgid "Available Addons"
 msgstr "Flatpak-Addons verfügbar"
 
 msgid "Installing flatpak addon"
-msgstr ""
+msgstr "Flatpak-Addon installieren"
 
 msgid "Unknown developer"
 msgstr "Unbekannter Entwickler"
@@ -1284,28 +1295,28 @@ msgid "Settings saved"
 msgstr "Einstellungen gespeichert"
 
 msgid "Installing Flatpak support"
-msgstr ""
+msgstr "Flatpak-Unterstützung installieren"
 
 msgid "Installing AppImage support"
-msgstr ""
+msgstr "AppImage-Unterstützung installieren"
 
 msgid "Failed to start Flatpak support installation"
-msgstr ""
+msgstr "Installation der Flatpak-Unterstützung fehlgeschlagen"
 
 msgid "Failed to start AppImage support installation"
-msgstr ""
+msgstr "Installation der AppImage-Unterstützung fehlgeschlagen"
 
 msgid "Flatpak support installation failed"
-msgstr ""
+msgstr "Installation der Flatpak-Unterstützung fehlgeschlagen"
 
 msgid "AppImage support installation failed"
-msgstr ""
+msgstr "Installation der AppImage-Unterstützung fehlgeschlagen"
 
 msgid "Flatpak support enabled"
-msgstr ""
+msgstr "Flatpak-Unterstützung aktiviert"
 
 msgid "AppImage support enabled"
-msgstr ""
+msgstr "App-Image-Unterstützung aktiviert"
 
 msgid "No changelog entries found"
 msgstr "Keine Einträge im Änderungsprotokoll gefunden"
@@ -1501,7 +1512,7 @@ msgstr ""
 "die CLI-Ausgabe und versuche es erneut."
 
 msgid "Update this package"
-msgstr ""
+msgstr "Dieses Paket aktualisieren"
 
 msgid "of"
 msgstr "von"
@@ -1555,7 +1566,7 @@ msgstr ""
 "Software basieren. Die Paketdaten werden aus externen Quellen abgerufen."
 
 msgid "Installing Flatpak and AppImage support"
-msgstr ""
+msgstr "Unterstützung für Flatpak und AppImage installieren"
 
 msgid "Settings"
 msgstr "Einstellungen"
