@@ -12,6 +12,7 @@ makedepends=(
   'pkgconf'
   'zig>=0.16.0'
   'flatpak'
+  'go-md2man'
 )
 source=("${pkgname}::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=development")
 sha256sums=('SKIP')
@@ -42,6 +43,11 @@ build() {
     "${srcdir}/zig-out/bin/shelly" utility --completions "${shell}" \
       > "${srcdir}/shelly.${shell}"
   done
+
+  "${srcdir}/zig-out/bin/shelly" utility --docs | go-md2man > "${srcdir}/shelly.1"
+  sed -i "s|^\\.TH .*|.TH \"SHELLY-BETA\" \"1\" \"\" \"Shelly CLI Beta ${pkgver}\" \"Shelly CLI Manual\"|" "${srcdir}/shelly.1"
+  printf '\n.SH AUTHORS\nSeafoam Labs.\n' >> "${srcdir}/shelly.1"
+
   sed -i \
     -e 's/_shelly/_shelly_beta/g' \
     -e 's/complete -F _shelly_beta shelly/complete -F _shelly_beta shelly-beta/' \
@@ -98,6 +104,8 @@ package_shelly-cli() {
     "${pkgdir}/usr/share/fish/vendor_completions.d/shelly-beta.fish"
   install -Dm644 "${srcdir}/shelly.zsh" \
     "${pkgdir}/usr/share/zsh/site-functions/_shelly-beta"
+  install -Dm644 "${srcdir}/shelly.1" \
+    "${pkgdir}/usr/share/man/man1/shelly-beta.1"
   install -Dm644 LICENSE \
     "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }

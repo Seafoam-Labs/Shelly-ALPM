@@ -7,7 +7,7 @@ pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
 license=('GPL-3.0-only')
-makedepends=('git' 'pkgconf' 'gtk4' 'zig>=0.16' 'clang' 'gettext' 'flatpak' 'ripgrep')
+makedepends=('git' 'pkgconf' 'gtk4' 'zig>=0.16' 'clang' 'gettext' 'flatpak' 'ripgrep' 'go-md2man')
 
 # Source tarball from GitHub release
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/archive/v${pkgver}.tar.gz")
@@ -58,6 +58,10 @@ build() {
   ./out-cli/bin/shelly utility --completions bash > shelly.bash
   ./out-cli/bin/shelly utility --completions fish > shelly.fish
   ./out-cli/bin/shelly utility --completions zsh  > _shelly
+
+  ./out-cli/bin/shelly utility --docs | go-md2man > shelly.1
+  sed -i "s|^\\.TH .*|.TH \"SHELLY\" \"1\" \"\" \"Shelly ${pkgver}\" \"Shelly CLI Manual\"|" shelly.1
+  printf '\n.SH AUTHORS\nSeafoam Labs.\n' >> shelly.1
 
   for po_file in Shelly.Ui.Gtk/po/*.po; do
     [ -f "$po_file" ] || continue
@@ -202,9 +206,13 @@ EOF
   install -Dm644 assets/shellylogo-tray.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-tray.png"
   install -Dm644 assets/shellylogo-update.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-update.png"
 
+  # Install shell completions
   install -Dm644 shelly.bash "$pkgdir/usr/share/bash-completion/completions/shelly"
   install -Dm644 shelly.fish "$pkgdir/usr/share/fish/vendor_completions.d/shelly.fish"
   install -Dm644 _shelly "$pkgdir/usr/share/zsh/site-functions/_shelly"
+
+  # Install man page
+  install -Dm644 shelly.1 "$pkgdir/usr/share/man/man1/shelly.1"
 
   # Install translations
   for mo_file in shelly-ui-*.mo; do
