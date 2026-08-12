@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-10 23:33+0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -21,8 +21,25 @@ msgstr ""
 msgid "Close"
 msgstr "Itxi"
 
+#| msgid "Saving update configuration"
+msgid "Keep configuration"
+msgstr ""
+
+msgid "App data and settings will be kept."
+msgstr ""
+
+#| msgid "Saving update configuration"
+msgid "Remove configuration"
+msgstr ""
+
+msgid "App data will be permanently removed."
+msgstr ""
+
 msgid "Confirm"
 msgstr "Berretsi"
+
+msgid "Cancel"
+msgstr "Utzi"
 
 msgid "Skip"
 msgstr "Eskapatu"
@@ -48,9 +65,6 @@ msgstr ""
 
 msgid "Source Files"
 msgstr "Jatorrizko fitxategiak"
-
-msgid "Cancel"
-msgstr "Utzi"
 
 msgid "polkit is required"
 msgstr ""
@@ -306,6 +320,9 @@ msgstr "Flatpak-en konponketa"
 msgid "Repairs Flatpak Installation (Experimental)"
 msgstr "Flatpak instalazioa konpontzen du (Esperimentala)"
 
+msgid "About"
+msgstr ""
+
 msgid "Shelly"
 msgstr "Shelly"
 
@@ -398,6 +415,39 @@ msgid ""
 msgstr ""
 "Ez da gomendiorik aurkitu. Mesedez, egiaztatu zure interneteko konexioa eta "
 "saiatu berriro."
+
+msgid "Search standard repositories, AUR and Flatpak"
+msgstr ""
+
+msgid "Standard"
+msgstr ""
+
+msgid "Show results from the configured ALPM sync databases"
+msgstr ""
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Show results from the Arch User Repository"
+msgstr ""
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Show results from the configured Flatpak remotes"
+msgstr ""
+
+#| msgid "Source Files"
+msgid "Source"
+msgstr ""
+
+msgid "Search everywhere"
+msgstr ""
+
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
 
 msgid "General"
 msgstr "Orokorra"
@@ -559,12 +609,6 @@ msgstr "Bertsio-berritu"
 
 msgid "System"
 msgstr "Sistema"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
 
 msgid "Checking for updates…"
 msgstr "Eguneraketak bilatzen…"
@@ -1102,17 +1146,52 @@ msgstr "Urruneko jatorria kentzen"
 msgid "Adding Remote"
 msgstr "Urruneko jatorria gehitzen"
 
+#| msgid "Removing Flatpak"
+msgid "Remove this Flatpak?"
+msgstr ""
+
+#| msgid "Removing Flatpak"
+msgid "Remove Flatpak"
+msgstr ""
+
 msgid "Removing Flatpak"
 msgstr "Flatpak kentzen"
 
-msgid "Loading..."
-msgstr "Kargatzen..."
+msgid "App ID"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Remote"
+msgstr ""
+
+#| msgid "Development"
+msgid "Developer"
+msgstr ""
+
+msgid "Type"
+msgstr ""
+
+msgid "Download Size"
+msgstr "Deskargaren tamaina"
 
 msgid "Installed Size"
 msgstr "Instalatutako tamaina"
 
-msgid "Download Size"
-msgstr "Deskargaren tamaina"
+msgid "Yes"
+msgstr "Bai"
+
+msgid "No"
+msgstr "Ez"
+
+msgid "Keywords"
+msgstr ""
+
+#| msgid "e.g., flathub"
+msgid "Flathub"
+msgstr ""
+
+msgid "Loading..."
+msgstr "Kargatzen..."
 
 msgid "Build Date"
 msgstr "Eraikitze-data"
@@ -1179,6 +1258,29 @@ msgstr "Paketeak kentzen"
 
 msgid "Installing packages"
 msgstr "Paketeak instalatzen"
+
+#| msgid "Operation failed"
+msgid "Search failed"
+msgstr ""
+
+#| msgid "Installation failed."
+msgid "Installation in progress"
+msgstr ""
+
+#| msgid "No packages selected"
+msgid "No sources selected"
+msgstr ""
+
+msgid "Enable at least one source filter above."
+msgstr ""
+
+#| msgid "Installing packages"
+msgid "Install Packages"
+msgstr ""
+
+#| msgid "Remove the selected packages?"
+msgid "Install the selected packages?"
+msgstr ""
 
 msgid "Failed to save settings"
 msgstr "Ezin izan dira ezarpenak gorde"
@@ -1392,12 +1494,6 @@ msgstr "irten"
 
 msgid "Cancelled"
 msgstr "Ezeztatuta"
-
-msgid "Yes"
-msgstr "Bai"
-
-msgid "No"
-msgstr "Ez"
 
 msgid "System package update"
 msgstr "Sistemako paketeen eguneraketa"

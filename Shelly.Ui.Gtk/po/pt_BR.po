@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-10 23:33+0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-08-03 10:39-0300\n"
 "Last-Translator: Vinícius Fonseca <viniqf@proton.me>\n"
 "Language-Team: Portuguese (Brazil) <viniqf@proton.me>\n"
@@ -18,8 +18,25 @@ msgstr ""
 msgid "Close"
 msgstr "Fechar"
 
+#| msgid "Saving update configuration"
+msgid "Keep configuration"
+msgstr ""
+
+msgid "App data and settings will be kept."
+msgstr ""
+
+#| msgid "Saving update configuration"
+msgid "Remove configuration"
+msgstr ""
+
+msgid "App data will be permanently removed."
+msgstr ""
+
 msgid "Confirm"
 msgstr "Confirmar"
+
+msgid "Cancel"
+msgstr "Cancelar"
 
 msgid "Skip"
 msgstr "Pular"
@@ -45,9 +62,6 @@ msgstr ""
 
 msgid "Source Files"
 msgstr "Arquivos de fonte"
-
-msgid "Cancel"
-msgstr "Cancelar"
 
 msgid "polkit is required"
 msgstr ""
@@ -303,6 +317,9 @@ msgstr "Reparo Flatpak"
 msgid "Repairs Flatpak Installation (Experimental)"
 msgstr "Repara a instalação Flatpak atual (experimental)"
 
+msgid "About"
+msgstr ""
+
 msgid "Shelly"
 msgstr ""
 
@@ -395,6 +412,39 @@ msgid ""
 msgstr ""
 "Nenhuma recomendação encontrada. Por favor, verifique sua conexão com a "
 "internet e tente novamente"
+
+msgid "Search standard repositories, AUR and Flatpak"
+msgstr ""
+
+msgid "Standard"
+msgstr ""
+
+msgid "Show results from the configured ALPM sync databases"
+msgstr ""
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Show results from the Arch User Repository"
+msgstr ""
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Show results from the configured Flatpak remotes"
+msgstr ""
+
+#| msgid "Source Files"
+msgid "Source"
+msgstr ""
+
+msgid "Search everywhere"
+msgstr ""
+
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
 
 msgid "General"
 msgstr "Geral"
@@ -556,12 +606,6 @@ msgstr "Atualizar"
 
 msgid "System"
 msgstr "Sistema"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
 
 msgid "Checking for updates…"
 msgstr "Verificando atualizações..."
@@ -1093,17 +1137,52 @@ msgstr "Removendo o remoto"
 msgid "Adding Remote"
 msgstr "Adicionando o remoto"
 
+#| msgid "Removing Flatpak"
+msgid "Remove this Flatpak?"
+msgstr ""
+
+#| msgid "Removing Flatpak"
+msgid "Remove Flatpak"
+msgstr ""
+
 msgid "Removing Flatpak"
 msgstr "Removendo Flatpak"
 
-msgid "Loading..."
-msgstr "Carregando..."
+msgid "App ID"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Remote"
+msgstr ""
+
+#| msgid "Development"
+msgid "Developer"
+msgstr ""
+
+msgid "Type"
+msgstr ""
+
+msgid "Download Size"
+msgstr "Tamanho do download"
 
 msgid "Installed Size"
 msgstr "Tamanho instalado"
 
-msgid "Download Size"
-msgstr "Tamanho do download"
+msgid "Yes"
+msgstr "Sim"
+
+msgid "No"
+msgstr "Não"
+
+msgid "Keywords"
+msgstr ""
+
+#| msgid "e.g., flathub"
+msgid "Flathub"
+msgstr ""
+
+msgid "Loading..."
+msgstr "Carregando..."
 
 msgid "Build Date"
 msgstr "Data de compilação"
@@ -1170,6 +1249,29 @@ msgstr "Removendo pacotes"
 
 msgid "Installing packages"
 msgstr "Instalando pacotes"
+
+#| msgid "Operation failed"
+msgid "Search failed"
+msgstr ""
+
+#| msgid "Installation failed."
+msgid "Installation in progress"
+msgstr ""
+
+#| msgid "No packages selected"
+msgid "No sources selected"
+msgstr ""
+
+msgid "Enable at least one source filter above."
+msgstr ""
+
+#| msgid "Installing packages"
+msgid "Install Packages"
+msgstr ""
+
+#| msgid "Remove the selected packages?"
+msgid "Install the selected packages?"
+msgstr ""
 
 msgid "Failed to save settings"
 msgstr "Falha ao salvar configurações"
@@ -1381,12 +1483,6 @@ msgstr "Saída"
 
 msgid "Cancelled"
 msgstr "Cancelado"
-
-msgid "Yes"
-msgstr "Sim"
-
-msgid "No"
-msgstr "Não"
 
 msgid "System package update"
 msgstr "Atualização de pacotes do sistema"
