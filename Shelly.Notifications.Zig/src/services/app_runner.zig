@@ -134,32 +134,33 @@ pub const AppRunner = struct {
 
         const argv: []const []const u8 = &.{ "setsid", bin };
 
-        if (self.activation_token) |token| {
+        var owned_env: ?std.process.Environ.Map = if (self.activation_token) |token| blk: {
             var env = try self.environ_map.clone(self.allocator);
-            defer env.deinit();
+            errdefer env.deinit();
             try env.put("XDG_ACTIVATION_TOKEN", token);
-            var child = std.process.spawn(self.io, .{
-                .argv = argv,
-                .environ_map = &env,
-                .stdout = .ignore,
-                .stderr = .ignore,
-            }) catch |e| {
-                log.err("failed to spawn '{s}': {any}", .{ bin, e });
-                return e;
-            };
-            _ = &child;
-        } else {
-            var child = std.process.spawn(self.io, .{
-                .argv = argv,
-                .environ_map = self.environ_map,
-                .stdout = .ignore,
-                .stderr = .ignore,
-            }) catch |e| {
-                log.err("failed to spawn '{s}': {any}", .{ bin, e });
-                return e;
-            };
-            _ = &child;
-        }
+            break :blk env;
+        } else null;
+        defer if (owned_env) |*e| e.deinit();
+
+        const env_ptr: *std.process.Environ.Map = if (owned_env) |*e| e else self.environ_map;
+
+        // Set pgid = 0 so `setsid` forks before exec'ing shelly-ui; otherwise,
+        // dropping the handle leaves shelly-ui as a zombie after it exits.
+        var child = std.process.spawn(self.io, .{
+            .argv = argv,
+            .environ_map = env_ptr,
+            .pgid = 0,
+            .stdout = .ignore,
+            .stderr = .ignore,
+        }) catch |e| {
+            log.err("failed to spawn '{s}': {any}", .{ bin, e });
+            return e;
+        };
+
+        _ = child.wait(runtime.io) catch |e| {
+            log.warn("failed to reap spawned process: {any}", .{e});
+        };
+
         log.info("spawned '{s}' (token: {s})", .{
             bin,
             if (self.activation_token != null) "yes" else "no",
