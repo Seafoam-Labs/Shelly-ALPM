@@ -113,6 +113,12 @@ const Updates = struct {
         return self.repo.items.len + self.aur.items.len + self.flatpak.items.len;
     }
 
+    fn count(self: *Updates) usize {
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        return self.total();
+    }
+
     fn signalRefresh(self: *Updates) void {
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
@@ -394,6 +400,8 @@ pub fn main(init: std.process.Init) !void {
 
         if (updates.takeRefresh()) {
             menu_ctrl.invalidate() catch |e| log_loop.err("invalidate: {any}", .{e});
+            const target_icon = if (updates.count() > 0) attention_icon_name else icon_name;
+            t.emitNewIcon(target_icon) catch |e| log_loop.err("emitNewIcon: {any}", .{e});
         }
 
         if (updates.takeNotif()) |n| {
@@ -408,16 +416,11 @@ pub fn main(init: std.process.Init) !void {
                 .on_activate = &openShelly,
                 .ctx = &runner,
             }) catch |e| log_loop.err("notify: {any}", .{e});
-            try t.emitNewIcon(attention_icon_name);
         }
 
         if (updates.takeConfigChange()) {
-            if (icon_name.len > 0) {
-                _ = t.emitNewIcon(icon_name) catch |e| log_loop.err("notify: {any}", .{e});
-            }
-            if (attention_icon_name.len > 0) {
-                _ = t.emitNewIcon(attention_icon_name) catch |e| log_loop.err("notify: {any}", .{e});
-            }
+            const target_icon = if (updates.count() > 0) attention_icon_name else icon_name;
+            t.emitNewIcon(target_icon) catch |e| log_loop.err("emitNewIcon: {any}", .{e});
         }
 
         if (launch_requested.swap(false, .seq_cst)) {
