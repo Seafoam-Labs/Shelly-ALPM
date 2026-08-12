@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-10 23:33+0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
@@ -18,8 +18,25 @@ msgstr "インストール可能なアドオンはありません"
 msgid "Close"
 msgstr "閉じる"
 
+#| msgid "Saving update configuration"
+msgid "Keep configuration"
+msgstr ""
+
+msgid "App data and settings will be kept."
+msgstr ""
+
+#| msgid "Saving update configuration"
+msgid "Remove configuration"
+msgstr ""
+
+msgid "App data will be permanently removed."
+msgstr ""
+
 msgid "Confirm"
 msgstr "確認"
+
+msgid "Cancel"
+msgstr "キャンセル"
 
 msgid "Skip"
 msgstr "スキップ"
@@ -45,9 +62,6 @@ msgstr ""
 
 msgid "Source Files"
 msgstr "ソースファイル"
-
-msgid "Cancel"
-msgstr "キャンセル"
 
 msgid "polkit is required"
 msgstr "polkit が必要です"
@@ -310,6 +324,9 @@ msgstr "Flatpak を修復"
 msgid "Repairs Flatpak Installation (Experimental)"
 msgstr "Flatpak インストールを修復する (実験的)"
 
+msgid "About"
+msgstr ""
+
 msgid "Shelly"
 msgstr "Shelly"
 
@@ -402,6 +419,39 @@ msgid ""
 msgstr ""
 "おすすめが見つかりませんでした。インターネット接続を確認して、もう一度お試し"
 "ください。"
+
+msgid "Search standard repositories, AUR and Flatpak"
+msgstr ""
+
+msgid "Standard"
+msgstr ""
+
+msgid "Show results from the configured ALPM sync databases"
+msgstr ""
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Show results from the Arch User Repository"
+msgstr ""
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Show results from the configured Flatpak remotes"
+msgstr ""
+
+#| msgid "Source Files"
+msgid "Source"
+msgstr ""
+
+msgid "Search everywhere"
+msgstr ""
+
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
 
 msgid "General"
 msgstr "全般"
@@ -563,12 +613,6 @@ msgstr "アップグレード"
 
 msgid "System"
 msgstr "システム"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
 
 msgid "Checking for updates…"
 msgstr "アップデートを確認中…"
@@ -1109,17 +1153,52 @@ msgstr "リモートを削除中"
 msgid "Adding Remote"
 msgstr "リモートを追加中"
 
+#| msgid "Removing Flatpak"
+msgid "Remove this Flatpak?"
+msgstr ""
+
+#| msgid "Removing Flatpak"
+msgid "Remove Flatpak"
+msgstr ""
+
 msgid "Removing Flatpak"
 msgstr "Flatpak を削除中"
 
-msgid "Loading..."
-msgstr "読み込み中..."
+msgid "App ID"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Remote"
+msgstr ""
+
+#| msgid "Development"
+msgid "Developer"
+msgstr ""
+
+msgid "Type"
+msgstr ""
+
+msgid "Download Size"
+msgstr "ダウンロード時のサイズ"
 
 msgid "Installed Size"
 msgstr "インストール時のサイズ"
 
-msgid "Download Size"
-msgstr "ダウンロード時のサイズ"
+msgid "Yes"
+msgstr "はい"
+
+msgid "No"
+msgstr "いいえ"
+
+msgid "Keywords"
+msgstr ""
+
+#| msgid "e.g., flathub"
+msgid "Flathub"
+msgstr ""
+
+msgid "Loading..."
+msgstr "読み込み中..."
 
 msgid "Build Date"
 msgstr "ビルド日時"
@@ -1186,6 +1265,29 @@ msgstr "パッケージを削除中"
 
 msgid "Installing packages"
 msgstr "パッケージをインストール中"
+
+#| msgid "Operation failed"
+msgid "Search failed"
+msgstr ""
+
+#| msgid "Installation failed."
+msgid "Installation in progress"
+msgstr ""
+
+#| msgid "No packages selected"
+msgid "No sources selected"
+msgstr ""
+
+msgid "Enable at least one source filter above."
+msgstr ""
+
+#| msgid "Installing packages"
+msgid "Install Packages"
+msgstr ""
+
+#| msgid "Remove the selected packages?"
+msgid "Install the selected packages?"
+msgstr ""
 
 msgid "Failed to save settings"
 msgstr "設定の保存に失敗しました"
@@ -1398,12 +1500,6 @@ msgstr "終了"
 
 msgid "Cancelled"
 msgstr "キャンセル"
-
-msgid "Yes"
-msgstr "はい"
-
-msgid "No"
-msgstr "いいえ"
 
 msgid "System package update"
 msgstr "システムパッケージのアップデート"

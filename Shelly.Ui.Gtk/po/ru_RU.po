@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-10 23:33+0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-06-30 10:06+0400\n"
 "Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\\nLanguage-Team: "
 "Russian (Russia) <anton@azdanov.dev>\n"
@@ -21,8 +21,25 @@ msgstr "Нет доступных дополнений для установки
 msgid "Close"
 msgstr "Закрыть"
 
+#| msgid "Saving update configuration"
+msgid "Keep configuration"
+msgstr ""
+
+msgid "App data and settings will be kept."
+msgstr ""
+
+#| msgid "Saving update configuration"
+msgid "Remove configuration"
+msgstr ""
+
+msgid "App data will be permanently removed."
+msgstr ""
+
 msgid "Confirm"
 msgstr "Подтвердить"
+
+msgid "Cancel"
+msgstr "Отмена"
 
 msgid "Skip"
 msgstr "Пропустить"
@@ -48,9 +65,6 @@ msgstr ""
 
 msgid "Source Files"
 msgstr "Исходные файлы"
-
-msgid "Cancel"
-msgstr "Отмена"
 
 msgid "polkit is required"
 msgstr "требуется polkit"
@@ -311,6 +325,9 @@ msgstr "Восстановление Flatpak"
 msgid "Repairs Flatpak Installation (Experimental)"
 msgstr "Восстанавливает установку Flatpak (экспериментально)"
 
+msgid "About"
+msgstr ""
+
 msgid "Shelly"
 msgstr "Shelly"
 
@@ -403,6 +420,39 @@ msgid ""
 msgstr ""
 "Рекомендации не найдены. Проверьте подключение к интернету и попробуйте ещё "
 "раз."
+
+msgid "Search standard repositories, AUR and Flatpak"
+msgstr ""
+
+msgid "Standard"
+msgstr ""
+
+msgid "Show results from the configured ALPM sync databases"
+msgstr ""
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Show results from the Arch User Repository"
+msgstr ""
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Show results from the configured Flatpak remotes"
+msgstr ""
+
+#| msgid "Source Files"
+msgid "Source"
+msgstr ""
+
+msgid "Search everywhere"
+msgstr ""
+
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
 
 msgid "General"
 msgstr "Общие"
@@ -564,12 +614,6 @@ msgstr "Обновить"
 
 msgid "System"
 msgstr "Система"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
 
 msgid "Checking for updates…"
 msgstr "Проверяются обновления…"
@@ -807,8 +851,8 @@ msgid ""
 "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
 "repo/releases"
 msgstr ""
-"Неверный URL-адрес Forgejo. Используйте http(s)://хост/владелец/репо или http(s)://"
-"хост/владелец/репо/releases"
+"Неверный URL-адрес Forgejo. Используйте http(s)://хост/владелец/репо или "
+"http(s)://хост/владелец/репо/releases"
 
 msgid "Choose an AppImage file"
 msgstr "Выберите файл AppImage"
@@ -1105,17 +1149,52 @@ msgstr "Удаление источника"
 msgid "Adding Remote"
 msgstr "Добавление источника"
 
+#| msgid "Removing Flatpak"
+msgid "Remove this Flatpak?"
+msgstr ""
+
+#| msgid "Removing Flatpak"
+msgid "Remove Flatpak"
+msgstr ""
+
 msgid "Removing Flatpak"
 msgstr "Удаление Flatpak"
 
-msgid "Loading..."
-msgstr "Загрузка..."
+msgid "App ID"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Remote"
+msgstr ""
+
+#| msgid "Development"
+msgid "Developer"
+msgstr ""
+
+msgid "Type"
+msgstr ""
+
+msgid "Download Size"
+msgstr "Размер скачивания"
 
 msgid "Installed Size"
 msgstr "Размер установки"
 
-msgid "Download Size"
-msgstr "Размер скачивания"
+msgid "Yes"
+msgstr "Да"
+
+msgid "No"
+msgstr "Нет"
+
+msgid "Keywords"
+msgstr ""
+
+#| msgid "e.g., flathub"
+msgid "Flathub"
+msgstr ""
+
+msgid "Loading..."
+msgstr "Загрузка..."
 
 msgid "Build Date"
 msgstr "Дата сборки"
@@ -1182,6 +1261,29 @@ msgstr "Удаление пакетов"
 
 msgid "Installing packages"
 msgstr "Установка пакетов"
+
+#| msgid "Operation failed"
+msgid "Search failed"
+msgstr ""
+
+#| msgid "Installation failed."
+msgid "Installation in progress"
+msgstr ""
+
+#| msgid "No packages selected"
+msgid "No sources selected"
+msgstr ""
+
+msgid "Enable at least one source filter above."
+msgstr ""
+
+#| msgid "Installing packages"
+msgid "Install Packages"
+msgstr ""
+
+#| msgid "Remove the selected packages?"
+msgid "Install the selected packages?"
+msgstr ""
 
 msgid "Failed to save settings"
 msgstr "Не удалось сохранить настройки"
@@ -1394,12 +1496,6 @@ msgstr "выход"
 
 msgid "Cancelled"
 msgstr "Отменено"
-
-msgid "Yes"
-msgstr "Да"
-
-msgid "No"
-msgstr "Нет"
 
 msgid "System package update"
 msgstr "Обновление системного пакета"

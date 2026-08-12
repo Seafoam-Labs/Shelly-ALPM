@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-10 23:33+0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -21,8 +21,25 @@ msgstr ""
 msgid "Close"
 msgstr "Κλείσιμο"
 
+#| msgid "Saving update configuration"
+msgid "Keep configuration"
+msgstr ""
+
+msgid "App data and settings will be kept."
+msgstr ""
+
+#| msgid "Saving update configuration"
+msgid "Remove configuration"
+msgstr ""
+
+msgid "App data will be permanently removed."
+msgstr ""
+
 msgid "Confirm"
 msgstr "Επιβεβαίωση"
+
+msgid "Cancel"
+msgstr "Ακύρωση"
 
 msgid "Skip"
 msgstr "Παράβλεψη"
@@ -48,9 +65,6 @@ msgstr ""
 
 msgid "Source Files"
 msgstr "Πηγαία αρχεία"
-
-msgid "Cancel"
-msgstr "Ακύρωση"
 
 msgid "polkit is required"
 msgstr ""
@@ -308,6 +322,9 @@ msgstr "Επιδιόρθωση Flatpak"
 msgid "Repairs Flatpak Installation (Experimental)"
 msgstr "Επιδιορθώνει την εγκατάσταση Flatpak (Πειραματικό)"
 
+msgid "About"
+msgstr ""
+
 msgid "Shelly"
 msgstr "Shelly"
 
@@ -400,6 +417,39 @@ msgid ""
 msgstr ""
 "Δεν βρέθηκαν προτάσεις. Παρακαλούμε ελέγξτε τη σύνδεσή σας στο διαδίκτυο και "
 "δοκιμάστε ξανά."
+
+msgid "Search standard repositories, AUR and Flatpak"
+msgstr ""
+
+msgid "Standard"
+msgstr ""
+
+msgid "Show results from the configured ALPM sync databases"
+msgstr ""
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Show results from the Arch User Repository"
+msgstr ""
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Show results from the configured Flatpak remotes"
+msgstr ""
+
+#| msgid "Source Files"
+msgid "Source"
+msgstr ""
+
+msgid "Search everywhere"
+msgstr ""
+
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
 
 msgid "General"
 msgstr "Γενικά"
@@ -561,12 +611,6 @@ msgstr "Αναβάθμιση"
 
 msgid "System"
 msgstr "Σύστημα"
-
-msgid "AUR"
-msgstr "AUR"
-
-msgid "Flatpak"
-msgstr "Flatpak"
 
 msgid "Checking for updates…"
 msgstr "Γίνεται έλεγχος για ενημερώσεις…"
@@ -1104,17 +1148,52 @@ msgstr "Αφαίρεση αποθετηρίου"
 msgid "Adding Remote"
 msgstr "Προσθήκη αποθετηρίου"
 
+#| msgid "Removing Flatpak"
+msgid "Remove this Flatpak?"
+msgstr ""
+
+#| msgid "Removing Flatpak"
+msgid "Remove Flatpak"
+msgstr ""
+
 msgid "Removing Flatpak"
 msgstr "Αφαίρεση Flatpak"
 
-msgid "Loading..."
-msgstr "Φόρτωση..."
+msgid "App ID"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Remote"
+msgstr ""
+
+#| msgid "Development"
+msgid "Developer"
+msgstr ""
+
+msgid "Type"
+msgstr ""
+
+msgid "Download Size"
+msgstr "Μέγεθος Λήψης"
 
 msgid "Installed Size"
 msgstr "Εγκατεστημένο μέγεθος"
 
-msgid "Download Size"
-msgstr "Μέγεθος Λήψης"
+msgid "Yes"
+msgstr "Ναι"
+
+msgid "No"
+msgstr "Όχι"
+
+msgid "Keywords"
+msgstr ""
+
+#| msgid "e.g., flathub"
+msgid "Flathub"
+msgstr ""
+
+msgid "Loading..."
+msgstr "Φόρτωση..."
 
 msgid "Build Date"
 msgstr "Ημερομηνία δημιουργίας"
@@ -1181,6 +1260,29 @@ msgstr "Κατάργηση πακέτων"
 
 msgid "Installing packages"
 msgstr "Εγκατάσταση πακέτων"
+
+#| msgid "Operation failed"
+msgid "Search failed"
+msgstr ""
+
+#| msgid "Installation failed."
+msgid "Installation in progress"
+msgstr ""
+
+#| msgid "No packages selected"
+msgid "No sources selected"
+msgstr ""
+
+msgid "Enable at least one source filter above."
+msgstr ""
+
+#| msgid "Installing packages"
+msgid "Install Packages"
+msgstr ""
+
+#| msgid "Remove the selected packages?"
+msgid "Install the selected packages?"
+msgstr ""
 
 msgid "Failed to save settings"
 msgstr "Αποτυχία αποθήκευσης ρυθμίσεων"
@@ -1395,12 +1497,6 @@ msgstr "έξοδος"
 
 msgid "Cancelled"
 msgstr "Ακυρώθηκε"
-
-msgid "Yes"
-msgstr "Ναι"
-
-msgid "No"
-msgstr "Όχι"
 
 msgid "System package update"
 msgstr "Ενημέρωση πακέτου συστήματος"

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-10 23:33+0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -21,7 +21,22 @@ msgstr ""
 msgid "Close"
 msgstr ""
 
+msgid "Keep configuration"
+msgstr ""
+
+msgid "App data and settings will be kept."
+msgstr ""
+
+msgid "Remove configuration"
+msgstr ""
+
+msgid "App data will be permanently removed."
+msgstr ""
+
 msgid "Confirm"
+msgstr ""
+
+msgid "Cancel"
 msgstr ""
 
 msgid "Skip"
@@ -45,9 +60,6 @@ msgid ""
 msgstr ""
 
 msgid "Source Files"
-msgstr ""
-
-msgid "Cancel"
 msgstr ""
 
 msgid "polkit is required"
@@ -296,6 +308,9 @@ msgstr ""
 msgid "Repairs Flatpak Installation (Experimental)"
 msgstr ""
 
+msgid "About"
+msgstr ""
+
 msgid "Shelly"
 msgstr ""
 
@@ -383,6 +398,38 @@ msgstr ""
 msgid ""
 "No recommendations found. Please check your internet connection and try "
 "again."
+msgstr ""
+
+msgid "Search standard repositories, AUR and Flatpak"
+msgstr ""
+
+msgid "Standard"
+msgstr ""
+
+msgid "Show results from the configured ALPM sync databases"
+msgstr ""
+
+msgid "AUR"
+msgstr ""
+
+msgid "Show results from the Arch User Repository"
+msgstr ""
+
+msgid "Flatpak"
+msgstr ""
+
+msgid "Show results from the configured Flatpak remotes"
+msgstr ""
+
+msgid "Source"
+msgstr ""
+
+msgid "Search everywhere"
+msgstr ""
+
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
 msgstr ""
 
 msgid "General"
@@ -540,12 +587,6 @@ msgid "Upgrade"
 msgstr ""
 
 msgid "System"
-msgstr ""
-
-msgid "AUR"
-msgstr ""
-
-msgid "Flatpak"
 msgstr ""
 
 msgid "Checking for updates…"
@@ -1067,16 +1108,46 @@ msgstr ""
 msgid "Adding Remote"
 msgstr ""
 
+msgid "Remove this Flatpak?"
+msgstr ""
+
+msgid "Remove Flatpak"
+msgstr ""
+
 msgid "Removing Flatpak"
 msgstr ""
 
-msgid "Loading..."
+msgid "App ID"
+msgstr ""
+
+msgid "Remote"
+msgstr ""
+
+msgid "Developer"
+msgstr ""
+
+msgid "Type"
+msgstr ""
+
+msgid "Download Size"
 msgstr ""
 
 msgid "Installed Size"
 msgstr ""
 
-msgid "Download Size"
+msgid "Yes"
+msgstr ""
+
+msgid "No"
+msgstr ""
+
+msgid "Keywords"
+msgstr ""
+
+msgid "Flathub"
+msgstr ""
+
+msgid "Loading..."
 msgstr ""
 
 msgid "Build Date"
@@ -1141,6 +1212,24 @@ msgid "Removing packages"
 msgstr ""
 
 msgid "Installing packages"
+msgstr ""
+
+msgid "Search failed"
+msgstr ""
+
+msgid "Installation in progress"
+msgstr ""
+
+msgid "No sources selected"
+msgstr ""
+
+msgid "Enable at least one source filter above."
+msgstr ""
+
+msgid "Install Packages"
+msgstr ""
+
+msgid "Install the selected packages?"
 msgstr ""
 
 msgid "Failed to save settings"
@@ -1350,12 +1439,6 @@ msgid "exit"
 msgstr ""
 
 msgid "Cancelled"
-msgstr ""
-
-msgid "Yes"
-msgstr ""
-
-msgid "No"
 msgstr ""
 
 msgid "System package update"
