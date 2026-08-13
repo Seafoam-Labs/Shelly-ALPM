@@ -153,7 +153,7 @@
                 </child>
                 <child>
                   <object class="GtkLabel" id="placeholder_subtitle">
-                    <property name="label" translatable="yes">The AUR has no browsable index type a package name to begin.</property>
+                    <property name="label" translatable="yes">The AUR has no browsable index. Type a package name to begin.</property>
                     <property name="wrap">true</property>
                     <property name="justify">center</property>
                     <property name="max-width-chars">40</property>
