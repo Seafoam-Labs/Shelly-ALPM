@@ -729,7 +729,7 @@ pub const AppImageManager = struct {
                     exec_written.* = true;
                 }
                 if (!try_exec_written.*) {
-                    try writer.writer.print("TryExec=\"{s}\"\n", .{escaped_path});
+                    try writer.writer.print("TryExec={s}\n", .{escaped_path});
                     try_exec_written.* = true;
                 }
                 if (!icon_written.*) {
@@ -1934,7 +1934,7 @@ test "writeDesktopEntry repairs omitted authoritative keys and escapes executabl
     try std.testing.expect(std.mem.indexOf(u8, desktop, "Name=Editor Display\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, desktop, "Comment=An editor\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, desktop, "Icon=editor\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, desktop, "TryExec=\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, desktop, "TryExec=") != null);
     try std.testing.expect(std.mem.indexOf(u8, desktop, "\\\\\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, desktop, "\\\\path.AppImage") != null);
 }
