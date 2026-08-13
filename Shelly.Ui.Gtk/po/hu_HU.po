@@ -2,34 +2,35 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
-"PO-Revision-Date: 2026-06-11 22:02+0200\n"
+"POT-Creation-Date: 2026-08-13 00:37+0200\n"
+"PO-Revision-Date: 2026-08-13 11:51+0200\n"
 "Last-Translator: Impostor0729\n"
 "Language-Team: csnyder@seafoamlabs.org\n"
 "Language: hu_HU\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"[bizonytalan][bizonytalan]Project-Id-Version: \n"
 "[bizonytalan]Project-Id-Version: shelly-ui 2.2.4.1\n"
 "X-Generator: Poedit 3.9\n"
 
 msgid "No installable addons available"
-msgstr ""
+msgstr "Nem állnak rendelkezésre telepíthető kiegészítők"
 
 msgid "Close"
 msgstr "Bezárás"
 
 msgid "Keep configuration"
-msgstr ""
+msgstr "Tartsa meg a beállításokat"
 
 msgid "App data and settings will be kept."
-msgstr ""
+msgstr "Az alkalmazás adatai és beállításai megmaradnak."
 
 msgid "Remove configuration"
-msgstr ""
+msgstr "Konfiguráció eltávolítása"
 
 msgid "App data will be permanently removed."
-msgstr ""
+msgstr "Az alkalmazás adatai véglegesen törlésre kerülnek."
 
 msgid "Confirm"
 msgstr "Megerősítés"
@@ -38,30 +39,32 @@ msgid "Cancel"
 msgstr "Mégse"
 
 msgid "Skip"
-msgstr ""
+msgstr "Kihagyás"
 
 msgid "No special permissions requested"
-msgstr ""
+msgstr "Nincs szükség különleges engedélyekre"
 
 msgid "Review PKGBUILD changes"
-msgstr ""
+msgstr "PKGBUILD-módosítások áttekintése"
 
 msgid "Changes"
-msgstr ""
+msgstr "Változások"
 
 msgid "Warnings"
-msgstr ""
+msgstr "Figyelmeztetések"
 
 msgid ""
 "These commands fetch and execute code outside of shelly and libalpm's "
 "control. Review them before continuing."
 msgstr ""
+"Ezek a parancsok a shelly és a libalpm felügyeletén kívül eső kódot hívnak "
+"le és hajtanak végre. Tekintse át őket, mielőtt folytatná."
 
 msgid "Source Files"
-msgstr ""
+msgstr "Forrásfájlok"
 
 msgid "polkit is required"
-msgstr ""
+msgstr "polkit szükséges"
 
 msgid ""
 "Shelly's GUI needs <b>polkit</b> installed and running to authorize "
@@ -72,9 +75,17 @@ msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
 "labs.org/shelly-alpm/docs/polkit</a>"
 msgstr ""
+"Shelly GUI-jának telepített és futó <b>polkit</b>-re van szüksége a "
+"privilegizált műveletek engedélyezéséhez, de ez nem volt megtalálható a "
+"rendszerbuszon.\n"
+"\n"
+"Telepítse és engedélyezze, majd próbálja újra.\n"
+"\n"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
+"labs.org/shelly-alpm/docs/polkit</a>"
 
 msgid "Review PKGBUILD"
-msgstr ""
+msgstr "PKGBUILD áttekintése"
 
 msgid "Search..."
 msgstr "Keresés..."
@@ -128,6 +139,8 @@ msgstr "pl. tulajdonos/tároló vagy https://..."
 
 msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
 msgstr ""
+"Érvénytelen formátum. Használja a tulajdonos/tároló formátumot (pl. seafoam-"
+"labs/shelly-alpm)"
 
 msgid "Allow Prerelease"
 msgstr "Előzetes kiadás engedélyezése"
@@ -148,22 +161,22 @@ msgid "Remove"
 msgstr "Eltávolítás"
 
 msgid "Information"
-msgstr ""
+msgstr "Információ"
 
 msgid "Preview Pkgbuild"
-msgstr ""
+msgstr "PKGBUILD előnézete"
 
 msgid "Search the AUR by name or keyword"
-msgstr ""
+msgstr "Keresés az AUR-ban név vagy kulcsszó alapján"
 
 msgid "Installed Only"
-msgstr ""
+msgstr "Csak telepített"
 
 msgid "Show only installed packages"
-msgstr ""
+msgstr "Csak a telepített csomagok megjelenítése"
 
 msgid "Additional Options"
-msgstr ""
+msgstr "További lehetőségek"
 
 msgid "Install Selected"
 msgstr "Kijelöltek telepítése"
@@ -178,39 +191,42 @@ msgid "Popularity"
 msgstr "Népszerűség"
 
 msgid "Search the AUR"
-msgstr ""
+msgstr "Keresés az AUR-ban"
 
-msgid "The AUR has no browsable index type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
+"Az AUR-nak nincs böngészhető indexe. A kezdéshez írja be a csomag nevét."
 
 msgid "Run checks"
 msgstr "Ellenőrzések futtatása"
 
 msgid "Run the --check function during package build"
-msgstr ""
+msgstr "A --check funkció futtatása a csomagépítés során"
 
 msgid "Hide Detail Pane"
-msgstr ""
+msgstr "Részletek ablak elrejtése"
 
 msgid "Hide the detail pane on the right"
-msgstr ""
+msgstr "A jobb oldali részletek panel elrejtése"
 
 msgid "Install a local Flatpak"
-msgstr ""
+msgstr "Helyi Flatpak telepítése"
 
 msgid ""
 "Choose a .flatpak bundle from your system and install it for the current "
 "user or system-wide."
 msgstr ""
+"Válasszon ki egy .flatpak csomagot a rendszeréből, és telepítse az aktuális "
+"felhasználóhoz vagy az egész rendszerre."
 
 msgid "Bundle"
-msgstr ""
+msgstr "Csomag"
 
 msgid "Choose file…"
-msgstr ""
+msgstr "Fájl kiválasztása…"
 
 msgid "Install for"
-msgstr ""
+msgstr "Telepítés ehhez"
 
 msgid "system"
 msgstr "rendszer"
@@ -231,7 +247,7 @@ msgid "Addons"
 msgstr "Kiegészítők"
 
 msgid "Install source"
-msgstr ""
+msgstr "Forrás telepítése"
 
 msgid "Author"
 msgstr "Szerző"
@@ -249,10 +265,10 @@ msgid "Summary"
 msgstr "Összegzés"
 
 msgid "Show more"
-msgstr ""
+msgstr "Mutass többet"
 
 msgid "App Permissions"
-msgstr ""
+msgstr "Alkalmazásengedélyek"
 
 msgid "Version History"
 msgstr "Verziótörténet"
@@ -261,7 +277,7 @@ msgid "Search packages..."
 msgstr "Csomagok keresése..."
 
 msgid "Browse"
-msgstr ""
+msgstr "Tallózás"
 
 msgid "Manage"
 msgstr "Kezelés"
@@ -300,7 +316,7 @@ msgid "Scope"
 msgstr "Hatókör"
 
 msgid "Show Runtimes"
-msgstr ""
+msgstr "Futási idők megjelenítése"
 
 msgid "Flatpak Repair"
 msgstr "Flatpak javítása"
@@ -309,43 +325,43 @@ msgid "Repairs Flatpak Installation (Experimental)"
 msgstr "Flatpak telepítés javítása (kísérleti)"
 
 msgid "About"
-msgstr ""
+msgstr "Névjegy"
 
 msgid "Shelly"
-msgstr ""
+msgstr "Shelly"
 
 msgid "Reinstall"
-msgstr ""
+msgstr "Újratelepítés"
 
 msgid "Add Ignore"
-msgstr ""
+msgstr "Hozzáadás a mellőzöttekhez"
 
 msgid "Add Hold"
-msgstr ""
+msgstr "Hozzáadás a megtartáshoz"
 
 msgid "Make Explicit"
-msgstr ""
+msgstr "Legyen kifejezetten telepített"
 
 msgid "Mark Dependency"
-msgstr ""
+msgstr "Függőség megjelölése"
 
 msgid "Package actions"
-msgstr ""
+msgstr "Csomagműveletek"
 
 msgid "Package Group Filter"
 msgstr "Csomagcsoport szűrő"
 
 msgid "Selected Packages"
-msgstr ""
+msgstr "Kiválasztott csomagok"
 
 msgid "0 Selected"
-msgstr ""
+msgstr "0 Kiválasztott"
 
 msgid "Grid View"
-msgstr ""
+msgstr "Rácsnézet"
 
 msgid "List View"
-msgstr ""
+msgstr "Listanézet"
 
 msgid "Size"
 msgstr "Méret"
@@ -354,10 +370,11 @@ msgid "Repository"
 msgstr "Tároló"
 
 msgid "Install Date"
-msgstr ""
+msgstr "Telepítés dátuma"
 
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
+"Probléma lépett fel a csomagok betöltésekor. Ellenőrizze, hogy van-e db zár."
 
 msgid "Perform Upgrade"
 msgstr "Frissítés végrehajtása"
@@ -372,28 +389,28 @@ msgid "Show packages in the IgnorePkg list from pacman.conf"
 msgstr "A pacman.conf IgnorePkg listáján lévő csomagok megjelenítése"
 
 msgid "Show Explicit Only"
-msgstr ""
+msgstr "Csak a kifejezetten telepített elemek megjelenítése"
 
 msgid "Show only explicitly installed packages"
-msgstr ""
+msgstr "Csak a kifejezetten telepített csomagok megjelenítése"
 
 msgid "Show Dependency Only"
-msgstr ""
+msgstr "Csak a függőség megjelenítése"
 
 msgid "Show dependency packages only"
-msgstr ""
+msgstr "Csak a függőségi csomagok megjelenítése"
 
 msgid "Recommended Packages"
-msgstr ""
+msgstr "Ajánlott csomagok"
 
 msgid "Curated suggestions from Seafoam Labs"
-msgstr ""
+msgstr "A Seafoam Labs válogatott javaslatai"
 
 msgid "Refresh the recommended packages list from the network"
-msgstr ""
+msgstr "Az ajánlott csomagok listájának frissítése a hálózatról"
 
 msgid "Loading Recommended Packages..."
-msgstr ""
+msgstr "Ajánlott csomagok betöltése..."
 
 msgid ""
 "No recommendations found. Please check your internet connection and try "
@@ -403,36 +420,38 @@ msgstr ""
 "próbálja újra."
 
 msgid "Search standard repositories, AUR and Flatpak"
-msgstr ""
+msgstr "Keresés az AUR és Flatpak szabványos tárolóiban"
 
 msgid "Standard"
-msgstr ""
+msgstr "Alapértelmezett"
 
 msgid "Show results from the configured ALPM sync databases"
-msgstr ""
+msgstr "Eredmények megjelenítése a beállított ALPM szinkronadatbázisokból"
 
 msgid "AUR"
 msgstr "AUR"
 
 msgid "Show results from the Arch User Repository"
-msgstr ""
+msgstr "Eredmények megjelenítése az Arch User Repository-ból"
 
 msgid "Flatpak"
 msgstr "Flatpak"
 
 msgid "Show results from the configured Flatpak remotes"
-msgstr ""
+msgstr "A beállított Flatpak távoli források eredményeinek megjelenítése"
 
 msgid "Source"
-msgstr ""
+msgstr "Forrás"
 
 msgid "Search everywhere"
-msgstr ""
+msgstr "Keressen mindenhol"
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
 msgstr ""
+"Keresés a hivatalos tárolókban, az AUR-ban és a Flatpakben egyszerre. Írjon "
+"be egy nevet a kezdéshez."
 
 msgid "General"
 msgstr "Általános"
@@ -441,13 +460,13 @@ msgid "Enable AUR"
 msgstr "AUR engedélyezése"
 
 msgid "Language"
-msgstr ""
+msgstr "Nyelv"
 
 msgid "Enable Flatpak"
 msgstr "Flatpak engedélyezése"
 
 msgid "Enable Recommended"
-msgstr ""
+msgstr "Ajánlott beállítások engedélyezése"
 
 msgid "Enable AppImage"
 msgstr "AppImage engedélyezése"
@@ -492,7 +511,7 @@ msgid "Update Time (24h):"
 msgstr "Frissítés időpontja (24 órás):"
 
 msgid ":"
-msgstr ""
+msgstr ":"
 
 msgid "Look & Feel"
 msgstr "Megjelenés és működés"
@@ -504,6 +523,8 @@ msgid ""
 "If enabled, Shelly will use appstream icons in the package list and details "
 "pages."
 msgstr ""
+"Ha engedélyezve van, a Shelly az appstream ikonokat fogja használni a "
+"csomaglistában és a részletes leírások oldalain."
 
 msgid "Use Symbolic Tray Icon"
 msgstr "Jelkép tálcaikon használata"
@@ -512,6 +533,8 @@ msgid ""
 "If enabled, Shelly will use a symbolic svg icon instead of the default image "
 "one."
 msgstr ""
+"Ha engedélyezve van, a Shelly egy szimbolikus svg ikont fog használni az "
+"alapértelmezett kép helyett."
 
 msgid "Tray Icon"
 msgstr "Tálcaikon"
@@ -529,7 +552,7 @@ msgid "Default page"
 msgstr "Alapértelmezett lap"
 
 msgid "Navigation style"
-msgstr ""
+msgstr "Navigációs stílus"
 
 msgid "Advanced"
 msgstr "Haladó"
@@ -550,16 +573,16 @@ msgid "Enable Webview Visualization (experimental)"
 msgstr "Webview vizualizáció engedélyezése (kísérleti)"
 
 msgid "AppImage Install Path"
-msgstr ""
+msgstr "AppImage telepítési útvonala"
 
 msgid "Select Directory"
-msgstr ""
+msgstr "Könyvtár kiválasztása"
 
 msgid "View Changelog"
 msgstr "Változásnapló megtekintése"
 
 msgid "v0.0.0"
-msgstr ""
+msgstr "v0.0.0"
 
 msgid "GitHub"
 msgstr "GitHub"
@@ -571,49 +594,49 @@ msgid "Sponsor"
 msgstr "Támogató"
 
 msgid "Toggle output"
-msgstr ""
+msgstr "Kimenet váltása"
 
 msgid "Available Updates"
 msgstr "Elérhető frissítések"
 
 msgid "7 of 7 updates included"
-msgstr ""
+msgstr "7 frissítésből 7 szerepel"
 
 msgid "Check all enabled sources again"
-msgstr ""
+msgstr "Az összes engedélyezett forrás újbóli ellenőrzése"
 
 msgid "Check Again"
-msgstr ""
+msgstr "Újbóli ellenőrzés"
 
 msgid "Upgrade"
-msgstr ""
+msgstr "Frissítés"
 
 msgid "System"
 msgstr "Rendszer"
 
 msgid "Checking for updates…"
-msgstr ""
+msgstr "Frissítések keresése…"
 
 msgid "Your system is up to date"
-msgstr ""
+msgstr "A rendszered naprakész"
 
 msgid "Could not check for updates"
-msgstr ""
+msgstr "Nem sikerült ellenőrizni a frissítéseket"
 
 msgid "Utilities"
-msgstr ""
+msgstr "Segédprogramok"
 
 msgid "Maintenance and repair tools for your Shelly installation."
-msgstr ""
+msgstr "Karbantartó és javító eszközök a telepített Shelly-hez."
 
 msgid "Force Database Update"
 msgstr "Adatbázis frissítésének kényszerítése"
 
 msgid "Force a synchronization of the package database."
-msgstr ""
+msgstr "Csomagadatbázis szinkronizálásának kényszerítése."
 
 msgid "Run"
-msgstr ""
+msgstr "Futtatás"
 
 msgid "Remove db.lck"
 msgstr "A db.lck eltávolítása"
@@ -621,6 +644,7 @@ msgstr "A db.lck eltávolítása"
 msgid ""
 "Removes the db.lck file if it was left behind by an interrupted alpm process."
 msgstr ""
+"Eltávolítja a db.lck fájlt, ha azt egy megszakadt alpm-folyamat hagyta hátra."
 
 msgid "Fix Permissions"
 msgstr "Jogosultságok javítása"
@@ -636,161 +660,169 @@ msgid "Purify Packages"
 msgstr "Csomagok tisztítása"
 
 msgid "Remove corrupted/orphaned packages."
-msgstr ""
+msgstr "A sérült/árva csomagok eltávolítása."
 
 msgid "Clean Package Cache"
-msgstr ""
+msgstr "Csomaggyorsítótár törlése"
 
 msgid ""
 "Removes old cached package versions, keeping the selected number per package."
 msgstr ""
+"Eltávolítja a korábbi gyorsítótárazott csomagverziókat, és csak a beállított "
+"darabszámot őrzi meg csomagonként."
 
 msgid "Keep"
-msgstr ""
+msgstr "Megtart"
 
 msgid "Number of cached versions to keep per package"
-msgstr ""
+msgstr "A csomagonként megőrzendő gyorsítótárazott verziók száma"
 
 msgid "Welcome to Shelly v3"
-msgstr ""
+msgstr "Üdvözöljük a Shelly v3-ban"
 
 msgid ""
 "Shelly is a modern package manager for Arch Linux. Configure your sources "
 "and preferences to get started."
 msgstr ""
+"A Shelly egy modern csomagkezelő az Arch Linuxhoz. A kezdéshez konfigurálja "
+"a forrásokat és a beállításokat."
 
 msgid "Select Your Sources"
-msgstr ""
+msgstr "Válassza ki a forrásokat"
 
 msgid ""
 "Choose which package sources you want to browse. You can always change this "
 "later in settings."
 msgstr ""
+"Válassza ki, hogy mely csomagforrásokat szeretné böngészni. Ezt később "
+"bármikor megváltoztathatja a beállításokban."
 
 msgid "Arch User Repository community packages"
-msgstr ""
+msgstr "Arch User Repository közösségi csomagok"
 
 msgid "Sandboxed universal Linux applications"
-msgstr ""
+msgstr "Sandboxolt univerzális Linux alkalmazások"
 
 msgid "AppImage"
 msgstr "AppImage"
 
 msgid "Portable self-contained application bundles"
-msgstr ""
+msgstr "Hordozható, önálló alkalmazáscsomagok"
 
 msgid "Recommended"
 msgstr "Ajánlott"
 
 msgid "Curated picks from Shelly"
-msgstr ""
+msgstr "A Shelly válogatott ajánlásai"
 
 msgid "Look and Feel"
-msgstr ""
+msgstr "Megjelenés és működés"
 
 msgid ""
 "Customize how Shelly looks and behaves. All of these can be changed later in "
 "preferences."
 msgstr ""
+"Szabja testre Shelly megjelenését és viselkedését. Mindezek később a "
+"beállításokban módosíthatók."
 
 msgid "Navigation Style"
-msgstr ""
+msgstr "Navigációs stílus"
 
 msgid "Sidebar"
-msgstr ""
+msgstr "Oldalsáv"
 
 msgid "Vertical icon rail on the left"
-msgstr ""
+msgstr "Függőleges ikonsáv a bal oldalon"
 
 msgid "Top Bar"
-msgstr ""
+msgstr "Felső sáv"
 
 msgid "Horizontal tab switcher at the top"
-msgstr ""
+msgstr "Vízszintes lapváltó felül"
 
 msgid "System Tray"
-msgstr ""
+msgstr "Rendszertálca"
 
 msgid "Run in system tray when minimized"
-msgstr ""
+msgstr "Kicsinyítéskor futtatás a tálcán"
 
 msgid "Next"
-msgstr ""
+msgstr "Következő"
 
 msgid "Start Shelly"
-msgstr ""
+msgstr "Shelly indítása"
 
 msgid "Filesystem"
-msgstr ""
+msgstr "Fájlrendszer"
 
 msgid "Devices"
-msgstr ""
+msgstr "Eszközök"
 
 msgid "Sockets"
-msgstr ""
+msgstr "Csatlakozások"
 
 msgid "Shared"
-msgstr ""
+msgstr "Megosztva"
 
 msgid "Environment"
-msgstr ""
+msgstr "Környezet"
 
 msgid "Session bus"
-msgstr ""
+msgstr "Munkamenet busz"
 
 msgid "System bus"
-msgstr ""
+msgstr "Rendszerbusz"
 
 msgid "Other"
-msgstr ""
+msgstr "Egyéb"
 
 msgid "Review PKGBUILD changes for"
-msgstr ""
+msgstr "PKGBUILD-módosítások áttekintése a"
 
 msgid "Review Changes"
-msgstr ""
+msgstr "Módosítások áttekintése"
 
 msgid "Security scan completed -"
-msgstr ""
+msgstr "Biztonsági ellenőrzés befejeződött -"
 
 msgid "warning(s) found."
-msgstr ""
+msgstr "figyelmeztetés(ek) találhatók."
 
 msgid "Security scan completed - warnings found."
-msgstr ""
+msgstr "A biztonsági ellenőrzés befejeződött – figyelmeztetések találhatók."
 
 msgid "Security scan completed - no issues found."
-msgstr ""
+msgstr "A biztonsági ellenőrzés befejeződött – nem található probléma."
 
 msgid "used in"
-msgstr ""
+msgstr "használt"
 
 msgid "Warning"
-msgstr ""
+msgstr "Figyelmeztetés"
 
 msgid "Install Anyway"
-msgstr ""
+msgstr "Telepítés mindenképpen"
 
 msgid "package(s)"
-msgstr ""
+msgstr "csomag(ok)"
 
 msgid "to"
-msgstr ""
+msgstr "hogy"
 
 msgid "download"
-msgstr ""
+msgstr "letöltés"
 
 msgid "net"
-msgstr ""
+msgstr "net"
 
 msgid "Dismiss"
-msgstr ""
+msgstr "Elvetés"
 
 msgid "None"
 msgstr "Nincs"
 
 msgid "Static URL"
-msgstr ""
+msgstr "Állandó URL"
 
 msgid "GitLab"
 msgstr "GitLab"
@@ -802,10 +834,10 @@ msgid "Forgejo"
 msgstr "Forgejo"
 
 msgid "Update Available"
-msgstr ""
+msgstr "Frissítés érhető el"
 
 msgid "Version ?"
-msgstr ""
+msgstr "Verzió ?"
 
 msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgstr ""
@@ -813,57 +845,59 @@ msgstr ""
 "labs/shelly-alpm)"
 
 msgid "Invalid URL. Must start with http:// or https://"
-msgstr ""
+msgstr "Érvénytelen URL. http:// vagy https:// karakterekkel kell kezdődnie"
 
 msgid ""
 "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
 "repo/releases"
 msgstr ""
+"Érvénytelen Forgejo URL. Használja a http(s)://host/owner/repo or http(s)://"
+"host/owner/repo/releases címet"
 
 msgid "Choose an AppImage file"
-msgstr ""
+msgstr "Válasszon ki egy AppImage fájlt"
 
 msgid "AppImage files"
-msgstr ""
+msgstr "AppImage fájlok"
 
 msgid "Only .AppImage files can be installed"
-msgstr ""
+msgstr "Csak .AppImage fájlok telepíthetők"
 
 msgid "Installing AppImage"
-msgstr ""
+msgstr "AppImage telepítése"
 
 msgid "No AppImages need to be upgraded"
 msgstr "Nincs frissítendő AppImage"
 
 msgid "Upgrading AppImages"
-msgstr ""
+msgstr "AppImages frissítése"
 
 msgid "Syncing AppImages"
-msgstr ""
+msgstr "AppImage-k szinkronizálása"
 
 msgid "Syncing AppImage"
-msgstr ""
+msgstr "AppImage szinkronizálása"
 
 msgid "Saving update configuration"
-msgstr ""
+msgstr "Frissítési konfiguráció mentése"
 
 msgid "Configuration files will be kept."
-msgstr ""
+msgstr "A beállításfájlok megtartásra kerülnek."
 
 msgid "Remove this AppImage?"
-msgstr ""
+msgstr "Eltávolítja ezt az AppImage-t?"
 
 msgid "Remove AppImage"
-msgstr ""
+msgstr "AppImage eltávolítása"
 
 msgid "Removing AppImage"
-msgstr ""
+msgstr "AppImage eltávolítása"
 
 msgid "Operation completed successfully"
-msgstr ""
+msgstr "A művelet sikeresen befejeződött"
 
 msgid "Operation failed"
-msgstr ""
+msgstr "A művelet sikertelen"
 
 msgid "Maintainer"
 msgstr "Karbantartó"
@@ -875,7 +909,7 @@ msgid "First Submitted"
 msgstr "Első beküldés"
 
 msgid "URL"
-msgstr ""
+msgstr "URL"
 
 msgid "Licenses"
 msgstr "Licencek"
@@ -884,31 +918,32 @@ msgid "Depends"
 msgstr "Függőségek"
 
 msgid "Optional Depends"
-msgstr ""
+msgstr "Választható Függőségek"
 
 msgid "Make Depends"
 msgstr "Építési függőségek"
 
 msgid "Section"
-msgstr ""
+msgstr "Szakasz"
 
 msgid "The AUR has no browsable index — type a package name to begin."
 msgstr ""
+"Az AUR-nak nincs böngészhető indexe — írjon be egy csomagnevet a kezdéshez."
 
 msgid "No packages found"
-msgstr ""
+msgstr "Nem találhatók csomagok"
 
 msgid "Try a shorter or more general keyword."
-msgstr ""
+msgstr "Próbálkozzon rövidebb vagy általánosabb kulcsszóval."
 
 msgid "Could not reach the AUR"
-msgstr ""
+msgstr "Nem sikerült elérni az AUR-t"
 
 msgid "Check your connection and try again."
-msgstr ""
+msgstr "Ellenőrizze a kapcsolatot, és próbálja meg újra."
 
 msgid "Flagged out of date"
-msgstr ""
+msgstr "Elavultként megjelölve"
 
 msgid "Installed"
 msgstr "Telepítve"
@@ -917,97 +952,99 @@ msgid "Remove Selected"
 msgstr "Kijelöltek eltávolítása"
 
 msgid "Select one or more packages"
-msgstr ""
+msgstr "Válasszon ki egy vagy több csomagot"
 
 msgid "Package(s)"
-msgstr ""
+msgstr "Csomag(ok)"
 
 msgid "Remove Packages"
-msgstr ""
+msgstr "Csomagok eltávolítása"
 
 msgid "Remove the selected AUR packages?"
-msgstr ""
+msgstr "Eltávolítja a kiválasztott AUR-csomagokat?"
 
 msgid "Build from AUR"
-msgstr ""
+msgstr "Építés AUR-ból"
 
 msgid "Build and install the selected packages? This may take a while."
 msgstr ""
+"Összeállítja és telepíti a kiválasztott csomagokat? Ez eltarthat egy ideig."
 
 msgid "Build"
-msgstr ""
+msgstr "Építés"
 
 msgid "Installing AUR packages"
-msgstr ""
+msgstr "AUR csomagok telepítése"
 
 msgid "Removing AUR packages"
-msgstr ""
+msgstr "AUR csomagok eltávolítása"
 
 msgid "Choose a Flatpak file"
-msgstr ""
+msgstr "Válasszon ki egy Flatpak fájlt"
 
 msgid "Flatpak files"
-msgstr ""
+msgstr "Flatpak fájlok"
 
 msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
 msgstr ""
+"Nem támogatott fájltípus. Válasszon ki egy .flatpak vagy .flatpakref fájlt."
 
 msgid "Installing local flatpak"
-msgstr ""
+msgstr "Flatpak helyi telepítése"
 
 msgid "Installation failed."
-msgstr ""
+msgstr "A telepítés sikertelen volt."
 
 msgid "Installation complete."
-msgstr ""
+msgstr "A telepítés sikeres."
 
 msgid "Choose file..."
-msgstr ""
+msgstr "Fájl kiválasztása…"
 
 msgid "Verified"
-msgstr ""
+msgstr "Ellenőrzött"
 
 msgid "Show less"
-msgstr ""
+msgstr "Mutasson kevesebbet"
 
 msgid "Installing flatpak"
-msgstr ""
+msgstr "Flatpak telepítése"
 
 msgid "Permissions"
-msgstr ""
+msgstr "Jogosultságok"
 
 msgid "Available Addons"
 msgstr "Elérhető kiegészítők"
 
 msgid "Installing flatpak addon"
-msgstr ""
+msgstr "Flatpak-bővítmény telepítése"
 
 msgid "Unknown developer"
-msgstr ""
+msgstr "Ismeretlen fejlesztő"
 
 msgid "Unknown"
 msgstr "Ismeretlen"
 
 msgid "Version: Unknown"
-msgstr ""
+msgstr "Verzió: Ismeretlen"
 
 msgid "Size: Loading..."
-msgstr ""
+msgstr "Méret: Betöltés..."
 
 msgid "Size: Unknown"
-msgstr ""
+msgstr "Méret: Ismeretlen"
 
 msgid "License"
-msgstr ""
+msgstr "Licenc"
 
 msgid "License: Unknown"
-msgstr ""
+msgstr "License: Ismeretlen"
 
 msgid "No summary available"
-msgstr ""
+msgstr "Összefoglaló nem érhető el"
 
 msgid "Size: Unavailable"
-msgstr ""
+msgstr "Méret: Nem elérhető"
 
 msgid "Download"
 msgstr "Letöltés"
@@ -1016,58 +1053,58 @@ msgid "No description available."
 msgstr "Nincs elérhető leírás."
 
 msgid "Unable to load screenshot"
-msgstr ""
+msgstr "A képernyőkép betöltése nem sikerült"
 
 msgid "Unable to download screenshot"
-msgstr ""
+msgstr "A képernyőkép letöltése nem sikerült"
 
 msgid "Unable to display screenshot"
-msgstr ""
+msgstr "Képernyőkép nem jeleníthető meg"
 
 msgid "Open link in browser"
-msgstr ""
+msgstr "Hivatkozást megnyitása böngészőben"
 
 msgid "Homepage"
-msgstr ""
+msgstr "Kezdőlap"
 
 msgid "Bug tracker"
-msgstr ""
+msgstr "Hibakövető"
 
 msgid "Donation"
-msgstr ""
+msgstr "Adományozás"
 
 msgid "FAQ"
-msgstr ""
+msgstr "GYIK"
 
 msgid "Help"
-msgstr ""
+msgstr "Help"
 
 msgid "Vcs-browser"
-msgstr ""
+msgstr "Vcs-böngésző"
 
 msgid "Contact"
-msgstr ""
+msgstr "Kapcsolat"
 
 msgid "Translate"
-msgstr ""
+msgstr "Fordítás"
 
 msgid "Unable to allocate memory while loading Flatpak data."
-msgstr ""
+msgstr "A Flatpak adatok betöltése közben nem sikerült memóriát lefoglalni."
 
 msgid "Unable to start the Flatpak data loader."
-msgstr ""
+msgstr "Nem sikerült elindítani a Flatpak adatbetöltőt."
 
 msgid "Unable to load Flatpak applications."
-msgstr ""
+msgstr "Nem sikerült betölteni a Flatpak alkalmazásokat."
 
 msgid "No Flatpak applications are available."
-msgstr ""
+msgstr "Nem érhetők el Flatpak alkalmazások."
 
 msgid "Discover"
-msgstr ""
+msgstr "Felfedezés"
 
 msgid "Categories"
-msgstr ""
+msgstr "Kategóriák"
 
 msgid "All Applications"
 msgstr "Minden alkalmazás"
@@ -1109,40 +1146,37 @@ msgid "Utility"
 msgstr "Segédprogramok"
 
 msgid "Removing Remote"
-msgstr ""
+msgstr "Távoli tároló eltávolítása"
 
 msgid "Adding Remote"
-msgstr ""
+msgstr "Távoli tároló hozzáadása"
 
 msgid "Remove this Flatpak?"
-msgstr ""
+msgstr "Eltávolítja ezt a Flatpak csomagot?"
 
-#| msgid "Flatpak"
 msgid "Remove Flatpak"
-msgstr ""
+msgstr "Flatpak eltávolítása"
 
 msgid "Removing Flatpak"
-msgstr ""
+msgstr "Flatpak eltávolítása"
 
 msgid "App ID"
-msgstr ""
+msgstr "App ID"
 
-#| msgid "Remove"
 msgid "Remote"
-msgstr ""
+msgstr "Távoli"
 
-#| msgid "Development"
 msgid "Developer"
-msgstr ""
+msgstr "Fejlesztő"
 
 msgid "Type"
-msgstr ""
+msgstr "Típus"
 
 msgid "Download Size"
-msgstr ""
+msgstr "Letöltési méret"
 
 msgid "Installed Size"
-msgstr ""
+msgstr "Telepített méret"
 
 msgid "Yes"
 msgstr "Igen"
@@ -1151,20 +1185,19 @@ msgid "No"
 msgstr "Nem"
 
 msgid "Keywords"
-msgstr ""
+msgstr "Kulcsszavak"
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
-msgstr ""
+msgstr "Flathub"
 
 msgid "Loading..."
 msgstr "Betöltés..."
 
 msgid "Build Date"
-msgstr ""
+msgstr "Építés dátuma"
 
 msgid "Install Reason"
-msgstr ""
+msgstr "Telepítés oka"
 
 msgid "Provides"
 msgstr "Biztosítja"
@@ -1173,107 +1206,106 @@ msgid "Conflicts"
 msgstr "Ütközések"
 
 msgid "Required By"
-msgstr ""
+msgstr "Szükséges"
 
 msgid "Reinstalling package"
-msgstr ""
+msgstr "Csomag újratelepítése"
 
 msgid "Adding to package ignore"
-msgstr ""
+msgstr "Hozzáadás a mellőzöttekhez"
 
 msgid "Adding to package to hold"
-msgstr ""
+msgstr "Csomag megtartottakhoz adása"
 
 msgid "Making Package Explicit"
-msgstr ""
+msgstr "Csomag kifejezetten telepítetté tétele"
 
 msgid "Making Package Dependency"
-msgstr ""
+msgstr "Csomagfüggőség készítése"
 
 msgid "Package is already installed"
 msgstr "A csomag már telepítve van"
 
 msgid "Remove from selection"
-msgstr ""
+msgstr "Eltávolítás a kijelölésből"
 
 msgid "remove"
-msgstr ""
+msgstr "eltávolítás"
 
 msgid "install"
-msgstr ""
+msgstr "telepítés"
 
 msgid "No packages selected"
-msgstr ""
+msgstr "Nincsenek kiválasztott csomagok"
 
 msgid "Selected"
-msgstr ""
+msgstr "Kiválasztva"
 
 msgid "Mixed selection"
-msgstr ""
+msgstr "Vegyes válogatás"
 
 msgid ""
 "Select only installed packages to remove, or only available ones to install."
 msgstr ""
+"Eltávolításhoz csak telepített, telepítéshez csak elérhető csomagot "
+"válasszon."
 
 msgid "Remove the selected packages?"
-msgstr ""
+msgstr "Eltávolítja a kiválasztott csomagokat?"
 
 msgid "Removing packages"
-msgstr ""
+msgstr "Csomagok eltávolítása"
 
 msgid "Installing packages"
-msgstr ""
+msgstr "Csomagok telepítése"
 
 msgid "Search failed"
-msgstr ""
+msgstr "A keresés sikertelen"
 
-#| msgid "Installation Path"
 msgid "Installation in progress"
-msgstr ""
+msgstr "Telepítés folyamatban"
 
 msgid "No sources selected"
-msgstr ""
+msgstr "Nincsenek kiválasztva források"
 
 msgid "Enable at least one source filter above."
-msgstr ""
+msgstr "Legalább egy forrásszűrőt engedélyezz fent."
 
-#| msgid "Install Local"
 msgid "Install Packages"
-msgstr ""
+msgstr "Csomagok telepítése"
 
-#| msgid "Install Selected"
 msgid "Install the selected packages?"
-msgstr ""
+msgstr "Telepíti a kiválasztott csomagokat?"
 
 msgid "Failed to save settings"
-msgstr ""
+msgstr "Nem sikerült menteni a beállításokat"
 
 msgid "Settings saved"
-msgstr ""
+msgstr "A beállítások mentve"
 
 msgid "Installing Flatpak support"
-msgstr ""
+msgstr "Flatpak támogatás telepítése"
 
 msgid "Installing AppImage support"
-msgstr ""
+msgstr "AppImage támogatás telepítése"
 
 msgid "Failed to start Flatpak support installation"
-msgstr ""
+msgstr "Nem sikerült elindítani a Flatpak támogatás telepítését"
 
 msgid "Failed to start AppImage support installation"
-msgstr ""
+msgstr "Nem sikerült elindítani az AppImage támogatás telepítését"
 
 msgid "Flatpak support installation failed"
-msgstr ""
+msgstr "A Flatpak támogatás telepítése sikertelen"
 
 msgid "AppImage support installation failed"
-msgstr ""
+msgstr "Az AppImage támogatás telepítése sikertelen"
 
 msgid "Flatpak support enabled"
-msgstr ""
+msgstr "Flatpak támogatás engedélyezve"
 
 msgid "AppImage support enabled"
-msgstr ""
+msgstr "AppImage támogatás engedélyezve"
 
 msgid "No changelog entries found"
 msgstr "Nem találhatók változásnapló bejegyzések"
@@ -1285,37 +1317,38 @@ msgid "Failed to load changelog"
 msgstr "Nem sikerült betölteni a változásnaplót"
 
 msgid "Changelog"
-msgstr ""
+msgstr "Változásnapló"
 
 msgid "Select Tray Icon"
-msgstr ""
+msgstr "Tálcaikon kiválasztása"
 
 msgid "Select Icon"
-msgstr ""
+msgstr "Ikon kiválasztása"
 
 msgid "Select Tray Updates Icon"
-msgstr ""
+msgstr "Tálca frissítés ikonjának kiválasztása"
 
 msgid "Select AppImage Install Directory"
-msgstr ""
+msgstr "AppImage telepítési könyvtár kiválasztása"
 
 msgid "Tray enabled"
-msgstr ""
+msgstr "Tálca engedélyezve"
 
 msgid "Tray disabled, but autostart service remains"
 msgstr ""
+"A tálcaikon le van tiltva, de az automatikus indítási szolgáltatás megmarad"
 
 msgid "Tray disabled"
-msgstr ""
+msgstr "Tálca letiltva"
 
 msgid "Failed to add systemd startup service"
-msgstr ""
+msgstr "Nem sikerült hozzáadni a rendszerindítási szolgáltatást"
 
 msgid "Systemd startup service added."
 msgstr "Indítási szolgáltatás hozzáadva a Systemd-hez."
 
 msgid "Failed to remove systemd startup service"
-msgstr ""
+msgstr "Nem sikerült eltávolítani a rendszerindítási szolgáltatást"
 
 msgid "Systemd startup service removed."
 msgstr "Indítási szolgáltatás eltávolítva a Systemd-ből."
@@ -1332,55 +1365,55 @@ msgstr ""
 "Szeretné engedélyezni?"
 
 msgid "Enable"
-msgstr ""
+msgstr "Engedélyezés"
 
 msgid "AUR enabled"
-msgstr ""
+msgstr "AUR engedélyezve"
 
 msgid "System Default"
-msgstr ""
+msgstr "Rendszer alapértelmezett"
 
 msgid "English"
-msgstr ""
+msgstr "English"
 
 msgid "Bulgarian"
-msgstr ""
+msgstr "Bulgarian"
 
 msgid "Català"
-msgstr ""
+msgstr "Català"
 
 msgid "Deutsch"
-msgstr ""
+msgstr "Deutsch"
 
 msgid "Español"
-msgstr ""
+msgstr "Español"
 
 msgid "Français"
-msgstr ""
+msgstr "Français"
 
 msgid "Magyar"
-msgstr ""
+msgstr "Magyar"
 
 msgid "日本語"
-msgstr ""
+msgstr "日本語"
 
 msgid "Polski"
-msgstr ""
+msgstr "Polski"
 
 msgid "Português (Brasil)"
-msgstr ""
+msgstr "Português (Brasil)"
 
 msgid "Português (Portugal)"
-msgstr ""
+msgstr "Português (Portugal)"
 
 msgid "Русский"
-msgstr ""
+msgstr "Русский"
 
 msgid "Türkçe"
-msgstr ""
+msgstr "Türkçe"
 
 msgid "中文（简体）"
-msgstr ""
+msgstr "中文（简体）"
 
 msgid "Packages"
 msgstr "Csomagok"
@@ -1389,137 +1422,144 @@ msgid "Shelly Search"
 msgstr "Shelly-keresés"
 
 msgid "Update"
-msgstr ""
+msgstr "Frissítés"
 
 msgid "Failed to start operation."
-msgstr ""
+msgstr "Nem sikerült elindítani a műveletet."
 
 msgid "Pending"
-msgstr ""
+msgstr "Függőben"
 
 msgid "Synchronizing databases"
-msgstr ""
+msgstr "Adatbázisok szinkronizálása"
 
 msgid "Building"
-msgstr ""
+msgstr "Építés"
 
 msgid "Downloading"
-msgstr ""
+msgstr "Letöltés"
 
 msgid "Packaging"
-msgstr ""
+msgstr "Csomagolás"
 
 msgid "Installing"
-msgstr ""
+msgstr "Telepítés"
 
 msgid "Upgrading"
-msgstr ""
+msgstr "Frissítés"
 
 msgid "Downgrading"
-msgstr ""
+msgstr "Visszaállítás"
 
 msgid "Reinstalling"
-msgstr ""
+msgstr "Újratelepítés"
 
 msgid "Removing"
-msgstr ""
+msgstr "Eltávolítás"
 
 msgid "Checking keyring"
-msgstr ""
+msgstr "Kulcstartó ellenőrzése"
 
 msgid "Checking integrity"
-msgstr ""
+msgstr "Az integritás ellenőrzése"
 
 msgid "Loading packages"
-msgstr ""
+msgstr "Csomagok betöltése"
 
 msgid "Checking conflicts"
-msgstr ""
+msgstr "Konfliktusok ellenőrzése"
 
 msgid "Checking disk space"
-msgstr ""
+msgstr "Lemezterület ellenőrzése"
 
 msgid "Working"
-msgstr ""
+msgstr "Dolgozom"
 
 msgid "Done"
-msgstr ""
+msgstr "Kész"
 
 msgid "Failed"
-msgstr ""
+msgstr "Sikertelen"
 
 msgid "Finished"
-msgstr ""
+msgstr "Befejezett"
 
 msgid "exit"
-msgstr ""
+msgstr "kilépés"
 
 msgid "Cancelled"
-msgstr ""
+msgstr "Törölt<"
 
 msgid "System package update"
-msgstr ""
+msgstr "Rendszercsomag frissítése"
 
 msgid "AUR package update"
-msgstr ""
+msgstr "AUR csomag frissítése"
 
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
+"Nem sikerült futtatni a shelly check-updates parancsot. Ellenőrizze a CLI "
+"kimenetet, és próbálja újra."
 
 msgid "Update this package"
-msgstr ""
+msgstr "Frissítse ezt a csomagot"
 
 msgid "of"
-msgstr ""
+msgstr "közülük"
 
 msgid "updates included"
-msgstr ""
+msgstr "frissítéseket tartalmaz"
 
 msgid "Updates included"
-msgstr ""
+msgstr "Frissítéseket tartalmaz"
 
 msgid "Upgrading packages"
-msgstr ""
+msgstr "Csomagok frissítése"
 
 msgid "Refreshing package databases"
-msgstr ""
+msgstr "Csomagadatbázisok frissítése"
 
 msgid "Database lock removed successfully"
-msgstr ""
+msgstr "Az adatbázis zárolása sikeresen eltávolítva"
 
 msgid "Failed to remove database lock"
-msgstr ""
+msgstr "Nem sikerült eltávolítani az adatbázis zárolását"
 
 msgid "Fixing permissions"
-msgstr ""
+msgstr "Engedélyek javítása"
 
 msgid "Purifying packages"
-msgstr ""
+msgstr "Csomagok teljes eltávolítása"
 
 msgid "Cleaning package cache"
-msgstr ""
+msgstr "Csomaggyorsítótár tisztítása"
 
 msgid "Welcome"
-msgstr ""
+msgstr "Üdvözöljük"
 
 msgid ""
 "The Arch User Repository is community-maintained. Packages are not "
 "officially vetted — only enable if you trust what you install."
 msgstr ""
+"Az Arch User Repository közösségileg karbantartott. A csomagok nincsenek "
+"hivatalosan ellenőrizve - csak akkor engedélyezze, ha megbízik abban, amit "
+"telepít."
 
 msgid "Enable Recommended?"
-msgstr ""
+msgstr "Engedélyezi az ajánlottakat?"
 
 msgid ""
 "Recommended shows curated package suggestions based on your installed "
 "software. Package data is fetched from external sources."
 msgstr ""
+"Az Ajánlott a telepített szoftver alapján válogatott csomagjavaslatokat "
+"jelenít meg. A csomagadatok külső forrásból kerülnek lekérdezésre."
 
 msgid "Installing Flatpak and AppImage support"
-msgstr ""
+msgstr "Flatpak és AppImage támogatás telepítése"
 
 msgid "Settings"
 msgstr "Beállítások"
 
 msgid "Package"
-msgstr ""
+msgstr "Csomag"
