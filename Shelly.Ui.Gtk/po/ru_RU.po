@@ -23,17 +23,17 @@ msgstr "Закрыть"
 
 #| msgid "Saving update configuration"
 msgid "Keep configuration"
-msgstr ""
+msgstr "Сохранить конфигурацию"
 
 msgid "App data and settings will be kept."
-msgstr ""
+msgstr "Данные приложения и настройки будут сохранены."
 
 #| msgid "Saving update configuration"
 msgid "Remove configuration"
-msgstr ""
+msgstr "Удалить конфигурацию"
 
 msgid "App data will be permanently removed."
-msgstr ""
+msgstr "Данные приложения будут безвозвратно удалены."
 
 msgid "Confirm"
 msgstr "Подтвердить"
@@ -326,7 +326,7 @@ msgid "Repairs Flatpak Installation (Experimental)"
 msgstr "Восстанавливает установку Flatpak (экспериментально)"
 
 msgid "About"
-msgstr ""
+msgstr "О программе"
 
 msgid "Shelly"
 msgstr "Shelly"
@@ -422,37 +422,39 @@ msgstr ""
 "раз."
 
 msgid "Search standard repositories, AUR and Flatpak"
-msgstr ""
+msgstr "Поиск в стандартных репозиториях, AUR и Flatpak"
 
 msgid "Standard"
-msgstr ""
+msgstr "Стандартные"
 
 msgid "Show results from the configured ALPM sync databases"
-msgstr ""
+msgstr "Показывать результаты из настроенных баз синхронизации ALPM"
 
 msgid "AUR"
 msgstr "AUR"
 
 msgid "Show results from the Arch User Repository"
-msgstr ""
+msgstr "Показывать результаты из Arch User Repository"
 
 msgid "Flatpak"
 msgstr "Flatpak"
 
 msgid "Show results from the configured Flatpak remotes"
-msgstr ""
+msgstr "Показывать результаты из настроенных удалённых источников Flatpak"
 
 #| msgid "Source Files"
 msgid "Source"
-msgstr ""
+msgstr "Источник"
 
 msgid "Search everywhere"
-msgstr ""
+msgstr "Искать везде"
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
 msgstr ""
+"Искать одновременно в стандартных репозиториях, AUR и Flatpak. Введите имя "
+"для начала."
 
 msgid "General"
 msgstr "Общие"
@@ -595,7 +597,7 @@ msgid "Sponsor"
 msgstr "Поддержать"
 
 msgid "Toggle output"
-msgstr "Переключить вывод"
+msgstr "Включить/отключить вывод"
 
 msgid "Available Updates"
 msgstr "Доступные обновления"
@@ -1151,28 +1153,28 @@ msgstr "Добавление источника"
 
 #| msgid "Removing Flatpak"
 msgid "Remove this Flatpak?"
-msgstr ""
+msgstr "Удалить этот Flatpak?"
 
 #| msgid "Removing Flatpak"
 msgid "Remove Flatpak"
-msgstr ""
+msgstr "Удалить Flatpak"
 
 msgid "Removing Flatpak"
 msgstr "Удаление Flatpak"
 
 msgid "App ID"
-msgstr ""
+msgstr "Идентификатор приложения"
 
 #| msgid "Remove"
 msgid "Remote"
-msgstr ""
+msgstr "Удалённый источник"
 
 #| msgid "Development"
 msgid "Developer"
-msgstr ""
+msgstr "Разработчик"
 
 msgid "Type"
-msgstr ""
+msgstr "Тип"
 
 msgid "Download Size"
 msgstr "Размер скачивания"
@@ -1187,11 +1189,11 @@ msgid "No"
 msgstr "Нет"
 
 msgid "Keywords"
-msgstr ""
+msgstr "Ключевые слова"
 
 #| msgid "e.g., flathub"
 msgid "Flathub"
-msgstr ""
+msgstr "Flathub"
 
 msgid "Loading..."
 msgstr "Загрузка..."
@@ -1264,26 +1266,26 @@ msgstr "Установка пакетов"
 
 #| msgid "Operation failed"
 msgid "Search failed"
-msgstr ""
+msgstr "Поиск не удался"
 
 #| msgid "Installation failed."
 msgid "Installation in progress"
-msgstr ""
+msgstr "Установка в процессе"
 
 #| msgid "No packages selected"
 msgid "No sources selected"
-msgstr ""
+msgstr "Источники не выбраны"
 
 msgid "Enable at least one source filter above."
-msgstr ""
+msgstr "Включите хотя бы один фильтр источников выше."
 
 #| msgid "Installing packages"
 msgid "Install Packages"
-msgstr ""
+msgstr "Установить пакеты"
 
 #| msgid "Remove the selected packages?"
 msgid "Install the selected packages?"
-msgstr ""
+msgstr "Установить выбранные пакеты?"
 
 msgid "Failed to save settings"
 msgstr "Не удалось сохранить настройки"
@@ -1465,19 +1467,19 @@ msgid "Removing"
 msgstr "Удаление"
 
 msgid "Checking keyring"
-msgstr ""
+msgstr "Проверка связки ключей"
 
 msgid "Checking integrity"
-msgstr ""
+msgstr "Проверка целостности"
 
 msgid "Loading packages"
-msgstr ""
+msgstr "Загрузка пакетов"
 
 msgid "Checking conflicts"
-msgstr ""
+msgstr "Проверка конфликтов"
 
 msgid "Checking disk space"
-msgstr ""
+msgstr "Проверка свободного места на диске"
 
 msgid "Working"
 msgstr "Выполнение"
