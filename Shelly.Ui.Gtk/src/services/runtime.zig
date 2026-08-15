@@ -1,5 +1,6 @@
 const std = @import("std");
-const ConfigResolver = @import("config_resolver.zig").ConfigResolver;
+const ConfigResolver = @import("ui_config_resolver.zig").ConfigResolver;
+const cli_config_resolver = @import("cli_config_resolver.zig");
 const xdg_paths = @import("xdg_paths.zig");
 
 // src/shellpers/runtime.zig
@@ -25,8 +26,19 @@ pub fn setupConfig(allocator: std.mem.Allocator) !*ConfigResolver {
     svc.* = try ConfigResolver.init(allocator, io, environ_map);
     try svc.load();
 
+    migrateLegacyAppImageInstallPath(allocator);
+
     config = svc;
     return svc;
+}
+
+fn migrateLegacyAppImageInstallPath(allocator: std.mem.Allocator) void {
+    var resolver = cli_config_resolver.CliConfigResolver.init(allocator, io, environ_map) catch |err| {
+        std.log.warn("appimage: could not open CLI config for legacy migration: {t}", .{err});
+        return;
+    };
+    defer resolver.deinit();
+    resolver.migrateLegacyInstallPath();
 }
 
 pub fn teardownConfig(allocator: std.mem.Allocator) void {

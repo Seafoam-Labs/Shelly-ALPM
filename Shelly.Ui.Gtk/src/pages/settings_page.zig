@@ -8,7 +8,8 @@ const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const ShellyTabs = @import("../models/shelly_config.zig").ShellyTabs;
 const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
 const NavMode = @import("../models/shelly_config.zig").NavMode;
-const ConfigResolver = @import("../services/config_resolver.zig").ConfigResolver;
+const ConfigResolver = @import("../services/ui_config_resolver.zig").ConfigResolver;
+const CliConfigResolver = @import("../services/cli_config_resolver.zig").CliConfigResolver;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const support_packages = @import("../services/support_packages.zig");
 const runtime = @import("../services/runtime.zig");
@@ -898,7 +899,21 @@ pub const ShellySettingsPage = extern struct {
         const p = self.priv();
         gtk.Button.setLabel(p.appimage_install_path_button, path_cstr);
 
-        updateConfigField(.AppImageInstallPath, path_slice);
+        self.saveAppImageInstallPath(path_slice);
+    }
+
+    fn saveAppImageInstallPath(self: *Self, path: []const u8) void {
+        const p = self.priv();
+        var resolver = CliConfigResolver.init(std.heap.c_allocator, runtime.io, runtime.environ_map) catch {
+            p.toast.show(.@"error", translations._("Failed to save settings"));
+            return;
+        };
+        defer resolver.deinit();
+
+        resolver.writeAppImageInstallPath(path) catch |err| {
+            std.log.err("settings: failed to save AppImage install path: {t}", .{err});
+            p.toast.show(.@"error", translations._("Failed to save settings"));
+        };
     }
 
     fn on_schedule_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
@@ -1314,7 +1329,25 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.remove_cache_switch, cfg.PackageManagementRemoveConfigs);
     setSwitch(p.webview_switch, cfg.WebviewEnabled);
 
-    setButtonLabel(p.appimage_install_path_button, std.heap.c_allocator, cfg.AppImageInstallPath, translations._("Select Directory"));
+    applyAppImageInstallPath(p);
+}
+
+fn applyAppImageInstallPath(p: *ShellySettingsPage.Private) void {
+    const allocator = std.heap.c_allocator;
+    var resolver = CliConfigResolver.init(allocator, runtime.io, runtime.environ_map) catch {
+        setButtonLabel(p.appimage_install_path_button, allocator, "", translations._("Select Directory"));
+        return;
+    };
+    defer resolver.deinit();
+
+    const path = resolver.readAppImageInstallPath() catch |err| {
+        std.log.warn("settings: could not read AppImage install path: {t}", .{err});
+        setButtonLabel(p.appimage_install_path_button, allocator, "", translations._("Select Directory"));
+        return;
+    };
+    defer if (path) |value| allocator.free(value);
+
+    setButtonLabel(p.appimage_install_path_button, allocator, path orelse "", translations._("Select Directory"));
 }
 
 fn setButtonLabel(b: *gtk.Button, allocator: std.mem.Allocator, value: []const u8, default: [:0]const u8) void {

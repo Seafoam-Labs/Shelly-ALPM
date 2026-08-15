@@ -208,7 +208,7 @@ fn setupGnomeThemePreference() void {
 
 test {
     _ = @import("services/icon_resolver.zig");
-    _ = @import("services/config_resolver.zig");
+    _ = @import("services/ui_config_resolver.zig");
     _ = @import("services/shelly_cli.zig");
     _ = @import("services/tray_service.zig");
     _ = @import("g_objects/appstream_app_object.zig");

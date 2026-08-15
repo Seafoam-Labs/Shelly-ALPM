@@ -38,7 +38,6 @@ pub const ShellyConfig = struct {
     AurEnabled: bool = false,
     AurWarningConfirmed: bool = false,
     AppImageEnabled: bool = false,
-    AppImageInstallPath: []const u8 = "",
     FlatPackEnabled: bool = false,
     RecommendedEnabled: bool = true,
     ShellyIconsEnabled: bool = true,
