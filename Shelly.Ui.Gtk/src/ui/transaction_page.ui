@@ -19,11 +19,19 @@
             <child>
               <object class="GtkBox">
                 <property name="orientation">horizontal</property>
-                <property name="spacing">8</property>
+                <property name="spacing">10</property>
                 <property name="margin-start">16</property>
                 <property name="margin-end">16</property>
                 <property name="margin-top">12</property>
                 <property name="margin-bottom">12</property>
+                <child>
+                  <object class="GtkImage" id="status_icon">
+                    <property name="visible">false</property>
+                    <property name="pixel-size">24</property>
+                    <property name="valign">center</property>
+                    <style><class name="status-icon"/></style>
+                  </object>
+                </child>
                 <child>
                   <object class="GtkLabel" id="title_label">
                     <property name="halign">start</property>
@@ -42,17 +50,17 @@
                 </child>
                 <child>
                   <object class="GtkButton" id="close_button">
-                    <property name="icon-name">window-close-symbolic</property>
-                    <property name="tooltip-text" translatable="yes">Close</property>
+                    <property name="label" translatable="yes">Done</property>
                     <property name="visible">false</property>
+                    <property name="receives-default">true</property>
                     <signal name="clicked" handler="on_close" swapped="true"/>
-                    <style><class name="flat"/></style>
+                    <style><class name="suggested-action"/></style>
                     <child>
                       <object class="GtkShortcutController">
                         <property name="scope">managed</property>
                         <child>
                           <object class="GtkShortcut">
-                            <property name="trigger">Escape</property>
+                            <property name="trigger">Return|KP_Enter|Escape</property>
                             <property name="action">activate</property>
                           </object>
                         </child>
@@ -134,6 +142,11 @@
             <style><class name="question-layer"/></style>
           </object>
         </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkEventControllerKey">
+        <signal name="key-pressed" handler="on_key_pressed" swapped="true"/>
       </object>
     </child>
   </template>
