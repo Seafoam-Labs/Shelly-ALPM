@@ -40,7 +40,6 @@ pub const ShellyConfig = struct {
     AppImageEnabled: bool = false,
     AppImageInstallPath: []const u8 = "",
     FlatPackEnabled: bool = false,
-    PackageDowngradeEnabled: bool = false,
     RecommendedEnabled: bool = true,
     ShellyIconsEnabled: bool = true,
     ShellySearchEnabled: bool = false,

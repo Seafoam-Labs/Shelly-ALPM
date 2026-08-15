@@ -90,7 +90,6 @@ pub const ShellySettingsPage = extern struct {
         remove_cache_switch: *gtk.Switch,
         no_confirm_switch: *gtk.Switch,
         shelly_search_switch: *gtk.Switch,
-        package_downgrade_switch: *gtk.Switch,
         webview_switch: *gtk.Switch,
         appimage_install_path_box: *gtk.Box,
         appimage_install_path_button: *gtk.Button,
@@ -220,7 +219,6 @@ pub const ShellySettingsPage = extern struct {
             p.symbolic_tray_switch,
             p.no_confirm_switch,
             p.shelly_search_switch,
-            p.package_downgrade_switch,
             p.remove_cache_switch,
             p.webview_switch,
         };
@@ -1075,7 +1073,6 @@ pub const ShellySettingsPage = extern struct {
         .{ "remove_cache_switch", @offsetOf(Private, "remove_cache_switch") },
         .{ "no_confirm_switch", @offsetOf(Private, "no_confirm_switch") },
         .{ "shelly_search_switch", @offsetOf(Private, "shelly_search_switch") },
-        .{ "package_downgrade_switch", @offsetOf(Private, "package_downgrade_switch") },
         .{ "webview_switch", @offsetOf(Private, "webview_switch") },
         .{ "appimage_install_path_box", @offsetOf(Private, "appimage_install_path_box") },
         .{ "appimage_install_path_button", @offsetOf(Private, "appimage_install_path_button") },
@@ -1314,7 +1311,6 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     // Advanced
     setSwitch(p.no_confirm_switch, cfg.NoConfirm);
     setSwitch(p.shelly_search_switch, cfg.ShellySearchEnabled);
-    setSwitch(p.package_downgrade_switch, cfg.PackageDowngradeEnabled);
     setSwitch(p.remove_cache_switch, cfg.PackageManagementRemoveConfigs);
     setSwitch(p.webview_switch, cfg.WebviewEnabled);
 
@@ -1376,7 +1372,6 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     // Advanced
     cfg.NoConfirm = getSwitch(p.no_confirm_switch);
     cfg.ShellySearchEnabled = getSwitch(p.shelly_search_switch);
-    cfg.PackageDowngradeEnabled = getSwitch(p.package_downgrade_switch);
     cfg.PackageManagementRemoveConfigs = getSwitch(p.remove_cache_switch);
     cfg.WebviewEnabled = getSwitch(p.webview_switch);
 }
