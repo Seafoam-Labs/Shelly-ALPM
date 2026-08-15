@@ -626,10 +626,9 @@ pub const Manager = struct {
     }
 
     pub fn updatePackages(self: *Self, package_names: []const []const u8) !void {
-        var completion: operation_api.CompletionStatus = .success;
         var operation_scope = OperationScope.init(self, .update, if (package_names.len == 0) null else package_names[0]);
         operation_scope.attach();
-        defer operation_scope.finish(completion);
+        defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try self.checkCancelled();
         const message = try std.mem.join(self.allocator, ", ", package_names);
@@ -641,10 +640,9 @@ pub const Manager = struct {
         defer result.deinit(self.allocator);
 
         if (result.failures.len > 0) {
-            for (result.failures, 0..) |failure, index| {
+            for (result.failures, 0..) |failure, index|
                 self.raisePackageProgress(.aur_package_failed, failure.package_name, index + 1, result.failures.len, failure.reason);
-                completion = .failed;
-            }
+            return error.BuildFailed;
         }
     }
 
@@ -698,20 +696,18 @@ pub const Manager = struct {
     }
 
     pub fn installPackages(self: *Self, package_names: []const []const u8) !void {
-        var completion: operation_api.CompletionStatus = .success;
         var operation_scope = OperationScope.init(self, .install, if (package_names.len == 0) null else package_names[0]);
         operation_scope.attach();
-        defer operation_scope.finish(completion);
+        defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
 
         var result = try self.installPackagesImpl(package_names);
         defer result.deinit(self.allocator);
 
         if (result.failures.len > 0) {
-            for (result.failures, 0..) |failure, index| {
+            for (result.failures, 0..) |failure, index|
                 self.raisePackageProgress(.aur_package_failed, failure.package_name, index + 1, result.failures.len, failure.reason);
-                completion = .failed;
-            }
+            return error.BuildFailed;
         }
     }
 
@@ -3247,7 +3243,10 @@ test "all requested PKGBUILDs are reviewed before the first build" {
     try std.testing.expectEqualStrings("review-suite", split_plans.items[0].requested_names.items[0]);
     try std.testing.expectEqualStrings("review-suite-addon", split_plans.items[0].requested_names.items[1]);
 
-    try manager.installPackages(&.{ "review-suite", "review-suite-addon" });
+    try std.testing.expectError(
+        error.BuildFailed,
+        manager.installPackages(&.{ "review-suite", "review-suite-addon" }),
+    );
     const split_build_marker = try std.Io.Dir.cwd().readFileAlloc(
         io,
         marker_path,
@@ -3441,7 +3440,7 @@ test "AUR package failures are emitted after all builds and fail the operation" 
     _ = try manager.cachePkgbase("failure-two", "failure-two");
 
     const package_names = &.{ "failure-one", "failure-two" };
-    try manager.installPackages(package_names);
+    try std.testing.expectError(error.BuildFailed, manager.installPackages(package_names));
     try std.testing.expectEqual(@as(usize, 2), capture.build_starts);
     try std.testing.expectEqual(@as(usize, 2), capture.failure_statuses);
     try std.testing.expectEqual(@as(usize, 2), capture.failure_progress);
@@ -3452,7 +3451,7 @@ test "AUR package failures are emitted after all builds and fail the operation" 
     try std.testing.expectEqual(operation_api.CompletionStatus.failed, capture.completion.?);
 
     capture.reset(.update);
-    try manager.updatePackages(package_names);
+    try std.testing.expectError(error.BuildFailed, manager.updatePackages(package_names));
     try std.testing.expectEqual(@as(usize, 2), capture.build_starts);
     try std.testing.expectEqual(@as(usize, 2), capture.failure_statuses);
     try std.testing.expectEqual(@as(usize, 2), capture.failure_progress);
@@ -3621,7 +3620,7 @@ test "build-only dependencies are removed after a failed build" {
     try manager.bin_variant_cache.put(try allocator.dupe(u8, "makedep-tool"), null);
 
     const package_names = [_][]const u8{"failpkg"};
-    try manager.installPackages(&package_names);
+    try std.testing.expectError(error.BuildFailed, manager.installPackages(&package_names));
 
     // The dependency was built and installed as part of the operation...
     try std.testing.expectEqual(@as(usize, 2), capture.build_starts);
