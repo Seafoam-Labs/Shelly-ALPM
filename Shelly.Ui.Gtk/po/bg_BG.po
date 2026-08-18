@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.3\n"
-"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
+"Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
 "POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-05-16 11:00+EST\n"
 "Last-Translator: momchil.nikolov@outlook.com\n"
