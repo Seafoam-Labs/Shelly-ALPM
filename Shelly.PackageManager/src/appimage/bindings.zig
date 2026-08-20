@@ -13,6 +13,7 @@ pub const appimage = struct {
     pub const AppImage = struct {
         name: []const u8,
         version: []const u8 = "Unknown",
+        release_tag: ?[]const u8 = null,
         raw_update_info: []const u8 = "",
         icon_name: []const u8 = "",
         description: []const u8 = "",

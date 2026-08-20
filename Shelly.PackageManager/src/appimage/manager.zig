@@ -872,7 +872,9 @@ pub const AppImageManager = struct {
         const contents = try reader.interface.allocRemaining(self.allocator, .unlimited);
         defer self.allocator.free(contents);
 
-        if (std.json.parseFromSlice([]appimage.AppImage, self.allocator, contents, .{})) |parsed| {
+        if (std.json.parseFromSlice([]appimage.AppImage, self.allocator, contents, .{
+            .ignore_unknown_fields = true,
+        })) |parsed| {
             defer parsed.deinit();
             return try self.cloneAppImages(parsed.value);
         } else |_| {}
@@ -901,6 +903,7 @@ pub const AppImageManager = struct {
         return .{
             .name = existing.name,
             .version = if (extracted.version.len > 0 and !std.mem.eql(u8, extracted.version, "Unknown")) extracted.version else provider_version orelse existing.version,
+            .release_tag = provider_version orelse existing.release_tag,
             .raw_update_info = if (extracted.raw_update_info.len > 0) extracted.raw_update_info else existing.raw_update_info,
             .icon_name = extracted.icon_name,
             .description = extracted.description,
@@ -935,6 +938,8 @@ pub const AppImageManager = struct {
         errdefer self.allocator.free(name);
         const version = try self.allocator.dupe(u8, source.version);
         errdefer self.allocator.free(version);
+        const release_tag: ?[]const u8 = if (source.release_tag) |value| try self.allocator.dupe(u8, value) else null;
+        errdefer if (release_tag) |value| self.allocator.free(value);
         const raw_update_info = try self.allocator.dupe(u8, source.raw_update_info);
         errdefer self.allocator.free(raw_update_info);
         const icon_name = try self.allocator.dupe(u8, source.icon_name);
@@ -957,6 +962,7 @@ pub const AppImageManager = struct {
         return .{
             .name = name,
             .version = version,
+            .release_tag = release_tag,
             .raw_update_info = raw_update_info,
             .icon_name = icon_name,
             .description = description,
@@ -1413,6 +1419,7 @@ pub const AppImageManager = struct {
     pub fn freeAppImage(self: AppImageManager, appimage_struct: appimage.AppImage) void {
         self.allocator.free(appimage_struct.name);
         self.allocator.free(appimage_struct.version);
+        if (appimage_struct.release_tag) |v| self.allocator.free(v);
         self.allocator.free(appimage_struct.raw_update_info);
         self.allocator.free(appimage_struct.icon_name);
         self.allocator.free(appimage_struct.description);
@@ -1470,6 +1477,7 @@ fn pathIsInside(root: []const u8, candidate: []const u8) bool {
 fn freeAppImageStatic(allocator: std.mem.Allocator, value: appimage.AppImage) void {
     allocator.free(value.name);
     allocator.free(value.version);
+    if (value.release_tag) |v| allocator.free(v);
     allocator.free(value.raw_update_info);
     allocator.free(value.icon_name);
     allocator.free(value.description);
@@ -2396,6 +2404,7 @@ test "addAppImageToLocalDb then getAppImagesFromLocalDb round-trips a single ent
     const appimage_struct = appimage.AppImage{
         .name = "TestApp",
         .version = "1.2.3",
+        .release_tag = "v1.2.3",
         .desktop_name = "TestApp",
         .path = "/fake/path/TestApp.AppImage",
     };
@@ -2408,6 +2417,48 @@ test "addAppImageToLocalDb then getAppImagesFromLocalDb round-trips a single ent
     try std.testing.expectEqual(1, result.len);
     try std.testing.expectEqualStrings("TestApp", result[0].name);
     try std.testing.expectEqualStrings("1.2.3", result[0].version);
+    try std.testing.expectEqualStrings("v1.2.3", result[0].release_tag.?);
+}
+
+test "getAppImagesFromLocalDb ignores unknown fields from a newer database" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimage-metadata-v2.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const future_db =
+        \\[{"name":"TestApp","version":"1.2.3","release_tag":"v1.2.3","future_field":42}]
+    ;
+    {
+        var file = try std.Io.Dir.cwd().createFile(std.testing.io, db_path, .{});
+        defer file.close(std.testing.io);
+        var write_buf: [4096]u8 = undefined;
+        var writer = file.writer(std.testing.io, &write_buf);
+        try writer.interface.writeAll(future_db);
+        try writer.interface.flush();
+    }
+
+    const manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = std.testing.environ,
+        .install_directory = dir_path,
+        .local_db_path = db_path,
+    };
+
+    const result = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(result);
+
+    try std.testing.expectEqual(1, result.len);
+    try std.testing.expectEqualStrings("TestApp", result[0].name);
+    try std.testing.expectEqualStrings("1.2.3", result[0].version);
+    try std.testing.expectEqualStrings("v1.2.3", result[0].release_tag.?);
 }
 
 test "addAppImageToLocalDb overwrites entry with matching desktop_name" {
