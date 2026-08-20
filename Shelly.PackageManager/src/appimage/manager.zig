@@ -11,23 +11,6 @@ pub const DatabaseCommitFn = *const fn (
     destination_path: []const u8,
 ) anyerror!void;
 
-const LegacyAppImage = struct {
-    Name: []const u8 = "",
-    DesktopName: []const u8 = "",
-    Version: []const u8 = "",
-    IconName: []const u8 = "",
-    Description: []const u8 = "",
-    SizeOnDisk: i64 = 0,
-    UpdateURl: []const u8 = "",
-    RawUpdateInfo: []const u8 = "",
-    RepoOwner: ?[]const u8 = null,
-    RepoName: ?[]const u8 = null,
-    UpdateType: i64 = 0,
-    AllowPrerelease: bool = false,
-    CommandLineArgs: ?[]const u8 = null,
-    Path: ?[]const u8 = null,
-};
-
 pub const AppImageManager = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -872,31 +855,14 @@ pub const AppImageManager = struct {
         const contents = try reader.interface.allocRemaining(self.allocator, .unlimited);
         defer self.allocator.free(contents);
 
-        if (std.json.parseFromSlice([]appimage.AppImage, self.allocator, contents, .{
-            .ignore_unknown_fields = true,
-        })) |parsed| {
-            defer parsed.deinit();
-            return try self.cloneAppImages(parsed.value);
-        } else |_| {}
-
-        const parsed = std.json.parseFromSlice([]LegacyAppImage, self.allocator, contents, .{
+        const parsed = std.json.parseFromSlice([]appimage.AppImage, self.allocator, contents, .{
             .ignore_unknown_fields = true,
         }) catch |err| {
             std.log.warn("Error reading AppImage local DB: {s}", .{@errorName(err)});
             return &.{};
         };
         defer parsed.deinit();
-
-        const result = self.convertLegacyAppImages(parsed.value) catch |err| switch (err) {
-            error.InvalidLegacySizeOnDisk, error.UnsupportedLegacyUpdateType => {
-                std.log.warn("Error reading AppImage local DB: {s}", .{@errorName(err)});
-                return &.{};
-            },
-            else => return err,
-        };
-        errdefer self.freeAppImages(result);
-        try self.persistAppImages(result);
-        return result;
+        return try self.cloneAppImages(parsed.value);
     }
 
     pub fn mergeMetadata(existing: appimage.AppImage, extracted: appimage.AppImage, provider_version: ?[]const u8) appimage.AppImage {
@@ -975,49 +941,6 @@ pub const AppImageManager = struct {
             .repo_owner = repo_owner,
             .repo_name = repo_name,
             .allow_prerelease = source.allow_prerelease,
-        };
-    }
-
-    fn convertLegacyAppImages(self: AppImageManager, source: []const LegacyAppImage) ![]appimage.AppImage {
-        const result = try self.allocator.alloc(appimage.AppImage, source.len);
-        errdefer self.allocator.free(result);
-
-        var initialized: usize = 0;
-        errdefer for (result[0..initialized]) |item| self.freeAppImage(item);
-
-        for (source) |item| {
-            const size_on_disk = std.math.cast(u64, item.SizeOnDisk) orelse return error.InvalidLegacySizeOnDisk;
-            const update_type = try legacyUpdateType(item.UpdateType);
-            result[initialized] = try self.cloneAppImage(.{
-                .name = item.Name,
-                .version = item.Version,
-                .raw_update_info = item.RawUpdateInfo,
-                .icon_name = item.IconName,
-                .description = item.Description,
-                .desktop_name = item.DesktopName,
-                .size_on_disk = size_on_disk,
-                .command_line_args = item.CommandLineArgs orelse "",
-                .path = item.Path orelse "",
-                .update_url = item.UpdateURl,
-                .update_type = update_type,
-                .repo_owner = item.RepoOwner,
-                .repo_name = item.RepoName,
-                .allow_prerelease = item.AllowPrerelease,
-            });
-            initialized += 1;
-        }
-        return result;
-    }
-
-    fn legacyUpdateType(value: i64) !appimage.UpdateType {
-        return switch (value) {
-            0 => .none,
-            1 => .static_url,
-            2 => .github,
-            3 => .gitlab,
-            4 => .codeberg,
-            5 => .forgejo,
-            else => error.UnsupportedLegacyUpdateType,
         };
     }
 
@@ -2091,235 +2014,6 @@ test "getAppImagesFromLocalDb returns empty when db file does not exist" {
     try std.testing.expectEqual(0, result.len);
 }
 
-test "getAppImagesFromLocalDb maps C# AppImage V2 fields" {
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-
-    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
-    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
-    defer std.testing.allocator.free(dir_path);
-    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
-    defer std.testing.allocator.free(db_path);
-
-    try writeTestAppImageDb(db_path,
-        \\[
-        \\  {
-        \\    "Name": "LegacyApp",
-        \\    "DesktopName": "Legacy App",
-        \\    "Version": "2.3.4",
-        \\    "IconName": "legacy-icon",
-        \\    "Description": "Legacy description",
-        \\    "SizeOnDisk": 123456,
-        \\    "UpdateURl": "https://example.test/LegacyApp.AppImage",
-        \\    "RawUpdateInfo": "zsync|https://example.test/LegacyApp.zsync",
-        \\    "RepoOwner": "shelly",
-        \\    "RepoName": "legacy-app",
-        \\    "UpdateType": 4,
-        \\    "AllowPrerelease": true,
-        \\    "CommandLineArgs": "--safe-mode",
-        \\    "Path": "/opt/appimages/LegacyApp.AppImage"
-        \\  }
-        \\]
-    );
-
-    const manager = AppImageManager{
-        .allocator = std.testing.allocator,
-        .io = std.testing.io,
-        .environ = std.testing.environ,
-        .install_directory = dir_path,
-        .local_db_path = db_path,
-    };
-    const result = try manager.getAppImagesFromLocalDb();
-    defer manager.freeAppImages(result);
-
-    try std.testing.expectEqual(@as(usize, 1), result.len);
-    const item = result[0];
-    try std.testing.expectEqualStrings("LegacyApp", item.name);
-    try std.testing.expectEqualStrings("Legacy App", item.desktop_name);
-    try std.testing.expectEqualStrings("2.3.4", item.version);
-    try std.testing.expectEqualStrings("legacy-icon", item.icon_name);
-    try std.testing.expectEqualStrings("Legacy description", item.description);
-    try std.testing.expectEqual(@as(u64, 123456), item.size_on_disk);
-    try std.testing.expectEqualStrings("https://example.test/LegacyApp.AppImage", item.update_url);
-    try std.testing.expectEqualStrings("zsync|https://example.test/LegacyApp.zsync", item.raw_update_info);
-    try std.testing.expectEqualStrings("shelly", item.repo_owner.?);
-    try std.testing.expectEqualStrings("legacy-app", item.repo_name.?);
-    try std.testing.expectEqual(appimage.UpdateType.codeberg, item.update_type);
-    try std.testing.expect(item.allow_prerelease);
-    try std.testing.expectEqualStrings("--safe-mode", item.command_line_args);
-    try std.testing.expectEqualStrings("/opt/appimages/LegacyApp.AppImage", item.path);
-}
-
-test "getAppImagesFromLocalDb normalizes nullable C# strings" {
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-
-    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
-    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
-    defer std.testing.allocator.free(dir_path);
-    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
-    defer std.testing.allocator.free(db_path);
-
-    try writeTestAppImageDb(db_path,
-        \\[
-        \\  {
-        \\    "Name": "NullableApp",
-        \\    "RepoOwner": null,
-        \\    "RepoName": null,
-        \\    "CommandLineArgs": null,
-        \\    "Path": null
-        \\  }
-        \\]
-    );
-
-    const manager = AppImageManager{
-        .allocator = std.testing.allocator,
-        .io = std.testing.io,
-        .environ = std.testing.environ,
-        .install_directory = dir_path,
-        .local_db_path = db_path,
-    };
-    const result = try manager.getAppImagesFromLocalDb();
-    defer manager.freeAppImages(result);
-
-    try std.testing.expectEqual(@as(usize, 1), result.len);
-    try std.testing.expectEqualStrings("", result[0].command_line_args);
-    try std.testing.expectEqualStrings("", result[0].path);
-    try std.testing.expect(result[0].repo_owner == null);
-    try std.testing.expect(result[0].repo_name == null);
-}
-
-test "getAppImagesFromLocalDb maps every C# update type" {
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-
-    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
-    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
-    defer std.testing.allocator.free(dir_path);
-    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
-    defer std.testing.allocator.free(db_path);
-
-    try writeTestAppImageDb(db_path,
-        \\[
-        \\  { "Name": "None", "UpdateType": 0 },
-        \\  { "Name": "Static", "UpdateType": 1 },
-        \\  { "Name": "GitHub", "UpdateType": 2 },
-        \\  { "Name": "GitLab", "UpdateType": 3 },
-        \\  { "Name": "Codeberg", "UpdateType": 4 },
-        \\  { "Name": "Forgejo", "UpdateType": 5 }
-        \\]
-    );
-
-    const manager = AppImageManager{
-        .allocator = std.testing.allocator,
-        .io = std.testing.io,
-        .environ = std.testing.environ,
-        .install_directory = dir_path,
-        .local_db_path = db_path,
-    };
-    const result = try manager.getAppImagesFromLocalDb();
-    defer manager.freeAppImages(result);
-
-    const expected = [_]appimage.UpdateType{ .none, .static_url, .github, .gitlab, .codeberg, .forgejo };
-    try std.testing.expectEqual(expected.len, result.len);
-    for (result, expected) |item, update_type| {
-        try std.testing.expectEqual(update_type, item.update_type);
-    }
-}
-
-test "getAppImagesFromLocalDb rejects unsupported C# update type" {
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-
-    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
-    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
-    defer std.testing.allocator.free(dir_path);
-    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
-    defer std.testing.allocator.free(db_path);
-
-    const source = "[{\"Name\":\"FutureApp\",\"UpdateType\":6}]";
-    try writeTestAppImageDb(db_path, source);
-
-    const manager = AppImageManager{
-        .allocator = std.testing.allocator,
-        .io = std.testing.io,
-        .environ = std.testing.environ,
-        .install_directory = dir_path,
-        .local_db_path = db_path,
-    };
-    const result = try manager.getAppImagesFromLocalDb();
-    defer manager.freeAppImages(result);
-    try std.testing.expectEqual(@as(usize, 0), result.len);
-
-    const contents = try readTestAppImageDb(std.testing.allocator, db_path);
-    defer std.testing.allocator.free(contents);
-    try std.testing.expectEqualStrings(source, contents);
-}
-
-test "getAppImagesFromLocalDb migrates C# database and second load is native" {
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-
-    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
-    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
-    defer std.testing.allocator.free(dir_path);
-    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
-    defer std.testing.allocator.free(db_path);
-
-    try writeTestAppImageDb(db_path,
-        \\[
-        \\  {
-        \\    "Name": "MigratedApp",
-        \\    "DesktopName": "Migrated App",
-        \\    "Version": "1.0.0",
-        \\    "UpdateType": 2,
-        \\    "UpdateVersion": "ignored legacy field",
-        \\    "CommandLineArgs": null,
-        \\    "Path": null
-        \\  }
-        \\]
-    );
-
-    const manager = AppImageManager{
-        .allocator = std.testing.allocator,
-        .io = std.testing.io,
-        .environ = std.testing.environ,
-        .install_directory = dir_path,
-        .local_db_path = db_path,
-    };
-    const first = try manager.getAppImagesFromLocalDb();
-    defer manager.freeAppImages(first);
-    try std.testing.expectEqual(@as(usize, 1), first.len);
-    try std.testing.expectEqual(appimage.UpdateType.github, first[0].update_type);
-
-    const canonical = try readTestAppImageDb(std.testing.allocator, db_path);
-    defer std.testing.allocator.free(canonical);
-    try std.testing.expect(std.mem.indexOf(u8, canonical, "\"name\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, canonical, "\"update_type\": \"github\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, canonical, "\"Name\"") == null);
-    try std.testing.expect(std.mem.indexOf(u8, canonical, "UpdateVersion") == null);
-
-    const parsed = try std.json.parseFromSlice([]appimage.AppImage, std.testing.allocator, canonical, .{});
-    defer parsed.deinit();
-    try std.testing.expectEqual(@as(usize, 1), parsed.value.len);
-
-    const second = try manager.getAppImagesFromLocalDb();
-    defer manager.freeAppImages(second);
-    try std.testing.expectEqualStrings(first[0].name, second[0].name);
-    try std.testing.expectEqual(first[0].update_type, second[0].update_type);
-    try std.testing.expectEqualStrings(first[0].command_line_args, second[0].command_line_args);
-    try std.testing.expectEqualStrings(first[0].path, second[0].path);
-
-    const after_second_load = try readTestAppImageDb(std.testing.allocator, db_path);
-    defer std.testing.allocator.free(after_second_load);
-    try std.testing.expectEqualStrings(canonical, after_second_load);
-}
-
 test "getAppImagesFromLocalDb leaves native database unchanged" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
@@ -2351,7 +2045,7 @@ test "getAppImagesFromLocalDb leaves native database unchanged" {
     try std.testing.expectEqualStrings(source, contents);
 }
 
-test "getAppImagesFromLocalDb leaves malformed C# database unchanged" {
+test "getAppImagesFromLocalDb leaves a malformed database unchanged" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
