@@ -166,6 +166,7 @@ pub const Manager = struct {
     handle: libalpm.Handle = null,
     is_initialized: bool = false,
     detected_cachyos: bool = false,
+    hooks_disabled: bool = false,
     allocator: std.mem.Allocator,
     environ: std.process.Environ,
     config_path: []const u8,
@@ -1504,6 +1505,27 @@ pub const Manager = struct {
         }
     }
 
+    /// Prevents transaction hooks from running, persisting across handle
+    /// refreshes that re-initialize libalpm and re-apply the configuration.
+    /// Hook directories are replaced with a nonexistent path because
+    /// clearing the list falls back to libalpm's compiled-in default
+    /// directory. Intended for hermetic tests that commit transactions
+    /// against fixture roots and must not execute host system hooks.
+    pub fn disable_transaction_hooks(self: *Manager) void {
+        self.hooks_disabled = true;
+        if (self.handle) |handle| {
+            self.replaceHookDirsWithSentinel(handle);
+        }
+    }
+
+    const no_hooks_sentinel_dir: [:0]const u8 = "/nonexistent/shelly-no-hooks";
+
+    fn replaceHookDirsWithSentinel(self: *Manager, handle: libalpm.Handle) void {
+        _ = self;
+        const list = rawLibalpm.alpm_list_add(null, @ptrCast(@constCast(no_hooks_sentinel_dir.ptr))) orelse return;
+        _ = rawLibalpm.alpm_option_set_hookdirs(handle, list);
+    }
+
     pub fn get_package_from_provides(self: *Manager, provides: [:0]const u8) QueryError![:0]const u8 {
         if (self.handle == null) return QueryError.NoHandle;
         var operation_scope = OperationScope.init(self, .search, provides);
@@ -2495,8 +2517,12 @@ pub const Manager = struct {
             self.check("ignore_group", rawLibalpm.alpm_option_add_ignoregroup(h, group_name.ptr));
         }
 
-        for (config.hook_directory.items) |hook_dir| {
-            self.check("hook_directory", rawLibalpm.alpm_option_add_hookdir(h, hook_dir.ptr));
+        if (self.hooks_disabled) {
+            self.replaceHookDirsWithSentinel(h);
+        } else {
+            for (config.hook_directory.items) |hook_dir| {
+                self.check("hook_directory", rawLibalpm.alpm_option_add_hookdir(h, hook_dir.ptr));
+            }
         }
 
         self.check("gpgdir", rawLibalpm.alpm_option_set_gpgdir(h, config.gpg_directory.ptr));

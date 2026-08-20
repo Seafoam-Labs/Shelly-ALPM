@@ -5,7 +5,7 @@ const shared_validator = @import("shared_validtor.zig");
 pub const HomographValidator = struct {
     allocator: std.mem.Allocator,
 
-    pub fn validate(self: HomographValidator, pkg_build: pkgbuild.pkgbuild_info) !shared_validator.ValidationResult {
+    pub fn validate(self: HomographValidator, pkg_build: pkgbuild.Pkgbuild) !shared_validator.ValidationResult {
         var result = shared_validator.ValidationResult{
             .has_findings = false,
             .findings = std.ArrayList(shared_validator.ValidationFinding).empty,
@@ -889,7 +889,7 @@ test "scan - matched_line shows codepoints for non-ascii" {
     try std.testing.expect(std.mem.indexOf(u8, result.findings.items[0].matched_line, "U+0430]") != null);
 }
 
-fn cleanup_pkgbuild_test_fields(info: *pkgbuild.pkgbuild_info) void {
+fn cleanup_pkgbuild_test_fields(info: *pkgbuild.Pkgbuild) void {
     info.variables.deinit();
     info.local_source_contents.deinit();
 }
@@ -900,7 +900,7 @@ test "validate - clean pkgbuild has no findings" {
     var make_depends = [_][]const u8{"cmake"};
     var source = [_][]const u8{"https://example.com/src.tar.gz"};
 
-    var info = pkgbuild.pkgbuild_info{
+    var info = pkgbuild.Pkgbuild{
         .pkg_name = "valid-package",
         .depends = &depends,
         .make_depends = &make_depends,
@@ -921,7 +921,7 @@ test "validate - clean pkgbuild has no findings" {
 test "validate - hidden character in pkgname" {
     const validator = HomographValidator{ .allocator = std.testing.allocator };
 
-    var info = pkgbuild.pkgbuild_info{
+    var info = pkgbuild.Pkgbuild{
         .pkg_name = "pkg\u{200B}name",
         .variables = std.StringHashMap([]const u8).init(std.testing.allocator),
         .local_source_contents = std.StringHashMap([]const u8).init(std.testing.allocator),
@@ -940,7 +940,7 @@ test "validate - hidden character in one of several depends" {
     const validator = HomographValidator{ .allocator = std.testing.allocator };
     var depends = [_][]const u8{ "glibc", "open\u{200B}ssl", "zlib" };
 
-    var info = pkgbuild.pkgbuild_info{
+    var info = pkgbuild.Pkgbuild{
         .pkg_name = "valid-package",
         .depends = &depends,
         .variables = std.StringHashMap([]const u8).init(std.testing.allocator),
@@ -960,7 +960,7 @@ test "validate - hidden character in makedepends" {
     const validator = HomographValidator{ .allocator = std.testing.allocator };
     var make_depends = [_][]const u8{"cmake\u{FEFF}"};
 
-    var info = pkgbuild.pkgbuild_info{
+    var info = pkgbuild.Pkgbuild{
         .pkg_name = "valid-package",
         .make_depends = &make_depends,
         .variables = std.StringHashMap([]const u8).init(std.testing.allocator),
@@ -978,7 +978,7 @@ test "validate - hidden character in makedepends" {
 test "validate - mixed script in url" {
     const validator = HomographValidator{ .allocator = std.testing.allocator };
 
-    var info = pkgbuild.pkgbuild_info{
+    var info = pkgbuild.Pkgbuild{
         .pkg_name = "valid-package",
         .url = "https://exampl\u{0435}.com", // Cyrillic е instead of e
         .variables = std.StringHashMap([]const u8).init(std.testing.allocator),
@@ -997,7 +997,7 @@ test "validate - hidden character in one of several source entries" {
     const validator = HomographValidator{ .allocator = std.testing.allocator };
     var source = [_][]const u8{ "https://example.com/a.tar.gz", "https://example.com/b\u{200D}.tar.gz" };
 
-    var info = pkgbuild.pkgbuild_info{
+    var info = pkgbuild.Pkgbuild{
         .pkg_name = "valid-package",
         .source = &source,
         .variables = std.StringHashMap([]const u8).init(std.testing.allocator),
@@ -1016,7 +1016,7 @@ test "validate - findings accumulate across multiple fields" {
     const validator = HomographValidator{ .allocator = std.testing.allocator };
     var depends = [_][]const u8{"open\u{200B}ssl"};
 
-    var info = pkgbuild.pkgbuild_info{
+    var info = pkgbuild.Pkgbuild{
         .pkg_name = "pkg\u{200B}name",
         .depends = &depends,
         .url = "https://exampl\u{0435}.com",
@@ -1035,7 +1035,7 @@ test "validate - findings accumulate across multiple fields" {
 test "validate - null and unset fields are skipped safely" {
     const validator = HomographValidator{ .allocator = std.testing.allocator };
 
-    var info = pkgbuild.pkgbuild_info{
+    var info = pkgbuild.Pkgbuild{
         .variables = std.StringHashMap([]const u8).init(std.testing.allocator),
         .local_source_contents = std.StringHashMap([]const u8).init(std.testing.allocator),
     };

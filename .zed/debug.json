@@ -16,4 +16,13 @@
     "build": "GTK UI Build",
     "cwd": "$ZED_WORKTREE_ROOT/Shelly.Ui.Gtk",
   },
+  {
+    "adapter": "CodeLLDB",
+    "label": "CLI Debug",
+    "request": "launch",
+    "program": "$ZED_WORKTREE_ROOT/Shelly.Cli.Zig/zig-out/bin/shelly",
+    "build": "CLI Build",
+    "cwd": "$ZED_WORKTREE_ROOT/Shelly.Cli.Zig",
+    "args": [],
+  },
 ]

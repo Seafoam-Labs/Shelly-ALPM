@@ -18,6 +18,20 @@ pub fn main(init: std.process.Init) !void {
     var stderr_file_writer: Io.File.Writer = .init(.stderr(), io, &stderr_buffer);
     const stderr_writer = &stderr_file_writer.interface;
 
+    // The Landlock sandbox wrapper re-executes the current executable with a
+    // reserved first argument. Serve it before any CLI setup so the wrapped
+    // step command never touches the dispatcher, session log, or signals.
+    if (arguments.len > 0 and std.mem.eql(u8, arguments[0], Shelly_Cli_Zig.app.sandbox_wrapper_argument)) {
+        const exit_code = Shelly_Cli_Zig.app.runSandboxExec(
+            arena,
+            init.minimal.environ,
+            stderr_writer,
+            arguments[1..],
+        );
+        stderr_writer.flush() catch {};
+        std.process.exit(exit_code);
+    }
+
     Shelly_Cli_Zig.signals.installInterruptHandler();
     var session_log = Shelly_Cli_Zig.log.SessionLog.tryOpen(io);
     defer if (session_log) |*log| log.close();

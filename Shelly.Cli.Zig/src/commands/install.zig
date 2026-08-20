@@ -595,7 +595,17 @@ fn runAur(
     if (!isAurVersionInstall(invocation) and
         optionEnabled(invocation, "--build-deps") and invocation.positionals.len > 1)
         return error.MultipleDependencyTargets;
-    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{ .root = true, .use_chroot = optionEnabled(invocation, "--chroot"), .no_check = !optionEnabled(invocation, "--check"), .operation_context = operation_context });
+    const executable = try std.process.executablePathAlloc(context.io, context.allocator);
+    defer context.allocator.free(executable);
+    const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
+    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+        .root = true,
+        .use_chroot = optionEnabled(invocation, "--chroot"),
+        .check = checkOverride(invocation),
+        .sign = signOverride(invocation),
+        .build_command = build_command,
+        .operation_context = operation_context,
+    });
     defer manager.deinit();
     manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null);
@@ -610,6 +620,18 @@ fn runAur(
     } else {
         try manager.installPackages(invocation.positionals);
     }
+}
+
+fn checkOverride(invocation: *const parser.Invocation) ?bool {
+    if (optionEnabled(invocation, "--no-check")) return false;
+    if (optionEnabled(invocation, "--check")) return true;
+    return null;
+}
+
+fn signOverride(invocation: *const parser.Invocation) ?bool {
+    if (optionEnabled(invocation, "--nosign")) return false;
+    if (optionEnabled(invocation, "--sign")) return true;
+    return null;
 }
 
 fn runAppImage(

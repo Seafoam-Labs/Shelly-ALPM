@@ -569,6 +569,17 @@ pub const ShellyWindow = extern struct {
         tp.run(request);
     }
 
+    pub fn navigateToUpdates(self: *ShellyWindow) void {
+        const p = self.private();
+        gtk.Stack.setVisibleChildName(p.content_stack, "update");
+        for (p.nav_buttons.items) |nb| {
+            if (std.mem.eql(u8, nb.name, "update")) {
+                set_active_nav(self, nb);
+                break;
+            }
+        }
+    }
+
     const template_children = .{
         .{ "lockout_overlay", @offsetOf(Private, "lockout_overlay") },
         .{ "lockout_content", @offsetOf(Private, "lockout_content") },

@@ -94,12 +94,19 @@ pub const PkgbuildReviewDialog = extern struct {
         const heading = std.fmt.bufPrintZ(&heading_buffer, "{s} {s}", .{ translations._("Review PKGBUILD changes for"), package_name }) catch translations._("Review PKGBUILD changes");
         gtk.Label.setLabel(p.heading_label, heading);
 
-        for (diff_lines) |raw| {
-            const label = gtk.Label.new(null);
-            gtk.Widget.setHalign(label.as(gtk.Widget), .fill);
-            gtk.Widget.setHexpand(label.as(gtk.Widget), 1);
-            gtk.Label.setXalign(label, 0);
-            gtk.Label.setJustify(label, .left);
+        const diff_view = gtk.TextView.new();
+        gtk.TextView.setEditable(diff_view, 0);
+        gtk.TextView.setMonospace(diff_view, 1);
+        gtk.TextView.setWrapMode(diff_view, .word_char);
+        gtk.TextView.setCursorVisible(diff_view, 0);
+        const diff_buffer = gtk.TextView.getBuffer(diff_view);
+
+        var diff_iter: gtk.TextIter = undefined;
+        gtk.TextBuffer.getEndIter(diff_buffer, &diff_iter);
+        for (diff_lines, 0..) |raw, i| {
+            if (i > 0) {
+                gtk.TextBuffer.insert(diff_buffer, &diff_iter, "\n", 1);
+            }
 
             const parsed = parse_diff_line(raw);
             const escaped = glib.markupEscapeText(@ptrCast(parsed.text.ptr), @intCast(parsed.text.len));
@@ -116,16 +123,16 @@ pub const PkgbuildReviewDialog = extern struct {
                 std.fmt.bufPrintZ(&markup_buffer, "<tt>{s}</tt>", .{escaped}) catch null;
 
             if (markup) |m| {
-                gtk.Label.setMarkup(label, m);
+                gtk.TextBuffer.insertMarkup(diff_buffer, &diff_iter, m, -1);
             } else {
-                gtk.Label.setLabel(label, raw);
+                gtk.TextBuffer.insert(diff_buffer, &diff_iter, raw, @intCast(raw.len));
             }
-            gtk.Box.append(p.diff_box, label.as(gtk.Widget));
         }
+        gtk.Box.append(p.diff_box, diff_view.as(gtk.Widget));
 
         const has_warnings = warnings.len > 0;
-        for (warnings) |warning| {
-            gtk.Box.append(p.warnings_box, make_warning_row(warning));
+        if (has_warnings) {
+            gtk.Box.append(p.warnings_box, make_warnings_view(warnings));
         }
         gtk.Widget.setVisible(p.warnings_page.as(gtk.Widget), @intFromBool(has_warnings));
 
@@ -201,50 +208,58 @@ pub const PkgbuildReviewDialog = extern struct {
         return box.as(gtk.Widget);
     }
 
-    fn make_warning_row(warning: Warning) *gtk.Widget {
-        const box = gtk.Box.new(.vertical, 6);
-        gtk.Widget.setMarginTop(box.as(gtk.Widget), 6);
+    fn make_warnings_view(warnings: []const Warning) *gtk.Widget {
+        const view = gtk.TextView.new();
+        gtk.TextView.setEditable(view, 0);
+        gtk.TextView.setMonospace(view, 1);
+        gtk.TextView.setWrapMode(view, .word_char);
+        gtk.TextView.setCursorVisible(view, 0);
+        const buffer = gtk.TextView.getBuffer(view);
 
-        var title_buffer: [512]u8 = undefined;
-        const title_text = std.fmt.bufPrintZ(
-            &title_buffer,
-            "{s} {s} {s}",
-            .{ warning.tool, translations._("used in"), warning.hook },
-        ) catch translations._("Warning");
-        const title = gtk.Label.new(title_text);
-        gtk.Label.setXalign(title, 0);
-        gtk.Widget.addCssClass(title.as(gtk.Widget), "heading");
-        gtk.Widget.addCssClass(
-            title.as(gtk.Widget),
-            if (std.mem.eql(u8, warning.severity, "Critical")) "error" else "warning",
-        );
-        gtk.Box.append(box, title.as(gtk.Widget));
+        var iter: gtk.TextIter = undefined;
+        gtk.TextBuffer.getEndIter(buffer, &iter);
 
-        if (warning.message.len > 0) {
-            const message = gtk.Label.new(warning.message);
-            gtk.Label.setXalign(message, 0);
-            gtk.Label.setWrap(message, 1);
-            gtk.Box.append(box, message.as(gtk.Widget));
+        const used_in = translations._("used in");
+        for (warnings, 0..) |warning, i| {
+            if (i > 0) {
+                gtk.TextBuffer.insert(buffer, &iter, "\n", 1);
+            }
+
+            const escaped_tool = glib.markupEscapeText(warning.tool, -1);
+            defer glib.free(escaped_tool);
+            const escaped_hook = glib.markupEscapeText(warning.hook, -1);
+            defer glib.free(escaped_hook);
+
+            var title_buffer: [512]u8 = undefined;
+            const severity_color = if (std.mem.eql(u8, warning.severity, "Critical")) "#c01c28" else "#e5a50a";
+            const title_markup = std.fmt.bufPrintZ(
+                &title_buffer,
+                "<b><span foreground=\"{s}\">{s} {s} {s}</span></b>",
+                .{ severity_color, escaped_tool, used_in, escaped_hook },
+            ) catch null;
+
+            if (title_markup) |markup| {
+                gtk.TextBuffer.insertMarkup(buffer, &iter, markup, -1);
+            } else {
+                gtk.TextBuffer.insert(buffer, &iter, warning.tool, @intCast(warning.tool.len));
+                gtk.TextBuffer.insert(buffer, &iter, " ", 1);
+                gtk.TextBuffer.insert(buffer, &iter, used_in, @intCast(used_in.len));
+                gtk.TextBuffer.insert(buffer, &iter, " ", 1);
+                gtk.TextBuffer.insert(buffer, &iter, warning.hook, @intCast(warning.hook.len));
+            }
+
+            if (warning.message.len > 0) {
+                gtk.TextBuffer.insert(buffer, &iter, "\n", 1);
+                gtk.TextBuffer.insert(buffer, &iter, warning.message, @intCast(warning.message.len));
+            }
+
+            if (warning.matched_line.len > 0) {
+                gtk.TextBuffer.insert(buffer, &iter, "\n", 1);
+                gtk.TextBuffer.insert(buffer, &iter, warning.matched_line, @intCast(warning.matched_line.len));
+            }
         }
 
-        const matched = gtk.Label.new(null);
-        const escaped = glib.markupEscapeText(warning.matched_line, -1);
-        defer glib.free(escaped);
-        var markup_buffer: [2048]u8 = undefined;
-        if (std.fmt.bufPrintZ(&markup_buffer, "<tt>{s}</tt>", .{escaped})) |markup| {
-            gtk.Label.setMarkup(matched, markup);
-        } else |_| {
-            gtk.Label.setLabel(matched, warning.matched_line);
-        }
-        gtk.Label.setSelectable(matched, 1);
-        gtk.Label.setWrap(matched, 1);
-        gtk.Label.setXalign(matched, 0);
-
-        const frame = gtk.Frame.new(null);
-        gtk.Frame.setChild(frame, matched.as(gtk.Widget));
-        gtk.Box.append(box, frame.as(gtk.Widget));
-
-        return box.as(gtk.Widget);
+        return view.as(gtk.Widget);
     }
 
     const DiffLine = struct {

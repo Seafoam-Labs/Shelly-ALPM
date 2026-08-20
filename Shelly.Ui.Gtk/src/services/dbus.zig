@@ -98,6 +98,8 @@ pub const DBus = struct {
     fn polkitDaemonPresence(self: *DBus) DaemonPresence {
         const conn = self.ensureSystemConnection() orelse return .unknown;
         const params = glib.Variant.new("(s)", POLKIT_NAME.ptr);
+        const reply_type = glib.VariantType.new("(b)");
+        defer reply_type.free();
         var call_err: ?*glib.Error = null;
         const result = conn.callSync(
             "org.freedesktop.DBus",
@@ -105,7 +107,7 @@ pub const DBus = struct {
             "org.freedesktop.DBus",
             "NameHasOwner",
             params,
-            glib.VariantType.new("(b)"),
+            reply_type,
             .{},
             -1,
             null,
@@ -196,10 +198,13 @@ pub const DBus = struct {
     }
 
     fn buildUnixSessionSubject(sid: []const u8) ?*glib.Variant {
-        const builder = glib.VariantBuilder.new(glib.VariantType.new("a{sv}"));
+        const vt = glib.VariantType.new("a{sv}");
+        defer vt.free();
 
+        const builder = glib.VariantBuilder.new(vt);
         builder.add("{sv}", "session-id", glib.Variant.new("s", sid.ptr));
         const dict = builder.end();
+        _ = &builder;
 
         return glib.Variant.new("(s@a{sv})", "unix-session", dict);
     }
@@ -221,6 +226,8 @@ pub const DBus = struct {
         const pid: u32 = @intCast(std.os.linux.getpid());
 
         const params = glib.Variant.new("(u)", pid);
+        const reply_type = glib.VariantType.new("(o)");
+        defer reply_type.free();
         var err: ?*glib.Error = null;
         const result = conn.callSync(
             LOGIND_NAME,
@@ -228,7 +235,7 @@ pub const DBus = struct {
             LOGIND_MANAGER_IFACE,
             "GetSessionByPID",
             params,
-            glib.VariantType.new("(o)"),
+            reply_type,
             .{},
             -1,
             null,
@@ -266,6 +273,8 @@ pub const DBus = struct {
             "org.freedesktop.login1.Session",
             "Id",
         );
+        const reply_type = glib.VariantType.new("(v)");
+        defer reply_type.free();
         var err: ?*glib.Error = null;
         const result = conn.callSync(
             LOGIND_NAME,
@@ -273,7 +282,7 @@ pub const DBus = struct {
             "org.freedesktop.DBus.Properties",
             "Get",
             params,
-            glib.VariantType.new("(v)"),
+            reply_type,
             .{},
             -1,
             null,

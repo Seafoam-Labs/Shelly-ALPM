@@ -4,6 +4,7 @@ const conch = @import("zsn");
 const Service = conch.Service;
 const wakeWorker = @import("../main.zig").wakeWorker;
 const runtime = @import("../runtime.zig");
+const Config = @import("../models/shelly_config.zig").ShellyConfig;
 
 const log = std.log.scoped(.runner);
 
@@ -74,7 +75,13 @@ pub const AppRunner = struct {
         return null;
     }
 
-    pub fn spawnFixedUpdate(self: *AppRunner) !void {
+    pub fn spawnFixedUpdate(self: *AppRunner, config: *const Config) !void {
+        std.log.debug("spawnFixedUpdate: UseUiForUpdate={}", .{config.UseUiForUpdate});
+        if (config.UseUiForUpdate) {
+            try self.spawnWithToken(&.{"--tray-updates"});
+            return;
+        }
+
         const bash_cmd = "shelly; echo; read -rp 'Press Enter to close...'";
 
         const terminal = self.findTerminalNoAlloc() orelse {
@@ -119,20 +126,24 @@ pub const AppRunner = struct {
             self.activation_token,
         ) catch |e| {
             log.warn("activate failed ({any}); spawning shelly-ui directly", .{e});
-            try self.spawnWithToken();
+            try self.spawnWithToken(&.{});
             return;
         };
         log.info("activated existing shelly-ui window", .{});
     }
 
-    fn spawnWithToken(self: *AppRunner) !void {
+    fn spawnWithToken(self: *AppRunner, extra_args: []const []const u8) !void {
         const bin = self.shellyUiBin();
         if (!self.isCommandAvailable(bin)) {
             log.err("'{s}' not found on PATH; cannot launch UI", .{bin});
             return error.ShellyUiNotFound;
         }
 
-        const argv: []const []const u8 = &.{ "setsid", bin };
+        var argv_buf: std.ArrayList([]const u8) = .empty;
+        defer argv_buf.deinit(self.allocator);
+        try argv_buf.appendSlice(self.allocator, &.{ "setsid", bin });
+        try argv_buf.appendSlice(self.allocator, extra_args);
+        const argv = argv_buf.items;
 
         var owned_env: ?std.process.Environ.Map = if (self.activation_token) |token| blk: {
             var env = try self.environ_map.clone(self.allocator);
@@ -141,11 +152,8 @@ pub const AppRunner = struct {
             break :blk env;
         } else null;
         defer if (owned_env) |*e| e.deinit();
-
         const env_ptr: *std.process.Environ.Map = if (owned_env) |*e| e else self.environ_map;
 
-        // Set pgid = 0 so `setsid` forks before exec'ing shelly-ui; otherwise,
-        // dropping the handle leaves shelly-ui as a zombie after it exits.
         var child = std.process.spawn(self.io, .{
             .argv = argv,
             .environ_map = env_ptr,
@@ -156,14 +164,13 @@ pub const AppRunner = struct {
             log.err("failed to spawn '{s}': {any}", .{ bin, e });
             return e;
         };
-
         _ = child.wait(runtime.io) catch |e| {
             log.warn("failed to reap spawned process: {any}", .{e});
         };
-
-        log.info("spawned '{s}' (token: {s})", .{
+        log.info("spawned '{s}' (token: {s}, args: {s})", .{
             bin,
             if (self.activation_token != null) "yes" else "no",
+            if (extra_args.len > 0) extra_args[extra_args.len - 1] else "none",
         });
     }
 

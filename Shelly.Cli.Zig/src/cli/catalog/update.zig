@@ -28,11 +28,12 @@ pub const variants = [_]types.Variant{
             0,
             "One or more AUR package names to rebuild and reinstall",
         )},
-        .options = &.{flag(
-            "--check",
-            &.{},
-            "Run each PKGBUILD check() function during the rebuild",
-        )},
+        .options = &.{
+            flag("--check", &.{}, "Run each PKGBUILD check() function during the rebuild"),
+            flag("--no-check", &.{}, "Skip each PKGBUILD check() function during the rebuild"),
+            flag("--sign", &.{}, "Sign rebuilt packages with GPG"),
+            flag("--nosign", &.{}, "Skip signing rebuilt packages"),
+        },
     },
     .{
         .action = .update,

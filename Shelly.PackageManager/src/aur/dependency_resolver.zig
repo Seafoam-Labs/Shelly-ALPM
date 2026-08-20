@@ -40,7 +40,7 @@ pub const Resolution = struct {
 
 pub fn resolve(
     allocator: std.mem.Allocator,
-    info: *const pkgbuild.pkgbuild_info,
+    info: *const pkgbuild.Pkgbuild,
     no_check: bool,
     backend: Backend,
 ) !Resolution {
@@ -110,7 +110,7 @@ fn findAurDependency(dependencies: []const AurDependency, expected: ParsedDepend
     return null;
 }
 
-fn strongerRole(lhs: Role, rhs: Role) Role {
+pub fn strongerRole(lhs: Role, rhs: Role) Role {
     if (lhs == .runtime or rhs == .runtime) return .runtime;
     if (lhs == .build or rhs == .build) return .build;
     return .check;
@@ -118,7 +118,7 @@ fn strongerRole(lhs: Role, rhs: Role) Role {
 
 pub fn collectBuildOnlyDependencies(
     allocator: std.mem.Allocator,
-    info: *const pkgbuild.pkgbuild_info,
+    info: *const pkgbuild.Pkgbuild,
     no_check: bool,
     backend: Backend,
 ) ![][]u8 {
@@ -258,6 +258,7 @@ test "dependency resolution partitions installed repo and AUR dependencies" {
     const parser = pkgbuild.PkgbuildParser{ .allocator = allocator, .io = std.testing.io };
     var info = try parser.parser_content(
         \\pkgname=demo
+        \\arch=('any')
         \\depends=('glibc' 'aur-runtime')
         \\makedepends=('cmake>=3')
         \\checkdepends=('check-only')

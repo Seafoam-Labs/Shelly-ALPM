@@ -389,7 +389,10 @@ pub const AppImageManager = struct {
         defer self.allocator.free(cache_home);
         const root = try std.fs.path.join(self.allocator, &.{ cache_home, "Shelly", "extractions" });
         defer self.allocator.free(root);
-        try std.Io.Dir.cwd().createDirPath(self.io, root);
+
+        var root_handle = try std.Io.Dir.cwd().createDirPathOpen(self.io, root, .{});
+        root_handle.close(self.io);
+
         var random_suffix: [16]u8 = undefined;
         self.io.random(&random_suffix);
         const suffix_hex = std.fmt.bytesToHex(random_suffix, .lower);
@@ -553,7 +556,7 @@ pub const AppImageManager = struct {
         return std.fs.path.join(self.allocator, &.{ icon_dir, dest_icon_name });
     }
 
-    fn updateIconCache(self: AppImageManager, data_home: []const u8) !void {
+    fn updateIconCache(self: AppImageManager, data_home: []const u8) std.mem.Allocator.Error!void {
         const theme_dir = try std.fs.path.join(self.allocator, &.{ data_home, "icons/hicolor" });
         defer self.allocator.free(theme_dir);
         var proc = std.process.spawn(self.io, .{
@@ -563,10 +566,19 @@ pub const AppImageManager = struct {
             .stderr = .ignore,
         }) catch |err| switch (err) {
             error.FileNotFound => return,
-            else => return err,
+            error.OutOfMemory => return error.OutOfMemory,
+            else => {
+                std.log.warn("Could not run gtk-update-icon-cache for {s}: {s}. Installed icons may not appear in menus until the icon cache is rebuilt.", .{ theme_dir, @errorName(err) });
+                return;
+            },
         };
-        const term = try proc.wait(self.io);
-        if (term != .exited or term.exited != 0) return error.IconCacheRefreshFailed;
+        const term = proc.wait(self.io) catch |err| {
+            std.log.warn("Could not wait for gtk-update-icon-cache for {s}: {s}. Installed icons may not appear in menus until the icon cache is rebuilt.", .{ theme_dir, @errorName(err) });
+            return;
+        };
+        if (term != .exited or term.exited != 0) {
+            std.log.warn("gtk-update-icon-cache failed for {s}. Installed icons may not appear in menus until the icon cache is rebuilt.", .{theme_dir});
+        }
     }
 
     fn parseExecSuffix(exec_value: []const u8) []const u8 {
@@ -667,14 +679,8 @@ pub const AppImageManager = struct {
         defer self.allocator.free(data_home);
         const desktop_dir = try std.fs.path.join(self.allocator, &.{ data_home, "applications" });
         defer self.allocator.free(desktop_dir);
-        self.updateDesktopDatabase(desktop_dir) catch |err| {
-            integration.rollback() catch |rollback_err| std.log.err("Could not restore desktop integration after cache failure: {s}", .{@errorName(rollback_err)});
-            return err;
-        };
-        if (icon_source != null) self.updateIconCache(data_home) catch |err| {
-            integration.rollback() catch |rollback_err| std.log.err("Could not restore desktop integration after cache failure: {s}", .{@errorName(rollback_err)});
-            return err;
-        };
+        try self.updateDesktopDatabase(desktop_dir);
+        if (icon_source != null) try self.updateIconCache(data_home);
         return integration;
     }
 
@@ -783,7 +789,10 @@ pub const AppImageManager = struct {
         const staging_path = try self.uniqueSiblingPath(destination_path, label);
         defer self.allocator.free(staging_path);
         defer std.Io.Dir.cwd().deleteFile(self.io, staging_path) catch {};
-        if (std.fs.path.dirname(destination_path)) |directory| try std.Io.Dir.cwd().createDirPath(self.io, directory);
+        if (std.fs.path.dirname(destination_path)) |directory| {
+            var directory_handle = try std.Io.Dir.cwd().createDirPathOpen(self.io, directory, .{});
+            directory_handle.close(self.io);
+        }
         try self.copyFile(source_path, staging_path);
         try std.Io.Dir.rename(.cwd(), staging_path, .cwd(), destination_path, self.io);
     }
@@ -1011,7 +1020,8 @@ pub const AppImageManager = struct {
         defer self.allocator.free(json_bytes);
 
         if (std.fs.path.dirname(self.local_db_path)) |dir| {
-            try std.Io.Dir.cwd().createDirPath(self.io, dir);
+            var dir_handle = try std.Io.Dir.cwd().createDirPathOpen(self.io, dir, .{});
+            dir_handle.close(self.io);
         }
 
         const staging_path = try self.uniqueSiblingPath(self.local_db_path, "database");
@@ -1185,7 +1195,9 @@ pub const AppImageManager = struct {
                         const old_exists = (std.Io.Dir.cwd().statFile(self.io, ex.path, .{}) catch null) != null;
                         if (!old_exists) break :blk false;
                         std.log.info("Moving AppImage from {s} to {s}", .{ ex.path, appimage_path });
-                        std.Io.Dir.cwd().createDirPath(self.io, self.install_directory) catch {};
+                        if (std.Io.Dir.cwd().createDirPathOpen(self.io, self.install_directory, .{})) |dir_handle| {
+                            dir_handle.close(self.io);
+                        } else |_| {}
                         self.copyFile(ex.path, appimage_path) catch |err| {
                             std.log.err("Failed to move AppImage: {s}", .{@errorName(err)});
                             break :blk false;

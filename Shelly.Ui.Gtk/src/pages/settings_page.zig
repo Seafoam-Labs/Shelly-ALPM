@@ -8,7 +8,8 @@ const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const ShellyTabs = @import("../models/shelly_config.zig").ShellyTabs;
 const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
 const NavMode = @import("../models/shelly_config.zig").NavMode;
-const ConfigResolver = @import("../services/config_resolver.zig").ConfigResolver;
+const ConfigResolver = @import("../services/ui_config_resolver.zig").ConfigResolver;
+const CliConfigResolver = @import("../services/cli_config_resolver.zig").CliConfigResolver;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const support_packages = @import("../services/support_packages.zig");
 const runtime = @import("../services/runtime.zig");
@@ -57,6 +58,8 @@ pub const ShellySettingsPage = extern struct {
         tray_auto_switch_box: *gtk.Box,
         daily_schedule: *gtk.Switch,
         weekly_schedule_switch_box: *gtk.Box,
+        use_ui: *gtk.Switch,
+        use_ui_switch_box: *gtk.Box,
         tray_interval_box: *gtk.Box,
         tray_interval_spin: *gtk.SpinButton,
         weekly_schedule_box: *gtk.Box,
@@ -74,6 +77,8 @@ pub const ShellySettingsPage = extern struct {
         shelly_icons_switch: *gtk.Switch,
         symbolic_tray_box: *gtk.Box,
         symbolic_tray_switch: *gtk.Switch,
+        use_ui_for_update_switch: *gtk.Switch,
+
         tray_icon_button: *gtk.Button,
         tray_icon_clear_button: *gtk.Button,
         tray_updates_icon_button: *gtk.Button,
@@ -86,7 +91,6 @@ pub const ShellySettingsPage = extern struct {
         remove_cache_switch: *gtk.Switch,
         no_confirm_switch: *gtk.Switch,
         shelly_search_switch: *gtk.Switch,
-        package_downgrade_switch: *gtk.Switch,
         webview_switch: *gtk.Switch,
         appimage_install_path_box: *gtk.Box,
         appimage_install_path_button: *gtk.Button,
@@ -161,6 +165,13 @@ pub const ShellySettingsPage = extern struct {
             .{ .detail = "active" },
         );
         _ = gobject.Object.signals.notify.connect(
+            p.use_ui.as(gobject.Object),
+            *Self,
+            &on_use_ui_notify,
+            self,
+            .{ .detail = "active" },
+        );
+        _ = gobject.Object.signals.notify.connect(
             p.tray_switch.as(gobject.Object),
             *Self,
             &on_tray_notify,
@@ -209,7 +220,6 @@ pub const ShellySettingsPage = extern struct {
             p.symbolic_tray_switch,
             p.no_confirm_switch,
             p.shelly_search_switch,
-            p.package_downgrade_switch,
             p.remove_cache_switch,
             p.webview_switch,
         };
@@ -889,12 +899,32 @@ pub const ShellySettingsPage = extern struct {
         const p = self.priv();
         gtk.Button.setLabel(p.appimage_install_path_button, path_cstr);
 
-        updateConfigField(.AppImageInstallPath, path_slice);
+        self.saveAppImageInstallPath(path_slice);
+    }
+
+    fn saveAppImageInstallPath(self: *Self, path: []const u8) void {
+        const p = self.priv();
+        var resolver = CliConfigResolver.init(std.heap.c_allocator, runtime.io, runtime.environ_map) catch {
+            p.toast.show(.@"error", translations._("Failed to save settings"));
+            return;
+        };
+        defer resolver.deinit();
+
+        resolver.writeAppImageInstallPath(path) catch |err| {
+            std.log.err("settings: failed to save AppImage install path: {t}", .{err});
+            p.toast.show(.@"error", translations._("Failed to save settings"));
+        };
     }
 
     fn on_schedule_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         applyScheduleVisibility(self.priv());
         self.autosave();
+    }
+
+    fn on_use_ui_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        const active = gtk.Switch.getActive(p.use_ui) != 0;
+        updateConfigField(.UseUiForUpdate, active);
     }
 
     fn on_tray_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
@@ -1027,6 +1057,8 @@ pub const ShellySettingsPage = extern struct {
         .{ "tray_auto_switch_box", @offsetOf(Private, "tray_auto_switch_box") },
         .{ "daily_schedule", @offsetOf(Private, "daily_schedule") },
         .{ "weekly_schedule_switch_box", @offsetOf(Private, "weekly_schedule_switch_box") },
+        .{ "use_ui", @offsetOf(Private, "use_ui") },
+        .{ "use_ui_switch_box", @offsetOf(Private, "use_ui_switch_box") },
         .{ "tray_interval_box", @offsetOf(Private, "tray_interval_box") },
         .{ "tray_interval_spin", @offsetOf(Private, "tray_interval_spin") },
         .{ "weekly_schedule_box", @offsetOf(Private, "weekly_schedule_box") },
@@ -1056,7 +1088,6 @@ pub const ShellySettingsPage = extern struct {
         .{ "remove_cache_switch", @offsetOf(Private, "remove_cache_switch") },
         .{ "no_confirm_switch", @offsetOf(Private, "no_confirm_switch") },
         .{ "shelly_search_switch", @offsetOf(Private, "shelly_search_switch") },
-        .{ "package_downgrade_switch", @offsetOf(Private, "package_downgrade_switch") },
         .{ "webview_switch", @offsetOf(Private, "webview_switch") },
         .{ "appimage_install_path_box", @offsetOf(Private, "appimage_install_path_box") },
         .{ "appimage_install_path_button", @offsetOf(Private, "appimage_install_path_button") },
@@ -1266,6 +1297,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.tray_switch, cfg.TrayEnabled);
     setSwitch(p.tray_auto_switch, cfg.TrayAutoStart);
     setSwitch(p.daily_schedule, cfg.UseWeeklySchedule);
+    setSwitch(p.use_ui, cfg.UseUiForUpdate);
 
     gtk.SpinButton.setValue(p.tray_interval_spin, @floatFromInt(cfg.TrayCheckIntervalHours));
 
@@ -1294,11 +1326,28 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     // Advanced
     setSwitch(p.no_confirm_switch, cfg.NoConfirm);
     setSwitch(p.shelly_search_switch, cfg.ShellySearchEnabled);
-    setSwitch(p.package_downgrade_switch, cfg.PackageDowngradeEnabled);
     setSwitch(p.remove_cache_switch, cfg.PackageManagementRemoveConfigs);
     setSwitch(p.webview_switch, cfg.WebviewEnabled);
 
-    setButtonLabel(p.appimage_install_path_button, std.heap.c_allocator, cfg.AppImageInstallPath, translations._("Select Directory"));
+    applyAppImageInstallPath(p);
+}
+
+fn applyAppImageInstallPath(p: *ShellySettingsPage.Private) void {
+    const allocator = std.heap.c_allocator;
+    var resolver = CliConfigResolver.init(allocator, runtime.io, runtime.environ_map) catch {
+        setButtonLabel(p.appimage_install_path_button, allocator, "", translations._("Select Directory"));
+        return;
+    };
+    defer resolver.deinit();
+
+    const path = resolver.readAppImageInstallPath() catch |err| {
+        std.log.warn("settings: could not read AppImage install path: {t}", .{err});
+        setButtonLabel(p.appimage_install_path_button, allocator, "", translations._("Select Directory"));
+        return;
+    };
+    defer if (path) |value| allocator.free(value);
+
+    setButtonLabel(p.appimage_install_path_button, allocator, path orelse "", translations._("Select Directory"));
 }
 
 fn setButtonLabel(b: *gtk.Button, allocator: std.mem.Allocator, value: []const u8, default: [:0]const u8) void {
@@ -1326,6 +1375,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.TrayEnabled = getSwitch(p.tray_switch);
     cfg.TrayAutoStart = getSwitch(p.tray_auto_switch);
     cfg.UseWeeklySchedule = getSwitch(p.daily_schedule);
+    cfg.UseUiForUpdate = getSwitch(p.use_ui);
 
     cfg.TrayCheckIntervalHours = gtk.SpinButton.getValueAsInt(p.tray_interval_spin);
 
@@ -1355,7 +1405,6 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     // Advanced
     cfg.NoConfirm = getSwitch(p.no_confirm_switch);
     cfg.ShellySearchEnabled = getSwitch(p.shelly_search_switch);
-    cfg.PackageDowngradeEnabled = getSwitch(p.package_downgrade_switch);
     cfg.PackageManagementRemoveConfigs = getSwitch(p.remove_cache_switch);
     cfg.WebviewEnabled = getSwitch(p.webview_switch);
 }
@@ -1409,6 +1458,7 @@ fn applyScheduleVisibility(p: *ShellySettingsPage.Private) void {
         gtk.Widget.setVisible(p.weekly_schedule_switch_box.as(gtk.Widget), 0);
         gtk.Widget.setVisible(p.weekly_schedule_box.as(gtk.Widget), 0);
         gtk.Widget.setVisible(p.tray_interval_box.as(gtk.Widget), 0);
+        gtk.Widget.setVisible(p.use_ui_switch_box.as(gtk.Widget), 0);
         return;
     }
 

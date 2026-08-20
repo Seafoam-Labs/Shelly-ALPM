@@ -2335,6 +2335,82 @@ test "update: automated update refreshes desktop name and exec path" {
     try std.testing.expect(std.mem.indexOf(u8, desktop, expected_exec) != null);
 }
 
+test "update follows a symlinked install directory" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+
+    const install_target = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "install-target" });
+    defer std.testing.allocator.free(install_target);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_target);
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "install-link" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().symLink(std.testing.io, install_target, install_dir, .{});
+
+    const data_home = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "data" });
+    defer std.testing.allocator.free(data_home);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, data_home);
+
+    var environ = std.process.Environ.Map.init(std.testing.allocator);
+    defer environ.deinit();
+    try environ.put("HOME", dir_path);
+    try environ.put("XDG_DATA_HOME", data_home);
+    try environ.put("XDG_CACHE_HOME", dir_path);
+    var environ_block = try environ.createPosixBlock(std.testing.allocator, .{});
+    defer environ_block.deinit(std.testing.allocator);
+    const test_environ: std.process.Environ = .{ .block = environ_block };
+
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "apps.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const app_name = "Editor";
+    const current_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(current_path);
+    try writeUpdateFixture(std.testing.io, current_path, "#!/bin/sh\nexit 0\n");
+
+    try seedDb(std.testing.allocator, std.testing.io, db_path, &.{
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Old Name", .path = current_path },
+    });
+
+    const staged_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "staged.AppImage" });
+    defer std.testing.allocator.free(staged_path);
+    try writeUpdateFixture(std.testing.io, staged_path, newDesktopNameAppImage);
+
+    var um = makeStagedUpdateManager(std.testing.allocator, install_dir, db_path, staged_path);
+    um.environ = test_environ;
+    var dto = appimage.AppImageUpdate{
+        .name = app_name,
+        .version = "2.0.0",
+        .download_url = "https://example.com/Editor.AppImage",
+        .is_update_available = true,
+    };
+    try std.testing.expect(try um.update(&dto));
+
+    // The replacement must land in the directory the symlink points to.
+    const resolved_path = try std.fs.path.join(std.testing.allocator, &.{ install_target, "Editor.AppImage" });
+    defer std.testing.allocator.free(resolved_path);
+    const installed = try readUpdateFile(std.testing.allocator, std.testing.io, resolved_path);
+    defer std.testing.allocator.free(installed);
+    try std.testing.expectEqualStrings(newDesktopNameAppImage, installed);
+
+    const manager = appimage_manager.AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = test_environ,
+        .install_directory = install_dir,
+        .local_db_path = db_path,
+    };
+    const apps = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqualStrings("2.0.0", apps[0].version);
+    try std.testing.expectEqualStrings(current_path, apps[0].path);
+}
+
 test "update: preserves GitHub provider configuration" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();

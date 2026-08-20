@@ -20,7 +20,7 @@ The decisive evidence is:
   incompatible AUR comparer.
 - The repository already acknowledges that its dependency collection is
   flattened rather than an operation-wide graph in
-  `docs/shelly-managed-isolated-root-plan.md`.
+  `docs/shelly-isolated-root-nspawn-implementation-plan.md`.
 
 The current Arch package is based on pacman/libalpm 7.1, so that should be the
 initial compatibility target.

@@ -715,6 +715,11 @@ pub const PackagePage = extern struct {
 
         gio.ListStore.removeAll(p.list_store);
 
+        p.check_map_grid.deinit(std.heap.c_allocator);
+        p.check_map_grid = .empty;
+        p.check_map_column.deinit(std.heap.c_allocator);
+        p.check_map_column = .empty;
+
         if (p.arena) |a| {
             a.deinit();
             std.heap.c_allocator.destroy(a);
@@ -730,20 +735,14 @@ pub const PackagePage = extern struct {
     fn load_worker(page: *Self, generation: u64, show_hidden: bool) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
         arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-
         const alloc = arena_ptr.allocator();
-
         const p = page.priv();
         if (!p.resolver.loaded) {
             p.resolver.load(runtime.io, runtime.environ_map) catch {};
         }
-
         var threaded: std.Io.Threaded = .init(alloc, .{});
         defer threaded.deinit();
 
-        //remember arena allocs arnt thread safe so if you are coming back
-        //and looking to paralize this please consider
-        //done sequentially as load times arnt heavily effected by it and its easier then paralizing atm.
         const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
         const parsed = cli.get_packages(show_hidden) catch |err| {
             std.debug.print("get_packages failed: {t}\n", .{err});
@@ -752,41 +751,49 @@ pub const PackagePage = extern struct {
             return;
         };
 
-        var installed_arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-        defer installed_arena.deinit();
-        const ialloc = installed_arena.allocator();
-
-        var ithreaded: std.Io.Threaded = .init(ialloc, .{});
-        defer ithreaded.deinit();
-        const icli = ShellyCli{ .allocator = ialloc, .io = ithreaded.io() };
-
+        const icli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
         const installed = icli.get_installed_packages() catch null;
+
+        var all: std.ArrayListUnmanaged(Package) = .empty;
+        all.appendSlice(alloc, parsed.value) catch {};
+
         if (installed) |inst| {
             var map: std.StringHashMapUnmanaged(*const Package) = .empty;
             for (inst.value) |*pkg| {
-                map.put(ialloc, pkg.Name, pkg) catch {};
+                map.put(alloc, pkg.Name, pkg) catch {};
             }
-            for (parsed.value) |*pkg| {
+
+            var matched: std.StringHashMapUnmanaged(void) = .empty;
+            for (all.items) |*pkg| {
                 if (map.get(pkg.Name)) |ipkg| {
                     pkg.Installed = true;
-                    pkg.InstallDate = if (ipkg.InstallDate) |id| alloc.dupe(u8, id) catch null else null;
+                    pkg.InstallDate = ipkg.InstallDate;
                     pkg.Explicit = std.mem.eql(u8, ipkg.InstallReason, "Explicit");
+                    matched.put(alloc, pkg.Name, {}) catch {};
                 } else {
                     pkg.Installed = false;
+                }
+            }
+
+            for (inst.value) |ipkg| {
+                if (!matched.contains(ipkg.Name)) {
+                    var extra = ipkg;
+                    extra.Installed = true;
+                    extra.Explicit = std.mem.eql(u8, ipkg.InstallReason, "Explicit");
+                    all.append(alloc, extra) catch {};
                 }
             }
         }
 
         var set: std.StringHashMapUnmanaged(void) = .empty;
-        for (parsed.value) |pkg| {
+        for (all.items) |pkg| {
             for (pkg.Groups) |g| set.put(alloc, g, {}) catch {};
         }
-
         var list: std.ArrayListUnmanaged([]const u8) = .empty;
         var it = set.keyIterator();
         while (it.next()) |k| list.append(alloc, k.*) catch {};
 
-        post_result(page, parsed.value, list.items, arena_ptr, generation);
+        post_result(page, all.items, list.items, arena_ptr, generation);
     }
 
     fn post_result(
@@ -823,6 +830,9 @@ pub const PackagePage = extern struct {
 
         if (result.index == 0) {
             gio.ListStore.removeAll(p.list_store);
+
+            p.check_map_grid.clearAndFree(std.heap.c_allocator);
+            p.check_map_column.clearAndFree(std.heap.c_allocator);
 
             const strings = gtk.StringList.new(null);
             gtk.StringList.append(strings, "Any");

@@ -9,7 +9,7 @@ pub const LocalSourceValidator = struct {
 
     pub fn validate(
         self: LocalSourceValidator,
-        pkg_build: pkgbuild.pkgbuild_info,
+        pkg_build: pkgbuild.Pkgbuild,
         base_directory: ?[]const u8,
     ) !shared_validator.ValidationResult {
         var result = shared_validator.ValidationResult{
@@ -94,7 +94,7 @@ test "local source validator flags ELF and binary files but not text" {
     var local_source_contents = std.StringHashMap([]const u8).init(std.testing.allocator);
     defer local_source_contents.deinit();
 
-    const info = pkgbuild.pkgbuild_info{
+    const info = pkgbuild.Pkgbuild{
         .variables = variables,
         .local_source_files = files,
         .local_source_contents = local_source_contents,

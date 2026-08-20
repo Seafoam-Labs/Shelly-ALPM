@@ -21,4 +21,14 @@
     "reveal_target": "dock",
     "allow_concurrent_runs": false,
   },
+  {
+    "label": "CLI Build",
+    "command": "zig build -Doptimize=Debug",
+    "args": [],
+    "reveal": "always",
+    "reveal_target": "dock",
+    "hide": "never",
+    "cwd": "$ZED_WORKTREE_ROOT/Shelly.Cli.Zig",
+    "show_command": true,
+  },
 ]

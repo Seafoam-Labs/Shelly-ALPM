@@ -38,9 +38,7 @@ pub const ShellyConfig = struct {
     AurEnabled: bool = false,
     AurWarningConfirmed: bool = false,
     AppImageEnabled: bool = false,
-    AppImageInstallPath: []const u8 = "",
     FlatPackEnabled: bool = false,
-    PackageDowngradeEnabled: bool = false,
     RecommendedEnabled: bool = true,
     ShellyIconsEnabled: bool = true,
     ShellySearchEnabled: bool = false,
@@ -87,6 +85,7 @@ pub const ShellyConfig = struct {
     UseSymbolicTray: bool = true,
     TrayIconPath: []const u8 = "",
     TrayUpdatesIconPath: []const u8 = "",
+    UseUiForUpdate: bool = false,
 
     // Scheduled Operations
     UseWeeklySchedule: bool = false,

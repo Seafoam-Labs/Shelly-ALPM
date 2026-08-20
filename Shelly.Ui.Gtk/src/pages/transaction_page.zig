@@ -52,6 +52,7 @@ pub const TransactionPage = extern struct {
     const resource_path = "/com/shellyorg/shelly/ui/transaction_page.ui";
 
     const Private = struct {
+        status_icon: *gtk.Image,
         title_label: *gtk.Label,
         terminal_toggle: *gtk.Button,
         close_button: *gtk.Button,
@@ -102,6 +103,7 @@ pub const TransactionPage = extern struct {
         p.rows = .empty;
         p.terminal_lines = .empty;
         p.operation = null;
+        p.finished = false;
         p.cancelled = false;
         p.terminal_visible = true;
         p.progress_lines = .empty;
@@ -161,7 +163,7 @@ pub const TransactionPage = extern struct {
             std.heap.c_allocator.destroy(op);
             p.operation = null;
             p.finished = true;
-            gtk.Widget.setVisible(p.close_button.as(gtk.Widget), 1);
+            self.showFinishedUI(.failed, translations._("Failed to start operation."));
             if (p.on_complete) |cb| {
                 if (p.on_complete_ctx) |ctx| cb(ctx, false);
             }
@@ -191,6 +193,15 @@ pub const TransactionPage = extern struct {
     fn reset(self: *Self) void {
         const p = self.priv();
         p.cancelled = false;
+        p.finished = false;
+        gtk.Widget.setVisible(p.status_icon.as(gtk.Widget), 0);
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "success");
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "error");
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "warning");
+        gtk.Widget.setVisible(p.close_button.as(gtk.Widget), 0);
+        gtk.Widget.removeCssClass(p.close_button.as(gtk.Widget), "suggested-action");
+        gtk.Widget.removeCssClass(p.close_button.as(gtk.Widget), "destructive-action");
+        setLabel(p.status_label, "");
         var rows = p.rows.valueIterator();
         while (rows.next()) |row| stopRowPulse(row.*);
         while (gtk.Widget.getFirstChild(p.rows_box.as(gtk.Widget))) |c| {
@@ -489,40 +500,88 @@ pub const TransactionPage = extern struct {
         gtk.Widget.addCssClass(row.status_label.as(gtk.Widget), "status-failed");
     }
 
+    const Outcome = enum { success, failed, cancelled };
+
+    fn showFinishedUI(self: *Self, outcome: Outcome, detail: []const u8) void {
+        const p = self.priv();
+
+        const icon: [:0]const u8 = switch (outcome) {
+            .success => "xsi-emblem-ok-symbolic",
+            .failed => "dialog-error-symbolic",
+            .cancelled => "dialog-warning-symbolic",
+        };
+        const tone: [:0]const u8 = switch (outcome) {
+            .success => "success",
+            .failed => "error",
+            .cancelled => "warning",
+        };
+
+        gtk.Image.setFromIconName(p.status_icon, icon);
+        gtk.Widget.setVisible(p.status_icon.as(gtk.Widget), 1);
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "success");
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "error");
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "warning");
+        gtk.Widget.addCssClass(p.status_icon.as(gtk.Widget), tone);
+
+        gtk.Widget.removeCssClass(p.close_button.as(gtk.Widget), "suggested-action");
+        gtk.Widget.removeCssClass(p.close_button.as(gtk.Widget), "destructive-action");
+        switch (outcome) {
+            .success => {
+                gtk.Widget.addCssClass(p.close_button.as(gtk.Widget), "suggested-action");
+                gtk.Button.setLabel(p.close_button, translations._("Done"));
+                setLabel(p.title_label, translations._("Transaction Completed"));
+            },
+            .failed => {
+                gtk.Widget.addCssClass(p.close_button.as(gtk.Widget), "destructive-action");
+                gtk.Button.setLabel(p.close_button, translations._("Close"));
+                setLabel(p.title_label, translations._("Transaction Failed"));
+            },
+            .cancelled => {
+                gtk.Button.setLabel(p.close_button, translations._("Close"));
+                setLabel(p.title_label, translations._("Transaction Cancelled"));
+            },
+        }
+
+        setLabel(p.status_label, detail);
+        gtk.Widget.setVisible(p.close_button.as(gtk.Widget), 1);
+        _ = gtk.Widget.grabFocus(p.close_button.as(gtk.Widget));
+    }
+
     fn handle_done(self: *Self, exit_code: u8) void {
         const p = self.priv();
         var buf: [64]u8 = undefined;
         const msg = std.fmt.bufPrint(&buf, "{s} ({s} {d})", .{ translations._("Finished"), translations._("exit"), exit_code }) catch translations._("Finished");
         append_terminal(self, msg);
 
-        setLabel(p.title_label, "Done");
-
-        const final_status = if (p.cancelled)
-            translations._("Cancelled")
-        else if (exit_code == 0)
-            translations._("Done")
-        else
-            translations._("Failed");
-        setLabel(p.status_label, final_status);
-
-        gtk.Widget.setVisible(p.close_button.as(gtk.Widget), 1);
         p.finished = true;
 
-        if (exit_code == 0 and !p.cancelled) {
-            var it = p.rows.valueIterator();
-            while (it.next()) |row_ptr| {
-                mark_row_done(row_ptr.*);
-            }
-        } else if (!p.cancelled) {
-            var it = p.rows.valueIterator();
-            while (it.next()) |row_ptr| {
-                mark_row_failed(row_ptr.*);
-            }
-        } else {
-            var it = p.rows.valueIterator();
-            while (it.next()) |row_ptr| {
-                stopRowPulse(row_ptr.*);
-                gtk.Label.setLabel(row_ptr.*.status_label, translations._("Cancelled"));
+        const outcome: Outcome = if (p.cancelled)
+            .cancelled
+        else if (exit_code == 0)
+            .success
+        else
+            .failed;
+
+        switch (outcome) {
+            .cancelled => self.showFinishedUI(outcome, translations._("The operation was cancelled.")),
+            .success => self.showFinishedUI(outcome, translations._("All operations finished successfully.")),
+            .failed => {
+                var fail_buf: [128]u8 = undefined;
+                const detail = std.fmt.bufPrint(&fail_buf, "{s} ({s} {d})", .{ translations._("Operation failed"), translations._("exit"), exit_code }) catch translations._("Operation failed");
+                self.showFinishedUI(outcome, detail);
+            },
+        }
+
+        var it = p.rows.valueIterator();
+        while (it.next()) |row_ptr| {
+            const row = row_ptr.*;
+            switch (outcome) {
+                .success => mark_row_done(row),
+                .failed => mark_row_failed(row),
+                .cancelled => {
+                    stopRowPulse(row);
+                    gtk.Label.setLabel(row.status_label, translations._("Cancelled"));
+                },
             }
         }
 
@@ -961,6 +1020,7 @@ pub const TransactionPage = extern struct {
         pending.destroy();
     }
     const template_children = .{
+        .{ "status_icon", @offsetOf(Private, "status_icon") },
         .{ "title_label", @offsetOf(Private, "title_label") },
         .{ "terminal_toggle", @offsetOf(Private, "terminal_toggle") },
         .{ "paned", @offsetOf(Private, "paned") },

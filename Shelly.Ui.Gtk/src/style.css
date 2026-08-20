@@ -193,3 +193,15 @@
 .terminal-output text {
   background-color: transparent;
 }
+
+.status-icon.success {
+  color: @success_color;
+}
+
+.status-icon.error {
+  color: @error_color;
+}
+
+.status-icon.warning {
+  color: @warning_color;
+}

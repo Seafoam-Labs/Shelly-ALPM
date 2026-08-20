@@ -9,6 +9,7 @@ const ShellyWindow = @import("shelly_window.zig").ShellyWindow;
 const runtime = @import("services/runtime.zig");
 const translations = @import("helpers/translations.zig");
 const tray_service = @import("services/tray_service.zig");
+const options = @import("options");
 const IconDownloadService = @import("services/icon_fetcher.zig").downloadIconsInBackground;
 
 var did_activate: bool = false;
@@ -20,34 +21,55 @@ pub fn main(init: std.process.Init) void {
     if (!translations.init()) {
         std.log.warn("translations: failed to initialize gettext", .{});
     }
-    IconDownloadService(std.heap.c_allocator, runtime.io);
+    if (!options.skip_background_services) {
+        IconDownloadService(std.heap.c_allocator, runtime.io);
+    }
 
-    const app = gtk.Application.new("com.shellyorg.shelly", .{});
+    const app = gtk.Application.new("com.shellyorg.shelly", .{
+        .handles_command_line = true,
+    });
     defer app.unref();
     const gapp = gobject.ext.as(gio.Application, app);
 
-    _ = gio.Application.signals.startup.connect(
-        app,
-        ?*anyopaque,
-        &startup,
-        null,
-        .{},
-    );
-    _ = gio.Application.signals.activate.connect(
-        app,
-        ?*anyopaque,
-        &activate,
-        null,
-        .{},
-    );
+    _ = gio.Application.signals.startup.connect(app, ?*anyopaque, &startup, null, .{});
+    _ = gio.Application.signals.activate.connect(app, ?*anyopaque, &activate, null, .{});
+    _ = gio.Application.signals.command_line.connect(app, ?*anyopaque, &commandLine, null, .{});
 
-    const status = gio.Application.run(gapp, 0, null);
+    const argv_vector = init.minimal.args.vector;
+    const status = gio.Application.run(
+        gapp,
+        @intCast(argv_vector.len),
+        @ptrCast(@constCast(argv_vector.ptr)),
+    );
 
     if (did_activate) {
         tryStopTray(runtime.io, std.heap.c_allocator);
     }
     runtime.teardownConfig(std.heap.c_allocator);
     std.process.exit(@intCast(status));
+}
+
+fn commandLine(
+    app: *gtk.Application,
+    cmdline: *gio.ApplicationCommandLine,
+    _: ?*anyopaque,
+) callconv(.c) c_int {
+    var argc: c_int = 0;
+    const argv = gio.ApplicationCommandLine.getArguments(cmdline, &argc);
+    defer glib.strfreev(@ptrCast(argv));
+
+    var i: usize = 1;
+    while (i < @as(usize, @intCast(argc))) : (i += 1) {
+        const arg = std.mem.span(argv[i]);
+
+        if (std.mem.eql(u8, arg, "--tray-updates")) {
+            runtime.pending_navigate_updates = true;
+        }
+    }
+
+    gio.Application.activate(app.as(gio.Application));
+    gio.ApplicationCommandLine.setExitStatus(cmdline, 0);
+    return 0;
 }
 
 fn tryStopTray(io: std.Io, alloc: std.mem.Allocator) void {
@@ -82,6 +104,13 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
 
     if (gtk.Application.getActiveWindow(app)) |window| {
         gtk.Window.present(window);
+
+        if (runtime.pending_navigate_updates) {
+            runtime.pending_navigate_updates = false;
+            if (gobject.ext.cast(ShellyWindow, window)) |shelly_window| {
+                shelly_window.navigateToUpdates();
+            }
+        }
         return;
     }
 
@@ -118,11 +147,17 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
         }
     }
 
-    tryStartTray(runtime.io, std.heap.c_allocator);
+    if (!options.skip_background_services) tryStartTray(runtime.io, std.heap.c_allocator);
 
     setupGnomeThemePreference();
 
     const window = ShellyWindow.new(app);
+
+    if (runtime.pending_navigate_updates) {
+        runtime.pending_navigate_updates = false;
+        window.navigateToUpdates();
+    }
+
     gtk.Window.present(gobject.ext.as(gtk.Window, window));
 }
 
@@ -173,7 +208,7 @@ fn setupGnomeThemePreference() void {
 
 test {
     _ = @import("services/icon_resolver.zig");
-    _ = @import("services/config_resolver.zig");
+    _ = @import("services/ui_config_resolver.zig");
     _ = @import("services/shelly_cli.zig");
     _ = @import("services/tray_service.zig");
     _ = @import("g_objects/appstream_app_object.zig");

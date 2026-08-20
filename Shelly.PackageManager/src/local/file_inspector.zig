@@ -1,5 +1,5 @@
 const std = @import("std");
-const archive = @import("archive.zig");
+const archive = @import("archive");
 
 pub const Inspector = struct {
     allocator: std.mem.Allocator,

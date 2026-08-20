@@ -9,7 +9,6 @@ const support = @import("../../pages/support.zig");
 const ShellyCli = @import("../../services/shelly_cli.zig").ShellyCli;
 const PkgBuild = @import("../../models/pkgbuild.zig").PkgBuild;
 const ShellyWindow = @import("../../shelly_window.zig").ShellyWindow;
-const c_string = @import("../../helpers/c_string.zig");
 
 pub const PkgbuildReviewDialog = extern struct {
     parent_instance: Parent,
@@ -71,7 +70,11 @@ pub const PkgbuildReviewDialog = extern struct {
     pub fn showPreview(self: *Self, name: []const u8) void {
         const p = self.priv();
         var buf: [512]u8 = undefined;
-        const heading = std.fmt.bufPrintZ(&buf, "{s}: {s}", .{ "PKGBUILD", name },) catch "PKGBUILD";
+        const heading = std.fmt.bufPrintZ(
+            &buf,
+            "{s}: {s}",
+            .{ "PKGBUILD", name },
+        ) catch "PKGBUILD";
         gtk.Label.setLabel(p.heading_label, heading);
         self.start_load(name);
     }
@@ -182,21 +185,6 @@ pub const PkgbuildReviewDialog = extern struct {
         const r: *Result = @ptrCast(@alignCast(data.?));
         defer std.heap.c_allocator.destroy(r);
         const p = r.page.priv();
-        var buf: [4096]u8 = undefined;
-
-        std.debug.print("r.pkgbuild.PkgBuild: {d}", .{r.pkgbuild.PkgBuild.len});
-
-        var it = std.mem.splitScalar(u8, r.pkgbuild.PkgBuild, '\n');
-        while (it.next()) |line| {
-            const label = gtk.Label.new(null);
-            gtk.Widget.setHalign(label.as(gtk.Widget), .fill);
-            gtk.Widget.setHexpand(label.as(gtk.Widget), 1);
-            gtk.Label.setXalign(label, 0);
-            gtk.Label.setJustify(label, .left);
-
-            gtk.Label.setLabel(label, c_string.cstr(&buf, line));
-            gtk.Box.append(p.diff_box, label.as(gtk.Widget));
-        }
 
         if (r.generation != p.generation) {
             r.arena.deinit();
@@ -210,7 +198,28 @@ pub const PkgbuildReviewDialog = extern struct {
         }
         p.arena = r.arena;
 
+        std.debug.print("r.pkgbuild.PkgBuild: {d}", .{r.pkgbuild.PkgBuild.len});
+
+        const view = gtk.TextView.new();
+        gtk.TextView.setEditable(view, 0);
+        gtk.TextView.setMonospace(view, 1);
+        gtk.TextView.setWrapMode(view, .word_char);
+        gtk.TextView.setCursorVisible(view, 0);
+        const buffer = gtk.TextView.getBuffer(view);
+        const text_z = std.heap.c_allocator.dupeZ(u8, r.pkgbuild.PkgBuild) catch return 0;
+        defer std.heap.c_allocator.free(text_z);
+        gtk.TextBuffer.setText(buffer, text_z, @intCast(text_z.len));
+
+        clear_box(p.diff_box);
+        gtk.Box.append(p.diff_box, view.as(gtk.Widget));
+
         return 0;
+    }
+
+    fn clear_box(box: *gtk.Box) void {
+        while (gtk.Widget.getFirstChild(box.as(gtk.Widget))) |child| {
+            gtk.Box.remove(box, child);
+        }
     }
 
     fn finalize(self: *Self) callconv(.c) void {
@@ -226,7 +235,7 @@ pub const PkgbuildReviewDialog = extern struct {
     }
 
     const template_children = .{
-        .{ "heading_label", @offsetOf(Private, "heading_label")},
+        .{ "heading_label", @offsetOf(Private, "heading_label") },
         .{ "diff_box", @offsetOf(Private, "diff_box") },
         .{ "cancel_button", @offsetOf(Private, "cancel_button") },
         .{ "loading_spinner", @offsetOf(Private, "loading_spinner") },

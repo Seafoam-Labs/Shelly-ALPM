@@ -20,6 +20,7 @@ const sync = @import("catalog/sync.zig");
 const update = @import("catalog/update.zig");
 const upgrade = @import("catalog/upgrade.zig");
 const utility = @import("catalog/utility.zig");
+const builder = @import("catalog/builder.zig");
 
 pub const Action = core.Action;
 pub const Argument = core.Argument;
@@ -80,7 +81,8 @@ pub const variants = search.variants ++
     update.variants ++
     config.variants ++
     keyring.variants ++
-    run.variants;
+    run.variants ++
+    builder.variants;
 
 pub const shared_modifiers = [_]SharedModifier{
     .{

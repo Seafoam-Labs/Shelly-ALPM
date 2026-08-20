@@ -4,6 +4,9 @@ const parser = @import("parser.zig");
 const shortcodes = @import("shortcodes.zig");
 const spec = @import("spec.zig");
 const runtime = @import("../runtime/context.zig");
+const Zigalpm = @import("Zigalpm");
+
+pub const sandbox_wrapper_argument = Zigalpm.builder.sandbox.wrapper_argument;
 
 pub fn run(context: *runtime.RuntimeContext, arguments: []const []const u8) !u8 {
     const manifest = try spec.Manifest.load(context.allocator);
@@ -69,6 +72,107 @@ fn renderFailure(
     if (failure.leading_help_newline) try context.stdout.writeByte('\n');
     try help.render(context.allocator, manifest, failure.help_command, context.stdout);
     return 1;
+}
+
+/// Entry point for the re-executed Landlock sandbox wrapper. Applies the
+/// policy parsed from `arguments` and replaces the process with the child
+/// command. Invoked from `main` before manifest loading or argument parsing
+/// so the wrapped bash body never touches the CLI grammar. Returns the exit
+/// code to terminate with; on success it does not return.
+pub fn runSandboxExec(
+    allocator: std.mem.Allocator,
+    environ: std.process.Environ,
+    stderr: *std.Io.Writer,
+    arguments: []const []const u8,
+) u8 {
+    const sandbox = Zigalpm.builder.sandbox;
+    const parsed = sandbox.parseWrapperArguments(allocator, arguments) catch |err| {
+        stderr.print("shelly sandbox: invalid wrapper arguments: {t}\n", .{err}) catch {};
+        return 1;
+    };
+    defer {
+        allocator.free(parsed.read_write_paths);
+        allocator.free(parsed.read_only_paths);
+    }
+
+    Zigalpm.builder.setNoNewPrivs() catch {
+        stderr.print("shelly sandbox: unable to lock process privileges\n", .{}) catch {};
+        return 1;
+    };
+
+    const read_write_paths = joinSandboxPaths(allocator, sandbox.base_read_write_paths, parsed.read_write_paths) catch {
+        stderr.print("shelly sandbox: out of memory\n", .{}) catch {};
+        return 1;
+    };
+    defer allocator.free(read_write_paths);
+    const read_only_paths = joinSandboxPaths(allocator, sandbox.base_read_only_paths, parsed.read_only_paths) catch {
+        stderr.print("shelly sandbox: out of memory\n", .{}) catch {};
+        return 1;
+    };
+    defer allocator.free(read_only_paths);
+
+    sandbox.applyPolicy(allocator, .{
+        .read_write_paths = read_write_paths,
+        .read_only_paths = read_only_paths,
+    }) catch |err| {
+        stderr.print("shelly sandbox: unable to confine step: {t}\n", .{err}) catch {};
+        return 1;
+    };
+
+    return execSandboxChild(allocator, environ, stderr, parsed.child_argv);
+}
+
+fn joinSandboxPaths(
+    allocator: std.mem.Allocator,
+    base: []const []const u8,
+    extra: []const []const u8,
+) ![][]const u8 {
+    const joined = try allocator.alloc([]const u8, base.len + extra.len);
+    @memcpy(joined[0..base.len], base);
+    @memcpy(joined[base.len..], extra);
+    return joined;
+}
+
+fn execSandboxChild(
+    allocator: std.mem.Allocator,
+    environ: std.process.Environ,
+    stderr: *std.Io.Writer,
+    child_argv: []const []const u8,
+) u8 {
+    switch (@import("builtin").os.tag) {
+        .linux => {
+            const argv = buildPosixArgv(allocator, child_argv) catch {
+                stderr.print("shelly sandbox: out of memory\n", .{}) catch {};
+                return 1;
+            };
+            const rc = std.os.linux.execve(argv[0].?, argv.ptr, environ.block.slice.ptr);
+            stderr.print(
+                "shelly sandbox: unable to execute {s}: {t}\n",
+                .{ child_argv[0], std.os.linux.errno(@intCast(rc)) },
+            ) catch {};
+            return 127;
+        },
+        else => {
+            stderr.print("shelly sandbox: unsupported platform\n", .{}) catch {};
+            return 1;
+        },
+    }
+}
+
+fn buildPosixArgv(
+    allocator: std.mem.Allocator,
+    args: []const []const u8,
+) ![:null]?[*:0]const u8 {
+    const argv = try allocator.alloc(?[*:0]const u8, args.len + 1);
+    errdefer {
+        for (argv) |entry| if (entry) |value| allocator.free(std.mem.span(value));
+        allocator.free(argv);
+    }
+    for (args, 0..) |arg, index| {
+        argv[index] = (try allocator.dupeZ(u8, arg)).ptr;
+    }
+    argv[args.len] = null;
+    return argv[0..args.len :null];
 }
 
 test "no arguments dispatch upgrade all through the injected runtime" {

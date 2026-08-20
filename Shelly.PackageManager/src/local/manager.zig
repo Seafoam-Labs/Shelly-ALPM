@@ -1,5 +1,5 @@
 const std = @import("std");
-const archive = @import("archive.zig");
+const archive = @import("archive");
 const events = @import("events.zig");
 const file_inspector = @import("file_inspector.zig");
 const xdg_integration = @import("xdg_integration.zig");

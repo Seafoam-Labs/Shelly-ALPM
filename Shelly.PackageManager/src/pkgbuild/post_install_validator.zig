@@ -66,17 +66,15 @@ pub const PostInstallValidator = struct {
         "prepare", "pkgver", "build", "check", "package",
     };
 
-    pub fn validate(self: PostInstallValidator, pkg_build: pkgbuild.pkgbuild_info) !shared_validator.ValidationResult {
+    pub fn validate(self: PostInstallValidator, pkg_build: pkgbuild.Pkgbuild) !shared_validator.ValidationResult {
         return self.validateWithContent(pkg_build, null);
     }
 
-    pub fn validateWithContent(self: PostInstallValidator, pkg_build: pkgbuild.pkgbuild_info, content: ?[]const u8) !shared_validator.ValidationResult {
+    pub fn validateWithContent(self: PostInstallValidator, pkg_build: pkgbuild.Pkgbuild, content: ?[]const u8) !shared_validator.ValidationResult {
         var result = shared_validator.ValidationResult{
             .has_findings = false,
             .findings = std.ArrayList(shared_validator.ValidationFinding).empty,
         };
-
-        try self.scan_hook(pkg_build.post_install, "post_install", &result);
 
         if (content) |raw| {
             for (pkgbuild_functions) |function_name| {
@@ -95,7 +93,7 @@ pub const PostInstallValidator = struct {
         return result;
     }
 
-    fn scan_hook(self: PostInstallValidator, scriptlet: ?[]const u8, hook: []const u8, result: *shared_validator.ValidationResult) !void {
+    pub fn scan_hook(self: PostInstallValidator, scriptlet: ?[]const u8, hook: []const u8, result: *shared_validator.ValidationResult) !void {
         const content = scriptlet orelse return;
         var iter = std.mem.splitScalar(u8, content, '\n');
         while (iter.next()) |line| {
@@ -650,19 +648,21 @@ test "scan_hook delegates to scan_dynamic_execution for eval-only lines" {
 
 fn make_test_pkgbuild(
     allocator: std.mem.Allocator,
-    post_install: ?[]const u8,
-) !pkgbuild.pkgbuild_info {
-    const lsc = std.StringHashMap([]const u8).init(allocator);
-    return pkgbuild.pkgbuild_info{
+    script_contents: ?[]const u8,
+) !pkgbuild.Pkgbuild {
+    var lsc = std.StringHashMap([]const u8).init(allocator);
+    if (script_contents) |contents| {
+        const key = try allocator.dupe(u8, "__test.install");
+        errdefer allocator.free(key);
+        try lsc.put(key, contents);
+    }
+    return pkgbuild.Pkgbuild{
         .variables = std.StringHashMap([]const u8).init(allocator),
-        .post_install = post_install,
         .local_source_contents = lsc,
     };
 }
 
-fn deinit_test_pkgbuild(pkg: *pkgbuild.pkgbuild_info, allocator: std.mem.Allocator) void {
-    if (pkg.post_install) |v| allocator.free(v);
-
+fn deinit_test_pkgbuild(pkg: *pkgbuild.Pkgbuild, allocator: std.mem.Allocator) void {
     var lsc_it = pkg.local_source_contents.iterator();
     while (lsc_it.next()) |entry| {
         allocator.free(entry.key_ptr.*);
@@ -726,7 +726,7 @@ test "validate: risky tool in post_install produces warning finding" {
     try std.testing.expectEqual(@as(usize, 1), result.findings.items.len);
     try std.testing.expect(result.has_findings);
     try std.testing.expectEqualStrings("curl", result.findings.items[0].tool);
-    try std.testing.expectEqualStrings("post_install", result.findings.items[0].hook);
+    try std.testing.expectEqualStrings("source: __test.install", result.findings.items[0].hook);
     try std.testing.expectEqual(shared_validator.ValidationSeverity.warning, result.findings.items[0].severity);
 }
 
@@ -949,9 +949,14 @@ test "validate: findings from both post_install and local_source_contents" {
 
     try std.testing.expectEqual(@as(usize, 2), result.findings.items.len);
     try std.testing.expect(result.has_findings);
-    try std.testing.expectEqualStrings("curl", result.findings.items[0].tool);
-    try std.testing.expectEqualStrings("post_install", result.findings.items[0].hook);
-    try std.testing.expectEqualStrings("npm", result.findings.items[1].tool);
+    var saw_curl = false;
+    var saw_npm = false;
+    for (result.findings.items) |finding| {
+        if (std.mem.eql(u8, finding.tool, "curl")) saw_curl = true;
+        if (std.mem.eql(u8, finding.tool, "npm")) saw_npm = true;
+    }
+    try std.testing.expect(saw_curl);
+    try std.testing.expect(saw_npm);
 }
 
 test "validate: multiple risky tools in post_install produce multiple findings" {
@@ -1085,6 +1090,6 @@ test "validate: install script produces expected findings" {
         } else {
             try std.testing.expectEqualStrings("<dynamic-command>", finding.tool);
         }
-        try std.testing.expectEqualStrings("post_install", finding.hook);
+        try std.testing.expectEqualStrings("source: __test.install", finding.hook);
     }
 }

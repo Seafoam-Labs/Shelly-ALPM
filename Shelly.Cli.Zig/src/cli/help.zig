@@ -459,7 +459,8 @@ fn shortcodeUsage(
     try usage.appendSlice(allocator, try shortcodePrefix(allocator, command, option == null) orelse return null);
     if (option) |selected_option| {
         if (std.mem.eql(u8, command.path, "shelly backup utility") and
-            !std.mem.eql(u8, selected_option.name, "--export"))
+            !std.mem.eql(u8, selected_option.name, "--export") and
+            !std.mem.eql(u8, selected_option.name, "--import"))
             try usage.append(allocator, 'e');
         const alias = shortOptionAlias(selected_option) orelse return null;
         if (modifierMustBeSeparate(command, alias[1])) {
@@ -923,4 +924,30 @@ test "leaf examples keep ambiguous and bare-alias modifiers executable" {
     try std.testing.expect(std.mem.indexOf(u8, upgrade_all.writer.buffered(), "-U                  Shortcode") != null);
     try std.testing.expect(std.mem.indexOf(u8, upgrade_all.writer.buffered(), "-Uxh") != null);
     try std.testing.expect(std.mem.indexOf(u8, upgrade_all.writer.buffered(), "-Uh") == null);
+}
+
+test "backup import example uses -Bi, not the contradictory -Bei" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    var output = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer output.deinit();
+
+    try render(
+        arena.allocator(),
+        &manifest,
+        manifest.findByPath("shelly backup utility").?,
+        &output.writer,
+    );
+    const rendered = output.writer.buffered();
+
+    // Import selects its own mode: the example must be -Bi. -Bei would combine
+    // export and import at once, which the parser rejects.
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "-Bi ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "-Bei") == null);
+
+    // Export mode and its export-scoped modifiers are unchanged.
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "-Be ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "-Bea <name>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "-Bed <directory>") != null);
 }

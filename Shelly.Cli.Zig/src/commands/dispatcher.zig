@@ -1,6 +1,7 @@
 const config = @import("config.zig");
 const downgrade = @import("downgrade.zig");
 const backup = @import("backup.zig");
+const builder = @import("builder.zig");
 const install = @import("install.zig");
 const keyring = @import("keyring.zig");
 const list = @import("list.zig");
@@ -42,5 +43,6 @@ pub fn dispatch(
     if (try remove.dispatch(context, invocation)) |exit_code| return exit_code;
     if (try run.dispatch(context, invocation)) |exit_code| return exit_code;
     if (try utility.dispatch(context, invocation)) |exit_code| return exit_code;
+    if (try builder.dispatch(context, invocation)) |exit_code| return exit_code;
     return runtime.unimplemented(null, context, invocation);
 }

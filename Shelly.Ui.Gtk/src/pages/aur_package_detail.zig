@@ -111,7 +111,7 @@ pub const PackageDetail = extern struct {
 
         const allocator = (p.arena orelse return).allocator();
 
-        const combined = std.mem.concat(allocator, u8, &.{ "aur.archlinux.org/packages/", package.Name }) catch "";
+        const combined = std.mem.concat(allocator, u8, &.{ "https://aur.archlinux.org/packages/", package.Name }) catch "";
         add_url_spec_row(p.spec_box, translations._("AUR"), c_string.cstr(&buf, combined));
 
         const alloc = (p.arena orelse return).allocator();

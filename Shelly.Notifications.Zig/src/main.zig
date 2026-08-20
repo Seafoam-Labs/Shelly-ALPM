@@ -63,6 +63,7 @@ const Updates = struct {
     mutex: std.Io.Mutex = .init,
     io: std.Io,
     runner: *AppRunner,
+    config: *ShellyConfig,
     allocator: std.mem.Allocator,
     repo: std.ArrayListUnmanaged(Repo) = .empty,
     aur: std.ArrayListUnmanaged(Aur) = .empty,
@@ -74,8 +75,8 @@ const Updates = struct {
     needs_config_change: bool = false,
     last_check: i64 = 0,
 
-    fn init(allocator: std.mem.Allocator, io: std.Io, runner: *AppRunner) Updates {
-        return .{ .allocator = allocator, .io = io, .runner = runner };
+    fn init(allocator: std.mem.Allocator, io: std.Io, runner: *AppRunner, config: *ShellyConfig) Updates {
+        return .{ .allocator = allocator, .io = io, .runner = runner, .config = config };
     }
 
     fn deinit(self: *Updates) void {
@@ -363,7 +364,7 @@ pub fn main(init: std.process.Init) !void {
     var notifier = Notifier.init(&service);
     defer notifier.deinit();
 
-    var updates = Updates.init(allocator, init.io, &runner);
+    var updates = Updates.init(allocator, init.io, &runner, &config);
     defer updates.deinit();
 
     try service.onExternalSignal("com.shellyorg.shelly", "Refresh", onUiRefresh, &updates);
@@ -593,7 +594,10 @@ fn onEvent(ctx: ?*anyopaque, id: i32) void {
     }
 
     if (id == run_update_index) {
-        updates.runner.spawnFixedUpdate() catch |e|
+        updates.runner.spawnFixedUpdate(updates.config.get() catch |e| {
+            log_menu.err("update spawn failed: {any}", .{e});
+            return;
+        }) catch |e|
             log_menu.err("update spawn failed: {any}", .{e});
     }
 

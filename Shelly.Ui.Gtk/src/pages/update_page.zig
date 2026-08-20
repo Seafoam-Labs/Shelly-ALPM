@@ -321,7 +321,6 @@ pub const UpdatePage = extern struct {
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 0);
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
                 gtk.Widget.setVisible(p.loading_spinner.as(gtk.Widget), 1);
-                self.update_source_labels();
             },
             .Loaded => {
                 gtk.Spinner.stop(p.loading_spinner);
@@ -332,7 +331,6 @@ pub const UpdatePage = extern struct {
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 1);
                 gtk.Widget.setVisible(p.loading_spinner.as(gtk.Widget), 0);
-                self.update_source_labels();
                 self.update_summary();
             },
             .Fail => {
@@ -350,6 +348,7 @@ pub const UpdatePage = extern struct {
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
             },
         }
+        self.update_source_labels();
     }
 
     fn update_source_labels(self: *Self) void {

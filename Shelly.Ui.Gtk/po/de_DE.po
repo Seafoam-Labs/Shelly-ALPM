@@ -1,9 +1,9 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
-"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
+"Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
 "POT-Creation-Date: 2026-08-12 09:19-0400\n"
-"PO-Revision-Date: 2026-08-04 21:24+0200\n"
+"PO-Revision-Date: 2026-08-14 15:27+0200\n"
 "Last-Translator: helge1o1o1@gmail.com\n"
 "Language-Team: Deutschland (Deutsch) helge1o1o1@gmail.com\n"
 "Language: de\n"
@@ -18,19 +18,17 @@ msgstr "Keine installierbaren Add-ons verfügbar"
 msgid "Close"
 msgstr "Schließen"
 
-#| msgid "Saving update configuration"
 msgid "Keep configuration"
-msgstr ""
+msgstr "Konfiguration beibehalten"
 
 msgid "App data and settings will be kept."
-msgstr ""
+msgstr "App-Daten und -Einstellungen bleiben erhalten."
 
-#| msgid "Saving update configuration"
 msgid "Remove configuration"
-msgstr ""
+msgstr "Konfiguration entfernen"
 
 msgid "App data will be permanently removed."
-msgstr ""
+msgstr "App-Daten werden dauerhaft entfernt."
 
 msgid "Confirm"
 msgstr "Bestätigen"
@@ -323,7 +321,7 @@ msgid "Repairs Flatpak Installation (Experimental)"
 msgstr "Repariert die Flatpak-Installation (experimentell)"
 
 msgid "About"
-msgstr ""
+msgstr "Über"
 
 msgid "Shelly"
 msgstr "Shelly"
@@ -419,37 +417,39 @@ msgstr ""
 "Internetverbindung und versuche es erneut."
 
 msgid "Search standard repositories, AUR and Flatpak"
-msgstr ""
+msgstr "Standard-Repositorys, AUR und Flatpak durchsuchen"
 
 msgid "Standard"
-msgstr ""
+msgstr "Standard"
 
 msgid "Show results from the configured ALPM sync databases"
 msgstr ""
+"Ergebnisse aus den konfigurierten ALPM-Synchronisationsdatenbanken anzeigen"
 
 msgid "AUR"
 msgstr "AUR"
 
 msgid "Show results from the Arch User Repository"
-msgstr ""
+msgstr "Ergebnisse aus dem Arch User Repository anzeigen"
 
 msgid "Flatpak"
 msgstr "Flatpak"
 
 msgid "Show results from the configured Flatpak remotes"
-msgstr ""
+msgstr "Ergebnisse der konfigurierten Flatpak-Remote-Quellen anzeigen"
 
-#| msgid "Source Files"
 msgid "Source"
-msgstr ""
+msgstr "Quelle"
 
 msgid "Search everywhere"
-msgstr ""
+msgstr "Überall suchen"
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
 msgstr ""
+"Durchsuche gleichzeitig die Standard-Repositorys, das AUR und Flatpak. Gib "
+"einen Namen ein, um zu beginnen."
 
 msgid "General"
 msgstr "Allgemein"
@@ -589,7 +589,7 @@ msgid "Community fluxer"
 msgstr "Community-Fluxer"
 
 msgid "Sponsor"
-msgstr "Sponsor"
+msgstr "Unterstützen"
 
 msgid "Toggle output"
 msgstr "Ausgabe umschalten"
@@ -689,13 +689,13 @@ msgstr ""
 "Quellen und Einstellungen, um loszulegen."
 
 msgid "Select Your Sources"
-msgstr "Wähle deine Quellen aus"
+msgstr "Deine Quellen auswählen"
 
 msgid ""
 "Choose which package sources you want to browse. You can always change this "
 "later in settings."
 msgstr ""
-"Wähle aus, welche Paketquellen du durchsuchen möchtest. Du kannst dies "
+"Auswählen, welche Paketquellen du durchsuchen möchtest. Du kannst dies "
 "später jederzeit in den Einstellungen ändern."
 
 msgid "Arch User Repository community packages"
@@ -723,8 +723,8 @@ msgid ""
 "Customize how Shelly looks and behaves. All of these can be changed later in "
 "preferences."
 msgstr ""
-"Passe das Aussehen und Verhalten von Shelly an. All diese Einstellungen "
-"lassen sich später unter Einstellungen ändern."
+"Aussehen und Verhalten von Shelly anpassen. All diese Einstellungen lassen "
+"sich später unter Einstellungen ändern."
 
 msgid "Navigation Style"
 msgstr "Navigationsstil"
@@ -934,13 +934,13 @@ msgid "No packages found"
 msgstr "Keine Pakete gefunden"
 
 msgid "Try a shorter or more general keyword."
-msgstr "Versuche es mit einem kürzeren oder allgemeineren Suchbegriff."
+msgstr "Mit einem kürzeren oder allgemeineren Suchbegriff versuchen."
 
 msgid "Could not reach the AUR"
 msgstr "AUR konnte nicht erreicht werden"
 
 msgid "Check your connection and try again."
-msgstr "Überprüfe deine Verbindung und versuche es erneut."
+msgstr "Deine Verbindung überprüfen und erneut versuchen."
 
 msgid "Flagged out of date"
 msgstr "Als veraltet markiert"
@@ -987,8 +987,8 @@ msgstr "Flatpak-Datei"
 
 msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
 msgstr ""
-"Nicht unterstützter Dateityp. Wähle eine .flatpak- oder .flatpakref-Datei "
-"aus."
+"Nicht unterstützter Dateityp. Eine .flatpak- oder .flatpakref-Datei "
+"auswählen."
 
 msgid "Installing local flatpak"
 msgstr "Lokales Flatpak installieren"
@@ -1152,30 +1152,26 @@ msgstr "Remote entfernen"
 msgid "Adding Remote"
 msgstr "Remote hinzufügen"
 
-#| msgid "Removing Flatpak"
 msgid "Remove this Flatpak?"
-msgstr ""
+msgstr "Dieses Flatpak entfernen?"
 
-#| msgid "Removing Flatpak"
 msgid "Remove Flatpak"
-msgstr ""
+msgstr "Flatpak entfernen"
 
 msgid "Removing Flatpak"
 msgstr "Flatpak entfernen"
 
 msgid "App ID"
-msgstr ""
+msgstr "App-ID"
 
-#| msgid "Remove"
 msgid "Remote"
-msgstr ""
+msgstr "Remote"
 
-#| msgid "Development"
 msgid "Developer"
-msgstr ""
+msgstr "Entwickler"
 
 msgid "Type"
-msgstr ""
+msgstr "Typ"
 
 msgid "Download Size"
 msgstr "Download-Größe"
@@ -1190,11 +1186,10 @@ msgid "No"
 msgstr "Nein"
 
 msgid "Keywords"
-msgstr ""
+msgstr "Schlagwörter"
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
-msgstr ""
+msgstr "Flathub"
 
 msgid "Loading..."
 msgstr "Laden..."
@@ -1265,28 +1260,23 @@ msgstr "Pakete entfernen"
 msgid "Installing packages"
 msgstr "Pakete installieren"
 
-#| msgid "Operation failed"
 msgid "Search failed"
-msgstr ""
+msgstr "Suche fehlgeschlagen"
 
-#| msgid "Installation failed."
 msgid "Installation in progress"
-msgstr ""
+msgstr "Installation läuft"
 
-#| msgid "No packages selected"
 msgid "No sources selected"
-msgstr ""
+msgstr "Keine Quellen ausgewählt"
 
 msgid "Enable at least one source filter above."
-msgstr ""
+msgstr "Aktiviere oben mindestens einen Quellenfilter."
 
-#| msgid "Installing packages"
 msgid "Install Packages"
-msgstr ""
+msgstr "Pakete installieren"
 
-#| msgid "Remove the selected packages?"
 msgid "Install the selected packages?"
-msgstr ""
+msgstr "Ausgewählte Pakete installieren?"
 
 msgid "Failed to save settings"
 msgstr "Einstellungen speichern fehlgeschlagen"
@@ -1456,7 +1446,7 @@ msgid "Installing"
 msgstr "Installieren"
 
 msgid "Upgrading"
-msgstr "Upgraden"
+msgstr "Aktualisieren"
 
 msgid "Downgrading"
 msgstr "Herabstufen"
@@ -1468,19 +1458,19 @@ msgid "Removing"
 msgstr "Entfernen"
 
 msgid "Checking keyring"
-msgstr ""
+msgstr "Keyring überprüfen"
 
 msgid "Checking integrity"
-msgstr ""
+msgstr "Integrität überprüfen"
 
 msgid "Loading packages"
-msgstr ""
+msgstr "Pakete laden"
 
 msgid "Checking conflicts"
-msgstr ""
+msgstr "Auf Konflikte überprüfen"
 
 msgid "Checking disk space"
-msgstr ""
+msgstr "Festplattenspeicher überprüfen"
 
 msgid "Working"
 msgstr "Berabeitung"

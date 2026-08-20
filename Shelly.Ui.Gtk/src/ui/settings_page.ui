@@ -190,6 +190,24 @@
                               </object>
                             </child>
                             <child>
+                              <object class="GtkBox" id="use_ui_switch_box">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Tray update with ui</property>
+                                    <property name="halign">start</property>
+                                    <property name="hexpand">true</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSwitch" id="use_ui">
+                                    <property name="halign">end</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
                               <object class="GtkBox" id="tray_interval_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
@@ -544,24 +562,6 @@
                                 </child>
                                 <child>
                                   <object class="GtkSwitch" id="shelly_search_switch">
-                                    <property name="halign">end</property>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkBox">
-                                <property name="orientation">horizontal</property>
-                                <property name="spacing">12</property>
-                                <child>
-                                  <object class="GtkLabel">
-                                    <property name="label" translatable="yes">Enable Package Downgrade</property>
-                                    <property name="halign">start</property>
-                                    <property name="hexpand">true</property>
-                                  </object>
-                                </child>
-                                <child>
-                                  <object class="GtkSwitch" id="package_downgrade_switch">
                                     <property name="halign">end</property>
                                   </object>
                                 </child>

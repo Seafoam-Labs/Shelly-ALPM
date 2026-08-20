@@ -31,7 +31,7 @@ POT="${PO_DIR}/${DOMAIN}.pot"
 # Package metadata for the .pot header (only used when no POT exists yet;
 # afterwards the existing header is preserved by the rebase below).
 PKG_NAME="shelly-ui"
-BUGS_ADDRESS="csnyder@seafoamlabs.org"
+BUGS_ADDRESS="csnyder@seafoam-labs.org"
 # -----------------------------------------------------------------------------
 
 NEW_LANGS=()

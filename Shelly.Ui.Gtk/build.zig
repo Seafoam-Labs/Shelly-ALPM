@@ -41,6 +41,15 @@ pub fn build(b: *std.Build) void {
             "Package containing the Flatpak backend for this Shelly build",
         ) orelse "shelly-flatpak-backend",
     );
+    options.addOption(
+        bool,
+        "skip_background_services",
+        b.option(
+            bool,
+            "skip-background-services",
+            "Skip starting background services (icon download, tray); useful for Valgrind leak checks",
+        ) orelse false,
+    );
 
     const exe = b.addExecutable(.{
         .name = "Shelly_Ui_Gtk",
@@ -117,6 +126,23 @@ pub fn build(b: *std.Build) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    const valgrind_cmd = b.addSystemCommand(&.{"valgrind"});
+    valgrind_cmd.addArgs(&.{
+        "--tool=memcheck",
+        "--leak-check=full",
+        "--show-leak-kinds=definite,indirect",
+        "--track-origins=yes",
+        "--num-callers=50",
+        "--error-exitcode=42",
+        "--log-file=valgrind-%p.log",
+    });
+    valgrind_cmd.addPrefixedFileArg("--suppressions=", b.path("valgrind/glib-gtk.supp"));
+    valgrind_cmd.addArtifactArg(exe);
+    if (b.args) |args| valgrind_cmd.addArgs(args);
+
+    const valgrind_step = b.step("valgrind", "Run the app under Valgrind (memcheck) to check for memory leaks");
+    valgrind_step.dependOn(&valgrind_cmd.step);
 
     const root_tests = b.addTest(.{ .root_module = shelly_ui_gtk });
     const exe_tests = b.addTest(.{ .root_module = exe.root_module });

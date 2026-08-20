@@ -364,15 +364,10 @@ pub const ShellyCommands = struct {
     pub fn install_appimage(
         alloc: std.mem.Allocator,
         path: []const u8,
-        install_path: []const u8,
     ) ![]const []const u8 {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
         try argv.append(alloc, "install");
         try argv.append(alloc, "appimage");
-        if (install_path.len > 0) {
-            try argv.append(alloc, "--install-path");
-            try argv.append(alloc, install_path);
-        }
         if (path.len > 0) try argv.append(alloc, path);
         return argv.toOwnedSlice(alloc);
     }
@@ -928,4 +923,10 @@ test "flatpak addon install argv marks addon refs as runtimes" {
     const argv = try ShellyCommands.install_flatpak_ex(std.testing.allocator, "org.example.App.Plugin", .user, "", true);
     defer std.testing.allocator.free(argv);
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App.Plugin", "--user", "--runtime" }, argv);
+}
+
+test "appimage install argv relies on the CLI config for the install path" {
+    const argv = try ShellyCommands.install_appimage(std.testing.allocator, "/tmp/NiceApp.AppImage");
+    defer std.testing.allocator.free(argv);
+    try std.testing.expectEqualSlices([]const u8, &.{ "install", "appimage", "/tmp/NiceApp.AppImage" }, argv);
 }

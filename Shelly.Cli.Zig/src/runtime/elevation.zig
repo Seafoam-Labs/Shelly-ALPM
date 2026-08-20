@@ -39,7 +39,7 @@ pub fn relaunchIfNeeded(
     return @as(?u8, try exitCode(try child.wait(context.io)));
 }
 
-/// Runs the current executable as the user who invoked sudo/doas/pkexec. This
+/// Runs the current executable as the user who invoked sudo/doas/pkexec/run0. This
 /// keeps per-user package stores (notably Flatpak) attached to the calling
 /// user when an aggregate command is already running as root. The child also
 /// receives the calling user's runtime directory and session bus address so
@@ -130,9 +130,14 @@ fn findElevator(context: *const context_module.RuntimeContext) []const u8 {
         if (environment.get("PATH")) |path| {
             if (isOnPath(context, path, "doas")) return "doas";
             if (isOnPath(context, path, "sudo")) return "sudo";
+            if (isOnPath(context, path, "run0")) return "run0";
         }
     }
     return "sudo";
+}
+
+fn isRun0(elevator: []const u8) bool {
+    return std.mem.eql(u8, std.fs.path.basename(elevator), "run0");
 }
 
 fn isOnPath(
@@ -178,6 +183,30 @@ fn buildInvokingUserArguments(
     bus_environment: []const u8,
     arguments: []const []const u8,
 ) ![]const []const u8 {
+    if (isRun0(elevator)) {
+        const result = try allocator.alloc([]const u8, arguments.len + 18);
+        result[0] = elevator;
+        result[1] = "--user";
+        result[2] = user;
+        result[3] = "--setenv";
+        result[4] = home_environment;
+        result[5] = "--setenv";
+        result[6] = config_environment;
+        result[7] = "--setenv";
+        result[8] = data_environment;
+        result[9] = "--setenv";
+        result[10] = cache_environment;
+        result[11] = "--setenv";
+        result[12] = bin_environment;
+        result[13] = "--setenv";
+        result[14] = runtime_environment;
+        result[15] = "--setenv";
+        result[16] = bus_environment;
+        result[17] = executable;
+        @memcpy(result[18..], arguments);
+        return result;
+    }
+
     const result = try allocator.alloc([]const u8, arguments.len + 13);
     result[0] = elevator;
     result[1] = "-u";
@@ -207,7 +236,7 @@ const InvokingIdentity = struct {
 };
 
 /// Resolves the username and uid of the user who invoked the current elevated
-/// process, recognizing sudo, doas, and pkexec. Returns null when the process
+/// process, recognizing sudo, doas, pkexec, and run0. Returns null when the process
 /// was not elevated by one of these tools or when the invoking user was root.
 /// Both returned strings are owned by the caller.
 fn invokingUser(context: *const context_module.RuntimeContext) !?InvokingIdentity {
@@ -341,6 +370,51 @@ test "elevated arguments preserve the canonical invocation" {
     for (expected, elevated) |wanted, actual| try std.testing.expectEqualStrings(wanted, actual);
 }
 
+test "run0 root arguments preserve the canonical invocation" {
+    const arguments = [_][]const u8{ "sync", "standard", "--force" };
+    const elevated = try buildArguments(std.testing.allocator, "run0", "/usr/bin/shelly", &arguments);
+    defer std.testing.allocator.free(elevated);
+
+    const expected = [_][]const u8{ "run0", "/usr/bin/shelly", "sync", "standard", "--force" };
+    try std.testing.expectEqual(expected.len, elevated.len);
+    for (expected, elevated) |wanted, actual| try std.testing.expectEqualStrings(wanted, actual);
+}
+
+test "automatic elevator precedence honors override and PATH discovery" {
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    for ([_][]const u8{ "doas", "sudo", "run0" }) |name| {
+        var fixture = try temporary.dir.createFile(std.testing.io, name, .{
+            .permissions = .executable_file,
+        });
+        fixture.close(std.testing.io);
+    }
+
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const path_length = try temporary.dir.realPath(std.testing.io, &path_buffer);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var environment = std.process.Environ.Map.init(arena.allocator());
+    try environment.put("PATH", path_buffer[0..path_length]);
+    var stdout = std.Io.Writer.Discarding.init(&.{});
+    var stderr = std.Io.Writer.Discarding.init(&.{});
+    var context: context_module.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+        .environment = &environment,
+    };
+
+    try std.testing.expectEqualStrings("doas", findElevator(&context));
+    try temporary.dir.deleteFile(std.testing.io, "doas");
+    try std.testing.expectEqualStrings("sudo", findElevator(&context));
+    try temporary.dir.deleteFile(std.testing.io, "sudo");
+    try std.testing.expectEqualStrings("run0", findElevator(&context));
+    try environment.put("SHELLY_ELEVATOR", "  pkexec \n");
+    try std.testing.expectEqualStrings("pkexec", findElevator(&context));
+}
+
 test "elevation child status maps to shell exit codes" {
     try std.testing.expectEqual(@as(u8, 7), try exitCode(.{ .exited = 7 }));
     try std.testing.expectError(error.ElevationFailed, exitCode(.{ .unknown = 1 }));
@@ -386,6 +460,51 @@ test "calling-user arguments use a clean invoking-user environment" {
     for (expected, actual) |wanted, value| try std.testing.expectEqualStrings(wanted, value);
 }
 
+test "run0 invoking-user arguments use native options" {
+    const arguments = [_][]const u8{ "upgrade", "flatpak", "--no-confirm" };
+    const actual = try buildInvokingUserArguments(
+        std.testing.allocator,
+        "/usr/bin/run0",
+        "tester",
+        "/usr/bin/shelly",
+        "HOME=/home/tester",
+        "XDG_CONFIG_HOME=/home/tester/.config",
+        "XDG_DATA_HOME=/home/tester/.local/share",
+        "XDG_CACHE_HOME=/home/tester/.cache",
+        "XDG_BIN_HOME=/home/tester/.local/bin",
+        "XDG_RUNTIME_DIR=/run/user/1000",
+        "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
+        &arguments,
+    );
+    defer std.testing.allocator.free(actual);
+
+    const expected = [_][]const u8{
+        "/usr/bin/run0",
+        "--user",
+        "tester",
+        "--setenv",
+        "HOME=/home/tester",
+        "--setenv",
+        "XDG_CONFIG_HOME=/home/tester/.config",
+        "--setenv",
+        "XDG_DATA_HOME=/home/tester/.local/share",
+        "--setenv",
+        "XDG_CACHE_HOME=/home/tester/.cache",
+        "--setenv",
+        "XDG_BIN_HOME=/home/tester/.local/bin",
+        "--setenv",
+        "XDG_RUNTIME_DIR=/run/user/1000",
+        "--setenv",
+        "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
+        "/usr/bin/shelly",
+        "upgrade",
+        "flatpak",
+        "--no-confirm",
+    };
+    try std.testing.expectEqual(expected.len, actual.len);
+    for (expected, actual) |wanted, value| try std.testing.expectEqualStrings(wanted, value);
+}
+
 const sample_passwd =
     "root:x:0:0:root:/root:/usr/bin/zsh\n" ++
     "tester:x:1000:1000::/home/tester:/usr/bin/zsh\n" ++
@@ -396,6 +515,18 @@ test "pkexec elevation resolves the invoking identity from passwd" {
     defer arena.deinit();
     var environment = std.process.Environ.Map.init(arena.allocator());
     try environment.put("PKEXEC_UID", "1000");
+
+    const identity = (try invokingIdentity(std.testing.allocator, &environment, sample_passwd)).?;
+    defer identity.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("tester", identity.username);
+    try std.testing.expectEqualStrings("1000", identity.uid);
+}
+
+test "run0 elevation resolves its SUDO_USER invoking identity" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var environment = std.process.Environ.Map.init(arena.allocator());
+    try environment.put("SUDO_USER", "tester");
 
     const identity = (try invokingIdentity(std.testing.allocator, &environment, sample_passwd)).?;
     defer identity.deinit(std.testing.allocator);
