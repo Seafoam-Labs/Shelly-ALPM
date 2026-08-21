@@ -687,6 +687,7 @@ pub fn build(b: *std.Build) void {
             "getAppImagesFromLocalDb leaves native database unchanged",
             "getAppImagesFromLocalDb leaves a malformed database unchanged",
             "removeAppImageFromLocalDb removes an orphaned entry by name",
+            "syncAppImageMeta removes a stale entry when the AppImage file is missing",
             "installAppImage preserves an existing install when staged validation fails",
             "installAppImage atomically replaces a validated AppImage",
             "installAppImage follows a symlinked install directory",

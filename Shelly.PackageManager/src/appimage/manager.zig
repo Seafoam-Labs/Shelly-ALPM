@@ -1134,6 +1134,19 @@ pub const AppImageManager = struct {
         const desktop_app_name = self.cleanDesktopEntries(app_name, appimage_path) catch null;
         defer if (desktop_app_name) |n| self.allocator.free(n);
 
+        try self.removeAppImageIcons(clean_name);
+
+        if (remove_config_files) {
+            self.removeAppConfigDirectories(desktop_app_name);
+        }
+
+        self.refreshDesktopCachesBestEffort(true);
+
+        self.emitStatusFmt(.success, "Removed AppImage {s}.", .{app_name});
+        return true;
+    }
+
+    fn removeAppImageIcons(self: AppImageManager, clean_name: []const u8) !void {
         const data_home = try xdg_paths.xdgDataHome(self.allocator, self.environ);
         defer self.allocator.free(data_home);
         for ([_][]const u8{ iconSubDir(".svg"), iconSubDir(".png") }) |icon_sub_dir| {
@@ -1151,15 +1164,23 @@ pub const AppImageManager = struct {
                 std.Io.Dir.cwd().deleteFile(self.io, icon_path) catch {};
             }
         }
+    }
 
-        if (remove_config_files) {
-            self.removeAppConfigDirectories(desktop_app_name);
-        }
+    fn removeStaleAppImageEntry(self: AppImageManager, app_name: []const u8, appimage_path: []const u8) void {
+        self.removeAppImageFromLocalDb(app_name) catch |err| {
+            std.log.warn("Could not remove stale AppImage metadata for {s}: {s}", .{ app_name, @errorName(err) });
+            return;
+        };
+        self.emitStatusFmt(.warning, "AppImage file for {s} not found; removed stale metadata entry.", .{app_name});
+
+        const desktop_app_name = self.cleanDesktopEntries(app_name, appimage_path) catch null;
+        if (desktop_app_name) |n| self.allocator.free(n);
+
+        const clean_name = self.cleanInvalidNames(app_name) catch return;
+        defer self.allocator.free(clean_name);
+        self.removeAppImageIcons(clean_name) catch {};
 
         self.refreshDesktopCachesBestEffort(true);
-
-        self.emitStatusFmt(.success, "Removed AppImage {s}.", .{app_name});
-        return true;
     }
 
     pub fn syncAppImageMeta(self: AppImageManager, app_image_names: []const []const u8) !bool {
@@ -1224,6 +1245,10 @@ pub const AppImageManager = struct {
                     break :blk false;
                 };
                 if (!moved) {
+                    if (existing != null) {
+                        self.removeStaleAppImageEntry(app_name, appimage_path);
+                        continue;
+                    }
                     std.log.warn("AppImage not found at {s}", .{appimage_path});
                     success = false;
                     continue;
@@ -2696,6 +2721,61 @@ test "removeAppImage removes matching entry from db by name" {
 
     try std.testing.expectEqual(1, result.len);
     try std.testing.expectEqualStrings("KeepMe", result[0].name);
+}
+
+test "syncAppImageMeta removes a stale entry when the AppImage file is missing" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "install" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    const data_home = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "data" });
+    defer std.testing.allocator.free(data_home);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, data_home);
+
+    var environ = std.process.Environ.Map.init(std.testing.allocator);
+    defer environ.deinit();
+    try environ.put("HOME", dir_path);
+    try environ.put("XDG_DATA_HOME", data_home);
+    try environ.put("XDG_CACHE_HOME", dir_path);
+    var environ_block = try environ.createPosixBlock(std.testing.allocator, .{});
+    defer environ_block.deinit(std.testing.allocator);
+    const test_environ: std.process.Environ = .{ .block = environ_block };
+
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "appimages.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = test_environ,
+        .install_directory = install_dir,
+        .local_db_path = db_path,
+    };
+
+    // Seed the database with an entry whose AppImage file no longer exists at
+    // either the install location or the recorded path.
+    try manager.addAppImageToLocalDb(.{
+        .name = "GhostApp",
+        .desktop_name = "Ghost App",
+        .path = "/nonexistent/GhostApp.AppImage",
+    });
+
+    // Syncing a stale entry must succeed and drop the orphaned record instead
+    // of failing the whole operation.
+    const ok = try manager.syncAppImageMeta(&.{"GhostApp"});
+    try std.testing.expect(ok);
+
+    const result = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(result);
+    try std.testing.expectEqual(0, result.len);
 }
 
 test "copyFile duplicates file contents" {
