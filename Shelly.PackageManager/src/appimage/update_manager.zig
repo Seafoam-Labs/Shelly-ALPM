@@ -544,6 +544,14 @@ pub const UpdateManager = struct {
 
         if (response.head.status.class() != .success) return null;
 
+        if (response.head.content_type) |content_type| {
+            if (contentTypeIsNotAppImage(content_type)) {
+                std.log.warn("Static update URL for {s} returned content type '{s}'; it does not point to a downloadable AppImage.", .{ app_name, content_type });
+                self.emitStatusFmt(.warning, "The static update URL for {s} does not point to a downloadable AppImage (content type '{s}').", .{ app_name, content_type });
+                return null;
+            }
+        }
+
         var etag: ?[]const u8 = null;
         var last_modified: ?[]const u8 = null;
 
@@ -561,8 +569,46 @@ pub const UpdateManager = struct {
     }
 
     fn build_static_url(allocator: std.mem.Allocator, app_name: []const u8, url: []const u8, current_version: []const u8, raw_version: []const u8) !?appimage.AppImageUpdate {
-        const version = std.mem.trim(u8, raw_version, "\"");
+        const version = normalizeStaticVersion(raw_version);
         return @as(?appimage.AppImageUpdate, try makeUpdate(allocator, app_name, version, url, current_version));
+    }
+
+    /// Normalizes the version token derived from an HTTP validator header.
+    /// Strips the weak-validator prefix (RFC 7232, e.g. `W/"abc"`) and the
+    /// surrounding quotes from an ETag. Last-Modified dates pass through
+    /// unchanged.
+    fn normalizeStaticVersion(raw_version: []const u8) []const u8 {
+        var version = raw_version;
+        if (version.len >= 2 and (version[0] == 'W' or version[0] == 'w') and version[1] == '/') {
+            version = version[2..];
+        }
+        return std.mem.trim(u8, version, "\"");
+    }
+
+    /// Returns true when the Content-Type indicates the response is a document
+    /// (web page, JSON feed, etc.) rather than a downloadable AppImage binary.
+    /// A missing or unrecognized type is treated as acceptable because many
+    /// servers serve binaries with unusual or absent Content-Type values.
+    fn contentTypeIsNotAppImage(content_type: []const u8) bool {
+        var mime = content_type;
+        if (std.mem.indexOfScalar(u8, mime, ';')) |idx| mime = mime[0..idx];
+        mime = std.mem.trim(u8, mime, &std.ascii.whitespace);
+        if (mime.len == 0) return false;
+
+        const text_prefix = "text/";
+        if (mime.len >= text_prefix.len and std.ascii.eqlIgnoreCase(mime[0..text_prefix.len], text_prefix)) return true;
+
+        const document_types = [_][]const u8{
+            "application/json",
+            "application/xml",
+            "application/xhtml+xml",
+            "application/rss+xml",
+            "application/atom+xml",
+        };
+        for (document_types) |t| {
+            if (std.ascii.eqlIgnoreCase(mime, t)) return true;
+        }
+        return false;
     }
 
     fn getSystemArchitecture() []const u8 {
@@ -1863,6 +1909,49 @@ test "build_static_url: download_url is preserved verbatim" {
     defer if (result) |r| r.deinit(std.testing.allocator);
     try std.testing.expect(result != null);
     try std.testing.expectEqualStrings(url, result.?.download_url);
+}
+
+test "build_static_url: strips weak etag prefix and quotes" {
+    const result = try UpdateManager.build_static_url(std.testing.allocator, "myapp", "https://example.com/myapp.AppImage", "0.0.0", "W/\"03a6517f9aeed6a2de262f80d7857df4\"");
+    defer if (result) |r| r.deinit(std.testing.allocator);
+    try std.testing.expect(result != null);
+    try std.testing.expectEqualStrings("03a6517f9aeed6a2de262f80d7857df4", result.?.version);
+    try std.testing.expect(result.?.is_update_available);
+}
+
+test "build_static_url: weak etag matching current version reports no update" {
+    const result = try UpdateManager.build_static_url(std.testing.allocator, "myapp", "https://example.com/myapp.AppImage", "abc123", "W/\"abc123\"");
+    defer if (result) |r| r.deinit(std.testing.allocator);
+    try std.testing.expect(result != null);
+    try std.testing.expect(!result.?.is_update_available);
+}
+
+test "normalizeStaticVersion: strips weak prefix and quotes, passes dates through" {
+    try std.testing.expectEqualStrings("abc", UpdateManager.normalizeStaticVersion("W/\"abc\""));
+    try std.testing.expectEqualStrings("abc", UpdateManager.normalizeStaticVersion("w/\"abc\""));
+    try std.testing.expectEqualStrings("abc", UpdateManager.normalizeStaticVersion("\"abc\""));
+    try std.testing.expectEqualStrings("Mon, 01 Jan 2025 00:00:00 GMT", UpdateManager.normalizeStaticVersion("Mon, 01 Jan 2025 00:00:00 GMT"));
+    try std.testing.expectEqualStrings("", UpdateManager.normalizeStaticVersion(""));
+}
+
+test "contentTypeIsNotAppImage: rejects html text and feed types" {
+    try std.testing.expect(UpdateManager.contentTypeIsNotAppImage("text/html"));
+    try std.testing.expect(UpdateManager.contentTypeIsNotAppImage("text/html; charset=utf-8"));
+    try std.testing.expect(UpdateManager.contentTypeIsNotAppImage("TEXT/HTML"));
+    try std.testing.expect(UpdateManager.contentTypeIsNotAppImage("text/plain"));
+    try std.testing.expect(UpdateManager.contentTypeIsNotAppImage("application/json"));
+    try std.testing.expect(UpdateManager.contentTypeIsNotAppImage("application/json; charset=utf-8"));
+    try std.testing.expect(UpdateManager.contentTypeIsNotAppImage("application/xml"));
+    try std.testing.expect(UpdateManager.contentTypeIsNotAppImage("application/xhtml+xml"));
+}
+
+test "contentTypeIsNotAppImage: accepts binary and unknown types" {
+    try std.testing.expect(!UpdateManager.contentTypeIsNotAppImage("application/octet-stream"));
+    try std.testing.expect(!UpdateManager.contentTypeIsNotAppImage("application/x-appimage"));
+    try std.testing.expect(!UpdateManager.contentTypeIsNotAppImage("application/vnd.appimage"));
+    try std.testing.expect(!UpdateManager.contentTypeIsNotAppImage("application/x-executable"));
+    try std.testing.expect(!UpdateManager.contentTypeIsNotAppImage("application/x-iso9660-appimage"));
+    try std.testing.expect(!UpdateManager.contentTypeIsNotAppImage(""));
 }
 
 test "parse_github_response: is_update_available true when current is Unknown" {
