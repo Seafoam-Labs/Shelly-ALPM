@@ -171,6 +171,14 @@ pub const AppImagePage = extern struct {
         gtk.DropDown.setModel(p.update_type_drop, type_strings.as(gio.ListModel));
         type_strings.as(gobject.Object).unref();
 
+        _ = gobject.Object.signals.notify.connect(
+            p.update_type_drop.as(gobject.Object),
+            *Self,
+            &on_update_type_changed,
+            self,
+            .{ .detail = "selected" },
+        );
+
         const drop_target = gtk.DropTarget.new(gio.File.getGObjectType(), .{ .copy = true });
         _ = gtk.DropTarget.signals.drop.connect(drop_target, *Self, &on_file_drop, self, .{});
         _ = gtk.DropTarget.signals.enter.connect(drop_target, *Self, &on_drag_enter, self, .{});
@@ -545,6 +553,7 @@ pub const AppImagePage = extern struct {
 
         gtk.Widget.setVisible(p.update_url_error.as(gtk.Widget), 0);
         gtk.Widget.removeCssClass(p.update_url_entry.as(gtk.Widget), "error");
+        update_strategy_controls(self);
 
         gtk.CheckButton.setActive(p.prerelease_check, @intFromBool(app.AllowPrerelease));
         gtk.Editable.setText(p.install_path_entry.as(gtk.Editable), if (app.Path) |path| c_string.cstr(&buf, path) else "");
@@ -561,16 +570,39 @@ pub const AppImagePage = extern struct {
         gtk.Widget.setVisible(p.list_view, 1);
     }
 
+    fn selectedUpdateType(p: *Private) UpdateType {
+        const selected = gtk.DropDown.getSelected(p.update_type_drop);
+        if (selected <= @intFromEnum(UpdateType.Forgejo)) {
+            return @enumFromInt(@as(u8, @intCast(selected)));
+        }
+        return .None;
+    }
+
+    fn update_strategy_controls(self: *Self) void {
+        const p = self.priv();
+        const is_none = selectedUpdateType(p) == .None;
+        const sensitive: c_int = if (is_none) 0 else 1;
+
+        gtk.Widget.setSensitive(p.update_url_entry.as(gtk.Widget), sensitive);
+        gtk.Widget.setSensitive(p.prerelease_check.as(gtk.Widget), sensitive);
+
+        if (is_none) {
+            gtk.Editable.setText(p.update_url_entry.as(gtk.Editable), "");
+            gtk.Widget.setVisible(p.update_url_error.as(gtk.Widget), 0);
+            gtk.Widget.removeCssClass(p.update_url_entry.as(gtk.Widget), "error");
+        }
+    }
+
+    fn on_update_type_changed(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        update_strategy_controls(self);
+    }
+
     fn validateUpdateConfig(self: *Self) bool {
         const p = self.priv();
         const text = std.mem.span(gtk.Editable.getText(p.update_url_entry.as(gtk.Editable)));
         const trimmed = std.mem.trim(u8, text, &std.ascii.whitespace);
 
-        const selected = gtk.DropDown.getSelected(p.update_type_drop);
-        const update_type: UpdateType = if (selected <= @intFromEnum(UpdateType.Forgejo))
-            @enumFromInt(@as(u8, @intCast(selected)))
-        else
-            .None;
+        const update_type = selectedUpdateType(p);
 
         var error_text: ?[:0]const u8 = null;
         switch (update_type) {
@@ -762,14 +794,12 @@ pub const AppImagePage = extern struct {
             std.mem.span(gtk.Editable.getText(p.update_url_entry.as(gtk.Editable))),
             &std.ascii.whitespace,
         );
-        const selected = gtk.DropDown.getSelected(p.update_type_drop);
-        const update_type: UpdateType = if (selected <= @intFromEnum(UpdateType.Forgejo))
-            @enumFromInt(@as(u8, @intCast(selected)))
-        else
-            .None;
+        const update_type = selectedUpdateType(p);
         const prerelease = gtk.CheckButton.getActive(p.prerelease_check) != 0;
 
-        const argv = ShellyCommands.configure_appimage(std.heap.c_allocator, app.Name, text, update_type, prerelease) catch return;
+        const url: []const u8 = if (update_type == .None) "" else text;
+
+        const argv = ShellyCommands.configure_appimage(std.heap.c_allocator, app.Name, url, update_type, prerelease) catch return;
         defer std.heap.c_allocator.free(argv);
 
         var names: std.ArrayListUnmanaged([]const u8) = .empty;
