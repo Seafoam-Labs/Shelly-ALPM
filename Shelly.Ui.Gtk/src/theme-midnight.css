@@ -3,3 +3,11 @@
 .theme-midnight {
   background-color: @midnight_window_bg;
 }
+
+.theme-midnight .app-headerbar {
+  background-color: alpha(#0b1627, 0.78);
+  background-image: linear-gradient(to bottom, alpha(white, 0.07), alpha(white, 0.01));
+  border-bottom: 1px solid alpha(white, 0.10);
+  box-shadow: 0 8px 24px alpha(black, 0.24);
+  color: #f3f6fc;
+}

@@ -4,10 +4,22 @@
   <property name="title" translatable="yes">Shelly</property>
   <property name="default-width">700</property>
   <property name="default-height">450</property>
+  <child type="titlebar">
+    <object class="GtkHeaderBar" id="app_headerbar">
+      <property name="show-title-buttons">true</property>
+      <property name="decoration-layout">:minimize,maximize,close</property>
+      <style>
+        <class name="app-headerbar"/>
+      </style>
+    </object>
+  </child>
   <child>
     <object class="GtkOverlay" id="root_overlay">
       <property name="hexpand">true</property>
       <property name="vexpand">true</property>
+      <style>
+        <class name="app-window-surface"/>
+      </style>
       <child>
         <object class="GtkBox" id="shell_box">
           <property name="hexpand">true</property>

@@ -18,6 +18,8 @@ const UtilitiesPage = @import("pages/utilities_page.zig").UtilitiesPage;
 const TransactionPage = @import("pages/transaction_page.zig").TransactionPage;
 const TransactionRequest = @import("pages/transaction_page.zig").TransactionRequest;
 const runtime = @import("services/runtime.zig");
+const theme_manager = @import("services/theme_manager.zig");
+const AppTheme = @import("models/shelly_config.zig").AppTheme;
 const NavMode = @import("models/shelly_config.zig").NavMode;
 const ShellyTabs = @import("models/shelly_config.zig").ShellyTabs;
 const translations = @import("helpers/translations.zig");
@@ -100,6 +102,8 @@ pub const ShellyWindow = extern struct {
         const svc = runtime.config orelse return;
         const cfg = svc.get() catch return;
 
+        self.applyTheme(cfg.Theme);
+
         setNavEnabled(self, "recommend", cfg.RecommendedEnabled);
         setNavEnabled(self, "aur", cfg.AurEnabled);
         setNavEnabled(self, "flatpak", cfg.FlatPackEnabled);
@@ -115,6 +119,10 @@ pub const ShellyWindow = extern struct {
                 @intCast(cfg.WindowLastHeight),
             );
         }
+    }
+
+    pub fn applyTheme(self: *ShellyWindow, theme: AppTheme) void {
+        theme_manager.apply(self.as(gtk.Widget), theme);
     }
 
     fn on_close_request(_: *gtk.Window, self: *ShellyWindow) callconv(.c) c_int {
