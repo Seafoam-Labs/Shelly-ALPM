@@ -8,6 +8,7 @@ const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const ShellyTabs = @import("../models/shelly_config.zig").ShellyTabs;
 const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
 const NavMode = @import("../models/shelly_config.zig").NavMode;
+const AppTheme = @import("../models/shelly_config.zig").AppTheme;
 const ConfigResolver = @import("../services/ui_config_resolver.zig").ConfigResolver;
 const CliConfigResolver = @import("../services/cli_config_resolver.zig").CliConfigResolver;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
@@ -86,6 +87,7 @@ pub const ShellySettingsPage = extern struct {
         default_page_box: *gtk.Box,
         default_page_drop: *gtk.DropDown,
         nav_mode_drop: *gtk.DropDown,
+        theme_drop: *gtk.DropDown,
 
         // Advanced
         remove_cache_switch: *gtk.Switch,
@@ -107,6 +109,7 @@ pub const ShellySettingsPage = extern struct {
         loaded: bool,
         save_guard: bool,
         save_source: c_uint,
+        last_saved_theme: AppTheme,
         support_install_pending: ?SupportFeature,
         support_install_stage: SupportInstallStage,
 
@@ -141,6 +144,7 @@ pub const ShellySettingsPage = extern struct {
         p.loaded = false;
         p.save_guard = false;
         p.save_source = 0;
+        p.last_saved_theme = .classic;
         p.support_install_pending = null;
         p.support_install_stage = .dependencies;
         p.page_filter = .{};
@@ -196,6 +200,13 @@ pub const ShellySettingsPage = extern struct {
             p.nav_mode_drop.as(gobject.Object),
             *Self,
             &on_nav_mode_changed,
+            self,
+            .{ .detail = "selected" },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.theme_drop.as(gobject.Object),
+            *Self,
+            &on_theme_changed,
             self,
             .{ .detail = "selected" },
         );
@@ -345,8 +356,15 @@ pub const ShellySettingsPage = extern struct {
 
         var updated = cfg.*;
         collectIntoConfig(p, arena.allocator(), &updated);
-        try svc.set(updated);
-        try svc.save();
+        svc.set(updated) catch |err| {
+            self.restoreSavedTheme(svc);
+            return err;
+        };
+        svc.save() catch |err| {
+            self.restoreSavedTheme(svc);
+            return err;
+        };
+        p.last_saved_theme = updated.Theme;
 
         const lang_value = language_entries[gtk.DropDown.getSelected(p.language_drop)].value;
         _ = translations.initWithLocale(lang_value);
@@ -357,6 +375,21 @@ pub const ShellySettingsPage = extern struct {
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.applyConfig();
             win.applyDefaultPage();
+        }
+    }
+
+    fn restoreSavedTheme(self: *Self, svc: *ConfigResolver) void {
+        const p = self.priv();
+        if (svc.get()) |current| {
+            restoreTheme(current, p.last_saved_theme);
+        } else |_| {}
+
+        p.save_guard = true;
+        gtk.DropDown.setSelected(p.theme_drop, themeIndex(p.last_saved_theme));
+        p.save_guard = false;
+
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.applyTheme(p.last_saved_theme);
         }
     }
 
@@ -387,13 +420,16 @@ pub const ShellySettingsPage = extern struct {
             !std.mem.eql(u8, updated.Culture, cfg.Culture);
 
         svc.set(updated) catch {
+            self.restoreSavedTheme(svc);
             p.toast.show(.@"error", translations._("Failed to save settings"));
             return;
         };
         svc.save() catch {
+            self.restoreSavedTheme(svc);
             p.toast.show(.@"error", translations._("Failed to save settings"));
             return;
         };
+        p.last_saved_theme = updated.Theme;
 
         const lang_value = language_entries[gtk.DropDown.getSelected(p.language_drop)].value;
         _ = translations.initWithLocale(lang_value);
@@ -425,6 +461,15 @@ pub const ShellySettingsPage = extern struct {
     }
 
     fn on_autosave_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        self.autosave();
+    }
+
+    fn on_theme_changed(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.save_guard or !p.loaded) return;
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.applyTheme(selectedTheme(p));
+        }
         self.autosave();
     }
 
@@ -1083,6 +1128,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "default_page_box", @offsetOf(Private, "default_page_box") },
         .{ "default_page_drop", @offsetOf(Private, "default_page_drop") },
         .{ "nav_mode_drop", @offsetOf(Private, "nav_mode_drop") },
+        .{ "theme_drop", @offsetOf(Private, "theme_drop") },
 
         // Advanced
         .{ "remove_cache_switch", @offsetOf(Private, "remove_cache_switch") },
@@ -1158,10 +1204,37 @@ const NavModeEntry = struct {
     value: NavMode,
 };
 
+const ThemeEntry = struct {
+    label: [:0]const u8,
+    value: AppTheme,
+};
+
+const theme_entries = [_]ThemeEntry{
+    .{ .label = "Classic", .value = .classic },
+    .{ .label = "Midnight", .value = .midnight },
+};
+
 const nav_mode_entries = [_]NavModeEntry{
     .{ .label = "Sidebar", .value = .sidebar },
     .{ .label = "Topbar", .value = .topbar },
 };
+
+fn themeIndex(theme: AppTheme) c_uint {
+    inline for (theme_entries, 0..) |entry, index| {
+        if (entry.value == theme) return @intCast(index);
+    }
+    return 0;
+}
+
+fn selectedTheme(p: *ShellySettingsPage.Private) AppTheme {
+    const index = gtk.DropDown.getSelected(p.theme_drop);
+    if (index >= theme_entries.len) return .classic;
+    return theme_entries[index].value;
+}
+
+fn restoreTheme(cfg: *ShellyConfig, theme: AppTheme) void {
+    cfg.Theme = theme;
+}
 
 const language_entries = [_]struct {
     label: [:0]const u8,
@@ -1185,6 +1258,16 @@ const language_entries = [_]struct {
 };
 
 fn populateDropdowns(p: *ShellySettingsPage.Private) void {
+    const theme_strings = gtk.StringList.new(null);
+    inline for (theme_entries) |entry| {
+        const label = switch (entry.value) {
+            .classic => translations._("Classic"),
+            .midnight => translations._("Midnight"),
+        };
+        gtk.StringList.append(theme_strings, label);
+    }
+    gtk.DropDown.setModel(p.theme_drop, theme_strings.as(gio.ListModel));
+
     const nav_strings = gtk.StringList.new(null);
     inline for (nav_mode_entries) |entry| {
         gtk.StringList.append(nav_strings, entry.label);
@@ -1317,6 +1400,8 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.shelly_icons_switch, cfg.ShellyIconsEnabled);
     setSwitch(p.symbolic_tray_switch, cfg.UseSymbolicTray);
 
+    gtk.DropDown.setSelected(p.theme_drop, themeIndex(cfg.Theme));
+    p.last_saved_theme = cfg.Theme;
     gtk.DropDown.setSelected(p.nav_mode_drop, navModeIndex(cfg.NavMode));
     gtk.DropDown.setSelected(p.language_drop, languageIndex(cfg.Culture));
 
@@ -1389,6 +1474,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
 
     cfg.ShellyIconsEnabled = getSwitch(p.shelly_icons_switch);
     cfg.UseSymbolicTray = getSwitch(p.symbolic_tray_switch);
+    cfg.Theme = selectedTheme(p);
 
     const idx = gtk.DropDown.getSelected(p.default_page_drop);
     if (idx != std.math.maxInt(u32)) {
@@ -1407,6 +1493,27 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.ShellySearchEnabled = getSwitch(p.shelly_search_switch);
     cfg.PackageManagementRemoveConfigs = getSwitch(p.remove_cache_switch);
     cfg.WebviewEnabled = getSwitch(p.webview_switch);
+}
+
+test "theme dropdown maps both themes" {
+    try std.testing.expectEqual(@as(c_uint, 0), themeIndex(.classic));
+    try std.testing.expectEqual(@as(c_uint, 1), themeIndex(.midnight));
+    try std.testing.expectEqual(AppTheme.classic, theme_entries[0].value);
+    try std.testing.expectEqual(AppTheme.midnight, theme_entries[1].value);
+}
+
+test "theme rollback preserves other settings" {
+    var cfg: ShellyConfig = .{
+        .Theme = .midnight,
+        .AurEnabled = true,
+        .RecommendedEnabled = false,
+    };
+
+    restoreTheme(&cfg, .classic);
+
+    try std.testing.expectEqual(AppTheme.classic, cfg.Theme);
+    try std.testing.expect(cfg.AurEnabled);
+    try std.testing.expect(!cfg.RecommendedEnabled);
 }
 
 test "Flatpak support uses libflatpak and the configured companion backend" {
