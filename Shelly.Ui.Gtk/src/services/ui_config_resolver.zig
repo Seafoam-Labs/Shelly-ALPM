@@ -4,6 +4,7 @@ const shelly_config = @import("../models/shelly_config.zig");
 const ShellyConfig = shelly_config.ShellyConfig;
 const ShellyTabs = shelly_config.ShellyTabs;
 const ViewType = shelly_config.ViewType;
+const AppTheme = shelly_config.AppTheme;
 const xdg_paths = @import("xdg_paths.zig").xdg_paths;
 
 pub const settings_path = "shelly/settings.json";
@@ -438,6 +439,56 @@ test "set then save round-trips nested enum fields" {
     const cfg = try other.get();
     try testing.expectEqual(@as(u8, 2), @intFromEnum(cfg.DefaultPageDropDown));
     try testing.expectEqual(@as(u8, 0), @intFromEnum(cfg.PackageInstallView));
+}
+
+test "theme defaults to classic" {
+    const cfg: ShellyConfig = .{};
+    try testing.expectEqual(AppTheme.classic, cfg.Theme);
+}
+
+test "midnight theme survives save and reload" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+
+    try svc.set(.{ .Theme = .midnight, .AurEnabled = true });
+    try svc.save();
+
+    var other = makeService(&tmp);
+    defer other.deinit();
+    try other.load();
+
+    const cfg = try other.get();
+    try testing.expectEqual(AppTheme.midnight, cfg.Theme);
+    try testing.expect(cfg.AurEnabled);
+}
+
+test "unknown theme falls back to classic without dropping valid fields" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    {
+        var sub_dir = try tmp.dir.createDirPathOpen(testing.io, "shelly", .{});
+        defer sub_dir.close(testing.io);
+        const file = try sub_dir.createFile(testing.io, "settings.json", .{});
+        defer file.close(testing.io);
+        var buf: [256]u8 = undefined;
+        var fw = file.writer(testing.io, &buf);
+        try fw.interface.writeAll(
+            \\{"Theme":"future_theme","RecommendedEnabled":false}
+        );
+        try fw.flush();
+    }
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const cfg = try svc.get();
+    try testing.expectEqual(AppTheme.classic, cfg.Theme);
+    try testing.expectEqual(false, cfg.RecommendedEnabled);
 }
 
 test "ignores unknown fields when loading" {

@@ -8,6 +8,11 @@ pub const NavMode = enum(u8) {
     topbar = 1,
 };
 
+pub const AppTheme = enum(u8) {
+    classic = 0,
+    midnight = 1,
+};
+
 pub const ShellyTabs = enum(u8) {
     packages = 0,
     aur = 1,
@@ -47,6 +52,7 @@ pub const ShellyConfig = struct {
     // Window & View
     DefaultPageDropDown: ShellyTabs = .packages,
     NavMode: NavMode = .sidebar,
+    Theme: AppTheme = .classic,
     // Internal: persisted window geometry, not exposed in settings UI
     WindowLastWidth: i32 = 0,
     WindowLastHeight: i32 = 0,
