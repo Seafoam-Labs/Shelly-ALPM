@@ -6,6 +6,7 @@
     <property name="vexpand">true</property>
     <style>
       <class name="background"/>
+      <class name="transaction-page"/>
     </style>
     <child>
       <object class="GtkOverlay" id="root_overlay">

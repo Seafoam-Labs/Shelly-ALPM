@@ -275,3 +275,36 @@
   color: @midnight_text;
   padding: 3px 8px;
 }
+
+.theme-midnight .settings-section,
+.theme-midnight .transaction-row {
+  background-color: alpha(@midnight_surface_bg, 0.78);
+  border: 1px solid alpha(white, 0.09);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px alpha(black, 0.18), inset 0 1px alpha(white, 0.04);
+  padding: 12px;
+}
+
+.theme-midnight .dialog-surface,
+.theme-midnight .toast-surface {
+  background-color: alpha(@midnight_surface_raised, 0.92);
+  border: 1px solid alpha(white, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px alpha(black, 0.34), inset 0 1px alpha(white, 0.05);
+}
+
+.theme-midnight .status-success {
+  color: @midnight_success;
+}
+
+.theme-midnight .status-warning {
+  color: @midnight_warning;
+}
+
+.theme-midnight .status-error {
+  color: @midnight_danger;
+}
+
+.theme-midnight .lockout-scrim {
+  background-color: alpha(@midnight_window_bg, 0.68);
+}

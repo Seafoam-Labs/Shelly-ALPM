@@ -198,6 +198,9 @@ pub const TransactionPage = extern struct {
         gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "success");
         gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "error");
         gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "warning");
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "status-success");
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "status-error");
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "status-warning");
         gtk.Widget.setVisible(p.close_button.as(gtk.Widget), 0);
         gtk.Widget.removeCssClass(p.close_button.as(gtk.Widget), "suggested-action");
         gtk.Widget.removeCssClass(p.close_button.as(gtk.Widget), "destructive-action");
@@ -226,6 +229,7 @@ pub const TransactionPage = extern struct {
 
         const card = gtk.Box.new(.vertical, 6);
         gtk.Widget.addCssClass(card.as(gtk.Widget), "pkg-card");
+        gtk.Widget.addCssClass(card.as(gtk.Widget), "transaction-row");
 
         const row_top = gtk.Box.new(.horizontal, 8);
 
@@ -241,6 +245,7 @@ pub const TransactionPage = extern struct {
         gtk.Widget.setHalign(status.as(gtk.Widget), .end);
         gtk.Label.setXalign(status, 1);
         gtk.Widget.addCssClass(status.as(gtk.Widget), "pkg-status");
+        gtk.Widget.addCssClass(status.as(gtk.Widget), "status-warning");
         gtk.Box.append(row_top, status.as(gtk.Widget));
 
         gtk.Box.append(card, row_top.as(gtk.Widget));
@@ -490,14 +495,20 @@ pub const TransactionPage = extern struct {
         stopRowPulse(row);
         gtk.Label.setLabel(row.status_label, translations._("Done"));
         gtk.ProgressBar.setFraction(row.progress, 1.0);
+        gtk.Widget.removeCssClass(row.status_label.as(gtk.Widget), "status-warning");
+        gtk.Widget.removeCssClass(row.status_label.as(gtk.Widget), "status-error");
         gtk.Widget.addCssClass(row.status_label.as(gtk.Widget), "status-done");
+        gtk.Widget.addCssClass(row.status_label.as(gtk.Widget), "status-success");
     }
 
     fn mark_row_failed(row: *PackageRow) void {
         stopRowPulse(row);
         gtk.Label.setLabel(row.status_label, translations._("Failed"));
         gtk.ProgressBar.setFraction(row.progress, 1.0);
+        gtk.Widget.removeCssClass(row.status_label.as(gtk.Widget), "status-warning");
+        gtk.Widget.removeCssClass(row.status_label.as(gtk.Widget), "status-success");
         gtk.Widget.addCssClass(row.status_label.as(gtk.Widget), "status-failed");
+        gtk.Widget.addCssClass(row.status_label.as(gtk.Widget), "status-error");
     }
 
     const Outcome = enum { success, failed, cancelled };
@@ -515,13 +526,22 @@ pub const TransactionPage = extern struct {
             .failed => "error",
             .cancelled => "warning",
         };
+        const status_tone: [:0]const u8 = switch (outcome) {
+            .success => "status-success",
+            .failed => "status-error",
+            .cancelled => "status-warning",
+        };
 
         gtk.Image.setFromIconName(p.status_icon, icon);
         gtk.Widget.setVisible(p.status_icon.as(gtk.Widget), 1);
         gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "success");
         gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "error");
         gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "warning");
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "status-success");
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "status-error");
+        gtk.Widget.removeCssClass(p.status_icon.as(gtk.Widget), "status-warning");
         gtk.Widget.addCssClass(p.status_icon.as(gtk.Widget), tone);
+        gtk.Widget.addCssClass(p.status_icon.as(gtk.Widget), status_tone);
 
         gtk.Widget.removeCssClass(p.close_button.as(gtk.Widget), "suggested-action");
         gtk.Widget.removeCssClass(p.close_button.as(gtk.Widget), "destructive-action");

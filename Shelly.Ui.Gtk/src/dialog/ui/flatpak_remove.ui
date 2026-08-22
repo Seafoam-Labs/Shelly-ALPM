@@ -6,6 +6,7 @@
     <property name="vexpand">true</property>
     <property name="halign">center</property>
     <property name="valign">center</property>
+    <style><class name="dialog-surface"/></style>
     <child>
       <object class="GtkFrame">
         <property name="halign">center</property>

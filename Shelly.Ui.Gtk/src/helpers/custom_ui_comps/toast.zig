@@ -103,6 +103,7 @@ pub const Toast = extern struct {
 
         const card = gtk.Box.new(.horizontal, 10);
         gtk.Widget.addCssClass(card.as(gtk.Widget), "toast-card");
+        gtk.Widget.addCssClass(card.as(gtk.Widget), "toast-surface");
         gtk.Widget.setMarginStart(card.as(gtk.Widget), 12);
         gtk.Widget.setMarginEnd(card.as(gtk.Widget), 12);
         gtk.Widget.setMarginTop(card.as(gtk.Widget), 8);
@@ -209,7 +210,16 @@ pub const Toast = extern struct {
         gtk.Widget.removeCssClass(p.card.as(gtk.Widget), "success");
         gtk.Widget.removeCssClass(p.card.as(gtk.Widget), "warning");
         gtk.Widget.removeCssClass(p.card.as(gtk.Widget), "error");
+        gtk.Widget.removeCssClass(p.card.as(gtk.Widget), "status-success");
+        gtk.Widget.removeCssClass(p.card.as(gtk.Widget), "status-warning");
+        gtk.Widget.removeCssClass(p.card.as(gtk.Widget), "status-error");
         gtk.Widget.addCssClass(p.card.as(gtk.Widget), @tagName(item.kind));
+        switch (item.kind) {
+            .info => {},
+            .success => gtk.Widget.addCssClass(p.card.as(gtk.Widget), "status-success"),
+            .warning => gtk.Widget.addCssClass(p.card.as(gtk.Widget), "status-warning"),
+            .@"error" => gtk.Widget.addCssClass(p.card.as(gtk.Widget), "status-error"),
+        }
 
         gtk.Label.setLabel(p.message_label, item.message.ptr);
 

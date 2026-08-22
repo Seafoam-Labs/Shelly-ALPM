@@ -10,6 +10,7 @@
     <property name="margin-bottom">20</property>
     <property name="margin-start">20</property>
     <property name="margin-end">20</property>
+    <style><class name="update-page"/></style>
     <child>
       <object class="GtkBox">
         <property name="spacing">12</property>
@@ -152,6 +153,7 @@
             <property name="spacing">10</property>
             <property name="halign">center</property>
             <property name="valign">center</property>
+            <style><class name="status-success"/></style>
             <child>
               <object class="GtkImage">
                 <property name="icon-name">object-select-symbolic</property>
@@ -172,6 +174,7 @@
             <property name="spacing">10</property>
             <property name="halign">center</property>
             <property name="valign">center</property>
+            <style><class name="status-error"/></style>
             <child>
               <object class="GtkImage">
                 <property name="icon-name">dialog-error-symbolic</property>

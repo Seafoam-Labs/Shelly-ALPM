@@ -4,6 +4,7 @@
   <template class="ShellyWelcomePage" parent="GtkBox">
     <style>
       <class name="welcome-screen"/>
+      <class name="welcome-page"/>
     </style>
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>

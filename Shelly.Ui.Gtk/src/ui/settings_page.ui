@@ -3,6 +3,7 @@
   <requires lib="gtk" version="4.0"/>
   <template class="ShellySettingsPage" parent="GtkBox">
     <property name="orientation">vertical</property>
+    <style><class name="settings-page"/></style>
     <child>
       <object class="GtkOverlay" id="page_overlay">
         <property name="hexpand">true</property>
@@ -45,6 +46,7 @@
                             <property name="vexpand">true</property>
                             <property name="halign">center</property>
                             <property name="width-request">600</property>
+                            <style><class name="settings-section"/></style>
                             <child>
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
@@ -360,6 +362,7 @@
                             <property name="vexpand">true</property>
                             <property name="halign">center</property>
                             <property name="width-request">600</property>
+                            <style><class name="settings-section"/></style>
                             <child>
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
@@ -530,6 +533,7 @@
                             <property name="vexpand">true</property>
                             <property name="halign">center</property>
                             <property name="width-request">600</property>
+                            <style><class name="settings-section"/></style>
                             <child>
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>

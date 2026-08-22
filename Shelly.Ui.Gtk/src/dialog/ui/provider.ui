@@ -4,6 +4,7 @@
     <property name="orientation">vertical</property>
     <property name="halign">center</property>
     <property name="valign">center</property>
+    <style><class name="dialog-surface"/></style>
     <child>
       <object class="GtkFrame">
         <property name="width-request">440</property>

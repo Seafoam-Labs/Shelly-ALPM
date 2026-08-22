@@ -3,6 +3,7 @@
   <requires lib="gtk" version="4.0"/>
   <template class="ShellyUtilitiesPage" parent="GtkBox">
     <property name="orientation">vertical</property>
+    <style><class name="utilities-page"/></style>
     <child>
       <object class="GtkOverlay" id="page_overlay">
         <property name="hexpand">true</property>
@@ -49,6 +50,7 @@
                     <property name="halign">center</property>
                     <property name="hexpand">true</property>
                     <property name="width-request">600</property>
+                    <style><class name="settings-section"/></style>
                     <child>
                       <object class="GtkBox">
                         <property name="orientation">horizontal</property>

@@ -382,6 +382,7 @@ pub const UpdatePage = extern struct {
     fn on_row_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, self: *Self) callconv(.c) void {
         const list_item = gobject.ext.cast(gtk.ListItem, item) orelse return;
         const grid = gtk.Grid.new();
+        gtk.Widget.addCssClass(grid.as(gtk.Widget), "package-row");
         gtk.Widget.setMarginStart(grid.as(gtk.Widget), 12);
         gtk.Widget.setMarginEnd(grid.as(gtk.Widget), 12);
         gtk.Widget.setMarginTop(grid.as(gtk.Widget), 10);
