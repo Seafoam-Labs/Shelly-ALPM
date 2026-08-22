@@ -255,6 +255,7 @@ pub const ShellyWindow = extern struct {
         const p = self.private();
         const rail = gtk.Box.new(.vertical, 6);
         gtk.Widget.addCssClass(rail.as(gtk.Widget), "nav-rail");
+        gtk.Widget.addCssClass(rail.as(gtk.Widget), "app-sidebar");
         gtk.Widget.setMarginTop(rail.as(gtk.Widget), 8);
         gtk.Widget.setMarginBottom(rail.as(gtk.Widget), 8);
         gtk.Widget.setMarginStart(rail.as(gtk.Widget), 6);
@@ -311,6 +312,7 @@ pub const ShellyWindow = extern struct {
         const p = self.private();
         const bar = gtk.Box.new(.horizontal, 4);
         gtk.Widget.addCssClass(bar.as(gtk.Widget), "nav-topbar");
+        gtk.Widget.addCssClass(bar.as(gtk.Widget), "app-topbar");
         gtk.Widget.setHexpand(bar.as(gtk.Widget), 1);
         gtk.Widget.setMarginTop(bar.as(gtk.Widget), 6);
         gtk.Widget.setMarginBottom(bar.as(gtk.Widget), 6);
@@ -399,6 +401,7 @@ pub const ShellyWindow = extern struct {
         gtk.Button.setChild(btn, box.as(gtk.Widget));
         gtk.Widget.addCssClass(btn.as(gtk.Widget), "flat");
         gtk.Widget.addCssClass(btn.as(gtk.Widget), "nav-btn");
+        gtk.Widget.addCssClass(btn.as(gtk.Widget), "app-nav-button");
 
         const nb = std.heap.c_allocator.create(NavButton) catch unreachable;
         nb.* = .{
