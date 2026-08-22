@@ -171,3 +171,28 @@
   outline-offset: 2px;
   box-shadow: 0 0 0 3px alpha(@midnight_accent, 0.24);
 }
+
+.theme-midnight .recommended-page.content-surface {
+  background-color: transparent;
+}
+
+.theme-midnight .package-card {
+  background-color: alpha(@midnight_surface_raised, 0.88);
+  border: 1px solid alpha(white, 0.09);
+  border-radius: 12px;
+  box-shadow: 0 8px 22px alpha(black, 0.20), inset 0 1px alpha(white, 0.04);
+}
+
+.theme-midnight .package-card:hover {
+  background-color: alpha(@midnight_surface_raised, 0.96);
+  border-color: alpha(@midnight_accent, 0.55);
+}
+
+.theme-midnight .package-card-content {
+  color: @midnight_text;
+}
+
+.theme-midnight .section-title {
+  color: @midnight_text;
+  font-weight: 700;
+}

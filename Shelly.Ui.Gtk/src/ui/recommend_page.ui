@@ -9,6 +9,10 @@
     <property name="margin-bottom">10</property>
     <property name="margin-start">10</property>
     <property name="margin-end">10</property>
+    <style>
+      <class name="recommended-page"/>
+      <class name="content-surface"/>
+    </style>
     <child>
       <object class="GtkBox" id="header_box">
         <property name="orientation">horizontal</property>

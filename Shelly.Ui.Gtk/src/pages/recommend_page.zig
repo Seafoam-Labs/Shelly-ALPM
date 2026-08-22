@@ -238,6 +238,7 @@ pub const RecommendPage = extern struct {
             const header = gtk.Label.new(c_string.cstr(&nbuf, cat.name));
             gtk.Widget.setHalign(header.as(gtk.Widget), .start);
             gtk.Widget.addCssClass(header.as(gtk.Widget), "title-4");
+            gtk.Widget.addCssClass(header.as(gtk.Widget), "section-title");
             gtk.Box.append(section, header.as(gtk.Widget));
 
             const flow = gtk.FlowBox.new();
@@ -263,6 +264,7 @@ pub const RecommendPage = extern struct {
         const p = self.priv();
 
         const content = gtk.Box.new(.horizontal, 10);
+        gtk.Widget.addCssClass(content.as(gtk.Widget), "package-card-content");
         gtk.Widget.setMarginTop(content.as(gtk.Widget), 8);
         gtk.Widget.setMarginBottom(content.as(gtk.Widget), 8);
         gtk.Widget.setMarginStart(content.as(gtk.Widget), 10);
@@ -278,6 +280,7 @@ pub const RecommendPage = extern struct {
         gtk.Image.setPixelSize(image, 48);
         gtk.Widget.setValign(image.as(gtk.Widget), .center);
         gtk.Widget.addCssClass(image.as(gtk.Widget), "icon-dropshadow");
+        gtk.Widget.addCssClass(image.as(gtk.Widget), "package-icon");
         gtk.Box.append(content, image.as(gtk.Widget));
 
         const text_box = gtk.Box.new(.vertical, 0);
@@ -353,6 +356,7 @@ pub const RecommendPage = extern struct {
         gtk.Widget.setHexpand(frame.as(gtk.Widget), 1);
         gtk.Widget.setHalign(frame.as(gtk.Widget), .fill);
         gtk.Widget.addCssClass(frame.as(gtk.Widget), "card");
+        gtk.Widget.addCssClass(frame.as(gtk.Widget), "package-card");
 
         return frame.as(gtk.Widget);
     }
