@@ -1,0 +1,5 @@
+[Desktop Action ShellyManage]
+# TRANSLATORS: right-click action added to every installed Flatpak app
+Name=Manage in Shelly
+Icon=shelly
+Exec=/usr/bin/shelly-ui --page flatpak-install

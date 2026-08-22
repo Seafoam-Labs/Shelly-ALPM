@@ -107,6 +107,28 @@ jobs:
             fi
           done
 
+      - name: Generate localized desktop entries
+        run: |
+          (
+            cd packaging/desktop
+            : > po/LINGUAS
+            for po_file in po/*.po; do
+              if [ -f "$po_file" ]; then
+                basename "$po_file" .po >> po/LINGUAS
+              fi
+            done
+            for template in *.desktop.in; do
+              msgfmt --desktop --template="$template" -d po -o "${template%.in}"
+              sed -i '/^#/d' "${template%.in}"
+            done
+            # msgfmt exits 0 even when it merged nothing, so check the result
+            if [ -s po/LINGUAS ] && ! grep -q '^[A-Za-z-]\{1,\}\[[a-zA-Z_@]\{1,\}\]=' com.shellyorg.shelly.desktop; then
+              echo "error: no translation was merged into the desktop entries" >&2
+              exit 1
+            fi
+          )
+          install -m644 packaging/desktop/*.desktop publish/shelly-ui/
+
       - name: Publish Shelly.Notifications.Zig
         run: |
           (cd Shelly.Notifications.Zig && zig build --verbose \

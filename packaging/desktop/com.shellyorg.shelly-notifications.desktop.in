@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Shelly Notifications
+Comment=Notification service for Shelly package manager
+Exec=/usr/bin/shelly-notifications
+Icon=shelly-tray
+Categories=System;Utility;
+# TRANSLATORS: semicolon-separated search terms. A translated list REPLACES the
+# English one, so keep the English words and append the translated ones.
+Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
+Terminal=false
+NoDisplay=true

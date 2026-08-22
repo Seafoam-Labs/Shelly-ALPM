@@ -141,6 +141,15 @@ Navigate to:
 
 This folder contains the localization  files used by the application.
 
+### Launcher entries
+
+The app menu entry, its right-click actions and the notification service entry
+are generated from the templates in `packaging/desktop/`. To translate them, copy
+`packaging/desktop/po/shelly-desktop.pot` to `packaging/desktop/po/<lang>.po` and
+fill it in. Use the plain language code (`ru`, not `ru_RU`) unless the country
+really matters, so the translation also applies to `ru_UA`, `ru_BY` and so on.
+The packaging picks up every po file in that folder automatically.
+
 ### Build and Test
 
 1. Build the application

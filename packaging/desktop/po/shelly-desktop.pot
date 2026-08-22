@@ -1,0 +1,59 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the shelly package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: shelly 3.0.6\n"
+"Report-Msgid-Bugs-To: https://github.com/Seafoam-Labs/Shelly-ALPM/issues\n"
+"POT-Creation-Date: 2026-08-23 00:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. TRANSLATORS: product name, keep as-is
+#: com.shellyorg.shelly.desktop.in:4
+msgid "Shelly"
+msgstr ""
+
+#: com.shellyorg.shelly.desktop.in:5
+msgid "A Modern Arch Package Manager"
+msgstr ""
+
+#. TRANSLATORS: semicolon-separated search terms. A translated list REPLACES the
+#. English one, so keep the English words and append the translated ones.
+#: com.shellyorg.shelly.desktop.in:11
+#: com.shellyorg.shelly-notifications.desktop.in:10
+msgid "program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;"
+msgstr ""
+
+#: com.shellyorg.shelly.desktop.in:18
+msgid "Flatpak Install"
+msgstr ""
+
+#: com.shellyorg.shelly.desktop.in:23
+msgid "Flatpak Update"
+msgstr ""
+
+#: com.shellyorg.shelly.desktop.in:28
+msgid "Flatpak Remove"
+msgstr ""
+
+#: com.shellyorg.shelly-notifications.desktop.in:3
+msgid "Shelly Notifications"
+msgstr ""
+
+#: com.shellyorg.shelly-notifications.desktop.in:4
+msgid "Notification service for Shelly package manager"
+msgstr ""
+
+#. TRANSLATORS: right-click action added to every installed Flatpak app
+#: com.shellyorg.shelly-flatpak-action.desktop.in:3
+msgid "Manage in Shelly"
+msgstr ""

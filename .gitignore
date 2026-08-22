@@ -14,3 +14,7 @@ Shelly.Notifications.Zig/build/
 .codex-zig-cache/
 .codex-zig-global-cache/
 .qwen/settings.json
+
+# Desktop entries generated from packaging/desktop/*.desktop.in
+packaging/desktop/*.desktop
+packaging/desktop/po/LINGUAS

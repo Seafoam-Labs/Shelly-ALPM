@@ -1,0 +1,58 @@
+# Russian translation for the Shelly desktop entries.
+# This file is distributed under the same license as the shelly package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: shelly 3.0.6\n"
+"Report-Msgid-Bugs-To: https://github.com/Seafoam-Labs/Shelly-ALPM/issues\n"
+"POT-Creation-Date: 2026-08-23 00:44+0200\n"
+"PO-Revision-Date: 2026-08-23 00:00+0200\n"
+"Last-Translator: Wehrwolfmann\n"
+"Language-Team: Russian\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<="
+"4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+
+#. TRANSLATORS: product name, keep as-is
+#: com.shellyorg.shelly.desktop.in:4
+msgid "Shelly"
+msgstr ""
+
+#: com.shellyorg.shelly.desktop.in:5
+msgid "A Modern Arch Package Manager"
+msgstr "Современный менеджер пакетов для Arch"
+
+#. TRANSLATORS: semicolon-separated search terms. A translated list REPLACES the
+#. English one, so keep the English words and append the translated ones.
+#: com.shellyorg.shelly.desktop.in:11
+#: com.shellyorg.shelly-notifications.desktop.in:10
+msgid "program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;"
+msgstr "program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;программа;приложение;магазин;репозиторий;пакет;добавить;установить;удалить;обновить;приложения;"
+
+#: com.shellyorg.shelly.desktop.in:18
+msgid "Flatpak Install"
+msgstr "Установить Flatpak"
+
+#: com.shellyorg.shelly.desktop.in:23
+msgid "Flatpak Update"
+msgstr "Обновить Flatpak"
+
+#: com.shellyorg.shelly.desktop.in:28
+msgid "Flatpak Remove"
+msgstr "Удалить Flatpak"
+
+#: com.shellyorg.shelly-notifications.desktop.in:3
+msgid "Shelly Notifications"
+msgstr "Уведомления Shelly"
+
+#: com.shellyorg.shelly-notifications.desktop.in:4
+msgid "Notification service for Shelly package manager"
+msgstr "Служба уведомлений менеджера пакетов Shelly"
+
+#. TRANSLATORS: right-click action added to every installed Flatpak app
+#: com.shellyorg.shelly-flatpak-action.desktop.in:3
+msgid "Manage in Shelly"
+msgstr "Управлять в Shelly"

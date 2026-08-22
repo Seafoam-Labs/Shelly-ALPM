@@ -61,50 +61,13 @@ package_shelly-bin() {
   install -Dm755 "$srcdir/shelly-key" "$pkgdir/usr/bin/shelly-key"
   install -Dm644 "$srcdir/shellybuild.conf" "$pkgdir/etc/shellybuild.conf"
 
-  # Install desktop entry
-  cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/com.shellyorg.shelly.desktop"
-[Desktop Entry]
-Name=Shelly
-Comment=A Modern Arch Package Manager
-Exec=/usr/bin/shelly-ui %u
-Icon=shelly
-Type=Application
-Categories=System;Utility;
-Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
-MimeType=x-scheme-handler/appstream;x-scheme-handler/flatpak+https;
-Terminal=false
-X-GNOME-UsesNotifications=true
-Actions=FlatpakInstall;FlatpakUpdate;FlatpakRemove;
-
-[Desktop Action FlatpakInstall]
-Name=Flatpak Install
-Icon=flatpak-symbolic
-Exec=/usr/bin/shelly-ui --page flatpak-install
-
-[Desktop Action FlatpakUpdate]
-Name=Flatpak Update
-Icon=flatpak-symbolic
-Exec=/usr/bin/shelly-ui --page flatpak-update
-
-[Desktop Action FlatpakRemove]
-Name=Flatpak Remove
-Icon=flatpak-symbolic
-Exec=/usr/bin/shelly-ui --page flatpak-remove
-EOF
-
-  # Install desktop entry for notification service
-  cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/com.shellyorg.shelly-notifications.desktop"
-[Desktop Entry]
-Name=Shelly Notifications
-Comment=Notification service for Shelly package manager
-Exec=/usr/bin/shelly-notifications
-Icon=shelly-tray
-Type=Application
-Categories=System;Utility;
-Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
-Terminal=false
-NoDisplay=true
-EOF
+  # Install desktop entries (generated from packaging/desktop at release time)
+  install -Dm644 "$srcdir/com.shellyorg.shelly.desktop" \
+    "$pkgdir/usr/share/applications/com.shellyorg.shelly.desktop"
+  install -Dm644 "$srcdir/com.shellyorg.shelly-notifications.desktop" \
+    "$pkgdir/usr/share/applications/com.shellyorg.shelly-notifications.desktop"
+  install -Dm644 "$srcdir/com.shellyorg.shelly-flatpak-action.desktop" \
+    "$pkgdir/usr/share/shelly/flatpak-action.desktop"
 
   # Ensure the polkit directory exists
   install -m0755 -d "${pkgdir}"/usr/share/polkit-1/actions
@@ -187,13 +150,8 @@ for dir in "${FLATPAK_DIRS[@]}"; do
             sed -i '/^\[Desktop Entry\]/a Actions=ShellyManage;' "$dest"
         fi
 
-        cat >> "$dest" << EOF
-
-[Desktop Action ShellyManage]
-Name=Manage in Shelly
-Icon=shelly
-Exec=/usr/bin/shelly-ui --page flatpak-install
-EOF
+        printf '\n' >> "$dest"
+        cat /usr/share/shelly/flatpak-action.desktop >> "$dest"
     done
 done
 

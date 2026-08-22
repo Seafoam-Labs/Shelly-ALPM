@@ -76,6 +76,27 @@ build() {
     lang=$(basename "$po_file" .po)
     msgfmt "$po_file" -o "shelly-notifications-${lang}.mo"
   done
+
+  # Generate the localized desktop entries from the templates in
+  # packaging/desktop. Translations live in packaging/desktop/po; adding a
+  # language means adding one po file there, nothing changes here.
+  (
+    cd packaging/desktop
+    : > po/LINGUAS
+    for po_file in po/*.po; do
+      [ -f "$po_file" ] || continue
+      basename "$po_file" .po >> po/LINGUAS
+    done
+    for template in *.desktop.in; do
+      msgfmt --desktop --template="$template" -d po -o "${template%.in}"
+      sed -i '/^#/d' "${template%.in}"
+    done
+    # msgfmt exits 0 even when it merged nothing, so check the result
+    if [ -s po/LINGUAS ] && ! grep -q '^[A-Za-z-]\{1,\}\[[a-zA-Z_@]\{1,\}\]=' com.shellyorg.shelly.desktop; then
+      echo "error: no translation was merged into the desktop entries" >&2
+      exit 1
+    fi
+  )
 }
 
 check() {
@@ -129,50 +150,13 @@ package_shelly() {
   install -Dm755 out-key/bin/shelly-key "$pkgdir/usr/bin/shelly-key"
   install -Dm644 "$srcdir/shellybuild.conf" "$pkgdir/etc/shellybuild.conf"
 
-  # Install desktop entry
-  cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/com.shellyorg.shelly.desktop"
-[Desktop Entry]
-Name=Shelly
-Comment=A Modern Arch Package Manager
-Exec=/usr/bin/shelly-ui %u
-Icon=shelly
-Type=Application
-Categories=System;Utility;
-Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
-MimeType=x-scheme-handler/appstream;x-scheme-handler/flatpak+https;
-Terminal=false
-X-GNOME-UsesNotifications=true
-Actions=FlatpakInstall;FlatpakUpdate;FlatpakRemove;
-
-[Desktop Action FlatpakInstall]
-Name=Flatpak Install
-Icon=flatpak-symbolic
-Exec=/usr/bin/shelly-ui --page flatpak-install
-
-[Desktop Action FlatpakUpdate]
-Name=Flatpak Update
-Icon=flatpak-symbolic
-Exec=/usr/bin/shelly-ui --page flatpak-update
-
-[Desktop Action FlatpakRemove]
-Name=Flatpak Remove
-Icon=flatpak-symbolic
-Exec=/usr/bin/shelly-ui --page flatpak-remove
-EOF
-
-  # Install desktop entry for notification service
-  cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/com.shellyorg.shelly-notifications.desktop"
-[Desktop Entry]
-Name=Shelly Notifications
-Comment=Notification service for Shelly package manager
-Exec=/usr/bin/shelly-notifications
-Icon=shelly-tray
-Type=Application
-Categories=System;Utility;
-Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
-Terminal=false
-NoDisplay=true
-EOF
+  # Install desktop entries generated in build()
+  install -Dm644 packaging/desktop/com.shellyorg.shelly.desktop \
+    "$pkgdir/usr/share/applications/com.shellyorg.shelly.desktop"
+  install -Dm644 packaging/desktop/com.shellyorg.shelly-notifications.desktop \
+    "$pkgdir/usr/share/applications/com.shellyorg.shelly-notifications.desktop"
+  install -Dm644 packaging/desktop/com.shellyorg.shelly-flatpak-action.desktop \
+    "$pkgdir/usr/share/shelly/flatpak-action.desktop"
 
   # Ensure the polkit directory exists
   install -m0755 -d "${pkgdir}"/usr/share/polkit-1/actions
@@ -263,13 +247,8 @@ for dir in "${FLATPAK_DIRS[@]}"; do
             sed -i '/^\[Desktop Entry\]/a Actions=ShellyManage;' "$dest"
         fi
 
-        cat >> "$dest" << EOF
-
-[Desktop Action ShellyManage]
-Name=Manage in Shelly
-Icon=shelly
-Exec=/usr/bin/shelly-ui --page flatpak-install
-EOF
+        printf '\n' >> "$dest"
+        cat /usr/share/shelly/flatpak-action.desktop >> "$dest"
     done
 done
 
