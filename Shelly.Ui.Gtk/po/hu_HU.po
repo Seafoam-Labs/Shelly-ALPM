@@ -1,8 +1,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
-"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-13 00:37+0200\n"
+"Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
+"POT-Creation-Date: 2026-08-22 04:40+0300\n"
 "PO-Revision-Date: 2026-08-13 11:51+0200\n"
 "Last-Translator: Impostor0729\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -480,6 +480,10 @@ msgstr "Tálcaikon hozzáadása az automatikus indításhoz"
 msgid "Use weekly schedule"
 msgstr "Heti ütemezés használata"
 
+#| msgid "Tray Updates Icon"
+msgid "Tray update with ui"
+msgstr ""
+
 msgid "Tray Check Interval (Hours)"
 msgstr "Tálcaellenőrzési időköz (órákban)"
 
@@ -515,6 +519,9 @@ msgstr ":"
 
 msgid "Look & Feel"
 msgstr "Megjelenés és működés"
+
+msgid "Theme"
+msgstr ""
 
 msgid "Icons Enabled"
 msgstr "Ikonok engedélyezve"
@@ -566,9 +573,6 @@ msgstr "Megerősítés kihagyása"
 msgid "Enable Shelly Search"
 msgstr "Shelly keresés engedélyezése"
 
-msgid "Enable Package Downgrade"
-msgstr "Korábbi verzióra váltás engedélyezése"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Webview vizualizáció engedélyezése (kísérleti)"
 
@@ -595,6 +599,9 @@ msgstr "Támogató"
 
 msgid "Toggle output"
 msgstr "Kimenet váltása"
+
+msgid "Done"
+msgstr "Kész"
 
 msgid "Available Updates"
 msgstr "Elérhető frissítések"
@@ -796,9 +803,6 @@ msgstr "A biztonsági ellenőrzés befejeződött – nem található probléma.
 
 msgid "used in"
 msgstr "használt"
-
-msgid "Warning"
-msgstr "Figyelmeztetés"
 
 msgid "Install Anyway"
 msgstr "Telepítés mindenképpen"
@@ -1370,6 +1374,12 @@ msgstr "Engedélyezés"
 msgid "AUR enabled"
 msgstr "AUR engedélyezve"
 
+msgid "Classic"
+msgstr ""
+
+msgid "Midnight"
+msgstr ""
+
 msgid "System Default"
 msgstr "Rendszer alapértelmezett"
 
@@ -1475,17 +1485,33 @@ msgstr "Lemezterület ellenőrzése"
 msgid "Working"
 msgstr "Dolgozom"
 
-msgid "Done"
-msgstr "Kész"
-
 msgid "Failed"
 msgstr "Sikertelen"
+
+#| msgid "Installation complete."
+msgid "Transaction Completed"
+msgstr ""
+
+#| msgid "Operation failed"
+msgid "Transaction Failed"
+msgstr ""
+
+#| msgid "Cancelled"
+msgid "Transaction Cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "Befejezett"
 
 msgid "exit"
 msgstr "kilépés"
+
+msgid "The operation was cancelled."
+msgstr ""
+
+#| msgid "Operation completed successfully"
+msgid "All operations finished successfully."
+msgstr ""
 
 msgid "Cancelled"
 msgstr "Törölt<"

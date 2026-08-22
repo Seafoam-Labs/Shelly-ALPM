@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
+"POT-Creation-Date: 2026-08-22 04:40+0300\n"
 "PO-Revision-Date: 2026-07-29 17:32+0000\n"
 "Last-Translator: Tiago Centurion <tiagodecgo2@gmail.com>\n"
 "Language-Team: Spanish <https://hosted.weblate.org/projects/shelly-alpm/"
@@ -20,14 +20,12 @@ msgstr "No hay complementos instalables disponibles"
 msgid "Close"
 msgstr "Cerrar"
 
-#| msgid "Saving update configuration"
 msgid "Keep configuration"
 msgstr ""
 
 msgid "App data and settings will be kept."
 msgstr ""
 
-#| msgid "Saving update configuration"
 msgid "Remove configuration"
 msgstr ""
 
@@ -189,10 +187,9 @@ msgstr "Popularidad"
 msgid "Search the AUR"
 msgstr "Buscar en el AUR"
 
-msgid "The AUR has no browsable index type a package name to begin."
+#| msgid "The AUR has no browsable index type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
-"El AUR no tiene un índice para explorar; escribe el nombre de un paquete "
-"para comenzar."
 
 msgid "Run checks"
 msgstr "Ejecutar comprobaciones"
@@ -438,7 +435,6 @@ msgstr "Flatpak"
 msgid "Show results from the configured Flatpak remotes"
 msgstr ""
 
-#| msgid "Source Files"
 msgid "Source"
 msgstr ""
 
@@ -477,6 +473,10 @@ msgstr "Agregar bandeja al inicio automático"
 msgid "Use weekly schedule"
 msgstr "Usar programación semanal"
 
+#| msgid "Tray Updates Icon"
+msgid "Tray update with ui"
+msgstr ""
+
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalo de comprobación de la bandeja (horas)"
 
@@ -512,6 +512,9 @@ msgstr ":"
 
 msgid "Look & Feel"
 msgstr "Apariencia"
+
+msgid "Theme"
+msgstr ""
 
 msgid "Icons Enabled"
 msgstr "Iconos habilitados"
@@ -563,9 +566,6 @@ msgstr "No pedir confirmacion"
 msgid "Enable Shelly Search"
 msgstr "Habilitar búsqueda de Shelly"
 
-msgid "Enable Package Downgrade"
-msgstr "Habilitar reversión de paquetes"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Habilitar visualización WebView (experimental)"
 
@@ -592,6 +592,9 @@ msgstr "Patrocinador"
 
 msgid "Toggle output"
 msgstr "Mostrar/Ocultar detalles de salida"
+
+msgid "Done"
+msgstr "Hecho"
 
 msgid "Available Updates"
 msgstr "Actualizaciones disponibles"
@@ -792,9 +795,6 @@ msgstr "Análisis de seguridad completado: no se encontraron problemas."
 
 msgid "used in"
 msgstr ""
-
-msgid "Warning"
-msgstr "Advertencia"
 
 msgid "Install Anyway"
 msgstr "Instalar de todos modos"
@@ -1146,11 +1146,9 @@ msgstr "Eliminando repositorio remoto"
 msgid "Adding Remote"
 msgstr "Añadiendo repositorio remoto"
 
-#| msgid "Removing Flatpak"
 msgid "Remove this Flatpak?"
 msgstr ""
 
-#| msgid "Removing Flatpak"
 msgid "Remove Flatpak"
 msgstr ""
 
@@ -1160,11 +1158,9 @@ msgstr "Desinstalar Flatpak"
 msgid "App ID"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
-#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1186,7 +1182,6 @@ msgstr "No"
 msgid "Keywords"
 msgstr ""
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1259,26 +1254,21 @@ msgstr "Eliminando paquete"
 msgid "Installing packages"
 msgstr "Instalando paquete"
 
-#| msgid "Operation failed"
 msgid "Search failed"
 msgstr ""
 
-#| msgid "Installation failed."
 msgid "Installation in progress"
 msgstr ""
 
-#| msgid "No packages selected"
 msgid "No sources selected"
 msgstr ""
 
 msgid "Enable at least one source filter above."
 msgstr ""
 
-#| msgid "Installing packages"
 msgid "Install Packages"
 msgstr ""
 
-#| msgid "Remove the selected packages?"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1373,6 +1363,12 @@ msgstr "Habilitar"
 
 msgid "AUR enabled"
 msgstr "AUR habilitados"
+
+msgid "Classic"
+msgstr ""
+
+msgid "Midnight"
+msgstr ""
 
 msgid "System Default"
 msgstr "Sistema predeterminado"
@@ -1479,17 +1475,33 @@ msgstr ""
 msgid "Working"
 msgstr "Trabajando"
 
-msgid "Done"
-msgstr "Hecho"
-
 msgid "Failed"
 msgstr "Fallado"
+
+#| msgid "Installation complete."
+msgid "Transaction Completed"
+msgstr ""
+
+#| msgid "Operation failed"
+msgid "Transaction Failed"
+msgstr ""
+
+#| msgid "Cancelled"
+msgid "Transaction Cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "Terminado"
 
 msgid "exit"
 msgstr "salir"
+
+msgid "The operation was cancelled."
+msgstr ""
+
+#| msgid "Operation completed successfully"
+msgid "All operations finished successfully."
+msgstr ""
 
 msgid "Cancelled"
 msgstr "Cancelado"
