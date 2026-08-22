@@ -30,6 +30,7 @@ pub fn main(init: std.process.Init) void {
         .handles_command_line = true,
     });
     defer app.unref();
+    defer theme_manager.deinit();
     const gapp = gobject.ext.as(gio.Application, app);
 
     _ = gio.Application.signals.startup.connect(app, ?*anyopaque, &startup, null, .{});
@@ -115,8 +116,9 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
         return;
     }
 
-    if (!theme_manager.loadProviders()) {
-        std.log.warn("theme: no display available; continuing with GTK defaults", .{});
+    const dev_css_dir = if (options.dev_css) options.dev_css_dir else null;
+    if (!theme_manager.loadProviders(dev_css_dir)) {
+        std.log.warn("theme: failed to load CSS providers; continuing with GTK defaults", .{});
     }
 
     if (gdk.Display.getDefault()) |display| {
@@ -204,6 +206,7 @@ fn setupGnomeThemePreference() void {
 }
 
 test {
+    _ = @import("window_controls.zig");
     _ = @import("services/icon_resolver.zig");
     _ = @import("services/ui_config_resolver.zig");
     _ = @import("services/theme_manager.zig");

@@ -23,14 +23,6 @@
     radial-gradient(circle at 84% 78%, alpha(#7147d9, 0.12), transparent 42%);
 }
 
-.theme-midnight .app-headerbar {
-  color: @midnight_text;
-  background-color: alpha(@midnight_sidebar_bg, 0.82);
-  background-image: linear-gradient(to bottom, alpha(white, 0.08), alpha(white, 0.01));
-  border-bottom: 1px solid alpha(white, 0.10);
-  box-shadow: 0 8px 24px alpha(black, 0.24);
-}
-
 .theme-midnight .app-sidebar,
 .theme-midnight .app-topbar,
 .theme-midnight .glass-surface {
@@ -39,6 +31,39 @@
   border: 1px solid alpha(white, 0.10);
   border-radius: 12px;
   box-shadow: 0 12px 32px alpha(black, 0.26), inset 0 1px alpha(white, 0.05);
+}
+
+.theme-midnight .app-headerbar {
+  background-color: @midnight_window_bg;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.theme-midnight .app-headerbar .app-window-control {
+  color: alpha(@midnight_text, 0.92);
+}
+
+.theme-midnight .app-headerbar .app-window-control:hover {
+  color: @midnight_text;
+  background-color: alpha(@midnight_surface_raised, 0.72);
+  border-color: alpha(white, 0.09);
+  box-shadow: inset 0 1px alpha(white, 0.06), 0 5px 14px alpha(black, 0.16);
+}
+
+.theme-midnight .app-headerbar .app-window-control:active {
+  background-color: alpha(@midnight_surface_raised, 0.88);
+}
+
+.theme-midnight .app-headerbar .window-control-close:hover {
+  color: #ffffff;
+  background-color: alpha(#ff3b45, 0.88);
+  border-color: alpha(#ff9da4, 0.42);
+  box-shadow: inset 0 1px alpha(white, 0.12), 0 5px 14px alpha(black, 0.18);
+}
+
+.theme-midnight .app-headerbar .window-control-close:active {
+  background-color: alpha(#e32636, 0.96);
 }
 
 .theme-midnight .app-nav-button {

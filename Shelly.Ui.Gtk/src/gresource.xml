@@ -9,6 +9,9 @@
     <file alias="settings-symbolic.svg" preprocess="xml-stripblanks">assets/icons/settings-symbolic.svg</file>
     <file alias="application-x-executable-symbolic.svg" preprocess="xml-stripblanks">assets/icons/application-x-executable-symbolic.svg</file>
     <file alias="software-update-available-symbolic.svg" preprocess="xml-stripblanks">assets/icons/software-update-available-symbolic.svg</file>
+    <file alias="shelly-window-minimize-symbolic.svg" preprocess="xml-stripblanks">assets/icons/shelly-window-minimize-symbolic.svg</file>
+    <file alias="shelly-window-maximize-symbolic.svg" preprocess="xml-stripblanks">assets/icons/shelly-window-maximize-symbolic.svg</file>
+    <file alias="shelly-window-close-symbolic.svg" preprocess="xml-stripblanks">assets/icons/shelly-window-close-symbolic.svg</file>
   </gresource>
   <gresource prefix="/com/shellyorg/shelly">
     <file>ui/main_window.ui</file>

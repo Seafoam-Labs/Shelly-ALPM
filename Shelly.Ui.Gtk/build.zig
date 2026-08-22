@@ -50,6 +50,17 @@ pub fn build(b: *std.Build) void {
             "Skip starting background services (icon download, tray); useful for Valgrind leak checks",
         ) orelse false,
     );
+    const dev_css = b.option(
+        bool,
+        "dev-css",
+        "Load CSS from src and reload it after saves; intended for local UI development",
+    ) orelse false;
+    options.addOption(bool, "dev_css", dev_css);
+    options.addOption(
+        ?[]const u8,
+        "dev_css_dir",
+        if (dev_css) b.pathFromRoot("src") else null,
+    );
 
     const exe = b.addExecutable(.{
         .name = "Shelly_Ui_Gtk",
@@ -86,6 +97,9 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/assets/icons/settings-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/application-x-executable-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/software-update-available-symbolic.svg"));
+    gresource.addFileInput(b.path("src/assets/icons/shelly-window-minimize-symbolic.svg"));
+    gresource.addFileInput(b.path("src/assets/icons/shelly-window-maximize-symbolic.svg"));
+    gresource.addFileInput(b.path("src/assets/icons/shelly-window-close-symbolic.svg"));
     gresource.addFileInput(b.path("src/ui/main_window.ui"));
     gresource.addFileInput(b.path("src/ui/settings_page.ui"));
     gresource.addFileInput(b.path("src/ui/utilities_page.ui"));

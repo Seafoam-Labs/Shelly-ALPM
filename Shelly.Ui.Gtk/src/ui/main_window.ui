@@ -4,10 +4,14 @@
   <property name="title" translatable="yes">Shelly</property>
   <property name="default-width">700</property>
   <property name="default-height">450</property>
+  <property name="resizable">true</property>
   <child type="titlebar">
     <object class="GtkHeaderBar" id="app_headerbar">
-      <property name="show-title-buttons">true</property>
+      <property name="show-title-buttons">false</property>
       <property name="decoration-layout">:minimize,maximize,close</property>
+      <child type="title">
+        <object class="GtkBox"/>
+      </child>
       <style>
         <class name="app-headerbar"/>
       </style>

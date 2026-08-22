@@ -26,6 +26,7 @@ const translations = @import("helpers/translations.zig");
 const ConfirmDialog = @import("dialog/page/yn_dialog.zig").ConfirmDialog;
 const PolkitDialog = @import("dialog/page/polkit_warning.zig").PolkitDialog;
 const DBus = @import("services/dbus.zig").DBus;
+const window_controls = @import("window_controls.zig");
 
 const NavButton = struct {
     button: *gtk.Button,
@@ -45,6 +46,7 @@ pub const ShellyWindow = extern struct {
     const LABEL_GAP: c_int = 8;
 
     const Private = struct {
+        app_headerbar: *gtk.HeaderBar,
         shell_box: *gtk.Box,
         lockout_overlay: *gtk.Box,
         lockout_content: *gtk.Box,
@@ -208,7 +210,8 @@ pub const ShellyWindow = extern struct {
         _ = build_topnav(self, stack);
 
         gtk.Box.append(p.shell_box, p.rail.?.as(gtk.Widget));
-        gtk.Box.append(p.shell_box, p.topnav.?.as(gtk.Widget));
+        gtk.HeaderBar.setTitleWidget(p.app_headerbar, p.topnav.?.as(gtk.Widget));
+        window_controls.install(p.app_headerbar);
         gtk.Box.append(p.shell_box, stack.as(gtk.Widget));
 
         applyNavMode(self, readNavMode());
@@ -310,14 +313,10 @@ pub const ShellyWindow = extern struct {
 
     fn build_topnav(self: *ShellyWindow, stack: *gtk.Stack) *gtk.Box {
         const p = self.private();
-        const bar = gtk.Box.new(.horizontal, 4);
+        const bar = gtk.Box.new(.horizontal, 0);
         gtk.Widget.addCssClass(bar.as(gtk.Widget), "nav-topbar");
         gtk.Widget.addCssClass(bar.as(gtk.Widget), "app-topbar");
         gtk.Widget.setHexpand(bar.as(gtk.Widget), 1);
-        gtk.Widget.setMarginTop(bar.as(gtk.Widget), 6);
-        gtk.Widget.setMarginBottom(bar.as(gtk.Widget), 6);
-        gtk.Widget.setMarginStart(bar.as(gtk.Widget), 6);
-        gtk.Widget.setMarginEnd(bar.as(gtk.Widget), 6);
         p.topnav = @ptrCast(bar.as(gobject.Object).ref());
 
         const left_spacer = gtk.Box.new(.horizontal, 0);
@@ -378,7 +377,9 @@ pub const ShellyWindow = extern struct {
         const box = gtk.Box.new(.horizontal, 0);
         const img = gtk.Image.newFromIconName(icon);
 
-        gtk.Widget.setSizeRequest(img.as(gtk.Widget), ICON_SLOT, -1);
+        if (is_rail) {
+            gtk.Widget.setSizeRequest(img.as(gtk.Widget), ICON_SLOT, -1);
+        }
         gtk.Widget.setHalign(img.as(gtk.Widget), .center);
         gtk.Box.append(box, img.as(gtk.Widget));
 
@@ -392,7 +393,7 @@ pub const ShellyWindow = extern struct {
             gtk.Revealer.setRevealChild(revealer, @intFromBool(!p.collapsed));
         } else {
             gtk.Revealer.setTransitionType(revealer, .none);
-            gtk.Revealer.setRevealChild(revealer, 1);
+            gtk.Revealer.setRevealChild(revealer, 0);
         }
         gtk.Revealer.setChild(revealer, label.as(gtk.Widget));
         gtk.Box.append(box, revealer.as(gtk.Widget));
@@ -402,6 +403,7 @@ pub const ShellyWindow = extern struct {
         gtk.Widget.addCssClass(btn.as(gtk.Widget), "flat");
         gtk.Widget.addCssClass(btn.as(gtk.Widget), "nav-btn");
         gtk.Widget.addCssClass(btn.as(gtk.Widget), "app-nav-button");
+        gtk.Widget.setTooltipText(btn.as(gtk.Widget), text);
 
         const nb = std.heap.c_allocator.create(NavButton) catch unreachable;
         nb.* = .{
@@ -592,6 +594,7 @@ pub const ShellyWindow = extern struct {
     }
 
     const template_children = .{
+        .{ "app_headerbar", @offsetOf(Private, "app_headerbar") },
         .{ "lockout_overlay", @offsetOf(Private, "lockout_overlay") },
         .{ "lockout_content", @offsetOf(Private, "lockout_content") },
     };
