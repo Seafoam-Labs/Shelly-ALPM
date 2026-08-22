@@ -5,6 +5,7 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
+    <style><class name="appimage-page"/></style>
     <child>
       <object class="GtkOverlay" id="AppImageOverlay">
         <property name="hexpand">true</property>
@@ -32,6 +33,7 @@
                         <property name="margin-start">10</property>
                         <property name="margin-end">10</property>
                         <property name="spacing">5</property>
+                        <style><class name="page-toolbar"/></style>
                         <child>
                           <object class="GtkSearchEntry" id="AppImageSearchEntry">
                             <property name="placeholder-text" translatable="yes">Search...</property>
@@ -134,6 +136,7 @@
                       <object class="GtkScrolledWindow" id="AppImageListWindow">
                         <property name="vexpand">true</property>
                         <property name="hscrollbar-policy">never</property>
+                        <style><class name="package-results"/></style>
                         <child>
                           <object class="GtkBox">
                             <property name="orientation">vertical</property>
@@ -210,6 +213,7 @@
                         <property name="margin-top">30</property>
                         <property name="margin-bottom">30</property>
                         <property name="width-request">600</property>
+                        <style><class name="detail-panel"/></style>
                         <child>
                           <object class="GtkBox">
                             <property name="spacing">18</property>

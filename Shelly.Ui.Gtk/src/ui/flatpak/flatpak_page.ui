@@ -5,6 +5,7 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
+    <style><class name="flatpak-page"/></style>
     <child>
       <object class="GtkBox">
         <property name="orientation">horizontal</property>
@@ -17,6 +18,7 @@
           <object class="GtkFrame">
             <property name="margin-end">5</property>
             <property name="margin-top">5</property>
+            <style><class name="form-surface"/></style>
             <child>
               <object class="GtkBox">
                 <property name="orientation">vertical</property>
@@ -206,6 +208,7 @@
             <property name="margin-top">5</property>
             <property name="hexpand">true</property>
             <property name="vexpand">true</property>
+            <style><class name="package-results"/></style>
             <child>
               <object class="GtkStack" id="main_content_stack">
                 <property name="vexpand">true</property>

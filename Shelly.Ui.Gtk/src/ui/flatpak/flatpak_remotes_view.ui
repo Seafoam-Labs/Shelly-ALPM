@@ -5,6 +5,7 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
+    <style><class name="package-results"/></style>
     <child>
       <object class="GtkStack" id="remotes_stack">
         <property name="hexpand">true</property>
@@ -23,6 +24,7 @@
                 <property name="margin-start">8</property>
                 <property name="margin-end">8</property>
                 <property name="spacing">8</property>
+                <style><class name="page-toolbar"/></style>
                 <child>
                   <object class="GtkBox">
                     <property name="hexpand">true</property>
@@ -78,6 +80,7 @@
                 <property name="margin-start">8</property>
                 <property name="margin-end">8</property>
                 <property name="spacing">8</property>
+                <style><class name="page-toolbar"/></style>
                 <child>
                   <object class="GtkButton" id="overlay_add_remote_back_button">
                     <property name="icon-name">go-previous-symbolic</property>
@@ -138,6 +141,7 @@
                 <property name="margin-bottom">48</property>
                 <property name="margin-start">128</property>
                 <property name="margin-end">128</property>
+                <style><class name="form-surface"/></style>
                 <child>
                   <object class="GtkBox">
                     <property name="orientation">vertical</property>

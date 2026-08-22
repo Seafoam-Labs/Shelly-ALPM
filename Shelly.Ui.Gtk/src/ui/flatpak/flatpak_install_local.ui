@@ -5,6 +5,7 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
+    <style><class name="package-results"/></style>
     <child>
       <object class="GtkBox">
         <property name="orientation">vertical</property>
@@ -14,6 +15,7 @@
         <property name="margin-start">12</property>
         <property name="margin-end">12</property>
         <property name="width-request">520</property>
+        <style><class name="form-surface"/></style>
         <child>
           <object class="GtkLabel">
             <property name="label" translatable="yes">Install a local Flatpak</property>

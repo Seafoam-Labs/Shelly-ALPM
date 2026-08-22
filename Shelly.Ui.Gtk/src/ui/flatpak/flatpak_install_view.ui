@@ -5,6 +5,7 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
+    <style><class name="package-results"/></style>
     <child>
       <object class="GtkStack" id="content_stack">
         <property name="vexpand">true</property>
@@ -73,6 +74,7 @@
             <style>
               <class name="flatpak-content"/>
               <class name="background"/>
+              <class name="detail-panel"/>
             </style>
             <property name="width-request">500</property>
             <property name="height-request">400</property>
@@ -119,6 +121,7 @@
                     </child>
                     <child>
                       <object class="GtkDropDown" id="overlay_remote_selection">
+                        <style><class name="source-badge"/></style>
                         <property name="tooltip-text" translatable="yes">Install source</property>
                       </object>
                     </child>

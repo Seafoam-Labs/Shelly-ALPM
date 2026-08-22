@@ -280,6 +280,7 @@ pub const FlatpakInstallView = extern struct {
                 gtk.Widget.setMarginTop(frame.as(gtk.Widget), 1);
                 gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 1);
                 gtk.Widget.addCssClass(frame.as(gtk.Widget), "card");
+                gtk.Widget.addCssClass(frame.as(gtk.Widget), "package-card");
                 gtk.ListItem.setChild(list_item, frame.as(gtk.Widget));
             }
 

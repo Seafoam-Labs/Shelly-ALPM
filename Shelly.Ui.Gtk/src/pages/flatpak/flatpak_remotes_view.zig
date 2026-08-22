@@ -287,6 +287,7 @@ pub const FlatpakRemotesView = extern struct {
 
     fn make_remote_row(remote: Remote, index: usize) *gtk.Widget {
         const row = gtk.ListBoxRow.new();
+        gtk.Widget.addCssClass(row.as(gtk.Widget), "package-row");
         var buf: [512]u8 = undefined;
         gobject.Object.setData(
             row.as(gobject.Object),
@@ -312,6 +313,7 @@ pub const FlatpakRemotesView = extern struct {
         gtk.Widget.setHalign(scope_label.as(gtk.Widget), .start);
         gtk.Label.setXalign(scope_label, 0);
         gtk.Widget.addCssClass(scope_label.as(gtk.Widget), "dim-label");
+        gtk.Widget.addCssClass(scope_label.as(gtk.Widget), "source-badge");
         gtk.Grid.attach(grid, scope_label.as(gtk.Widget), 1, 0, 1, 1);
 
         const url_label = gtk.Label.new(cstr(&buf, remote.Url));

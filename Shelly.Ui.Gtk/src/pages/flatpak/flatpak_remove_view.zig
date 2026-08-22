@@ -125,6 +125,7 @@ pub const FlatpakRemoveView = extern struct {
         const list_item = gobject.ext.cast(gtk.ListItem, item) orelse return;
 
         const grid = gtk.Grid.new();
+        gtk.Widget.addCssClass(grid.as(gtk.Widget), "package-row");
         gtk.Widget.setMarginStart(grid.as(gtk.Widget), 12);
         gtk.Widget.setMarginEnd(grid.as(gtk.Widget), 12);
         gtk.Widget.setMarginTop(grid.as(gtk.Widget), 6);

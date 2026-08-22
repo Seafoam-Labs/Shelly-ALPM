@@ -5,6 +5,7 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
+    <style><class name="package-results"/></style>
     <child>
       <object class="GtkBox">
         <property name="margin-end">9</property>
@@ -20,6 +21,7 @@
             <property name="margin-start">10</property>
             <property name="margin-end">10</property>
             <property name="halign">baseline</property>
+            <style><class name="page-toolbar"/></style>
             <child>
               <object class="GtkBox">
                 <property name="hexpand">true</property>

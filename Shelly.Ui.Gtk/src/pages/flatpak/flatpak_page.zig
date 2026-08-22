@@ -186,6 +186,7 @@ pub const FlatpakPage = extern struct {
 
         for (std.enums.values(Category)) |app| {
             const row = gtk.ListBoxRow.new();
+            gtk.Widget.addCssClass(row.as(gtk.Widget), "package-row");
             const enum_num: usize = @intFromEnum(app);
             gobject.Object.setData(
                 row.as(gobject.Object),

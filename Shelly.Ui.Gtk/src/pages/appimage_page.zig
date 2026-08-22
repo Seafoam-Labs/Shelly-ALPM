@@ -385,6 +385,7 @@ pub const AppImagePage = extern struct {
 
     fn make_app_row(app: *const AppImage, index: usize) *gtk.Widget {
         const row = gtk.ListBoxRow.new();
+        gtk.Widget.addCssClass(row.as(gtk.Widget), "package-row");
         gtk.ListBoxRow.setActivatable(row, 1);
 
         gobject.Object.setData(
