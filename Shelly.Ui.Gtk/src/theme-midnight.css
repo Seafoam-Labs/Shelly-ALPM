@@ -245,3 +245,18 @@
   color: @midnight_danger;
   background-color: alpha(@midnight_danger, 0.14);
 }
+
+.theme-midnight .empty-state {
+  color: @midnight_text_dim;
+}
+
+.theme-midnight .error-state {
+  color: @midnight_danger;
+}
+
+.theme-midnight .status-badge.out-of-date {
+  color: @midnight_warning;
+  background-color: alpha(@midnight_warning, 0.12);
+  border: 1px solid alpha(@midnight_warning, 0.55);
+  padding: 1px 4px;
+}

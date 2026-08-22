@@ -6,6 +6,7 @@
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
     <property name="margin-bottom">10</property>
+    <style><class name="search-page"/></style>
 
     <child>
       <object class="GtkBox">
@@ -15,6 +16,7 @@
         <property name="margin-start">10</property>
         <property name="margin-end">10</property>
         <property name="spacing">5</property>
+        <style><class name="page-toolbar"/></style>
         <child>
           <object class="GtkSearchEntry" id="search_entry">
             <property name="placeholder-text" translatable="yes">Search standard repositories, AUR and Flatpak</property>
@@ -87,6 +89,7 @@
         <property name="hexpand">true</property>
         <property name="orientation">horizontal</property>
         <property name="vexpand">true</property>
+        <style><class name="package-results"/></style>
 
         <child>
           <object class="GtkOverlay" id="grid_overlay">
@@ -152,6 +155,7 @@
                 <property name="valign">center</property>
                 <property name="margin-start">40</property>
                 <property name="margin-end">40</property>
+                <style><class name="empty-state"/></style>
                 <child>
                   <object class="GtkImage" id="placeholder_icon">
                     <property name="icon-name">system-search-symbolic</property>

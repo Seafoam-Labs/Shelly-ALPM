@@ -192,6 +192,9 @@ pub const AurPage = extern struct {
 
     fn set_state(self: *Self, state: State) void {
         const p = self.priv();
+        gtk.Widget.removeCssClass(p.placeholder_box.as(gtk.Widget), "empty-state");
+        gtk.Widget.removeCssClass(p.placeholder_box.as(gtk.Widget), "error-state");
+        gtk.Widget.addCssClass(p.placeholder_box.as(gtk.Widget), if (state == .err) "error-state" else "empty-state");
         switch (state) {
             .loading => {
                 gtk.Widget.setVisible(p.loading_box.as(gtk.Widget), 1);
@@ -228,6 +231,7 @@ pub const AurPage = extern struct {
             fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
                 const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
                 const label = gtk.Label.new("");
+                gtk.Widget.addCssClass(label.as(gtk.Widget), "package-row");
                 gtk.Widget.setHalign(label.as(gtk.Widget), halign);
                 gtk.Label.setEllipsize(label, .end);
                 gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
@@ -274,6 +278,7 @@ pub const AurPage = extern struct {
             fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
                 const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
                 const label = gtk.Label.new("");
+                gtk.Widget.addCssClass(label.as(gtk.Widget), "package-row");
                 gtk.Widget.setHalign(label.as(gtk.Widget), .start);
                 gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
             }
@@ -300,6 +305,7 @@ pub const AurPage = extern struct {
                 gtk.ListItem.setActivatable(gobject.ext.as(gtk.ListItem, cell), 1);
 
                 const box = gtk.Box.new(.vertical, 0);
+                gtk.Widget.addCssClass(box.as(gtk.Widget), "package-row");
                 gtk.Widget.setValign(box.as(gtk.Widget), .center);
 
                 const title_box = gtk.Box.new(.horizontal, 6);
@@ -311,6 +317,8 @@ pub const AurPage = extern struct {
                 gtk.Box.append(title_box, name_label.as(gtk.Widget));
 
                 const ood_icon = gtk.Image.newFromIconName("dialog-warning-symbolic");
+                gtk.Widget.addCssClass(ood_icon.as(gtk.Widget), "status-badge");
+                gtk.Widget.addCssClass(ood_icon.as(gtk.Widget), "out-of-date");
                 gtk.Widget.setTooltipText(ood_icon.as(gtk.Widget), translations._("Flagged out of date"));
                 gtk.Box.append(title_box, ood_icon.as(gtk.Widget));
 
@@ -363,6 +371,7 @@ pub const AurPage = extern struct {
     fn on_check_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, self: *Self) callconv(.c) void {
         const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
         const check = gtk.CheckButton.new();
+        gtk.Widget.addCssClass(check.as(gtk.Widget), "package-row");
         gtk.Widget.setMarginStart(check.as(gtk.Widget), 10);
         gtk.Widget.setMarginEnd(check.as(gtk.Widget), 10);
         gtk.Widget.setValign(check.as(gtk.Widget), .center);
