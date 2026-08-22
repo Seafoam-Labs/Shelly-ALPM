@@ -1,0 +1,5 @@
+@define-color midnight_window_bg #08111f;
+
+.theme-midnight {
+  background-color: @midnight_window_bg;
+}

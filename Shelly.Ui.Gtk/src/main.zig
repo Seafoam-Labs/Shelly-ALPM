@@ -7,6 +7,7 @@ const glib = bindings.glib;
 const gobject = bindings.gobject;
 const ShellyWindow = @import("shelly_window.zig").ShellyWindow;
 const runtime = @import("services/runtime.zig");
+const theme_manager = @import("services/theme_manager.zig");
 const translations = @import("helpers/translations.zig");
 const tray_service = @import("services/tray_service.zig");
 const options = @import("options");
@@ -114,13 +115,9 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
         return;
     }
 
-    const provider = gtk.CssProvider.new();
-    gtk.CssProvider.loadFromResource(provider, "/com/shellyorg/shelly/style.css");
-    gtk.StyleContext.addProviderForDisplay(
-        gdk.Display.getDefault().?,
-        provider.as(gtk.StyleProvider),
-        gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
+    if (!theme_manager.loadProviders()) {
+        std.log.warn("theme: no display available; continuing with GTK defaults", .{});
+    }
 
     if (gdk.Display.getDefault()) |display| {
         const icon_theme = gtk.IconTheme.getForDisplay(display);
@@ -209,6 +206,7 @@ fn setupGnomeThemePreference() void {
 test {
     _ = @import("services/icon_resolver.zig");
     _ = @import("services/ui_config_resolver.zig");
+    _ = @import("services/theme_manager.zig");
     _ = @import("services/shelly_cli.zig");
     _ = @import("services/tray_service.zig");
     _ = @import("g_objects/appstream_app_object.zig");

@@ -42,5 +42,6 @@
     <file>ui/update_page.ui</file>
     <file>ui/recommend_page.ui</file>
     <file>style.css</file>
+    <file>theme-midnight.css</file>
   </gresource>
 </gresources>
