@@ -196,3 +196,52 @@
   color: @midnight_text;
   font-weight: 700;
 }
+
+.theme-midnight .package-page,
+.theme-midnight .package-results {
+  background-color: transparent;
+}
+
+.theme-midnight .page-toolbar,
+.theme-midnight .selection-panel,
+.theme-midnight .detail-panel {
+  background-color: alpha(@midnight_surface_bg, 0.82);
+  border: 1px solid alpha(white, 0.09);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px alpha(black, 0.22), inset 0 1px alpha(white, 0.04);
+}
+
+.theme-midnight .package-row:hover,
+.theme-midnight .package-results row:hover,
+.theme-midnight .package-results row:hover .package-row {
+  background-color: alpha(white, 0.05);
+}
+
+.theme-midnight .package-row:selected,
+.theme-midnight .package-card:selected,
+.theme-midnight .package-results row:selected,
+.theme-midnight .package-results row:selected .package-row,
+.theme-midnight .package-results gridview > child:selected .package-card {
+  background-color: alpha(@midnight_accent, 0.22);
+  border-color: alpha(@midnight_accent, 0.72);
+}
+
+.theme-midnight .spec-row {
+  border-bottom: 1px solid alpha(@midnight_border, 0.72);
+}
+
+.theme-midnight .status-badge {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 600;
+}
+
+.theme-midnight .status-badge.success {
+  color: @midnight_success;
+  background-color: alpha(@midnight_success, 0.14);
+}
+
+.theme-midnight .status-badge.error {
+  color: @midnight_danger;
+  background-color: alpha(@midnight_danger, 0.14);
+}

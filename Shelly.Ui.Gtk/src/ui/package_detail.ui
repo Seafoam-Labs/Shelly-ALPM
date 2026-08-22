@@ -28,6 +28,9 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">false</property>
     <property name="width-request">340</property>
+    <style>
+      <class name="detail-panel"/>
+    </style>
     <child>
       <object class="GtkScrolledWindow">
         <property name="hscrollbar-policy">never</property>

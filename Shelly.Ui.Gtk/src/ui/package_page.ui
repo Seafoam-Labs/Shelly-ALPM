@@ -6,6 +6,9 @@
         <property name="hexpand">true</property>
         <property name="vexpand">true</property>
          <property name="margin-bottom">10</property>
+        <style>
+            <class name="package-page"/>
+        </style>
         <child>
             <object class="GtkOverlay" id="PackageWindow">
                 <property name="hexpand">true</property>
@@ -25,6 +28,9 @@
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">5</property>
                                 <property name="valign">baseline-center</property>
+                                <style>
+                                    <class name="page-toolbar"/>
+                                </style>
                                 <child>
                                   <object class="GtkSearchEntry" id="search_entry">
                                       <property name="placeholder-text" translatable="yes">Search packages...</property>
@@ -140,6 +146,9 @@
                                 <property name="hexpand">true</property>
                                 <property name="orientation">horizontal</property>
                                 <property name="vexpand">true</property>
+                                <style>
+                                    <class name="package-results"/>
+                                </style>
                                 <child>
                                     <object class="GtkBox" id="detail_hbox">
                                         <property name="visible">true</property>
@@ -330,6 +339,9 @@
                 <property name="margin-bottom">8</property>
                 <property name="margin-start">12</property>
                 <property name="margin-end">12</property>
+                <style>
+                    <class name="selection-panel"/>
+                </style>
                 <child>
                     <object class="GtkLabel">
                         <property name="label" translatable="yes">Selected Packages</property>

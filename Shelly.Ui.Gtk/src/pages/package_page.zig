@@ -218,6 +218,7 @@ pub const PackagePage = extern struct {
     fn install_date_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
         const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
         const label = gtk.Label.new("");
+        gtk.Widget.addCssClass(label.as(gtk.Widget), "package-row");
         gtk.Widget.setHalign(label.as(gtk.Widget), gtk.Align.start);
         gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
     }
@@ -236,6 +237,7 @@ pub const PackagePage = extern struct {
             fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
                 const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
                 const label = gtk.Label.new("");
+                gtk.Widget.addCssClass(label.as(gtk.Widget), "package-row");
                 gtk.Widget.setHalign(label.as(gtk.Widget), halign);
                 gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
             }
@@ -262,6 +264,7 @@ pub const PackagePage = extern struct {
                 const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
 
                 const box = gtk.Box.new(.horizontal, 6);
+                gtk.Widget.addCssClass(box.as(gtk.Widget), "package-row");
                 gtk.ListItem.setActivatable(gobject.ext.as(gtk.ListItem, cell), 1);
                 const icon = gtk.Image.new();
                 gtk.Image.setPixelSize(icon, 24);
@@ -313,6 +316,7 @@ pub const PackagePage = extern struct {
     fn on_check_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, self: *Self) callconv(.c) void {
         const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
         const check = gtk.CheckButton.new();
+        gtk.Widget.addCssClass(check.as(gtk.Widget), "package-row");
         gtk.Widget.setMarginStart(check.as(gtk.Widget), 10);
         gtk.Widget.setMarginEnd(check.as(gtk.Widget), 10);
         gobject.Object.setData(check.as(gobject.Object), "cell", cell);
@@ -356,6 +360,7 @@ pub const PackagePage = extern struct {
     fn size_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
         const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
         const label = gtk.Label.new("");
+        gtk.Widget.addCssClass(label.as(gtk.Widget), "package-row");
         gtk.Widget.setHalign(label.as(gtk.Widget), gtk.Align.start);
         gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
     }
@@ -387,6 +392,7 @@ pub const PackagePage = extern struct {
                 gtk.ListItem.setActivatable(list_item, 1);
 
                 const content_grid = gtk.Grid.new();
+                gtk.Widget.addCssClass(content_grid.as(gtk.Widget), "package-card-content");
                 gtk.Widget.setMarginStart(content_grid.as(gtk.Widget), 10);
                 gtk.Widget.setMarginEnd(content_grid.as(gtk.Widget), 12);
                 gtk.Widget.setMarginTop(content_grid.as(gtk.Widget), 12);
@@ -463,6 +469,7 @@ pub const PackagePage = extern struct {
                 gtk.Widget.setMarginTop(frame.as(gtk.Widget), 3);
                 gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 3);
                 gtk.Widget.addCssClass(frame.as(gtk.Widget), "card");
+                gtk.Widget.addCssClass(frame.as(gtk.Widget), "package-card");
 
                 gtk.ListItem.setChild(list_item, frame.as(gtk.Widget));
             }
@@ -975,6 +982,7 @@ pub const PackagePage = extern struct {
 
             const tag = gtk.Label.new(if (installed) translations._("remove") else translations._("install"));
             gtk.Widget.addCssClass(tag.as(gtk.Widget), "caption");
+            gtk.Widget.addCssClass(tag.as(gtk.Widget), "status-badge");
             gtk.Widget.addCssClass(tag.as(gtk.Widget), if (installed) "error" else "success");
             gtk.Widget.setHalign(tag.as(gtk.Widget), .end);
             gtk.Box.append(row, tag.as(gtk.Widget));
