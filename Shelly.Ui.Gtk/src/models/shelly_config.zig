@@ -54,6 +54,7 @@ pub const ShellyConfig = struct {
     NavMode: NavMode = .sidebar,
     Theme: AppTheme = .classic,
     // Internal: persisted window geometry, not exposed in settings UI
+    SidebarCollapsed: bool = true,
     WindowLastWidth: i32 = 0,
     WindowLastHeight: i32 = 0,
 

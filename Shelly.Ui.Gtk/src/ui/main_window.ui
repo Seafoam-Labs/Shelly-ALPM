@@ -6,14 +6,9 @@
   <property name="default-height">450</property>
   <property name="resizable">true</property>
   <child type="titlebar">
-    <object class="GtkHeaderBar" id="app_headerbar">
-      <property name="show-title-buttons">false</property>
-      <property name="decoration-layout">:minimize,maximize,close</property>
-      <child type="title">
-        <object class="GtkBox"/>
-      </child>
+    <object class="GtkBox">
       <style>
-        <class name="app-headerbar"/>
+        <class name="app-csd-anchor"/>
       </style>
     </object>
   </child>

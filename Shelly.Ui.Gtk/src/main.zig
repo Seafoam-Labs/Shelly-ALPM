@@ -15,6 +15,15 @@ const IconDownloadService = @import("services/icon_fetcher.zig").downloadIconsIn
 
 var did_activate: bool = false;
 
+fn applicationId(dev_css: bool) [:0]const u8 {
+    return if (dev_css) "com.shellyorg.shelly.Devel" else "com.shellyorg.shelly";
+}
+
+test "development CSS preview uses an isolated application id" {
+    try std.testing.expectEqualStrings("com.shellyorg.shelly", applicationId(false));
+    try std.testing.expectEqualStrings("com.shellyorg.shelly.Devel", applicationId(true));
+}
+
 pub fn main(init: std.process.Init) void {
     runtime.io = init.io;
     runtime.environ_map = init.environ_map;
@@ -26,7 +35,7 @@ pub fn main(init: std.process.Init) void {
         IconDownloadService(std.heap.c_allocator, runtime.io);
     }
 
-    const app = gtk.Application.new("com.shellyorg.shelly", .{
+    const app = gtk.Application.new(applicationId(options.dev_css), .{
         .handles_command_line = true,
     });
     defer app.unref();
@@ -206,6 +215,8 @@ fn setupGnomeThemePreference() void {
 }
 
 test {
+    _ = @import("sidebar.zig");
+    _ = @import("shelly_window.zig");
     _ = @import("window_controls.zig");
     _ = @import("services/icon_resolver.zig");
     _ = @import("services/ui_config_resolver.zig");

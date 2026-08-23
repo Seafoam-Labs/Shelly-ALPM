@@ -229,3 +229,13 @@ test "incomplete and unrelated file events do not reload CSS" {
         reloadIndex(.changes_done_hint, "main_window.ui", null),
     );
 }
+
+test "Midnight sidebar visuals do not leak into the Classic stylesheet" {
+    const classic_css = @embedFile("../style.css");
+    const midnight_css = @embedFile("../theme-midnight.css");
+
+    try std.testing.expect(std.mem.indexOf(u8, classic_css, "\n.app-sidebar {\n") == null);
+    try std.testing.expect(std.mem.indexOf(u8, classic_css, "\n.app-sidebar .nav-btn {\n") == null);
+    try std.testing.expect(std.mem.indexOf(u8, midnight_css, "\n.theme-midnight .app-sidebar.sidebar-expanded {\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, midnight_css, "\n.theme-midnight .app-sidebar .nav-btn {\n") != null);
+}

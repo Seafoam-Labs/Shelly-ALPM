@@ -18,6 +18,7 @@ const UtilitiesPage = @import("pages/utilities_page.zig").UtilitiesPage;
 const TransactionPage = @import("pages/transaction_page.zig").TransactionPage;
 const TransactionRequest = @import("pages/transaction_page.zig").TransactionRequest;
 const runtime = @import("services/runtime.zig");
+const ConfigResolver = @import("services/ui_config_resolver.zig").ConfigResolver;
 const theme_manager = @import("services/theme_manager.zig");
 const AppTheme = @import("models/shelly_config.zig").AppTheme;
 const NavMode = @import("models/shelly_config.zig").NavMode;
@@ -27,6 +28,7 @@ const ConfirmDialog = @import("dialog/page/yn_dialog.zig").ConfirmDialog;
 const PolkitDialog = @import("dialog/page/polkit_warning.zig").PolkitDialog;
 const DBus = @import("services/dbus.zig").DBus;
 const window_controls = @import("window_controls.zig");
+const Sidebar = @import("sidebar.zig").Sidebar;
 
 const NavButton = struct {
     button: *gtk.Button,
@@ -37,23 +39,41 @@ const NavButton = struct {
     is_rail: bool,
 };
 
+const MainColumn = struct {
+    root: *gtk.Box,
+    chrome: *gtk.Box,
+};
+
+fn buildMainColumn(toggle: *gtk.Button, topnav: *gtk.Box, stack: *gtk.Stack) MainColumn {
+    const root = gtk.Box.new(.vertical, 0);
+    gtk.Widget.addCssClass(root.as(gtk.Widget), "app-main-column");
+    gtk.Widget.setHexpand(root.as(gtk.Widget), 1);
+    gtk.Widget.setVexpand(root.as(gtk.Widget), 1);
+
+    const chrome = window_controls.buildChromeRow(toggle);
+    gtk.Box.append(root, chrome.as(gtk.Widget));
+    gtk.Box.append(root, topnav.as(gtk.Widget));
+    gtk.Box.append(root, stack.as(gtk.Widget));
+
+    return .{ .root = root, .chrome = chrome };
+}
+
 pub const ShellyWindow = extern struct {
     parent_instance: Parent,
 
     pub const Parent = gtk.ApplicationWindow;
 
-    const ICON_SLOT: c_int = 24;
-    const LABEL_GAP: c_int = 8;
-
     const Private = struct {
-        app_headerbar: *gtk.HeaderBar,
+        root_overlay: *gtk.Overlay,
         shell_box: *gtk.Box,
         lockout_overlay: *gtk.Box,
         lockout_content: *gtk.Box,
         content_stack: *gtk.Stack,
+        main_column: *gtk.Box,
+        chrome_row: *gtk.Box,
+        sidebar: ?Sidebar,
         rail: ?*gtk.Box,
         topnav: ?*gtk.Box,
-        chevron_img: ?*gtk.Image,
         nav_buttons: std.ArrayListUnmanaged(*NavButton),
         collapsed: bool,
         nav_mode: NavMode,
@@ -84,11 +104,11 @@ pub const ShellyWindow = extern struct {
     fn init(self: *ShellyWindow, _: *Class) callconv(.c) void {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
         const p = self.private();
+        p.sidebar = null;
         p.rail = null;
         p.topnav = null;
-        p.chevron_img = null;
         p.nav_buttons = .empty;
-        p.collapsed = true;
+        p.collapsed = readSidebarCollapsed();
         p.nav_mode = .sidebar;
         p.pending_nav = .sidebar;
         build_shell(self);
@@ -209,10 +229,12 @@ pub const ShellyWindow = extern struct {
         _ = build_rail(self, stack);
         _ = build_topnav(self, stack);
 
+        const main = buildMainColumn(p.sidebar.?.collapse_button, p.topnav.?, stack);
+        p.main_column = main.root;
+        p.chrome_row = main.chrome;
         gtk.Box.append(p.shell_box, p.rail.?.as(gtk.Widget));
-        gtk.HeaderBar.setTitleWidget(p.app_headerbar, p.topnav.?.as(gtk.Widget));
-        window_controls.install(p.app_headerbar);
-        gtk.Box.append(p.shell_box, stack.as(gtk.Widget));
+        gtk.Box.append(p.shell_box, main.root.as(gtk.Widget));
+        window_controls.installOverlay(p.root_overlay);
 
         applyNavMode(self, readNavMode());
     }
@@ -221,6 +243,12 @@ pub const ShellyWindow = extern struct {
         const svc = runtime.config orelse return .sidebar;
         const cfg = svc.get() catch return .sidebar;
         return cfg.NavMode;
+    }
+
+    fn readSidebarCollapsed() bool {
+        const svc = runtime.config orelse return true;
+        const cfg = svc.get() catch return true;
+        return cfg.SidebarCollapsed;
     }
 
     pub fn requestNav(self: *ShellyWindow, mode: NavMode) void {
@@ -244,41 +272,30 @@ pub const ShellyWindow = extern struct {
         p.nav_mode = mode;
 
         const sidebar = mode == .sidebar;
-        gtk.Orientable.setOrientation(
-            p.shell_box.as(gtk.Orientable),
-            if (sidebar) .horizontal else .vertical,
-        );
+        gtk.Orientable.setOrientation(p.shell_box.as(gtk.Orientable), .horizontal);
         gtk.Widget.setVisible(p.rail.?.as(gtk.Widget), @intFromBool(sidebar));
         gtk.Widget.setVisible(p.topnav.?.as(gtk.Widget), @intFromBool(!sidebar));
+        gtk.Widget.setVisible(p.sidebar.?.collapse_button.as(gtk.Widget), @intFromBool(sidebar));
+        gtk.Widget.removeCssClass(
+            p.chrome_row.as(gtk.Widget),
+            if (sidebar) "app-window-chrome-topbar" else "app-window-chrome-sidebar",
+        );
+        gtk.Widget.addCssClass(
+            p.chrome_row.as(gtk.Widget),
+            if (sidebar) "app-window-chrome-sidebar" else "app-window-chrome-topbar",
+        );
 
         sync_active_nav(self);
     }
 
     fn build_rail(self: *ShellyWindow, stack: *gtk.Stack) *gtk.Box {
         const p = self.private();
-        const rail = gtk.Box.new(.vertical, 6);
-        gtk.Widget.addCssClass(rail.as(gtk.Widget), "nav-rail");
-        gtk.Widget.addCssClass(rail.as(gtk.Widget), "app-sidebar");
-        gtk.Widget.setMarginTop(rail.as(gtk.Widget), 8);
-        gtk.Widget.setMarginBottom(rail.as(gtk.Widget), 8);
-        gtk.Widget.setMarginStart(rail.as(gtk.Widget), 6);
-        gtk.Widget.setMarginEnd(rail.as(gtk.Widget), 6);
-        p.rail = @ptrCast(rail.as(gobject.Object).ref());
+        const sidebar = Sidebar.init(p.collapsed);
+        p.sidebar = sidebar;
+        p.rail = @ptrCast(sidebar.root.as(gobject.Object).ref());
+        _ = gtk.Button.signals.clicked.connect(sidebar.collapse_button, *ShellyWindow, &on_chevron, self, .{});
 
-        const chevron = gtk.Button.new();
-        gtk.Widget.addCssClass(chevron.as(gtk.Widget), "flat");
-        const chevron_img = gtk.Image.newFromIconName(if (p.collapsed) "go-next-symbolic" else "go-previous-symbolic");
-        gtk.Widget.setSizeRequest(chevron_img.as(gtk.Widget), ICON_SLOT, -1);
-        gtk.Widget.setHalign(chevron_img.as(gtk.Widget), .center);
-        gtk.Button.setChild(chevron, chevron_img.as(gtk.Widget));
-        p.chevron_img = chevron_img;
-        _ = gtk.Button.signals.clicked.connect(chevron, *ShellyWindow, &on_chevron, self, .{});
-        gtk.Box.append(rail, chevron.as(gtk.Widget));
-
-        const items = gtk.Box.new(.vertical, 6);
-        gtk.Widget.setMarginTop(items.as(gtk.Widget), 4);
-        gtk.Widget.setMarginBottom(items.as(gtk.Widget), 4);
-        gtk.Box.append(rail, items.as(gtk.Widget));
+        const items = sidebar.primary;
 
         add_nav_button(self, items, stack, true, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
         add_nav_button(self, items, stack, true, "package", PackagePage.icon_name, translations._(PackagePage.title));
@@ -287,28 +304,8 @@ pub const ShellyWindow = extern struct {
         add_nav_button(self, items, stack, true, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
         add_nav_button(self, items, stack, true, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
         add_nav_button(self, items, stack, true, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
-
-        const sep = gtk.Box.new(.horizontal, 0);
-        gtk.Widget.setVexpand(sep.as(gtk.Widget), 1);
-        gtk.Box.append(rail, sep.as(gtk.Widget));
-
-        const menu_button = gtk.MenuButton.new();
-        gtk.Widget.addCssClass(menu_button.as(gtk.Widget), "flat");
-        gtk.MenuButton.setIconName(menu_button, "open-menu-symbolic");
-        const popover = gtk.Popover.new();
-        const menu_box = gtk.Box.new(.vertical, 4);
-        const utils_btn = gtk.Button.newWithLabel(translations._("Utilities"));
-        gtk.Widget.addCssClass(utils_btn.as(gtk.Widget), "flat");
-        _ = gtk.Button.signals.clicked.connect(utils_btn, *ShellyWindow, &on_utilities, self, .{});
-        gtk.Box.append(menu_box, utils_btn.as(gtk.Widget));
-        const sp_btn = gtk.Button.newWithLabel(translations._("Settings"));
-        gtk.Widget.addCssClass(sp_btn.as(gtk.Widget), "flat");
-        _ = gtk.Button.signals.clicked.connect(sp_btn, *ShellyWindow, &on_settings, self, .{});
-        gtk.Box.append(menu_box, sp_btn.as(gtk.Widget));
-        gtk.Popover.setChild(popover, menu_box.as(gtk.Widget));
-        gtk.MenuButton.setPopover(menu_button, popover);
-        gtk.Box.append(rail, menu_button.as(gtk.Widget));
-        return rail;
+        add_nav_button(self, sidebar.bottom, stack, true, "settings", SettingsPage.icon_name, translations._(SettingsPage.title));
+        return sidebar.root;
     }
 
     fn build_topnav(self: *ShellyWindow, stack: *gtk.Stack) *gtk.Box {
@@ -343,10 +340,6 @@ pub const ShellyWindow = extern struct {
         gtk.MenuButton.setIconName(menu_button, "view-more-symbolic");
         const popover = gtk.Popover.new();
         const menu_box = gtk.Box.new(.vertical, 4);
-        const utils_btn = gtk.Button.newWithLabel(translations._("Utilities"));
-        gtk.Widget.addCssClass(utils_btn.as(gtk.Widget), "flat");
-        _ = gtk.Button.signals.clicked.connect(utils_btn, *ShellyWindow, &on_utilities, self, .{});
-        gtk.Box.append(menu_box, utils_btn.as(gtk.Widget));
         const sp_btn = gtk.Button.newWithLabel(translations._("Settings"));
         gtk.Widget.addCssClass(sp_btn.as(gtk.Widget), "flat");
         _ = gtk.Button.signals.clicked.connect(sp_btn, *ShellyWindow, &on_settings, self, .{});
@@ -362,14 +355,22 @@ pub const ShellyWindow = extern struct {
         const p = self.private();
         p.collapsed = !p.collapsed;
 
-        if (p.chevron_img) |img| {
-            gtk.Image.setFromIconName(img, if (p.collapsed) "go-next-symbolic" else "go-previous-symbolic");
-        }
+        if (p.sidebar) |sidebar| sidebar.setCollapsed(p.collapsed);
 
         for (p.nav_buttons.items) |nb| {
             if (!nb.is_rail) continue;
             gtk.Revealer.setRevealChild(nb.revealer, @intFromBool(!p.collapsed));
         }
+
+        if (runtime.config) |config| {
+            persistSidebarCollapsed(config, p.collapsed) catch |err| {
+                std.log.err("window: failed to save sidebar state: {t}", .{err});
+            };
+        }
+    }
+
+    fn persistSidebarCollapsed(config: *ConfigResolver, collapsed: bool) !void {
+        try config.updateField(.SidebarCollapsed, collapsed);
     }
 
     fn add_nav_button(self: *ShellyWindow, parent_box: *gtk.Box, stack: *gtk.Stack, is_rail: bool, name: [:0]const u8, icon: [:0]const u8, text: [:0]const u8) void {
@@ -377,14 +378,13 @@ pub const ShellyWindow = extern struct {
         const box = gtk.Box.new(.horizontal, 0);
         const img = gtk.Image.newFromIconName(icon);
 
-        if (is_rail) {
-            gtk.Widget.setSizeRequest(img.as(gtk.Widget), ICON_SLOT, -1);
-        }
+        gtk.Image.setIconSize(img, .normal);
+        if (is_rail) gtk.Widget.addCssClass(img.as(gtk.Widget), "sidebar-nav-icon");
         gtk.Widget.setHalign(img.as(gtk.Widget), .center);
         gtk.Box.append(box, img.as(gtk.Widget));
 
         const label = gtk.Label.new(text);
-        gtk.Widget.setMarginStart(label.as(gtk.Widget), LABEL_GAP);
+        gtk.Widget.addCssClass(label.as(gtk.Widget), "nav-label");
         gtk.Widget.setHalign(label.as(gtk.Widget), .start);
 
         const revealer = gtk.Revealer.new();
@@ -495,14 +495,6 @@ pub const ShellyWindow = extern struct {
         }
     }
 
-    fn on_utilities(btn: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
-        const p = self.private();
-        gtk.Stack.setVisibleChildName(p.content_stack, "utilities");
-        if (gtk.Widget.getAncestor(btn.as(gtk.Widget), gtk.Popover.getGObjectType())) |pop| {
-            gtk.Popover.popdown(@ptrCast(@alignCast(pop)));
-        }
-    }
-
     fn populate_stack(self: *ShellyWindow) void {
         const stack = self.private().content_stack;
 
@@ -539,8 +531,7 @@ pub const ShellyWindow = extern struct {
         gtk.StackPage.setIconName(sp_page, SettingsPage.icon_name);
 
         const up_utils = UtilitiesPage.new();
-        const up_utils_page = gtk.Stack.addTitled(stack, up_utils.as(gtk.Widget), "utilities", translations._("Utilities"));
-        gtk.StackPage.setIconName(up_utils_page, UtilitiesPage.icon_name);
+        _ = sp.addPage(up_utils.as(gtk.Widget), "utilities", translations._("Utilities"));
     }
 
     pub fn showLockout(self: *ShellyWindow, content: *gtk.Widget) void {
@@ -594,7 +585,7 @@ pub const ShellyWindow = extern struct {
     }
 
     const template_children = .{
-        .{ "app_headerbar", @offsetOf(Private, "app_headerbar") },
+        .{ "root_overlay", @offsetOf(Private, "root_overlay") },
         .{ "lockout_overlay", @offsetOf(Private, "lockout_overlay") },
         .{ "lockout_content", @offsetOf(Private, "lockout_content") },
     };
@@ -635,3 +626,61 @@ pub const ShellyWindow = extern struct {
         gobject.Object.virtual_methods.finalize.call(Class.parent, self.as(Parent));
     }
 };
+
+test "sidebar rail fills the shell without outer gaps" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const sidebar = Sidebar.init(false);
+    const rail = sidebar.root;
+    _ = rail.as(gobject.Object).refSink();
+    defer rail.as(gobject.Object).unref();
+
+    const widget = rail.as(gtk.Widget);
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.getMarginTop(widget));
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.getMarginBottom(widget));
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.getMarginStart(widget));
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.getMarginEnd(widget));
+    try std.testing.expectEqual(@as(c_int, 1), gtk.Widget.getVexpand(widget));
+}
+
+test "main column keeps chrome beside the full-height sidebar" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const shell = gtk.Box.new(.horizontal, 0);
+    _ = shell.as(gobject.Object).refSink();
+    defer shell.as(gobject.Object).unref();
+
+    const sidebar = Sidebar.init(false);
+    const topnav = gtk.Box.new(.horizontal, 0);
+    const stack = gtk.Stack.new();
+    const main = buildMainColumn(sidebar.collapse_button, topnav, stack);
+
+    gtk.Box.append(shell, sidebar.root.as(gtk.Widget));
+    gtk.Box.append(shell, main.root.as(gtk.Widget));
+
+    try std.testing.expect(gtk.Widget.getFirstChild(shell.as(gtk.Widget)) == sidebar.root.as(gtk.Widget));
+    try std.testing.expect(gtk.Widget.getNextSibling(sidebar.root.as(gtk.Widget)) == main.root.as(gtk.Widget));
+    try std.testing.expect(gtk.Widget.getFirstChild(main.root.as(gtk.Widget)) == main.chrome.as(gtk.Widget));
+    try std.testing.expect(gtk.Widget.getParent(sidebar.collapse_button.as(gtk.Widget)) == main.chrome.as(gtk.Widget));
+    try std.testing.expect(gtk.Widget.getNextSibling(main.chrome.as(gtk.Widget)) == topnav.as(gtk.Widget));
+    try std.testing.expect(gtk.Widget.getNextSibling(topnav.as(gtk.Widget)) == stack.as(gtk.Widget));
+}
+
+test "sidebar collapsed state survives save and reload" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    {
+        var config = ConfigResolver.initDir(std.testing.allocator, std.testing.io, tmp.dir);
+        defer config.deinit();
+        try config.load();
+        try ShellyWindow.persistSidebarCollapsed(&config, false);
+    }
+
+    var reloaded = ConfigResolver.initDir(std.testing.allocator, std.testing.io, tmp.dir);
+    defer reloaded.deinit();
+    try reloaded.load();
+
+    const config = try reloaded.get();
+    try std.testing.expectEqual(false, config.SidebarCollapsed);
+}

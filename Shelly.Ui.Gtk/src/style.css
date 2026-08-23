@@ -39,7 +39,37 @@
 .spec-value { font-weight: 600; }
 
 .nav-rail {
-  padding: 2px 2px;}
+  padding: 2px 2px;
+}
+
+.theme-classic .app-sidebar {
+  margin: 8px 6px;
+}
+
+.theme-classic .sidebar-brand {
+  padding: 2px 4px;
+  border-spacing: 4px;
+}
+
+.theme-classic .sidebar-primary {
+  padding: 4px 0;
+  border-spacing: 6px;
+}
+
+.sidebar-primary-scroll,
+.sidebar-primary-scroll > viewport {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.theme-classic .sidebar-bottom {
+  padding: 0;
+}
+
+.theme-classic .sidebar-separator {
+  margin: 0 4px;
+}
 
 .nav-btn {
   padding: 6px 4px;
@@ -51,30 +81,84 @@
 }
 
 .nav-selected {
-    background-color: alpha(@theme_fg_color, 0.04);
+  background-color: alpha(@theme_fg_color, 0.04);
+}
+
+.theme-classic .app-sidebar .sidebar-nav-icon {
+  min-width: 24px;
+}
+
+.theme-classic .app-sidebar .nav-label {
+  margin-left: 8px;
 }
 
 .nav-selected label {
   font-weight: bold;
 }
 
-.app-headerbar {
-  min-height: 2em;
-  padding: 0 0.125em 0 0.25em;
+.app-csd-anchor {
+  min-height: 0;
+  padding: 0;
   margin: 0;
-  background-color: @theme_bg_color;
+  background: transparent;
   border: 0;
   border-radius: 0;
   box-shadow: none;
 }
 
-.app-headerbar .app-window-controls {
+.app-window-chrome-row {
+  min-height: 1em;
+  background: transparent;
+}
+
+.app-window-chrome-row.app-window-chrome-sidebar {
+  min-height: 2em;
+}
+
+.sidebar-collapse-button {
+  min-width: 2em;
+  min-height: 2em;
+  padding: 0;
   margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.app-window-drag-region {
+  background: transparent;
+}
+
+.app-window-resize-handle {
+  background: transparent;
+}
+
+.window-resize-north,
+.window-resize-south {
+  min-height: 0.125em;
+}
+
+.window-resize-east,
+.window-resize-west {
+  min-width: 0.25em;
+}
+
+.window-resize-north-east,
+.window-resize-south-east,
+.window-resize-south-west,
+.window-resize-north-west {
+  min-width: 0.5em;
+  min-height: 0.5em;
+}
+
+.app-window-controls-overlay {
+  margin: 0 0.125em 0 0;
   padding: 0;
   border-spacing: 0.125em;
 }
 
-.app-headerbar .app-window-control {
+.app-window-controls-overlay .app-window-control {
   min-width: 1.75em;
   min-height: 1.75em;
   padding: 0;
@@ -86,7 +170,7 @@
   box-shadow: none;
 }
 
-.app-headerbar .app-window-control > image {
+.app-window-controls-overlay .app-window-control > image {
   min-width: 0.8em;
   min-height: 0.8em;
   -gtk-icon-size: 0.8em;
@@ -97,15 +181,15 @@
   box-shadow: none;
 }
 
-.app-headerbar .window-control-close > image {
+.app-window-controls-overlay .window-control-close > image {
   min-width: 1em;
   min-height: 1em;
   -gtk-icon-size: 1em;
 }
 
-.app-headerbar .app-topbar {
+.app-topbar {
   margin: 0;
-  padding: 0 0.125em;
+  padding: 0 5.75em 0 0.125em;
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -113,27 +197,27 @@
   border-spacing: 0.125em;
 }
 
-.app-headerbar .app-topbar .app-nav-button {
+.app-topbar .app-nav-button {
   min-width: 1.75em;
   min-height: 1.75em;
   margin: 0 0.0625em;
   padding: 0.25em;
 }
 
-.app-headerbar .app-topbar .app-nav-button image {
+.app-topbar .app-nav-button image {
   -gtk-icon-size: 0.9em;
 }
 
-.app-headerbar .app-window-control:hover {
+.app-window-controls-overlay .app-window-control:hover {
   color: @theme_fg_color;
   background-color: alpha(@theme_fg_color, 0.10);
   border-color: alpha(@theme_fg_color, 0.08);
   box-shadow: inset 0 1px alpha(white, 0.05);
 }
 
-.app-headerbar .app-window-control:hover > image,
-.app-headerbar .app-window-control:active > image,
-.app-headerbar .app-window-control:checked > image {
+.app-window-controls-overlay .app-window-control:hover > image,
+.app-window-controls-overlay .app-window-control:active > image,
+.app-window-controls-overlay .app-window-control:checked > image {
   background-color: transparent;
   background-image: none;
   border: 0;
@@ -141,19 +225,27 @@
   box-shadow: none;
 }
 
-.app-headerbar .app-window-control:active {
+.app-window-controls-overlay .app-window-control:active {
   background-color: alpha(@theme_fg_color, 0.16);
 }
 
-.app-headerbar .window-control-close:hover {
+.app-window-controls-overlay .window-control-close:hover {
   color: #ffffff;
   background-color: alpha(#ff3b45, 0.88);
   border-color: alpha(#ff9da4, 0.42);
   box-shadow: inset 0 1px alpha(white, 0.12);
 }
 
-.app-headerbar .window-control-close:active {
+.app-window-controls-overlay .window-control-close:active {
   background-color: alpha(#e32636, 0.96);
+}
+
+.page-toolbar {
+  margin-right: 5.75em;
+}
+
+.recommended-page {
+  padding-right: 5.75em;
 }
 
 .transaction-page {

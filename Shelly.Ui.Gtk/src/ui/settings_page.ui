@@ -44,8 +44,7 @@
                             <property name="spacing">20</property>
                             <property name="hexpand">true</property>
                             <property name="vexpand">true</property>
-                            <property name="halign">center</property>
-                            <property name="width-request">600</property>
+                            <property name="halign">fill</property>
                             <style><class name="settings-section"/></style>
                             <child>
                               <object class="GtkBox">
@@ -360,8 +359,7 @@
                             <property name="spacing">20</property>
                             <property name="hexpand">true</property>
                             <property name="vexpand">true</property>
-                            <property name="halign">center</property>
-                            <property name="width-request">600</property>
+                            <property name="halign">fill</property>
                             <style><class name="settings-section"/></style>
                             <child>
                               <object class="GtkBox">
@@ -531,8 +529,7 @@
                             <property name="spacing">20</property>
                             <property name="hexpand">true</property>
                             <property name="vexpand">true</property>
-                            <property name="halign">center</property>
-                            <property name="width-request">600</property>
+                            <property name="halign">fill</property>
                             <style><class name="settings-section"/></style>
                             <child>
                               <object class="GtkBox">

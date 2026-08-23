@@ -134,6 +134,10 @@ pub const ShellySettingsPage = extern struct {
         return gobject.ext.as(T, self);
     }
 
+    pub fn addPage(self: *Self, child: *gtk.Widget, name: [:0]const u8, title_text: [:0]const u8) *gtk.StackPage {
+        return gtk.Stack.addTitled(self.priv().settings_stack, child, name, title_text);
+    }
+
     fn priv(self: *Self) *Private {
         return gobject.ext.impl_helpers.getPrivate(self, Private, Private.offset);
     }
@@ -384,6 +388,11 @@ pub const ShellySettingsPage = extern struct {
             restoreTheme(current, p.last_saved_theme);
         } else |_| {}
 
+        self.restoreThemeSelection();
+    }
+
+    fn restoreThemeSelection(self: *Self) void {
+        const p = self.priv();
         p.save_guard = true;
         gtk.DropDown.setSelected(p.theme_drop, themeIndex(p.last_saved_theme));
         p.save_guard = false;
@@ -467,10 +476,23 @@ pub const ShellySettingsPage = extern struct {
     fn on_theme_changed(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         const p = self.priv();
         if (p.save_guard or !p.loaded) return;
+
+        const theme = selectedTheme(p);
+        const svc = obtainConfigService() catch {
+            self.restoreThemeSelection();
+            p.toast.show(.@"error", translations._("Failed to save settings"));
+            return;
+        };
+        persistTheme(svc, theme) catch {
+            self.restoreSavedTheme(svc);
+            p.toast.show(.@"error", translations._("Failed to save settings"));
+            return;
+        };
+
+        p.last_saved_theme = theme;
         if (support.getWindow(ShellyWindow, self)) |win| {
-            win.applyTheme(selectedTheme(p));
+            win.applyTheme(theme);
         }
-        self.autosave();
     }
 
     fn on_flatpak_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
@@ -1372,6 +1394,10 @@ fn persistFeatureEnabled(
     try svc.save();
 }
 
+fn persistTheme(config: *ConfigResolver, theme: AppTheme) !void {
+    try config.updateField(.Theme, theme);
+}
+
 fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.aur_switch, cfg.AurEnabled);
     setSwitch(p.flatpak_switch, cfg.FlatPackEnabled);
@@ -1514,6 +1540,30 @@ test "theme rollback preserves other settings" {
     try std.testing.expectEqual(AppTheme.classic, cfg.Theme);
     try std.testing.expect(cfg.AurEnabled);
     try std.testing.expect(!cfg.RecommendedEnabled);
+}
+
+test "theme choice persists independently without replacing other settings" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var config = ConfigResolver.initDir(std.testing.allocator, std.testing.io, tmp.dir);
+    defer config.deinit();
+    try config.load();
+
+    var seeded = (try config.get()).*;
+    seeded.AurEnabled = true;
+    try config.set(seeded);
+    try config.save();
+
+    try persistTheme(&config, .midnight);
+
+    var reloaded = ConfigResolver.initDir(std.testing.allocator, std.testing.io, tmp.dir);
+    defer reloaded.deinit();
+    try reloaded.load();
+
+    const saved = try reloaded.get();
+    try std.testing.expectEqual(AppTheme.midnight, saved.Theme);
+    try std.testing.expect(saved.AurEnabled);
 }
 
 test "Flatpak support uses libflatpak and the configured companion backend" {

@@ -47,9 +47,8 @@
                   <object class="GtkBox">
                     <property name="orientation">vertical</property>
                     <property name="spacing">12</property>
-                    <property name="halign">center</property>
+                    <property name="halign">fill</property>
                     <property name="hexpand">true</property>
-                    <property name="width-request">600</property>
                     <style><class name="settings-section"/></style>
                     <child>
                       <object class="GtkBox">

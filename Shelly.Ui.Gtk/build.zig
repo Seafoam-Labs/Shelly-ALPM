@@ -83,12 +83,15 @@ pub fn build(b: *std.Build) void {
     gresource.addArg("--generate-source");
     gresource.addArg("--sourcedir");
     gresource.addDirectoryArg(b.path("src"));
+    gresource.addArg("--sourcedir");
+    gresource.addDirectoryArg(b.path("../assets"));
     gresource.addArg("--target");
     const resources_c = gresource.addOutputFileArg("resources.c");
     gresource.addFileArg(b.path("src/gresource.xml"));
 
     gresource.addFileInput(b.path("src/style.css"));
     gresource.addFileInput(b.path("src/theme-midnight.css"));
+    gresource.addFileInput(b.path("../assets/shellylogo.png"));
     gresource.addFileInput(b.path("src/assets/icons/flatpak-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/arch-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/update-symbolic.svg"));
