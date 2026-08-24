@@ -9,6 +9,7 @@ const operation_api = @import("operation_context");
 const ShellyBuildConfiguration = @import("shellybuild.zig").ShellyBuildConfiguration;
 const package_builder = @import("builder/builder.zig");
 const review_integrity = @import("review_integrity.zig");
+const source_pgp_keyring = @import("../shared/source_pgp_keyring.zig");
 
 pub const models = @import("models.zig");
 pub const rpc = @import("rpc_client.zig");
@@ -1732,7 +1733,8 @@ pub const Manager = struct {
         );
         defer build_review.deinit();
 
-        if (self.build_command) |command|
+        if (self.build_command) |command| {
+            try self.ensureSourcePgpKeys(operation, prepared.package_name, package_builds);
             return self.buildPreparedPackageWithCommand(
                 command,
                 prepared,
@@ -1740,6 +1742,7 @@ pub const Manager = struct {
                 historical,
                 build_review.digest,
             );
+        }
 
         const active_context = self.operation_context orelse operation.context;
         const work_directory = if (self.shellybuild_config.destinations.build) |build_root|
@@ -1834,6 +1837,60 @@ pub const Manager = struct {
         const paths = try self.selectBuiltPackageFiles(prepared.cache_path, requested_names);
         defer builder.deinitPaths(self.allocator, paths);
         return artifactsFromPaths(self.allocator, paths, requested_names);
+    }
+
+    fn ensureSourcePgpKeys(
+        self: *Self,
+        operation: *const operation_api.Operation,
+        package_name: []const u8,
+        package_builds: []const PkgbuildInfo,
+    ) !void {
+        var fingerprints: std.ArrayList([]const u8) = .empty;
+        defer fingerprints.deinit(self.allocator);
+        for (package_builds) |package_build|
+            if (package_build.valid_pgp_keys) |keys|
+                try fingerprints.appendSlice(self.allocator, keys);
+        if (fingerprints.items.len == 0) return;
+
+        try source_pgp_keyring.ensurePinnedKeys(
+            self.allocator,
+            operation,
+            package_name,
+            fingerprints.items,
+            .{
+                .context = self,
+                .contains = sourcePgpKeyExists,
+                .receive = receiveSourcePgpKey,
+            },
+        );
+    }
+
+    fn sourcePgpKeyExists(data: ?*anyopaque, fingerprint: []const u8) !bool {
+        const self: *Self = @ptrCast(@alignCast(data.?));
+        var result = try self.runAsInvokingUser(&.{
+            "/usr/bin/gpg",
+            "--batch",
+            "--no-tty",
+            "--list-keys",
+            fingerprint,
+        }, null, 30);
+        defer result.deinit(self.allocator);
+        return result.exit_code == 0;
+    }
+
+    fn receiveSourcePgpKey(data: ?*anyopaque, fingerprint: []const u8) !bool {
+        const self: *Self = @ptrCast(@alignCast(data.?));
+        const command = self.build_command orelse return false;
+        var result = try self.runAsInvokingUser(&.{
+            command,
+            "keyring",
+            "recv",
+            "--user",
+            "--no-confirm",
+            fingerprint,
+        }, null, 120);
+        defer result.deinit(self.allocator);
+        return result.exit_code == 0;
     }
 
     fn readCachedPkgbuild(self: *Self, package_name: []const u8) !?[]u8 {

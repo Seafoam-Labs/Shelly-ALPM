@@ -212,6 +212,8 @@ const Real = struct {
 
         const package_base = package_builds[0].variables.get("pkgbase") orelse
             package_builds[0].pkg_name orelse return error.MissingPackageName;
+        if (!optionEnabled(invocation, "--skip-source-pgp-verification"))
+            try ensureSourcePgpKeys(context, &operation, package_base, package_builds);
         const work_directory = if (shellybuild.destinations.build) |build_root|
             try Zigalpm.builder.uniqueWorkDirectory(
                 context.allocator,
@@ -286,6 +288,91 @@ const Real = struct {
         completion = .success;
     }
 };
+
+const SourcePgpCommandContext = struct {
+    runtime_context: *runtime.RuntimeContext,
+    executable: []const u8,
+
+    fn contains(data: ?*anyopaque, fingerprint: []const u8) !bool {
+        const self: *@This() = @ptrCast(@alignCast(data.?));
+        return runQuiet(self.runtime_context, &.{
+            "/usr/bin/gpg",
+            "--batch",
+            "--no-tty",
+            "--list-keys",
+            fingerprint,
+        });
+    }
+
+    fn receive(data: ?*anyopaque, fingerprint: []const u8) !bool {
+        const self: *@This() = @ptrCast(@alignCast(data.?));
+        var child = try std.process.spawn(self.runtime_context.io, .{
+            .argv = &.{
+                self.executable,
+                "keyring",
+                "recv",
+                "--user",
+                "--no-confirm",
+                fingerprint,
+            },
+            .stdin = .inherit,
+            .stdout = .inherit,
+            .stderr = .inherit,
+        });
+        errdefer child.kill(self.runtime_context.io);
+        return childSucceeded(try child.wait(self.runtime_context.io));
+    }
+};
+
+fn ensureSourcePgpKeys(
+    context: *runtime.RuntimeContext,
+    operation: *const Zigalpm.Operation,
+    package_name: []const u8,
+    package_builds: []const Zigalpm.pkgbuild.parser.Pkgbuild,
+) !void {
+    var fingerprints: std.ArrayList([]const u8) = .empty;
+    defer fingerprints.deinit(context.allocator);
+    for (package_builds) |package_build|
+        if (package_build.valid_pgp_keys) |keys|
+            try fingerprints.appendSlice(context.allocator, keys);
+    if (fingerprints.items.len == 0) return;
+
+    const executable_allocated = try std.process.executablePathAlloc(context.io, context.allocator);
+    defer context.allocator.free(executable_allocated);
+    var command_context: SourcePgpCommandContext = .{
+        .runtime_context = context,
+        .executable = std.mem.trimEnd(u8, executable_allocated, " (deleted)"),
+    };
+    try Zigalpm.source_pgp_keyring.ensurePinnedKeys(
+        context.allocator,
+        operation,
+        package_name,
+        fingerprints.items,
+        .{
+            .context = &command_context,
+            .contains = SourcePgpCommandContext.contains,
+            .receive = SourcePgpCommandContext.receive,
+        },
+    );
+}
+
+fn runQuiet(context: *runtime.RuntimeContext, argv: []const []const u8) !bool {
+    var child = try std.process.spawn(context.io, .{
+        .argv = argv,
+        .stdin = .ignore,
+        .stdout = .ignore,
+        .stderr = .ignore,
+    });
+    errdefer child.kill(context.io);
+    return childSucceeded(try child.wait(context.io));
+}
+
+fn childSucceeded(term: std.process.Child.Term) bool {
+    return switch (term) {
+        .exited => |code| code == 0,
+        else => false,
+    };
+}
 
 const BuildRequest = struct {
     pkgbuild_path: []u8,

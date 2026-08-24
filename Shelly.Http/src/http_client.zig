@@ -325,7 +325,7 @@ pub const Connection = struct {
         client: TlsClient,
         connection: Connection,
 
-        /// Asserts that `client.now` is non-null.
+        /// Requires the client's TLS trust state to be initialized.
         fn create(
             client: *Client,
             remote_host: HostName,
@@ -334,6 +334,7 @@ pub const Connection = struct {
         ) !*Tls {
             const io = client.io;
             const gpa = client.allocator;
+            const realtime_now = client.now orelse return error.TlsInitializationFailed;
             const alloc_len = allocLen(client, remote_host.bytes.len);
             const base = try gpa.alignedAlloc(u8, .of(Tls), alloc_len);
             errdefer gpa.free(base);
@@ -379,7 +380,7 @@ pub const Connection = struct {
                         .read_buffer = tls_read_buffer,
                         .write_buffer = socket_write_buffer,
                         .entropy = &random_buffer,
-                        .realtime_now = client.now.?,
+                        .realtime_now = realtime_now,
                         // This is appropriate for HTTPS because the HTTP headers contain
                         // the content length which is used to detect truncation attacks.
                         .allow_truncation_attacks = true,
@@ -1475,9 +1476,41 @@ pub const basic_authorization = struct {
     }
 };
 
-pub const ConnectTcpError = error{
+const TlsInitializationError = error{
     TlsInitializationFailed,
-} || Allocator.Error || HostName.ConnectError;
+    CertificateBundleLoadFailure,
+} || Io.Cancelable;
+
+fn ensureTlsInitialized(client: *Client) TlsInitializationError!void {
+    if (disable_tls) return error.TlsInitializationFailed;
+
+    const io = client.io;
+    {
+        try client.ca_bundle_lock.lockShared(io);
+        const loaded = client.now != null;
+        client.ca_bundle_lock.unlockShared(io);
+        if (loaded) return;
+    }
+
+    // Only the first TLS connection scans the system trust store. Concurrent
+    // callers wait here and observe the populated bundle after acquiring the
+    // lock.
+    try client.ca_bundle_lock.lock(io);
+    defer client.ca_bundle_lock.unlock(io);
+    if (client.now != null) return;
+
+    var bundle: std.crypto.Certificate.Bundle = .empty;
+    defer bundle.deinit(client.allocator);
+    const now = Io.Clock.real.now(io);
+    bundle.rescan(client.allocator, io, now) catch |err| switch (err) {
+        error.Canceled => |e| return e,
+        else => return error.CertificateBundleLoadFailure,
+    };
+    client.now = now;
+    std.mem.swap(std.crypto.Certificate.Bundle, &client.ca_bundle, &bundle);
+}
+
+pub const ConnectTcpError = TlsInitializationError || Allocator.Error || HostName.ConnectError;
 
 /// Reuses a `Connection` if one matching `host` and `port` is already open.
 ///
@@ -1514,6 +1547,8 @@ pub fn connectTcpOptions(client: *Client, options: ConnectTcpOptions) ConnectTcp
 
     const proxied_host = options.proxied_host orelse host;
     const proxied_port = options.proxied_port orelse port;
+
+    if (protocol == .tls) try ensureTlsInitialized(client);
 
     if (client.connection_pool.findConnection(io, .{
         .host = proxied_host,
@@ -2682,8 +2717,6 @@ pub fn request(
     uri: Uri,
     options: RequestOptions,
 ) RequestError!Request {
-    const io = client.io;
-
     if (std.debug.runtime_safety) {
         for (options.extra_headers) |header| {
             assert(header.name.len != 0);
@@ -2699,33 +2732,6 @@ pub fn request(
     }
 
     const protocol = Protocol.fromUri(uri) orelse return error.UnsupportedUriScheme;
-
-    if (protocol == .tls) tls: {
-        if (disable_tls) unreachable;
-        {
-            try client.ca_bundle_lock.lockShared(io);
-            const loaded = client.now != null;
-            client.ca_bundle_lock.unlockShared(io);
-            if (loaded) break :tls;
-        }
-
-        // Only the first request in a shared session scans the system trust
-        // store. Concurrent requests wait here and observe the populated
-        // bundle after acquiring the lock.
-        try client.ca_bundle_lock.lock(io);
-        defer client.ca_bundle_lock.unlock(io);
-        if (client.now != null) break :tls;
-
-        var bundle: std.crypto.Certificate.Bundle = .empty;
-        defer bundle.deinit(client.allocator);
-        const now = Io.Clock.real.now(io);
-        bundle.rescan(client.allocator, io, now) catch |err| switch (err) {
-            error.Canceled => |e| return e,
-            else => return error.CertificateBundleLoadFailure,
-        };
-        client.now = now;
-        std.mem.swap(std.crypto.Certificate.Bundle, &client.ca_bundle, &bundle);
-    }
 
     const connection = options.connection orelse c: {
         var host_name_buffer: [HostName.max_len]u8 = undefined;
@@ -2869,6 +2875,148 @@ pub fn fetch(client: *Client, options: FetchOptions) FetchError!FetchResult {
 
 test {
     _ = Response;
+}
+
+fn consumeTestRequestHead(reader: *Io.Reader) !void {
+    while (true) {
+        const line = (try reader.takeDelimiter('\n')) orelse return error.EndOfStream;
+        if (std.mem.eql(u8, line, "\r")) return;
+    }
+}
+
+const HttpToTlsRedirectTestServer = struct {
+    io: Io,
+    server: Io.net.Server,
+
+    fn init(io: Io) !HttpToTlsRedirectTestServer {
+        var address: IpAddress = .{ .ip4 = .loopback(0) };
+        return .{
+            .io = io,
+            .server = try address.listen(io, .{ .reuse_address = true }),
+        };
+    }
+
+    fn deinit(server: *HttpToTlsRedirectTestServer) void {
+        server.server.deinit(server.io);
+    }
+
+    fn url(server: *const HttpToTlsRedirectTestServer, allocator: Allocator) ![]u8 {
+        return std.fmt.allocPrint(
+            allocator,
+            "http://127.0.0.1:{d}/source",
+            .{server.server.socket.address.getPort()},
+        );
+    }
+
+    fn serve(server: *HttpToTlsRedirectTestServer) !void {
+        {
+            var stream = try server.server.accept(server.io);
+            defer stream.close(server.io);
+
+            var read_buffer: [2048]u8 = undefined;
+            var stream_reader = stream.reader(server.io, &read_buffer);
+            try consumeTestRequestHead(&stream_reader.interface);
+
+            var write_buffer: [512]u8 = undefined;
+            var stream_writer = stream.writer(server.io, &write_buffer);
+            try stream_writer.interface.print(
+                "HTTP/1.1 301 Moved Permanently\r\n" ++
+                    "Location: https://127.0.0.1:{d}/source\r\n" ++
+                    "Content-Length: 0\r\n" ++
+                    "Connection: close\r\n\r\n",
+                .{server.server.socket.address.getPort()},
+            );
+            try stream_writer.interface.flush();
+        }
+
+        // Accept the redirected TLS connection, then close it without a
+        // handshake. The client must return a typed TLS error rather than
+        // reaching Tls.create with uninitialized trust state.
+        var stream = try server.server.accept(server.io);
+        stream.close(server.io);
+    }
+};
+
+test "HTTP to HTTPS redirect initializes TLS before connecting" {
+    if (disable_tls) return error.SkipZigTest;
+
+    var threaded: Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var server = try HttpToTlsRedirectTestServer.init(io);
+    defer server.deinit();
+    var server_future = try io.concurrent(HttpToTlsRedirectTestServer.serve, .{&server});
+    defer _ = server_future.cancel(io) catch {};
+
+    const url = try server.url(testing.allocator);
+    defer testing.allocator.free(url);
+    var client: Client = .{ .allocator = testing.allocator, .io = io };
+    defer client.deinit();
+
+    var request_value = try client.request(.GET, try Uri.parse(url), .{
+        .redirect_behavior = .init(1),
+    });
+    defer request_value.deinit();
+    try request_value.sendBodiless();
+
+    var redirect_buffer: [1024]u8 = undefined;
+    try testing.expectError(
+        error.TlsInitializationFailed,
+        request_value.receiveHead(&redirect_buffer),
+    );
+    try testing.expect(client.now != null);
+    try server_future.await(io);
+}
+
+test "direct TLS connection initializes trust state before handshake" {
+    if (disable_tls) return error.SkipZigTest;
+
+    var threaded: Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var listen_address: IpAddress = .{ .ip4 = .loopback(0) };
+    var server = try listen_address.listen(io, .{ .reuse_address = true });
+    defer server.deinit(io);
+    var server_future = try io.concurrent(acceptOneTestConnection, .{ &server, io });
+    defer _ = server_future.cancel(io) catch {};
+
+    var client: Client = .{ .allocator = testing.allocator, .io = io };
+    defer client.deinit();
+    const host = try HostName.init("127.0.0.1");
+    try testing.expectError(
+        error.TlsInitializationFailed,
+        client.connectTcp(host, server.socket.address.getPort(), .tls),
+    );
+    try testing.expect(client.now != null);
+    try server_future.await(io);
+}
+
+test "concurrent TLS initialization loads one stable trust state" {
+    if (disable_tls) return error.SkipZigTest;
+
+    var threaded: Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var client: Client = .{ .allocator = testing.allocator, .io = io };
+    defer client.deinit();
+
+    var first = try io.concurrent(ensureTlsInitialized, .{&client});
+    defer _ = first.cancel(io) catch {};
+    var second = try io.concurrent(ensureTlsInitialized, .{&client});
+    defer _ = second.cancel(io) catch {};
+    try first.await(io);
+    try second.await(io);
+
+    const initialized_at = client.now orelse return error.ExpectedTlsInitialization;
+    const bundle_ptr = client.ca_bundle.bytes.items.ptr;
+    const bundle_len = client.ca_bundle.bytes.items.len;
+    try ensureTlsInitialized(&client);
+
+    try testing.expectEqual(initialized_at.nanoseconds, client.now.?.nanoseconds);
+    try testing.expect(bundle_ptr == client.ca_bundle.bytes.items.ptr);
+    try testing.expectEqual(bundle_len, client.ca_bundle.bytes.items.len);
 }
 
 test "Zig resolver uses the host database for an IPv4 query" {

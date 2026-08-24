@@ -66,6 +66,7 @@ pub const aur = @import("aur/manager.zig");
 
 pub const builder = @import("aur/builder/builder.zig");
 pub const source_pgp_verifier = @import("shared/source_pgp_verifier.zig");
+pub const source_pgp_keyring = @import("shared/source_pgp_keyring.zig");
 pub const package_signer = @import("shared/package_signer.zig");
 
 pub const flatpak = struct {
@@ -206,6 +207,7 @@ pub const OperationQuestionAttachment = operation.QuestionAttachment;
 pub const OperationReviewSeverity = operation.ReviewSeverity;
 pub const OperationReviewFinding = operation.ReviewFinding;
 pub const OperationReviewPayload = operation.ReviewPayload;
+pub const OperationPgpKeyImportPayload = operation.PgpKeyImportPayload;
 pub const OperationTransactionAction = operation.TransactionAction;
 pub const OperationTransactionPackageSource = operation.TransactionPackageSource;
 pub const OperationTransactionPackageRole = operation.TransactionPackageRole;
@@ -499,6 +501,7 @@ test {
     _ = @import("archive");
     _ = @import("shared/downloader.zig");
     _ = @import("shared/source_pgp_verifier.zig");
+    _ = @import("shared/source_pgp_keyring.zig");
     _ = @import("shared/package_signer.zig");
     _ = @import("appimage/update_manager.zig");
     _ = @import("pkgbuild/pkgbuild_parser.zig");

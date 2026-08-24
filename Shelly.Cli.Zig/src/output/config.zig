@@ -249,6 +249,12 @@ pub fn writeYesNoQuestionFrame(
     try json.write(questionKindName(question));
     try json.objectField("QuestionText");
     try json.write(question.prompt);
+    if (question.pgp_key_import) |key| {
+        try json.objectField("PackageName");
+        try json.write(key.package_name);
+        try json.objectField("Fingerprint");
+        try json.write(key.fingerprint);
+    }
     try json.endObject();
     try writeFrame(context, payload.writer.buffered());
 }
@@ -370,6 +376,7 @@ fn writeSelectionQuestionFrame(
 }
 
 fn questionKindName(question: Zigalpm.OperationQuestion) []const u8 {
+    if (question.kind == .import_pgp_key) return "ImportPgpKey";
     return switch (question.envelope.kind) {
         .remove => "RemovePkgs",
         .update => "ConflictPkg",

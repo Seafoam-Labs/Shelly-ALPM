@@ -70,7 +70,7 @@ pub const types = [_]Type{
     .{ .name = "flatpak", .code = 'f', .description = "Flatpak applications and runtimes" },
     .{ .name = "appimage", .code = 'i', .description = "AppImage applications" },
     .{ .name = "utility", .code = 'u', .description = "System and Shelly utility operations" },
-    .{ .name = "keyring", .code = 'k', .description = "Pacman keyring operations" },
+    .{ .name = "keyring", .code = 'k', .description = "Package and source-signing keyring operations" },
     .{ .name = "all", .code = 'x', .description = "All supported package backends" },
 };
 

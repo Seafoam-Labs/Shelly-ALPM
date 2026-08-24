@@ -163,6 +163,7 @@ pub const QuestionResponder = struct {
     ) Zigalpm.OperationQuestionResponse {
         switch (question.kind) {
             .confirmation => output.writeYesNoQuestionFrame(self.context, question) catch return .declined,
+            .import_pgp_key => output.writeYesNoQuestionFrame(self.context, question) catch return .declined,
             .confirm_transaction => output.writeTransactionQuestionFrame(self.context, question) catch return .declined,
             .review_changes => output.writePkgbuildQuestionFrame(self.context, question) catch return .declined,
             .select_one, .select_provider => output.writeProviderQuestionFrame(self.context, question) catch return .{ .choice = 0 },
@@ -389,10 +390,14 @@ fn hasSecurityFindings(question: Zigalpm.OperationQuestion) bool {
 fn automaticResponse(kind: Zigalpm.OperationQuestionKind) Zigalpm.OperationQuestionResponse {
     return switch (kind) {
         .confirmation, .confirm_transaction => .accepted,
-        .review_changes => .declined,
+        .import_pgp_key, .review_changes => .declined,
         .select_one, .select_provider => .{ .choice = 0 },
         .select_many, .select_optional_dependencies => .{ .choices = &.{} },
     };
+}
+
+test "non-interactive UI declines source key imports" {
+    try std.testing.expect(automaticResponse(.import_pgp_key) == .declined);
 }
 
 pub fn flush(context: *runtime.RuntimeContext) !void {

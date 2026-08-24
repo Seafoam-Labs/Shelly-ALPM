@@ -509,6 +509,7 @@ pub const Renderer = struct {
         defer self.drawBars() catch self.write_failed.store(true, .release);
         return switch (question.kind) {
             .confirmation => if (try self.confirm(question.prompt, true)) .accepted else .declined,
+            .import_pgp_key => if (try self.confirm(question.prompt, false)) .accepted else .declined,
             .confirm_transaction => blk: {
                 try self.renderTransactionPlan(question);
                 const default_approved = defaultResponse(question) == .accepted;
@@ -1005,6 +1006,7 @@ fn renderBar(
 fn automaticResponse(kind: Zigalpm.OperationQuestionKind) Zigalpm.OperationQuestionResponse {
     return switch (kind) {
         .confirmation, .confirm_transaction, .review_changes => .accepted,
+        .import_pgp_key => .declined,
         .select_one, .select_provider => .{ .choice = 0 },
         .select_many, .select_optional_dependencies => .{ .choices = &.{} },
     };
@@ -1199,6 +1201,7 @@ test "single-pane clears unknown-length bars on completion and suppresses AUR me
 
 test "single-pane no-confirm uses the shared automatic question policy" {
     try std.testing.expect(automaticResponse(.confirmation) == .accepted);
+    try std.testing.expect(automaticResponse(.import_pgp_key) == .declined);
     try std.testing.expectEqual(@as(usize, 0), automaticResponse(.select_provider).choice);
     try std.testing.expectEqual(@as(usize, 0), automaticResponse(.select_optional_dependencies).choices.len);
 }

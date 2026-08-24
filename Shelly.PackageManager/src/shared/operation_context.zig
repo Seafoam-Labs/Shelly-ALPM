@@ -123,12 +123,20 @@ pub const Event = union(enum) {
 
 pub const QuestionKind = enum {
     confirmation,
+    import_pgp_key,
     confirm_transaction,
     select_one,
     select_many,
     select_provider,
     select_optional_dependencies,
     review_changes,
+};
+
+/// A source-signing key requested by a reviewed PKGBUILD. The fingerprint is
+/// the complete value pinned by `validpgpkeys`, never a short GnuPG key ID.
+pub const PgpKeyImportPayload = struct {
+    package_name: []const u8,
+    fingerprint: []const u8,
 };
 
 pub const QuestionOption = struct {
@@ -233,6 +241,7 @@ pub const QuestionRequest = struct {
     review: ?ReviewPayload = null,
     transaction_plan: ?TransactionPlan = null,
     dependency_name: ?[]const u8 = null,
+    pgp_key_import: ?PgpKeyImportPayload = null,
     default_response: QuestionResponse = .default,
 };
 
@@ -246,6 +255,7 @@ pub const Question = struct {
     review: ?ReviewPayload,
     transaction_plan: ?TransactionPlan,
     dependency_name: ?[]const u8,
+    pgp_key_import: ?PgpKeyImportPayload = null,
     default_response: QuestionResponse,
 };
 
@@ -522,6 +532,7 @@ pub const OperationContext = struct {
             .review = request.review,
             .transaction_plan = request.transaction_plan,
             .dependency_name = request.dependency_name,
+            .pgp_key_import = request.pgp_key_import,
             .default_response = request.default_response,
         };
 

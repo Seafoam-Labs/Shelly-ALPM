@@ -29,7 +29,7 @@ const Real = struct {
         context: *runtime.RuntimeContext,
         arguments: []const []const u8,
     ) !u8 {
-        return runPacmanKey(context, arguments);
+        return runKeyringCommand(context, arguments);
     }
 };
 
@@ -39,7 +39,8 @@ pub fn dispatch(
 ) !?u8 {
     if (actionForPath(invocation.command.path) == null) return null;
 
-    if (!invocation.globals.ui_mode and !elevation.isRoot()) {
+    const user_receive = optionEnabled(invocation, "--user");
+    if (!user_receive and !invocation.globals.ui_mode and !elevation.isRoot()) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
             try context.stderr.print("Unable to elevate keyring operation: {t}\n", .{err});
             return 1;
@@ -56,7 +57,12 @@ fn executeWithRunner(
     runner: anytype,
 ) anyerror!u8 {
     const action = actionForPath(invocation.command.path) orelse return 1;
-    const opening = try openingMessage(context.allocator, action, invocation.positionals);
+    const opening = try openingMessage(
+        context.allocator,
+        action,
+        invocation.positionals,
+        optionEnabled(invocation, "--user"),
+    );
     defer context.allocator.free(opening);
     try writeOpening(context, invocation, opening);
     try flush(context);
@@ -64,7 +70,7 @@ fn executeWithRunner(
     const result = runAction(context, invocation, action, runner) catch |err| {
         const message = try std.fmt.allocPrint(
             context.allocator,
-            "Failed to run pacman-key: {t}",
+            "Failed to run keyring command: {t}",
             .{err},
         );
         defer context.allocator.free(message);
@@ -119,24 +125,35 @@ fn runAction(
         },
         .recv => {
             const keyserver = optionValue(invocation, "--keyserver");
+            const user_receive = optionEnabled(invocation, "--user");
             const arguments = try context.allocator.alloc(
                 []const u8,
-                invocation.positionals.len + 2 + @as(usize, if (keyserver == null) 0 else 2),
+                invocation.positionals.len +
+                    @as(usize, if (user_receive) 4 else 2) +
+                    @as(usize, if (keyserver == null) 0 else 2),
             );
             defer context.allocator.free(arguments);
-            arguments[0] = "pacman-key";
-            arguments[1] = "--recv-keys";
-            @memcpy(arguments[2 .. invocation.positionals.len + 2], invocation.positionals);
+            const key_offset: usize = if (user_receive) 4 else 2;
+            if (user_receive) {
+                arguments[0] = "gpg";
+                arguments[1] = "--batch";
+                arguments[2] = "--no-tty";
+                arguments[3] = "--recv-keys";
+            } else {
+                arguments[0] = "pacman-key";
+                arguments[1] = "--recv-keys";
+            }
+            @memcpy(arguments[key_offset .. invocation.positionals.len + key_offset], invocation.positionals);
             if (keyserver) |server| {
-                arguments[invocation.positionals.len + 2] = "--keyserver";
-                arguments[invocation.positionals.len + 3] = server;
+                arguments[invocation.positionals.len + key_offset] = "--keyserver";
+                arguments[invocation.positionals.len + key_offset + 1] = server;
             }
             return .{ .exit_code = try runner.call(context, arguments) };
         },
     }
 }
 
-fn runPacmanKey(
+fn runKeyringCommand(
     context: *runtime.RuntimeContext,
     arguments: []const []const u8,
 ) !u8 {
@@ -200,6 +217,7 @@ fn openingMessage(
     allocator: std.mem.Allocator,
     action: Action,
     values: []const []const u8,
+    user_keyring: bool,
 ) ![]const u8 {
     return switch (action) {
         .init => allocator.dupe(u8, "Initializing pacman keyring..."),
@@ -210,7 +228,11 @@ fn openingMessage(
             allocator.dupe(u8, "Populating keyring with default keys...")
         else
             joinedMessage(allocator, "Populating keyring with: ", values),
-        .recv => joinedMessage(allocator, "Receiving keys: ", values),
+        .recv => joinedMessage(
+            allocator,
+            if (user_keyring) "Receiving PKGBUILD source-signing keys: " else "Receiving keys: ",
+            values,
+        ),
     };
 }
 
@@ -253,6 +275,15 @@ fn optionValue(invocation: *const parser.Invocation, name: []const u8) ?[]const 
     return null;
 }
 
+fn optionEnabled(invocation: *const parser.Invocation, name: []const u8) bool {
+    for (invocation.options) |option| {
+        if (!std.mem.eql(u8, option.name, name)) continue;
+        const value = option.value orelse return true;
+        return !std.ascii.eqlIgnoreCase(value, "false");
+    }
+    return false;
+}
+
 fn actionForPath(path: []const u8) ?Action {
     if (!std.mem.startsWith(u8, path, command_prefix)) return null;
     const name = path[command_prefix.len..];
@@ -291,6 +322,7 @@ test "keyring catalog exposes top-level actions and recv keyserver help" {
     try std.testing.expect(manifest.findByPath("shelly recv keyring") == null);
     const recv = manifest.findByPath("shelly keyring recv").?;
     try std.testing.expectEqualStrings("--keyserver", manifest.findOption(recv, "--keyserver").?.name);
+    try std.testing.expectEqualStrings("--user", manifest.findOption(recv, "--user").?.name);
 
     const missing_action = try parser.parse(arena.allocator(), &manifest, &.{"keyring"});
     try std.testing.expect(missing_action == .failure);
@@ -298,7 +330,7 @@ test "keyring catalog exposes top-level actions and recv keyserver help" {
     try std.testing.expect(missing_key == .failure);
 }
 
-test "keyring maps every action to structured pacman-key arguments" {
+test "keyring maps every action to structured backend arguments" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const manifest = try spec.Manifest.load(arena.allocator());
@@ -311,6 +343,7 @@ test "keyring maps every action to structured pacman-key arguments" {
         &.{ "pacman-key", "--lsign-key", "BBBB" },
         &.{ "pacman-key", "--populate", "archlinux", "cachyos" },
         &.{ "pacman-key", "--recv-keys", "CCCC", "DDDD", "--keyserver", "hkps://keys.example" },
+        &.{ "gpg", "--batch", "--no-tty", "--recv-keys", "EEEE", "--keyserver", "hkps://keys.example" },
     };
     const Capture = struct {
         expected: []const []const []const u8,
@@ -339,6 +372,7 @@ test "keyring maps every action to structured pacman-key arguments" {
         &.{ "keyring", "lsign", "AAAA", "BBBB" },
         &.{ "keyring", "populate", "archlinux", "cachyos" },
         &.{ "keyring", "recv", "CCCC", "DDDD", "--keyserver", "hkps://keys.example" },
+        &.{ "keyring", "recv", "EEEE", "--user", "--keyserver", "hkps://keys.example" },
     }) |arguments| {
         const outcome = try parser.parse(arena.allocator(), &manifest, arguments);
         try std.testing.expect(outcome == .dispatch);
