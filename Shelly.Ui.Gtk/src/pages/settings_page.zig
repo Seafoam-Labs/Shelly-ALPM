@@ -1291,6 +1291,7 @@ const ThemeEntry = struct {
 const theme_entries = [_]ThemeEntry{
     .{ .label = "Classic", .value = .classic },
     .{ .label = "Midnight", .value = .midnight },
+    .{ .label = "Seafoam", .value = .seafoam },
 };
 
 const nav_mode_entries = [_]NavModeEntry{
@@ -1342,6 +1343,7 @@ fn populateDropdowns(p: *ShellySettingsPage.Private) void {
         const label = switch (entry.value) {
             .classic => translations._("Classic"),
             .midnight => translations._("Midnight"),
+            .seafoam => translations._("Seafoam"),
         };
         gtk.StringList.append(theme_strings, label);
     }
@@ -1578,11 +1580,13 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.WebviewEnabled = getSwitch(p.webview_switch);
 }
 
-test "theme dropdown maps both themes" {
+test "theme dropdown maps every theme" {
     try std.testing.expectEqual(@as(c_uint, 0), themeIndex(.classic));
     try std.testing.expectEqual(@as(c_uint, 1), themeIndex(.midnight));
+    try std.testing.expectEqual(@as(c_uint, 2), themeIndex(.seafoam));
     try std.testing.expectEqual(AppTheme.classic, theme_entries[0].value);
     try std.testing.expectEqual(AppTheme.midnight, theme_entries[1].value);
+    try std.testing.expectEqual(AppTheme.seafoam, theme_entries[2].value);
 }
 
 test "theme rollback preserves other settings" {

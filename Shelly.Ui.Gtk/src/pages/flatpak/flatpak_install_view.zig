@@ -40,6 +40,12 @@ pub const FlatpakInstallView = extern struct {
     const resource_path = "/com/shellyorg/shelly/ui/flatpak/flatpak_install_view.ui";
     const batch_size = 128;
 
+    const PermissionsState = enum {
+        loading,
+        ready,
+        failed,
+    };
+
     const Private = struct {
         content_stack: *gtk.Stack,
         list_overlay: *gtk.Overlay,
@@ -71,6 +77,8 @@ pub const FlatpakInstallView = extern struct {
         filter: ?*gtk.CustomFilter,
         selection: ?*gtk.SingleSelection,
         selected_app: ?*AppstreamAppObject,
+        permissions_dialog: ?*PermissionsDialog,
+        permissions_state: PermissionsState,
 
         loaded: bool,
         disposed: bool,
@@ -153,6 +161,8 @@ pub const FlatpakInstallView = extern struct {
         p.filter = null;
         p.selection = null;
         p.selected_app = null;
+        p.permissions_dialog = null;
+        p.permissions_state = .ready;
 
         p.loaded = false;
         p.disposed = false;
@@ -317,7 +327,7 @@ pub const FlatpakInstallView = extern struct {
         const item: *gobject.Object = @ptrCast(@alignCast(gio.ListModel.getItem(selection.as(gio.ListModel), position) orelse return));
         defer item.unref();
         const app = gobject.ext.cast(AppstreamAppObject, item) orelse return;
-        self.show_details(app);
+        self.showDetails(app);
     }
 
     fn on_back_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
@@ -377,9 +387,12 @@ pub const FlatpakInstallView = extern struct {
     }
 
     fn on_permissions_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
-        const app = self.priv().selected_app orelse return;
+        const p = self.priv();
+        const app = p.selected_app orelse return;
 
         const dlg = PermissionsDialog.new(translations._("Permissions"), app.getName(), app.getPermissions(), &on_close, self);
+        p.permissions_dialog = dlg;
+        self.syncPermissionsDialog();
         if (support.getWindow(ShellyWindow, self)) |win| win.showLockout(dlg.as(gtk.Widget));
     }
 
@@ -486,6 +499,7 @@ pub const FlatpakInstallView = extern struct {
 
     fn on_close(ctx: ?*anyopaque) void {
         const self: *FlatpakInstallView = @ptrCast(@alignCast(ctx.?));
+        self.priv().permissions_dialog = null;
 
         if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
     }
@@ -496,11 +510,12 @@ pub const FlatpakInstallView = extern struct {
         self.clear_details();
     }
 
-    fn show_details(self: *Self, app: *AppstreamAppObject) void {
+    pub fn showDetails(self: *Self, app: *AppstreamAppObject) void {
         const p = self.priv();
         self.clear_details();
         p.selected_app = app;
         _ = app.as(gobject.Object).ref();
+        gtk.Widget.setSensitive(p.overlay_permissions_button.as(gtk.Widget), 1);
 
         gtk.Label.setLabel(p.overlay_name_label, if (app.getName().len > 0) app.getName() else app.getId());
         gtk.Label.setLabel(p.overlay_author_label, if (app.getDeveloperName().len > 0) app.getDeveloperName() else translations._("Unknown developer"));
@@ -557,7 +572,11 @@ pub const FlatpakInstallView = extern struct {
         gtk.DropDown.setSelected(p.overlay_remote_selection, 0);
         gtk.Widget.setSensitive(p.overlay_remote_selection.as(gtk.Widget), @intFromBool(remotes.len > 0));
         gtk.Widget.setSensitive(p.overlay_install_button.as(gtk.Widget), @intFromBool(remotes.len > 0));
-        if (remotes.len > 0) self.request_remote_info(remotes[0].Name, app);
+        if (remotes.len > 0) {
+            self.request_remote_info(remotes[0].Name, app);
+        } else {
+            self.setPermissionsState(.ready);
+        }
         gtk.Widget.setVisible(p.overlay_remote_selection.as(gtk.Widget), @intFromBool(remotes.len > 1));
     }
 
@@ -574,20 +593,24 @@ pub const FlatpakInstallView = extern struct {
         const p = self.priv();
         p.remote_info_generation +%= 1;
         const request_generation = p.remote_info_generation;
+        self.setPermissionsState(.loading);
         gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Loading..."));
 
         const load = std.heap.c_allocator.create(RemoteInfoLoad) catch {
+            self.setPermissionsState(.failed);
             gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Unavailable"));
             return;
         };
         const owned_remote = std.heap.c_allocator.dupeZ(u8, remote) catch {
             std.heap.c_allocator.destroy(load);
+            self.setPermissionsState(.failed);
             gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Unavailable"));
             return;
         };
         const owned_app_id = std.heap.c_allocator.dupeZ(u8, app.getId()) catch {
             std.heap.c_allocator.free(owned_remote);
             std.heap.c_allocator.destroy(load);
+            self.setPermissionsState(.failed);
             gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Unavailable"));
             return;
         };
@@ -601,6 +624,7 @@ pub const FlatpakInstallView = extern struct {
         };
         _ = self.as(gobject.Object).ref();
         const thread = std.Thread.spawn(.{}, remote_info_worker, .{load}) catch {
+            self.setPermissionsState(.failed);
             cleanup_remote_info_load(load);
             gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Unavailable"));
             return;
@@ -656,6 +680,7 @@ pub const FlatpakInstallView = extern struct {
             p.remote_info_generation == load.request_generation)
         {
             if (load.failed) {
+                load.page.setPermissionsState(.failed);
                 gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Unavailable"));
             } else {
                 var download_buffer: [64]u8 = undefined;
@@ -668,9 +693,9 @@ pub const FlatpakInstallView = extern struct {
                     "{s}: {s}  •  {s}: {s}",
                     .{ translations._("Download"), download, translations._("Installed"), installed },
                 ) catch translations._("Size: Unavailable");
-                gtk.Widget.setSensitive(p.overlay_permissions_button.as(gtk.Widget), 1);
                 gtk.Label.setLabel(p.overlay_size_label, label);
                 load.app.setPermissions(load.permissions);
+                load.page.setPermissionsState(.ready);
             }
         }
         cleanup_remote_info_load(load);
@@ -712,6 +737,8 @@ pub const FlatpakInstallView = extern struct {
     fn populate_screenshots(self: *Self, app: *AppstreamAppObject) void {
         const p = self.priv();
         const carousel = Carousel.new();
+        _ = carousel.as(gobject.Object).refSink();
+        defer carousel.as(gobject.Object).unref();
         var count: usize = 0;
         for (app.getScreenshots()) |screenshot| {
             const screenshot_url = firstScreenshotUrl(screenshot) orelse continue;
@@ -729,7 +756,6 @@ pub const FlatpakInstallView = extern struct {
         }
 
         if (count == 0) {
-            carousel.as(gobject.Object).unref();
             gtk.Widget.setVisible(p.overlay_screenshots_container.as(gtk.Widget), 0);
             return;
         }
@@ -919,6 +945,8 @@ pub const FlatpakInstallView = extern struct {
 
     fn clear_details(self: *Self) void {
         const p = self.priv();
+        p.permissions_dialog = null;
+        p.permissions_state = .ready;
         p.details_generation +%= 1;
         p.remote_info_generation +%= 1;
         while (gtk.Widget.getFirstChild(p.overlay_screenshots_container.as(gtk.Widget))) |child| {
@@ -934,6 +962,21 @@ pub const FlatpakInstallView = extern struct {
         if (p.selected_app) |app| {
             app.as(gobject.Object).unref();
             p.selected_app = null;
+        }
+    }
+
+    fn setPermissionsState(self: *Self, state: PermissionsState) void {
+        self.priv().permissions_state = state;
+        self.syncPermissionsDialog();
+    }
+
+    fn syncPermissionsDialog(self: *Self) void {
+        const p = self.priv();
+        const dialog = p.permissions_dialog orelse return;
+        switch (p.permissions_state) {
+            .loading => dialog.showLoading(),
+            .ready => if (p.selected_app) |app| dialog.setPermissions(app.getPermissions()),
+            .failed => dialog.showLoadError(),
         }
     }
 

@@ -32,7 +32,7 @@ const Sidebar = @import("sidebar.zig").Sidebar;
 const wayland_blur = @import("wayland/blur.zig");
 
 fn shouldRequestBlur(theme: AppTheme, mode: NavMode) bool {
-    return theme == .midnight and mode == .sidebar;
+    return theme_manager.isDark(theme) and mode == .sidebar;
 }
 
 const NavButton = struct {
@@ -851,9 +851,11 @@ test "main window close request allows GTK to destroy the window after saving si
     );
 }
 
-test "native blur is requested only for the Midnight sidebar" {
+test "native blur is requested for dark themes in sidebar mode" {
     try std.testing.expect(shouldRequestBlur(.midnight, .sidebar));
     try std.testing.expect(!shouldRequestBlur(.midnight, .topbar));
+    try std.testing.expect(shouldRequestBlur(.seafoam, .sidebar));
+    try std.testing.expect(!shouldRequestBlur(.seafoam, .topbar));
     try std.testing.expect(!shouldRequestBlur(.classic, .sidebar));
     try std.testing.expect(!shouldRequestBlur(.classic, .topbar));
     _ = wayland_blur.Region;

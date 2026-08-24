@@ -108,6 +108,7 @@ pub fn build(b: *std.Build) void {
 
     gresource.addFileInput(b.path("src/themes/style.css"));
     gresource.addFileInput(b.path("src/themes/theme-midnight.css"));
+    gresource.addFileInput(b.path("src/themes/theme-seafoam.css"));
     gresource.addFileInput(b.path("../assets/shellylogo.png"));
     gresource.addFileInput(b.path("src/assets/icons/flatpak-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/arch-symbolic.svg"));
@@ -203,6 +204,29 @@ pub fn build(b: *std.Build) void {
     });
     layout_style_tests.root_module.linkSystemLibrary("gtk4", .{});
 
+    const theme_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/theme_manager_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "Shelly_Ui_Gtk", .module = shelly_ui_gtk }},
+        }),
+        .filters = &.{"Seafoam"},
+    });
+    theme_tests.root_module.linkSystemLibrary("gtk4", .{});
+    const theme_test_step = b.step("test-theme", "Run Seafoam theme tests");
+    theme_test_step.dependOn(&b.addRunArtifact(theme_tests).step);
+
+    const config_theme_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/config_theme_test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    const config_theme_test_step = b.step("test-config-theme", "Run theme persistence tests");
+    config_theme_test_step.dependOn(&b.addRunArtifact(config_theme_tests).step);
+
     const settings_allocation_tests = b.addExecutable(.{
         .name = "settings-layout-allocation-test",
         .root_module = b.createModule(.{
@@ -228,10 +252,64 @@ pub fn build(b: *std.Build) void {
     settings_allocation_tests.root_module.linkSystemLibrary("gtk4-wayland", .{});
     settings_allocation_tests.root_module.linkSystemLibrary("gtk4", .{});
 
-    const layout_test_step = b.step("test-layout", "Run sidebar and settings layout tests");
+    const package_toolbar_tests = b.addExecutable(.{
+        .name = "package-toolbar-layout-test",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/package_toolbar_layout_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "Shelly_Ui_Gtk", .module = shelly_ui_gtk },
+                .{ .name = "options", .module = options.createModule() },
+                .{ .name = "ShellyHttp", .module = shelly_http.module("ShellyHttp") },
+            },
+        }),
+    });
+    package_toolbar_tests.root_module.addIncludePath(b.path("src/wayland"));
+    package_toolbar_tests.root_module.addIncludePath(blur_header.dirname());
+    package_toolbar_tests.root_module.addCSourceFile(.{
+        .file = b.path("src/wayland/blur_bridge.c"),
+        .flags = &.{ "-Wall", "-Wextra", "-Werror" },
+    });
+    package_toolbar_tests.root_module.addCSourceFile(.{ .file = blur_code });
+    package_toolbar_tests.root_module.addCSourceFile(.{ .file = resources_c });
+    package_toolbar_tests.root_module.link_libc = true;
+    package_toolbar_tests.root_module.linkSystemLibrary("gtk4-wayland", .{});
+    package_toolbar_tests.root_module.linkSystemLibrary("gtk4", .{});
+
+    const update_page_tests = b.addExecutable(.{
+        .name = "update-page-layout-test",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/update_page_layout_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "Shelly_Ui_Gtk", .module = shelly_ui_gtk },
+                .{ .name = "options", .module = options.createModule() },
+                .{ .name = "ShellyHttp", .module = shelly_http.module("ShellyHttp") },
+            },
+        }),
+    });
+    update_page_tests.root_module.addIncludePath(b.path("src/wayland"));
+    update_page_tests.root_module.addIncludePath(blur_header.dirname());
+    update_page_tests.root_module.addCSourceFile(.{
+        .file = b.path("src/wayland/blur_bridge.c"),
+        .flags = &.{ "-Wall", "-Wextra", "-Werror" },
+    });
+    update_page_tests.root_module.addCSourceFile(.{ .file = blur_code });
+    update_page_tests.root_module.addCSourceFile(.{ .file = resources_c });
+    update_page_tests.root_module.link_libc = true;
+    update_page_tests.root_module.linkSystemLibrary("gtk4-wayland", .{});
+    update_page_tests.root_module.linkSystemLibrary("gtk4", .{});
+    const update_page_test_step = b.step("test-update-row", "Run update row layout test");
+    update_page_test_step.dependOn(&b.addRunArtifact(update_page_tests).step);
+
+    const layout_test_step = b.step("test-layout", "Run UI layout tests");
     layout_test_step.dependOn(&b.addRunArtifact(sidebar_tests).step);
     layout_test_step.dependOn(&b.addRunArtifact(layout_style_tests).step);
     layout_test_step.dependOn(&b.addRunArtifact(settings_allocation_tests).step);
+    layout_test_step.dependOn(&b.addRunArtifact(package_toolbar_tests).step);
+    layout_test_step.dependOn(update_page_test_step);
 
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&b.addRunArtifact(root_tests).step);

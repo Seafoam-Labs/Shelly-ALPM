@@ -14,6 +14,7 @@ const SizeConverter = @import("../helpers/size_converts.zig").SizeConverter;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const ShellyOperation = @import("../services/shelly_operation.zig").ShellyOperation;
 const PkgbuildReviewDialog = @import("../dialog/page/preview_pkgbuild.zig").PkgbuildReviewDialog;
+const detail_spec_row = @import("../helpers/detail_spec_row.zig");
 
 pub const PackageDetail = extern struct {
     parent_instance: Parent,
@@ -151,50 +152,11 @@ pub const PackageDetail = extern struct {
     }
 
     fn add_spec_row(box: *gtk.Box, label: []const u8, value: [:0]const u8) void {
-        var lbuf: [64]u8 = undefined;
-        const row = gtk.Box.new(.horizontal, 8);
-        gtk.Widget.setMarginTop(row.as(gtk.Widget), 10);
-        gtk.Widget.setMarginBottom(row.as(gtk.Widget), 10);
-        gtk.Widget.addCssClass(row.as(gtk.Widget), "spec-row");
-        const key = gtk.Label.new(c_string.cstr(&lbuf, label));
-        gtk.Widget.setHalign(key.as(gtk.Widget), .start);
-        gtk.Label.setXalign(key, 0);
-        gtk.Widget.addCssClass(key.as(gtk.Widget), "dim-label");
-        gtk.Box.append(row, key.as(gtk.Widget));
-        const val = gtk.Label.new(value);
-        gtk.Widget.setHalign(val.as(gtk.Widget), .end);
-        gtk.Widget.setHexpand(val.as(gtk.Widget), 1);
-        gtk.Label.setXalign(val, 1);
-        gtk.Label.setEllipsize(val, .end);
-        gtk.Widget.addCssClass(val.as(gtk.Widget), "spec-value");
-        gtk.Box.append(row, val.as(gtk.Widget));
-        gtk.Box.append(box, row.as(gtk.Widget));
+        detail_spec_row.appendText(box, label, value);
     }
 
     fn add_url_spec_row(box: *gtk.Box, label: []const u8, value: [:0]const u8) void {
-        var lbuf: [64]u8 = undefined;
-        const row = gtk.Box.new(.horizontal, 8);
-        gtk.Widget.setMarginTop(row.as(gtk.Widget), 10);
-        gtk.Widget.setMarginBottom(row.as(gtk.Widget), 10);
-        gtk.Widget.addCssClass(row.as(gtk.Widget), "spec-row");
-        const key = gtk.Label.new(c_string.cstr(&lbuf, label));
-        gtk.Widget.setHalign(key.as(gtk.Widget), .start);
-        gtk.Label.setXalign(key, 0);
-        gtk.Widget.addCssClass(key.as(gtk.Widget), "dim-label");
-        gtk.Box.append(row, key.as(gtk.Widget));
-
-        var mbuf: [256]u8 = undefined;
-        const markup = std.fmt.bufPrintZ(&mbuf, "<a href=\"{s}\">{s}</a>", .{ value, value }) catch value;
-        const val = gtk.Label.new(null);
-        gtk.Label.setMarkup(val, markup);
-        gtk.Widget.setHalign(val.as(gtk.Widget), .end);
-        gtk.Widget.setHexpand(val.as(gtk.Widget), 1);
-        gtk.Label.setXalign(val, 1);
-        gtk.Label.setEllipsize(val, .end);
-
-        gtk.Box.append(row, val.as(gtk.Widget));
-
-        gtk.Box.append(box, row.as(gtk.Widget));
+        detail_spec_row.appendUrl(box, label, value);
     }
 
     fn add_spec_list(box: *gtk.Box, allocator: std.mem.Allocator, label: []const u8, items: []const [:0]const u8) void {
@@ -211,26 +173,7 @@ pub const PackageDetail = extern struct {
     }
 
     fn add_spec_row_raw(box: *gtk.Box, label: []const u8, value: [:0]const u8) void {
-        var lbuf: [64]u8 = undefined;
-        const row = gtk.Box.new(.horizontal, 8);
-        gtk.Widget.setMarginTop(row.as(gtk.Widget), 10);
-        gtk.Widget.setMarginBottom(row.as(gtk.Widget), 10);
-        gtk.Widget.addCssClass(row.as(gtk.Widget), "spec-row");
-        const key = gtk.Label.new(c_string.cstr(&lbuf, label));
-        gtk.Widget.setHalign(key.as(gtk.Widget), .start);
-        gtk.Widget.setValign(key.as(gtk.Widget), .start);
-        gtk.Label.setXalign(key, 0);
-        gtk.Widget.addCssClass(key.as(gtk.Widget), "dim-label");
-        gtk.Box.append(row, key.as(gtk.Widget));
-        const val = gtk.Label.new(value);
-        gtk.Widget.setHalign(val.as(gtk.Widget), .end);
-        gtk.Widget.setHexpand(val.as(gtk.Widget), 1);
-        gtk.Label.setXalign(val, 1);
-        gtk.Label.setWrap(val, 1);
-        gtk.Label.setJustify(val, .right);
-        gtk.Widget.addCssClass(val.as(gtk.Widget), "spec-value");
-        gtk.Box.append(row, val.as(gtk.Widget));
-        gtk.Box.append(box, row.as(gtk.Widget));
+        detail_spec_row.appendText(box, label, value);
     }
 
     fn add_list_section(box: *gtk.Box, page: *PackageDetail, title: []const u8, items: []const [:0]const u8) void {

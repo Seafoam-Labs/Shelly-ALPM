@@ -33,15 +33,16 @@
                         <property name="margin-start">10</property>
                         <property name="margin-end">10</property>
                         <property name="spacing">5</property>
-                        <style><class name="page-toolbar"/></style>
+                        <style><class name="compact-search-zone"/></style>
                         <child>
                           <object class="GtkSearchEntry" id="AppImageSearchEntry">
+                            <property name="hexpand">true</property>
                             <property name="placeholder-text" translatable="yes">Search...</property>
-                            <property name="width-request">200</property>
                             <property name="valign">center</property>
                             <signal name="search-changed" handler="search_changed" swapped="true"/>
                             <style>
                               <class name="spaced-search"/>
+                              <class name="package-search-concept"/>
                             </style>
                             <child>
                                 <object class="GtkShortcutController">
@@ -207,72 +208,175 @@
                     <child>
                       <object class="GtkBox">
                         <property name="orientation">vertical</property>
-                        <property name="spacing">24</property>
+                        <property name="halign">fill</property>
+                        <property name="hexpand">true</property>
+                        <property name="spacing">16</property>
                         <property name="margin-start">20</property>
                         <property name="margin-end">20</property>
-                        <property name="margin-top">30</property>
-                        <property name="margin-bottom">30</property>
-                        <property name="width-request">600</property>
-                        <style><class name="detail-panel"/></style>
+                        <property name="margin-top">20</property>
+                        <property name="margin-bottom">20</property>
+                        <style><class name="appimage-detail-content"/></style>
                         <child>
-                          <object class="GtkBox">
-                            <property name="spacing">18</property>
+                          <object class="GtkBox" id="AppImageDetailHeader">
+                            <property name="spacing">16</property>
+                            <property name="hexpand">true</property>
+                            <style><class name="appimage-detail-header"/></style>
                             <child>
-                              <object class="GtkButton" id="BackToListButton">
-                                <property name="icon-name">go-previous-symbolic</property>
-                                <property name="valign">center</property>
-                                <signal name="clicked" handler="back_to_list" swapped="true"/>
-                                <style>
-                                  <class name="flat"/>
-                                  <class name="circular"/>
-                                </style>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkImage" id="DetailIcon">
-                                <property name="pixel-size">64</property>
-                                <property name="valign">center</property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkBox">
-                                <property name="orientation">vertical</property>
-                                <property name="valign">center</property>
+                              <object class="GtkBox" id="AppImageDetailIdentity">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">16</property>
+                                <property name="hexpand">true</property>
                                 <child>
-                                  <object class="GtkLabel" id="DetailTitleLabel">
-                                    <property name="label" translatable="yes">App Name</property>
-                                    <property name="xalign">0</property>
+                                  <object class="GtkButton" id="BackToListButton">
+                                    <property name="icon-name">go-previous-symbolic</property>
+                                    <property name="halign">start</property>
+                                    <property name="valign">center</property>
+                                    <signal name="clicked" handler="back_to_list" swapped="true"/>
                                     <style>
-                                      <class name="title-1"/>
+                                      <class name="flat"/>
+                                      <class name="circular"/>
                                     </style>
                                   </object>
                                 </child>
                                 <child>
+                                  <object class="GtkImage" id="DetailIcon">
+                                    <property name="halign">start</property>
+                                    <property name="valign">center</property>
+                                    <style><class name="appimage-detail-icon"/></style>
+                                  </object>
+                                </child>
+                                <child>
                                   <object class="GtkBox">
-                                    <property name="spacing">8</property>
+                                    <property name="orientation">vertical</property>
+                                    <property name="valign">center</property>
+                                    <property name="hexpand">true</property>
+                                    <property name="spacing">4</property>
                                     <child>
-                                      <object class="GtkLabel" id="DetailVersionLabel">
-                                        <property name="label" translatable="yes">Version</property>
+                                      <object class="GtkLabel" id="DetailTitleLabel">
+                                        <property name="label" translatable="yes">App Name</property>
                                         <property name="xalign">0</property>
+                                        <property name="wrap">true</property>
+                                        <property name="wrap-mode">word-char</property>
                                         <style>
-                                          <class name="caption"/>
+                                          <class name="title-1"/>
+                                        </style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="spacing">8</property>
+                                        <child>
+                                          <object class="GtkLabel" id="DetailVersionLabel">
+                                            <property name="label" translatable="yes">Version</property>
+                                            <property name="xalign">0</property>
+                                            <style>
+                                              <class name="caption"/>
+                                              <class name="pill"/>
+                                            </style>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="DetailDescriptionLabel">
+                                        <property name="label" translatable="yes">Description goes here...</property>
+                                        <property name="xalign">0</property>
+                                        <property name="wrap">true</property>
+                                        <property name="wrap-mode">word-char</property>
+                                        <style>
+                                          <class name="body"/>
                                           <class name="dim-label"/>
                                         </style>
                                       </object>
                                     </child>
                                   </object>
                                 </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox" id="AppImageDetailActions">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">8</property>
+                                <property name="halign">end</property>
+                                <property name="valign">center</property>
+                                <style><class name="appimage-detail-actions"/></style>
                                 <child>
-                                  <object class="GtkLabel" id="DetailDescriptionLabel">
-                                    <property name="label" translatable="yes">Description goes here...</property>
-                                    <property name="xalign">0</property>
-                                    <property name="wrap">true</property>
-                                    <property name="lines">3</property>
-                                    <property name="ellipsize">end</property>
+                                  <object class="GtkButton" id="SaveConfigButton">
+                                    <signal name="clicked" handler="save_config" swapped="true"/>
                                     <style>
-                                      <class name="body"/>
-                                      <class name="dim-label"/>
+                                      <class name="suggested-action"/>
                                     </style>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="spacing">8</property>
+                                        <property name="halign">center</property>
+                                        <property name="valign">center</property>
+                                        <child>
+                                          <object class="GtkImage">
+                                            <property name="icon-name">document-save-symbolic</property>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel">
+                                            <property name="label" translatable="yes">Save</property>
+                                            <style>
+                                              <class name="bold"/>
+                                            </style>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="SyncButton">
+                                    <property name="valign">center</property>
+                                    <property name="tooltip-text" translatable="yes">Sync metadata for all AppImages. Useful if AppImage self updated.</property>
+                                    <signal name="clicked" handler="sync_appimage" swapped="true"/>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="spacing">6</property>
+                                        <property name="halign">center</property>
+                                        <child>
+                                          <object class="GtkImage">
+                                            <property name="icon-name">emblem-synchronizing-symbolic</property>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel">
+                                            <property name="label" translatable="yes">Sync</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkButton" id="RemoveAppImageButton">
+                                    <signal name="clicked" handler="remove_appimage" swapped="true"/>
+                                    <style>
+                                      <class name="destructive-action"/>
+                                    </style>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="spacing">8</property>
+                                        <property name="halign">center</property>
+                                        <property name="valign">center</property>
+                                        <child>
+                                          <object class="GtkImage">
+                                            <property name="icon-name">user-trash-symbolic</property>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel">
+                                            <property name="label" translatable="yes">Remove</property>
+                                            <style>
+                                              <class name="bold"/>
+                                            </style>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
                                   </object>
                                 </child>
                               </object>
@@ -280,39 +384,33 @@
                           </object>
                         </child>
                         <child>
-                          <object class="GtkListBox">
-                            <property name="selection-mode">none</property>
-                            <style>
-                              <class name="boxed-list"/>
-                            </style>
+                          <object class="GtkBox" id="AppImageDetailColumns">
+                            <property name="orientation">horizontal</property>
+                            <property name="spacing">16</property>
+                            <property name="homogeneous">true</property>
+                            <property name="hexpand">true</property>
+                            <style><class name="appimage-detail-columns"/></style>
                             <child>
-                              <object class="GtkListBoxRow">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">8</property>
+                                <property name="hexpand">true</property>
+                                <style>
+                                  <class name="form-surface"/>
+                                  <class name="appimage-detail-card"/>
+                                </style>
                                 <child>
-                                  <object class="GtkBox">
-                                    <property name="margin-start">12</property>
-                                    <property name="margin-end">12</property>
-                                    <property name="margin-top">12</property>
-                                    <property name="margin-bottom">12</property>
-                                    <property name="spacing">12</property>
-                                    <child>
-                                      <object class="GtkLabel">
-                                        <property name="label" translatable="yes">Size on Disk</property>
-                                        <property name="hexpand">true</property>
-                                        <property name="xalign">0</property>
-                                      </object>
-                                    </child>
-                                    <child>
-                                      <object class="GtkLabel" id="DetailSizeLabel">
-                                        <property name="valign">center</property>
-                                        <style>
-                                          <class name="dim-label"/>
-                                        </style>
-                                      </object>
-                                    </child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Update Strategy</property>
+                                    <property name="halign">start</property>
+                                    <property name="xalign">0</property>
+                                    <style><class name="detail-section-header"/></style>
                                   </object>
                                 </child>
-                              </object>
-                            </child>
+                                <child>
+                                  <object class="GtkListBox" id="AppImageUpdateSettingsList">
+                                    <property name="selection-mode">none</property>
+                                    <style><class name="boxed-list"/></style>
                             <child>
                               <object class="GtkListBoxRow">
                                 <child>
@@ -400,140 +498,111 @@
                                 </child>
                               </object>
                             </child>
-                            <child>
-                              <object class="GtkListBoxRow">
-                                <child>
-                                  <object class="GtkBox">
-                                    <property name="margin-start">12</property>
-                                    <property name="margin-end">12</property>
-                                    <property name="margin-top">12</property>
-                                    <property name="margin-bottom">12</property>
-                                    <property name="spacing">12</property>
-                                    <property name="orientation">vertical</property>
-                                    <child>
-                                      <object class="GtkLabel">
-                                        <property name="label" translatable="yes">Installation Path</property>
-                                        <property name="xalign">0</property>
-                                      </object>
-                                    </child>
-                                    <child>
-                                      <object class="GtkEntry" id="InstallPathEntry">
-                                        <property name="editable">false</property>
-                                        <property name="can-focus">true</property>
-                                      </object>
-                                    </child>
                                   </object>
                                 </child>
                               </object>
                             </child>
                             <child>
-                              <object class="GtkListBoxRow">
-                                <child>
-                                  <object class="GtkBox">
-                                    <property name="margin-start">12</property>
-                                    <property name="margin-end">12</property>
-                                    <property name="margin-top">12</property>
-                                    <property name="margin-bottom">12</property>
-                                    <property name="spacing">12</property>
-                                    <property name="orientation">vertical</property>
-                                    <child>
-                                      <object class="GtkLabel">
-                                        <property name="label" translatable="yes">Launch Flags</property>
-                                        <property name="xalign">0</property>
-                                      </object>
-                                    </child>
-                                    <child>
-                                      <object class="GtkEntry" id="LaunchFlagsEntry">
-                                        <property name="editable">false</property>
-                                        <property name="can-focus">true</property>
-                                      </object>
-                                    </child>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="spacing">12</property>
-                            <property name="halign">center</property>
-                            <child>
-                              <object class="GtkButton" id="SaveConfigButton">
-                                <signal name="clicked" handler="save_config" swapped="true"/>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">8</property>
+                                <property name="hexpand">true</property>
                                 <style>
-                                  <class name="suggested-action"/>
+                                  <class name="form-surface"/>
+                                  <class name="appimage-detail-card"/>
                                 </style>
                                 <child>
-                                  <object class="GtkBox">
-                                    <property name="spacing">8</property>
-                                    <property name="halign">center</property>
-                                    <property name="valign">center</property>
-                                    <child>
-                                      <object class="GtkImage">
-                                        <property name="icon-name">document-save-symbolic</property>
-                                      </object>
-                                    </child>
-                                    <child>
-                                      <object class="GtkLabel">
-                                        <property name="label" translatable="yes">Save</property>
-                                        <style>
-                                          <class name="bold"/>
-                                        </style>
-                                      </object>
-                                    </child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Information</property>
+                                    <property name="halign">start</property>
+                                    <property name="xalign">0</property>
+                                    <style><class name="detail-section-header"/></style>
                                   </object>
                                 </child>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkButton" id="SyncButton">
-                                <property name="valign">center</property>
-                                <property name="tooltip-text" translatable="yes">Sync metadata for all AppImages. Useful if AppImage self updated.</property>
-                                <signal name="clicked" handler="sync_appimage" swapped="true"/>
                                 <child>
-                                  <object class="GtkBox">
-                                    <style>
-                                      <class name="suggested-action"/>
-                                    </style>
-                                    <property name="spacing">6</property>
+                                  <object class="GtkListBox" id="AppImageInformationList">
+                                    <property name="selection-mode">none</property>
+                                    <style><class name="boxed-list"/></style>
                                     <child>
-                                      <object class="GtkImage">
-                                        <property name="icon-name">emblem-synchronizing-symbolic</property>
+                                      <object class="GtkListBoxRow">
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="margin-start">12</property>
+                                            <property name="margin-end">12</property>
+                                            <property name="margin-top">12</property>
+                                            <property name="margin-bottom">12</property>
+                                            <property name="spacing">12</property>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Size on Disk</property>
+                                                <property name="hexpand">true</property>
+                                                <property name="xalign">0</property>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="DetailSizeLabel">
+                                                <property name="valign">center</property>
+                                                <style><class name="spec-value"/></style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
                                       </object>
                                     </child>
                                     <child>
-                                      <object class="GtkLabel">
-                                        <property name="label" translatable="yes">Sync</property>
+                                      <object class="GtkListBoxRow">
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="margin-start">12</property>
+                                            <property name="margin-end">12</property>
+                                            <property name="margin-top">12</property>
+                                            <property name="margin-bottom">12</property>
+                                            <property name="spacing">8</property>
+                                            <property name="orientation">vertical</property>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Installation Path</property>
+                                                <property name="xalign">0</property>
+                                                <style><class name="dim-label"/></style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkEntry" id="InstallPathEntry">
+                                                <property name="editable">false</property>
+                                                <property name="can-focus">true</property>
+                                                <property name="hexpand">true</property>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
                                       </object>
                                     </child>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkButton" id="RemoveAppImageButton">
-                                <signal name="clicked" handler="remove_appimage" swapped="true"/>
-                                <style>
-                                  <class name="destructive-action"/>
-                                </style>
-                                <child>
-                                  <object class="GtkBox">
-                                    <property name="spacing">8</property>
-                                    <property name="halign">center</property>
-                                    <property name="valign">center</property>
                                     <child>
-                                      <object class="GtkImage">
-                                        <property name="icon-name">user-trash-symbolic</property>
-                                      </object>
-                                    </child>
-                                    <child>
-                                      <object class="GtkLabel">
-                                        <property name="label" translatable="yes">Remove</property>
-                                        <style>
-                                          <class name="bold"/>
-                                        </style>
+                                      <object class="GtkListBoxRow">
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="margin-start">12</property>
+                                            <property name="margin-end">12</property>
+                                            <property name="margin-top">12</property>
+                                            <property name="margin-bottom">12</property>
+                                            <property name="spacing">8</property>
+                                            <property name="orientation">vertical</property>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Launch Flags</property>
+                                                <property name="xalign">0</property>
+                                                <style><class name="dim-label"/></style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkEntry" id="LaunchFlagsEntry">
+                                                <property name="editable">false</property>
+                                                <property name="can-focus">true</property>
+                                                <property name="hexpand">true</property>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
                                       </object>
                                     </child>
                                   </object>

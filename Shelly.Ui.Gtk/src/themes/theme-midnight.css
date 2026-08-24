@@ -431,9 +431,12 @@
   box-shadow: 0 0.75em 2em alpha(black, 0.34);
 }
 
-.theme-midnight .dim-label,
-.theme-midnight .spec-value {
+.theme-midnight .dim-label {
   color: @midnight_text_dim;
+}
+
+.theme-midnight .spec-value {
+  color: @midnight_text;
 }
 
 .theme-midnight .pill {
@@ -493,6 +496,26 @@
   border: 1px solid alpha(white, 0.09);
   border-radius: 12px;
   box-shadow: 0 10px 28px alpha(black, 0.22), inset 0 1px alpha(white, 0.04);
+}
+
+.theme-midnight .compact-search-zone button,
+.theme-midnight .compact-search-zone entry,
+.theme-midnight .compact-search-zone dropdown > button,
+.theme-midnight .compact-search-entry {
+  border-radius: 0.55em;
+}
+
+.theme-midnight .package-toolbar-concept .package-view-switch-concept {
+  border-color: alpha(white, 0.10);
+  background-color: alpha(@midnight_surface_bg, 0.72);
+}
+
+.theme-midnight .package-toolbar-concept .package-view-switch-concept button {
+  background-color: transparent;
+}
+
+.theme-midnight .package-toolbar-concept .package-view-switch-concept button:checked {
+  background-color: alpha(@accent_bg_color, 0.32);
 }
 
 .theme-midnight .package-results row:hover,
@@ -561,6 +584,19 @@
   border: 1px solid alpha(white, 0.09);
   border-radius: 12px;
   box-shadow: 0 10px 28px alpha(black, 0.18), inset 0 1px alpha(white, 0.04);
+}
+
+.theme-midnight .appimage-detail-card {
+  background-color: alpha(@midnight_surface_bg, 0.82);
+  border-color: alpha(white, 0.08);
+  box-shadow: 0 0.65em 1.6em alpha(black, 0.18), inset 0 1px alpha(white, 0.035);
+}
+
+.theme-midnight .appimage-detail-card list,
+.theme-midnight .appimage-detail-card row,
+.theme-midnight .appimage-detail-card row:hover {
+  background-color: transparent;
+  background-image: none;
 }
 
 .theme-midnight .flatpak-page .form-surface {

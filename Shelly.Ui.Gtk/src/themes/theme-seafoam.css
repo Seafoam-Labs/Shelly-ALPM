@@ -1,0 +1,735 @@
+/* Seafoam palette based on seafoam-labs.org. Midnight remains the structural base. */
+@define-color seafoam_window_bg #0f172a;
+@define-color seafoam_sidebar_bg #1e293b;
+@define-color seafoam_surface_bg #1e293b;
+@define-color seafoam_surface_raised #334155;
+@define-color seafoam_border #334155;
+@define-color seafoam_text #f8fafc;
+@define-color seafoam_text_soft #cbd5e1;
+@define-color seafoam_text_dim #94a3b8;
+@define-color seafoam_accent #2dd4a8;
+@define-color seafoam_accent_light #5eead4;
+@define-color seafoam_accent_dark #14b8a6;
+@define-color seafoam_accent_muted #0d9488;
+@define-color seafoam_purple #7c3aed;
+@define-color seafoam_purple_light #a78bfa;
+@define-color seafoam_pink #ec4899;
+@define-color seafoam_success #5eead4;
+@define-color seafoam_warning #e6a23c;
+@define-color seafoam_danger #e46b6b;
+
+.theme-seafoam {
+  color: @seafoam_text;
+  background-color: transparent;
+}
+
+.theme-seafoam .app-window-surface {
+  color: @seafoam_text;
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-seafoam .app-main-column {
+  background-color: @seafoam_window_bg;
+  background-image:
+    radial-gradient(circle at 18% 12%, alpha(@seafoam_accent, 0.20), transparent 36%),
+    radial-gradient(circle at 84% 78%, alpha(@seafoam_purple, 0.12), transparent 42%),
+    radial-gradient(circle at 68% 96%, alpha(@seafoam_pink, 0.07), transparent 34%);
+}
+
+.theme-seafoam .app-topbar,
+.theme-seafoam .glass-surface {
+  background-color: alpha(@seafoam_sidebar_bg, 0.80);
+  background-image: linear-gradient(to bottom, alpha(white, 0.07), alpha(white, 0.01));
+  border: 1px solid alpha(white, 0.10);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px alpha(black, 0.26), inset 0 1px alpha(white, 0.05);
+}
+
+.theme-seafoam .app-topbar {
+  background-image: none;
+  border-radius: 0;
+  border-right: 0;
+  border-left: 0;
+}
+
+.theme-seafoam .app-topbar .app-nav-button.nav-selected {
+  color: @seafoam_text;
+  background-color: alpha(@seafoam_accent, 0.18);
+  box-shadow: inset 0 -0.16em @seafoam_accent;
+}
+
+.theme-seafoam .app-topbar-scroll scrollbar.horizontal trough {
+  background-color: alpha(@seafoam_border, 0.52);
+}
+
+.theme-seafoam .app-topbar-scroll scrollbar.horizontal slider {
+  min-width: 2em;
+  min-height: 0.35em;
+  border-radius: 0.35em;
+  background-color: alpha(@seafoam_text_dim, 0.68);
+}
+
+.theme-seafoam .app-sidebar {
+  background-color: alpha(@seafoam_sidebar_bg, 0.95);
+  background-image: none;
+  border: 0;
+  border-right: 1px solid alpha(white, 0.14);
+  border-radius: 0;
+  box-shadow: inset -1px 0 alpha(black, 0.26), inset 1px 0 alpha(white, 0.04);
+}
+
+.theme-seafoam .app-sidebar.sidebar-expanded {
+  min-width: 13em;
+}
+
+.theme-seafoam .sidebar-brand {
+  min-height: 2em;
+  padding: 1em 1.025em 0.75em;
+  border-spacing: 0.55em;
+}
+
+.theme-seafoam .sidebar-logo {
+  min-width: 1.8em;
+  min-height: 1.8em;
+  -gtk-icon-size: 1.8em;
+}
+
+.theme-seafoam .sidebar-brand-name {
+  color: @seafoam_text;
+  font-size: 1em;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.theme-seafoam .sidebar-collapse-button {
+  color: alpha(@seafoam_text_dim, 0.88);
+  border-radius: 0.45em;
+}
+
+.theme-seafoam .sidebar-collapse-button:hover {
+  color: @seafoam_text;
+  background-color: alpha(white, 0.08);
+}
+
+.theme-seafoam .sidebar-separator {
+  margin: 0 0.75em;
+  color: alpha(white, 0.10);
+  background-color: alpha(white, 0.10);
+}
+
+.theme-seafoam .sidebar-primary {
+  padding: 0.35em 0.55em 0.75em;
+  border-spacing: 0.25em;
+}
+
+.theme-seafoam .sidebar-bottom {
+  padding: 0.65em 0.55em 0.8em;
+}
+
+.theme-seafoam .app-window-controls-overlay {
+  margin-right: 0;
+}
+
+.theme-seafoam .app-window-controls-overlay .app-window-control {
+  color: alpha(@seafoam_text, 0.92);
+}
+
+.theme-seafoam .app-window-controls-overlay .app-window-control:hover {
+  color: @seafoam_text;
+  background-color: alpha(@seafoam_surface_raised, 0.72);
+  border-color: alpha(white, 0.09);
+  box-shadow: inset 0 1px alpha(white, 0.06), 0 5px 14px alpha(black, 0.16);
+}
+
+.theme-seafoam .app-window-controls-overlay .app-window-control:active {
+  background-color: alpha(@seafoam_surface_raised, 0.88);
+}
+
+.theme-seafoam .app-window-controls-overlay .window-control-close:hover {
+  color: #ffffff;
+  background-color: alpha(#ff3b45, 0.88);
+  border-color: alpha(#ff9da4, 0.42);
+  box-shadow: inset 0 1px alpha(white, 0.12), 0 5px 14px alpha(black, 0.18);
+}
+
+.theme-seafoam .app-window-controls-overlay .window-control-close:active {
+  background-color: alpha(#e32636, 0.96);
+}
+
+.theme-seafoam .app-nav-button {
+  color: @seafoam_text_dim;
+  border-radius: 8px;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.theme-seafoam .app-nav-button:hover {
+  color: @seafoam_text;
+  background-color: alpha(white, 0.07);
+}
+
+.theme-seafoam .app-nav-button.nav-selected {
+  color: @seafoam_text;
+  background-color: alpha(@seafoam_accent, 0.24);
+  box-shadow: inset 3px 0 @seafoam_accent;
+}
+
+.theme-seafoam .app-sidebar .nav-btn {
+  min-height: 2.35em;
+  margin: 0;
+  padding: 0.34em 0.65em;
+  color: @seafoam_text_dim;
+  background: transparent;
+  border: 0;
+  border-radius: 0.45em;
+  box-shadow: none;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.theme-seafoam .app-sidebar .nav-btn:hover {
+  color: @seafoam_text;
+  background-color: alpha(white, 0.055);
+}
+
+.theme-seafoam .app-sidebar .nav-btn.nav-selected {
+  color: @seafoam_text;
+  background-color: alpha(@seafoam_accent, 0.16);
+  box-shadow: inset 0.14em 0 @seafoam_accent, inset 0 0 0 1px alpha(@seafoam_accent, 0.10);
+}
+
+.theme-seafoam .app-sidebar .sidebar-nav-icon {
+  min-width: 1.45em;
+  min-height: 1.45em;
+  -gtk-icon-size: 1.15em;
+}
+
+.theme-seafoam .app-sidebar .nav-label {
+  margin-left: 0.65em;
+  font-size: 0.9em;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+}
+
+.theme-seafoam .app-sidebar .nav-btn.nav-selected .nav-label {
+  font-weight: 600;
+}
+
+.theme-seafoam .app-sidebar.sidebar-collapsed .nav-btn {
+  padding-left: 0.7em;
+  padding-right: 0.7em;
+}
+
+.theme-seafoam .app-sidebar.sidebar-collapsed .sidebar-brand {
+  padding-left: 0.45em;
+  padding-right: 0.45em;
+  border-spacing: 0;
+}
+
+.theme-seafoam entry,
+.theme-seafoam entry.search,
+.theme-seafoam dropdown > button,
+.theme-seafoam spinbutton {
+  color: @seafoam_text;
+  background-color: alpha(@seafoam_surface_bg, 0.86);
+  border: 1px solid @seafoam_border;
+  border-radius: 8px;
+  box-shadow: inset 0 1px alpha(white, 0.04);
+}
+
+.theme-seafoam entry placeholder,
+.theme-seafoam entry.search placeholder {
+  color: @seafoam_text_dim;
+}
+
+.theme-seafoam dropdown > button:hover,
+.theme-seafoam spinbutton:hover,
+.theme-seafoam entry:hover {
+  background-color: alpha(@seafoam_surface_raised, 0.92);
+  border-color: alpha(@seafoam_accent, 0.70);
+}
+
+.theme-seafoam switch {
+  color: @seafoam_text_dim;
+  background-color: @seafoam_surface_bg;
+  border: 1px solid @seafoam_border;
+}
+
+.theme-seafoam switch:checked {
+  color: @seafoam_text;
+  background-color: @seafoam_accent;
+  border-color: alpha(white, 0.20);
+}
+
+.theme-seafoam switch slider {
+  background-color: @seafoam_text;
+  box-shadow: 0 2px 6px alpha(black, 0.32);
+}
+
+.theme-seafoam checkbutton {
+  color: @seafoam_text;
+}
+
+.theme-seafoam checkbutton check,
+.theme-seafoam checkbutton radio {
+  color: @seafoam_text;
+  background-color: @seafoam_surface_bg;
+  border: 1px solid @seafoam_border;
+}
+
+.theme-seafoam checkbutton check:checked,
+.theme-seafoam checkbutton radio:checked {
+  color: @seafoam_text;
+  background-color: @seafoam_accent;
+  border-color: alpha(white, 0.20);
+}
+
+.theme-seafoam scrollbar {
+  background-color: transparent;
+}
+
+.theme-seafoam scrollbar slider {
+  background-color: alpha(@seafoam_text_dim, 0.55);
+  border-radius: 999px;
+}
+
+.theme-seafoam scrollbar slider:hover {
+  background-color: alpha(@seafoam_text, 0.72);
+}
+
+.theme-seafoam button.suggested-action {
+  color: white;
+  background-color: @seafoam_accent;
+  border-color: alpha(white, 0.18);
+  box-shadow: 0 6px 16px alpha(@seafoam_accent, 0.30);
+}
+
+.theme-seafoam button.suggested-action:hover {
+  background-color: shade(@seafoam_accent, 1.12);
+}
+
+.theme-seafoam button.destructive-action {
+  color: white;
+  background-color: @seafoam_danger;
+  border-color: alpha(white, 0.18);
+  box-shadow: 0 6px 16px alpha(@seafoam_danger, 0.24);
+}
+
+.theme-seafoam button.destructive-action:hover {
+  background-color: shade(@seafoam_danger, 1.08);
+}
+
+.theme-seafoam *:disabled {
+  color: alpha(@seafoam_text_dim, 0.58);
+}
+
+.theme-seafoam button:disabled,
+.theme-seafoam entry:disabled,
+.theme-seafoam dropdown > button:disabled,
+.theme-seafoam spinbutton:disabled {
+  background-color: alpha(@seafoam_surface_bg, 0.54);
+  border-color: alpha(@seafoam_border, 0.62);
+  box-shadow: none;
+}
+
+.theme-seafoam *:focus-visible {
+  outline-color: @seafoam_accent;
+  outline-style: solid;
+  outline-width: 2px;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px alpha(@seafoam_accent, 0.24);
+}
+
+.theme-seafoam .recommended-page.content-surface {
+  background-color: transparent;
+}
+
+.theme-seafoam .transaction-page,
+.theme-seafoam .welcome-screen {
+  color: @seafoam_text;
+  background-color: @seafoam_window_bg;
+  background-image:
+    radial-gradient(circle at 18% 12%, alpha(@seafoam_accent, 0.20), transparent 36%),
+    radial-gradient(circle at 84% 78%, alpha(@seafoam_purple, 0.12), transparent 42%),
+    radial-gradient(circle at 68% 96%, alpha(@seafoam_pink, 0.07), transparent 34%);
+}
+
+.theme-seafoam .welcome-card {
+  color: @seafoam_text;
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-seafoam .welcome-option-row {
+  background-color: alpha(@seafoam_surface_raised, 0.68);
+  border-color: alpha(@seafoam_border, 0.88);
+}
+
+.theme-seafoam .welcome-option-row:hover {
+  background-color: alpha(@seafoam_accent, 0.13);
+  border-color: alpha(@seafoam_accent, 0.52);
+}
+
+.theme-seafoam .welcome-navigation {
+  background-color: alpha(@seafoam_sidebar_bg, 0.92);
+  border-color: alpha(white, 0.11);
+  box-shadow: 0 -0.75em 2em alpha(black, 0.18);
+}
+
+.theme-seafoam .transaction-page scrolledwindow,
+.theme-seafoam .transaction-page scrolledwindow > viewport,
+.theme-seafoam .transaction-page paned,
+.theme-seafoam .transaction-page .terminal-output,
+.theme-seafoam .transaction-page .terminal-output text {
+  color: @seafoam_text;
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-seafoam .lockout-content {
+  padding-top: 2em;
+  background-color: @seafoam_window_bg;
+  background-image:
+    radial-gradient(circle at 18% 12%, alpha(@seafoam_accent, 0.20), transparent 36%),
+    radial-gradient(circle at 84% 78%, alpha(@seafoam_purple, 0.12), transparent 42%),
+    radial-gradient(circle at 68% 96%, alpha(@seafoam_pink, 0.07), transparent 34%);
+}
+
+.theme-seafoam.app-window-surface,
+.theme-seafoam.pkgbuild-window,
+.theme-seafoam.pkgbuild-window .app-window-surface {
+  color: @seafoam_text;
+  background-color: @seafoam_window_bg;
+  background-image: none;
+}
+
+.theme-seafoam.pkgbuild-window notebook,
+.theme-seafoam.pkgbuild-window notebook > header,
+.theme-seafoam.pkgbuild-window notebook > stack,
+.theme-seafoam.pkgbuild-window scrolledwindow,
+.theme-seafoam.pkgbuild-window scrolledwindow > viewport {
+  color: @seafoam_text;
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-seafoam.pkgbuild-window notebook > header tabs tab {
+  color: @seafoam_text_dim;
+  background-color: transparent;
+}
+
+.theme-seafoam.pkgbuild-window notebook > header tabs tab:checked {
+  color: @seafoam_text;
+  box-shadow: inset 0 -0.12em @seafoam_accent;
+}
+
+.theme-seafoam.pkgbuild-window frame {
+  background-color: alpha(@seafoam_surface_bg, 0.72);
+  border: 1px solid alpha(white, 0.09);
+  border-radius: 0.5em;
+}
+
+.theme-seafoam.pkgbuild-window textview,
+.theme-seafoam.pkgbuild-window textview text {
+  color: @seafoam_text;
+  background-color: alpha(@seafoam_surface_bg, 0.72);
+  background-image: none;
+}
+
+.theme-seafoam popover > contents {
+  color: @seafoam_text;
+  background-color: alpha(@seafoam_surface_raised, 0.98);
+  border: 1px solid alpha(white, 0.12);
+  box-shadow: 0 0.75em 2em alpha(black, 0.34);
+}
+
+.theme-seafoam .dim-label {
+  color: @seafoam_text_dim;
+}
+
+.theme-seafoam .spec-value {
+  color: @seafoam_text;
+}
+
+.theme-seafoam .pill {
+  color: @seafoam_text;
+  background-color: alpha(@seafoam_text, 0.08);
+}
+
+.theme-seafoam .package-card {
+  background-color: alpha(@seafoam_surface_raised, 0.88);
+  border: 1px solid alpha(white, 0.09);
+  border-radius: 12px;
+  box-shadow: 0 8px 22px alpha(black, 0.20), inset 0 1px alpha(white, 0.04);
+}
+
+.theme-seafoam .package-card:hover {
+  background-color: alpha(@seafoam_surface_raised, 0.96);
+  border-color: alpha(@seafoam_accent, 0.55);
+}
+
+.theme-seafoam .package-card-content {
+  color: @seafoam_text;
+}
+
+.theme-seafoam .section-title {
+  color: @seafoam_text;
+  font-weight: 700;
+}
+
+.theme-seafoam .package-page,
+.theme-seafoam .aur-page,
+.theme-seafoam .flatpak-page,
+.theme-seafoam .appimage-page,
+.theme-seafoam .update-page,
+.theme-seafoam .package-results {
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-seafoam .package-results scrolledwindow,
+.theme-seafoam .package-results viewport,
+.theme-seafoam .package-results columnview,
+.theme-seafoam .package-results gridview,
+.theme-seafoam .package-results listview,
+.theme-seafoam .package-results list,
+.theme-seafoam .package-results .background,
+.theme-seafoam .update-page scrolledwindow,
+.theme-seafoam .update-page viewport,
+.theme-seafoam .update-page listview {
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-seafoam .page-toolbar,
+.theme-seafoam .selection-panel,
+.theme-seafoam .detail-panel {
+  background-color: alpha(@seafoam_surface_bg, 0.82);
+  border: 1px solid alpha(white, 0.09);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px alpha(black, 0.22), inset 0 1px alpha(white, 0.04);
+}
+
+.theme-seafoam .compact-search-zone button,
+.theme-seafoam .compact-search-zone entry,
+.theme-seafoam .compact-search-zone dropdown > button,
+.theme-seafoam .compact-search-entry {
+  border-radius: 0.55em;
+}
+
+.theme-seafoam .package-toolbar-concept .package-view-switch-concept {
+  border-color: alpha(white, 0.10);
+  background-color: alpha(@seafoam_surface_bg, 0.72);
+}
+
+.theme-seafoam .package-toolbar-concept .package-view-switch-concept button {
+  background-color: transparent;
+}
+
+.theme-seafoam .package-toolbar-concept .package-view-switch-concept button:checked {
+  background-color: alpha(@seafoam_accent, 0.32);
+}
+
+.theme-seafoam .package-results row:hover,
+.theme-seafoam .update-page row:hover {
+  background-color: alpha(white, 0.05);
+}
+
+.theme-seafoam .package-results gridview > child.activatable:hover,
+.theme-seafoam .package-results gridview > child.activatable:selected:hover,
+.theme-seafoam .package-results gridview > child:selected {
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.theme-seafoam .package-results row:selected,
+.theme-seafoam .update-page row:selected {
+  background-color: alpha(@seafoam_accent, 0.22);
+  border-color: alpha(@seafoam_accent, 0.72);
+}
+
+.theme-seafoam .package-card:selected,
+.theme-seafoam .package-results gridview > child:selected .package-card {
+  background-color: alpha(@seafoam_accent, 0.22);
+  border-color: alpha(@seafoam_accent, 0.72);
+}
+
+.theme-seafoam .spec-row {
+  border-bottom: 1px solid alpha(@seafoam_border, 0.72);
+}
+
+.theme-seafoam .status-badge {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 600;
+}
+
+.theme-seafoam .status-badge.success {
+  color: @seafoam_success;
+  background-color: alpha(@seafoam_success, 0.14);
+}
+
+.theme-seafoam .status-badge.error {
+  color: @seafoam_danger;
+  background-color: alpha(@seafoam_danger, 0.14);
+}
+
+.theme-seafoam .empty-state {
+  color: @seafoam_text_dim;
+}
+
+.theme-seafoam .error-state {
+  color: @seafoam_danger;
+}
+
+.theme-seafoam .status-badge.out-of-date {
+  color: @seafoam_warning;
+  background-color: alpha(@seafoam_warning, 0.12);
+  border: 1px solid alpha(@seafoam_warning, 0.55);
+  padding: 1px 4px;
+}
+
+.theme-seafoam .form-surface {
+  background-color: alpha(@seafoam_surface_bg, 0.86);
+  border: 1px solid alpha(white, 0.09);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px alpha(black, 0.18), inset 0 1px alpha(white, 0.04);
+}
+
+.theme-seafoam .appimage-detail-card {
+  background-color: alpha(@seafoam_surface_bg, 0.82);
+  border-color: alpha(white, 0.08);
+  box-shadow: 0 0.65em 1.6em alpha(black, 0.18), inset 0 1px alpha(white, 0.035);
+}
+
+.theme-seafoam .appimage-detail-card list,
+.theme-seafoam .appimage-detail-card row,
+.theme-seafoam .appimage-detail-card row:hover {
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-seafoam .flatpak-page .form-surface {
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.theme-seafoam .flatpak-page list.flatpak-nav,
+.theme-seafoam .flatpak-page scrolledwindow,
+.theme-seafoam .flatpak-page scrolledwindow > viewport {
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-seafoam .source-badge {
+  background-color: alpha(@seafoam_accent, 0.16);
+  border: 1px solid alpha(@seafoam_accent, 0.42);
+  border-radius: 999px;
+  color: @seafoam_text;
+  padding: 3px 8px;
+}
+
+.theme-seafoam .settings-section,
+.theme-seafoam .transaction-row,
+.theme-seafoam .utility-row {
+  background-color: alpha(@seafoam_surface_bg, 0.78);
+  border: 1px solid alpha(white, 0.09);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px alpha(black, 0.18), inset 0 1px alpha(white, 0.04);
+  padding: 12px;
+}
+
+
+.theme-seafoam .settings-section > box:hover {
+  background-color: alpha(@seafoam_accent, 0.12);
+}
+
+.theme-seafoam.dialog-surface,
+.theme-seafoam .lockout-card,
+.theme-seafoam .toast-surface {
+  background-color: alpha(@seafoam_surface_raised, 0.92);
+  border: 1px solid alpha(white, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px alpha(black, 0.34), inset 0 1px alpha(white, 0.05);
+}
+
+.theme-seafoam .pkg-status {
+  color: @seafoam_text_dim;
+  background-color: alpha(@seafoam_text, 0.07);
+}
+
+.theme-seafoam .pkg-status.status-done {
+  color: @seafoam_success;
+  background-color: alpha(@seafoam_success, 0.14);
+}
+
+.theme-seafoam .pkg-status.status-failed {
+  color: @seafoam_danger;
+  background-color: alpha(@seafoam_danger, 0.14);
+}
+
+.theme-seafoam .toast-card {
+  color: @seafoam_text;
+  background-color: alpha(@seafoam_surface_raised, 0.97);
+  border: 1px solid alpha(white, 0.12);
+  box-shadow: 0 0.65em 1.5em alpha(black, 0.32);
+}
+
+.theme-seafoam .toast-card.success {
+  background-color: alpha(@seafoam_success, 0.94);
+}
+
+.theme-seafoam .toast-card.warning {
+  background-color: alpha(@seafoam_warning, 0.94);
+}
+
+.theme-seafoam .toast-card.error {
+  background-color: alpha(@seafoam_danger, 0.94);
+}
+
+.theme-seafoam .drop-zone.drag-hover {
+  background-color: alpha(@seafoam_accent, 0.12);
+  border-color: @seafoam_accent;
+}
+
+.theme-seafoam .success,
+.theme-seafoam .status-icon.success {
+  color: @seafoam_success;
+}
+
+.theme-seafoam .warning,
+.theme-seafoam .status-icon.warning {
+  color: @seafoam_warning;
+}
+
+.theme-seafoam .error,
+.theme-seafoam .status-icon.error {
+  color: @seafoam_danger;
+}
+
+.theme-seafoam .status-success {
+  color: @seafoam_success;
+}
+
+.theme-seafoam .status-warning {
+  color: @seafoam_warning;
+}
+
+.theme-seafoam .status-error {
+  color: @seafoam_danger;
+}
+
+.theme-seafoam .lockout-scrim {
+  background-color: alpha(@seafoam_window_bg, 0.68);
+}
+
+.theme-seafoam button.suggested-action,
+.theme-seafoam switch:checked,
+.theme-seafoam checkbutton check:checked,
+.theme-seafoam checkbutton radio:checked {
+  color: @seafoam_window_bg;
+}

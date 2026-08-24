@@ -334,7 +334,8 @@
                         <child>
                           <object class="GtkButton" id="overlay_permissions_button">
                             <property name="hexpand">true</property>
-                             <property name="label" translatable="yes">App Permissions</property>
+                            <property name="label" translatable="yes">App Permissions</property>
+                            <style><class name="flatpak-permissions-action"/></style>
                           </object>
                         </child>
                         <child>

@@ -2,6 +2,7 @@ const std = @import("std");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gio = bindings.gio;
+const gdk = bindings.gdk;
 const glib = bindings.glib;
 const gobject = bindings.gobject;
 const support = @import("support.zig");
@@ -18,8 +19,16 @@ const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const ViewType = @import("../models/shelly_config.zig").ViewType;
 const RecommendCategory = @import("../models/recommendation.zig").RecommendCategory;
 const sorters = @import("../helpers/sorters.zig");
+const package_toolbar_layout = @import("../helpers/package_toolbar_layout.zig");
 const recommendations = @import("../services/recommendations.zig");
 const translations = @import("../helpers/translations.zig");
+
+const load_batch_size: usize = 64;
+
+pub fn nextLoadBatchEnd(index: usize, total: usize) usize {
+    if (index >= total) return total;
+    return index + @min(load_batch_size, total - index);
+}
 
 const Event = @import("../services/shelly_operation.zig").Event;
 const PackageDetail = @import("package_detail.zig").PackageDetail;
@@ -46,24 +55,29 @@ pub const PackagePage = extern struct {
         list_store: *gio.ListStore,
         loading_overlay: *gtk.Box,
         filter: *gtk.CustomFilter,
-        grouping_selection: *gtk.DropDown,
+        concept_grouping_selection: *gtk.DropDown,
         loading_spinner: *gtk.Spinner,
         error_label: *gtk.Label,
-        search_entry: *gtk.SearchEntry,
+        concept_search_entry: *gtk.SearchEntry,
+        concept_installed_only_check: *gtk.CheckButton,
         filter_model: *gtk.FilterListModel,
+        concept_toolbar: *gtk.Box,
+        concept_filter_controls: *gtk.Box,
+        concept_action_controls: *gtk.Box,
+        concept_toolbar_spacer: *gtk.Box,
         grid_view: *gtk.GridView,
         detail_hbox: *gtk.Box,
         detail_grid_hbox: *gtk.Box,
-        grid_view_button: *gtk.ToggleButton,
-        list_view_button: *gtk.ToggleButton,
-        install_button: *gtk.Button,
-        cart_items_box: *gtk.Box,
-        cart_label: *gtk.Label,
-        upgrade_check: *gtk.CheckButton,
-        show_hidden_check: *gtk.CheckButton,
-        show_explicit_only_check: *gtk.CheckButton,
-        show_depends_only_check: *gtk.CheckButton,
-        show_detail_pane_check: *gtk.CheckButton,
+        concept_grid_view_button: *gtk.ToggleButton,
+        concept_list_view_button: *gtk.ToggleButton,
+        concept_install_button: *gtk.Button,
+        concept_cart_items_box: *gtk.Box,
+        concept_cart_label: *gtk.Label,
+        concept_upgrade_check: *gtk.CheckButton,
+        concept_show_hidden_check: *gtk.CheckButton,
+        concept_show_explicit_only_check: *gtk.CheckButton,
+        concept_show_depends_only_check: *gtk.CheckButton,
+        concept_show_detail_pane_check: *gtk.CheckButton,
         arena: ?*std.heap.ArenaAllocator,
         selected_group: [64]u8,
         selected_group_len: usize,
@@ -78,6 +92,8 @@ pub const PackagePage = extern struct {
         check_map_column: std.AutoHashMapUnmanaged(*PackageObject, *gtk.CheckButton),
         loaded: bool,
         applying_config: bool,
+        surface: ?*gdk.Surface,
+        surface_layout_handler: c_ulong,
         resolver: IconResolver,
         search_text: [256]u8,
         search_len: usize,
@@ -122,6 +138,8 @@ pub const PackagePage = extern struct {
         const p = self.priv();
         p.loaded = false;
         p.applying_config = false;
+        p.surface = null;
+        p.surface_layout_handler = 0;
         p.arena = null;
         p.generation = 0;
         p.show_installed_only = false;
@@ -170,9 +188,9 @@ pub const PackagePage = extern struct {
         _ = gtk.SignalListItemFactory.signals.bind.connect(size_factory, ?*anyopaque, &size_bind, null, .{});
         gtk.ColumnViewColumn.setFactory(p.size_column, size_factory.as(gtk.ListItemFactory));
 
-        _ = gtk.SearchEntry.signals.search_changed.connect(p.search_entry, *Self, &on_search_changed, self, .{});
+        _ = gtk.SearchEntry.signals.search_changed.connect(p.concept_search_entry, *Self, &on_search_changed, self, .{});
 
-        _ = gobject.Object.signals.notify.connect(p.grouping_selection.as(gobject.Object), *Self, &on_group_notify, self, .{ .detail = "selected" });
+        _ = gobject.Object.signals.notify.connect(p.concept_grouping_selection.as(gobject.Object), *Self, &on_group_notify, self, .{ .detail = "selected" });
         _ = gobject.Object.signals.notify.connect(p.selection.as(gobject.Object), *Self, &on_selection_changed, self, .{ .detail = "selected" });
 
         _ = gtk.GridView.signals.activate.connect(p.grid_view, *Self, &on_grid_activated, self, .{});
@@ -180,8 +198,8 @@ pub const PackagePage = extern struct {
 
         p.resolver = IconResolver.init(std.heap.c_allocator);
 
-        _ = gtk.CheckButton.signals.toggled.connect(p.upgrade_check, *Self, &on_upgrade_toggled, self, .{});
-        _ = gtk.CheckButton.signals.toggled.connect(p.show_hidden_check, *Self, &on_show_hidden_toggled, self, .{});
+        _ = gtk.CheckButton.signals.toggled.connect(p.concept_upgrade_check, *Self, &on_upgrade_toggled, self, .{});
+        _ = gtk.CheckButton.signals.toggled.connect(p.concept_show_hidden_check, *Self, &on_show_hidden_toggled, self, .{});
 
         const install_date_factory = gtk.SignalListItemFactory.new();
         _ = gtk.SignalListItemFactory.signals.setup.connect(install_date_factory, ?*anyopaque, &install_date_setup, null, .{});
@@ -203,11 +221,44 @@ pub const PackagePage = extern struct {
         gtk.Widget.insertActionGroup(self.as(gtk.Widget), "search", group.as(gio.ActionGroup));
 
         applyOptionsFromConfig(self);
+        self.update_selection_ui();
         support.connectLifecycle(Self, self);
     }
 
     fn onFocusSearch(_: *gio.SimpleAction, _: ?*glib.Variant, self: *Self) callconv(.c) void {
-        _ = gtk.Widget.grabFocus(self.priv().search_entry.as(gtk.Widget));
+        _ = gtk.Widget.grabFocus(self.priv().concept_search_entry.as(gtk.Widget));
+    }
+
+    fn updateToolbarLayout(self: *Self) void {
+        const p = self.priv();
+        package_toolbar_layout.apply(
+            p.concept_toolbar,
+            p.concept_filter_controls,
+            p.concept_action_controls,
+            p.concept_toolbar_spacer,
+            gtk.Widget.getWidth(self.as(gtk.Widget)),
+        );
+    }
+
+    fn connectSurfaceLayout(self: *Self) void {
+        const p = self.priv();
+        if (p.surface_layout_handler != 0) return;
+
+        const native = gtk.Widget.getNative(self.as(gtk.Widget)) orelse return;
+        const surface = gtk.Native.getSurface(native) orelse return;
+        p.surface = surface;
+        p.surface_layout_handler = gdk.Surface.signals.layout.connect(
+            surface,
+            *Self,
+            &onSurfaceLayout,
+            self,
+            .{},
+        );
+        self.updateToolbarLayout();
+    }
+
+    fn onSurfaceLayout(_: *gdk.Surface, _: c_int, _: c_int, self: *Self) callconv(.c) void {
+        self.updateToolbarLayout();
     }
 
     fn attachSorter(column: *gtk.ColumnViewColumn, sorter: *gtk.Sorter) void {
@@ -623,6 +674,7 @@ pub const PackagePage = extern struct {
 
         const text = gtk.Editable.getText(entry.as(gtk.Editable));
         const slice = std.mem.span(text);
+
         const len = @min(slice.len, p.search_text.len);
         @memcpy(p.search_text[0..len], slice[0..len]);
         p.search_len = len;
@@ -643,15 +695,16 @@ pub const PackagePage = extern struct {
         gtk.Revealer.setRevealChild(p.detail_revealer, 1);
     }
 
-    fn on_group_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+    fn on_group_notify(object: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         const p = self.priv();
+        const source = gobject.ext.cast(gtk.DropDown, object) orelse return;
 
-        const idx = gtk.DropDown.getSelected(p.grouping_selection);
+        const idx = gtk.DropDown.getSelected(source);
 
         if (idx == 0 or idx == std.math.maxInt(u32)) {
             p.selected_group_len = 0;
         } else {
-            const model = gtk.DropDown.getModel(p.grouping_selection) orelse return;
+            const model = gtk.DropDown.getModel(source) orelse return;
             const obj = gio.ListModel.getObject(model, idx) orelse return;
             const so = gobject.ext.cast(gtk.StringObject, obj) orelse return;
             const s = std.mem.span(gtk.StringObject.getString(so));
@@ -664,6 +717,7 @@ pub const PackagePage = extern struct {
     }
 
     pub fn onMap(self: *Self) void {
+        self.connectSurfaceLayout();
         const p = self.priv();
         if (p.loaded) return;
         applyOptionsFromConfig(self);
@@ -671,7 +725,8 @@ pub const PackagePage = extern struct {
         p.generation += 1;
         show_loading(self);
         self.update_selection_ui();
-        _ = gtk.Widget.grabFocus(p.search_entry.as(gtk.Widget));
+        self.updateToolbarLayout();
+        _ = gtk.Widget.grabFocus(p.concept_search_entry.as(gtk.Widget));
         const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
         thread.detach();
     }
@@ -684,19 +739,22 @@ pub const PackagePage = extern struct {
         defer p.applying_config = false;
 
         p.show_hidden = cfg.PackageInstallShowHidden;
-        gtk.CheckButton.setActive(p.upgrade_check, @intFromBool(cfg.PackageInstallUpgrade));
-        gtk.CheckButton.setActive(p.show_hidden_check, @intFromBool(cfg.PackageInstallShowHidden));
+        gtk.CheckButton.setActive(p.concept_upgrade_check, @intFromBool(cfg.PackageInstallUpgrade));
+        gtk.CheckButton.setActive(p.concept_show_hidden_check, @intFromBool(cfg.PackageInstallShowHidden));
 
         p.show_explicit_only = cfg.PackageInstallShowExplicitOnly;
-        gtk.CheckButton.setActive(p.show_explicit_only_check, @intFromBool(cfg.PackageInstallShowExplicitOnly));
+        gtk.CheckButton.setActive(p.concept_show_explicit_only_check, @intFromBool(cfg.PackageInstallShowExplicitOnly));
+
+        p.show_depends_only = cfg.PackageInstallShowDependsOnly;
+        gtk.CheckButton.setActive(p.concept_show_depends_only_check, @intFromBool(cfg.PackageInstallShowDependsOnly));
 
         p.show_detail_pane = cfg.PackageInstallShowDetailPane;
-        gtk.CheckButton.setActive(p.show_detail_pane_check, @intFromBool(cfg.PackageInstallShowDetailPane));
+        gtk.CheckButton.setActive(p.concept_show_detail_pane_check, @intFromBool(cfg.PackageInstallShowDetailPane));
         gtk.Widget.setVisible(p.detail_revealer.as(gtk.Widget), if (cfg.PackageInstallShowDetailPane) 0 else 1);
 
         const use_grid = cfg.PackageInstallView == .grid;
-        gtk.ToggleButton.setActive(p.grid_view_button, @intFromBool(use_grid));
-        gtk.ToggleButton.setActive(p.list_view_button, @intFromBool(!use_grid));
+        gtk.ToggleButton.setActive(p.concept_grid_view_button, @intFromBool(use_grid));
+        gtk.ToggleButton.setActive(p.concept_list_view_button, @intFromBool(!use_grid));
         gtk.Widget.setVisible(p.detail_grid_hbox.as(gtk.Widget), @intFromBool(use_grid));
         gtk.Widget.setVisible(p.detail_hbox.as(gtk.Widget), @intFromBool(!use_grid));
     }
@@ -716,6 +774,14 @@ pub const PackagePage = extern struct {
     //Unmap stuff we owned
     pub fn onUnmap(self: *Self) void {
         const p = self.priv();
+        if (p.surface) |surface| {
+            if (p.surface_layout_handler != 0) {
+                gobject.signalHandlerDisconnect(surface.as(gobject.Object), p.surface_layout_handler);
+            }
+        }
+        p.surface = null;
+        p.surface_layout_handler = 0;
+
         if (!p.loaded) return;
         p.loaded = false;
         p.generation += 1;
@@ -847,15 +913,14 @@ pub const PackagePage = extern struct {
                 var buf: [128]u8 = undefined;
                 gtk.StringList.append(strings, c_string.cstr(&buf, g));
             }
-            gtk.DropDown.setModel(p.grouping_selection, strings.as(gio.ListModel));
+            gtk.DropDown.setModel(p.concept_grouping_selection, strings.as(gio.ListModel));
             strings.as(gobject.Object).unref();
-            gtk.DropDown.setSelected(p.grouping_selection, 0);
+            gtk.DropDown.setSelected(p.concept_grouping_selection, 0);
         }
 
-        const batch_size = 500;
-        const end = @min(result.index + batch_size, result.packages.len);
+        const end = nextLoadBatchEnd(result.index, result.packages.len);
         const n = end - result.index;
-        var batch: [500]*gobject.Object = undefined;
+        var batch: [load_batch_size]*gobject.Object = undefined;
         var i: usize = 0;
         for (result.packages[result.index..end]) |d| {
             const pkg = PackageObject.new(d);
@@ -905,21 +970,27 @@ pub const PackagePage = extern struct {
         .{ "loading_overlay", @offsetOf(Private, "loading_overlay") },
         .{ "loading_spinner", @offsetOf(Private, "loading_spinner") },
         .{ "error_label", @offsetOf(Private, "error_label") },
-        .{ "search_entry", @offsetOf(Private, "search_entry") },
+        .{ "concept_search_entry", @offsetOf(Private, "concept_search_entry") },
+        .{ "concept_installed_only_check", @offsetOf(Private, "concept_installed_only_check") },
+        .{ "concept_toolbar", @offsetOf(Private, "concept_toolbar") },
+        .{ "concept_filter_controls", @offsetOf(Private, "concept_filter_controls") },
+        .{ "concept_action_controls", @offsetOf(Private, "concept_action_controls") },
+        .{ "concept_toolbar_spacer", @offsetOf(Private, "concept_toolbar_spacer") },
         .{ "list_packages", @offsetOf(Private, "grid_view") },
         .{ "detail_hbox", @offsetOf(Private, "detail_hbox") },
         .{ "detail_grid_hbox", @offsetOf(Private, "detail_grid_hbox") },
-        .{ "grid_view_button", @offsetOf(Private, "grid_view_button") },
-        .{ "list_view_button", @offsetOf(Private, "list_view_button") },
-        .{ "grouping_selection", @offsetOf(Private, "grouping_selection") },
+        .{ "concept_grid_view_button", @offsetOf(Private, "concept_grid_view_button") },
+        .{ "concept_list_view_button", @offsetOf(Private, "concept_list_view_button") },
+        .{ "concept_grouping_selection", @offsetOf(Private, "concept_grouping_selection") },
         .{ "detail_revealer", @offsetOf(Private, "detail_revealer") },
-        .{ "install_button", @offsetOf(Private, "install_button") },
-        .{ "cart_label", @offsetOf(Private, "cart_label") },
-        .{ "cart_items_box", @offsetOf(Private, "cart_items_box") },
-        .{ "upgrade_check", @offsetOf(Private, "upgrade_check") },
-        .{ "show_hidden_check", @offsetOf(Private, "show_hidden_check") },
-        .{ "show_explicit_only", @offsetOf(Private, "show_explicit_only_check") },
-        .{ "show_detail_pane", @offsetOf(Private, "show_detail_pane_check") },
+        .{ "concept_install_button", @offsetOf(Private, "concept_install_button") },
+        .{ "concept_cart_label", @offsetOf(Private, "concept_cart_label") },
+        .{ "concept_cart_items_box", @offsetOf(Private, "concept_cart_items_box") },
+        .{ "concept_upgrade_check", @offsetOf(Private, "concept_upgrade_check") },
+        .{ "concept_show_hidden_check", @offsetOf(Private, "concept_show_hidden_check") },
+        .{ "concept_show_explicit_only", @offsetOf(Private, "concept_show_explicit_only_check") },
+        .{ "concept_show_depends_only", @offsetOf(Private, "concept_show_depends_only_check") },
+        .{ "concept_show_detail_pane", @offsetOf(Private, "concept_show_detail_pane_check") },
     };
 
     pub const Class = extern struct {
@@ -949,8 +1020,8 @@ pub const PackagePage = extern struct {
         const model = p.list_store.as(gio.ListModel);
         const n = gio.ListModel.getNItems(model);
 
-        while (gtk.Widget.getFirstChild(p.cart_items_box.as(gtk.Widget))) |child| {
-            gtk.Box.remove(p.cart_items_box, child);
+        while (gtk.Widget.getFirstChild(p.concept_cart_items_box.as(gtk.Widget))) |child| {
+            gtk.Box.remove(p.concept_cart_items_box, child);
         }
 
         var install_count: u32 = 0;
@@ -969,8 +1040,9 @@ pub const PackagePage = extern struct {
             gtk.Widget.setHexpand(row_btn.as(gtk.Widget), 1);
             gtk.Widget.setTooltipText(row_btn.as(gtk.Widget), translations._("Remove from selection"));
 
-            const row = gtk.Box.new(.horizontal, 8);
+            const row = gtk.Box.new(.horizontal, 0);
             gtk.Widget.setHexpand(row.as(gtk.Widget), 1);
+            gtk.Widget.addCssClass(row.as(gtk.Widget), "package-selection-row");
 
             const name_label = gtk.Label.new(pkg.getName());
             gtk.Widget.setHalign(name_label.as(gtk.Widget), .start);
@@ -988,7 +1060,7 @@ pub const PackagePage = extern struct {
             gtk.Box.append(row, tag.as(gtk.Widget));
 
             const x_icon = gtk.Image.newFromIconName("window-close-symbolic");
-            gtk.Image.setPixelSize(x_icon, 12);
+            gtk.Widget.addCssClass(x_icon.as(gtk.Widget), "package-selection-remove-icon");
             gtk.Widget.setHalign(x_icon.as(gtk.Widget), .end);
             gtk.Box.append(row, x_icon.as(gtk.Widget));
 
@@ -998,39 +1070,41 @@ pub const PackagePage = extern struct {
             gobject.Object.setData(row_btn.as(gobject.Object), "page", self);
             _ = gtk.Button.signals.clicked.connect(row_btn, ?*anyopaque, &on_cart_item_clicked, null, .{});
 
-            gtk.Box.append(p.cart_items_box, row_btn.as(gtk.Widget));
+            gtk.Box.append(p.concept_cart_items_box, row_btn.as(gtk.Widget));
         }
 
         if (install_count == 0 and remove_count == 0) {
             const empty = gtk.Label.new(translations._("No packages selected"));
             gtk.Widget.addCssClass(empty.as(gtk.Widget), "dim-label");
             gtk.Widget.setHalign(empty.as(gtk.Widget), .start);
-            gtk.Box.append(p.cart_items_box, empty.as(gtk.Widget));
+            gtk.Box.append(p.concept_cart_items_box, empty.as(gtk.Widget));
         }
 
         const total = install_count + remove_count;
         var cart_buf: [32]u8 = undefined;
-        gtk.Label.setLabel(p.cart_label, std.fmt.bufPrintZ(&cart_buf, "{d} {s}", .{ total, translations._("Selected") }) catch translations._("0 Selected"));
+        const cart_text = std.fmt.bufPrintZ(&cart_buf, "{d} {s}", .{ total, translations._("Selected") }) catch translations._("0 Selected");
+        gtk.Label.setLabel(p.concept_cart_label, cart_text);
 
-        const btn = p.install_button.as(gtk.Widget);
+        const button = p.concept_install_button;
+        const btn = button.as(gtk.Widget);
         gtk.Widget.removeCssClass(btn, "suggested-action");
         gtk.Widget.removeCssClass(btn, "destructive-action");
 
         if (total == 0) {
-            gtk.Button.setLabel(p.install_button, translations._("Install Selected"));
+            gtk.Button.setLabel(button, translations._("Install Selected"));
             gtk.Widget.setSensitive(btn, 0);
             gtk.Widget.setTooltipText(btn, null);
         } else if (install_count > 0 and remove_count > 0) {
-            gtk.Button.setLabel(p.install_button, translations._("Mixed selection"));
+            gtk.Button.setLabel(button, translations._("Mixed selection"));
             gtk.Widget.setSensitive(btn, 0);
             gtk.Widget.setTooltipText(btn, translations._("Select only installed packages to remove, or only available ones to install."));
         } else if (remove_count > 0) {
-            gtk.Button.setLabel(p.install_button, translations._("Remove Selected"));
+            gtk.Button.setLabel(button, translations._("Remove Selected"));
             gtk.Widget.setSensitive(btn, 1);
             gtk.Widget.addCssClass(btn, "destructive-action");
             gtk.Widget.setTooltipText(btn, null);
         } else {
-            gtk.Button.setLabel(p.install_button, translations._("Install Selected"));
+            gtk.Button.setLabel(button, translations._("Install Selected"));
             gtk.Widget.setSensitive(btn, 1);
             gtk.Widget.addCssClass(btn, "suggested-action");
             gtk.Widget.setTooltipText(btn, null);
@@ -1074,19 +1148,21 @@ pub const PackagePage = extern struct {
         if (remove_count > 0) self.confirm_remove() else self.start_install();
     }
 
-    fn on_grid_view_toggled(self: *Self) callconv(.c) void {
+    fn on_grid_view_toggled(button: *gtk.ToggleButton, self: *Self) callconv(.c) void {
         const p = self.priv();
         if (p.applying_config) return;
-        if (gtk.ToggleButton.getActive(p.grid_view_button) == 0) return;
+        if (gtk.ToggleButton.getActive(button) == 0) return;
+
         gtk.Widget.setVisible(p.detail_grid_hbox.as(gtk.Widget), 1);
         gtk.Widget.setVisible(p.detail_hbox.as(gtk.Widget), 0);
         updateConfigField(.PackageInstallView, ViewType.grid);
     }
 
-    fn on_list_view_toggled(self: *Self) callconv(.c) void {
+    fn on_list_view_toggled(button: *gtk.ToggleButton, self: *Self) callconv(.c) void {
         const p = self.priv();
         if (p.applying_config) return;
-        if (gtk.ToggleButton.getActive(p.list_view_button) == 0) return;
+        if (gtk.ToggleButton.getActive(button) == 0) return;
+
         gtk.Widget.setVisible(p.detail_hbox.as(gtk.Widget), 1);
         gtk.Widget.setVisible(p.detail_grid_hbox.as(gtk.Widget), 0);
         updateConfigField(.PackageInstallView, ViewType.list);
@@ -1095,7 +1171,8 @@ pub const PackagePage = extern struct {
     fn on_upgrade_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
         const p = self.priv();
         if (p.applying_config) return;
-        updateConfigField(.PackageInstallUpgrade, gtk.CheckButton.getActive(check) != 0);
+        const active = gtk.CheckButton.getActive(check) != 0;
+        updateConfigField(.PackageInstallUpgrade, active);
     }
 
     fn on_show_hidden_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
@@ -1109,7 +1186,9 @@ pub const PackagePage = extern struct {
 
     fn on_installed_only_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
         const p = self.priv();
-        p.show_installed_only = gtk.CheckButton.getActive(check) != 0;
+        const active = gtk.CheckButton.getActive(check) != 0;
+
+        p.show_installed_only = active;
         gtk.ColumnViewColumn.setVisible(p.install_date_column, @intFromBool(p.show_installed_only));
         gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
     }
@@ -1229,7 +1308,7 @@ pub const PackagePage = extern struct {
         argv.append(std.heap.c_allocator, "install") catch return;
         argv.append(std.heap.c_allocator, "standard") catch return;
         for (names.items) |name| argv.append(std.heap.c_allocator, name) catch return;
-        if (gtk.CheckButton.getActive(p.upgrade_check) != 0) {
+        if (gtk.CheckButton.getActive(p.concept_upgrade_check) != 0) {
             argv.append(std.heap.c_allocator, "--upgrade") catch return;
         }
 

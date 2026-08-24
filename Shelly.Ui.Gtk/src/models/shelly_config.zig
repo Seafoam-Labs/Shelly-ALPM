@@ -11,6 +11,7 @@ pub const NavMode = enum(u8) {
 pub const AppTheme = enum(u8) {
     classic = 0,
     midnight = 1,
+    seafoam = 2,
 };
 
 pub const ShellyTabs = enum(u8) {

@@ -21,10 +21,13 @@ pub const VersionHistoryDialog = extern struct {
     pub const CloseFn = *const fn (ctx: ?*anyopaque) void;
 
     const Private = struct {
+        history_frame: *gtk.Frame,
         title_label: *gtk.Label,
         subtitle_label: *gtk.Label,
         history_list: *gtk.ListBox,
         close_button: *gtk.Button,
+        surface: ?*gdk.Surface,
+        surface_layout_handler: c_ulong,
         on_close: ?CloseFn,
         ctx: ?*anyopaque,
         var offset: c_int = 0;
@@ -49,8 +52,11 @@ pub const VersionHistoryDialog = extern struct {
     fn init(self: *Self, _: *Class) callconv(.c) void {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
         const p = self.priv();
+        p.surface = null;
+        p.surface_layout_handler = 0;
         p.on_close = null;
         p.ctx = null;
+        support.connectLifecycle(Self, self);
     }
 
     /// Takes ownership of `entries` and its strings; frees them before returning.
@@ -81,6 +87,44 @@ pub const VersionHistoryDialog = extern struct {
     pub fn setButtons(self: *Self, close: [:0]const u8) void {
         const p = self.priv();
         gtk.Button.setLabel(p.close_button, close);
+    }
+
+    pub fn applyAvailableSize(self: *Self, available_width: c_int, available_height: c_int) void {
+        const width = @max(@divTrunc(available_width * 3, 4), 1);
+        const height = @max(@divTrunc(available_height * 3, 4), 1);
+        gtk.Widget.setSizeRequest(self.priv().history_frame.as(gtk.Widget), width, height);
+    }
+
+    pub fn onMap(self: *Self) void {
+        const p = self.priv();
+        if (p.surface_layout_handler != 0) return;
+
+        const native = gtk.Widget.getNative(self.as(gtk.Widget)) orelse return;
+        const surface = gtk.Native.getSurface(native) orelse return;
+        p.surface = surface;
+        p.surface_layout_handler = gdk.Surface.signals.layout.connect(
+            surface,
+            *Self,
+            &onSurfaceLayout,
+            self,
+            .{},
+        );
+        self.applyAvailableSize(gdk.Surface.getWidth(surface), gdk.Surface.getHeight(surface));
+    }
+
+    pub fn onUnmap(self: *Self) void {
+        const p = self.priv();
+        if (p.surface) |surface| {
+            if (p.surface_layout_handler != 0) {
+                gobject.signalHandlerDisconnect(surface.as(gobject.Object), p.surface_layout_handler);
+            }
+        }
+        p.surface = null;
+        p.surface_layout_handler = 0;
+    }
+
+    fn onSurfaceLayout(_: *gdk.Surface, width: c_int, height: c_int, self: *Self) callconv(.c) void {
+        self.applyAvailableSize(width, height);
     }
 
     fn make_row(entry: Entry) *gtk.Widget {
@@ -122,6 +166,7 @@ pub const VersionHistoryDialog = extern struct {
     }
 
     const template_children = .{
+        .{ "history_frame", @offsetOf(Private, "history_frame") },
         .{ "title_label", @offsetOf(Private, "title_label") },
         .{ "subtitle_label", @offsetOf(Private, "subtitle_label") },
         .{ "history_list", @offsetOf(Private, "history_list") },

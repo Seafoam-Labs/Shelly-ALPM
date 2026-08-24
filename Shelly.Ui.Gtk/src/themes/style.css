@@ -90,6 +90,12 @@
 
 .spec-row {
   border-bottom: 1px solid alpha(@theme_fg_color, 0.1);
+  border-spacing: 0.2em;
+  padding: 0.45em 0 0.55em;
+}
+
+.spec-key {
+  font-size: 0.85em;
 }
 
 .spec-value {
@@ -335,8 +341,160 @@
   margin-right: 5.75em;
 }
 
-.recommended-page {
-  padding-right: 5.75em;
+.compact-search-zone {
+  background-color: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.compact-search-zone entry,
+.compact-search-zone dropdown,
+.compact-search-zone checkbutton,
+.compact-search-entry {
+  min-height: 1.85em;
+}
+
+.compact-search-zone button,
+.compact-search-zone menubutton > button {
+  min-height: 1.85em;
+  padding-top: 0.16em;
+  padding-bottom: 0.16em;
+}
+
+.compact-search-zone entry,
+.compact-search-zone dropdown > button,
+.compact-search-entry {
+  padding-top: 0.08em;
+  padding-bottom: 0.08em;
+}
+
+.package-toolbar-concept {
+  margin-top: 0.625em;
+  margin-right: 0.625em;
+  margin-bottom: 0.625em;
+  margin-left: 0.625em;
+  padding: 0;
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.package-search-concept {
+  min-width: 9em;
+}
+
+.package-toolbar-concept .package-count-button-concept > button {
+  padding-right: 0.7em;
+  padding-left: 0.7em;
+}
+
+.package-toolbar-concept .package-view-switch-concept {
+  border: 1px solid alpha(@theme_fg_color, 0.12);
+  border-radius: 0.55em;
+}
+
+.package-toolbar-concept .package-view-switch-concept button {
+  min-width: 1.85em;
+  padding-right: 0.25em;
+  padding-left: 0.25em;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.package-toolbar-concept .package-view-switch-concept button image,
+.package-options-button-concept image {
+  -gtk-icon-size: 0.9em;
+}
+
+.package-options-button-concept > button {
+  min-width: 1.85em;
+  padding-right: 0.25em;
+  padding-left: 0.25em;
+}
+
+.package-options-content,
+.package-cart-content {
+  padding: 0.5em 0.75em;
+  border-spacing: 0.5em;
+}
+
+.package-options-content checkbutton check,
+.package-toolbar-concept .package-installed-concept check {
+  min-width: 0.85em;
+  min-height: 0.85em;
+}
+
+.package-options-content checkbutton check {
+  margin-right: 0.4em;
+}
+
+.package-toolbar-concept .package-installed-concept check {
+  margin-right: 0.5em;
+}
+
+.package-selection-items {
+  border-spacing: 0.25em;
+}
+
+.package-selection-row {
+  border-spacing: 0.5em;
+}
+
+.package-selection-remove-icon {
+  -gtk-icon-size: 0.75em;
+}
+
+.update-row-action {
+  min-width: 3em;
+  min-height: 3em;
+  padding: 0;
+}
+
+.update-row-action > image {
+  min-width: 1.25em;
+  min-height: 1.25em;
+  -gtk-icon-size: 1.25em;
+}
+
+.appimage-detail-content {
+  border-spacing: 1em;
+}
+
+.appimage-detail-header {
+  border-spacing: 1em;
+}
+
+.appimage-detail-icon {
+  min-width: 4.5em;
+  min-height: 4.5em;
+  -gtk-icon-size: 4.5em;
+}
+
+.appimage-detail-columns {
+  border-spacing: 1em;
+}
+
+.appimage-detail-card {
+  padding: 1em;
+  border-spacing: 0.65em;
+}
+
+.appimage-detail-card list,
+.appimage-detail-card row {
+  background-color: transparent;
+  background-image: none;
+}
+
+.appimage-detail-actions {
+  border-spacing: 0.5em;
+}
+
+.appimage-detail-actions button {
+  min-height: 2.5em;
+  padding-right: 0.8em;
+  padding-left: 0.8em;
 }
 
 .transaction-page {

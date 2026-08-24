@@ -465,6 +465,25 @@ test "midnight theme survives save and reload" {
     try testing.expect(cfg.AurEnabled);
 }
 
+test "seafoam theme survives save and reload" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+
+    try svc.set(.{ .Theme = .seafoam, .AurEnabled = true });
+    try svc.save();
+
+    var other = makeService(&tmp);
+    defer other.deinit();
+    try other.load();
+
+    const cfg = try other.get();
+    try testing.expectEqual(AppTheme.seafoam, cfg.Theme);
+    try testing.expect(cfg.AurEnabled);
+}
+
 test "unknown theme falls back to midnight without dropping valid fields" {
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();

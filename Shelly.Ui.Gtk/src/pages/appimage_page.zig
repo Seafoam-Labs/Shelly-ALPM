@@ -80,6 +80,9 @@ pub const AppImagePage = extern struct {
         list_view: *gtk.Widget,
         page_overlay: *gtk.Overlay,
         detail_view: *gtk.Widget,
+        detail_header: *gtk.Box,
+        detail_columns: *gtk.Box,
+        detail_actions: *gtk.Box,
         detail_title: *gtk.Label,
         detail_version: *gtk.Label,
         detail_description: *gtk.Label,
@@ -108,6 +111,8 @@ pub const AppImagePage = extern struct {
         selected_index: ?usize = null,
         generation: u64 = 0,
         loaded: bool = false,
+        surface: ?*gdk.Surface = null,
+        surface_layout_handler: c_ulong = 0,
         toast: *Toast,
         var offset: c_int = 0;
     };
@@ -152,6 +157,7 @@ pub const AppImagePage = extern struct {
 
         gtk.Widget.setVexpand(p.detail_view, 1);
         gtk.Widget.setHexpand(p.detail_view, 1);
+        self.applyDetailLayout(1280);
 
         const toast = Toast.new();
         gtk.Overlay.addOverlay(p.page_overlay, toast.as(gtk.Widget));
@@ -201,6 +207,7 @@ pub const AppImagePage = extern struct {
 
     pub fn onMap(self: *Self) void {
         const p = self.priv();
+        self.connectSurfaceLayout();
         if (p.loaded) return;
         p.loaded = true;
         self.reload();
@@ -208,6 +215,7 @@ pub const AppImagePage = extern struct {
 
     pub fn onUnmap(self: *Self) void {
         const p = self.priv();
+        self.disconnectSurfaceLayout();
         if (!p.loaded) return;
         p.loaded = false;
         p.generation += 1;
@@ -227,6 +235,85 @@ pub const AppImagePage = extern struct {
         p.apps = &.{};
         p.updates = &.{};
         p.selected_index = null;
+    }
+
+    pub fn applyDetailLayout(self: *Self, available_width: c_int) void {
+        const p = self.priv();
+        const narrow = available_width < 900;
+
+        gtk.Orientable.setOrientation(
+            p.detail_header.as(gtk.Orientable),
+            if (narrow) .vertical else .horizontal,
+        );
+        gtk.Orientable.setOrientation(
+            p.detail_columns.as(gtk.Orientable),
+            if (narrow) .vertical else .horizontal,
+        );
+        gtk.Box.setHomogeneous(p.detail_columns, @intFromBool(!narrow));
+
+        gtk.Orientable.setOrientation(p.detail_actions.as(gtk.Orientable), .horizontal);
+        var actions_minimum_width: c_int = 0;
+        gtk.Widget.measure(
+            p.detail_actions.as(gtk.Widget),
+            .horizontal,
+            -1,
+            &actions_minimum_width,
+            null,
+            null,
+            null,
+        );
+        const content_width = @max(available_width - 40, 1);
+        const stack_actions = content_width < @max(actions_minimum_width, 480);
+        gtk.Orientable.setOrientation(
+            p.detail_actions.as(gtk.Orientable),
+            if (stack_actions) .vertical else .horizontal,
+        );
+        gtk.Widget.setHalign(
+            p.detail_actions.as(gtk.Widget),
+            if (narrow) .fill else .end,
+        );
+        gtk.Widget.setHexpand(p.detail_actions.as(gtk.Widget), @intFromBool(narrow));
+
+        for ([_]*gtk.Button{ p.save_button, p.sync_button, p.remove_button }) |button| {
+            gtk.Widget.setHexpand(button.as(gtk.Widget), @intFromBool(narrow));
+        }
+    }
+
+    fn connectSurfaceLayout(self: *Self) void {
+        const p = self.priv();
+        if (p.surface_layout_handler != 0) return;
+
+        const native = gtk.Widget.getNative(self.as(gtk.Widget)) orelse return;
+        const surface = gtk.Native.getSurface(native) orelse return;
+        p.surface = surface;
+        p.surface_layout_handler = gdk.Surface.signals.layout.connect(
+            surface,
+            *Self,
+            &onSurfaceLayout,
+            self,
+            .{},
+        );
+        self.applyDetailLayout(currentDetailWidth(self, gdk.Surface.getWidth(surface)));
+    }
+
+    fn disconnectSurfaceLayout(self: *Self) void {
+        const p = self.priv();
+        if (p.surface) |surface| {
+            if (p.surface_layout_handler != 0) {
+                gobject.signalHandlerDisconnect(surface.as(gobject.Object), p.surface_layout_handler);
+            }
+        }
+        p.surface = null;
+        p.surface_layout_handler = 0;
+    }
+
+    fn currentDetailWidth(self: *Self, surface_width: c_int) c_int {
+        const page_width = gtk.Widget.getWidth(self.as(gtk.Widget));
+        return if (page_width > 0) page_width else surface_width;
+    }
+
+    fn onSurfaceLayout(_: *gdk.Surface, width: c_int, _: c_int, self: *Self) callconv(.c) void {
+        self.applyDetailLayout(currentDetailWidth(self, width));
     }
 
     fn reload(self: *Self) void {
@@ -892,6 +979,9 @@ pub const AppImagePage = extern struct {
         .{ "AppImageOverlay", @offsetOf(Private, "page_overlay") },
         .{ "AppImagePageMain", @offsetOf(Private, "list_view") },
         .{ "AppImageDetailView", @offsetOf(Private, "detail_view") },
+        .{ "AppImageDetailHeader", @offsetOf(Private, "detail_header") },
+        .{ "AppImageDetailColumns", @offsetOf(Private, "detail_columns") },
+        .{ "AppImageDetailActions", @offsetOf(Private, "detail_actions") },
         .{ "DetailTitleLabel", @offsetOf(Private, "detail_title") },
         .{ "DetailVersionLabel", @offsetOf(Private, "detail_version") },
         .{ "DetailDescriptionLabel", @offsetOf(Private, "detail_description") },

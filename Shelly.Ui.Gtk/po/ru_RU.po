@@ -47,6 +47,12 @@ msgstr "Пропустить"
 msgid "No special permissions requested"
 msgstr "Специальные разрешения не запрашиваются"
 
+msgid "Loading permissions..."
+msgstr "Загрузка разрешений..."
+
+msgid "Unable to load application permissions"
+msgstr "Не удалось загрузить разрешения приложения"
+
 msgid "Review PKGBUILD changes"
 msgstr "Просмотреть изменения в PKGBUILD"
 
@@ -1580,3 +1586,6 @@ msgstr ""
 
 msgid "Midnight"
 msgstr ""
+
+msgid "Seafoam"
+msgstr "Seafoam"

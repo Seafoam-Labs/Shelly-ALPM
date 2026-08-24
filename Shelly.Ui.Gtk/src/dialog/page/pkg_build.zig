@@ -158,9 +158,13 @@ pub const PkgbuildReviewDialog = extern struct {
 
     pub fn present(self: *Self) void {
         const p = self.priv();
-        const theme = if (gtk.Window.getTransientFor(self.as(gtk.Window))) |parent|
-            theme_manager.inherit(self.as(gtk.Widget), parent.as(gtk.Widget))
-        else blk: {
+        const theme = if (gtk.Window.getTransientFor(self.as(gtk.Window))) |parent| blk: {
+            self.applyAvailableSize(
+                gtk.Widget.getWidth(parent.as(gtk.Widget)),
+                gtk.Widget.getHeight(parent.as(gtk.Widget)),
+            );
+            break :blk theme_manager.inherit(self.as(gtk.Widget), parent.as(gtk.Widget));
+        } else blk: {
             theme_manager.apply(self.as(gtk.Widget), .classic);
             break :blk .classic;
         };
@@ -168,7 +172,7 @@ pub const PkgbuildReviewDialog = extern struct {
             self.as(gtk.Window),
             p.root_overlay,
             p.drag_region.as(gtk.Widget),
-            theme == .midnight,
+            theme_manager.isDark(theme),
         );
         gtk.Window.present(self.as(gtk.Window));
         if (p.changes_reviewed) {
@@ -176,6 +180,15 @@ pub const PkgbuildReviewDialog = extern struct {
         } else {
             _ = gtk.Widget.grabFocus(p.cancel_button.as(gtk.Widget));
         }
+    }
+
+    pub fn applyAvailableSize(self: *Self, available_width: c_int, available_height: c_int) void {
+        if (available_width <= 0 or available_height <= 0) return;
+        gtk.Window.setDefaultSize(
+            self.as(gtk.Window),
+            @divTrunc(available_width * 3, 4),
+            @divTrunc(available_height * 3, 4),
+        );
     }
 
     fn set_scan_banner(p: *Private, has_warnings: bool, count: usize) void {

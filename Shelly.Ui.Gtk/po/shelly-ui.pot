@@ -45,6 +45,12 @@ msgstr ""
 msgid "No special permissions requested"
 msgstr ""
 
+msgid "Loading permissions..."
+msgstr ""
+
+msgid "Unable to load application permissions"
+msgstr ""
+
 msgid "Review PKGBUILD changes"
 msgstr ""
 
@@ -1515,4 +1521,7 @@ msgid "Classic"
 msgstr ""
 
 msgid "Midnight"
+msgstr ""
+
+msgid "Seafoam"
 msgstr ""

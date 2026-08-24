@@ -381,6 +381,10 @@ pub const UpdatePage = extern struct {
 
     fn on_row_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, self: *Self) callconv(.c) void {
         const list_item = gobject.ext.cast(gtk.ListItem, item) orelse return;
+        self.buildUpdateRow(list_item);
+    }
+
+    pub fn buildUpdateRow(self: *Self, list_item: *gtk.ListItem) void {
         const grid = gtk.Grid.new();
         gtk.Widget.addCssClass(grid.as(gtk.Widget), "package-row");
         gtk.Widget.setMarginStart(grid.as(gtk.Widget), 12);
@@ -436,6 +440,7 @@ pub const UpdatePage = extern struct {
         gtk.Widget.setTooltipText(update_btn.as(gtk.Widget), translations._("Update this package"));
         gtk.Widget.addCssClass(update_btn.as(gtk.Widget), "flat");
         gtk.Widget.addCssClass(update_btn.as(gtk.Widget), "circular");
+        gtk.Widget.addCssClass(update_btn.as(gtk.Widget), "update-row-action");
         gobject.Object.setData(update_btn.as(gobject.Object), "page", self);
         gobject.Object.setData(update_btn.as(gobject.Object), "list_item", list_item);
         _ = gtk.Button.signals.clicked.connect(update_btn, ?*anyopaque, &on_row_update_clicked, null, .{});

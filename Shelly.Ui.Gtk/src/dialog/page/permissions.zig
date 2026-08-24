@@ -1,6 +1,7 @@
 const std = @import("std");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
+const gdk = bindings.gdk;
 const gobject = bindings.gobject;
 const support = @import("../../pages/support.zig");
 const translations = @import("../../helpers/translations.zig");
@@ -14,11 +15,14 @@ pub const PermissionsDialog = extern struct {
     pub const CloseFn = *const fn (ctx: ?*anyopaque) void;
 
     const Private = struct {
+        permissions_frame: *gtk.Frame,
         title_label: *gtk.Label,
         subtitle_label: *gtk.Label,
         permissions_stack: *gtk.Stack,
         permissions_list: *gtk.ListBox,
         close_button: *gtk.Button,
+        surface: ?*gdk.Surface,
+        surface_layout_handler: c_ulong,
         on_close: ?CloseFn,
         ctx: ?*anyopaque,
         var offset: c_int = 0;
@@ -43,8 +47,11 @@ pub const PermissionsDialog = extern struct {
     fn init(self: *Self, _: *Class) callconv(.c) void {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
         const p = self.priv();
+        p.surface = null;
+        p.surface_layout_handler = 0;
         p.on_close = null;
         p.ctx = null;
+        support.connectLifecycle(Self, self);
     }
 
     /// Borrows `permissions`; strings are copied into labels before returning,
@@ -57,6 +64,14 @@ pub const PermissionsDialog = extern struct {
         p.on_close = on_close_fn;
         p.ctx = ctx;
 
+        self.setPermissions(permissions);
+        return self;
+    }
+
+    pub fn setPermissions(self: *Self, permissions: []const [:0]const u8) void {
+        const p = self.priv();
+        gtk.ListBox.removeAll(p.permissions_list);
+
         var shown: usize = 0;
         for (permissions) |perm| {
             const parsed = parse_permission(perm) orelse continue;
@@ -65,11 +80,56 @@ pub const PermissionsDialog = extern struct {
         }
 
         gtk.Stack.setVisibleChildName(p.permissions_stack, if (shown == 0) "empty" else "list");
-        return self;
+    }
+
+    pub fn showLoading(self: *Self) void {
+        gtk.Stack.setVisibleChildName(self.priv().permissions_stack, "loading");
+    }
+
+    pub fn showLoadError(self: *Self) void {
+        gtk.Stack.setVisibleChildName(self.priv().permissions_stack, "error");
     }
 
     pub fn setButtons(self: *Self, close: [:0]const u8) void {
         gtk.Button.setLabel(self.priv().close_button, close);
+    }
+
+    pub fn applyAvailableSize(self: *Self, available_width: c_int, available_height: c_int) void {
+        const width = @max(@divTrunc(available_width * 3, 4), 1);
+        const height = @max(@divTrunc(available_height * 3, 4), 1);
+        gtk.Widget.setSizeRequest(self.priv().permissions_frame.as(gtk.Widget), width, height);
+    }
+
+    pub fn onMap(self: *Self) void {
+        const p = self.priv();
+        if (p.surface_layout_handler != 0) return;
+
+        const native = gtk.Widget.getNative(self.as(gtk.Widget)) orelse return;
+        const surface = gtk.Native.getSurface(native) orelse return;
+        p.surface = surface;
+        p.surface_layout_handler = gdk.Surface.signals.layout.connect(
+            surface,
+            *Self,
+            &onSurfaceLayout,
+            self,
+            .{},
+        );
+        self.applyAvailableSize(gdk.Surface.getWidth(surface), gdk.Surface.getHeight(surface));
+    }
+
+    pub fn onUnmap(self: *Self) void {
+        const p = self.priv();
+        if (p.surface) |surface| {
+            if (p.surface_layout_handler != 0) {
+                gobject.signalHandlerDisconnect(surface.as(gobject.Object), p.surface_layout_handler);
+            }
+        }
+        p.surface = null;
+        p.surface_layout_handler = 0;
+    }
+
+    fn onSurfaceLayout(_: *gdk.Surface, width: c_int, height: c_int, self: *Self) callconv(.c) void {
+        self.applyAvailableSize(width, height);
     }
 
     const Permission = struct {
@@ -150,6 +210,7 @@ pub const PermissionsDialog = extern struct {
     }
 
     const template_children = .{
+        .{ "permissions_frame", @offsetOf(Private, "permissions_frame") },
         .{ "title_label", @offsetOf(Private, "title_label") },
         .{ "subtitle_label", @offsetOf(Private, "subtitle_label") },
         .{ "permissions_stack", @offsetOf(Private, "permissions_stack") },

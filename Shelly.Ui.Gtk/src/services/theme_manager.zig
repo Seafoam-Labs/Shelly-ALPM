@@ -8,6 +8,7 @@ const AppTheme = @import("../models/shelly_config.zig").AppTheme;
 
 pub const CLASSIC_CLASS: [:0]const u8 = "theme-classic";
 pub const MIDNIGHT_CLASS: [:0]const u8 = "theme-midnight";
+pub const SEAFOAM_CLASS: [:0]const u8 = "theme-seafoam";
 
 const CssAsset = struct {
     file_name: []const u8,
@@ -23,6 +24,10 @@ const css_assets = [_]CssAsset{
         .file_name = "theme-midnight.css",
         .resource_path = "/com/shellyorg/shelly/themes/theme-midnight.css",
     },
+    .{
+        .file_name = "theme-seafoam.css",
+        .resource_path = "/com/shellyorg/shelly/themes/theme-seafoam.css",
+    },
 };
 
 const DevCssState = struct {
@@ -37,7 +42,12 @@ pub fn className(theme: AppTheme) [:0]const u8 {
     return switch (theme) {
         .classic => CLASSIC_CLASS,
         .midnight => MIDNIGHT_CLASS,
+        .seafoam => SEAFOAM_CLASS,
     };
+}
+
+pub fn isDark(theme: AppTheme) bool {
+    return theme != .classic;
 }
 
 pub fn loadProviders(dev_css_dir: ?[]const u8) bool {
@@ -193,21 +203,52 @@ pub fn deinit() void {
 pub fn apply(root: *gtk.Widget, theme: AppTheme) void {
     gtk.Widget.removeCssClass(root, CLASSIC_CLASS);
     gtk.Widget.removeCssClass(root, MIDNIGHT_CLASS);
+    gtk.Widget.removeCssClass(root, SEAFOAM_CLASS);
+
+    if (theme == .seafoam) {
+        gtk.Widget.addCssClass(root, MIDNIGHT_CLASS);
+    }
     gtk.Widget.addCssClass(root, className(theme));
 }
 
 pub fn inherit(root: *gtk.Widget, parent: *gtk.Widget) AppTheme {
-    const theme: AppTheme = if (gtk.Widget.hasCssClass(parent, MIDNIGHT_CLASS) != 0) .midnight else .classic;
+    const theme: AppTheme = if (gtk.Widget.hasCssClass(parent, SEAFOAM_CLASS) != 0)
+        .seafoam
+    else if (gtk.Widget.hasCssClass(parent, MIDNIGHT_CLASS) != 0)
+        .midnight
+    else
+        .classic;
     apply(root, theme);
     return theme;
 }
 
-test "theme class names are stable" {
+test "Seafoam theme class names are stable" {
     try std.testing.expectEqualStrings("theme-classic", className(.classic));
     try std.testing.expectEqualStrings("theme-midnight", className(.midnight));
+    try std.testing.expectEqualStrings("theme-seafoam", className(.seafoam));
 }
 
-test "child window inherits the active theme from its parent" {
+test "Seafoam and Midnight share dark window behavior" {
+    try std.testing.expect(!isDark(.classic));
+    try std.testing.expect(isDark(.midnight));
+    try std.testing.expect(isDark(.seafoam));
+}
+
+test "Seafoam layers its palette class over the Midnight structure" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const root = gtk.Box.new(.vertical, 0);
+    _ = root.as(bindings.gobject.Object).refSink();
+    defer root.as(bindings.gobject.Object).unref();
+
+    apply(root.as(gtk.Widget), .seafoam);
+
+    try std.testing.expect(gtk.Widget.hasCssClass(root.as(gtk.Widget), MIDNIGHT_CLASS) != 0);
+    try std.testing.expect(gtk.Widget.hasCssClass(root.as(gtk.Widget), SEAFOAM_CLASS) != 0);
+    try std.testing.expect(gtk.Widget.hasCssClass(root.as(gtk.Widget), CLASSIC_CLASS) == 0);
+}
+
+test "Seafoam child window inherits the active theme from its parent" {
     if (gtk.initCheck() == 0) return error.SkipZigTest;
 
     const parent = gtk.Box.new(.vertical, 0);
@@ -228,9 +269,17 @@ test "child window inherits the active theme from its parent" {
 
     try std.testing.expect(gtk.Widget.hasCssClass(child.as(gtk.Widget), CLASSIC_CLASS) != 0);
     try std.testing.expect(gtk.Widget.hasCssClass(child.as(gtk.Widget), MIDNIGHT_CLASS) == 0);
+
+    apply(parent.as(gtk.Widget), .seafoam);
+    const inherited_theme = inherit(child.as(gtk.Widget), parent.as(gtk.Widget));
+
+    try std.testing.expectEqual(AppTheme.seafoam, inherited_theme);
+    try std.testing.expect(gtk.Widget.hasCssClass(child.as(gtk.Widget), SEAFOAM_CLASS) != 0);
+    try std.testing.expect(gtk.Widget.hasCssClass(child.as(gtk.Widget), MIDNIGHT_CLASS) != 0);
+    try std.testing.expect(gtk.Widget.hasCssClass(child.as(gtk.Widget), CLASSIC_CLASS) == 0);
 }
 
-test "completed CSS write selects the matching provider" {
+test "Seafoam completed CSS write selects the matching provider" {
     try std.testing.expectEqual(
         @as(?usize, 0),
         reloadIndex(.changes_done_hint, "style.css", null),
@@ -239,12 +288,20 @@ test "completed CSS write selects the matching provider" {
         @as(?usize, 1),
         reloadIndex(.changes_done_hint, "theme-midnight.css", null),
     );
+    try std.testing.expectEqual(
+        @as(?usize, 2),
+        reloadIndex(.changes_done_hint, "theme-seafoam.css", null),
+    );
 }
 
-test "atomic CSS save selects the renamed destination" {
+test "Seafoam atomic CSS save selects the renamed destination" {
     try std.testing.expectEqual(
         @as(?usize, 1),
         reloadIndex(.renamed, ".theme-midnight.css.tmp", "theme-midnight.css"),
+    );
+    try std.testing.expectEqual(
+        @as(?usize, 2),
+        reloadIndex(.renamed, ".theme-seafoam.css.tmp", "theme-seafoam.css"),
     );
 }
 
@@ -257,6 +314,48 @@ test "incomplete and unrelated file events do not reload CSS" {
         @as(?usize, null),
         reloadIndex(.changes_done_hint, "main_window.ui", null),
     );
+}
+
+test "Seafoam palette is scoped and accepted by GTK" {
+    const seafoam_css = @embedFile("../themes/theme-seafoam.css");
+
+    try std.testing.expect(std.mem.indexOf(u8, seafoam_css, "@define-color seafoam_window_bg #0f172a;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, seafoam_css, "@define-color seafoam_accent #2dd4a8;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, seafoam_css, "@define-color seafoam_text #f8fafc;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, seafoam_css, ".theme-seafoam .app-main-column") != null);
+    try std.testing.expect(std.mem.indexOf(u8, seafoam_css, ".theme-midnight") == null);
+
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+    const display = gdk.Display.getDefault() orelse return error.SkipZigTest;
+    const provider = gtk.CssProvider.new();
+    defer provider.unref();
+    gtk.CssProvider.loadFromString(provider, seafoam_css);
+    gtk.StyleContext.addProviderForDisplay(
+        display,
+        provider.as(gtk.StyleProvider),
+        gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+    defer gtk.StyleContext.removeProviderForDisplay(
+        display,
+        provider.as(gtk.StyleProvider),
+    );
+
+    const root = gtk.Box.new(.vertical, 0);
+    _ = root.as(bindings.gobject.Object).refSink();
+    defer root.as(bindings.gobject.Object).unref();
+    apply(root.as(gtk.Widget), .seafoam);
+
+    var accent: gdk.RGBA = undefined;
+    const context = gtk.Widget.getStyleContext(root.as(gtk.Widget));
+    try std.testing.expect(gtk.StyleContext.lookupColor(context, "seafoam_accent", &accent) != 0);
+    try std.testing.expectApproxEqAbs(@as(f32, 45.0 / 255.0), accent.f_red, 0.001);
+    try std.testing.expectApproxEqAbs(@as(f32, 212.0 / 255.0), accent.f_green, 0.001);
+    try std.testing.expectApproxEqAbs(@as(f32, 168.0 / 255.0), accent.f_blue, 0.001);
+}
+
+test "Seafoam palette is bundled as an application resource" {
+    const resources = @embedFile("../gresource.xml");
+    try std.testing.expect(std.mem.indexOf(u8, resources, "<file>themes/theme-seafoam.css</file>") != null);
 }
 
 test "Midnight sidebar visuals stay scoped without forcing navigation width" {

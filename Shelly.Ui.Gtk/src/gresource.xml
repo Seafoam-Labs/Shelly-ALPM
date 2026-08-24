@@ -47,5 +47,6 @@
     <file>ui/recommend_page.ui</file>
     <file>themes/style.css</file>
     <file>themes/theme-midnight.css</file>
+    <file>themes/theme-seafoam.css</file>
   </gresource>
 </gresources>

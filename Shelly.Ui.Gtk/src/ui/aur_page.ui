@@ -16,13 +16,16 @@
         <property name="margin-start">10</property>
         <property name="margin-end">10</property>
         <property name="spacing">5</property>
-        <style><class name="page-toolbar"/></style>
+        <style><class name="compact-search-zone"/></style>
         <child>
           <object class="GtkSearchEntry" id="search_entry">
+            <property name="hexpand">true</property>
             <property name="placeholder-text" translatable="yes">Search the AUR by name or keyword</property>
-            <property name="width-request">200</property>
             <signal name="activate" handler="on_search_activate" swapped="true"/>
-            <style><class name="spaced-search"/></style>
+            <style>
+              <class name="spaced-search"/>
+              <class name="package-search-concept"/>
+            </style>
             <child>
                 <object class="GtkShortcutController">
                     <property name="scope">managed</property>
@@ -51,6 +54,7 @@
             <property name="icon-name">view-more-symbolic</property>
             <property name="tooltip-text" translatable="yes">Additional Options</property>
             <property name="popover">options_popover</property>
+            <style><class name="package-options-button-concept"/></style>
           </object>
         </child>
         <child>
@@ -175,6 +179,7 @@
             <property name="transition-type">slide-left</property>
             <property name="hexpand">false</property>
             <property name="halign">end</property>
+            <property name="margin-end">10</property>
           </object>
         </child>
 

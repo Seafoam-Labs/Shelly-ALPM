@@ -8,16 +8,17 @@
     <property name="valign">center</property>
     <style><class name="dialog-surface"/></style>
     <child>
-      <object class="GtkFrame">
+      <object class="GtkFrame" id="permissions_frame">
         <property name="halign">center</property>
         <property name="valign">center</property>
-        <property name="width-request">520</property>
         <style>
           <class name="lockout-card"/>
         </style>
         <child>
           <object class="GtkBox">
             <property name="orientation">vertical</property>
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
             <property name="spacing">8</property>
             <property name="margin-start">20</property>
             <property name="margin-end">20</property>
@@ -50,16 +51,71 @@
             </child>
             <child>
               <object class="GtkStack" id="permissions_stack">
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
                 <property name="transition-type">crossfade</property>
                 <property name="vhomogeneous">false</property>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">loading</property>
+                    <property name="child">
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">10</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <child>
+                          <object class="GtkSpinner">
+                            <property name="spinning">true</property>
+                            <property name="halign">center</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Loading permissions...</property>
+                            <style><class name="dim-label"/></style>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">error</property>
+                    <property name="child">
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">10</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="icon-name">dialog-error-symbolic</property>
+                            <property name="pixel-size">48</property>
+                            <style><class name="error"/></style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Unable to load application permissions</property>
+                            <property name="wrap">true</property>
+                            <property name="justify">center</property>
+                            <style><class name="error"/></style>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
                 <child>
                   <object class="GtkStackPage">
                     <property name="name">list</property>
                     <property name="child">
                       <object class="GtkScrolledWindow">
+                        <property name="hexpand">true</property>
+                        <property name="vexpand">true</property>
                         <property name="hscrollbar-policy">never</property>
-                        <property name="propagate-natural-height">true</property>
-                        <property name="max-content-height">340</property>
                         <child>
                           <object class="GtkListBox" id="permissions_list">
                             <property name="selection-mode">none</property>

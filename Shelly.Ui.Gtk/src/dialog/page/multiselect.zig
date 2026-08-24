@@ -1,6 +1,7 @@
 const std = @import("std");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
+const gdk = bindings.gdk;
 const gobject = bindings.gobject;
 const c_string = @import("../../helpers/c_string.zig");
 const support = @import("../../pages/support.zig");
@@ -16,10 +17,13 @@ pub const MultiSelectDialog = extern struct {
     pub const ResponseFn = *const fn (ctx: ?*anyopaque, confirmed: bool, selected: []const usize) void;
 
     const Private = struct {
+        dialog_frame: *gtk.Frame,
         title_label: *gtk.Label,
         options_box: *gtk.Box,
         confirm_button: *gtk.Button,
         cancel_button: *gtk.Button,
+        surface: ?*gdk.Surface,
+        surface_layout_handler: c_ulong,
         on_response: ?ResponseFn,
         ctx: ?*anyopaque,
         checks: []*gtk.CheckButton,
@@ -47,11 +51,14 @@ pub const MultiSelectDialog = extern struct {
     fn init(self: *Self, _: *Class) callconv(.c) void {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
         const p = self.priv();
+        p.surface = null;
+        p.surface_layout_handler = 0;
         p.on_response = null;
         p.ctx = null;
         p.checks = &.{};
         p.indices = &.{};
         p.checks_len = 0;
+        support.connectLifecycle(Self, self);
     }
 
     pub fn new(
@@ -69,7 +76,7 @@ pub const MultiSelectDialog = extern struct {
 
         p.on_response = on_response;
         p.ctx = ctx;
-        
+
         p.checks = alloc.alloc(*gtk.CheckButton, options.len) catch &.{};
         p.indices = alloc.alloc(usize, options.len) catch &.{};
         p.checks_len = if (p.checks.len == options.len and p.indices.len == options.len) options.len else 0;
@@ -115,6 +122,44 @@ pub const MultiSelectDialog = extern struct {
         return self;
     }
 
+    pub fn applyAvailableSize(self: *Self, available_width: c_int, available_height: c_int) void {
+        const width = @max(@divTrunc(available_width * 3, 4), 1);
+        const height = @max(@divTrunc(available_height * 3, 4), 1);
+        gtk.Widget.setSizeRequest(self.priv().dialog_frame.as(gtk.Widget), width, height);
+    }
+
+    pub fn onMap(self: *Self) void {
+        const p = self.priv();
+        if (p.surface_layout_handler != 0) return;
+
+        const native = gtk.Widget.getNative(self.as(gtk.Widget)) orelse return;
+        const surface = gtk.Native.getSurface(native) orelse return;
+        p.surface = surface;
+        p.surface_layout_handler = gdk.Surface.signals.layout.connect(
+            surface,
+            *Self,
+            &onSurfaceLayout,
+            self,
+            .{},
+        );
+        self.applyAvailableSize(gdk.Surface.getWidth(surface), gdk.Surface.getHeight(surface));
+    }
+
+    pub fn onUnmap(self: *Self) void {
+        const p = self.priv();
+        if (p.surface) |surface| {
+            if (p.surface_layout_handler != 0) {
+                gobject.signalHandlerDisconnect(surface.as(gobject.Object), p.surface_layout_handler);
+            }
+        }
+        p.surface = null;
+        p.surface_layout_handler = 0;
+    }
+
+    fn onSurfaceLayout(_: *gdk.Surface, width: c_int, height: c_int, self: *Self) callconv(.c) void {
+        self.applyAvailableSize(width, height);
+    }
+
     fn on_confirm(self: *Self) callconv(.c) void {
         const p = self.priv();
         var selected: [256]usize = undefined;
@@ -135,6 +180,7 @@ pub const MultiSelectDialog = extern struct {
     }
 
     const template_children = .{
+        .{ "dialog_frame", @offsetOf(Private, "dialog_frame") },
         .{ "title_label", @offsetOf(Private, "title_label") },
         .{ "options_box", @offsetOf(Private, "options_box") },
         .{ "confirm_button", @offsetOf(Private, "confirm_button") },
