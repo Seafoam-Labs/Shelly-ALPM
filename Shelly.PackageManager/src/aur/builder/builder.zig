@@ -97,6 +97,11 @@ pub const BuildOptions = struct {
     install_scripts: []const install_script.Script = &.{},
     /// Byte-exact local and auxiliary files retained by package review.
     reviewed_files: []const pkgbuild_review.ReviewedFile = &.{},
+    /// Build every member in the final, sandbox-evaluated `pkgname` array.
+    /// Direct PKGBUILD builds set this when no explicit `--package` selection
+    /// was supplied. AUR/install callers keep the default and build only the
+    /// names in `requested_names`.
+    build_all_members: bool = false,
     /// Wrapper command prefix used to confine lifecycle steps with Landlock
     /// when `[sandbox] enabled` is set. Production callers leave this null so
     /// steps re-execute the current executable's `__sandbox-exec` entry
@@ -138,6 +143,10 @@ pub const PackageBuilder = struct {
     /// Owned package names produced when sandboxed top-level evaluation turns
     /// statically unresolved split-package names into their final values.
     evaluated_requested_names: ?[][]const u8 = null,
+    /// Owned replacement builds used when runtime evaluation changes the
+    /// number of selected split-package members. The inputs passed to init are
+    /// borrowed, so only this replacement slice is released by deinit.
+    evaluated_package_builds: ?[]PackageBuild = null,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -170,6 +179,10 @@ pub const PackageBuilder = struct {
     }
 
     pub fn deinit(self: *PackageBuilder) void {
+        if (self.evaluated_package_builds) |builds| {
+            for (builds) |*package_build| package_build.deinit(self.allocator);
+            self.allocator.free(builds);
+        }
         if (self.evaluated_requested_names) |names| {
             for (names) |name| self.allocator.free(name);
             self.allocator.free(names);
@@ -469,34 +482,45 @@ pub const PackageBuilder = struct {
             .dynamic_array_unsets = unset_array_overrides,
         }).package_names_content(content);
         defer evaluated_names.deinit(self.allocator);
-        const mapped = try self.allocator.alloc([]const u8, self.requested_names.len);
+        const target_count = if (self.options.build_all_members)
+            evaluated_names.items.len
+        else
+            self.requested_names.len;
+        const mapped = try self.allocator.alloc([]const u8, target_count);
         var mapped_count: usize = 0;
         errdefer {
             for (mapped[0..mapped_count]) |name| self.allocator.free(name);
             self.allocator.free(mapped);
         }
-        for (self.requested_names, mapped) |requested_name, *destination| {
-            var selected: ?[]const u8 = null;
-            for (evaluated_names.items) |name| {
-                if (std.mem.eql(u8, name, requested_name)) {
-                    selected = name;
-                    break;
-                }
+        if (self.options.build_all_members) {
+            for (evaluated_names.items, mapped) |name, *destination| {
+                destination.* = try self.allocator.dupe(u8, name);
+                mapped_count += 1;
             }
-            if (selected == null) {
-                for (static_names.items, 0..) |name, index| {
-                    if (!std.mem.eql(u8, name, requested_name)) continue;
-                    if (index >= evaluated_names.items.len)
-                        return error.SelectedPackageNotFound;
-                    selected = evaluated_names.items[index];
-                    break;
+        } else {
+            for (self.requested_names, mapped) |requested_name, *destination| {
+                var selected: ?[]const u8 = null;
+                for (evaluated_names.items) |name| {
+                    if (std.mem.eql(u8, name, requested_name)) {
+                        selected = name;
+                        break;
+                    }
                 }
+                if (selected == null) {
+                    for (static_names.items, 0..) |name, index| {
+                        if (!std.mem.eql(u8, name, requested_name)) continue;
+                        if (index >= evaluated_names.items.len)
+                            return error.SelectedPackageNotFound;
+                        selected = evaluated_names.items[index];
+                        break;
+                    }
+                }
+                destination.* = try self.allocator.dupe(
+                    u8,
+                    selected orelse return error.SelectedPackageNotFound,
+                );
+                mapped_count += 1;
             }
-            destination.* = try self.allocator.dupe(
-                u8,
-                selected orelse return error.SelectedPackageNotFound,
-            );
-            mapped_count += 1;
         }
 
         if (self.evaluated_requested_names) |old_names| {
@@ -524,8 +548,33 @@ pub const PackageBuilder = struct {
         );
         defer self.allocator.free(content);
 
-        for (self.package_builds, self.requested_names) |*package_build, requested_name| {
-            const reparsed = try (pkgbuild_parser.PkgbuildParser{
+        if (self.package_builds.len == self.requested_names.len) {
+            for (self.package_builds, self.requested_names) |*package_build, requested_name| {
+                const reparsed = try (pkgbuild_parser.PkgbuildParser{
+                    .allocator = self.allocator,
+                    .io = self.io,
+                    .selected_package_name = requested_name,
+                    .package_carch = self.shellybuild_config.build.carch,
+                    .dynamic_overrides = overrides,
+                    .dynamic_unsets = unset_overrides,
+                    .dynamic_array_overrides = array_overrides,
+                    .dynamic_array_unsets = unset_array_overrides,
+                }).parser_content(content, self.options.start_directory);
+                package_build.deinit(self.allocator);
+                package_build.* = reparsed;
+            }
+            return;
+        }
+
+        const reparsed_builds = try self.allocator.alloc(PackageBuild, self.requested_names.len);
+        var parsed_count: usize = 0;
+        errdefer {
+            for (reparsed_builds[0..parsed_count]) |*package_build|
+                package_build.deinit(self.allocator);
+            self.allocator.free(reparsed_builds);
+        }
+        for (self.requested_names, reparsed_builds) |requested_name, *package_build| {
+            package_build.* = try (pkgbuild_parser.PkgbuildParser{
                 .allocator = self.allocator,
                 .io = self.io,
                 .selected_package_name = requested_name,
@@ -535,9 +584,14 @@ pub const PackageBuilder = struct {
                 .dynamic_array_overrides = array_overrides,
                 .dynamic_array_unsets = unset_array_overrides,
             }).parser_content(content, self.options.start_directory);
-            package_build.deinit(self.allocator);
-            package_build.* = reparsed;
+            parsed_count += 1;
         }
+        if (self.evaluated_package_builds) |old_builds| {
+            for (old_builds) |*package_build| package_build.deinit(self.allocator);
+            self.allocator.free(old_builds);
+        }
+        self.evaluated_package_builds = reparsed_builds;
+        self.package_builds = reparsed_builds;
     }
 
     /// Sandboxed builds hard-fail when the kernel cannot confine the steps:

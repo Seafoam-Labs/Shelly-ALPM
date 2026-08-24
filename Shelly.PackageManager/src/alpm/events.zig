@@ -101,6 +101,7 @@ pub const Dispatcher = struct {
     operation: ?*operation_api.Operation,
     common_question_response: ?operation_api.OwnedQuestionResponse,
     error_generation: std.atomic.Value(usize),
+    recoverable_error_context: ?[]const u8,
 
     allocator: std.mem.Allocator,
 
@@ -122,6 +123,7 @@ pub const Dispatcher = struct {
             .operation = null,
             .common_question_response = null,
             .error_generation = .init(0),
+            .recoverable_error_context = null,
         };
     }
 
@@ -372,9 +374,36 @@ pub const Dispatcher = struct {
         return self.error_generation.load(.monotonic);
     }
 
+    /// Marks synchronous failures raised through this dispatcher as
+    /// recoverable and prefixes them with the caller's best-effort context.
+    /// The returned scope restores the previous policy when it is deinitialized.
+    pub fn beginRecoverableErrors(self: *Dispatcher, context: []const u8) RecoverableErrorScope {
+        const previous = self.recoverable_error_context;
+        self.recoverable_error_context = context;
+        return .{ .dispatcher = self, .previous = previous };
+    }
+
+    pub fn recoverableErrorContext(self: *const Dispatcher) ?[]const u8 {
+        return self.recoverable_error_context;
+    }
+
     pub fn raiseError(self: *Dispatcher, args: ErrorArgs) void {
         _ = self.error_generation.fetchAdd(1, .monotonic);
-        if (self.operation) |operation| operation.reportError(error.AlpmOperationFailed, args.message, "alpm", null, false);
+        if (self.operation) |operation| {
+            if (self.recoverable_error_context) |context| {
+                const message = std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ context, args.message }) catch null;
+                defer if (message) |owned| self.allocator.free(owned);
+                operation.reportError(
+                    error.AlpmOperationFailed,
+                    message orelse context,
+                    "alpm",
+                    null,
+                    true,
+                );
+            } else {
+                operation.reportError(error.AlpmOperationFailed, args.message, "alpm", null, false);
+            }
+        }
         self.dispatch(ErrorArgs, &self.errorEvents, args);
     }
 
@@ -416,6 +445,18 @@ pub const Dispatcher = struct {
             operation.status(.information, message orelse args.pkg_name, "alpm.replaces", null);
         }
         self.dispatch(ReplacesArgs, &self.replaces, args);
+    }
+};
+
+pub const RecoverableErrorScope = struct {
+    dispatcher: *Dispatcher,
+    previous: ?[]const u8,
+    active: bool = true,
+
+    pub fn deinit(self: *RecoverableErrorScope) void {
+        if (!self.active) return;
+        self.dispatcher.recoverable_error_context = self.previous;
+        self.active = false;
     }
 };
 

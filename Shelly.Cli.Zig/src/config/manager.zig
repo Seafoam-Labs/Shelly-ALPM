@@ -103,6 +103,10 @@ test "creates, updates, and reloads the XDG config file" {
         "PreferIPv4",
         (try config.getDisplay(arena.allocator(), "DownloadAddressFamilyPolicy")).?,
     );
+    try std.testing.expectEqualStrings(
+        "False",
+        (try config.getDisplay(arena.allocator(), "AutoConfirmCacheClean")).?,
+    );
 
     const saved = try temporary.dir.readFileAlloc(
         std.testing.io,
@@ -125,4 +129,10 @@ test "creates, updates, and reloads the XDG config file" {
         (try manager.get("downloadaddressfamilypolicy")).?,
     );
     try std.testing.expect(!try manager.update("DownloadAddressFamilyPolicy", "automatic"));
+    try std.testing.expect(try manager.update("AutoConfirmCacheClean", "true"));
+    try std.testing.expectEqualStrings(
+        "True",
+        (try manager.get("AutoConfirmCacheClean")).?,
+    );
+    try std.testing.expect(!try manager.update("AutoConfirmCacheClean", "yes"));
 }

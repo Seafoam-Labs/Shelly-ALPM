@@ -72,8 +72,12 @@ tests.
   no backend installed
 - [ ] A direct Flatpak command explains that `shelly-flatpak-backend` and
   Flatpak must be installed
-- [ ] `list-updates all` and `upgrade all` warn, skip Flatpak, and continue
-  other selected backends when the backend is missing
+- [ ] `list-updates all` warns, skips Flatpak, and continues other backends when
+  the backend is missing
+- [ ] `upgrade all` silently skips Flatpak and continues other selected
+  backends when the backend is missing
+- [ ] `upgrade all` still warns for an incompatible Flatpak backend and reports
+  a broken Flatpak backend as a failed upgrade step
 - [ ] Backup warns and exports standard/AUR records without Flatpak records
   when the backend is missing
 - [ ] Installing `shelly-flatpak-backend` enables Flatpak without rebuilding
@@ -148,6 +152,10 @@ tests.
 
 ### Sandboxed AUR Builds (Landlock)
 Requires a kernel with Landlock enabled (check `cat /sys/kernel/security/lsm`).
+- [ ] A split PKGBUILD that conditionally appends an enabled member to
+  `pkgname` builds that member when no `--package` selection is supplied
+- [ ] `shelly build --package <dynamic-member> PKGBUILD` builds only that
+  enabled member and rejects it when its condition evaluates false
 - [ ] With `[sandbox] enabled = true` in `shellybuild.conf`, a PKGBUILD whose
   `build()` runs `ls "$HOME"` fails that listing with "Permission denied" in
   the step output while the build itself completes

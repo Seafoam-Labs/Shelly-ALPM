@@ -33,12 +33,22 @@ pub const version = build_options.version;
 pub const informational_version = version;
 pub const root_description = "Shelly — a native, unified package manager for Arch Linux repository packages, the AUR, Flatpaks, and AppImages. A bare value searches standard repositories and the AUR, then prompts for a package to install.";
 
+fn hiddenGlobalFlag(name: []const u8, description: []const u8) Option {
+    var option = core.globalFlag(name, &.{}, description);
+    option.hidden = true;
+    return option;
+}
+
 pub const root_options = [_]Option{
     core.voidOption("--help", &.{ "-?", "-h", "/?", "/h" }, "Show command-specific help and usage information", true, true),
     core.voidOption("--version", &.{"-V"}, "Show version information", false, true),
     core.globalFlag("--no-confirm", &.{"-n"}, "Use safe automatic answers instead of prompting"),
     core.globalFlag("--ui-mode", &.{"-U"}, "Emit framed output for the Shelly UI"),
     core.globalFlag("--json", &.{"-j"}, "Output structured JSON where the command supports it"),
+    hiddenGlobalFlag(
+        "--auto-confirm-cache-clean",
+        "Preserve the invoking user's cache-clean policy across elevation",
+    ),
 };
 
 pub const root_arguments = [_]Argument{.{

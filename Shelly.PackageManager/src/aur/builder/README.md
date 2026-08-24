@@ -18,6 +18,7 @@ PackageBuilder.runWithOperation (builder.zig)
   3. open the build log                      (steps.zig)
   4. buildPackage:
      a. sandbox-evaluate deferred metadata   (steps.zig)
+        select the final split members,
         and re-review discovered local files (pkgbuild_review.zig)
      b. validate package-function shape      (builder.zig)
      c. acquire + verify + extract sources   (sources.zig)
@@ -26,16 +27,17 @@ PackageBuilder.runWithOperation (builder.zig)
         assemble + sign the archive          (package_file.zig)
 ```
 
-`PackageBuilder` (in `builder.zig`) is the orchestrator; it owns no pipeline
-logic itself anymore — every stage is delegated to a sibling module and passed
-the builder as `self: *PackageBuilder` for access to configuration, IO, and
-the active operation/log.
+`PackageBuilder` (in `builder.zig`) is the orchestrator. It owns package-set
+selection, review sequencing, and evaluated-build lifetime; focused pipeline
+stages are delegated to sibling modules and passed the builder as
+`self: *PackageBuilder` for access to configuration, IO, and the active
+operation/log.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `builder.zig` | **Orchestrator + public API.** `PackageBuilder` (init/run/runWithOperation/BuildPackage), review re-check, sandbox-evaluated scalar/array reparse, ordinal-safe remapping of shell-resolved split-package names, and lifecycle sequencing, plus the public types `BuildArtifact`, `BuildOptions`, `BuilderErrors`, `FailureLocation`. Re-exports the security entry points and the review/validation modules so external callers (`aur/manager.zig`, `root.zig`, the CLI) only import this file. |
+| `builder.zig` | **Orchestrator + public API.** `PackageBuilder` (init/run/runWithOperation/BuildPackage), review re-check, sandbox-evaluated scalar/array reparse, final all-members or explicit split-member selection, cardinality-safe ownership of evaluated builds, and lifecycle sequencing, plus the public types `BuildArtifact`, `BuildOptions`, `BuilderErrors`, `FailureLocation`. Re-exports the security entry points and the review/validation modules so external callers (`aur/manager.zig`, `root.zig`, the CLI) only import this file. |
 | `source_spec.zig` | **Pure source-entry parsing.** `ParsedSource.parse` classifies `source=()` entries (local/http/git), handles `name::url` renames, `#branch=/tag=/commit=` fragments and `?signed` queries; detached-signature pairing (`findDetachedPayload`); archive-name and symlink-target safety checks. No IO, no builder state — fully unit-tested in-file. |
 | `checksums.zig` | **Checksum tables.** Maps the seven PKGBUILD sum arrays (`sha512sums` … `b2sums`) into `checksumSets`, enforces count/SKIP rules, and verifies file hashes (`verifyFileHash`). |
 | `metadata.zig` | **Metadata + option helpers.** makepkg option merging (`effectivePackageOptions`, `!option` semantics), `pkgver` validation, ownership-safe replacement of optional strings/arrays, and application of runtime-captured package metadata onto the parsed PKGBUILD (`applyPackageMetadata`). |

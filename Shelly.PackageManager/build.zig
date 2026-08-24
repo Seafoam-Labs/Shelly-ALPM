@@ -277,6 +277,8 @@ pub fn build(b: *std.Build) void {
             "ALPM and AUR questions use the shared response hook",
             "common ALPM optional dependency choices preserve every selected index",
             "install_packages preserves every optional dependency selection after an installed first choice",
+            "AUR optional dependency prompts identify their package",
+            "OperationScope turns best-effort ALPM failures into contextual recoverable errors",
         },
     });
     const run_adapter_tests = b.addRunArtifact(adapter_tests);
@@ -306,6 +308,9 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder preserves generic shell-created scalar defaults for lifecycle steps",
             "PackageBuilder preserves generic conditional indexed arrays for lifecycle steps",
             "PackageBuilder remaps shell-resolved split package names by reviewed order",
+            "PackageBuilder builds members added by sandbox-evaluated pkgname",
+            "PackageBuilder explicitly selects a member added by evaluated pkgname",
+            "PackageBuilder rejects an explicitly selected disabled dynamic member",
             "PackageBuilder requires supplemental review for a dynamically discovered local source",
             "dynamic indexed array output preserves values and unsets with structural bounds",
             "dynamic scalar output preserves values, newlines, empty strings, and unsets",
@@ -442,6 +447,8 @@ pub fn build(b: *std.Build) void {
             "invalid optional database signature is fatal and cleaned up",
             "Manager.sync downloads the configured database into DBPath/sync",
             "Manager.sync exposes cancellable logical database downloads during mirror failover",
+            "refresh reloads an externally replaced sync database cache",
+            "refresh reports a detailed reinitialization failure",
         },
     });
     const run_alpm_sync_tests = b.addRunArtifact(alpm_sync_tests);
@@ -605,6 +612,9 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder preserves generic shell-created scalar defaults for lifecycle steps",
             "PackageBuilder preserves generic conditional indexed arrays for lifecycle steps",
             "PackageBuilder remaps shell-resolved split package names by reviewed order",
+            "PackageBuilder builds members added by sandbox-evaluated pkgname",
+            "PackageBuilder explicitly selects a member added by evaluated pkgname",
+            "PackageBuilder rejects an explicitly selected disabled dynamic member",
             "PackageBuilder requires supplemental review for a dynamically discovered local source",
             "PackageBuilder rejects a legacy unwritable package tree",
             "PackageBuilder cannot perform privileged package filesystem operations",

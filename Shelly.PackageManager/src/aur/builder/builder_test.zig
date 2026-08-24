@@ -1056,6 +1056,164 @@ test "PackageBuilder remaps shell-resolved split package names by reviewed order
     try testing.expectEqualStrings("demo-stable-docs", fixture.builder.requested_names[1]);
 }
 
+test "PackageBuilder builds members added by sandbox-evaluated pkgname" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    const pkgbuild_content =
+        \\: "${_build_addon:=yes}"
+        \\pkgbase=dynamic-split
+        \\pkgname=("$pkgbase")
+        \\pkgname+=("$pkgbase-headers")
+        \\[ "$_build_addon" = yes ] && pkgname+=("$pkgbase-addon")
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\_package() {
+        \\  mkdir -p "$pkgdir/usr/share/dynamic-split"
+        \\  printf main > "$pkgdir/usr/share/dynamic-split/value"
+        \\}
+        \\_package-headers() {
+        \\  mkdir -p "$pkgdir/usr/share/dynamic-split-headers"
+        \\  printf headers > "$pkgdir/usr/share/dynamic-split-headers/value"
+        \\}
+        \\_package-addon() {
+        \\  depends=('dynamic-addon-runtime')
+        \\  mkdir -p "$pkgdir/usr/share/dynamic-split-addon"
+        \\  printf addon > "$pkgdir/usr/share/dynamic-split-addon/value"
+        \\}
+        \\for _p in "${pkgname[@]}"; do
+        \\  eval "package_$_p() {
+        \\    $(declare -f "_package${_p#$pkgbase}")
+        \\    _package${_p#$pkgbase}
+        \\  }"
+        \\done
+    ;
+    const statically_discovered = [_][]const u8{ "dynamic-split", "dynamic-split-headers" };
+    var fixture = try Fixture.createMany(allocator, pkgbuild_content, &statically_discovered, null);
+    defer fixture.destroy();
+    fixture.builder.options.build_all_members = true;
+
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = pkgbuild_content });
+    const pkgbuild_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "PKGBUILD" });
+    defer allocator.free(pkgbuild_path);
+    var review = try builder_mod.preparePkgbuildReview(
+        allocator,
+        io,
+        fixture.build_dir,
+        pkgbuild_content,
+        fixture.package_builds,
+    );
+    defer review.deinit();
+    fixture.builder.options.pkgbuild_path = pkgbuild_path;
+    fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+    fixture.builder.options.reviewed_files = review.reviewed_files;
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 3), artifacts.len);
+    try testing.expectEqualStrings("dynamic-split", artifacts[0].package_name);
+    try testing.expectEqualStrings("dynamic-split-headers", artifacts[1].package_name);
+    try testing.expectEqualStrings("dynamic-split-addon", artifacts[2].package_name);
+    try testing.expectEqual(@as(usize, 3), fixture.builder.package_builds.len);
+    const addon_info = try readPkgInfo(allocator, artifacts[2].path);
+    defer allocator.free(addon_info);
+    try testing.expect(std.mem.indexOf(u8, addon_info, "depend = dynamic-addon-runtime\n") != null);
+}
+
+test "PackageBuilder explicitly selects a member added by evaluated pkgname" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    const pkgbuild_content =
+        \\: "${_build_addon:=yes}"
+        \\pkgbase=dynamic-explicit
+        \\pkgname=("$pkgbase")
+        \\[ "$_build_addon" = yes ] && pkgname+=("$pkgbase-addon")
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\_package() {
+        \\  mkdir -p "$pkgdir/usr/share/dynamic-explicit"
+        \\}
+        \\_package-addon() {
+        \\  mkdir -p "$pkgdir/usr/share/dynamic-explicit-addon"
+        \\  printf addon > "$pkgdir/usr/share/dynamic-explicit-addon/value"
+        \\}
+        \\for _p in "${pkgname[@]}"; do
+        \\  eval "package_$_p() {
+        \\    $(declare -f "_package${_p#$pkgbase}")
+        \\    _package${_p#$pkgbase}
+        \\  }"
+        \\done
+    ;
+    var fixture = try Fixture.create(allocator, pkgbuild_content, null, "dynamic-explicit");
+    defer fixture.destroy();
+    allocator.free(fixture.requested_names[0]);
+    fixture.requested_names[0] = try allocator.dupe(u8, "dynamic-explicit-addon");
+
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = pkgbuild_content });
+    const pkgbuild_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "PKGBUILD" });
+    defer allocator.free(pkgbuild_path);
+    var review = try builder_mod.preparePkgbuildReview(
+        allocator,
+        io,
+        fixture.build_dir,
+        pkgbuild_content,
+        fixture.package_builds,
+    );
+    defer review.deinit();
+    fixture.builder.options.pkgbuild_path = pkgbuild_path;
+    fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+    fixture.builder.options.reviewed_files = review.reviewed_files;
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 1), artifacts.len);
+    try testing.expectEqualStrings("dynamic-explicit-addon", artifacts[0].package_name);
+}
+
+test "PackageBuilder rejects an explicitly selected disabled dynamic member" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    const pkgbuild_content =
+        \\_build_addon=no
+        \\pkgbase=dynamic-disabled
+        \\pkgname=("$pkgbase")
+        \\[ "$_build_addon" = yes ] && pkgname+=("$pkgbase-addon")
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\_package() { mkdir -p "$pkgdir/usr/share/dynamic-disabled"; }
+        \\_package-addon() { mkdir -p "$pkgdir/usr/share/dynamic-disabled-addon"; }
+        \\for _p in "${pkgname[@]}"; do
+        \\  eval "package_$_p() {
+        \\    $(declare -f "_package${_p#$pkgbase}")
+        \\    _package${_p#$pkgbase}
+        \\  }"
+        \\done
+    ;
+    var fixture = try Fixture.create(allocator, pkgbuild_content, null, "dynamic-disabled");
+    defer fixture.destroy();
+    allocator.free(fixture.requested_names[0]);
+    fixture.requested_names[0] = try allocator.dupe(u8, "dynamic-disabled-addon");
+
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = pkgbuild_content });
+    const pkgbuild_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "PKGBUILD" });
+    defer allocator.free(pkgbuild_path);
+    var review = try builder_mod.preparePkgbuildReview(
+        allocator,
+        io,
+        fixture.build_dir,
+        pkgbuild_content,
+        fixture.package_builds,
+    );
+    defer review.deinit();
+    fixture.builder.options.pkgbuild_path = pkgbuild_path;
+    fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+    fixture.builder.options.reviewed_files = review.reviewed_files;
+
+    try testing.expectError(error.BuildFailed, fixture.builder.BuildPackage());
+}
+
 test "PackageBuilder requires supplemental review for a dynamically discovered local source" {
     const allocator = testing.allocator;
     const io = testing.io;

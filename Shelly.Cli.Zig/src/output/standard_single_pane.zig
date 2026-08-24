@@ -220,7 +220,11 @@ pub const Renderer = struct {
             .progress => |progress| try self.writeProgress(progress),
             .status => |status| try self.writeStatus(status),
             .failure => |failure| {
-                try self.writeColoredLine(.red, "error: {s}", .{failure.message});
+                if (failure.recoverable) {
+                    try self.writeColoredLine(.yellow, "warning: {s}", .{failure.message});
+                } else {
+                    try self.writeColoredLine(.red, "error: {s}", .{failure.message});
+                }
             },
             .completed => |completed| try self.completeOperation(completed.envelope.operation_id),
             .started => {},
@@ -1058,6 +1062,8 @@ test "redirected single-pane output suppresses intermediate progress and finaliz
 
     try renderer.begin("Synchronizing package databases...");
     var operation = operation_context.begin(.{ .backend = .download, .kind = .download, .subject = "extra.db" });
+    operation.reportError(error.TestRecoverableFailure, "optional cleanup failed", "test", null, true);
+    operation.reportError(error.TestFatalFailure, "required transaction failed", "test", null, false);
     operation.status(.information, "Download started", "download.start", null);
     operation.progress(.{ .completed = 50, .total = 100, .percentage = 50, .stage = "download" });
     operation.progress(.{ .completed = 100, .total = 100, .percentage = 100, .stage = "download" });
@@ -1099,6 +1105,8 @@ test "redirected single-pane output suppresses intermediate progress and finaliz
     try std.testing.expect(std.mem.indexOf(u8, rendered, "100%") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Download started") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Download completed") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "warning: optional cleanup failed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "error: required transaction failed") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Scriptlet: post-install output") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Hook: Refreshing system state") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, ":: pacnew stored @ /etc/demo.conf.pacnew") != null);

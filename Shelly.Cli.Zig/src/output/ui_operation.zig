@@ -112,7 +112,10 @@ pub const Reporter = struct {
                 status.message,
             ),
             .progress => |progress| try output.writeOperationProgressFrame(self.context, progress),
-            .failure => |failure| try output.writeErrorFrame(self.context, failure.message),
+            .failure => |failure| if (failure.recoverable)
+                try output.writeWarningFrame(self.context, failure.message)
+            else
+                try output.writeErrorFrame(self.context, failure.message),
             .started, .completed => {},
         }
         try flush(self.context);
@@ -428,6 +431,9 @@ test "UI operation reporter preserves percentages for every progress frame shape
     var appimage = operation_context.begin(.{ .backend = .appimage, .kind = .download, .subject = "demo.AppImage" });
     appimage.progress(.{ .bytes_completed = 25, .bytes_total = 100 });
     appimage.finish(.success);
+    var cleanup = operation_context.begin(.{ .backend = .alpm, .kind = .cleanup, .subject = "build dependencies" });
+    cleanup.reportError(error.TestRecoverableFailure, "optional cleanup failed", "test", null, true);
+    cleanup.finish(.failed);
 
     var frame_iterator = std.mem.splitSequence(u8, stdout.writer.buffered(), "[/JSON]\n");
     const expected = [_][]const []const u8{
@@ -448,6 +454,12 @@ test "UI operation reporter preserves percentages for every progress frame shape
             "\"$kind\":\"appimage.progress\"",
             "\"Status\":\"demo.AppImage\"",
             "\"Percentage\":25",
+        },
+        &.{
+            "\"$kind\":\"alpm.info\"",
+            "\"EventType\":\"WarningOutput\"",
+            "\"Message\":\"optional cleanup failed\"",
+            "\"Level\":\"Warning\"",
         },
     };
     for (expected) |needles| {

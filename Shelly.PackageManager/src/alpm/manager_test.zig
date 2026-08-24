@@ -1370,6 +1370,71 @@ test "get_foreign_packages excludes packages provided by a sync database" {
     try testing.expect(!containsPackage(foreign, "remote-provider"));
 }
 
+test "refresh reloads an externally replaced sync database cache" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.createSyncDatabase(allocator);
+
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+
+    const original = try allocator.dupeZ(u8, "remote-provider");
+    defer allocator.free(original);
+    const replacement = try allocator.dupeZ(u8, "remote-target");
+    defer allocator.free(replacement);
+
+    // Materialize the first archive in libalpm's sync package cache.
+    try testing.expectEqualStrings("remote-provider", try mgr.find_remote_satisfier_for_dependency(original));
+    try testing.expectError(error.PkgNotFound, mgr.find_remote_satisfier_for_dependency(replacement));
+
+    // Shelly's downloader replaces repository archives outside alpm_db_update,
+    // so the live handle continues to expose the old cache until refresh.
+    try workspace.createRequiredBySyncDatabase(allocator);
+    try testing.expectEqualStrings("remote-provider", try mgr.find_remote_satisfier_for_dependency(original));
+    try testing.expectError(error.PkgNotFound, mgr.find_remote_satisfier_for_dependency(replacement));
+
+    try mgr.refresh();
+    try testing.expectError(error.PkgNotFound, mgr.find_remote_satisfier_for_dependency(original));
+    try testing.expectEqualStrings("remote-target", try mgr.find_remote_satisfier_for_dependency(replacement));
+}
+
+test "refresh reports a detailed reinitialization failure" {
+    const allocator = testing.allocator;
+
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+
+    var capture: ErrorCapture = .{};
+    const error_handler = try mgr.dispatcher.addErrorHandler(.{
+        .function = captureError,
+        .data = &capture,
+    });
+    defer mgr.dispatcher.removeErrorHandler(error_handler);
+
+    // A regular file cannot contain libalpm's database hierarchy.
+    mgr.config.database_path = "/dev/null/shelly-refresh-test";
+    try testing.expectError(error.RefreshFailed, mgr.refresh());
+    try testing.expect(std.mem.indexOf(
+        u8,
+        capture.text(),
+        "Failed to reinitialize ALPM while reloading package databases",
+    ) != null);
+    try testing.expect(std.mem.indexOf(u8, capture.text(), "ALPM operation failed") == null);
+}
+
 // ---------------------------------------------------------------------------
 // Local-database symlink (non-root update checking)
 //

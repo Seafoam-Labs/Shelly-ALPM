@@ -33,6 +33,7 @@ pub const SessionLog = struct {
         self.* = undefined;
     }
 
+    
     pub fn writeSessionHeader(
         self: *SessionLog,
         allocator: std.mem.Allocator,
@@ -40,12 +41,18 @@ pub const SessionLog = struct {
     ) void {
         var buffer = std.Io.Writer.Allocating.init(allocator);
         defer buffer.deinit();
-        const timestamp = std.Io.Clock.real.now(self.io).toSeconds();
+        const raw: u64 = @intCast(std.Io.Clock.real.now(self.io).toSeconds());
         buffer.writer.writeAll("=====================================\n") catch return;
-        buffer.writer.print("[{d}] SESSION START\n", .{timestamp}) catch return;
-        buffer.writer.print("[{d}] Command: shelly", .{timestamp}) catch return;
-        for (arguments) |argument| buffer.writer.print(" {s}", .{argument}) catch return;
-        buffer.writer.writeAll("\n=====================================\n") catch return;
+        buffer.writer.writeAll("[") catch return;
+        writeUtcTime(&buffer.writer, raw) catch return;
+        buffer.writer.writeAll("] SESSION START\n") catch return;
+        buffer.writer.writeAll("[") catch return;
+        writeUtcTime(&buffer.writer, raw) catch return;
+        buffer.writer.writeAll("] Command: shelly") catch return;
+        for (arguments) |argument| {
+            buffer.writer.print(" {s}", .{argument}) catch return;
+        }
+        buffer.writer.writeAll("\n=====================================\n") catch return;        
         self.append(buffer.writer.buffered());
     }
 
@@ -56,13 +63,14 @@ pub const SessionLog = struct {
     ) void {
         var buffer = std.Io.Writer.Allocating.init(allocator);
         defer buffer.deinit();
-        const timestamp = std.Io.Clock.real.now(self.io).toSeconds();
+        const raw: u64 = @intCast(std.Io.Clock.real.now(self.io).toSeconds());
+        buffer.writer.writeAll("[") catch return;
+        writeUtcTime(&buffer.writer, raw) catch return;
         buffer.writer.print(
-            "[{d}] SESSION END — exit code: {d}\n",
-            .{ timestamp, exit_code },
+            "] SESSION END — exit code: {d}\n",
+            .{exit_code},
         ) catch return;
-        self.append(buffer.writer.buffered());
-    }
+        self.append(buffer.writer.buffered());    }
 
     fn append(self: *SessionLog, bytes: []const u8) void {
         self.mutex.lockUncancelable(self.io);
@@ -109,7 +117,7 @@ pub const TransactionLog = struct {
     }
 
     pub fn writeEntry(self: *TransactionLog, allocator: std.mem.Allocator, level: LogLevel, source: Source, message: []const u8) void {
-        const timestamp = std.Io.Clock.real.now(self.session.io).toSeconds();
+        const raw: u64 = @intCast(std.Io.Clock.real.now(self.session.io).toSeconds());
         var buffer = std.Io.Writer.Allocating.init(allocator);
         defer buffer.deinit();
         const level_str: []const u8 = switch (level) {
@@ -118,14 +126,16 @@ pub const TransactionLog = struct {
             .exception => "EXCEPTION",
         };
         const source_str: []const u8 = switch (source) {
-            .standard => "standard",
-            .aur => "aur",
-            .flatpak => "flatpak",
-            .appimage => "appimage",
-            .local => "local",
-            .download => "download",
+            .standard => "STANDARD",
+            .aur => "AUR",
+            .flatpak => "FLATPAK",
+            .appimage => "APPIMAGE",
+            .local => "LOCAL",
+            .download => "DOWNLOAD",
         };
-        buffer.writer.print("[{d}] Level: {s}  Source: {s} Message: {s}\n", .{ timestamp, level_str, source_str, message }) catch return;
+        buffer.writer.writeAll("[") catch return;
+        writeUtcTime(&buffer.writer, raw) catch return;
+        buffer.writer.print("] {s} [{s}]: {s}\n",.{ level_str, source_str, message },) catch return;        
         self.session.append(buffer.writer.buffered());
     }
 
@@ -144,7 +154,7 @@ pub const TransactionLog = struct {
         switch (event) {
             .started => {
                 if (envelope.parent_id == null)
-                    self.writeEntry(self.allocator, .info, source, "transaction started");
+                    self.writeEntry(self.allocator, .info, source, "Transaction started");
             },
             .progress => {},
             .status => |status| switch (status.level) {
@@ -152,13 +162,18 @@ pub const TransactionLog = struct {
                 .information, .success => self.writeEntry(self.allocator, .info, source, status.message),
                 .warning => self.writeEntry(self.allocator, .warning, source, status.message),
             },
-            .failure => |failure| self.writeEntry(self.allocator, .exception, source, failure.message),
+            .failure => |failure| self.writeEntry(
+                self.allocator,
+                if (failure.recoverable) .warning else .exception,
+                source,
+                failure.message,
+            ),
             .completed => |completed| {
                 if (envelope.parent_id != null) return;
                 const message: []const u8 = switch (completed.status) {
-                    .success => "transaction completed",
-                    .failed => "transaction failed",
-                    .cancelled => "transaction cancelled",
+                    .success => "Transaction completed",
+                    .failed => "Transaction failed",
+                    .cancelled => "Transaction cancelled",
                 };
                 self.writeEntry(
                     self.allocator,
@@ -170,6 +185,37 @@ pub const TransactionLog = struct {
         }
     }
 };
+
+fn writeUtcTime(writer: *std.Io.Writer, unix_seconds: u64,) !void {
+    const epoch_seconds = std.time.epoch.EpochSeconds{
+        .secs = unix_seconds,
+    };
+
+    const epoch_day = epoch_seconds.getEpochDay();
+    const epoch_year = epoch_day.calculateYearDay();
+    const epoch_month = epoch_year.calculateMonthDay();
+
+    const year = epoch_year.year;
+    const month = epoch_month.month.numeric();
+    const day = epoch_month.day_index + 1;
+
+    const day_seconds = epoch_seconds.getDaySeconds();
+    const hours = day_seconds.getHoursIntoDay();
+    const minutes = day_seconds.getMinutesIntoHour();
+    const seconds = day_seconds.getSecondsIntoMinute();
+
+    try writer.print(
+        "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}Z",
+        .{
+            year,
+            month,
+            day,
+            hours,
+            minutes,
+            seconds,
+        },
+    );
+}
 
 fn sourceForBackend(backend: Zigalpm.operation.Backend) Source {
     return switch (backend) {
@@ -253,12 +299,12 @@ test "transaction log writes every level and source" {
         source_text: []const u8,
         message: []const u8,
     }{
-        .{ .level = .info, .source = .standard, .level_text = "INFO", .source_text = "standard", .message = "standard message" },
-        .{ .level = .warning, .source = .aur, .level_text = "WARNING", .source_text = "aur", .message = "aur message" },
-        .{ .level = .exception, .source = .flatpak, .level_text = "EXCEPTION", .source_text = "flatpak", .message = "flatpak message" },
-        .{ .level = .info, .source = .appimage, .level_text = "INFO", .source_text = "appimage", .message = "appimage message" },
-        .{ .level = .warning, .source = .local, .level_text = "WARNING", .source_text = "local", .message = "local message" },
-        .{ .level = .info, .source = .download, .level_text = "INFO", .source_text = "download", .message = "download message" },
+        .{ .level = .info, .source = .standard, .level_text = "INFO", .source_text = "STANDARD", .message = "standard message" },
+        .{ .level = .warning, .source = .aur, .level_text = "WARNING", .source_text = "AUR", .message = "aur message" },
+        .{ .level = .exception, .source = .flatpak, .level_text = "EXCEPTION", .source_text = "FLATPAK", .message = "flatpak message" },
+        .{ .level = .info, .source = .appimage, .level_text = "INFO", .source_text = "APPIMAGE", .message = "appimage message" },
+        .{ .level = .warning, .source = .local, .level_text = "WARNING", .source_text = "LOCAL", .message = "local message" },
+        .{ .level = .info, .source = .download, .level_text = "INFO", .source_text = "DOWNLOAD", .message = "download message" },
     };
 
     const rotated_path = try std.fmt.allocPrint(allocator, "{s}.1", .{path});
@@ -282,13 +328,22 @@ test "transaction log writes every level and source" {
     for (cases) |case| {
         const expected = try std.fmt.allocPrint(
             allocator,
-            "Level: {s}  Source: {s} Message: {s}\n",
+            "] {s} [{s}]: {s}\n",
             .{ case.level_text, case.source_text, case.message },
         );
         defer allocator.free(expected);
         try std.testing.expect(std.mem.indexOf(u8, contents, expected) != null);
     }
     try std.testing.expectEqual(cases.len, std.mem.count(u8, contents, "\n"));
+}
+
+test "transaction log converts timestamp to UTC time" {
+    var buffer: [64]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+
+    try writeUtcTime(&writer, 0);
+
+    try std.testing.expectEqualStrings("1970-01-01T00:00:00Z", writer.buffered(),);
 }
 
 test "transaction log appends after existing content" {
@@ -324,7 +379,7 @@ test "transaction log appends after existing content" {
     );
     defer allocator.free(contents);
     try std.testing.expect(std.mem.startsWith(u8, contents, "existing entry\n"));
-    try std.testing.expect(std.mem.endsWith(u8, contents, "Source: standard Message: new entry\n"));
+    try std.testing.expect(std.mem.endsWith(u8, contents, "] INFO [STANDARD]: new entry\n"));
 }
 
 test "transaction log records operation lifecycle without progress noise" {
@@ -362,8 +417,9 @@ test "transaction log records operation lifecycle without progress noise" {
         .limited(4096),
     );
     defer allocator.free(contents);
-    try std.testing.expect(std.mem.indexOf(u8, contents, "Message: transaction started") != null);
-    try std.testing.expect(std.mem.indexOf(u8, contents, "Message: installed example (1.0-1)") != null);
-    try std.testing.expect(std.mem.indexOf(u8, contents, "Message: transaction completed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, contents, "Transaction started") != null);
+    try std.testing.expect(std.mem.indexOf(u8, contents, "installed example (1.0-1)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, contents, "Transaction completed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, contents, "installed example (1.0-1)") != null);
     try std.testing.expect(std.mem.indexOf(u8, contents, "ignored progress") == null);
 }

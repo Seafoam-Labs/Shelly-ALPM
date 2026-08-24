@@ -8,7 +8,8 @@ pub const json =
     \\  "ProgressBarStyle": "Blocks",
     \\  "ProgressBarWidth": 24,
     \\  "OutputMode": "singlepane",
-    \\  "AppImageInstallPath": null
+    \\  "AppImageInstallPath": null,
+    \\  "AutoConfirmCacheClean": false
     \\}
 ;
 
@@ -22,4 +23,5 @@ test "native defaults remain valid JSON" {
         "PreferIPv4",
         parsed.value.object.get("DownloadAddressFamilyPolicy").?.string,
     );
+    try std.testing.expect(!parsed.value.object.get("AutoConfirmCacheClean").?.bool);
 }

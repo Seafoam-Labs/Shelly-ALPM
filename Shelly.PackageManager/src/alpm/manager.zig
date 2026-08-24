@@ -2175,8 +2175,12 @@ pub const Manager = struct {
         if (self.handle != null) {
             const refresh_result = rawLibalpm.alpm_release(self.handle);
             if (refresh_result != 0) {
+                self.dispatcher.raiseError(.{
+                    .message = "Failed to release the ALPM handle while reloading package databases",
+                });
                 return TransactionError.RefreshFailed;
             }
+            self.handle = null;
         }
 
         self.sync_dbs.clearRetainingCapacity();
@@ -2184,6 +2188,13 @@ pub const Manager = struct {
         var err2: rawLibalpm.alpm_errno_t = 0;
         self.handle = rawLibalpm.alpm_initialize(self.config.root_directory, self.config.database_path, &err2);
         if (self.handle == null) {
+            var message_buffer: [512]u8 = undefined;
+            const message = std.fmt.bufPrint(
+                &message_buffer,
+                "Failed to reinitialize ALPM while reloading package databases: {s}",
+                .{std.mem.span(rawLibalpm.alpm_strerror(err2))},
+            ) catch "Failed to reinitialize ALPM while reloading package databases";
+            self.dispatcher.raiseError(.{ .message = message });
             return TransactionError.RefreshFailed;
         }
 
@@ -2789,35 +2800,72 @@ pub const Manager = struct {
 
     fn onDownloadEvent(ctx: ?*anyopaque, event: downloader.DownloadEvent) void {
         const self: *Manager = @ptrCast(@alignCast(ctx));
+        self.handleDownloadEvent(event) catch return;   
+    }
+
+    fn handleDownloadEvent(
+        self: *Manager,
+        event: downloader.DownloadEvent,
+    ) TransactionError!void {
         const path = event.destination_path orelse "";
+    
         switch (event.event_type) {
-            .Start => self.dispatcher.raiseInformational(.{
-                .event_type = .pkg_retrieve_start,
-                .message = path,
-            }),
+            .Start => {
+                const message = std.fmt.allocPrint(
+                    self.allocator,
+                    "Retrieving package: {s}",
+                    .{std.fs.path.basename(path)},
+                ) catch return TransactionError.OutOfMemory;
+    
+                defer self.allocator.free(message);
+    
+                self.dispatcher.raiseInformational(.{
+                    .event_type = .pkg_retrieve_start,
+                    .message = message,
+                });
+            },
+    
             .Progress => if (event.progress) |p| {
                 // CoreDownloader forwards rich byte progress to the logical
                 // download operation. Retain this fallback only for legacy
                 // callers that do not attach a common operation.
-                if (self.dispatcher.operation == null) self.dispatcher.raiseProgress(.{
-                    .progress_type = @intCast(rawLibalpm.ALPM_PROGRESS_ADD_START),
-                    .pkg_name = std.fs.path.basename(path),
-                    .percent = p.percent,
-                    .howmany = 1,
-                    .current = 1,
+                if (self.dispatcher.operation == null) {
+                    self.dispatcher.raiseProgress(.{
+                        .progress_type = @intCast(rawLibalpm.ALPM_PROGRESS_ADD_START),
+                        .pkg_name = std.fs.path.basename(path),
+                        .percent = p.percent,
+                        .howmany = 1,
+                        .current = 1,
+                    });
+                }
+            },
+    
+            .Complete => {
+                const message = std.fmt.allocPrint(
+                    self.allocator,
+                    "Package retrieval completed: {s}",
+                    .{std.fs.path.basename(path)},
+                ) catch return TransactionError.OutOfMemory;
+    
+                defer self.allocator.free(message);
+    
+                self.dispatcher.raiseInformational(.{
+                    .event_type = .pkg_retrieve_done,
+                    .message = message,
                 });
             },
-            .Complete => self.dispatcher.raiseInformational(.{
-                .event_type = .pkg_retrieve_done,
-                .message = path,
-            }),
+    
             .Error => self.dispatcher.raiseError(.{
-                .message = if (event.download_error) |e| @errorName(e) else "download failed",
+                .message = if (event.download_error) |err|
+                    @errorName(err)
+                else
+                    "download failed",
             }),
+    
             .Skipped => {},
         }
     }
-
+    
     fn progressCallback(
         ctx: ?*anyopaque,
         progress: rawLibalpm.alpm_progress_t,
@@ -2840,9 +2888,17 @@ pub const Manager = struct {
         ctx: ?*anyopaque,
         event: [*c]rawLibalpm.alpm_event_t,
     ) callconv(.c) void {
-        if (event == null) return;
-
         const self: *Manager = @ptrCast(@alignCast(ctx));
+    
+        self.handleEvent(event) catch return;
+    }
+
+    fn handleEvent(
+        self: *Manager,
+        event: [*c]rawLibalpm.alpm_event_t,
+    ) TransactionError!void { 
+
+        if (event == null) return;
         const type_value: u32 = @intCast(event.*.type);
         if (type_value < rawLibalpm.ALPM_EVENT_CHECKDEPS_START or type_value > rawLibalpm.ALPM_EVENT_HOOK_RUN_DONE) return;
 
@@ -2851,6 +2907,86 @@ pub const Manager = struct {
             .scriptlet_info => {
                 const line = spanC(event.*.scriptlet_info.line) orelse return;
                 if (line.len != 0) self.dispatcher.raiseScriptlet(.{ .line = line });
+            },
+            .package_operation_start => {
+                const operation = event.*.package_operation;
+            
+                const message = (switch (operation.operation) {
+                    rawLibalpm.ALPM_PACKAGE_INSTALL => blk: {
+                        const pkg = operation.newpkg orelse return;
+                        const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
+                        const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
+            
+                        break :blk std.fmt.allocPrint(
+                            self.allocator,
+                            "Installing package: {s}-{s}",
+                            .{ name, version },
+                        );
+                    },
+            
+                    rawLibalpm.ALPM_PACKAGE_UPGRADE => blk: {
+                        const oldpkg = operation.oldpkg orelse return;
+                        const newpkg = operation.newpkg orelse return;
+            
+                        const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(newpkg)) orelse return;
+                        const old_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(oldpkg)) orelse return;
+                        const new_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(newpkg)) orelse return;
+            
+                        break :blk std.fmt.allocPrint(
+                            self.allocator,
+                            "Upgrading package: {s} {s} -> {s}",
+                            .{ name, old_version, new_version },
+                        );
+                    },
+            
+                    rawLibalpm.ALPM_PACKAGE_REINSTALL => blk: {
+                        const pkg = operation.newpkg orelse return;
+                        const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
+                        const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
+            
+                        break :blk std.fmt.allocPrint(
+                            self.allocator,
+                            "Reinstalling package: {s}-{s}",
+                            .{ name, version },
+                        );
+                    },
+            
+                    rawLibalpm.ALPM_PACKAGE_DOWNGRADE => blk: {
+                        const oldpkg = operation.oldpkg orelse return;
+                        const newpkg = operation.newpkg orelse return;
+            
+                        const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(newpkg)) orelse return;
+                        const old_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(oldpkg)) orelse return;
+                        const new_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(newpkg)) orelse return;
+            
+                        break :blk std.fmt.allocPrint(
+                            self.allocator,
+                            "Downgrading package: {s} {s} -> {s}",
+                            .{ name, old_version, new_version },
+                        );
+                    },
+            
+                    rawLibalpm.ALPM_PACKAGE_REMOVE => blk: {
+                        const pkg = operation.oldpkg orelse return;
+                        const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
+                        const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
+            
+                        break :blk std.fmt.allocPrint(
+                            self.allocator,
+                            "Removing package: {s}-{s}",
+                            .{ name, version },
+                        );
+                    },
+            
+                    else => return,
+                }) catch return TransactionError.OutOfMemory;
+            
+                defer self.allocator.free(message);
+            
+                self.dispatcher.raiseInformational(.{
+                    .event_type = event_type,
+                    .message = message,
+                });
             },
             .hook_run_start => {
                 const hook = event.*.hook_run;
@@ -2869,6 +3005,12 @@ pub const Manager = struct {
                     .position = @intCast(hook.position),
                     .total = @intCast(hook.total),
                 });
+
+                self.dispatcher.raiseInformational(.{
+                    .event_type = event_type,
+                    .message = message,
+                });
+
             },
             .pacnew_created => self.dispatcher.raisePacnew(.{
                 .file = spanC(event.*.pacnew_created.file),
@@ -2886,8 +3028,8 @@ pub const Manager = struct {
             },
             else => self.handleInformationMessage(event_type),
         }
-    }
 
+    }
     fn handleInformationMessage(self: *Manager, event_type: libalpm.EventType) void {
         const message = switch (event_type) {
             .checkdeps_start => "Checking dependencies...",
@@ -2900,7 +3042,6 @@ pub const Manager = struct {
             .interconflicts_done => "Package conflict check finished.",
             .transaction_start => "Starting transaction...",
             .transaction_done => "Transaction completed.",
-            .package_operation_start => "Starting package operation...",
             .package_operation_done => "Package operation completed.",
             .integrity_start => "Checking package integrity...",
             .integrity_done => "Package integrity check finished.",
@@ -3533,6 +3674,54 @@ test "OperationScope emits one generic ALPM error when no detail was reported" {
     try testing.expectEqualStrings("ALPM operation failed", capture.last_message);
 }
 
+test "OperationScope turns best-effort ALPM failures into contextual recoverable errors" {
+    const Capture = struct {
+        failures: usize = 0,
+        contextual: bool = false,
+        recoverable: bool = false,
+
+        fn event(data: ?*anyopaque, value: operation_api.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (value) {
+                .failure => |failure| {
+                    self.failures += 1;
+                    self.contextual = std.mem.eql(
+                        u8,
+                        failure.message,
+                        "Failed to remove build-only dependencies: ALPM operation failed",
+                    );
+                    self.recoverable = failure.recoverable;
+                },
+                else => {},
+            }
+        }
+    };
+
+    var threaded: std.Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    var context = operation_api.OperationContext.init(testing.allocator, threaded.io());
+    defer context.deinit();
+    var capture: Capture = .{};
+    const subscription = try context.subscribe(.{ .function = Capture.event, .data = &capture });
+    defer _ = context.unsubscribe(subscription);
+
+    var manager: Manager = undefined;
+    manager.handle = null;
+    manager.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer manager.dispatcher.deinit();
+    manager.operation_context = &context;
+
+    var recoverable_errors = manager.dispatcher.beginRecoverableErrors("Failed to remove build-only dependencies");
+    defer recoverable_errors.deinit();
+    var scope = OperationScope.init(&manager, .remove, "build-tool");
+    scope.attach();
+    scope.fail();
+
+    try testing.expectEqual(@as(usize, 1), capture.failures);
+    try testing.expect(capture.contextual);
+    try testing.expect(capture.recoverable);
+}
+
 test "nested OperationScopes do not duplicate a detailed ALPM error" {
     const Capture = struct {
         failures: usize = 0,
@@ -4077,6 +4266,7 @@ test "handleInformationMessage emits a known informational description" {
         .function = captureInfo,
         .data = @ptrCast(&cap),
     }) catch unreachable;
+    defer cap.deinit(testing.allocator);
 
     mgr.handleInformationMessage(.transaction_start);
 
@@ -4095,6 +4285,7 @@ test "handleInformationMessage ignores specialized event types" {
         .function = captureInfo,
         .data = @ptrCast(&cap),
     }) catch unreachable;
+    defer cap.deinit(testing.allocator);
 
     mgr.handleInformationMessage(.scriptlet_info);
 
@@ -4111,7 +4302,7 @@ test "handleInformationMessage ignores application-only event types" {
         .function = captureInfo,
         .data = @ptrCast(&cap),
     });
-
+    defer cap.deinit(testing.allocator);
     mgr.handleInformationMessage(.download_start);
     mgr.handleInformationMessage(.validation_failed);
     mgr.handleInformationMessage(.rollback_complete);
@@ -4135,8 +4326,6 @@ test "handleInformationMessage emits every generic informational description" {
         .{ .event_type = .interconflicts_done, .message = "Package conflict check finished." },
         .{ .event_type = .transaction_start, .message = "Starting transaction..." },
         .{ .event_type = .transaction_done, .message = "Transaction completed." },
-        .{ .event_type = .package_operation_start, .message = "Starting package operation..." },
-        .{ .event_type = .package_operation_done, .message = "Package operation completed." },
         .{ .event_type = .integrity_start, .message = "Checking package integrity..." },
         .{ .event_type = .integrity_done, .message = "Package integrity check finished." },
         .{ .event_type = .load_start, .message = "Loading packages..." },
@@ -4168,6 +4357,7 @@ test "handleInformationMessage emits every generic informational description" {
     defer mgr.dispatcher.deinit();
 
     var cap = InfoCapture{};
+    defer cap.deinit(testing.allocator);    
     _ = try mgr.dispatcher.addInformationalHandler(.{
         .function = captureInfo,
         .data = @ptrCast(&cap),
@@ -4192,7 +4382,7 @@ test "eventCallback dispatches the informational message for an event type" {
         .function = captureInfo,
         .data = @ptrCast(&cap),
     }) catch unreachable;
-
+    defer cap.deinit(testing.allocator);
     var ev: rawLibalpm.alpm_event_t = .{ .type = @intCast(rawLibalpm.ALPM_EVENT_TRANSACTION_START) };
     Manager.eventCallback(@ptrCast(&mgr), &ev);
 
@@ -4286,7 +4476,7 @@ test "eventCallback ignores null out-of-range and empty scriptlet events" {
     defer mgr.dispatcher.deinit();
 
     var info_cap = InfoCapture{};
-    var scriptlet_cap = ScriptletCapture{};
+    defer info_cap.deinit(testing.allocator);    var scriptlet_cap = ScriptletCapture{};
     _ = try mgr.dispatcher.addInformationalHandler(.{
         .function = captureInfo,
         .data = @ptrCast(&info_cap),
@@ -4321,6 +4511,7 @@ test "eventCallback ignores event values above the libalpm range" {
         .function = captureInfo,
         .data = @ptrCast(&cap),
     });
+    defer cap.deinit(testing.allocator);
 
     var event: rawLibalpm.alpm_event_t = .{
         .type = @intCast(rawLibalpm.ALPM_EVENT_HOOK_RUN_DONE + 1),
@@ -4398,10 +4589,12 @@ test "eventCallback falls back from hook description to name and generic text" {
 
 test "onDownloadEvent translates start progress and completion events" {
     var mgr: Manager = undefined;
+    mgr.allocator = testing.allocator;
     mgr.dispatcher = events.Dispatcher.init(testing.allocator);
     defer mgr.dispatcher.deinit();
 
     var info_cap = InfoCapture{};
+    defer info_cap.deinit(testing.allocator);
     var progress_cap = ProgressCapture{};
     _ = try mgr.dispatcher.addInformationalHandler(.{
         .function = captureInfo,
@@ -4418,7 +4611,7 @@ test "onDownloadEvent translates start progress and completion events" {
     });
     var info = info_cap.args orelse return error.TestFailed;
     try testing.expectEqual(libalpm.EventType.pkg_retrieve_start, info.event_type);
-    try testing.expectEqualStrings("/tmp/example.pkg.tar.zst", info.message);
+    try testing.expectEqualStrings("Retrieving package: example.pkg.tar.zst", info_cap.message orelse return error.TestFailed);
 
     Manager.onDownloadEvent(@ptrCast(&mgr), .{
         .event_type = .Progress,
@@ -4442,7 +4635,7 @@ test "onDownloadEvent translates start progress and completion events" {
     });
     info = info_cap.args orelse return error.TestFailed;
     try testing.expectEqual(libalpm.EventType.pkg_retrieve_done, info.event_type);
-    try testing.expectEqualStrings("/tmp/example.pkg.tar.zst", info.message);
+    try testing.expectEqualStrings("Package retrieval completed: example.pkg.tar.zst", info_cap.message orelse return error.TestFailed);
 }
 
 test "onDownloadEvent does not duplicate progress when a common operation is attached" {
@@ -4484,6 +4677,8 @@ test "onDownloadEvent reports concrete and fallback errors and ignores skipped e
 
     var error_cap = ErrorCapture{};
     var info_cap = InfoCapture{};
+    defer info_cap.deinit(testing.allocator);
+
     _ = try mgr.dispatcher.addErrorHandler(.{
         .function = captureError,
         .data = @ptrCast(&error_cap),
@@ -4513,10 +4708,12 @@ test "onDownloadEvent reports concrete and fallback errors and ignores skipped e
 
 test "onDownloadEvent handles missing paths and missing progress payloads" {
     var mgr: Manager = undefined;
+    mgr.allocator = testing.allocator;
     mgr.dispatcher = events.Dispatcher.init(testing.allocator);
     defer mgr.dispatcher.deinit();
 
     var info_cap = InfoCapture{};
+    defer info_cap.deinit(testing.allocator);
     var progress_cap = ProgressCapture{};
     _ = try mgr.dispatcher.addInformationalHandler(.{
         .function = captureInfo,
@@ -4530,7 +4727,7 @@ test "onDownloadEvent handles missing paths and missing progress payloads" {
     Manager.onDownloadEvent(@ptrCast(&mgr), .{ .event_type = .Start });
     const info = info_cap.args orelse return error.TestFailed;
     try testing.expectEqual(libalpm.EventType.pkg_retrieve_start, info.event_type);
-    try testing.expectEqualStrings("", info.message);
+    try testing.expectEqualStrings("Retrieving package: ", info_cap.message orelse return error.TestFailed);
 
     Manager.onDownloadEvent(@ptrCast(&mgr), .{ .event_type = .Progress });
     try testing.expect(progress_cap.args == null);
@@ -4917,6 +5114,27 @@ test "handleErrorMessage formats populated file conflict details" {
     ) != null);
 }
 
+test "handleDownloadEvent returns out of memory when message allocation fails" {
+    var failing = testing.FailingAllocator.init(testing.allocator, .{
+        .fail_index = 0,
+    });
+
+    var mgr: Manager = undefined;
+    mgr.allocator = failing.allocator();
+    mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    defer mgr.dispatcher.deinit();
+
+    try testing.expectError(
+        TransactionError.OutOfMemory,
+        mgr.handleDownloadEvent(.{
+            .event_type = .Start,
+            .destination_path = "/tmp/example.pkg.tar.zst",
+        }),
+    );
+
+    try testing.expect(failing.has_induced_failure);
+}
+
 test "handleErrorMessage emits descriptions for every scalar libalpm error" {
     const Case = struct {
         err: libalpm.Error,
@@ -5003,11 +5221,30 @@ fn captureProgress(data: ?*anyopaque, args: events.ProgressArgs) void {
 
 const InfoCapture = struct {
     args: ?events.InformationalArgs = null,
+    message: ?[]u8 = null,
+
+    fn deinit(self: *InfoCapture, allocator: std.mem.Allocator) void {
+        if (self.message) |message| {
+            allocator.free(message);
+        }
+
+        self.message = null;
+        self.args = null;
+    }
 };
 
 fn captureInfo(data: ?*anyopaque, args: events.InformationalArgs) void {
     const cap: *InfoCapture = @ptrCast(@alignCast(data));
+
+    if (cap.message) |message| {
+        testing.allocator.free(message);
+    }
+
+    const message = testing.allocator.dupe(u8, args.message) catch unreachable;
+
+    cap.message = message;
     cap.args = args;
+    cap.args.?.message = message;
 }
 
 const ScriptletCapture = struct {
@@ -5064,6 +5301,7 @@ const ErrorCapture = struct {
     buf: [2048]u8 = undefined,
     len: usize = 0,
     count: usize = 0,
+    err: ?anyerror = null,
 
     fn text(self: *const ErrorCapture) []const u8 {
         return self.buf[0..self.len];

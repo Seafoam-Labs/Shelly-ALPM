@@ -126,11 +126,10 @@ const Real = struct {
 
         var requested_names: std.ArrayList([]const u8) = .empty;
         defer requested_names.deinit(context.allocator);
+        const build_all_members = !hasPackageSelection(invocation);
         for (invocation.options) |option| {
             if (!std.mem.eql(u8, option.name, "--package")) continue;
             const requested_name = option.value orelse return error.MissingPackageName;
-            if (!containsString(names.items, requested_name))
-                return error.SelectedPackageNotFound;
             if (!containsString(requested_names.items, requested_name))
                 try requested_names.append(context.allocator, requested_name);
         }
@@ -150,10 +149,11 @@ const Real = struct {
         }
 
         for (requested_names.items, package_builds) |name, *pkgbuild| {
+            const parse_name = if (containsString(names.items, name)) name else names.items[0];
             pkgbuild.* = try (Zigalpm.pkgbuild.Parser{
                 .allocator = context.allocator,
                 .io = context.io,
-                .selected_package_name = name,
+                .selected_package_name = parse_name,
                 .package_carch = shellybuild.build.carch,
             }).parser_content(pkgbuild_content, build_directory);
 
@@ -256,6 +256,7 @@ const Real = struct {
                 .reviewed_pkgbuild_digest = expected_digest,
                 .install_scripts = review.install_scripts,
                 .reviewed_files = review.reviewed_files,
+                .build_all_members = build_all_members,
                 .sources_prepared = false,
             },
             context.environ,
@@ -351,8 +352,6 @@ fn parseBuildRequest(
     for (invocation.options) |option| {
         if (!std.mem.eql(u8, option.name, "--package")) continue;
         const requested_name = option.value orelse return error.MissingPackageName;
-        if (!containsString(names.items, requested_name))
-            return error.SelectedPackageNotFound;
         if (!containsString(requested_names.items, requested_name))
             try requested_names.append(context.allocator, requested_name);
     }
@@ -368,10 +367,11 @@ fn parseBuildRequest(
     errdefer for (package_builds[0..parsed_count]) |*pkgbuild|
         pkgbuild.deinit(context.allocator);
     for (requested_names.items, package_builds) |name, *pkgbuild| {
+        const parse_name = if (containsString(names.items, name)) name else names.items[0];
         pkgbuild.* = try (Zigalpm.pkgbuild.Parser{
             .allocator = context.allocator,
             .io = context.io,
-            .selected_package_name = name,
+            .selected_package_name = parse_name,
             .package_carch = shellybuild.build.carch,
         }).parser_content(pkgbuild_content, build_directory);
         parsed_count += 1;
@@ -706,6 +706,12 @@ fn optionValue(invocation: *const parser.Invocation, name: []const u8) ?[]const 
     return null;
 }
 
+fn hasPackageSelection(invocation: *const parser.Invocation) bool {
+    for (invocation.options) |option|
+        if (std.mem.eql(u8, option.name, "--package")) return true;
+    return false;
+}
+
 fn containsString(values: []const []const u8, wanted: []const u8) bool {
     for (values) |value| if (std.mem.eql(u8, value, wanted)) return true;
     return false;
@@ -892,10 +898,25 @@ test "build request parsing selects members and honors check overrides" {
         &manifest,
         &.{ "build", "--no-confirm", "--package", "demo-missing", pkgbuild_path },
     );
-    try std.testing.expectError(
-        error.SelectedPackageNotFound,
-        parseBuildRequest(&test_context.context, &missing.dispatch),
+    var deferred_request = try parseBuildRequest(&test_context.context, &missing.dispatch);
+    try std.testing.expectEqual(@as(usize, 1), deferred_request.parsed_count);
+    try std.testing.expectEqualStrings("demo", deferred_request.package_builds[0].pkg_name.?);
+    deferred_request.deinit(&test_context.context);
+}
+
+test "package selection intent distinguishes implicit all from explicit members" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    const all = try parser.parse(arena.allocator(), &manifest, &.{"build"});
+    const selected = try parser.parse(
+        arena.allocator(),
+        &manifest,
+        &.{ "build", "--package", "demo-addon" },
     );
+    try std.testing.expect(!hasPackageSelection(&all.dispatch));
+    try std.testing.expect(hasPackageSelection(&selected.dispatch));
 }
 
 test "sync deps options parse under both spellings" {
@@ -944,6 +965,15 @@ test "invoking user build arguments drop sync deps flags and keep everything els
     const child = try buildChildArguments(allocator, &arguments);
     defer allocator.free(child);
     const expected = [_][]const u8{ "build", "--no-check", "--package", "demo", "/tmp/PKGBUILD" };
+    try std.testing.expectEqualStrings(&expected, child);
+}
+
+test "sync deps child preserves implicit all-members selection" {
+    const allocator = std.testing.allocator;
+    const arguments = [_][]const u8{ "build", "--sync-deps", "/tmp/PKGBUILD" };
+    const child = try buildChildArguments(allocator, &arguments);
+    defer allocator.free(child);
+    const expected = [_][]const u8{ "build", "/tmp/PKGBUILD" };
     try std.testing.expectEqualStrings(&expected, child);
 }
 
