@@ -52,7 +52,7 @@ pub const ShellyConfig = struct {
     // Window & View
     DefaultPageDropDown: ShellyTabs = .packages,
     NavMode: NavMode = .sidebar,
-    Theme: AppTheme = .classic,
+    Theme: AppTheme = .midnight,
     // Internal: persisted window geometry, not exposed in settings UI
     SidebarCollapsed: bool = true,
     WindowLastWidth: i32 = 0,

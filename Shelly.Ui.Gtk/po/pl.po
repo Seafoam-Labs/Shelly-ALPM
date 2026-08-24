@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-22 04:40+0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-08-13 08:06+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: Polish\n"
@@ -195,9 +195,9 @@ msgstr "Popularność"
 msgid "Search the AUR"
 msgstr "Przeszukaj AUR"
 
-#| msgid "The AUR has no browsable index type a package name to begin."
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "The AUR has no browsable index type a package name to begin."
 msgstr ""
+"AUR nie ma indeksu do przeglądania — wpisz nazwę pakietu, aby rozpocząć."
 
 msgid "Run checks"
 msgstr "Uruchom testy"
@@ -482,10 +482,6 @@ msgstr "Uruchamiaj ikonę w zasobniku automatycznie"
 msgid "Use weekly schedule"
 msgstr "Użyj harmonogramu tygodniowego"
 
-#| msgid "Tray Updates Icon"
-msgid "Tray update with ui"
-msgstr ""
-
 msgid "Tray Check Interval (Hours)"
 msgstr "Interwał sprawdzania przez ikonę w zasobniku (godziny)"
 
@@ -521,9 +517,6 @@ msgstr ":"
 
 msgid "Look & Feel"
 msgstr "Wygląd i zachowanie"
-
-msgid "Theme"
-msgstr ""
 
 msgid "Icons Enabled"
 msgstr "Ikony włączone"
@@ -575,6 +568,9 @@ msgstr "Bez potwierdzania"
 msgid "Enable Shelly Search"
 msgstr "Włącz wyszukiwarkę Shelly"
 
+msgid "Enable Package Downgrade"
+msgstr "Włącz obniżanie wersji pakietów"
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Włącz wizualizację WebView (eksperymentalne)"
 
@@ -601,9 +597,6 @@ msgstr "Sponsoruj"
 
 msgid "Toggle output"
 msgstr "Przełącz wyjście"
-
-msgid "Done"
-msgstr "Gotowe"
 
 msgid "Available Updates"
 msgstr "Dostępne aktualizacje"
@@ -804,6 +797,9 @@ msgstr "Skanowanie bezpieczeństwa ukończone — nie znaleziono problemów."
 
 msgid "used in"
 msgstr "używane w"
+
+msgid "Warning"
+msgstr "Ostrzeżenie"
 
 msgid "Install Anyway"
 msgstr "Zainstaluj mimo to"
@@ -1372,12 +1368,6 @@ msgstr "Włącz"
 msgid "AUR enabled"
 msgstr "AUR włączony"
 
-msgid "Classic"
-msgstr ""
-
-msgid "Midnight"
-msgstr ""
-
 msgid "System Default"
 msgstr "Domyślne ustawienie systemu"
 
@@ -1483,33 +1473,17 @@ msgstr "Sprawdzanie miejsca na dysku"
 msgid "Working"
 msgstr "Trwa wykonywanie"
 
+msgid "Done"
+msgstr "Gotowe"
+
 msgid "Failed"
 msgstr "Niepowodzenie"
-
-#| msgid "Installation complete."
-msgid "Transaction Completed"
-msgstr ""
-
-#| msgid "Operation failed"
-msgid "Transaction Failed"
-msgstr ""
-
-#| msgid "Cancelled"
-msgid "Transaction Cancelled"
-msgstr ""
 
 msgid "Finished"
 msgstr "Zakończono"
 
 msgid "exit"
 msgstr "wyjście"
-
-msgid "The operation was cancelled."
-msgstr ""
-
-#| msgid "Operation completed successfully"
-msgid "All operations finished successfully."
-msgstr ""
 
 msgid "Cancelled"
 msgstr "Anulowano"
@@ -1587,3 +1561,12 @@ msgstr "Ustawienia"
 
 msgid "Package"
 msgstr "Pakiet"
+
+msgid "Theme"
+msgstr ""
+
+msgid "Classic"
+msgstr ""
+
+msgid "Midnight"
+msgstr ""

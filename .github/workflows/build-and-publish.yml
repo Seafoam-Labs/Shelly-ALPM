@@ -151,7 +151,7 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig base-devel gtk4 glibc git vala
+          pacman -S --needed --noconfirm zig base-devel gtk4 wayland glibc git vala
       - uses: actions/checkout@v6
       - name: Build GTK GUI and test
         run: |

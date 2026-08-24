@@ -441,9 +441,9 @@ test "set then save round-trips nested enum fields" {
     try testing.expectEqual(@as(u8, 0), @intFromEnum(cfg.PackageInstallView));
 }
 
-test "theme defaults to classic" {
+test "theme defaults to midnight" {
     const cfg: ShellyConfig = .{};
-    try testing.expectEqual(AppTheme.classic, cfg.Theme);
+    try testing.expectEqual(AppTheme.midnight, cfg.Theme);
 }
 
 test "midnight theme survives save and reload" {
@@ -465,7 +465,7 @@ test "midnight theme survives save and reload" {
     try testing.expect(cfg.AurEnabled);
 }
 
-test "unknown theme falls back to classic without dropping valid fields" {
+test "unknown theme falls back to midnight without dropping valid fields" {
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
 
@@ -487,7 +487,7 @@ test "unknown theme falls back to classic without dropping valid fields" {
     try svc.load();
 
     const cfg = try svc.get();
-    try testing.expectEqual(AppTheme.classic, cfg.Theme);
+    try testing.expectEqual(AppTheme.midnight, cfg.Theme);
     try testing.expectEqual(false, cfg.RecommendedEnabled);
 }
 

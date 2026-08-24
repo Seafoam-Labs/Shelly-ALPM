@@ -7,7 +7,7 @@ pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
 license=('GPL-3.0-only')
-makedepends=('git' 'pkgconf' 'gtk4' 'zig>=0.16' 'clang' 'gettext' 'flatpak' 'ripgrep' 'go-md2man')
+makedepends=('git' 'pkgconf' 'gtk4>=4.18' 'wayland' 'zig>=0.16' 'clang' 'gettext' 'flatpak' 'ripgrep' 'go-md2man')
 
 # Source tarball from GitHub release
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/archive/v${pkgver}.tar.gz"
@@ -99,7 +99,8 @@ package_shelly() {
   backup=('etc/shellybuild.conf')
   depends=(
       'pacman'
-      'gtk4'
+      'gtk4>=4.18'
+      'wayland'
       'glib2'
       'sudo'
       'tar'

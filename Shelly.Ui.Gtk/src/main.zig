@@ -235,4 +235,6 @@ test {
     _ = @import("models/search_result.zig");
     _ = @import("g_objects/search_result_object.zig");
     _ = @import("pages/transaction_page.zig");
+    _ = @import("dialog/page/pkg_build.zig");
+    _ = @import("dialog/page/preview_pkgbuild.zig");
 }

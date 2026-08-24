@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-22 04:40+0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-06-17 11:40-0400\n"
 "Last-Translator: Ulaş Çakmak <celonfix@protonmail.com>\n"
 "Language-Team: Turkish (Turkiye)<>\n"
@@ -180,7 +180,7 @@ msgstr "Popülerlik"
 msgid "Search the AUR"
 msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "The AUR has no browsable index type a package name to begin."
 msgstr ""
 
 msgid "Run checks"
@@ -459,10 +459,6 @@ msgstr "Sistem Tepsisini Otomatik Başlatmaya Ekle"
 msgid "Use weekly schedule"
 msgstr "Haftalık program kullan"
 
-#| msgid "Tray Updates Icon"
-msgid "Tray update with ui"
-msgstr ""
-
 msgid "Tray Check Interval (Hours)"
 msgstr "Tepsi Kontrol Aralığı (Saat)"
 
@@ -499,9 +495,6 @@ msgstr ""
 
 msgid "Look & Feel"
 msgstr "Görünüm ve His"
-
-msgid "Theme"
-msgstr ""
 
 msgid "Icons Enabled"
 msgstr "Simgeler Etkin"
@@ -549,6 +542,9 @@ msgstr "Onay Yok"
 msgid "Enable Shelly Search"
 msgstr "Shelly Aramayı Etkinleştir"
 
+msgid "Enable Package Downgrade"
+msgstr "Paket Sürüm Düşürmeyi Etkinleştir"
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Webview Görselleştirmeyi Etkinleştir (Deneysel)"
 
@@ -574,9 +570,6 @@ msgid "Sponsor"
 msgstr "Sponsor"
 
 msgid "Toggle output"
-msgstr ""
-
-msgid "Done"
 msgstr ""
 
 msgid "Available Updates"
@@ -770,6 +763,9 @@ msgid "Security scan completed - no issues found."
 msgstr ""
 
 msgid "used in"
+msgstr ""
+
+msgid "Warning"
 msgstr ""
 
 msgid "Install Anyway"
@@ -1120,6 +1116,7 @@ msgstr ""
 msgid "Remove this Flatpak?"
 msgstr ""
 
+#| msgid "Flatpak"
 msgid "Remove Flatpak"
 msgstr ""
 
@@ -1129,9 +1126,11 @@ msgstr ""
 msgid "App ID"
 msgstr ""
 
+#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
+#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1153,6 +1152,7 @@ msgstr "Hayır"
 msgid "Keywords"
 msgstr ""
 
+#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1227,6 +1227,7 @@ msgstr ""
 msgid "Search failed"
 msgstr ""
 
+#| msgid "Installation Path"
 msgid "Installation in progress"
 msgstr ""
 
@@ -1236,9 +1237,11 @@ msgstr ""
 msgid "Enable at least one source filter above."
 msgstr ""
 
+#| msgid "Install Local"
 msgid "Install Packages"
 msgstr ""
 
+#| msgid "Install Selected"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1330,12 +1333,6 @@ msgid "Enable"
 msgstr ""
 
 msgid "AUR enabled"
-msgstr ""
-
-msgid "Classic"
-msgstr ""
-
-msgid "Midnight"
 msgstr ""
 
 msgid "System Default"
@@ -1443,28 +1440,16 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
+msgid "Done"
+msgstr ""
+
 msgid "Failed"
-msgstr ""
-
-msgid "Transaction Completed"
-msgstr ""
-
-msgid "Transaction Failed"
-msgstr ""
-
-msgid "Transaction Cancelled"
 msgstr ""
 
 msgid "Finished"
 msgstr ""
 
 msgid "exit"
-msgstr ""
-
-msgid "The operation was cancelled."
-msgstr ""
-
-msgid "All operations finished successfully."
 msgstr ""
 
 msgid "Cancelled"
@@ -1535,4 +1520,13 @@ msgid "Settings"
 msgstr "Ayarlar"
 
 msgid "Package"
+msgstr ""
+
+msgid "Theme"
+msgstr ""
+
+msgid "Classic"
+msgstr ""
+
+msgid "Midnight"
 msgstr ""

@@ -29,6 +29,11 @@ const PolkitDialog = @import("dialog/page/polkit_warning.zig").PolkitDialog;
 const DBus = @import("services/dbus.zig").DBus;
 const window_controls = @import("window_controls.zig");
 const Sidebar = @import("sidebar.zig").Sidebar;
+const wayland_blur = @import("wayland/blur.zig");
+
+fn shouldRequestBlur(theme: AppTheme, mode: NavMode) bool {
+    return theme == .midnight and mode == .sidebar;
+}
 
 const NavButton = struct {
     button: *gtk.Button,
@@ -42,7 +47,22 @@ const NavButton = struct {
 const MainColumn = struct {
     root: *gtk.Box,
     chrome: *gtk.Box,
+    topnav_scroll: *gtk.ScrolledWindow,
 };
+
+fn applyTopnavViewportWidth(topnav: *gtk.Box, viewport_width: c_int) void {
+    gtk.Widget.setSizeRequest(topnav.as(gtk.Widget), viewport_width, -1);
+}
+
+fn onTopnavViewportWidthChanged(
+    source: *gobject.Object,
+    _: *gobject.ParamSpec,
+    topnav: *gtk.Box,
+) callconv(.c) void {
+    const viewport: *gtk.Widget = @ptrCast(@alignCast(source));
+    const viewport_width = gtk.Widget.getWidth(viewport);
+    applyTopnavViewportWidth(topnav, viewport_width);
+}
 
 fn buildMainColumn(toggle: *gtk.Button, topnav: *gtk.Box, stack: *gtk.Stack) MainColumn {
     const root = gtk.Box.new(.vertical, 0);
@@ -51,11 +71,24 @@ fn buildMainColumn(toggle: *gtk.Button, topnav: *gtk.Box, stack: *gtk.Stack) Mai
     gtk.Widget.setVexpand(root.as(gtk.Widget), 1);
 
     const chrome = window_controls.buildChromeRow(toggle);
+    const topnav_scroll = gtk.ScrolledWindow.new();
+    gtk.Widget.addCssClass(topnav_scroll.as(gtk.Widget), "app-topbar-scroll");
+    gtk.ScrolledWindow.setPolicy(topnav_scroll, .automatic, .never);
+    gtk.ScrolledWindow.setOverlayScrolling(topnav_scroll, 0);
+    gtk.ScrolledWindow.setChild(topnav_scroll, topnav.as(gtk.Widget));
+    _ = gobject.Object.signals.notify.connect(
+        topnav_scroll.as(gobject.Object),
+        *gtk.Box,
+        &onTopnavViewportWidthChanged,
+        topnav,
+        .{ .detail = "width" },
+    );
+
     gtk.Box.append(root, chrome.as(gtk.Widget));
-    gtk.Box.append(root, topnav.as(gtk.Widget));
+    gtk.Box.append(root, topnav_scroll.as(gtk.Widget));
     gtk.Box.append(root, stack.as(gtk.Widget));
 
-    return .{ .root = root, .chrome = chrome };
+    return .{ .root = root, .chrome = chrome, .topnav_scroll = topnav_scroll };
 }
 
 pub const ShellyWindow = extern struct {
@@ -66,7 +99,7 @@ pub const ShellyWindow = extern struct {
     const Private = struct {
         root_overlay: *gtk.Overlay,
         shell_box: *gtk.Box,
-        lockout_overlay: *gtk.Box,
+        lockout_overlay: *gtk.Overlay,
         lockout_content: *gtk.Box,
         content_stack: *gtk.Stack,
         main_column: *gtk.Box,
@@ -75,6 +108,8 @@ pub const ShellyWindow = extern struct {
         rail: ?*gtk.Box,
         topnav: ?*gtk.Box,
         nav_buttons: std.ArrayListUnmanaged(*NavButton),
+        blur: ?*wayland_blur.Blur,
+        active_theme: AppTheme,
         collapsed: bool,
         nav_mode: NavMode,
         pending_nav: NavMode,
@@ -108,15 +143,20 @@ pub const ShellyWindow = extern struct {
         p.rail = null;
         p.topnav = null;
         p.nav_buttons = .empty;
+        p.blur = null;
+        p.active_theme = .classic;
         p.collapsed = readSidebarCollapsed();
         p.nav_mode = .sidebar;
         p.pending_nav = .sidebar;
+        window_controls.installLockoutDragRegion(p.lockout_overlay);
         build_shell(self);
         populate_stack(self);
         applyConfig(self);
         applyDefaultPage(self);
         showWelcomeIfFirstStart(self);
         checkPolkitLockout(self);
+        _ = gtk.Widget.signals.map.connect(self.as(gtk.Widget), *ShellyWindow, &on_map, self, .{});
+        _ = gtk.Widget.signals.unmap.connect(self.as(gtk.Widget), *ShellyWindow, &on_unmap, self, .{});
         _ = gtk.Window.signals.close_request.connect(self.as(gtk.Window), *ShellyWindow, &on_close_request, self, .{});
     }
 
@@ -144,7 +184,41 @@ pub const ShellyWindow = extern struct {
     }
 
     pub fn applyTheme(self: *ShellyWindow, theme: AppTheme) void {
+        self.private().active_theme = theme;
         theme_manager.apply(self.as(gtk.Widget), theme);
+        updateBlurRegion(self);
+    }
+
+    fn on_map(_: *gtk.Widget, self: *ShellyWindow) callconv(.c) void {
+        const p = self.private();
+        if (p.blur != null) return;
+
+        const native = gtk.Widget.getNative(self.as(gtk.Widget)) orelse return;
+        const surface = gtk.Native.getSurface(native) orelse return;
+        const display = gtk.Widget.getDisplay(self.as(gtk.Widget));
+        p.blur = wayland_blur.Blur.init(display, surface);
+        updateBlurRegion(self);
+    }
+
+    fn on_unmap(_: *gtk.Widget, self: *ShellyWindow) callconv(.c) void {
+        const p = self.private();
+        if (p.blur) |blur| blur.deinit();
+        p.blur = null;
+    }
+
+    fn on_blur_geometry_changed(_: *gobject.Object, _: *gobject.ParamSpec, self: *ShellyWindow) callconv(.c) void {
+        updateBlurRegion(self);
+    }
+
+    fn updateBlurRegion(self: *ShellyWindow) void {
+        const p = self.private();
+        const blur = p.blur orelse return;
+        const rail = p.rail orelse return;
+        blur.update(
+            shouldRequestBlur(p.active_theme, p.nav_mode),
+            gtk.Widget.getWidth(rail.as(gtk.Widget)),
+            gtk.Widget.getHeight(self.as(gtk.Widget)),
+        );
     }
 
     fn on_close_request(_: *gtk.Window, self: *ShellyWindow) callconv(.c) c_int {
@@ -236,6 +310,21 @@ pub const ShellyWindow = extern struct {
         gtk.Box.append(p.shell_box, main.root.as(gtk.Widget));
         window_controls.installOverlay(p.root_overlay);
 
+        _ = gobject.Object.signals.notify.connect(
+            p.rail.?.as(gobject.Object),
+            *ShellyWindow,
+            &on_blur_geometry_changed,
+            self,
+            .{ .detail = "width" },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            self.as(gobject.Object),
+            *ShellyWindow,
+            &on_blur_geometry_changed,
+            self,
+            .{ .detail = "height" },
+        );
+
         applyNavMode(self, readNavMode());
     }
 
@@ -285,6 +374,7 @@ pub const ShellyWindow = extern struct {
             if (sidebar) "app-window-chrome-sidebar" else "app-window-chrome-topbar",
         );
 
+        updateBlurRegion(self);
         sync_active_nav(self);
     }
 
@@ -317,10 +407,12 @@ pub const ShellyWindow = extern struct {
         p.topnav = @ptrCast(bar.as(gobject.Object).ref());
 
         const left_spacer = gtk.Box.new(.horizontal, 0);
+        gtk.Widget.addCssClass(left_spacer.as(gtk.Widget), "app-topbar-spacer");
         gtk.Widget.setHexpand(left_spacer.as(gtk.Widget), 1);
         gtk.Box.append(bar, left_spacer.as(gtk.Widget));
 
         const items = gtk.Box.new(.horizontal, 0);
+        gtk.Widget.addCssClass(items.as(gtk.Widget), "app-topbar-items");
         gtk.Box.append(bar, items.as(gtk.Widget));
 
         add_nav_button(self, items, stack, false, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
@@ -330,23 +422,12 @@ pub const ShellyWindow = extern struct {
         add_nav_button(self, items, stack, false, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
         add_nav_button(self, items, stack, false, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
         add_nav_button(self, items, stack, false, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
+        add_nav_button(self, items, stack, false, "settings", SettingsPage.icon_name, translations._(SettingsPage.title));
 
         const right_spacer = gtk.Box.new(.horizontal, 0);
+        gtk.Widget.addCssClass(right_spacer.as(gtk.Widget), "app-topbar-spacer");
         gtk.Widget.setHexpand(right_spacer.as(gtk.Widget), 1);
         gtk.Box.append(bar, right_spacer.as(gtk.Widget));
-
-        const menu_button = gtk.MenuButton.new();
-        gtk.Widget.addCssClass(menu_button.as(gtk.Widget), "flat");
-        gtk.MenuButton.setIconName(menu_button, "view-more-symbolic");
-        const popover = gtk.Popover.new();
-        const menu_box = gtk.Box.new(.vertical, 4);
-        const sp_btn = gtk.Button.newWithLabel(translations._("Settings"));
-        gtk.Widget.addCssClass(sp_btn.as(gtk.Widget), "flat");
-        _ = gtk.Button.signals.clicked.connect(sp_btn, *ShellyWindow, &on_settings, self, .{});
-        gtk.Box.append(menu_box, sp_btn.as(gtk.Widget));
-        gtk.Popover.setChild(popover, menu_box.as(gtk.Widget));
-        gtk.MenuButton.setPopover(menu_button, popover);
-        gtk.Box.append(bar, menu_button.as(gtk.Widget));
 
         return bar;
     }
@@ -367,6 +448,7 @@ pub const ShellyWindow = extern struct {
                 std.log.err("window: failed to save sidebar state: {t}", .{err});
             };
         }
+        updateBlurRegion(self);
     }
 
     fn persistSidebarCollapsed(config: *ConfigResolver, collapsed: bool) !void {
@@ -393,7 +475,7 @@ pub const ShellyWindow = extern struct {
             gtk.Revealer.setRevealChild(revealer, @intFromBool(!p.collapsed));
         } else {
             gtk.Revealer.setTransitionType(revealer, .none);
-            gtk.Revealer.setRevealChild(revealer, 0);
+            gtk.Revealer.setRevealChild(revealer, 1);
         }
         gtk.Revealer.setChild(revealer, label.as(gtk.Widget));
         gtk.Box.append(box, revealer.as(gtk.Widget));
@@ -485,14 +567,6 @@ pub const ShellyWindow = extern struct {
             }
         }
         sync_active_nav(self);
-    }
-
-    fn on_settings(btn: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
-        const p = self.private();
-        gtk.Stack.setVisibleChildName(p.content_stack, "settings");
-        if (gtk.Widget.getAncestor(btn.as(gtk.Widget), gtk.Popover.getGObjectType())) |pop| {
-            gtk.Popover.popdown(@ptrCast(@alignCast(pop)));
-        }
     }
 
     fn populate_stack(self: *ShellyWindow) void {
@@ -617,6 +691,8 @@ pub const ShellyWindow = extern struct {
 
     fn finalize(self: *ShellyWindow) callconv(.c) void {
         const p = self.private();
+        if (p.blur) |blur| blur.deinit();
+        p.blur = null;
         for (p.nav_buttons.items) |nb| {
             std.heap.c_allocator.destroy(nb);
         }
@@ -662,8 +738,69 @@ test "main column keeps chrome beside the full-height sidebar" {
     try std.testing.expect(gtk.Widget.getNextSibling(sidebar.root.as(gtk.Widget)) == main.root.as(gtk.Widget));
     try std.testing.expect(gtk.Widget.getFirstChild(main.root.as(gtk.Widget)) == main.chrome.as(gtk.Widget));
     try std.testing.expect(gtk.Widget.getParent(sidebar.collapse_button.as(gtk.Widget)) == main.chrome.as(gtk.Widget));
-    try std.testing.expect(gtk.Widget.getNextSibling(main.chrome.as(gtk.Widget)) == topnav.as(gtk.Widget));
-    try std.testing.expect(gtk.Widget.getNextSibling(topnav.as(gtk.Widget)) == stack.as(gtk.Widget));
+    try std.testing.expect(gtk.Widget.getNextSibling(main.chrome.as(gtk.Widget)) == main.topnav_scroll.as(gtk.Widget));
+    try std.testing.expect(
+        gtk.Widget.getAncestor(topnav.as(gtk.Widget), gtk.ScrolledWindow.getGObjectType()) ==
+            main.topnav_scroll.as(gtk.Widget),
+    );
+    try std.testing.expect(gtk.Widget.getNextSibling(main.topnav_scroll.as(gtk.Widget)) == stack.as(gtk.Widget));
+
+    applyTopnavViewportWidth(topnav, 900);
+    var minimum_width: c_int = 0;
+    gtk.Widget.measure(topnav.as(gtk.Widget), .horizontal, -1, &minimum_width, null, null, null);
+    try std.testing.expectEqual(@as(c_int, 900), minimum_width);
+}
+
+test "topbar is scrollable and keeps every destination labeled" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const sidebar = Sidebar.init(false);
+    const topnav = gtk.Box.new(.horizontal, 0);
+    const stack = gtk.Stack.new();
+    const main = buildMainColumn(sidebar.collapse_button, topnav, stack);
+    _ = main.root.as(gobject.Object).refSink();
+    defer main.root.as(gobject.Object).unref();
+
+    const topnav_container = gtk.Widget.getNextSibling(main.chrome.as(gtk.Widget)) orelse
+        return error.TestUnexpectedResult;
+    const scroll = gobject.ext.cast(gtk.ScrolledWindow, topnav_container) orelse
+        return error.TestUnexpectedResult;
+    try std.testing.expect(
+        gtk.Widget.getAncestor(topnav.as(gtk.Widget), gtk.ScrolledWindow.getGObjectType()) ==
+            scroll.as(gtk.Widget),
+    );
+
+    const app = gtk.Application.new("com.shellyorg.shelly.TopbarTest", .{});
+    defer app.unref();
+    const window = ShellyWindow.new(app);
+    _ = window.as(gobject.Object).refSink();
+    defer window.as(gobject.Object).unref();
+
+    const bar = window.private().topnav.?;
+    const left_spacer = gtk.Widget.getFirstChild(bar.as(gtk.Widget)) orelse
+        return error.TestUnexpectedResult;
+    const items = gtk.Widget.getNextSibling(left_spacer) orelse
+        return error.TestUnexpectedResult;
+    const right_spacer = gtk.Widget.getNextSibling(items) orelse
+        return error.TestUnexpectedResult;
+    try std.testing.expect(gtk.Widget.hasCssClass(left_spacer, "app-topbar-spacer") != 0);
+    try std.testing.expect(gtk.Widget.hasCssClass(items, "app-topbar-items") != 0);
+    try std.testing.expect(gtk.Widget.hasCssClass(right_spacer, "app-topbar-spacer") != 0);
+    try std.testing.expect(gtk.Widget.getHexpand(left_spacer) != 0);
+    try std.testing.expect(gtk.Widget.getHexpand(right_spacer) != 0);
+    try std.testing.expect(gtk.Widget.getNextSibling(right_spacer) == null);
+
+    var topbar_count: usize = 0;
+    var has_settings = false;
+    for (window.private().nav_buttons.items) |nb| {
+        if (nb.is_rail) continue;
+        topbar_count += 1;
+        try std.testing.expect(gtk.Revealer.getRevealChild(nb.revealer) != 0);
+        if (std.mem.eql(u8, nb.name, "settings")) has_settings = true;
+    }
+
+    try std.testing.expectEqual(@as(usize, 8), topbar_count);
+    try std.testing.expect(has_settings);
 }
 
 test "sidebar collapsed state survives save and reload" {
@@ -683,4 +820,41 @@ test "sidebar collapsed state survives save and reload" {
 
     const config = try reloaded.get();
     try std.testing.expectEqual(false, config.SidebarCollapsed);
+}
+
+test "main window close request allows GTK to destroy the window after saving size" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const app = gtk.Application.new(
+        "com.shellyorg.shelly.CloseRequestTest",
+        .{ .non_unique = true },
+    );
+    defer app.unref();
+    try std.testing.expect(gio.Application.register(app.as(gio.Application), null, null) != 0);
+    const window = ShellyWindow.new(app);
+    _ = window.as(gobject.Object).refSink();
+    defer window.as(gobject.Object).unref();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var config = ConfigResolver.initDir(std.testing.allocator, std.testing.io, tmp.dir);
+    defer config.deinit();
+    try config.load();
+
+    const previous_config = runtime.config;
+    runtime.config = &config;
+    defer runtime.config = previous_config;
+
+    try std.testing.expectEqual(
+        @as(c_int, 0),
+        ShellyWindow.on_close_request(window.as(gtk.Window), window),
+    );
+}
+
+test "native blur is requested only for the Midnight sidebar" {
+    try std.testing.expect(shouldRequestBlur(.midnight, .sidebar));
+    try std.testing.expect(!shouldRequestBlur(.midnight, .topbar));
+    try std.testing.expect(!shouldRequestBlur(.classic, .sidebar));
+    try std.testing.expect(!shouldRequestBlur(.classic, .topbar));
+    _ = wayland_blur.Region;
 }

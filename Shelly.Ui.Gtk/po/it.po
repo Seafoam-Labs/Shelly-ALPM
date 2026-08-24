@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-22 04:40+0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-06-23 19:13+0200\n"
 "Last-Translator: csnyder@seafoam-labs.org\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -181,7 +181,7 @@ msgstr "Popolarità"
 msgid "Search the AUR"
 msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "The AUR has no browsable index type a package name to begin."
 msgstr ""
 
 msgid "Run checks"
@@ -465,10 +465,6 @@ msgstr "Aggiungi icona del vassoio all'avvio automatico"
 msgid "Use weekly schedule"
 msgstr "Usa programmazione settimanale"
 
-#| msgid "Tray Updates Icon"
-msgid "Tray update with ui"
-msgstr ""
-
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervallo di controllo del vassoio (ore)"
 
@@ -504,9 +500,6 @@ msgstr ""
 
 msgid "Look & Feel"
 msgstr "Aspetto e funzionalità"
-
-msgid "Theme"
-msgstr ""
 
 msgid "Icons Enabled"
 msgstr "Icone abilitate"
@@ -554,6 +547,9 @@ msgstr "Nessuna conferma"
 msgid "Enable Shelly Search"
 msgstr "Abilita ricerca di Shelly"
 
+msgid "Enable Package Downgrade"
+msgstr "Abilita il downgrade dei pacchetti"
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Abilita la visualizzazione Webview (sperimentale)"
 
@@ -579,9 +575,6 @@ msgid "Sponsor"
 msgstr "Sponsor"
 
 msgid "Toggle output"
-msgstr ""
-
-msgid "Done"
 msgstr ""
 
 msgid "Available Updates"
@@ -774,6 +767,9 @@ msgid "Security scan completed - no issues found."
 msgstr ""
 
 msgid "used in"
+msgstr ""
+
+msgid "Warning"
 msgstr ""
 
 msgid "Install Anyway"
@@ -1125,6 +1121,7 @@ msgstr ""
 msgid "Remove this Flatpak?"
 msgstr ""
 
+#| msgid "Flatpak"
 msgid "Remove Flatpak"
 msgstr ""
 
@@ -1134,9 +1131,11 @@ msgstr ""
 msgid "App ID"
 msgstr ""
 
+#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
+#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1158,6 +1157,7 @@ msgstr "No"
 msgid "Keywords"
 msgstr ""
 
+#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1231,6 +1231,7 @@ msgstr ""
 msgid "Search failed"
 msgstr ""
 
+#| msgid "Installation Path"
 msgid "Installation in progress"
 msgstr ""
 
@@ -1240,9 +1241,11 @@ msgstr ""
 msgid "Enable at least one source filter above."
 msgstr ""
 
+#| msgid "Install Local"
 msgid "Install Packages"
 msgstr ""
 
+#| msgid "Install Selected"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1336,12 +1339,6 @@ msgid "Enable"
 msgstr ""
 
 msgid "AUR enabled"
-msgstr ""
-
-msgid "Classic"
-msgstr ""
-
-msgid "Midnight"
 msgstr ""
 
 msgid "System Default"
@@ -1449,28 +1446,16 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
+msgid "Done"
+msgstr ""
+
 msgid "Failed"
-msgstr ""
-
-msgid "Transaction Completed"
-msgstr ""
-
-msgid "Transaction Failed"
-msgstr ""
-
-msgid "Transaction Cancelled"
 msgstr ""
 
 msgid "Finished"
 msgstr ""
 
 msgid "exit"
-msgstr ""
-
-msgid "The operation was cancelled."
-msgstr ""
-
-msgid "All operations finished successfully."
 msgstr ""
 
 msgid "Cancelled"
@@ -1541,4 +1526,13 @@ msgid "Settings"
 msgstr "Impostazioni"
 
 msgid "Package"
+msgstr ""
+
+msgid "Theme"
+msgstr ""
+
+msgid "Classic"
+msgstr ""
+
+msgid "Midnight"
 msgstr ""

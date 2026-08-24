@@ -6,6 +6,73 @@
   background-color: @theme_bg_color;
 }
 
+.welcome-step,
+.welcome-step-scroll,
+.welcome-step-scroll > viewport {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.welcome-card {
+  margin: 1em;
+  padding: 1.5em;
+  border: 0;
+  border-radius: 0;
+  border-spacing: 0.8em;
+  background-color: transparent;
+}
+
+.welcome-intro-card {
+  padding: 2em;
+}
+
+.welcome-hero {
+  border-spacing: 1em;
+}
+
+.welcome-hero-icon {
+  min-width: 3em;
+  min-height: 3em;
+  -gtk-icon-size: 3em;
+}
+
+.welcome-option-list {
+  margin-top: 0.4em;
+  border-spacing: 0.55em;
+}
+
+.welcome-option-row {
+  min-height: 3em;
+  padding: 0.65em 0.8em;
+  border: 1px solid alpha(@theme_fg_color, 0.10);
+  border-radius: 0.75em;
+  border-spacing: 0.7em;
+  background-color: alpha(@theme_fg_color, 0.045);
+}
+
+.welcome-option-row:hover {
+  background-color: alpha(@theme_fg_color, 0.075);
+}
+
+.welcome-option-row image {
+  -gtk-icon-size: 1.25em;
+}
+
+.welcome-navigation {
+  min-height: 3em;
+  padding: 0.65em 1em;
+  border-top: 1px solid alpha(@theme_fg_color, 0.10);
+  border-spacing: 0.6em;
+  background-color: alpha(@theme_bg_color, 0.92);
+}
+
+.welcome-nav-button {
+  min-width: 6em;
+  min-height: 2.5em;
+  padding: 0.35em 1em;
+}
+
 .lockout-card {
   background-color: @theme_bg_color;
   border-radius: 12px;
@@ -107,12 +174,8 @@
 }
 
 .app-window-chrome-row {
-  min-height: 1em;
-  background: transparent;
-}
-
-.app-window-chrome-row.app-window-chrome-sidebar {
   min-height: 2em;
+  background: transparent;
 }
 
 .sidebar-collapse-button {
@@ -128,6 +191,15 @@
 
 .app-window-drag-region {
   background: transparent;
+}
+
+.app-window-lockout-drag-region {
+  min-height: 2em;
+  margin-right: 10em;
+}
+
+.app-window-dialog-drag-region {
+  min-height: 2em;
 }
 
 .app-window-resize-handle {
@@ -187,25 +259,44 @@
   -gtk-icon-size: 1em;
 }
 
+.app-topbar-scroll,
+.app-topbar-scroll > viewport {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.app-topbar-scroll scrollbar.horizontal {
+  min-height: 0.45em;
+}
+
 .app-topbar {
   margin: 0;
-  padding: 0 5.75em 0 0.125em;
+  padding: 0.125em 0.375em;
   background: transparent;
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  border-spacing: 0.125em;
+}
+
+.app-topbar-items {
+  border-spacing: 0.4em;
 }
 
 .app-topbar .app-nav-button {
-  min-width: 1.75em;
-  min-height: 1.75em;
-  margin: 0 0.0625em;
-  padding: 0.25em;
+  min-height: 2.15em;
+  margin: 0;
+  padding: 0.2em 0.55em;
+  border-radius: 0.5em;
 }
 
 .app-topbar .app-nav-button image {
   -gtk-icon-size: 0.9em;
+}
+
+.app-topbar .nav-label {
+  margin-left: 0.4em;
+  font-size: 0.85em;
 }
 
 .app-window-controls-overlay .app-window-control:hover {
@@ -269,6 +360,19 @@
   padding: 14px 16px;
 }
 
+.settings-section > box {
+  padding: 0.45em 0.65em;
+  border-radius: 0.55em;
+}
+
+.settings-section.settings-section-wide {
+  min-width: 52.25em;
+}
+
+.settings-section > box:hover {
+  background-color: alpha(@theme_fg_color, 0.07);
+}
+
 .pkg-name {
   font-size: 1.0em;
   font-weight: 600;
@@ -291,14 +395,6 @@
 .pkg-status.status-failed {
   color: @error_bg_color;
   background-color: alpha(@error_bg_color, 0.1);
-}
-
-.question-layer {
-  background-color: @theme_bg_color;
-  border: 1px solid alpha(@theme_fg_color, 0.12);
-  border-radius: 12px;
-  padding: 18px;
-  box-shadow: 0 4px 16px alpha(black, 0.35);
 }
 
 .toast-revealer {

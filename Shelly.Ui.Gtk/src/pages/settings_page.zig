@@ -1,6 +1,7 @@
 const std = @import("std");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
+const gdk = bindings.gdk;
 const gobject = bindings.gobject;
 const gio = bindings.gio;
 const glib = bindings.glib;
@@ -24,6 +25,7 @@ const VersionHistoryDialog = @import("../dialog/page/version_history.zig").Versi
 const HistoryEntry = @import("../dialog/page/version_history.zig").Entry;
 const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
 const translations = @import("../helpers/translations.zig");
+const settings_layout = @import("../helpers/settings_layout.zig");
 const options = @import("options");
 
 pub const SettingsPage = ShellySettingsPage;
@@ -47,7 +49,9 @@ pub const ShellySettingsPage = extern struct {
     const Private = struct {
         page_overlay: *gtk.Overlay,
         settings_stack: *gtk.Stack,
-
+        general_settings_section: *gtk.Box,
+        look_feel_settings_section: *gtk.Box,
+        advanced_settings_section: *gtk.Box,
         // General
         aur_switch: *gtk.Switch,
         language_drop: *gtk.DropDown,
@@ -112,6 +116,8 @@ pub const ShellySettingsPage = extern struct {
         last_saved_theme: AppTheme,
         support_install_pending: ?SupportFeature,
         support_install_stage: SupportInstallStage,
+        surface: ?*gdk.Surface,
+        surface_layout_handler: c_ulong,
 
         page_filter: PageFilter,
 
@@ -151,6 +157,8 @@ pub const ShellySettingsPage = extern struct {
         p.last_saved_theme = .classic;
         p.support_install_pending = null;
         p.support_install_stage = .dependencies;
+        p.surface = null;
+        p.surface_layout_handler = 0;
         p.page_filter = .{};
 
         populateDropdowns(p);
@@ -303,6 +311,7 @@ pub const ShellySettingsPage = extern struct {
     }
 
     pub fn onMap(self: *Self) void {
+        self.connectSurfaceLayout();
         const p = self.priv();
         if (p.loaded) return;
         p.loaded = true;
@@ -333,8 +342,53 @@ pub const ShellySettingsPage = extern struct {
         applyTrayVisibility(p);
     }
 
+    fn updateSettingsLayout(self: *Self, width: c_int) void {
+        const p = self.priv();
+        const wide = settings_layout.usesWideLayout(width);
+        const sections = .{
+            p.general_settings_section,
+            p.look_feel_settings_section,
+            p.advanced_settings_section,
+        };
+        inline for (sections) |section| {
+            if (wide) {
+                gtk.Widget.addCssClass(section.as(gtk.Widget), "settings-section-wide");
+            } else {
+                gtk.Widget.removeCssClass(section.as(gtk.Widget), "settings-section-wide");
+            }
+        }
+    }
+
+    fn connectSurfaceLayout(self: *Self) void {
+        const p = self.priv();
+        if (p.surface_layout_handler != 0) return;
+
+        const native = gtk.Widget.getNative(self.as(gtk.Widget)) orelse return;
+        const surface = gtk.Native.getSurface(native) orelse return;
+        p.surface = surface;
+        p.surface_layout_handler = gdk.Surface.signals.layout.connect(
+            surface,
+            *Self,
+            &onSurfaceLayout,
+            self,
+            .{},
+        );
+        updateSettingsLayout(self, gdk.Surface.getWidth(surface));
+    }
+
+    fn onSurfaceLayout(_: *gdk.Surface, width: c_int, _: c_int, self: *Self) callconv(.c) void {
+        updateSettingsLayout(self, width);
+    }
+
     pub fn onUnmap(self: *Self) void {
         const p = self.priv();
+        if (p.surface) |surface| {
+            if (p.surface_layout_handler != 0) {
+                gobject.signalHandlerDisconnect(surface.as(gobject.Object), p.surface_layout_handler);
+            }
+        }
+        p.surface = null;
+        p.surface_layout_handler = 0;
         if (p.save_source != 0) {
             _ = glib.Source.remove(p.save_source);
             p.save_source = 0;
@@ -1112,6 +1166,9 @@ pub const ShellySettingsPage = extern struct {
     const template_children = .{
         .{ "page_overlay", @offsetOf(Private, "page_overlay") },
         .{ "settings_stack", @offsetOf(Private, "settings_stack") },
+        .{ "general_settings_section", @offsetOf(Private, "general_settings_section") },
+        .{ "look_feel_settings_section", @offsetOf(Private, "look_feel_settings_section") },
+        .{ "advanced_settings_section", @offsetOf(Private, "advanced_settings_section") },
 
         // General
         .{ "aur_switch", @offsetOf(Private, "aur_switch") },

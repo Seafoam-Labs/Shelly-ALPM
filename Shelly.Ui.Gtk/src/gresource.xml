@@ -45,7 +45,7 @@
     <file>ui/flatpak_package_detail.ui</file>
     <file>ui/update_page.ui</file>
     <file>ui/recommend_page.ui</file>
-    <file>style.css</file>
-    <file>theme-midnight.css</file>
+    <file>themes/style.css</file>
+    <file>themes/theme-midnight.css</file>
   </gresource>
 </gresources>

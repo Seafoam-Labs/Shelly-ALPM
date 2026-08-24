@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig flatpak base-devel gtk4 clang glibc git gettext libarchive curl vala meson ninja json-glib ripgrep
+          pacman -S --needed --noconfirm zig flatpak base-devel gtk4 wayland clang glibc git gettext libarchive curl vala meson ninja json-glib ripgrep
 
       # Checkout only after git is installed in the container.
       - uses: actions/checkout@v6

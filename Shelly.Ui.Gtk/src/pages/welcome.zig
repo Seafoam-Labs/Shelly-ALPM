@@ -468,3 +468,28 @@ pub const WelcomePage = extern struct {
         }
     };
 };
+
+test "welcome steps scroll while navigation stays outside the stack" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const page = WelcomePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+
+    const p = page.priv();
+    try std.testing.expect(gtk.Widget.hasCssClass(p.nav_bar.as(gtk.Widget), "welcome-navigation") != 0);
+    try std.testing.expect(
+        gtk.Widget.getParent(p.nav_bar.as(gtk.Widget)) ==
+            gtk.Widget.getParent(p.welcome_stack.as(gtk.Widget)),
+    );
+
+    const steps = [_]*gtk.Box{ p.page_welcome, p.page_sources, p.page_appearance };
+    for (steps) |step| {
+        try std.testing.expect(gtk.Widget.hasCssClass(step.as(gtk.Widget), "welcome-step") != 0);
+        const first = gtk.Widget.getFirstChild(step.as(gtk.Widget)) orelse
+            return error.TestUnexpectedResult;
+        const scroll = gobject.ext.cast(gtk.ScrolledWindow, first) orelse
+            return error.TestUnexpectedResult;
+        try std.testing.expect(gtk.ScrolledWindow.getChild(scroll) != null);
+    }
+}

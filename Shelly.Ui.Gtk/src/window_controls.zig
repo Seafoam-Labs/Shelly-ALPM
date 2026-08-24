@@ -52,6 +52,35 @@ pub fn installOverlay(overlay: *gtk.Overlay) void {
     gtk.Overlay.setMeasureOverlay(overlay, controls.as(gtk.Widget), 0);
 }
 
+pub fn installLockoutDragRegion(overlay: *gtk.Overlay) void {
+    const drag_region = buildDragRegion();
+    gtk.Widget.addCssClass(drag_region.as(gtk.Widget), "app-window-lockout-drag-region");
+    gtk.Widget.setValign(drag_region.as(gtk.Widget), .start);
+    gtk.Overlay.addOverlay(overlay, drag_region.as(gtk.Widget));
+    gtk.Overlay.setMeasureOverlay(overlay, drag_region.as(gtk.Widget), 0);
+}
+
+pub fn setOverlayEnabled(overlay: *gtk.Overlay, enabled: bool) void {
+    var child = gtk.Widget.getFirstChild(overlay.as(gtk.Widget));
+    while (child) |current| : (child = gtk.Widget.getNextSibling(current)) {
+        const is_custom_chrome =
+            gtk.Widget.hasCssClass(current, "app-window-controls-overlay") != 0 or
+            gtk.Widget.hasCssClass(current, "app-window-resize-handle") != 0;
+        if (is_custom_chrome) gtk.Widget.setVisible(current, @intFromBool(enabled));
+    }
+}
+
+pub fn configureChildWindow(
+    window: *gtk.Window,
+    overlay: *gtk.Overlay,
+    drag_region: *gtk.Widget,
+    custom_chrome_enabled: bool,
+) void {
+    setOverlayEnabled(overlay, custom_chrome_enabled);
+    gtk.Widget.setVisible(drag_region, @intFromBool(custom_chrome_enabled));
+    if (!custom_chrome_enabled) gtk.Window.setTitlebar(window, null);
+}
+
 fn buildDragRegion() *gtk.WindowHandle {
     const drag_region = gtk.WindowHandle.new();
     const hitbox = gtk.Box.new(.horizontal, 0);
@@ -223,6 +252,26 @@ test "chrome row keeps the sidebar toggle outside a vertically fixed drag area" 
     try std.testing.expectEqual(gtk.Align.fill, gtk.Widget.getValign(drag_region));
 }
 
+test "lockout overlay exposes a full-width window handle without changing layout" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const overlay = gtk.Overlay.new();
+    _ = overlay.as(gobject.Object).refSink();
+    defer overlay.as(gobject.Object).unref();
+    const content = gtk.Box.new(.vertical, 0);
+    gtk.Overlay.setChild(overlay, content.as(gtk.Widget));
+
+    installLockoutDragRegion(overlay);
+
+    try std.testing.expect(gtk.Overlay.getChild(overlay) == content.as(gtk.Widget));
+    const drag_region = gtk.Widget.getNextSibling(content.as(gtk.Widget)) orelse return error.TestUnexpectedResult;
+    try std.testing.expect(gobject.ext.cast(gtk.WindowHandle, drag_region) != null);
+    try std.testing.expect(gtk.Widget.hasCssClass(drag_region, "app-window-lockout-drag-region") != 0);
+    try std.testing.expectEqual(gtk.Align.start, gtk.Widget.getValign(drag_region));
+    try std.testing.expectEqual(@as(c_int, 1), gtk.Widget.getHexpand(drag_region));
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Overlay.getMeasureOverlay(overlay, drag_region));
+}
+
 test "overlay chrome exposes resize handles for every edge and corner" {
     if (gtk.initCheck() == 0) return error.SkipZigTest;
 
@@ -250,4 +299,55 @@ test "overlay chrome exposes resize handles for every edge and corner" {
         }
         try std.testing.expect(found);
     }
+}
+
+test "custom overlay chrome can be disabled without hiding window content" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const overlay = gtk.Overlay.new();
+    _ = overlay.as(gobject.Object).refSink();
+    defer overlay.as(gobject.Object).unref();
+    const content = gtk.Box.new(.vertical, 0);
+    gtk.Overlay.setChild(overlay, content.as(gtk.Widget));
+    installOverlay(overlay);
+
+    setOverlayEnabled(overlay, false);
+    try std.testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(content.as(gtk.Widget)));
+
+    var chrome_count: usize = 0;
+    var child = gtk.Widget.getNextSibling(content.as(gtk.Widget));
+    while (child) |current| : (child = gtk.Widget.getNextSibling(current)) {
+        chrome_count += 1;
+        try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(current));
+    }
+    try std.testing.expectEqual(resize_handles.len + 1, chrome_count);
+
+    setOverlayEnabled(overlay, true);
+    child = gtk.Widget.getNextSibling(content.as(gtk.Widget));
+    while (child) |current| : (child = gtk.Widget.getNextSibling(current)) {
+        try std.testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(current));
+    }
+}
+
+test "Classic child window restores native decorations and hides custom drag chrome" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const window = gtk.Window.new();
+    _ = window.as(gobject.Object).refSink();
+    defer window.as(gobject.Object).unref();
+    const titlebar = gtk.Box.new(.horizontal, 0);
+    gtk.Window.setTitlebar(window, titlebar.as(gtk.Widget));
+    const overlay = gtk.Overlay.new();
+    gtk.Window.setChild(window, overlay.as(gtk.Widget));
+    const content = gtk.Box.new(.vertical, 0);
+    gtk.Overlay.setChild(overlay, content.as(gtk.Widget));
+    const drag_region = buildDragRegion();
+    gtk.Overlay.addOverlay(overlay, drag_region.as(gtk.Widget));
+    installOverlay(overlay);
+
+    configureChildWindow(window, overlay, drag_region.as(gtk.Widget), false);
+
+    try std.testing.expect(gtk.Window.getTitlebar(window) == null);
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(drag_region.as(gtk.Widget)));
+    try std.testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(content.as(gtk.Widget)));
 }

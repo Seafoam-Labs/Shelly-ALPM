@@ -26,7 +26,7 @@
         </object>
       </child>
       <child type="overlay">
-        <object class="GtkBox" id="lockout_overlay">
+        <object class="GtkOverlay" id="lockout_overlay">
           <property name="visible">false</property>
           <property name="hexpand">true</property>
           <property name="vexpand">true</property>
@@ -42,6 +42,9 @@
               <property name="valign">fill</property>
               <property name="hexpand">true</property>
               <property name="vexpand">true</property>
+              <style>
+                <class name="lockout-content"/>
+              </style>
             </object>
           </child>
         </object>

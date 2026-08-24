@@ -7,16 +7,44 @@
     <property name="resizable">true</property>
     <property name="default-width">720</property>
     <property name="default-height">560</property>
-    <style><class name="dialog-surface"/></style>
+    <style>
+      <class name="dialog-surface"/>
+      <class name="app-window-surface"/>
+      <class name="pkgbuild-window"/>
+    </style>
     <signal name="close-request" handler="on_close_request" swapped="true"/>
-    <property name="child">
+    <child type="titlebar">
       <object class="GtkBox">
-        <property name="orientation">vertical</property>
-        <property name="spacing">12</property>
-        <property name="margin-start">16</property>
-        <property name="margin-end">16</property>
-        <property name="margin-top">16</property>
-        <property name="margin-bottom">16</property>
+        <style><class name="app-csd-anchor"/></style>
+      </object>
+    </child>
+    <property name="child">
+      <object class="GtkOverlay" id="root_overlay">
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <child>
+              <object class="GtkWindowHandle" id="drag_region">
+                <property name="hexpand">true</property>
+                <style>
+                  <class name="app-window-drag-region"/>
+                  <class name="app-window-dialog-drag-region"/>
+                </style>
+                <property name="child">
+                  <object class="GtkBox"/>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">12</property>
+                <property name="margin-start">16</property>
+                <property name="margin-end">16</property>
+                <property name="margin-top">16</property>
+                <property name="margin-bottom">16</property>
 
         <child>
           <object class="GtkLabel" id="heading_label">
@@ -174,6 +202,10 @@
                     </child>
                   </object>
                 </child>
+              </object>
+            </child>
+          </object>
+        </child>
               </object>
             </child>
           </object>

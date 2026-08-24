@@ -9,6 +9,8 @@ const support = @import("../../pages/support.zig");
 const ShellyCli = @import("../../services/shelly_cli.zig").ShellyCli;
 const PkgBuild = @import("../../models/pkgbuild.zig").PkgBuild;
 const ShellyWindow = @import("../../shelly_window.zig").ShellyWindow;
+const theme_manager = @import("../../services/theme_manager.zig");
+const window_controls = @import("../../window_controls.zig");
 
 pub const PkgbuildReviewDialog = extern struct {
     parent_instance: Parent,
@@ -23,6 +25,8 @@ pub const PkgbuildReviewDialog = extern struct {
     };
 
     const Private = struct {
+        root_overlay: *gtk.Overlay,
+        drag_region: *gtk.WindowHandle,
         heading_label: *gtk.Label,
         notebook: *gtk.Notebook,
         diff_box: *gtk.Box,
@@ -59,6 +63,7 @@ pub const PkgbuildReviewDialog = extern struct {
         const p = self.priv();
         p.generation = 0;
         p.arena = null;
+        window_controls.installOverlay(p.root_overlay);
 
         support.connectLifecycle(Self, self);
     }
@@ -87,6 +92,18 @@ pub const PkgbuildReviewDialog = extern struct {
 
     pub fn present(self: *Self) void {
         const p = self.priv();
+        const theme = if (gtk.Window.getTransientFor(self.as(gtk.Window))) |parent|
+            theme_manager.inherit(self.as(gtk.Widget), parent.as(gtk.Widget))
+        else blk: {
+            theme_manager.apply(self.as(gtk.Widget), .classic);
+            break :blk .classic;
+        };
+        window_controls.configureChildWindow(
+            self.as(gtk.Window),
+            p.root_overlay,
+            p.drag_region.as(gtk.Widget),
+            theme == .midnight,
+        );
         gtk.Window.present(self.as(gtk.Window));
 
         _ = gtk.Widget.grabFocus(p.cancel_button.as(gtk.Widget));
@@ -235,6 +252,8 @@ pub const PkgbuildReviewDialog = extern struct {
     }
 
     const template_children = .{
+        .{ "root_overlay", @offsetOf(Private, "root_overlay") },
+        .{ "drag_region", @offsetOf(Private, "drag_region") },
         .{ "heading_label", @offsetOf(Private, "heading_label") },
         .{ "diff_box", @offsetOf(Private, "diff_box") },
         .{ "cancel_button", @offsetOf(Private, "cancel_button") },
@@ -260,3 +279,29 @@ pub const PkgbuildReviewDialog = extern struct {
         }
     };
 };
+
+test "PKGBUILD preview window uses shared client-side chrome" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const dialog = PkgbuildReviewDialog.new();
+    _ = dialog.as(gobject.Object).refSink();
+    defer dialog.as(gobject.Object).unref();
+
+    const root = gtk.Widget.getFirstChild(dialog.as(gtk.Widget)) orelse return error.TestUnexpectedResult;
+    try std.testing.expect(gobject.ext.cast(gtk.Overlay, root) != null);
+
+    const Find = struct {
+        fn css(widget: *gtk.Widget, class_name: [:0]const u8) bool {
+            if (gtk.Widget.hasCssClass(widget, class_name) != 0) return true;
+            var child = gtk.Widget.getFirstChild(widget);
+            while (child) |current| : (child = gtk.Widget.getNextSibling(current)) {
+                if (css(current, class_name)) return true;
+            }
+            return false;
+        }
+    };
+
+    try std.testing.expect(Find.css(root, "app-window-drag-region"));
+    try std.testing.expect(Find.css(root, "app-window-controls-overlay"));
+    try std.testing.expect(gtk.Widget.hasCssClass(dialog.as(gtk.Widget), "pkgbuild-window") != 0);
+}

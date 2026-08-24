@@ -1,6 +1,7 @@
 const std = @import("std");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
+const gdk = bindings.gdk;
 const gobject = bindings.gobject;
 const glib = bindings.glib;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
@@ -9,6 +10,7 @@ const support = @import("support.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const translations = @import("../helpers/translations.zig");
+const settings_layout = @import("../helpers/settings_layout.zig");
 
 pub const UtilitiesPage = ShellyUtilitiesPage;
 
@@ -24,6 +26,7 @@ pub const ShellyUtilitiesPage = extern struct {
 
     const Private = struct {
         page_overlay: *gtk.Overlay,
+        utilities_settings_section: *gtk.Box,
         sync_button: *gtk.Button,
         rm_db_lock_button: *gtk.Button,
         fix_permissions_button: *gtk.Button,
@@ -32,6 +35,8 @@ pub const ShellyUtilitiesPage = extern struct {
         cache_keep_spin: *gtk.SpinButton,
 
         toast: *Toast,
+        surface: ?*gdk.Surface,
+        surface_layout_handler: c_ulong,
 
         var offset: c_int = 0;
     };
@@ -59,6 +64,8 @@ pub const ShellyUtilitiesPage = extern struct {
     fn init(self: *Self, _: *Class) callconv(.c) void {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
         const p = self.priv();
+        p.surface = null;
+        p.surface_layout_handler = 0;
 
         _ = gtk.Button.signals.clicked.connect(p.sync_button, *Self, &on_sync_db, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.rm_db_lock_button, *Self, &on_remove_db_lock, self, .{});
@@ -73,9 +80,50 @@ pub const ShellyUtilitiesPage = extern struct {
         p.toast = toast;
     }
 
-    pub fn onMap(_: *Self) void {}
+    pub fn onMap(self: *Self) void {
+        self.connectSurfaceLayout();
+    }
 
-    pub fn onUnmap(_: *Self) void {}
+    pub fn onUnmap(self: *Self) void {
+        const p = self.priv();
+        if (p.surface) |surface| {
+            if (p.surface_layout_handler != 0) {
+                gobject.signalHandlerDisconnect(surface.as(gobject.Object), p.surface_layout_handler);
+            }
+        }
+        p.surface = null;
+        p.surface_layout_handler = 0;
+    }
+
+    fn updateSettingsLayout(self: *Self, width: c_int) void {
+        const section = self.priv().utilities_settings_section;
+        if (settings_layout.usesWideLayout(width)) {
+            gtk.Widget.addCssClass(section.as(gtk.Widget), "settings-section-wide");
+        } else {
+            gtk.Widget.removeCssClass(section.as(gtk.Widget), "settings-section-wide");
+        }
+    }
+
+    fn connectSurfaceLayout(self: *Self) void {
+        const p = self.priv();
+        if (p.surface_layout_handler != 0) return;
+
+        const native = gtk.Widget.getNative(self.as(gtk.Widget)) orelse return;
+        const surface = gtk.Native.getSurface(native) orelse return;
+        p.surface = surface;
+        p.surface_layout_handler = gdk.Surface.signals.layout.connect(
+            surface,
+            *Self,
+            &onSurfaceLayout,
+            self,
+            .{},
+        );
+        updateSettingsLayout(self, gdk.Surface.getWidth(surface));
+    }
+
+    fn onSurfaceLayout(_: *gdk.Surface, width: c_int, _: c_int, self: *Self) callconv(.c) void {
+        updateSettingsLayout(self, width);
+    }
 
     fn on_sync_db(_: *gtk.Button, self: *Self) callconv(.c) void {
         const argv = ShellyCommands.sync_db(std.heap.c_allocator) catch return;
@@ -174,6 +222,7 @@ pub const ShellyUtilitiesPage = extern struct {
 
     const template_children = .{
         .{ "page_overlay", @offsetOf(Private, "page_overlay") },
+        .{ "utilities_settings_section", @offsetOf(Private, "utilities_settings_section") },
         .{ "sync_button", @offsetOf(Private, "sync_button") },
         .{ "rm_db_lock_button", @offsetOf(Private, "rm_db_lock_button") },
         .{ "fix_permissions_button", @offsetOf(Private, "fix_permissions_button") },

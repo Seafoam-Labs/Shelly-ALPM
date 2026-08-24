@@ -1,5 +1,5 @@
 @define-color midnight_window_bg #08111f;
-@define-color midnight_sidebar_bg #0b1627;
+@define-color midnight_sidebar_bg #101c30;
 @define-color midnight_surface_bg #101c2f;
 @define-color midnight_surface_raised #16243a;
 @define-color midnight_border #273750;
@@ -37,8 +37,32 @@
   box-shadow: 0 12px 32px alpha(black, 0.26), inset 0 1px alpha(white, 0.05);
 }
 
+.theme-midnight .app-topbar {
+  background-image: none;
+  border-radius: 0;
+  border-right: 0;
+  border-left: 0;
+}
+
+.theme-midnight .app-topbar .app-nav-button.nav-selected {
+  color: @midnight_text;
+  background-color: alpha(@midnight_accent, 0.18);
+  box-shadow: inset 0 -0.16em @midnight_accent;
+}
+
+.theme-midnight .app-topbar-scroll scrollbar.horizontal trough {
+  background-color: alpha(@midnight_border, 0.52);
+}
+
+.theme-midnight .app-topbar-scroll scrollbar.horizontal slider {
+  min-width: 2em;
+  min-height: 0.35em;
+  border-radius: 0.35em;
+  background-color: alpha(@midnight_text_dim, 0.68);
+}
+
 .theme-midnight .app-sidebar {
-  background-color: alpha(@midnight_sidebar_bg, 0.92);
+  background-color: alpha(@midnight_sidebar_bg, 0.95);
   background-image: none;
   border: 0;
   border-right: 1px solid alpha(white, 0.14);
@@ -52,7 +76,7 @@
 
 .theme-midnight .sidebar-brand {
   min-height: 2em;
-  padding: 0 0.65em;
+  padding: 1em 1.025em 0.75em;
   border-spacing: 0.55em;
 }
 
@@ -64,9 +88,9 @@
 
 .theme-midnight .sidebar-brand-name {
   color: @midnight_text;
-  font-size: 1.08em;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-size: 1em;
+  font-weight: 650;
+  letter-spacing: 0;
 }
 
 .theme-midnight .sidebar-collapse-button {
@@ -86,12 +110,16 @@
 }
 
 .theme-midnight .sidebar-primary {
-  padding: 0.35em 0.5em 0.75em;
-  border-spacing: 0.18em;
+  padding: 0.35em 0.55em 0.75em;
+  border-spacing: 0.25em;
 }
 
 .theme-midnight .sidebar-bottom {
-  padding: 0.65em 0.5em 0.8em;
+  padding: 0.65em 0.55em 0.8em;
+}
+
+.theme-midnight .app-window-controls-overlay {
+  margin-right: 0;
 }
 
 .theme-midnight .app-window-controls-overlay .app-window-control {
@@ -138,26 +166,26 @@
 }
 
 .theme-midnight .app-sidebar .nav-btn {
-  min-height: 2.75em;
+  min-height: 2.35em;
   margin: 0;
-  padding: 0.55em 0.7em;
+  padding: 0.34em 0.65em;
   color: @midnight_text_dim;
   background: transparent;
   border: 0;
-  border-radius: 0.55em;
+  border-radius: 0.45em;
   box-shadow: none;
   transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 
 .theme-midnight .app-sidebar .nav-btn:hover {
   color: @midnight_text;
-  background-color: alpha(white, 0.07);
+  background-color: alpha(white, 0.055);
 }
 
 .theme-midnight .app-sidebar .nav-btn.nav-selected {
   color: @midnight_text;
-  background-color: alpha(@midnight_accent, 0.24);
-  box-shadow: inset 0.2em 0 @midnight_accent;
+  background-color: alpha(@midnight_accent, 0.16);
+  box-shadow: inset 0.14em 0 @midnight_accent, inset 0 0 0 1px alpha(@midnight_accent, 0.10);
 }
 
 .theme-midnight .app-sidebar .sidebar-nav-icon {
@@ -167,7 +195,14 @@
 }
 
 .theme-midnight .app-sidebar .nav-label {
-  margin-left: 0.7em;
+  margin-left: 0.65em;
+  font-size: 0.9em;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+}
+
+.theme-midnight .app-sidebar .nav-btn.nav-selected .nav-label {
+  font-weight: 600;
 }
 
 .theme-midnight .app-sidebar.sidebar-collapsed .nav-btn {
@@ -178,6 +213,7 @@
 .theme-midnight .app-sidebar.sidebar-collapsed .sidebar-brand {
   padding-left: 0.45em;
   padding-right: 0.45em;
+  border-spacing: 0;
 }
 
 .theme-midnight entry,
@@ -298,6 +334,113 @@
   background-color: transparent;
 }
 
+.theme-midnight .transaction-page,
+.theme-midnight .welcome-screen {
+  color: @midnight_text;
+  background-color: @midnight_window_bg;
+  background-image:
+    radial-gradient(circle at 18% 12%, alpha(@midnight_accent, 0.20), transparent 36%),
+    radial-gradient(circle at 84% 78%, alpha(#7147d9, 0.12), transparent 42%);
+}
+
+.theme-midnight .welcome-card {
+  color: @midnight_text;
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-midnight .welcome-option-row {
+  background-color: alpha(@midnight_surface_raised, 0.68);
+  border-color: alpha(@midnight_border, 0.88);
+}
+
+.theme-midnight .welcome-option-row:hover {
+  background-color: alpha(@midnight_accent, 0.13);
+  border-color: alpha(@midnight_accent, 0.52);
+}
+
+.theme-midnight .welcome-navigation {
+  background-color: alpha(@midnight_sidebar_bg, 0.92);
+  border-color: alpha(white, 0.11);
+  box-shadow: 0 -0.75em 2em alpha(black, 0.18);
+}
+
+.theme-midnight .transaction-page scrolledwindow,
+.theme-midnight .transaction-page scrolledwindow > viewport,
+.theme-midnight .transaction-page paned,
+.theme-midnight .transaction-page .terminal-output,
+.theme-midnight .transaction-page .terminal-output text {
+  color: @midnight_text;
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-midnight .lockout-content {
+  padding-top: 2em;
+  background-color: @midnight_window_bg;
+  background-image:
+    radial-gradient(circle at 18% 12%, alpha(@midnight_accent, 0.20), transparent 36%),
+    radial-gradient(circle at 84% 78%, alpha(#7147d9, 0.12), transparent 42%);
+}
+
+.theme-midnight.app-window-surface,
+.theme-midnight.pkgbuild-window,
+.theme-midnight.pkgbuild-window .app-window-surface {
+  color: @midnight_text;
+  background-color: @midnight_window_bg;
+  background-image: none;
+}
+
+.theme-midnight.pkgbuild-window notebook,
+.theme-midnight.pkgbuild-window notebook > header,
+.theme-midnight.pkgbuild-window notebook > stack,
+.theme-midnight.pkgbuild-window scrolledwindow,
+.theme-midnight.pkgbuild-window scrolledwindow > viewport {
+  color: @midnight_text;
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-midnight.pkgbuild-window notebook > header tabs tab {
+  color: @midnight_text_dim;
+  background-color: transparent;
+}
+
+.theme-midnight.pkgbuild-window notebook > header tabs tab:checked {
+  color: @midnight_text;
+  box-shadow: inset 0 -0.12em @midnight_accent;
+}
+
+.theme-midnight.pkgbuild-window frame {
+  background-color: alpha(@midnight_surface_bg, 0.72);
+  border: 1px solid alpha(white, 0.09);
+  border-radius: 0.5em;
+}
+
+.theme-midnight.pkgbuild-window textview,
+.theme-midnight.pkgbuild-window textview text {
+  color: @midnight_text;
+  background-color: alpha(@midnight_surface_bg, 0.72);
+  background-image: none;
+}
+
+.theme-midnight popover > contents {
+  color: @midnight_text;
+  background-color: alpha(@midnight_surface_raised, 0.98);
+  border: 1px solid alpha(white, 0.12);
+  box-shadow: 0 0.75em 2em alpha(black, 0.34);
+}
+
+.theme-midnight .dim-label,
+.theme-midnight .spec-value {
+  color: @midnight_text_dim;
+}
+
+.theme-midnight .pill {
+  color: @midnight_text;
+  background-color: alpha(@midnight_text, 0.08);
+}
+
 .theme-midnight .package-card {
   background-color: alpha(@midnight_surface_raised, 0.88);
   border: 1px solid alpha(white, 0.09);
@@ -320,8 +463,27 @@
 }
 
 .theme-midnight .package-page,
+.theme-midnight .aur-page,
+.theme-midnight .flatpak-page,
+.theme-midnight .appimage-page,
+.theme-midnight .update-page,
 .theme-midnight .package-results {
   background-color: transparent;
+  background-image: none;
+}
+
+.theme-midnight .package-results scrolledwindow,
+.theme-midnight .package-results viewport,
+.theme-midnight .package-results columnview,
+.theme-midnight .package-results gridview,
+.theme-midnight .package-results listview,
+.theme-midnight .package-results list,
+.theme-midnight .package-results .background,
+.theme-midnight .update-page scrolledwindow,
+.theme-midnight .update-page viewport,
+.theme-midnight .update-page listview {
+  background-color: transparent;
+  background-image: none;
 }
 
 .theme-midnight .page-toolbar,
@@ -333,16 +495,27 @@
   box-shadow: 0 10px 28px alpha(black, 0.22), inset 0 1px alpha(white, 0.04);
 }
 
-.theme-midnight .package-row:hover,
 .theme-midnight .package-results row:hover,
-.theme-midnight .package-results row:hover .package-row {
+.theme-midnight .update-page row:hover {
   background-color: alpha(white, 0.05);
 }
 
-.theme-midnight .package-row:selected,
-.theme-midnight .package-card:selected,
+.theme-midnight .package-results gridview > child.activatable:hover,
+.theme-midnight .package-results gridview > child.activatable:selected:hover,
+.theme-midnight .package-results gridview > child:selected {
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 .theme-midnight .package-results row:selected,
-.theme-midnight .package-results row:selected .package-row,
+.theme-midnight .update-page row:selected {
+  background-color: alpha(@midnight_accent, 0.22);
+  border-color: alpha(@midnight_accent, 0.72);
+}
+
+.theme-midnight .package-card:selected,
 .theme-midnight .package-results gridview > child:selected .package-card {
   background-color: alpha(@midnight_accent, 0.22);
   border-color: alpha(@midnight_accent, 0.72);
@@ -390,6 +563,21 @@
   box-shadow: 0 10px 28px alpha(black, 0.18), inset 0 1px alpha(white, 0.04);
 }
 
+.theme-midnight .flatpak-page .form-surface {
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.theme-midnight .flatpak-page list.flatpak-nav,
+.theme-midnight .flatpak-page scrolledwindow,
+.theme-midnight .flatpak-page scrolledwindow > viewport {
+  background-color: transparent;
+  background-image: none;
+}
+
 .theme-midnight .source-badge {
   background-color: alpha(@midnight_accent, 0.16);
   border: 1px solid alpha(@midnight_accent, 0.42);
@@ -399,7 +587,8 @@
 }
 
 .theme-midnight .settings-section,
-.theme-midnight .transaction-row {
+.theme-midnight .transaction-row,
+.theme-midnight .utility-row {
   background-color: alpha(@midnight_surface_bg, 0.78);
   border: 1px solid alpha(white, 0.09);
   border-radius: 12px;
@@ -407,12 +596,72 @@
   padding: 12px;
 }
 
-.theme-midnight .dialog-surface,
+
+.theme-midnight .settings-section > box:hover {
+  background-color: alpha(@midnight_accent, 0.12);
+}
+
+.theme-midnight.dialog-surface,
+.theme-midnight .lockout-card,
 .theme-midnight .toast-surface {
   background-color: alpha(@midnight_surface_raised, 0.92);
   border: 1px solid alpha(white, 0.12);
   border-radius: 12px;
   box-shadow: 0 16px 40px alpha(black, 0.34), inset 0 1px alpha(white, 0.05);
+}
+
+.theme-midnight .pkg-status {
+  color: @midnight_text_dim;
+  background-color: alpha(@midnight_text, 0.07);
+}
+
+.theme-midnight .pkg-status.status-done {
+  color: @midnight_success;
+  background-color: alpha(@midnight_success, 0.14);
+}
+
+.theme-midnight .pkg-status.status-failed {
+  color: @midnight_danger;
+  background-color: alpha(@midnight_danger, 0.14);
+}
+
+.theme-midnight .toast-card {
+  color: @midnight_text;
+  background-color: alpha(@midnight_surface_raised, 0.97);
+  border: 1px solid alpha(white, 0.12);
+  box-shadow: 0 0.65em 1.5em alpha(black, 0.32);
+}
+
+.theme-midnight .toast-card.success {
+  background-color: alpha(@midnight_success, 0.94);
+}
+
+.theme-midnight .toast-card.warning {
+  background-color: alpha(@midnight_warning, 0.94);
+}
+
+.theme-midnight .toast-card.error {
+  background-color: alpha(@midnight_danger, 0.94);
+}
+
+.theme-midnight .drop-zone.drag-hover {
+  background-color: alpha(@midnight_accent, 0.12);
+  border-color: @midnight_accent;
+}
+
+.theme-midnight .success,
+.theme-midnight .status-icon.success {
+  color: @midnight_success;
+}
+
+.theme-midnight .warning,
+.theme-midnight .status-icon.warning {
+  color: @midnight_warning;
+}
+
+.theme-midnight .error,
+.theme-midnight .status-icon.error {
+  color: @midnight_danger;
 }
 
 .theme-midnight .status-success {

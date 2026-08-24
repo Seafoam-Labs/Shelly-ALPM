@@ -18,6 +18,7 @@ pub const Sidebar = struct {
         const root = gtk.Box.new(.vertical, 0);
         gtk.Widget.addCssClass(root.as(gtk.Widget), "nav-rail");
         gtk.Widget.addCssClass(root.as(gtk.Widget), "app-sidebar");
+        gtk.Widget.setHexpand(root.as(gtk.Widget), 0);
         gtk.Widget.setVexpand(root.as(gtk.Widget), 1);
 
         const brand = gtk.Box.new(.horizontal, 0);
@@ -46,7 +47,12 @@ pub const Sidebar = struct {
         gtk.Revealer.setTransitionDuration(brand_name, 180);
         gtk.Revealer.setChild(brand_name, name.as(gtk.Widget));
         gtk.Box.append(brand, brand_name.as(gtk.Widget));
-        gtk.Box.append(root, brand.as(gtk.Widget));
+
+        const brand_drag_region = gtk.WindowHandle.new();
+        gtk.WindowHandle.setChild(brand_drag_region, brand.as(gtk.Widget));
+        gtk.Widget.setHalign(brand_drag_region.as(gtk.Widget), .fill);
+        gtk.Widget.setHexpand(brand_drag_region.as(gtk.Widget), 1);
+        gtk.Box.append(root, brand_drag_region.as(gtk.Widget));
 
         const primary = gtk.Box.new(.vertical, 0);
         gtk.Widget.addCssClass(primary.as(gtk.Widget), "sidebar-primary");
@@ -84,6 +90,7 @@ pub const Sidebar = struct {
     pub fn setCollapsed(self: Sidebar, collapsed: bool) void {
         gtk.Widget.removeCssClass(self.root.as(gtk.Widget), if (collapsed) "sidebar-expanded" else "sidebar-collapsed");
         gtk.Widget.addCssClass(self.root.as(gtk.Widget), if (collapsed) "sidebar-collapsed" else "sidebar-expanded");
+        gtk.Widget.setHalign(self.brand.as(gtk.Widget), if (collapsed) .center else .fill);
         gtk.Revealer.setRevealChild(self.brand_name, @intFromBool(!collapsed));
         gtk.Image.setFromIconName(self.collapse_image, "sidebar-show-symbolic");
         gtk.Widget.setTooltipText(
@@ -163,4 +170,53 @@ test "sidebar brand stays at the top while the collapse toggle remains external"
         gtk.Widget.getFirstChild(sidebar.brand.as(gtk.Widget)) ==
             sidebar.logo.as(gtk.Widget),
     );
+}
+
+test "sidebar brand is a full-width native window drag region" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const sidebar = Sidebar.init(false);
+    _ = sidebar.root.as(gobject.Object).refSink();
+    defer sidebar.root.as(gobject.Object).unref();
+
+    const brand_parent = gtk.Widget.getParent(sidebar.brand.as(gtk.Widget)) orelse
+        return error.TestUnexpectedResult;
+    const drag_region = gobject.ext.cast(gtk.WindowHandle, brand_parent) orelse
+        return error.TestUnexpectedResult;
+
+    try std.testing.expect(gtk.Widget.getFirstChild(sidebar.root.as(gtk.Widget)) == brand_parent);
+    try std.testing.expect(gtk.WindowHandle.getChild(drag_region) == sidebar.brand.as(gtk.Widget));
+    try std.testing.expectEqual(@as(c_int, 1), gtk.Widget.getHexpand(brand_parent));
+    try std.testing.expectEqual(gtk.Align.fill, gtk.Widget.getHalign(brand_parent));
+}
+
+test "sidebar root explicitly refuses horizontal expansion" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const sidebar = Sidebar.init(false);
+    _ = sidebar.root.as(gobject.Object).refSink();
+    defer sidebar.root.as(gobject.Object).unref();
+
+    try std.testing.expectEqual(@as(c_int, 1), gtk.Widget.getHexpandSet(sidebar.root.as(gtk.Widget)));
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.getHexpand(sidebar.root.as(gtk.Widget)));
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.computeExpand(sidebar.root.as(gtk.Widget), .horizontal));
+}
+
+test "collapsed sidebar centers the brand without requesting extra width" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+
+    const sidebar = Sidebar.init(false);
+    _ = sidebar.root.as(gobject.Object).refSink();
+    defer sidebar.root.as(gobject.Object).unref();
+
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.getHexpand(sidebar.logo.as(gtk.Widget)));
+    try std.testing.expectEqual(gtk.Align.fill, gtk.Widget.getHalign(sidebar.brand.as(gtk.Widget)));
+
+    sidebar.setCollapsed(true);
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.getHexpand(sidebar.logo.as(gtk.Widget)));
+    try std.testing.expectEqual(gtk.Align.center, gtk.Widget.getHalign(sidebar.brand.as(gtk.Widget)));
+
+    sidebar.setCollapsed(false);
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.getHexpand(sidebar.logo.as(gtk.Widget)));
+    try std.testing.expectEqual(gtk.Align.fill, gtk.Widget.getHalign(sidebar.brand.as(gtk.Widget)));
 }
