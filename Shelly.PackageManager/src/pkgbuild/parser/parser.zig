@@ -40,16 +40,21 @@ pub const PkgbuildParser = struct {
     io: std.Io,
     selected_package_name: ?[]const u8 = null,
     package_carch: []const u8 = "x86_64",
-    /// Pre-evaluated values for top-level command-substitution assignments,
-    /// produced by the builder's sandboxed dynamic-assignment evaluation. When
-    /// present, `build_var_hashmap` seeds these instead of skipping the
-    /// assignment, letting a re-parse resolve everything that depends on them.
-    /// Null on the initial (analysis) parse.
+    /// Scalar values produced by sourcing the reviewed PKGBUILD in the build
+    /// sandbox. These overlay the static parse so shell-only assignments such
+    /// as `${name:=default}`, conditionals, and helper calls reach lifecycle
+    /// functions. Null on the initial (analysis) parse.
     dynamic_overrides: ?*const std.StringHashMap([]const u8) = null,
-    /// Sandboxed source-array values produced after the initial review.
+    /// Scalars removed while sourcing the reviewed PKGBUILD. Tombstones are
+    /// kept separately because an absent map entry otherwise means "no
+    /// override", not `unset`.
+    dynamic_unsets: ?*const std.StringHashMap(void) = null,
+    /// Sandboxed indexed-array values produced after the initial review.
     /// Each map value owns an ordered list of already-expanded Bash array
     /// elements. Null during the initial static analysis parse.
     dynamic_array_overrides: ?*const std.StringHashMap([]const []const u8) = null,
+    /// Indexed arrays removed while sourcing the reviewed PKGBUILD.
+    dynamic_array_unsets: ?*const std.StringHashMap(void) = null,
 
     /// Public entry point kept on the parser type for existing callers;
     /// implemented in `function_body.zig`.
@@ -1409,17 +1414,50 @@ test "parser_content: seeded dynamic override resolves dependent fields" {
     );
 }
 
-test "parser_content: array command substitution is still rejected" {
-    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
-    try std.testing.expectError(
-        error.UnsupportedDynamicAssignment,
-        parser.parser_content(
-            \\pkgname=demo
-            \\pkgver=1
-            \\_items=($(generate_items))
-            \\package() { :; }
-        , null),
-    );
+test "parser_content: arbitrary array command substitution is deferred to sandbox evaluation" {
+    const content =
+        \\pkgname=demo
+        \\pkgver=1
+        \\arch=('any')
+        \\_items=($(generate_items))
+        \\package() { :; }
+    ;
+    var initial = try (PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+    }).parser_content(content, null);
+    defer initial.deinit(std.testing.allocator);
+    try std.testing.expect(std.mem.indexOf(u8, initial.execution.?.shared_prelude, "declare -a _items=") == null);
+
+    var array_overrides = std.StringHashMap([]const []const u8).init(std.testing.allocator);
+    defer array_overrides.deinit();
+    try array_overrides.put("_items", &.{ "one", "second value" });
+    var evaluated = try (PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .dynamic_array_overrides = &array_overrides,
+    }).parser_content(content, null);
+    defer evaluated.deinit(std.testing.allocator);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        evaluated.execution.?.shared_prelude,
+        "declare -a _items=('one' 'second value')",
+    ) != null);
+
+    var empty_overrides = std.StringHashMap([]const []const u8).init(std.testing.allocator);
+    defer empty_overrides.deinit();
+    var array_unsets = std.StringHashMap(void).init(std.testing.allocator);
+    defer array_unsets.deinit();
+    try array_unsets.put("_items", {});
+    var unset = try (PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .dynamic_array_overrides = &empty_overrides,
+        .dynamic_array_unsets = &array_unsets,
+    }).parser_content(content, null);
+    defer unset.deinit(std.testing.allocator);
+    try std.testing.expect(std.mem.indexOf(u8, unset.execution.?.shared_prelude, "declare -a _items=") == null);
+    try std.testing.expect(std.mem.indexOf(u8, unset.execution.?.shared_prelude, "unset -- _items") != null);
 }
 
 test "parser_content: issue 1750 source command substitution is deferred and overridden" {
@@ -1443,8 +1481,9 @@ test "parser_content: issue 1750 source command substitution is deferred and ove
     var initial = try parser.parser_content(content, null);
     defer initial.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(@as(usize, 1), initial.dynamic_source_assignments.len);
+    try std.testing.expectEqual(@as(usize, 2), initial.dynamic_source_assignments.len);
     try std.testing.expect(initial.dynamic_source_assignments[0].has_command_substitution);
+    try std.testing.expectEqualStrings("sha256sums", initial.dynamic_source_assignments[1].name);
     try std.testing.expectEqual(@as(usize, 1), initial.source.?.len);
     try std.testing.expectEqualStrings(
         "gpu-screen-recorder-ui::git+$(sed 's&//git\\.&//repo.&' <<< https://git.dec05eba.com/gpu-screen-recorder-ui)",
@@ -1490,14 +1529,65 @@ test "parser_content: dynamic source keeps assignment and architecture append or
     , null);
     defer info.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(@as(usize, 3), info.dynamic_source_assignments.len);
+    try std.testing.expectEqual(@as(usize, 5), info.dynamic_source_assignments.len);
     try std.testing.expectEqualStrings("source", info.dynamic_source_assignments[0].name);
     try std.testing.expect(!info.dynamic_source_assignments[0].has_command_substitution);
     try std.testing.expect(info.dynamic_source_assignments[1].has_command_substitution);
     try std.testing.expectEqualStrings("source_x86_64", info.dynamic_source_assignments[2].name);
     try std.testing.expect(info.dynamic_source_assignments[2].has_command_substitution);
+    try std.testing.expectEqualStrings("sha256sums", info.dynamic_source_assignments[3].name);
+    try std.testing.expectEqualStrings("sha256sums_x86_64", info.dynamic_source_assignments[4].name);
     try std.testing.expectEqual(@as(usize, 1), info.local_source_files.?.len);
     try std.testing.expectEqualStrings("base.patch", info.local_source_files.?[0]);
+}
+
+test "parser_content: conditional source integrity arrays are deferred as one family" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const content =
+        \\pkgname=generic-conditional
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('x86_64')
+        \\_feature=yes
+        \\source=('base.patch')
+        \\sha256sums=('base-sum')
+        \\if [ "$_feature" = yes ]; then
+        \\  source+=('feature.patch')
+        \\  sha256sums+=('feature-sum')
+        \\fi
+        \\case "$CARCH" in
+        \\  x86_64)
+        \\    source_x86_64+=('architecture.patch')
+        \\    sha256sums_x86_64+=('architecture-sum')
+        \\    ;;
+        \\esac
+        \\package() { :; }
+    ;
+    var initial = try parser.parser_content(content, null);
+    defer initial.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 6), initial.dynamic_source_assignments.len);
+    try std.testing.expectEqual(@as(usize, 1), initial.source.?.len);
+    try std.testing.expectEqual(@as(usize, 1), initial.sha_256_sums.?.len);
+
+    var array_overrides: std.StringHashMap([]const []const u8) = .init(std.testing.allocator);
+    defer array_overrides.deinit();
+    try array_overrides.put("source", &.{ "base.patch", "feature.patch" });
+    try array_overrides.put("sha256sums", &.{ "base-sum", "feature-sum" });
+    try array_overrides.put("source_x86_64", &.{"architecture.patch"});
+    try array_overrides.put("sha256sums_x86_64", &.{"architecture-sum"});
+    var resolved = try (PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .dynamic_array_overrides = &array_overrides,
+    }).parser_content(content, null);
+    defer resolved.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), resolved.dynamic_source_assignments.len);
+    try std.testing.expectEqual(@as(usize, 3), resolved.source.?.len);
+    try std.testing.expectEqualStrings("architecture.patch", resolved.source.?[2]);
+    try std.testing.expectEqual(@as(usize, 3), resolved.sha_256_sums.?.len);
+    try std.testing.expectEqualStrings("architecture-sum", resolved.sha_256_sums.?[2]);
 }
 
 test "parser_content: source URL resolves CARCH statically" {

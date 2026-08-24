@@ -16,14 +16,12 @@ pub fn dispatch(
     invocation: *const parser.Invocation,
 ) !?u8 {
     if (!std.mem.eql(u8, invocation.command.path, command_path)) return null;
-    if (syncDepsRequested(invocation) and !invocation.globals.ui_mode and !elevation.isRoot()) {
-        if (syncDepsNeeded(context, invocation)) {
-            const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-                try context.stderr.print("Unable to elevate build dependency installation: {t}\n", .{err});
-                return 1;
-            };
-            if (elevated_exit) |exit_code| return exit_code;
-        }
+    if (shouldElevateSyncDeps(invocation, elevation.isRoot())) {
+        const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
+            try context.stderr.print("Unable to elevate build dependency installation: {t}\n", .{err});
+            return 1;
+        };
+        if (elevated_exit) |exit_code| return exit_code;
     }
     return try executeWithRunner(context, invocation, Real{});
 }
@@ -37,38 +35,8 @@ fn syncDepsRequested(invocation: *const parser.Invocation) bool {
         !optionEnabled(invocation, "--coordinator-child");
 }
 
-/// Read-only pre-elevation check. Resolves dependencies against the local
-/// and sync databases exactly as they exist on disk — no syncing, no writes
-/// — so a build with nothing missing never pays the elevation prompt. Any
-/// failure conservatively reports that elevation is needed; the elevated
-/// coordinator syncs and re-resolves authoritatively.
-fn syncDepsNeeded(context: *runtime.RuntimeContext, invocation: *const parser.Invocation) bool {
-    return checkSyncDepsNeeded(context, invocation) catch true;
-}
-
-fn checkSyncDepsNeeded(
-    context: *runtime.RuntimeContext,
-    invocation: *const parser.Invocation,
-) !bool {
-    var request = try parseBuildRequest(context, invocation);
-    defer request.deinit(context);
-
-    const manager = try Zigalpm.AlpmManager.init(
-        context.allocator,
-        context.environ,
-        .{ .use_root = false },
-    );
-    defer manager.deinit();
-
-    var backend_context: AlpmResolverContext = .{ .manager = manager };
-    var plan = try resolveSyncDependencies(
-        context.allocator,
-        request.package_builds,
-        request.no_check,
-        backend_context.backend(),
-    );
-    defer plan.deinit(context.allocator);
-    return plan.repo_dependencies.len > 0 or plan.aur_dependencies.len > 0;
+fn shouldElevateSyncDeps(invocation: *const parser.Invocation, running_as_root: bool) bool {
+    return syncDepsRequested(invocation) and !running_as_root;
 }
 
 fn executeWithRunner(
@@ -591,8 +559,25 @@ fn resolveSyncDependencies(
         aur.deinit(allocator);
     }
 
+    var provided: std.ArrayList(resolver.ProvidedPackage) = .empty;
+    defer {
+        for (provided.items) |package| allocator.free(package.version);
+        provided.deinit(allocator);
+    }
+    for (package_builds) |package_build| {
+        const name = package_build.pkg_name orelse continue;
+        const full_version = try package_build.get_full_version(allocator);
+        provided.append(allocator, .{
+            .name = name,
+            .version = full_version,
+        }) catch |err| {
+            allocator.free(full_version);
+            return err;
+        };
+    }
+
     for (package_builds) |*package_build| {
-        var resolution = try resolver.resolve(allocator, package_build, no_check, backend);
+        var resolution = try resolver.resolveWithProvided(allocator, package_build, no_check, backend, provided.items);
         defer resolution.deinit(allocator);
         for (resolution.repo_packages) |dependency| {
             if (findRepoDependency(repo.items, dependency.name)) |index| {
@@ -913,20 +898,6 @@ test "build request parsing selects members and honors check overrides" {
     );
 }
 
-test "pre-elevation check conservatively reports missing PKGBUILD paths" {
-    const spec = @import("../cli/spec.zig");
-    var test_context: test_support.TestContext = .{};
-    test_context.init();
-    defer test_context.deinit();
-    const manifest = try spec.Manifest.load(test_context.arena.allocator());
-    const outcome = try parser.parse(
-        test_context.arena.allocator(),
-        &manifest,
-        &.{ "build", "--no-confirm", "/nonexistent/shelly-sync-deps-fixture/PKGBUILD" },
-    );
-    try std.testing.expect(syncDepsNeeded(&test_context.context, &outcome.dispatch));
-}
-
 test "sync deps options parse under both spellings" {
     const spec = @import("../cli/spec.zig");
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -938,6 +909,10 @@ test "sync deps options parse under both spellings" {
     try std.testing.expect(syncDepsRequested(&long_form.dispatch));
     try std.testing.expect(syncDepsRequested(&short_form.dispatch));
     try std.testing.expect(!syncDepsRequested(&plain.dispatch));
+    try std.testing.expect(shouldElevateSyncDeps(&long_form.dispatch, false));
+    try std.testing.expect(shouldElevateSyncDeps(&short_form.dispatch, false));
+    try std.testing.expect(!shouldElevateSyncDeps(&long_form.dispatch, true));
+    try std.testing.expect(!shouldElevateSyncDeps(&plain.dispatch, false));
 }
 
 test "coordinator child builds never re-enter the sync deps coordinator" {
@@ -952,6 +927,7 @@ test "coordinator child builds never re-enter the sync deps coordinator" {
     });
     try std.testing.expect(optionEnabled(&outcome.dispatch, "--sync-deps"));
     try std.testing.expect(!syncDepsRequested(&outcome.dispatch));
+    try std.testing.expect(!shouldElevateSyncDeps(&outcome.dispatch, false));
 }
 
 test "invoking user build arguments drop sync deps flags and keep everything else" {
@@ -994,6 +970,8 @@ const fake_sync_deps_backend = struct {
 const sync_deps_pkgbuild =
     \\pkgbase=demo
     \\pkgname=(demo-cli demo-docs)
+    \\pkgver=1
+    \\pkgrel=1
     \\arch=('any')
     \\makedepends=('cmake>=3')
     \\checkdepends=('meson')
@@ -1003,7 +981,7 @@ const sync_deps_pkgbuild =
     \\}
     \\
     \\package_demo-docs() {
-    \\    depends=('cmake>=3')
+    \\    depends=('demo-cli=1-1' 'cmake>=3')
     \\}
 ;
 

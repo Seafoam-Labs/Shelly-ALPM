@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const Package = struct {
     Name: []const u8 = "",
     Version: []const u8 = "",
@@ -11,6 +13,7 @@ pub const Package = struct {
     Provides: []const []const u8 = &.{},
     Depends: []const []const u8 = &.{},
     OptDepends: []const []const u8 = &.{},
+    OptDependsInstalled: []const bool = &.{},
     Conflicts: []const []const u8 = &.{},
     PackageFile: ?FileNode = null,
     InstallReason: []const u8 = "",
@@ -25,3 +28,16 @@ pub const Package = struct {
 };
 
 const FileNode = struct { Name: []const u8, Files: []const FileNode };
+
+test "package model preserves optional dependency installation state" {
+    const parsed = try std.json.parseFromSlice(
+        Package,
+        std.testing.allocator,
+        "{\"Name\":\"editor\",\"OptDepends\":[\"spellcheck: Spell checking\",\"plugins: Plugin support\"],\"OptDependsInstalled\":[true,false]}",
+        .{},
+    );
+    defer parsed.deinit();
+
+    try std.testing.expectEqual(@as(usize, 2), parsed.value.OptDepends.len);
+    try std.testing.expectEqualSlices(bool, &.{ true, false }, parsed.value.OptDependsInstalled);
+}

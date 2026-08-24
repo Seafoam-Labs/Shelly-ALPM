@@ -135,6 +135,9 @@ pub const PackageBuilder = struct {
     failure_location: FailureLocation = .{},
     active_operation: ?*op_context.Operation = null,
     active_log: ?*steps.BuildLog = null,
+    /// Owned package names produced when sandboxed top-level evaluation turns
+    /// statically unresolved split-package names into their final values.
+    evaluated_requested_names: ?[][]const u8 = null,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -167,6 +170,10 @@ pub const PackageBuilder = struct {
     }
 
     pub fn deinit(self: *PackageBuilder) void {
+        if (self.evaluated_requested_names) |names| {
+            for (names) |name| self.allocator.free(name);
+            self.allocator.free(names);
+        }
         self.allocator.destroy(self);
     }
 
@@ -258,8 +265,13 @@ pub const PackageBuilder = struct {
             self.options.install_scripts = original_install_scripts;
             self.options.reviewed_files = original_reviewed_files;
         }
-        if (self.package_builds[0].hasDynamicAssignments()) {
-            try self.resolveDynamicBuilds(operation);
+        // Production builds always have a reviewed PKGBUILD path. Source it
+        // once in the lifecycle sandbox so shell-created scalar state (not
+        // just statically recognizable assignments) is reflected in the
+        // execution plan. Path-less unit fixtures retain their lightweight
+        // static-only behavior.
+        if (self.options.pkgbuild_path != null and self.package_builds[0].execution != null) {
+            try self.resolveEvaluatedBuilds(operation);
             const pkgbuild_path = self.options.pkgbuild_path orelse
                 return error.UnreviewedBuilderRequest;
             const content = try std.Io.Dir.cwd().readFileAlloc(
@@ -282,7 +294,7 @@ pub const PackageBuilder = struct {
             if (!std.mem.eql(u8, &prior_digest, &review.digest)) {
                 var answer = try operation.ask(.{
                     .kind = .review_changes,
-                    .prompt = "Review files discovered by dynamic PKGBUILD source evaluation?",
+                    .prompt = "Review files discovered by sandboxed PKGBUILD evaluation?",
                     .review = .{
                         .subject = self.requested_names[0],
                         .old_content = content,
@@ -383,46 +395,124 @@ pub const PackageBuilder = struct {
         return artifacts.toOwnedSlice(self.allocator);
     }
 
-    /// Resolves packages that declare top-level command-substitution
-    /// assignments. The recorded assignments are evaluated in the sandbox
-    /// (post-review), then the PKGBUILD is re-parsed with the resulting values
-    /// seeded so downstream stages — source acquisition and lifecycle steps —
-    /// see fully resolved metadata. Replaces `package_builds` contents in place.
-    fn resolveDynamicBuilds(self: *PackageBuilder, operation: *op_context.Operation) !void {
+    /// Sources the reviewed PKGBUILD in the sandbox and reparses it with the
+    /// resulting scalar and indexed-array state. This makes
+    /// source acquisition and lifecycle steps share one coherent top-level
+    /// shell state. Replaces `package_builds` contents in place.
+    fn resolveEvaluatedBuilds(self: *PackageBuilder, operation: *op_context.Operation) !void {
         var overrides: std.StringHashMap([]const u8) = .init(self.allocator);
-        defer {
-            var it = overrides.iterator();
-            while (it.next()) |entry| {
-                self.allocator.free(entry.key_ptr.*);
-                self.allocator.free(entry.value_ptr.*);
-            }
-            overrides.deinit();
-        }
-
-        if (self.package_builds[0].dynamic_assignments.len > 0) {
-            const evaluated = try steps.evaluateDynamicAssignments(self, operation);
-            overrides.deinit();
-            overrides = evaluated;
-            try self.reparseDynamicBuilds(&overrides, null);
-        }
-
+        defer steps.deinitDynamicScalarOverrides(self.allocator, &overrides);
+        var unset_overrides: steps.DynamicScalarUnsets = .init(self.allocator);
+        defer steps.deinitDynamicScalarUnsets(self.allocator, &unset_overrides);
         var array_overrides: steps.DynamicArrayOverrides = .init(self.allocator);
         defer steps.deinitDynamicArrayOverrides(self.allocator, &array_overrides);
-        if (self.package_builds[0].dynamic_source_assignments.len > 0) {
-            const evaluated = try steps.evaluateDynamicSourceArrays(self, operation);
-            array_overrides.deinit();
-            array_overrides = evaluated;
-            try self.reparseDynamicBuilds(
-                if (overrides.count() > 0) &overrides else null,
-                &array_overrides,
-            );
-        }
+        var unset_array_overrides: steps.DynamicArrayUnsets = .init(self.allocator);
+        defer steps.deinitDynamicArrayUnsets(self.allocator, &unset_array_overrides);
+
+        const evaluated = try steps.evaluateDynamicMetadata(self, operation);
+        overrides.deinit();
+        overrides = evaluated.scalars;
+        unset_overrides.deinit();
+        unset_overrides = evaluated.unset_scalars;
+        array_overrides.deinit();
+        array_overrides = evaluated.arrays;
+        unset_array_overrides.deinit();
+        unset_array_overrides = evaluated.unset_arrays;
+        try self.resolveEvaluatedRequestedNames(
+            if (overrides.count() > 0) &overrides else null,
+            if (unset_overrides.count() > 0) &unset_overrides else null,
+            &array_overrides,
+            if (unset_array_overrides.count() > 0) &unset_array_overrides else null,
+        );
+        try self.reparseEvaluatedBuilds(
+            if (overrides.count() > 0) &overrides else null,
+            if (unset_overrides.count() > 0) &unset_overrides else null,
+            &array_overrides,
+            if (unset_array_overrides.count() > 0) &unset_array_overrides else null,
+        );
     }
 
-    fn reparseDynamicBuilds(
+    /// Keeps explicit package selections stable when top-level shell state
+    /// resolves a dynamic pkgbase/pkgname. A name already present in the final
+    /// list is retained; otherwise a statically discovered placeholder maps to
+    /// the final name at the same split-package index.
+    fn resolveEvaluatedRequestedNames(
         self: *PackageBuilder,
         overrides: ?*const std.StringHashMap([]const u8),
+        unset_overrides: ?*const steps.DynamicScalarUnsets,
         array_overrides: ?*const steps.DynamicArrayOverrides,
+        unset_array_overrides: ?*const steps.DynamicArrayUnsets,
+    ) !void {
+        const pkgbuild_path = self.options.pkgbuild_path orelse
+            return error.UnreviewedBuilderRequest;
+        const content = try std.Io.Dir.cwd().readFileAlloc(
+            self.io,
+            pkgbuild_path,
+            self.allocator,
+            .limited(32 * 1024 * 1024),
+        );
+        defer self.allocator.free(content);
+
+        var static_names = try (pkgbuild_parser.PkgbuildParser{
+            .allocator = self.allocator,
+            .io = self.io,
+            .package_carch = self.shellybuild_config.build.carch,
+        }).package_names_content(content);
+        defer static_names.deinit(self.allocator);
+        var evaluated_names = try (pkgbuild_parser.PkgbuildParser{
+            .allocator = self.allocator,
+            .io = self.io,
+            .package_carch = self.shellybuild_config.build.carch,
+            .dynamic_overrides = overrides,
+            .dynamic_unsets = unset_overrides,
+            .dynamic_array_overrides = array_overrides,
+            .dynamic_array_unsets = unset_array_overrides,
+        }).package_names_content(content);
+        defer evaluated_names.deinit(self.allocator);
+        const mapped = try self.allocator.alloc([]const u8, self.requested_names.len);
+        var mapped_count: usize = 0;
+        errdefer {
+            for (mapped[0..mapped_count]) |name| self.allocator.free(name);
+            self.allocator.free(mapped);
+        }
+        for (self.requested_names, mapped) |requested_name, *destination| {
+            var selected: ?[]const u8 = null;
+            for (evaluated_names.items) |name| {
+                if (std.mem.eql(u8, name, requested_name)) {
+                    selected = name;
+                    break;
+                }
+            }
+            if (selected == null) {
+                for (static_names.items, 0..) |name, index| {
+                    if (!std.mem.eql(u8, name, requested_name)) continue;
+                    if (index >= evaluated_names.items.len)
+                        return error.SelectedPackageNotFound;
+                    selected = evaluated_names.items[index];
+                    break;
+                }
+            }
+            destination.* = try self.allocator.dupe(
+                u8,
+                selected orelse return error.SelectedPackageNotFound,
+            );
+            mapped_count += 1;
+        }
+
+        if (self.evaluated_requested_names) |old_names| {
+            for (old_names) |name| self.allocator.free(name);
+            self.allocator.free(old_names);
+        }
+        self.evaluated_requested_names = mapped;
+        self.requested_names = mapped;
+    }
+
+    fn reparseEvaluatedBuilds(
+        self: *PackageBuilder,
+        overrides: ?*const std.StringHashMap([]const u8),
+        unset_overrides: ?*const steps.DynamicScalarUnsets,
+        array_overrides: ?*const steps.DynamicArrayOverrides,
+        unset_array_overrides: ?*const steps.DynamicArrayUnsets,
     ) !void {
         const pkgbuild_path = self.options.pkgbuild_path orelse
             return error.UnreviewedBuilderRequest;
@@ -441,7 +531,9 @@ pub const PackageBuilder = struct {
                 .selected_package_name = requested_name,
                 .package_carch = self.shellybuild_config.build.carch,
                 .dynamic_overrides = overrides,
+                .dynamic_unsets = unset_overrides,
                 .dynamic_array_overrides = array_overrides,
+                .dynamic_array_unsets = unset_array_overrides,
             }).parser_content(content, self.options.start_directory);
             package_build.deinit(self.allocator);
             package_build.* = reparsed;

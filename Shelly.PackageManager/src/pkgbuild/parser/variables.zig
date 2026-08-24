@@ -127,6 +127,35 @@ pub fn build_var_hashmap(self: PkgbuildParser, content: []const u8) !std.StringH
         try vars.put(key_owned, value_owned);
     }
 
+    // A reviewed PKGBUILD may create or change scalars through shell syntax
+    // that the static assignment scanner intentionally does not execute
+    // (`${name:=default}`, conditionals, helper calls, ...). Apply the
+    // sandboxed snapshot before resolving references so every dependent field
+    // and lifecycle declaration sees the effective value.
+    if (self.dynamic_overrides) |overrides| {
+        var override_it = overrides.iterator();
+        while (override_it.next()) |entry| {
+            const key_owned = try self.allocator.dupe(u8, entry.key_ptr.*);
+            errdefer self.allocator.free(key_owned);
+            const value_owned = try self.allocator.dupe(u8, entry.value_ptr.*);
+            errdefer self.allocator.free(value_owned);
+            if (vars.fetchRemove(entry.key_ptr.*)) |old| {
+                self.allocator.free(old.key);
+                self.allocator.free(old.value);
+            }
+            try vars.put(key_owned, value_owned);
+        }
+    }
+    if (self.dynamic_unsets) |unsets| {
+        var unset_it = unsets.keyIterator();
+        while (unset_it.next()) |name| {
+            if (vars.fetchRemove(name.*)) |old| {
+                self.allocator.free(old.key);
+                self.allocator.free(old.value);
+            }
+        }
+    }
+
     // makepkg exposes CARCH to every top-level assignment, so metadata that
     // references it (most commonly source=() URLs) resolves statically. Seed
     // it unless the PKGBUILD defined its own value.
@@ -177,6 +206,11 @@ fn dynamicOverride(self: PkgbuildParser, name: []const u8) ?[]const u8 {
     return overrides.get(name);
 }
 
+fn dynamicallyUnset(self: PkgbuildParser, name: []const u8) bool {
+    const unsets = self.dynamic_unsets orelse return false;
+    return unsets.contains(name);
+}
+
 /// Collects every top-level scalar assignment whose value contains a command
 /// substitution and that has no seeded override, in declaration order. The
 /// builder evaluates these post-review in the sandbox and re-parses with the
@@ -198,7 +232,7 @@ pub fn collect_dynamic_assignments(self: PkgbuildParser, content: []const u8) ![
         const parsed = parse_kvp(executable_line) orelse continue;
         if (std.mem.startsWith(u8, parsed.value, "(")) continue;
         if (!shell_scan.contains_command_substitution(executable_line)) continue;
-        if (dynamicOverride(self, parsed.key) != null) continue;
+        if (dynamicOverride(self, parsed.key) != null or dynamicallyUnset(self, parsed.key)) continue;
 
         const name_owned = try self.allocator.dupe(u8, parsed.key);
         const statement_owned = try self.allocator.dupe(u8, std.mem.trim(u8, executable_line, " \t"));
@@ -343,6 +377,33 @@ test "build_var_hashmap: seeded override replaces a skipped command substitution
     defer free_vars(std.testing.allocator, &vars);
     try std.testing.expectEqualStrings("20260819", vars.get("_date").?);
     try std.testing.expectEqualStrings("nightly-20260819", vars.get("_tag").?);
+}
+
+test "build_var_hashmap: evaluated shell state overlays and unsets static values" {
+    var overrides: std.StringHashMap([]const u8) = .init(std.testing.allocator);
+    defer overrides.deinit();
+    try overrides.put("_defaulted", "portable");
+    try overrides.put("_changed", "shell-value");
+    var unsets: std.StringHashMap(void) = .init(std.testing.allocator);
+    defer unsets.deinit();
+    try unsets.put("_removed", {});
+
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .dynamic_overrides = &overrides,
+        .dynamic_unsets = &unsets,
+    };
+    var vars = try build_var_hashmap(
+        parser,
+        "_changed=static\n_removed=static\n_dependent=$_defaulted\n",
+    );
+    defer free_vars(std.testing.allocator, &vars);
+
+    try std.testing.expectEqualStrings("portable", vars.get("_defaulted").?);
+    try std.testing.expectEqualStrings("shell-value", vars.get("_changed").?);
+    try std.testing.expectEqualStrings("portable", vars.get("_dependent").?);
+    try std.testing.expect(vars.get("_removed") == null);
 }
 
 test "collect_dynamic_assignments: records command substitutions in order, skips overridden" {

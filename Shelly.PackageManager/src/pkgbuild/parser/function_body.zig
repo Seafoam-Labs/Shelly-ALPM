@@ -4,6 +4,39 @@ const shell_scan = @import("shell_scan.zig");
 const PkgbuildParser = @import("parser.zig").PkgbuildParser;
 
 pub fn selected_package_body(self: PkgbuildParser, content: []const u8) !?[]const u8 {
+    return selected_package_body_with_vars(self, content, null);
+}
+
+/// Returns the package-scoped body selected by makepkg. In addition to a
+/// literal package_<name>() declaration, this recognizes the helper dispatch
+/// used by CachyOS kernel PKGBUILDs:
+///
+///   eval "package_$_p() { $(declare -f \"_package${_p#$pkgbase}\"); ... }"
+///
+/// The reviewed eval text is never executed by the parser. We only map the
+/// selected package name to its literal _package<suffix>() helper and extract
+/// that helper's body with the normal static function scanner.
+pub fn selected_package_body_with_vars(
+    self: PkgbuildParser,
+    content: []const u8,
+    vars: ?*const std.StringHashMap([]const u8),
+) !?[]const u8 {
+    // A null selection is the initial/global parse. Preserve the global
+    // metadata there; package() assignments are applied only once a concrete
+    // package member is selected.
+    if (self.selected_package_name == null) return null;
+    if (try selected_scoped_package_body(self, content, vars)) |body| return body;
+    return try extract_function_body(content, "package");
+}
+
+/// Like selected_package_body_with_vars, but does not fall back to package().
+/// Package-function contract validation uses this to distinguish an actual
+/// split member function from a forbidden generic split package function.
+pub fn selected_scoped_package_body(
+    self: PkgbuildParser,
+    content: []const u8,
+    vars: ?*const std.StringHashMap([]const u8),
+) !?[]const u8 {
     const package_name = self.selected_package_name orelse return null;
     const function_name = try std.fmt.allocPrint(
         self.allocator,
@@ -12,8 +45,47 @@ pub fn selected_package_body(self: PkgbuildParser, content: []const u8) !?[]cons
     );
     defer self.allocator.free(function_name);
 
-    return (try extract_function_body(content, function_name)) orelse
-        try extract_function_body(content, "package");
+    if (try extract_function_body(content, function_name)) |body| return body;
+    const pkgbase = (vars orelse return null).get("pkgbase") orelse return null;
+    return try generated_helper_body(self, content, package_name, pkgbase);
+}
+
+fn generated_helper_body(
+    self: PkgbuildParser,
+    content: []const u8,
+    package_name: []const u8,
+    pkgbase: []const u8,
+) !?[]const u8 {
+    if (!std.mem.startsWith(u8, package_name, pkgbase)) return null;
+
+    // Require all structural pieces of the known dispatch idiom before
+    // treating a private helper as a generated package function. This avoids
+    // assigning package semantics to an unrelated _package helper.
+    if (!has_generated_helper_dispatch(content)) return null;
+
+    const suffix = package_name[pkgbase.len..];
+    const helper_name = try std.fmt.allocPrint(self.allocator, "_package{s}", .{suffix});
+    defer self.allocator.free(helper_name);
+    return try extract_function_body(content, helper_name);
+}
+
+fn has_generated_helper_dispatch(content: []const u8) bool {
+    var has_eval = false;
+    var has_declaration = false;
+    var has_call = false;
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |raw_line| {
+        const line = std.mem.trim(u8, raw_line, " \t\r");
+        if (std.mem.startsWith(u8, line, "#")) continue;
+        if (std.mem.startsWith(u8, line, "eval \"package_")) has_eval = true;
+        if (std.mem.startsWith(u8, line, "$(declare -f \"_package${") and
+            std.mem.indexOf(u8, line, "#$pkgbase}") != null)
+            has_declaration = true;
+        if (std.mem.startsWith(u8, line, "_package${") and
+            std.mem.indexOf(u8, line, "#$pkgbase}") != null)
+            has_call = true;
+    }
+    return has_eval and has_declaration and has_call;
 }
 
 pub fn extract_function_body(content: []const u8, function_name: []const u8) !?[]const u8 {
@@ -164,4 +236,47 @@ test "extract_function_body: unclosed brace consumes to end of content" {
     const result = try extract_function_body(content, "myFunction");
     try std.testing.expect(result != null);
     try std.testing.expectEqualStrings("return 1;", result.?);
+}
+
+test "selected_scoped_package_body: resolves CachyOS generated split helper" {
+    const content =
+        \\pkgbase=linux-cachyos
+        \\pkgname=("$pkgbase" "$pkgbase-headers")
+        \\_package() { pkgdesc='kernel'; }
+        \\_package-headers() { pkgdesc='headers'; }
+        \\for _p in "${pkgname[@]}"; do
+        \\  eval "package_$_p() {
+        \\    $(declare -f "_package${_p#$pkgbase}")
+        \\    _package${_p#$pkgbase}
+        \\  }"
+        \\done
+    ;
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer vars.deinit();
+    try vars.put("pkgbase", "linux-cachyos");
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "linux-cachyos-headers",
+    };
+    const body = try selected_scoped_package_body(parser, content, &vars);
+    try std.testing.expectEqualStrings("pkgdesc='headers';", body.?);
+}
+
+test "selected_scoped_package_body: ignores commented generated dispatch" {
+    const content =
+        \\_package-headers() { pkgdesc='headers'; }
+        \\# eval "package_$_p() {
+        \\#   $(declare -f "_package${_p#$pkgbase}")
+        \\#   _package${_p#$pkgbase}
+    ;
+    var vars = std.StringHashMap([]const u8).init(std.testing.allocator);
+    defer vars.deinit();
+    try vars.put("pkgbase", "linux-cachyos");
+    const parser = PkgbuildParser{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .selected_package_name = "linux-cachyos-headers",
+    };
+    try std.testing.expect((try selected_scoped_package_body(parser, content, &vars)) == null);
 }

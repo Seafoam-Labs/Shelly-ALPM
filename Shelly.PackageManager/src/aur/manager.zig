@@ -1287,10 +1287,14 @@ pub const Manager = struct {
             _ = self.currently_installing_dependencies.remove(dependency.package_base);
             self.allocator.free(key);
         }
-        self.raisePackageProgress(.aur_build_start, dependency.package_name, 1, 1, "Building AUR dependency");
-        const artifacts = self.buildPreparedPackage(dependency, &.{dependency.package_name}, false) catch {
-            self.raisePackageProgress(.aur_package_failed, dependency.package_name, 1, 1, "Failed to build AUR dependency");
-            return error.BuildFailed;
+        const start_message = std.fmt.allocPrint(self.allocator, "Building AUR dependency {s}", .{dependency.package_name}) catch null;
+        defer if (start_message) |message| self.allocator.free(message);
+        self.raisePackageProgress(.aur_build_start, dependency.package_name, 1, 1, start_message orelse "Building AUR dependency");
+        const artifacts = self.buildPreparedPackage(dependency, &.{dependency.package_name}, false) catch |err| {
+            const failure_message = std.fmt.allocPrint(self.allocator, "Failed to build AUR dependency {s}: {s}", .{ dependency.package_name, @errorName(err) }) catch null;
+            defer if (failure_message) |message| self.allocator.free(message);
+            self.raisePackageProgress(.aur_package_failed, dependency.package_name, 1, 1, failure_message orelse "Failed to build AUR dependency");
+            return err;
         };
         defer package_builder.deinitArtifacts(self.allocator, artifacts);
         self.raisePackageProgress(.aur_build_done, dependency.package_name, 1, 1, "");

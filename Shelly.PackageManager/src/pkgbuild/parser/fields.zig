@@ -28,7 +28,7 @@ pub fn resolve_file_assignment(
         null;
     errdefer if (assignment) |current| self.allocator.free(current.value);
 
-    if (try function_body.selected_package_body(self, content)) |body| {
+    if (try function_body.selected_package_body_with_vars(self, content, vars)) |body| {
         if (try variables.parse_variable(body, field_name)) |value| {
             const owned_value = try self.allocator.dupe(u8, value);
             if (assignment) |current| self.allocator.free(current.value);
@@ -68,6 +68,8 @@ pub fn resolve_file_string(
 }
 
 pub fn resolve_array_field(self: PkgbuildParser, content: []const u8, vars: *std.StringHashMap([]const u8), var_name: []const u8) ![][]const u8 {
+    if (self.dynamic_array_unsets) |unsets| if (unsets.contains(var_name))
+        return self.allocator.alloc([]const u8, 0);
     if (self.dynamic_array_overrides) |overrides| if (overrides.get(var_name)) |items| {
         const cloned = try self.allocator.alloc([]const u8, items.len);
         errdefer self.allocator.free(cloned);
@@ -93,6 +95,8 @@ fn resolve_array_field_preserving_commands(
     vars: *std.StringHashMap([]const u8),
     var_name: []const u8,
 ) ![][]const u8 {
+    if (self.dynamic_array_unsets) |unsets| if (unsets.contains(var_name))
+        return self.allocator.alloc([]const u8, 0);
     if (self.dynamic_array_overrides) |overrides| if (overrides.get(var_name)) |items| {
         const cloned = try self.allocator.alloc([]const u8, items.len);
         errdefer self.allocator.free(cloned);
@@ -180,7 +184,7 @@ pub fn resolve_package_string_field(
         null;
     errdefer if (result) |value| self.allocator.free(value);
 
-    const body = try function_body.selected_package_body(self, content) orelse return result;
+    const body = try function_body.selected_package_body_with_vars(self, content, vars) orelse return result;
     var lines = std.mem.splitScalar(u8, body, '\n');
     var scoped_value: ?[]const u8 = null;
     while (lines.next()) |line| {
@@ -205,7 +209,7 @@ pub fn resolve_package_array_field(
     const global = try resolve_array_field(self, content, vars, var_name);
     var global_owned = true;
     errdefer if (global_owned) variables.freeStringSlice(self.allocator, global);
-    const body = try function_body.selected_package_body(self, content) orelse return global;
+    const body = try function_body.selected_package_body_with_vars(self, content, vars) orelse return global;
 
     var values: std.ArrayList([]const u8) = .empty;
     errdefer {

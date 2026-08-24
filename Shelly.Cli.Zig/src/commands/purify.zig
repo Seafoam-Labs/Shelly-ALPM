@@ -480,11 +480,9 @@ fn writePlan(
     for (targets, rows) |target, *row|
         row.* = try storage.allocator().dupe([]const u8, &.{target});
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{"Package"},
         rows,
-        output.supportsAnsi(context),
     );
 }
 

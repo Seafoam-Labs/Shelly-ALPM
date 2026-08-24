@@ -618,10 +618,11 @@ fn extractSourceArchive(
             },
             .symbolic_link => {
                 const target = entry.link_target orelse return error.UnsafeSourceArchiveLink;
-                try source_spec.validateArchiveLink(target);
+                const safe_target = try source_spec.archiveLinkTarget(self.allocator, relative, target);
+                defer self.allocator.free(safe_target);
                 try ensureSafeArchivePath(self, destination_root, relative, false);
                 try rejectExistingDestination(self.io, destination);
-                try std.Io.Dir.cwd().symLink(self.io, target, destination, .{});
+                try std.Io.Dir.cwd().symLink(self.io, safe_target, destination, .{});
             },
             .other => return error.UnsupportedSourceArchiveEntry,
         }

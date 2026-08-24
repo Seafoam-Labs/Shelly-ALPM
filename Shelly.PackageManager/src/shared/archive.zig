@@ -441,8 +441,9 @@ pub const FixtureCompression = enum { none, gzip, zstd, xz };
 
 pub const FixtureEntry = struct {
     path: [:0]const u8,
-    contents: []const u8,
+    contents: []const u8 = "",
     permissions: u32 = 0o644,
+    link_target: ?[:0]const u8 = null,
 };
 
 pub fn writeFixture(
@@ -474,12 +475,13 @@ pub fn writeFixture(
         const entry = c.archive_entry_new() orelse return Error.ArchiveCreateFailed;
         defer c.archive_entry_free(entry);
         c.archive_entry_set_pathname(entry, fixture.path.ptr);
-        c.archive_entry_set_filetype(entry, ae_ifreg);
+        c.archive_entry_set_filetype(entry, if (fixture.link_target != null) ae_iflnk else ae_ifreg);
         c.archive_entry_set_perm(entry, @intCast(fixture.permissions));
-        c.archive_entry_set_size(entry, @intCast(fixture.contents.len));
+        c.archive_entry_set_size(entry, if (fixture.link_target != null) 0 else @intCast(fixture.contents.len));
+        if (fixture.link_target) |target| c.archive_entry_set_symlink(entry, target.ptr);
         if (c.archive_write_header(handle, entry) < c.ARCHIVE_WARN)
             return Error.ArchiveWriteFailed;
-        if (fixture.contents.len != 0) {
+        if (fixture.link_target == null and fixture.contents.len != 0) {
             const amount = c.archive_write_data(handle, fixture.contents.ptr, fixture.contents.len);
             if (amount < 0 or amount != fixture.contents.len) return Error.ArchiveWriteFailed;
         }

@@ -529,11 +529,9 @@ fn writeStandardPlain(context: *runtime.RuntimeContext, updates: []const Standar
         row.* = cells;
     }
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{ "Name", "Current Version", "New Version", "Download Size", "Size Difference" },
         rows,
-        output.supportsAnsi(context),
     );
     try context.stdout.writeByte('\n');
     const message = try std.fmt.allocPrint(allocator, "{d} standard packages can be updated", .{updates.len});
@@ -561,11 +559,9 @@ fn writeAurPlain(context: *runtime.RuntimeContext, updates: []const AurUpdate) !
         row.* = cells;
     }
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{ "Name", "Installed", "Available", "Description" },
         rows,
-        output.supportsAnsi(context),
     );
     const message = try std.fmt.allocPrint(allocator, "AUR Total: {d} packages need updates", .{updates.len});
     try writeColoredLine(context, .warning, message);
@@ -602,11 +598,9 @@ fn writeFlatpakPlain(context: *runtime.RuntimeContext, updates: []const FlatpakU
         row.* = cells;
     }
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{ "Name", "Id", "Version", "Permissions" },
         rows,
-        output.supportsAnsi(context),
     );
     try context.stdout.writeByte('\n');
     const message = try std.fmt.allocPrint(allocator, "Flatpak Total: {d} packages", .{updates.len});
@@ -652,7 +646,7 @@ fn sortedFlatpak(allocator: std.mem.Allocator, updates: []const FlatpakUpdate) !
 }
 
 fn truncate(value: []const u8, maximum: usize) []const u8 {
-    return if (value.len <= maximum) value else value[0..maximum];
+    return format.truncate(value, maximum);
 }
 
 fn checkOptions(invocation: *const parser.Invocation) CheckOptions {
@@ -1595,7 +1589,8 @@ test "Flatpak list-updates sorts compatibility JSON and renders table" {
     try std.testing.expect(std.mem.indexOf(u8, plain, "Version") != null);
     try std.testing.expect(std.mem.indexOf(u8, plain, "Permissions") != null);
     try std.testing.expect(std.mem.indexOf(u8, plain, "No changes") != null);
-    try std.testing.expect(std.mem.indexOf(u8, plain, "Add: network\nRemove: ipc") != null);
+    try std.testing.expect(std.mem.indexOf(u8, plain, "Add: network") != null);
+    try std.testing.expect(std.mem.indexOf(u8, plain, "Remove: ipc") != null);
     const plain_alpha_index = std.mem.indexOf(u8, plain, "org.alpha.App") orelse return error.MissingAlpha;
     const plain_zeta_index = std.mem.indexOf(u8, plain, "org.zeta.App") orelse return error.MissingZeta;
     try std.testing.expect(plain_alpha_index < plain_zeta_index);

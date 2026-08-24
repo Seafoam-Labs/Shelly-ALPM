@@ -79,6 +79,9 @@ pub const QuestionResponse = struct {
     answer: ?c_int = null,
     pkg: ?[]const u8 = null,
     choice: ?c_int = null,
+    /// Borrowed indices selected by a shared multi-select question response.
+    /// The dispatcher keeps the owning response alive until the next question.
+    selected_indices: []const usize = &.{},
 };
 
 pub const Dispatcher = struct {
@@ -462,7 +465,7 @@ fn mapCommonQuestionResponse(
         },
         .select_optional_dependencies => switch (response) {
             .choice => |choice| mapPackageChoice(choice, options),
-            .choices => |choices| if (choices.len == 0) .{} else mapPackageChoice(choices[0], options),
+            .choices => |choices| .{ .selected_indices = choices },
             .package => |pkg| .{ .pkg = pkg },
             .declined => .{},
             .accepted => if (options.len == 0) .{} else .{ .pkg = options[0].id },
@@ -881,9 +884,10 @@ test "common ALPM confirmation maps accepted and declined answers" {
     try std.testing.expectEqual(@as(usize, 2), responder.calls);
 }
 
-test "common ALPM optional dependency choices map to package names" {
+test "common ALPM optional dependency choices preserve every selected index" {
     const Responder = struct {
         saw_provider_metadata: bool = false,
+        response: operation_api.QuestionResponse = .{ .choices = &.{ 0, 1 } },
 
         fn answer(data: ?*anyopaque, question: operation_api.Question) operation_api.QuestionResponse {
             const self: *@This() = @ptrCast(@alignCast(data.?));
@@ -892,7 +896,7 @@ test "common ALPM optional dependency choices map to package names" {
             std.testing.expectEqualStrings("second description", question.options[1].description) catch unreachable;
             std.testing.expect(question.options[1].is_installed) catch unreachable;
             self.saw_provider_metadata = true;
-            return .{ .choice = 1 };
+            return self.response;
         }
     };
 
@@ -913,15 +917,24 @@ test "common ALPM optional dependency choices map to package names" {
         .{ .name = "first-package", .description = "first description", .is_installed = false },
         .{ .name = "second-package", .description = "second description", .is_installed = true },
     };
-    const response = dispatcher.raiseQuestion(threaded.io(), .{
+    var response = dispatcher.raiseQuestion(threaded.io(), .{
         .question = "Select an optional dependency",
         .question_type = @intFromEnum(bindings.libalpm.QuestionType.select_optional_dependencies),
         .options = &names,
         .provider_options = &providers,
     });
 
-    try std.testing.expectEqualStrings("second-package", response.pkg.?);
+    try std.testing.expectEqualSlices(usize, &.{ 0, 1 }, response.selected_indices);
     try std.testing.expect(responder.saw_provider_metadata);
+
+    responder.response = .{ .choice = 1 };
+    response = dispatcher.raiseQuestion(threaded.io(), .{
+        .question = "Select an optional dependency",
+        .question_type = @intFromEnum(bindings.libalpm.QuestionType.select_optional_dependencies),
+        .options = &names,
+        .provider_options = &providers,
+    });
+    try std.testing.expectEqualStrings("second-package", response.pkg.?);
 }
 
 test "question blocks until answered from another task" {

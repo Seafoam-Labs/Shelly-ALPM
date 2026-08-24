@@ -767,11 +767,9 @@ fn writeStandardPlain(
         cells.* = try values.toOwnedSlice(allocator);
     }
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         headings.items,
         rows,
-        output.supportsAnsi(context),
     );
     try coloredTotal(context, try std.fmt.allocPrint(allocator, "Total: {d} packages", .{selected.len}));
 }
@@ -797,11 +795,9 @@ fn writeAppImagePlain(context: *runtime.RuntimeContext, items: []const AppImageI
         });
     }
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{ "Name", "Version", "Size", "Update Info" },
         rows,
-        output.supportsAnsi(context),
     );
 }
 
@@ -835,11 +831,9 @@ fn writeAurPlain(
         cells.* = try values.toOwnedSlice(allocator);
     }
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         headings.items,
         rows,
-        output.supportsAnsi(context),
     );
     try coloredTotal(context, try std.fmt.allocPrint(
         allocator,
@@ -864,11 +858,9 @@ fn writeFlatpakPlain(context: *runtime.RuntimeContext, items: []const FlatpakIte
         item.remote,
     });
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{ "Name", "Id", "Version", "Arch", "Branch", "Summary", "Remote" },
         rows,
-        output.supportsAnsi(context),
     );
     try coloredTotal(context, try std.fmt.allocPrint(allocator, "Total: {d} packages", .{sorted.len}));
 }
@@ -951,7 +943,7 @@ fn formatSignedSize(allocator: std.mem.Allocator, display: SizeDisplay, bytes: i
 }
 
 fn truncate(value: []const u8, maximum: usize) []const u8 {
-    return if (value.len <= maximum) value else value[0..maximum];
+    return format.truncate(value, maximum);
 }
 
 fn runReal(

@@ -292,11 +292,9 @@ fn renderPlannedStandardUpdates(
 
     try context.stdout.print("Repository ({d}):\n", .{updates.len});
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{ "Repository", "Package", "Old Version", "New Version", "Net Change", "Download Size" },
         rows,
-        output.supportsAnsi(context),
     );
     const formatted_download = try fmt.formatSignedSize(allocator, size_display, total_download);
     const formatted_change = try fmt.formatSignedSize(allocator, size_display, net_change);
@@ -405,11 +403,9 @@ fn renderStandardUpgradePreview(
 
     try context.stdout.writeAll("The following upgrades are planned:\n\n");
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{ "Repository", "Package", "Old Version", "New Version", "Net Change", "Download Size" },
         rows,
-        output.supportsAnsi(context),
     );
     const formatted_download = try fmt.formatSignedSize(allocator, size_display, total_download);
     const formatted_change = try fmt.formatSignedSize(allocator, size_display, net_change);

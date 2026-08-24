@@ -52,10 +52,9 @@ pub const Pkgbuild = struct {
     /// re-parses with the results. Empty when none are present or after a
     /// re-parse that seeded every value.
     dynamic_assignments: []dynamic_assignment = &.{},
-    /// Complete top-level source/source_<CARCH> array assignments for an
-    /// array that contains command substitution. The initial parse records
-    /// these as reviewed shell text; the builder evaluates them in its
-    /// sandbox and reparses with array overrides.
+    /// Source-integrity array assignments whose effective values require Bash
+    /// control flow or command substitution. The builder evaluates the whole
+    /// reviewed family atomically in its sandbox and reparses with overrides.
     dynamic_source_assignments: []dynamic_array_assignment = &.{},
 
     pub fn deinit(self: *Pkgbuild, allocator: std.mem.Allocator) void {
@@ -278,11 +277,9 @@ pub const dynamic_assignment = struct {
     }
 };
 
-/// One complete source-array assignment retained for post-review evaluation.
-/// All assignments for a dynamic array are retained (including preceding
-/// static assignments and `+=`) so Bash reconstructs the array in source
-/// order. `has_command_substitution` distinguishes the statements that need
-/// an explicit review warning.
+/// One source-integrity array assignment retained for post-review evaluation.
+/// `has_command_substitution` distinguishes statements that need an explicit
+/// review warning; the statements themselves are not replayed out of context.
 pub const dynamic_array_assignment = struct {
     name: []const u8,
     statement: []const u8,

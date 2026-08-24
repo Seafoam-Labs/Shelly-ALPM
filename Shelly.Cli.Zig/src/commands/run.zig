@@ -206,11 +206,9 @@ fn writeRunningPlain(context: *runtime.RuntimeContext, items: []const RunningIte
         item.branch,
     };
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{ "Application", "Instance", "PID", "Child PID", "Arch", "Branch" },
         rows,
-        output.supportsAnsi(context),
     );
     try context.stdout.print("Total: {d} running Flatpak{s}\n", .{ items.len, if (items.len == 1) "" else "s" });
 }

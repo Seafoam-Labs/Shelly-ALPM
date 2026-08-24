@@ -5,6 +5,7 @@ const install = @import("install.zig");
 const parser = @import("../cli/parser.zig");
 const output = @import("../output/config.zig");
 const colors = @import("../output/colors.zig");
+const format = @import("../output/format.zig");
 const runtime = @import("../runtime/context.zig");
 
 const command_path = "shelly";
@@ -423,7 +424,7 @@ fn orderIgnoreCase(left: []const u8, right: []const u8) std.math.Order {
 }
 
 fn truncate(value: []const u8, maximum: usize) []const u8 {
-    return if (value.len <= maximum) value else value[0..maximum];
+    return format.truncate(value, maximum);
 }
 
 test "candidate preparation puts the closest standard match last" {

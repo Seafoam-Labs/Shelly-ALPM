@@ -36,6 +36,7 @@ pub const StandardPackage = struct {
     provides: []const []const u8 = &.{},
     depends: []const []const u8 = &.{},
     optional_depends: []const []const u8 = &.{},
+    optional_depends_installed: []const bool = &.{},
     conflicts: []const []const u8 = &.{},
     install_reason: []const u8 = "Unknown",
     install_date: ?i64 = null,
@@ -325,6 +326,11 @@ fn runStandard(
             var pkg = package;
             if (std.ascii.eqlIgnoreCase(package.name, wanted)) {
                 pkg.required_by = try manager.get_required_packages(package.name, package.repository);
+                pkg.optional_depends_installed = try optionalDependencyInstalledStates(
+                    context.allocator,
+                    manager,
+                    package.optional_depends,
+                );
                 return .{ .mode = .detail, .detail = pkg };
             }
         }
@@ -603,7 +609,7 @@ fn renderStandard(
         .groups => {
             var rows: std.ArrayList([]const []const u8) = .empty;
             for (result.groups) |group_name| try rows.append(context.allocator, try row(context.allocator, &.{group_name}));
-            try table.write(context.allocator, context.stdout, &.{"Group"}, rows.items, output.supportsAnsi(context));
+            try table.write(context, &.{"Group"}, rows.items);
             try context.stdout.writeByte('\n');
         },
         .detail => try writePackageDetail(context, result.detail.?),
@@ -615,7 +621,7 @@ fn renderStandard(
                     package.name,
                     try formatSize(context.allocator, size_display, package.size),
                 }));
-                try table.write(context.allocator, context.stdout, &.{ "Name", "Size" }, rows.items, output.supportsAnsi(context));
+                try table.write(context, &.{ "Name", "Size" }, rows.items);
                 try context.stdout.writeByte('\n');
             }
             if (result.packages.len > 0) {
@@ -628,11 +634,9 @@ fn renderStandard(
                     truncate(package.description, 50),
                 }));
                 try table.write(
-                    context.allocator,
-                    context.stdout,
+                    context,
                     &.{ "Name", "Repository", "Version", "Size", "Description" },
                     rows.items,
-                    output.supportsAnsi(context),
                 );
                 try context.stdout.writeByte('\n');
             }
@@ -711,11 +715,9 @@ fn renderAur(
         }));
     }
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{ "Name", "Version", "Maintainer/Repository", "Last Updated/Build Date", "Description" },
         rows.items,
-        output.supportsAnsi(context),
     );
     try context.stdout.writeByte('\n');
     try context.stdout.print("Total results: {d}\n", .{result.packages.len + result.standard_packages.len});
@@ -786,11 +788,9 @@ fn renderFlatpak(
         try joined(context.allocator, package.permissions),
     }));
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{ "Name", "AppId", "Summary", "Remote", "Download Size", "Installed Size", "Permissions" },
         rows.items,
-        output.supportsAnsi(context),
     );
     try context.stdout.writeByte('\n');
 }
@@ -862,6 +862,7 @@ fn writeStandardPackageJsonWith(json: *std.json.Stringify, package: StandardPack
     try field(json, "Provides", package.provides);
     try field(json, "Depends", package.depends);
     try field(json, "OptDepends", package.optional_depends);
+    try field(json, "OptDependsInstalled", package.optional_depends_installed);
     try field(json, "Conflicts", package.conflicts);
     try field(json, "PackageFile", null);
     try field(json, "InstallReason", package.install_reason);
@@ -1013,6 +1014,31 @@ fn copyStandardPackage(
         .required_by = try copySentinelStrings(allocator, package.required_by()),
         .optional_for = try copySentinelStrings(allocator, package.optional_for()),
     };
+}
+
+fn optionalDependencyInstalledStates(
+    allocator: std.mem.Allocator,
+    manager: *Zigalpm.AlpmManager,
+    optional_dependencies: []const []const u8,
+) ![]bool {
+    const states = try allocator.alloc(bool, optional_dependencies.len);
+    errdefer allocator.free(states);
+    for (optional_dependencies, states) |raw, *installed| {
+        const dependency = optionalDependencyExpression(raw);
+        if (dependency.len == 0) {
+            installed.* = false;
+            continue;
+        }
+        const dependency_z = try allocator.dupeZ(u8, dependency);
+        defer allocator.free(dependency_z);
+        installed.* = manager.is_dependency_satisfied_by_installed_packages(dependency_z) catch false;
+    }
+    return states;
+}
+
+fn optionalDependencyExpression(raw: []const u8) []const u8 {
+    const description = std.mem.indexOf(u8, raw, ": ") orelse raw.len;
+    return std.mem.trim(u8, raw[0..description], " \t\r\n");
 }
 
 fn copyAurPackage(allocator: std.mem.Allocator, package: Zigalpm.aur.models.Package) !AurPackage {
@@ -1280,6 +1306,22 @@ test "standard output preserves C# table columns and ranked result order" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Total: 2 packages") != null);
 }
 
+test "standard package detail serializes optional dependency installation state" {
+    var output_buffer = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer output_buffer.deinit();
+    try writeStandardPackageJson(&output_buffer.writer, .{
+        .name = "editor",
+        .version = "1.0",
+        .optional_depends = &.{ "spellcheck: Spell checking", "plugins>=2: Plugin support" },
+        .optional_depends_installed = &.{ true, false },
+    });
+
+    const rendered = output_buffer.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"OptDependsInstalled\":[true,false]") != null);
+    try std.testing.expectEqualStrings("plugins>=1:2", optionalDependencyExpression("plugins>=1:2: Plugin support"));
+    try std.testing.expectEqualStrings("spellcheck", optionalDependencyExpression("spellcheck: Spell checking"));
+}
+
 test "AUR standard merge and Flatpak paging are serialized without subprocesses" {
     var tc: test_support.TestContext = .{};
     tc.init();
@@ -1334,6 +1376,39 @@ test "AUR standard merge and Flatpak paging are serialized without subprocesses"
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Installed Size") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "shared=network") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "sockets=wayland") != null);
+}
+
+test "interactive AUR search table stays within terminal width" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    var environment = std.process.Environ.Map.init(tc.arena.allocator());
+    try environment.put("COLUMNS", "80");
+    tc.context.environment = &environment;
+    tc.context.stdout_is_tty = true;
+
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const invocation = try parser.parse(tc.arena.allocator(), &manifest, &.{ "search", "aur", "codelldb-bin" });
+    const Fixture = struct {
+        fn search(_: @This(), _: *runtime.RuntimeContext, _: *const parser.Invocation) !Result {
+            return .{ .aur = .{ .packages = &.{.{
+                .name = "codelldb-bin",
+                .version = "1.12.3-1",
+                .maintainer = "dmitmel",
+                .last_modified = 1_777_000_000,
+                .description = "A native debugger extension for VSCode based on LLDB. Also known as CodeLLDB.",
+            }} } };
+        }
+    };
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &invocation.dispatch, Fixture{}));
+
+    const rendered = tc.stdout.writer.buffered();
+    var lines = std.mem.splitScalar(u8, rendered, '\n');
+    while (lines.next()) |line|
+        try std.testing.expect((try std.unicode.utf8CountCodepoints(line)) <= 79);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "codelldb-bin") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "VSCode") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Total results: 1") != null);
 }
 
 test "AUR pkgbuild search displays fetched content and structured output" {

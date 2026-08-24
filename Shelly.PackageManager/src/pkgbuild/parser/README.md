@@ -13,7 +13,8 @@ reviewable text for the builder's post-review shell evaluation.
 PkgbuildParser.parser_content (parser.zig)
   1. build_var_hashmap          top-level assignments → variable map
                                 (variables.zig; rejects command substitution)
-  2. collect dynamic source arrays; reject other dynamic arrays (execution.zig)
+  2. defer source-integrity control flow and arbitrary dynamic indexed arrays to reviewed sandbox evaluation
+     (execution.zig)
   3. validate_selected_package / arch directives             (validation.zig)
   4. inspect_package_functions  split-package shape          (validation.zig)
   5. install/changelog file resolution                       (fields.zig)
@@ -27,8 +28,10 @@ PkgbuildParser.parser_content (parser.zig)
 
 `PkgbuildParser` (in `parser.zig`) is a small context value —
 `{ allocator, io, selected_package_name, package_carch, dynamic_overrides,
-dynamic_array_overrides }` — passed into every module function; split-package
-builds set `selected_package_name` to evaluate one `package_<name>()` at a time.
+dynamic_unsets, dynamic_array_overrides }` — passed into every module function;
+split-package builds set `selected_package_name` to evaluate one
+`package_<name>()` at a time. The dynamic maps contain state captured while
+sourcing the reviewed PKGBUILD in the build sandbox.
 
 ## Files
 
@@ -41,12 +44,12 @@ builds set `selected_package_name` to evaluate one `package_<name>()` at a time.
 | `arithmetic.zig` | **`$((…))` evaluator.** Recursive-descent arithmetic with correct precedence, parentheses, and `$var` substitution of integer variables. |
 | `expansion.zig` | **The expansion engine.** Resolves bash parameter expansions against the variable map: plain `$var`/`${var}`, case conversion `${v,}`/`${v,,}`/`${v^}`/`${v^^}`, trim `${v#p}`/`${v##p}`/`${v%p}`/`${v%%p}`, replacement `${v/a/b}` (+ `//`, `/#`, `/%`), substring `${v:o:l}`, arithmetic, and command substitution (stripped for metadata, preserved for step bodies). Two modes: `.metadata` (destructive — unknowns fail later validation) and `.execution` (lossless — the shell resolves the rest at runtime). Honors quoting and heredoc semantics via `shell_scan`. |
 | `arrays.zig` | **Array parsing.** `parse_array` with quoted words, escapes, per-line comments, `+=` appends, brace expansion (`pkg-{a,b}.tar` cartesian product, bounded), conditional-block skipping, and scoped `package_<name>` arrays. |
-| `variables.zig` | **Variable map.** `build_var_hashmap` collects top-level `key=value` assignments (quotes, appends), rejects command substitution, then fixpoint-resolves chained references; `inject_array_pkgname` overlays the first split-package name; `parse_variable`, `resolve_or_parse`, and the string-freeing helpers. |
+| `variables.zig` | **Variable map.** `build_var_hashmap` collects top-level `key=value` assignments (quotes, appends), avoids executing command substitution, overlays sandbox-captured scalar values and unsets, then fixpoint-resolves chained references; `inject_array_pkgname` overlays the first split-package name; `parse_variable`, `resolve_or_parse`, and the string-freeing helpers. |
 | `dependencies.zig` | **Dependency handling.** `parse_dependencies` splits `name>=version` into `parsed_dep`; `resolve_variable_references` expands `$var`/`${arr[@]}` items and strips dangling constraints on unresolvable variables (with a warning). |
 | `sources.zig` | **Local source handling.** Classifies resolved `source=()` entries (remote vs local, `name::url` renames), ignores deferred command-substitution entries until the sandboxed reparse, reads local files for review (32 MB cap), and labels binary content. |
 | `fields.zig` | **Field resolution.** Resolves each metadata field with makepkg semantics, merges `${CARCH}`-suffixed arrays, preserves deferred source commands during analysis, and consumes sandbox-produced array overrides during the final reparse. |
 | `validation.zig` | **makepkg rules.** Package-name uniqueness, reserved `xdata` keys, arch directive legality (incl. per-package overrides), package-function shape (split vs single, `build()` without `package()`), and forbidden assignments inside package bodies. |
-| `execution.zig` | **Execution plan.** Extracts `verify/prepare/pkgver/build/check/package[_name]` bodies in makepkg order, reconstructs the pre-execution environment as safely quoted bash declarations (`shared_prelude`/`package_prelude` with the selected split name overlaid), captures helper functions, and expands step bodies through the `.execution` mode with makepkg builtins (`pkgbase`, `startdir`, `srcdir`, `pkgdir`, `CARCH`). |
+| `execution.zig` | **Execution plan.** Extracts `verify/prepare/pkgver/build/check/package[_name]` bodies in makepkg order, reconstructs the pre-execution environment as safely quoted bash declarations and explicit unsets (`shared_prelude`/`package_prelude` with the selected split name overlaid), captures helper functions, identifies source/checksum arrays that require Bash control flow, and expands step bodies through the `.execution` mode with makepkg builtins (`pkgbase`, `startdir`, `srcdir`, `pkgdir`, `CARCH`). |
 
 ## Module dependencies
 
@@ -76,11 +79,12 @@ the resulting circular imports are intentional and legal in Zig.
   expansion/quoting semantics. The in-file unit tests (127 across the two)
   are the spec; heredoc bodies, single-quote runs, and backslash escapes must
   pass through untouched.
-- **Security model:** no PKGBUILD code ever runs here. Command substitution in
-  `source` and active `source_<CARCH>` arrays is retained for post-review,
-  sandboxed evaluation; other dynamic arrays remain rejected with
-  `UnsupportedDynamicAssignment`. Unresolved file fields fail closed, local
-  files are captured for human review, and expansion depth/counts are bounded.
+- **Security model:** no PKGBUILD code ever runs here. Source-integrity arrays
+  that require command substitution or shell control flow are retained for
+  atomic post-review sandboxed evaluation; other dynamic arrays remain
+  rejected with `UnsupportedDynamicAssignment`. Unresolved file fields fail
+  closed, newly discovered local files require supplemental review, and
+  expansion/output depth and counts are bounded.
 - **makepkg fidelity:** `execution.zig` prelude ordering, `${CARCH}` array
   merging in `fields.zig`, and arch/split rules in `validation.zig` mirror
   makepkg behavior — compare against makepkg sources when in doubt.

@@ -325,12 +325,28 @@ const SyncTestWorkspace = struct {
         name: []const u8,
         version: []const u8,
     ) ![]u8 {
+        return self.createPackageArchiveWithDependencies(allocator, name, version, &.{});
+    }
+
+    fn createPackageArchiveWithDependencies(
+        self: *const SyncTestWorkspace,
+        allocator: std.mem.Allocator,
+        name: []const u8,
+        version: []const u8,
+        dependencies: []const []const u8,
+    ) ![]u8 {
         const package_path = try std.fmt.allocPrint(
             allocator,
             "{s}/{s}-{s}-any.pkg.tar",
             .{ self.root, name, version },
         );
         errdefer allocator.free(package_path);
+
+        var dependency_lines: std.ArrayList(u8) = .empty;
+        defer dependency_lines.deinit(allocator);
+        for (dependencies) |dependency| {
+            try dependency_lines.print(allocator, "depend = {s}\n", .{dependency});
+        }
 
         const pkginfo = try std.fmt.allocPrint(
             allocator,
@@ -344,8 +360,9 @@ const SyncTestWorkspace = struct {
                 "packager = Shelly test suite\n" ++
                 "size = 0\n" ++
                 "arch = any\n" ++
-                "license = MIT\n",
-            .{ name, name, version, name },
+                "license = MIT\n" ++
+                "{s}",
+            .{ name, name, version, name, dependency_lines.items },
         );
         defer allocator.free(pkginfo);
 
@@ -390,6 +407,65 @@ const SyncTestWorkspace = struct {
         try file_writer.interface.flush();
     }
 
+    fn createOptionalDependencySyncDatabase(self: *const SyncTestWorkspace, allocator: std.mem.Allocator) !void {
+        const sync_dir = try std.fmt.allocPrint(allocator, "{s}/sync", .{self.db_path});
+        defer allocator.free(sync_dir);
+        try std.Io.Dir.cwd().createDirPath(self.io, sync_dir);
+
+        const database_path = try std.fmt.allocPrint(allocator, "{s}/seafoam-labs.db", .{sync_dir});
+        defer allocator.free(database_path);
+
+        const parent_desc =
+            "%FILENAME%\noptional-parent-1.0-1-any.pkg.tar\n\n" ++
+            "%NAME%\noptional-parent\n\n" ++
+            "%BASE%\noptional-parent\n\n" ++
+            "%VERSION%\n1.0-1\n\n" ++
+            "%DESC%\nPackage with several optional dependencies\n\n" ++
+            "%CSIZE%\n1\n\n" ++
+            "%ISIZE%\n1\n\n" ++
+            "%ARCH%\nany\n\n" ++
+            "%OPTDEPENDS%\ninstalled-option: already installed\noptional-one: first new option\noptional-two>=1: second new option\n\n";
+        const installed_desc =
+            "%FILENAME%\ninstalled-option-1.0-1-any.pkg.tar\n\n" ++
+            "%NAME%\ninstalled-option\n\n" ++
+            "%BASE%\ninstalled-option\n\n" ++
+            "%VERSION%\n1.0-1\n\n" ++
+            "%DESC%\nAlready installed option\n\n" ++
+            "%CSIZE%\n1\n\n" ++
+            "%ISIZE%\n1\n\n" ++
+            "%ARCH%\nany\n\n";
+        const first_desc =
+            "%FILENAME%\noptional-one-1.0-1-any.pkg.tar\n\n" ++
+            "%NAME%\noptional-one\n\n" ++
+            "%BASE%\noptional-one\n\n" ++
+            "%VERSION%\n1.0-1\n\n" ++
+            "%DESC%\nFirst new option\n\n" ++
+            "%CSIZE%\n1\n\n" ++
+            "%ISIZE%\n1\n\n" ++
+            "%ARCH%\nany\n\n";
+        const second_desc =
+            "%FILENAME%\noptional-two-1.0-1-any.pkg.tar\n\n" ++
+            "%NAME%\noptional-two\n\n" ++
+            "%BASE%\noptional-two\n\n" ++
+            "%VERSION%\n1.0-1\n\n" ++
+            "%DESC%\nSecond new option\n\n" ++
+            "%CSIZE%\n1\n\n" ++
+            "%ISIZE%\n1\n\n" ++
+            "%ARCH%\nany\n\n";
+
+        var file = try std.Io.Dir.cwd().createFile(self.io, database_path, .{});
+        defer file.close(self.io);
+        var write_buffer: [8192]u8 = undefined;
+        var file_writer = file.writer(self.io, &write_buffer);
+        var archive_writer: std.tar.Writer = .{ .underlying_writer = &file_writer.interface };
+        try archive_writer.writeFileBytes("optional-parent-1.0-1/desc", parent_desc, .{ .mode = 0o644 });
+        try archive_writer.writeFileBytes("installed-option-1.0-1/desc", installed_desc, .{ .mode = 0o644 });
+        try archive_writer.writeFileBytes("optional-one-1.0-1/desc", first_desc, .{ .mode = 0o644 });
+        try archive_writer.writeFileBytes("optional-two-1.0-1/desc", second_desc, .{ .mode = 0o644 });
+        try archive_writer.finishPedantically();
+        try file_writer.interface.flush();
+    }
+
     // Removes the entire temp tree (config + downloaded databases) and frees the
     // owned path strings. Safe to call regardless of how far `create` got.
     fn cleanup(self: *SyncTestWorkspace, allocator: std.mem.Allocator) void {
@@ -399,6 +475,208 @@ const SyncTestWorkspace = struct {
         allocator.free(self.root);
     }
 };
+
+/// A fully local repository fixture for database-signature synchronization.
+/// Source files deliberately use restrictive modes so successful syncs prove
+/// that destination permissions do not inherit either source modes or umask.
+const SignatureSyncWorkspace = struct {
+    io: std.Io,
+    root: []const u8,
+    config_path: []const u8,
+    db_path: []const u8,
+    mirror_path: []const u8,
+
+    fn create(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        signature_level: []const u8,
+        include_signature: bool,
+    ) !SignatureSyncWorkspace {
+        const anchor: u8 = 0;
+        var prng = std.Random.DefaultPrng.init(@intFromPtr(&anchor));
+        const root = try std.fmt.allocPrint(allocator, "/tmp/shelly-signature-sync-test-{x}", .{prng.random().int(u32)});
+        errdefer allocator.free(root);
+        const config_path = try std.fmt.allocPrint(allocator, "{s}/pacman.conf", .{root});
+        errdefer allocator.free(config_path);
+        const db_path = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+        errdefer allocator.free(db_path);
+        const mirror_path = try std.fmt.allocPrint(allocator, "{s}/mirror", .{root});
+        errdefer allocator.free(mirror_path);
+        const gpg_path = try std.fmt.allocPrint(allocator, "{s}/gnupg", .{root});
+        defer allocator.free(gpg_path);
+
+        std.Io.Dir.cwd().deleteTree(io, root) catch {};
+        try std.Io.Dir.cwd().createDirPath(io, db_path);
+        try std.Io.Dir.cwd().createDirPath(io, mirror_path);
+        try std.Io.Dir.cwd().createDirPath(io, gpg_path);
+
+        const database_path = try std.fmt.allocPrint(allocator, "{s}/seafoam-labs.db", .{mirror_path});
+        defer allocator.free(database_path);
+        {
+            var file = try std.Io.Dir.cwd().createFile(io, database_path, .{});
+            defer file.close(io);
+            var write_buffer: [4096]u8 = undefined;
+            var file_writer = file.writer(io, &write_buffer);
+            var archive_writer: std.tar.Writer = .{ .underlying_writer = &file_writer.interface };
+            try archive_writer.writeFileBytes(
+                "fixture-1.0-1/desc",
+                "%FILENAME%\nfixture-1.0-1-any.pkg.tar.zst\n\n" ++
+                    "%NAME%\nfixture\n\n" ++
+                    "%VERSION%\n1.0-1\n\n" ++
+                    "%DESC%\nDatabase signature synchronization fixture\n\n" ++
+                    "%CSIZE%\n1\n\n" ++
+                    "%ISIZE%\n1\n\n" ++
+                    "%ARCH%\nany\n\n",
+                .{ .mode = 0o644 },
+            );
+            try archive_writer.finishPedantically();
+            try file_writer.interface.flush();
+            try file.setPermissions(io, .fromMode(0o600));
+        }
+
+        if (include_signature) {
+            const signature_path = try std.fmt.allocPrint(allocator, "{s}.sig", .{database_path});
+            defer allocator.free(signature_path);
+            var signature = try std.Io.Dir.cwd().createFile(io, signature_path, .{});
+            defer signature.close(io);
+            try signature.writeStreamingAll(io, "deliberately-invalid-detached-signature");
+            try signature.setPermissions(io, .fromMode(0o600));
+        }
+
+        const config = try std.fmt.allocPrint(
+            allocator,
+            "[options]\n" ++
+                "Architecture = x86_64\n" ++
+                "DBPath = {s}\n" ++
+                "GPGDir = {s}\n" ++
+                "SigLevel = {s}\n" ++
+                "\n" ++
+                "[seafoam-labs]\n" ++
+                "Server = file://{s}\n",
+            .{ db_path, gpg_path, signature_level, mirror_path },
+        );
+        defer allocator.free(config);
+        var config_file = try std.Io.Dir.cwd().createFile(io, config_path, .{});
+        defer config_file.close(io);
+        try config_file.writeStreamingAll(io, config);
+
+        return .{
+            .io = io,
+            .root = root,
+            .config_path = config_path,
+            .db_path = db_path,
+            .mirror_path = mirror_path,
+        };
+    }
+
+    fn syncPath(self: *const SignatureSyncWorkspace, allocator: std.mem.Allocator, suffix: []const u8) ![]u8 {
+        return std.fmt.allocPrint(allocator, "{s}/sync/seafoam-labs.db{s}", .{ self.db_path, suffix });
+    }
+
+    fn cleanup(self: *SignatureSyncWorkspace, allocator: std.mem.Allocator) void {
+        std.Io.Dir.cwd().deleteTree(self.io, self.root) catch {};
+        allocator.free(self.mirror_path);
+        allocator.free(self.db_path);
+        allocator.free(self.config_path);
+        allocator.free(self.root);
+    }
+};
+
+test "optional database signatures are retained beside world-readable databases" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var workspace = try SignatureSyncWorkspace.create(allocator, io, "Required DatabaseOptional", true);
+    defer workspace.cleanup(allocator);
+
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+    try mgr.sync_for_update_check(true);
+
+    const database_path = try workspace.syncPath(allocator, "");
+    defer allocator.free(database_path);
+    const signature_path = try workspace.syncPath(allocator, ".sig");
+    defer allocator.free(signature_path);
+    const database_stat = try std.Io.Dir.cwd().statFile(io, database_path, .{});
+    const signature_stat = try std.Io.Dir.cwd().statFile(io, signature_path, .{});
+    try testing.expectEqual(@as(u32, 0o644), database_stat.permissions.toMode() & 0o7777);
+    try testing.expectEqual(@as(u32, 0o644), signature_stat.permissions.toMode() & 0o7777);
+
+    const sync_directory = try std.fmt.allocPrint(allocator, "{s}/sync", .{workspace.db_path});
+    defer allocator.free(sync_directory);
+    const directory_stat = try std.Io.Dir.cwd().statFile(io, sync_directory, .{});
+    try testing.expectEqual(@as(u32, 0o755), directory_stat.permissions.toMode() & 0o7777);
+}
+
+test "optional missing database signature succeeds and removes a stale sibling" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var workspace = try SignatureSyncWorkspace.create(allocator, io, "Required DatabaseOptional", false);
+    defer workspace.cleanup(allocator);
+
+    const sync_directory = try std.fmt.allocPrint(allocator, "{s}/sync", .{workspace.db_path});
+    defer allocator.free(sync_directory);
+    try std.Io.Dir.cwd().createDirPath(io, sync_directory);
+    try std.Io.Dir.cwd().setFilePermissions(io, sync_directory, .fromMode(0o700), .{});
+    const signature_path = try workspace.syncPath(allocator, ".sig");
+    defer allocator.free(signature_path);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = signature_path, .data = "stale-signature" });
+
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+    try mgr.sync_for_update_check(true);
+
+    const database_path = try workspace.syncPath(allocator, "");
+    defer allocator.free(database_path);
+    const database_stat = try std.Io.Dir.cwd().statFile(io, database_path, .{});
+    try testing.expectEqual(@as(u32, 0o644), database_stat.permissions.toMode() & 0o7777);
+    try testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, signature_path, .{}));
+    const directory_stat = try std.Io.Dir.cwd().statFile(io, sync_directory, .{});
+    try testing.expectEqual(@as(u32, 0o755), directory_stat.permissions.toMode() & 0o7777);
+}
+
+test "required missing database signature fails without leaving a database" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var workspace = try SignatureSyncWorkspace.create(allocator, io, "Required", false);
+    defer workspace.cleanup(allocator);
+
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+    try testing.expectError(error.UpdateFetchFailed, mgr.sync_for_update_check(true));
+
+    const database_path = try workspace.syncPath(allocator, "");
+    defer allocator.free(database_path);
+    const signature_path = try workspace.syncPath(allocator, ".sig");
+    defer allocator.free(signature_path);
+    try testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, database_path, .{}));
+    try testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, signature_path, .{}));
+}
+
+test "invalid optional database signature is fatal and cleaned up" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var workspace = try SignatureSyncWorkspace.create(allocator, io, "Required DatabaseOptional", true);
+    defer workspace.cleanup(allocator);
+
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+    try testing.expectError(error.SyncDbFailed, mgr.sync(true));
+
+    const database_path = try workspace.syncPath(allocator, "");
+    defer allocator.free(database_path);
+    const signature_path = try workspace.syncPath(allocator, ".sig");
+    defer allocator.free(signature_path);
+    try testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, database_path, .{}));
+    try testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, signature_path, .{}));
+}
 
 test "Manager.init registers the configured sync database" {
     const allocator = testing.allocator;
@@ -529,7 +807,7 @@ test "Manager.sync downloads the configured database into DBPath/sync" {
     defer threaded.deinit();
     const io = threaded.io();
 
-    var workspace = try SyncTestWorkspace.create(allocator, io);
+    var workspace = try SignatureSyncWorkspace.create(allocator, io, "Never", false);
     defer workspace.cleanup(allocator);
 
     const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
@@ -538,8 +816,7 @@ test "Manager.sync downloads the configured database into DBPath/sync" {
     // Force the download so the result never depends on a pre-existing cache.
     try mgr.sync(true);
 
-    // sync creates "<DBPath>/sync" and download_database stores each database
-    // there under its bare repository name (no extension).
+    // sync creates "<DBPath>/sync" and stores the configured database there.
     const sync_dir = try std.fmt.allocPrint(allocator, "{s}/sync", .{workspace.db_path});
     defer allocator.free(sync_dir);
     _ = try std.Io.Dir.cwd().statFile(io, sync_dir, .{});
@@ -1377,7 +1654,7 @@ test "get_available_packages returns packages after a successful sync" {
     defer threaded.deinit();
     const io = threaded.io();
 
-    var workspace = try SyncTestWorkspace.create(allocator, io);
+    var workspace = try SignatureSyncWorkspace.create(allocator, io, "Never", false);
     defer workspace.cleanup(allocator);
 
     const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
@@ -1389,7 +1666,7 @@ test "get_available_packages returns packages after a successful sync" {
     const packages = try mgr.get_available_packages();
     defer libalpm.OwnedPackage.deinitSlice(allocator, packages);
 
-    // A real repository always exposes packages, each with a readable name.
+    // The local fixture exposes one package with a readable name.
     try testing.expect(packages.len > 0);
     for (packages) |package| {
         _ = package.name() orelse return error.TestFailed;
@@ -1614,6 +1891,85 @@ test "install_packages exposes its prepared plan and decline prevents downloads"
     try testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, archive_path, .{}));
 }
 
+test "install_packages preserves every optional dependency selection after an installed first choice" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.addLocalPackage(allocator, "installed-option", "1.0-1");
+    try workspace.createOptionalDependencySyncDatabase(allocator);
+    const cache_path = try std.fmt.allocPrint(allocator, "{s}/cache", .{workspace.root});
+    defer allocator.free(cache_path);
+    try std.Io.Dir.cwd().createDirPath(io, cache_path);
+    const config = try std.fmt.allocPrint(
+        allocator,
+        "[options]\nArchitecture = auto\nSigLevel = Never\nDBPath = {s}\nCacheDir = {s}\n\n" ++
+            "[seafoam-labs]\nServer = file://{s}/mirror\n",
+        .{ workspace.db_path, cache_path, workspace.root },
+    );
+    defer allocator.free(config);
+    {
+        var config_file = try std.Io.Dir.cwd().createFile(io, workspace.config_path, .{});
+        defer config_file.close(io);
+        try config_file.writeStreamingAll(io, config);
+    }
+
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+    const Capture = struct {
+        saw_optional_question: bool = false,
+        saw_plan: bool = false,
+
+        fn answer(data: ?*anyopaque, question: operations.Question) operations.QuestionResponse {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (question.kind == .select_optional_dependencies) {
+                testing.expectEqual(@as(usize, 3), question.options.len) catch unreachable;
+                testing.expectEqualStrings("installed-option", question.options[0].id) catch unreachable;
+                testing.expect(question.options[0].is_installed) catch unreachable;
+                self.saw_optional_question = true;
+                return .{ .choices = &.{ 0, 1, 2 } };
+            }
+            if (question.kind != .confirm_transaction) return .accepted;
+
+            const plan = question.transaction_plan orelse return .declined;
+            var saw_parent = false;
+            var saw_first = false;
+            var saw_second = false;
+            for (plan.packages) |package| {
+                if (std.mem.eql(u8, package.name, "optional-parent")) {
+                    testing.expectEqual(operations.TransactionPackageRole.requested, package.role) catch unreachable;
+                    saw_parent = true;
+                } else if (std.mem.eql(u8, package.name, "optional-one")) {
+                    testing.expectEqual(operations.TransactionPackageRole.optional_dependency, package.role) catch unreachable;
+                    saw_first = true;
+                } else if (std.mem.eql(u8, package.name, "optional-two")) {
+                    testing.expectEqual(operations.TransactionPackageRole.optional_dependency, package.role) catch unreachable;
+                    saw_second = true;
+                } else if (std.mem.eql(u8, package.name, "installed-option")) {
+                    unreachable;
+                }
+            }
+            testing.expectEqual(@as(usize, 3), plan.packages.len) catch unreachable;
+            testing.expect(saw_parent and saw_first and saw_second) catch unreachable;
+            self.saw_plan = true;
+            return .declined;
+        }
+    };
+    var capture: Capture = .{};
+    var context = operations.OperationContext.init(allocator, io);
+    defer context.deinit();
+    context.setQuestionHandler(.{ .function = Capture.answer, .data = &capture });
+    mgr.setOperationContext(&context);
+
+    var package_names = [_][:0]const u8{"optional-parent"};
+    try testing.expectError(error.Cancelled, mgr.install_packages(&package_names, .{}));
+    try testing.expect(capture.saw_optional_question);
+    try testing.expect(capture.saw_plan);
+}
+
 // ---------------------------------------------------------------------------
 // install_local_packages
 // ---------------------------------------------------------------------------
@@ -1674,6 +2030,75 @@ test "install_local_packages reports an unreadable package archive" {
         mgr.install_local_packages(&paths, .{}),
     );
     try testing.expect(capture.len != 0);
+}
+
+test "install_local_packages predownloads repository dependencies before commit" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.createSyncDatabase(allocator);
+
+    const provider_path = try workspace.createPackageArchive(allocator, "remote-provider", "2.0-1");
+    defer allocator.free(provider_path);
+
+    const local_path = try workspace.createPackageArchiveWithDependencies(
+        allocator,
+        "aur-style-package",
+        "1.0-1",
+        &.{"remote-provider"},
+    );
+    defer allocator.free(local_path);
+
+    const cache_path = try std.fmt.allocPrint(allocator, "{s}/cache", .{workspace.root});
+    defer allocator.free(cache_path);
+    try std.Io.Dir.cwd().createDirPath(io, cache_path);
+
+    const config = try std.fmt.allocPrint(
+        allocator,
+        "[options]\n" ++
+            "Architecture = auto\n" ++
+            "SigLevel = Never\n" ++
+            "DBPath = {s}\n" ++
+            "CacheDir = {s}\n" ++
+            "\n" ++
+            "[seafoam-labs]\n" ++
+            "Server = file://{s}\n",
+        .{ workspace.db_path, cache_path, workspace.root },
+    );
+    defer allocator.free(config);
+    {
+        var config_file = try std.Io.Dir.cwd().createFile(io, workspace.config_path, .{});
+        defer config_file.close(io);
+        try config_file.writeStreamingAll(io, config);
+    }
+
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+
+    const UnexpectedFetchCapture = struct {
+        saw_unexpected_fetch: bool = false,
+
+        fn capture(data: ?*anyopaque, args: events.ErrorArgs) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (std.mem.indexOf(u8, args.message, "Unexpected libalpm fetch request") != null) {
+                self.saw_unexpected_fetch = true;
+            }
+        }
+    };
+    var capture: UnexpectedFetchCapture = .{};
+    _ = try mgr.dispatcher.addErrorHandler(.{ .function = UnexpectedFetchCapture.capture, .data = &capture });
+
+    var paths = [_][]const u8{local_path};
+    try mgr.install_local_packages(&paths, .{ .downloadonly = true });
+
+    const cached_provider = try std.fmt.allocPrint(allocator, "{s}/remote-provider-2.0-1-any.pkg.tar", .{cache_path});
+    defer allocator.free(cached_provider);
+    _ = try std.Io.Dir.cwd().statFile(io, cached_provider, .{});
+    try testing.expect(!capture.saw_unexpected_fetch);
 }
 
 test "install_local_packages installs multiple archives in a DB-only transaction" {
@@ -1873,7 +2298,7 @@ test "get_updates_available returns an empty list when no packages are installed
     defer threaded.deinit();
     const io = threaded.io();
 
-    var workspace = try SyncTestWorkspace.create(allocator, io);
+    var workspace = try SignatureSyncWorkspace.create(allocator, io, "Never", false);
     defer workspace.cleanup(allocator);
 
     const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });

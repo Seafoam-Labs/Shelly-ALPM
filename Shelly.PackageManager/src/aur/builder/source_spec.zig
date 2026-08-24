@@ -222,18 +222,88 @@ pub fn containsString(values: []const []const u8, needle: []const u8) bool {
 
 pub fn isExtractableArchive(name: []const u8) bool {
     const suffixes = [_][]const u8{
-        ".tar", ".tar.gz", ".tgz", ".tar.zst", ".tar.xz", ".txz", ".tar.bz2", ".tbz", ".tbz2", ".zip", ".deb",
+        ".tar", ".tar.gz", ".tgz", ".tar.zst", ".tar.xz", ".txz", ".tar.bz2", ".tbz", ".tbz2", ".zip", ".vsix", ".deb",
     };
     for (suffixes) |suffix| if (std.ascii.endsWithIgnoreCase(name, suffix)) return true;
     return false;
 }
 
-pub fn validateArchiveLink(target: []const u8) !void {
-    if (target.len == 0 or std.fs.path.isAbsolute(target) or std.mem.indexOfScalar(u8, target, '\\') != null)
+/// Returns the target text that may safely be materialized in the extraction
+/// tree. The caller owns the returned slice. Archive-absolute targets are
+/// interpreted relative to the archive root and rewritten as relative links
+/// so they can never resolve into the host filesystem.
+pub fn archiveLinkTarget(
+    allocator: std.mem.Allocator,
+    entry_path: []const u8,
+    target: []const u8,
+) ![]u8 {
+    if (target.len == 0 or std.mem.indexOfAny(u8, target, "\\\r\n\x00") != null)
         return error.UnsafeSourceArchiveLink;
+
+    var entry_depth: usize = 0;
+    if (entry_path.len == 0 or
+        std.fs.path.isAbsolute(entry_path) or
+        std.mem.indexOfAny(u8, entry_path, "\\\r\n\x00") != null)
+        return error.UnsafeSourceArchiveLink;
+    var entry_components = std.mem.splitScalar(u8, entry_path, '/');
+    while (entry_components.next()) |component| {
+        if (component.len == 0 or
+            std.mem.eql(u8, component, ".") or
+            std.mem.eql(u8, component, "..")) return error.UnsafeSourceArchiveLink;
+        entry_depth += 1;
+    }
+    if (entry_depth == 0) return error.UnsafeSourceArchiveLink;
+    const parent_depth = entry_depth - 1;
+
+    if (!std.fs.path.isAbsolute(target)) {
+        // Relative targets are interpreted from the link's parent. Track
+        // lexical depth so ordinary links such as bin/tool -> ../lib/tool are
+        // accepted while traversal above the archive root remains impossible.
+        var depth = parent_depth;
+        var components = std.mem.splitScalar(u8, target, '/');
+        while (components.next()) |component| {
+            if (component.len == 0 or std.mem.eql(u8, component, ".")) continue;
+            if (!std.mem.eql(u8, component, "..")) {
+                depth += 1;
+                continue;
+            }
+            if (depth == 0) return error.UnsafeSourceArchiveLink;
+            depth -= 1;
+        }
+        return allocator.dupe(u8, target);
+    }
+
+    // Absolute targets in package source archives describe paths inside the
+    // archive's eventual filesystem root. Canonicalize that rooted path, then
+    // express it relative to the link entry before creating it in staging.
+    var rooted_components: std.ArrayList([]const u8) = .empty;
+    defer rooted_components.deinit(allocator);
     var components = std.mem.splitScalar(u8, target, '/');
-    while (components.next()) |component|
-        if (std.mem.eql(u8, component, "..")) return error.UnsafeSourceArchiveLink;
+    while (components.next()) |component| {
+        if (component.len == 0 or std.mem.eql(u8, component, ".")) continue;
+        if (std.mem.eql(u8, component, "..")) {
+            if (rooted_components.items.len == 0) return error.UnsafeSourceArchiveLink;
+            _ = rooted_components.pop();
+            continue;
+        }
+        try rooted_components.append(allocator, component);
+    }
+
+    var rewritten: std.ArrayList(u8) = .empty;
+    errdefer rewritten.deinit(allocator);
+    for (0..parent_depth) |_| try appendArchiveLinkComponent(&rewritten, allocator, "..");
+    for (rooted_components.items) |component| try appendArchiveLinkComponent(&rewritten, allocator, component);
+    if (rewritten.items.len == 0) try rewritten.append(allocator, '.');
+    return rewritten.toOwnedSlice(allocator);
+}
+
+fn appendArchiveLinkComponent(
+    target: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    component: []const u8,
+) !void {
+    if (target.items.len != 0) try target.append(allocator, '/');
+    try target.appendSlice(allocator, component);
 }
 
 test "signed Git source parser accepts query before or after fragment" {
@@ -335,6 +405,8 @@ test "isExtractableArchive recognizes archive suffixes case-insensitively" {
     try std.testing.expect(isExtractableArchive("pkg.tar.gz"));
     try std.testing.expect(isExtractableArchive("pkg.TAR.ZST"));
     try std.testing.expect(isExtractableArchive("pkg.zip"));
+    try std.testing.expect(isExtractableArchive("pkg.vsix"));
+    try std.testing.expect(isExtractableArchive("pkg.VSIX"));
     try std.testing.expect(isExtractableArchive("pkg.tbz2"));
     try std.testing.expect(isExtractableArchive("pkg.deb"));
     try std.testing.expect(isExtractableArchive("pkg.DEB"));
@@ -342,13 +414,30 @@ test "isExtractableArchive recognizes archive suffixes case-insensitively" {
     try std.testing.expect(!isExtractableArchive("package"));
 }
 
-test "validateArchiveLink rejects absolute, parent, and backslash targets" {
-    try std.testing.expectError(error.UnsafeSourceArchiveLink, validateArchiveLink("/etc/passwd"));
-    try std.testing.expectError(error.UnsafeSourceArchiveLink, validateArchiveLink("../escape"));
-    try std.testing.expectError(error.UnsafeSourceArchiveLink, validateArchiveLink("sub/../escape"));
-    try std.testing.expectError(error.UnsafeSourceArchiveLink, validateArchiveLink("a\\b"));
-    try std.testing.expectError(error.UnsafeSourceArchiveLink, validateArchiveLink(""));
-    try validateArchiveLink("sub/dir/target");
+test "archiveLinkTarget contains relative traversal and rebases absolute targets" {
+    const allocator = std.testing.allocator;
+    const cases = [_]struct { entry: []const u8, target: []const u8, expected: []const u8 }{
+        .{ .entry = "bin/tool", .target = "../lib/tool", .expected = "../lib/tool" },
+        .{ .entry = "usr/bin/tool", .target = "../../lib/tool", .expected = "../../lib/tool" },
+        .{ .entry = "bin/tool", .target = "./sub/../target", .expected = "./sub/../target" },
+        .{ .entry = "tool", .target = ".", .expected = "." },
+        .{ .entry = "usr/bin/zoom", .target = "/opt/zoom/ZoomLauncher", .expected = "../../opt/zoom/ZoomLauncher" },
+        .{ .entry = "zoom", .target = "/opt/zoom/ZoomLauncher", .expected = "opt/zoom/ZoomLauncher" },
+        .{ .entry = "usr/bin/root", .target = "/", .expected = "../.." },
+        .{ .entry = "usr/bin/tool", .target = "/opt/../lib/tool", .expected = "../../lib/tool" },
+    };
+    for (cases) |case| {
+        const actual = try archiveLinkTarget(allocator, case.entry, case.target);
+        defer allocator.free(actual);
+        try std.testing.expectEqualStrings(case.expected, actual);
+    }
+
+    try std.testing.expectError(error.UnsafeSourceArchiveLink, archiveLinkTarget(allocator, "bin/tool", "../../escape"));
+    try std.testing.expectError(error.UnsafeSourceArchiveLink, archiveLinkTarget(allocator, "tool", "../escape"));
+    try std.testing.expectError(error.UnsafeSourceArchiveLink, archiveLinkTarget(allocator, "bin/tool", "/../../etc/passwd"));
+    try std.testing.expectError(error.UnsafeSourceArchiveLink, archiveLinkTarget(allocator, "bin/tool", "a\\b"));
+    try std.testing.expectError(error.UnsafeSourceArchiveLink, archiveLinkTarget(allocator, "bin/tool", "line\nbreak"));
+    try std.testing.expectError(error.UnsafeSourceArchiveLink, archiveLinkTarget(allocator, "bin/tool", ""));
 }
 
 test "detached signature naming" {

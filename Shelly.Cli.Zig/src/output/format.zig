@@ -54,7 +54,15 @@ pub fn joined(allocator: std.mem.Allocator, values: []const []const u8) ![]const
 }
 
 pub fn truncate(value: []const u8, maximum: usize) []const u8 {
-    return if (value.len <= maximum) value else value[0..maximum];
+    if (value.len <= maximum) return value;
+    var end = maximum;
+    while (end > 0 and value[end] & 0xc0 == 0x80) end -= 1;
+    return value[0..end];
+}
+
+test "truncate preserves UTF-8 boundaries" {
+    try std.testing.expectEqualStrings("pkg-", truncate("pkg-éclair", 5));
+    try std.testing.expectEqualStrings("pkg-é", truncate("pkg-éclair", 6));
 }
 
 pub fn formatIsoDateTimeUtc(allocator: std.mem.Allocator, seconds: i64) ![]const u8 {

@@ -14,7 +14,7 @@ pub fn has_forbidden_package_assignment(
     content: []const u8,
     vars: *const std.StringHashMap([]const u8),
 ) !bool {
-    const body = (try function_body.selected_package_body(self, content)) orelse blk: {
+    const body = (try function_body.selected_package_body_with_vars(self, content, vars)) orelse blk: {
         if (try function_body.extract_function_body(content, "package")) |generic| break :blk generic;
         const package_name = vars.get("pkgname") orelse return false;
         const function_name = try std.fmt.allocPrint(self.allocator, "package_{s}", .{package_name});
@@ -160,14 +160,22 @@ pub fn inspect_package_functions(
 
     const has_generic = (try function_body.extract_function_body(content, "package")) != null;
     const selected_name = self.selected_package_name orelse names[0];
-    const function_name = try std.fmt.allocPrint(self.allocator, "package_{s}", .{selected_name});
-    defer self.allocator.free(function_name);
-    const has_scoped = (try function_body.extract_function_body(content, function_name)) != null;
+    var selected_parser = self;
+    selected_parser.selected_package_name = selected_name;
+    const has_scoped = (try function_body.selected_scoped_package_body(
+        selected_parser,
+        content,
+        vars,
+    )) != null;
     var has_complete_split = true;
     if (names.len > 1) for (names) |name| {
-        const member_function = try std.fmt.allocPrint(self.allocator, "package_{s}", .{name});
-        defer self.allocator.free(member_function);
-        if ((try function_body.extract_function_body(content, member_function)) == null)
+        var member_parser = self;
+        member_parser.selected_package_name = name;
+        if ((try function_body.selected_scoped_package_body(
+            member_parser,
+            content,
+            vars,
+        )) == null)
             has_complete_split = false;
     };
     return .{

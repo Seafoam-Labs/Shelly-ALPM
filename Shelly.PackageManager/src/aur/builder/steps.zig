@@ -277,118 +277,37 @@ fn wrapStepCommand(self: *PackageBuilder, child_argv: []const []const u8) !Wrapp
     return .{ .argv = argv, .executable = executable };
 }
 
-/// Evaluates the top-level command-substitution assignments recorded by the
-/// static parser. Each assignment's original statement runs in a sandboxed
-/// bash child (post-review, confined exactly like lifecycle steps), then the
-/// resulting values are read back. Returns a name -> value map used to seed the
-/// resolution re-parse. Mirrors the pkgver() capture pattern in `runStep`.
-pub fn evaluateDynamicAssignments(
-    self: *PackageBuilder,
-    operation: *op_context.Operation,
-) !std.StringHashMap([]const u8) {
-    const package_build = &self.package_builds[0];
-    const dynamic = package_build.dynamic_assignments;
-    const execution = package_build.execution orelse return error.MissingExecutionSteps;
+pub const DynamicArrayOverrides = std.StringHashMap([]const []const u8);
+pub const DynamicScalarUnsets = std.StringHashMap(void);
+pub const DynamicArrayUnsets = std.StringHashMap(void);
 
-    var result: std.StringHashMap([]const u8) = .init(self.allocator);
-    errdefer {
-        var it = result.iterator();
-        while (it.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.*);
-        }
-        result.deinit();
+pub const DynamicMetadataOverrides = struct {
+    scalars: std.StringHashMap([]const u8),
+    unset_scalars: DynamicScalarUnsets,
+    arrays: DynamicArrayOverrides,
+    unset_arrays: DynamicArrayUnsets,
+};
+
+pub fn deinitDynamicScalarOverrides(
+    allocator: std.mem.Allocator,
+    overrides: *std.StringHashMap([]const u8),
+) void {
+    var iterator = overrides.iterator();
+    while (iterator.next()) |entry| {
+        allocator.free(entry.key_ptr.*);
+        allocator.free(entry.value_ptr.*);
     }
-
-    var script: std.Io.Writer.Allocating = .init(self.allocator);
-    errdefer script.deinit();
-    const script_writer = &script.writer;
-    try script_writer.writeAll(execution.shared_prelude);
-    try script_writer.writeAll("\n");
-    for (dynamic) |assignment| {
-        try script_writer.writeAll(assignment.statement);
-        try script_writer.writeAll("\n");
-    }
-    try script_writer.writeAll("printf '%s\\0'");
-    for (dynamic) |assignment| {
-        try script_writer.print(" \"${s}\"", .{assignment.name});
-    }
-    try script_writer.writeAll(" > \"$1\"\n");
-    const command_body = try script.toOwnedSlice();
-    defer self.allocator.free(command_body);
-
-    const result_path = try std.fs.path.join(
-        self.allocator,
-        &.{ self.options.work_directory, ".shelly-dynamic-vars" },
-    );
-    defer self.allocator.free(result_path);
-    std.Io.Dir.cwd().deleteFile(self.io, result_path) catch |err| switch (err) {
-        error.FileNotFound => {},
-        else => return err,
-    };
-    defer std.Io.Dir.cwd().deleteFile(self.io, result_path) catch {};
-
-    try logPhase(self, "dynamic-assignments");
-    try operation.checkCancelled();
-    self.failure_location = .{
-        .package_name = package_build.pkg_name,
-        .step_name = "dynamic-assignments",
-    };
-
-    var stream_context: StepStreamContext = .{
-        .operation = operation,
-        .package_name = self.requested_names[0],
-        .log = self.active_log,
-    };
-    const effective_options = try metadata.effectivePackageOptions(
-        self.allocator,
-        self.shellybuild_config.package.options,
-        package_build.options orelse &.{},
-    );
-    defer metadata.freeOwnedStrings(self.allocator, effective_options);
-    const step_argv: []const []const u8 = &.{ "/bin/bash", "-e", "-c", command_body, "shelly-dynamic", result_path };
-    const sandbox_enabled = self.shellybuild_config.sandbox.enabled;
-    const wrapped = if (sandbox_enabled) try wrapStepCommand(self, step_argv) else null;
-    defer if (wrapped) |command| command.deinit(self.allocator);
-    const exit_code = try process_runner.runStreamingWithBuildEnvironmentOperation(
-        self.allocator,
-        self.io,
-        self.environ,
-        buildEnvironment(self, effective_options),
-        if (wrapped) |command| command.argv else step_argv,
-        self.options.work_directory,
-        null,
-        .{ .function = forwardStepLine, .data = &stream_context },
-        operation,
-    );
-    if (self.active_log) |log| try log.ensureHealthy();
-    if (exit_code != 0) {
-        if (sandbox_enabled) writeSandboxFailureHint(self);
-        return error.StepFailed;
-    }
-
-    const output = try std.Io.Dir.cwd().readFileAlloc(
-        self.io,
-        result_path,
-        self.allocator,
-        .limited(1024 * 1024),
-    );
-    defer self.allocator.free(output);
-    var values = std.mem.splitScalar(u8, output, 0);
-    for (dynamic) |assignment| {
-        const value = values.next() orelse return error.StepFailed;
-        const key_owned = try self.allocator.dupe(u8, assignment.name);
-        const value_owned = try self.allocator.dupe(u8, value);
-        result.put(key_owned, value_owned) catch |err| {
-            self.allocator.free(key_owned);
-            self.allocator.free(value_owned);
-            return err;
-        };
-    }
-    return result;
+    overrides.deinit();
 }
 
-pub const DynamicArrayOverrides = std.StringHashMap([]const []const u8);
+pub fn deinitDynamicScalarUnsets(
+    allocator: std.mem.Allocator,
+    unsets: *DynamicScalarUnsets,
+) void {
+    var iterator = unsets.keyIterator();
+    while (iterator.next()) |name| allocator.free(name.*);
+    unsets.deinit();
+}
 
 pub fn deinitDynamicArrayOverrides(
     allocator: std.mem.Allocator,
@@ -403,20 +322,198 @@ pub fn deinitDynamicArrayOverrides(
     overrides.deinit();
 }
 
-fn containsDynamicArrayName(names: []const []const u8, name: []const u8) bool {
-    for (names) |existing| if (std.mem.eql(u8, existing, name)) return true;
-    return false;
+pub fn deinitDynamicArrayUnsets(
+    allocator: std.mem.Allocator,
+    unsets: *DynamicArrayUnsets,
+) void {
+    var iterator = unsets.keyIterator();
+    while (iterator.next()) |name| allocator.free(name.*);
+    unsets.deinit();
 }
+
+fn isShellVariableName(name: []const u8) bool {
+    if (name.len == 0 or !(std.ascii.isAlphabetic(name[0]) or name[0] == '_')) return false;
+    for (name[1..]) |c| if (!(std.ascii.isAlphanumeric(c) or c == '_')) return false;
+    return true;
+}
+
+fn parseDynamicScalarOutput(
+    allocator: std.mem.Allocator,
+    output: []const u8,
+) !struct { values: std.StringHashMap([]const u8), unsets: DynamicScalarUnsets } {
+    var values: std.StringHashMap([]const u8) = .init(allocator);
+    errdefer deinitDynamicScalarOverrides(allocator, &values);
+    var unsets: DynamicScalarUnsets = .init(allocator);
+    errdefer deinitDynamicScalarUnsets(allocator, &unsets);
+
+    var fields = std.mem.splitScalar(u8, output, 0);
+    while (true) {
+        const kind = fields.next() orelse return error.InvalidDynamicScalarOutput;
+        if (kind.len == 0) {
+            if (fields.next() != null) return error.InvalidDynamicScalarOutput;
+            break;
+        }
+        const name = fields.next() orelse return error.InvalidDynamicScalarOutput;
+        if (!isShellVariableName(name) or values.contains(name) or unsets.contains(name))
+            return error.InvalidDynamicScalarOutput;
+        const key = try allocator.dupe(u8, name);
+        errdefer allocator.free(key);
+        if (std.mem.eql(u8, kind, "S")) {
+            const value = fields.next() orelse return error.InvalidDynamicScalarOutput;
+            const owned_value = try allocator.dupe(u8, value);
+            errdefer allocator.free(owned_value);
+            try values.put(key, owned_value);
+        } else if (std.mem.eql(u8, kind, "U")) {
+            try unsets.put(key, {});
+        } else {
+            return error.InvalidDynamicScalarOutput;
+        }
+    }
+    return .{ .values = values, .unsets = unsets };
+}
+
+const dynamic_scalar_capture_prelude =
+    \\declare -A __shelly_before_scalars=()
+    \\__shelly_ignore_scalar() {
+    \\  case "$1" in
+    \\    __shelly_*|BASH_*|BASHPID|EPOCHREALTIME|EPOCHSECONDS|LINENO|OLDPWD|OPTARG|OPTIND|PIPESTATUS|PPID|PWD|RANDOM|SECONDS|SHELLOPTS|SHLVL|SRANDOM|_) return 0 ;;
+    \\  esac
+    \\  return 1
+    \\}
+    \\__shelly_scalar_declaration() {
+    \\  local __shelly_name="$1" __shelly_declaration __shelly_attributes
+    \\  __shelly_declaration=$(declare -p "$__shelly_name" 2>/dev/null) || return 1
+    \\  __shelly_attributes=${__shelly_declaration#declare }
+    \\  __shelly_attributes=${__shelly_attributes%% *}
+    \\  case "$__shelly_attributes" in *a*|*A*|*n*) return 1 ;; esac
+    \\  printf '%s' "$__shelly_declaration"
+    \\}
+    \\__shelly_snapshot_scalars() {
+    \\  local __shelly_name __shelly_declaration
+    \\  while IFS= read -r __shelly_name; do
+    \\    __shelly_ignore_scalar "$__shelly_name" && continue
+    \\    __shelly_declaration=$(__shelly_scalar_declaration "$__shelly_name") || continue
+    \\    __shelly_before_scalars["$__shelly_name"]="$__shelly_declaration"
+    \\  done < <(compgen -A variable)
+    \\}
+    \\__shelly_capture_scalar_changes() {
+    \\  local __shelly_path="$1" __shelly_name __shelly_declaration
+    \\  local -A __shelly_after_scalars=()
+    \\  : > "$__shelly_path"
+    \\  while IFS= read -r __shelly_name; do
+    \\    __shelly_ignore_scalar "$__shelly_name" && continue
+    \\    __shelly_declaration=$(__shelly_scalar_declaration "$__shelly_name") || continue
+    \\    __shelly_after_scalars["$__shelly_name"]=1
+    \\    if [[ ${__shelly_before_scalars[$__shelly_name]+present} != present || ${__shelly_before_scalars[$__shelly_name]} != "$__shelly_declaration" ]]; then
+    \\      printf 'S\0%s\0%s\0' "$__shelly_name" "${!__shelly_name-}" >> "$__shelly_path"
+    \\    fi
+    \\  done < <(compgen -A variable)
+    \\  for __shelly_name in "${!__shelly_before_scalars[@]}"; do
+    \\    if [[ ${__shelly_after_scalars[$__shelly_name]+present} != present ]]; then
+    \\      printf 'U\0%s\0' "$__shelly_name" >> "$__shelly_path"
+    \\    fi
+    \\  done
+    \\}
+    \\readonly -f __shelly_ignore_scalar __shelly_scalar_declaration __shelly_snapshot_scalars __shelly_capture_scalar_changes
+;
+
+const dynamic_array_capture_prelude =
+    \\declare -A __shelly_before_arrays=()
+    \\__shelly_ignore_array() {
+    \\  case "$1" in
+    \\    __shelly_*|BASH_*|BASHPID|EPOCHREALTIME|EPOCHSECONDS|LINENO|OLDPWD|OPTARG|OPTIND|PIPESTATUS|PPID|PWD|RANDOM|SECONDS|SHELLOPTS|SHLVL|SRANDOM|_) return 0 ;;
+    \\  esac
+    \\  return 1
+    \\}
+    \\__shelly_array_declaration() {
+    \\  local __shelly_name="$1" __shelly_declaration __shelly_attributes
+    \\  __shelly_declaration=$(declare -p "$__shelly_name" 2>/dev/null) || return 1
+    \\  __shelly_attributes=${__shelly_declaration#declare }
+    \\  __shelly_attributes=${__shelly_attributes%% *}
+    \\  case "$__shelly_attributes" in
+    \\    *A*|*n*) return 1 ;;
+    \\    *a*) printf '%s' "$__shelly_declaration" ;;
+    \\    *) return 1 ;;
+    \\  esac
+    \\}
+    \\__shelly_snapshot_arrays() {
+    \\  local __shelly_name __shelly_declaration
+    \\  while IFS= read -r __shelly_name; do
+    \\    __shelly_ignore_array "$__shelly_name" && continue
+    \\    __shelly_declaration=$(__shelly_array_declaration "$__shelly_name") || continue
+    \\    __shelly_before_arrays["$__shelly_name"]="$__shelly_declaration"
+    \\  done < <(compgen -A variable)
+    \\}
+    \\__shelly_clear_user_arrays() {
+    \\  local __shelly_name
+    \\  while IFS= read -r __shelly_name; do
+    \\    __shelly_ignore_array "$__shelly_name" && continue
+    \\    __shelly_array_declaration "$__shelly_name" >/dev/null || continue
+    \\    unset -v "$__shelly_name"
+    \\  done < <(compgen -A variable)
+    \\}
+    \\__shelly_write_array_record() {
+    \\  local __shelly_path="$1" __shelly_name="$2" __shelly_count
+    \\  local -n __shelly_array_ref="$__shelly_name"
+    \\  __shelly_count=${#__shelly_array_ref[@]}
+    \\  if ((__shelly_count > 4096)); then
+    \\    printf 'shelly: indexed array %s exceeds the 4096-element capture limit\n' "$__shelly_name" >&2
+    \\    return 1
+    \\  fi
+    \\  printf 'A\0%s\0%s\0' "$__shelly_name" "$__shelly_count" >> "$__shelly_path"
+    \\  if ((__shelly_count > 0)); then
+    \\    printf '%s\0' "${__shelly_array_ref[@]}" >> "$__shelly_path"
+    \\  fi
+    \\}
+    \\__shelly_capture_array_changes() {
+    \\  local __shelly_path="$1" __shelly_name __shelly_declaration
+    \\  local -A __shelly_after_arrays=()
+    \\  : > "$__shelly_path"
+    \\  while IFS= read -r __shelly_name; do
+    \\    __shelly_ignore_array "$__shelly_name" && continue
+    \\    __shelly_declaration=$(__shelly_array_declaration "$__shelly_name") || continue
+    \\    __shelly_after_arrays["$__shelly_name"]=1
+    \\    if [[ ${__shelly_before_arrays[$__shelly_name]+present} != present || ${__shelly_before_arrays[$__shelly_name]} != "$__shelly_declaration" ]]; then
+    \\      __shelly_write_array_record "$__shelly_path" "$__shelly_name"
+    \\    fi
+    \\  done < <(compgen -A variable)
+    \\  for __shelly_name in "${!__shelly_before_arrays[@]}"; do
+    \\    if [[ ${__shelly_after_arrays[$__shelly_name]+present} != present ]]; then
+    \\      printf 'U\0%s\0' "$__shelly_name" >> "$__shelly_path"
+    \\    fi
+    \\  done
+    \\}
+    \\readonly -f __shelly_ignore_array __shelly_array_declaration __shelly_snapshot_arrays __shelly_clear_user_arrays __shelly_write_array_record __shelly_capture_array_changes
+;
 
 fn parseDynamicArrayOutput(
     allocator: std.mem.Allocator,
-    names: []const []const u8,
     output: []const u8,
-) !DynamicArrayOverrides {
-    var result: DynamicArrayOverrides = .init(allocator);
-    errdefer deinitDynamicArrayOverrides(allocator, &result);
+) !struct { values: DynamicArrayOverrides, unsets: DynamicArrayUnsets } {
+    var values: DynamicArrayOverrides = .init(allocator);
+    errdefer deinitDynamicArrayOverrides(allocator, &values);
+    var unsets: DynamicArrayUnsets = .init(allocator);
+    errdefer deinitDynamicArrayUnsets(allocator, &unsets);
     var fields = std.mem.splitScalar(u8, output, 0);
-    for (names) |name| {
+    var record_count: usize = 0;
+    while (true) {
+        const kind = fields.next() orelse return error.InvalidDynamicArrayOutput;
+        if (kind.len == 0) {
+            if (fields.next() != null) return error.InvalidDynamicArrayOutput;
+            break;
+        }
+        record_count += 1;
+        if (record_count > 1024) return error.InvalidDynamicArrayOutput;
+        const name = fields.next() orelse return error.InvalidDynamicArrayOutput;
+        if (!isShellVariableName(name) or values.contains(name) or unsets.contains(name))
+            return error.InvalidDynamicArrayOutput;
+        const key = try allocator.dupe(u8, name);
+        errdefer allocator.free(key);
+        if (std.mem.eql(u8, kind, "U")) {
+            try unsets.put(key, {});
+            continue;
+        }
+        if (!std.mem.eql(u8, kind, "A")) return error.InvalidDynamicArrayOutput;
         const count_text = fields.next() orelse return error.InvalidDynamicArrayOutput;
         const count = std.fmt.parseInt(usize, count_text, 10) catch
             return error.InvalidDynamicArrayOutput;
@@ -431,81 +528,81 @@ fn parseDynamicArrayOutput(
             const value = fields.next() orelse return error.InvalidDynamicArrayOutput;
             items[item_count] = try allocator.dupe(u8, value);
         }
-        const key = try allocator.dupe(u8, name);
-        result.put(key, items) catch |err| {
-            allocator.free(key);
-            return err;
-        };
+        try values.put(key, items);
     }
-    const trailing = fields.next() orelse return error.InvalidDynamicArrayOutput;
-    if (trailing.len != 0 or fields.next() != null)
-        return error.InvalidDynamicArrayOutput;
-    return result;
+    return .{ .values = values, .unsets = unsets };
 }
 
-/// Executes the reviewed source/source_<CARCH> assignments in the same
-/// sandbox used for lifecycle steps and captures their final indexed-array
-/// values without interpreting shell output in-process.
-pub fn evaluateDynamicSourceArrays(
+/// Sources the reviewed PKGBUILD in the same sandbox used for lifecycle steps
+/// and captures one coherent snapshot of changed scalar and indexed-array
+/// state. Sourcing preserves arbitrary top-level
+/// parameter defaults, `if`, `case`, helper calls, and short-circuit control
+/// flow; lifecycle functions are defined by Bash but are not invoked here.
+pub fn evaluateDynamicMetadata(
     self: *PackageBuilder,
     operation: *op_context.Operation,
-) !DynamicArrayOverrides {
+) !DynamicMetadataOverrides {
     const package_build = &self.package_builds[0];
-    const dynamic = package_build.dynamic_source_assignments;
     const execution = package_build.execution orelse return error.MissingExecutionSteps;
 
-    var result: DynamicArrayOverrides = .init(self.allocator);
-    errdefer deinitDynamicArrayOverrides(self.allocator, &result);
-    if (dynamic.len == 0) return result;
-
-    var names: std.ArrayList([]const u8) = .empty;
-    defer names.deinit(self.allocator);
-    for (dynamic) |assignment| {
-        if (!containsDynamicArrayName(names.items, assignment.name))
-            try names.append(self.allocator, assignment.name);
-    }
+    var array_result: DynamicArrayOverrides = .init(self.allocator);
+    errdefer deinitDynamicArrayOverrides(self.allocator, &array_result);
+    var unset_array_result: DynamicArrayUnsets = .init(self.allocator);
+    errdefer deinitDynamicArrayUnsets(self.allocator, &unset_array_result);
+    var scalar_result: std.StringHashMap([]const u8) = .init(self.allocator);
+    errdefer deinitDynamicScalarOverrides(self.allocator, &scalar_result);
+    var unset_scalar_result: DynamicScalarUnsets = .init(self.allocator);
+    errdefer deinitDynamicScalarUnsets(self.allocator, &unset_scalar_result);
 
     var script: std.Io.Writer.Allocating = .init(self.allocator);
     errdefer script.deinit();
     const writer = &script.writer;
+    try writer.writeAll(messagingShellPrelude);
+    try writer.writeAll("\n");
     try writer.writeAll(execution.shared_prelude);
     try writer.writeAll("\n");
-    var initialized: std.ArrayList([]const u8) = .empty;
-    defer initialized.deinit(self.allocator);
-    for (dynamic) |assignment| {
-        if (!containsDynamicArrayName(initialized.items, assignment.name)) {
-            try writer.print("unset -v {s}\n", .{assignment.name});
-            try initialized.append(self.allocator, assignment.name);
-        }
-        try writer.writeAll(assignment.statement);
-        try writer.writeAll("\n");
-    }
-    try writer.writeAll(": > \"$1\"\n");
-    for (names.items) |name| {
-        try writer.print(
-            "printf '%s\\0' \"${{#{s}[@]}}\" \"${{{s}[@]}}\" >> \"$1\"\n",
-            .{ name, name },
-        );
-    }
+    try writer.writeAll(dynamic_scalar_capture_prelude);
+    try writer.writeAll("\n");
+    try writer.writeAll(dynamic_array_capture_prelude);
+    try writer.writeAll("\n__shelly_clear_user_arrays\n__shelly_snapshot_scalars\n__shelly_snapshot_arrays\nsource \"$3\"\n__shelly_capture_scalar_changes \"$1\"\n__shelly_capture_array_changes \"$2\"\n");
     const command_body = try script.toOwnedSlice();
     defer self.allocator.free(command_body);
 
-    const result_path = try std.fs.path.join(
+    const scalar_result_path = try std.fs.path.join(
+        self.allocator,
+        &.{ self.options.work_directory, ".shelly-dynamic-source-scalars" },
+    );
+    defer self.allocator.free(scalar_result_path);
+    const array_result_path = try std.fs.path.join(
         self.allocator,
         &.{ self.options.work_directory, ".shelly-dynamic-source-arrays" },
     );
-    defer self.allocator.free(result_path);
-    std.Io.Dir.cwd().deleteFile(self.io, result_path) catch |err| switch (err) {
+    defer self.allocator.free(array_result_path);
+    std.Io.Dir.cwd().deleteFile(self.io, scalar_result_path) catch |err| switch (err) {
         error.FileNotFound => {},
         else => return err,
     };
-    defer std.Io.Dir.cwd().deleteFile(self.io, result_path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(self.io, scalar_result_path) catch {};
+    std.Io.Dir.cwd().deleteFile(self.io, array_result_path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(self.io, array_result_path) catch {};
 
-    try logPhase(self, "dynamic-source-arrays");
+    const pkgbuild_path = self.options.pkgbuild_path orelse
+        return error.UnreviewedBuilderRequest;
+    const canonical_pkgbuild_path = try std.Io.Dir.cwd().realPathFileAlloc(
+        self.io,
+        pkgbuild_path,
+        self.allocator,
+    );
+    defer self.allocator.free(canonical_pkgbuild_path);
+
+    try logPhase(self, "dynamic-metadata");
     try operation.checkCancelled();
     self.failure_location = .{
         .package_name = package_build.pkg_name,
-        .step_name = "dynamic-source-arrays",
+        .step_name = "dynamic-metadata",
     };
 
     var stream_context: StepStreamContext = .{
@@ -519,7 +616,16 @@ pub fn evaluateDynamicSourceArrays(
         package_build.options orelse &.{},
     );
     defer metadata.freeOwnedStrings(self.allocator, effective_options);
-    const argv: []const []const u8 = &.{ "/bin/bash", "-e", "-c", command_body, "shelly-dynamic-source", result_path };
+    const argv: []const []const u8 = &.{
+        "/bin/bash",
+        "-e",
+        "-c",
+        command_body,
+        "shelly-dynamic-source",
+        scalar_result_path,
+        array_result_path,
+        canonical_pkgbuild_path,
+    };
     const sandbox_enabled = self.shellybuild_config.sandbox.enabled;
     const wrapped = if (sandbox_enabled) try wrapStepCommand(self, argv) else null;
     defer if (wrapped) |command| command.deinit(self.allocator);
@@ -529,7 +635,7 @@ pub fn evaluateDynamicSourceArrays(
         self.environ,
         buildEnvironment(self, effective_options),
         if (wrapped) |command| command.argv else argv,
-        self.options.work_directory,
+        self.options.start_directory,
         null,
         .{ .function = forwardStepLine, .data = &stream_context },
         operation,
@@ -540,41 +646,94 @@ pub fn evaluateDynamicSourceArrays(
         return error.StepFailed;
     }
 
-    const output = try std.Io.Dir.cwd().readFileAlloc(
+    const scalar_output = try std.Io.Dir.cwd().readFileAlloc(
         self.io,
-        result_path,
+        scalar_result_path,
         self.allocator,
         .limited(1024 * 1024),
     );
-    defer self.allocator.free(output);
-    const parsed = try parseDynamicArrayOutput(self.allocator, names.items, output);
-    deinitDynamicArrayOverrides(self.allocator, &result);
-    return parsed;
+    defer self.allocator.free(scalar_output);
+    const parsed_scalars = try parseDynamicScalarOutput(self.allocator, scalar_output);
+    deinitDynamicScalarOverrides(self.allocator, &scalar_result);
+    scalar_result = parsed_scalars.values;
+    deinitDynamicScalarUnsets(self.allocator, &unset_scalar_result);
+    unset_scalar_result = parsed_scalars.unsets;
+
+    const array_output = try std.Io.Dir.cwd().readFileAlloc(
+        self.io,
+        array_result_path,
+        self.allocator,
+        .limited(1024 * 1024),
+    );
+    defer self.allocator.free(array_output);
+    const parsed = try parseDynamicArrayOutput(self.allocator, array_output);
+    deinitDynamicArrayOverrides(self.allocator, &array_result);
+    array_result = parsed.values;
+    deinitDynamicArrayUnsets(self.allocator, &unset_array_result);
+    unset_array_result = parsed.unsets;
+    return .{
+        .scalars = scalar_result,
+        .unset_scalars = unset_scalar_result,
+        .arrays = array_result,
+        .unset_arrays = unset_array_result,
+    };
 }
 
-test "dynamic source array output is bounded and structurally validated" {
+test "dynamic scalar output preserves values, newlines, empty strings, and unsets" {
+    var parsed = try parseDynamicScalarOutput(
+        std.testing.allocator,
+        "S\x00_scheduler\x00portable\x00" ++
+            "S\x00_message\x00line one\nline two\x00" ++
+            "S\x00_empty\x00\x00" ++
+            "U\x00_removed\x00",
+    );
+    defer deinitDynamicScalarOverrides(std.testing.allocator, &parsed.values);
+    defer deinitDynamicScalarUnsets(std.testing.allocator, &parsed.unsets);
+    try std.testing.expectEqualStrings("portable", parsed.values.get("_scheduler").?);
+    try std.testing.expectEqualStrings("line one\nline two", parsed.values.get("_message").?);
+    try std.testing.expectEqualStrings("", parsed.values.get("_empty").?);
+    try std.testing.expect(parsed.unsets.contains("_removed"));
+
+    try std.testing.expectError(
+        error.InvalidDynamicScalarOutput,
+        parseDynamicScalarOutput(std.testing.allocator, "S\x00bad-name\x00value\x00"),
+    );
+    try std.testing.expectError(
+        error.InvalidDynamicScalarOutput,
+        parseDynamicScalarOutput(std.testing.allocator, "U\x00duplicate\x00S\x00duplicate\x00value\x00"),
+    );
+}
+
+test "dynamic indexed array output preserves values and unsets with structural bounds" {
     var valid = try parseDynamicArrayOutput(
         std.testing.allocator,
-        &.{ "source", "source_x86_64" },
-        "2\x00one\x00\x00" ++ "1\x00arch\x00",
+        "A\x00source\x002\x00one\x00\x00" ++
+            "A\x00BUILD_FLAGS\x001\x00CC=clang\x00" ++
+            "U\x00removed\x00",
     );
-    defer deinitDynamicArrayOverrides(std.testing.allocator, &valid);
-    try std.testing.expectEqual(@as(usize, 2), valid.get("source").?.len);
-    try std.testing.expectEqualStrings("one", valid.get("source").?[0]);
-    try std.testing.expectEqualStrings("", valid.get("source").?[1]);
-    try std.testing.expectEqualStrings("arch", valid.get("source_x86_64").?[0]);
+    defer deinitDynamicArrayOverrides(std.testing.allocator, &valid.values);
+    defer deinitDynamicArrayUnsets(std.testing.allocator, &valid.unsets);
+    try std.testing.expectEqual(@as(usize, 2), valid.values.get("source").?.len);
+    try std.testing.expectEqualStrings("one", valid.values.get("source").?[0]);
+    try std.testing.expectEqualStrings("", valid.values.get("source").?[1]);
+    try std.testing.expectEqualStrings("CC=clang", valid.values.get("BUILD_FLAGS").?[0]);
+    try std.testing.expect(valid.unsets.contains("removed"));
 
     try std.testing.expectError(
         error.InvalidDynamicArrayOutput,
-        parseDynamicArrayOutput(std.testing.allocator, &.{"source"}, "4097\x00"),
+        parseDynamicArrayOutput(std.testing.allocator, "A\x00source\x004097\x00"),
     );
     try std.testing.expectError(
         error.InvalidDynamicArrayOutput,
-        parseDynamicArrayOutput(std.testing.allocator, &.{"source"}, "2\x00one\x00"),
+        parseDynamicArrayOutput(std.testing.allocator, "A\x00source\x002\x00one\x00"),
     );
     try std.testing.expectError(
         error.InvalidDynamicArrayOutput,
-        parseDynamicArrayOutput(std.testing.allocator, &.{"source"}, "nope\x00"),
+        parseDynamicArrayOutput(std.testing.allocator, "A\x00source\x00nope\x00"),
+    );
+    try std.testing.expectError(
+        error.InvalidDynamicArrayOutput,
+        parseDynamicArrayOutput(std.testing.allocator, "U\x00same\x00A\x00same\x000\x00"),
     );
 }
 

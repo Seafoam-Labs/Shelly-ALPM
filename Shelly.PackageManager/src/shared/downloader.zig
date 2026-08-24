@@ -21,12 +21,14 @@ pub const DownloadEventType = enum {
 
 pub const DownloadError = error{
     HttpError,
+    NotFound,
     NetworkError,
     FileError,
     InvalidUrl,
     Timeout,
     ConnectTimeout,
     HeaderTimeout,
+    BodyTimeout,
     RetryExceeded,
     SslError,
     CertificateBundleError,
@@ -48,6 +50,11 @@ pub const DownloadProgress = struct {
     speed_bytes_per_sec: ?u64,
 };
 
+const BodyReadRace = union(enum) {
+    read: std.Io.Reader.ShortError!usize,
+    timeout: std.Io.Cancelable!void,
+};
+
 pub const DownloadConfiguration = struct {
     user_agent: ?[:0]const u8 = null,
     /// Bounds DNS, TCP, and TLS request setup.
@@ -55,6 +62,7 @@ pub const DownloadConfiguration = struct {
     /// Bounds sending the request and receiving the final response headers,
     /// including redirects.
     response_header_timeout_in_seconds: u32 = 30,
+    response_body_timeout_in_seconds: u32 = 30,
     /// Defaults to IPv4-first Happy Eyeballs without disabling IPv6 fallback.
     /// `ipv4_only` remains an explicit escape hatch for networks or VPNs that
     /// advertise but blackhole IPv6.
@@ -64,6 +72,10 @@ pub const DownloadConfiguration = struct {
     verify_ssl: bool = true,
     parallel_downloads: u8 = 10,
     file_durability: FileDurability = .sync_before_rename,
+    /// When set, completed downloads are normalized to this exact mode. The
+    /// default preserves the downloader's historical umask-dependent behavior
+    /// for consumers such as AppImage downloads.
+    final_permissions: ?std.Io.File.Permissions = null,
 
     pub fn default() DownloadConfiguration {
         return .{ .user_agent = "ShellyPackageManager/2.0" };
@@ -308,6 +320,14 @@ pub const CoreDownloader = struct {
                 return .{ .succes = .{ .destination_path = destination_path } };
             } else |err| {
                 if (err == DownloadError.NotModified) {
+                    self.normalizeExistingPermissions(destination_path) catch |permission_err| {
+                        self.emitEvent(.{
+                            .event_type = .Error,
+                            .download_error = permission_err,
+                            .destination_path = destination_path,
+                        });
+                        return .{ .failure = permission_err };
+                    };
                     self.emitEvent(.{ .event_type = .Skipped, .destination_path = destination_path });
                     return .{ .skipped = .{ .destination_path = destination_path, .reason = .NotModified } };
                 }
@@ -341,7 +361,10 @@ pub const CoreDownloader = struct {
 
         if (std.ascii.eqlIgnoreCase(uri.scheme, "file")) {
             const path = parseFileUri(url) catch return DownloadError.InvalidUrl;
-            copyFile(self.io, path, destination_path) catch return DownloadError.FailedDownload;
+            copyFile(self.io, path, destination_path, self.configuration.final_permissions) catch |err| switch (err) {
+                error.FileNotFound => return DownloadError.NotFound,
+                else => return DownloadError.FailedDownload,
+            };
             return;
         }
 
@@ -374,9 +397,6 @@ pub const CoreDownloader = struct {
         };
         defer req.deinit();
 
-        req.accept_encoding[@intFromEnum(std.http.ContentEncoding.gzip)] = false;
-        req.accept_encoding[@intFromEnum(std.http.ContentEncoding.deflate)] = false;
-
         var redirect_buffer: [8 * 1024]u8 = undefined;
         var response = sendAndReceiveHeadWithTimeout(
             &req,
@@ -395,6 +415,7 @@ pub const CoreDownloader = struct {
 
         const status = response.head.status;
         if (status == .not_modified) return DownloadError.NotModified;
+        if (status == .not_found) return DownloadError.NotFound;
         switch (status.class()) {
             .success => {},
             .server_error => {
@@ -445,11 +466,19 @@ pub const CoreDownloader = struct {
         var last_percent: i16 = -1;
         var last_reported: u64 = 0;
 
+        const body_stall_timeout = timeoutFromSeconds(self.configuration.response_body_timeout_in_seconds);
+
         while (true) {
             if (self.isCancelled()) return DownloadError.Cancelled;
-            const n = readBody(body_reader, copy_buffer) catch {
-                self.logErr("Read failed while downloading {s}: {?}", .{ url, response.bodyErr() });
-                return DownloadError.NetworkError;
+            const n = readBodyWithTimeout(self, &req, body_reader, copy_buffer, body_stall_timeout) catch |err| switch (err) {
+                error.BodyTimeout => {
+                    self.logErr("Timed out waiting for body data from {s}", .{url});
+                    return DownloadError.BodyTimeout; // retryable -> mirror failover / retry
+                },
+                else => {
+                    self.logErr("Read failed while downloading {s}: {?}", .{ url, response.bodyErr() });
+                    return DownloadError.NetworkError;
+                },
             };
             if (n == 0) break;
 
@@ -479,6 +508,13 @@ pub const CoreDownloader = struct {
             }
         }
 
+        if (self.configuration.final_permissions) |permissions| {
+            file.setPermissions(self.io, permissions) catch |err| {
+                self.logErr("Failed to set permissions on temporary file {s}: {}", .{ part_path, err });
+                return DownloadError.FileError;
+            };
+        }
+
         if (self.configuration.file_durability == .sync_before_rename) {
             file.sync(self.io) catch |err| {
                 self.logErr("Failed to sync temporary file {s}: {}", .{ part_path, err });
@@ -498,6 +534,19 @@ pub const CoreDownloader = struct {
             .destination_path = destination_path,
             .progress = makeProgress(downloaded, total orelse downloaded, self.speedBytesPerSec(downloaded, start_ns)),
         });
+    }
+
+    fn normalizeExistingPermissions(self: *CoreDownloader, destination_path: []const u8) DownloadError!void {
+        const permissions = self.configuration.final_permissions orelse return;
+        var file = std.Io.Dir.cwd().openFile(self.io, destination_path, .{ .mode = .read_write }) catch |err| {
+            self.logErr("Failed to open {s} while normalizing permissions: {}", .{ destination_path, err });
+            return DownloadError.FileError;
+        };
+        defer file.close(self.io);
+        file.setPermissions(self.io, permissions) catch |err| {
+            self.logErr("Failed to normalize permissions on {s}: {}", .{ destination_path, err });
+            return DownloadError.FileError;
+        };
     }
 
     /// Decides whether a `Progress` event should be emitted, throttling to
@@ -646,6 +695,40 @@ fn readBody(reader: *std.Io.Reader, buffer: []u8) std.Io.Reader.ShortError!usize
     }
 }
 
+fn readBodyWithTimeout(
+    self: *CoreDownloader,
+    req: *HttpClient.Request,
+    reader: *std.Io.Reader,
+    buffer: []u8,
+    timeout: std.Io.Timeout,
+) (std.Io.Reader.ShortError || std.Io.Cancelable || error{ BodyTimeout, Unexpected })!usize {
+    if (timeout == .none) return readBody(reader, buffer);
+
+    var result_buffer: [2]BodyReadRace = undefined;
+    var select = std.Io.Select(BodyReadRace).init(self.io, &result_buffer);
+    var interrupt_on_cleanup = false;
+    select.concurrent(.read, readBody, .{ reader, buffer }) catch
+        return error.Unexpected;
+    defer {
+        if (interrupt_on_cleanup) req.interrupt();
+        while (select.cancel()) |_| {}
+        if (interrupt_on_cleanup) req.markConnectionClosing();
+    }
+    select.concurrent(.timeout, waitForRequestSetupTimeout, .{ self.io, timeout }) catch {
+        interrupt_on_cleanup = true;
+        return error.Unexpected;
+    };
+
+    return switch (try select.await()) {
+        .read => |result| result,
+        .timeout => |result| {
+            try result;
+            interrupt_on_cleanup = true;
+            return error.BodyTimeout;
+        },
+    };
+}
+
 /// Bounds DNS, TCP, and TLS initialization together. The response body is not
 /// part of this deadline, so a mirror that successfully starts responding can
 /// finish at normal transfer speed.
@@ -780,6 +863,7 @@ fn isRetryable(err: DownloadError) bool {
         error.Timeout,
         error.ConnectTimeout,
         error.HeaderTimeout,
+        error.BodyTimeout,
         => true,
         else => false,
     };
@@ -850,6 +934,7 @@ fn copyFile(
     io: std.Io,
     source_path: []const u8,
     destination_path: []const u8,
+    final_permissions: ?std.Io.File.Permissions,
 ) !void {
     var source = try std.Io.Dir.cwd().openFile(io, source_path, .{});
     defer source.close(io);
@@ -865,6 +950,7 @@ fn copyFile(
 
     _ = try reader.interface.streamRemaining(&writer.interface);
     try writer.interface.flush();
+    if (final_permissions) |permissions| try destination.setPermissions(io, permissions);
 }
 
 // Unit tests for downloader.zig
@@ -873,12 +959,14 @@ test "DownloadConfiguration.default() returns correct default values" {
     try std.testing.expectEqualStrings("ShellyPackageManager/2.0", config.user_agent.?);
     try std.testing.expectEqual(@as(u32, 30), config.timeout_in_seconds);
     try std.testing.expectEqual(@as(u32, 30), config.response_header_timeout_in_seconds);
+    try std.testing.expectEqual(@as(u32, 30), config.response_body_timeout_in_seconds);
     try std.testing.expectEqual(AddressFamilyPolicy.prefer_ipv4, config.address_family_policy);
     try std.testing.expectEqual(@as(u8, 3), config.max_retries);
     try std.testing.expectEqual(@as(u32, 1), config.retry_delay_secs);
     try std.testing.expectEqual(true, config.verify_ssl);
     try std.testing.expectEqual(@as(u8, 10), config.parallel_downloads);
     try std.testing.expectEqual(FileDurability.sync_before_rename, config.file_durability);
+    try std.testing.expect(config.final_permissions == null);
 }
 
 test "connect timeout uses the configured duration" {
@@ -952,10 +1040,12 @@ test "isRetryable returns true for NetworkError and Timeout" {
     try std.testing.expect(isRetryable(DownloadError.Timeout));
     try std.testing.expect(isRetryable(DownloadError.ConnectTimeout));
     try std.testing.expect(isRetryable(DownloadError.HeaderTimeout));
+    try std.testing.expect(isRetryable(DownloadError.BodyTimeout));
 }
 
 test "isRetryable returns false for other errors" {
     try std.testing.expect(!isRetryable(DownloadError.HttpError));
+    try std.testing.expect(!isRetryable(DownloadError.NotFound));
     try std.testing.expect(!isRetryable(DownloadError.FileError));
     try std.testing.expect(!isRetryable(DownloadError.InvalidUrl));
     try std.testing.expect(!isRetryable(DownloadError.RetryExceeded));
@@ -1024,8 +1114,17 @@ test "mapReceiveHeadError maps other errors to NetworkError" {
 
 const TestServerMode = enum {
     stall_headers,
+    stall_body,
+    not_found,
+    x_gzip_ignoring_identity,
     reuse_with_not_modified,
 };
+
+const test_x_gzip_body =
+    "\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03\x2b\x4a" ++
+    "\x2d\xc8\x2f\xce\x2c\xc9\x2f\xaa\x54\x48\x49\x2c" ++
+    "\x49\x4c\x4a\x2c\x4e\x05\x00\x82\xd8\xef\x91\x13" ++
+    "\x00\x00\x00";
 
 const TestHttpServer = struct {
     io: std.Io,
@@ -1063,6 +1162,43 @@ const TestHttpServer = struct {
 
         switch (self.mode) {
             .stall_headers => try self.io.sleep(std.Io.Duration.fromSeconds(10), .awake),
+            .stall_body => {
+                var read_buffer: [2048]u8 = undefined;
+                var stream_reader = stream.reader(self.io, &read_buffer);
+                try consumeTestRequest(&stream_reader.interface);
+                try writer.writeAll(
+                    "HTTP/1.1 200 OK\r\n" ++
+                        "Content-Length: 5\r\n" ++
+                        "Connection: keep-alive\r\n\r\n",
+                );
+                try writer.flush();
+                try self.io.sleep(std.Io.Duration.fromSeconds(10), .awake);
+            },
+            .not_found => {
+                var read_buffer: [2048]u8 = undefined;
+                var stream_reader = stream.reader(self.io, &read_buffer);
+                try consumeTestRequest(&stream_reader.interface);
+                try writer.writeAll(
+                    "HTTP/1.1 404 Not Found\r\n" ++
+                        "Content-Length: 0\r\n" ++
+                        "Connection: close\r\n\r\n",
+                );
+                try writer.flush();
+            },
+            .x_gzip_ignoring_identity => {
+                var read_buffer: [2048]u8 = undefined;
+                var stream_reader = stream.reader(self.io, &read_buffer);
+                try consumeTestRequestExpectIdentityEncoding(&stream_reader.interface);
+                try writer.print(
+                    "HTTP/1.1 200 OK\r\n" ++
+                        "Content-Length: {d}\r\n" ++
+                        "Content-Encoding: x-gzip\r\n" ++
+                        "Connection: close\r\n\r\n",
+                    .{test_x_gzip_body.len},
+                );
+                try writer.writeAll(test_x_gzip_body);
+                try writer.flush();
+            },
             .reuse_with_not_modified => {
                 var read_buffer: [2048]u8 = undefined;
                 var stream_reader = stream.reader(self.io, &read_buffer);
@@ -1107,6 +1243,25 @@ fn consumeTestRequest(reader: *std.Io.Reader) !void {
     }
 }
 
+fn consumeTestRequestExpectIdentityEncoding(reader: *std.Io.Reader) !void {
+    var saw_identity_encoding = false;
+    while (true) {
+        const line = (try reader.takeDelimiter('\n')) orelse return error.EndOfStream;
+        if (std.mem.eql(u8, line, "\r")) break;
+
+        const trimmed = std.mem.trimEnd(u8, line, "\r");
+        const separator = std.mem.indexOfScalar(u8, trimmed, ':') orelse continue;
+        const name = trimmed[0..separator];
+        const value = std.mem.trim(u8, trimmed[separator + 1 ..], " \t");
+        if (std.ascii.eqlIgnoreCase(name, "accept-encoding") and
+            std.ascii.eqlIgnoreCase(value, "identity"))
+        {
+            saw_identity_encoding = true;
+        }
+    }
+    if (!saw_identity_encoding) return error.ExpectedIdentityAcceptEncoding;
+}
+
 fn testDestinationPath(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -1135,6 +1290,7 @@ test "downloadToFile copies a file URI to the destination" {
         var source_file = try temporary.dir.createFile(io, "nutcase.db", .{});
         defer source_file.close(io);
         try source_file.writeStreamingAll(io, "nutcase repository database");
+        try source_file.setPermissions(io, .fromMode(0o600));
     }
 
     var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -1159,6 +1315,7 @@ test "downloadToFile copies a file URI to the destination" {
 
     var downloader = CoreDownloader.init(std.testing.allocator, io, .{
         .max_retries = 0,
+        .final_permissions = .fromMode(0o644),
     });
     defer downloader.deinit();
     downloader.quiet = true;
@@ -1176,6 +1333,71 @@ test "downloadToFile copies a file URI to the destination" {
     );
     defer std.testing.allocator.free(contents);
     try std.testing.expectEqualStrings("nutcase repository database", contents);
+    const downloaded_stat = try std.Io.Dir.cwd().statFile(io, destination_path, .{});
+    try std.testing.expectEqual(@as(u32, 0o644), downloaded_stat.permissions.toMode() & 0o7777);
+}
+
+test "downloadToFile reports HTTP 404 as NotFound" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var server = try TestHttpServer.init(io, .not_found);
+    defer server.deinit();
+    var server_future = try io.concurrent(TestHttpServer.serve, .{&server});
+    defer _ = server_future.cancel(io) catch {};
+
+    const url = try server.url(std.testing.allocator);
+    defer std.testing.allocator.free(url);
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const destination = try testDestinationPath(std.testing.allocator, io, &temporary);
+    defer std.testing.allocator.free(destination);
+
+    var downloader = CoreDownloader.init(std.testing.allocator, io, timeoutTestConfiguration());
+    defer downloader.deinit();
+    downloader.quiet = true;
+    switch (downloader.downloadToFile(url, destination, true)) {
+        .failure => |err| try std.testing.expectEqual(DownloadError.NotFound, err),
+        else => return error.ExpectedNotFound,
+    }
+    try server_future.await(io);
+}
+
+test "downloadToFile preserves unsolicited x-gzip response bytes" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var server = try TestHttpServer.init(io, .x_gzip_ignoring_identity);
+    defer server.deinit();
+    var server_future = try io.concurrent(TestHttpServer.serve, .{&server});
+    defer _ = server_future.cancel(io) catch {};
+
+    const url = try server.url(std.testing.allocator);
+    defer std.testing.allocator.free(url);
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const destination = try testDestinationPath(std.testing.allocator, io, &temporary);
+    defer std.testing.allocator.free(destination);
+
+    var downloader = CoreDownloader.init(std.testing.allocator, io, timeoutTestConfiguration());
+    defer downloader.deinit();
+    downloader.quiet = true;
+    switch (downloader.downloadToFile(url, destination, true)) {
+        .succes => {},
+        else => return error.ExpectedSuccessfulDownload,
+    }
+    try server_future.await(io);
+
+    const contents = try std.Io.Dir.cwd().readFileAlloc(
+        io,
+        destination,
+        std.testing.allocator,
+        .limited(1024),
+    );
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualSlices(u8, test_x_gzip_body, contents);
 }
 
 test "response header timeout interrupts a server that never responds" {
@@ -1209,6 +1431,45 @@ test "response header timeout interrupts a server that never responds" {
     try std.testing.expect(elapsed.nanoseconds < std.Io.Duration.fromSeconds(3).nanoseconds);
 }
 
+test "response body timeout interrupts a server that stalls after headers" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var server = try TestHttpServer.init(io, .stall_body);
+    defer server.deinit();
+    var server_future = try io.concurrent(TestHttpServer.serve, .{&server});
+    defer _ = server_future.cancel(io) catch {};
+
+    const url = try server.url(std.testing.allocator);
+    defer std.testing.allocator.free(url);
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const destination = try testDestinationPath(std.testing.allocator, io, &temporary);
+    defer std.testing.allocator.free(destination);
+
+    var config = timeoutTestConfiguration();
+    config.response_header_timeout_in_seconds = 2;
+    config.response_body_timeout_in_seconds = 1;
+    var downloader = CoreDownloader.init(std.testing.allocator, io, config);
+    defer downloader.deinit();
+    downloader.quiet = true;
+
+    const started = std.Io.Timestamp.now(io, .awake);
+    const result = downloader.downloadToFile(url, destination, true);
+    const elapsed = started.durationTo(std.Io.Timestamp.now(io, .awake));
+
+    switch (result) {
+        .failure => |err| try std.testing.expectEqual(DownloadError.BodyTimeout, err),
+        else => return error.ExpectedBodyTimeout,
+    }
+    try std.testing.expect(elapsed.nanoseconds < std.Io.Duration.fromSeconds(3).nanoseconds);
+    try std.testing.expectError(
+        error.FileNotFound,
+        std.Io.Dir.cwd().statFile(io, destination, .{}),
+    );
+}
+
 test "shared session reuses one connection across a bodyless 304 response" {
     // Force `Io.async` to execute inline. Timeout races must use the stronger
     // concurrent contract so their sleeping branches cannot stall fast I/O.
@@ -1240,6 +1501,12 @@ test "shared session reuses one connection across a bodyless 304 response" {
         .succes => {},
         else => return error.ExpectedSuccessfulDownload,
     }
+    {
+        var destination_file = try std.Io.Dir.cwd().openFile(io, destination, .{ .mode = .read_write });
+        defer destination_file.close(io);
+        try destination_file.setPermissions(io, .fromMode(0o600));
+    }
+    config.final_permissions = .fromMode(0o644);
 
     var second = session.downloader(config);
     defer second.deinit();
@@ -1247,6 +1514,8 @@ test "shared session reuses one connection across a bodyless 304 response" {
         .skipped => |skipped| try std.testing.expectEqual(SkippedReason.NotModified, skipped.reason),
         else => return error.ExpectedNotModified,
     }
+    const repaired_stat = try std.Io.Dir.cwd().statFile(io, destination, .{});
+    try std.testing.expectEqual(@as(u32, 0o644), repaired_stat.permissions.toMode() & 0o7777);
 
     var third = session.downloader(config);
     defer third.deinit();

@@ -68,7 +68,11 @@ pub fn resolve_execution_plan(
                 );
                 defer self.allocator.free(scoped_name);
 
-                if (try function_body.extract_function_body(content, scoped_name)) |body| {
+                if (try function_body.selected_scoped_package_body(
+                    self,
+                    content,
+                    vars,
+                )) |body| {
                     try append_execution_step(self, &steps, scoped_name, body, &package_vars);
                     continue;
                 }
@@ -121,20 +125,42 @@ fn build_execution_prelude(
     errdefer output.deinit();
     const writer = &output.writer;
 
-    var array_names = try collect_top_level_array_names(self, content);
+    var array_names = if (self.dynamic_array_overrides == null)
+        try collect_top_level_array_names(self, content)
+    else
+        std.ArrayList([]const u8).empty;
     defer {
         for (array_names.items) |name| self.allocator.free(name);
         array_names.deinit(self.allocator);
+    }
+    if (self.dynamic_array_overrides) |overrides| {
+        var iterator = overrides.keyIterator();
+        while (iterator.next()) |name| {
+            if (types.contains_string(array_names.items, name.*)) continue;
+            try array_names.append(self.allocator, try self.allocator.dupe(u8, name.*));
+        }
+    }
+    if (self.dynamic_array_unsets) |unsets| {
+        var index: usize = 0;
+        while (index < array_names.items.len) {
+            if (!unsets.contains(array_names.items[index])) {
+                index += 1;
+                continue;
+            }
+            self.allocator.free(array_names.items[index]);
+            _ = array_names.orderedRemove(index);
+        }
     }
     std.mem.sort([]const u8, array_names.items, {}, string_before);
 
     for (array_names.items) |name| {
         if (try array_uses_command_substitution(self, content, name)) {
-            if (self.dynamic_array_overrides == null) {
-                if (is_supported_dynamic_source_name(self, name)) continue;
-                return error.UnsupportedDynamicAssignment;
-            }
-            if (self.dynamic_array_overrides.?.get(name) == null)
+            // Command substitutions are evaluated only by sandbox-sourcing
+            // the reviewed PKGBUILD. Omit their analysis-time declaration;
+            // the final reparse receives the resulting array as data.
+            if (self.dynamic_array_overrides == null) continue;
+            if (self.dynamic_array_overrides.?.get(name) == null and
+                (self.dynamic_array_unsets == null or !self.dynamic_array_unsets.?.contains(name)))
                 return error.UnsupportedDynamicAssignment;
         }
         const resolved = try resolve_execution_array(self, content, vars, name, 0);
@@ -157,6 +183,31 @@ fn build_execution_prelude(
             continue;
         }
         try write_execution_declaration(writer, name, .{ .scalar = vars.get(name).? });
+    }
+
+    // Preserve explicit top-level `unset` operations, including unsets of
+    // inherited environment variables that would otherwise reappear in the
+    // fresh shell used for each lifecycle function.
+    if (self.dynamic_unsets) |unsets| {
+        var unset_names: std.ArrayList([]const u8) = .empty;
+        defer unset_names.deinit(self.allocator);
+        var unset_iterator = unsets.keyIterator();
+        while (unset_iterator.next()) |name| {
+            if (!types.contains_string(array_names.items, name.*))
+                try unset_names.append(self.allocator, name.*);
+        }
+        std.mem.sort([]const u8, unset_names.items, {}, string_before);
+        for (unset_names.items) |name| try writer.print("unset -- {s}\n", .{name});
+    }
+    if (self.dynamic_array_unsets) |unsets| {
+        var unset_names: std.ArrayList([]const u8) = .empty;
+        defer unset_names.deinit(self.allocator);
+        var unset_iterator = unsets.keyIterator();
+        while (unset_iterator.next()) |name| {
+            if (!vars.contains(name.*)) try unset_names.append(self.allocator, name.*);
+        }
+        std.mem.sort([]const u8, unset_names.items, {}, string_before);
+        for (unset_names.items) |name| try writer.print("unset -- {s}\n", .{name});
     }
 
     return output.toOwnedSlice();
@@ -255,24 +306,116 @@ pub fn validate_execution_assignments(self: PkgbuildParser, content: []const u8)
 }
 
 fn is_supported_dynamic_source_name(self: PkgbuildParser, name: []const u8) bool {
-    if (std.mem.eql(u8, name, "source")) return true;
-    const prefix = "source_";
-    return std.mem.startsWith(u8, name, prefix) and
-        std.mem.eql(u8, name[prefix.len..], self.package_carch);
+    const architecture_fields = [_][]const u8{
+        "source",
+        "sha1sums",
+        "sha224sums",
+        "sha256sums",
+        "sha384sums",
+        "sha512sums",
+        "md5sums",
+        "b2sums",
+    };
+    for (architecture_fields) |field| {
+        if (std.mem.eql(u8, name, field)) return true;
+        if (name.len == field.len + 1 + self.package_carch.len and
+            std.mem.startsWith(u8, name, field) and
+            name[field.len] == '_' and
+            std.mem.eql(u8, name[field.len + 1 ..], self.package_carch))
+            return true;
+    }
+    return std.mem.eql(u8, name, "noextract") or
+        std.mem.eql(u8, name, "validpgpkeys");
 }
 
-/// Records every assignment for a supported dynamic source array. Keeping the
-/// static assignments too is required for correct `=`/`+=` reconstruction.
-/// Dynamic arrays outside source/source_<CARCH> remain deliberately rejected.
+const array_assignment_occurrence = struct {
+    name: []const u8,
+    start: usize,
+    after_paren: usize,
+    has_leading_shell: bool,
+};
+
+fn is_assignment_boundary(byte: u8) bool {
+    return std.ascii.isWhitespace(byte) or
+        std.mem.indexOfScalar(u8, ";&|(){}", byte) != null;
+}
+
+/// Finds an indexed-array assignment at any shell-command position on a line.
+/// Unlike `arrays.find_next_array_start`, this deliberately sees indented and
+/// short-circuit assignments so the static parser can defer control flow that
+/// it cannot soundly interpret itself.
+fn find_next_array_assignment_anywhere(
+    content: []const u8,
+    search_from: usize,
+) ?array_assignment_occurrence {
+    var line_start = search_from;
+    while (line_start < content.len) {
+        const line_end = std.mem.indexOfScalarPos(u8, content, line_start, '\n') orelse content.len;
+        const line = content[line_start..line_end];
+        var first_non_space: usize = 0;
+        while (first_non_space < line.len and
+            (line[first_non_space] == ' ' or line[first_non_space] == '\t'))
+            first_non_space += 1;
+
+        var in_single = false;
+        var in_double = false;
+        var index: usize = first_non_space;
+        while (index < line.len) {
+            const byte = line[index];
+            if (byte == '\\' and !in_single and index + 1 < line.len) {
+                index += 2;
+                continue;
+            }
+            if (byte == '\'' and !in_double) {
+                in_single = !in_single;
+                index += 1;
+                continue;
+            }
+            if (byte == '"' and !in_single) {
+                in_double = !in_double;
+                index += 1;
+                continue;
+            }
+            if (!in_single and !in_double and byte == '#') break;
+            if (in_single or in_double or
+                !(std.ascii.isAlphabetic(byte) or byte == '_') or
+                (index > 0 and !is_assignment_boundary(line[index - 1])))
+            {
+                index += 1;
+                continue;
+            }
+
+            var name_end = index + 1;
+            while (name_end < line.len and shell_scan.is_word(line[name_end])) : (name_end += 1) {}
+            var cursor = name_end;
+            if (cursor < line.len and line[cursor] == '+') cursor += 1;
+            if (cursor + 1 >= line.len or line[cursor] != '=' or line[cursor + 1] != '(') {
+                index = name_end;
+                continue;
+            }
+            return .{
+                .name = content[line_start + index .. line_start + name_end],
+                .start = line_start + index,
+                .after_paren = line_start + cursor + 2,
+                .has_leading_shell = index != first_non_space or first_non_space != 0,
+            };
+        }
+        if (line_end == content.len) break;
+        line_start = line_end + 1;
+    }
+    return null;
+}
+
+/// Records the complete source-integrity array family whenever Bash control
+/// flow is needed to determine any member. Sources and their checksum tables
+/// are then evaluated atomically after review instead of being allowed to
+/// diverge during static parsing.
 pub fn collect_dynamic_source_assignments(
     self: PkgbuildParser,
     content: []const u8,
 ) ![]types.dynamic_array_assignment {
-    var names = try collect_top_level_array_names(self, content);
-    defer {
-        for (names.items) |name| self.allocator.free(name);
-        names.deinit(self.allocator);
-    }
+    if (self.dynamic_array_overrides != null)
+        return @as([]types.dynamic_array_assignment, &.{});
 
     var result: std.ArrayList(types.dynamic_array_assignment) = .empty;
     errdefer {
@@ -280,42 +423,33 @@ pub fn collect_dynamic_source_assignments(
         result.deinit(self.allocator);
     }
 
-    for (names.items) |name| {
-        if (!(try array_uses_command_substitution(self, content, name))) continue;
-        if (self.dynamic_array_overrides) |overrides| {
-            if (overrides.get(name) != null) continue;
-        }
-        if (!is_supported_dynamic_source_name(self, name))
-            return error.UnsupportedDynamicAssignment;
+    var requires_shell = false;
+    var search_from: usize = 0;
+    while (find_next_array_assignment_anywhere(content, search_from)) |assignment| {
+        const scanned = try arrays.scan_array_body(self.allocator, content, assignment.after_paren);
+        defer self.allocator.free(scanned.body);
+        search_from = scanned.end;
+        if (!is_supported_dynamic_source_name(self, assignment.name)) continue;
 
-        var search_from: usize = 0;
-        while (arrays.find_next_array_start(content, name, search_from)) |assignment| {
-            const scanned = try arrays.scan_array_body(self.allocator, content, assignment.after_paren);
-            defer self.allocator.free(scanned.body);
-            const conditional = try shell_scan.is_inside_conditional_block(self, content, assignment.start);
-            if (conditional) {
-                // Re-emitting an assignment without its surrounding condition
-                // would change PKGBUILD semantics. Keep conditional dynamic
-                // arrays outside the supported subset for now.
-                if (shell_scan.contains_command_substitution(scanned.body))
-                    return error.UnsupportedDynamicAssignment;
-                search_from = scanned.end;
-                continue;
-            }
-            const owned_name = try self.allocator.dupe(u8, name);
-            errdefer self.allocator.free(owned_name);
-            const statement = std.mem.trim(u8, content[assignment.start..scanned.end], " \t\r\n");
-            const owned_statement = try self.allocator.dupe(u8, statement);
-            errdefer self.allocator.free(owned_statement);
-            try result.append(self.allocator, .{
-                .name = owned_name,
-                .statement = owned_statement,
-                .has_command_substitution = shell_scan.contains_command_substitution(scanned.body),
-            });
-            search_from = scanned.end;
-        }
+        const has_command_substitution = shell_scan.contains_command_substitution(scanned.body);
+        const conditional = assignment.has_leading_shell or
+            try shell_scan.is_inside_conditional_block(self, content, assignment.start);
+        requires_shell = requires_shell or has_command_substitution or conditional;
+
+        const owned_name = try self.allocator.dupe(u8, assignment.name);
+        errdefer self.allocator.free(owned_name);
+        const statement = std.mem.trim(u8, content[assignment.start..scanned.end], " \t\r\n");
+        const owned_statement = try self.allocator.dupe(u8, statement);
+        errdefer self.allocator.free(owned_statement);
+        try result.append(self.allocator, .{
+            .name = owned_name,
+            .statement = owned_statement,
+            .has_command_substitution = has_command_substitution,
+        });
     }
-    if (result.items.len == 0) {
+
+    if (!requires_shell or result.items.len == 0) {
+        for (result.items) |assignment| assignment.deinit(self.allocator);
         result.deinit(self.allocator);
         return @as([]types.dynamic_array_assignment, &.{});
     }

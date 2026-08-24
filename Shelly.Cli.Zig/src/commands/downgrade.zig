@@ -503,11 +503,9 @@ fn writeCandidates(
         cells.* = values;
     }
     try table.write(
-        context.allocator,
-        context.stdout,
+        context,
         &.{ "Filename", "Location", "Installed" },
         rows,
-        output.supportsAnsi(context),
     );
 }
 

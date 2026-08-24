@@ -1,5 +1,6 @@
 const std = @import("std");
 const pkgbuild = @import("../pkgbuild/pkgbuild_parser.zig");
+const version = @import("version.zig");
 
 pub const ParsedDependency = pkgbuild.parsed_dep;
 
@@ -17,6 +18,14 @@ pub const RepoDependency = struct {
 pub const AurDependency = struct {
     dependency: ParsedDependency,
     role: Role,
+};
+
+/// A package output produced by the PKGBUILD currently being coordinated.
+/// Dependencies satisfied by these outputs must not be resolved from a
+/// repository or recursively rebuilt from the AUR.
+pub const ProvidedPackage = struct {
+    name: []const u8,
+    version: []const u8,
 };
 
 pub const Backend = struct {
@@ -44,6 +53,16 @@ pub fn resolve(
     no_check: bool,
     backend: Backend,
 ) !Resolution {
+    return resolveWithProvided(allocator, info, no_check, backend, &.{});
+}
+
+pub fn resolveWithProvided(
+    allocator: std.mem.Allocator,
+    info: *const pkgbuild.Pkgbuild,
+    no_check: bool,
+    backend: Backend,
+    provided_packages: []const ProvidedPackage,
+) !Resolution {
     var repo: std.ArrayList(RepoDependency) = .empty;
     errdefer {
         for (repo.items) |dependency| allocator.free(dependency.name);
@@ -55,10 +74,10 @@ pub fn resolve(
         aur.deinit(allocator);
     }
 
-    try resolveGroup(allocator, info.parsed_depends orelse &.{}, .runtime, backend, &repo, &aur);
-    try resolveGroup(allocator, info.parsed_make_depends orelse &.{}, .build, backend, &repo, &aur);
+    try resolveGroup(allocator, info.parsed_depends orelse &.{}, .runtime, backend, provided_packages, &repo, &aur);
+    try resolveGroup(allocator, info.parsed_make_depends orelse &.{}, .build, backend, provided_packages, &repo, &aur);
     if (!no_check)
-        try resolveGroup(allocator, info.parsed_check_depends orelse &.{}, .check, backend, &repo, &aur);
+        try resolveGroup(allocator, info.parsed_check_depends orelse &.{}, .check, backend, provided_packages, &repo, &aur);
 
     return .{
         .repo_packages = try repo.toOwnedSlice(allocator),
@@ -71,10 +90,12 @@ fn resolveGroup(
     dependencies: []const ParsedDependency,
     role: Role,
     backend: Backend,
+    provided_packages: []const ProvidedPackage,
     repo: *std.ArrayList(RepoDependency),
     aur: *std.ArrayList(AurDependency),
 ) !void {
     for (dependencies) |dependency| {
+        if (try dependencySatisfiedByProvided(allocator, dependency, provided_packages)) continue;
         const dependency_string = try formatDependencyZ(allocator, dependency);
         defer allocator.free(dependency_string);
         if (backend.is_installed(backend.context, dependency_string)) continue;
@@ -92,6 +113,45 @@ fn resolveGroup(
             .role = role,
         });
     }
+}
+
+fn dependencySatisfiedByProvided(
+    allocator: std.mem.Allocator,
+    dependency: ParsedDependency,
+    provided_packages: []const ProvidedPackage,
+) !bool {
+    for (provided_packages) |package| {
+        if (std.mem.eql(u8, package.name, dependency.name)) {
+            if (dependency.operator.len == 0 or dependency.version.len == 0) return true;
+            if (try version.satisfies(allocator, package.version, dependency.operator, dependency.version)) return true;
+            continue;
+        }
+
+        // An unresolved shell variable is valid while statically reviewing a
+        // PKGBUILD, but it prevents the dependency parser from recognizing the
+        // operator. For example, `linux-$_suffix=1-1` is temporarily stored as
+        // one dependency name. Match that representation only against the
+        // exact sibling-output prefix and evaluate its trailing constraint.
+        if (dependency.operator.len != 0 or dependency.version.len != 0 or
+            !std.mem.startsWith(u8, dependency.name, package.name)) continue;
+        const constraint = dependency.name[package.name.len..];
+        const operator_len: usize = if (std.mem.startsWith(u8, constraint, ">=") or
+            std.mem.startsWith(u8, constraint, "<="))
+            2
+        else if (constraint.len > 0 and
+            (constraint[0] == '=' or constraint[0] == '>' or constraint[0] == '<'))
+            1
+        else
+            continue;
+        if (constraint.len == operator_len) continue;
+        if (try version.satisfies(
+            allocator,
+            package.version,
+            constraint[0..operator_len],
+            constraint[operator_len..],
+        )) return true;
+    }
+    return false;
 }
 
 fn findRepoDependency(dependencies: []const RepoDependency, name: []const u8) ?usize {
@@ -285,4 +345,44 @@ test "dependency resolution partitions installed repo and AUR dependencies" {
     defer no_check.deinit(allocator);
     try std.testing.expectEqual(@as(usize, 1), no_check.aur_packages.len);
     try std.testing.expectEqualStrings("aur-runtime", no_check.aur_packages[0].dependency.name);
+}
+
+test "dependency resolution excludes version-compatible outputs from the same PKGBUILD" {
+    const Context = struct {
+        fn installed(_: ?*anyopaque, _: [:0]const u8) bool {
+            return false;
+        }
+        fn repo(_: ?*anyopaque, _: [:0]const u8) ?[]const u8 {
+            return null;
+        }
+    };
+
+    const allocator = std.testing.allocator;
+    const parser = pkgbuild.PkgbuildParser{ .allocator = allocator, .io = std.testing.io };
+    var info = try parser.parser_content(
+        \\pkgname=linux-nvidia-open
+        \\arch=('any')
+        \\depends=('linux-$_pkgsuffix=7.2.0-3' 'external-runtime')
+    , null);
+    defer info.deinit(allocator);
+
+    const backend: Backend = .{
+        .context = null,
+        .is_installed = Context.installed,
+        .find_repo_satisfier = Context.repo,
+    };
+    var resolution = try resolveWithProvided(allocator, &info, false, backend, &.{.{
+        .name = "linux-$_pkgsuffix",
+        .version = "7.2.0-3",
+    }});
+    defer resolution.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 1), resolution.aur_packages.len);
+    try std.testing.expectEqualStrings("external-runtime", resolution.aur_packages[0].dependency.name);
+
+    var wrong_version = try resolveWithProvided(allocator, &info, false, backend, &.{.{
+        .name = "linux-$_pkgsuffix",
+        .version = "7.2.0-2",
+    }});
+    defer wrong_version.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), wrong_version.aur_packages.len);
 }
