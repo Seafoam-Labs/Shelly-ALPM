@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
+"POT-Creation-Date: 2026-08-25 14:44-0300\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -21,14 +21,12 @@ msgstr "Ez dago instalatzeko addonik eskuragarri"
 msgid "Close"
 msgstr "Itxi"
 
-#| msgid "Saving update configuration"
 msgid "Keep configuration"
 msgstr ""
 
 msgid "App data and settings will be kept."
 msgstr ""
 
-#| msgid "Saving update configuration"
 msgid "Remove configuration"
 msgstr ""
 
@@ -77,7 +75,14 @@ msgid ""
 "\n"
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
 "labs.org/shelly-alpm/docs/polkit</a>"
-msgstr "Shelly-ren GUIak <b>polkit</b> instalatuta eta martxan behar du ekintza pribilegiatuak baimentzeko, baina ez da sistema-busean aurkitu.\n\nInstalatu eta gaitu, eta saiatu berriro.\n\n<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-labs.org/shelly-alpm/docs/polkit</a>"
+msgstr ""
+"Shelly-ren GUIak <b>polkit</b> instalatuta eta martxan behar du ekintza "
+"pribilegiatuak baimentzeko, baina ez da sistema-busean aurkitu.\n"
+"\n"
+"Instalatu eta gaitu, eta saiatu berriro.\n"
+"\n"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
+"labs.org/shelly-alpm/docs/polkit</a>"
 
 msgid "Review PKGBUILD"
 msgstr "Berrikusi PKGBUILD"
@@ -188,10 +193,9 @@ msgstr "Ospea"
 msgid "Search the AUR"
 msgstr "Bilatu AURen"
 
-msgid "The AUR has no browsable index type a package name to begin."
+#| msgid "The AUR has no browsable index type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
-"AURek ez du arakatu daitekeen indexaziorik, idatzi pakete baten izena "
-"hasteko."
 
 msgid "Run checks"
 msgstr "Exekutatu egiaztapenak"
@@ -232,6 +236,10 @@ msgstr "erabiltzailea"
 
 msgid "Install"
 msgstr "Instalatu"
+
+#| msgid "No changelog entries found"
+msgid "No matching applications found"
+msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Flatpak datuak kargatzen..."
@@ -368,6 +376,10 @@ msgstr "Biltegia"
 msgid "Install Date"
 msgstr "Instalazio-data"
 
+#| msgid "No packages found"
+msgid "No matching packages found"
+msgstr ""
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Arazo bat egon da paketeak kargatzean. Egiaztatu datu-basea blokeatuta "
@@ -437,7 +449,6 @@ msgstr "Flatpak"
 msgid "Show results from the configured Flatpak remotes"
 msgstr ""
 
-#| msgid "Source Files"
 msgid "Source"
 msgstr ""
 
@@ -475,6 +486,10 @@ msgstr "Gehitu erretilua hasiera automatikoan"
 
 msgid "Use weekly schedule"
 msgstr "Erabili asteko ordutegia"
+
+#| msgid "Tray Updates Icon"
+msgid "Tray update with ui"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Erretiluko egiaztapen-tartea (ordutan)"
@@ -562,9 +577,6 @@ msgstr "Berrespenik gabe"
 msgid "Enable Shelly Search"
 msgstr "Gaitu Shelly bilaketa"
 
-msgid "Enable Package Downgrade"
-msgstr "Gaitu paketeen bertsio-jaitsiera"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Gaitu Webview ikuspegia (esperimentala)"
 
@@ -591,6 +603,9 @@ msgstr "Babeslea"
 
 msgid "Toggle output"
 msgstr "Txandakatu irteera"
+
+msgid "Done"
+msgstr "Eginda"
 
 msgid "Available Updates"
 msgstr "Eguneraketa eskuragarriak"
@@ -791,9 +806,6 @@ msgstr "Segurtasun azterketa osatuta - ez da arazorik aurkitu."
 
 msgid "used in"
 msgstr "hemen erabilita:"
-
-msgid "Warning"
-msgstr "Oharra"
 
 msgid "Install Anyway"
 msgstr "Instalatu hala ere"
@@ -1148,11 +1160,9 @@ msgstr "Urruneko jatorria kentzen"
 msgid "Adding Remote"
 msgstr "Urruneko jatorria gehitzen"
 
-#| msgid "Removing Flatpak"
 msgid "Remove this Flatpak?"
 msgstr ""
 
-#| msgid "Removing Flatpak"
 msgid "Remove Flatpak"
 msgstr ""
 
@@ -1162,11 +1172,9 @@ msgstr "Flatpak kentzen"
 msgid "App ID"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
-#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1188,7 +1196,6 @@ msgstr "Ez"
 msgid "Keywords"
 msgstr ""
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1261,26 +1268,21 @@ msgstr "Paketeak kentzen"
 msgid "Installing packages"
 msgstr "Paketeak instalatzen"
 
-#| msgid "Operation failed"
 msgid "Search failed"
 msgstr ""
 
-#| msgid "Installation failed."
 msgid "Installation in progress"
 msgstr ""
 
-#| msgid "No packages selected"
 msgid "No sources selected"
 msgstr ""
 
 msgid "Enable at least one source filter above."
 msgstr ""
 
-#| msgid "Installing packages"
 msgid "Install Packages"
 msgstr ""
 
-#| msgid "Remove the selected packages?"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1482,11 +1484,20 @@ msgstr "Disko-espazioa egiaztatzen"
 msgid "Working"
 msgstr "Lanean"
 
-msgid "Done"
-msgstr "Eginda"
-
 msgid "Failed"
 msgstr "Huts egin du"
+
+#| msgid "Installation complete."
+msgid "Transaction Completed"
+msgstr ""
+
+#| msgid "Operation failed"
+msgid "Transaction Failed"
+msgstr ""
+
+#| msgid "Cancelled"
+msgid "Transaction Cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "Amaituta"
@@ -1494,8 +1505,18 @@ msgstr "Amaituta"
 msgid "exit"
 msgstr "irten"
 
+msgid "The operation was cancelled."
+msgstr ""
+
+#| msgid "Operation completed successfully"
+msgid "All operations finished successfully."
+msgstr ""
+
 msgid "Cancelled"
 msgstr "Ezeztatuta"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
 
 msgid "System package update"
 msgstr "Sistemako paketeen eguneraketa"
@@ -1569,23 +1590,3 @@ msgstr "Ezarpenak"
 
 msgid "Package"
 msgstr "Paketea"
-
-#~ msgid ""
-#~ "Shelly's GUI needs <b>polkit</b> installed and running to authorize "
-#~ "privileged actions, but it wasn't found on the system bus.\n"
-#~ "\n"
-#~ "Install and enable it, then retry.\n"
-#~ "\n"
-#~ "<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/"
-#~ "title/Polkit</a>"
-#~ msgstr ""
-#~ "Shelly-ren GUIak <b>polkit</b> instalatuta eta martxan behar du ekintza "
-#~ "pribilegiatuak baimentzeko, baina ez da sistema-busean aurkitu.\n"
-#~ "\n"
-#~ "Instalatu eta gaitu, eta saiatu berriro.\n"
-#~ "\n"
-#~ "<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/"
-#~ "title/Polkit</a>"
-
-#~ msgid "Show dependency packages on;y"
-#~ msgstr "Erakutsi menpekotasun-paketeak soilik"

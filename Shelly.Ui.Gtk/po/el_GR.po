@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
+"POT-Creation-Date: 2026-08-25 14:44-0300\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -21,14 +21,12 @@ msgstr ""
 msgid "Close"
 msgstr "Κλείσιμο"
 
-#| msgid "Saving update configuration"
 msgid "Keep configuration"
 msgstr ""
 
 msgid "App data and settings will be kept."
 msgstr ""
 
-#| msgid "Saving update configuration"
 msgid "Remove configuration"
 msgstr ""
 
@@ -190,10 +188,9 @@ msgstr "Δημοτικότητα"
 msgid "Search the AUR"
 msgstr "Αναζήτηση στο AUR"
 
-msgid "The AUR has no browsable index type a package name to begin."
+#| msgid "The AUR has no browsable index type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
-"Το AUR δεν διαθέτει ευρετήριο για περιήγηση, πληκτρολογήστε το όνομα ενός "
-"πακέτου για να ξεκινήσετε."
 
 msgid "Run checks"
 msgstr "Εκτέλεση ελέγχων"
@@ -234,6 +231,10 @@ msgstr "χρήστης"
 
 msgid "Install"
 msgstr "Εγκατάσταση"
+
+#| msgid "No changelog entries found"
+msgid "No matching applications found"
+msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Φόρτωση δεδομένων Flatpak..."
@@ -370,6 +371,10 @@ msgstr "Αποθετήριο"
 msgid "Install Date"
 msgstr ""
 
+#| msgid "No packages found"
+msgid "No matching packages found"
+msgstr ""
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Παρουσιάστηκε πρόβλημα κατά τη φόρτωση των πακέτων σας. Ελέγξτε αν υπάρχει "
@@ -439,7 +444,6 @@ msgstr "Flatpak"
 msgid "Show results from the configured Flatpak remotes"
 msgstr ""
 
-#| msgid "Source Files"
 msgid "Source"
 msgstr ""
 
@@ -477,6 +481,10 @@ msgstr "Αυτόματη εκκίνηση εικονιδίου tray"
 
 msgid "Use weekly schedule"
 msgstr "Χρήση εβδομαδιαίου προγράμματος"
+
+#| msgid "Tray Updates Icon"
+msgid "Tray update with ui"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Διάστημα ελέγχου εικονιδίου tray (ώρες)"
@@ -564,9 +572,6 @@ msgstr "Χωρίς επιβεβαίωση"
 msgid "Enable Shelly Search"
 msgstr "Ενεργοποίηση αναζήτησης Shelly"
 
-msgid "Enable Package Downgrade"
-msgstr "Ενεργοποίηση υποβάθμισης πακέτων"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Ενεργοποίηση οπτικοποίησης Webview (πειραματικό)"
 
@@ -593,6 +598,9 @@ msgstr "Χορηγός"
 
 msgid "Toggle output"
 msgstr "Εναλλαγή προβολής εξόδου"
+
+msgid "Done"
+msgstr "Ολοκληρώθηκε"
 
 msgid "Available Updates"
 msgstr "Διαθέσιμες ενημερώσεις"
@@ -793,9 +801,6 @@ msgstr "Ο έλεγχος ασφαλείας ολοκληρώθηκε - δεν �
 
 msgid "used in"
 msgstr "χρησιμοποιείται σε"
-
-msgid "Warning"
-msgstr "Προειδοποίηση"
 
 msgid "Install Anyway"
 msgstr "Εγκατάσταση οπωσδήποτε"
@@ -1148,11 +1153,9 @@ msgstr "Αφαίρεση αποθετηρίου"
 msgid "Adding Remote"
 msgstr "Προσθήκη αποθετηρίου"
 
-#| msgid "Removing Flatpak"
 msgid "Remove this Flatpak?"
 msgstr ""
 
-#| msgid "Removing Flatpak"
 msgid "Remove Flatpak"
 msgstr ""
 
@@ -1162,11 +1165,9 @@ msgstr "Αφαίρεση Flatpak"
 msgid "App ID"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
-#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1188,7 +1189,6 @@ msgstr "Όχι"
 msgid "Keywords"
 msgstr ""
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1261,26 +1261,21 @@ msgstr "Κατάργηση πακέτων"
 msgid "Installing packages"
 msgstr "Εγκατάσταση πακέτων"
 
-#| msgid "Operation failed"
 msgid "Search failed"
 msgstr ""
 
-#| msgid "Installation failed."
 msgid "Installation in progress"
 msgstr ""
 
-#| msgid "No packages selected"
 msgid "No sources selected"
 msgstr ""
 
 msgid "Enable at least one source filter above."
 msgstr ""
 
-#| msgid "Installing packages"
 msgid "Install Packages"
 msgstr ""
 
-#| msgid "Remove the selected packages?"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1483,11 +1478,20 @@ msgstr ""
 msgid "Working"
 msgstr "Σε εξέλιξη"
 
-msgid "Done"
-msgstr "Ολοκληρώθηκε"
-
 msgid "Failed"
 msgstr "Απέτυχε"
+
+#| msgid "Installation complete."
+msgid "Transaction Completed"
+msgstr ""
+
+#| msgid "Operation failed"
+msgid "Transaction Failed"
+msgstr ""
+
+#| msgid "Cancelled"
+msgid "Transaction Cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "Τελείωσε"
@@ -1495,8 +1499,18 @@ msgstr "Τελείωσε"
 msgid "exit"
 msgstr "έξοδος"
 
+msgid "The operation was cancelled."
+msgstr ""
+
+#| msgid "Operation completed successfully"
+msgid "All operations finished successfully."
+msgstr ""
+
 msgid "Cancelled"
 msgstr "Ακυρώθηκε"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
 
 msgid "System package update"
 msgstr "Ενημέρωση πακέτου συστήματος"

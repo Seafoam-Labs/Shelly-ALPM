@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
+"POT-Creation-Date: 2026-08-25 14:44-0300\n"
 "PO-Revision-Date: 2026-08-14 15:27+0200\n"
 "Last-Translator: helge1o1o1@gmail.com\n"
 "Language-Team: Deutschland (Deutsch) helge1o1o1@gmail.com\n"
@@ -188,10 +188,9 @@ msgstr "Popularität"
 msgid "Search the AUR"
 msgstr "Das AUR durchsuchen"
 
-msgid "The AUR has no browsable index type a package name to begin."
+#| msgid "The AUR has no browsable index type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
-"Das AUR verfügt über keinen durchsuchbaren Index, gebe einen Paketnamen ein, "
-"um zu beginnen."
 
 msgid "Run checks"
 msgstr "Prüfungen durchführen"
@@ -232,6 +231,10 @@ msgstr "Nutzer"
 
 msgid "Install"
 msgstr "Installieren"
+
+#| msgid "No changelog entries found"
+msgid "No matching applications found"
+msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Flatpak-Daten werden geladen..."
@@ -368,6 +371,10 @@ msgstr "Repository"
 msgid "Install Date"
 msgstr "Installationsdatum"
 
+#| msgid "No packages found"
+msgid "No matching packages found"
+msgstr ""
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Beim Laden deiner Pakete ist ein Problem aufgetreten. Überprüfe bitte, ob "
@@ -478,6 +485,10 @@ msgstr "Tray zum Autostart hinzufügen"
 msgid "Use weekly schedule"
 msgstr "Wochenplan verwenden"
 
+#| msgid "Tray Updates Icon"
+msgid "Tray update with ui"
+msgstr ""
+
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervall für Tray-Prüfung (Stunden)"
 
@@ -564,9 +575,6 @@ msgstr "Nicht bestätigen"
 msgid "Enable Shelly Search"
 msgstr "Shelly-Suche aktivieren"
 
-msgid "Enable Package Downgrade"
-msgstr "Paketherabstufung aktivieren"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Webview-Visualisierung aktivieren (experimentell)"
 
@@ -593,6 +601,9 @@ msgstr "Unterstützen"
 
 msgid "Toggle output"
 msgstr "Ausgabe umschalten"
+
+msgid "Done"
+msgstr "Fertig"
 
 msgid "Available Updates"
 msgstr "Updates verfügbar"
@@ -797,9 +808,6 @@ msgstr "Sicherheitsscan abgeschlossen – keine Probleme gefunden."
 
 msgid "used in"
 msgstr "verwendet in"
-
-msgid "Warning"
-msgstr "Warnung"
 
 msgid "Install Anyway"
 msgstr "Trotzdem installieren"
@@ -1475,11 +1483,20 @@ msgstr "Festplattenspeicher überprüfen"
 msgid "Working"
 msgstr "Berabeitung"
 
-msgid "Done"
-msgstr "Fertig"
-
 msgid "Failed"
 msgstr "Fehlgeschlagen"
+
+#| msgid "Installation complete."
+msgid "Transaction Completed"
+msgstr ""
+
+#| msgid "Operation failed"
+msgid "Transaction Failed"
+msgstr ""
+
+#| msgid "Cancelled"
+msgid "Transaction Cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "Fertiggestellt"
@@ -1487,8 +1504,18 @@ msgstr "Fertiggestellt"
 msgid "exit"
 msgstr "beenden"
 
+msgid "The operation was cancelled."
+msgstr ""
+
+#| msgid "Operation completed successfully"
+msgid "All operations finished successfully."
+msgstr ""
+
 msgid "Cancelled"
 msgstr "Abgebrochen"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
 
 msgid "System package update"
 msgstr "Systempaket-Update"
