@@ -376,6 +376,11 @@ fn writeSelectionQuestionFrame(
 }
 
 fn questionKindName(question: Zigalpm.OperationQuestion) []const u8 {
+    switch(question.purpose) {
+        .cache_clean_extra_entries => return "CacheCleanExtraEntries",
+        .generic => {},
+    }
+    
     if (question.kind == .import_pgp_key) return "ImportPgpKey";
     return switch (question.envelope.kind) {
         .remove => "RemovePkgs",

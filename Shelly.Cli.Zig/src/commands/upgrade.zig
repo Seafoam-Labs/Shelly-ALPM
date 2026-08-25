@@ -1114,6 +1114,7 @@ fn confirmCacheClean(
     if (auto_confirm) return true;
     var answer = try cache_operation.ask(.{
         .kind = .confirmation,
+        .purpose = .cache_clean_extra_entries,
         .prompt = "Would you like to remove extra cache entries?",
         .default_response = .accepted,
     });
