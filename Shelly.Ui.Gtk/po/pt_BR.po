@@ -12,6 +12,9 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
+msgid "Would you like to remove extra cache entries?"
+msgstr "Você gostaria de remover entradas adicionais do cache?"
+
 msgid "No installable addons available"
 msgstr "Nenhum addon instalável disponível"
 
