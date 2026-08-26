@@ -9,6 +9,7 @@
     <file alias="settings-symbolic.svg" preprocess="xml-stripblanks">assets/icons/settings-symbolic.svg</file>
     <file alias="application-x-executable-symbolic.svg" preprocess="xml-stripblanks">assets/icons/application-x-executable-symbolic.svg</file>
     <file alias="software-update-available-symbolic.svg" preprocess="xml-stripblanks">assets/icons/software-update-available-symbolic.svg</file>
+    <file alias="checkmark-small-symbolic.svg" preprocess="xml-stripblanks">assets/icons/checkmark-small-symbolic.svg</file>
   </gresource>
   <gresource prefix="/com/shellyorg/shelly">
     <file>ui/main_window.ui</file>

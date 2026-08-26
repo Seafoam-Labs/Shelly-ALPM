@@ -506,7 +506,7 @@ pub const TransactionPage = extern struct {
         const p = self.priv();
 
         const icon: [:0]const u8 = switch (outcome) {
-            .success => "xsi-emblem-ok-symbolic",
+            .success => "checkmark-small-symbolic",
             .failed => "dialog-error-symbolic",
             .cancelled => "dialog-warning-symbolic",
         };
