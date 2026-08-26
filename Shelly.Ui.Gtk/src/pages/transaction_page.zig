@@ -793,10 +793,9 @@ pub const TransactionPage = extern struct {
         self.handle_question(pending);
     }
 
-    fn getQuestionText(question_kind: []const u8, fallback: []const u8,) []const u8 {
-        if (std.mem.eql(u8,question_kind,"CacheCleanExtraEntries",)) 
-        { 
-            return translations._( "Would you like to remove extra cache entries?",);
+    fn getQuestionText(question_kind: []const u8, fallback: []const u8) []const u8 {
+        if (std.mem.eql(u8, question_kind, "CacheCleanExtraEntries")) {
+            return translations._("Would you like to remove extra cache entries?");
         }
         return fallback;
     }
