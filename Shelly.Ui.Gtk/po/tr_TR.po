@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-25 14:44-0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-06-17 11:40-0400\n"
 "Last-Translator: Ulaş Çakmak <celonfix@protonmail.com>\n"
 "Language-Team: Turkish (Turkiye)<>\n"
@@ -180,7 +180,7 @@ msgstr "Popülerlik"
 msgid "Search the AUR"
 msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "The AUR has no browsable index type a package name to begin."
 msgstr ""
 
 msgid "Run checks"
@@ -220,10 +220,6 @@ msgstr "kullanıcı"
 
 msgid "Install"
 msgstr "Kur"
-
-#| msgid "No changelog entries found"
-msgid "No matching applications found"
-msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Flatpak Verileri Yükleniyor..."
@@ -360,10 +356,6 @@ msgstr "Depo"
 msgid "Install Date"
 msgstr ""
 
-#| msgid "No changelog entries found"
-msgid "No matching packages found"
-msgstr ""
-
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 
@@ -467,10 +459,6 @@ msgstr "Sistem Tepsisini Otomatik Başlatmaya Ekle"
 msgid "Use weekly schedule"
 msgstr "Haftalık program kullan"
 
-#| msgid "Tray Updates Icon"
-msgid "Tray update with ui"
-msgstr ""
-
 msgid "Tray Check Interval (Hours)"
 msgstr "Tepsi Kontrol Aralığı (Saat)"
 
@@ -554,6 +542,9 @@ msgstr "Onay Yok"
 msgid "Enable Shelly Search"
 msgstr "Shelly Aramayı Etkinleştir"
 
+msgid "Enable Package Downgrade"
+msgstr "Paket Sürüm Düşürmeyi Etkinleştir"
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Webview Görselleştirmeyi Etkinleştir (Deneysel)"
 
@@ -579,9 +570,6 @@ msgid "Sponsor"
 msgstr "Sponsor"
 
 msgid "Toggle output"
-msgstr ""
-
-msgid "Done"
 msgstr ""
 
 msgid "Available Updates"
@@ -775,6 +763,9 @@ msgid "Security scan completed - no issues found."
 msgstr ""
 
 msgid "used in"
+msgstr ""
+
+msgid "Warning"
 msgstr ""
 
 msgid "Install Anyway"
@@ -1125,6 +1116,7 @@ msgstr ""
 msgid "Remove this Flatpak?"
 msgstr ""
 
+#| msgid "Flatpak"
 msgid "Remove Flatpak"
 msgstr ""
 
@@ -1134,9 +1126,11 @@ msgstr ""
 msgid "App ID"
 msgstr ""
 
+#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
+#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1158,6 +1152,7 @@ msgstr "Hayır"
 msgid "Keywords"
 msgstr ""
 
+#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1232,6 +1227,7 @@ msgstr ""
 msgid "Search failed"
 msgstr ""
 
+#| msgid "Installation Path"
 msgid "Installation in progress"
 msgstr ""
 
@@ -1241,9 +1237,11 @@ msgstr ""
 msgid "Enable at least one source filter above."
 msgstr ""
 
+#| msgid "Install Local"
 msgid "Install Packages"
 msgstr ""
 
+#| msgid "Install Selected"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1442,16 +1440,10 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
+msgid "Done"
+msgstr ""
+
 msgid "Failed"
-msgstr ""
-
-msgid "Transaction Completed"
-msgstr ""
-
-msgid "Transaction Failed"
-msgstr ""
-
-msgid "Transaction Cancelled"
 msgstr ""
 
 msgid "Finished"
@@ -1460,16 +1452,7 @@ msgstr ""
 msgid "exit"
 msgstr ""
 
-msgid "The operation was cancelled."
-msgstr ""
-
-msgid "All operations finished successfully."
-msgstr ""
-
 msgid "Cancelled"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

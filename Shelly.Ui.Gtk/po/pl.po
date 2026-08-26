@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-25 14:44-0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-08-20 14:15+0200\n"
 "Last-Translator: hotline1337 <denuvo at tuta dot io>\n"
 "Language-Team: Polish\n"
@@ -141,8 +141,8 @@ msgstr "np. właściciel/repozytorium lub https://..."
 
 msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
 msgstr ""
-"Nieprawidłowy format. Użyj formatu właściciel/repozytorium (np. seafoam-labs/"
-"shelly-alpm)"
+"Nieprawidłowy format. Użyj formatu właściciel/repozytorium (np. seafoam-"
+"labs/shelly-alpm)"
 
 msgid "Allow Prerelease"
 msgstr "Zezwalaj na wersje przedpremierowe"
@@ -195,9 +195,9 @@ msgstr "Popularność"
 msgid "Search the AUR"
 msgstr "Przeszukaj AUR"
 
-#| msgid "The AUR has no browsable index type a package name to begin."
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "The AUR has no browsable index type a package name to begin."
 msgstr ""
+"AUR nie posiada indeksu do przeglądania - wpisz nazwę pakietu, aby rozpocząć."
 
 msgid "Run checks"
 msgstr "Uruchom testy"
@@ -218,8 +218,8 @@ msgid ""
 "Choose a .flatpak bundle from your system and install it for the current "
 "user or system-wide."
 msgstr ""
-"Wybierz pakiet .flatpak z dysku i zainstaluj go dla bieżącego użytkownika "
-"lub dla całego systemu."
+"Wybierz pakiet .flatpak z dysku i zainstaluj go dla bieżącego użytkownika lub "
+"dla całego systemu."
 
 msgid "Bundle"
 msgstr "Pakiet"
@@ -238,10 +238,6 @@ msgstr "użytkownika"
 
 msgid "Install"
 msgstr "Zainstaluj"
-
-#| msgid "No changelog entries found"
-msgid "No matching applications found"
-msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Wczytywanie danych Flatpak..."
@@ -378,10 +374,6 @@ msgstr "Repozytorium"
 msgid "Install Date"
 msgstr "Data instalacji"
 
-#| msgid "No packages found"
-msgid "No matching packages found"
-msgstr ""
-
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Wystąpił problem podczas wczytywania pakietów. Sprawdź, czy baza danych nie "
@@ -491,10 +483,6 @@ msgstr "Uruchom ikonę w zasobniku przy starcie systemu"
 msgid "Use weekly schedule"
 msgstr "Użyj harmonogramu tygodniowego"
 
-#| msgid "Tray Updates Icon"
-msgid "Tray update with ui"
-msgstr ""
-
 msgid "Tray Check Interval (Hours)"
 msgstr "Częstotliwość sprawdzania w zasobniku (godziny)"
 
@@ -581,6 +569,9 @@ msgstr "Bez potwierdzania"
 msgid "Enable Shelly Search"
 msgstr "Włącz wyszukiwarkę Shelly"
 
+msgid "Enable Package Downgrade"
+msgstr "Włącz obniżanie wersji pakietów"
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Włącz wizualizację WebView (eksperymentalne)"
 
@@ -607,9 +598,6 @@ msgstr "Wesprzyj projekt"
 
 msgid "Toggle output"
 msgstr "Przełącz widok konsoli"
-
-msgid "Done"
-msgstr "Gotowe"
 
 msgid "Available Updates"
 msgstr "Dostępne aktualizacje"
@@ -814,6 +802,9 @@ msgstr "Skanowanie bezpieczeństwa ukończone — nie wykryto problemów."
 msgid "used in"
 msgstr "używane w"
 
+msgid "Warning"
+msgstr "Ostrzeżenie"
+
 msgid "Install Anyway"
 msgstr "Zainstaluj mimo to"
 
@@ -855,8 +846,8 @@ msgstr "Wersja: ?"
 
 msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgstr ""
-"Nieprawidłowy format. Użyj formatu właściciel/repozytorium (np. seafoam-labs/"
-"shelly-alpm)"
+"Nieprawidłowy format. Użyj formatu właściciel/repozytorium (np. seafoam-"
+"labs/shelly-alpm)"
 
 msgid "Invalid URL. Must start with http:// or https://"
 msgstr "Nieprawidłowy adres URL. Musi zaczynać się od http:// lub https://"
@@ -1488,20 +1479,11 @@ msgstr "Sprawdzanie miejsca na dysku"
 msgid "Working"
 msgstr "Przetwarzanie"
 
+msgid "Done"
+msgstr "Gotowe"
+
 msgid "Failed"
 msgstr "Niepowodzenie"
-
-#| msgid "Installation complete."
-msgid "Transaction Completed"
-msgstr ""
-
-#| msgid "Operation failed"
-msgid "Transaction Failed"
-msgstr ""
-
-#| msgid "Cancelled"
-msgid "Transaction Cancelled"
-msgstr ""
 
 msgid "Finished"
 msgstr "Zakończono"
@@ -1509,18 +1491,8 @@ msgstr "Zakończono"
 msgid "exit"
 msgstr "wyjście"
 
-msgid "The operation was cancelled."
-msgstr ""
-
-#| msgid "Operation completed successfully"
-msgid "All operations finished successfully."
-msgstr ""
-
 msgid "Cancelled"
 msgstr "Anulowano"
-
-msgid "Would you like to remove extra cache entries?"
-msgstr ""
 
 msgid "System package update"
 msgstr "Aktualizacja pakietu systemowego"

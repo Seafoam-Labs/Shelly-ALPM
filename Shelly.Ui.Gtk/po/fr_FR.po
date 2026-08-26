@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-25 14:44-0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-08-13 18:50+0200\n"
 "Last-Translator: Roxfr <roxfr-dev@outlook.com>\n"
 "Language-Team: French\n"
@@ -194,9 +194,9 @@ msgstr "Popularité"
 msgid "Search the AUR"
 msgstr "Rechercher dans l'AUR"
 
-#| msgid "The AUR has no browsable index type a package name to begin."
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "The AUR has no browsable index type a package name to begin."
 msgstr ""
+"L'AUR n'a pas d'index consultable. Tapez un nom de paquet pour commencer."
 
 msgid "Run checks"
 msgstr "Exécuter les vérifications"
@@ -237,10 +237,6 @@ msgstr "utilisateur"
 
 msgid "Install"
 msgstr "Installer"
-
-#| msgid "No changelog entries found"
-msgid "No matching applications found"
-msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Chargement des données Flatpak…"
@@ -377,10 +373,6 @@ msgstr "Dépôt"
 msgid "Install Date"
 msgstr "Date d'installation"
 
-#| msgid "No packages found"
-msgid "No matching packages found"
-msgstr ""
-
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Un problème est survenu lors du chargement de vos paquets. Vérifiez si un "
@@ -494,10 +486,6 @@ msgstr "Ajouter la zone de notification au démarrage automatique"
 msgid "Use weekly schedule"
 msgstr "Utiliser une planification hebdomadaire"
 
-#| msgid "Tray Updates Icon"
-msgid "Tray update with ui"
-msgstr ""
-
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalle de vérification de la zone de notification (heures)"
 
@@ -584,6 +572,9 @@ msgstr "Ne pas demander de confirmation"
 msgid "Enable Shelly Search"
 msgstr "Activer la recherche Shelly"
 
+msgid "Enable Package Downgrade"
+msgstr "Activer la rétrogradation des paquets"
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Activer la visualisation WebView (expérimental)"
 
@@ -610,9 +601,6 @@ msgstr "Sponsoriser"
 
 msgid "Toggle output"
 msgstr "Afficher/masquer la sortie"
-
-msgid "Done"
-msgstr "Terminé"
 
 msgid "Available Updates"
 msgstr "Mises à jour disponibles"
@@ -816,6 +804,9 @@ msgstr "Analyse de sécurité terminée : aucun problème trouvé."
 
 msgid "used in"
 msgstr "utilisé dans"
+
+msgid "Warning"
+msgstr "Avertissement"
 
 msgid "Install Anyway"
 msgstr "Installer quand même"
@@ -1496,20 +1487,11 @@ msgstr "Vérification de l'espace disque"
 msgid "Working"
 msgstr "En cours"
 
+msgid "Done"
+msgstr "Terminé"
+
 msgid "Failed"
 msgstr "Échec"
-
-#| msgid "Installation complete."
-msgid "Transaction Completed"
-msgstr ""
-
-#| msgid "Operation failed"
-msgid "Transaction Failed"
-msgstr ""
-
-#| msgid "Cancelled"
-msgid "Transaction Cancelled"
-msgstr ""
 
 msgid "Finished"
 msgstr "Terminé"
@@ -1517,18 +1499,8 @@ msgstr "Terminé"
 msgid "exit"
 msgstr "quitter"
 
-msgid "The operation was cancelled."
-msgstr ""
-
-#| msgid "Operation completed successfully"
-msgid "All operations finished successfully."
-msgstr ""
-
 msgid "Cancelled"
 msgstr "Annulé"
-
-msgid "Would you like to remove extra cache entries?"
-msgstr ""
 
 msgid "System package update"
 msgstr "Mise à jour des paquets système"

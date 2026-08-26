@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-25 14:44-0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-06-29 21:36+0330\n"
 "Last-Translator: Sohrab Behdani <behdanisohrab@proton.me>\n"
 "Language-Team: fa\n"
@@ -186,7 +186,7 @@ msgstr "محبوبیت"
 msgid "Search the AUR"
 msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "The AUR has no browsable index type a package name to begin."
 msgstr ""
 
 msgid "Run checks"
@@ -226,10 +226,6 @@ msgstr "کاربر"
 
 msgid "Install"
 msgstr "نصب"
-
-#| msgid "No changelog entries found"
-msgid "No matching applications found"
-msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "درحال بارگزاری اطلاعات فلت‌پک...."
@@ -366,10 +362,6 @@ msgstr "مخزن"
 msgid "Install Date"
 msgstr ""
 
-#| msgid "No changelog entries found"
-msgid "No matching packages found"
-msgstr ""
-
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "در هنگام بازکردن بسته‌های شما خطایی رخ داد. بررسی کنید که آیا دیتابیس قفل شده "
@@ -477,10 +469,6 @@ msgstr "افزودن نماد سینی به اجرای اولیه"
 msgid "Use weekly schedule"
 msgstr "استفاده از زمان‌بندی هفتگی"
 
-#| msgid "Tray Updates Icon"
-msgid "Tray update with ui"
-msgstr ""
-
 msgid "Tray Check Interval (Hours)"
 msgstr "فاصلهٔ بررسی در سینی (ساعت)"
 
@@ -567,6 +555,9 @@ msgstr "بدون تأیید"
 msgid "Enable Shelly Search"
 msgstr "فعال‌سازی جست‌جوی Shelly"
 
+msgid "Enable Package Downgrade"
+msgstr "فعال‌سازی بازگردانی نگارش بسته"
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "فعال‌سازی مجازی‌سازی WebView (آزمایشی)"
 
@@ -592,9 +583,6 @@ msgid "Sponsor"
 msgstr "حامی"
 
 msgid "Toggle output"
-msgstr ""
-
-msgid "Done"
 msgstr ""
 
 msgid "Available Updates"
@@ -789,6 +777,9 @@ msgid "Security scan completed - no issues found."
 msgstr "اسکن امنیتی پایان یافت - هیچ مشکلی یافت نشد."
 
 msgid "used in"
+msgstr ""
+
+msgid "Warning"
 msgstr ""
 
 msgid "Install Anyway"
@@ -1140,6 +1131,7 @@ msgstr ""
 msgid "Remove this Flatpak?"
 msgstr ""
 
+#| msgid "Flatpak"
 msgid "Remove Flatpak"
 msgstr ""
 
@@ -1149,9 +1141,11 @@ msgstr ""
 msgid "App ID"
 msgstr ""
 
+#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
+#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1173,6 +1167,7 @@ msgstr "نه"
 msgid "Keywords"
 msgstr ""
 
+#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1246,6 +1241,7 @@ msgstr ""
 msgid "Search failed"
 msgstr ""
 
+#| msgid "Installation Path"
 msgid "Installation in progress"
 msgstr ""
 
@@ -1255,9 +1251,11 @@ msgstr ""
 msgid "Enable at least one source filter above."
 msgstr ""
 
+#| msgid "Install Local"
 msgid "Install Packages"
 msgstr ""
 
+#| msgid "Install Selected"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1457,16 +1455,10 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
+msgid "Done"
+msgstr ""
+
 msgid "Failed"
-msgstr ""
-
-msgid "Transaction Completed"
-msgstr ""
-
-msgid "Transaction Failed"
-msgstr ""
-
-msgid "Transaction Cancelled"
 msgstr ""
 
 msgid "Finished"
@@ -1475,16 +1467,7 @@ msgstr ""
 msgid "exit"
 msgstr ""
 
-msgid "The operation was cancelled."
-msgstr ""
-
-msgid "All operations finished successfully."
-msgstr ""
-
 msgid "Cancelled"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

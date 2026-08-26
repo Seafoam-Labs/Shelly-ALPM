@@ -1,8 +1,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
-"Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-25 14:44-0300\n"
+"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
+"POT-Creation-Date: 2026-08-13 00:37+0200\n"
 "PO-Revision-Date: 2026-08-13 11:51+0200\n"
 "Last-Translator: Impostor0729\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -237,10 +237,6 @@ msgstr "felhasználó"
 msgid "Install"
 msgstr "Telepítés"
 
-#| msgid "No changelog entries found"
-msgid "No matching applications found"
-msgstr ""
-
 msgid "Loading Flatpak Data..."
 msgstr "Flatpak adatok betöltése..."
 
@@ -376,10 +372,6 @@ msgstr "Tároló"
 msgid "Install Date"
 msgstr "Telepítés dátuma"
 
-#| msgid "No packages found"
-msgid "No matching packages found"
-msgstr ""
-
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Probléma lépett fel a csomagok betöltésekor. Ellenőrizze, hogy van-e db zár."
@@ -488,10 +480,6 @@ msgstr "Tálcaikon hozzáadása az automatikus indításhoz"
 msgid "Use weekly schedule"
 msgstr "Heti ütemezés használata"
 
-#| msgid "Tray Updates Icon"
-msgid "Tray update with ui"
-msgstr ""
-
 msgid "Tray Check Interval (Hours)"
 msgstr "Tálcaellenőrzési időköz (órákban)"
 
@@ -578,6 +566,9 @@ msgstr "Megerősítés kihagyása"
 msgid "Enable Shelly Search"
 msgstr "Shelly keresés engedélyezése"
 
+msgid "Enable Package Downgrade"
+msgstr "Korábbi verzióra váltás engedélyezése"
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Webview vizualizáció engedélyezése (kísérleti)"
 
@@ -604,9 +595,6 @@ msgstr "Támogató"
 
 msgid "Toggle output"
 msgstr "Kimenet váltása"
-
-msgid "Done"
-msgstr "Kész"
 
 msgid "Available Updates"
 msgstr "Elérhető frissítések"
@@ -808,6 +796,9 @@ msgstr "A biztonsági ellenőrzés befejeződött – nem található probléma.
 
 msgid "used in"
 msgstr "használt"
+
+msgid "Warning"
+msgstr "Figyelmeztetés"
 
 msgid "Install Anyway"
 msgstr "Telepítés mindenképpen"
@@ -1484,20 +1475,11 @@ msgstr "Lemezterület ellenőrzése"
 msgid "Working"
 msgstr "Dolgozom"
 
+msgid "Done"
+msgstr "Kész"
+
 msgid "Failed"
 msgstr "Sikertelen"
-
-#| msgid "Installation complete."
-msgid "Transaction Completed"
-msgstr ""
-
-#| msgid "Operation failed"
-msgid "Transaction Failed"
-msgstr ""
-
-#| msgid "Cancelled"
-msgid "Transaction Cancelled"
-msgstr ""
 
 msgid "Finished"
 msgstr "Befejezett"
@@ -1505,18 +1487,8 @@ msgstr "Befejezett"
 msgid "exit"
 msgstr "kilépés"
 
-msgid "The operation was cancelled."
-msgstr ""
-
-#| msgid "Operation completed successfully"
-msgid "All operations finished successfully."
-msgstr ""
-
 msgid "Cancelled"
 msgstr "Törölt<"
-
-msgid "Would you like to remove extra cache entries?"
-msgstr ""
 
 msgid "System package update"
 msgstr "Rendszercsomag frissítése"

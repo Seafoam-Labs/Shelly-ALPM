@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-25 14:44-0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-05-24 15:21+0100\n"
 "Last-Translator: André Moreira <afrmscb@gmail.com>, 2026\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -180,7 +180,7 @@ msgstr "Popularidade"
 msgid "Search the AUR"
 msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "The AUR has no browsable index type a package name to begin."
 msgstr ""
 
 msgid "Run checks"
@@ -220,10 +220,6 @@ msgstr "utilizador"
 
 msgid "Install"
 msgstr "Instalar"
-
-#| msgid "No changelog entries found"
-msgid "No matching applications found"
-msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "A carregar dados do Flatpak..."
@@ -360,10 +356,6 @@ msgstr "Repositório"
 msgid "Install Date"
 msgstr ""
 
-#| msgid "No changelog entries found"
-msgid "No matching packages found"
-msgstr ""
-
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 
@@ -469,10 +461,6 @@ msgstr "Adicionar Ícone ao Arranque Automático"
 msgid "Use weekly schedule"
 msgstr "Utilizar agendamento semanal"
 
-#| msgid "Tray Updates Icon"
-msgid "Tray update with ui"
-msgstr ""
-
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalo de Verificação no Ícone (Horas)"
 
@@ -555,6 +543,9 @@ msgstr "Não Confirmar"
 msgid "Enable Shelly Search"
 msgstr "Ativar Procura do Shelly"
 
+msgid "Enable Package Downgrade"
+msgstr ""
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Ativar Visualização Webview (experimental)"
 
@@ -580,9 +571,6 @@ msgid "Sponsor"
 msgstr "Patrocinar"
 
 msgid "Toggle output"
-msgstr ""
-
-msgid "Done"
 msgstr ""
 
 msgid "Available Updates"
@@ -775,6 +763,9 @@ msgid "Security scan completed - no issues found."
 msgstr ""
 
 msgid "used in"
+msgstr ""
+
+msgid "Warning"
 msgstr ""
 
 msgid "Install Anyway"
@@ -1124,6 +1115,7 @@ msgstr ""
 msgid "Remove this Flatpak?"
 msgstr ""
 
+#| msgid "Flatpak"
 msgid "Remove Flatpak"
 msgstr ""
 
@@ -1133,9 +1125,11 @@ msgstr ""
 msgid "App ID"
 msgstr ""
 
+#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
+#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1157,6 +1151,7 @@ msgstr "Não"
 msgid "Keywords"
 msgstr ""
 
+#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1230,6 +1225,7 @@ msgstr ""
 msgid "Search failed"
 msgstr ""
 
+#| msgid "Installation Path"
 msgid "Installation in progress"
 msgstr ""
 
@@ -1239,9 +1235,11 @@ msgstr ""
 msgid "Enable at least one source filter above."
 msgstr ""
 
+#| msgid "Install Local"
 msgid "Install Packages"
 msgstr ""
 
+#| msgid "Install Selected"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1442,6 +1440,9 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
+msgid "Done"
+msgstr ""
+
 msgid "Failed"
 msgstr ""
 
@@ -1460,16 +1461,7 @@ msgstr ""
 msgid "exit"
 msgstr ""
 
-msgid "The operation was cancelled."
-msgstr ""
-
-msgid "All operations finished successfully."
-msgstr ""
-
 msgid "Cancelled"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

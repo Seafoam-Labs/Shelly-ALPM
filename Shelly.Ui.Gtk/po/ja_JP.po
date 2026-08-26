@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-25 14:44-0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -18,12 +18,14 @@ msgstr "インストール可能なアドオンはありません"
 msgid "Close"
 msgstr "閉じる"
 
+#| msgid "Saving update configuration"
 msgid "Keep configuration"
 msgstr ""
 
 msgid "App data and settings will be kept."
 msgstr ""
 
+#| msgid "Saving update configuration"
 msgid "Remove configuration"
 msgstr ""
 
@@ -190,9 +192,10 @@ msgstr "人気度"
 msgid "Search the AUR"
 msgstr "AUR を検索"
 
-#| msgid "The AUR has no browsable index type a package name to begin."
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "The AUR has no browsable index type a package name to begin."
 msgstr ""
+"AUR には参照可能なインデックスがありません。開始するにはパッケージ名を入力し"
+"てください。"
 
 msgid "Run checks"
 msgstr "チェックを実行"
@@ -233,10 +236,6 @@ msgstr "ユーザー"
 
 msgid "Install"
 msgstr "インストール"
-
-#| msgid "No changelog entries found"
-msgid "No matching applications found"
-msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Flatpak のデータを読み込み中..."
@@ -373,10 +372,6 @@ msgstr "リポジトリ"
 msgid "Install Date"
 msgstr "インストール日時"
 
-#| msgid "No packages found"
-msgid "No matching packages found"
-msgstr ""
-
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "パッケージの読み込み中に問題が発生しました。DB がロックされていないか確認して"
@@ -446,6 +441,7 @@ msgstr "Flatpak"
 msgid "Show results from the configured Flatpak remotes"
 msgstr ""
 
+#| msgid "Source Files"
 msgid "Source"
 msgstr ""
 
@@ -483,10 +479,6 @@ msgstr "トレイを自動起動に追加する"
 
 msgid "Use weekly schedule"
 msgstr "週間スケジュールを使用する"
-
-#| msgid "Tray Updates Icon"
-msgid "Tray update with ui"
-msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "トレイのチェック間隔 (時間)"
@@ -574,6 +566,9 @@ msgstr "確認なしで実行する"
 msgid "Enable Shelly Search"
 msgstr "Shelly 検索を有効にする"
 
+msgid "Enable Package Downgrade"
+msgstr "パッケージのダウングレードを有効にする"
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "WebView 表示を有効にする (実験的)"
 
@@ -600,9 +595,6 @@ msgstr "スポンサー"
 
 msgid "Toggle output"
 msgstr "出力を切り替える"
-
-msgid "Done"
-msgstr "完了"
 
 msgid "Available Updates"
 msgstr "利用可能なアップデート"
@@ -803,6 +795,9 @@ msgstr "セキュリティスキャン完了 - 問題は見つかりませんで
 
 msgid "used in"
 msgstr "次で使用"
+
+msgid "Warning"
+msgstr "警告"
 
 msgid "Install Anyway"
 msgstr "とにかくインストール"
@@ -1158,9 +1153,11 @@ msgstr "リモートを削除中"
 msgid "Adding Remote"
 msgstr "リモートを追加中"
 
+#| msgid "Removing Flatpak"
 msgid "Remove this Flatpak?"
 msgstr ""
 
+#| msgid "Removing Flatpak"
 msgid "Remove Flatpak"
 msgstr ""
 
@@ -1170,9 +1167,11 @@ msgstr "Flatpak を削除中"
 msgid "App ID"
 msgstr ""
 
+#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
+#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1194,6 +1193,7 @@ msgstr "いいえ"
 msgid "Keywords"
 msgstr ""
 
+#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1266,21 +1266,26 @@ msgstr "パッケージを削除中"
 msgid "Installing packages"
 msgstr "パッケージをインストール中"
 
+#| msgid "Operation failed"
 msgid "Search failed"
 msgstr ""
 
+#| msgid "Installation failed."
 msgid "Installation in progress"
 msgstr ""
 
+#| msgid "No packages selected"
 msgid "No sources selected"
 msgstr ""
 
 msgid "Enable at least one source filter above."
 msgstr ""
 
+#| msgid "Installing packages"
 msgid "Install Packages"
 msgstr ""
 
+#| msgid "Remove the selected packages?"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1481,20 +1486,11 @@ msgstr "ディスク容量を確認中"
 msgid "Working"
 msgstr "作業中"
 
+msgid "Done"
+msgstr "完了"
+
 msgid "Failed"
 msgstr "失敗"
-
-#| msgid "Installation complete."
-msgid "Transaction Completed"
-msgstr ""
-
-#| msgid "Operation failed"
-msgid "Transaction Failed"
-msgstr ""
-
-#| msgid "Cancelled"
-msgid "Transaction Cancelled"
-msgstr ""
 
 msgid "Finished"
 msgstr "完了"
@@ -1502,18 +1498,8 @@ msgstr "完了"
 msgid "exit"
 msgstr "終了"
 
-msgid "The operation was cancelled."
-msgstr ""
-
-#| msgid "Operation completed successfully"
-msgid "All operations finished successfully."
-msgstr ""
-
 msgid "Cancelled"
 msgstr "キャンセル"
-
-msgid "Would you like to remove extra cache entries?"
-msgstr ""
 
 msgid "System package update"
 msgstr "システムパッケージのアップデート"

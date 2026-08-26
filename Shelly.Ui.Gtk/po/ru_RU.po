@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-25 14:44-0300\n"
+"POT-Creation-Date: 2026-08-12 09:19-0400\n"
 "PO-Revision-Date: 2026-06-30 10:06+0400\n"
 "Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\\nLanguage-Team: "
 "Russian (Russia) <anton@azdanov.dev>\n"
@@ -21,12 +21,14 @@ msgstr "Нет доступных дополнений для установки
 msgid "Close"
 msgstr "Закрыть"
 
+#| msgid "Saving update configuration"
 msgid "Keep configuration"
 msgstr "Сохранить конфигурацию"
 
 msgid "App data and settings will be kept."
 msgstr "Данные приложения и настройки будут сохранены."
 
+#| msgid "Saving update configuration"
 msgid "Remove configuration"
 msgstr "Удалить конфигурацию"
 
@@ -193,9 +195,8 @@ msgstr "Популярность"
 msgid "Search the AUR"
 msgstr "Поиск в AUR"
 
-#| msgid "The AUR has no browsable index type a package name to begin."
-msgid "The AUR has no browsable index. Type a package name to begin."
-msgstr ""
+msgid "The AUR has no browsable index type a package name to begin."
+msgstr "В AUR нет индекса для просмотра — введите имя пакета для начала."
 
 msgid "Run checks"
 msgstr "Выполнить проверки"
@@ -236,10 +237,6 @@ msgstr "пользователь"
 
 msgid "Install"
 msgstr "Установить"
-
-#| msgid "No changelog entries found"
-msgid "No matching applications found"
-msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Загрузка данных Flatpak..."
@@ -376,10 +373,6 @@ msgstr "Репозиторий"
 msgid "Install Date"
 msgstr "Дата установки"
 
-#| msgid "No packages found"
-msgid "No matching packages found"
-msgstr ""
-
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Возникла проблема при загрузке пакетов. Проверьте, нет ли блокировки базы "
@@ -449,6 +442,7 @@ msgstr "Flatpak"
 msgid "Show results from the configured Flatpak remotes"
 msgstr "Показывать результаты из настроенных удалённых источников Flatpak"
 
+#| msgid "Source Files"
 msgid "Source"
 msgstr "Источник"
 
@@ -488,10 +482,6 @@ msgstr "Добавить значок трея в автозапуск"
 
 msgid "Use weekly schedule"
 msgstr "Использовать недельное расписание"
-
-#| msgid "Tray Updates Icon"
-msgid "Tray update with ui"
-msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Интервал проверки в трее (часы)"
@@ -579,6 +569,9 @@ msgstr "Без подтверждения"
 msgid "Enable Shelly Search"
 msgstr "Включить поиск Shelly"
 
+msgid "Enable Package Downgrade"
+msgstr "Включить понижение версии пакетов"
+
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Включить визуализацию WebView (экспериментально)"
 
@@ -605,9 +598,6 @@ msgstr "Поддержать"
 
 msgid "Toggle output"
 msgstr "Включить/отключить вывод"
-
-msgid "Done"
-msgstr "Готово"
 
 msgid "Available Updates"
 msgstr "Доступные обновления"
@@ -808,6 +798,9 @@ msgstr "Сканирование безопасности завершено —
 
 msgid "used in"
 msgstr "используется в"
+
+msgid "Warning"
+msgstr "Предупреждение"
 
 msgid "Install Anyway"
 msgstr "Всё равно установить"
@@ -1158,9 +1151,11 @@ msgstr "Удаление источника"
 msgid "Adding Remote"
 msgstr "Добавление источника"
 
+#| msgid "Removing Flatpak"
 msgid "Remove this Flatpak?"
 msgstr "Удалить этот Flatpak?"
 
+#| msgid "Removing Flatpak"
 msgid "Remove Flatpak"
 msgstr "Удалить Flatpak"
 
@@ -1170,9 +1165,11 @@ msgstr "Удаление Flatpak"
 msgid "App ID"
 msgstr "Идентификатор приложения"
 
+#| msgid "Remove"
 msgid "Remote"
 msgstr "Удалённый источник"
 
+#| msgid "Development"
 msgid "Developer"
 msgstr "Разработчик"
 
@@ -1194,6 +1191,7 @@ msgstr "Нет"
 msgid "Keywords"
 msgstr "Ключевые слова"
 
+#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr "Flathub"
 
@@ -1266,21 +1264,26 @@ msgstr "Удаление пакетов"
 msgid "Installing packages"
 msgstr "Установка пакетов"
 
+#| msgid "Operation failed"
 msgid "Search failed"
 msgstr "Поиск не удался"
 
+#| msgid "Installation failed."
 msgid "Installation in progress"
 msgstr "Установка в процессе"
 
+#| msgid "No packages selected"
 msgid "No sources selected"
 msgstr "Источники не выбраны"
 
 msgid "Enable at least one source filter above."
 msgstr "Включите хотя бы один фильтр источников выше."
 
+#| msgid "Installing packages"
 msgid "Install Packages"
 msgstr "Установить пакеты"
 
+#| msgid "Remove the selected packages?"
 msgid "Install the selected packages?"
 msgstr "Установить выбранные пакеты?"
 
@@ -1481,20 +1484,11 @@ msgstr "Проверка свободного места на диске"
 msgid "Working"
 msgstr "Выполнение"
 
+msgid "Done"
+msgstr "Готово"
+
 msgid "Failed"
 msgstr "Ошибка"
-
-#| msgid "Installation complete."
-msgid "Transaction Completed"
-msgstr ""
-
-#| msgid "Operation failed"
-msgid "Transaction Failed"
-msgstr ""
-
-#| msgid "Cancelled"
-msgid "Transaction Cancelled"
-msgstr ""
 
 msgid "Finished"
 msgstr "Завершено"
@@ -1502,18 +1496,8 @@ msgstr "Завершено"
 msgid "exit"
 msgstr "выход"
 
-msgid "The operation was cancelled."
-msgstr ""
-
-#| msgid "Operation completed successfully"
-msgid "All operations finished successfully."
-msgstr ""
-
 msgid "Cancelled"
 msgstr "Отменено"
-
-msgid "Would you like to remove extra cache entries?"
-msgstr ""
 
 msgid "System package update"
 msgstr "Обновление системного пакета"
