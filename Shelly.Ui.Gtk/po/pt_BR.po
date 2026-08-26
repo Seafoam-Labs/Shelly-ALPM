@@ -192,7 +192,7 @@ msgstr "Pesquisar na AUR"
 
 #| msgid "The AUR has no browsable index type a package name to begin."
 msgid "The AUR has no browsable index. Type a package name to begin."
-msgstr ""
+msgstr "A AUR não tem um índice navegável. Digite um nome de pacote para começar."
 
 msgid "Run checks"
 msgstr "Executar verificações"
@@ -236,7 +236,7 @@ msgstr "Instalar"
 
 #| msgid "No changelog entries found"
 msgid "No matching applications found"
-msgstr ""
+msgstr " Nenhuma aplicação correspondente encontrada "
 
 msgid "Loading Flatpak Data..."
 msgstr "Carregando dados do Flatpak..."
@@ -375,7 +375,7 @@ msgstr "Data de instalação"
 
 #| msgid "No packages found"
 msgid "No matching packages found"
-msgstr ""
+msgstr " Sem pacotes correspondentes encontrados "
 
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
@@ -489,7 +489,7 @@ msgstr "Usar agenda semanal"
 
 #| msgid "Tray Updates Icon"
 msgid "Tray update with ui"
-msgstr ""
+msgstr "Atualização da bandeja com ui"
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalo de verificação da bandeja (horas)"
