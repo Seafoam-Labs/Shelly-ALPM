@@ -1446,15 +1446,6 @@ msgstr ""
 msgid "Failed"
 msgstr ""
 
-msgid "Transaction Completed"
-msgstr ""
-
-msgid "Transaction Failed"
-msgstr ""
-
-msgid "Transaction Cancelled"
-msgstr ""
-
 msgid "Finished"
 msgstr ""
 
