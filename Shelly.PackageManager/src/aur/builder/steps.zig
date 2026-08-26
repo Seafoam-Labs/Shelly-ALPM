@@ -281,20 +281,47 @@ pub const DynamicArrayOverrides = std.StringHashMap([]const []const u8);
 pub const DynamicScalarUnsets = std.StringHashMap(void);
 pub const DynamicArrayUnsets = std.StringHashMap(void);
 
+pub const ShellOptionDelta = struct {
+    shell_enable: [][]const u8,
+    shell_disable: [][]const u8,
+    shopt_enable: [][]const u8,
+    shopt_disable: [][]const u8,
+
+    pub fn deinit(self: *ShellOptionDelta, allocator: std.mem.Allocator) void {
+        freeOwnedStrings(allocator, self.shell_enable);
+        freeOwnedStrings(allocator, self.shell_disable);
+        freeOwnedStrings(allocator, self.shopt_enable);
+        freeOwnedStrings(allocator, self.shopt_disable);
+        self.* = undefined;
+    }
+
+    pub fn isEmpty(self: ShellOptionDelta) bool {
+        return self.shell_enable.len == 0 and self.shell_disable.len == 0 and
+            self.shopt_enable.len == 0 and self.shopt_disable.len == 0;
+    }
+};
+
 pub const DynamicMetadataOverrides = struct {
     scalars: std.StringHashMap([]const u8),
     unset_scalars: DynamicScalarUnsets,
     arrays: DynamicArrayOverrides,
     unset_arrays: DynamicArrayUnsets,
+    shell_options: ShellOptionDelta,
 
     pub fn deinit(self: *DynamicMetadataOverrides, allocator: std.mem.Allocator) void {
         deinitDynamicScalarOverrides(allocator, &self.scalars);
         deinitDynamicScalarUnsets(allocator, &self.unset_scalars);
         deinitDynamicArrayOverrides(allocator, &self.arrays);
         deinitDynamicArrayUnsets(allocator, &self.unset_arrays);
+        self.shell_options.deinit(allocator);
         self.* = undefined;
     }
 };
+
+fn freeOwnedStrings(allocator: std.mem.Allocator, values: []const []const u8) void {
+    for (values) |value| allocator.free(value);
+    allocator.free(values);
+}
 
 pub fn deinitDynamicScalarOverrides(
     allocator: std.mem.Allocator,
@@ -345,6 +372,98 @@ fn isShellVariableName(name: []const u8) bool {
     return true;
 }
 
+fn isShellOptionName(name: []const u8) bool {
+    if (name.len == 0 or !std.ascii.isLower(name[0])) return false;
+    for (name[1..]) |byte| {
+        if (!(std.ascii.isLower(byte) or std.ascii.isDigit(byte) or byte == '_' or byte == '-'))
+            return false;
+    }
+    return true;
+}
+
+fn parseShellOptionList(allocator: std.mem.Allocator, value: []const u8) ![][]const u8 {
+    if (value.len > 64 * 1024) return error.InvalidDynamicShellOptionOutput;
+    var result: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (result.items) |item| allocator.free(item);
+        result.deinit(allocator);
+    }
+    if (value.len == 0) return result.toOwnedSlice(allocator);
+
+    var components = std.mem.splitScalar(u8, value, ':');
+    while (components.next()) |component| {
+        if (!isShellOptionName(component) or result.items.len >= 256)
+            return error.InvalidDynamicShellOptionOutput;
+        for (result.items) |existing| {
+            if (std.mem.eql(u8, existing, component))
+                return error.InvalidDynamicShellOptionOutput;
+        }
+        const owned = try allocator.dupe(u8, component);
+        errdefer allocator.free(owned);
+        try result.append(allocator, owned);
+    }
+    return result.toOwnedSlice(allocator);
+}
+
+fn containsShellOption(options: []const []const u8, name: []const u8) bool {
+    for (options) |option| if (std.mem.eql(u8, option, name)) return true;
+    return false;
+}
+
+fn shellOptionDifference(
+    allocator: std.mem.Allocator,
+    minuend: []const []const u8,
+    subtrahend: []const []const u8,
+) ![][]const u8 {
+    var result: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (result.items) |item| allocator.free(item);
+        result.deinit(allocator);
+    }
+    for (minuend) |option| {
+        if (containsShellOption(subtrahend, option)) continue;
+        const owned = try allocator.dupe(u8, option);
+        errdefer allocator.free(owned);
+        try result.append(allocator, owned);
+    }
+    return result.toOwnedSlice(allocator);
+}
+
+fn parseShellOptionDelta(allocator: std.mem.Allocator, output: []const u8) !ShellOptionDelta {
+    var fields = std.mem.splitScalar(u8, output, 0);
+    const before_shopt_text = fields.next() orelse return error.InvalidDynamicShellOptionOutput;
+    const after_shopt_text = fields.next() orelse return error.InvalidDynamicShellOptionOutput;
+    const before_shell_text = fields.next() orelse return error.InvalidDynamicShellOptionOutput;
+    const after_shell_text = fields.next() orelse return error.InvalidDynamicShellOptionOutput;
+    const terminator = fields.next() orelse return error.InvalidDynamicShellOptionOutput;
+    if (terminator.len != 0 or fields.next() != null)
+        return error.InvalidDynamicShellOptionOutput;
+
+    const before_shopt = try parseShellOptionList(allocator, before_shopt_text);
+    defer freeOwnedStrings(allocator, before_shopt);
+    const after_shopt = try parseShellOptionList(allocator, after_shopt_text);
+    defer freeOwnedStrings(allocator, after_shopt);
+    const before_shell = try parseShellOptionList(allocator, before_shell_text);
+    defer freeOwnedStrings(allocator, before_shell);
+    const after_shell = try parseShellOptionList(allocator, after_shell_text);
+    defer freeOwnedStrings(allocator, after_shell);
+
+    const shell_enable = try shellOptionDifference(allocator, after_shell, before_shell);
+    errdefer freeOwnedStrings(allocator, shell_enable);
+    const shell_disable = try shellOptionDifference(allocator, before_shell, after_shell);
+    errdefer freeOwnedStrings(allocator, shell_disable);
+    const shopt_enable = try shellOptionDifference(allocator, after_shopt, before_shopt);
+    errdefer freeOwnedStrings(allocator, shopt_enable);
+    const shopt_disable = try shellOptionDifference(allocator, before_shopt, after_shopt);
+    errdefer freeOwnedStrings(allocator, shopt_disable);
+    return .{
+        .shell_enable = shell_enable,
+        .shell_disable = shell_disable,
+        .shopt_enable = shopt_enable,
+        .shopt_disable = shopt_disable,
+    };
+}
+
 fn parseDynamicScalarOutput(
     allocator: std.mem.Allocator,
     output: []const u8,
@@ -384,7 +503,7 @@ const dynamic_scalar_capture_prelude =
     \\declare -A __shelly_before_scalars=()
     \\__shelly_ignore_scalar() {
     \\  case "$1" in
-    \\    __shelly_*|BASH_*|BASHPID|EPOCHREALTIME|EPOCHSECONDS|LINENO|OLDPWD|OPTARG|OPTIND|PIPESTATUS|PPID|PWD|RANDOM|SECONDS|SHELLOPTS|SHLVL|SRANDOM|_) return 0 ;;
+    \\    __shelly_*|BASH_*|BASHOPTS|BASHPID|EPOCHREALTIME|EPOCHSECONDS|LINENO|OLDPWD|OPTARG|OPTIND|PIPESTATUS|PPID|PWD|RANDOM|SECONDS|SHELLOPTS|SHLVL|SRANDOM|_) return 0 ;;
     \\  esac
     \\  return 1
     \\}
@@ -429,7 +548,7 @@ const dynamic_array_capture_prelude =
     \\declare -A __shelly_before_arrays=()
     \\__shelly_ignore_array() {
     \\  case "$1" in
-    \\    __shelly_*|BASH_*|BASHPID|EPOCHREALTIME|EPOCHSECONDS|LINENO|OLDPWD|OPTARG|OPTIND|PIPESTATUS|PPID|PWD|RANDOM|SECONDS|SHELLOPTS|SHLVL|SRANDOM|_) return 0 ;;
+    \\    __shelly_*|BASH_*|BASHOPTS|BASHPID|EPOCHREALTIME|EPOCHSECONDS|LINENO|OLDPWD|OPTARG|OPTIND|PIPESTATUS|PPID|PWD|RANDOM|SECONDS|SHELLOPTS|SHLVL|SRANDOM|_) return 0 ;;
     \\  esac
     \\  return 1
     \\}
@@ -572,7 +691,17 @@ pub fn evaluateDynamicMetadata(
     try writer.writeAll(dynamic_scalar_capture_prelude);
     try writer.writeAll("\n");
     try writer.writeAll(dynamic_array_capture_prelude);
-    try writer.writeAll("\n__shelly_clear_user_arrays\n__shelly_snapshot_scalars\n__shelly_snapshot_arrays\nsource \"$3\"\n__shelly_capture_scalar_changes \"$1\"\n__shelly_capture_array_changes \"$2\"\n");
+    try writer.writeAll(
+        "\n__shelly_clear_user_arrays\n" ++
+            "__shelly_snapshot_scalars\n" ++
+            "__shelly_snapshot_arrays\n" ++
+            "__shelly_before_bashopts=$BASHOPTS\n" ++
+            "__shelly_before_shellopts=$SHELLOPTS\n" ++
+            "source \"$4\"\n" ++
+            "__shelly_capture_scalar_changes \"$1\"\n" ++
+            "__shelly_capture_array_changes \"$2\"\n" ++
+            "printf '%s\\0%s\\0%s\\0%s\\0' \"$__shelly_before_bashopts\" \"$BASHOPTS\" \"$__shelly_before_shellopts\" \"$SHELLOPTS\" > \"$3\"\n",
+    );
     const command_body = try script.toOwnedSlice();
     defer self.allocator.free(command_body);
 
@@ -586,6 +715,11 @@ pub fn evaluateDynamicMetadata(
         &.{ self.options.work_directory, ".shelly-dynamic-source-arrays" },
     );
     defer self.allocator.free(array_result_path);
+    const shell_option_result_path = try std.fs.path.join(
+        self.allocator,
+        &.{ self.options.work_directory, ".shelly-dynamic-shell-options" },
+    );
+    defer self.allocator.free(shell_option_result_path);
     std.Io.Dir.cwd().deleteFile(self.io, scalar_result_path) catch |err| switch (err) {
         error.FileNotFound => {},
         else => return err,
@@ -596,6 +730,11 @@ pub fn evaluateDynamicMetadata(
         else => return err,
     };
     defer std.Io.Dir.cwd().deleteFile(self.io, array_result_path) catch {};
+    std.Io.Dir.cwd().deleteFile(self.io, shell_option_result_path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => return err,
+    };
+    defer std.Io.Dir.cwd().deleteFile(self.io, shell_option_result_path) catch {};
 
     const pkgbuild_path = self.options.pkgbuild_path orelse
         return error.UnreviewedBuilderRequest;
@@ -632,6 +771,7 @@ pub fn evaluateDynamicMetadata(
         "shelly-dynamic-source",
         scalar_result_path,
         array_result_path,
+        shell_option_result_path,
         canonical_pkgbuild_path,
     };
     const sandbox_enabled = self.shellybuild_config.sandbox.enabled;
@@ -679,11 +819,22 @@ pub fn evaluateDynamicMetadata(
     array_result = parsed.values;
     deinitDynamicArrayUnsets(self.allocator, &unset_array_result);
     unset_array_result = parsed.unsets;
+
+    const shell_option_output = try std.Io.Dir.cwd().readFileAlloc(
+        self.io,
+        shell_option_result_path,
+        self.allocator,
+        .limited(64 * 1024),
+    );
+    defer self.allocator.free(shell_option_output);
+    var shell_options = try parseShellOptionDelta(self.allocator, shell_option_output);
+    errdefer shell_options.deinit(self.allocator);
     return .{
         .scalars = scalar_result,
         .unset_scalars = unset_scalar_result,
         .arrays = array_result,
         .unset_arrays = unset_array_result,
+        .shell_options = shell_options,
     };
 }
 
@@ -709,6 +860,46 @@ test "dynamic scalar output preserves values, newlines, empty strings, and unset
     try std.testing.expectError(
         error.InvalidDynamicScalarOutput,
         parseDynamicScalarOutput(std.testing.allocator, "U\x00duplicate\x00S\x00duplicate\x00value\x00"),
+    );
+}
+
+test "dynamic scalar capture separates validated shell option deltas" {
+    var delta = try parseShellOptionDelta(
+        std.testing.allocator,
+        "checkwinsize:extquote\x00" ++
+            "checkwinsize:extglob\x00" ++
+            "braceexpand:hashall:interactive-comments\x00" ++
+            "hashall:nounset\x00",
+    );
+    defer delta.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), delta.shopt_enable.len);
+    try std.testing.expectEqualStrings("extglob", delta.shopt_enable[0]);
+    try std.testing.expectEqual(@as(usize, 1), delta.shopt_disable.len);
+    try std.testing.expectEqualStrings("extquote", delta.shopt_disable[0]);
+    try std.testing.expectEqual(@as(usize, 1), delta.shell_enable.len);
+    try std.testing.expectEqualStrings("nounset", delta.shell_enable[0]);
+    try std.testing.expectEqual(@as(usize, 2), delta.shell_disable.len);
+    try std.testing.expectEqualStrings("braceexpand", delta.shell_disable[0]);
+    try std.testing.expectEqualStrings("interactive-comments", delta.shell_disable[1]);
+
+    var unchanged = try parseShellOptionDelta(
+        std.testing.allocator,
+        "extglob\x00extglob\x00hashall\x00hashall\x00",
+    );
+    defer unchanged.deinit(std.testing.allocator);
+    try std.testing.expect(unchanged.isEmpty());
+
+    try std.testing.expectError(
+        error.InvalidDynamicShellOptionOutput,
+        parseShellOptionDelta(std.testing.allocator, "extglob\x00extglob\x00hashall\x00hashall"),
+    );
+    try std.testing.expectError(
+        error.InvalidDynamicShellOptionOutput,
+        parseShellOptionDelta(std.testing.allocator, "extglob:bad$name\x00extglob\x00hashall\x00hashall\x00"),
+    );
+    try std.testing.expectError(
+        error.InvalidDynamicShellOptionOutput,
+        parseShellOptionDelta(std.testing.allocator, "extglob:extglob\x00extglob\x00hashall\x00hashall\x00"),
     );
 }
 

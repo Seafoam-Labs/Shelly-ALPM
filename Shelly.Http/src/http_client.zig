@@ -33,6 +33,25 @@ const posix = std.posix;
 
 pub const disable_tls = std.options.http_disable_tls;
 
+// Proxy configuration is process-wide, just like the environment it mirrors.
+// Executables register their stable environment map before starting HTTP work;
+// individual clients then copy the relevant values into client-owned storage.
+var default_proxy_environment = std.atomic.Value(usize).init(0);
+
+/// Registers the environment used by clients that do not provide explicit
+/// `http_proxy` or `https_proxy` values. `environ_map` must remain valid until
+/// every client in the process has been deinitialized.
+///
+/// Call this during process startup, before starting HTTP worker threads.
+pub fn setDefaultProxyEnvironment(environ_map: *const std.process.Environ.Map) void {
+    default_proxy_environment.store(@intFromPtr(environ_map), .release);
+}
+
+fn defaultProxyEnvironment() ?*const std.process.Environ.Map {
+    const address = default_proxy_environment.load(.acquire);
+    return if (address == 0) null else @ptrFromInt(address);
+}
+
 /// Controls which resolved address families are eligible for new connections.
 /// `happy_eyeballs` mirrors curl by preferring IPv6 while racing IPv4 shortly
 /// afterwards. `prefer_ipv4` uses the same algorithm with IPv4 launched first.
@@ -87,6 +106,12 @@ http_proxy: ?*Proxy = null,
 /// This field cannot be modified while the client has active connections.
 /// Pointer to externally-owned memory.
 https_proxy: ?*Proxy = null,
+
+/// Storage for proxies discovered from the process-default environment.
+/// Explicitly supplied proxy pointers remain externally owned.
+default_proxy_arena: ?std.heap.ArenaAllocator = null,
+default_proxy_lock: Io.Mutex = .init,
+default_proxies_initialized: std.atomic.Value(bool) = .init(false),
 
 /// A Least-Recently-Used cache of open connections to be reused.
 pub const ConnectionPool = struct {
@@ -180,6 +205,16 @@ pub const ConnectionPool = struct {
         defer pool.mutex.unlock(io);
 
         pool.used.append(&connection.pool_node);
+    }
+
+    /// Removes a connection from the used list without closing its stream.
+    /// This is used when an HTTP CONNECT transport is replaced by a TLS
+    /// connection that owns the same stream.
+    fn removeUsed(pool: *ConnectionPool, io: Io, connection: *Connection) void {
+        pool.mutex.lockUncancelable(io);
+        defer pool.mutex.unlock(io);
+
+        pool.used.remove(&connection.pool_node);
     }
 
     /// Resizes the connection pool.
@@ -1371,8 +1406,32 @@ pub fn deinit(client: *Client) void {
 
     client.connection_pool.deinit(io);
     if (!disable_tls) client.ca_bundle.deinit(client.allocator);
+    if (client.default_proxy_arena) |*arena| arena.deinit();
 
     client.* = undefined;
+}
+
+fn ensureDefaultProxies(client: *Client) error{ OutOfMemory, InvalidProxyConfiguration }!void {
+    if (client.default_proxies_initialized.load(.acquire)) return;
+
+    const io = client.io;
+    client.default_proxy_lock.lockUncancelable(io);
+    defer client.default_proxy_lock.unlock(io);
+
+    if (client.default_proxies_initialized.load(.monotonic)) return;
+    const environ_map = defaultProxyEnvironment() orelse {
+        client.default_proxies_initialized.store(true, .release);
+        return;
+    };
+
+    var arena = std.heap.ArenaAllocator.init(client.allocator);
+    errdefer arena.deinit();
+    initDefaultProxies(client, arena.allocator(), environ_map) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.InvalidProxyConfiguration,
+    };
+    client.default_proxy_arena = arena;
+    client.default_proxies_initialized.store(true, .release);
 }
 
 /// Populates `http_proxy` and `https_proxy` via standard proxy environment variables.
@@ -1431,6 +1490,145 @@ fn createProxyFromEnvVar(
         .supports_connect = true,
     };
     return proxy;
+}
+
+test "ordinary client lazily owns proxies from the process environment" {
+    const previous_environment = default_proxy_environment.load(.acquire);
+    defer default_proxy_environment.store(previous_environment, .release);
+
+    var environment = std.process.Environ.Map.init(testing.allocator);
+    defer environment.deinit();
+    try environment.put("http_proxy", "http://lower-proxy.example:8080/");
+    try environment.put("HTTP_PROXY", "http://uppercase-proxy.example:8081/");
+    try environment.put("ALL_PROXY", "http://fallback-proxy.example:3128/");
+    setDefaultProxyEnvironment(&environment);
+
+    var client: Client = .{ .allocator = testing.allocator, .io = testing.io };
+    defer client.deinit();
+    try client.ensureDefaultProxies();
+
+    try testing.expect(client.default_proxy_arena != null);
+    try testing.expectEqualStrings("lower-proxy.example", client.http_proxy.?.host.bytes);
+    try testing.expectEqual(@as(u16, 8080), client.http_proxy.?.port);
+    try testing.expectEqualStrings("fallback-proxy.example", client.https_proxy.?.host.bytes);
+    try testing.expectEqual(@as(u16, 3128), client.https_proxy.?.port);
+}
+
+test "explicit client proxy is not replaced by process defaults" {
+    const previous_environment = default_proxy_environment.load(.acquire);
+    defer default_proxy_environment.store(previous_environment, .release);
+
+    var environment = std.process.Environ.Map.init(testing.allocator);
+    defer environment.deinit();
+    try environment.put("http_proxy", "http://environment-proxy.example:8080/");
+    setDefaultProxyEnvironment(&environment);
+
+    var explicit_proxy: Proxy = .{
+        .protocol = .plain,
+        .host = .{ .bytes = "explicit-proxy.example" },
+        .authorization = null,
+        .port = 9000,
+        .supports_connect = true,
+    };
+    var client: Client = .{
+        .allocator = testing.allocator,
+        .io = testing.io,
+        .http_proxy = &explicit_proxy,
+    };
+    defer client.deinit();
+    try client.ensureDefaultProxies();
+
+    try testing.expect(client.http_proxy == &explicit_proxy);
+    try testing.expectEqualStrings("explicit-proxy.example", client.http_proxy.?.host.bytes);
+}
+
+const ConnectTlsProbe = struct {
+    io: Io,
+    server: Io.net.Server,
+    saw_connect: bool = false,
+    saw_authorization: bool = false,
+    saw_tls_client_hello: bool = false,
+
+    fn init(io: Io) !ConnectTlsProbe {
+        var address: IpAddress = .{ .ip4 = .loopback(0) };
+        return .{ .io = io, .server = try address.listen(io, .{ .reuse_address = true }) };
+    }
+
+    fn deinit(probe: *ConnectTlsProbe) void {
+        probe.server.deinit(probe.io);
+    }
+
+    fn serve(probe: *ConnectTlsProbe) !void {
+        var stream = try probe.server.accept(probe.io);
+        defer stream.close(probe.io);
+
+        var read_buffer: [4096]u8 = undefined;
+        var stream_reader = stream.reader(probe.io, &read_buffer);
+        var first_line = true;
+        while (true) {
+            const line = (try stream_reader.interface.takeDelimiter('\n')) orelse return error.EndOfStream;
+            if (first_line) {
+                probe.saw_connect = std.mem.eql(u8, line, "CONNECT destination.example:443 HTTP/1.1\r");
+                first_line = false;
+            }
+            if (std.mem.eql(u8, line, "proxy-authorization: Basic dXNlcjpwYXNzd29yZA==\r"))
+                probe.saw_authorization = true;
+            if (std.mem.eql(u8, line, "\r")) break;
+        }
+
+        var write_buffer: [256]u8 = undefined;
+        var stream_writer = stream.writer(probe.io, &write_buffer);
+        try stream_writer.interface.writeAll("HTTP/1.1 200 Connection Established\r\n\r\n");
+        try stream_writer.interface.flush();
+
+        var tls_prefix: [3]u8 = undefined;
+        var received: usize = 0;
+        while (received < tls_prefix.len) {
+            const amount = try stream_reader.interface.readSliceShort(tls_prefix[received..]);
+            if (amount == 0) break;
+            received += amount;
+        }
+        probe.saw_tls_client_hello = received == tls_prefix.len and
+            tls_prefix[0] == 0x16 and tls_prefix[1] == 0x03;
+    }
+};
+
+test "HTTPS proxy sends authenticated CONNECT then starts destination TLS" {
+    if (disable_tls) return error.SkipZigTest;
+
+    var threaded: Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var probe = try ConnectTlsProbe.init(io);
+    defer probe.deinit();
+    var server_future = try io.concurrent(ConnectTlsProbe.serve, .{&probe});
+    defer _ = server_future.cancel(io) catch {};
+
+    var environment = std.process.Environ.Map.init(testing.allocator);
+    defer environment.deinit();
+    const proxy_url = try std.fmt.allocPrint(
+        testing.allocator,
+        "http://user:password@127.0.0.1:{d}/",
+        .{probe.server.socket.address.getPort()},
+    );
+    defer testing.allocator.free(proxy_url);
+    try environment.put("https_proxy", proxy_url);
+    const previous_environment = default_proxy_environment.load(.acquire);
+    defer default_proxy_environment.store(previous_environment, .release);
+    setDefaultProxyEnvironment(&environment);
+
+    var client: Client = .{ .allocator = testing.allocator, .io = io };
+    defer client.deinit();
+    if (client.request(.GET, try Uri.parse("https://destination.example/package"), .{})) |request_value| {
+        var unexpected_request = request_value;
+        unexpected_request.deinit();
+        return error.ExpectedTlsHandshakeFailure;
+    } else |_| {}
+
+    try server_future.await(io);
+    try testing.expect(probe.saw_connect);
+    try testing.expect(probe.saw_authorization);
+    try testing.expect(probe.saw_tls_client_hello);
 }
 
 pub const basic_authorization = struct {
@@ -2559,64 +2757,80 @@ pub fn connectProxied(
     proxy: *Proxy,
     proxied_host: HostName,
     proxied_port: u16,
-) !*Connection {
+) ConnectError!*Connection {
     const io = client.io;
     if (!proxy.supports_connect) return error.TunnelNotSupported;
+    // TLS to the proxy followed by TLS inside the CONNECT tunnel requires a
+    // nested TLS transport. The compatibility client does not implement that
+    // transport yet; fail closed rather than sending destination traffic with
+    // the wrong protocol.
+    if (proxy.protocol != .plain) return error.UnsupportedProxyScheme;
 
     if (client.connection_pool.findConnection(io, .{
         .host = proxied_host,
         .port = proxied_port,
-        .protocol = proxy.protocol,
+        .protocol = .tls,
     })) |node| return node;
 
-    var maybe_valid = false;
-    (tunnel: {
-        const connection = try client.connectTcpOptions(.{
-            .host = proxy.host,
-            .port = proxy.port,
-            .protocol = proxy.protocol,
-            .proxied_host = proxied_host,
-            .proxied_port = proxied_port,
-        });
-        errdefer {
-            connection.closing = true;
-            client.connection_pool.release(connection, io);
-        }
+    try ensureTlsInitialized(client);
 
-        var req = client.request(.CONNECT, .{
-            .scheme = "http",
-            .host = .{ .raw = proxied_host.bytes },
-            .port = proxied_port,
-        }, .{
-            .redirect_behavior = .unhandled,
-            .connection = connection,
-        }) catch |err| {
-            break :tunnel err;
-        };
-        defer req.deinit();
-
-        req.sendBodiless() catch |err| break :tunnel err;
-        const response = req.receiveHead(&.{}) catch |err| break :tunnel err;
-
-        if (response.head.status.class() == .server_error) {
-            maybe_valid = true;
-            break :tunnel error.ServerError;
-        }
-
-        if (response.head.status != .ok) break :tunnel error.ConnectionRefused;
-
-        // this connection is now a tunnel, so we can't use it for anything
-        // else, it will only be released when the client is de-initialized.
-        req.connection = null;
-
-        connection.closing = false;
-
-        return connection;
-    }) catch {
-        // something went wrong with the tunnel
-        proxy.supports_connect = maybe_valid;
-        return error.TunnelNotSupported;
+    const connection = try client.connectTcp(proxy.host, proxy.port, .plain);
+    // CONNECT itself uses authority-form and carries its authorization header
+    // explicitly below. Do not let forward-proxy request formatting add a
+    // second, potentially unrelated proxy authorization header.
+    connection.proxied = false;
+    var release_connection = true;
+    errdefer if (release_connection) {
+        connection.closing = true;
+        client.connection_pool.release(connection, io);
     };
+
+    var proxy_header: [1]http.Header = undefined;
+    const proxy_headers: []const http.Header = if (proxy.authorization) |authorization| headers: {
+        proxy_header[0] = .{ .name = "proxy-authorization", .value = authorization };
+        break :headers &proxy_header;
+    } else &.{};
+    var req = client.request(.CONNECT, .{
+        .scheme = "http",
+        .host = .{ .raw = proxied_host.bytes },
+        .port = proxied_port,
+    }, .{
+        .redirect_behavior = .unhandled,
+        .connection = connection,
+        .extra_headers = proxy_headers,
+    }) catch return error.ProxyTunnelFailed;
+    release_connection = false;
+    defer req.deinit();
+    errdefer {
+        if (req.connection) |failed_connection| failed_connection.closing = true;
+    }
+
+    req.sendBodiless() catch return error.ProxyTunnelFailed;
+    const response = req.receiveHead(&.{}) catch return error.ProxyTunnelFailed;
+    if (response.head.status.class() != .success) {
+        connection.closing = true;
+        return error.ProxyTunnelRejected;
+    }
+
+    // The CONNECT request no longer owns this stream. Replace its temporary
+    // plain HTTP connection with a TLS connection for the destination.
+    req.connection = null;
+    const stream = connection.getStream();
+    client.connection_pool.removeUsed(io, connection);
+    const plain: *Connection.Plain = @alignCast(@fieldParentPtr("connection", connection));
+    plain.destroy();
+
+    var stream_owned = true;
+    errdefer if (stream_owned) stream.close(io);
+    const tls = Connection.Tls.create(client, proxied_host, proxied_port, stream) catch |err| switch (err) {
+        error.OutOfMemory => |e| return e,
+        error.Unexpected => |e| return e,
+        error.Canceled => |e| return e,
+        else => return error.TlsInitializationFailed,
+    };
+    stream_owned = false;
+    client.connection_pool.addUsed(io, &tls.connection);
+    return &tls.connection;
 }
 
 pub const ConnectError = ConnectTcpError || RequestError;
@@ -2634,6 +2848,8 @@ pub fn connect(
     port: u16,
     protocol: Protocol,
 ) ConnectError!*Connection {
+    try client.ensureDefaultProxies();
+
     const proxy = switch (protocol) {
         .plain => client.http_proxy,
         .tls => client.https_proxy,
@@ -2643,15 +2859,12 @@ pub fn connect(
     if (proxy.host.eql(host) and proxy.port == port and proxy.protocol == protocol) {
         return client.connectTcp(host, port, protocol);
     }
+    if (proxy.protocol != .plain) return error.UnsupportedProxyScheme;
 
-    if (proxy.supports_connect) tunnel: {
-        return connectProxied(client, proxy, host, port) catch |err| switch (err) {
-            error.TunnelNotSupported => break :tunnel,
-            else => |e| return e,
-        };
-    }
+    if (protocol == .tls) return connectProxied(client, proxy, host, port);
 
-    // fall back to using the proxy as a normal http proxy
+    // Plain HTTP uses the proxy as a normal forward proxy. Request.sendHead
+    // emits an absolute-form target whenever `proxied` is true.
     const connection = try client.connectTcp(proxy.host, proxy.port, proxy.protocol);
     connection.proxied = true;
     return connection;
@@ -2661,6 +2874,11 @@ pub const RequestError = ConnectTcpError || error{
     UnsupportedUriScheme,
     UriMissingHost,
     CertificateBundleLoadFailure,
+    InvalidProxyConfiguration,
+    UnsupportedProxyScheme,
+    TunnelNotSupported,
+    ProxyTunnelRejected,
+    ProxyTunnelFailed,
 };
 
 pub const RequestOptions = struct {

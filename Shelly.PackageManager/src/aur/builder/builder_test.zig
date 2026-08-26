@@ -942,6 +942,64 @@ test "PackageBuilder preserves generic shell-created scalar defaults for lifecyc
     try testing.expect(fixture.package_builds[0].variables.get("PATH") == null);
 }
 
+test "PackageBuilder preserves top-level Bash option state for lifecycle steps" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    const pkgbuild_content =
+        \\pkgname=shell-option-state
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\shopt -s extglob
+        \\shopt -u checkwinsize
+        \\set -o noclobber
+        \\set +o braceexpand
+        \\prepare() {
+        \\  shopt -q extglob
+        \\  ! shopt -q checkwinsize
+        \\  [[ -o noclobber ]]
+        \\  [[ ! -o braceexpand ]]
+        \\}
+        \\package() {
+        \\  shopt -q extglob
+        \\  ! shopt -q checkwinsize
+        \\  [[ -o noclobber ]]
+        \\  [[ ! -o braceexpand ]]
+        \\  mkdir -p "$pkgdir/usr/share/shell-option-state"
+        \\  printf preserved > "$pkgdir/usr/share/shell-option-state/value"
+        \\}
+    ;
+    var fixture = try Fixture.create(allocator, pkgbuild_content, null, null);
+    defer fixture.destroy();
+
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = pkgbuild_content });
+    const pkgbuild_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "PKGBUILD" });
+    defer allocator.free(pkgbuild_path);
+    var review = try builder_mod.preparePkgbuildReview(
+        allocator,
+        io,
+        fixture.build_dir,
+        pkgbuild_content,
+        fixture.package_builds,
+    );
+    defer review.deinit();
+    fixture.builder.options.pkgbuild_path = pkgbuild_path;
+    fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+    fixture.builder.options.reviewed_files = review.reviewed_files;
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const value = try readPackageEntry(
+        allocator,
+        artifacts[0].path,
+        "usr/share/shell-option-state/value",
+    );
+    defer allocator.free(value);
+    try testing.expectEqualStrings("preserved", value);
+    try testing.expect(fixture.package_builds[0].variables.get("BASHOPTS") == null);
+    try testing.expect(fixture.package_builds[0].variables.get("SHELLOPTS") == null);
+}
+
 test "PackageBuilder preserves generic conditional indexed arrays for lifecycle steps" {
     const allocator = testing.allocator;
     const io = testing.io;

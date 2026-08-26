@@ -590,6 +590,10 @@ fn extractSourceArchive(
         entry_count += 1;
         if (entry_count > 1_000_000 or entry.size > 4 * 1024 * 1024 * 1024)
             return error.SourceArchiveTooLarge;
+        if (isArchiveRootDirectoryEntry(entry.kind, entry.path)) {
+            try reader.skip();
+            continue;
+        }
         const relative = try archive.normalizeEntryPath(self.allocator, entry.path);
         defer self.allocator.free(relative);
         const destination = try std.fs.path.join(self.allocator, &.{ destination_root, relative });
@@ -627,6 +631,51 @@ fn extractSourceArchive(
             .other => return error.UnsupportedSourceArchiveEntry,
         }
     }
+}
+
+fn isArchiveRootDirectoryEntry(kind: archive.EntryKind, path: []const u8) bool {
+    if (kind != .directory or path.len == 0 or std.fs.path.isAbsolute(path) or
+        std.mem.indexOfScalar(u8, path, '\\') != null)
+        return false;
+
+    var saw_current_directory = false;
+    var components = std.mem.splitScalar(u8, path, '/');
+    while (components.next()) |component| {
+        if (component.len == 0) continue;
+        if (!std.mem.eql(u8, component, ".")) return false;
+        saw_current_directory = true;
+    }
+    return saw_current_directory;
+}
+
+test "PackageBuilder skips only source archive root directory markers" {
+    const root_markers = [_][]const u8{
+        ".",
+        "./",
+        ".//",
+        "././",
+    };
+    for (root_markers) |path| {
+        try std.testing.expect(isArchiveRootDirectoryEntry(.directory, path));
+        try std.testing.expect(!isArchiveRootDirectoryEntry(.regular_file, path));
+        try std.testing.expect(!isArchiveRootDirectoryEntry(.symbolic_link, path));
+        try std.testing.expect(!isArchiveRootDirectoryEntry(.other, path));
+    }
+
+    const invalid_root_markers = [_][]const u8{
+        "",
+        "/",
+        "//.",
+        "dir",
+        "./dir",
+        "../",
+        "./../",
+        "dir/..",
+        "\\",
+        ".\\",
+    };
+    for (invalid_root_markers) |path|
+        try std.testing.expect(!isArchiveRootDirectoryEntry(.directory, path));
 }
 
 fn ensureSafeArchivePath(

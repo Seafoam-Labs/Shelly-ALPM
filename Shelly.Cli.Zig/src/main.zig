@@ -2,6 +2,7 @@ const std = @import("std");
 const Io = std.Io;
 
 const Shelly_Cli_Zig = @import("Shelly_Cli_Zig");
+const Zigalpm = @import("Zigalpm");
 
 pub fn main(init: std.process.Init) !void {
     const arena: std.mem.Allocator = init.arena.allocator();
@@ -32,10 +33,20 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(exit_code);
     }
 
+    const proxy_environment = try Shelly_Cli_Zig.proxy_environment.prepare(
+        arena,
+        &stdin_file_reader.interface,
+        init.minimal.environ,
+        arguments,
+    );
+    const effective_arguments = proxy_environment.arguments;
+    const effective_environment_map = proxy_environment.map(init.environ_map);
+    Zigalpm.HttpClient.setDefaultProxyEnvironment(effective_environment_map);
+
     Shelly_Cli_Zig.signals.installInterruptHandler();
     var session_log = Shelly_Cli_Zig.log.SessionLog.tryOpen(io);
     defer if (session_log) |*log| log.close();
-    if (session_log) |*log| log.writeSessionHeader(arena, arguments);
+    if (session_log) |*log| log.writeSessionHeader(arena, effective_arguments);
     var transaction_log: ?Shelly_Cli_Zig.log.TransactionLog = if (session_log) |*log|
         .init(log, arena)
     else
@@ -47,15 +58,15 @@ pub fn main(init: std.process.Init) !void {
         .stdin = &stdin_file_reader.interface,
         .stdout = stdout_writer,
         .stderr = stderr_writer,
-        .environment = init.environ_map,
-        .environ = init.minimal.environ,
+        .environment = effective_environment_map,
+        .environ = proxy_environment.environ,
         .stdin_is_tty = Io.File.stdin().isTty(io) catch false,
         .stdout_is_tty = Io.File.stdout().isTty(io) catch false,
         .dispatcher = .{ .call = Shelly_Cli_Zig.commands.dispatch },
         .transaction_log = if (transaction_log) |*log| log else null,
     };
     Shelly_Cli_Zig.download_policy.applyProcessDefault(&context);
-    const exit_code = Shelly_Cli_Zig.app.run(&context, arguments) catch |err| code: {
+    const exit_code = Shelly_Cli_Zig.app.run(&context, effective_arguments) catch |err| code: {
         stderr_writer.print("shelly: {t}\n", .{err}) catch {};
         break :code 1;
     };

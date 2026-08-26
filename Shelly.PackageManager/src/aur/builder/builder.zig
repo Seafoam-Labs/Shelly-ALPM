@@ -520,7 +520,45 @@ pub const PackageBuilder = struct {
             &evaluated.arrays,
             if (evaluated.unset_arrays.count() > 0) &evaluated.unset_arrays else null,
         );
+        try self.applyShellOptionDelta(evaluated.shell_options);
         return evaluated;
+    }
+
+    fn applyShellOptionDelta(
+        self: *PackageBuilder,
+        delta: steps.ShellOptionDelta,
+    ) !void {
+        if (delta.isEmpty()) return;
+
+        var replay: std.Io.Writer.Allocating = .init(self.allocator);
+        defer replay.deinit();
+        const writer = &replay.writer;
+        // Apply regular shell options first because modes such as `posix` can
+        // affect shopt defaults. Reapplying the shopt delta last restores the
+        // exact state observed after sourcing the PKGBUILD.
+        for (delta.shell_disable) |name| try writer.print("set +o {s}\n", .{name});
+        for (delta.shell_enable) |name| try writer.print("set -o {s}\n", .{name});
+        for (delta.shopt_disable) |name| try writer.print("shopt -u {s}\n", .{name});
+        for (delta.shopt_enable) |name| try writer.print("shopt -s {s}\n", .{name});
+
+        for (self.package_builds) |*package_build| {
+            const execution = &(package_build.execution orelse continue);
+            const shared_prelude = try std.mem.concat(
+                self.allocator,
+                u8,
+                &.{ replay.written(), execution.shared_prelude },
+            );
+            errdefer self.allocator.free(shared_prelude);
+            const package_prelude = try std.mem.concat(
+                self.allocator,
+                u8,
+                &.{ replay.written(), execution.package_prelude },
+            );
+            self.allocator.free(execution.shared_prelude);
+            self.allocator.free(execution.package_prelude);
+            execution.shared_prelude = shared_prelude;
+            execution.package_prelude = package_prelude;
+        }
     }
 
     /// Keeps explicit package selections stable when top-level shell state

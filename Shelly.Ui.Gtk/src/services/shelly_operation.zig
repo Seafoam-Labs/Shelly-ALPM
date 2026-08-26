@@ -8,6 +8,38 @@ const builtin = @import("builtin");
 const runtime = @import("runtime.zig");
 
 const log = std.log.scoped(.shelly_operation);
+const proxy_environment_marker = "--proxy-environment-stdin";
+
+const ProxyEnvironmentFrame = struct {
+    @"$kind": []const u8 = "proxy.environment",
+    http_proxy: ?[]const u8 = null,
+    HTTP_PROXY: ?[]const u8 = null,
+    https_proxy: ?[]const u8 = null,
+    HTTPS_PROXY: ?[]const u8 = null,
+    all_proxy: ?[]const u8 = null,
+    ALL_PROXY: ?[]const u8 = null,
+};
+
+fn serializeProxyEnvironment(
+    allocator: std.mem.Allocator,
+    environment: *const std.process.Environ.Map,
+) !?[]u8 {
+    const frame: ProxyEnvironmentFrame = .{
+        .http_proxy = environment.get("http_proxy"),
+        .HTTP_PROXY = environment.get("HTTP_PROXY"),
+        .https_proxy = environment.get("https_proxy"),
+        .HTTPS_PROXY = environment.get("HTTPS_PROXY"),
+        .all_proxy = environment.get("all_proxy"),
+        .ALL_PROXY = environment.get("ALL_PROXY"),
+    };
+    if (frame.http_proxy == null and frame.HTTP_PROXY == null and
+        frame.https_proxy == null and frame.HTTPS_PROXY == null and
+        frame.all_proxy == null and frame.ALL_PROXY == null)
+    {
+        return null;
+    }
+    return try std.json.Stringify.valueAlloc(allocator, frame, .{});
+}
 
 pub const Event = union(enum) {
     info: struct {
@@ -460,20 +492,29 @@ pub const ShellyOperation = struct {
     pub fn start(self: *ShellyOperation, args: []const []const u8) !void {
         const full = try self.build_full_argv(args);
         defer self.allocator.free(full);
-        try self.spawn_and_read(full);
+        try self.spawn_and_read(full, null);
     }
 
     pub fn startPrivileged(self: *ShellyOperation, args: []const []const u8) !void {
         const full = try self.build_full_argv(args);
         defer self.allocator.free(full);
-        var withpk = try self.allocator.alloc([]const u8, full.len + 1);
+        const proxy_environment = try serializeProxyEnvironment(self.allocator, runtime.environ_map);
+        defer if (proxy_environment) |json| self.allocator.free(json);
+
+        const marker_count: usize = if (proxy_environment != null) 1 else 0;
+        var withpk = try self.allocator.alloc([]const u8, full.len + 1 + marker_count);
         defer self.allocator.free(withpk);
         withpk[0] = "pkexec";
-        @memcpy(withpk[1..], full);
-        try self.spawn_and_read(withpk);
+        @memcpy(withpk[1 .. 1 + full.len], full);
+        if (proxy_environment != null) withpk[withpk.len - 1] = proxy_environment_marker;
+        try self.spawn_and_read(withpk, proxy_environment);
     }
 
-    fn spawn_and_read(self: *ShellyOperation, argv: []const []const u8) !void {
+    fn spawn_and_read(
+        self: *ShellyOperation,
+        argv: []const []const u8,
+        startup_frame: ?[]const u8,
+    ) !void {
         if (builtin.mode == .Debug) {
             if (std.mem.join(self.allocator, " ", argv)) |command| {
                 defer self.allocator.free(command);
@@ -483,8 +524,11 @@ pub const ShellyOperation = struct {
             }
         }
 
-        // FIXME: Environment map is not propagated to the child process and has to be set manually when unprivileged.
+        // pkexec sanitizes the environment. Privileged starts restore only the
+        // proxy variables through the startup frame written below.
         self.child = try std.process.spawn(self.io, .{ .argv = argv, .stdin = .pipe, .stdout = .pipe, .stderr = .ignore, .environ_map = runtime.environ_map });
+        errdefer self.child.kill(self.io);
+        if (startup_frame) |json| try self.writeAnswerFrame(json);
         self.reader = try std.Thread.spawn(.{}, reader_loop, .{self});
     }
 
@@ -929,4 +973,30 @@ test "appimage install argv relies on the CLI config for the install path" {
     const argv = try ShellyCommands.install_appimage(std.testing.allocator, "/tmp/NiceApp.AppImage");
     defer std.testing.allocator.free(argv);
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "appimage", "/tmp/NiceApp.AppImage" }, argv);
+}
+
+test "proxy environment serialization preserves standard variable names" {
+    var environment = std.process.Environ.Map.init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("http_proxy", "http://user:p@ss@proxy.example:443/");
+    try environment.put("HTTPS_PROXY", "http://secure-proxy.example:8080/");
+    try environment.put("ALL_PROXY", "http://fallback.example:3128/");
+    try environment.put("PATH", "/usr/bin");
+
+    const json = (try serializeProxyEnvironment(std.testing.allocator, &environment)).?;
+    defer std.testing.allocator.free(json);
+    var parsed = try std.json.parseFromSlice(ProxyEnvironmentFrame, std.testing.allocator, json, .{});
+    defer parsed.deinit();
+
+    try std.testing.expectEqualStrings("proxy.environment", parsed.value.@"$kind");
+    try std.testing.expectEqualStrings("http://user:p@ss@proxy.example:443/", parsed.value.http_proxy.?);
+    try std.testing.expectEqualStrings("http://secure-proxy.example:8080/", parsed.value.HTTPS_PROXY.?);
+    try std.testing.expectEqualStrings("http://fallback.example:3128/", parsed.value.ALL_PROXY.?);
+}
+
+test "proxy environment serialization is absent without proxy variables" {
+    var environment = std.process.Environ.Map.init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("PATH", "/usr/bin");
+    try std.testing.expect(try serializeProxyEnvironment(std.testing.allocator, &environment) == null);
 }

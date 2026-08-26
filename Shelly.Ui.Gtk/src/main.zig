@@ -1,4 +1,5 @@
 const std = @import("std");
+const HttpClient = @import("ShellyHttp");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gio = bindings.gio;
@@ -17,6 +18,7 @@ var did_activate: bool = false;
 pub fn main(init: std.process.Init) void {
     runtime.io = init.io;
     runtime.environ_map = init.environ_map;
+    HttpClient.setDefaultProxyEnvironment(init.environ_map);
 
     if (!translations.init()) {
         std.log.warn("translations: failed to initialize gettext", .{});

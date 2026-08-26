@@ -663,6 +663,16 @@ fn runSyncDepsCoordinator(
     defer manager.deinit();
     try manager.sync(false);
 
+    // Snapshot the local database before dependency installation. Cleanup is
+    // based on the resulting package delta rather than only the direct
+    // makedepends/checkdepends declarations, so repository and AUR dependency
+    // graphs are covered without touching packages that predated this build.
+    var dependency_cleanup = try BuildDependencyCleanup.init(context.allocator, manager);
+    defer {
+        dependency_cleanup.run(manager, context, operation_context);
+        dependency_cleanup.deinit();
+    }
+
     var backend_context: AlpmResolverContext = .{ .manager = manager };
     const backend = backend_context.backend();
 
@@ -673,20 +683,6 @@ fn runSyncDepsCoordinator(
         backend,
     );
     defer plan.deinit(context.allocator);
-
-    // Collected before any installation so the freshly installed packages
-    // are still seen as build-only candidates for post-build removal.
-    const build_only = try collectBuildOnlyDependencies(
-        context.allocator,
-        request.package_builds,
-        request.no_check,
-        backend,
-    );
-    defer deinitOwnedPaths(context.allocator, build_only);
-    // Build-only dependencies are removed on every exit path: the errdefer
-    // covers coordinator failures, and the explicit call after the child
-    // covers build success and build failure alike.
-    errdefer removeBuildOnlyDependencies(manager, context, build_only);
 
     if (plan.aur_dependencies.len > 0) {
         const executable = try std.process.executablePathAlloc(context.io, context.allocator);
@@ -704,6 +700,11 @@ fn runSyncDepsCoordinator(
         defer aur_manager.setOperationContext(null);
         try aur_manager.installAurBuildDependencies(plan.aur_dependencies, request.build_directory);
     }
+
+    // The AUR manager owns a separate libalpm handle. Reload this coordinator's
+    // handle before another transaction so it observes packages installed by
+    // that handle rather than using a stale local-database cache.
+    if (plan.aur_dependencies.len > 0) try manager.refresh();
 
     if (plan.repo_dependencies.len > 0) {
         var targets: std.ArrayList([:0]const u8) = .empty;
@@ -727,7 +728,6 @@ fn runSyncDepsCoordinator(
         return error.InvokingUserUnavailable;
     };
 
-    removeBuildOnlyDependencies(manager, context, build_only);
     if (exit_code != 0) return error.BuildFailed;
 }
 
@@ -850,68 +850,195 @@ fn findRepoDependency(
     return null;
 }
 
-fn collectBuildOnlyDependencies(
+const BuildDependencyCleanup = struct {
     allocator: std.mem.Allocator,
-    package_builds: []const Zigalpm.pkgbuild.parser.Pkgbuild,
-    no_check: bool,
-    backend: Zigalpm.aur.dependency_resolver.Backend,
-) ![][]u8 {
-    var result: std.ArrayList([]u8) = .empty;
-    errdefer {
-        for (result.items) |name| allocator.free(name);
-        result.deinit(allocator);
-    }
-    for (package_builds) |*package_build| {
-        const names = try Zigalpm.aur.dependency_resolver.collectBuildOnlyDependencies(
-            allocator,
-            package_build,
-            no_check,
-            backend,
-        );
-        defer {
-            for (names) |name| allocator.free(name);
-            allocator.free(names);
-        }
-        for (names) |name| {
-            if (containsString(result.items, name)) continue;
-            try result.append(allocator, try allocator.dupe(u8, name));
-        }
-    }
-    return result.toOwnedSlice(allocator);
-}
+    baseline: std.StringHashMap(void),
 
-fn deinitOwnedPaths(allocator: std.mem.Allocator, paths: [][]u8) void {
-    for (paths) |path| allocator.free(path);
-    allocator.free(paths);
-}
+    fn init(allocator: std.mem.Allocator, manager: *Zigalpm.AlpmManager) !BuildDependencyCleanup {
+        var baseline = std.StringHashMap(void).init(allocator);
+        errdefer deinitOwnedStringSet(allocator, &baseline);
 
-/// Best-effort removal mirroring the AUR manager's post-build cleanup: only
-/// installed packages are targeted and removal errors never mask the build
-/// result.
-fn removeBuildOnlyDependencies(
-    manager: *Zigalpm.AlpmManager,
-    context: *runtime.RuntimeContext,
-    build_only: []const []u8,
-) void {
-    if (build_only.len == 0) return;
-    var installed: std.ArrayList([:0]const u8) = .empty;
-    defer {
-        for (installed.items) |name| context.allocator.free(name);
-        installed.deinit(context.allocator);
-    }
-    for (build_only) |name| {
-        const name_z = context.allocator.dupeZ(u8, name) catch continue;
-        if (manager.is_package_installed(name_z)) {
-            installed.append(context.allocator, name_z) catch {
-                context.allocator.free(name_z);
-                continue;
+        const installed = try manager.get_installed_packages();
+        defer Zigalpm.alpm.OwnedPackage.deinitSlice(allocator, installed);
+        for (installed) |package| {
+            const name = package.name() orelse continue;
+            if (baseline.contains(name)) continue;
+            const owned_name = try allocator.dupe(u8, name);
+            baseline.put(owned_name, {}) catch |err| {
+                allocator.free(owned_name);
+                return err;
             };
-        } else {
-            context.allocator.free(name_z);
+        }
+        return .{ .allocator = allocator, .baseline = baseline };
+    }
+
+    fn deinit(self: *BuildDependencyCleanup) void {
+        deinitOwnedStringSet(self.allocator, &self.baseline);
+        self.* = undefined;
+    }
+
+    /// Best-effort cleanup must outlive cancellation of the build operation.
+    /// A fresh context lets ALPM query and remove packages even when the parent
+    /// context is cancelled; failures are still reported to the parent as a
+    /// recoverable cleanup failure and never replace the build result.
+    fn run(
+        self: *const BuildDependencyCleanup,
+        manager: *Zigalpm.AlpmManager,
+        context: *runtime.RuntimeContext,
+        parent_context: *Zigalpm.OperationContext,
+    ) void {
+        var operation = parent_context.begin(.{
+            .backend = .alpm,
+            .kind = .cleanup,
+            .subject = "build dependencies",
+        });
+        var completion: Zigalpm.OperationCompletionStatus = .success;
+        defer operation.finish(completion);
+
+        var cleanup_context = independentCleanupContext(context.allocator, context.io);
+        defer cleanup_context.deinit();
+        manager.setOperationContext(&cleanup_context);
+        defer manager.setOperationContext(parent_context);
+
+        manager.refresh() catch |err| {
+            completion = .failed;
+            operation.reportError(
+                err,
+                "Failed to refresh package state for build dependency cleanup",
+                "alpm.cleanup",
+                null,
+                true,
+            );
+            return;
+        };
+
+        const installed = manager.get_installed_packages() catch |err| {
+            completion = .failed;
+            operation.reportError(
+                err,
+                "Failed to inspect packages installed for the build",
+                "alpm.cleanup",
+                null,
+                true,
+            );
+            return;
+        };
+        defer Zigalpm.alpm.OwnedPackage.deinitSlice(context.allocator, installed);
+
+        var targets: std.ArrayList([:0]const u8) = .empty;
+        defer {
+            for (targets.items) |name| context.allocator.free(name);
+            targets.deinit(context.allocator);
+        }
+        for (installed) |package| {
+            const name = package.name() orelse continue;
+            appendCleanupCandidate(
+                context.allocator,
+                &self.baseline,
+                name,
+                package.install_reason() == .Dependency,
+                &targets,
+            ) catch |err| {
+                completion = .failed;
+                operation.reportError(
+                    err,
+                    "Failed to prepare build dependency cleanup",
+                    "alpm.cleanup",
+                    null,
+                    true,
+                );
+                return;
+            };
+        }
+        if (targets.items.len == 0) return;
+
+        manager.remove_packages(targets.items, .{
+            .recurse = true,
+            .unneeded = true,
+        }, true) catch |err| {
+            completion = .failed;
+            reportCleanupFailure(context.allocator, &operation, err, targets.items);
+            return;
+        };
+
+        var remaining: std.ArrayList([:0]const u8) = .empty;
+        defer remaining.deinit(context.allocator);
+        for (targets.items) |name| {
+            if (!manager.is_package_installed(name)) continue;
+            remaining.append(context.allocator, name) catch |err| {
+                completion = .failed;
+                operation.reportError(
+                    err,
+                    "Failed to verify build dependency cleanup",
+                    "alpm.cleanup",
+                    null,
+                    true,
+                );
+                return;
+            };
+        }
+        if (remaining.items.len != 0) {
+            completion = .failed;
+            reportCleanupFailure(
+                context.allocator,
+                &operation,
+                error.BuildDependencyCleanupIncomplete,
+                remaining.items,
+            );
         }
     }
-    if (installed.items.len == 0) return;
-    manager.remove_packages(installed.items, .{}, true) catch {};
+};
+
+fn deinitOwnedStringSet(allocator: std.mem.Allocator, values: *std.StringHashMap(void)) void {
+    var keys = values.keyIterator();
+    while (keys.next()) |key| allocator.free(key.*);
+    values.deinit();
+}
+
+fn appendCleanupCandidate(
+    allocator: std.mem.Allocator,
+    baseline: *const std.StringHashMap(void),
+    name: [:0]const u8,
+    installed_as_dependency: bool,
+    targets: *std.ArrayList([:0]const u8),
+) !void {
+    if (!installed_as_dependency or baseline.contains(name)) return;
+    const owned_name = try allocator.dupeZ(u8, name);
+    targets.append(allocator, owned_name) catch |err| {
+        allocator.free(owned_name);
+        return err;
+    };
+}
+
+fn independentCleanupContext(allocator: std.mem.Allocator, io: std.Io) Zigalpm.OperationContext {
+    return Zigalpm.OperationContext.init(allocator, io);
+}
+
+fn reportCleanupFailure(
+    allocator: std.mem.Allocator,
+    operation: *const Zigalpm.Operation,
+    err: anyerror,
+    targets: []const [:0]const u8,
+) void {
+    const names: []const []const u8 = @ptrCast(targets);
+    const joined = std.mem.join(allocator, ", ", names) catch null;
+    defer if (joined) |value| allocator.free(value);
+    const message = if (joined) |value|
+        std.fmt.allocPrint(
+            allocator,
+            "Failed to remove build dependencies ({s}): {s}",
+            .{ value, @errorName(err) },
+        ) catch null
+    else
+        null;
+    defer if (message) |value| allocator.free(value);
+    operation.reportError(
+        err,
+        message orelse "Failed to remove build dependencies",
+        "alpm.cleanup",
+        null,
+        true,
+    );
 }
 
 /// Arguments for the invoking-user re-execution: the original invocation
@@ -1342,28 +1469,84 @@ test "sync deps resolution merges split members and upgrades roles" {
     try std.testing.expectEqual(@as(usize, 1), unchecked.aur_dependencies.len);
 }
 
-test "sync deps build-only collection deduplicates across split members" {
+test "sync deps cleanup selects every new dependency and preserves prior or explicit packages" {
     const allocator = std.testing.allocator;
-    var cli_build = try (Zigalpm.pkgbuild.Parser{
-        .allocator = allocator,
-        .io = std.testing.io,
-        .selected_package_name = "demo-cli",
-    }).parser_content(sync_deps_pkgbuild, null);
-    defer cli_build.deinit(allocator);
-    var docs_build = try (Zigalpm.pkgbuild.Parser{
-        .allocator = allocator,
-        .io = std.testing.io,
-        .selected_package_name = "demo-docs",
-    }).parser_content(sync_deps_pkgbuild, null);
-    defer docs_build.deinit(allocator);
+    var baseline = std.StringHashMap(void).init(allocator);
+    defer deinitOwnedStringSet(allocator, &baseline);
+    try baseline.put(try allocator.dupe(u8, "preexisting-tool"), {});
 
-    const builds = [_]Zigalpm.pkgbuild.parser.Pkgbuild{ cli_build, docs_build };
+    var targets: std.ArrayList([:0]const u8) = .empty;
+    defer {
+        for (targets.items) |name| allocator.free(name);
+        targets.deinit(allocator);
+    }
+    try appendCleanupCandidate(allocator, &baseline, "preexisting-tool", true, &targets);
+    try appendCleanupCandidate(allocator, &baseline, "user-installed-tool", false, &targets);
+    try appendCleanupCandidate(allocator, &baseline, "direct-makedep", true, &targets);
+    try appendCleanupCandidate(allocator, &baseline, "transitive-repo-dep", true, &targets);
+    try appendCleanupCandidate(allocator, &baseline, "transitive-aur-dep", true, &targets);
 
-    const with_check = try collectBuildOnlyDependencies(allocator, &builds, false, fake_sync_deps_backend.backend());
-    defer deinitOwnedPaths(allocator, with_check);
-    try std.testing.expectEqualSlices([]const u8, &.{ "cmake", "meson" }, with_check);
+    try std.testing.expectEqual(@as(usize, 3), targets.items.len);
+    try std.testing.expectEqualStrings("direct-makedep", targets.items[0]);
+    try std.testing.expectEqualStrings("transitive-repo-dep", targets.items[1]);
+    try std.testing.expectEqualStrings("transitive-aur-dep", targets.items[2]);
+}
 
-    const without_check = try collectBuildOnlyDependencies(allocator, &builds, true, fake_sync_deps_backend.backend());
-    defer deinitOwnedPaths(allocator, without_check);
-    try std.testing.expectEqualSlices([]const u8, &.{"cmake"}, without_check);
+test "sync deps cleanup context remains usable after parent cancellation" {
+    var parent = Zigalpm.OperationContext.init(std.testing.allocator, std.testing.io);
+    defer parent.deinit();
+    parent.cancel();
+
+    var cleanup = independentCleanupContext(std.testing.allocator, std.testing.io);
+    defer cleanup.deinit();
+    try std.testing.expect(parent.isCancelled());
+    try std.testing.expect(!cleanup.isCancelled());
+}
+
+test "sync deps cleanup failures are recoverable and identify every remaining package" {
+    const Capture = struct {
+        failures: usize = 0,
+        recoverable: bool = false,
+        names_present: bool = false,
+
+        fn event(data: ?*anyopaque, value: Zigalpm.OperationEvent) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (value) {
+                .failure => |failure| {
+                    self.failures += 1;
+                    self.recoverable = failure.recoverable;
+                    self.names_present = std.mem.indexOf(u8, failure.message, "direct-makedep") != null and
+                        std.mem.indexOf(u8, failure.message, "transitive-dep") != null;
+                },
+                else => {},
+            }
+        }
+    };
+
+    var operation_context = Zigalpm.OperationContext.init(std.testing.allocator, std.testing.io);
+    defer operation_context.deinit();
+    var capture: Capture = .{};
+    const subscription = try operation_context.subscribe(.{
+        .function = Capture.event,
+        .data = &capture,
+    });
+    defer _ = operation_context.unsubscribe(subscription);
+
+    var operation = operation_context.begin(.{
+        .backend = .alpm,
+        .kind = .cleanup,
+        .subject = "build dependencies",
+    });
+    const targets = [_][:0]const u8{ "direct-makedep", "transitive-dep" };
+    reportCleanupFailure(
+        std.testing.allocator,
+        &operation,
+        error.BuildDependencyCleanupIncomplete,
+        &targets,
+    );
+    operation.finish(.failed);
+
+    try std.testing.expectEqual(@as(usize, 1), capture.failures);
+    try std.testing.expect(capture.recoverable);
+    try std.testing.expect(capture.names_present);
 }
