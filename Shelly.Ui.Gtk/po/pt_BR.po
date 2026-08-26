@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
+"POT-Creation-Date: 2026-08-25 14:44-0300\n"
 "PO-Revision-Date: 2026-08-25 10:10-0300\n"
 "Last-Translator: Vinícius Fonseca <viniqf@proton.me>\n"
 "Language-Team: Portuguese (Brazil) <viniqf@proton.me>\n"
@@ -18,14 +18,12 @@ msgstr "Nenhum addon instalável disponível"
 msgid "Close"
 msgstr "Fechar"
 
-#| msgid "Saving update configuration"
 msgid "Keep configuration"
 msgstr "Manter configuração"
 
 msgid "App data and settings will be kept."
 msgstr "Os dados e as configurações do aplicativo serão mantidos."
 
-#| msgid "Saving update configuration"
 msgid "Remove configuration"
 msgstr "Remover configuração"
 
@@ -75,9 +73,9 @@ msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
 "labs.org/shelly-alpm/docs/polkit</a>"
 msgstr ""
-"A GUI do Shelly precisa do <b>polkit</b> instalado e em execução para autorizar "
-"ações privilegiadas, mas não foi encontrada no barramento de memória do sistema. "
-"\n"
+"A GUI do Shelly precisa do <b>polkit</b> instalado e em execução para "
+"autorizar ações privilegiadas, mas não foi encontrada no barramento de "
+"memória do sistema. \n"
 "Instale e habilite-o e tente novamente \n"
 "\n"
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
@@ -192,10 +190,9 @@ msgstr "Popularidade"
 msgid "Search the AUR"
 msgstr "Pesquisar na AUR"
 
-msgid "The AUR has no browsable index type a package name to begin."
+#| msgid "The AUR has no browsable index type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
-"A AUR não possui um índice visualizável. Digite o nome de um pacote para "
-"começar. "
 
 msgid "Run checks"
 msgstr "Executar verificações"
@@ -236,6 +233,10 @@ msgstr "usuário"
 
 msgid "Install"
 msgstr "Instalar"
+
+#| msgid "No changelog entries found"
+msgid "No matching applications found"
+msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Carregando dados do Flatpak..."
@@ -372,6 +373,10 @@ msgstr "Repositório"
 msgid "Install Date"
 msgstr "Data de instalação"
 
+#| msgid "No packages found"
+msgid "No matching packages found"
+msgstr ""
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Não foi possível carregar seus pacotes. Verifique se há um bloqueio no banco "
@@ -427,7 +432,8 @@ msgid "Standard"
 msgstr "Padrão"
 
 msgid "Show results from the configured ALPM sync databases"
-msgstr "Mostrar resultados dos bancos de dados de sincronização ALPM configurados"
+msgstr ""
+"Mostrar resultados dos bancos de dados de sincronização ALPM configurados"
 
 msgid "AUR"
 msgstr "AUR"
@@ -441,7 +447,6 @@ msgstr "Flatpak"
 msgid "Show results from the configured Flatpak remotes"
 msgstr "Mostrar resultados dos remotos Flatpak configurados"
 
-#| msgid "Source Files"
 msgid "Source"
 msgstr "Fonte"
 
@@ -452,8 +457,8 @@ msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
 msgstr ""
-"Pesquise por repositórios padrão, o AUR e o Flatpak de uma só vez. Digite um nome para "
-"começar."
+"Pesquise por repositórios padrão, o AUR e o Flatpak de uma só vez. Digite um "
+"nome para começar."
 
 msgid "General"
 msgstr "Geral"
@@ -481,6 +486,10 @@ msgstr "Adicionar bandeja à inicialização automática"
 
 msgid "Use weekly schedule"
 msgstr "Usar agenda semanal"
+
+#| msgid "Tray Updates Icon"
+msgid "Tray update with ui"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalo de verificação da bandeja (horas)"
@@ -568,9 +577,6 @@ msgstr "Sem confirmação"
 msgid "Enable Shelly Search"
 msgstr "Ativar pesquisa Shelly"
 
-msgid "Enable Package Downgrade"
-msgstr "Ativar downgrade de pacotes"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Ativar visualização webview (experimental)"
 
@@ -597,6 +603,9 @@ msgstr "Patrocinar"
 
 msgid "Toggle output"
 msgstr "Exibir resultado"
+
+msgid "Done"
+msgstr "Concluído"
 
 msgid "Available Updates"
 msgstr "Atualizações disponíveis"
@@ -795,9 +804,6 @@ msgstr "Scan de segurança concluído - nenhum problema encontrado."
 
 msgid "used in"
 msgstr "usado em"
-
-msgid "Warning"
-msgstr "Aviso"
 
 msgid "Install Anyway"
 msgstr "Instalar mesmo assim"
@@ -1146,11 +1152,9 @@ msgstr "Removendo o remoto"
 msgid "Adding Remote"
 msgstr "Adicionando o remoto"
 
-#| msgid "Removing Flatpak"
 msgid "Remove this Flatpak?"
 msgstr "Remover esse Flatpak?"
 
-#| msgid "Removing Flatpak"
 msgid "Remove Flatpak"
 msgstr "Remover Flatpak"
 
@@ -1160,11 +1164,9 @@ msgstr "Removendo Flatpak"
 msgid "App ID"
 msgstr "ID do aplicativo"
 
-#| msgid "Remove"
 msgid "Remote"
 msgstr "Remoto"
 
-#| msgid "Development"
 msgid "Developer"
 msgstr "Desenvolvedor"
 
@@ -1186,7 +1188,6 @@ msgstr "Não"
 msgid "Keywords"
 msgstr "Palavras-chave"
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1259,26 +1260,21 @@ msgstr "Removendo pacotes"
 msgid "Installing packages"
 msgstr "Instalando pacotes"
 
-#| msgid "Operation failed"
 msgid "Search failed"
 msgstr "Falha na pesquisa"
 
-#| msgid "Installation failed."
 msgid "Installation in progress"
 msgstr "Instalação em andamento"
 
-#| msgid "No packages selected"
 msgid "No sources selected"
 msgstr "Nenhuma fonte selecionada"
 
 msgid "Enable at least one source filter above."
 msgstr "Habilite pelo menos um filtro de origem acima."
 
-#| msgid "Installing packages"
 msgid "Install Packages"
 msgstr "Instalar pacotes"
 
-#| msgid "Remove the selected packages?"
 msgid "Install the selected packages?"
 msgstr "Instalar os pacotes selecionados?"
 
@@ -1478,11 +1474,20 @@ msgstr "Verificando o espaço em disco"
 msgid "Working"
 msgstr "Trabalhando"
 
-msgid "Done"
-msgstr "Concluído"
-
 msgid "Failed"
 msgstr "Falhou"
+
+#| msgid "Installation complete."
+msgid "Transaction Completed"
+msgstr "Operação finalizada"
+
+#| msgid "Operation failed"
+msgid "Transaction Failed"
+msgstr "Operação falhou"
+
+#| msgid "Cancelled"
+msgid "Transaction Cancelled"
+msgstr "Operação cancelada"
 
 msgid "Finished"
 msgstr "Finalizado"
@@ -1490,8 +1495,18 @@ msgstr "Finalizado"
 msgid "exit"
 msgstr "Saída"
 
+msgid "The operation was cancelled."
+msgstr "A operação foi cancelada"
+
+#| msgid "Operation completed successfully"
+msgid "All operations finished successfully."
+msgstr "Todas as operações foram concluídas com sucesso."
+
 msgid "Cancelled"
 msgstr "Cancelado"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr "Você gostaria de remover entradas adicionais do cache?"
 
 msgid "System package update"
 msgstr "Atualização de pacotes do sistema"

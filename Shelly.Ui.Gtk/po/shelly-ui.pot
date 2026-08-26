@@ -1438,7 +1438,16 @@ msgstr ""
 msgid "exit"
 msgstr ""
 
+msgid "The operation was cancelled."
+msgstr ""
+
+msgid "All operations finished successfully."
+msgstr ""
+
 msgid "Cancelled"
+msgstr ""
+
+msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"
