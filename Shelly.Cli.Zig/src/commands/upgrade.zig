@@ -1253,6 +1253,7 @@ test "cache clean auto-confirm bypasses only the cache question" {
         ) Zigalpm.OperationQuestionResponse {
             const self: *@This() = @ptrCast(@alignCast(data.?));
             std.testing.expect(question.kind == .confirmation) catch unreachable;
+            std.testing.expect(question.purpose == .cache_clean_extra_entries) catch unreachable;
             std.testing.expectEqualStrings(
                 "Would you like to remove extra cache entries?",
                 question.prompt,
