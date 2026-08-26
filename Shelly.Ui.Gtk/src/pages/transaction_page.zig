@@ -809,7 +809,7 @@ pub const TransactionPage = extern struct {
             .yes_no => |q| {
                 const qa = pending.arena.allocator();
 
-                const text = getQuestionText(q.question_text, q.question_kind);
+                const text = getQuestionText(q.question_kind, q.question_text);
                 
                 const text_z = qa.dupeZ(u8, text) catch {
                     pending.operation.answerYesNo(q.question_id, false) catch {};
