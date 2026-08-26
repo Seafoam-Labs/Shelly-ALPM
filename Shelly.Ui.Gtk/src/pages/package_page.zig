@@ -262,21 +262,41 @@ pub const PackagePage = extern struct {
         const c = struct {
             fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: *Self) callconv(.c) void {
                 const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
-
-                const box = gtk.Box.new(.horizontal, 6);
                 gtk.ListItem.setActivatable(gobject.ext.as(gtk.ListItem, cell), 1);
+
+                const box = gtk.Box.new(.horizontal, 8);
+
                 const icon = gtk.Image.new();
-                gtk.Image.setPixelSize(icon, 24);
+                gtk.Image.setPixelSize(icon, 32);
+                gtk.Widget.setValign(icon.as(gtk.Widget), .center);
                 gtk.Box.append(box, icon.as(gtk.Widget));
+
+                const text_box = gtk.Box.new(.vertical, 0);
+                gtk.Widget.setValign(text_box.as(gtk.Widget), .center);
+                gtk.Widget.setHexpand(text_box.as(gtk.Widget), 1);
+
+                const name_row = gtk.Box.new(.horizontal, 6);
 
                 const label = gtk.Label.new("");
                 gtk.Widget.setHalign(label.as(gtk.Widget), .start);
+                gtk.Label.setUseMarkup(label, 1);
                 gtk.Label.setEllipsize(label, .end);
-                gtk.Box.append(box, label.as(gtk.Widget));
+                gtk.Box.append(name_row, label.as(gtk.Widget));
 
                 const installed_icon = gtk.Image.newFromIconName("object-select-symbolic");
                 gtk.Widget.setTooltipText(installed_icon.as(gtk.Widget), translations._("Installed"));
-                gtk.Box.append(box, installed_icon.as(gtk.Widget));
+                gtk.Box.append(name_row, installed_icon.as(gtk.Widget));
+
+                gtk.Box.append(text_box, name_row.as(gtk.Widget));
+
+                const desc_label = gtk.Label.new("");
+                gtk.Widget.setHalign(desc_label.as(gtk.Widget), .start);
+                gtk.Widget.addCssClass(desc_label.as(gtk.Widget), "dim-label");
+                gtk.Label.setEllipsize(desc_label, .end);
+                gtk.Label.setMaxWidthChars(desc_label, 60);
+                gtk.Box.append(text_box, desc_label.as(gtk.Widget));
+
+                gtk.Box.append(box, text_box.as(gtk.Widget));
 
                 gtk.ColumnViewCell.setChild(cell, box.as(gtk.Widget));
             }
@@ -290,11 +310,20 @@ pub const PackagePage = extern struct {
 
                 const icon_w = gtk.Widget.getFirstChild(box.as(gtk.Widget)) orelse return;
                 const icon = gobject.ext.cast(gtk.Image, icon_w) orelse return;
-                const label_w = gtk.Widget.getNextSibling(icon_w) orelse return;
+                const text_w = gtk.Widget.getNextSibling(icon_w) orelse return;
+                const name_row_w = gtk.Widget.getFirstChild(text_w) orelse return;
+                const label_w = gtk.Widget.getFirstChild(name_row_w) orelse return;
                 const label = gobject.ext.cast(gtk.Label, label_w) orelse return;
                 const installed_w = gtk.Widget.getNextSibling(label_w) orelse return;
+                const desc_w = gtk.Widget.getLastChild(text_w) orelse return;
+                const desc_label = gobject.ext.cast(gtk.Label, desc_w) orelse return;
 
-                gtk.Label.setLabel(label, pkg.getName());
+                var buf: [512]u8 = undefined;
+                const escaped = glib.markupEscapeText(pkg.getName(), -1);
+                defer glib.free(escaped);
+                const markup = std.fmt.bufPrintZ(&buf, "<b>{s}</b>", .{escaped}) catch pkg.getName();
+                gtk.Label.setMarkup(label, markup);
+                gtk.Label.setLabel(desc_label, pkg.getDescription());
                 gtk.Widget.setVisible(installed_w, @intFromBool(pkg.isInstalled()));
 
                 const p = page.priv();
