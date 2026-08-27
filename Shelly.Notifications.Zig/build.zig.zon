@@ -41,8 +41,8 @@
             .hash = "zeit-0.9.0-5I6bk2m9AgBSMH8-L6rYJkwuQAyhXplnfxnvTSGzVHUR",
         },
         .conch = .{
-            .url = "git+https://github.com/Seafoam-Labs/conch#8f93225b4fa19e9a57b215f5f68b04a4dba65d13",
-            .hash = "conch-0.0.1-k9bFopLbAADEC8abKBiXaAro8wVAESAkhFMKVt8exO8P",
+            .url = "git+https://github.com/Seafoam-Labs/conch#65c2e4e5b3edeaf645235bcc78e74886939c15c8",
+            .hash = "conch-0.0.1-k9bFopLbAAC_l9UBCH66wOICCcns-7eVTIcdMl66Cjlh",
         },
     },
     .paths = .{
