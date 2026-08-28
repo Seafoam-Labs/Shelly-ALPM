@@ -1617,7 +1617,36 @@ pub const Manager = struct {
         errdefer operation_scope.fail();
         try self.checkOperationCancelled();
         const requested_name = dependencyName(dependency);
+
+        // Search every configured repository for a literal package before
+        // considering providers. Calling alpm_find_satisfier independently on
+        // each database lets a provider shadow a literal package in that cache
+        // or a later repository (for example, gcc-go's `provides=go` shadowing
+        // the real `go` package).
+        const parsed_dependency = rawLibalpm.alpm_dep_from_string(dependency.ptr) orelse
+            return QueryError.PkgNotFound;
+        defer rawLibalpm.alpm_dep_free(parsed_dependency);
+        const requested_name_z = self.allocator.dupeZ(u8, requested_name) catch
+            return QueryError.OutOfMemory;
+        defer self.allocator.free(requested_name_z);
+
         var sync_dbs = rawLibalpm.alpm_get_syncdbs(self.handle);
+        while (sync_dbs != null) : (sync_dbs = sync_dbs.*.next) {
+            const db_ptr = sync_dbs.*.data orelse continue;
+            const db = libalpm.Database.from(db_ptr) orelse continue;
+            if (!db.allowUsage(.install)) continue;
+            const pkg_ptr = rawLibalpm.alpm_db_get_pkg(db.ptr, requested_name_z.ptr) orelse continue;
+            if (!literalPackageSatisfiesDependency(pkg_ptr, parsed_dependency)) continue;
+            const pkg = libalpm.Package.from(pkg_ptr) orelse continue;
+            return .{
+                .real_name = pkg.name() orelse continue,
+                .via_provides = false,
+            };
+        }
+
+        // No satisfying literal exists in any configured repository. Preserve
+        // the historical first-provider behavior as a separate second pass.
+        sync_dbs = rawLibalpm.alpm_get_syncdbs(self.handle);
         while (sync_dbs != null) : (sync_dbs = sync_dbs.*.next) {
             const db_ptr = sync_dbs.*.data orelse continue;
             const db = libalpm.Database.from(db_ptr) orelse continue;
@@ -3806,6 +3835,24 @@ fn stringBefore(_: void, lhs: []u8, rhs: []u8) bool {
 fn dependencyName(dependency: []const u8) []const u8 {
     const end = std.mem.indexOfAny(u8, dependency, "<>=") orelse dependency.len;
     return std.mem.trim(u8, dependency[0..end], " \t\r\n");
+}
+
+fn literalPackageSatisfiesDependency(
+    package: *rawLibalpm.alpm_pkg_t,
+    dependency: *rawLibalpm.alpm_depend_t,
+) bool {
+    if (dependency.mod == rawLibalpm.ALPM_DEP_MOD_ANY) return true;
+    const package_version = rawLibalpm.alpm_pkg_get_version(package) orelse return false;
+    const dependency_version = dependency.version orelse return false;
+    const comparison = rawLibalpm.alpm_pkg_vercmp(package_version, dependency_version);
+    return switch (dependency.mod) {
+        rawLibalpm.ALPM_DEP_MOD_EQ => comparison == 0,
+        rawLibalpm.ALPM_DEP_MOD_GE => comparison >= 0,
+        rawLibalpm.ALPM_DEP_MOD_LE => comparison <= 0,
+        rawLibalpm.ALPM_DEP_MOD_GT => comparison > 0,
+        rawLibalpm.ALPM_DEP_MOD_LT => comparison < 0,
+        else => false,
+    };
 }
 
 fn nonNegativeSize(value: i64) ?u64 {
