@@ -115,6 +115,7 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/dialog/ui/plan_dialog.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/preview_pkgbuild.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/polkit_warning.ui"));
+    gresource.addFileInput(b.path("src/dialog/ui/aur_warning.ui"));
     gresource.addFileInput(b.path("src/ui/welcome.ui"));
     // Link the generated resource C into the exe.
     exe.root_module.addCSourceFile(.{ .file = resources_c });

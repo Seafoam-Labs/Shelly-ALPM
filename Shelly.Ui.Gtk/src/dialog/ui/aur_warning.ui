@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellyAurWarningDialog" parent="GtkBox">
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <property name="halign">center</property>
+    <property name="valign">center</property>
+    <child>
+      <object class="GtkFrame">
+        <property name="halign">center</property>
+        <property name="valign">center</property>
+        <property name="width-request">420</property>
+        <style>
+          <class name="lockout-card"/>
+        </style>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="spacing">20</property>
+            <property name="margin-start">30</property>
+            <property name="margin-end">30</property>
+            <property name="margin-top">20</property>
+            <property name="margin-bottom">20</property>
+            <child>
+              <object class="GtkLabel" id="title_label">
+                <property name="wrap">true</property>
+                <property name="justify">center</property>
+                <property name="label" translatable="yes">Enable AUR?</property>
+                <style>
+                  <class name="title-2"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">12</property>
+                <child>
+                  <object class="GtkLabel" id="message_label">
+                    <property name="wrap">true</property>
+                    <property name="justify">center</property>
+                    <property name="max-width-chars">40</property>
+                    <property name="label" translatable="yes">The Arch User Repository contains build scripts that are known as PKGBUILDs. Those scripts are uploaded by users, and are not verified or vetted in any way. Only enable this feature if you are comfortable in verifying the build scripts.</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="link_label">
+                    <property name="wrap">true</property>
+                    <property name="justify">center</property>
+                    <property name="use-markup">true</property>
+                    <property name="label" translatable="yes">&lt;a href="https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/"&gt;AUR Safety Guide&lt;/a&gt;</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">12</property>
+                <property name="halign">center</property>
+                <property name="homogeneous">true</property>
+                <property name="margin-top">12</property>
+                <child>
+                  <object class="GtkButton" id="enable_button">
+                    <property name="label" translatable="yes">Enable</property>
+                    <signal name="clicked" handler="on_enable" swapped="true"/>
+                    <style><class name="destructive-action"/></style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="cancel_button">
+                    <property name="label" translatable="yes">Cancel</property>
+                    <property name="receives-default">true</property>
+                    <signal name="clicked" handler="on_cancel" swapped="true"/>
+                    <style><class name="suggested-action"/></style>
+                    <child>
+                      <object class="GtkShortcutController">
+                        <property name="scope">managed</property>
+                        <child>
+                          <object class="GtkShortcut">
+                            <property name="trigger">Return|KP_Enter|Escape</property>
+                            <property name="action">activate</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

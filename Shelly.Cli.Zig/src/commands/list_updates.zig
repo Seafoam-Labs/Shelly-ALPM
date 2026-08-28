@@ -12,6 +12,7 @@ const shortcodes = @import("../cli/shortcodes.zig");
 const runtime = @import("../runtime/context.zig");
 const xdg = @import("../runtime/xdg.zig");
 const spec = @import("../cli/spec.zig");
+const aur_url = @import("../config/aur_url.zig");
 
 const all_command_path = "shelly list-updates all";
 const standard_command_path = "shelly list-updates standard";
@@ -116,8 +117,9 @@ pub const Result = union(Backend) {
 };
 
 pub const CheckOptions = struct {
-    show_hidden: bool,
-    no_devel: bool,
+    show_hidden: bool = false,
+    no_devel: bool = false,
+    aur_url: ?[]const u8 = null,
 };
 
 const Real = struct {
@@ -137,10 +139,9 @@ const Real = struct {
 pub fn collectUpdates(
     context: *runtime.RuntimeContext,
     backend: Backend,
-    show_hidden: bool,
-    no_devel: bool,
+    options: CheckOptions,
 ) !Result {
-    return runReal(context, backend, .{ .show_hidden = show_hidden, .no_devel = no_devel });
+    return runReal(context, backend, options);
 }
 
 pub fn resultCount(result: *const Result) usize {
@@ -649,10 +650,11 @@ fn truncate(value: []const u8, maximum: usize) []const u8 {
     return format.truncate(value, maximum);
 }
 
-fn checkOptions(invocation: *const parser.Invocation) CheckOptions {
+pub fn checkOptions(invocation: *const parser.Invocation) CheckOptions {
     return .{
         .show_hidden = optionEnabled(invocation, "--show-hidden"),
         .no_devel = optionEnabled(invocation, "--no-devel"),
+        .aur_url = aur_url.overrideValue(invocation),
     };
 }
 
@@ -663,7 +665,7 @@ fn runReal(
 ) !Result {
     return switch (backend) {
         .standard => runStandard(context),
-        .aur => runAur(context, options.show_hidden, options.no_devel),
+        .aur => runAur(context, options),
         .appimage => runAppImage(context),
         .flatpak => runFlatpak(context),
     };
@@ -722,18 +724,20 @@ fn runStandard(context: *runtime.RuntimeContext) !Result {
     return .{ .standard = .{ .items = updates, .arena = arena } };
 }
 
-fn runAur(context: *runtime.RuntimeContext, show_hidden: bool, no_devel: bool) !Result {
+fn runAur(context: *runtime.RuntimeContext, options: CheckOptions) !Result {
     const database_path = try xdg.shellyCache(context, &.{"db"});
     defer context.allocator.free(database_path);
     try std.Io.Dir.cwd().createDirPath(context.io, database_path);
 
+    const aur_base = try aur_url.resolve(context, options.aur_url);
     const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+        .aur_git_base_url = aur_base,
         .use_temp_path = true,
         .temp_path = database_path,
-        .show_hidden_packages = show_hidden,
+        .show_hidden_packages = options.show_hidden,
     });
     defer manager.deinit();
-    const native_updates = try manager.getPackagesNeedingUpdate(!no_devel);
+    const native_updates = try manager.getPackagesNeedingUpdate(!options.no_devel);
     defer Zigalpm.aur.models.Update.deinitSlice(context.allocator, native_updates);
 
     const arena = try context.allocator.create(std.heap.ArenaAllocator);

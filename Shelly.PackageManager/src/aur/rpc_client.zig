@@ -1,9 +1,10 @@
 const std = @import("std");
 const models = @import("models.zig");
+const endpoints = @import("endpoints.zig");
 const operation_api = @import("operation_context");
 const HttpClient = @import("ShellyHttp");
 
-pub const default_rpc_url = "https://aur.archlinux.org/rpc/";
+pub const default_rpc_url = endpoints.official_rpc_url;
 pub const default_cgit_url = "https://aur.archlinux.org/cgit/aur.git/plain";
 const max_response_size = 32 * 1024 * 1024;
 const connect_timeout_seconds = 15;
@@ -12,15 +13,16 @@ pub const Client = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
     http: HttpClient,
-    rpc_url: []const u8 = default_rpc_url,
+    rpc_url: []const u8,
     cgit_url: []const u8 = default_cgit_url,
     operation_context: ?*operation_api.OperationContext = null,
     parent_operation: ?*const operation_api.Operation = null,
 
-    pub fn init(allocator: std.mem.Allocator, io: std.Io) Client {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, rpc_url: []const u8) !Client {
         return .{
             .allocator = allocator,
             .io = io,
+            .rpc_url = try allocator.dupe(u8, rpc_url),
             .http = .{
                 .allocator = allocator,
                 .io = io,
@@ -34,6 +36,7 @@ pub const Client = struct {
 
     pub fn deinit(self: *Client) void {
         self.http.deinit();
+        self.allocator.free(self.rpc_url);
         self.* = undefined;
     }
 
@@ -419,6 +422,26 @@ test "AUR suggestions are returned as owned strings" {
     try std.testing.expectEqualStrings("yay-bin", suggestions[1]);
 }
 
+test "RPC client keeps an owned copy of its configured endpoint" {
+    const allocator = std.testing.allocator;
+    var temporary: [64]u8 = undefined;
+    @memcpy(temporary[0.."https://atoll.seafoam-labs.org/rpc".len], "https://atoll.seafoam-labs.org/rpc");
+    var client = try Client.init(allocator, std.testing.io, temporary[0.."https://atoll.seafoam-labs.org/rpc".len]);
+    defer client.deinit();
+    // Releasing or reusing the caller's storage must not affect the client.
+    @memset(&temporary, 0);
+    try std.testing.expectEqualStrings("https://atoll.seafoam-labs.org/rpc", client.rpc_url);
+
+    var official = try Client.init(allocator, std.testing.io, default_rpc_url);
+    defer official.deinit();
+    const url = try buildSearchUrl(allocator, official.rpc_url, "demo", "name-desc");
+    defer allocator.free(url);
+    try std.testing.expectEqualStrings(
+        "https://aur.archlinux.org/rpc/?v=5&type=search&arg=demo&by=name-desc",
+        url,
+    );
+}
+
 test "partial info failures preserve packages returned by earlier chunks" {
     const allocator = std.testing.allocator;
     const parsed = try models.Response.parse(allocator,
@@ -432,7 +455,7 @@ test "partial info failures preserve packages returned by earlier chunks" {
     allocator.free(parsed.response_type);
     if (parsed.error_message) |message| allocator.free(message);
 
-    var client = Client.init(allocator, std.testing.io);
+    var client = try Client.init(allocator, std.testing.io, default_rpc_url);
     defer client.deinit();
     const response_type = try allocator.dupe(u8, "info");
     var partial = try client.partialInfoError(&packages, response_type, error.Timeout);

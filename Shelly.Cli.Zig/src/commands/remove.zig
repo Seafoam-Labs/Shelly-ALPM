@@ -10,6 +10,7 @@ const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const elevation = @import("../runtime/elevation.zig");
 const xdg = @import("../runtime/xdg.zig");
+const aur_url = @import("../config/aur_url.zig");
 
 const standard_command_path = "shelly remove standard";
 const appimage_command_path = "shelly remove appimage";
@@ -69,7 +70,13 @@ pub fn dispatch(
         return try reportValidationFailure(context, invocation, "No packages specified.");
 
     if (!invocation.globals.ui_mode and needsElevation(invocation)) {
-        const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
+        const carries_aur = std.mem.eql(u8, invocation.command.path, aur_command_path);
+        const elevated_arguments = if (carries_aur)
+            try aur_url.argumentsWithEffectiveBase(context, invocation)
+        else
+            invocation.arguments;
+        defer if (carries_aur) context.allocator.free(elevated_arguments);
+        const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
             try context.stderr.print("Unable to elevate remove: {t}\n", .{err});
             return 1;
         };
@@ -179,7 +186,12 @@ fn runAur(
     invocation: *const parser.Invocation,
 ) !void {
     const dependency_removal = dependencyRemoval(invocation, false, false);
-    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{ .root = true, .operation_context = operation_context });
+    const aur_base = try aur_url.resolveFor(context, invocation);
+    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+        .aur_git_base_url = aur_base,
+        .root = true,
+        .operation_context = operation_context,
+    });
     defer manager.deinit();
     manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null);

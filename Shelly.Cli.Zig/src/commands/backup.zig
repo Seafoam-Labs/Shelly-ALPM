@@ -8,6 +8,7 @@ const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const spec = @import("../cli/spec.zig");
 const xdg = @import("../runtime/xdg.zig");
+const aur_url = @import("../config/aur_url.zig");
 const install = @import("install.zig");
 
 const command_path = "shelly backup utility";
@@ -29,8 +30,8 @@ pub const State = struct {
 };
 
 const Real = struct {
-    fn call(_: Real, context: *runtime.RuntimeContext) !State {
-        return collectState(context);
+    fn call(_: Real, context: *runtime.RuntimeContext, aur_base: []const u8) !State {
+        return collectState(context, aur_base);
     }
 };
 
@@ -72,7 +73,8 @@ fn executeWithRunner(
     }
     if (import_requested) return executeImport(context, invocation);
 
-    const state = runner.call(context) catch |err| {
+    const aur_base = try aur_url.resolveFor(context, invocation);
+    const state = runner.call(context, aur_base) catch |err| {
         try writeFailure(context, invocation, err);
         return 1;
     };
@@ -164,9 +166,14 @@ fn importStateWithCaller(
     caller: anytype,
 ) anyerror!void {
     const state = try parseBackupToml(context.allocator, source);
+    const effective_aur_base: ?[]const u8 = if (state.aur.len > 0)
+        try aur_url.resolveFor(context, invocation)
+    else
+        null;
     const options: install.CallOptions = .{
         .no_confirm = invocation.globals.no_confirm,
         .ui_mode = invocation.globals.ui_mode,
+        .aur_url = effective_aur_base,
     };
 
     try installTargets(context, caller, .standard, state.standard, options);
@@ -187,10 +194,13 @@ fn installTargets(
         return error.BackupPackageInstallFailed;
 }
 
-fn collectState(context: *runtime.RuntimeContext) !State {
+fn collectState(context: *runtime.RuntimeContext, aur_base: []const u8) !State {
     var standard: std.ArrayList(Package) = .empty;
+    defer standard.deinit(context.allocator);
     var aur: std.ArrayList(Package) = .empty;
+    defer aur.deinit(context.allocator);
     var flatpaks: std.ArrayList(Flatpak) = .empty;
+    defer flatpaks.deinit(context.allocator);
 
     {
         const manager = try Zigalpm.AlpmManager.init(context.allocator, context.environ, .{ .use_root = false });
@@ -214,6 +224,7 @@ fn collectState(context: *runtime.RuntimeContext) !State {
 
     {
         const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+            .aur_git_base_url = aur_base,
             .show_hidden_packages = true,
         });
         defer manager.deinit();
@@ -502,7 +513,7 @@ const sample_state: State = .{
 };
 
 const SampleRunner = struct {
-    fn call(_: SampleRunner, _: *runtime.RuntimeContext) !State {
+    fn call(_: SampleRunner, _: *runtime.RuntimeContext, _: []const u8) !State {
         return sample_state;
     }
 };
@@ -786,9 +797,11 @@ test "backup import delegates every backend to install with inherited globals" {
         "backup",
         "--import",
         "--name",
-        "snapshot",
+        "demo",
         "--no-confirm",
         "--ui-mode",
+        "--aur-url",
+        "https://atoll.seafoam-labs.org",
     });
     try std.testing.expect(outcome == .dispatch);
 
@@ -811,6 +824,7 @@ test "backup import delegates every backend to install with inherited globals" {
         ) !u8 {
             try std.testing.expect(options.no_confirm);
             try std.testing.expect(options.ui_mode);
+            try std.testing.expectEqualStrings("https://atoll.seafoam-labs.org", options.aur_url.?);
             switch (self.calls) {
                 0 => {
                     try std.testing.expectEqual(install.Backend.standard, backend);
@@ -903,7 +917,7 @@ test "backup requires an operation before collecting package state" {
     const Capture = struct {
         called: bool = false,
 
-        fn call(self: *@This(), _: *runtime.RuntimeContext) !State {
+        fn call(self: *@This(), _: *runtime.RuntimeContext, _: []const u8) !State {
             self.called = true;
             return sample_state;
         }

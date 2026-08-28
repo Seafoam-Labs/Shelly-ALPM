@@ -31,6 +31,7 @@
     <file>dialog/ui/provider.ui</file>
     <file>dialog/ui/preview_pkgbuild.ui</file>
     <file>dialog/ui/polkit_warning.ui</file>
+    <file>dialog/ui/aur_warning.ui</file>
     <file>ui/appimage_page.ui</file>
     <file>ui/welcome.ui</file>
     <file>ui/transaction_page.ui</file>

@@ -14,3 +14,4 @@ Shelly.Notifications.Zig/build/
 .codex-zig-cache/
 .codex-zig-global-cache/
 .qwen/settings.json
+.zed/

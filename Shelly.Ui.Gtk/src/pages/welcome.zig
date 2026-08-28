@@ -7,6 +7,7 @@ const gobject = bindings.gobject;
 const support = @import("support.zig");
 const translations = @import("../helpers/translations.zig");
 const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
+const AurWarningDialog = @import("../dialog/page/aur_warning.zig").AurWarningDialog;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const runtime = @import("../services/runtime.zig");
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
@@ -166,13 +167,13 @@ pub const WelcomePage = extern struct {
         _ = self;
     }
 
-    fn showInternalDialog(self: *Self, dialog: *ConfirmDialog) void {
+    fn showInternalDialog(self: *Self, dialog: *gtk.Widget) void {
         const p = self.priv();
         const scrim = p.welcome_scrim orelse return;
         const host = p.welcome_dialog_host orelse return;
         while (gtk.Widget.getFirstChild(host.as(gtk.Widget))) |c|
             gtk.Box.remove(host, c);
-        gtk.Box.append(host, dialog.as(gtk.Widget));
+        gtk.Box.append(host, dialog);
         gtk.Widget.setVisible(scrim.as(gtk.Widget), 1);
     }
 
@@ -192,14 +193,9 @@ pub const WelcomePage = extern struct {
 
         gtk.CheckButton.setActive(p.source_aur, 0);
 
-        const dialog = ConfirmDialog.new(
-            translations._("Enable AUR?"),
-            translations._("The Arch User Repository is community-maintained. Packages are not officially vetted — only enable if you trust what you install."),
-            &on_aur_response,
-            self,
-        );
-        dialog.setButtons(translations._("Enable"), translations._("Cancel"));
-        self.showInternalDialog(dialog);
+        const dialog = AurWarningDialog.new(&on_aur_response, self);
+        self.showInternalDialog(dialog.as(gtk.Widget));
+        dialog.focusCancel();
     }
 
     fn on_aur_response(ctx: ?*anyopaque, confirmed: bool) void {
@@ -225,7 +221,7 @@ pub const WelcomePage = extern struct {
             self,
         );
         dialog.setButtons(translations._("Enable"), translations._("Cancel"));
-        self.showInternalDialog(dialog);
+        self.showInternalDialog(dialog.as(gtk.Widget));
     }
 
     fn on_recommended_response(ctx: ?*anyopaque, confirmed: bool) void {

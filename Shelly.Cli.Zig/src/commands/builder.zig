@@ -8,6 +8,7 @@ const PackageBuilder = Zigalpm.builder.PackageBuilder;
 const standard_single_pane = @import("../output/standard_single_pane.zig");
 const ui_operation = @import("../output/ui_operation.zig");
 const ShellyBuildConfiguration = Zigalpm.builder.ShellyBuildConfiguration;
+const aur_url = @import("../config/aur_url.zig");
 
 const command_path = "shelly build build";
 
@@ -19,7 +20,9 @@ pub fn dispatch(
     if (optionEnabled(invocation, "--makesrcinfo"))
         return try executeMakeSrcinfo(context, invocation);
     if (shouldElevateSyncDeps(invocation, elevation.isRoot())) {
-        const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
+        const elevated_arguments = try aur_url.argumentsWithEffectiveBase(context, invocation);
+        defer context.allocator.free(elevated_arguments);
+        const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
             try context.stderr.print("Unable to elevate build dependency installation: {t}\n", .{err});
             return 1;
         };
@@ -688,7 +691,9 @@ fn runSyncDepsCoordinator(
         const executable = try std.process.executablePathAlloc(context.io, context.allocator);
         defer context.allocator.free(executable);
         const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
+        const aur_base = try aur_url.resolveFor(context, invocation);
         const aur_manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+            .aur_git_base_url = aur_base,
             .root = true,
             .check = checkOverride(invocation),
             .sign = signOverride(invocation),
