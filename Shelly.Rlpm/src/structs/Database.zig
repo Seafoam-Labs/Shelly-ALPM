@@ -59,3 +59,40 @@ pub fn deinit(
 
     self.* = undefined;
 }
+
+fn freeStrings(
+    allocator: std.mem.Allocator,
+    strings: *std.ArrayList([]u8),
+) void {
+    for (strings.items) |string| {
+        allocator.free(string);
+    }
+    strings.deinit(allocator);
+    strings.* = .empty;
+}
+
+test "freeStrings frees each string and the list storage" {
+    const allocator = std.testing.allocator;
+    var strings: std.ArrayList([]u8) = .empty;
+    defer {
+        for (strings.items) |string| allocator.free(string);
+        strings.deinit(allocator);
+    }
+
+    const first = try allocator.dupe(u8, "https://mirror-one.example");
+    strings.append(allocator, first) catch |err| {
+        allocator.free(first);
+        return err;
+    };
+
+    const second = try allocator.dupe(u8, "https://mirror-two.example");
+    strings.append(allocator, second) catch |err| {
+        allocator.free(second);
+        return err;
+    };
+
+    freeStrings(allocator, &strings);
+
+    try std.testing.expectEqual(@as(usize, 0), strings.items.len);
+    try std.testing.expectEqual(@as(usize, 0), strings.capacity);
+}
