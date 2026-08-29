@@ -11,6 +11,7 @@ const AurWarningDialog = @import("../dialog/page/aur_warning.zig").AurWarningDia
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const runtime = @import("../services/runtime.zig");
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
+const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const support_packages = @import("../services/support_packages.zig");
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const NavMode = @import("../models/shelly_config.zig").NavMode;
@@ -297,12 +298,7 @@ pub const WelcomePage = extern struct {
 
     fn startSupportInstall(window: *ShellyWindow, flatpak: bool, appimage: bool) void {
         var package_buffer: [2][]const u8 = undefined;
-        const packages = support_packages.selectedDependencies(&package_buffer, flatpak, appimage);
-        const argv = ShellyCommands.install(std.heap.c_allocator, packages) catch {
-            window.hideLockout();
-            return;
-        };
-        defer std.heap.c_allocator.free(argv);
+        const packages = needsInstall(&package_buffer, flatpak, appimage);
 
         const ctx = std.heap.c_allocator.create(SupportInstallContext) catch {
             window.hideLockout();
@@ -314,6 +310,19 @@ pub const WelcomePage = extern struct {
             .appimage = appimage,
         };
 
+        if (packages.len == 0) {
+            // All support packages already installed; skip to the next stage.
+            on_support_install_complete(ctx, true);
+            return;
+        }
+
+        const argv = ShellyCommands.install(std.heap.c_allocator, packages) catch {
+            std.heap.c_allocator.destroy(ctx);
+            window.hideLockout();
+            return;
+        };
+        defer std.heap.c_allocator.free(argv);
+
         window.startTransaction(.{
             .title = supportInstallTitle(flatpak, appimage),
             .argv = argv,
@@ -322,6 +331,25 @@ pub const WelcomePage = extern struct {
             .on_complete = &on_support_install_complete,
             .ctx = ctx,
         });
+    }
+
+    /// Returns the subset of support packages that are not yet installed.
+    /// Falls back to the full selected list if the installed-package query fails.
+    fn needsInstall(buffer: *[2][]const u8, flatpak: bool, appimage: bool) []const []const u8 {
+        const cli = ShellyCli{ .allocator = std.heap.c_allocator, .io = runtime.io };
+        const parsed = cli.get_installed_packages() catch {
+            return support_packages.selectedDependencies(buffer, flatpak, appimage);
+        };
+        defer parsed.deinit();
+        var names: [256][]const u8 = undefined;
+        var n: usize = 0;
+        for (parsed.value) |pkg| {
+            if (n < names.len) {
+                names[n] = pkg.Name;
+                n += 1;
+            }
+        }
+        return support_packages.uninstalledDependencies(buffer, flatpak, appimage, names[0..n]);
     }
 
     fn on_support_install_complete(raw_ctx: *anyopaque, success: bool) void {
