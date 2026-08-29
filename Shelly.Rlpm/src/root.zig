@@ -21,4 +21,11 @@ test "basic add functionality" {
 
 test {
     _ = @import("structs/Version.zig");
+    _ = @import("structs/PackageRelation.zig");
+    _ = @import("structs/Package.zig");
+    _ = @import("structs/Group.zig");
+    _ = @import("structs/DatabaseStatus.zig");
+    _ = @import("structs/DatabaseUsage.zig");
+    _ = @import("structs/SignaturePolicy.zig");
+    _ = @import("structs/Database.zig");
 }
