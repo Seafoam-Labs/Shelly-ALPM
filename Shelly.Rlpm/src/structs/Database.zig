@@ -27,12 +27,8 @@ pub const PackageIndex = struct {
     ordered: std.ArrayList(PackageId),
 };
 
-//owner: *Handle,
-
 name: []u8,
 path: ?[]u8 = null,
-
-//backend: Backend, Could probably be retooled,
 
 packages: PackageIndex = .{},
 groups: GroupIndex = .{},
