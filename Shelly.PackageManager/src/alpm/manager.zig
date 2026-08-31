@@ -3137,14 +3137,32 @@ pub const Manager = struct {
                 const conflict = q.conflict();
                 const pkg_one = conflict.packageOne();
                 const pkg_two = conflict.packageTwo();
+
+                const package_one_name = pkg_one.name() orelse "unknown";
+                const package_one_version = pkg_one.version() orelse "?";
+                const package_two_name = pkg_two.name() orelse "unknown";
+                const package_two_version = pkg_two.version() orelse "?";
+
                 const text = formatConflictQuestion(
-                    &buf,
-                    pkg_one.name() orelse "unknown",
-                    pkg_one.version() orelse "?",
-                    pkg_two.name() orelse "unknown",
-                    pkg_two.version() orelse "?",
-                );
-                q.confirm_removal(self.askYesNo(manager_io, qtype, text));
+                     &buf,
+                     package_one_name,
+                     package_one_version,
+                     package_two_name,
+                     package_two_version,
+                 );
+
+                 q.confirm_removal(self.askYesNoWithArguments(
+                        manager_io,
+                        qtype,
+                        text,
+                        &.{
+                            package_one_name,
+                            package_one_version,
+                            package_two_name,
+                            package_two_version,
+                            package_two_name,
+                        },
+                    ));
             },
             .corrupted_package => {
                 const q = libalpm.RemoveCorruptedPackagesQuestion.from(data).?;
@@ -3177,11 +3195,21 @@ pub const Manager = struct {
         }
     }
 
-    fn askYesNo(self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8) bool {
+    fn askYesNo(self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, ) bool {
+        return self.askYesNoWithArguments(
+            manager_io,
+            qtype,
+            text,
+            &.{},
+        );
+    }
+
+    fn askYesNoWithArguments( self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, arguments: []const []const u8, ) bool {
         const yes_no = [_][]const u8{ "yes", "no" };
         const resp = self.dispatcher.raiseQuestion(manager_io, .{
             .question = text,
             .question_type = qtype,
+            .arguments = arguments,
             .options = &yes_no,
         });
         return (resp.answer orelse 0) != 0;
