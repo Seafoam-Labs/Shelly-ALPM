@@ -3138,9 +3138,14 @@ pub const Manager = struct {
             .conflict_package => {
                 const q = libalpm.ConflictQuestion.from(data).?;
                 const conflict = q.conflict();
-                const text = std.fmt.bufPrint(&buf, "{s} conflicts with {s}. Remove?", .{
-                    conflict.packageOne().name() orelse "unknown",
-                    conflict.packageTwo().name() orelse "unknown",
+                const pkg_one = conflict.packageOne();
+                const pkg_two = conflict.packageTwo();
+                const text = std.fmt.bufPrint(&buf, "{s}-{s} conflicts with {s}-{s}. Remove {s}?", .{
+                    pkg_one.name() orelse "unknown",
+                    pkg_one.version() orelse "?",
+                    pkg_two.name() orelse "unknown",
+                    pkg_two.version() orelse "?",
+                    pkg_two.name() orelse "unknown",
                 }) catch "Remove the conflicting package?";
                 q.confirm_removal(self.askYesNo(manager_io, qtype, text));
             },
@@ -3387,6 +3392,26 @@ fn stalePartSweepDirectory(
         if (age_ns < max_age.nanoseconds) continue;
         dir.deleteFile(io, entry.path) catch {};
     }
+}
+
+fn formatConflictQuestion(
+    buf: []u8,
+    package_one_name: []const u8,
+    package_one_version: []const u8,
+    package_two_name: []const u8,
+    package_two_version: []const u8,
+) []const u8 {
+    return std.fmt.bufPrint(
+        buf,
+        "{s}-{s} conflicts with {s}-{s}. Remove {s}?",
+        .{
+            package_one_name,
+            package_one_version,
+            package_two_name,
+            package_two_version,
+            package_two_name,
+        },
+    ) catch "Remove the conflicting package?";
 }
 
 fn mirrorDownloadConfiguration(
@@ -4898,6 +4923,8 @@ test "questionCallback applies affirmative answers to simple libalpm questions" 
     Manager.questionCallback(@ptrCast(&mgr), &import_key);
     try testing.expectEqual(@as(c_int, 1), import_key.import_key.import);
 }
+
+
 
 test "questionCallback keeps unknown answers and applies selected provider choices" {
     var mgr: Manager = undefined;
