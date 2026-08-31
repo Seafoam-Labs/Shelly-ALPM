@@ -187,9 +187,14 @@ const Worker = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
     config: *ShellyConfig,
+    running: std.atomic.Value(bool) = std.atomic.Value(bool).init(true),
 
     fn run(self: *Worker) void {
-        while (true) {
+        while (self.running.load(.seq_cst)) {
+            if (self.config.dirty.swap(false, .seq_cst)) {
+                self.applyConfigChange();
+            }
+
             self.pollOnce() catch |e| {
                 log_worker.err("check failed: {any}", .{e});
             };
@@ -210,28 +215,38 @@ const Worker = struct {
             log_worker.info("next check in: {d}s (or on request)", .{secs});
             log_worker.debug("waiting {d}s until next check (interruptible)", .{secs});
 
-            _ = self.config.dirty.swap(false, .seq_cst);
-
             const expected = runtime.wake_gen.load(.acquire);
+            if (!self.running.load(.seq_cst)) return;
+            if (self.config.dirty.load(.seq_cst)) continue;
             self.io.futexWaitTimeout(
                 u32,
                 &runtime.wake_gen.raw,
                 expected,
                 .{ .duration = .{ .raw = .fromSeconds(secs), .clock = .awake } },
             ) catch {};
-
-            if (self.config.dirty.swap(false, .seq_cst)) {
-                log_worker.info("config changed, recomputing schedule", .{});
-                const icons = getIconsToUse(self.config);
-                @memcpy(icon_buf[0..icons.icon_name.len], icons.icon_name);
-                icon_buf[icons.icon_name.len] = 0;
-                @memcpy(updates_buf[0..icons.attention_icon_name.len], icons.attention_icon_name);
-                updates_buf[icons.attention_icon_name.len] = 0;
-                icon_name = icon_buf[0..icons.icon_name.len :0];
-                attention_icon_name = updates_buf[0..icons.attention_icon_name.len :0];
-                self.updates.signalConfigChange();
-            }
         }
+    }
+
+    fn applyConfigChange(self: *Worker) void {
+        log_worker.info("config changed, updating tray icons", .{});
+        const icons = blk: {
+            self.config.mutex.lockUncancelable(self.io);
+            defer self.config.mutex.unlock(self.io);
+            break :blk getIconsToUse(self.config);
+        };
+
+        if (icons.icon_name.len >= icon_buf.len or icons.attention_icon_name.len >= updates_buf.len) {
+            log_worker.warn("configured tray icon name too long, keeping previous icons", .{});
+            return;
+        }
+
+        @memcpy(icon_buf[0..icons.icon_name.len], icons.icon_name);
+        icon_buf[icons.icon_name.len] = 0;
+        @memcpy(updates_buf[0..icons.attention_icon_name.len], icons.attention_icon_name);
+        updates_buf[icons.attention_icon_name.len] = 0;
+        icon_name = icon_buf[0..icons.icon_name.len :0];
+        attention_icon_name = updates_buf[0..icons.attention_icon_name.len :0];
+        self.updates.signalConfigChange();
     }
 
     fn pollOnce(self: *Worker) !void {
@@ -317,6 +332,19 @@ pub fn main(init: std.process.Init) !void {
 
     _ = translations.init();
 
+    while (true) {
+        runSession(init) catch |err| {
+            log_main.err("session ended: {any}; reconnecting in 5s", .{err});
+            init.io.sleep(.fromMilliseconds(5_000), .awake) catch {};
+            continue;
+        };
+        return;
+    }
+}
+
+fn runSession(init: std.process.Init) !void {
+    const allocator = init.gpa;
+
     var service = try Service.init(allocator, init.io, init.environ_map);
     defer service.deinit();
 
@@ -391,7 +419,11 @@ pub fn main(init: std.process.Init) !void {
         .config = &config,
     };
     const worker_thread = try std.Thread.spawn(.{}, Worker.run, .{&worker});
-    defer worker_thread.join();
+    defer {
+        worker.running.store(false, .seq_cst);
+        runtime.wakeWorker();
+        worker_thread.join();
+    }
 
     while (true) {
         _ = service.tickTimeout(.{
@@ -400,7 +432,8 @@ pub fn main(init: std.process.Init) !void {
                 .clock = .awake,
             },
         }) catch |e| {
-            log_loop.err("tick error: {any}", .{e});
+            log_loop.err("tick error: {any}; D-Bus connection lost, reconnecting", .{e});
+            return e;
         };
 
         if (updates.takeRefresh()) {

@@ -42,6 +42,14 @@ pub fn requireSkippedVcsChecksums(package_build: *const PackageBuild, index: usi
     }
 }
 
+pub fn hasVerifiableChecksum(package_build: *const PackageBuild, index: usize) bool {
+    for (checksumSets(package_build)) |set| {
+        const sums = set.sums orelse continue;
+        if (sums.len > 0 and !std.ascii.eqlIgnoreCase(sums[index], "SKIP")) return true;
+    }
+    return false;
+}
+
 pub fn verifyFileHash(comptime Hash: type, io: std.Io, path: []const u8, expected: []const u8) !void {
     if (std.ascii.eqlIgnoreCase(expected, "SKIP")) return;
     if (expected.len != Hash.digest_length * 2) return error.InvalidSourceChecksum;
@@ -75,7 +83,7 @@ test "validateChecksumCount accepts matching, empty, and missing tables" {
     try std.testing.expectError(error.SourceChecksumCountMismatch, validateChecksumCount(3, sums));
 }
 
-test "checksum tables report presence and enforce SKIP for VCS sources" {
+test "checksum tables report presence and classify VCS sums" {
     var pkg = pkgbuild_parser.Pkgbuild{
         .variables = .init(std.testing.allocator),
         .local_source_contents = .init(std.testing.allocator),
@@ -83,16 +91,20 @@ test "checksum tables report presence and enforce SKIP for VCS sources" {
     defer pkg.deinit(std.testing.allocator);
 
     try std.testing.expect(!hasSourceChecksums(&pkg));
+    try std.testing.expect(!hasVerifiableChecksum(&pkg, 0));
     try requireSkippedVcsChecksums(&pkg, 0);
 
     const skip = try std.testing.allocator.alloc([]const u8, 1);
     skip[0] = try std.testing.allocator.dupe(u8, "SKIP");
     pkg.sha_512_sums = skip;
     try std.testing.expect(hasSourceChecksums(&pkg));
+    try std.testing.expect(!hasVerifiableChecksum(&pkg, 0));
     try requireSkippedVcsChecksums(&pkg, 0);
 
     std.testing.allocator.free(skip[0]);
     skip[0] = try std.testing.allocator.dupe(u8, "0123456789abcdef");
+    try std.testing.expect(hasSourceChecksums(&pkg));
+    try std.testing.expect(hasVerifiableChecksum(&pkg, 0));
     try std.testing.expectError(error.UnsupportedVcsChecksum, requireSkippedVcsChecksums(&pkg, 0));
 }
 

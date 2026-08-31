@@ -9,6 +9,7 @@ const table = @import("../output/table.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const spec = @import("../cli/spec.zig");
+const aur_url = @import("../config/aur_url.zig");
 
 const joined = format.joined;
 const nonNegative = format.nonNegative;
@@ -434,16 +435,30 @@ fn runAur(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
 ) !AurResult {
-    var manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{});
+    const aur_base = try aur_url.resolveFor(context, invocation);
+    var manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+        .aur_git_base_url = aur_base,
+    });
     defer manager.deinit();
 
     if (optionEnabled(invocation, "--pkgbuild")) {
         const builds = try context.allocator.alloc(PackageBuild, invocation.positionals.len);
+        var initialized: usize = 0;
+        errdefer {
+            for (builds[0..initialized]) |build| {
+                context.allocator.free(build.name);
+                if (build.pkgbuild) |pkgbuild| context.allocator.free(pkgbuild);
+            }
+            context.allocator.free(builds);
+        }
         for (invocation.positionals, builds) |package, *build| {
-            build.* = .{
-                .name = try context.allocator.dupe(u8, package),
-                .pkgbuild = manager.fetchPkgbuild(package) catch null,
+            const name = try context.allocator.dupe(u8, package);
+            const pkgbuild = manager.fetchPkgbuild(package) catch |err| {
+                context.allocator.free(name);
+                return err;
             };
+            build.* = .{ .name = name, .pkgbuild = pkgbuild };
+            initialized += 1;
         }
         return .{ .pkgbuilds = builds };
     }

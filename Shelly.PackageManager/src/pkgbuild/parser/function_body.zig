@@ -93,7 +93,7 @@ pub fn extract_function_body(content: []const u8, function_name: []const u8) !?[
     const header = header_match orelse return null;
 
     const end = switch (header.delimiter) {
-        .brace => find_brace_body_end(content, header.body_start),
+        .brace => try find_brace_body_end(content, header.body_start),
         .subshell => try find_subshell_body_end(content, header.body_start),
     };
     const substring = content[header.body_start..end];
@@ -119,7 +119,7 @@ pub fn extract_function_definition(
 ) !?function_definition {
     const header = (try match_at_line_start(content, 0, function_name)) orelse return null;
     const end = switch (header.delimiter) {
-        .brace => find_brace_body_end(content, header.body_start),
+        .brace => try find_brace_body_end(content, header.body_start),
         .subshell => try find_subshell_body_end(content, header.body_start),
     };
     return .{
@@ -133,18 +133,125 @@ const function_header = struct {
     delimiter: function_body_delimiter,
 };
 
-fn find_brace_body_end(content: []const u8, start: usize) usize {
+/// Finds the closing brace of a Bash brace-group function body. Braces only
+/// affect the nesting depth when they are shell reserved words; quoted text,
+/// comments, heredocs, expansions, and substitutions are skipped as opaque
+/// regions so data such as a sed expression cannot consume later functions.
+fn find_brace_body_end(content: []const u8, start: usize) function_scan_error!usize {
     var depth: usize = 1;
+    var word_start = true;
+    var pending: [max_pending_heredocs]pending_heredoc = undefined;
+    var pending_count: usize = 0;
     var i = start;
-    while (i < content.len and depth > 0) : (i += 1) {
-        if (content[i] == '{') {
-            depth += 1;
-        } else if (content[i] == '}') {
-            depth -= 1;
-            if (depth == 0) return i;
+
+    while (i < content.len) {
+        const c = content[i];
+
+        if (c == '\n') {
+            i += 1;
+            word_start = true;
+            if (pending_count > 0) {
+                i = skip_heredoc_bodies(content, i, pending[0..pending_count]);
+                pending_count = 0;
+            }
+            continue;
         }
+        if (std.ascii.isWhitespace(c)) {
+            i += 1;
+            word_start = true;
+            continue;
+        }
+        if (c == '#' and word_start) {
+            i = std.mem.indexOfScalarPos(u8, content, i, '\n') orelse content.len;
+            continue;
+        }
+        if (c == '\\' and i + 1 < content.len) {
+            const escaped_newline = content[i + 1] == '\n';
+            i += 2;
+            if (!escaped_newline) word_start = false;
+            continue;
+        }
+        if (c == '\'') {
+            i = skip_single_quote(content, i + 1);
+            word_start = false;
+            continue;
+        }
+        if (c == '"') {
+            i = try skip_double_quote(content, i + 1);
+            word_start = false;
+            continue;
+        }
+        if (c == '`') {
+            i = skip_backtick(content, i + 1);
+            word_start = false;
+            continue;
+        }
+
+        if (c == '$' and i + 2 < content.len and content[i + 1] == '(' and content[i + 2] == '(') {
+            i = try skip_arithmetic(content, i + 3, 2);
+            word_start = false;
+            continue;
+        }
+        if (c == '(' and i + 1 < content.len and content[i + 1] == '(') {
+            i = try skip_arithmetic(content, i + 2, 2);
+            word_start = false;
+            continue;
+        }
+        if (c == '$' and i + 1 < content.len and content[i + 1] == '(') {
+            const close = try find_subshell_body_end(content, i + 2);
+            i = if (close < content.len) close + 1 else close;
+            word_start = false;
+            continue;
+        }
+        if (c == '$' and i + 1 < content.len and content[i + 1] == '{') {
+            i = try skip_parameter_expansion(content, i + 2);
+            word_start = false;
+            continue;
+        }
+
+        if (c == '<' and i + 1 < content.len and content[i + 1] == '<' and
+            (i + 2 >= content.len or content[i + 2] != '<'))
+        {
+            if (parse_heredoc_declaration(content, i + 2)) |declaration| {
+                if (pending_count == pending.len) return error.TooManyHeredocs;
+                pending[pending_count] = declaration;
+                pending_count += 1;
+                i = declaration.end;
+                word_start = false;
+                continue;
+            }
+        }
+
+        if ((c == '{' or c == '}') and is_structural_brace(content, i, word_start)) {
+            if (c == '{') {
+                depth += 1;
+            } else {
+                depth -= 1;
+                if (depth == 0) return i;
+            }
+            i += 1;
+            word_start = true;
+            continue;
+        }
+
+        if (std.mem.indexOfScalar(u8, ";&|()<>", c) != null) {
+            i += 1;
+            word_start = true;
+            continue;
+        }
+
+        i += 1;
+        word_start = false;
     }
+
     return content.len;
+}
+
+fn is_structural_brace(content: []const u8, index: usize, word_start: bool) bool {
+    if (!word_start or index + 1 == content.len) return word_start;
+    const next = content[index + 1];
+    return std.ascii.isWhitespace(next) or
+        std.mem.indexOfScalar(u8, ";&|(){}<>", next) != null;
 }
 
 const max_pending_heredocs = 16;
@@ -336,6 +443,10 @@ fn skip_double_quote(content: []const u8, start: usize) function_scan_error!usiz
             i = if (close < content.len) close + 1 else close;
             continue;
         }
+        if (content[i] == '$' and i + 1 < content.len and content[i + 1] == '{') {
+            i = try skip_parameter_expansion(content, i + 2);
+            continue;
+        }
         i += 1;
     }
     return content.len;
@@ -378,6 +489,54 @@ fn skip_arithmetic(content: []const u8, start: usize, initial_depth: usize) func
         i += 1;
     }
     return i;
+}
+
+/// Returns the first byte after a parameter expansion that starts with `${`.
+/// Nested expansions and substitutions are opaque to the surrounding
+/// function-body scanner, so their braces cannot terminate a function.
+fn skip_parameter_expansion(content: []const u8, start: usize) function_scan_error!usize {
+    var depth: usize = 1;
+    var i = start;
+    while (i < content.len) {
+        if (content[i] == '\\' and i + 1 < content.len) {
+            i += 2;
+            continue;
+        }
+        if (content[i] == '\'') {
+            i = skip_single_quote(content, i + 1);
+            continue;
+        }
+        if (content[i] == '"') {
+            i = try skip_double_quote(content, i + 1);
+            continue;
+        }
+        if (content[i] == '`') {
+            i = skip_backtick(content, i + 1);
+            continue;
+        }
+        if (content[i] == '$' and i + 2 < content.len and content[i + 1] == '(' and content[i + 2] == '(') {
+            i = try skip_arithmetic(content, i + 3, 2);
+            continue;
+        }
+        if (content[i] == '$' and i + 1 < content.len and content[i + 1] == '(') {
+            const close = try find_subshell_body_end(content, i + 2);
+            i = if (close < content.len) close + 1 else close;
+            continue;
+        }
+        if (content[i] == '$' and i + 1 < content.len and content[i + 1] == '{') {
+            depth += 1;
+            i += 2;
+            continue;
+        }
+        if (content[i] == '}') {
+            depth -= 1;
+            i += 1;
+            if (depth == 0) return i;
+            continue;
+        }
+        i += 1;
+    }
+    return content.len;
 }
 
 fn is_shell_token_delimiter(c: u8) bool {
@@ -583,6 +742,56 @@ test "extract_function_body: nested braces are balanced correctly" {
         "if (x) {\n    doThing();\n  }\n  return 1;",
         result.?,
     );
+}
+
+test "extract_function_body: Equicord sed expressions do not consume later functions" {
+    const content =
+        \\prepare() {
+        \\  sed -i \\
+        \\    -e '#async function fetchUpdates\\(\\) {#a return false;' \\
+        \\    -e '#async function applyUpdates\\(\\) {#a return false;' \\
+        \\    src/updater.ts
+        \\}
+        \\build() {
+        \\  pnpm build
+        \\}
+        \\package() {
+        \\  install -Dm644 app.asar "$pkgdir/usr/lib/app.asar"
+        \\}
+    ;
+    const result = (try extract_function_body(content, "prepare")).?;
+    try std.testing.expectEqualStrings(
+        \\sed -i \\
+        \\    -e '#async function fetchUpdates\\(\\) {#a return false;' \\
+        \\    -e '#async function applyUpdates\\(\\) {#a return false;' \\
+        \\    src/updater.ts
+    , result);
+    try std.testing.expect(std.mem.indexOf(u8, result, "build()") == null);
+}
+
+test "extract_function_body: brace scan skips shell data regions" {
+    const content =
+        \\prepare() {
+        \\  echo "a double-quoted } is data"
+        \\  echo escaped \\{
+        \\  # a comment containing { does not open a group
+        \\  fallback="${value:-{literal data} }"
+        \\  generated="$(printf '%s' '{ command substitution data')"
+        \\  cat <<'EOF'
+        \\heredoc data with unmatched }}}
+        \\EOF
+        \\  {
+        \\    echo nested-group
+        \\  }
+        \\  echo finished
+        \\}
+        \\build() { echo build; }
+    ;
+    const result = (try extract_function_body(content, "prepare")).?;
+    try std.testing.expect(std.mem.indexOf(u8, result, "heredoc data with unmatched") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "echo nested-group") != null);
+    try std.testing.expect(std.mem.endsWith(u8, result, "echo finished"));
+    try std.testing.expect(std.mem.indexOf(u8, result, "build()") == null);
 }
 
 test "extract_function_body: no matching function returns null" {

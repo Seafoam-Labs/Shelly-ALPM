@@ -1207,6 +1207,42 @@ test "parser_content: execution steps skip functions the PKGBUILD does not defin
     try std.testing.expectEqualStrings("install -Dm755 target/demo \"$pkgdir/usr/bin/demo\"", steps[1].body);
 }
 
+test "parser_content: quoted braces keep AUR lifecycle steps separate" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const content =
+        \\pkgname=equicord-openasar
+        \\pkgver=1
+        \\pkgrel=1
+        \\prepare() {
+        \\  sed -i \\
+        \\    -e '#async function fetchUpdates\\(\\) {#a return false;' \\
+        \\    -e '#async function applyUpdates\\(\\) {#a return false;' \\
+        \\    src/updater.ts
+        \\}
+        \\build() {
+        \\  pnpm build
+        \\}
+        \\package() {
+        \\  install -Dm644 app.asar "$pkgdir/usr/lib/app.asar"
+        \\}
+    ;
+    var info = try parse_test_pkgbuild(parser, content, null);
+    defer info.deinit(std.testing.allocator);
+
+    const steps = info.execution.?.steps;
+    try std.testing.expectEqual(@as(usize, 3), steps.len);
+    try std.testing.expectEqualStrings("prepare", steps[0].name);
+    try std.testing.expect(std.mem.indexOf(u8, steps[0].body, "fetchUpdates") != null);
+    try std.testing.expect(std.mem.indexOf(u8, steps[0].body, "build()") == null);
+    try std.testing.expectEqualStrings("build", steps[1].name);
+    try std.testing.expectEqualStrings("pnpm build", steps[1].body);
+    try std.testing.expectEqualStrings("package", steps[2].name);
+    try std.testing.expectEqualStrings(
+        "install -Dm644 app.asar \"$pkgdir/usr/lib/app.asar\"",
+        steps[2].body,
+    );
+}
+
 test "parser_content: Darkly-style subshell lifecycle functions produce execution steps" {
     const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
     const content =

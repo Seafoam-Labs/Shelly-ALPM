@@ -8,6 +8,8 @@ const PackageBuilder = Zigalpm.builder.PackageBuilder;
 const standard_single_pane = @import("../output/standard_single_pane.zig");
 const ui_operation = @import("../output/ui_operation.zig");
 const ShellyBuildConfiguration = Zigalpm.builder.ShellyBuildConfiguration;
+const aur_url = @import("../config/aur_url.zig");
+const isolated_build = @import("isolated_build.zig");
 
 const command_path = "shelly build build";
 
@@ -18,8 +20,10 @@ pub fn dispatch(
     if (!std.mem.eql(u8, invocation.command.path, command_path)) return null;
     if (optionEnabled(invocation, "--makesrcinfo"))
         return try executeMakeSrcinfo(context, invocation);
-    if (shouldElevateSyncDeps(invocation, elevation.isRoot())) {
-        const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
+    if (shouldElevateBuildCoordinator(invocation, elevation.isRoot())) {
+        const elevated_arguments = try aur_url.argumentsWithEffectiveBase(context, invocation);
+        defer context.allocator.free(elevated_arguments);
+        const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
             try context.stderr.print("Unable to elevate build dependency installation: {t}\n", .{err});
             return 1;
         };
@@ -39,6 +43,16 @@ fn syncDepsRequested(invocation: *const parser.Invocation) bool {
 
 fn shouldElevateSyncDeps(invocation: *const parser.Invocation, running_as_root: bool) bool {
     return syncDepsRequested(invocation) and !running_as_root;
+}
+
+fn isolatedRequested(invocation: *const parser.Invocation) bool {
+    return optionEnabled(invocation, "--isolated") and
+        !optionEnabled(invocation, "--coordinator-child");
+}
+
+fn shouldElevateBuildCoordinator(invocation: *const parser.Invocation, running_as_root: bool) bool {
+    return !running_as_root and
+        (syncDepsRequested(invocation) or isolatedRequested(invocation));
 }
 
 fn executeWithRunner(
@@ -231,6 +245,8 @@ const Real = struct {
         operation_context: *Zigalpm.OperationContext,
         invocation: *const parser.Invocation,
     ) !void {
+        if (isolatedRequested(invocation))
+            return runIsolatedCoordinator(context, operation_context, invocation);
         if (syncDepsRequested(invocation))
             return runSyncDepsCoordinator(context, operation_context, invocation);
 
@@ -634,6 +650,295 @@ fn parseBuildRequest(
     };
 }
 
+/// Root-only coordinator for the nspawn backend. It reviews the host input,
+/// stages the reviewed snapshots, provisions an operation-scoped guest, and
+/// then runs the ordinary Shelly builder as the fixed unprivileged guest.
+fn runIsolatedCoordinator(
+    context: *runtime.RuntimeContext,
+    operation_context: *Zigalpm.OperationContext,
+    invocation: *const parser.Invocation,
+) !void {
+    if (!elevation.isRoot()) return error.ElevationRequired;
+    const invoking_ids = (try elevation.invokingUserIds(context)) orelse
+        return error.InvokingUserUnavailable;
+    if (optionEnabled(invocation, "--sign") and !optionEnabled(invocation, "--nosign"))
+        return error.IsolatedSigningUnsupported;
+
+    var request = try parseBuildRequest(context, invocation);
+    defer request.deinit(context);
+    if (request.shellybuild.package.sign and !optionEnabled(invocation, "--nosign"))
+        return error.IsolatedSigningUnsupported;
+
+    const pkgbuild_content = try std.Io.Dir.cwd().readFileAlloc(
+        context.io,
+        request.pkgbuild_path,
+        context.allocator,
+        .limited(32 * 1024 * 1024),
+    );
+    defer context.allocator.free(pkgbuild_content);
+    var review = try Zigalpm.builder.preparePkgbuildReview(
+        context.allocator,
+        context.io,
+        request.build_directory,
+        pkgbuild_content,
+        request.package_builds,
+    );
+    defer review.deinit();
+
+    var operation = operation_context.begin(.{
+        .backend = .aur,
+        .kind = .build,
+        .subject = request.pkgbuild_path,
+    });
+    var completion: Zigalpm.OperationCompletionStatus = .failed;
+    defer operation.finish(completion);
+
+    if (!optionEnabled(invocation, "--reviewed")) {
+        var answer = try operation.ask(.{
+            .kind = .review_changes,
+            .prompt = "Build packages in a systemd-nspawn isolated root?",
+            .review = .{
+                .subject = request.pkgbuild_path,
+                .findings = review.findings,
+                .old_content = "",
+                .new_content = pkgbuild_content,
+                .related_files = review.related_files,
+            },
+            .default_response = if (review.findings.len == 0) .accepted else .declined,
+        });
+        defer answer.deinit(context.allocator);
+        if (answer.response != .accepted) {
+            completion = .cancelled;
+            return error.Cancelled;
+        }
+    }
+    try review.verifyCurrent(
+        context.allocator,
+        context.io,
+        request.pkgbuild_path,
+        request.build_directory,
+    );
+
+    var dependency_plan: ?SyncDependencyPlan = null;
+    defer if (dependency_plan) |*plan| plan.deinit(context.allocator);
+    var bootstrap_packages: std.ArrayList([]const u8) = .empty;
+    defer bootstrap_packages.deinit(context.allocator);
+    if (optionEnabled(invocation, "--sync-deps")) {
+        const manager = try Zigalpm.AlpmManager.init(
+            context.allocator,
+            context.environ,
+            .{ .use_root = true, .operation_context = operation_context },
+        );
+        defer manager.deinit();
+        try manager.sync(false);
+        var resolver_context: IsolatedResolverContext = .{ .manager = manager };
+        dependency_plan = try resolveSyncDependencies(
+            context.allocator,
+            request.package_builds,
+            request.no_check,
+            resolver_context.backend(),
+        );
+        if (dependency_plan.?.aur_dependencies.len != 0) {
+            for (dependency_plan.?.aur_dependencies) |name|
+                operation.status(.warning, name, "build.isolation.aur-dependency", null);
+            return error.IsolatedAurDependencyUnsupported;
+        }
+        for (dependency_plan.?.repo_dependencies) |dependency|
+            try bootstrap_packages.append(context.allocator, dependency.name);
+    }
+
+    var root = try isolated_build.Root.create(context.allocator, context.io);
+    defer root.deinit();
+    operation.status(.information, "Provisioning clean build root", "build.isolation.provision", null);
+    try root.bootstrap(bootstrap_packages.items);
+    try root.stageReviewedInputs(pkgbuild_content, review.reviewed_files);
+
+    const executable_allocated = try std.process.executablePathAlloc(context.io, context.allocator);
+    defer context.allocator.free(executable_allocated);
+    const executable = std.mem.trimEnd(u8, executable_allocated, " (deleted)");
+    try root.stageExecutable(executable);
+
+    const guest_configuration = try renderIsolatedConfiguration(
+        context.allocator,
+        request.shellybuild,
+    );
+    defer context.allocator.free(guest_configuration);
+    try root.writeBuildConfiguration(guest_configuration);
+
+    const digest_hex = std.fmt.bytesToHex(review.digest, .lower);
+    const child_arguments = try buildIsolatedChildArguments(
+        context.allocator,
+        invocation.arguments,
+        if (invocation.positionals.len == 0) null else invocation.positionals[0],
+        &digest_hex,
+    );
+    defer context.allocator.free(child_arguments);
+    operation.status(.information, "Running unprivileged nspawn build", "build.isolation.execute", null);
+    try root.run(child_arguments);
+
+    const expected_names = try context.allocator.alloc([]const u8, request.package_builds.len);
+    defer context.allocator.free(expected_names);
+    for (request.package_builds, expected_names) |package_build, *name|
+        name.* = package_build.pkg_name orelse return error.MissingPackageName;
+    try validateIsolatedArtifacts(context, root.artifact_path, expected_names);
+
+    const destination = request.shellybuild.destinations.packages orelse request.build_directory;
+    const artifact_count = try root.exportArtifacts(
+        destination,
+        !optionEnabled(invocation, "--no-overwrite"),
+        invoking_ids.uid,
+        invoking_ids.gid,
+    );
+    const message = try std.fmt.allocPrint(
+        context.allocator,
+        "Exported {d} isolated build artifact{s} to {s}",
+        .{ artifact_count, if (artifact_count == 1) "" else "s", destination },
+    );
+    defer context.allocator.free(message);
+    operation.status(.success, message, "build.isolation.artifacts", null);
+    root.succeeded = true;
+    completion = .success;
+}
+
+fn validateIsolatedArtifacts(
+    context: *runtime.RuntimeContext,
+    artifact_directory: []const u8,
+    expected_names: []const []const u8,
+) !void {
+    const bindings = Zigalpm.alpm.bindings.libalpm;
+    const raw = bindings.alpm;
+    var alpm_error: raw.alpm_errno_t = 0;
+    const handle = raw.alpm_initialize("/", "/var/lib/pacman", &alpm_error) orelse
+        return error.ArtifactValidationFailed;
+    defer _ = raw.alpm_release(handle);
+
+    const found = try context.allocator.alloc(bool, expected_names.len);
+    defer context.allocator.free(found);
+    @memset(found, false);
+    var directory = try std.Io.Dir.cwd().openDir(context.io, artifact_directory, .{ .iterate = true });
+    defer directory.close(context.io);
+    var iterator = directory.iterate();
+    while (try iterator.next(context.io)) |entry| {
+        if (entry.kind != .file or !isolated_build.isPackageArtifact(entry.name)) continue;
+        const path = try std.fs.path.joinZ(context.allocator, &.{ artifact_directory, entry.name });
+        defer context.allocator.free(path);
+        var package: ?*raw.alpm_pkg_t = null;
+        if (raw.alpm_pkg_load(handle, path.ptr, 1, 0, &package) != 0 or package == null)
+            return error.ArtifactValidationFailed;
+        defer _ = raw.alpm_pkg_free(package.?);
+        const package_name = bindings.str(raw.alpm_pkg_get_name(package.?)) orelse
+            return error.ArtifactValidationFailed;
+        var matched = false;
+        for (expected_names, found) |expected, *was_found| {
+            if (!std.mem.eql(u8, package_name, expected)) continue;
+            if (was_found.*) return error.DuplicateBuildArtifact;
+            was_found.* = true;
+            matched = true;
+            break;
+        }
+        if (!matched) return error.UnexpectedBuildArtifact;
+    }
+    for (found) |was_found| if (!was_found) return error.MissingBuildArtifact;
+}
+
+fn buildIsolatedChildArguments(
+    allocator: std.mem.Allocator,
+    arguments: []const []const u8,
+    original_positional: ?[]const u8,
+    digest_hex: []const u8,
+) ![]const []const u8 {
+    var result: std.ArrayList([]const u8) = .empty;
+    defer result.deinit(allocator);
+    var positional_index: ?usize = null;
+    if (original_positional) |positional| {
+        for (arguments, 0..) |argument, index| {
+            if (std.mem.eql(u8, argument, positional)) positional_index = index;
+        }
+    }
+    for (arguments, 0..) |argument, index| {
+        if (std.mem.eql(u8, argument, "--isolated") or
+            std.mem.eql(u8, argument, "-i") or
+            std.mem.eql(u8, argument, "--sync-deps") or
+            std.mem.eql(u8, argument, "-s") or
+            std.mem.eql(u8, argument, "--")) continue;
+        if (positional_index != null and positional_index.? == index) continue;
+        try result.append(allocator, argument);
+    }
+    try result.appendSlice(allocator, &.{
+        "--coordinator-child",
+        "--review-digest",
+        digest_hex,
+        "--nosign",
+        isolated_build.guest_source ++ "/PKGBUILD",
+    });
+    return result.toOwnedSlice(allocator);
+}
+
+fn renderIsolatedConfiguration(
+    allocator: std.mem.Allocator,
+    configuration: *const ShellyBuildConfiguration,
+) ![]u8 {
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    errdefer output.deinit();
+    const writer = &output.writer;
+    try writer.writeAll("[build]\n");
+    try writeTomlString(writer, "carch", configuration.build.carch);
+    try writeTomlString(writer, "chost", configuration.build.chost);
+    try writeTomlArray(writer, "cppflags", configuration.build.cppflags);
+    try writeTomlArray(writer, "cflags", configuration.build.cflags);
+    try writeTomlArray(writer, "cxxflags", configuration.build.cxxflags);
+    try writeTomlArray(writer, "ldflags", configuration.build.ldflags);
+    try writeTomlArray(writer, "ltoflags", configuration.build.ltoflags);
+    try writeTomlArray(writer, "makeflags", configuration.build.makeflags);
+    try writer.print("check = {}\nccache = false\ndistcc = false\n\n", .{configuration.build.check});
+
+    try writer.writeAll("[package]\n");
+    try writeTomlString(writer, "packager", configuration.package.packager);
+    try writeTomlString(writer, "extension", configuration.package.extension);
+    try writeTomlArray(writer, "options", configuration.package.options);
+    try writeTomlArray(writer, "strip_binaries", configuration.package.strip_binaries);
+    try writeTomlArray(writer, "strip_shared", configuration.package.strip_shared);
+    try writeTomlArray(writer, "strip_static", configuration.package.strip_static);
+    try writer.writeAll("sign = false\n\n[destinations]\n");
+    try writeTomlString(writer, "build", "/build/work");
+    try writeTomlString(writer, "packages", isolated_build.guest_artifacts);
+    try writeTomlString(writer, "sources", "/build/sources");
+    try writeTomlString(writer, "logs", "/build/logs");
+    try writer.writeAll("\n[sandbox]\nenabled = false\n");
+    return output.toOwnedSlice();
+}
+
+fn writeTomlString(writer: *std.Io.Writer, key: []const u8, value: []const u8) !void {
+    try writer.print("{s} = ", .{key});
+    try writeTomlQuoted(writer, value);
+    try writer.writeByte('\n');
+}
+
+fn writeTomlArray(writer: *std.Io.Writer, key: []const u8, values: []const []const u8) !void {
+    try writer.print("{s} = [", .{key});
+    for (values, 0..) |value, index| {
+        if (index != 0) try writer.writeAll(", ");
+        try writeTomlQuoted(writer, value);
+    }
+    try writer.writeAll("]\n");
+}
+
+fn writeTomlQuoted(writer: *std.Io.Writer, value: []const u8) !void {
+    try writer.writeByte('"');
+    for (value) |byte| switch (byte) {
+        '"' => try writer.writeAll("\\\""),
+        '\\' => try writer.writeAll("\\\\"),
+        '\n' => try writer.writeAll("\\n"),
+        '\r' => try writer.writeAll("\\r"),
+        '\t' => try writer.writeAll("\\t"),
+        0x08 => try writer.writeAll("\\b"),
+        0x0c => try writer.writeAll("\\f"),
+        0x00...0x07, 0x0b, 0x0e...0x1f, 0x7f => try writer.print("\\u{X:0>4}", .{byte}),
+        else => try writer.writeByte(byte),
+    };
+    try writer.writeByte('"');
+}
+
 /// Elevated half of `--sync-deps`: resolves the PKGBUILD's dependencies
 /// against the host ALPM state, installs the missing repository packages and
 /// builds the missing AUR packages, re-executes the build as the invoking
@@ -688,7 +993,9 @@ fn runSyncDepsCoordinator(
         const executable = try std.process.executablePathAlloc(context.io, context.allocator);
         defer context.allocator.free(executable);
         const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
+        const aur_base = try aur_url.resolveFor(context, invocation);
         const aur_manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+            .aur_git_base_url = aur_base,
             .root = true,
             .check = checkOverride(invocation),
             .sign = signOverride(invocation),
@@ -754,6 +1061,30 @@ const AlpmResolverContext = struct {
         };
     }
 };
+
+/// An isolated root starts with no host packages. Repository metadata is
+/// shared for resolution, but the host local database must not suppress a
+/// dependency that still needs to be provisioned into the guest.
+const IsolatedResolverContext = struct {
+    manager: *Zigalpm.AlpmManager,
+
+    fn backend(self: *IsolatedResolverContext) Zigalpm.aur.dependency_resolver.Backend {
+        return .{
+            .context = self,
+            .is_installed = isolatedDependencyInstalled,
+            .find_repo_satisfier = isolatedRepoSatisfier,
+        };
+    }
+};
+
+fn isolatedDependencyInstalled(_: ?*anyopaque, _: [:0]const u8) bool {
+    return false;
+}
+
+fn isolatedRepoSatisfier(context: ?*anyopaque, dependency: [:0]const u8) ?[]const u8 {
+    const self: *IsolatedResolverContext = @ptrCast(@alignCast(context.?));
+    return self.manager.find_remote_satisfier_for_dependency(dependency) catch null;
+}
 
 fn alpmDependencyInstalled(context: ?*anyopaque, dependency: [:0]const u8) bool {
     const self: *AlpmResolverContext = @ptrCast(@alignCast(context.?));
@@ -1355,6 +1686,82 @@ test "sync deps options parse under both spellings" {
     try std.testing.expect(shouldElevateSyncDeps(&short_form.dispatch, false));
     try std.testing.expect(!shouldElevateSyncDeps(&long_form.dispatch, true));
     try std.testing.expect(!shouldElevateSyncDeps(&plain.dispatch, false));
+}
+
+test "isolated builds elevate only the outer coordinator" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    const outer = try parser.parse(arena.allocator(), &manifest, &.{ "build", "--isolated" });
+    const child = try parser.parse(arena.allocator(), &manifest, &.{
+        "build",
+        "--isolated",
+        "--coordinator-child",
+        "--review-digest",
+        "5a" ** std.crypto.hash.sha2.Sha256.digest_length,
+    });
+    try std.testing.expect(isolatedRequested(&outer.dispatch));
+    try std.testing.expect(shouldElevateBuildCoordinator(&outer.dispatch, false));
+    try std.testing.expect(!shouldElevateBuildCoordinator(&outer.dispatch, true));
+    try std.testing.expect(!isolatedRequested(&child.dispatch));
+    try std.testing.expect(!shouldElevateBuildCoordinator(&child.dispatch, false));
+}
+
+test "isolated child arguments remove host coordinator flags and replace the path" {
+    const arguments = [_][]const u8{
+        "build",
+        "--isolated",
+        "--sync-deps",
+        "--no-check",
+        "/host/reviewed/PKGBUILD",
+    };
+    const digest = "5a" ** std.crypto.hash.sha2.Sha256.digest_length;
+    const child = try buildIsolatedChildArguments(
+        std.testing.allocator,
+        &arguments,
+        "/host/reviewed/PKGBUILD",
+        digest,
+    );
+    defer std.testing.allocator.free(child);
+    const expected = [_][]const u8{
+        "build",
+        "--no-check",
+        "--coordinator-child",
+        "--review-digest",
+        digest,
+        "--nosign",
+        "/build/source/PKGBUILD",
+    };
+    try std.testing.expectEqualStrings(&expected, child);
+}
+
+test "isolated configuration preserves build policy and forces guest-local destinations" {
+    const configuration = try ShellyBuildConfiguration.initFromBuffers(
+        std.testing.allocator,
+        null,
+        null,
+    );
+    defer configuration.deinit();
+    const rendered = try renderIsolatedConfiguration(std.testing.allocator, configuration);
+    defer std.testing.allocator.free(rendered);
+    const parsed = try ShellyBuildConfiguration.initFromBuffers(
+        std.testing.allocator,
+        rendered,
+        null,
+    );
+    defer parsed.deinit();
+    try std.testing.expectEqualStrings(configuration.build.carch, parsed.build.carch);
+    try std.testing.expectEqualStrings(configuration.build.cflags[0], parsed.build.cflags[0]);
+    try std.testing.expectEqualStrings("/build/work", parsed.destinations.build.?);
+    try std.testing.expectEqualStrings(isolated_build.guest_artifacts, parsed.destinations.packages.?);
+    try std.testing.expect(!parsed.package.sign);
+    try std.testing.expect(!parsed.sandbox.enabled);
+}
+
+test "isolated dependency state never inherits host installations" {
+    var dependency = [_:0]u8{ 'd', 'e', 'm', 'o' };
+    try std.testing.expect(!isolatedDependencyInstalled(null, &dependency));
 }
 
 test "coordinator child builds never re-enter the sync deps coordinator" {

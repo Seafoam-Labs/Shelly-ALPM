@@ -66,6 +66,7 @@ pub const FlatpakPage = extern struct {
         populateStack(self);
 
         _ = gtk.SearchEntry.signals.search_changed.connect(p.search_entry, *Self, &onSearchChanged, self, .{});
+        _ = gtk.SearchEntry.signals.activate.connect(p.search_entry, *Self, &onSearchActivate, self, .{});
 
         _ = gtk.ListBox.signals.row_selected.connect(
             p.section_nav_list,
@@ -176,6 +177,14 @@ pub const FlatpakPage = extern struct {
         const p = self.priv();
         p.install_view.apply_search(text);
         p.remove_view.applySearch(text);
+    }
+
+    fn onSearchActivate(entry: *gtk.SearchEntry, self: *Self) callconv(.c) void {
+        const text = std.mem.span(gtk.Editable.getText(entry.as(gtk.Editable)));
+        const p = self.priv();
+        p.install_view.apply_search(text);
+        p.remove_view.applySearch(text);
+        p.install_view.show_list();
     }
 
     pub fn onMap(self: *Self) void {

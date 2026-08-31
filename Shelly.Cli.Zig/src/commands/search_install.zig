@@ -7,6 +7,7 @@ const output = @import("../output/config.zig");
 const colors = @import("../output/colors.zig");
 const format = @import("../output/format.zig");
 const runtime = @import("../runtime/context.zig");
+const aur_url = @import("../config/aur_url.zig");
 
 const command_path = "shelly";
 const maximum_results = 10;
@@ -38,8 +39,9 @@ const Discoverer = struct {
         _: @This(),
         context: *runtime.RuntimeContext,
         query: []const u8,
+        aur_base: []const u8,
     ) !DiscoveryResult {
-        return discoverReal(context, query);
+        return discoverReal(context, query, aur_base);
     }
 };
 
@@ -49,8 +51,9 @@ const Installer = struct {
         context: *runtime.RuntimeContext,
         candidate: Candidate,
         no_confirm: bool,
+        aur_override: ?[]const u8,
     ) !u8 {
-        return installReal(context, candidate, no_confirm);
+        return installReal(context, candidate, no_confirm, aur_override);
     }
 };
 
@@ -83,7 +86,10 @@ fn executeWith(
         return 1;
     }
 
-    const discovery = discoverer.call(context, query) catch |err| {
+    const aur_base = try aur_url.resolveFor(context, invocation);
+    const aur_override: ?[]const u8 = aur_base;
+
+    const discovery = discoverer.call(context, query, aur_base) catch |err| {
         try context.stderr.print("Package search failed: {t}\n", .{err});
         return 1;
     };
@@ -113,7 +119,7 @@ fn executeWith(
         try context.stdout.writeAll("Installation cancelled.\n");
         return 0;
     };
-    return installer.call(context, candidates[index], invocation.globals.no_confirm) catch |err| {
+    return installer.call(context, candidates[index], invocation.globals.no_confirm, aur_override) catch |err| {
         try context.stderr.print("Unable to start installation: {t}\n", .{err});
         return 1;
     };
@@ -122,6 +128,7 @@ fn executeWith(
 fn discoverReal(
     context: *runtime.RuntimeContext,
     query: []const u8,
+    aur_base: []const u8,
 ) !DiscoveryResult {
     var candidates: std.ArrayList(Candidate) = .empty;
     const standard_error: ?anyerror = error_value: {
@@ -129,7 +136,7 @@ fn discoverReal(
         break :error_value null;
     };
     const aur_error: ?anyerror = error_value: {
-        discoverAur(context, query, &candidates) catch |err| break :error_value err;
+        discoverAur(context, query, &candidates, aur_base) catch |err| break :error_value err;
         break :error_value null;
     };
     return .{
@@ -172,9 +179,12 @@ fn discoverAur(
     context: *runtime.RuntimeContext,
     query: []const u8,
     candidates: *std.ArrayList(Candidate),
+    aur_base: []const u8,
 ) !void {
     if (query.len < 2) return;
-    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{});
+    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+        .aur_git_base_url = aur_base,
+    });
     defer manager.deinit();
 
     const packages = try manager.searchPackages(query);
@@ -374,6 +384,7 @@ fn installReal(
     context: *runtime.RuntimeContext,
     candidate: Candidate,
     no_confirm: bool,
+    aur_override: ?[]const u8,
 ) !u8 {
     const target = if (candidate.source == .standard and candidate.repository.len > 0)
         try std.fmt.allocPrint(context.allocator, "{s}/{s}", .{ candidate.repository, candidate.name })
@@ -383,7 +394,7 @@ fn installReal(
         context,
         if (candidate.source == .standard) .standard else .aur,
         &.{target},
-        .{ .no_confirm = no_confirm },
+        .{ .no_confirm = no_confirm, .aur_url = aur_override },
     );
 }
 
@@ -503,16 +514,19 @@ test "no-confirm installs the final closest candidate and preserves partial resu
         installed_name: ?[]const u8 = null,
         source: ?Source = null,
         no_confirm: bool = false,
+        aur_override: ?[]const u8 = null,
 
         fn call(
             self: *@This(),
             _: *runtime.RuntimeContext,
             candidate: Candidate,
             no_confirm: bool,
+            aur_override: ?[]const u8,
         ) !u8 {
             self.installed_name = candidate.name;
             self.source = candidate.source;
             self.no_confirm = no_confirm;
+            self.aur_override = aur_override;
             return 23;
         }
     };
@@ -522,6 +536,7 @@ test "no-confirm installs the final closest candidate and preserves partial resu
             _: @This(),
             _: *runtime.RuntimeContext,
             query: []const u8,
+            _: []const u8,
         ) !DiscoveryResult {
             try std.testing.expectEqualStrings("demo", query);
             return .{
@@ -541,5 +556,6 @@ test "no-confirm installs the final closest candidate and preserves partial resu
     try std.testing.expectEqualStrings("demo", capture.installed_name.?);
     try std.testing.expectEqual(Source.standard, capture.source.?);
     try std.testing.expect(capture.no_confirm);
+    try std.testing.expectEqualStrings(aur_url.default_base, capture.aur_override.?);
     try std.testing.expect(std.mem.indexOf(u8, tc.stderr.writer.buffered(), "warning: AUR package search failed") != null);
 }

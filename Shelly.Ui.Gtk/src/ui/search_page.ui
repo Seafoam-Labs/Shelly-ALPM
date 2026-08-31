@@ -167,7 +167,7 @@
                 </child>
                 <child>
                   <object class="GtkLabel" id="placeholder_subtitle">
-                    <property name="label" translatable="yes">Search standard repositories, the AUR and Flatpak at once. Type a name to begin.</property>
+                    <property name="label" translatable="yes">Search the standard repositories, the AUR, and Flatpak all at once. Type a name to begin.</property>
                     <property name="wrap">true</property>
                     <property name="justify">center</property>
                     <property name="max-width-chars">40</property>

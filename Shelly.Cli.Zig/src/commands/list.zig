@@ -12,6 +12,7 @@ const shortcodes = @import("../cli/shortcodes.zig");
 const runtime = @import("../runtime/context.zig");
 const spec = @import("../cli/spec.zig");
 const xdg = @import("../runtime/xdg.zig");
+const aur_url = @import("../config/aur_url.zig");
 
 const standard_command_path = "shelly list standard";
 const appimage_command_path = "shelly list appimage";
@@ -24,6 +25,7 @@ const ListOptions = struct {
     show_hidden: bool = false,
     required_by: bool = false,
     optional_for: bool = false,
+    aur_url: ?[]const u8 = null,
 };
 
 pub const StandardItem = struct {
@@ -177,6 +179,7 @@ fn dispatchWithRunner(
             .show_hidden = optionEnabled(invocation, "--show-hidden"),
             .required_by = optionEnabled(invocation, "--required-by"),
             .optional_for = optionEnabled(invocation, "--optional-for"),
+            .aur_url = aur_url.overrideValue(invocation),
         },
     ) catch |err| {
         try writeQueryFailure(context, invocation, backend, err);
@@ -1054,7 +1057,9 @@ fn runAur(context: *runtime.RuntimeContext, options: ListOptions) !Result {
     const database_path = try xdg.shellyCache(context, &.{"db"});
     defer context.allocator.free(database_path);
     try std.Io.Dir.cwd().createDirPath(context.io, database_path);
+    const aur_base = try aur_url.resolve(context, options.aur_url);
     const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+        .aur_git_base_url = aur_base,
         .use_temp_path = true,
         .temp_path = database_path,
         .show_hidden_packages = options.show_hidden,

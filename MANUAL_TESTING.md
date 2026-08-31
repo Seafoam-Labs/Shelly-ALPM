@@ -150,6 +150,19 @@ tests.
 - [ ] AUR installation works from CLI
 - [ ] AUR updates work from CLI
 
+### Custom AUR Base URL (Atoll Compatibility)
+
+- [ ] Configure custom base URL: `shelly config set AurUrl https://atoll.seafoam-labs.org`
+- [ ] Verify RPC search and package info queries against the configured base
+- [ ] Verify `shelly search aur --pkgbuild <pkg>` retrieves `PKGBUILD` via Git checkout instead of cgit
+- [ ] Install normal package and split package from the custom base
+- [ ] Verify AUR dependency and provider resolution work against custom base
+- [ ] Verify list, list-updates, update, remove, and upgrade operations work with custom base
+- [ ] Verify aggregate commands (`upgrade all`, `list-updates all`) use custom base for their AUR branch
+- [ ] Verify elevated operations still use the invoking user's `AurUrl` setting
+- [ ] Verify `--aur-url` overrides the persistent `AurUrl` setting per command
+- [ ] Switch back to official base (`shelly config set AurUrl https://aur.archlinux.org`) and verify checkout origin replacement safeguard
+
 ### Sandboxed AUR Builds (Landlock)
 Requires a kernel with Landlock enabled (check `cat /sys/kernel/security/lsm`).
 - [ ] `shelly build --makesrcinfo --reviewed PKGBUILD > .SRCINFO` matches

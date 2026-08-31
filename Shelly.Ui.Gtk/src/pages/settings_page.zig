@@ -21,7 +21,7 @@ const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const VersionHistoryDialog = @import("../dialog/page/version_history.zig").VersionHistoryDialog;
 const HistoryEntry = @import("../dialog/page/version_history.zig").Entry;
-const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
+const AurWarningDialog = @import("../dialog/page/aur_warning.zig").AurWarningDialog;
 const translations = @import("../helpers/translations.zig");
 const options = @import("options");
 
@@ -1009,15 +1009,10 @@ pub const ShellySettingsPage = extern struct {
 
         gtk.Switch.setActive(p.aur_switch, 0);
 
-        const dialog = ConfirmDialog.new(
-            translations._("Enable AUR?"),
-            translations._("The Arch User Repository (AUR) is a community-driven repository. Packages are user-produced and may contain risks. Do you want to enable it?"),
-            &on_aur_confirmation_response,
-            self,
-        );
-        dialog.setButtons(translations._("Enable"), translations._("Cancel"));
+        const dialog = AurWarningDialog.new(&on_aur_confirmation_response, self);
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.showLockout(dialog.as(gtk.Widget));
+            dialog.focusCancel();
         }
     }
 

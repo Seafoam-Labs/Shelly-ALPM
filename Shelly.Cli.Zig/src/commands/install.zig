@@ -13,6 +13,7 @@ const runtime = @import("../runtime/context.zig");
 const elevation = @import("../runtime/elevation.zig");
 const xdg = @import("../runtime/xdg.zig");
 const spec = @import("../cli/spec.zig");
+const aur_url = @import("../config/aur_url.zig");
 
 const standard_command_path = "shelly install standard";
 const appimage_command_path = "shelly install appimage";
@@ -60,6 +61,7 @@ pub const Backend = enum {
 pub const CallOptions = struct {
     no_confirm: bool = false,
     ui_mode: bool = false,
+    aur_url: ?[]const u8 = null,
 };
 
 pub const Caller = struct {
@@ -114,6 +116,10 @@ fn callArguments(
     try arguments.append(allocator, @tagName(backend));
     if (options.no_confirm) try arguments.append(allocator, "--no-confirm");
     if (options.ui_mode) try arguments.append(allocator, "--ui-mode");
+    if (options.aur_url) |url| {
+        try arguments.append(allocator, "--aur-url");
+        try arguments.append(allocator, url);
+    }
     try arguments.appendSlice(allocator, targets);
     return arguments.toOwnedSlice(allocator);
 }
@@ -127,7 +133,7 @@ test "internal install calls preserve targets and automatic-answer globals" {
         allocator,
         .standard,
         &.{ "base", "linux" },
-        .{ .no_confirm = true, .ui_mode = true },
+        .{ .no_confirm = true, .ui_mode = true, .aur_url = "https://atoll.seafoam-labs.org" },
     );
     const manifest = try spec.Manifest.load(allocator);
     const outcome = try parser.parse(allocator, &manifest, arguments);
@@ -136,6 +142,7 @@ test "internal install calls preserve targets and automatic-answer globals" {
     try std.testing.expectEqualStrings(standard_command_path, outcome.dispatch.command.path);
     try std.testing.expect(outcome.dispatch.globals.no_confirm);
     try std.testing.expect(outcome.dispatch.globals.ui_mode);
+    try std.testing.expectEqualStrings("https://atoll.seafoam-labs.org", aur_url.overrideValue(&outcome.dispatch).?);
     try std.testing.expectEqual(@as(usize, 2), outcome.dispatch.positionals.len);
     try std.testing.expectEqualStrings("base", outcome.dispatch.positionals[0]);
     try std.testing.expectEqualStrings("linux", outcome.dispatch.positionals[1]);
@@ -229,7 +236,13 @@ pub fn dispatch(
             if (elevated_exit) |exit_code| return exit_code;
         }
     } else if (!invocation.globals.ui_mode and needsElevation(invocation)) {
-        const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
+        const carries_aur = std.mem.eql(u8, invocation.command.path, aur_command_path);
+        const elevated_arguments = if (carries_aur)
+            try aur_url.argumentsWithEffectiveBase(context, invocation)
+        else
+            invocation.arguments;
+        defer if (carries_aur) context.allocator.free(elevated_arguments);
+        const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
             try context.stderr.print("Unable to elevate install: {t}\n", .{err});
             return 1;
         };
@@ -267,7 +280,7 @@ fn requestsStandardUpgrade(invocation: *const parser.Invocation) bool {
 }
 
 fn confirmStandardUpgrade(context: *runtime.RuntimeContext) !bool {
-    var result = list_updates.collectUpdates(context, .standard, false, false) catch |err| {
+    var result = list_updates.collectUpdates(context, .standard, .{}) catch |err| {
         try context.stderr.print("Unable to prepare the standard upgrade plan: {t}\n", .{err});
         try context.stderr.flush();
         return err;
@@ -323,7 +336,7 @@ fn confirmStandardUpgradeWithUpdates(
 }
 
 fn confirmStandardUpgradeUi(context: *runtime.RuntimeContext) !bool {
-    var result = list_updates.collectUpdates(context, .standard, false, false) catch |err| {
+    var result = list_updates.collectUpdates(context, .standard, .{}) catch |err| {
         const message = try std.fmt.allocPrint(
             context.allocator,
             "Unable to prepare the standard upgrade plan: {t}",
@@ -598,7 +611,9 @@ fn runAur(
     const executable = try std.process.executablePathAlloc(context.io, context.allocator);
     defer context.allocator.free(executable);
     const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
+    const aur_base = try aur_url.resolveFor(context, invocation);
     const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+        .aur_git_base_url = aur_base,
         .root = true,
         .use_chroot = optionEnabled(invocation, "--chroot"),
         .check = checkOverride(invocation),

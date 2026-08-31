@@ -7,6 +7,7 @@ const ui_operation = @import("../output/ui_operation.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const elevation = @import("../runtime/elevation.zig");
+const aur_url = @import("../config/aur_url.zig");
 
 const standard_command_path = "shelly update standard";
 const aur_command_path = "shelly update aur";
@@ -54,11 +55,17 @@ pub fn dispatch(
     }
 
     if (!invocation.globals.ui_mode and needsElevation(invocation) and !elevation.isRoot()) {
-        const elevated_arguments = if (is_standard and confirmed_standard)
-            try argumentsWithNoConfirm(context.allocator, invocation.arguments)
+        const carries_aur = std.mem.eql(u8, invocation.command.path, aur_command_path);
+        const aur_arguments = if (carries_aur)
+            try aur_url.argumentsWithEffectiveBase(context, invocation)
         else
             invocation.arguments;
-        defer if (elevated_arguments.ptr != invocation.arguments.ptr)
+        defer if (carries_aur) context.allocator.free(aur_arguments);
+        const elevated_arguments = if (is_standard and confirmed_standard)
+            try argumentsWithNoConfirm(context.allocator, aur_arguments)
+        else
+            aur_arguments;
+        defer if (elevated_arguments.ptr != aur_arguments.ptr)
             context.allocator.free(elevated_arguments);
 
         const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
@@ -232,7 +239,9 @@ fn runAur(
     const executable = try std.process.executablePathAlloc(context.io, context.allocator);
     defer context.allocator.free(executable);
     const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
+    const aur_base = try aur_url.resolveFor(context, invocation);
     const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+        .aur_git_base_url = aur_base,
         .root = true,
         .check = checkOverride(invocation),
         .sign = signOverride(invocation),

@@ -199,6 +199,7 @@ pub const OperationKind = operation.OperationKind;
 pub const OperationStatusLevel = operation.StatusLevel;
 pub const OperationCompletionStatus = operation.CompletionStatus;
 pub const OperationQuestion = operation.Question;
+pub const OperationPurpose = operation.QuestionPurpose;
 pub const OperationQuestionRequest = operation.QuestionRequest;
 pub const OperationQuestionResponse = operation.QuestionResponse;
 pub const OperationQuestionKind = operation.QuestionKind;

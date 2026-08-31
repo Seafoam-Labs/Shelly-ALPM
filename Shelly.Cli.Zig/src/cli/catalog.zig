@@ -45,6 +45,11 @@ pub const root_options = [_]Option{
     core.globalFlag("--no-confirm", &.{"-n"}, "Use safe automatic answers instead of prompting"),
     core.globalFlag("--ui-mode", &.{"-U"}, "Emit framed output for the Shelly UI"),
     core.globalFlag("--json", &.{"-j"}, "Output structured JSON where the command supports it"),
+    core.globalStringOption(
+        "--aur-url",
+        &.{},
+        "Base URL of the AUR service used for Git clones and RPC requests",
+    ),
     hiddenGlobalFlag(
         "--auto-confirm-cache-clean",
         "Preserve the invoking user's cache-clean policy across elevation",

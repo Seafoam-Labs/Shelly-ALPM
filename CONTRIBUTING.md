@@ -141,6 +141,25 @@ Navigate to:
 
 This folder contains the localization  files used by the application.
 
+### Desktop entries
+
+The application menu strings live outside the `po/` catalogs, in the desktop
+entries that the packages install:
+
+```
+├── com.shellyorg.shelly.desktop
+├── com.shellyorg.shelly-notifications.desktop
+├── shelly-flatpak-integrate
+```
+
+To translate them, add `Name[xx]=`, `Comment[xx]=` and `Keywords[xx]=` lines
+next to the English ones, where `xx` is your locale code. Keep the English
+words in `Keywords[xx]` so searches in either language still match. The
+PKGBUILDs install these files as-is, so a new language never adds lines to
+them; only run `updpkgsums` on `PKGBUILD`, `PKGBUILD-bin` and `PKGBUILD-git`
+afterwards so the recorded checksums match. Run `desktop-file-validate` on the
+two `.desktop` files before submitting.
+
 ### Build and Test
 
 1. Build the application

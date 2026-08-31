@@ -41,7 +41,8 @@ without acquiring sources or invoking lifecycle functions.
 |---|---|
 | `builder.zig` | **Orchestrator + public API.** `PackageBuilder` (init/run/runWithOperation/writeSrcinfoWithOperation/BuildPackage), review re-check, sandbox-evaluated scalar/array reparse, final all-members or explicit split-member selection, cardinality-safe ownership of evaluated builds, SRCINFO metadata preparation, and lifecycle sequencing, plus the public types `BuildArtifact`, `BuildOptions`, `BuilderErrors`, `FailureLocation`. Re-exports the security entry points and the review/validation modules so external callers (`aur/manager.zig`, `root.zig`, the CLI) only import this file. |
 | `source_spec.zig` | **Pure source-entry parsing.** `ParsedSource.parse` classifies `source=()` entries (local/http/git), handles `name::url` renames, `#branch=/tag=/commit=` fragments and `?signed` queries; detached-signature pairing (`findDetachedPayload`); archive-name and symlink-target safety checks. No IO, no builder state — fully unit-tested in-file. |
-| `checksums.zig` | **Checksum tables.** Maps the seven PKGBUILD sum arrays (`sha512sums` … `b2sums`) into `checksumSets`, enforces count/SKIP rules, and verifies file hashes (`verifyFileHash`). |
+| `checksums.zig` | **Checksum tables.** Maps the seven PKGBUILD sum arrays (`sha512sums` … `b2sums`) into `checksumSets`, enforces count/SKIP rules, and verifies file hashes (`verifyFileHash`). Pinned Git tags and commits are verified against deterministic archives, matching makepkg. |
+| `virtual_ownership.zig` | **Virtual package ownership.** Parses the bounded package-step ownership journal, resolves numeric and named UID/GID specifications, tracks ownership by inode across renames and hard links, and converts surviving objects into the shared archive/MTREE metadata view without changing host ownership. |
 | `metadata.zig` | **Metadata + option helpers.** makepkg option merging (`effectivePackageOptions`, `!option` semantics), `pkgver` validation, ownership-safe replacement of optional strings/arrays, and application of runtime-captured package metadata onto the parsed PKGBUILD (`applyPackageMetadata`). |
 | `security.zig` | **Privilege guards.** Non-root effective-UID policy, `prctl(NO_NEW_PRIVS)` process lockdown (`setNoNewPrivs` is shared with the sandbox wrapper), randomized unique work directories, and `narrowBuilderError` (anyerror → `BuilderErrors`). |
 | `sandbox.zig` | **Landlock step confinement.** Raw Landlock syscalls (ruleset create/add-rule/restrict-self), the ABI probe, the base and per-build allow-list, the `__sandbox-exec` wrapper protocol (`parseWrapperArguments`/`buildWrappedCommand`), and their unit tests. Steps re-execute through the CLI wrapper so only the untrusted bash children are confined. |
@@ -76,8 +77,9 @@ accessible across files, so no getters are needed.
   `security.zig` privilege handling, `sandbox.zig` Landlock confinement
   (allow-list construction and the `__sandbox-exec` wrapper protocol), and
   the virtual-metadata prelude in `steps.zig` (fakeroot simulation that
-  rejects privileged operations with exit code 97 →
-  `PrivilegedPackageOperationUnsupported`).
+  records ownership requests without host `chown`, writes the requested
+  UID/GID into package metadata, and rejects unsupported operations with exit
+  code 97 → `PrivilegedPackageOperationUnsupported`).
 - **Integrity model:** nothing executes until the reviewed digest matches
   (`builder.zig` `runWithOperation`). Deferred source commands execute only
   after that check and inside the configured build sandbox. A resolved local

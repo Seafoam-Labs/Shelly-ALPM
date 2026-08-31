@@ -13,6 +13,7 @@ const security = @import("security.zig");
 const steps = @import("steps.zig");
 const sources = @import("sources.zig");
 const package_file = @import("package_file.zig");
+const virtual_ownership = @import("virtual_ownership.zig");
 const srcinfo = @import("../srcinfo.zig");
 
 pub const pkgbuild_validation = @import("pkgbuild_validation.zig");
@@ -36,6 +37,7 @@ test {
     _ = @import("steps.zig");
     _ = @import("sources.zig");
     _ = @import("package_file.zig");
+    _ = @import("virtual_ownership.zig");
 }
 
 pub const BuildArtifact = struct {
@@ -148,6 +150,9 @@ pub const PackageBuilder = struct {
     /// number of selected split-package members. The inputs passed to init are
     /// borrowed, so only this replacement slice is released by deinit.
     evaluated_package_builds: ?[]PackageBuild = null,
+    /// Ownership requested by the currently executing package step. This is
+    /// converted to archive metadata and cleared before the next split member.
+    virtual_ownership_tracker: ?virtual_ownership.Tracker = null,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -180,6 +185,7 @@ pub const PackageBuilder = struct {
     }
 
     pub fn deinit(self: *PackageBuilder) void {
+        self.clearVirtualOwnership();
         if (self.evaluated_package_builds) |builds| {
             for (builds) |*package_build| package_build.deinit(self.allocator);
             self.allocator.free(builds);
@@ -189,6 +195,11 @@ pub const PackageBuilder = struct {
             self.allocator.free(names);
         }
         self.allocator.destroy(self);
+    }
+
+    pub fn clearVirtualOwnership(self: *PackageBuilder) void {
+        if (self.virtual_ownership_tracker) |*tracker| tracker.deinit();
+        self.virtual_ownership_tracker = null;
     }
 
     pub fn BuildPackage(self: *PackageBuilder) BuilderErrors![]BuildArtifact {
@@ -466,20 +477,24 @@ pub const PackageBuilder = struct {
                 return error.MissingExecutionSteps;
             const package_step = steps.findPackageStep(package_execution.steps) orelse
                 return error.MissingPackageStep;
-            try steps.runStep(
-                self,
-                operation,
-                requested_name,
-                package_step.name,
-                package_execution.package_prelude,
-                package_execution.package_helpers,
-                package_step.body,
-                null,
-            );
-            if (!metadata.reviewedAuxiliarySelectionMatches(approved_install, package_build.install_file) or
-                !metadata.reviewedAuxiliarySelectionMatches(approved_changelog, package_build.changelog_file))
-                return error.ReviewedPkgbuildChanged;
-            const artifact = try package_file.assemblePackage(self, package_build);
+            const artifact = artifact: {
+                self.clearVirtualOwnership();
+                defer self.clearVirtualOwnership();
+                try steps.runStep(
+                    self,
+                    operation,
+                    requested_name,
+                    package_step.name,
+                    package_execution.package_prelude,
+                    package_execution.package_helpers,
+                    package_step.body,
+                    null,
+                );
+                if (!metadata.reviewedAuxiliarySelectionMatches(approved_install, package_build.install_file) or
+                    !metadata.reviewedAuxiliarySelectionMatches(approved_changelog, package_build.changelog_file))
+                    return error.ReviewedPkgbuildChanged;
+                break :artifact try package_file.assemblePackage(self, package_build);
+            };
             artifacts.append(self.allocator, artifact) catch |err| {
                 package_file.removePublishedArtifact(self, artifact.path);
                 artifact.deinit(self.allocator);

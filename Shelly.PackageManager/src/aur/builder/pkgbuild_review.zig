@@ -10,6 +10,7 @@ pub const Digest = [std.crypto.hash.sha2.Sha256.digest_length]u8;
 pub const ReviewedFile = struct {
     name: []const u8,
     contents: []const u8,
+    permissions: u32,
 };
 
 const binary_review_message =
@@ -21,9 +22,9 @@ pub const PreparedPkgbuildReview = struct {
     findings: []operation_api.ReviewFinding,
     related_files: []operation_api.QuestionAttachment,
     reviewed_file_names: []const []const u8,
-    /// Byte-exact snapshots for every reviewed local, install, and changelog
-    /// file. Packaging consumes these bytes rather than reopening paths after
-    /// approval.
+    /// Byte-exact snapshots and permission bits for every reviewed local,
+    /// install, and changelog file. Packaging consumes these snapshots rather
+    /// than reopening paths after approval.
     reviewed_files: []const ReviewedFile,
     /// Exact reviewed bytes for every distinct package install script.
     install_scripts: []install_script.Script,
@@ -114,6 +115,7 @@ pub fn preparePkgbuildReview(
     for (file_names, related_files, reviewed_files) |file_name, *attachment, *reviewed_file| {
         try review_integrity.requireReviewedFile(allocator, io, build_directory, file_name);
         const path = try std.fs.path.join(allocator, &.{ build_directory, file_name });
+        const stat = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
         const content = try std.Io.Dir.cwd().readFileAlloc(
             io,
             path,
@@ -124,7 +126,11 @@ pub fn preparePkgbuildReview(
             .name = file_name,
             .content = if (std.unicode.utf8ValidateSlice(content)) content else binary_review_message,
         };
-        reviewed_file.* = .{ .name = file_name, .contents = content };
+        reviewed_file.* = .{
+            .name = file_name,
+            .contents = content,
+            .permissions = stat.permissions.toMode() & 0o777,
+        };
         if (install_names.contains(file_name)) {
             scripts[script_count] = try install_script.Script.init(allocator, file_name, content);
             script_count += 1;
@@ -199,7 +205,10 @@ fn findInstallScript(
 fn digestLoadedReview(pkgbuild_content: []const u8, files: anytype) Digest {
     var hash = std.crypto.hash.sha2.Sha256.init(.{});
     hashReviewField(&hash, "PKGBUILD", pkgbuild_content);
-    for (files) |file| hashReviewField(&hash, file.name, file.contents);
+    for (files) |file| {
+        hashReviewField(&hash, file.name, file.contents);
+        hashReviewMode(&hash, file.permissions);
+    }
     var digest: Digest = undefined;
     hash.final(&digest);
     return digest;
@@ -226,10 +235,18 @@ fn digestReview(
         );
         defer allocator.free(content);
         hashReviewField(&hash, file_name, content);
+        const stat = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
+        hashReviewMode(&hash, stat.permissions.toMode() & 0o777);
     }
     var digest: Digest = undefined;
     hash.final(&digest);
     return digest;
+}
+
+fn hashReviewMode(hash: *std.crypto.hash.sha2.Sha256, permissions: u32) void {
+    var encoded: [4]u8 = undefined;
+    std.mem.writeInt(u32, &encoded, permissions, .little);
+    hashReviewField(hash, "permissions", &encoded);
 }
 
 fn hashReviewField(
@@ -257,6 +274,7 @@ test "aggregate split-package review includes member-specific files and detects 
     const build_directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
     defer allocator.free(build_directory);
     try temporary.dir.writeFile(io, .{ .sub_path = "one.patch", .data = "one\n" });
+    try temporary.dir.setFilePermissions(io, "one.patch", .fromMode(0o644), .{});
     try temporary.dir.writeFile(io, .{ .sub_path = "one.changelog", .data = "release one\n" });
     const install_contents =
         "helper() { true; }\n" ++
@@ -308,6 +326,13 @@ test "aggregate split-package review includes member-specific files and detects 
         review.verifyCurrent(allocator, io, pkgbuild_path, build_directory),
     );
     try temporary.dir.writeFile(io, .{ .sub_path = "two.install", .data = install_contents });
+    try review.verifyCurrent(allocator, io, pkgbuild_path, build_directory);
+    try temporary.dir.setFilePermissions(io, "one.patch", .fromMode(0o755), .{});
+    try std.testing.expectError(
+        error.ReviewedPkgbuildChanged,
+        review.verifyCurrent(allocator, io, pkgbuild_path, build_directory),
+    );
+    try temporary.dir.setFilePermissions(io, "one.patch", .fromMode(0o644), .{});
     try review.verifyCurrent(allocator, io, pkgbuild_path, build_directory);
     try temporary.dir.writeFile(io, .{ .sub_path = "one.patch", .data = "changed\n" });
     try std.testing.expectError(

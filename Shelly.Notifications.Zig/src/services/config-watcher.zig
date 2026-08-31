@@ -1,6 +1,7 @@
 const std = @import("std");
 const linux = std.os.linux;
 const ConfigResolver = @import("config.zig").ConfigResolver;
+const runtime = @import("../runtime.zig");
 
 const log = std.log.scoped(.watcher);
 
@@ -100,6 +101,7 @@ pub const ConfigWatcher = struct {
                     continue;
                 };
                 log.info("config reloaded from disk", .{});
+                runtime.wakeWorker();
             }
         }
     }

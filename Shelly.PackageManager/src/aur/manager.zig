@@ -13,6 +13,7 @@ const source_pgp_keyring = @import("../shared/source_pgp_keyring.zig");
 
 pub const models = @import("models.zig");
 pub const rpc = @import("rpc_client.zig");
+pub const endpoints = @import("endpoints.zig");
 pub const vcs = @import("vcs.zig");
 pub const srcinfo = @import("srcinfo.zig");
 pub const events = @import("events.zig");
@@ -219,11 +220,10 @@ pub const Manager = struct {
         else
             try std.fs.path.join(allocator, &.{ cache_home, "Shelly" });
         errdefer allocator.free(cache_root);
-        const aur_git_base_url = try allocator.dupe(
-            u8,
-            std.mem.trimEnd(u8, options.aur_git_base_url, "/"),
-        );
+        const aur_git_base_url = try endpoints.normalizeBase(allocator, options.aur_git_base_url);
         errdefer allocator.free(aur_git_base_url);
+        const aur_rpc_url = try endpoints.rpcUrl(allocator, aur_git_base_url);
+        defer allocator.free(aur_rpc_url);
         const makepkg_command = if (options.makepkg_command) |command|
             try allocator.dupe(u8, command)
         else
@@ -248,7 +248,7 @@ pub const Manager = struct {
             .allocator = allocator,
             .environ = environ,
             .alpm = alpm,
-            .aur_client = rpc.Client.init(allocator, alpm.io()),
+            .aur_client = try rpc.Client.init(allocator, alpm.io(), aur_rpc_url),
             .dispatcher = events.Dispatcher.init(allocator),
             .vcs_store = vcs.Store.init(allocator),
             .pkgbase_cache = std.StringHashMap([]u8).init(allocator),
@@ -319,6 +319,10 @@ pub const Manager = struct {
 
     pub fn io(self: *Self) std.Io {
         return self.alpm.io();
+    }
+
+    fn usesOfficialAur(self: *const Self) bool {
+        return endpoints.isOfficialBase(self.aur_git_base_url);
     }
 
     /// Borrows a shared context and forwards it to nested ALPM and HTTP work.
@@ -634,17 +638,66 @@ pub const Manager = struct {
         }
     }
 
-    pub fn fetchPkgbuild(self: *Self, package_name: []const u8) ![]u8 {
+    pub fn fetchPkgbuild(self: *Self, package_name: []const u8) !?[]u8 {
         var operation_scope = OperationScope.init(self, .download, package_name);
         operation_scope.attach();
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try self.checkCancelled();
+        if (!self.usesOfficialAur()) return self.fetchPkgbuildFromCheckout(package_name);
         const package_base = try self.resolvePkgbase(package_name);
         const message = try std.fmt.allocPrint(self.allocator, "Fetching PKGBUILD for {s} ({s})", .{ package_name, package_base });
         defer self.allocator.free(message);
         self.raiseInfo(.informational_output, package_name, message, null, null);
-        return self.aur_client.fetchPkgbuild(package_base);
+        return self.aur_client.fetchPkgbuild(package_base) catch |err| switch (err) {
+            error.Cancelled, error.OutOfMemory => return err,
+            else => null,
+        };
+    }
+
+    /// Fetches a PKGBUILD for custom bases by cloning or updating `{base}/{pkgbase}.git`.
+    fn fetchPkgbuildFromCheckout(self: *Self, package_name: []const u8) !?[]u8 {
+        const package_base = (try self.resolveCustomPkgbase(package_name)) orelse return null;
+        const message = try std.fmt.allocPrint(self.allocator, "Fetching PKGBUILD for {s} ({s})", .{ package_name, package_base });
+        defer self.allocator.free(message);
+        self.raiseInfo(.informational_output, package_name, message, null, null);
+        if (!(try self.downloadPackageBase(package_base))) {
+            const cache_path = try self.cachePath(package_base);
+            defer self.allocator.free(cache_path);
+            const git_dir = try std.fs.path.join(self.allocator, &.{ cache_path, ".git" });
+            defer self.allocator.free(git_dir);
+            const pkgbuild_path = try std.fs.path.join(self.allocator, &.{ cache_path, "PKGBUILD" });
+            defer self.allocator.free(pkgbuild_path);
+            // A checkout without a PKGBUILD failed retrieval, not the clone.
+            if (std.Io.Dir.cwd().statFile(self.io(), git_dir, .{})) |_| {
+                _ = std.Io.Dir.cwd().statFile(self.io(), pkgbuild_path, .{}) catch
+                    return error.AurPkgbuildMissing;
+            } else |_| {}
+            return error.AurGitCheckoutFailed;
+        }
+        const cache_path = try self.cachePath(package_base);
+        defer self.allocator.free(cache_path);
+        const pkgbuild_path = try std.fs.path.join(self.allocator, &.{ cache_path, "PKGBUILD" });
+        defer self.allocator.free(pkgbuild_path);
+        return std.Io.Dir.cwd().readFileAlloc(self.io(), pkgbuild_path, self.allocator, .limited(max_file_size)) catch
+            return error.AurPkgbuildMissing;
+    }
+
+    /// Resolves the package base for custom bases via cache or RPC lookup.
+    fn resolveCustomPkgbase(self: *Self, package_name: []const u8) !?[]const u8 {
+        if (std.mem.trim(u8, package_name, " \t\r\n").len == 0) return package_name;
+        if (self.pkgbase_cache.get(package_name)) |cached| return cached;
+        var response = try self.aur_client.getInfo(&.{package_name});
+        defer response.deinit(self.allocator);
+        if (response.results.len == 0) {
+            if (std.mem.eql(u8, response.response_type, "error")) return error.AurRpcLookupFailed;
+            return null;
+        }
+        const package_base = if (response.results[0].package_base.len > 0)
+            response.results[0].package_base
+        else
+            package_name;
+        return try self.cachePkgbase(package_name, package_base);
     }
 
     pub fn installDependenciesOnly(self: *Self, package_name: []const u8, include_make_dependencies: bool) !void {
@@ -1924,6 +1977,7 @@ pub const Manager = struct {
     }
 
     fn cachePkgbase(self: *Self, package_name: []const u8, package_base: []const u8) ![]const u8 {
+        if (!endpoints.isValidPackageBase(package_base)) return error.InvalidAurPackageBase;
         const key = try self.allocator.dupe(u8, package_name);
         errdefer self.allocator.free(key);
         const value = try self.allocator.dupe(u8, package_base);
@@ -1935,28 +1989,43 @@ pub const Manager = struct {
     fn tryResolveFromSrcinfo(self: *Self, package_name: []const u8) !?[]u8 {
         const direct_dir = try self.cachePath(package_name);
         defer self.allocator.free(direct_dir);
-        const direct = try std.fs.path.join(self.allocator, &.{ direct_dir, ".SRCINFO" });
-        defer self.allocator.free(direct);
-        if (srcinfo.parseFile(self.allocator, self.io(), direct)) |info_value| {
-            var info = info_value;
-            defer info.deinit(self.allocator);
-            if (info.contains(package_name) and info.package_base != null)
-                return @as(?[]u8, try self.allocator.dupe(u8, info.package_base.?));
-        } else |_| {}
+        if (try self.srcinfoPackageBase(direct_dir, package_name)) |package_base| return package_base;
 
         var root = std.Io.Dir.cwd().openDir(self.io(), self.cache_root, .{ .iterate = true }) catch return null;
         defer root.close(self.io());
         var iterator = root.iterate();
         while (try iterator.next(self.io())) |entry| {
             if (entry.kind != .directory) continue;
-            const path = try std.fs.path.join(self.allocator, &.{ self.cache_root, entry.name, ".SRCINFO" });
-            defer self.allocator.free(path);
-            var info = srcinfo.parseFile(self.allocator, self.io(), path) catch continue;
-            defer info.deinit(self.allocator);
-            if (info.contains(package_name) and info.package_base != null)
-                return @as(?[]u8, try self.allocator.dupe(u8, info.package_base.?));
+            const directory = try std.fs.path.join(self.allocator, &.{ self.cache_root, entry.name });
+            defer self.allocator.free(directory);
+            if (try self.srcinfoPackageBase(directory, package_name)) |package_base| return package_base;
         }
         return null;
+    }
+
+    /// Reads `.SRCINFO` package base, verifying Git origin for custom bases.
+    fn srcinfoPackageBase(self: *Self, directory: []const u8, package_name: []const u8) !?[]u8 {
+        const path = try std.fs.path.join(self.allocator, &.{ directory, ".SRCINFO" });
+        defer self.allocator.free(path);
+        var info = srcinfo.parseFile(self.allocator, self.io(), path) catch return null;
+        defer info.deinit(self.allocator);
+        if (!(info.contains(package_name) and info.package_base != null)) return null;
+        const package_base = info.package_base.?;
+        if (!self.usesOfficialAur() and !try self.checkoutOriginMatchesBase(directory, package_base)) return null;
+        return @as(?[]u8, try self.allocator.dupe(u8, package_base));
+    }
+
+    /// Checks that a checkout's origin remote matches the configured AUR base.
+    fn checkoutOriginMatchesBase(self: *Self, directory: []const u8, package_base: []const u8) !bool {
+        const git_directory = try std.fs.path.join(self.allocator, &.{ directory, ".git" });
+        defer self.allocator.free(git_directory);
+        _ = std.Io.Dir.cwd().statFile(self.io(), git_directory, .{}) catch return false;
+        var result = try self.runAsInvokingUser(&.{ "git", "-C", directory, "remote", "get-url", "origin" }, null, null);
+        defer result.deinit(self.allocator);
+        if (result.exit_code != 0) return false;
+        const parsed = (try parseAurGitRemote(self.allocator, self.aur_git_base_url, std.mem.trim(u8, result.stdout, " \t\r\n"))) orelse return false;
+        defer self.allocator.free(parsed);
+        return std.mem.eql(u8, parsed, package_base);
     }
 
     fn tryResolveFromGitRemote(self: *Self, package_name: []const u8) !?[]u8 {
@@ -1968,18 +2037,19 @@ pub const Manager = struct {
         var result = try self.runAsInvokingUser(&.{ "git", "-C", directory, "remote", "get-url", "origin" }, null, null);
         defer result.deinit(self.allocator);
         if (result.exit_code != 0) return null;
-        return parseAurGitRemote(self.allocator, std.mem.trim(u8, result.stdout, " \t\r\n"));
+        return parseAurGitRemote(self.allocator, self.aur_git_base_url, std.mem.trim(u8, result.stdout, " \t\r\n"));
     }
 
     fn downloadPackage(self: *Self, package_name: []const u8) !bool {
         const package_base = try self.resolvePkgbase(package_name);
+        return self.downloadPackageBase(package_base);
+    }
+
+    /// Clones or updates `{base}/{pkgbase}.git`, replacing mismatched remotes.
+    fn downloadPackageBase(self: *Self, package_base: []const u8) !bool {
         const cache_path = try self.cachePath(package_base);
         defer self.allocator.free(cache_path);
-        const expected_remote = try std.fmt.allocPrint(
-            self.allocator,
-            "{s}/{s}.git",
-            .{ self.aur_git_base_url, package_base },
-        );
+        const expected_remote = try endpoints.gitRemoteUrl(self.allocator, self.aur_git_base_url, package_base);
         defer self.allocator.free(expected_remote);
         const git_dir = try std.fs.path.join(self.allocator, &.{ cache_path, ".git" });
         defer self.allocator.free(git_dir);
@@ -2009,11 +2079,7 @@ pub const Manager = struct {
         const package_base = try self.resolvePkgbase(package_name);
         const cache_path = try self.cachePath(package_base);
         defer self.allocator.free(cache_path);
-        const remote = try std.fmt.allocPrint(
-            self.allocator,
-            "{s}/{s}.git",
-            .{ self.aur_git_base_url, package_base },
-        );
+        const remote = try endpoints.gitRemoteUrl(self.allocator, self.aur_git_base_url, package_base);
         defer self.allocator.free(remote);
         if (!(try self.removeCacheDirectory(cache_path))) return false;
         var clone = try self.runAsInvokingUser(&.{ "git", "clone", remote, cache_path }, null, null);
@@ -2261,6 +2327,8 @@ pub const Manager = struct {
             const pkgbuild = try std.fs.path.join(self.allocator, &.{ source, "PKGBUILD" });
             defer self.allocator.free(pkgbuild);
             _ = std.Io.Dir.cwd().statFile(self.io(), pkgbuild, .{}) catch continue;
+            // For custom bases, require matching Git origin provenance before importing.
+            if (!self.usesOfficialAur() and !try self.checkoutOriginMatchesBase(source, entry.name)) continue;
             var identity = try self.resolveCloneIdentity(source, entry.name);
             defer identity.deinit(self.allocator);
             var installed = false;
@@ -2298,7 +2366,7 @@ pub const Manager = struct {
             var remote = try self.runAsInvokingUser(&.{ "git", "-C", clone_directory, "remote", "get-url", "origin" }, null, null);
             defer remote.deinit(self.allocator);
             if (remote.exit_code == 0) {
-                if (try parseAurGitRemote(self.allocator, std.mem.trim(u8, remote.stdout, " \t\r\n"))) |package_base| {
+                if (try parseAurGitRemote(self.allocator, self.aur_git_base_url, std.mem.trim(u8, remote.stdout, " \t\r\n"))) |package_base| {
                     defer self.allocator.free(package_base);
                     return CloneIdentity.init(self.allocator, package_base, &.{});
                 }
@@ -2308,6 +2376,7 @@ pub const Manager = struct {
     }
 
     fn cachePath(self: *Self, package_base: []const u8) ![]u8 {
+        if (!endpoints.isValidPackageBase(package_base)) return error.InvalidAurPackageBase;
         return std.fs.path.join(self.allocator, &.{ self.cache_root, package_base });
     }
 
@@ -2936,13 +3005,18 @@ fn resolveXdgHome(
     return std.fs.path.join(allocator, &.{ home, fallback_relative });
 }
 
-fn parseAurGitRemote(allocator: std.mem.Allocator, remote: []const u8) !?[]u8 {
-    const prefix = "https://aur.archlinux.org/";
-    if (!std.mem.startsWith(u8, remote, prefix)) return null;
-    var package_base = std.mem.trim(u8, remote[prefix.len..], " /\t\r\n");
-    if (std.mem.endsWith(u8, package_base, ".git")) package_base = package_base[0 .. package_base.len - 4];
-    if (package_base.len == 0) return null;
-    return @as(?[]u8, try allocator.dupe(u8, package_base));
+/// Extracts the package base from a remote URL under `base`, stripping optional `.git`.
+fn parseAurGitRemote(allocator: std.mem.Allocator, base: []const u8, remote: []const u8) !?[]u8 {
+    const trimmed = std.mem.trim(u8, remote, " \t\r\n");
+    if (base.len == 0 or trimmed.len <= base.len) return null;
+    if (!std.mem.startsWith(u8, trimmed, base)) return null;
+    var remainder = trimmed[base.len..];
+    if (remainder[0] != '/') return null;
+    remainder = std.mem.trim(u8, remainder, "/");
+    if (std.mem.endsWith(u8, remainder, ".git")) remainder = remainder[0 .. remainder.len - 4];
+    if (remainder.len == 0) return null;
+    if (std.mem.indexOfScalar(u8, remainder, '/') != null) return null;
+    return @as(?[]u8, try allocator.dupe(u8, remainder));
 }
 
 fn isVcsPackage(package_name: []const u8) bool {
@@ -3138,6 +3212,278 @@ fn createSplitAurFixtureRepository(
     try runFixtureCommand(allocator, io, &.{ "git", "commit", "-m", "fixture" }, remote);
 }
 
+/// Directory layout shared by manager-level AUR fixture tests: a Git remote
+/// root, the Shelly cache root, and an isolated libalpm root/database pair.
+const AurManagerFixturePaths = struct {
+    temporary: std.testing.TmpDir,
+    environ: std.process.Environ,
+    root: [:0]const u8,
+    remote_root: []const u8,
+    cache_root: []const u8,
+    config_path: []const u8,
+    shellybuild_system_path: []const u8,
+    shellybuild_user_path: []const u8,
+
+    fn deinit(self: *AurManagerFixturePaths, allocator: std.mem.Allocator) void {
+        self.environ.block.deinit(allocator);
+        allocator.free(self.root);
+        allocator.free(self.remote_root);
+        allocator.free(self.cache_root);
+        allocator.free(self.config_path);
+        allocator.free(self.shellybuild_system_path);
+        allocator.free(self.shellybuild_user_path);
+        self.temporary.cleanup();
+    }
+};
+
+fn createAurManagerFixturePaths(allocator: std.mem.Allocator, io: std.Io) !AurManagerFixturePaths {
+    var temporary = std.testing.tmpDir(.{});
+    errdefer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    errdefer allocator.free(root);
+    const remote_root = try std.fs.path.join(allocator, &.{ root, "remotes" });
+    errdefer allocator.free(remote_root);
+    const cache_root = try std.fs.path.join(allocator, &.{ root, "cache" });
+    errdefer allocator.free(cache_root);
+    const alpm_root = try std.fs.path.join(allocator, &.{ root, "alpm-root" });
+    defer allocator.free(alpm_root);
+    const db_path = try std.fs.path.join(allocator, &.{ root, "db" });
+    defer allocator.free(db_path);
+    const package_cache = try std.fs.path.join(allocator, &.{ root, "packages" });
+    defer allocator.free(package_cache);
+    const config_path = try std.fs.path.join(allocator, &.{ root, "pacman.conf" });
+    errdefer allocator.free(config_path);
+    const shellybuild_system_path = try std.fs.path.join(allocator, &.{ root, "missing-system.conf" });
+    errdefer allocator.free(shellybuild_system_path);
+    const shellybuild_user_path = try std.fs.path.join(allocator, &.{ root, "missing-user.conf" });
+    errdefer allocator.free(shellybuild_user_path);
+    try std.Io.Dir.cwd().createDirPath(io, remote_root);
+    try std.Io.Dir.cwd().createDirPath(io, cache_root);
+    try std.Io.Dir.cwd().createDirPath(io, alpm_root);
+    try std.Io.Dir.cwd().createDirPath(io, db_path);
+    try std.Io.Dir.cwd().createDirPath(io, package_cache);
+    const config = try std.fmt.allocPrint(
+        allocator,
+        "[options]\nArchitecture = auto\nSigLevel = Never\nRootDir = {s}\nDBPath = {s}\nCacheDir = {s}\n",
+        .{ alpm_root, db_path, package_cache },
+    );
+    defer allocator.free(config);
+    try writeFixtureFile(io, config_path, config, false);
+
+    var environment = std.process.Environ.Map.init(allocator);
+    defer environment.deinit();
+    try environment.put("HOME", root);
+    try environment.put("XDG_CACHE_HOME", cache_root);
+    try environment.put("XDG_DATA_HOME", root);
+    try environment.put("PATH", "/usr/bin:/bin");
+    const environ: std.process.Environ = .{
+        .block = try environment.createPosixBlock(allocator, .{}),
+    };
+    errdefer environ.block.deinit(allocator);
+
+    return .{
+        .temporary = temporary,
+        .environ = environ,
+        .root = root,
+        .remote_root = remote_root,
+        .cache_root = cache_root,
+        .config_path = config_path,
+        .shellybuild_system_path = shellybuild_system_path,
+        .shellybuild_user_path = shellybuild_user_path,
+    };
+}
+
+fn initFixtureAurManager(
+    allocator: std.mem.Allocator,
+    paths: *const AurManagerFixturePaths,
+    git_base_url: []const u8,
+) !*Manager {
+    return Manager.init(allocator, paths.environ, .{
+        .config_path = paths.config_path,
+        .cache_root = paths.cache_root,
+        .aur_git_base_url = git_base_url,
+        .shellybuild_configuration_paths = .{
+            .system = paths.shellybuild_system_path,
+            .user = paths.shellybuild_user_path,
+        },
+    });
+}
+
+test "custom AUR base fetches PKGBUILDs from its Git checkout" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+
+    try createSplitAurFixtureRepository(
+        allocator,
+        io,
+        paths.remote_root,
+        "demo-suite",
+        &.{ "demo-cli", "demo-docs" },
+    );
+    try createAurFixtureRepository(allocator, io, paths.remote_root, "plain", null);
+
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+    try std.testing.expect(!manager.usesOfficialAur());
+
+    // Split-package names resolve to their package base and PKGBUILDs come
+    // from the Git checkout rather than the official cgit endpoint.
+    _ = try manager.cachePkgbase("demo-cli", "demo-suite");
+    const split_pkgbuild = (try manager.fetchPkgbuild("demo-cli")).?;
+    defer allocator.free(split_pkgbuild);
+    try std.testing.expect(std.mem.indexOf(u8, split_pkgbuild, "'demo-cli' 'demo-docs'") != null);
+
+    _ = try manager.cachePkgbase("plain", "plain");
+    const plain_pkgbuild = (try manager.fetchPkgbuild("plain")).?;
+    defer allocator.free(plain_pkgbuild);
+    try std.testing.expect(std.mem.indexOf(u8, plain_pkgbuild, "pkgname=plain") != null);
+
+    const checkout = try std.fs.path.join(allocator, &.{ paths.cache_root, "demo-suite", "PKGBUILD" });
+    defer allocator.free(checkout);
+    try std.Io.Dir.cwd().access(io, checkout, .{});
+}
+
+test "custom AUR base PKGBUILD failures stay actionable" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+
+    // A repository without a PKGBUILD still clones but fails retrieval with a
+    // distinct error instead of a silent `null`.
+    const remote = try std.fs.path.join(allocator, &.{ paths.remote_root, "empty.git" });
+    defer allocator.free(remote);
+    const keep_path = try std.fs.path.join(allocator, &.{ remote, ".keep" });
+    defer allocator.free(keep_path);
+    try std.Io.Dir.cwd().createDirPath(io, remote);
+    try writeFixtureFile(io, keep_path, "", false);
+    try runFixtureCommand(allocator, io, &.{ "git", "init" }, remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "config", "user.email", "shelly-tests@example.invalid" }, remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "config", "user.name", "Shelly Tests" }, remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "add", ".keep" }, remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "commit", "-m", "fixture" }, remote);
+
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+    _ = try manager.cachePkgbase("empty", "empty");
+    try std.testing.expectError(error.AurPkgbuildMissing, manager.fetchPkgbuild("empty"));
+
+    // A package base that cannot be cloned at all surfaces as a Git failure.
+    _ = try manager.cachePkgbase("missing-repo", "missing-repo");
+    try std.testing.expectError(error.AurGitCheckoutFailed, manager.fetchPkgbuild("missing-repo"));
+}
+
+test "custom AUR base ignores unverified cached SRCINFO provenance" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+
+    // A cached .SRCINFO without matching Git provenance must not be trusted
+    // while a custom base is active.
+    const stale = try std.fs.path.join(allocator, &.{ paths.cache_root, "stale-suite" });
+    defer allocator.free(stale);
+    const srcinfo_path = try std.fs.path.join(allocator, &.{ stale, ".SRCINFO" });
+    defer allocator.free(srcinfo_path);
+    try std.Io.Dir.cwd().createDirPath(io, stale);
+    try writeFixtureFile(
+        io,
+        srcinfo_path,
+        "pkgbase = stale-suite\n\tpkgver = 1\n\tpkgrel = 1\n\tarch = any\npkgname = stale-cli\n",
+        false,
+    );
+
+    {
+        var custom_manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+        defer custom_manager.deinit();
+        try std.testing.expect((try custom_manager.tryResolveFromSrcinfo("stale-cli")) == null);
+    }
+
+    // The same cache stays trusted for the official base, which has no
+    // provenance ambiguity between services.
+    var official_manager = try initFixtureAurManager(allocator, &paths, "https://aur.archlinux.org");
+    defer official_manager.deinit();
+    const trusted = (try official_manager.tryResolveFromSrcinfo("stale-cli")).?;
+    defer allocator.free(trusted);
+    try std.testing.expectEqualStrings("stale-suite", trusted);
+}
+
+test "endpoint switching replaces a checkout with a mismatched origin" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+
+    const first_root = try std.fs.path.join(allocator, &.{ paths.root, "service-one" });
+    defer allocator.free(first_root);
+    const second_root = try std.fs.path.join(allocator, &.{ paths.root, "service-two" });
+    defer allocator.free(second_root);
+    try std.Io.Dir.cwd().createDirPath(io, first_root);
+    try std.Io.Dir.cwd().createDirPath(io, second_root);
+    try createAurFixtureRepository(allocator, io, first_root, "demo", null);
+    try createAurFixtureRepository(allocator, io, second_root, "demo", null);
+
+    const checkout = try std.fs.path.join(allocator, &.{ paths.cache_root, "demo" });
+    defer allocator.free(checkout);
+
+    {
+        var manager = try initFixtureAurManager(allocator, &paths, first_root);
+        defer manager.deinit();
+        _ = try manager.cachePkgbase("demo", "demo");
+        try std.testing.expect(try manager.downloadPackage("demo"));
+        try std.testing.expect(try manager.checkoutOriginMatchesBase(checkout, "demo"));
+    }
+
+    // Switching the configured service re-clones the checkout because its
+    // origin still points at the first service; the replacement is verified
+    // against the new expected remote rather than trusted blindly.
+    {
+        var manager = try initFixtureAurManager(allocator, &paths, second_root);
+        defer manager.deinit();
+        _ = try manager.cachePkgbase("demo", "demo");
+        try std.testing.expect(try manager.downloadPackage("demo"));
+        try std.testing.expect(try manager.checkoutOriginMatchesBase(checkout, "demo"));
+    }
+
+    const first_remote = try endpoints.gitRemoteUrl(allocator, first_root, "demo");
+    defer allocator.free(first_remote);
+    const second_remote = try endpoints.gitRemoteUrl(allocator, second_root, "demo");
+    defer allocator.free(second_remote);
+    try std.testing.expect(!std.mem.eql(u8, first_remote, second_remote));
+}
+
+test "endpoint switching does not trust the previous service checkout" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+
+    const first_root = try std.fs.path.join(allocator, &.{ paths.root, "service-one" });
+    defer allocator.free(first_root);
+    try std.Io.Dir.cwd().createDirPath(io, first_root);
+    try createAurFixtureRepository(allocator, io, first_root, "demo", null);
+
+    {
+        var manager = try initFixtureAurManager(allocator, &paths, first_root);
+        defer manager.deinit();
+        _ = try manager.cachePkgbase("demo", "demo");
+        try std.testing.expect(try manager.downloadPackage("demo"));
+    }
+
+    // A manager configured for a different service must not resolve package
+    // bases through the previous service's checkout: origin parsing fails and
+    // resolution falls through to the configured RPC.
+    const second_root = try std.fs.path.join(allocator, &.{ paths.root, "service-two" });
+    defer allocator.free(second_root);
+    try std.Io.Dir.cwd().createDirPath(io, second_root);
+    var manager = try initFixtureAurManager(allocator, &paths, second_root);
+    defer manager.deinit();
+    try std.testing.expect((try manager.tryResolveFromGitRemote("demo")) == null);
+    try std.testing.expect((try manager.tryResolveFromSrcinfo("demo")) == null);
+}
+
 test "PKGBUILD validation combines post-install and homograph findings" {
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
@@ -3199,13 +3545,52 @@ test "AUR update projection compares remote and installed versions" {
 }
 
 test "AUR git remote and VCS suffix parsing mirror the C# manager" {
-    const package_base = (try parseAurGitRemote(std.testing.allocator, "https://aur.archlinux.org/split-base.git\n")).?;
+    const official = "https://aur.archlinux.org";
+    const package_base = (try parseAurGitRemote(std.testing.allocator, official, "https://aur.archlinux.org/split-base.git\n")).?;
     defer std.testing.allocator.free(package_base);
     try std.testing.expectEqualStrings("split-base", package_base);
-    try std.testing.expect((try parseAurGitRemote(std.testing.allocator, "ssh://aur@aur.archlinux.org/demo.git")) == null);
+    try std.testing.expect((try parseAurGitRemote(std.testing.allocator, official, "ssh://aur@aur.archlinux.org/demo.git")) == null);
     try std.testing.expect(isVcsPackage("demo-GIT"));
     try std.testing.expect(!isVcsPackage("demo"));
     try std.testing.expect(hasNoBinRemapSuffix("demo-bin"));
+}
+
+test "unsafe package bases cannot escape the AUR cache" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+
+    try std.testing.expectError(error.InvalidAurPackageBase, manager.cachePkgbase("demo", "../outside"));
+    try std.testing.expectError(error.InvalidAurPackageBase, manager.cachePath("/absolute"));
+    try std.testing.expectError(error.InvalidAurPackageBase, manager.downloadPackageBase("nested/path"));
+}
+
+test "AUR git remote parsing honors the configured base boundary" {
+    const allocator = std.testing.allocator;
+    const base = "https://host/atoll";
+    const demo = (try parseAurGitRemote(allocator, base, "https://host/atoll/demo.git")).?;
+    defer allocator.free(demo);
+    try std.testing.expectEqualStrings("demo", demo);
+    const trailing = (try parseAurGitRemote(allocator, base, "https://host/atoll/demo.git/\n")).?;
+    defer allocator.free(trailing);
+    try std.testing.expectEqualStrings("demo", trailing);
+
+    // Adjacent hosts and path prefixes must not leak across the boundary.
+    try std.testing.expect((try parseAurGitRemote(allocator, base, "https://host/atoll2/demo.git")) == null);
+    try std.testing.expect((try parseAurGitRemote(allocator, base, "https://host/demo.git")) == null);
+    // Empty, root-only, and nested package paths are rejected.
+    try std.testing.expect((try parseAurGitRemote(allocator, base, "https://host/atoll")) == null);
+    try std.testing.expect((try parseAurGitRemote(allocator, base, "https://host/atoll/.git")) == null);
+    try std.testing.expect((try parseAurGitRemote(allocator, base, "https://host/atoll/nested/demo.git")) == null);
+
+    // Local filesystem fixture roots parse the same way.
+    const local = (try parseAurGitRemote(allocator, "/tmp/remote-root", "/tmp/remote-root/demo.git")).?;
+    defer allocator.free(local);
+    try std.testing.expectEqualStrings("demo", local);
+    try std.testing.expect((try parseAurGitRemote(allocator, "/tmp/remote-root", "/tmp/remote-rootx/demo.git")) == null);
 }
 
 test "helper cache identity recognizes installed split-package members" {

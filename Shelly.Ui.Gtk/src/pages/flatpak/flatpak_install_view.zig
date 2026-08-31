@@ -491,7 +491,7 @@ pub const FlatpakInstallView = extern struct {
         if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
     }
 
-    fn show_list(self: *Self) void {
+    pub fn show_list(self: *Self) void {
         const p = self.priv();
         gtk.Stack.setVisibleChild(p.content_stack, p.list_overlay.as(gtk.Widget));
         self.clear_details();
@@ -535,6 +535,7 @@ pub const FlatpakInstallView = extern struct {
         self.populate_screenshots(app);
         self.populate_links(app);
         gtk.Stack.setVisibleChild(p.content_stack, p.overlay_panel.as(gtk.Widget));
+        _ = gtk.Widget.grabFocus(p.overlay_install_button.as(gtk.Widget));
     }
 
     fn populate_remotes(self: *Self, app: *AppstreamAppObject) void {

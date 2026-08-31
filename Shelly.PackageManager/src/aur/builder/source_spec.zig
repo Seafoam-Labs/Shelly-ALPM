@@ -222,7 +222,7 @@ pub fn containsString(values: []const []const u8, needle: []const u8) bool {
 
 pub fn isExtractableArchive(name: []const u8) bool {
     const suffixes = [_][]const u8{
-        ".tar", ".tar.gz", ".tgz", ".tar.zst", ".tar.xz", ".txz", ".tar.bz2", ".tbz", ".tbz2", ".zip", ".vsix", ".deb",
+        ".tar", ".tar.gz", ".tgz", ".tar.zst", ".tar.xz", ".txz", ".tar.bz2", ".tbz", ".tbz2", ".zip", ".vsix", ".deb", ".crate",
     };
     for (suffixes) |suffix| if (std.ascii.endsWithIgnoreCase(name, suffix)) return true;
     return false;

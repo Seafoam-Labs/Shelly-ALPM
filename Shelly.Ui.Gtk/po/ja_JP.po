@@ -800,7 +800,7 @@ msgid "Warning"
 msgstr "警告"
 
 msgid "Install Anyway"
-msgstr "とにかくインストール"
+msgstr "このままインストール"
 
 msgid "package(s)"
 msgstr "個のパッケージ"

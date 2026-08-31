@@ -9,6 +9,7 @@
     <file alias="settings-symbolic.svg" preprocess="xml-stripblanks">assets/icons/settings-symbolic.svg</file>
     <file alias="application-x-executable-symbolic.svg" preprocess="xml-stripblanks">assets/icons/application-x-executable-symbolic.svg</file>
     <file alias="software-update-available-symbolic.svg" preprocess="xml-stripblanks">assets/icons/software-update-available-symbolic.svg</file>
+    <file alias="checkmark-small-symbolic.svg" preprocess="xml-stripblanks">assets/icons/checkmark-small-symbolic.svg</file>
   </gresource>
   <gresource prefix="/com/shellyorg/shelly">
     <file>ui/main_window.ui</file>
@@ -30,6 +31,7 @@
     <file>dialog/ui/provider.ui</file>
     <file>dialog/ui/preview_pkgbuild.ui</file>
     <file>dialog/ui/polkit_warning.ui</file>
+    <file>dialog/ui/aur_warning.ui</file>
     <file>ui/appimage_page.ui</file>
     <file>ui/welcome.ui</file>
     <file>ui/transaction_page.ui</file>

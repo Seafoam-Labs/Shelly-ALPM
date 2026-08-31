@@ -267,3 +267,9 @@ pub fn stringOption(
         .description = description,
     };
 }
+
+pub fn globalStringOption(name: []const u8, aliases: []const []const u8, description: []const u8) Option {
+    var option = stringOption(name, aliases, description, false);
+    option.recursive = true;
+    return option;
+}

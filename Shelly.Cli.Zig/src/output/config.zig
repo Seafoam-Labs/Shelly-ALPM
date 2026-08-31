@@ -376,12 +376,47 @@ fn writeSelectionQuestionFrame(
 }
 
 fn questionKindName(question: Zigalpm.OperationQuestion) []const u8 {
+    
+    switch(question.purpose) {
+        .cache_clean_extra_entries => return "CacheCleanExtraEntries",
+        .generic => {},
+    }
+    
     if (question.kind == .import_pgp_key) return "ImportPgpKey";
+    
     return switch (question.envelope.kind) {
         .remove => "RemovePkgs",
         .update => "ConflictPkg",
         else => "InstallIgnorePkg",
     };
+}
+
+test "cache clean question uses cache clean wire kind" {
+    const question: Zigalpm.OperationQuestion = .{
+        .question_id = 1,
+        .envelope = .{
+            .operation_id = 1,
+            .parent_id = null,
+            .backend = .alpm,
+            .kind = .cleanup,
+            .subject = null,
+        },
+        .kind = .confirmation,
+        .purpose = .cache_clean_extra_entries,
+        .prompt = "Would you like to remove extra cache entries?",
+        .options = &.{},
+        .attachments = &.{},
+        .review = null,
+        .transaction_plan = null,
+        .dependency_name = null,
+        .pgp_key_import = null,
+        .default_response = .accepted,
+    };
+
+    try std.testing.expectEqualStrings(
+        "CacheCleanExtraEntries",
+        questionKindName(question),
+    );
 }
 
 fn writeAlpmProgressFrame(

@@ -168,6 +168,7 @@ pub const ShellySearchPage = extern struct {
         p.flatpak_detail = flatpak_detail;
         _ = gtk.Stack.addNamed(p.detail_stack, flatpak_detail.as(gtk.Widget), "flatpak");
 
+        attachSorter(p.check_column, sorters.boolSorter(SearchResultObject, &SearchResultObject.isSelected));
         attachSorter(p.name_column, sorters.stringSorter(SearchResultObject, &SearchResultObject.getName));
         attachSorter(p.source_column, sorters.stringSorter(SearchResultObject, &source_label));
         attachSorter(p.version_column, sorters.stringSorter(SearchResultObject, &SearchResultObject.getVersion));
