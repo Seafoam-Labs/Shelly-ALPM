@@ -2829,7 +2829,7 @@ pub const Manager = struct {
 
     fn onDownloadEvent(ctx: ?*anyopaque, event: downloader.DownloadEvent) void {
         const self: *Manager = @ptrCast(@alignCast(ctx));
-        self.handleDownloadEvent(event) catch return;   
+        self.handleDownloadEvent(event) catch return;
     }
 
     fn handleDownloadEvent(
@@ -2837,7 +2837,7 @@ pub const Manager = struct {
         event: downloader.DownloadEvent,
     ) TransactionError!void {
         const path = event.destination_path orelse "";
-    
+
         switch (event.event_type) {
             .Start => {
                 const message = std.fmt.allocPrint(
@@ -2845,15 +2845,15 @@ pub const Manager = struct {
                     "Retrieving package: {s}",
                     .{std.fs.path.basename(path)},
                 ) catch return TransactionError.OutOfMemory;
-    
+
                 defer self.allocator.free(message);
-    
+
                 self.dispatcher.raiseInformational(.{
                     .event_type = .pkg_retrieve_start,
                     .message = message,
                 });
             },
-    
+
             .Progress => if (event.progress) |p| {
                 // CoreDownloader forwards rich byte progress to the logical
                 // download operation. Retain this fallback only for legacy
@@ -2868,33 +2868,33 @@ pub const Manager = struct {
                     });
                 }
             },
-    
+
             .Complete => {
                 const message = std.fmt.allocPrint(
                     self.allocator,
                     "Package retrieval completed: {s}",
                     .{std.fs.path.basename(path)},
                 ) catch return TransactionError.OutOfMemory;
-    
+
                 defer self.allocator.free(message);
-    
+
                 self.dispatcher.raiseInformational(.{
                     .event_type = .pkg_retrieve_done,
                     .message = message,
                 });
             },
-    
+
             .Error => self.dispatcher.raiseError(.{
                 .message = if (event.download_error) |err|
                     @errorName(err)
                 else
                     "download failed",
             }),
-    
+
             .Skipped => {},
         }
     }
-    
+
     fn progressCallback(
         ctx: ?*anyopaque,
         progress: rawLibalpm.alpm_progress_t,
@@ -2918,15 +2918,14 @@ pub const Manager = struct {
         event: [*c]rawLibalpm.alpm_event_t,
     ) callconv(.c) void {
         const self: *Manager = @ptrCast(@alignCast(ctx));
-    
+
         self.handleEvent(event) catch return;
     }
 
     fn handleEvent(
         self: *Manager,
         event: [*c]rawLibalpm.alpm_event_t,
-    ) TransactionError!void { 
-
+    ) TransactionError!void {
         if (event == null) return;
         const type_value: u32 = @intCast(event.*.type);
         if (type_value < rawLibalpm.ALPM_EVENT_CHECKDEPS_START or type_value > rawLibalpm.ALPM_EVENT_HOOK_RUN_DONE) return;
@@ -2939,79 +2938,79 @@ pub const Manager = struct {
             },
             .package_operation_start => {
                 const operation = event.*.package_operation;
-            
+
                 const message = (switch (operation.operation) {
                     rawLibalpm.ALPM_PACKAGE_INSTALL => blk: {
                         const pkg = operation.newpkg orelse return;
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
                         const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Installing package: {s}-{s}",
                             .{ name, version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_UPGRADE => blk: {
                         const oldpkg = operation.oldpkg orelse return;
                         const newpkg = operation.newpkg orelse return;
-            
+
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(newpkg)) orelse return;
                         const old_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(oldpkg)) orelse return;
                         const new_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(newpkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Upgrading package: {s} {s} -> {s}",
                             .{ name, old_version, new_version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_REINSTALL => blk: {
                         const pkg = operation.newpkg orelse return;
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
                         const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Reinstalling package: {s}-{s}",
                             .{ name, version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_DOWNGRADE => blk: {
                         const oldpkg = operation.oldpkg orelse return;
                         const newpkg = operation.newpkg orelse return;
-            
+
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(newpkg)) orelse return;
                         const old_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(oldpkg)) orelse return;
                         const new_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(newpkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Downgrading package: {s} {s} -> {s}",
                             .{ name, old_version, new_version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_REMOVE => blk: {
                         const pkg = operation.oldpkg orelse return;
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
                         const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Removing package: {s}-{s}",
                             .{ name, version },
                         );
                     },
-            
+
                     else => return,
                 }) catch return TransactionError.OutOfMemory;
-            
+
                 defer self.allocator.free(message);
-            
+
                 self.dispatcher.raiseInformational(.{
                     .event_type = event_type,
                     .message = message,
@@ -3039,7 +3038,6 @@ pub const Manager = struct {
                     .event_type = event_type,
                     .message = message,
                 });
-
             },
             .pacnew_created => self.dispatcher.raisePacnew(.{
                 .file = spanC(event.*.pacnew_created.file),
@@ -3057,7 +3055,6 @@ pub const Manager = struct {
             },
             else => self.handleInformationMessage(event_type),
         }
-
     }
     fn handleInformationMessage(self: *Manager, event_type: libalpm.EventType) void {
         const message = switch (event_type) {
@@ -3141,12 +3138,12 @@ pub const Manager = struct {
                 const pkg_one = conflict.packageOne();
                 const pkg_two = conflict.packageTwo();
                 const text = formatConflictQuestion(
-                     &buf,
-                     pkg_one.name() orelse "unknown",
-                     pkg_one.version() orelse "?",
-                     pkg_two.name() orelse "unknown",
-                     pkg_two.version() orelse "?",
-                 );
+                    &buf,
+                    pkg_one.name() orelse "unknown",
+                    pkg_one.version() orelse "?",
+                    pkg_two.name() orelse "unknown",
+                    pkg_two.version() orelse "?",
+                );
                 q.confirm_removal(self.askYesNo(manager_io, qtype, text));
             },
             .corrupted_package => {
@@ -4429,7 +4426,7 @@ test "handleInformationMessage emits every generic informational description" {
     defer mgr.dispatcher.deinit();
 
     var cap = InfoCapture{};
-    defer cap.deinit(testing.allocator);    
+    defer cap.deinit(testing.allocator);
     _ = try mgr.dispatcher.addInformationalHandler(.{
         .function = captureInfo,
         .data = @ptrCast(&cap),
@@ -4548,7 +4545,8 @@ test "eventCallback ignores null out-of-range and empty scriptlet events" {
     defer mgr.dispatcher.deinit();
 
     var info_cap = InfoCapture{};
-    defer info_cap.deinit(testing.allocator);    var scriptlet_cap = ScriptletCapture{};
+    defer info_cap.deinit(testing.allocator);
+    var scriptlet_cap = ScriptletCapture{};
     _ = try mgr.dispatcher.addInformationalHandler(.{
         .function = captureInfo,
         .data = @ptrCast(&info_cap),
@@ -4939,7 +4937,6 @@ test "conflict question identifies the package to remove" {
         text,
     );
 }
-
 
 test "questionCallback keeps unknown answers and applies selected provider choices" {
     var mgr: Manager = undefined;
