@@ -854,19 +854,34 @@ pub const TransactionPage = extern struct {
         );
     }
 
-    fn getQuestionText(allocator: std.mem.Allocator, question_kind: []const u8, arguments: []const []const u8, fallback: []const u8, ) ![:0]const u8 {
-        if (std.mem.eql(u8, question_kind, "CacheCleanExtraEntries")) {
+    fn getQuestionText(allocator: std.mem.Allocator, question_kind: []const u8, arguments: []const []const u8, fallback: []const u8,) ![:0]const u8 {
+        if (std.mem.eql(
+            u8,
+            question_kind,
+            "CacheCleanExtraEntries",
+        )) {
             return allocator.dupeZ(
                 u8,
-                translations._("Would you like to remove extra cache entries?"),
+                translations._(
+                    "Would you like to remove extra cache entries?",
+                ),
             );
         }
     
-        if (std.mem.eql(u8, question_kind, "PackageConflict") and
-            arguments.len >= 5)
-        {
-            return allocator.dupeZ(u8, translations._( translations._("{package_one}-{version_one} conflicts with {package_two}-{version_two}. Remove {package_to_remove}?"),));
+        if (std.mem.eql(u8, question_kind, "PackageConflict")) {
+            if (arguments.len < 5) {
+                return allocator.dupeZ(u8, fallback);
+            }
+    
+            const formatted = try formatPackageConflictQuestion(
+                allocator,
+                arguments,
+            );
+            defer allocator.free(formatted);
+    
+            return allocator.dupeZ(u8, formatted);
         }
+    
         return allocator.dupeZ(u8, fallback);
     }
     
@@ -878,9 +893,8 @@ pub const TransactionPage = extern struct {
             .yes_no => |q| {
                 const qa = pending.arena.allocator();
 
-                const text = getQuestionText(q.question_kind, q.question_text);
-                
-                const text_z = qa.dupeZ(u8, text) catch {
+                const text_z = getQuestionText(qa, q.question_kind, q.arguments, q.question_text,) 
+                catch {
                     pending.operation.answerYesNo(q.question_id, false) catch {};
                     pending.destroy();
                     return;
