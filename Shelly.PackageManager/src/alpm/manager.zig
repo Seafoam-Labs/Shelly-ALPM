@@ -4924,6 +4924,21 @@ test "questionCallback applies affirmative answers to simple libalpm questions" 
     try testing.expectEqual(@as(c_int, 1), import_key.import_key.import);
 }
 
+test "conflict question identifies the package to remove" {
+    var buf: [512]u8 = undefined;
+
+    const text = formatConflictQuestion(
+        &buf,
+        "qemu-common",
+        "11.1.0-1",
+        "qemu-block-gluster",
+        "11.0.2-4",
+    );
+    try testing.expectEqualStrings(
+        "qemu-common-11.1.0-1 conflicts with qemu-block-gluster-11.0.2-4. Remove qemu-block-gluster?",
+        text,
+    );
+}
 
 
 test "questionCallback keeps unknown answers and applies selected provider choices" {
