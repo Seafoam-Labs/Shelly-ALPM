@@ -3140,13 +3140,13 @@ pub const Manager = struct {
                 const conflict = q.conflict();
                 const pkg_one = conflict.packageOne();
                 const pkg_two = conflict.packageTwo();
-                const text = std.fmt.bufPrint(&buf, "{s}-{s} conflicts with {s}-{s}. Remove {s}?", .{
-                    pkg_one.name() orelse "unknown",
-                    pkg_one.version() orelse "?",
-                    pkg_two.name() orelse "unknown",
-                    pkg_two.version() orelse "?",
-                    pkg_two.name() orelse "unknown",
-                }) catch "Remove the conflicting package?";
+                const text = formatConflictQuestion(
+                     &buf,
+                     pkg_one.name() orelse "unknown",
+                     pkg_one.version() orelse "?",
+                     pkg_two.name() orelse "unknown",
+                     pkg_two.version() orelse "?",
+                 );
                 q.confirm_removal(self.askYesNo(manager_io, qtype, text));
             },
             .corrupted_package => {
