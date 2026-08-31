@@ -48,6 +48,8 @@ jobs:
               - 'Shelly.Notifications.Zig/**'
             pkgbuild:
               - 'PKGBUILD*'
+              - '*.desktop'
+              - 'shelly-flatpak-integrate'
 
   backend:
     needs: changes
@@ -225,9 +227,16 @@ jobs:
     container:
       image: archlinux:latest
     steps:
+      - run: |
+          pacman -Syu --noconfirm
+          pacman -S --needed --noconfirm desktop-file-utils
       - uses: actions/checkout@v6
       - name: Validate Arch package recipes
         run: bash -n PKGBUILD PKGBUILD-git PKGBUILD-bin PKGBUILD-cli
+      - name: Validate packaged desktop entries
+        run: |
+          desktop-file-validate com.shellyorg.shelly.desktop com.shellyorg.shelly-notifications.desktop
+          bash -n shelly-flatpak-integrate
 
   all-pass:
     if: ${{ always() }}

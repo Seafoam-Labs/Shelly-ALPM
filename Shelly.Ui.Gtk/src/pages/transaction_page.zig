@@ -793,6 +793,13 @@ pub const TransactionPage = extern struct {
         self.handle_question(pending);
     }
 
+    fn getQuestionText(question_kind: []const u8, fallback: []const u8) []const u8 {
+        if (std.mem.eql(u8, question_kind, "CacheCleanExtraEntries")) {
+            return translations._("Would you like to remove extra cache entries?");
+        }
+        return fallback;
+    }
+    
     fn handle_question(self: *Self, pending: *PendingQuestion) void {
         const p = self.priv();
         log.debug("handle_question: question_layer={*}", .{p.question_layer});
@@ -800,7 +807,10 @@ pub const TransactionPage = extern struct {
         switch (pending.request) {
             .yes_no => |q| {
                 const qa = pending.arena.allocator();
-                const text_z = qa.dupeZ(u8, q.question_text) catch {
+
+                const text = getQuestionText(q.question_kind, q.question_text);
+                
+                const text_z = qa.dupeZ(u8, text) catch {
                     pending.operation.answerYesNo(q.question_id, false) catch {};
                     pending.destroy();
                     return;

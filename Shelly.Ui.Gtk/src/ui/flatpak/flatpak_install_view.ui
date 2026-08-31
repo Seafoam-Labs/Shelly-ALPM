@@ -165,8 +165,7 @@
                         </style>
                         <child>
                           <object class="GtkShortcutController">
-                            <property name="scope">managed</property>
-                            <property name="propagation-phase">capture</property>
+                            <property name="scope">local</property>
                             <child>
                               <object class="GtkShortcut">
                                 <property name="trigger">Return</property>

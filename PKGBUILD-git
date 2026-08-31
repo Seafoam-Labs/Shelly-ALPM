@@ -2,7 +2,7 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgbase=shelly-git
 pkgname=('shelly-git' 'shelly-flatpak-backend-git')
-pkgver=3.1.1
+pkgver=3.1.2
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
@@ -10,15 +10,21 @@ license=('GPL-3.0-only')
 makedepends=('git' 'pkgconf' 'gtk4' 'zig>=0.16' 'clang' 'gettext' 'flatpak' 'ripgrep' 'go-md2man')
 
 source=("${pkgname}::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=development"
-        'shellybuild.conf')
+        'shellybuild.conf'
+        'com.shellyorg.shelly.desktop'
+        'com.shellyorg.shelly-notifications.desktop'
+        'shelly-flatpak-integrate')
 
 sha256sums=('SKIP'
-            '0aff9177498bd94e90c937076d15ac76116c628ec3504a7c1b8c9ea086336ca6')
+            '0aff9177498bd94e90c937076d15ac76116c628ec3504a7c1b8c9ea086336ca6'
+            '2cdefd69e5e1a2ecaa9a787ef04137af16d55690361034420f4dfcbb575e8627'
+            '05f39f65a0f0797ea8a45b10cb693a197908aec298b2a17422a6d942ad1dee36'
+            'da6ed2f71966aef9cc20f7dcd3a5aa87afd3d57d2fccebfe71be62e4d9ae64d5')
 
 pkgver() {
   cd "${srcdir}/${pkgname}"
 
-  printf '3.1.1r%s.g%s' \
+  printf '3.1.2r%s.g%s' \
     "$(git rev-list --count HEAD)" \
     "$(git rev-parse --short=7 HEAD)"
 }
@@ -122,6 +128,7 @@ package_shelly-git() {
       'json-glib'
   )
   optdepends=(
+      'arch-install-scripts: provision fresh roots for --isolated builds'
       'fish: Fish shell completions'
       'zsh: Zsh shell completions'
       'libstarfish: dependency viewer for arch packages'
@@ -136,50 +143,11 @@ package_shelly-git() {
   install -Dm755 out-key/bin/shelly-key "$pkgdir/usr/bin/shelly-key"
   install -Dm644 "$srcdir/shellybuild.conf" "$pkgdir/etc/shellybuild.conf"
 
-  # Install desktop entry
-  cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/com.shellyorg.shelly.desktop"
-[Desktop Entry]
-Name=Shelly
-Comment=A Modern Arch Package Manager
-Exec=/usr/bin/shelly-ui %u
-Icon=shelly
-Type=Application
-Categories=System;Utility;
-Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
-MimeType=x-scheme-handler/appstream;x-scheme-handler/flatpak+https;
-Terminal=false
-X-GNOME-UsesNotifications=true
-Actions=FlatpakInstall;FlatpakUpdate;FlatpakRemove;
-
-[Desktop Action FlatpakInstall]
-Name=Flatpak Install
-Icon=flatpak-symbolic
-Exec=/usr/bin/shelly-ui --page flatpak-install
-
-[Desktop Action FlatpakUpdate]
-Name=Flatpak Update
-Icon=flatpak-symbolic
-Exec=/usr/bin/shelly-ui --page flatpak-update
-
-[Desktop Action FlatpakRemove]
-Name=Flatpak Remove
-Icon=flatpak-symbolic
-Exec=/usr/bin/shelly-ui --page flatpak-remove
-EOF
-
-  # Install desktop entry for notification service
-  cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/com.shellyorg.shelly-notifications.desktop"
-[Desktop Entry]
-Name=Shelly Notifications
-Comment=Notification service for Shelly package manager
-Exec=/usr/bin/shelly-notifications
-Icon=shelly-tray
-Type=Application
-Categories=System;Utility;
-Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
-Terminal=false
-NoDisplay=true
-EOF
+  # Install desktop entries
+  install -Dm644 "$srcdir/com.shellyorg.shelly.desktop" \
+    "$pkgdir/usr/share/applications/com.shellyorg.shelly.desktop"
+  install -Dm644 "$srcdir/com.shellyorg.shelly-notifications.desktop" \
+    "$pkgdir/usr/share/applications/com.shellyorg.shelly-notifications.desktop"
 
   # Ensure the polkit directory exists
   install -m0755 -d "${pkgdir}"/usr/share/polkit-1/actions
@@ -238,50 +206,8 @@ EOF
     done
 
   # Install Flatpak integration script
-  cat <<'SCRIPT' | install -Dm755 /dev/stdin "$pkgdir/usr/bin/shelly-flatpak-integrate"
-#!/bin/bash
-# Adds "Manage in Shelly" right-click action to all Flatpak .desktop files
-FLATPAK_DIRS=(
-    "/var/lib/flatpak/exports/share/applications"
-    "$HOME/.local/share/flatpak/exports/share/applications"
-)
-LOCAL_APPS_DIR="$HOME/.local/share/applications"
-mkdir -p "$LOCAL_APPS_DIR"
-
-for dir in "${FLATPAK_DIRS[@]}"; do
-    [ -d "$dir" ] || continue
-    for desktop_file in "$dir"/*.desktop; do
-        [ -f "$desktop_file" ] || continue
-        filename=$(basename "$desktop_file")
-        app_id="${filename%.desktop}"
-        dest="$LOCAL_APPS_DIR/$filename"
-
-        # Copy if override doesn't exist yet
-        [ -f "$dest" ] || cp "$desktop_file" "$dest"
-
-        # Skip if already patched
-        grep -q "ShellyManage" "$dest" && continue
-
-        # Add action to existing Actions= line or insert one
-        if grep -q "^Actions=" "$dest"; then
-            sed -i 's/^Actions=\(.*\)/Actions=\1ShellyManage;/' "$dest"
-        else
-            sed -i '/^\[Desktop Entry\]/a Actions=ShellyManage;' "$dest"
-        fi
-
-        cat >> "$dest" << EOF
-
-[Desktop Action ShellyManage]
-Name=Manage in Shelly
-Icon=shelly
-Exec=/usr/bin/shelly-ui --page flatpak-install
-EOF
-    done
-done
-
-update-desktop-database "$LOCAL_APPS_DIR" 2>/dev/null || true
-echo "Flatpak desktop entries patched with Shelly integration."
-SCRIPT
+  install -Dm755 "$srcdir/shelly-flatpak-integrate" \
+    "$pkgdir/usr/bin/shelly-flatpak-integrate"
 }
 
 package_shelly-flatpak-backend-git() {

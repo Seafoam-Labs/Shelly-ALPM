@@ -30,7 +30,7 @@ pub const variants = [_]types.Variant{.{
         flag("--nosign", &.{}, "Skips signing the resulting packages"),
         stringOption("--key", &.{}, "Specifies the GPG key used for package signing", false),
         flag("--noverify", &.{}, "Skips the PKGBUILD verify() function"),
-        flag("--isolated", &.{"-i"}, "Runs isolated root build. (This is currently nonfunctional and is being worked on)"),
+        flag("--isolated", &.{"-i"}, "Builds as an unprivileged user in a fresh systemd-nspawn root"),
         hiddenFlag("--coordinator-child", "Runs as a non-root child of an elevated package operation"),
         hiddenStringOption("--review-digest", "Requires the reviewed PKGBUILD input digest"),
         hiddenStringOption("--package", "Builds only the selected split-package member; repeatable"),

@@ -9,6 +9,7 @@ const pkgbuild_review = @import("pkgbuild_review.zig");
 const package_signer = @import("../../shared/package_signer.zig");
 const package_options = @import("package_options");
 const metadata = @import("metadata.zig");
+const virtual_ownership = @import("virtual_ownership.zig");
 const steps = @import("steps.zig");
 const alpm_bindings = @import("../../alpm/bindings.zig").libalpm;
 const raw_alpm = alpm_bindings.alpm;
@@ -94,6 +95,18 @@ pub fn assemblePackage(self: *PackageBuilder, package_build: *const PackageBuild
     );
     defer self.allocator.free(pkgdir);
 
+    // Resolve inode-attached ownership before tidy tools such as `strip` can
+    // replace a file behind the same final package path.
+    var owned_virtual_metadata: ?virtual_ownership.OwnedMetadata = if (self.virtual_ownership_tracker) |*tracker|
+        if (tracker.hasNonDefaultOwnership())
+            try tracker.buildMetadata(self.io, pkgdir)
+        else
+            null
+    else
+        null;
+    defer if (owned_virtual_metadata) |*owned| owned.deinit();
+    const virtual_metadata: archive.VirtualMetadata = if (owned_virtual_metadata) |*owned| owned.view() else .{};
+
     try tidyPackage(self, package_build, pkgdir);
 
     var pkgdir_handle = try std.Io.Dir.cwd().openDir(self.io, pkgdir, .{ .iterate = true });
@@ -118,7 +131,6 @@ pub fn assemblePackage(self: *PackageBuilder, package_build: *const PackageBuild
 
     const mtree_path = try std.fs.path.join(self.allocator, &.{ pkgdir, ".MTREE" });
     defer self.allocator.free(mtree_path);
-    const virtual_metadata: archive.VirtualMetadata = .{};
     try archive.writeMtreeWithMetadata(self.allocator, self.io, pkgdir, mtree_path, virtual_metadata);
     var mtree_file = try pkgdir_handle.openFile(self.io, ".MTREE", .{});
     defer mtree_file.close(self.io);
@@ -262,6 +274,7 @@ pub fn reviewedFilesMatch(
     for (current_files) |current| {
         const reviewed = findReviewedFile(self, current.name) orelse return false;
         if (!std.mem.eql(u8, reviewed.contents, current.contents)) return false;
+        if (reviewed.permissions != current.permissions) return false;
     }
     return true;
 }

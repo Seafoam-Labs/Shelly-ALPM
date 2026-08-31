@@ -136,6 +136,7 @@ pub const AurPage = extern struct {
         p.aur_detail = detail;
         gtk.Revealer.setChild(p.detail_revealer, detail.as(gtk.Widget));
 
+        attachSorter(p.check_column, sorters.boolSorter(AurPackageObject, &AurPackageObject.isSelected));
         attachSorter(p.name_column, sorters.stringSorter(AurPackageObject, &AurPackageObject.getName));
         attachSorter(p.version_column, sorters.stringSorter(AurPackageObject, &AurPackageObject.getVersion));
         attachSorter(p.votes_column, sorters.numericSorter(AurPackageObject, &AurPackageObject.getNumVotes));

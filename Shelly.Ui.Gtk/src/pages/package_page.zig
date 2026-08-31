@@ -192,6 +192,7 @@ pub const PackagePage = extern struct {
 
         gtk.ColumnViewColumn.setVisible(p.install_date_column, 0);
 
+        attachSorter(p.check_column, sorters.boolSorter(PackageObject, &PackageObject.isSelected));
         attachSorter(p.install_date_column, sorters.stringSorter(PackageObject, &PackageObject.getInstallDate));
         attachSorter(p.name_column, sorters.stringSorter(PackageObject, &PackageObject.getName));
         attachSorter(p.size_column, sorters.numericSorter(PackageObject, &PackageObject.getInstalledSize));

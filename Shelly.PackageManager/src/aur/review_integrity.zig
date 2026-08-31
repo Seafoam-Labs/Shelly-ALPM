@@ -89,4 +89,8 @@ fn hashReviewedFile(
     const content = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_file_size));
     defer allocator.free(content);
     hashReviewField(hash, file_name, content);
+    const status = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
+    var encoded_mode: [4]u8 = undefined;
+    std.mem.writeInt(u32, &encoded_mode, status.permissions.toMode() & 0o777, .little);
+    hashReviewField(hash, "permissions", &encoded_mode);
 }

@@ -85,18 +85,20 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
     }
 
     // Match makepkg's integrity ordering: acquire every source, then check
-    // hashes and signatures, and only then extract anything.
+    // hashes and signatures, and only then extract anything. makepkg hashes a
+    // deterministic `git archive` for pinned tags and commits. Moving Git
+    // references cannot be checksummed and must retain their SKIP entries.
     for (prepared) |*source| {
         try operation.checkCancelled();
         if (source.source.kind == .git) {
-            try checksums.requireSkippedVcsChecksums(package_build, source.index);
-        } else {
-            verifySourceChecksums(self, package_build, source.index, source.destination) catch |err| {
-                if (err != error.SourceChecksumMismatch or source.source.kind != .http) return err;
-                try acquireHttpSource(self, operation, source.source, source.destination, true);
-                try verifySourceChecksums(self, package_build, source.index, source.destination);
-            };
+            try verifyGitSourceChecksums(self, operation, package_build, source);
+            continue;
         }
+        verifySourceChecksums(self, package_build, source.index, source.destination) catch |err| {
+            if (err != error.SourceChecksumMismatch or source.source.kind != .http) return err;
+            try acquireHttpSource(self, operation, source.source, source.destination, true);
+            try verifySourceChecksums(self, package_build, source.index, source.destination);
+        };
     }
 
     if (!self.options.skip_source_pgp_verification)
@@ -169,6 +171,73 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
         steps.reportUnwritableBuildDirectory(self, srcdir);
         return error.BuildDirectoryNotWritable;
     };
+}
+
+fn verifyGitSourceChecksums(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    package_build: *const PackageBuild,
+    prepared: *const source_spec.PreparedSource,
+) !void {
+    const reference = prepared.source.reference orelse {
+        return checksums.requireSkippedVcsChecksums(package_build, prepared.index);
+    };
+    if (reference.kind == .branch)
+        return checksums.requireSkippedVcsChecksums(package_build, prepared.index);
+    if (!checksums.hasVerifiableChecksum(package_build, prepared.index)) return;
+
+    var random_suffix: [8]u8 = undefined;
+    self.io.random(&random_suffix);
+    const suffix = std.fmt.bytesToHex(random_suffix, .lower);
+    const archive_path = try std.fmt.allocPrint(
+        self.allocator,
+        "{s}.shelly-archive-{s}.tmp",
+        .{ prepared.destination, suffix },
+    );
+    defer self.allocator.free(archive_path);
+    defer std.Io.Dir.cwd().deleteFile(self.io, archive_path) catch {};
+
+    // makepkg neutralizes export-subst/export-ignore when it archives the
+    // acquisition mirror. Apply the same highest-precedence Git attributes
+    // to this fresh working clone only for the checksum operation.
+    const info_path = try std.fs.path.join(self.allocator, &.{ prepared.destination, ".git/info" });
+    defer self.allocator.free(info_path);
+    try std.Io.Dir.cwd().createDirPath(self.io, info_path);
+    const attributes_path = try std.fs.path.join(self.allocator, &.{ info_path, "attributes" });
+    defer self.allocator.free(attributes_path);
+    const previous_attributes: ?[]u8 = std.Io.Dir.cwd().readFileAlloc(
+        self.io,
+        attributes_path,
+        self.allocator,
+        .limited(1024 * 1024),
+    ) catch |err| switch (err) {
+        error.FileNotFound => null,
+        else => return err,
+    };
+    defer {
+        if (previous_attributes) |contents| {
+            std.Io.Dir.cwd().writeFile(self.io, .{ .sub_path = attributes_path, .data = contents }) catch {};
+            self.allocator.free(contents);
+        } else {
+            std.Io.Dir.cwd().deleteFile(self.io, attributes_path) catch {};
+        }
+    }
+    try std.Io.Dir.cwd().writeFile(self.io, .{
+        .sub_path = attributes_path,
+        .data = "* -export-subst -export-ignore\n",
+    });
+
+    try runSourceCommand(self, operation, &.{
+        "-C",
+        prepared.destination,
+        "archive",
+        "--format=tar",
+        "--output",
+        archive_path,
+        "--",
+        reference.value,
+    });
+    try verifySourceChecksums(self, package_build, prepared.index, archive_path);
 }
 
 fn copyLocalSource(self: *PackageBuilder, source_name: []const u8, destination: []const u8) !void {
@@ -580,8 +649,18 @@ fn extractSourceArchive(
     archive_path: []const u8,
     destination_root: []const u8,
 ) !void {
+    const DirectoryTimestamp = struct {
+        path: []u8,
+        mtime: std.Io.Timestamp,
+    };
+
     var reader = try archive.Reader.initAll(self.allocator, archive_path);
     defer reader.deinit();
+    var directory_timestamps: std.ArrayList(DirectoryTimestamp) = .empty;
+    defer {
+        for (directory_timestamps.items) |timestamp| self.allocator.free(timestamp.path);
+        directory_timestamps.deinit(self.allocator);
+    }
     var buffer: [64 * 1024]u8 = undefined;
     var entry_count: usize = 0;
     var total_size: u64 = 0;
@@ -599,7 +678,17 @@ fn extractSourceArchive(
         const destination = try std.fs.path.join(self.allocator, &.{ destination_root, relative });
         defer self.allocator.free(destination);
         switch (entry.kind) {
-            .directory => try ensureSafeArchivePath(self, destination_root, relative, true),
+            .directory => {
+                try ensureSafeArchivePath(self, destination_root, relative, true);
+                if (entry.mtime) |mtime| {
+                    const owned_path = try self.allocator.dupe(u8, destination);
+                    errdefer self.allocator.free(owned_path);
+                    try directory_timestamps.append(self.allocator, .{
+                        .path = owned_path,
+                        .mtime = mtime,
+                    });
+                }
+            },
             .regular_file => {
                 try ensureSafeArchivePath(self, destination_root, relative, false);
                 try rejectSymlinkDestination(self.io, destination);
@@ -619,6 +708,10 @@ fn extractSourceArchive(
                         return error.SourceArchiveTooLarge;
                     try writer.interface.writeAll(buffer[0..amount]);
                 }
+                try writer.interface.flush();
+                if (entry.mtime) |mtime| try output.setTimestamps(self.io, .{
+                    .modify_timestamp = .{ .new = mtime },
+                });
             },
             .symbolic_link => {
                 const target = entry.link_target orelse return error.UnsafeSourceArchiveLink;
@@ -627,9 +720,27 @@ fn extractSourceArchive(
                 try ensureSafeArchivePath(self, destination_root, relative, false);
                 try rejectExistingDestination(self.io, destination);
                 try std.Io.Dir.cwd().symLink(self.io, safe_target, destination, .{});
+                if (entry.mtime) |mtime| try std.Io.Dir.cwd().setTimestamps(
+                    self.io,
+                    destination,
+                    .{
+                        .follow_symlinks = false,
+                        .modify_timestamp = .{ .new = mtime },
+                    },
+                );
             },
             .other => return error.UnsupportedSourceArchiveEntry,
         }
+    }
+
+    // Creating children changes directory mtimes. Restore recorded directory
+    // timestamps only after the complete tree exists. Archive order is retained
+    // so a repeated directory entry keeps the metadata from its last occurrence.
+    for (directory_timestamps.items) |timestamp| {
+        try std.Io.Dir.cwd().setTimestamps(self.io, timestamp.path, .{
+            .follow_symlinks = false,
+            .modify_timestamp = .{ .new = timestamp.mtime },
+        });
     }
 }
 

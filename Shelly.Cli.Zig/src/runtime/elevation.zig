@@ -121,6 +121,20 @@ pub fn runAsInvokingUser(
     return @as(?u8, try exitCode(try child.wait(context.io)));
 }
 
+pub const UserIds = struct {
+    uid: std.Io.File.Uid,
+    gid: std.Io.File.Gid,
+};
+
+pub fn invokingUserIds(context: *const context_module.RuntimeContext) !?UserIds {
+    const identity = (try invokingUser(context)) orelse return null;
+    defer identity.deinit(context.allocator);
+    return .{
+        .uid = try std.fmt.parseInt(std.Io.File.Uid, identity.uid, 10),
+        .gid = try std.fmt.parseInt(std.Io.File.Gid, identity.gid, 10),
+    };
+}
+
 fn findElevator(context: *const context_module.RuntimeContext) []const u8 {
     if (context.environment) |environment| {
         if (environment.get("SHELLY_ELEVATOR")) |configured| {
@@ -228,10 +242,12 @@ fn buildInvokingUserArguments(
 const InvokingIdentity = struct {
     username: []const u8,
     uid: []const u8,
+    gid: []const u8,
 
     fn deinit(self: InvokingIdentity, allocator: std.mem.Allocator) void {
         allocator.free(self.username);
         allocator.free(self.uid);
+        allocator.free(self.gid);
     }
 };
 
@@ -268,11 +284,8 @@ fn invokingIdentity(
     const uid = environment.get("PKEXEC_UID") orelse return null;
     if (uid.len == 0) return null;
     const username = try usernameForUidInPasswd(allocator, passwd, uid) orelse return null;
-    errdefer allocator.free(username);
-    return InvokingIdentity{
-        .username = username,
-        .uid = try allocator.dupe(u8, uid),
-    };
+    defer allocator.free(username);
+    return identityForUsername(allocator, passwd, username);
 }
 
 fn identityForUsername(
@@ -282,9 +295,12 @@ fn identityForUsername(
 ) !?InvokingIdentity {
     const uid = try uidForUsernameInPasswd(allocator, passwd, username) orelse return null;
     errdefer allocator.free(uid);
+    const gid = try gidForUsernameInPasswd(allocator, passwd, username) orelse return null;
+    errdefer allocator.free(gid);
     return InvokingIdentity{
         .username = try allocator.dupe(u8, username),
         .uid = uid,
+        .gid = gid,
     };
 }
 
@@ -322,6 +338,24 @@ fn uidForUsernameInPasswd(
         const uid = fields.next() orelse continue;
         if (std.mem.eql(u8, username, wanted_username) and uid.len > 0)
             return try allocator.dupe(u8, uid);
+    }
+    return null;
+}
+
+fn gidForUsernameInPasswd(
+    allocator: std.mem.Allocator,
+    passwd: []const u8,
+    wanted_username: []const u8,
+) !?[]const u8 {
+    var lines = std.mem.splitScalar(u8, passwd, '\n');
+    while (lines.next()) |line| {
+        var fields = std.mem.splitScalar(u8, line, ':');
+        const username = fields.next() orelse continue;
+        _ = fields.next() orelse continue;
+        _ = fields.next() orelse continue;
+        const gid = fields.next() orelse continue;
+        if (std.mem.eql(u8, username, wanted_username) and gid.len > 0)
+            return try allocator.dupe(u8, gid);
     }
     return null;
 }
@@ -520,6 +554,7 @@ test "pkexec elevation resolves the invoking identity from passwd" {
     defer identity.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("tester", identity.username);
     try std.testing.expectEqualStrings("1000", identity.uid);
+    try std.testing.expectEqualStrings("1000", identity.gid);
 }
 
 test "run0 elevation resolves its SUDO_USER invoking identity" {
@@ -532,6 +567,7 @@ test "run0 elevation resolves its SUDO_USER invoking identity" {
     defer identity.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("tester", identity.username);
     try std.testing.expectEqualStrings("1000", identity.uid);
+    try std.testing.expectEqualStrings("1000", identity.gid);
 }
 
 test "sudo elevation takes precedence over pkexec and resolves its uid" {
@@ -545,6 +581,7 @@ test "sudo elevation takes precedence over pkexec and resolves its uid" {
     defer identity.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("tester", identity.username);
     try std.testing.expectEqualStrings("1000", identity.uid);
+    try std.testing.expectEqualStrings("1000", identity.gid);
 }
 
 test "root callers are not treated as an invoking user" {

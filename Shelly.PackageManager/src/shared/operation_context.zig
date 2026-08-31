@@ -147,6 +147,11 @@ pub const QuestionOption = struct {
     is_selected: bool = false,
 };
 
+pub const QuestionPurpose = enum {
+    generic,
+    cache_clean_extra_entries,
+}; 
+
 pub const QuestionAttachment = struct {
     name: []const u8,
     media_type: []const u8 = "text/plain",
@@ -235,6 +240,7 @@ pub const QuestionResponse = union(enum) {
 
 pub const QuestionRequest = struct {
     kind: QuestionKind,
+    purpose: QuestionPurpose = .generic,
     prompt: []const u8,
     options: []const QuestionOption = &.{},
     attachments: []const QuestionAttachment = &.{},
@@ -249,6 +255,7 @@ pub const Question = struct {
     question_id: QuestionId,
     envelope: Envelope,
     kind: QuestionKind,
+    purpose: QuestionPurpose,
     prompt: []const u8,
     options: []const QuestionOption,
     attachments: []const QuestionAttachment,
@@ -525,6 +532,7 @@ pub const OperationContext = struct {
         const question: Question = .{
             .question_id = id,
             .envelope = envelope,
+            .purpose = request.purpose,
             .kind = request.kind,
             .prompt = request.prompt,
             .options = request.options,

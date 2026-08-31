@@ -1390,8 +1390,9 @@ test "PackageBuilder simulates root ownership without host chown" {
     try testing.expect(saw_installed);
 }
 
-test "PackageBuilder rejects unsupported virtual ownership" {
+test "PackageBuilder preserves non-root virtual ownership and special modes" {
     const allocator = testing.allocator;
+    const io = testing.io;
     var fixture = try Fixture.create(allocator,
         \\pkgname=demo
         \\pkgver=1
@@ -1399,7 +1400,179 @@ test "PackageBuilder rejects unsupported virtual ownership" {
         \\package() {
         \\  mkdir -p "$pkgdir/usr/share/demo"
         \\  touch "$pkgdir/usr/share/demo/data"
+        \\  chmod 4755 "$pkgdir/usr/share/demo/data"
         \\  chown 42:84 "$pkgdir/usr/share/demo/data"
+        \\  chgrp 50 "$pkgdir/usr/share/demo/data"
+        \\  install --mode=2755 --owner=42 -g50 /dev/null "$pkgdir/usr/share/demo/installed"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+
+    var reader = try archive.Reader.init(allocator, artifacts[0].path);
+    defer reader.deinit();
+    var saw_data = false;
+    var saw_installed = false;
+    while (try reader.next()) |entry| {
+        if (std.mem.eql(u8, entry.path, "usr/share/demo/data")) {
+            saw_data = true;
+            try testing.expectEqual(@as(i64, 42), entry.uid);
+            try testing.expectEqual(@as(i64, 50), entry.gid);
+            try testing.expectEqual(@as(u32, 0o4755), entry.permissions);
+        } else if (std.mem.eql(u8, entry.path, "usr/share/demo/installed")) {
+            saw_installed = true;
+            try testing.expectEqual(@as(i64, 42), entry.uid);
+            try testing.expectEqual(@as(i64, 50), entry.gid);
+            try testing.expectEqual(@as(u32, 0o2755), entry.permissions);
+        } else {
+            try testing.expectEqual(@as(i64, 0), entry.uid);
+            try testing.expectEqual(@as(i64, 0), entry.gid);
+        }
+    }
+    try testing.expect(saw_data);
+    try testing.expect(saw_installed);
+
+    const mtree_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "pkg/demo/.MTREE" });
+    defer allocator.free(mtree_path);
+    var gzip = try process_runner.run(allocator, io, &.{ "gzip", "-dc", mtree_path }, null, null);
+    defer gzip.deinit(allocator);
+    try testing.expectEqual(@as(u8, 0), gzip.exit_code);
+    var lines = std.mem.splitScalar(u8, gzip.stdout, '\n');
+    var saw_data_metadata = false;
+    var saw_installed_metadata = false;
+    while (lines.next()) |line| {
+        if (std.mem.indexOf(u8, line, "usr/share/demo/data") != null) {
+            saw_data_metadata = true;
+            try testing.expect(std.mem.indexOf(u8, line, "uid=42") != null);
+            try testing.expect(std.mem.indexOf(u8, line, "gid=50") != null);
+            try testing.expect(std.mem.indexOf(u8, line, "mode=4755") != null);
+        }
+        if (std.mem.indexOf(u8, line, "usr/share/demo/installed") != null) {
+            saw_installed_metadata = true;
+            try testing.expect(std.mem.indexOf(u8, line, "uid=42") != null);
+            try testing.expect(std.mem.indexOf(u8, line, "gid=50") != null);
+            try testing.expect(std.mem.indexOf(u8, line, "mode=2755") != null);
+        }
+    }
+    try testing.expect(saw_data_metadata);
+    try testing.expect(saw_installed_metadata);
+}
+
+test "PackageBuilder virtual ownership follows identities and recursive snapshots" {
+    const allocator = testing.allocator;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=identity-demo
+        \\pkgver=1
+        \\arch=('any')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/identity/tree"
+        \\  touch "$pkgdir/usr/share/identity/renamed"
+        \\  chown 41:81 "$pkgdir/usr/share/identity/renamed"
+        \\  mv "$pkgdir/usr/share/identity/renamed" "$pkgdir/usr/share/identity/final"
+        \\  touch "$pkgdir/usr/share/identity/replaced"
+        \\  chown 42:82 "$pkgdir/usr/share/identity/replaced"
+        \\  rm "$pkgdir/usr/share/identity/replaced"
+        \\  touch "$pkgdir/usr/share/identity/replaced"
+        \\  touch "$pkgdir/usr/share/identity/tree/existing"
+        \\  chown -R 43:83 "$pkgdir/usr/share/identity/tree"
+        \\  touch "$pkgdir/usr/share/identity/tree/later"
+        \\  touch "$pkgdir/usr/share/identity/hard"
+        \\  ln "$pkgdir/usr/share/identity/hard" "$pkgdir/usr/share/identity/hard-link"
+        \\  chown 45:85 "$pkgdir/usr/share/identity/hard"
+        \\  touch "$pkgdir/usr/share/identity/symlink-target"
+        \\  ln -s symlink-target "$pkgdir/usr/share/identity/symlink"
+        \\  chown -h 46:86 "$pkgdir/usr/share/identity/symlink"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    var reader = try archive.Reader.init(allocator, artifacts[0].path);
+    defer reader.deinit();
+    var checked: usize = 0;
+    while (try reader.next()) |entry| {
+        const entry_path = std.mem.trimEnd(u8, entry.path, "/");
+        if (std.mem.eql(u8, entry_path, "usr/share/identity/final")) {
+            checked += 1;
+            try testing.expectEqual(@as(i64, 41), entry.uid);
+            try testing.expectEqual(@as(i64, 81), entry.gid);
+        } else if (std.mem.eql(u8, entry_path, "usr/share/identity/replaced") or
+            std.mem.eql(u8, entry_path, "usr/share/identity/tree/later"))
+        {
+            checked += 1;
+            try testing.expectEqual(@as(i64, 0), entry.uid);
+            try testing.expectEqual(@as(i64, 0), entry.gid);
+        } else if (std.mem.eql(u8, entry_path, "usr/share/identity/tree") or
+            std.mem.eql(u8, entry_path, "usr/share/identity/tree/existing"))
+        {
+            checked += 1;
+            try testing.expectEqual(@as(i64, 43), entry.uid);
+            try testing.expectEqual(@as(i64, 83), entry.gid);
+        } else if (std.mem.eql(u8, entry_path, "usr/share/identity/hard") or
+            std.mem.eql(u8, entry_path, "usr/share/identity/hard-link"))
+        {
+            checked += 1;
+            try testing.expectEqual(@as(i64, 45), entry.uid);
+            try testing.expectEqual(@as(i64, 85), entry.gid);
+        } else if (std.mem.eql(u8, entry_path, "usr/share/identity/symlink")) {
+            checked += 1;
+            try testing.expectEqual(archive.EntryKind.symbolic_link, entry.kind);
+            try testing.expectEqual(@as(i64, 46), entry.uid);
+            try testing.expectEqual(@as(i64, 86), entry.gid);
+        }
+    }
+    try testing.expectEqual(@as(usize, 8), checked);
+}
+
+test "PackageBuilder isolates virtual ownership between split members" {
+    const allocator = testing.allocator;
+    const content =
+        \\pkgbase=ownership-split
+        \\pkgname=('ownership-one' 'ownership-two')
+        \\pkgver=1
+        \\arch=('any')
+        \\package_ownership-one() {
+        \\  mkdir -p "$pkgdir/usr/share/ownership"
+        \\  touch "$pkgdir/usr/share/ownership/data"
+        \\  chown 44:84 "$pkgdir/usr/share/ownership/data"
+        \\}
+        \\package_ownership-two() {
+        \\  mkdir -p "$pkgdir/usr/share/ownership"
+        \\  touch "$pkgdir/usr/share/ownership/data"
+        \\}
+    ;
+    const requested = [_][]const u8{ "ownership-one", "ownership-two" };
+    var fixture = try Fixture.createMany(allocator, content, &requested, null);
+    defer fixture.destroy();
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    for (artifacts, 0..) |artifact, index| {
+        var reader = try archive.Reader.init(allocator, artifact.path);
+        defer reader.deinit();
+        var saw_data = false;
+        while (try reader.next()) |entry| {
+            if (!std.mem.eql(u8, entry.path, "usr/share/ownership/data")) continue;
+            saw_data = true;
+            try testing.expectEqual(@as(i64, if (index == 0) 44 else 0), entry.uid);
+            try testing.expectEqual(@as(i64, if (index == 0) 84 else 0), entry.gid);
+        }
+        try testing.expect(saw_data);
+    }
+}
+
+test "PackageBuilder rejects malformed virtual ownership" {
+    const allocator = testing.allocator;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\arch=('any')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/demo"
+        \\  install --owner= /dev/null "$pkgdir/usr/share/demo/installed"
         \\}
     , null, null);
     defer fixture.destroy();
@@ -1407,6 +1580,40 @@ test "PackageBuilder rejects unsupported virtual ownership" {
     try testing.expectError(
         error.PrivilegedPackageOperationUnsupported,
         fixture.builder.BuildPackage(),
+    );
+}
+
+test "PackageBuilder rejects unresolved and out-of-package virtual ownership" {
+    const allocator = testing.allocator;
+    var unresolved = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\arch=('any')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/demo"
+        \\  touch "$pkgdir/usr/share/demo/data"
+        \\  chown shelly-owner-that-does-not-exist "$pkgdir/usr/share/demo/data"
+        \\}
+    , null, null);
+    defer unresolved.destroy();
+    try testing.expectError(
+        error.PrivilegedPackageOperationUnsupported,
+        unresolved.builder.BuildPackage(),
+    );
+
+    var outside = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\arch=('any')
+        \\package() {
+        \\  touch "$startdir/outside"
+        \\  chown 42:84 "$startdir/outside"
+        \\}
+    , null, null);
+    defer outside.destroy();
+    try testing.expectError(
+        error.PrivilegedPackageOperationUnsupported,
+        outside.builder.BuildPackage(),
     );
 }
 
@@ -2251,6 +2458,53 @@ test "PackageBuilder extracts source archives into srcdir" {
     try fixture.temporary.dir.access(io, "pkg/demo/usr/share/demo/source.txt", .{});
 }
 
+test "PackageBuilder preserves source archive modification timestamps" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('payload.tar.gz')
+        \\sha256sums=('SKIP')
+        \\build() {
+        \\  test ! "$srcdir/demo/generated.c" -ot "$srcdir/demo/source.tree"
+        \\}
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/demo"
+        \\  cp "$srcdir/demo/generated.c" "$pkgdir/usr/share/demo/generated.c"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    const archive_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "payload.tar.gz" });
+    defer allocator.free(archive_path);
+    const shared_mtime: std.Io.Timestamp = .{ .nanoseconds = 1_234_567_890 * std.time.ns_per_s };
+    const link_mtime: std.Io.Timestamp = .{ .nanoseconds = shared_mtime.nanoseconds + 7 * std.time.ns_per_s };
+    try archive.writeFixture(allocator, archive_path, .gzip, &.{
+        .{ .path = "demo", .kind = .directory, .permissions = 0o755, .mtime = shared_mtime },
+        // Keep the generated target before its prerequisite to reproduce the
+        // ordering that made flite1 regenerate us_pos_cart.c.
+        .{ .path = "demo/generated.c", .contents = "generated\n", .mtime = shared_mtime },
+        .{ .path = "demo/source.tree", .contents = "source\n", .mtime = shared_mtime },
+        .{ .path = "demo/current", .link_target = "generated.c", .mtime = link_mtime },
+    });
+    fixture.builder.options.sources_prepared = false;
+    try fixture.temporary.dir.deleteTree(io, "src");
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const directory = try fixture.temporary.dir.statFile(io, "src/demo", .{ .follow_symlinks = false });
+    const generated = try fixture.temporary.dir.statFile(io, "src/demo/generated.c", .{ .follow_symlinks = false });
+    const prerequisite = try fixture.temporary.dir.statFile(io, "src/demo/source.tree", .{ .follow_symlinks = false });
+    const link = try fixture.temporary.dir.statFile(io, "src/demo/current", .{ .follow_symlinks = false });
+    try testing.expectEqual(shared_mtime.nanoseconds, directory.mtime.nanoseconds);
+    // Updating the link itself must not follow it and change generated.c.
+    try testing.expectEqual(shared_mtime.nanoseconds, generated.mtime.nanoseconds);
+    try testing.expectEqual(shared_mtime.nanoseconds, prerequisite.mtime.nanoseconds);
+    try testing.expectEqual(link_mtime.nanoseconds, link.mtime.nanoseconds);
+}
+
 test "PackageBuilder extracts VSIX sources into srcdir" {
     const allocator = testing.allocator;
     const io = testing.io;
@@ -2647,6 +2901,86 @@ test "PackageBuilder runs relative VCS paths from srcdir before pkgver" {
     const refreshed = try std.Io.Dir.cwd().readFileAlloc(io, refreshed_path, allocator, .unlimited);
     defer allocator.free(refreshed);
     try testing.expectEqualStrings("refreshed\n", refreshed);
+}
+
+test "PackageBuilder verifies real checksums for pinned VCS sources" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var remote = std.testing.tmpDir(.{});
+    defer remote.cleanup();
+    const remote_path = try remote.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(remote_path);
+    try remote.dir.writeFile(io, .{ .sub_path = "source-marker", .data = "checked out\n" });
+    try remote.dir.writeFile(io, .{ .sub_path = ".gitattributes", .data = "source-marker export-ignore\n" });
+    try runTestCommand(allocator, io, &.{ "git", "init", "-b", "main" }, remote_path);
+    try runTestCommand(allocator, io, &.{ "git", "config", "user.email", "shelly-tests@example.invalid" }, remote_path);
+    try runTestCommand(allocator, io, &.{ "git", "config", "user.name", "Shelly Tests" }, remote_path);
+    try runTestCommand(allocator, io, &.{ "git", "add", "source-marker", ".gitattributes" }, remote_path);
+    try runTestCommand(allocator, io, &.{ "git", "commit", "-m", "fixture" }, remote_path);
+    try runTestCommand(allocator, io, &.{ "git", "tag", "1" }, remote_path);
+
+    // Modern makepkg disables repository export attributes in its acquisition
+    // mirror so checksum generation cannot omit or rewrite tracked content.
+    try remote.dir.writeFile(io, .{
+        .sub_path = ".git/info/attributes",
+        .data = "* -export-subst -export-ignore\n",
+    });
+    var archive_result = try process_runner.run(
+        allocator,
+        io,
+        &.{ "git", "archive", "--format=tar", "1" },
+        remote_path,
+        null,
+    );
+    try remote.dir.deleteFile(io, ".git/info/attributes");
+    defer archive_result.deinit(allocator);
+    try testing.expectEqual(@as(u8, 0), archive_result.exit_code);
+    var digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(archive_result.stdout, &digest, .{});
+    const expected_checksum = std.fmt.bytesToHex(digest, .lower);
+
+    // Legitimate AUR pattern (e.g. lib32-orc): a pinned VCS source with a
+    // real checksum entry. makepkg hashes the deterministic archive for tags
+    // and commits, rather than requiring every VCS checksum entry to be SKIP.
+    const pkgbuild = try std.fmt.allocPrint(allocator,
+        \\pkgname=shelly-git
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('shelly-git::git+file://{s}#tag=1')
+        \\sha256sums=('{s}')
+        \\package() {{
+        \\  cd "$pkgname"
+        \\  mkdir -p "$pkgdir/usr/share/shelly"
+        \\  cp source-marker "$pkgdir/usr/share/shelly/source-marker"
+        \\}}
+    , .{ remote_path, expected_checksum });
+    defer allocator.free(pkgbuild);
+    var fixture = try Fixture.create(allocator, pkgbuild, null, null);
+    defer fixture.destroy();
+    const work_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "work" });
+    defer allocator.free(work_path);
+    const source_cache = try std.fs.path.join(allocator, &.{ fixture.build_dir, "source-cache" });
+    defer allocator.free(source_cache);
+    const package_destination = try std.fs.path.join(allocator, &.{ fixture.build_dir, "packages" });
+    defer allocator.free(package_destination);
+    const log_destination = try std.fs.path.join(allocator, &.{ fixture.build_dir, "logs" });
+    defer allocator.free(log_destination);
+    fixture.builder.options.work_directory = work_path;
+    fixture.builder.options.source_destination = source_cache;
+    fixture.builder.options.package_destination = package_destination;
+    fixture.builder.options.log_destination = log_destination;
+    fixture.builder.options.sources_prepared = false;
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 1), artifacts.len);
+
+    const configured_checksum = @constCast(fixture.builder.package_builds[0].sha_256_sums.?[0]);
+    const original_nibble = configured_checksum[0];
+    defer configured_checksum[0] = original_nibble;
+    configured_checksum[0] = if (original_nibble == '0') '1' else '0';
+    try testing.expectError(error.BuildFailed, fixture.builder.BuildPackage());
 }
 
 test "PackageBuilder applies generic patch arrays and propagates dynamic pkgver" {
@@ -3891,6 +4225,8 @@ test "PackageBuilder wraps lifecycle steps through the sandbox wrapper when enab
         \\package() {
         \\  mkdir -p "$pkgdir"
         \\  echo packaged > "$pkgdir/package-marker"
+        \\  chmod 4755 "$pkgdir/package-marker"
+        \\  chown 42:84 "$pkgdir/package-marker"
         \\}
     , null, null);
     defer fixture.destroy();
@@ -3924,6 +4260,31 @@ test "PackageBuilder wraps lifecycle steps through the sandbox wrapper when enab
     try fixture.temporary.dir.access(io, "wrapper-marker", .{});
     try fixture.temporary.dir.access(io, "src/build-marker", .{});
     try fixture.temporary.dir.access(io, "pkg/sandbox-demo/package-marker", .{});
+
+    const staged_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "pkg/sandbox-demo/package-marker" });
+    defer allocator.free(staged_path);
+    var stat_result = try process_runner.run(allocator, io, &.{ "stat", "-c", "%u:%g", staged_path }, null, null);
+    defer stat_result.deinit(allocator);
+    try testing.expectEqual(@as(u8, 0), stat_result.exit_code);
+    var expected_owner_buffer: [64]u8 = undefined;
+    const expected_owner = try std.fmt.bufPrint(
+        &expected_owner_buffer,
+        "{d}:{d}",
+        .{ std.os.linux.geteuid(), std.os.linux.getegid() },
+    );
+    try testing.expectEqualStrings(expected_owner, std.mem.trim(u8, stat_result.stdout, " \t\r\n"));
+
+    var reader = try archive.Reader.init(allocator, artifacts[0].path);
+    defer reader.deinit();
+    var saw_marker = false;
+    while (try reader.next()) |entry| {
+        if (!std.mem.eql(u8, entry.path, "package-marker")) continue;
+        saw_marker = true;
+        try testing.expectEqual(@as(i64, 42), entry.uid);
+        try testing.expectEqual(@as(i64, 84), entry.gid);
+        try testing.expectEqual(@as(u32, 0o4755), entry.permissions);
+    }
+    try testing.expect(saw_marker);
 }
 
 test "PackageBuilder records a sandbox hint when a confined step fails" {
