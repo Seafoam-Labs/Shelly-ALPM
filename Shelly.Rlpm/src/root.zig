@@ -3,6 +3,7 @@ const std = @import("std");
 const Io = std.Io;
 
 pub const Version = @import("structs/Version.zig");
+pub const ParsedDescription = @import("structs/ParsedDescription.zig");
 
 /// This is a documentation comment to explain the `printAnotherMessage` function below.
 ///
@@ -23,6 +24,7 @@ test {
     _ = @import("structs/Version.zig");
     _ = @import("structs/PackageRelation.zig");
     _ = @import("structs/Package.zig");
+    _ = @import("structs/ParsedDescription.zig");
     _ = @import("structs/Group.zig");
     _ = @import("structs/DatabaseStatus.zig");
     _ = @import("structs/DatabaseUsage.zig");
