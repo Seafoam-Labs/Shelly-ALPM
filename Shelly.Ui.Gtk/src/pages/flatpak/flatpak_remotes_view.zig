@@ -78,11 +78,11 @@ pub const FlatpakRemotesView = extern struct {
         support.connectLifecycle(Self, self);
     }
 
-    pub fn show_add_form(self: *Self) void {
+    pub fn showAddForm(self: *Self) void {
         gtk.Stack.setVisibleChildName(self.priv().remotes_stack, "add");
     }
 
-    pub fn show_list(self: *Self) void {
+    pub fn showList(self: *Self) void {
         gtk.Stack.setVisibleChildName(self.priv().remotes_stack, "list");
     }
 
@@ -93,11 +93,11 @@ pub const FlatpakRemotesView = extern struct {
         p.generation += 1;
         p.has_selection = false;
 
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation }) catch return;
+        const thread = std.Thread.spawn(.{}, loadWorker, .{ self, p.generation }) catch return;
         thread.detach();
     }
 
-    fn load_worker(page: *Self, generation: u64) void {
+    fn loadWorker(page: *Self, generation: u64) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
         arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         const alloc = arena_ptr.allocator();
@@ -106,25 +106,25 @@ pub const FlatpakRemotesView = extern struct {
         defer threaded.deinit();
 
         const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const parsed = cli.get_remotes() catch {
-            post_result(page, &.{}, arena_ptr, generation);
+        const parsed = cli.getRemotes() catch {
+            postResult(page, &.{}, arena_ptr, generation);
             return;
         };
 
-        post_result(page, parsed.value, arena_ptr, generation);
+        postResult(page, parsed.value, arena_ptr, generation);
     }
 
-    fn post_result(page: *Self, remotes: []Remote, arena: *std.heap.ArenaAllocator, generation: u64) void {
+    fn postResult(page: *Self, remotes: []Remote, arena: *std.heap.ArenaAllocator, generation: u64) void {
         const result = std.heap.c_allocator.create(LoadResult) catch {
             arena.deinit();
             std.heap.c_allocator.destroy(arena);
             return;
         };
         result.* = .{ .page = page, .remotes = remotes, .arena = arena, .generation = generation };
-        _ = glib.idleAdd(&on_load_complete, result);
+        _ = glib.idleAdd(&onLoadComplete, result);
     }
 
-    fn on_load_complete(data: ?*anyopaque) callconv(.c) c_int {
+    fn onLoadComplete(data: ?*anyopaque) callconv(.c) c_int {
         const result: *LoadResult = @ptrCast(@alignCast(data.?));
         defer std.heap.c_allocator.destroy(result);
         const p = result.page.priv();
@@ -145,7 +145,7 @@ pub const FlatpakRemotesView = extern struct {
         }
 
         for (result.remotes, 0..) |r, i| {
-            gtk.ListBox.append(p.list_remotes, make_remote_row(r, i));
+            gtk.ListBox.append(p.list_remotes, makeRemoteRow(r, i));
         }
         return 0;
     }
@@ -187,14 +187,14 @@ pub const FlatpakRemotesView = extern struct {
             inline for (template_children) |c| {
                 support.bindChild(class, Private.offset, c[0], c[1]);
             }
-            gtk.Widget.Class.bindTemplateCallbackFull(wc, "remove_selected_remote", @ptrCast(&remove_remote));
-            gtk.Widget.Class.bindTemplateCallbackFull(wc, "add_remote", @ptrCast(&add_remote));
-            gtk.Widget.Class.bindTemplateCallbackFull(wc, "back_to_list", @ptrCast(&back_to_list));
-            gtk.Widget.Class.bindTemplateCallbackFull(wc, "add_remote_confirm", @ptrCast(&add_remote_confirm));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "remove_selected_remote", @ptrCast(&removeRemote));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "add_remote", @ptrCast(&addRemote));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "back_to_list", @ptrCast(&backToList));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "add_remote_confirm", @ptrCast(&addRemoteConfirm));
         }
     };
 
-    fn remove_remote(self: *Self) callconv(.c) void {
+    fn removeRemote(self: *Self) callconv(.c) void {
         const p = self.priv();
 
         const row = gtk.ListBox.getSelectedRow(p.list_remotes) orelse return;
@@ -218,14 +218,14 @@ pub const FlatpakRemotesView = extern struct {
                 .title = translations._("Removing Remote"),
                 .argv = argv,
                 .packages = names.items,
-                .on_complete = &on_transaction_complete,
+                .on_complete = &onTransactionComplete,
                 .privileged = false,
                 .ctx = self,
             });
         }
     }
 
-    fn add_remote_confirm(self: *Self) callconv(.c) void {
+    fn addRemoteConfirm(self: *Self) callconv(.c) void {
         std.debug.print("test", .{});
         const p = self.priv();
 
@@ -253,39 +253,39 @@ pub const FlatpakRemotesView = extern struct {
                 .title = translations._("Adding Remote"),
                 .argv = argv,
                 .packages = names.items,
-                .on_complete = &on_transaction_complete,
+                .on_complete = &onTransactionComplete,
                 .privileged = false,
                 .ctx = self,
             });
         }
     }
 
-    fn on_transaction_complete(ctx: *anyopaque, success: bool) void {
+    fn onTransactionComplete(ctx: *anyopaque, success: bool) void {
         const self: *FlatpakRemotesView = @ptrCast(@alignCast(ctx));
         const p = self.priv();
         if (!success) return;
         self.reload();
         gtk.Editable.setText(p.overlay_add_remote_name_entry.as(gtk.Editable), "");
         gtk.Editable.setText(p.overlay_add_remote_url_entry.as(gtk.Editable), "");
-        self.back_to_list();
+        self.backToList();
     }
 
     fn reload(self: *Self) void {
         const p = self.priv();
         p.generation += 1;
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation }) catch return;
+        const thread = std.Thread.spawn(.{}, loadWorker, .{ self, p.generation }) catch return;
         thread.detach();
     }
 
-    fn add_remote(self: *Self) callconv(.c) void {
-        show_add_form(self);
+    fn addRemote(self: *Self) callconv(.c) void {
+        showAddForm(self);
     }
 
-    fn back_to_list(self: *Self) callconv(.c) void {
-        show_list(self);
+    fn backToList(self: *Self) callconv(.c) void {
+        showList(self);
     }
 
-    fn make_remote_row(remote: Remote, index: usize) *gtk.Widget {
+    fn makeRemoteRow(remote: Remote, index: usize) *gtk.Widget {
         const row = gtk.ListBoxRow.new();
         var buf: [512]u8 = undefined;
         gobject.Object.setData(

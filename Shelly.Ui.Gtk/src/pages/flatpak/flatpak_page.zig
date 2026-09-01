@@ -88,7 +88,7 @@ pub const FlatpakPage = extern struct {
         gtk.ListBox.selectRow(p.section_nav_list, p.nav_install_row);
         gtk.Stack.setVisibleChildName(p.main_content_stack, "install");
 
-        gtk.ListBox.setHeaderFunc(p.category_list, &category_header, null, null);
+        gtk.ListBox.setHeaderFunc(p.category_list, &getCategoryHeader, null, null);
 
         const group = gio.SimpleActionGroup.new();
         const action = gio.SimpleAction.new("focus", null);
@@ -131,7 +131,7 @@ pub const FlatpakPage = extern struct {
         gtk.Stack.setVisibleChildName(p.main_content_stack, name);
     }
 
-    fn category_header(row: *gtk.ListBoxRow, before: ?*gtk.ListBoxRow, _: ?*anyopaque) callconv(.c) void {
+    fn getCategoryHeader(row: *gtk.ListBoxRow, before: ?*gtk.ListBoxRow, _: ?*anyopaque) callconv(.c) void {
         const raw = gobject.Object.getData(row.as(gobject.Object), "category-index");
         if (raw == null) return;
         const index = @intFromPtr(raw) - 1;
@@ -168,23 +168,23 @@ pub const FlatpakPage = extern struct {
 
             const app: Category = @enumFromInt(index);
             const p = self.priv();
-            p.install_view.apply_category(app);
+            p.install_view.applyCategory(app);
         }
     }
 
     fn onSearchChanged(entry: *gtk.SearchEntry, self: *Self) callconv(.c) void {
         const text = std.mem.span(gtk.Editable.getText(entry.as(gtk.Editable)));
         const p = self.priv();
-        p.install_view.apply_search(text);
+        p.install_view.applySearch(text);
         p.remove_view.applySearch(text);
     }
 
     fn onSearchActivate(entry: *gtk.SearchEntry, self: *Self) callconv(.c) void {
         const text = std.mem.span(gtk.Editable.getText(entry.as(gtk.Editable)));
         const p = self.priv();
-        p.install_view.apply_search(text);
+        p.install_view.applySearch(text);
         p.remove_view.applySearch(text);
-        p.install_view.show_list();
+        p.install_view.showList();
     }
 
     pub fn onMap(self: *Self) void {
@@ -208,12 +208,12 @@ pub const FlatpakPage = extern struct {
             gtk.Widget.setMarginTop(box.as(gtk.Widget), 2);
             gtk.Widget.setMarginBottom(box.as(gtk.Widget), 2);
 
-            const icon = gtk.Image.newFromIconName(icon_for_cat(app));
+            const icon = gtk.Image.newFromIconName(getIconForCategory(app));
             gtk.Image.setPixelSize(icon, 16);
             gtk.Widget.setValign(icon.as(gtk.Widget), .center);
             gtk.Box.append(box, icon.as(gtk.Widget));
 
-            const label = gtk.Label.new(category_label(app));
+            const label = gtk.Label.new(getCategoryLabel(app));
             gtk.Widget.setHalign(label.as(gtk.Widget), .start);
             gtk.Widget.setHexpand(label.as(gtk.Widget), 1);
             gtk.Label.setXalign(label, 0);
@@ -226,7 +226,7 @@ pub const FlatpakPage = extern struct {
         p.loaded = true;
     }
 
-    fn icon_for_cat(category: Category) [:0]const u8 {
+    fn getIconForCategory(category: Category) [:0]const u8 {
         return switch (category) {
             .@"All Applications" => "view-grid-symbolic",
             .Recommended => "starred-symbolic",
@@ -247,7 +247,7 @@ pub const FlatpakPage = extern struct {
         };
     }
 
-    fn category_label(category: Category) [:0]const u8 {
+    fn getCategoryLabel(category: Category) [:0]const u8 {
         return switch (category) {
             .@"All Applications" => translations._("All Applications"),
             .Recommended => translations._("Recommended"),

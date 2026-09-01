@@ -81,7 +81,7 @@ pub const FlatpakRemoveView = extern struct {
 
         p.list_store = gio.ListStore.new(FlatpakObject.getGObjectType());
 
-        p.filter = gtk.CustomFilter.new(&filter_func, self, null);
+        p.filter = gtk.CustomFilter.new(&filterFunc, self, null);
         p.filter_model = gtk.FilterListModel.new(
             p.list_store.as(gio.ListModel),
             p.filter.as(gtk.Filter),
@@ -92,14 +92,14 @@ pub const FlatpakRemoveView = extern struct {
         gtk.ListView.setModel(p.installed_flatpaks, p.selection.as(gtk.SelectionModel));
 
         const factory = gtk.SignalListItemFactory.new();
-        _ = gtk.SignalListItemFactory.signals.setup.connect(factory, *FlatpakRemoveView, &on_setup, self, .{});
-        _ = gtk.SignalListItemFactory.signals.bind.connect(factory, ?*anyopaque, &on_bind, null, .{});
+        _ = gtk.SignalListItemFactory.signals.setup.connect(factory, *FlatpakRemoveView, &onSetup, self, .{});
+        _ = gtk.SignalListItemFactory.signals.bind.connect(factory, ?*anyopaque, &onBind, null, .{});
         gtk.ListView.setFactory(p.installed_flatpaks, factory.as(gtk.ListItemFactory));
 
         support.connectLifecycle(Self, self);
     }
 
-    fn filter_func(item: *gobject.Object, data: ?*anyopaque) callconv(.c) c_int {
+    fn filterFunc(item: *gobject.Object, data: ?*anyopaque) callconv(.c) c_int {
         const self: *Self = @ptrCast(@alignCast(data.?));
         const p = self.priv();
 
@@ -121,7 +121,7 @@ pub const FlatpakRemoveView = extern struct {
         gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
     }
 
-    fn on_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, self: *FlatpakRemoveView) callconv(.c) void {
+    fn onSetup(_: *gtk.SignalListItemFactory, item: *gobject.Object, self: *FlatpakRemoveView) callconv(.c) void {
         const list_item = gobject.ext.cast(gtk.ListItem, item) orelse return;
 
         const grid = gtk.Grid.new();
@@ -156,14 +156,14 @@ pub const FlatpakRemoveView = extern struct {
 
         // stash the list item so the handler can find the current package
         gobject.Object.setData(remove_button.as(gobject.Object), "list-item", list_item);
-        _ = gtk.Button.signals.clicked.connect(remove_button, *FlatpakRemoveView, &on_remove_clicked, self, .{});
+        _ = gtk.Button.signals.clicked.connect(remove_button, *FlatpakRemoveView, &onRemoveClicked, self, .{});
 
         gtk.Grid.attach(grid, remove_button.as(gtk.Widget), 3, 0, 1, 2);
 
         gtk.ListItem.setChild(list_item, grid.as(gtk.Widget));
     }
 
-    fn on_bind(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
+    fn onBind(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
         const list_item = gobject.ext.cast(gtk.ListItem, item) orelse return;
         const obj = gtk.ListItem.getItem(list_item) orelse return;
         const pkg = gobject.ext.cast(FlatpakObject, obj) orelse return;
@@ -205,7 +205,7 @@ pub const FlatpakRemoveView = extern struct {
         }
     }
 
-    fn on_remove_clicked(button: *gtk.Button, self: *FlatpakRemoveView) callconv(.c) void {
+    fn onRemoveClicked(button: *gtk.Button, self: *FlatpakRemoveView) callconv(.c) void {
         const raw = gobject.Object.getData(button.as(gobject.Object), "list-item") orelse return;
         const list_item: *gtk.ListItem = @ptrCast(@alignCast(raw));
         const obj = gtk.ListItem.getItem(list_item) orelse return;
@@ -231,7 +231,7 @@ pub const FlatpakRemoveView = extern struct {
             0,
         ) catch translations._("Remove this Flatpak?");
 
-        const dialog = FlatpakRemoveDialog.new(translations._("Remove Flatpak"), message, &on_remove_response, self);
+        const dialog = FlatpakRemoveDialog.new(translations._("Remove Flatpak"), message, &onRemoveResponse, self);
         dialog.setButtons(translations._("Remove"), translations._("Cancel"));
         dialog.setDefaultRemoveConfig(remove_config);
 
@@ -243,7 +243,7 @@ pub const FlatpakRemoveView = extern struct {
         }
     }
 
-    fn on_remove_response(ctx: ?*anyopaque, confirmed: bool, remove_config: bool) void {
+    fn onRemoveResponse(ctx: ?*anyopaque, confirmed: bool, remove_config: bool) void {
         const self: *FlatpakRemoveView = @ptrCast(@alignCast(ctx.?));
         if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
 
@@ -255,7 +255,7 @@ pub const FlatpakRemoveView = extern struct {
             return;
         }
 
-        const argv = ShellyCommands.remove_flatpak(std.heap.c_allocator, pkg.getId(), remove_config) catch {
+        const argv = ShellyCommands.removeFlatpak(std.heap.c_allocator, pkg.getId(), remove_config) catch {
             self.clearPending();
             return;
         };
@@ -270,7 +270,7 @@ pub const FlatpakRemoveView = extern struct {
                 .title = translations._("Removing Flatpak"),
                 .argv = argv,
                 .packages = names.items,
-                .on_complete = &on_transaction_complete,
+                .on_complete = &onTransactionComplete,
                 .privileged = false,
                 .ctx = self,
             });
@@ -287,7 +287,7 @@ pub const FlatpakRemoveView = extern struct {
         }
     }
 
-    fn on_transaction_complete(ctx: *anyopaque, success: bool) void {
+    fn onTransactionComplete(ctx: *anyopaque, success: bool) void {
         const self: *FlatpakRemoveView = @ptrCast(@alignCast(ctx));
         if (!success) return;
         self.reload();
@@ -296,7 +296,7 @@ pub const FlatpakRemoveView = extern struct {
     fn reload(self: *Self) void {
         const p = self.priv();
         p.generation += 1;
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation }) catch return;
+        const thread = std.Thread.spawn(.{}, loadWorker, .{ self, p.generation }) catch return;
         thread.detach();
     }
 
@@ -310,7 +310,7 @@ pub const FlatpakRemoveView = extern struct {
         arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         p.arena = arena_ptr;
 
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation }) catch return;
+        const thread = std.Thread.spawn(.{}, loadWorker, .{ self, p.generation }) catch return;
         thread.detach();
     }
 
@@ -331,7 +331,7 @@ pub const FlatpakRemoveView = extern struct {
         }
     }
 
-    fn load_worker(page: *Self, generation: u64) void {
+    fn loadWorker(page: *Self, generation: u64) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
         arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
 
@@ -341,15 +341,15 @@ pub const FlatpakRemoveView = extern struct {
         defer threaded.deinit();
 
         const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const parsed = cli.get_installed_flatpaks() catch |err| {
+        const parsed = cli.getInstalledFlatpaks() catch |err| {
             std.debug.print("get_installed_flatpaks failed: {t}\n", .{err});
-            post_result(page, &.{}, arena_ptr, generation);
+            postResult(page, &.{}, arena_ptr, generation);
             return;
         };
-        post_result(page, parsed.value, arena_ptr, generation);
+        postResult(page, parsed.value, arena_ptr, generation);
     }
 
-    fn post_result(page: *Self, packages: []Flatpak, arena: *std.heap.ArenaAllocator, generation: u64) void {
+    fn postResult(page: *Self, packages: []Flatpak, arena: *std.heap.ArenaAllocator, generation: u64) void {
         const result = std.heap.c_allocator.create(LoadResult) catch {
             arena.deinit();
             std.heap.c_allocator.destroy(arena);
@@ -429,11 +429,11 @@ pub const FlatpakRemoveView = extern struct {
             inline for (template_children) |c| {
                 support.bindChild(class, Private.offset, c[0], c[1]);
             }
-            gtk.Widget.Class.bindTemplateCallbackFull(wc, "show_runtimes", @ptrCast(&show_runtimes));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "show_runtimes", @ptrCast(&showRuntimes));
         }
     };
 
-    fn show_runtimes(self: *Self, check: *gtk.CheckButton) callconv(.c) void {
+    fn showRuntimes(self: *Self, check: *gtk.CheckButton) callconv(.c) void {
         const p = self.priv();
         p.show_runtimes = gtk.CheckButton.getActive(check) != 0;
         gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
