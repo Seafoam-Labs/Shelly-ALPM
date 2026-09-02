@@ -190,6 +190,24 @@
                               </object>
                             </child>
                             <child>
+                              <object class="GtkBox" id="tray_cron_box">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Run Tray as cron</property>
+                                    <property name="halign">start</property>
+                                    <property name="hexpand">true</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSwitch" id="tray_cron_switch">
+                                    <property name="halign">end</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
                               <object class="GtkBox" id="use_ui_switch_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>

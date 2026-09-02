@@ -58,6 +58,8 @@ pub const ShellySettingsPage = extern struct {
         tray_auto_switch_box: *gtk.Box,
         daily_schedule: *gtk.Switch,
         weekly_schedule_switch_box: *gtk.Box,
+        tray_cron_switch: *gtk.Switch,
+        tray_cron_box: *gtk.Box,
         use_ui: *gtk.Switch,
         use_ui_switch_box: *gtk.Box,
         tray_interval_box: *gtk.Box,
@@ -218,6 +220,7 @@ pub const ShellySettingsPage = extern struct {
             p.recommended_switch,
             p.shelly_icons_switch,
             p.symbolic_tray_switch,
+            p.tray_cron_switch,
             p.no_confirm_switch,
             p.shelly_search_switch,
             p.remove_cache_switch,
@@ -1052,6 +1055,8 @@ pub const ShellySettingsPage = extern struct {
         .{ "tray_auto_switch_box", @offsetOf(Private, "tray_auto_switch_box") },
         .{ "daily_schedule", @offsetOf(Private, "daily_schedule") },
         .{ "weekly_schedule_switch_box", @offsetOf(Private, "weekly_schedule_switch_box") },
+        .{ "tray_cron_switch", @offsetOf(Private, "tray_cron_switch") },
+        .{ "tray_cron_box", @offsetOf(Private, "tray_cron_box") },
         .{ "use_ui", @offsetOf(Private, "use_ui") },
         .{ "use_ui_switch_box", @offsetOf(Private, "use_ui_switch_box") },
         .{ "tray_interval_box", @offsetOf(Private, "tray_interval_box") },
@@ -1292,6 +1297,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.tray_switch, cfg.TrayEnabled);
     setSwitch(p.tray_auto_switch, cfg.TrayAutoStart);
     setSwitch(p.daily_schedule, cfg.UseWeeklySchedule);
+    setSwitch(p.tray_cron_switch, cfg.TrayRunAsCron);
     setSwitch(p.use_ui, cfg.UseUiForUpdate);
 
     gtk.SpinButton.setValue(p.tray_interval_spin, @floatFromInt(cfg.TrayCheckIntervalHours));
@@ -1370,6 +1376,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.TrayEnabled = getSwitch(p.tray_switch);
     cfg.TrayAutoStart = getSwitch(p.tray_auto_switch);
     cfg.UseWeeklySchedule = getSwitch(p.daily_schedule);
+    cfg.TrayRunAsCron = getSwitch(p.tray_cron_switch);
     cfg.UseUiForUpdate = getSwitch(p.use_ui);
 
     cfg.TrayCheckIntervalHours = gtk.SpinButton.getValueAsInt(p.tray_interval_spin);
@@ -1451,6 +1458,7 @@ fn applyScheduleVisibility(p: *ShellySettingsPage.Private) void {
     const tray_enabled = gtk.Switch.getActive(p.tray_switch) != 0;
     if (!tray_enabled) {
         gtk.Widget.setVisible(p.weekly_schedule_switch_box.as(gtk.Widget), 0);
+        gtk.Widget.setVisible(p.tray_cron_box.as(gtk.Widget), 0);
         gtk.Widget.setVisible(p.weekly_schedule_box.as(gtk.Widget), 0);
         gtk.Widget.setVisible(p.tray_interval_box.as(gtk.Widget), 0);
         gtk.Widget.setVisible(p.use_ui_switch_box.as(gtk.Widget), 0);
@@ -1459,6 +1467,7 @@ fn applyScheduleVisibility(p: *ShellySettingsPage.Private) void {
 
     gtk.Widget.setVisible(p.weekly_schedule_switch_box.as(gtk.Widget), 1);
     const daily_enabled = gtk.Switch.getActive(p.daily_schedule) != 0;
+    gtk.Widget.setVisible(p.tray_cron_box.as(gtk.Widget), @intFromBool(daily_enabled));
     gtk.Widget.setVisible(p.weekly_schedule_box.as(gtk.Widget), @intFromBool(daily_enabled));
     gtk.Widget.setVisible(p.tray_interval_box.as(gtk.Widget), @intFromBool(!daily_enabled));
 }

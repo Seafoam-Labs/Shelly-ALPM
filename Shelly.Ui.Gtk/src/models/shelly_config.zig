@@ -89,6 +89,7 @@ pub const ShellyConfig = struct {
 
     // Scheduled Operations
     UseWeeklySchedule: bool = false,
+    TrayRunAsCron: bool = true,
     DaysOfWeek: []const DayOfWeek = &.{},
     Time: []const u8 = "",
 };
