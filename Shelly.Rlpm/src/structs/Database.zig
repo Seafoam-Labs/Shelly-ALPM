@@ -382,6 +382,10 @@ fn descSectionFromHeader(header: []const u8) DescSection {
     if (std.mem.eql(u8, header, "%SIZE%"))
         return .installed_size;
 
+    // Synchronized repository databases use ISIZE for installed size.
+    if (std.mem.eql(u8, header, "%ISIZE%"))
+        return .installed_size;
+
     if (std.mem.eql(u8, header, "%REASON%"))
         return .reason;
 
@@ -806,6 +810,185 @@ test "loadDatabase skips missing and malformed package descriptions" {
     try std.testing.expect(database.packages.by_name.contains("valid"));
     try std.testing.expect(!database.packages.by_name.contains("malformed"));
     try std.testing.expect(!database.packages.by_name.contains("missing"));
+}
+
+test "integration parses the actual local package database" {
+    const local_database_path = "/var/lib/pacman/local";
+    var probe = std.Io.Dir.cwd().openDir(std.testing.io, local_database_path, .{}) catch |err| switch (err) {
+        error.FileNotFound, error.AccessDenied => return error.SkipZigTest,
+        else => return err,
+    };
+    probe.close(std.testing.io);
+
+    const previous_log_level = std.testing.log_level;
+    std.testing.log_level = .err;
+    defer std.testing.log_level = previous_log_level;
+
+    var database = try Database.init(std.testing.allocator, "local", local_database_path);
+    defer database.deinit();
+    try database.loadDatabase(local_database_path, std.testing.io);
+
+    try std.testing.expect(database.status.package_cache_loaded);
+    try std.testing.expect(database.packages.packages.items.len > 0);
+    try std.testing.expectEqual(
+        database.packages.packages.items.len,
+        database.packages.ordered.items.len,
+    );
+    try std.testing.expectEqual(
+        database.packages.packages.items.len,
+        database.packages.by_name.count(),
+    );
+
+    for (database.packages.ordered.items) |package_id| {
+        const package = database.packages.packages.items[@intFromEnum(package_id)];
+        try std.testing.expect(package.name.len > 0);
+        try std.testing.expect(package.version.raw.len > 0);
+        try std.testing.expectEqual(
+            package_id,
+            database.packages.by_name.get(package.name).?,
+        );
+    }
+}
+
+test "integration parses descriptions from actual sync databases" {
+    const sync_database_path = "/var/lib/pacman/sync";
+    var sync_dir = std.Io.Dir.cwd().openDir(std.testing.io, sync_database_path, .{
+        .iterate = true,
+        .access_sub_paths = true,
+    }) catch |err| switch (err) {
+        error.FileNotFound, error.AccessDenied => return error.SkipZigTest,
+        else => return err,
+    };
+    defer sync_dir.close(std.testing.io);
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var parsed_databases: usize = 0;
+    var parsed_packages: usize = 0;
+    var iterator = sync_dir.iterate();
+    while (try iterator.next(std.testing.io)) |entry| {
+        if (!std.mem.endsWith(u8, entry.name, ".db")) continue;
+        if (entry.kind != .file and entry.kind != .sym_link and entry.kind != .unknown) continue;
+
+        var file = sync_dir.openFile(std.testing.io, entry.name, .{}) catch continue;
+        defer file.close(std.testing.io);
+
+        var magic: [4]u8 = undefined;
+        const magic_length = try file.readPositionalAll(std.testing.io, &magic, 0);
+        if (magic_length < 2) continue;
+
+        const archive_contents: []const u8 = archive: {
+            if (magic[0] == 0x1f and magic[1] == 0x8b) {
+                var read_buffer: [64 * 1024]u8 = undefined;
+                var file_reader = file.reader(std.testing.io, &read_buffer);
+                var decompression_buffer: [std.compress.flate.max_window_len]u8 = undefined;
+                var decompressor: std.compress.flate.Decompress = .init(
+                    &file_reader.interface,
+                    .gzip,
+                    &decompression_buffer,
+                );
+                break :archive try decompressor.reader.allocRemaining(
+                    allocator,
+                    .limited(256 * 1024 * 1024),
+                );
+            }
+
+            // Zstandard-compressed repository databases need a different
+            // decoder. Skip them rather than mistaking them for a tar stream.
+            if (magic_length == magic.len and std.mem.eql(u8, &magic, "\x28\xb5\x2f\xfd")) {
+                continue;
+            }
+
+            var read_buffer: [64 * 1024]u8 = undefined;
+            var file_reader = file.reader(std.testing.io, &read_buffer);
+            break :archive try file_reader.interface.allocRemaining(
+                allocator,
+                .limited(256 * 1024 * 1024),
+            );
+        };
+
+        const database_name = entry.name[0 .. entry.name.len - ".db".len];
+        const package_count = try parseSyncTarDescriptions(
+            allocator,
+            database_name,
+            archive_contents,
+        );
+        try std.testing.expect(package_count > 0);
+        parsed_databases += 1;
+        parsed_packages += package_count;
+    }
+
+    if (parsed_databases == 0) return error.SkipZigTest;
+    try std.testing.expect(parsed_packages >= parsed_databases);
+}
+
+fn parseSyncTarDescriptions(
+    allocator: std.mem.Allocator,
+    database_name: []const u8,
+    archive_contents: []const u8,
+) !usize {
+    const tar_block_size = 512;
+    var offset: usize = 0;
+    var package_count: usize = 0;
+
+    while (offset + tar_block_size <= archive_contents.len) {
+        const header = archive_contents[offset .. offset + tar_block_size];
+        if (isZeroTarBlock(header)) break;
+
+        const file_size = try parseTarOctal(header[124..136]);
+        const data_start = offset + tar_block_size;
+        if (file_size > archive_contents.len - data_start) return error.TruncatedTarArchive;
+        const data_end = data_start + file_size;
+
+        const entry_name = tarString(header[0..100]);
+        const type_flag = header[156];
+        if ((type_flag == 0 or type_flag == '0') and std.mem.endsWith(u8, entry_name, "/desc")) {
+            var parsed = try parseDescription(allocator, archive_contents[data_start..data_end]);
+            defer parsed.deinit(allocator);
+            _ = try parsed.intoPackage(allocator, database_name);
+            package_count += 1;
+        }
+
+        const remainder = file_size % tar_block_size;
+        const padded_size = if (remainder == 0)
+            file_size
+        else
+            file_size + (tar_block_size - remainder);
+        if (padded_size > archive_contents.len - data_start) return error.TruncatedTarArchive;
+        offset = data_start + padded_size;
+    }
+
+    return package_count;
+}
+
+fn isZeroTarBlock(block: []const u8) bool {
+    for (block) |byte| {
+        if (byte != 0) return false;
+    }
+    return true;
+}
+
+fn tarString(field: []const u8) []const u8 {
+    const end = std.mem.indexOfScalar(u8, field, 0) orelse field.len;
+    return std.mem.trimEnd(u8, field[0..end], " ");
+}
+
+fn parseTarOctal(field: []const u8) !usize {
+    const digits = std.mem.trim(u8, field, " \x00");
+    if (digits.len == 0) return 0;
+
+    var value: usize = 0;
+    for (digits) |digit| {
+        if (digit < '0' or digit > '7') return error.InvalidTarHeader;
+        const numeric_digit: usize = digit - '0';
+        if (value > (std.math.maxInt(usize) - numeric_digit) / 8) {
+            return error.InvalidTarHeader;
+        }
+        value = value * 8 + numeric_digit;
+    }
+    return value;
 }
 
 test "freeStrings frees each string and the list storage" {
