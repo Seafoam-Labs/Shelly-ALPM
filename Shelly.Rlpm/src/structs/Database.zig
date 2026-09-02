@@ -839,6 +839,16 @@ test "integration parses the actual local package database" {
         database.packages.by_name.count(),
     );
 
+    const preview_count = @min(database.packages.ordered.items.len, 5);
+    std.debug.print(
+        "\nlocal database preview ({d} of {d} packages):\n",
+        .{ preview_count, database.packages.packages.items.len },
+    );
+    for (database.packages.ordered.items[0..preview_count]) |package_id| {
+        const package = database.packages.packages.items[@intFromEnum(package_id)];
+        std.debug.print("  {s} {s}\n", .{ package.name, package.version.raw });
+    }
+
     for (database.packages.ordered.items) |package_id| {
         const package = database.packages.packages.items[@intFromEnum(package_id)];
         try std.testing.expect(package.name.len > 0);
@@ -867,6 +877,9 @@ test "integration parses descriptions from actual sync databases" {
 
     var parsed_databases: usize = 0;
     var parsed_packages: usize = 0;
+    var preview_remaining: usize = 10;
+    std.debug.print("\nsync database preview (up to {d} packages):\n", .{preview_remaining});
+
     var iterator = sync_dir.iterate();
     while (try iterator.next(std.testing.io)) |entry| {
         if (!std.mem.endsWith(u8, entry.name, ".db")) continue;
@@ -914,8 +927,10 @@ test "integration parses descriptions from actual sync databases" {
             allocator,
             database_name,
             archive_contents,
+            &preview_remaining,
         );
         try std.testing.expect(package_count > 0);
+        std.debug.print("  [{s}: {d} packages parsed]\n", .{ database_name, package_count });
         parsed_databases += 1;
         parsed_packages += package_count;
     }
@@ -928,6 +943,7 @@ fn parseSyncTarDescriptions(
     allocator: std.mem.Allocator,
     database_name: []const u8,
     archive_contents: []const u8,
+    preview_remaining: *usize,
 ) !usize {
     const tar_block_size = 512;
     var offset: usize = 0;
@@ -947,7 +963,14 @@ fn parseSyncTarDescriptions(
         if ((type_flag == 0 or type_flag == '0') and std.mem.endsWith(u8, entry_name, "/desc")) {
             var parsed = try parseDescription(allocator, archive_contents[data_start..data_end]);
             defer parsed.deinit(allocator);
-            _ = try parsed.intoPackage(allocator, database_name);
+            const package = try parsed.intoPackage(allocator, database_name);
+            if (preview_remaining.* > 0) {
+                std.debug.print(
+                    "  {s}/{s} {s}\n",
+                    .{ database_name, package.name, package.version.raw },
+                );
+                preview_remaining.* -= 1;
+            }
             package_count += 1;
         }
 

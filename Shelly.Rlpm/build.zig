@@ -118,12 +118,25 @@ pub fn build(b: *std.Build) void {
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to
     // set the releative field.
+    // The server-mode test runner interprets anything written to stderr as a
+    // diagnostic. These tests intentionally print a bounded preview of the
+    // databases they parse, so use the terminal runner and inherit its output.
+    const terminal_test_runner: std.Build.Step.Compile.TestRunner = .{
+        .path = .{ .cwd_relative = b.pathJoin(&.{
+            b.graph.zig_lib_directory.path.?,
+            "compiler/test_runner.zig",
+        }) },
+        .mode = .simple,
+    };
+
     const mod_tests = b.addTest(.{
         .root_module = mod,
+        .test_runner = terminal_test_runner,
     });
 
     // A run step that will run the test executable.
     const run_mod_tests = b.addRunArtifact(mod_tests);
+    run_mod_tests.stdio = .inherit;
 
     // Creates an executable that will run `test` blocks from the executable's
     // root module. Note that test executables only test one module at a time,
