@@ -13,17 +13,37 @@ pkgver: []const u8,
 pkgrel: ?[]const u8,
 
 pub fn init(version: []const u8, allocator: std.mem.Allocator) !Version {
-    const epoch_index = std.mem.find(u8, version, ":") orelse 0;
-    const epoch: []const u8 = version[0..epoch_index];
-    const ver_rel: []const u8 = version[epoch_index + 1 ..];
+    if (version.len == 0) return error.InvalidVersion;
+
+    var epoch_value: u64 = 0;
+    var ver_rel = version;
+    if (std.mem.find(u8, version, ":")) |epoch_index| {
+        if (epoch_index == 0 or epoch_index + 1 == version.len) {
+            return error.InvalidVersion;
+        }
+        epoch_value = try std.fmt.parseInt(u64, version[0..epoch_index], 10);
+        ver_rel = version[epoch_index + 1 ..];
+    }
+
     const last_index = std.mem.findLast(u8, ver_rel, "-") orelse ver_rel.len;
     const ver = ver_rel[0..last_index];
     const rel: ?[]const u8 = if (last_index != ver_rel.len) ver_rel[last_index + 1 ..] else null;
+
+    if (ver.len == 0 or (rel != null and rel.?.len == 0)) {
+        return error.InvalidVersion;
+    }
+
+    const raw = try allocator.dupe(u8, version);
+    errdefer allocator.free(raw);
+    const pkgver = try allocator.dupe(u8, ver);
+    errdefer allocator.free(pkgver);
+    const pkgrel: ?[]u8 = if (rel) |release| try allocator.dupe(u8, release) else null;
+
     return .{
-        .raw = try allocator.dupe(u8, version),
-        .epoch = try std.fmt.parseInt(u64, epoch, 10),
-        .pkgver = try allocator.dupe(u8, ver),
-        .pkgrel = if (rel) |r| try allocator.dupe(u8, r) else null,
+        .raw = raw,
+        .epoch = epoch_value,
+        .pkgver = pkgver,
+        .pkgrel = pkgrel,
     };
 }
 
@@ -173,14 +193,13 @@ test "Version parses epoch, pkgver, and pkgrel" {
     try std.testing.expectEqualStrings("2", version.pkgrel.?);
 }
 
-test "Version rejects a missing epoch" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
+test "Version treats a missing epoch as zero" {
+    var version = try Version.init("1.27.0-2", std.testing.allocator);
+    defer version.deinit(std.testing.allocator);
 
-    try std.testing.expectError(
-        error.InvalidCharacter,
-        Version.init("1.27.0-2", arena.allocator()),
-    );
+    try std.testing.expectEqual(@as(u64, 0), version.epoch);
+    try std.testing.expectEqualStrings("1.27.0", version.pkgver);
+    try std.testing.expectEqualStrings("2", version.pkgrel.?);
 }
 
 test "Version permits a missing pkgrel" {

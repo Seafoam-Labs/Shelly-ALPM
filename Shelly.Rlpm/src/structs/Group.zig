@@ -4,7 +4,7 @@ const std = @import("std");
 const Package = @import("Package.zig");
 const Version = @import("Version.zig");
 
-name: []u8,
+name: []const u8,
 packages: std.ArrayList(*Package),
 
 test "Group stores packages in insertion order" {
