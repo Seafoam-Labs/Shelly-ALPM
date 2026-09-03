@@ -12,22 +12,22 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 msgid "No installable addons available"
-msgstr ""
+msgstr "没有可安装的插件"
 
 msgid "Close"
 msgstr "关闭"
 
 msgid "Keep configuration"
-msgstr ""
+msgstr "保留配置"
 
 msgid "App data and settings will be kept."
-msgstr ""
+msgstr "应用数据和设置将被保留。"
 
 msgid "Remove configuration"
-msgstr ""
+msgstr "移除配置"
 
 msgid "App data will be permanently removed."
-msgstr ""
+msgstr "应用数据将会永久删除。"
 
 msgid "Confirm"
 msgstr "确认"
@@ -36,19 +36,19 @@ msgid "Cancel"
 msgstr "取消"
 
 msgid "Skip"
-msgstr ""
+msgstr "跳过"
 
 msgid "No special permissions requested"
 msgstr ""
 
 msgid "Review PKGBUILD changes"
-msgstr ""
+msgstr "审阅 PKGBUILD 变更"
 
 msgid "Changes"
-msgstr ""
+msgstr "变更"
 
 msgid "Warnings"
-msgstr ""
+msgstr "警告"
 
 msgid ""
 "These commands fetch and execute code outside of shelly and libalpm's "
@@ -56,10 +56,10 @@ msgid ""
 msgstr ""
 
 msgid "Source Files"
-msgstr ""
+msgstr "源文件"
 
 msgid "polkit is required"
-msgstr ""
+msgstr "需要polkit"
 
 msgid ""
 "Shelly's GUI needs <b>polkit</b> installed and running to authorize "
@@ -72,7 +72,7 @@ msgid ""
 msgstr ""
 
 msgid "Review PKGBUILD"
-msgstr ""
+msgstr "审阅 PKGBUILD"
 
 msgid "Search..."
 msgstr "搜索..."
@@ -96,7 +96,7 @@ msgid "Install AppImage"
 msgstr "安装 AppImage"
 
 msgid "Drop AppImage here to install"
-msgstr ""
+msgstr "将 AppImage 拖放到此处以安装"
 
 msgid "App Name"
 msgstr "应用名称"
@@ -126,13 +126,13 @@ msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
 msgstr ""
 
 msgid "Allow Prerelease"
-msgstr ""
+msgstr "允许预发布版本"
 
 msgid "Installation Path"
 msgstr "安装路径"
 
 msgid "Launch Flags"
-msgstr ""
+msgstr "启动标志"
 
 msgid "Save"
 msgstr "保存"
@@ -144,22 +144,22 @@ msgid "Remove"
 msgstr "移除"
 
 msgid "Information"
-msgstr ""
+msgstr "信息"
 
 msgid "Preview Pkgbuild"
-msgstr ""
+msgstr "预览 PKGBUILD"
 
 msgid "Search the AUR by name or keyword"
-msgstr ""
+msgstr "通过包名或关键词搜索AUR"
 
 msgid "Installed Only"
-msgstr ""
+msgstr "仅显示已安装"
 
 msgid "Show only installed packages"
-msgstr ""
+msgstr "仅显示已安装的软件包"
 
 msgid "Additional Options"
-msgstr ""
+msgstr "额外选项"
 
 msgid "Install Selected"
 msgstr "安装所选"
@@ -174,7 +174,7 @@ msgid "Popularity"
 msgstr "流行度"
 
 msgid "Search the AUR"
-msgstr ""
+msgstr "搜索AUR"
 
 msgid "The AUR has no browsable index type a package name to begin."
 msgstr ""
@@ -186,13 +186,13 @@ msgid "Run the --check function during package build"
 msgstr ""
 
 msgid "Hide Detail Pane"
-msgstr ""
+msgstr "隐藏详情面板"
 
 msgid "Hide the detail pane on the right"
-msgstr ""
+msgstr "隐藏右侧详情面板"
 
 msgid "Install a local Flatpak"
-msgstr ""
+msgstr "安装本地FLatpak包"
 
 msgid ""
 "Choose a .flatpak bundle from your system and install it for the current "
@@ -203,10 +203,10 @@ msgid "Bundle"
 msgstr ""
 
 msgid "Choose file…"
-msgstr ""
+msgstr "选择文件..."
 
 msgid "Install for"
-msgstr ""
+msgstr "安装为"
 
 msgid "system"
 msgstr "系统"
@@ -227,7 +227,7 @@ msgid "Addons"
 msgstr "附加组件"
 
 msgid "Install source"
-msgstr ""
+msgstr "安装来源"
 
 msgid "Author"
 msgstr "作者"
@@ -245,10 +245,10 @@ msgid "Summary"
 msgstr "摘要"
 
 msgid "Show more"
-msgstr ""
+msgstr "显示更多"
 
 msgid "App Permissions"
-msgstr ""
+msgstr "应用权限"
 
 msgid "Version History"
 msgstr "版本历史"
@@ -257,7 +257,7 @@ msgid "Search packages..."
 msgstr "搜索软件包..."
 
 msgid "Browse"
-msgstr ""
+msgstr "浏览"
 
 msgid "Manage"
 msgstr "管理"
@@ -296,52 +296,52 @@ msgid "Scope"
 msgstr "作用域"
 
 msgid "Show Runtimes"
-msgstr ""
+msgstr "显示运行时"
 
 msgid "Flatpak Repair"
-msgstr ""
+msgstr "Flatpak修复"
 
 msgid "Repairs Flatpak Installation (Experimental)"
-msgstr ""
+msgstr "修复Flatpak安装（实验）"
 
 msgid "About"
-msgstr ""
+msgstr "关于"
 
 msgid "Shelly"
 msgstr ""
 
 msgid "Reinstall"
-msgstr ""
+msgstr "重新安装"
 
 msgid "Add Ignore"
-msgstr ""
+msgstr "添加忽略"
 
 msgid "Add Hold"
-msgstr ""
+msgstr "添加保留"
 
 msgid "Make Explicit"
-msgstr ""
+msgstr "显式安装"
 
 msgid "Mark Dependency"
-msgstr ""
+msgstr "标记依赖"
 
 msgid "Package actions"
-msgstr ""
+msgstr "软件包操作"
 
 msgid "Package Group Filter"
 msgstr "软件包分组筛选"
 
 msgid "Selected Packages"
-msgstr ""
+msgstr "选择软件包"
 
 msgid "0 Selected"
-msgstr ""
+msgstr "0 选中"
 
 msgid "Grid View"
-msgstr ""
+msgstr "网格视图"
 
 msgid "List View"
-msgstr ""
+msgstr "列表视图"
 
 msgid "Size"
 msgstr "大小"
@@ -350,10 +350,10 @@ msgid "Repository"
 msgstr "仓库"
 
 msgid "Install Date"
-msgstr ""
+msgstr "安装日期"
 
 msgid "Had an issue loading your packages. Check if you have a db lock."
-msgstr ""
+msgstr "加载软件包时出错。请检查是否有数据库锁。"
 
 msgid "Perform Upgrade"
 msgstr "执行升级"
@@ -368,28 +368,28 @@ msgid "Show packages in the IgnorePkg list from pacman.conf"
 msgstr "显示 pacman.conf 中 IgnorePkg 列表内的软件包"
 
 msgid "Show Explicit Only"
-msgstr ""
+msgstr "仅显示显式安装"
 
 msgid "Show only explicitly installed packages"
-msgstr ""
+msgstr "仅显示显式安装的软件包"
 
 msgid "Show Dependency Only"
-msgstr ""
+msgstr "仅显示依赖"
 
 msgid "Show dependency packages only"
-msgstr ""
+msgstr "仅显示作为依赖安装的软件包"
 
 msgid "Recommended Packages"
-msgstr ""
+msgstr "推荐的包"
 
 msgid "Curated suggestions from Seafoam Labs"
 msgstr ""
 
 msgid "Refresh the recommended packages list from the network"
-msgstr ""
+msgstr "从网络刷新推荐包列表"
 
 msgid "Loading Recommended Packages..."
-msgstr ""
+msgstr "加载推荐..."
 
 msgid ""
 "No recommendations found. Please check your internet connection and try "
@@ -397,31 +397,31 @@ msgid ""
 msgstr "未找到推荐内容。请检查网络连接后重试。"
 
 msgid "Search standard repositories, AUR and Flatpak"
-msgstr ""
+msgstr "搜索标准仓库，AUR和Flatpak"
 
 msgid "Standard"
-msgstr ""
+msgstr "标准"
 
 msgid "Show results from the configured ALPM sync databases"
-msgstr ""
+msgstr "显示设置的ALPM sync databases中的结果"
 
 msgid "AUR"
 msgstr "AUR"
 
 msgid "Show results from the Arch User Repository"
-msgstr ""
+msgstr "显示AUR中的结果"
 
 msgid "Flatpak"
 msgstr "Flatpak"
 
 msgid "Show results from the configured Flatpak remotes"
-msgstr ""
+msgstr "显示设置的Flatpak remotes中的结果"
 
 msgid "Source"
 msgstr ""
 
 msgid "Search everywhere"
-msgstr ""
+msgstr "全局搜索"
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
@@ -435,13 +435,13 @@ msgid "Enable AUR"
 msgstr "启用 AUR"
 
 msgid "Language"
-msgstr ""
+msgstr "语言"
 
 msgid "Enable Flatpak"
 msgstr "启用 Flatpak"
 
 msgid "Enable Recommended"
-msgstr ""
+msgstr "启用推荐"
 
 msgid "Enable AppImage"
 msgstr "启用 AppImage"
@@ -523,7 +523,7 @@ msgid "Default page"
 msgstr "默认页面"
 
 msgid "Navigation style"
-msgstr ""
+msgstr "导航样式"
 
 msgid "Advanced"
 msgstr "高级"
@@ -538,16 +538,16 @@ msgid "Enable Shelly Search"
 msgstr "启用 Shelly 搜索"
 
 msgid "Enable Package Downgrade"
-msgstr ""
+msgstr "启用软件包降级"
 
 msgid "Enable Webview Visualization (experimental)"
 msgstr "启用 Webview 可视化（实验性）"
 
 msgid "AppImage Install Path"
-msgstr ""
+msgstr "AppImage 安装路径"
 
 msgid "Select Directory"
-msgstr ""
+msgstr "选择目录"
 
 msgid "View Changelog"
 msgstr "查看变更日志"
@@ -574,47 +574,47 @@ msgid "7 of 7 updates included"
 msgstr ""
 
 msgid "Check all enabled sources again"
-msgstr ""
+msgstr "再次检查所有启用的软件源"
 
 msgid "Check Again"
-msgstr ""
+msgstr "再次检查"
 
 msgid "Upgrade"
-msgstr ""
+msgstr "更新"
 
 msgid "System"
 msgstr "系统"
 
 msgid "Checking for updates…"
-msgstr ""
+msgstr "检查更新..."
 
 msgid "Your system is up to date"
-msgstr ""
+msgstr "你的系统已是最新"
 
 msgid "Could not check for updates"
-msgstr ""
+msgstr "无法检查更新"
 
 msgid "Utilities"
-msgstr ""
+msgstr "工具"
 
 msgid "Maintenance and repair tools for your Shelly installation."
-msgstr ""
+msgstr "Shelly 的维护和修复工具。"
 
 msgid "Force Database Update"
 msgstr "强制数据库更新"
 
 msgid "Force a synchronization of the package database."
-msgstr ""
+msgstr "强制同步软件包数据库"
 
 msgid "Run"
-msgstr ""
+msgstr "运行"
 
 msgid "Remove db.lck"
-msgstr ""
+msgstr "移除db.lck"
 
 msgid ""
 "Removes the db.lck file if it was left behind by an interrupted alpm process."
-msgstr ""
+msgstr "删除 db.lck 文件（如果中断了 ALPM 进程，它会残留）。"
 
 msgid "Fix Permissions"
 msgstr "修复权限"
@@ -629,140 +629,140 @@ msgid "Purify Packages"
 msgstr "清理软件包"
 
 msgid "Remove corrupted/orphaned packages."
-msgstr ""
+msgstr "删除损坏或孤儿软件包。"
 
 msgid "Clean Package Cache"
-msgstr ""
+msgstr "清理软件包缓存"
 
 msgid ""
 "Removes old cached package versions, keeping the selected number per package."
-msgstr ""
+msgstr "删除旧缓存的软件包版本，为每个软件包保留指定的版本数量。"
 
 msgid "Keep"
-msgstr ""
+msgstr "保留"
 
 msgid "Number of cached versions to keep per package"
-msgstr ""
+msgstr "每个软件包保留的缓存版本数量"
 
 msgid "Welcome to Shelly v3"
-msgstr ""
+msgstr "欢迎使用Shelly v3"
 
 msgid ""
 "Shelly is a modern package manager for Arch Linux. Configure your sources "
 "and preferences to get started."
-msgstr ""
+msgstr "Shelly 是一个现代的 Arch Linux 软件包管理器。配置您的软件源和偏好以开始使用。"
 
 msgid "Select Your Sources"
-msgstr ""
+msgstr "选择您的软件源"
 
 msgid ""
 "Choose which package sources you want to browse. You can always change this "
 "later in settings."
-msgstr ""
+msgstr "选择您想要浏览哪些软件包来源。之后您总可以在设置里修改这些选项。"
 
 msgid "Arch User Repository community packages"
-msgstr ""
+msgstr "Arch 用户仓库(社区软件包)"
 
 msgid "Sandboxed universal Linux applications"
-msgstr ""
+msgstr "沙箱化通用 Linux 软件包"
 
 msgid "AppImage"
 msgstr "AppImage"
 
 msgid "Portable self-contained application bundles"
-msgstr ""
+msgstr "便携的自包含应用包"
 
 msgid "Recommended"
 msgstr "推荐"
 
 msgid "Curated picks from Shelly"
-msgstr ""
+msgstr "Shelly 推荐的软件包"
 
 msgid "Look and Feel"
-msgstr ""
+msgstr "外观"
 
 msgid ""
 "Customize how Shelly looks and behaves. All of these can be changed later in "
 "preferences."
-msgstr ""
+msgstr "自定义 Shelly 的外观和行为方式。所有这些设置稍后都可以在偏好设置中更改。"
 
 msgid "Navigation Style"
-msgstr ""
+msgstr "导航样式"
 
 msgid "Sidebar"
-msgstr ""
+msgstr "侧边栏"
 
 msgid "Vertical icon rail on the left"
-msgstr ""
+msgstr "左侧垂直图标栏"
 
 msgid "Top Bar"
-msgstr ""
+msgstr "顶栏"
 
 msgid "Horizontal tab switcher at the top"
-msgstr ""
+msgstr "顶部水平标签切换器"
 
 msgid "System Tray"
-msgstr ""
+msgstr "系统托盘"
 
 msgid "Run in system tray when minimized"
-msgstr ""
+msgstr "最小化到系统托盘"
 
 msgid "Next"
-msgstr ""
+msgstr "下一步"
 
 msgid "Start Shelly"
-msgstr ""
+msgstr "启动 Shelly"
 
 msgid "Filesystem"
-msgstr ""
+msgstr "文件系统"
 
 msgid "Devices"
-msgstr ""
+msgstr "设备"
 
 msgid "Sockets"
-msgstr ""
+msgstr "套接字"
 
 msgid "Shared"
-msgstr ""
+msgstr "共享"
 
 msgid "Environment"
-msgstr ""
+msgstr "环境变量"
 
 msgid "Session bus"
-msgstr ""
+msgstr "会话总线"
 
 msgid "System bus"
-msgstr ""
+msgstr "系统总线"
 
 msgid "Other"
-msgstr ""
+msgstr "其他"
 
 msgid "Review PKGBUILD changes for"
-msgstr ""
+msgstr "检查 PKGBUILD 的变更"
 
 msgid "Review Changes"
-msgstr ""
+msgstr "检查变更"
 
 msgid "Security scan completed -"
-msgstr ""
+msgstr "安全扫描已完成 —"
 
 msgid "warning(s) found."
-msgstr ""
+msgstr "发现警告。"
 
 msgid "Security scan completed - warnings found."
-msgstr ""
+msgstr "安全扫描已完成 — 发现警告。"
 
 msgid "Security scan completed - no issues found."
-msgstr ""
+msgstr "安全扫描已完成 — 未发现问题。"
 
 msgid "used in"
-msgstr ""
+msgstr "用于"
 
 msgid "Warning"
-msgstr ""
+msgstr "警告"
 
 msgid "Install Anyway"
-msgstr ""
+msgstr "仍然安装"
 
 msgid "package(s)"
 msgstr ""
@@ -771,19 +771,19 @@ msgid "to"
 msgstr ""
 
 msgid "download"
-msgstr ""
+msgstr "下载"
 
 msgid "net"
 msgstr ""
 
 msgid "Dismiss"
-msgstr ""
+msgstr "忽略"
 
 msgid "None"
 msgstr "无"
 
 msgid "Static URL"
-msgstr ""
+msgstr "静态 URL"
 
 msgid "GitLab"
 msgstr "GitLab"
@@ -795,16 +795,16 @@ msgid "Forgejo"
 msgstr "Forgejo"
 
 msgid "Update Available"
-msgstr ""
+msgstr "有可用更新"
 
 msgid "Version ?"
-msgstr ""
+msgstr "版本？"
 
 msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
-msgstr ""
+msgstr "格式无效。请使用 owner/repo（例如 seafoam-labs/shelly-alpm）"
 
 msgid "Invalid URL. Must start with http:// or https://"
-msgstr ""
+msgstr "URL 无效。必须以 http:// 或 https:// 开头"
 
 msgid ""
 "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
@@ -812,49 +812,49 @@ msgid ""
 msgstr ""
 
 msgid "Choose an AppImage file"
-msgstr ""
+msgstr "选择一个 AppImage 文件"
 
 msgid "AppImage files"
-msgstr ""
+msgstr "AppImage 文件"
 
 msgid "Only .AppImage files can be installed"
-msgstr ""
+msgstr "只能安装 .AppImage 文件"
 
 msgid "Installing AppImage"
-msgstr ""
+msgstr "正在安装 AppImage"
 
 msgid "No AppImages need to be upgraded"
 msgstr "没有需要升级的 AppImage"
 
 msgid "Upgrading AppImages"
-msgstr ""
+msgstr "正在升级 AppImage"
 
 msgid "Syncing AppImages"
-msgstr ""
+msgstr "正在同步 AppImage"
 
 msgid "Syncing AppImage"
-msgstr ""
+msgstr "正在同步 AppImage"
 
 msgid "Saving update configuration"
-msgstr ""
+msgstr "正在保存更新配置"
 
 msgid "Configuration files will be kept."
-msgstr ""
+msgstr "配置文件将被保留。"
 
 msgid "Remove this AppImage?"
-msgstr ""
+msgstr "移除此 AppImage？"
 
 msgid "Remove AppImage"
-msgstr ""
+msgstr "移除 AppImage"
 
 msgid "Removing AppImage"
-msgstr ""
+msgstr "正在移除 AppImage"
 
 msgid "Operation completed successfully"
-msgstr ""
+msgstr "操作成功完成"
 
 msgid "Operation failed"
-msgstr ""
+msgstr "操作失败"
 
 msgid "Maintainer"
 msgstr "维护者"
@@ -875,31 +875,31 @@ msgid "Depends"
 msgstr "依赖"
 
 msgid "Optional Depends"
-msgstr ""
+msgstr "可选依赖"
 
 msgid "Make Depends"
 msgstr "构建依赖"
 
 msgid "Section"
-msgstr ""
+msgstr "分类"
 
 msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
+msgstr "AUR 没有可浏览的索引 — 请输入软件包名称开始搜索。"
 
 msgid "No packages found"
-msgstr ""
+msgstr "未找到软件包"
 
 msgid "Try a shorter or more general keyword."
-msgstr ""
+msgstr "请尝试更短或更通用的关键词。"
 
 msgid "Could not reach the AUR"
-msgstr ""
+msgstr "无法连接到 AUR"
 
 msgid "Check your connection and try again."
-msgstr ""
+msgstr "请检查网络连接后重试。"
 
 msgid "Flagged out of date"
-msgstr ""
+msgstr "标记为过期"
 
 msgid "Installed"
 msgstr "已安装"
@@ -908,97 +908,97 @@ msgid "Remove Selected"
 msgstr "移除所选"
 
 msgid "Select one or more packages"
-msgstr ""
+msgstr "请选择一个或多个软件包"
 
 msgid "Package(s)"
-msgstr ""
+msgstr "软件包"
 
 msgid "Remove Packages"
-msgstr ""
+msgstr "移除软件包"
 
 msgid "Remove the selected AUR packages?"
-msgstr ""
+msgstr "移除所选 AUR 软件包？"
 
 msgid "Build from AUR"
-msgstr ""
+msgstr "从 AUR 构建"
 
 msgid "Build and install the selected packages? This may take a while."
-msgstr ""
+msgstr "构建并安装所选软件包？这可能需要一段时间。"
 
 msgid "Build"
-msgstr ""
+msgstr "构建"
 
 msgid "Installing AUR packages"
-msgstr ""
+msgstr "正在安装 AUR 软件包"
 
 msgid "Removing AUR packages"
-msgstr ""
+msgstr "正在移除 AUR 软件包"
 
 msgid "Choose a Flatpak file"
-msgstr ""
+msgstr "选择一个 Flatpak 文件"
 
 msgid "Flatpak files"
-msgstr ""
+msgstr "Flatpak 文件"
 
 msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
-msgstr ""
+msgstr "不支持的文件类型。请选择 .flatpak 或 .flatpakref 文件。"
 
 msgid "Installing local flatpak"
-msgstr ""
+msgstr "正在安装本地 Flatpak"
 
 msgid "Installation failed."
-msgstr ""
+msgstr "安装失败。"
 
 msgid "Installation complete."
-msgstr ""
+msgstr "安装完成。"
 
 msgid "Choose file..."
-msgstr ""
+msgstr "选择文件..."
 
 msgid "Verified"
-msgstr ""
+msgstr "已验证"
 
 msgid "Show less"
-msgstr ""
+msgstr "收起"
 
 msgid "Installing flatpak"
-msgstr ""
+msgstr "正在安装 Flatpak"
 
 msgid "Permissions"
-msgstr ""
+msgstr "权限"
 
 msgid "Available Addons"
 msgstr "可用附加组件"
 
 msgid "Installing flatpak addon"
-msgstr ""
+msgstr "正在安装 Flatpak 附加组件"
 
 msgid "Unknown developer"
-msgstr ""
+msgstr "未知开发者"
 
 msgid "Unknown"
 msgstr "未知"
 
 msgid "Version: Unknown"
-msgstr ""
+msgstr "版本：未知"
 
 msgid "Size: Loading..."
-msgstr ""
+msgstr "大小：加载中..."
 
 msgid "Size: Unknown"
-msgstr ""
+msgstr "大小：未知"
 
 msgid "License"
-msgstr ""
+msgstr "许可证"
 
 msgid "License: Unknown"
-msgstr ""
+msgstr "许可证：未知"
 
 msgid "No summary available"
-msgstr ""
+msgstr "无可用摘要"
 
 msgid "Size: Unavailable"
-msgstr ""
+msgstr "大小：不可用"
 
 msgid "Download"
 msgstr "下载"
@@ -1007,58 +1007,58 @@ msgid "No description available."
 msgstr "无可用描述。"
 
 msgid "Unable to load screenshot"
-msgstr ""
+msgstr "无法加载截图"
 
 msgid "Unable to download screenshot"
-msgstr ""
+msgstr "无法下载截图"
 
 msgid "Unable to display screenshot"
-msgstr ""
+msgstr "无法显示截图"
 
 msgid "Open link in browser"
-msgstr ""
+msgstr "在浏览器中打开链接"
 
 msgid "Homepage"
-msgstr ""
+msgstr "主页"
 
 msgid "Bug tracker"
-msgstr ""
+msgstr "问题追踪"
 
 msgid "Donation"
-msgstr ""
+msgstr "捐赠"
 
 msgid "FAQ"
-msgstr ""
+msgstr "常见问题"
 
 msgid "Help"
-msgstr ""
+msgstr "帮助"
 
 msgid "Vcs-browser"
 msgstr ""
 
 msgid "Contact"
-msgstr ""
+msgstr "联系方式"
 
 msgid "Translate"
-msgstr ""
+msgstr "翻译"
 
 msgid "Unable to allocate memory while loading Flatpak data."
-msgstr ""
+msgstr "加载 Flatpak 数据时无法分配内存。"
 
 msgid "Unable to start the Flatpak data loader."
-msgstr ""
+msgstr "无法启动 Flatpak 数据加载器。"
 
 msgid "Unable to load Flatpak applications."
-msgstr ""
+msgstr "无法加载 Flatpak 应用程序。"
 
 msgid "No Flatpak applications are available."
-msgstr ""
+msgstr "没有可用的 Flatpak 应用程序。"
 
 msgid "Discover"
-msgstr ""
+msgstr "发现"
 
 msgid "Categories"
-msgstr ""
+msgstr "分类"
 
 msgid "All Applications"
 msgstr "所有应用程序"
@@ -1100,40 +1100,40 @@ msgid "Utility"
 msgstr "工具"
 
 msgid "Removing Remote"
-msgstr ""
+msgstr "正在移除远程仓库"
 
 msgid "Adding Remote"
-msgstr ""
+msgstr "正在添加远程仓库"
 
 msgid "Remove this Flatpak?"
-msgstr ""
+msgstr "移除此 Flatpak？"
 
 #| msgid "Flatpak"
 msgid "Remove Flatpak"
-msgstr ""
+msgstr "移除 Flatpak"
 
 msgid "Removing Flatpak"
-msgstr ""
+msgstr "正在移除 Flatpak"
 
 msgid "App ID"
 msgstr ""
 
 #| msgid "Remove"
 msgid "Remote"
-msgstr ""
+msgstr "远程仓库"
 
 #| msgid "Development"
 msgid "Developer"
-msgstr ""
+msgstr "开发者"
 
 msgid "Type"
-msgstr ""
+msgstr "类型"
 
 msgid "Download Size"
-msgstr ""
+msgstr "下载大小"
 
 msgid "Installed Size"
-msgstr ""
+msgstr "安装大小"
 
 msgid "Yes"
 msgstr "是"
@@ -1142,20 +1142,20 @@ msgid "No"
 msgstr "否"
 
 msgid "Keywords"
-msgstr ""
+msgstr "关键词"
 
 #| msgid "e.g., flathub"
 msgid "Flathub"
-msgstr ""
+msgstr "Flathub"
 
 msgid "Loading..."
 msgstr "加载中..."
 
 msgid "Build Date"
-msgstr ""
+msgstr "构建日期"
 
 msgid "Install Reason"
-msgstr ""
+msgstr "安装原因"
 
 msgid "Provides"
 msgstr "提供"
@@ -1164,107 +1164,106 @@ msgid "Conflicts"
 msgstr "冲突"
 
 msgid "Required By"
-msgstr ""
+msgstr "被以下软件包需要"
 
 msgid "Reinstalling package"
-msgstr ""
+msgstr "重新安装软件包"
 
 msgid "Adding to package ignore"
-msgstr ""
+msgstr "添加到忽略列表"
 
 msgid "Adding to package to hold"
-msgstr ""
+msgstr "添加到保留列表"
 
 msgid "Making Package Explicit"
-msgstr ""
+msgstr "将软件包设为显式安装"
 
 msgid "Making Package Dependency"
-msgstr ""
+msgstr "将软件包设为依赖安装"
 
 msgid "Package is already installed"
 msgstr "软件包已安装"
 
 msgid "Remove from selection"
-msgstr ""
+msgstr "从选择中去除"
 
 msgid "remove"
-msgstr ""
+msgstr "移除"
 
 msgid "install"
-msgstr ""
+msgstr "安装"
 
 msgid "No packages selected"
-msgstr ""
+msgstr "未选择任何软件包"
 
 msgid "Selected"
-msgstr ""
+msgstr "已选择"
 
 msgid "Mixed selection"
-msgstr ""
+msgstr "混合选择"
 
-msgid ""
-"Select only installed packages to remove, or only available ones to install."
-msgstr ""
+msgid "Select only installed packages to remove, or only available ones to install."
+msgstr "请仅选择已安装的软件包进行移除，或仅选择可用的软件包进行安装。"
 
 msgid "Remove the selected packages?"
-msgstr ""
+msgstr "移除所选软件包？"
 
 msgid "Removing packages"
-msgstr ""
+msgstr "正在移除软件包"
 
 msgid "Installing packages"
-msgstr ""
+msgstr "正在安装软件包"
 
 msgid "Search failed"
-msgstr ""
+msgstr "搜索失败"
 
 #| msgid "Installation Path"
 msgid "Installation in progress"
-msgstr ""
+msgstr "正在安装"
 
 msgid "No sources selected"
-msgstr ""
+msgstr "未选择任何源"
 
 msgid "Enable at least one source filter above."
-msgstr ""
+msgstr "请启用上方至少一个来源筛选器。"
 
 #| msgid "Install Local"
 msgid "Install Packages"
-msgstr ""
+msgstr "安装软件包"
 
 #| msgid "Install Selected"
 msgid "Install the selected packages?"
-msgstr ""
+msgstr "安装所选软件包？"
 
 msgid "Failed to save settings"
-msgstr ""
+msgstr "保存设置失败"
 
 msgid "Settings saved"
-msgstr ""
+msgstr "设置已保存"
 
 msgid "Installing Flatpak support"
-msgstr ""
+msgstr "正在安装 Flatpak 支持"
 
 msgid "Installing AppImage support"
-msgstr ""
+msgstr "正在安装 AppImage 支持"
 
 msgid "Failed to start Flatpak support installation"
-msgstr ""
+msgstr "启动 Flatpak 支持安装失败"
 
 msgid "Failed to start AppImage support installation"
-msgstr ""
+msgstr "启动 AppImage 支持安装失败"
 
 msgid "Flatpak support installation failed"
-msgstr ""
+msgstr "Flatpak 支持安装失败"
 
 msgid "AppImage support installation failed"
-msgstr ""
+msgstr "AppImage 支持安装失败"
 
 msgid "Flatpak support enabled"
-msgstr ""
+msgstr "Flatpak 支持已启用"
 
 msgid "AppImage support enabled"
-msgstr ""
+msgstr "AppImage 支持已启用"
 
 msgid "No changelog entries found"
 msgstr "未找到变更日志条目"
@@ -1276,37 +1275,37 @@ msgid "Failed to load changelog"
 msgstr "加载变更日志失败"
 
 msgid "Changelog"
-msgstr ""
+msgstr "变更日志"
 
 msgid "Select Tray Icon"
-msgstr ""
+msgstr "选择托盘图标"
 
 msgid "Select Icon"
-msgstr ""
+msgstr "选择图标"
 
 msgid "Select Tray Updates Icon"
-msgstr ""
+msgstr "选择托盘更新图标"
 
 msgid "Select AppImage Install Directory"
-msgstr ""
+msgstr "选择 AppImage 安装目录"
 
 msgid "Tray enabled"
-msgstr ""
+msgstr "托盘已启用"
 
 msgid "Tray disabled, but autostart service remains"
-msgstr ""
+msgstr "托盘已禁用，但自启动服务仍保留"
 
 msgid "Tray disabled"
-msgstr ""
+msgstr "托盘已禁用"
 
 msgid "Failed to add systemd startup service"
-msgstr ""
+msgstr "添加 systemd 启动服务失败"
 
 msgid "Systemd startup service added."
 msgstr "已添加 systemd 启动服务"
 
 msgid "Failed to remove systemd startup service"
-msgstr ""
+msgstr "移除 systemd 启动服务失败"
 
 msgid "Systemd startup service removed."
 msgstr "已删除 systemd 启动服务"
@@ -1322,10 +1321,10 @@ msgstr ""
 "否启用？"
 
 msgid "Enable"
-msgstr ""
+msgstr "启用"
 
 msgid "AUR enabled"
-msgstr ""
+msgstr "AUR 已启用"
 
 msgid "System Default"
 msgstr ""
@@ -1379,85 +1378,85 @@ msgid "Shelly Search"
 msgstr "Shelly 搜索"
 
 msgid "Update"
-msgstr ""
+msgstr "更新"
 
 msgid "Failed to start operation."
-msgstr ""
+msgstr "启动操作失败。"
 
 msgid "Pending"
-msgstr ""
+msgstr "等待中"
 
 msgid "Synchronizing databases"
-msgstr ""
+msgstr "正在同步数据库"
 
 msgid "Building"
-msgstr ""
+msgstr "正在构建"
 
 msgid "Downloading"
-msgstr ""
+msgstr "正在下载"
 
 msgid "Packaging"
-msgstr ""
+msgstr "正在打包"
 
 msgid "Installing"
-msgstr ""
+msgstr "正在安装"
 
 msgid "Upgrading"
-msgstr ""
+msgstr "正在升级"
 
 msgid "Downgrading"
-msgstr ""
+msgstr "正在降级"
 
 msgid "Reinstalling"
-msgstr ""
+msgstr "正在重新安装"
 
 msgid "Removing"
-msgstr ""
+msgstr "正在移除"
 
 msgid "Checking keyring"
-msgstr ""
+msgstr "正在检查密钥环"
 
 msgid "Checking integrity"
-msgstr ""
+msgstr "正在检查完整性"
 
 msgid "Loading packages"
-msgstr ""
+msgstr "正在加载软件包"
 
 msgid "Checking conflicts"
-msgstr ""
+msgstr "正在检查冲突"
 
 msgid "Checking disk space"
-msgstr ""
+msgstr "正在检查磁盘空间"
 
 msgid "Working"
-msgstr ""
+msgstr "处理中"
 
 msgid "Done"
-msgstr ""
+msgstr "完成"
 
 msgid "Failed"
-msgstr ""
+msgstr "失败"
 
 msgid "Finished"
-msgstr ""
+msgstr "已完成"
 
 msgid "exit"
-msgstr ""
+msgstr "退出"
 
 msgid "Cancelled"
-msgstr ""
+msgstr "已取消"
 
 msgid "System package update"
-msgstr ""
+msgstr "系统软件包更新"
 
 msgid "AUR package update"
-msgstr ""
+msgstr "AUR 软件包更新"
 
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
-msgstr ""
+msgstr "无法运行 shelly check-updates。请检查 CLI 输出后重试。"
 
 msgid "Update this package"
-msgstr ""
+msgstr "更新此软件包"
 
 msgid "of"
 msgstr ""
@@ -1469,47 +1468,43 @@ msgid "Updates included"
 msgstr ""
 
 msgid "Upgrading packages"
-msgstr ""
+msgstr "正在升级软件包"
 
 msgid "Refreshing package databases"
-msgstr ""
+msgstr "正在刷新软件包数据库"
 
 msgid "Database lock removed successfully"
-msgstr ""
+msgstr "数据库锁已成功移除"
 
 msgid "Failed to remove database lock"
-msgstr ""
+msgstr "移除数据库锁失败"
 
 msgid "Fixing permissions"
-msgstr ""
+msgstr "正在修复权限"
 
 msgid "Purifying packages"
-msgstr ""
+msgstr "正在清理软件包"
 
 msgid "Cleaning package cache"
-msgstr ""
+msgstr "正在清理软件包缓存"
 
 msgid "Welcome"
-msgstr ""
+msgstr "欢迎"
 
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
+msgid "The Arch User Repository is community-maintained. Packages are not officially vetted — only enable if you trust what you install."
+msgstr "Arch 用户仓库由社区维护。软件包未经官方审核 — 请仅在信任要安装的内容时启用。"
 
 msgid "Enable Recommended?"
-msgstr ""
+msgstr "启用推荐功能？"
 
-msgid ""
-"Recommended shows curated package suggestions based on your installed "
-"software. Package data is fetched from external sources."
-msgstr ""
+msgid "Recommended shows curated package suggestions based on your installed software. Package data is fetched from external sources."
+msgstr "推荐功能会根据您已安装的软件显示精选的软件包建议。软件包数据从外部来源获取。"
 
 msgid "Installing Flatpak and AppImage support"
-msgstr ""
+msgstr "正在安装 Flatpak 和 AppImage 支持"
 
 msgid "Settings"
 msgstr "设置"
 
 msgid "Package"
-msgstr ""
+msgstr "软件包"
