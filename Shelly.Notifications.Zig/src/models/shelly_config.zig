@@ -16,6 +16,7 @@ pub const ShellyConfig = struct {
     TrayIconPath: []const u8 = "",
     TrayUpdatesIconPath: []const u8 = "",
     UseWeeklySchedule: bool = false,
+    TrayRunAsCron: bool = false,
     DaysOfWeek: []const DayOfWeek = &.{},
     UseUiForUpdate: bool = false,
     Time: []const u8 = "",

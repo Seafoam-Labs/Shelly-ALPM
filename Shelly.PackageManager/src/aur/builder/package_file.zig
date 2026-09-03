@@ -113,7 +113,7 @@ pub fn assemblePackage(self: *PackageBuilder, package_build: *const PackageBuild
     defer pkgdir_handle.close(self.io);
 
     const payload_size = try directorySize(self.allocator, self.io, pkgdir_handle);
-    const build_date = std.Io.Clock.real.now(self.io).toSeconds();
+    const build_date = self.source_date_epoch orelse return error.MissingSourceDateEpoch;
     try writePackageInfo(self, package_build, pkgdir_handle, full_version, package_arch, payload_size, build_date);
     try writeBuildInfo(self, package_build, pkgdir_handle, full_version, package_arch, build_date);
     if (package_build.install_file) |install_file| {

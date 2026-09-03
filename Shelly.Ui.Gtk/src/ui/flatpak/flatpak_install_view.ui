@@ -176,6 +176,26 @@
                         </child>
                       </object>
                     </child>
+                    <child>
+                      <object class="GtkButton" id="overlay_uninstall_button">
+                        <property name="label" translatable="yes">Remove</property>
+                        <property name="visible">false</property>
+                        <style>
+                          <class name="destructive-action"/>
+                        </style>
+                        <child>
+                          <object class="GtkShortcutController">
+                            <property name="scope">local</property>
+                            <child>
+                              <object class="GtkShortcut">
+                                <property name="trigger">Return</property>
+                                <property name="action">activate</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>

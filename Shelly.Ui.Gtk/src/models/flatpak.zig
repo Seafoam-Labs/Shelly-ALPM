@@ -163,6 +163,7 @@ pub const AppstreamApp = struct {
     Remotes: []const Remote = &.{},
     Extends: ?[]const u8 = null,
     Addons: []const AppstreamApp = &.{},
+    Installed: bool = false,
 };
 
 test "parse AppStream app metadata" {

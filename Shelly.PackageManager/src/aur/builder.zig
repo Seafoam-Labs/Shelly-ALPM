@@ -36,6 +36,9 @@ pub const BuildEnvironment = struct {
     makeflags: ?[]const []const u8 = null,
     chost: ?[]const u8 = null,
     distcc_hosts: ?[]const []const u8 = null,
+    /// One build-scoped timestamp shared with every PKGBUILD subprocess and
+    /// package metadata writer, matching makepkg's SOURCE_DATE_EPOCH model.
+    source_date_epoch: ?i64 = null,
     ccache: bool = false,
     distcc: bool = false,
 };
@@ -297,6 +300,11 @@ pub fn executionEnvironmentWithBuild(
         "DISTCC_HOSTS",
         if (build.distcc) build.distcc_hosts else null,
     );
+    if (build.source_date_epoch) |epoch| {
+        var epoch_buffer: [20]u8 = undefined;
+        const epoch_text = try std.fmt.bufPrint(&epoch_buffer, "{d}", .{epoch});
+        try environ_map.put("SOURCE_DATE_EPOCH", epoch_text);
+    }
 
     const base_path = environ_map.get("PATH") orelse "";
     var prefixed_path: std.ArrayList(u8) = .empty;
@@ -466,7 +474,16 @@ pub fn invokingUserCleanCommand(
     const path = try buildExecutionPath(allocator, environ);
     defer allocator.free(path);
 
-    return cleanUserCommand(allocator, username, home, uid, path, command, arguments);
+    return cleanUserCommand(
+        allocator,
+        username,
+        home,
+        uid,
+        path,
+        environ.getPosix("SOURCE_DATE_EPOCH"),
+        command,
+        arguments,
+    );
 }
 
 fn cleanUserCommand(
@@ -475,6 +492,7 @@ fn cleanUserCommand(
     home: []const u8,
     uid: []const u8,
     path: []const u8,
+    source_date_epoch: ?[]const u8,
     command: []const u8,
     arguments: []const []const u8,
 ) !OwnedCommand {
@@ -498,6 +516,11 @@ fn cleanUserCommand(
     defer allocator.free(bus_environment);
     const path_environment = try std.fmt.allocPrint(allocator, "PATH={s}", .{path});
     defer allocator.free(path_environment);
+    const source_date_epoch_environment = if (source_date_epoch) |epoch|
+        try std.fmt.allocPrint(allocator, "SOURCE_DATE_EPOCH={s}", .{epoch})
+    else
+        null;
+    defer if (source_date_epoch_environment) |value| allocator.free(value);
 
     var argv: std.ArrayList([]u8) = .empty;
     errdefer {
@@ -519,8 +542,10 @@ fn cleanUserCommand(
         runtime_environment,
         bus_environment,
         path_environment,
-        command,
     });
+    if (source_date_epoch_environment) |value|
+        try appendOwned(allocator, &argv, &.{value});
+    try appendOwned(allocator, &argv, &.{command});
     try appendOwned(allocator, &argv, arguments);
     return .{ .argv = try argv.toOwnedSlice(allocator) };
 }
@@ -723,6 +748,7 @@ test "build environment exports flags hosts and compiler wrapper paths" {
         .makeflags = &.{"-j8"},
         .chost = "x86_64-pc-linux-gnu",
         .distcc_hosts = &.{ "builder/8", "localhost/2" },
+        .source_date_epoch = 1_700_000_000,
         .ccache = true,
         .distcc = true,
     });
@@ -732,6 +758,7 @@ test "build environment exports flags hosts and compiler wrapper paths" {
     try std.testing.expectEqualStrings("-O3 -pipe", effective.get("CFLAGS").?);
     try std.testing.expectEqualStrings("-j8", effective.get("MAKEFLAGS").?);
     try std.testing.expectEqualStrings("builder/8 localhost/2", effective.get("DISTCC_HOSTS").?);
+    try std.testing.expectEqualStrings("1700000000", effective.get("SOURCE_DATE_EPOCH").?);
     try std.testing.expect(std.mem.startsWith(u8, effective.get("PATH").?, "/usr/lib/ccache/bin:/usr/lib/distcc/bin:"));
 }
 
@@ -790,6 +817,7 @@ test "clean invoking-user build command drops the elevated environment" {
         "/home/zoey",
         "1000",
         "/usr/bin:/bin",
+        "1700000000",
         "/usr/bin/shelly",
         &.{ "build", "--coordinator-child", "/tmp/PKGBUILD" },
     );
@@ -809,6 +837,7 @@ test "clean invoking-user build command drops the elevated environment" {
         "XDG_RUNTIME_DIR=/run/user/1000",
         "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
         "PATH=/usr/bin:/bin",
+        "SOURCE_DATE_EPOCH=1700000000",
         "/usr/bin/shelly",
         "build",
         "--coordinator-child",

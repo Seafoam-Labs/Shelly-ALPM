@@ -324,16 +324,29 @@ pub const Reader = struct {
     path_z: [:0]u8,
 
     pub fn init(allocator: std.mem.Allocator, path: []const u8) !Reader {
-        return initWithSupport(allocator, path, false);
+        return (try initWithSupport(allocator, path, false, false)) orelse
+            Error.ArchiveOpenFailed;
     }
 
     /// Opens a source archive using every filter and format supported by the
     /// installed libarchive. Package readers use init() and remain tar-only.
     pub fn initAll(allocator: std.mem.Allocator, path: []const u8) !Reader {
-        return initWithSupport(allocator, path, true);
+        return (try initWithSupport(allocator, path, true, false)) orelse
+            Error.ArchiveOpenFailed;
     }
 
-    fn initWithSupport(allocator: std.mem.Allocator, path: []const u8, support_all: bool) !Reader {
+    /// Opens a source only when libarchive recognizes its contents. A null
+    /// result means no registered format bidder accepted the readable input.
+    pub fn initAllIfRecognized(allocator: std.mem.Allocator, path: []const u8) !?Reader {
+        return initWithSupport(allocator, path, true, true);
+    }
+
+    fn initWithSupport(
+        allocator: std.mem.Allocator,
+        path: []const u8,
+        support_all: bool,
+        allow_unrecognized: bool,
+    ) !?Reader {
         const path_z = try allocator.dupeZ(u8, path);
         errdefer allocator.free(path_z);
 
@@ -350,8 +363,14 @@ pub const Reader = struct {
             try requireStatus(c.archive_read_support_format_tar(handle));
         }
 
-        if (c.archive_read_open_filename(handle, path_z.ptr, 64 * 1024) < c.ARCHIVE_WARN)
+        if (c.archive_read_open_filename(handle, path_z.ptr, 64 * 1024) < c.ARCHIVE_WARN) {
+            if (allow_unrecognized and c.archive_format(handle) == 0) {
+                _ = c.archive_read_free(handle);
+                allocator.free(path_z);
+                return null;
+            }
             return Error.ArchiveOpenFailed;
+        }
 
         return .{
             .allocator = allocator,
@@ -366,13 +385,41 @@ pub const Reader = struct {
         self.* = undefined;
     }
 
+    /// Result of asking libarchive's registered format bidders to classify
+    /// the input. The first entry is returned with the open reader so callers
+    /// can continue extracting without reopening the untrusted source.
+    pub const Probe = union(enum) {
+        not_archive,
+        archive: ?Entry,
+    };
+
+    pub fn probe(self: *Reader) !Probe {
+        var raw_entry: ?*c.struct_archive_entry = null;
+        const status = c.archive_read_next_header(self.handle, &raw_entry);
+        if (status == c.ARCHIVE_EOF)
+            return if (c.archive_format(self.handle) == 0)
+                .not_archive
+            else
+                .{ .archive = null };
+        if (status < c.ARCHIVE_WARN)
+            return if (c.archive_format(self.handle) == 0)
+                .not_archive
+            else
+                Error.ArchiveReadFailed;
+        const entry = raw_entry orelse return Error.ArchiveReadFailed;
+        return .{ .archive = try entryFromRaw(entry) };
+    }
+
     pub fn next(self: *Reader) !?Entry {
         var raw_entry: ?*c.struct_archive_entry = null;
         const status = c.archive_read_next_header(self.handle, &raw_entry);
         if (status == c.ARCHIVE_EOF) return null;
         if (status < c.ARCHIVE_WARN or raw_entry == null) return Error.ArchiveReadFailed;
 
-        const entry = raw_entry.?;
+        return @as(?Entry, try entryFromRaw(raw_entry.?));
+    }
+
+    fn entryFromRaw(entry: *c.struct_archive_entry) !Entry {
         const pathname = c.archive_entry_pathname_utf8(entry) orelse
             c.archive_entry_pathname(entry) orelse return Error.InvalidEntryPath;
         const raw_size = c.archive_entry_size(entry);
@@ -480,6 +527,26 @@ pub fn writeFixture(
     compression: FixtureCompression,
     entries: []const FixtureEntry,
 ) !void {
+    return writeFixtureWithFormat(allocator, path, compression, .pax, entries);
+}
+
+pub fn writeZipFixture(
+    allocator: std.mem.Allocator,
+    path: []const u8,
+    entries: []const FixtureEntry,
+) !void {
+    return writeFixtureWithFormat(allocator, path, .none, .zip, entries);
+}
+
+const FixtureFormat = enum { pax, zip };
+
+fn writeFixtureWithFormat(
+    allocator: std.mem.Allocator,
+    path: []const u8,
+    compression: FixtureCompression,
+    format: FixtureFormat,
+    entries: []const FixtureEntry,
+) !void {
     const path_z = try allocator.dupeZ(u8, path);
     defer allocator.free(path_z);
 
@@ -497,10 +564,13 @@ pub fn writeFixture(
         const mtime = fixture.mtime orelse continue;
         if (@mod(mtime.nanoseconds, std.time.ns_per_s) != 0) break true;
     } else false;
-    const format_status = if (needs_full_pax)
-        c.archive_write_set_format_pax(handle)
-    else
-        c.archive_write_set_format_pax_restricted(handle);
+    const format_status = switch (format) {
+        .pax => if (needs_full_pax)
+            c.archive_write_set_format_pax(handle)
+        else
+            c.archive_write_set_format_pax_restricted(handle),
+        .zip => c.archive_write_set_format_zip(handle),
+    };
     if (format_status < c.ARCHIVE_WARN)
         return Error.ArchiveWriteFailed;
     if (c.archive_write_open_filename(handle, path_z.ptr) < c.ARCHIVE_WARN)

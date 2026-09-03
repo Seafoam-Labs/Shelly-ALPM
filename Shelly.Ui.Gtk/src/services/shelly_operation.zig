@@ -287,11 +287,11 @@ pub const ShellyCommands = struct {
         return argv.toOwnedSlice(alloc);
     }
 
-    pub fn install_flatpak(alloc: std.mem.Allocator, names: []const u8, remote: Scope, remote_name: []const u8) ![]const []const u8 {
-        return install_flatpak_ex(alloc, names, remote, remote_name, false);
+    pub fn installFlatpak(alloc: std.mem.Allocator, names: []const u8, remote: Scope, remote_name: []const u8) ![]const []const u8 {
+        return installFlatpakEx(alloc, names, remote, remote_name, false);
     }
 
-    pub fn install_flatpak_ex(alloc: std.mem.Allocator, names: []const u8, remote: Scope, remote_name: []const u8, is_runtime: bool) ![]const []const u8 {
+    pub fn installFlatpakEx(alloc: std.mem.Allocator, names: []const u8, remote: Scope, remote_name: []const u8, is_runtime: bool) ![]const []const u8 {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
         try argv.append(alloc, "install");
         try argv.append(alloc, "flatpak");
@@ -305,7 +305,7 @@ pub const ShellyCommands = struct {
         return argv.toOwnedSlice(alloc);
     }
 
-    pub fn remove_flatpak(alloc: std.mem.Allocator, names: []const u8, config_removal: bool) ![]const []const u8 {
+    pub fn removeFlatpak(alloc: std.mem.Allocator, names: []const u8, config_removal: bool) ![]const []const u8 {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
         try argv.append(alloc, "remove");
         try argv.append(alloc, "flatpak");

@@ -1777,6 +1777,162 @@ test "PackageBuilder exports configured build environment to lifecycle steps" {
     try testing.expect(std.mem.indexOf(u8, environment, "/usr/lib/ccache/bin:/usr/lib/distcc/bin:") != null);
 }
 
+test "PackageBuilder establishes one SOURCE_DATE_EPOCH for PKGBUILD evaluation and metadata" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    const pkgbuild_content =
+        \\pkgname=source-date-epoch-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\_top_level_epoch="${SOURCE_DATE_EPOCH}"
+        \\prepare() {
+        \\  test -n "$SOURCE_DATE_EPOCH"
+        \\  test "$SOURCE_DATE_EPOCH" = "$_top_level_epoch"
+        \\  printf '%s\n' "$SOURCE_DATE_EPOCH" > "$startdir/epochs"
+        \\}
+        \\pkgver() {
+        \\  printf '%s\n' "$SOURCE_DATE_EPOCH" >> "$startdir/epochs"
+        \\  printf '1'
+        \\}
+        \\build() {
+        \\  printf '%s\n' "$SOURCE_DATE_EPOCH" >> "$startdir/epochs"
+        \\  date -u -d "@${SOURCE_DATE_EPOCH}" '+%Y-%m-%dT%H:%M:%S.000Z' > "$startdir/build-time"
+        \\}
+        \\check() {
+        \\  printf '%s\n' "$SOURCE_DATE_EPOCH" >> "$startdir/epochs"
+        \\}
+        \\package() {
+        \\  printf '%s\n' "$SOURCE_DATE_EPOCH" >> "$startdir/epochs"
+        \\  mkdir -p "$pkgdir/usr/share/source-date-epoch-demo"
+        \\  cp "$startdir/epochs" "$startdir/build-time" "$pkgdir/usr/share/source-date-epoch-demo/"
+        \\}
+    ;
+
+    // Use an explicitly empty environment so this exercises Shelly's default
+    // instead of inheriting a CI-provided SOURCE_DATE_EPOCH.
+    var environment = std.process.Environ.Map.init(allocator);
+    defer environment.deinit();
+    const environ: std.process.Environ = .{
+        .block = try environment.createPosixBlock(allocator, .{}),
+    };
+    defer environ.block.deinit(allocator);
+
+    var fixture = try Fixture.create(allocator, pkgbuild_content, null, null);
+    defer fixture.destroy();
+    fixture.builder.environ = environ;
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = pkgbuild_content });
+    const pkgbuild_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "PKGBUILD" });
+    defer allocator.free(pkgbuild_path);
+    var review = try builder_mod.preparePkgbuildReview(
+        allocator,
+        io,
+        fixture.build_dir,
+        pkgbuild_content,
+        fixture.package_builds,
+    );
+    defer review.deinit();
+    fixture.builder.options.pkgbuild_path = pkgbuild_path;
+    fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+    fixture.builder.options.reviewed_files = review.reviewed_files;
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+
+    const epochs = try readPackageEntry(
+        allocator,
+        artifacts[0].path,
+        "usr/share/source-date-epoch-demo/epochs",
+    );
+    defer allocator.free(epochs);
+    var lines = std.mem.tokenizeScalar(u8, epochs, '\n');
+    const epoch = lines.next() orelse return error.MissingSourceDateEpoch;
+    _ = try std.fmt.parseInt(i64, epoch, 10);
+    var phase_count: usize = 1;
+    while (lines.next()) |phase_epoch| : (phase_count += 1)
+        try testing.expectEqualStrings(epoch, phase_epoch);
+    try testing.expectEqual(@as(usize, 5), phase_count);
+
+    const build_time = try readPackageEntry(
+        allocator,
+        artifacts[0].path,
+        "usr/share/source-date-epoch-demo/build-time",
+    );
+    defer allocator.free(build_time);
+    try testing.expect(build_time.len > 1);
+
+    const expected_builddate = try std.fmt.allocPrint(allocator, "builddate = {s}\n", .{epoch});
+    defer allocator.free(expected_builddate);
+    const pkg_info = try readPkgInfo(allocator, artifacts[0].path);
+    defer allocator.free(pkg_info);
+    try testing.expect(std.mem.indexOf(u8, pkg_info, expected_builddate) != null);
+    const build_info = try readPackageEntry(allocator, artifacts[0].path, ".BUILDINFO");
+    defer allocator.free(build_info);
+    try testing.expect(std.mem.indexOf(u8, build_info, expected_builddate) != null);
+}
+
+test "PackageBuilder preserves a caller-provided SOURCE_DATE_EPOCH" {
+    const allocator = testing.allocator;
+    var environment = std.process.Environ.Map.init(allocator);
+    defer environment.deinit();
+    try environment.put("SOURCE_DATE_EPOCH", "1700000000");
+    const environ: std.process.Environ = .{
+        .block = try environment.createPosixBlock(allocator, .{}),
+    };
+    defer environ.block.deinit(allocator);
+
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=inherited-source-date-epoch
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/inherited-source-date-epoch"
+        \\  printf '%s\n' "$SOURCE_DATE_EPOCH" > "$pkgdir/usr/share/inherited-source-date-epoch/epoch"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    fixture.builder.environ = environ;
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const epoch = try readPackageEntry(
+        allocator,
+        artifacts[0].path,
+        "usr/share/inherited-source-date-epoch/epoch",
+    );
+    defer allocator.free(epoch);
+    try testing.expectEqualStrings("1700000000\n", epoch);
+    const pkg_info = try readPkgInfo(allocator, artifacts[0].path);
+    defer allocator.free(pkg_info);
+    try testing.expect(std.mem.indexOf(u8, pkg_info, "builddate = 1700000000\n") != null);
+}
+
+test "PackageBuilder rejects an invalid SOURCE_DATE_EPOCH before PKGBUILD execution" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var environment = std.process.Environ.Map.init(allocator);
+    defer environment.deinit();
+    try environment.put("SOURCE_DATE_EPOCH", "not-a-timestamp");
+    const environ: std.process.Environ = .{
+        .block = try environment.createPosixBlock(allocator, .{}),
+    };
+    defer environ.block.deinit(allocator);
+
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=invalid-source-date-epoch
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\package() { touch "$startdir/executed"; }
+    , null, null);
+    defer fixture.destroy();
+    fixture.builder.environ = environ;
+
+    try testing.expectError(error.InvalidSourceDateEpoch, fixture.builder.BuildPackage());
+    try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, "executed", .{}));
+}
+
 test "PackageBuilder honors PKGBUILD build flag make flag and LTO negations" {
     const allocator = testing.allocator;
     const pkgbuild_content =
@@ -2456,6 +2612,56 @@ test "PackageBuilder extracts source archives into srcdir" {
     const chained_link = try fixture.temporary.dir.statFile(io, "src/demo/current", .{ .follow_symlinks = false });
     try testing.expectEqual(std.Io.File.Kind.sym_link, chained_link.kind);
     try fixture.temporary.dir.access(io, "pkg/demo/usr/share/demo/source.txt", .{});
+}
+
+test "PackageBuilder detects source archives by content including zip and tar zstd" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('renamed-payload.data' 'payload.tar.zst' 'ordinary.zip')
+        \\sha256sums=('SKIP' 'SKIP' 'SKIP')
+        \\build() {
+        \\  test "$(cat "$srcdir/from-zip.txt")" = zip
+        \\  test "$(cat "$srcdir/from-zstd.txt")" = zstd
+        \\  test "$(cat "$srcdir/ordinary.zip")" = plain
+        \\}
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/demo"
+        \\  cp "$srcdir/from-zip.txt" "$srcdir/from-zstd.txt" "$pkgdir/usr/share/demo/"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+
+    const zip_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "renamed-payload.data" });
+    defer allocator.free(zip_path);
+    try archive.writeZipFixture(allocator, zip_path, &.{
+        .{ .path = "from-zip.txt", .contents = "zip\n" },
+    });
+
+    const tar_zstd_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "payload.tar.zst" });
+    defer allocator.free(tar_zstd_path);
+    try archive.writeFixture(allocator, tar_zstd_path, .zstd, &.{
+        .{ .path = "from-zstd.txt", .contents = "zstd\n" },
+    });
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "ordinary.zip", .data = "plain\n" });
+
+    fixture.builder.options.sources_prepared = false;
+    try fixture.temporary.dir.deleteTree(io, "src");
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 1), artifacts.len);
+    try fixture.temporary.dir.access(io, "src/renamed-payload.data", .{});
+    try fixture.temporary.dir.access(io, "src/payload.tar.zst", .{});
+    try fixture.temporary.dir.access(io, "src/ordinary.zip", .{});
+    try fixture.temporary.dir.access(io, "src/from-zip.txt", .{});
+    try fixture.temporary.dir.access(io, "src/from-zstd.txt", .{});
+    try fixture.temporary.dir.access(io, "pkg/demo/usr/share/demo/from-zip.txt", .{});
+    try fixture.temporary.dir.access(io, "pkg/demo/usr/share/demo/from-zstd.txt", .{});
 }
 
 test "PackageBuilder preserves source archive modification timestamps" {

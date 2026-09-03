@@ -123,6 +123,7 @@ pub const BuilderErrors = error{
     BuildDirectoryNotWritable,
     PrivilegedPackageOperationUnsupported,
     SandboxUnsupported,
+    InvalidSourceDateEpoch,
 };
 
 pub const FailureLocation = struct {
@@ -143,6 +144,9 @@ pub const PackageBuilder = struct {
     failure_location: FailureLocation = .{},
     active_operation: ?*op_context.Operation = null,
     active_log: ?*steps.BuildLog = null,
+    /// Resolved once before any PKGBUILD code runs. A caller-provided value is
+    /// retained; otherwise this is the native builder's start timestamp.
+    source_date_epoch: ?i64 = null,
     /// Owned package names produced when sandboxed top-level evaluation turns
     /// statically unresolved split-package names into their final values.
     evaluated_requested_names: ?[][]const u8 = null,
@@ -200,6 +204,26 @@ pub const PackageBuilder = struct {
     pub fn clearVirtualOwnership(self: *PackageBuilder) void {
         if (self.virtual_ownership_tracker) |*tracker| tracker.deinit();
         self.virtual_ownership_tracker = null;
+    }
+
+    fn resolveSourceDateEpoch(self: *PackageBuilder) !void {
+        if (self.source_date_epoch != null) return;
+
+        if (self.environ.getPosix("SOURCE_DATE_EPOCH")) |value| {
+            // makepkg treats an empty variable like an unset one, but rejects
+            // every non-empty value containing anything except decimal digits.
+            if (value.len > 0) {
+                for (value) |byte| if (!std.ascii.isDigit(byte))
+                    return error.InvalidSourceDateEpoch;
+                self.source_date_epoch = std.fmt.parseInt(i64, value, 10) catch
+                    return error.InvalidSourceDateEpoch;
+                return;
+            }
+        }
+
+        const now = std.Io.Clock.real.now(self.io).toSeconds();
+        if (now < 0) return error.InvalidSourceDateEpoch;
+        self.source_date_epoch = now;
     }
 
     pub fn BuildPackage(self: *PackageBuilder) BuilderErrors![]BuildArtifact {
@@ -260,6 +284,7 @@ pub const PackageBuilder = struct {
         if (self.active_operation != null) return error.BuildAlreadyRunning;
         self.active_operation = operation;
         defer self.active_operation = null;
+        try self.resolveSourceDateEpoch();
         try steps.validateBuildDirectories(self);
         var log = try steps.openBuildLog(self);
         defer log.close();
@@ -316,6 +341,7 @@ pub const PackageBuilder = struct {
         defer self.active_operation = null;
         try security.secureBuilderProcess();
         try self.requireSandboxAvailability();
+        try self.resolveSourceDateEpoch();
 
         var evaluated = try self.resolveEvaluatedBuilds(operation);
         defer evaluated.deinit(self.allocator);

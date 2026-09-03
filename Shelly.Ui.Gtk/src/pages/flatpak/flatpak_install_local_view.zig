@@ -58,8 +58,8 @@ pub const FlatpakInstallLocalView = extern struct {
         p.selected_path = null;
         p.loaded = false;
         p.disposed = false;
-        _ = gtk.Button.signals.clicked.connect(p.choose_file_button, *Self, &on_choose_clicked, self, .{});
-        _ = gtk.Button.signals.clicked.connect(p.install_button, *Self, &on_install_clicked, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.choose_file_button, *Self, &onChooseClicked, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.install_button, *Self, &onInstallClicked, self, .{});
         support.connectLifecycle(Self, self);
     }
 
@@ -75,7 +75,7 @@ pub const FlatpakInstallLocalView = extern struct {
         p.loaded = false;
     }
 
-    fn on_choose_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
+    fn onChooseClicked(_: *gtk.Button, self: *Self) callconv(.c) void {
         const dialog = gtk.FileDialog.new();
         gtk.FileDialog.setTitle(dialog, translations._("Choose a Flatpak file"));
 
@@ -94,10 +94,10 @@ pub const FlatpakInstallLocalView = extern struct {
         const parent_window: ?*gtk.Window = if (root) |r| gobject.ext.cast(gtk.Window, r) else null;
 
         _ = self.as(gobject.Object).ref();
-        gtk.FileDialog.open(dialog, parent_window, null, &on_file_chosen, self);
+        gtk.FileDialog.open(dialog, parent_window, null, &onFileChosen, self);
     }
 
-    fn on_file_chosen(source: ?*gobject.Object, result: *gio.AsyncResult, data: ?*anyopaque) callconv(.c) void {
+    fn onFileChosen(source: ?*gobject.Object, result: *gio.AsyncResult, data: ?*anyopaque) callconv(.c) void {
         const self: *Self = @ptrCast(@alignCast(data.?));
         defer self.as(gobject.Object).unref();
         const dialog: *gtk.FileDialog = @ptrCast(@alignCast(source.?));
@@ -130,7 +130,7 @@ pub const FlatpakInstallLocalView = extern struct {
         gtk.Widget.setSensitive(p.install_button.as(gtk.Widget), 1);
     }
 
-    fn on_install_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
+    fn onInstallClicked(_: *gtk.Button, self: *Self) callconv(.c) void {
         const p = self.priv();
         const path = p.selected_path orelse return;
         const selected: usize = @intCast(gtk.DropDown.getSelected(p.scope_dropdown));
@@ -141,7 +141,7 @@ pub const FlatpakInstallLocalView = extern struct {
         else if (std.ascii.endsWithIgnoreCase(path, ".flatpak"))
             .bundle
         else {
-            self.show_status(translations._("Unsupported file type. Choose a .flatpak or .flatpakref file."));
+            self.showStatus(translations._("Unsupported file type. Choose a .flatpak or .flatpakref file."));
             return;
         };
 
@@ -162,7 +162,7 @@ pub const FlatpakInstallLocalView = extern struct {
                 .title = translations._("Installing local flatpak"),
                 .argv = argv,
                 .packages = names.items,
-                .on_complete = &on_transaction_complete,
+                .on_complete = &onTransactionComplete,
                 .privileged = !user_scope,
                 .ctx = self,
             });
@@ -171,15 +171,15 @@ pub const FlatpakInstallLocalView = extern struct {
 
     const BundleKind = enum { bundle, ref };
 
-    fn on_transaction_complete(ctx: *anyopaque, success: bool) void {
+    fn onTransactionComplete(ctx: *anyopaque, success: bool) void {
         const self: *FlatpakInstallLocalView = @ptrCast(@alignCast(ctx));
         const p = self.priv();
         if (p.disposed) return;
         if (!success) {
-            self.show_status(translations._("Installation failed."));
+            self.showStatus(translations._("Installation failed."));
             return;
         }
-        self.show_status(translations._("Installation complete."));
+        self.showStatus(translations._("Installation complete."));
         if (p.selected_path) |old| {
             std.heap.c_allocator.free(old);
             p.selected_path = null;
@@ -188,7 +188,7 @@ pub const FlatpakInstallLocalView = extern struct {
         gtk.Widget.setSensitive(p.install_button.as(gtk.Widget), 0);
     }
 
-    fn show_status(self: *Self, message: [:0]const u8) void {
+    fn showStatus(self: *Self, message: [:0]const u8) void {
         const p = self.priv();
         gtk.Label.setLabel(p.status_label, message);
         gtk.Widget.setVisible(p.status_label.as(gtk.Widget), 1);

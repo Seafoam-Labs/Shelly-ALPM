@@ -998,6 +998,7 @@ pub fn buildEnvironment(
             self.shellybuild_config.build.distcc_hosts
         else
             null,
+        .source_date_epoch = self.source_date_epoch,
         .ccache = self.shellybuild_config.build.ccache,
         .distcc = self.shellybuild_config.build.distcc,
     };

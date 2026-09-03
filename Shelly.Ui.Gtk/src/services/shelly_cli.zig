@@ -132,7 +132,7 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode([]Package, self.allocator, result.stdout);
     }
 
-    pub fn get_remotes(self: ShellyCli) !std.json.Parsed([]Remote) {
+    pub fn getRemotes(self: ShellyCli) !std.json.Parsed([]Remote) {
         const result = try self.run(&.{ "list", "flatpak", "remote" });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
@@ -140,7 +140,7 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode([]Remote, self.allocator, result.stdout);
     }
 
-    pub fn get_installed_flatpaks(self: ShellyCli) !std.json.Parsed([]Flatpak) {
+    pub fn getInstalledFlatpaks(self: ShellyCli) !std.json.Parsed([]Flatpak) {
         const result = try self.run(&.{"-Lf"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
@@ -148,7 +148,7 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode([]Flatpak, self.allocator, result.stdout);
     }
 
-    pub fn get_remote_appstream_apps(self: ShellyCli) !std.json.Parsed([]AppstreamApp) {
+    pub fn getRemoteAppstreamApps(self: ShellyCli) !std.json.Parsed([]AppstreamApp) {
         const result = try self.run(&.{ "list", "flatpak", "remote", "all" });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);

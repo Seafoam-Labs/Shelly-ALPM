@@ -155,9 +155,8 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
             try materializeGitSource(self, operation, source.source, source.destination, materialized);
         } else {
             try std.Io.Dir.copyFile(.cwd(), source.destination, .cwd(), materialized, self.io, .{});
-            if (source_spec.isExtractableArchive(source.source.name) and
-                !source_spec.containsString(package_build.no_extract orelse &.{}, source.source.name))
-                try extractSourceArchive(self, operation, source.destination, extraction_staging);
+            if (!source_spec.containsString(package_build.no_extract orelse &.{}, source.source.name))
+                try extractSourceArchiveIfRecognized(self, operation, source.destination, extraction_staging);
         }
     }
     // Only a fully prepared staging tree is committed. Sources are
@@ -643,7 +642,7 @@ fn decompressSignedPayload(
     if (term != .exited or term.exited != 0) return error.SourceDecompressionFailed;
 }
 
-fn extractSourceArchive(
+fn extractSourceArchiveIfRecognized(
     self: *PackageBuilder,
     operation: *op_context.Operation,
     archive_path: []const u8,
@@ -654,8 +653,12 @@ fn extractSourceArchive(
         mtime: std.Io.Timestamp,
     };
 
-    var reader = try archive.Reader.initAll(self.allocator, archive_path);
+    var reader = (try archive.Reader.initAllIfRecognized(self.allocator, archive_path)) orelse return;
     defer reader.deinit();
+    const first_entry = switch (try reader.probe()) {
+        .not_archive => return,
+        .archive => |entry| entry,
+    };
     var directory_timestamps: std.ArrayList(DirectoryTimestamp) = .empty;
     defer {
         for (directory_timestamps.items) |timestamp| self.allocator.free(timestamp.path);
@@ -664,13 +667,15 @@ fn extractSourceArchive(
     var buffer: [64 * 1024]u8 = undefined;
     var entry_count: usize = 0;
     var total_size: u64 = 0;
-    while (try reader.next()) |entry| {
+    var next_entry = first_entry;
+    while (next_entry) |entry| {
         try operation.checkCancelled();
         entry_count += 1;
         if (entry_count > 1_000_000 or entry.size > 4 * 1024 * 1024 * 1024)
             return error.SourceArchiveTooLarge;
         if (isArchiveRootDirectoryEntry(entry.kind, entry.path)) {
             try reader.skip();
+            next_entry = try reader.next();
             continue;
         }
         const relative = try archive.normalizeEntryPath(self.allocator, entry.path);
@@ -731,6 +736,7 @@ fn extractSourceArchive(
             },
             .other => return error.UnsupportedSourceArchiveEntry,
         }
+        next_entry = try reader.next();
     }
 
     // Creating children changes directory mtimes. Restore recorded directory
