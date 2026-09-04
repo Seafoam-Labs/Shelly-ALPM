@@ -1,8 +1,10 @@
 [Desktop Entry]
 Name=Shelly Notifications
+Name[it]=Notifiche Shelly
 Name[ru]=Уведомления Shelly
 Name[pl]=Powiadomienia Shelly
 Comment=Notification service for Shelly package manager
+Comment[it]=Servizio di notifica per il gestore pacchetti Shelly
 Comment[ru]=Служба уведомлений менеджера пакетов Shelly
 Comment[pl]=Usługa powiadomień dla menedżera pakietów Shelly
 Exec=/usr/bin/shelly-notifications
