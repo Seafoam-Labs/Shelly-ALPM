@@ -1,6 +1,7 @@
 [Desktop Entry]
 Name=Shelly
 Comment=A Modern Arch Package Manager
+Comment[it]=Un gestore pacchetti moderno per Arch Linux
 Comment[ru]=Современный менеджер пакетов для Arch
 Comment[pl]=Nowoczesny menedżer pakietów Arch
 Exec=/usr/bin/shelly-ui %u
@@ -17,6 +18,7 @@ Actions=FlatpakInstall;FlatpakUpdate;FlatpakRemove;
 
 [Desktop Action FlatpakInstall]
 Name=Flatpak Install
+Name[it]=Installa Flatpak
 Name[ru]=Установить Flatpak
 Name[pl]=Zainstaluj Flatpak
 Icon=flatpak-symbolic
@@ -24,6 +26,7 @@ Exec=/usr/bin/shelly-ui --page flatpak-install
 
 [Desktop Action FlatpakUpdate]
 Name=Flatpak Update
+Name[it]=Aggiorna Flatpak
 Name[ru]=Обновить Flatpak
 Name[pl]=Zaktualizuj Flatpak
 Icon=flatpak-symbolic
@@ -31,6 +34,7 @@ Exec=/usr/bin/shelly-ui --page flatpak-update
 
 [Desktop Action FlatpakRemove]
 Name=Flatpak Remove
+Name[it]=Rimuovi Flatpak
 Name[ru]=Удалить Flatpak
 Name[pl]=Odinstaluj Flatpak
 Icon=flatpak-symbolic
