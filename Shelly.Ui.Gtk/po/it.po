@@ -16,7 +16,7 @@ msgid "Would you like to remove extra cache entries?"
 msgstr "Vuoi rimuovere le voci di cache in eccesso?"
 
 msgid "No installable addons available"
-msgstr "Nessun addon installabile disponibile"
+msgstr "Nessun componente aggiuntivo installabile disponibile"
 
 msgid "Close"
 msgstr "Chiudi"
