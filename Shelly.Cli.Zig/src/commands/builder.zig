@@ -150,6 +150,13 @@ const SrcinfoReal = struct {
         );
         defer review.deinit();
 
+        const reviewed_digest = if (optionValue(invocation, "--review-digest")) |encoded| blk: {
+            const expected = try parseReviewDigest(encoded);
+            if (!std.mem.eql(u8, &expected, &review.digest))
+                return error.ReviewedPkgbuildChanged;
+            break :blk expected;
+        } else null;
+
         var operation = operation_context.begin(.{
             .backend = .aur,
             .kind = .build,
@@ -158,7 +165,7 @@ const SrcinfoReal = struct {
         var completion: Zigalpm.OperationCompletionStatus = .failed;
         defer operation.finish(completion);
 
-        if (!optionEnabled(invocation, "--reviewed")) {
+        if (!optionEnabled(invocation, "--reviewed") and reviewed_digest == null) {
             var answer = try operation.ask(.{
                 .kind = .review_changes,
                 .prompt = "Generate SRCINFO from this PKGBUILD?",
@@ -1633,6 +1640,9 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
     const pkgbuild_content = try std.fmt.allocPrint(
         test_context.arena.allocator(),
         "pkgname=demo\npkgver=1\npkgrel=1\npkgdesc=$(printf 'Dynamic description')\narch=(any)\n" ++
+            "_enable_plasmoid=${{SYNCTHING_TRAY_ENABLE_PLASMOID:-1}}\n" ++
+            "makedepends=('cmake')\n" ++
+            "[[ $_enable_plasmoid ]] && makedepends+=('libplasma' 'extra-cmake-modules')\n" ++
             "pkgver() {{ touch '{s}'; printf 2; }}\n" ++
             "build() {{ touch '{s}'; }}\n" ++
             "package() {{ touch '{s}'; }}\n",
@@ -1646,10 +1656,33 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
     defer environ.block.deinit(std.testing.allocator);
     test_context.context.environ = environ;
     const manifest = try spec.Manifest.load(test_context.arena.allocator());
+    var package_builds = try test_context.arena.allocator().alloc(Zigalpm.pkgbuild.parser.Pkgbuild, 1);
+    package_builds[0] = try (Zigalpm.pkgbuild.Parser{
+        .allocator = test_context.arena.allocator(),
+        .io = std.testing.io,
+        .selected_package_name = "demo",
+    }).parser_content(pkgbuild_content, directory_path);
+    var review = try Zigalpm.builder.preparePkgbuildReview(
+        test_context.arena.allocator(),
+        std.testing.io,
+        directory_path,
+        pkgbuild_content,
+        package_builds,
+    );
+    defer review.deinit();
+    const wrong_digest = "5a" ** std.crypto.hash.sha2.Sha256.digest_length;
+    const mismatched = try parser.parse(
+        test_context.arena.allocator(),
+        &manifest,
+        &.{ "build", "--makesrcinfo", "--review-digest", wrong_digest, "--no-confirm", pkgbuild_path },
+    );
+    try std.testing.expect((try executeMakeSrcinfo(&test_context.context, &mismatched.dispatch)) != 0);
+
+    const digest_hex = std.fmt.bytesToHex(review.digest, .lower);
     const outcome = try parser.parse(
         test_context.arena.allocator(),
         &manifest,
-        &.{ "build", "--makesrcinfo", "--reviewed", "--no-confirm", pkgbuild_path },
+        &.{ "build", "--makesrcinfo", "--review-digest", &digest_hex, "--no-confirm", pkgbuild_path },
     );
     try std.testing.expect(optionEnabled(&outcome.dispatch, "--makesrcinfo"));
     try std.testing.expectEqual(
@@ -1657,7 +1690,9 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
         try executeMakeSrcinfo(&test_context.context, &outcome.dispatch),
     );
     try std.testing.expectEqualStrings(
-        "pkgbase = demo\n\tpkgdesc = Dynamic description\n\tpkgver = 1\n\tpkgrel = 1\n\tarch = any\n\npkgname = demo\n",
+        "pkgbase = demo\n\tpkgdesc = Dynamic description\n\tpkgver = 1\n\tpkgrel = 1\n" ++
+            "\tarch = any\n\tmakedepends = cmake\n\tmakedepends = libplasma\n" ++
+            "\tmakedepends = extra-cmake-modules\n\npkgname = demo\n",
         test_context.stdout.writer.buffered(),
     );
     try std.testing.expect(std.mem.indexOf(

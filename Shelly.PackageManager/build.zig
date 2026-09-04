@@ -578,6 +578,7 @@ pub fn build(b: *std.Build) void {
             "unsafe package bases cannot escape the AUR cache",
             "RPC client keeps an owned copy of its configured endpoint",
             "custom AUR base fetches PKGBUILDs from its Git checkout",
+            "AUR dependency planning uses sandbox-evaluated conditional arrays",
             "custom AUR base PKGBUILD failures stay actionable",
             "custom AUR base ignores unverified cached SRCINFO provenance",
             "endpoint switching replaces a checkout with a mismatched origin",
@@ -663,6 +664,8 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder rejects a source checksum mismatch without committing srcdir",
             "PackageBuilder extracts source archives into srcdir",
             "PackageBuilder detects source archives by content including zip and tar zstd",
+            "PackageBuilder extracts an extensionless source over its matching archive root",
+            "PackageBuilder rejects an archive root colliding with another staged source",
             "PackageBuilder preserves source archive modification timestamps",
             "PackageBuilder extracts VSIX sources into srcdir",
             "PackageBuilder rebases Zoom absolute source archive link inside srcdir",
@@ -710,6 +713,7 @@ pub fn build(b: *std.Build) void {
             "streaming process execution forwards stdout stderr and a final unterminated line",
             "streaming process execution delivers output before the child exits",
             "streaming process execution terminates when the shared operation is cancelled",
+            ".SRCINFO dependency parser merges global selected and architecture scopes",
         },
     });
     const run_aur_tests = b.addRunArtifact(aur_tests);

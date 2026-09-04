@@ -2217,6 +2217,37 @@ test "parser_content: execution step expansion does not mistake arithmetic shift
     , steps[0].expanded_body);
 }
 
+test "parser_content: execution step expansion does not mistake here-strings for heredocs" {
+    // Issue 1848 (rime-ice-pinyin-git): `<<<` with a quoted command
+    // substitution was treated as a heredoc introducer, swallowing the
+    // rest of the function body.
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const content =
+        \\pkgname=hello
+        \\
+        \\build() {
+        \\  mapfile -t deps <<< "$(sed -n '/dependencies:/,/^$/ {/dependencies:/d; p }' list.txt)"
+        \\  echo "$pkgname"
+        \\}
+        \\
+        \\package() {
+        \\  echo "$pkgname"
+        \\}
+    ;
+    var info = try parse_test_pkgbuild(parser, content, null);
+    defer info.deinit(std.testing.allocator);
+
+    const steps = info.execution.?.steps;
+    try std.testing.expectEqual(@as(usize, 2), steps.len);
+    try std.testing.expectEqualStrings("build", steps[0].name);
+    try std.testing.expectEqualStrings(
+        \\mapfile -t deps <<< "$(sed -n '/dependencies:/,/^$/ {/dependencies:/d; p }' list.txt)"
+        \\  echo "hello"
+    , steps[0].expanded_body);
+    try std.testing.expectEqualStrings("package", steps[1].name);
+    try std.testing.expectEqualStrings("echo \"hello\"", steps[1].expanded_body);
+}
+
 test "parser_content: architecture sources and b2 sums follow makepkg ordering" {
     const parser = PkgbuildParser{
         .allocator = std.testing.allocator,

@@ -154,9 +154,34 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
         if (source.source.kind == .git) {
             try materializeGitSource(self, operation, source.source, source.destination, materialized);
         } else {
-            try std.Io.Dir.copyFile(.cwd(), source.destination, .cwd(), materialized, self.io, .{});
-            if (!source_spec.containsString(package_build.no_extract orelse &.{}, source.source.name))
-                try extractSourceArchiveIfRecognized(self, operation, source.destination, extraction_staging);
+            const no_extract = source_spec.containsString(
+                package_build.no_extract orelse &.{},
+                source.source.name,
+            );
+            if (no_extract) {
+                try std.Io.Dir.copyFile(.cwd(), source.destination, .cwd(), materialized, self.io, .{});
+                continue;
+            }
+
+            // Extract before materializing the raw payload. An extensionless
+            // renamed source may have the same name as the archive's root
+            // directory; in that case the extracted entry owns the path and
+            // the raw archive must not overwrite it.
+            _ = std.Io.Dir.cwd().statFile(self.io, materialized, .{ .follow_symlinks = false }) catch |err| switch (err) {
+                error.FileNotFound => {
+                    const extracted = try extractSourceArchiveIfRecognized(
+                        self,
+                        operation,
+                        source.destination,
+                        extraction_staging,
+                    );
+                    if (!extracted or !pathExistsNoFollow(self.io, materialized))
+                        try std.Io.Dir.copyFile(.cwd(), source.destination, .cwd(), materialized, self.io, .{});
+                    continue;
+                },
+                else => return err,
+            };
+            return error.UnsafeSourceArchivePath;
         }
     }
     // Only a fully prepared staging tree is committed. Sources are
@@ -647,16 +672,16 @@ fn extractSourceArchiveIfRecognized(
     operation: *op_context.Operation,
     archive_path: []const u8,
     destination_root: []const u8,
-) !void {
+) !bool {
     const DirectoryTimestamp = struct {
         path: []u8,
         mtime: std.Io.Timestamp,
     };
 
-    var reader = (try archive.Reader.initAllIfRecognized(self.allocator, archive_path)) orelse return;
+    var reader = (try archive.Reader.initAllIfRecognized(self.allocator, archive_path)) orelse return false;
     defer reader.deinit();
     const first_entry = switch (try reader.probe()) {
-        .not_archive => return,
+        .not_archive => return false,
         .archive => |entry| entry,
     };
     var directory_timestamps: std.ArrayList(DirectoryTimestamp) = .empty;
@@ -696,7 +721,7 @@ fn extractSourceArchiveIfRecognized(
             },
             .regular_file => {
                 try ensureSafeArchivePath(self, destination_root, relative, false);
-                try rejectSymlinkDestination(self.io, destination);
+                try rejectExistingDestination(self.io, destination);
                 var output = try std.Io.Dir.cwd().createFile(self.io, destination, .{
                     .truncate = true,
                     .permissions = std.Io.File.Permissions.fromMode(entry.permissions & 0o777),
@@ -748,6 +773,12 @@ fn extractSourceArchiveIfRecognized(
             .modify_timestamp = .{ .new = timestamp.mtime },
         });
     }
+    return true;
+}
+
+fn pathExistsNoFollow(io: std.Io, path: []const u8) bool {
+    _ = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch return false;
+    return true;
 }
 
 fn isArchiveRootDirectoryEntry(kind: archive.EntryKind, path: []const u8) bool {
@@ -827,14 +858,6 @@ fn raiseSourceMessage(self: *PackageBuilder, package_build: *const PackageBuild,
         .stage = "sources",
         .message = package_build.pkg_name orelse message,
     });
-}
-
-fn rejectSymlinkDestination(io: std.Io, path: []const u8) !void {
-    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
-        error.FileNotFound => return,
-        else => return err,
-    };
-    if (stat.kind == .sym_link or stat.kind == .directory) return error.UnsafeSourceArchivePath;
 }
 
 fn rejectExistingDestination(io: std.Io, path: []const u8) !void {
