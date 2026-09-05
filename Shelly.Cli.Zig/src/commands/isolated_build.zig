@@ -239,11 +239,13 @@ pub const Root = struct {
         defer self.allocator.free(path);
         if (std.fs.path.dirname(path)) |parent|
             try std.Io.Dir.cwd().createDirPath(self.io, parent);
-        try std.Io.Dir.cwd().writeFile(self.io, .{
-            .sub_path = path,
-            .data = contents,
-            .flags = .{ .permissions = .fromMode(permissions & 0o777) },
+        const file = try std.Io.Dir.cwd().createFile(self.io, path, .{
+            .permissions = .fromMode(0o600),
         });
+        defer file.close(self.io);
+        try file.writeStreamingAll(self.io, contents);
+        // Permissions are part of the review digest and must survive umask.
+        try file.setPermissions(self.io, .fromMode(permissions & 0o777));
     }
 
     pub fn stageExecutable(self: *Root, executable: []const u8) !void {
@@ -575,16 +577,96 @@ test "reviewed inputs are materialized with exact bytes and permissions" {
         .artifact_path = unused,
     };
 
-    try root.writeReviewedInput("patches/fix.patch", "reviewed\n", 0o750);
-    const contents = try temporary.dir.readFileAlloc(io, "patches/fix.patch", allocator, .limited(1024));
-    defer allocator.free(contents);
-    try std.testing.expectEqualStrings("reviewed\n", contents);
-    const stat = try temporary.dir.statFile(io, "patches/fix.patch", .{ .follow_symlinks = false });
-    try std.testing.expectEqual(@as(u32, 0o750), stat.permissions.toMode() & 0o777);
+    for ([_]u32{ 0o600, 0o640, 0o644, 0o660, 0o664, 0o750, 0o770 }) |mode| {
+        const name = try std.fmt.allocPrint(allocator, "patches/mode-{o}.patch", .{mode});
+        defer allocator.free(name);
+        try root.writeReviewedInput(name, "reviewed\x00\xff\n", mode);
+        try expectStagedInput(temporary.dir, name, "reviewed\x00\xff\n", mode);
+    }
+    try temporary.dir.writeFile(io, .{ .sub_path = "overwrite.patch", .data = "old longer contents\n" });
+    try temporary.dir.setFilePermissions(io, "overwrite.patch", .fromMode(0o770), .{});
+    try root.writeReviewedInput("overwrite.patch", "short\n", 0o640);
+    try expectStagedInput(temporary.dir, "overwrite.patch", "short\n", 0o640);
+    try root.writeReviewedInput("overwrite.patch", "group writable\n", 0o660);
+    try expectStagedInput(temporary.dir, "overwrite.patch", "group writable\n", 0o660);
     try std.testing.expectError(
         error.FileNotFound,
         temporary.dir.statFile(io, "unreviewed.cache", .{ .follow_symlinks = false }),
     );
+}
+
+fn expectStagedInput(directory: std.Io.Dir, name: []const u8, expected: []const u8, mode: u32) !void {
+    const contents = try directory.readFileAlloc(std.testing.io, name, std.testing.allocator, .limited(1024));
+    defer std.testing.allocator.free(contents);
+    try std.testing.expectEqualStrings(expected, contents);
+    const stat = try directory.statFile(std.testing.io, name, .{ .follow_symlinks = false });
+    try std.testing.expectEqual(mode, stat.permissions.toMode() & 0o777);
+}
+
+test "staged reviewed inputs preserve the host digest and reject real changes" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var host = std.testing.tmpDir(.{});
+    defer host.cleanup();
+    var guest = std.testing.tmpDir(.{});
+    defer guest.cleanup();
+    const host_path = try host.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(host_path);
+    const guest_path = try guest.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(guest_path);
+    const guest_pkgbuild = try std.fs.path.join(allocator, &.{ guest_path, "PKGBUILD" });
+    defer allocator.free(guest_pkgbuild);
+    const content =
+        \\pkgname=staged-review
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('related.txt')
+        \\sha256sums=('SKIP')
+        \\package() { :; }
+    ;
+    try host.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = content });
+    try host.dir.writeFile(io, .{ .sub_path = "related.txt", .data = "reviewed\n" });
+    try host.dir.setFilePermissions(io, "related.txt", .fromMode(0o660), .{});
+    var host_build = try (Zigalpm.pkgbuild.Parser{ .allocator = allocator, .io = io }).parser_content(content, host_path);
+    defer host_build.deinit(allocator);
+    var review = try Zigalpm.builder.preparePkgbuildReview(allocator, io, host_path, content, &.{host_build});
+    defer review.deinit();
+    try std.testing.expectEqual(@as(usize, 1), review.reviewed_files.len);
+    try std.testing.expectEqual(@as(u32, 0o660), review.reviewed_files[0].permissions);
+
+    var unused: [0]u8 = .{};
+    var root: Root = .{
+        .allocator = allocator,
+        .io = io,
+        .operation_path = &unused,
+        .root_path = &unused,
+        .source_path = guest_path,
+        .artifact_path = &unused,
+    };
+    try root.writeReviewedInput("PKGBUILD", content, 0o644);
+    for (review.reviewed_files) |file|
+        try root.writeReviewedInput(file.name, file.contents, file.permissions);
+
+    const staged_content = try guest.dir.readFileAlloc(io, "PKGBUILD", allocator, .limited(1024));
+    defer allocator.free(staged_content);
+    var guest_build = try (Zigalpm.pkgbuild.Parser{ .allocator = allocator, .io = io }).parser_content(staged_content, guest_path);
+    defer guest_build.deinit(allocator);
+    var guest_review = try Zigalpm.builder.preparePkgbuildReview(allocator, io, guest_path, staged_content, &.{guest_build});
+    defer guest_review.deinit();
+    try std.testing.expectEqualSlices(u8, &review.digest, &guest_review.digest);
+    try review.verifyCurrent(allocator, io, guest_pkgbuild, guest_path);
+
+    try guest.dir.writeFile(io, .{ .sub_path = "related.txt", .data = "changed\n" });
+    try std.testing.expectError(error.ReviewedPkgbuildChanged, review.verifyCurrent(allocator, io, guest_pkgbuild, guest_path));
+    try guest.dir.writeFile(io, .{ .sub_path = "related.txt", .data = "reviewed\n" });
+    try review.verifyCurrent(allocator, io, guest_pkgbuild, guest_path);
+    try guest.dir.setFilePermissions(io, "related.txt", .fromMode(0o640), .{});
+    try std.testing.expectError(error.ReviewedPkgbuildChanged, review.verifyCurrent(allocator, io, guest_pkgbuild, guest_path));
+    try guest.dir.setFilePermissions(io, "related.txt", .fromMode(0o660), .{});
+    try review.verifyCurrent(allocator, io, guest_pkgbuild, guest_path);
+    try guest.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = content ++ "\n# changed\n" });
+    try std.testing.expectError(error.ReviewedPkgbuildChanged, review.verifyCurrent(allocator, io, guest_pkgbuild, guest_path));
 }
 
 test "artifact export accepts package archives but not detached signatures" {
