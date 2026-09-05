@@ -219,6 +219,7 @@ test {
     _ = @import("pages/flatpak/flatpak_install_view.zig");
     _ = @import("helpers/ui_decode.zig");
     _ = @import("helpers/datetime.zig");
+    _ = @import("helpers/deep_link.zig");
     _ = @import("services/flathub_api.zig");
     _ = @import("models/aur_package.zig");
     _ = @import("g_objects/aur_package_object.zig");

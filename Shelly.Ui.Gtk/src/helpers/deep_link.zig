@@ -21,7 +21,7 @@ pub fn extractFlatpakAppId(
     if (std.mem.startsWith(u8, arg, appstream_prefix)) {
         var remainder = stripQueryAndFragment(arg[appstream_prefix.len..]);
 
-        remainder = std.mem.trimLeft(u8, remainder, "/");
+        remainder = std.mem.trimStart(u8, remainder, "/");
 
         if (remainder.len == 0 or
             std.mem.indexOfScalar(u8, remainder, '/') != null)
@@ -30,6 +30,7 @@ pub fn extractFlatpakAppId(
         }
 
         app_id = remainder;
+        
     } else if (std.mem.startsWith(u8, arg, flatpak_https_prefix)) {
         const remainder =
             stripQueryAndFragment(arg[flatpak_https_prefix.len..]);
@@ -57,6 +58,9 @@ pub fn extractFlatpakAppId(
     } else {
         return null;
     }
+
+    if (app_id.len == 0 or app_id.len > max_app_id_len)
+        return null;
 
     @memcpy(buffer[0..app_id.len], app_id);
     buffer[app_id.len] = 0;
