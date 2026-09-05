@@ -21,6 +21,14 @@ pub const FlatpakPage = extern struct {
 
     pub const title: [:0]const u8 = "Flatpak";
     pub const icon_name: [:0]const u8 = "flatpak-symbolic";
+
+    pub const Section = enum {
+        install,
+        remove,
+        remotes,
+        local,
+    };
+    
     const resource_path = "/com/shellyorg/shelly/ui/flatpak/flatpak_page.ui";
 
     const Private = struct {
@@ -56,6 +64,30 @@ pub const FlatpakPage = extern struct {
 
     fn priv(self: *Self) *Private {
         return gobject.ext.impl_helpers.getPrivate(self, Private, Private.offset);
+    }
+
+    pub fn navigateTo(self: *Self, section: Section) void {
+        const p = self.priv();
+        const row: *gtk.ListBoxRow = switch (section) {
+            .install => p.nav_install_row,
+            .remove => p.nav_remove_row,
+            .remotes => p.nav_remote_row,
+            .local => p.nav_install_local,
+        };
+        const name: [:0]const u8 = switch (section) {
+            .install => "install",
+            .remove => "remove",
+            .remotes => "remotes",
+            .local => "local",
+        };
+        gtk.ListBox.selectRow(p.section_nav_list, row);
+        gtk.Stack.setVisibleChildName(p.main_content_stack, name);
+    }
+    
+    pub fn openApp(self: *Self, app_id: [:0]const u8) void {
+        const p = self.priv();
+        p.install_view.openAppById(app_id);
+        self.navigateTo(.install);
     }
 
     fn init(self: *Self, _: *Class) callconv(.c) void {

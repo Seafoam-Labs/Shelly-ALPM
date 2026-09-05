@@ -150,12 +150,6 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
             dispatchPendingNavigation(window);
         }
         gtk.Window.present(gtk_window);
-        if (runtime.pending_navigate_updates) {
-            runtime.pending_navigate_updates = false;
-            if (gobject.ext.cast(ShellyWindow, gtk_window)) |shelly_window| {
-                shelly_window.navigateToUpdates();
-            }
-        }
         return;
     }
     const provider = gtk.CssProvider.new();
@@ -198,13 +192,6 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
     const window = ShellyWindow.new(app);
     dispatchPendingNavigation(window);
     gtk.Window.present(window.as(gtk.Window));
-
-    if (runtime.pending_navigate_updates) {
-        runtime.pending_navigate_updates = false;
-        window.navigateToUpdates();
-    }
-
-    gtk.Window.present(gobject.ext.as(gtk.Window, window));
 }
 
 fn tryStartTray(io: std.Io, alloc: std.mem.Allocator) void {

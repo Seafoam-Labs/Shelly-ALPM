@@ -80,6 +80,9 @@ pub const FlatpakInstallView = extern struct {
         selected_app_position: c_uint,
 
         loaded: bool,
+        catalog_ready: bool,
+        pending_app_id: [256]u8,
+        pending_app_id_len: usize,
         disposed: bool,
         load_generation: u64,
         details_generation: u64,
@@ -160,7 +163,8 @@ pub const FlatpakInstallView = extern struct {
         p.filter = null;
         p.selection = null;
         p.selected_app = null;
-
+        p.catalog_ready = false;
+        p.pending_app_id_len = 0;
         p.loaded = false;
         p.disposed = false;
         p.load_generation = 0;
@@ -186,6 +190,7 @@ pub const FlatpakInstallView = extern struct {
         const p = self.priv();
         if (p.loaded) return;
         p.loaded = true;
+        p.catalog_ready = false;
         p.load_generation +%= 1;
         self.loadApps(p.load_generation);
     }
@@ -195,6 +200,8 @@ pub const FlatpakInstallView = extern struct {
         if (!p.loaded) return;
         p.loaded = false;
         p.load_generation +%= 1;
+        p.catalog_ready = false;
+        p.pending_app_id_len = 0;
         gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), 0);
         self.showList();
         if (p.model) |model| gio.ListStore.removeAll(model);
@@ -594,6 +601,69 @@ pub const FlatpakInstallView = extern struct {
         const p = self.priv();
         gtk.Stack.setVisibleChild(p.content_stack, p.list_overlay.as(gtk.Widget));
         self.clearDetails();
+    }
+    
+    pub fn openAppById(self: *Self, app_id: []const u8) void {
+        const p = self.priv();
+    
+        if (p.catalog_ready) {
+            _ = self.resolveAppById(app_id);
+            return;
+        }
+    
+        const len = @min(app_id.len, p.pending_app_id.len);
+    
+        @memcpy(p.pending_app_id[0..len], app_id[0..len]);
+        p.pending_app_id_len = len;
+    }
+    
+    fn resolveAppById(self: *Self, app_id: []const u8) bool {
+        const p = self.priv();
+        const selection = p.selection orelse return false;
+        const model = selection.as(gio.ListModel);
+        const count = gio.ListModel.getNItems(model);
+    
+        var position: c_uint = 0;
+        while (position < count) : (position += 1) {
+            const item: *gobject.Object = @ptrCast(@alignCast(
+                gio.ListModel.getItem(
+                    model,
+                    position,
+                ) orelse continue,
+            ));
+            defer item.unref();
+    
+            const app = gobject.ext.cast(
+                AppstreamAppObject,
+                item,
+            ) orelse continue;
+    
+            if (!std.mem.eql(u8, app.getId(), app_id))
+                continue;
+    
+            self.showDetails(app, position);
+            return true;
+        }
+    
+        self.showList();
+        self.updateNoResults();
+        return false;
+    }
+
+    fn openPendingApp(self: *Self) void {
+        const p = self.priv();
+    
+        if (p.pending_app_id_len == 0)
+            return;
+    
+        const app_id =
+            p.pending_app_id[0..p.pending_app_id_len];
+    
+        // Clear the logical pending value before opening the details page.
+        // The bytes remain valid for the duration of resolveAppById().
+        p.pending_app_id_len = 0;
+    
+        _ = self.resolveAppById(app_id);
     }
 
     fn showDetails(self: *Self, app: *AppstreamAppObject, position: c_uint) void {
@@ -1230,6 +1300,8 @@ pub const FlatpakInstallView = extern struct {
             return 0;
         }
         if (result.failed or result.parsed == null) {
+            p.catalog_ready = false;
+            p.pending_app_id_len = 0;
             page.showStatus(translations._("Unable to load Flatpak applications."), false);
             cleanupResult(result);
             return 0;
@@ -1238,6 +1310,8 @@ pub const FlatpakInstallView = extern struct {
         const apps = result.parsed.?.value;
         const end = @min(result.next_index + batch_size, apps.len);
         const model = p.model orelse {
+            p.catalog_ready = false;
+            p.pending_app_id_len = 0;
             cleanupResult(result);
             return 0;
         };
@@ -1258,10 +1332,14 @@ pub const FlatpakInstallView = extern struct {
         if (end < apps.len) return 1;
 
         if (gio.ListModel.getNItems(model.as(gio.ListModel)) == 0) {
+            p.catalog_ready = true;
+            p.pending_app_id_len = 0;
             page.showStatus(translations._("No Flatpak applications are available."), false);
         } else {
+            p.catalog_ready = true;
             gtk.Spinner.stop(p.loading_spinner);
             gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), 0);
+            page.openPendingApp();
         }
         cleanupResult(result);
         return 0;

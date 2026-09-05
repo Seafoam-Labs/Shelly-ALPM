@@ -68,6 +68,17 @@ pub fn extractFlatpakAppId(
     return buffer[0..app_id.len :0];
 }
 
+pub fn parsePageTarget(value: []const u8) ?PageTarget {
+    if (std.mem.eql(u8, value, "flatpak-install"))
+        return .flatpak_install;
+    if (std.mem.eql(u8, value, "flatpak-remove"))
+        return .flatpak_remove;
+    if (std.mem.eql(u8, value, "flatpak-update"))
+        return .updates;
+
+    return null;
+}
+
 fn stripQueryAndFragment(value: []const u8) []const u8 {
     var end = value.len;
 

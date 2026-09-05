@@ -21,6 +21,7 @@ const runtime = @import("services/runtime.zig");
 const NavMode = @import("models/shelly_config.zig").NavMode;
 const ShellyTabs = @import("models/shelly_config.zig").ShellyTabs;
 const translations = @import("helpers/translations.zig");
+const deep_link = @import("helpers/deep_link.zig");
 const ConfirmDialog = @import("dialog/page/yn_dialog.zig").ConfirmDialog;
 const PolkitDialog = @import("dialog/page/polkit_warning.zig").PolkitDialog;
 const DBus = @import("services/dbus.zig").DBus;
@@ -54,6 +55,7 @@ pub const ShellyWindow = extern struct {
         collapsed: bool,
         nav_mode: NavMode,
         pending_nav: NavMode,
+        flatpak_page: *FlatpakPage,
         var offset: c_int = 0;
     };
 
@@ -155,6 +157,28 @@ pub const ShellyWindow = extern struct {
     fn on_polkit_close(ctx: ?*anyopaque) void {
         const self: *ShellyWindow = @ptrCast(@alignCast(ctx.?));
         self.hideLockout();
+    }
+
+    fn canShowTopLevelPage(self: *ShellyWindow, name: [:0]const u8) bool {
+        const p = self.private();
+    
+        const child = gtk.Stack.getChildByName(
+            p.content_stack,
+            name,
+        ) orelse return false;
+    
+        const page = gtk.Stack.getPage(p.content_stack, child);
+        return gtk.StackPage.getVisible(page) != 0;
+    }
+
+    fn showTopLevelPage(self: *ShellyWindow, name: [:0]const u8) bool {
+        if (!self.canShowTopLevelPage(name))
+            return false;
+    
+        const p = self.private();
+        gtk.Stack.setVisibleChildName(p.content_stack, name);
+        sync_active_nav(self);
+        return true;
     }
 
     fn setNavEnabled(self: *ShellyWindow, name: [:0]const u8, enabled: bool) void {
@@ -502,6 +526,7 @@ pub const ShellyWindow = extern struct {
         gtk.StackPage.setIconName(pp_page, PackagePage.icon_name);
 
         const fp = FlatpakPage.new();
+        self.private().flatpak_page = fp;
         const fp_page = gtk.Stack.addTitled(stack, fp.as(gtk.Widget), "flatpak", translations._("Flatpak"));
         gtk.StackPage.setIconName(fp_page, FlatpakPage.icon_name);
 
@@ -569,15 +594,42 @@ pub const ShellyWindow = extern struct {
         tp.run(request);
     }
 
-    pub fn navigateToUpdates(self: *ShellyWindow) void {
-        const p = self.private();
-        gtk.Stack.setVisibleChildName(p.content_stack, "update");
-        for (p.nav_buttons.items) |nb| {
-            if (std.mem.eql(u8, nb.name, "update")) {
-                set_active_nav(self, nb);
-                break;
-            }
-        }
+    pub fn openFlatpakApp(
+        self: *ShellyWindow,
+        app_id: [:0]const u8,
+    ) bool {
+        if (!self.canShowTopLevelPage("flatpak"))
+            return false;
+    
+        // Queue/configure the child before showing the top-level page.
+        self.private().flatpak_page.openApp(app_id);
+    
+        return self.showTopLevelPage("flatpak");
+    }
+
+    pub fn navigateTo(
+        self: *ShellyWindow,
+        target: deep_link.PageTarget,
+    ) bool {
+        return switch (target) {
+            .updates => self.showTopLevelPage("update"),
+    
+            .flatpak_install => blk: {
+                if (!self.canShowTopLevelPage("flatpak"))
+                    break :blk false;
+    
+                self.private().flatpak_page.navigateTo(.install);
+                break :blk self.showTopLevelPage("flatpak");
+            },
+    
+            .flatpak_remove => blk: {
+                if (!self.canShowTopLevelPage("flatpak"))
+                    break :blk false;
+    
+                self.private().flatpak_page.navigateTo(.remove);
+                break :blk self.showTopLevelPage("flatpak");
+            },
+        };
     }
 
     const template_children = .{
