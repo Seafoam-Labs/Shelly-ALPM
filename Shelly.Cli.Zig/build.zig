@@ -78,6 +78,33 @@ pub fn build(b: *std.Build) void {
     const run_builder_tests = b.addRunArtifact(builder_tests);
     test_step.dependOn(&run_builder_tests.step);
 
+    const isolated_test_module = b.createModule(.{
+        .root_source_file = b.path("src/commands/isolated_build.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    isolated_test_module.addImport("Zigalpm", zigalpm);
+    const isolated_tests = b.addTest(.{
+        .name = "isolated-build-test",
+        .root_module = isolated_test_module,
+        .filters = &.{
+            "reviewed input paths cannot escape the staged source root",
+            "reviewed inputs are materialized with exact bytes and permissions",
+            "staged reviewed inputs preserve the host digest and reject real changes",
+        },
+    });
+    const isolated_test_step = b.step("isolated-build-test", "Test reviewed staging and integrity under restrictive umasks");
+    for ([_][]const u8{ "0022", "0007", "0077" }) |mask| {
+        // Each runner inherits its own umask; never mutate it in concurrent Zig tests.
+        const run_isolated_tests = b.addSystemCommand(&.{
+            "bash", "-c", "umask \"$1\"; exec \"$2\"", "isolated-build-test", mask,
+        });
+        run_isolated_tests.addArtifactArg(isolated_tests);
+        run_isolated_tests.has_side_effects = true;
+        isolated_test_step.dependOn(&run_isolated_tests.step);
+    }
+    test_step.dependOn(isolated_test_step);
+
     const native_check_step = b.step("native-check", "Build and test the self-contained native Zig CLI");
     native_check_step.dependOn(b.getInstallStep());
     native_check_step.dependOn(&run_module_tests.step);

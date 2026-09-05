@@ -72,11 +72,27 @@ with an explicit recipe path:
 Copying only `PKGBUILD` into the binary directory is not sufficient: every
 local entry in its `source=()` array must reside beside that copy.
 
-Run the root-required smoke test from a normal user session with:
+The reviewed-input staging and digest-integrity regressions run in separate
+processes under umasks `0022`, `0007`, and `0077`. They cover exact bytes and
+permissions, overwrites, and rejection of subsequent input changes. Run them
+without elevation with:
+
+```sh
+zig build --build-file Shelly.Cli.Zig/build.zig isolated-build-test
+```
+
+This target also runs as part of the CLI's `zig build test` and executes every
+time, including when the test executable is cached.
+
+Run the root-required smoke test from a normal user session with `jq` installed:
 
 ```sh
 Shelly.Cli.Zig/scripts/test-isolated-build.sh
 ```
+
+The smoke fixture reviews a group-writable (`0660`) local source, passes the
+returned digest through `--review-digest`, checks the staged input in the guest,
+and verifies that the package artifact is exported to the invoking user.
 
 Cancellation across the elevation boundary has a rootless integration fixture
 that uses a deterministic fake elevator:
