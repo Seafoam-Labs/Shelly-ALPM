@@ -23,6 +23,20 @@ The resulting package's `.BUILDINFO` records the exact package set installed
 in the guest. Before export, libalpm loads every candidate archive and Shelly
 rejects malformed, duplicate, missing, or unexpected package identities.
 
+Source-signing keys listed in the evaluated `validpgpkeys` are prepared as the
+invoking host user before provisioning. Shelly checks the approved digest again,
+requests approval for missing keys, and exports only the required public keys.
+The guest imports that bundle into its own user keyring before the normal source
+signature checks. Host private keys, ownertrust, and GnuPG configuration are not
+copied.
+
+`--no-confirm` still declines missing-key imports; approving a review digest does
+not approve an import. For unattended callers such as Remora, import the required
+fingerprints once with `shelly keyring recv --user FINGERPRINT`, running as the
+account that invokes Shelly. Missing keys fail before provisioning and identify
+the import commands. Keys in root's keyring or pacman's keyring do not replace
+the invoking user's source-signing keys.
+
 The root lives under
 `/var/lib/shelly/build-roots/v1/operations/<random-id>/root`, is mode `0700` at
 the operation boundary, and is removed after success, failure, or
@@ -83,6 +97,13 @@ zig build --build-file Shelly.Cli.Zig/build.zig isolated-build-test
 
 This target also runs as part of the CLI's `zig build test` and executes every
 time, including when the test executable is cached.
+
+The public-key handoff, import approval, and signed-source regressions also run
+through the CLI's `test` target, or directly with:
+
+```sh
+zig build --build-file Shelly.Cli.Zig/build.zig isolated-source-keys-test
+```
 
 Run the root-required smoke test from a normal user session with `jq` installed:
 
