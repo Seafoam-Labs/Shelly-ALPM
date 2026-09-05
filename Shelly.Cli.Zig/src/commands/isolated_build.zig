@@ -45,6 +45,8 @@ pub fn deinitExportedArtifacts(allocator: std.mem.Allocator, artifacts: []Export
 }
 const guest_executable_relative = "usr/local/libexec/shelly/shelly";
 pub const guest_executable = "/" ++ guest_executable_relative;
+const source_keys_relative = "usr/local/libexec/shelly/source-keys.asc";
+pub const guest_source_keys = "/" ++ source_keys_relative;
 
 const operation_parent = "/var/lib/shelly/build-roots/v1/operations";
 
@@ -256,6 +258,16 @@ pub const Root = struct {
         defer self.allocator.free(destination);
         try std.Io.Dir.copyFile(.cwd(), executable, .cwd(), destination, self.io, .{});
         try std.Io.Dir.cwd().setFilePermissions(self.io, destination, .fromMode(0o755), .{});
+    }
+
+    pub fn stageSourcePgpKeys(self: *Root, contents: []const u8) !void {
+        const path = try self.rootJoin(source_keys_relative);
+        defer self.allocator.free(path);
+        const file = try std.Io.Dir.cwd().createFile(self.io, path, .{ .permissions = .fromMode(0o600) });
+        defer file.close(self.io);
+        try file.writeStreamingAll(self.io, contents);
+        // Public keys are read by the unprivileged guest, outside the reviewed source tree.
+        try file.setPermissions(self.io, .fromMode(0o644));
     }
 
     pub fn writeBuildConfiguration(self: *Root, contents: []const u8) !void {
@@ -667,6 +679,28 @@ test "staged reviewed inputs preserve the host digest and reject real changes" {
     try review.verifyCurrent(allocator, io, guest_pkgbuild, guest_path);
     try guest.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = content ++ "\n# changed\n" });
     try std.testing.expectError(error.ReviewedPkgbuildChanged, review.verifyCurrent(allocator, io, guest_pkgbuild, guest_path));
+}
+
+test "isolated public source key bundle is readable under restrictive umasks" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const path = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(path);
+    var unused: [0]u8 = .{};
+    var root: Root = .{
+        .allocator = allocator,
+        .io = io,
+        .operation_path = &unused,
+        .root_path = path,
+        .source_path = &unused,
+        .artifact_path = &unused,
+    };
+    try temporary.dir.createDirPath(io, "usr/local/libexec/shelly");
+    const keys = @embedFile("fixtures/source-pgp/public.asc");
+    try root.stageSourcePgpKeys(keys);
+    try expectStagedInput(temporary.dir, source_keys_relative, keys, 0o644);
 }
 
 test "artifact export accepts package archives but not detached signatures" {

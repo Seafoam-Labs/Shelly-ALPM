@@ -10,6 +10,7 @@ const ui_operation = @import("../output/ui_operation.zig");
 const ShellyBuildConfiguration = Zigalpm.builder.ShellyBuildConfiguration;
 const aur_url = @import("../config/aur_url.zig");
 const isolated_build = @import("isolated_build.zig");
+const source_pgp_transport = @import("source_pgp_transport.zig");
 const signals = @import("../runtime/signals.zig");
 
 const command_path = "shelly build build";
@@ -59,6 +60,8 @@ pub fn dispatch(
         return try executeReviewOnly(context, invocation);
     if (optionEnabled(invocation, "--makesrcinfo"))
         return try executeMakeSrcinfo(context, invocation);
+    if (optionEnabled(invocation, "--prepare-isolated-source-keys"))
+        return try executeSourcePgpKeyPreparation(context, invocation);
     if (shouldElevateBuildCoordinator(invocation, elevation.isRoot())) {
         const elevated_arguments = try aur_url.argumentsWithEffectiveBase(context, invocation);
         defer context.allocator.free(elevated_arguments);
@@ -143,6 +146,8 @@ const ReviewOnlyResult = struct {
     package_names: [][]u8,
     review: Zigalpm.builder.PreparedPkgbuildReview,
     dependency_plan: ?SyncDependencyPlan = null,
+    // Owned by the review arena; used only by the internal key-preparation child.
+    source_pgp_fingerprints: []const []const u8 = &.{},
 
     fn deinit(self: *ReviewOnlyResult, allocator: std.mem.Allocator) void {
         allocator.free(self.package_base);
@@ -177,6 +182,93 @@ const CapturedReview = struct {
         self.* = undefined;
     }
 };
+
+const SourcePgpKeyResult = struct {
+    public_keys: []const u8 = "",
+    failure: ?[]const u8 = null,
+};
+
+fn sourcePgpPreparationArguments(allocator: std.mem.Allocator, invocation: *const parser.Invocation, pkgbuild_path: []const u8, digest_hex: []const u8) ![]const []const u8 {
+    var arguments: std.ArrayList([]const u8) = .empty;
+    defer arguments.deinit(allocator);
+    try arguments.appendSlice(allocator, &.{ "build", "--prepare-isolated-source-keys", "--review-digest", digest_hex });
+    if (invocation.globals.no_confirm) try arguments.append(allocator, "--no-confirm");
+    for (invocation.options) |option| {
+        if (std.mem.eql(u8, option.name, "--package"))
+            try arguments.appendSlice(allocator, &.{ "--package", option.value orelse return error.MissingPackageName });
+    }
+    try arguments.append(allocator, pkgbuild_path);
+    return arguments.toOwnedSlice(allocator);
+}
+
+fn captureSourcePgpKeys(context: *runtime.RuntimeContext, operation_context: *Zigalpm.OperationContext, invocation: *const parser.Invocation, pkgbuild_path: []const u8, digest: Zigalpm.builder.pkgbuild_review.Digest) ![]u8 {
+    const digest_hex = std.fmt.bytesToHex(digest, .lower);
+    const arguments = try sourcePgpPreparationArguments(context.allocator, invocation, pkgbuild_path, &digest_hex);
+    defer context.allocator.free(arguments);
+    const captured = (try elevation.runAsInvokingUserCapture(context, arguments, operation_context)) orelse return error.InvokingUserUnavailable;
+    defer captured.deinit(context.allocator);
+    const result = try std.json.parseFromSlice(SourcePgpKeyResult, context.allocator, captured.stdout, .{});
+    defer result.deinit();
+    if (result.value.failure) |failure| {
+        if (std.mem.eql(u8, failure, "PgpKeyImportDeclined")) return error.PgpKeyImportDeclined;
+        if (std.mem.eql(u8, failure, "ReviewedPkgbuildChanged")) return error.ReviewedPkgbuildChanged;
+        if (std.mem.eql(u8, failure, "Cancelled")) return error.Cancelled;
+        return error.IsolatedSourcePgpKeyPreparationFailed;
+    }
+    if (captured.exit_code != 0) return error.IsolatedSourcePgpKeyPreparationFailed;
+    return context.allocator.dupe(u8, result.value.public_keys);
+}
+
+fn executeSourcePgpKeyPreparation(context: *runtime.RuntimeContext, invocation: *const parser.Invocation) !u8 {
+    var operation_context = Zigalpm.OperationContext.init(context.allocator, context.io);
+    defer operation_context.deinit();
+    var cancellation_watcher: signals.CancellationWatcher = .{};
+    try cancellation_watcher.start(context.io, &operation_context);
+    defer cancellation_watcher.deinit();
+    const stdout = context.stdout;
+    context.stdout = context.stderr;
+    defer context.stdout = stdout;
+    var renderer = try standard_single_pane.Renderer.init(context, invocation.globals.no_confirm);
+    defer renderer.deinit();
+    try renderer.attach(&operation_context);
+    try renderer.begin("Preparing isolated source-signing keys...");
+    const keys = prepareSourcePgpKeyExport(context, invocation, &operation_context) catch |err| {
+        try renderer.reportError(@errorName(err));
+        try renderer.finishWithMessage(false, "Source-signing key preparation failed.");
+        try std.json.Stringify.value(SourcePgpKeyResult{ .failure = @errorName(err) }, .{}, stdout);
+        try stdout.writeByte('\n');
+        try stdout.flush();
+        return exitCodeForBuildError(err);
+    };
+    defer context.allocator.free(keys);
+    try renderer.finishWithMessage(true, "Source-signing keys prepared.");
+    try std.json.Stringify.value(SourcePgpKeyResult{ .public_keys = keys }, .{}, stdout);
+    try stdout.writeByte('\n');
+    try stdout.flush();
+    return 0;
+}
+
+fn prepareSourcePgpKeyExport(context: *runtime.RuntimeContext, invocation: *const parser.Invocation, operation_context: *Zigalpm.OperationContext) ![]u8 {
+    const expected = try parseReviewDigest(optionValue(invocation, "--review-digest") orelse return error.MissingReviewDigest);
+    var result = try prepareReviewOnly(context, operation_context, invocation);
+    defer result.deinit(context.allocator);
+    if (!std.mem.eql(u8, &expected, &result.review.digest)) return error.ReviewedPkgbuildChanged;
+    var operation = operation_context.begin(.{ .backend = .aur, .kind = .build, .subject = result.package_base });
+    var completion: Zigalpm.OperationCompletionStatus = .failed;
+    defer operation.finish(completion);
+    ensureSourcePgpFingerprints(context, &operation, result.package_base, result.source_pgp_fingerprints) catch |err| {
+        if (err == error.PgpKeyImportDeclined) {
+            try context.stderr.writeAll("Source key imports require approval. Before an unattended isolated build, import the required keys as the invoking host user:\n");
+            for (result.source_pgp_fingerprints) |fingerprint|
+                try context.stderr.print("  shelly keyring recv --user {s}\n", .{fingerprint});
+            try context.stderr.flush();
+        }
+        return err;
+    };
+    const keys = try source_pgp_transport.exportKeys(context.allocator, context.io, context.environ, result.source_pgp_fingerprints);
+    completion = .success;
+    return keys;
+}
 
 fn executeReviewOnly(
     context: *runtime.RuntimeContext,
@@ -345,12 +437,22 @@ fn prepareReviewOnly(
     const package_base_value = builder.package_builds[0].variables.get("pkgbase") orelse
         builder.package_builds[0].pkg_name orelse return error.MissingPackageName;
     const package_base = try context.allocator.dupe(u8, package_base_value);
+    errdefer context.allocator.free(package_base);
+    const review_allocator = final_review.arena.allocator();
+    var source_pgp_fingerprints: std.ArrayList([]const u8) = .empty;
+    for (builder.package_builds) |package_build| {
+        for (package_build.valid_pgp_keys orelse &.{}) |fingerprint| {
+            if (!containsString(source_pgp_fingerprints.items, fingerprint))
+                try source_pgp_fingerprints.append(review_allocator, try review_allocator.dupe(u8, fingerprint));
+        }
+    }
     completion = .success;
     return .{
         .package_base = package_base,
         .package_names = package_names,
         .review = final_review,
         .dependency_plan = dependency_plan,
+        .source_pgp_fingerprints = try source_pgp_fingerprints.toOwnedSlice(review_allocator),
     };
 }
 
@@ -917,8 +1019,11 @@ const Real = struct {
         );
 
         self.result.?.review_digest = expected_digest;
-        if (!optionEnabled(invocation, "--skip-source-pgp-verification"))
+        if (!optionEnabled(invocation, "--skip-source-pgp-verification")) {
+            if (coordinator_child and optionEnabled(invocation, "--isolated-source-keys"))
+                try source_pgp_transport.importKeys(context.allocator, context.io, context.environ, isolated_build.guest_source_keys);
             try ensureSourcePgpKeys(context, &operation, package_base, builder.package_builds);
+        }
         builder.options.reviewed_pkgbuild_digest = expected_digest;
         builder.options.pkgbuild_sha256sum = final_review.pkgbuild_digest;
         builder.options.install_scripts = final_review.install_scripts;
@@ -960,17 +1065,13 @@ const SourcePgpCommandContext = struct {
 
     fn contains(data: ?*anyopaque, fingerprint: []const u8) !bool {
         const self: *@This() = @ptrCast(@alignCast(data.?));
-        return runQuiet(self.runtime_context, &.{
-            "/usr/bin/gpg",
-            "--batch",
-            "--no-tty",
-            "--list-keys",
-            fingerprint,
-        });
+        return source_pgp_transport.containsKey(self.runtime_context.allocator, self.runtime_context.io, self.runtime_context.environ, fingerprint);
     }
 
     fn receive(data: ?*anyopaque, fingerprint: []const u8) !bool {
         const self: *@This() = @ptrCast(@alignCast(data.?));
+        var environment = try self.runtime_context.environ.createMap(self.runtime_context.allocator);
+        defer environment.deinit();
         var child = try std.process.spawn(self.runtime_context.io, .{
             .argv = &.{
                 self.executable,
@@ -980,6 +1081,7 @@ const SourcePgpCommandContext = struct {
                 "--no-confirm",
                 fingerprint,
             },
+            .environ_map = &environment,
             .stdin = .inherit,
             .stdout = if (self.runtime_context.stdout == self.runtime_context.stderr) .ignore else .inherit,
             .stderr = .inherit,
@@ -1002,6 +1104,17 @@ fn ensureSourcePgpKeys(
             try fingerprints.appendSlice(context.allocator, keys);
     if (fingerprints.items.len == 0) return;
 
+    try ensureSourcePgpFingerprints(context, operation, package_name, fingerprints.items);
+}
+
+fn ensureSourcePgpFingerprints(
+    context: *runtime.RuntimeContext,
+    operation: *const Zigalpm.Operation,
+    package_name: []const u8,
+    fingerprints: []const []const u8,
+) !void {
+    if (fingerprints.len == 0) return;
+
     const executable_allocated = try std.process.executablePathAlloc(context.io, context.allocator);
     defer context.allocator.free(executable_allocated);
     var command_context: SourcePgpCommandContext = .{
@@ -1012,7 +1125,7 @@ fn ensureSourcePgpKeys(
         context.allocator,
         operation,
         package_name,
-        fingerprints.items,
+        fingerprints,
         .{
             .context = &command_context,
             .contains = SourcePgpCommandContext.contains,
@@ -1263,6 +1376,12 @@ fn runIsolatedCoordinator(
         try bootstrap_packages.appendSlice(context.allocator, review.repository_dependencies);
     }
 
+    const source_keys = if (optionEnabled(invocation, "--skip-source-pgp-verification"))
+        try context.allocator.dupe(u8, "")
+    else
+        try captureSourcePgpKeys(context, operation_context, invocation, request.pkgbuild_path, review.digest);
+    defer context.allocator.free(source_keys);
+
     var root = try isolated_build.Root.create(context.allocator, context.io);
     defer root.deinit();
     const executable_allocated = try std.process.executablePathAlloc(context.io, context.allocator);
@@ -1273,6 +1392,7 @@ fn runIsolatedCoordinator(
     try root.stageReviewedInputs(context.environ, pkgbuild_content, review.reviewed_files, &operation);
 
     try root.stageExecutable(executable);
+    if (source_keys.len != 0) try root.stageSourcePgpKeys(source_keys);
 
     const guest_configuration = try renderIsolatedConfiguration(
         context.allocator,
@@ -1287,6 +1407,7 @@ fn runIsolatedCoordinator(
         invocation.arguments,
         if (invocation.positionals.len == 0) null else invocation.positionals[0],
         &digest_hex,
+        source_keys.len != 0,
     );
     defer context.allocator.free(child_arguments);
     operation.status(.information, "Running unprivileged nspawn build", "build.isolation.execute", null);
@@ -1395,6 +1516,7 @@ fn buildIsolatedChildArguments(
     arguments: []const []const u8,
     original_positional: ?[]const u8,
     digest_hex: []const u8,
+    has_source_keys: bool,
 ) ![]const []const u8 {
     var result: std.ArrayList([]const u8) = .empty;
     defer result.deinit(allocator);
@@ -1424,6 +1546,7 @@ fn buildIsolatedChildArguments(
         if (positional_index != null and positional_index.? == index) continue;
         try result.append(allocator, argument);
     }
+    if (has_source_keys) try result.append(allocator, "--isolated-source-keys");
     try result.appendSlice(allocator, &.{
         "--coordinator-child",
         "--review-digest",
@@ -2735,6 +2858,7 @@ test "isolated child arguments remove host coordinator flags and replace the pat
         &arguments,
         "/host/reviewed/PKGBUILD",
         digest,
+        false,
     );
     defer std.testing.allocator.free(child);
     const expected = [_][]const u8{
@@ -2746,7 +2870,88 @@ test "isolated child arguments remove host coordinator flags and replace the pat
         "--nosign",
         "/build/source/PKGBUILD",
     };
-    try std.testing.expectEqualStrings(&expected, child);
+    try std.testing.expectEqual(expected.len, child.len);
+    for (expected, child) |wanted, actual| try std.testing.expectEqualStrings(wanted, actual);
+}
+
+test "isolated source key transport preserves approval policy and guest verification" {
+    const allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const manifest = try @import("../cli/spec.zig").Manifest.load(arena.allocator());
+    const digest = "5a" ** std.crypto.hash.sha2.Sha256.digest_length;
+    const unattended = try parser.parse(arena.allocator(), &manifest, &.{ "build", "--isolated", "--no-confirm", "--package", "demo", "/host/PKGBUILD" });
+    const arguments = try sourcePgpPreparationArguments(allocator, &unattended.dispatch, "/host/PKGBUILD", digest);
+    defer allocator.free(arguments);
+    const prepared = try parser.parse(arena.allocator(), &manifest, arguments);
+    try std.testing.expect(optionEnabled(&prepared.dispatch, "--prepare-isolated-source-keys"));
+    try std.testing.expect(prepared.dispatch.globals.no_confirm);
+    try std.testing.expectEqualStrings(digest, optionValue(&prepared.dispatch, "--review-digest").?);
+    try std.testing.expectEqualStrings("demo", optionValue(&prepared.dispatch, "--package").?);
+
+    const interactive = try parser.parse(arena.allocator(), &manifest, &.{ "build", "--isolated" });
+    const interactive_arguments = try sourcePgpPreparationArguments(allocator, &interactive.dispatch, "/host/PKGBUILD", digest);
+    defer allocator.free(interactive_arguments);
+    try std.testing.expect(!containsString(interactive_arguments, "--no-confirm"));
+    const guest = try buildIsolatedChildArguments(allocator, &.{ "build", "--isolated", "--no-confirm", "/host/PKGBUILD" }, "/host/PKGBUILD", digest, true);
+    defer allocator.free(guest);
+    const guest_invocation = try parser.parse(arena.allocator(), &manifest, guest);
+    try std.testing.expect(optionEnabled(&guest_invocation.dispatch, "--isolated-source-keys"));
+    try std.testing.expect(!optionEnabled(&guest_invocation.dispatch, "--skip-source-pgp-verification"));
+    try std.testing.expectEqualStrings(digest, optionValue(&guest_invocation.dispatch, "--review-digest").?);
+}
+
+test "isolated source key preparation checks the digest and refuses unapproved imports" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    const path = try std.fs.path.join(allocator, &.{ directory, "PKGBUILD" });
+    defer allocator.free(path);
+    const content =
+        \\pkgname=pgp-preparation
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\validpgpkeys=('2E37DFCC9287C8A2F84B2519241A5B24548FAC70')
+        \\package() { touch lifecycle-ran; }
+    ;
+    try temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = content });
+    const environ = try testEnvironWithHome(allocator, directory);
+    defer environ.block.deinit(allocator);
+    context.context.environ = environ;
+    try temporary.dir.createDir(io, ".gnupg", .fromMode(0o700));
+    try temporary.dir.writeFile(io, .{ .sub_path = ".gnupg/gpg.conf", .data = "no-autostart\n" });
+    var operations = Zigalpm.OperationContext.init(allocator, io);
+    defer operations.deinit();
+    const manifest = try @import("../cli/spec.zig").Manifest.load(context.arena.allocator());
+    const wrong = try parser.parse(context.arena.allocator(), &manifest, &.{ "build", "--prepare-isolated-source-keys", "--no-confirm", "--review-digest", "5a" ** 32, path });
+    try std.testing.expectError(error.ReviewedPkgbuildChanged, prepareSourcePgpKeyExport(&context.context, &wrong.dispatch, &operations));
+    const digest = Zigalpm.builder.pkgbuild_review.digestPreparedReview(content, @as([]const Zigalpm.builder.pkgbuild_review.ReviewedFile, &.{}));
+    const hex = std.fmt.bytesToHex(digest, .lower);
+    const approved = try parser.parse(context.arena.allocator(), &manifest, &.{ "build", "--prepare-isolated-source-keys", "--no-confirm", "--review-digest", &hex, path });
+    try std.testing.expectError(error.PgpKeyImportDeclined, prepareSourcePgpKeyExport(&context.context, &approved.dispatch, &operations));
+    try std.testing.expectEqual(@as(u8, 1), try executeSourcePgpKeyPreparation(&context.context, &approved.dispatch));
+    const declined = try std.json.parseFromSlice(SourcePgpKeyResult, allocator, context.stdout.written(), .{});
+    defer declined.deinit();
+    try std.testing.expectEqualStrings("PgpKeyImportDeclined", declined.value.failure.?);
+    try std.testing.expectEqualStrings("", declined.value.public_keys);
+    try std.testing.expect(std.mem.indexOf(u8, context.stderr.written(), "shelly keyring recv --user 2E37DFCC9287C8A2F84B2519241A5B24548FAC70") != null);
+    try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, "lifecycle-ran", .{}));
+    try temporary.dir.writeFile(io, .{ .sub_path = "public.asc", .data = @embedFile("fixtures/source-pgp/public.asc") });
+    const public_path = try std.fs.path.join(allocator, &.{ directory, "public.asc" });
+    defer allocator.free(public_path);
+    try source_pgp_transport.importKeys(allocator, io, environ, public_path);
+    const keys = try prepareSourcePgpKeyExport(&context.context, &approved.dispatch, &operations);
+    defer context.context.allocator.free(keys);
+    try std.testing.expect(std.mem.startsWith(u8, keys, "-----BEGIN PGP PUBLIC KEY BLOCK-----"));
+    try temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = content ++ "\n# changed\n" });
+    try std.testing.expectError(error.ReviewedPkgbuildChanged, prepareSourcePgpKeyExport(&context.context, &approved.dispatch, &operations));
 }
 
 test "isolated configuration preserves build policy and forces guest-local destinations" {
@@ -3213,7 +3418,7 @@ test "isolated argument rewriting removes JSON and both package destination spel
     const separate = [_][]const u8{
         "build", "--isolated", "--json", "--package-destination", "/host/job", "--no-check", "/host/PKGBUILD",
     };
-    const first = try buildIsolatedChildArguments(allocator, &separate, "/host/PKGBUILD", digest);
+    const first = try buildIsolatedChildArguments(allocator, &separate, "/host/PKGBUILD", digest, false);
     defer allocator.free(first);
     try std.testing.expect(!containsString(first, "--json"));
     try std.testing.expect(!containsString(first, "--package-destination"));
@@ -3223,7 +3428,7 @@ test "isolated argument rewriting removes JSON and both package destination spel
     const joined = [_][]const u8{
         "build", "--isolated", "--package-destination=/host/job", "/host/PKGBUILD",
     };
-    const second = try buildIsolatedChildArguments(allocator, &joined, "/host/PKGBUILD", digest);
+    const second = try buildIsolatedChildArguments(allocator, &joined, "/host/PKGBUILD", digest, false);
     defer allocator.free(second);
     for (second) |argument|
         try std.testing.expect(!std.mem.startsWith(u8, argument, "--package-destination"));

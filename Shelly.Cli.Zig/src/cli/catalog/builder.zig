@@ -35,6 +35,8 @@ pub const variants = [_]types.Variant{.{
         flag("--noverify", &.{}, "Skips the PKGBUILD verify() function"),
         flag("--isolated", &.{"-i"}, "Builds as an unprivileged user in a fresh systemd-nspawn root"),
         hiddenFlag("--coordinator-child", "Runs as a non-root child of an elevated package operation"),
+        hiddenFlag("--prepare-isolated-source-keys", "Prepares approved public source keys as the invoking user"),
+        hiddenFlag("--isolated-source-keys", "Imports the coordinator's public source keys in the guest"),
         hiddenFlag("--review-dependencies", "Includes evaluated dependency resolution in coordinator review transport"),
         hiddenFlag("--review-host-dependencies", "Resolves coordinator review dependencies against the host package state"),
         hiddenStringOption("--package", "Builds only the selected split-package member; repeatable"),
