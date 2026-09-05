@@ -3,13 +3,13 @@ const std = @import("std");
 pub const max_app_id_len = 255;
 
 const appstream_prefix = "appstream://";
-const flatpak_https_prefix= "flatpak+https://";
+const flatpak_https_prefix = "flatpak+https://";
 const flatpak_ref_suffix = ".flatpakref";
 
 pub const PageTarget = enum {
     flatpak_install,
-    flatpak_remove, 
-    updates,    
+    flatpak_remove,
+    updates,
 };
 
 pub fn extractFlatpakAppId(
@@ -30,7 +30,6 @@ pub fn extractFlatpakAppId(
         }
 
         app_id = remainder;
-        
     } else if (std.mem.startsWith(u8, arg, flatpak_https_prefix)) {
         const remainder =
             stripQueryAndFragment(arg[flatpak_https_prefix.len..]);

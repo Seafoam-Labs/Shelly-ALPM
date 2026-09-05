@@ -20,7 +20,7 @@ pub const PendingApp = struct {
 
 pub const PendingNavigation = union(enum) {
     page: deep_link.PageTarget,
-    flatpak_app:PendingApp,
+    flatpak_app: PendingApp,
 };
 
 pub var pending_navigation: ?PendingNavigation = null;

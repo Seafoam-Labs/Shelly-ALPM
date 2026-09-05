@@ -161,12 +161,12 @@ pub const ShellyWindow = extern struct {
 
     fn canShowTopLevelPage(self: *ShellyWindow, name: [:0]const u8) bool {
         const p = self.private();
-    
+
         const child = gtk.Stack.getChildByName(
             p.content_stack,
             name,
         ) orelse return false;
-    
+
         const page = gtk.Stack.getPage(p.content_stack, child);
         return gtk.StackPage.getVisible(page) != 0;
     }
@@ -174,7 +174,7 @@ pub const ShellyWindow = extern struct {
     fn showTopLevelPage(self: *ShellyWindow, name: [:0]const u8) bool {
         if (!self.canShowTopLevelPage(name))
             return false;
-    
+
         const p = self.private();
         gtk.Stack.setVisibleChildName(p.content_stack, name);
         sync_active_nav(self);
@@ -594,38 +594,29 @@ pub const ShellyWindow = extern struct {
         tp.run(request);
     }
 
-    pub fn openFlatpakApp(
-        self: *ShellyWindow,
-        app_id: [:0]const u8,
-    ) bool {
+    pub fn openFlatpakApp(self: *ShellyWindow, app_id: [:0]const u8) bool {
         if (!self.canShowTopLevelPage("flatpak"))
             return false;
-    
-        // Queue/configure the child before showing the top-level page.
         self.private().flatpak_page.openApp(app_id);
-    
         return self.showTopLevelPage("flatpak");
     }
 
-    pub fn navigateTo(
-        self: *ShellyWindow,
-        target: deep_link.PageTarget,
-    ) bool {
+    pub fn navigateTo(self: *ShellyWindow, target: deep_link.PageTarget) bool {
         return switch (target) {
             .updates => self.showTopLevelPage("update"),
-    
+
             .flatpak_install => blk: {
                 if (!self.canShowTopLevelPage("flatpak"))
                     break :blk false;
-    
+
                 self.private().flatpak_page.navigateTo(.install);
                 break :blk self.showTopLevelPage("flatpak");
             },
-    
+
             .flatpak_remove => blk: {
                 if (!self.canShowTopLevelPage("flatpak"))
                     break :blk false;
-    
+
                 self.private().flatpak_page.navigateTo(.remove);
                 break :blk self.showTopLevelPage("flatpak");
             },

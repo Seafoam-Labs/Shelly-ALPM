@@ -28,7 +28,7 @@ pub const FlatpakPage = extern struct {
         remotes,
         local,
     };
-    
+
     const resource_path = "/com/shellyorg/shelly/ui/flatpak/flatpak_page.ui";
 
     const Private = struct {
@@ -83,7 +83,7 @@ pub const FlatpakPage = extern struct {
         gtk.ListBox.selectRow(p.section_nav_list, row);
         gtk.Stack.setVisibleChildName(p.main_content_stack, name);
     }
-    
+
     pub fn openApp(self: *Self, app_id: [:0]const u8) void {
         const p = self.priv();
         p.install_view.openAppById(app_id);

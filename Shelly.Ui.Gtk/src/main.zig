@@ -59,7 +59,7 @@ fn commandLine(
 ) callconv(.c) c_int {
     var argc: c_int = 0;
     const argv = gio.ApplicationCommandLine.getArguments(cmdline, &argc);
-   const argc_usize = @as(usize, @intCast(argc));
+    const argc_usize = @as(usize, @intCast(argc));
     defer glib.strfreev(@ptrCast(argv));
 
     var requested_page: ?deep_link.PageTarget = null;
@@ -69,12 +69,12 @@ fn commandLine(
     var i: usize = 1;
     while (i < argc_usize) : (i += 1) {
         const arg = std.mem.span(argv[i]);
-    
+
         if (std.mem.eql(u8, arg, "--tray-updates")) {
             requested_page = .updates;
             continue;
         }
-    
+
         if (std.mem.eql(u8, arg, "--page")) {
             if (i + 1 < argc_usize) {
                 i += 1;
@@ -85,7 +85,7 @@ fn commandLine(
             }
             continue;
         }
-    
+
         if (deep_link.extractFlatpakAppId(arg, &app_id_buffer)) |id| {
             requested_app_id = id;
         }
@@ -96,7 +96,7 @@ fn commandLine(
     } else if (requested_page) |page| {
         runtime.queuePage(page);
     }
- 
+
     gio.Application.activate(app.as(gio.Application));
     gio.ApplicationCommandLine.setExitStatus(cmdline, 0);
     return 0;

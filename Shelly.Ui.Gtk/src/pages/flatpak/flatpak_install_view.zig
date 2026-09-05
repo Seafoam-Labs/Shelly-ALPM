@@ -603,7 +603,7 @@ pub const FlatpakInstallView = extern struct {
         gtk.Stack.setVisibleChild(p.content_stack, p.list_overlay.as(gtk.Widget));
         self.clearDetails();
     }
-    
+
     pub fn openAppById(self: *Self, app_id: []const u8) void {
         const p = self.priv();
         p.category = .@"All Applications";
@@ -617,13 +617,13 @@ pub const FlatpakInstallView = extern struct {
         @memcpy(p.pending_app_id[0..len], app_id[0..len]);
         p.pending_app_id_len = len;
     }
-    
+
     fn resolveAppById(self: *Self, app_id: []const u8) bool {
         const p = self.priv();
         const selection = p.selection orelse return false;
         const model = selection.as(gio.ListModel);
         const count = gio.ListModel.getNItems(model);
-    
+
         var position: c_uint = 0;
         while (position < count) : (position += 1) {
             const item: *gobject.Object = @ptrCast(@alignCast(
@@ -633,19 +633,19 @@ pub const FlatpakInstallView = extern struct {
                 ) orelse continue,
             ));
             defer item.unref();
-    
+
             const app = gobject.ext.cast(
                 AppstreamAppObject,
                 item,
             ) orelse continue;
-    
+
             if (!std.mem.eql(u8, app.getId(), app_id))
                 continue;
-    
+
             self.showDetails(app, position);
             return true;
         }
-    
+
         self.showList();
         self.updateNoResults();
         return false;
@@ -653,17 +653,17 @@ pub const FlatpakInstallView = extern struct {
 
     fn openPendingApp(self: *Self) void {
         const p = self.priv();
-    
+
         if (p.pending_app_id_len == 0)
             return;
-    
+
         const app_id =
             p.pending_app_id[0..p.pending_app_id_len];
-    
+
         // Clear the logical pending value before opening the details page.
         // The bytes remain valid for the duration of resolveAppById().
         p.pending_app_id_len = 0;
-    
+
         _ = self.resolveAppById(app_id);
     }
 
