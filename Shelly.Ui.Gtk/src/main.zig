@@ -9,6 +9,7 @@ const gobject = bindings.gobject;
 const ShellyWindow = @import("shelly_window.zig").ShellyWindow;
 const runtime = @import("services/runtime.zig");
 const translations = @import("helpers/translations.zig");
+const deep_link = @import("helpers/deep_link.zig");
 const tray_service = @import("services/tray_service.zig");
 const options = @import("options");
 const IconDownloadService = @import("services/icon_fetcher.zig").downloadIconsInBackground;
@@ -58,17 +59,44 @@ fn commandLine(
 ) callconv(.c) c_int {
     var argc: c_int = 0;
     const argv = gio.ApplicationCommandLine.getArguments(cmdline, &argc);
+   const argc_usize = @as(usize, @intCast(argc));
     defer glib.strfreev(@ptrCast(argv));
 
-    var i: usize = 1;
-    while (i < @as(usize, @intCast(argc))) : (i += 1) {
-        const arg = std.mem.span(argv[i]);
+    var requested_page: ?deep_link.PageTarget = null;
+    var app_id_buffer: [deep_link.max_app_id_len + 1]u8 = undefined;
+    var requested_app_id: ?[:0]const u8 = null;
 
+    var i: usize = 1;
+    while (i < argc_usize) : (i += 1) {
+        const arg = std.mem.span(argv[i]);
+    
         if (std.mem.eql(u8, arg, "--tray-updates")) {
-            runtime.pending_navigate_updates = true;
+            requested_page = .updates;
+            continue;
+        }
+    
+        if (std.mem.eql(u8, arg, "--page")) {
+            if (i + 1 < argc_usize) {
+                i += 1;
+                requested_page =
+                    deep_link.parsePageTarget(std.mem.span(argv[i]));
+            } else {
+                std.log.warn("--page requires a value", .{});
+            }
+            continue;
+        }
+    
+        if (deep_link.extractFlatpakAppId(arg, &app_id_buffer)) |id| {
+            requested_app_id = id;
         }
     }
 
+    if (requested_app_id) |id| {
+        runtime.queueFlatpakApp(id);
+    } else if (requested_page) |page| {
+        runtime.queuePage(page);
+    }
+ 
     gio.Application.activate(app.as(gio.Application));
     gio.ApplicationCommandLine.setExitStatus(cmdline, 0);
     return 0;
