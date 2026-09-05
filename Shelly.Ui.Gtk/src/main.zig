@@ -102,6 +102,19 @@ fn commandLine(
     return 0;
 }
 
+fn dispatchPendingNavigation(window: *ShellyWindow) void {
+    const request = runtime.takePendingNavigation() orelse return;
+
+    const navigated = switch (request) {
+        .page => |target| window.navigateTo(target),
+        .flatpak_app => |app| window.openFlatpakApp(app.id()),
+    };
+
+    if (!navigated) {
+        std.log.warn("requested page is disabled or unavailable", .{});
+    }
+}
+
 fn tryStopTray(io: std.Io, alloc: std.mem.Allocator) void {
     var should_stop = true;
     if (runtime.config) |svc| {
@@ -132,18 +145,19 @@ fn startup(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
 fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
     did_activate = true;
 
-    if (gtk.Application.getActiveWindow(app)) |window| {
-        gtk.Window.present(window);
-
+    if (gtk.Application.getActiveWindow(app)) |gtk_window| {
+        if (gobject.ext.cast(ShellyWindow, gtk_window)) |window| {
+            dispatchPendingNavigation(window);
+        }
+        gtk.Window.present(gtk_window);
         if (runtime.pending_navigate_updates) {
             runtime.pending_navigate_updates = false;
-            if (gobject.ext.cast(ShellyWindow, window)) |shelly_window| {
+            if (gobject.ext.cast(ShellyWindow, gtk_window)) |shelly_window| {
                 shelly_window.navigateToUpdates();
             }
         }
         return;
     }
-
     const provider = gtk.CssProvider.new();
     gtk.CssProvider.loadFromResource(provider, "/com/shellyorg/shelly/style.css");
     gtk.StyleContext.addProviderForDisplay(
@@ -182,6 +196,8 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
     setupGnomeThemePreference();
 
     const window = ShellyWindow.new(app);
+    dispatchPendingNavigation(window);
+    gtk.Window.present(window.as(gtk.Window));
 
     if (runtime.pending_navigate_updates) {
         runtime.pending_navigate_updates = false;
