@@ -605,14 +605,14 @@ pub const FlatpakInstallView = extern struct {
     
     pub fn openAppById(self: *Self, app_id: []const u8) void {
         const p = self.priv();
-    
+        p.category = .@"All Applications";
+        p.search_len = 0;
+        if (p.filter) |f| gtk.Filter.changed(f.as(gtk.Filter), .different);
         if (p.catalog_ready) {
             _ = self.resolveAppById(app_id);
             return;
         }
-    
         const len = @min(app_id.len, p.pending_app_id.len);
-    
         @memcpy(p.pending_app_id[0..len], app_id[0..len]);
         p.pending_app_id_len = len;
     }
