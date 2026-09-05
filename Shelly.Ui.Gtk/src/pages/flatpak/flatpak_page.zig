@@ -88,6 +88,7 @@ pub const FlatpakPage = extern struct {
         const p = self.priv();
         p.install_view.openAppById(app_id);
         self.navigateTo(.install);
+        gtk.Editable.setText(p.search_entry.as(gtk.Editable), "");
     }
 
     fn init(self: *Self, _: *Class) callconv(.c) void {

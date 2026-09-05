@@ -28,6 +28,7 @@ const Entry = @import("../../dialog/page/version_history.zig").Entry;
 const Flatpak = @import("../../models/flatpak.zig").Flatpak;
 const FlatpakRemoveDialog = @import("../../dialog/page/flatpak_remove_dialog.zig").FlatpakRemoveDialog;
 const translations = @import("../../helpers/translations.zig");
+const deep_link = @import("../../helpers/deep_link.zig");
 
 extern fn g_get_user_data_dir() [*:0]const u8;
 extern fn g_file_test(filename: [*:0]const u8, flags: c_uint) c_int;

@@ -31,6 +31,7 @@ pub fn queuePage(target: deep_link.PageTarget) void {
 
 pub fn queueFlatpakApp(app_id: []const u8) void {
     var pending: PendingApp = undefined;
+    if (app_id.len > deep_link.max_app_id_len) return;
     @memcpy(pending.buffer[0..app_id.len], app_id);
     pending.buffer[app_id.len] = 0;
     pending.len = app_id.len;
