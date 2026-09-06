@@ -163,7 +163,29 @@ pub const DownloadEvent = struct {
     progress: ?DownloadProgress = null,
     download_error: ?DownloadError = null,
     destination_path: ?[]const u8 = null,
+    url: ?[]const u8 = null,
 };
+
+pub fn failureMessage(allocator: std.mem.Allocator, event: DownloadEvent) ![]u8 {
+    const err = event.download_error orelse DownloadError.FailedDownload;
+    if (err == error.Cancelled) return allocator.dupe(u8, "Download cancelled.");
+    const name = if (event.destination_path) |path| std.fs.path.basename(path) else "the requested file";
+    const uri = if (event.url) |url| std.Uri.parse(url) catch null else null;
+    const host = if (uri) |value| value.host else null;
+    // Only show the hostname, never URL credentials or query tokens.
+    const server = if (host) |value| switch (value) {
+        .raw => |raw| raw,
+        .percent_encoded => |encoded| encoded,
+    } else "the selected source";
+    const guidance: []const u8 = switch (err) {
+        error.FileError => "Could not save the downloaded file. Check the destination directory's permissions and available disk space, then try again.",
+        error.InvalidUrl => "The download address is invalid. Check the package source configuration and try again.",
+        error.NotFound => "The file is no longer available at this source. Refresh the package lists and try again.",
+        error.SslError, error.CertificateBundleError => "Could not establish a secure connection. Check your system clock and trusted certificates, then try again.",
+        else => "Check your internet connection and try again. If the problem continues, the server may be unavailable.",
+    };
+    return std.fmt.allocPrint(allocator, "Could not download \"{s}\" from {s}. {s}\n\nTechnical details: {s}", .{ name, server, guidance, @errorName(err) });
+}
 
 pub const DownloadEventCallback = *const fn (ctx: ?*anyopaque, event: DownloadEvent) void;
 
@@ -306,7 +328,7 @@ pub const CoreDownloader = struct {
         var tls_reset_used = false;
         while (true) : (attempt += 1) {
             if (self.isCancelled()) {
-                try self.emitEvent(.{ .event_type = .Error, .download_error = DownloadError.Cancelled, .destination_path = destination_path });
+                try self.emitEvent(.{ .event_type = .Error, .download_error = DownloadError.Cancelled, .destination_path = destination_path, .url = url });
                 return .{ .failure = DownloadError.Cancelled };
             }
             if (attempt > 0) {
@@ -325,6 +347,7 @@ pub const CoreDownloader = struct {
                             .event_type = .Error,
                             .download_error = permission_err,
                             .destination_path = destination_path,
+                            .url = url,
                         });
                         return .{ .failure = permission_err };
                     };
@@ -347,6 +370,7 @@ pub const CoreDownloader = struct {
                             .event_type = .Error,
                             .download_error = final_err,
                             .destination_path = destination_path,
+                            .url = url,
                         });
                         return .{ .failure = final_err };
                     },
@@ -601,13 +625,15 @@ pub const CoreDownloader = struct {
                 .bytes_per_second = progress.speed_bytes_per_sec,
             }),
             .Complete => operation.status(.success, "Download completed", "download.complete", null),
-            .Error => if (event.download_error) |download_error| operation.reportError(
-                download_error,
-                @errorName(download_error),
-                "download",
-                null,
-                false,
-            ),
+            .Error => if (event.download_error) |download_error| {
+                if (download_error == error.Cancelled) return;
+                const message = failureMessage(self.allocator, event) catch {
+                    operation.reportError(download_error, "Could not download the requested file. Shelly could not allocate memory for the error details.", "download", null, false);
+                    return;
+                };
+                defer self.allocator.free(message);
+                operation.reportError(download_error, message, "download", null, false);
+            },
             .Skipped => operation.status(.information, "Download skipped", "download.skipped", null),
         }
     }
@@ -1720,7 +1746,25 @@ test "shared cancellation stops downloads before network access" {
     }
 
     try std.testing.expectEqual(@as(usize, 1), capture.started);
-    try std.testing.expectEqual(@as(usize, 1), capture.failures);
+    try std.testing.expectEqual(@as(usize, 0), capture.failures);
     try std.testing.expectEqual(@as(usize, 1), capture.completed);
     try std.testing.expectEqual(operations.CompletionStatus.cancelled, capture.completion.?);
+}
+
+test "download failure explains the resource without exposing URL credentials" {
+    const message = try failureMessage(std.testing.allocator, .{
+        .event_type = .Error,
+        .download_error = error.NetworkError,
+        .destination_path = "/tmp/firefox.pkg.tar.zst",
+        .url = "https://user:secret@mirror.example.org/firefox?token=private",
+    });
+    defer std.testing.allocator.free(message);
+    try std.testing.expect(std.mem.startsWith(u8, message, "Could not download \"firefox.pkg.tar.zst\" from mirror.example.org."));
+    try std.testing.expect(std.mem.indexOf(u8, message, "Check your internet connection") != null);
+    try std.testing.expect(std.mem.indexOf(u8, message, "secret") == null);
+    try std.testing.expect(std.mem.indexOf(u8, message, "private") == null);
+    const file_error = try failureMessage(std.testing.allocator, .{ .event_type = .Error, .download_error = error.FileError });
+    defer std.testing.allocator.free(file_error);
+    try std.testing.expect(std.mem.indexOf(u8, file_error, "permissions") != null);
+    try std.testing.expect(std.mem.indexOf(u8, file_error, "internet") == null);
 }

@@ -943,11 +943,9 @@ fn reportBackendFailure(
     backend: Backend,
     err: anyerror,
 ) !void {
-    const message = try std.fmt.allocPrint(
-        context.allocator,
-        "{s} upgrade step failed: {t}",
-        .{ backend.displayName(), err },
-    );
+    const action = try std.fmt.allocPrint(context.allocator, "the {s} upgrade", .{backend.displayName()});
+    defer context.allocator.free(action);
+    const message = try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = action });
     defer context.allocator.free(message);
     var operation = operation_context.begin(.{
         .backend = backend.operationBackend(),
@@ -1810,7 +1808,7 @@ test "upgrade all continues after a failed backend and returns failure" {
 
     try std.testing.expectEqual(@as(u8, 1), try executeWithRunner(&tc.context, &outcome.dispatch, &calls));
     try std.testing.expectEqualSlices(Backend, &all_backends, calls.backends.items);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "AUR upgrade step failed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Could not complete the AUR upgrade") != null);
     try std.testing.expect(std.mem.indexOf(
         u8,
         tc.stdout.writer.buffered(),
@@ -1897,7 +1895,7 @@ test "upgrade all warns for an incompatible Flatpak backend" {
     try std.testing.expect(std.mem.indexOf(
         u8,
         tc.stdout.writer.buffered(),
-        "Upgrade Shelly and shelly-flatpak-backend together",
+        "Upgrade shelly and shelly-flatpak-backend together",
     ) != null);
 }
 
@@ -1933,7 +1931,7 @@ test "upgrade all reports a broken Flatpak backend as a failure" {
     try std.testing.expect(std.mem.indexOf(
         u8,
         tc.stdout.writer.buffered(),
-        "Flatpak upgrade step failed: FlatpakBackendCreateFailed",
+        "Technical details: FlatpakBackendCreateFailed",
     ) != null);
     try std.testing.expect(std.mem.indexOf(
         u8,
