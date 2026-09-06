@@ -108,6 +108,7 @@ pub const Question = union(enum) {
         question_id: []const u8,
         question_kind: []const u8,
         question_text: []const u8,
+        arguments: []const []const u8,
     },
     select_many: struct {
         question_id: []const u8,
@@ -206,6 +207,7 @@ const YesNoRequest = struct {
     QuestionId: []const u8 = "",
     QuestionKind: []const u8 = "",
     QuestionText: []const u8 = "",
+    Arguments: []const []const u8 = &.{},
 };
 
 pub const TransactionRequest = struct {
@@ -777,20 +779,37 @@ fn parsePkgbuildDiff(op: *ShellyOperation, json: []const u8) !?*PendingQuestion 
 }
 
 fn parseYesNo(op: *ShellyOperation, json: []const u8) !?*PendingQuestion {
-    const e = try std.json.parseFromSlice(YesNoRequest, op.allocator, json, .{ .ignore_unknown_fields = true });
+    const e = try std.json.parseFromSlice(
+        YesNoRequest,
+        op.allocator,
+        json,
+        .{ .ignore_unknown_fields = true },
+    );
     defer e.deinit();
 
     const pending = try newPending(op);
     errdefer pending.destroy();
     const qa = pending.arena.allocator();
 
+    const arguments = try qa.alloc(
+        []const u8,
+        e.value.Arguments.len,
+    );
+
+    for (e.value.Arguments, arguments) |argument, *owned| {
+        owned.* = try qa.dupe(u8, argument);
+    }
+
     pending.request = .{ .yes_no = .{
         .question_id = try qa.dupe(u8, e.value.QuestionId),
         .question_kind = try qa.dupe(u8, e.value.QuestionKind),
         .question_text = try qa.dupe(u8, e.value.QuestionText),
+        .arguments = arguments,
     } };
+
     return pending;
 }
+
 
 fn parseTransaction(op: *ShellyOperation, json: []const u8) !?*PendingQuestion {
     const e = try std.json.parseFromSlice(TransactionRequest, op.allocator, json, .{ .ignore_unknown_fields = true });
