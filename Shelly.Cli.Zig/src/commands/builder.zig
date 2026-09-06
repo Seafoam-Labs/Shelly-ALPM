@@ -2800,6 +2800,7 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
     const pkgbuild_content = try std.fmt.allocPrint(
         test_context.arena.allocator(),
         "pkgname=demo\npkgver=1\npkgrel=1\npkgdesc=$(printf 'Dynamic description')\narch=(any)\n" ++
+            "install=''\nchangelog=\"\"\n" ++
             "_enable_plasmoid=${{SYNCTHING_TRAY_ENABLE_PLASMOID:-1}}\n" ++
             "makedepends=('cmake')\n" ++
             "[[ $_enable_plasmoid ]] && makedepends+=('libplasma' 'extra-cmake-modules')\n" ++

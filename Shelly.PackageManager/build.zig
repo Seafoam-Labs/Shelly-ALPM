@@ -291,6 +291,10 @@ pub fn build(b: *std.Build) void {
         .root_module = mod,
         .filters = &.{
             "PKGBUILD validation combines post-install and homograph findings",
+            "PKGBUILD review accepts empty auxiliary selections and rejects missing files",
+            "parser_content: empty optional filenames mean no auxiliary file",
+            "parser_content: empty split auxiliary overrides clear global filenames",
+            "parser_content: nonempty optional filenames retain exact bytes",
             "review digest covers exact local source contents and missing sources fail closed",
             "fixture checkout cannot invoke fake makepkg before review and integrity gates pass",
             "embedded whitespace does not bypass homograph analysis",
