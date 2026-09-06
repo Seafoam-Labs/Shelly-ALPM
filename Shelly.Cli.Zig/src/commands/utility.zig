@@ -204,7 +204,7 @@ fn repairDb(
         return 0;
     };
     std.Io.Dir.deleteFileAbsolute(context.io, db_lock) catch |err| {
-        const message = try std.fmt.allocPrint(context.allocator, "Failed to remove pacman database lock: {t}", .{err});
+        const message = try std.fmt.allocPrint(context.allocator, "Failed to remove the package database lock: {t}", .{err});
         try writeResponseMessage(context, invocation, false, message);
         return 1;
     };

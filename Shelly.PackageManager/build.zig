@@ -651,6 +651,8 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder honors PKGBUILD build flag make flag and LTO negations",
             "PackageBuilder packages exact reviewed install and changelog files",
             "PackageBuilder strips ELF debug sections unless PKGBUILD disables strip",
+            "PackageBuilder preserves unsupported ELF binaries and reports strip warnings",
+            "PackageBuilder discards partial output from failed strip commands",
             "PackageBuilder runs local declarations and reviewed helper functions inside package steps",
             "PackageBuilder accepts b2 checksums and honors noextract",
             "PackageBuilder stages and verifies local sources before build steps",

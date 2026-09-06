@@ -24,7 +24,7 @@ pub const variants = [_]types.Variant{
             flag("--local", &.{"-l"}, "Search Shelly-managed binary packages installed under /opt/shelly"),
             integerOption("--limit", &.{"-t"}, "Maximum number of search results to return per page"),
             integerOption("--page", &.{"-p"}, "Page number for paginated results"),
-            flag("--show-hidden", &.{"-w"}, "Include packages hidden by pacman IgnorePkg configuration"),
+            flag("--show-hidden", &.{"-w"}, "Include packages excluded by the configured ignore list"),
             flag("--detail", &.{ "--info", "-d" }, "Show complete metadata for one exact ALPM package name"),
             flag("--group", &.{"-g"}, "List package groups or restrict available packages to the requested group"),
             flag("--explicit", &.{"-e"}, "Shows only explicitly installed pacakges"),
