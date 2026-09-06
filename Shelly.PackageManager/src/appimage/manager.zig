@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const appimage = @import("bindings.zig").appimage;
+const launch_environment = @import("environment.zig");
 const events = @import("events.zig");
 const xdg_paths = @import("../shared/xdg_paths.zig").xdg_paths;
 const operation_api = @import("operation_context");
@@ -100,7 +101,7 @@ pub const AppImageManager = struct {
             return false;
         };
         defer content.deinit();
-        const metadata = content.metadata;
+        var metadata = content.metadata;
 
         const existing_images = try self.getAppImagesFromLocalDb();
         defer self.freeAppImages(existing_images);
@@ -112,6 +113,7 @@ pub const AppImageManager = struct {
             if (name_match or desktop_match) {
                 std.log.warn("AppImage {s} already exists. Overwriting...", .{existing.name});
                 self.emitStatusFmt(.warning, "AppImage {s} already exists. Overwriting...", .{existing.name});
+                metadata.environment_variables = existing.environment_variables;
                 replaced = existing;
                 break;
             }
@@ -657,21 +659,6 @@ pub const AppImageManager = struct {
         self.emitStatus(.warning, message);
     }
 
-    fn parseExecSuffix(exec_value: []const u8) []const u8 {
-        const trimmed = std.mem.trim(u8, exec_value, " \t\r\n");
-        if (trimmed.len == 0) return "";
-        var i: usize = 0;
-        if (trimmed[0] == '"') {
-            i = 1;
-            while (i < trimmed.len and trimmed[i] != '"') i += 1;
-            if (i < trimmed.len) i += 1; // consume the closing quote
-        } else {
-            while (i < trimmed.len and trimmed[i] != ' ' and trimmed[i] != '\t') i += 1;
-        }
-        const rest = std.mem.trim(u8, trimmed[i..], " \t\r\n");
-        return rest;
-    }
-
     pub fn applyDesktopIntegration(
         self: AppImageManager,
         metadata: appimage.AppImage,
@@ -778,7 +765,7 @@ pub const AppImageManager = struct {
 
         const desktop_name: []const u8 = if (metadata.desktop_name.len > 0) metadata.desktop_name else metadata.name;
         const comment: []const u8 = if (metadata.description.len > 0) metadata.description else "application";
-        const escaped_exec_path = try escapeDesktopExecArgument(self.allocator, exec_path);
+        const escaped_exec_path = try launch_environment.composeExec(self.allocator, exec_path, null, metadata.environment_variables);
         defer self.allocator.free(escaped_exec_path);
         const escaped_try_exec_path = try escapeDesktopStringValue(self.allocator, exec_path);
         defer self.allocator.free(escaped_try_exec_path);
@@ -804,7 +791,7 @@ pub const AppImageManager = struct {
                     comment_written.* = true;
                 }
                 if (!exec_written.*) {
-                    try writer.writer.print("Exec=\"{s}\"\n", .{escaped_exec});
+                    try writer.writer.print("Exec={s}\n", .{escaped_exec});
                     exec_written.* = true;
                 }
                 if (!try_exec_written.*) {
@@ -821,8 +808,17 @@ pub const AppImageManager = struct {
         if (source_desktop_file) |src| {
             const contents = try self.readFileAllocOwned(src);
             defer self.allocator.free(contents);
+            var main_exec: ?[]const u8 = null;
+            var source_lines = std.mem.splitScalar(u8, contents, '\n');
+            var main_section = false;
+            while (source_lines.next()) |line| {
+                if (std.mem.startsWith(u8, line, "[")) main_section = std.mem.eql(u8, line, "[Desktop Entry]");
+                if (main_section and std.mem.startsWith(u8, line, "Exec=")) main_exec = line[5..];
+            }
+            var in_action = false;
             var lines = std.mem.splitScalar(u8, contents, '\n');
             while (lines.next()) |line| {
+                if (std.mem.startsWith(u8, line, "[")) in_action = std.mem.startsWith(u8, line, "[Desktop Action ");
                 if (std.mem.startsWith(u8, line, "[") and !std.mem.eql(u8, line, "[Desktop Entry]")) {
                     if (in_desktop_entry) try append_authoritative(&out, desktop_name, comment, escaped_exec_path, escaped_try_exec_path, metadata.icon_name, &wrote_name, &wrote_comment, &wrote_exec, &wrote_try_exec, &wrote_icon);
                     in_desktop_entry = false;
@@ -832,9 +828,16 @@ pub const AppImageManager = struct {
                     in_desktop_entry = true;
                     try out.writer.writeAll("[Desktop Entry]\n");
                 } else if (in_desktop_entry and std.mem.startsWith(u8, line, "Exec=")) {
-                    const suffix = parseExecSuffix(line["Exec=".len..]);
-                    try out.writer.print("Exec=\"{s}\"{s}{s}\n", .{ escaped_exec_path, if (suffix.len > 0) " " else "", suffix });
+                    const command = try launch_environment.composeExec(self.allocator, exec_path, line["Exec=".len..], metadata.environment_variables);
+                    defer self.allocator.free(command);
+                    try out.writer.print("Exec={s}\n", .{command});
                     wrote_exec = true;
+                } else if (in_action and main_exec != null and
+                    std.mem.startsWith(u8, line, "Exec=") and launch_environment.sameExecutable(main_exec.?, line[5..]))
+                {
+                    const command = try launch_environment.composeExec(self.allocator, exec_path, line[5..], metadata.environment_variables);
+                    defer self.allocator.free(command);
+                    try out.writer.print("Exec={s}\n", .{command});
                 } else if (in_desktop_entry and std.mem.startsWith(u8, line, "TryExec=")) {
                     try out.writer.print("TryExec={s}\n", .{escaped_try_exec_path});
                     wrote_try_exec = true;
@@ -950,6 +953,34 @@ pub const AppImageManager = struct {
         return try self.cloneAppImages(parsed.value);
     }
 
+    pub fn configureEnvironment(self: AppImageManager, name: []const u8, mutation: launch_environment.Mutation) !void {
+        try ensureNonRootMutation();
+        try self.checkCancelled();
+        const apps = try self.getAppImagesFromLocalDb();
+        defer self.freeAppImages(apps);
+        var selected: ?appimage.AppImage = null;
+        for (apps) |app| {
+            if (std.ascii.eqlIgnoreCase(app.name, name)) {
+                if (selected != null) return error.AmbiguousAppImage;
+                selected = app;
+            }
+        }
+        var candidate = selected orelse return error.AppImageNotFound;
+        const variables = try launch_environment.mutate(self.allocator, candidate.environment_variables, mutation);
+        defer launch_environment.free(self.allocator, variables);
+        candidate.environment_variables = variables;
+        var content = (try self.extractMetadataPure(candidate.path, null, null)) orelse return error.AppImageExtractionFailed;
+        defer content.deinit();
+        var integration = try self.beginDesktopIntegration(candidate, candidate.path, content.source_desktop_path, content.icon_source);
+        defer integration.deinit();
+        self.addAppImageToLocalDb(candidate) catch |err| {
+            try integration.rollback();
+            return err;
+        };
+        try integration.finish();
+        self.refreshDesktopCachesBestEffort(content.icon_source != null);
+    }
+
     pub fn mergeMetadata(existing: appimage.AppImage, extracted: appimage.AppImage, provider_version: ?[]const u8) appimage.AppImage {
         return .{
             .name = existing.name,
@@ -960,6 +991,7 @@ pub const AppImageManager = struct {
             .description = extracted.description,
             .desktop_name = extracted.desktop_name,
             .size_on_disk = extracted.size_on_disk,
+            .environment_variables = existing.environment_variables,
             .command_line_args = existing.command_line_args,
             .path = existing.path,
             .update_url = existing.update_url,
@@ -999,6 +1031,8 @@ pub const AppImageManager = struct {
         errdefer self.allocator.free(description);
         const desktop_name = try self.allocator.dupe(u8, source.desktop_name);
         errdefer self.allocator.free(desktop_name);
+        const environment_variables = try launch_environment.clone(self.allocator, source.environment_variables);
+        errdefer launch_environment.free(self.allocator, environment_variables);
         const command_line_args = try self.allocator.dupe(u8, source.command_line_args);
         errdefer self.allocator.free(command_line_args);
         const path = try self.allocator.dupe(u8, source.path);
@@ -1019,6 +1053,7 @@ pub const AppImageManager = struct {
             .description = description,
             .desktop_name = desktop_name,
             .size_on_disk = source.size_on_disk,
+            .environment_variables = environment_variables,
             .command_line_args = command_line_args,
             .path = path,
             .update_url = update_url,
@@ -1457,6 +1492,7 @@ pub const AppImageManager = struct {
         self.allocator.free(appimage_struct.icon_name);
         self.allocator.free(appimage_struct.description);
         self.allocator.free(appimage_struct.desktop_name);
+        launch_environment.free(self.allocator, appimage_struct.environment_variables);
         self.allocator.free(appimage_struct.command_line_args);
         self.allocator.free(appimage_struct.path);
         self.allocator.free(appimage_struct.update_url);
@@ -1489,16 +1525,6 @@ fn restoreArtifact(io: std.Io, destination: []const u8, backup: ?[]const u8) !vo
             else => return err,
         };
     }
-}
-
-fn escapeDesktopExecArgument(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
-    var escaped: std.ArrayList(u8) = .empty;
-    errdefer escaped.deinit(allocator);
-    for (value) |character| {
-        if (character == '\\' or character == '"') try escaped.append(allocator, '\\');
-        try escaped.append(allocator, character);
-    }
-    return escaped.toOwnedSlice(allocator);
 }
 
 fn escapeDesktopStringValue(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
@@ -1535,6 +1561,7 @@ fn freeAppImageStatic(allocator: std.mem.Allocator, value: appimage.AppImage) vo
     allocator.free(value.icon_name);
     allocator.free(value.description);
     allocator.free(value.desktop_name);
+    launch_environment.free(allocator, value.environment_variables);
     allocator.free(value.command_line_args);
     allocator.free(value.path);
     allocator.free(value.update_url);
@@ -1652,6 +1679,65 @@ const validTestAppImage =
     \\fi
     \\exit 0
 ;
+
+test "configureEnvironment survives sync and replacement and rolls back failed writes" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = path_buffer[0..try tmp.dir.realPath(std.testing.io, &path_buffer)];
+    const source = try std.fs.path.join(allocator, &.{ root, "Editor.AppImage" });
+    const replacement = try std.fs.path.join(allocator, &.{ root, "Editor-2.AppImage" });
+    const install_dir = try std.fs.path.join(allocator, &.{ root, "install" });
+    const database = try std.fs.path.join(allocator, &.{ root, "appimages.db" });
+    const fixture = try std.mem.replaceOwned(u8, allocator, validTestAppImage, "'Exec=editor'", "'Exec=editor' 'Actions=New;Helper;' '[Desktop Action New]' 'Name=New' 'Exec=editor --new' '[Desktop Action Helper]' 'Name=Helper' 'Exec=/usr/bin/true'");
+    try writeTestAppImageDb(source, fixture);
+    try writeTestAppImageDb(replacement, fixture);
+    var environ = try createTestAppImageEnviron(std.testing.allocator, root);
+    defer environ.block.deinit(std.testing.allocator);
+    var manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = environ,
+        .install_directory = install_dir,
+        .local_db_path = database,
+        .cache_command_run = successfulCacheCommand,
+    };
+    try std.testing.expect(try manager.installAppImage(source));
+    try manager.configureEnvironment("editor", .{ .set = .{ .key = "WEBKIT_DISABLE_DMABUF_RENDERER", .value = "1" } });
+    const desktop_path = try manager.installedDesktopPath("editor");
+    defer std.testing.allocator.free(desktop_path);
+    const desktop_before = try readTestAppImageDb(allocator, desktop_path);
+    const database_before = try readTestAppImageDb(allocator, database);
+    try std.testing.expect(std.mem.indexOf(u8, desktop_before, "Exec=env \"WEBKIT_DISABLE_DMABUF_RENDERER=1\"") != null);
+    try std.testing.expectError(error.InvalidEnvironmentName, manager.configureEnvironment("Editor", .{ .set = .{ .key = "BAD KEY", .value = "2" } }));
+    manager.database_commit = failDatabaseCommit;
+    try std.testing.expectError(error.InjectedDatabaseCommitFailure, manager.configureEnvironment("Editor", .clear));
+    try std.testing.expectEqualStrings(desktop_before, try readTestAppImageDb(allocator, desktop_path));
+    try std.testing.expectEqualStrings(database_before, try readTestAppImageDb(allocator, database));
+    manager.database_commit = commitDatabase;
+    try std.testing.expect(try manager.syncAppImageMeta(&.{"Editor"}));
+    try std.testing.expect(try manager.installAppImage(replacement));
+    const apps = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqualStrings("Editor-2", apps[0].name);
+    try std.testing.expect(std.mem.endsWith(u8, apps[0].path, "Editor-2.AppImage"));
+    try std.testing.expectEqualStrings("1", apps[0].environment_variables[0].value);
+    try manager.configureEnvironment("Editor-2", .{ .unset = "WEBKIT_DISABLE_DMABUF_RENDERER" });
+    const cleared = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(cleared);
+    try std.testing.expectEqual(@as(usize, 0), cleared[0].environment_variables.len);
+    const cleared_desktop_path = try manager.installedDesktopPath("editor-2");
+    defer std.testing.allocator.free(cleared_desktop_path);
+    const cleared_desktop = try readTestAppImageDb(allocator, cleared_desktop_path);
+    const action_exec = try std.fmt.allocPrint(allocator, "Exec=\"{s}\" --new", .{cleared[0].path});
+    try std.testing.expect(std.mem.indexOf(u8, cleared_desktop, action_exec) != null);
+    try std.testing.expect(std.mem.indexOf(u8, cleared_desktop, "Exec=/usr/bin/true") != null);
+    try std.testing.expect(std.mem.indexOf(u8, cleared_desktop, "WEBKIT_DISABLE_DMABUF_RENDERER=1") == null);
+}
 
 const symlinkLayoutTestAppImage =
     \\#!/bin/sh

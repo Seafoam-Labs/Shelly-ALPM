@@ -255,8 +255,6 @@
                                           <class name="dim-label"/>
                                         </style>
                                       </object>
-                                    </child>
-                                  </object>
                                 </child>
                                 <child>
                                   <object class="GtkLabel" id="DetailDescriptionLabel">
@@ -443,6 +441,54 @@
                                         <property name="editable">false</property>
                                         <property name="can-focus">true</property>
                                       </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Environment Variables</property>
+                                        <property name="xalign">0</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">One KEY=value per line. Remove a line to restore the normal environment.</property>
+                                        <property name="xalign">0</property>
+                                        <property name="wrap">true</property>
+                                        <style><class name="dim-label"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkScrolledWindow">
+                                        <property name="min-content-height">100</property>
+                                        <property name="has-frame">true</property>
+                                        <child>
+                                          <object class="GtkTextView" id="EnvironmentView">
+                                            <property name="monospace">true</property>
+                                            <property name="accepts-tab">false</property>
+                                            <property name="left-margin">8</property>
+                                            <property name="right-margin">8</property>
+                                            <property name="top-margin">8</property>
+                                            <property name="bottom-margin">8</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="EnvironmentError">
+                                        <property name="visible">false</property>
+                                        <property name="xalign">0</property>
+                                        <property name="wrap">true</property>
+                                        <style><class name="error"/></style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="SaveEnvironmentButton">
+                                        <property name="label" translatable="yes">Save Environment</property>
+                                        <property name="halign">end</property>
+                                        <property name="sensitive">false</property>
+                                        <signal name="clicked" handler="save_environment" swapped="true"/>
+                                      </object>
+                                    </child>
+                                  </object>
                                     </child>
                                   </object>
                                 </child>

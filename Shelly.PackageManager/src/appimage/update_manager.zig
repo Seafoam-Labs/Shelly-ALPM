@@ -3137,10 +3137,10 @@ test "update: sync and automated update produce equivalent metadata" {
 
     // Seed both databases with the same old record.
     try seedDb(std.testing.allocator, std.testing.io, sync_env.db_path, &.{
-        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Old Name", .path = sync_env.current_path },
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Old Name", .environment_variables = &.{.{ .key = "WEBKIT_DISABLE_DMABUF_RENDERER", .value = "1" }}, .path = sync_env.current_path },
     });
     try seedDb(std.testing.allocator, std.testing.io, update_env.db_path, &.{
-        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Old Name", .path = update_env.current_path },
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Old Name", .environment_variables = &.{.{ .key = "WEBKIT_DISABLE_DMABUF_RENDERER", .value = "1" }}, .path = update_env.current_path },
     });
 
     // For sync: place the new AppImage at the install path (sync inspects the
@@ -3206,6 +3206,10 @@ test "update: sync and automated update produce equivalent metadata" {
     try std.testing.expectEqualStrings(sync_apps[0].icon_name, update_apps[0].icon_name);
     try std.testing.expectEqual(sync_apps[0].size_on_disk, update_apps[0].size_on_disk);
 
+    try std.testing.expectEqualStrings("1", sync_apps[0].environment_variables[0].value);
+    try std.testing.expectEqualStrings("WEBKIT_DISABLE_DMABUF_RENDERER", update_apps[0].environment_variables[0].key);
+    try std.testing.expectEqualStrings("1", update_apps[0].environment_variables[0].value);
+
     // Compare desktop entries.
     const sync_desktop = try readUpdateFile(std.testing.allocator, std.testing.io, sync_env.desktop_path);
     defer std.testing.allocator.free(sync_desktop);
@@ -3221,9 +3225,9 @@ test "update: sync and automated update produce equivalent metadata" {
     try std.testing.expect(std.mem.indexOf(u8, update_desktop, "%U") != null);
 
     // Both should reference their respective installed paths via Exec=.
-    const sync_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\" %U\n", .{sync_env.current_path});
+    const sync_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=env \"WEBKIT_DISABLE_DMABUF_RENDERER=1\" \"{s}\" %U\n", .{sync_env.current_path});
     defer std.testing.allocator.free(sync_exec);
-    const update_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\" %U\n", .{update_env.current_path});
+    const update_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=env \"WEBKIT_DISABLE_DMABUF_RENDERER=1\" \"{s}\" %U\n", .{update_env.current_path});
     defer std.testing.allocator.free(update_exec);
     try std.testing.expect(std.mem.indexOf(u8, sync_desktop, sync_exec) != null);
     try std.testing.expect(std.mem.indexOf(u8, update_desktop, update_exec) != null);

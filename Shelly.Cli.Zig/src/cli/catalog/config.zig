@@ -6,6 +6,19 @@ const requiredArgument = types.requiredArgument;
 pub const variants = [_]types.Variant{
     .{
         .action = .config,
+        .name = "appimage",
+        .description = "Edit an installed AppImage's environment overrides.",
+        .implementation = "Zigalpm.AppImageManager.configureEnvironment",
+        .arguments = &.{requiredArgument("name", "Exact installed AppImage name")},
+        .options = &.{
+            types.stringOption("--set-env", &.{}, "Add or replace one KEY=value environment override", false),
+            types.stringOption("--unset-env", &.{}, "Remove one environment override by key", false),
+            types.flag("--clear-env", &.{}, "Remove all environment overrides"),
+            types.stringOption("--replace-env", &.{}, "Replace all overrides with a JSON object of string values", false),
+        },
+    },
+    .{
+        .action = .config,
         .name = "list",
         .default_for_action = true,
         .description = "List every Shelly configuration value.",
