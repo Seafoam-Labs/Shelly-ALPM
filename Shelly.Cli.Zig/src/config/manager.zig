@@ -135,4 +135,11 @@ test "creates, updates, and reloads the XDG config file" {
         (try manager.get("AutoConfirmCacheClean")).?,
     );
     try std.testing.expect(!try manager.update("AutoConfirmCacheClean", "yes"));
+    try std.testing.expectEqualStrings("False", (try manager.get("DisableCacheClean")).?);
+    try std.testing.expect(try manager.update("disablecacheclean", "TrUe"));
+    try std.testing.expectEqualStrings("True", (try manager.get("DisableCacheClean")).?);
+    try std.testing.expect(!try manager.update("DisableCacheClean", "yes"));
+    try std.testing.expectEqualStrings("True", (try manager.get("DisableCacheClean")).?);
+    try manager.reset();
+    try std.testing.expectEqualStrings("False", (try manager.get("DisableCacheClean")).?);
 }

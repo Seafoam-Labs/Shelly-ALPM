@@ -68,6 +68,35 @@ paru -Rns shelly
   Flatpak applications alongside native packages without making Flatpak a
   runtime dependency of the base Shelly package.
 
+## Upgrade cache cleaning
+
+To skip the package-cache cleanup prompt and deletion during `shelly upgrade all`:
+
+```bash
+shelly config set DisableCacheClean true
+```
+
+This also applies to upgrade-all aliases and takes precedence over
+`AutoConfirmCacheClean`. The setting defaults to `false`; restore the existing
+cleanup behavior with `shelly config set DisableCacheClean false`.
+Standalone `shelly upgrade standard` keeps its existing cleanup behavior.
+You can still clean the cache manually with `shelly purify standard --cache`.
+
+Add `--aur-cache` to also delete **all** built AUR package archives and their
+matching signatures from the invoking user's `$XDG_CACHE_HOME/Shelly` cache
+(default: `~/.cache/Shelly`):
+
+```bash
+shelly purify standard --cache --aur-cache --dry-run
+shelly purify standard --cache --aur-cache
+```
+
+The command previews the files and asks for confirmation before deleting them.
+`--aur-cache` can also be used without `--cache`; standard purify still checks
+for corrupted archives. AUR PKGBUILDs, checkout history, source files, and build
+directories are retained. Archives in custom build output destinations outside
+Shelly's cache are not included.
+
 ## Roadmap
 
 Upcoming features and development targets:
