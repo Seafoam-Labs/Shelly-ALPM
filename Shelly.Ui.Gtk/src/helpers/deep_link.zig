@@ -12,10 +12,7 @@ pub const PageTarget = enum {
     updates,
 };
 
-pub fn extractFlatpakAppId(
-    arg: []const u8,
-    buffer: *[max_app_id_len + 1]u8,
-) ?[:0]const u8 {
+pub fn extractFlatpakAppId(arg: []const u8, buffer: *[max_app_id_len + 1]u8) ?[:0]const u8 {
     var app_id: []const u8 = undefined;
 
     if (std.mem.startsWith(u8, arg, appstream_prefix)) {
