@@ -1207,8 +1207,8 @@ pub const FlatpakInstallView = extern struct {
         gtk.Spinner.start(p.loading_spinner);
         gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), 1);
         p.catalog_ready = false;
-        p.pending_app_id_len = 0;
         const result = std.heap.c_allocator.create(LoadResult) catch {
+            p.pending_app_id_len = 0;
             self.showStatus(translations._("Unable to allocate memory while loading Flatpak data."), false);
             return;
         };
