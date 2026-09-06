@@ -534,6 +534,7 @@ pub const UpdateManager = struct {
 
         var req = client.request(.HEAD, uri, .{
             .headers = .{},
+            .redirect_behavior = .init(10),
         }) catch return null;
         defer req.deinit();
 
