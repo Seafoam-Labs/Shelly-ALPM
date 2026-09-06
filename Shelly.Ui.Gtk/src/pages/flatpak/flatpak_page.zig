@@ -86,9 +86,12 @@ pub const FlatpakPage = extern struct {
 
     pub fn openApp(self: *Self, app_id: [:0]const u8) void {
         const p = self.priv();
+        gtk.Editable.setText(p.search_entry.as(gtk.Editable), "");
+        if (gtk.ListBox.getRowAtIndex(p.category_list, 0)) |row| {
+            gtk.ListBox.selectRow(p.category_list, row);
+        }
         p.install_view.openAppById(app_id);
         self.navigateTo(.install);
-        gtk.Editable.setText(p.search_entry.as(gtk.Editable), "");
     }
 
     fn init(self: *Self, _: *Class) callconv(.c) void {

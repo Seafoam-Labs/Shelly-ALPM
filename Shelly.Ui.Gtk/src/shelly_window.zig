@@ -595,9 +595,14 @@ pub const ShellyWindow = extern struct {
     }
 
     pub fn openFlatpakApp(self: *ShellyWindow, app_id: [:0]const u8) bool {
+        const p = self.private();
+
+        if (gtk.Widget.getVisible(p.lockout_overlay.as(gtk.Widget)) != 0)
+            return false;
+
         if (!self.canShowTopLevelPage("flatpak"))
             return false;
-        self.private().flatpak_page.openApp(app_id);
+        p.flatpak_page.openApp(app_id);
         return self.showTopLevelPage("flatpak");
     }
 

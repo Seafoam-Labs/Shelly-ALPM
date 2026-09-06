@@ -472,6 +472,7 @@ pub const FlatpakInstallView = extern struct {
         const selection = self.priv().selection orelse return;
 
         const item: *gobject.Object = @ptrCast(@alignCast(gio.ListModel.getItem(selection.as(gio.ListModel), self.priv().selected_app_position) orelse return));
+        defer item.unref();
         const app = gobject.ext.cast(AppstreamAppObject, item) orelse return;
         app.setInstalled(installed);
 
@@ -613,6 +614,8 @@ pub const FlatpakInstallView = extern struct {
             _ = self.resolveAppById(app_id);
             return;
         }
+        if (app_id.len == 0 or app_id.len > p.pending_app_id.len)
+            return;
         const len = @min(app_id.len, p.pending_app_id.len);
         @memcpy(p.pending_app_id[0..len], app_id[0..len]);
         p.pending_app_id_len = len;
@@ -706,6 +709,8 @@ pub const FlatpakInstallView = extern struct {
         self.populateScreenshots(app);
         self.populateLinks(app);
 
+        gtk.Stack.setVisibleChild(p.content_stack, p.overlay_panel.as(gtk.Widget));
+
         if (app.isInstalled()) {
             _ = gtk.Widget.setVisible(p.overlay_uninstall_button.as(gtk.Widget), 1);
             _ = gtk.Widget.setVisible(p.overlay_install_button.as(gtk.Widget), 0);
@@ -714,8 +719,6 @@ pub const FlatpakInstallView = extern struct {
             _ = gtk.Widget.setVisible(p.overlay_install_button.as(gtk.Widget), 1);
             _ = gtk.Widget.grabFocus(p.overlay_install_button.as(gtk.Widget));
         }
-
-        gtk.Stack.setVisibleChild(p.content_stack, p.overlay_panel.as(gtk.Widget));
     }
 
     fn populateRemotes(self: *Self, app: *AppstreamAppObject) void {
