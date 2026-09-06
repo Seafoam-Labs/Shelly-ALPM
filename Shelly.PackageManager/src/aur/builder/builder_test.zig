@@ -4622,3 +4622,149 @@ test "PackageBuilder records a sandbox hint when a confined step fails" {
     defer allocator.free(build_log);
     try testing.expect(std.mem.indexOf(u8, build_log, "[sandbox] step failed inside the Landlock sandbox") != null);
 }
+
+test "PackageBuilder standalone files use aliases and are available before prepare" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('renamed.gz::download.gz' 'unix.Z' 'lower.z' 'bzip.bz2' 'short.bz' 'xz.xz' 'zstd.zst' 'empty.gz' 'empty-xz.xz' 'empty-zstd.zst' 'ordinary.gz' 'keep.gz' 'mismatch.xz' 'extensionless')
+        \\sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        \\noextract=('keep.gz')
+        \\prepare() {
+        \\  for name in renamed unix lower bzip short xz zstd; do
+        \\    test "$(cat "$srcdir/$name")" = payload || return 1
+        \\  done
+        \\  test -f "$srcdir/empty" && test ! -s "$srcdir/empty"
+        \\  test -f "$srcdir/renamed.gz" && test -f "$srcdir/keep.gz"
+        \\  test "$(cat "$srcdir/ordinary.gz")" = plain
+        \\  for name in download embedded-name keep mismatch ordinary; do
+        \\    test ! -e "$srcdir/$name" || return 1
+        \\  done
+        \\}
+        \\package() {
+        \\  install -Dm644 "$srcdir/renamed" "$pkgdir/usr/share/demo/payload"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    const fixtures = .{
+        .{ "download.gz", archive.FixtureCompression.gzip },
+        .{ "unix.Z", archive.FixtureCompression.compress },
+        .{ "lower.z", archive.FixtureCompression.gzip },
+        .{ "bzip.bz2", archive.FixtureCompression.bzip2 },
+        .{ "short.bz", archive.FixtureCompression.bzip2 },
+        .{ "xz.xz", archive.FixtureCompression.xz },
+        .{ "zstd.zst", archive.FixtureCompression.zstd },
+        .{ "keep.gz", archive.FixtureCompression.gzip },
+        .{ "mismatch.xz", archive.FixtureCompression.gzip },
+        .{ "extensionless", archive.FixtureCompression.gzip },
+    };
+    inline for (fixtures) |item| {
+        const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, item[0] });
+        defer allocator.free(path);
+        try archive.writeCompressedFixture(allocator, path, item[1], "payload\n");
+    }
+    const gzip_bytes = try fixture.temporary.dir.readFileAlloc(io, "download.gz", allocator, .limited(1024));
+    defer allocator.free(gzip_bytes);
+    gzip_bytes[3] |= 8; // FNAME: the embedded name must not determine the output path.
+    const named_gzip = try std.mem.concat(allocator, u8, &.{ gzip_bytes[0..10], "embedded-name\x00", gzip_bytes[10..] });
+    defer allocator.free(named_gzip);
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "download.gz", .data = named_gzip });
+    // noextract must bypass the decoder even when the compressed input is damaged.
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "keep.gz", .data = "\x1f\x8btruncated" });
+    inline for (.{ .{ "empty.gz", archive.FixtureCompression.gzip }, .{ "empty-xz.xz", archive.FixtureCompression.xz }, .{ "empty-zstd.zst", archive.FixtureCompression.zstd } }) |item| {
+        const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, item[0] });
+        defer allocator.free(path);
+        try archive.writeCompressedFixture(allocator, path, item[1], "");
+    }
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "ordinary.gz", .data = "plain\n" });
+    fixture.builder.options.sources_prepared = false;
+    const artifacts = fixture.builder.BuildPackage() catch |err| {
+        const log = try readOnlyBuildLog(allocator, io, fixture.build_dir);
+        defer allocator.free(log);
+        std.debug.print("{s}\n", .{log});
+        return err;
+    };
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 1), artifacts.len);
+    inline for (.{ "empty", "empty-xz", "empty-zstd" }) |name| {
+        const stat = try fixture.temporary.dir.statFile(io, "src/" ++ name, .{});
+        try testing.expectEqual(@as(u64, 0), stat.size);
+    }
+}
+
+test "PackageBuilder standalone damaged streams preserve the previous srcdir" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    inline for (.{ archive.FixtureCompression.gzip, .bzip2, .xz, .zstd }) |compression| {
+        const suffix = switch (compression) {
+            .gzip => "gz",
+            .bzip2 => "bz2",
+            .xz => "xz",
+            .zstd => "zst",
+            else => unreachable,
+        };
+        for ([_]bool{ false, true }) |truncate| {
+            var fixture = try Fixture.create(allocator, "pkgname=demo\npkgver=1\npkgrel=1\narch=('any')\nsource=('payload." ++ suffix ++ "')\nsha256sums=('SKIP')\npackage() { touch \"$startdir/package-ran\"; }\n", null, null);
+            defer fixture.destroy();
+            const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "payload." ++ suffix });
+            defer allocator.free(path);
+            try archive.writeCompressedFixture(allocator, path, compression, "payload\n");
+            const compressed = try fixture.temporary.dir.readFileAlloc(io, "payload." ++ suffix, allocator, .limited(1024));
+            defer allocator.free(compressed);
+            if (!truncate) compressed[compressed.len / 2] ^= 0xff;
+            try fixture.temporary.dir.writeFile(io, .{ .sub_path = "payload." ++ suffix, .data = compressed[0 .. compressed.len - @as(usize, if (truncate) 4 else 0)] });
+            try fixture.temporary.dir.writeFile(io, .{ .sub_path = "src/marker", .data = "previous\n" });
+            fixture.builder.options.sources_prepared = false;
+            if (fixture.builder.BuildPackage()) |artifacts| {
+                defer builder_mod.deinitArtifacts(allocator, artifacts);
+                std.debug.print("unexpected success: {s}, truncated={}\n", .{ @tagName(compression), truncate });
+                return error.TestExpectedError;
+            } else |err| try testing.expectEqual(error.BuildFailed, err);
+            try fixture.temporary.dir.access(io, "src/marker", .{});
+            try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, ".src.shelly-staging", .{}));
+            try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, "package-ran", .{}));
+        }
+    }
+}
+
+test "PackageBuilder standalone rejects collisions in either source order including noextract" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    inline for (.{ "'payload.gz' 'payload'", "'payload' 'payload.gz'", "'payload.gz' 'payload.xz'" }) |sources| {
+        var fixture = try Fixture.create(allocator, "pkgname=demo\npkgver=1\npkgrel=1\narch=('any')\nsource=(" ++ sources ++ ")\nsha256sums=('SKIP' 'SKIP')\nnoextract=('payload')\npackage() { :; }\n", null, null);
+        defer fixture.destroy();
+        inline for (.{ .{ "payload.gz", archive.FixtureCompression.gzip }, .{ "payload.xz", archive.FixtureCompression.xz } }) |item| {
+            const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, item[0] });
+            defer allocator.free(path);
+            try archive.writeCompressedFixture(allocator, path, item[1], "payload\n");
+        }
+        try fixture.temporary.dir.writeFile(io, .{ .sub_path = "payload", .data = "original\n" });
+        try fixture.temporary.dir.writeFile(io, .{ .sub_path = "src/marker", .data = "previous\n" });
+        fixture.builder.options.sources_prepared = false;
+        try testing.expectError(error.BuildFailed, fixture.builder.BuildPackage());
+        try fixture.temporary.dir.access(io, "src/marker", .{});
+        try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, ".src.shelly-staging", .{}));
+    }
+}
+
+test "PackageBuilder standalone rejects output symlinks and unsafe stripped names" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    inline for (.{ "payload.gz", "..gz", "...gz", ".gz" }) |name| {
+        var fixture = try Fixture.create(allocator, "pkgname=demo\npkgver=1\npkgrel=1\narch=('any')\nsource=('link.tar' '" ++ name ++ "')\nsha256sums=('SKIP' 'SKIP')\npackage() { :; }\n", null, null);
+        defer fixture.destroy();
+        const tar_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "link.tar" });
+        defer allocator.free(tar_path);
+        try archive.writeFixture(allocator, tar_path, .none, &.{ .{ .path = "target", .contents = "original" }, .{ .path = "payload", .link_target = "target" } });
+        const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, name });
+        defer allocator.free(path);
+        try archive.writeCompressedFixture(allocator, path, .gzip, "replacement\n");
+        fixture.builder.options.sources_prepared = false;
+        try testing.expectError(error.BuildFailed, fixture.builder.BuildPackage());
+        try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, ".src.shelly-staging", .{}));
+    }
+}
