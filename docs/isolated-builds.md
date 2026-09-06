@@ -23,6 +23,20 @@ The resulting package's `.BUILDINFO` records the exact package set installed
 in the guest. Before export, libalpm loads every candidate archive and Shelly
 rejects malformed, duplicate, missing, or unexpected package identities.
 
+Source-signing keys listed in the evaluated `validpgpkeys` are prepared as the
+invoking host user before provisioning. Shelly checks the approved digest again,
+requests approval for missing keys, and exports only the required public keys.
+The guest imports that bundle into its own user keyring before the normal source
+signature checks. Host private keys, ownertrust, and GnuPG configuration are not
+copied.
+
+`--no-confirm` still declines missing-key imports; approving a review digest does
+not approve an import. For unattended callers such as Remora, import the required
+fingerprints once with `shelly keyring recv --user FINGERPRINT`, running as the
+account that invokes Shelly. Missing keys fail before provisioning and identify
+the import commands. Keys in root's keyring or pacman's keyring do not replace
+the invoking user's source-signing keys.
+
 The root lives under
 `/var/lib/shelly/build-roots/v1/operations/<random-id>/root`, is mode `0700` at
 the operation boundary, and is removed after success, failure, or
@@ -42,6 +56,15 @@ Requirements:
 - `systemd-nspawn` (provided by Arch's `systemd` package)
 - `unshare` (provided by Arch's `util-linux` package) for private provisioning
 - an invoking-user-preserving elevator such as sudo, doas, run0, or pkexec
+
+Dependency review refreshes the repositories configured in the host's
+`/etc/pacman.conf` into a private temporary database before classifying
+dependencies. This lets newly published local repository packages participate
+without refreshing or modifying the host package database. The temporary
+database is removed after review; provisioning refreshes and verifies the
+repositories again using the configured signature policy. Local repository
+servers must be readable by the invoking user during review. A built archive
+must be published in a configured repository's database to be resolved here.
 
 Current limitations are deliberately fail-closed:
 
@@ -72,11 +95,34 @@ with an explicit recipe path:
 Copying only `PKGBUILD` into the binary directory is not sufficient: every
 local entry in its `source=()` array must reside beside that copy.
 
-Run the root-required smoke test from a normal user session with:
+The reviewed-input staging and digest-integrity regressions run in separate
+processes under umasks `0022`, `0007`, and `0077`. They cover exact bytes and
+permissions, overwrites, and rejection of subsequent input changes. Run them
+without elevation with:
+
+```sh
+zig build --build-file Shelly.Cli.Zig/build.zig isolated-build-test
+```
+
+This target also runs as part of the CLI's `zig build test` and executes every
+time, including when the test executable is cached.
+
+The public-key handoff, import approval, and signed-source regressions also run
+through the CLI's `test` target, or directly with:
+
+```sh
+zig build --build-file Shelly.Cli.Zig/build.zig isolated-source-keys-test
+```
+
+Run the root-required smoke test from a normal user session with `jq` installed:
 
 ```sh
 Shelly.Cli.Zig/scripts/test-isolated-build.sh
 ```
+
+The smoke fixture reviews a group-writable (`0660`) local source, passes the
+returned digest through `--review-digest`, checks the staged input in the guest,
+and verifies that the package artifact is exported to the invoking user.
 
 Cancellation across the elevation boundary has a rootless integration fixture
 that uses a deterministic fake elevator:

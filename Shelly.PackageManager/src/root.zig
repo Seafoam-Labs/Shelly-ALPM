@@ -65,6 +65,8 @@ pub const alpm = struct {
     pub const parse_pacfile_path = pacfile_manager.parsePacfilePath;
 };
 
+pub const user_errors = @import("shared/user_errors.zig");
+
 pub const aur = @import("aur/manager.zig");
 
 pub const builder = @import("aur/builder/builder.zig");

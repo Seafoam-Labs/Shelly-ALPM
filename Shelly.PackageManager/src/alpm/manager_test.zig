@@ -2328,7 +2328,7 @@ test "remove_packages returns NoPackageFound for an unknown target" {
         error.NoPackageFound,
         mgr.remove_packages(&package_names, .{}, true),
     );
-    try testing.expectEqualStrings("Failed to find package", capture.text());
+    try testing.expectEqualStrings("Could not remove \"shelly-package-that-does-not-exist\" because it is not installed. Check the package name and try again.", capture.text());
 }
 
 test "remove_packages cancels removal of a held package without confirmation" {

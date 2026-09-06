@@ -149,69 +149,69 @@ pub const ShellySettingsPage = extern struct {
 
         populateDropdowns(p);
 
-        _ = gtk.Button.signals.clicked.connect(p.save_button, *Self, &on_save_clicked, self, .{});
-        _ = gtk.Button.signals.clicked.connect(p.changelog_button, *Self, &on_changelog_clicked, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.save_button, *Self, &onSaveClicked, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.changelog_button, *Self, &onChangelogClicked, self, .{});
 
-        _ = gtk.Button.signals.clicked.connect(p.tray_icon_button, *Self, &on_pick_tray_icon, self, .{});
-        _ = gtk.Button.signals.clicked.connect(p.tray_icon_clear_button, *Self, &on_clear_tray_icon, self, .{});
-        _ = gtk.Button.signals.clicked.connect(p.tray_updates_icon_button, *Self, &on_pick_tray_updates_icon, self, .{});
-        _ = gtk.Button.signals.clicked.connect(p.tray_updates_icon_clear_button, *Self, &on_clear_tray_updates_icon, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.tray_icon_button, *Self, &onPickTrayIcon, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.tray_icon_clear_button, *Self, &onClearTrayIcon, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.tray_updates_icon_button, *Self, &onPickTrayUpdatesIcon, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.tray_updates_icon_clear_button, *Self, &onClearTrayUpdatesIcon, self, .{});
 
-        _ = gtk.Button.signals.clicked.connect(p.appimage_install_path_button, *Self, &on_pick_appimage_install_path, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.appimage_install_path_button, *Self, &onPickAppImageInstallPath, self, .{});
 
         _ = gobject.Object.signals.notify.connect(
             p.daily_schedule.as(gobject.Object),
             *Self,
-            &on_schedule_notify,
+            &onScheduleNotify,
             self,
             .{ .detail = "active" },
         );
         _ = gobject.Object.signals.notify.connect(
             p.use_ui.as(gobject.Object),
             *Self,
-            &on_use_ui_notify,
+            &onUseUiNotify,
             self,
             .{ .detail = "active" },
         );
         _ = gobject.Object.signals.notify.connect(
             p.tray_switch.as(gobject.Object),
             *Self,
-            &on_tray_notify,
+            &onTrayNotify,
             self,
             .{ .detail = "active" },
         );
         _ = gobject.Object.signals.notify.connect(
             p.tray_auto_switch.as(gobject.Object),
             *Self,
-            &on_tray_auto_notify,
+            &onTrayAutoNotify,
             self,
             .{ .detail = "active" },
         );
         _ = gobject.Object.signals.notify.connect(
             p.aur_switch.as(gobject.Object),
             *Self,
-            &on_aur_notify,
+            &onAurNotify,
             self,
             .{ .detail = "active" },
         );
         _ = gobject.Object.signals.notify.connect(
             p.nav_mode_drop.as(gobject.Object),
             *Self,
-            &on_nav_mode_changed,
+            &onNavModeChanged,
             self,
             .{ .detail = "selected" },
         );
         _ = gobject.Object.signals.notify.connect(
             p.flatpak_switch.as(gobject.Object),
             *Self,
-            &on_flatpak_notify,
+            &onFlatpakNotify,
             self,
             .{ .detail = "active" },
         );
         _ = gobject.Object.signals.notify.connect(
             p.appimage_switch.as(gobject.Object),
             *Self,
-            &on_appimage_notify,
+            &onAppImageNotify,
             self,
             .{ .detail = "active" },
         );
@@ -230,7 +230,7 @@ pub const ShellySettingsPage = extern struct {
             _ = gobject.Object.signals.notify.connect(
                 s.as(gobject.Object),
                 *Self,
-                &on_autosave_notify,
+                &onAutosaveNotify,
                 self,
                 .{ .detail = "active" },
             );
@@ -238,7 +238,7 @@ pub const ShellySettingsPage = extern struct {
         _ = gobject.Object.signals.notify.connect(
             p.aur_switch.as(gobject.Object),
             *Self,
-            &on_autosave_notify,
+            &onAutosaveNotify,
             self,
             .{ .detail = "active", .after = true },
         );
@@ -246,21 +246,21 @@ pub const ShellySettingsPage = extern struct {
         _ = gobject.Object.signals.notify.connect(
             p.default_page_drop.as(gobject.Object),
             *Self,
-            &on_autosave_notify,
+            &onAutosaveNotify,
             self,
             .{ .detail = "selected" },
         );
         _ = gobject.Object.signals.notify.connect(
             p.language_drop.as(gobject.Object),
             *Self,
-            &on_autosave_notify,
+            &onAutosaveNotify,
             self,
             .{ .detail = "selected" },
         );
         _ = gobject.Object.signals.notify.connect(
             p.nav_mode_drop.as(gobject.Object),
             *Self,
-            &on_autosave_notify,
+            &onAutosaveNotify,
             self,
             .{ .detail = "selected", .after = true },
         );
@@ -275,12 +275,12 @@ pub const ShellySettingsPage = extern struct {
             p.day_sat_check,
         };
         inline for (day_checks) |c| {
-            _ = gtk.CheckButton.signals.toggled.connect(c, *Self, &on_autosave_toggled, self, .{});
+            _ = gtk.CheckButton.signals.toggled.connect(c, *Self, &onAutosaveToggled, self, .{});
         }
 
         const spins = .{ p.tray_interval_spin, p.update_hour_spin, p.update_minute_spin };
         inline for (spins) |s| {
-            _ = gtk.SpinButton.signals.value_changed.connect(s, *Self, &on_autosave_value_changed, self, .{});
+            _ = gtk.SpinButton.signals.value_changed.connect(s, *Self, &onAutosaveValueChanged, self, .{});
         }
 
         support.connectLifecycle(Self, self);
@@ -329,7 +329,7 @@ pub const ShellySettingsPage = extern struct {
         }
     }
 
-    fn on_save_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
+    fn onSaveClicked(_: *gtk.Button, self: *Self) callconv(.c) void {
         self.save() catch |err| {
             std.log.err("settings: save failed: {t}", .{err});
             self.priv().toast.show(.@"error", translations._("Failed to save settings"));
@@ -417,25 +417,25 @@ pub const ShellySettingsPage = extern struct {
         const p = self.priv();
         if (p.save_guard or !p.loaded) return;
         if (p.save_source != 0) return;
-        p.save_source = glib.timeoutAdd(300, &on_autosave_timeout, self);
+        p.save_source = glib.timeoutAdd(300, &onAutosaveTimeout, self);
     }
 
-    fn on_autosave_timeout(data: ?*anyopaque) callconv(.c) c_int {
+    fn onAutosaveTimeout(data: ?*anyopaque) callconv(.c) c_int {
         const self: *Self = @ptrCast(@alignCast(data.?));
         self.priv().save_source = 0;
         self.autosave();
         return 0;
     }
 
-    fn on_autosave_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+    fn onAutosaveNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         self.autosave();
     }
 
-    fn on_flatpak_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+    fn onFlatpakNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         self.onSupportNotify(.flatpak);
     }
 
-    fn on_appimage_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+    fn onAppImageNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         self.onSupportNotify(.appimage);
     }
 
@@ -463,27 +463,42 @@ pub const ShellySettingsPage = extern struct {
             return;
         };
 
-        const packages = supportDependencies(feature);
+        const selected = supportDependencies(feature);
+        var package_buffer: [2][]const u8 = undefined;
+        const packages = support_packages.missingPackages(
+            std.heap.c_allocator,
+            runtime.io,
+            selected,
+            &package_buffer,
+        );
+
+        p.support_install_pending = feature;
+        p.support_install_stage = .dependencies;
+
+        if (packages.len == 0) {
+            onSupportInstallComplete(self, true);
+            return;
+        }
+
         const argv = ShellyCommands.install(std.heap.c_allocator, packages) catch {
+            p.support_install_pending = null;
             self.restoreSupportSwitch(feature, false);
             p.toast.show(.@"error", supportStartFailureMessage(feature));
             return;
         };
         defer std.heap.c_allocator.free(argv);
 
-        p.support_install_pending = feature;
-        p.support_install_stage = .dependencies;
         win.startTransaction(.{
             .title = supportInstallTitle(feature),
             .argv = argv,
             .packages = packages,
             .privileged = true,
-            .on_complete = &on_support_install_complete,
+            .on_complete = &onSupportInstallComplete,
             .ctx = self,
         });
     }
 
-    fn on_support_install_complete(ctx: *anyopaque, success: bool) void {
+    fn onSupportInstallComplete(ctx: *anyopaque, success: bool) void {
         const self: *Self = @ptrCast(@alignCast(ctx));
         const p = self.priv();
         const feature = p.support_install_pending orelse return;
@@ -493,14 +508,14 @@ pub const ShellySettingsPage = extern struct {
                 if (!success) return self.finishSupportInstall(feature, false);
                 if (feature == .flatpak) {
                     p.support_install_stage = .backend_standard;
-                    _ = glib.idleAdd(&start_support_backend_idle, self);
+                    _ = glib.idleAdd(&startSupportBackendIdle, self);
                     return;
                 }
             },
             .backend_standard => {
                 if (!success) {
                     p.support_install_stage = .backend_aur;
-                    _ = glib.idleAdd(&start_support_backend_idle, self);
+                    _ = glib.idleAdd(&startSupportBackendIdle, self);
                     return;
                 }
             },
@@ -510,7 +525,7 @@ pub const ShellySettingsPage = extern struct {
         self.finishSupportInstall(feature, true);
     }
 
-    fn start_support_backend_idle(data: ?*anyopaque) callconv(.c) c_int {
+    fn startSupportBackendIdle(data: ?*anyopaque) callconv(.c) c_int {
         const self: *Self = @ptrCast(@alignCast(data.?));
         self.startSupportBackend();
         return 0;
@@ -519,8 +534,15 @@ pub const ShellySettingsPage = extern struct {
     fn startSupportBackend(self: *Self) void {
         const p = self.priv();
         const feature = p.support_install_pending orelse return;
-        const package = support_packages.flatpakBackendPackage();
-        const packages = &.{package};
+        const packages = &.{support_packages.flatpakBackendPackage()};
+
+        var backend_buffer: [1][]const u8 = undefined;
+        const missing = support_packages.missingPackages(std.heap.c_allocator, runtime.io, packages, &backend_buffer);
+        if (missing.len == 0) {
+            onSupportInstallComplete(self, true);
+            return;
+        }
+
         const argv = switch (p.support_install_stage) {
             .backend_standard => ShellyCommands.install(std.heap.c_allocator, packages),
             .backend_aur => ShellyCommands.install_aur(std.heap.c_allocator, packages),
@@ -542,7 +564,7 @@ pub const ShellySettingsPage = extern struct {
             .argv = argv,
             .packages = packages,
             .privileged = true,
-            .on_complete = &on_support_install_complete,
+            .on_complete = &onSupportInstallComplete,
             .ctx = self,
         });
     }
@@ -635,11 +657,11 @@ pub const ShellySettingsPage = extern struct {
         };
     }
 
-    fn on_autosave_toggled(_: *gtk.CheckButton, self: *Self) callconv(.c) void {
+    fn onAutosaveToggled(_: *gtk.CheckButton, self: *Self) callconv(.c) void {
         self.autosave();
     }
 
-    fn on_autosave_value_changed(_: *gtk.SpinButton, self: *Self) callconv(.c) void {
+    fn onAutosaveValueChanged(_: *gtk.SpinButton, self: *Self) callconv(.c) void {
         self.scheduleAutosave();
     }
 
@@ -728,26 +750,26 @@ pub const ShellySettingsPage = extern struct {
         }
 
         const owned = entries.toOwnedSlice(c) catch return;
-        const dlg = VersionHistoryDialog.new(translations._("Changelog"), translations._("Shelly"), owned, &on_close_changelog, self);
+        const dlg = VersionHistoryDialog.new(translations._("Changelog"), translations._("Shelly"), owned, &onCloseChangelog, self);
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.showLockout(dlg.as(gtk.Widget));
         }
     }
 
-    fn on_changelog_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
+    fn onChangelogClicked(_: *gtk.Button, self: *Self) callconv(.c) void {
         self.showChangelog() catch |err| {
             std.log.err("settings: failed to load changelog: {any}", .{err});
             self.priv().toast.show(.@"error", translations._("Failed to load changelog"));
         };
     }
 
-    fn on_close_changelog(ctx: ?*anyopaque) void {
+    fn onCloseChangelog(ctx: ?*anyopaque) void {
         const self: *Self = @ptrCast(@alignCast(ctx.?));
         if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
     }
 
-    fn on_pick_tray_icon(_: *gtk.Button, self: *Self) callconv(.c) void {
+    fn onPickTrayIcon(_: *gtk.Button, self: *Self) callconv(.c) void {
         const dialog = gtk.FileDialog.new();
         gtk.FileDialog.setTitle(dialog, translations._("Select Tray Icon"));
 
@@ -758,12 +780,12 @@ pub const ShellySettingsPage = extern struct {
             dialog,
             parent,
             null,
-            &on_tray_icon_selected,
+            &onTrayIconSelected,
             self,
         );
     }
 
-    fn on_tray_icon_selected(
+    fn onTrayIconSelected(
         source_object: ?*gobject.Object,
         result: *gio.AsyncResult,
         user_data: ?*anyopaque,
@@ -795,14 +817,14 @@ pub const ShellySettingsPage = extern struct {
         updateConfigField(.TrayIconPath, path_slice);
     }
 
-    fn on_clear_tray_icon(_: *gtk.Button, self: *Self) callconv(.c) void {
+    fn onClearTrayIcon(_: *gtk.Button, self: *Self) callconv(.c) void {
         const p = self.priv();
         gtk.Button.setLabel(p.tray_icon_button, translations._("Select Icon"));
 
         updateConfigField(.TrayIconPath, "");
     }
 
-    fn on_pick_tray_updates_icon(_: *gtk.Button, self: *Self) callconv(.c) void {
+    fn onPickTrayUpdatesIcon(_: *gtk.Button, self: *Self) callconv(.c) void {
         const dialog = gtk.FileDialog.new();
         gtk.FileDialog.setTitle(dialog, translations._("Select Tray Updates Icon"));
 
@@ -813,12 +835,12 @@ pub const ShellySettingsPage = extern struct {
             dialog,
             parent,
             null,
-            &on_tray_updates_icon_selected,
+            &onTrayUpdatesIconSelected,
             self,
         );
     }
 
-    fn on_tray_updates_icon_selected(
+    fn onTrayUpdatesIconSelected(
         source_object: ?*gobject.Object,
         result: *gio.AsyncResult,
         user_data: ?*anyopaque,
@@ -850,14 +872,14 @@ pub const ShellySettingsPage = extern struct {
         updateConfigField(.TrayUpdatesIconPath, path_slice);
     }
 
-    fn on_clear_tray_updates_icon(_: *gtk.Button, self: *Self) callconv(.c) void {
+    fn onClearTrayUpdatesIcon(_: *gtk.Button, self: *Self) callconv(.c) void {
         const p = self.priv();
         gtk.Button.setLabel(p.tray_updates_icon_button, translations._("Select Icon"));
 
         updateConfigField(.TrayUpdatesIconPath, "");
     }
 
-    fn on_pick_appimage_install_path(_: *gtk.Button, self: *Self) callconv(.c) void {
+    fn onPickAppImageInstallPath(_: *gtk.Button, self: *Self) callconv(.c) void {
         const dialog = gtk.FileDialog.new();
         gtk.FileDialog.setTitle(dialog, translations._("Select AppImage Install Directory"));
 
@@ -868,12 +890,12 @@ pub const ShellySettingsPage = extern struct {
             dialog,
             parent,
             null,
-            &on_appimage_folder_selected,
+            &onAppImageFolderSelected,
             self,
         );
     }
 
-    fn on_appimage_folder_selected(
+    fn onAppImageFolderSelected(
         source_object: ?*gobject.Object,
         result: *gio.AsyncResult,
         user_data: ?*anyopaque,
@@ -919,18 +941,18 @@ pub const ShellySettingsPage = extern struct {
         };
     }
 
-    fn on_schedule_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+    fn onScheduleNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         applyScheduleVisibility(self.priv());
         self.autosave();
     }
 
-    fn on_use_ui_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+    fn onUseUiNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         const p = self.priv();
         const active = gtk.Switch.getActive(p.use_ui) != 0;
         updateConfigField(.UseUiForUpdate, active);
     }
 
-    fn on_tray_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+    fn onTrayNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         const p = self.priv();
 
         applyTrayVisibility(p);
@@ -964,7 +986,7 @@ pub const ShellySettingsPage = extern struct {
         }
     }
 
-    fn on_tray_auto_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+    fn onTrayAutoNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         const p = self.priv();
         const active = gtk.Switch.getActive(p.tray_auto_switch) != 0;
 
@@ -999,7 +1021,7 @@ pub const ShellySettingsPage = extern struct {
         updateConfigField(.TrayAutoStart, active);
     }
 
-    fn on_aur_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+    fn onAurNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         const p = self.priv();
         const active = gtk.Switch.getActive(p.aur_switch) != 0;
         if (!active) return;
@@ -1012,14 +1034,14 @@ pub const ShellySettingsPage = extern struct {
 
         gtk.Switch.setActive(p.aur_switch, 0);
 
-        const dialog = AurWarningDialog.new(&on_aur_confirmation_response, self);
+        const dialog = AurWarningDialog.new(&onAurConfirmationResponse, self);
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.showLockout(dialog.as(gtk.Widget));
             dialog.focusCancel();
         }
     }
 
-    fn on_nav_mode_changed(obj: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+    fn onNavModeChanged(obj: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         const dd: *gtk.DropDown = @ptrCast(@alignCast(obj));
         const idx = gtk.DropDown.getSelected(dd);
         if (idx >= nav_mode_entries.len) return;
@@ -1028,7 +1050,7 @@ pub const ShellySettingsPage = extern struct {
         }
     }
 
-    fn on_aur_confirmation_response(ctx: ?*anyopaque, confirmed: bool) void {
+    fn onAurConfirmationResponse(ctx: ?*anyopaque, confirmed: bool) void {
         const self: *Self = @ptrCast(@alignCast(ctx.?));
         if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
         if (!confirmed) return;

@@ -119,7 +119,7 @@ fn run(init: std.process.Init) !void {
             error.TrustdbMissing => {
                 stderrPrint(
                     init.io,
-                    "error: The pacman keyring at '{s}' is not initialized.",
+                    "error: The package-signing keyring at '{s}' is not initialized.",
                     .{opts.gpgdir},
                 );
                 stderrPrint(

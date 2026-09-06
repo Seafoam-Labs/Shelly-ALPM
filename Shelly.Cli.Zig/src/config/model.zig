@@ -251,7 +251,7 @@ test "defaults preserve reflection order and display conventions" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const config = try Config.defaults(arena.allocator());
-    try std.testing.expectEqual(@as(usize, 9), config.values.count());
+    try std.testing.expectEqual(@as(usize, 10), config.values.count());
     try std.testing.expectEqualStrings("FileSizeDisplay", config.values.keys()[0]);
     try std.testing.expectEqualStrings(
         "False",
@@ -284,4 +284,16 @@ test "updates typed and enumerated values case-insensitively" {
         (try config.getDisplay(arena.allocator(), "AutoConfirmCacheClean")).?,
     );
     try std.testing.expect(!try config.set(arena.allocator(), "AutoConfirmCacheClean", "yes"));
+}
+
+test "older configs default to enabled cache cleaning" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var config = try Config.defaults(arena.allocator());
+    var older: std.json.ObjectMap = .empty;
+    try older.put(arena.allocator(), "AutoConfirmCacheClean", .{ .bool = true });
+    try config.overlay(older);
+    try std.testing.expectEqualStrings("False", (try config.getDisplay(arena.allocator(), "DisableCacheClean")).?);
+    try older.put(arena.allocator(), "DisableCacheClean", .{ .string = "true" });
+    try std.testing.expectError(error.InvalidConfig, config.overlay(older));
 }
