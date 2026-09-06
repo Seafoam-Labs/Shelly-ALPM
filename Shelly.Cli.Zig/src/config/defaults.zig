@@ -10,6 +10,7 @@ pub const json =
     \\  "OutputMode": "singlepane",
     \\  "AppImageInstallPath": null,
     \\  "AutoConfirmCacheClean": false,
+    \\  "DisableCacheClean": false,
     \\  "AurUrl": "https://aur.archlinux.org"
     \\}
 ;
@@ -25,4 +26,5 @@ test "native defaults remain valid JSON" {
         parsed.value.object.get("DownloadAddressFamilyPolicy").?.string,
     );
     try std.testing.expect(!parsed.value.object.get("AutoConfirmCacheClean").?.bool);
+    try std.testing.expect(!parsed.value.object.get("DisableCacheClean").?.bool);
 }
