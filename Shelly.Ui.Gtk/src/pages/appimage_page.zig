@@ -94,6 +94,11 @@ pub const AppImagePage = extern struct {
         prerelease_check: *gtk.CheckButton,
         install_path_entry: *gtk.Entry,
         launch_flags_entry: *gtk.Entry,
+        environment_view: *gtk.TextView,
+        environment_error: *gtk.Label,
+        environment_save: *gtk.Button,
+        environment_loading: bool = false,
+        environment_dirty: bool = false,
         sync_button: *gtk.Button,
         save_button: *gtk.Button,
         remove_button: *gtk.Button,
@@ -191,6 +196,7 @@ pub const AppImagePage = extern struct {
         gio.ActionMap.addAction(group.as(gio.ActionMap), action.as(gio.Action));
         gtk.Widget.insertActionGroup(self.as(gtk.Widget), "search", group.as(gio.ActionGroup));
 
+        _ = gtk.TextBuffer.signals.changed.connect(gtk.TextView.getBuffer(p.environment_view), *Self, &environment_changed, self, .{});
         support.connectLifecycle(Self, self);
         _ = gtk.ListBox.signals.row_activated.connect(p.app_list, *Self, &onRowActivated, self, .{});
     }
@@ -208,7 +214,7 @@ pub const AppImagePage = extern struct {
 
     pub fn onUnmap(self: *Self) void {
         const p = self.priv();
-        if (!p.loaded) return;
+        if (!p.loaded or p.environment_dirty) return;
         p.loaded = false;
         p.generation += 1;
 
@@ -303,7 +309,7 @@ pub const AppImagePage = extern struct {
         const result: *AppsResult = @ptrCast(@alignCast(data.?));
         const self = result.page;
         const p = self.priv();
-        if (result.generation != p.generation) {
+        if (result.generation != p.generation or p.environment_dirty) {
             result.arena.deinit();
             std.heap.c_allocator.destroy(result.arena);
             std.heap.c_allocator.destroy(result);
@@ -559,6 +565,19 @@ pub const AppImagePage = extern struct {
         gtk.Editable.setText(p.install_path_entry.as(gtk.Editable), if (app.Path) |path| c_string.cstr(&buf, path) else "");
         gtk.Editable.setText(p.launch_flags_entry.as(gtk.Editable), if (app.CommandLineArgs) |args| c_string.cstr(&buf, args) else "");
 
+        var environment_text: std.Io.Writer.Allocating = .init(std.heap.c_allocator);
+        defer environment_text.deinit();
+        for (app.EnvironmentVariables) |variable| {
+            environment_text.writer.print("{s}={s}\n", .{ variable.Key, variable.Value }) catch return;
+        }
+        const environment_z = std.heap.c_allocator.dupeZ(u8, environment_text.written()) catch return;
+        defer std.heap.c_allocator.free(environment_z);
+        p.environment_loading = true;
+        gtk.TextBuffer.setText(gtk.TextView.getBuffer(p.environment_view), environment_z, -1);
+        p.environment_loading = false;
+        p.environment_dirty = false;
+        validate_environment(self);
+
         gtk.Widget.setVisible(p.list_view, 0);
         gtk.Widget.setVisible(p.detail_view, 1);
     }
@@ -782,8 +801,70 @@ pub const AppImagePage = extern struct {
         });
     }
 
+    fn get_environment_text(self: *Self) [:0]u8 {
+        const buffer = gtk.TextView.getBuffer(self.priv().environment_view);
+        var start: gtk.TextIter = undefined;
+        var end: gtk.TextIter = undefined;
+        gtk.TextBuffer.getBounds(buffer, &start, &end);
+        return std.mem.span(gtk.TextBuffer.getText(buffer, &start, &end, 0));
+    }
+
+    fn environment_changed(_: *gtk.TextBuffer, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.environment_loading) return;
+        p.environment_dirty = true;
+        validate_environment(self);
+    }
+
+    fn validate_environment(self: *Self) void {
+        const p = self.priv();
+        gtk.Widget.setSensitive(p.sync_button.as(gtk.Widget), @intFromBool(!p.environment_dirty));
+        gtk.Widget.setSensitive(p.save_button.as(gtk.Widget), @intFromBool(!p.environment_dirty));
+        gtk.Widget.setSensitive(p.remove_button.as(gtk.Widget), @intFromBool(!p.environment_dirty));
+        const text = get_environment_text(self);
+        defer glib.free(text.ptr);
+        const json = @import("../models/appimage.zig").environmentJson(std.heap.c_allocator, text) catch {
+            gtk.Label.setLabel(p.environment_error, translations._("Use unique KEY=value lines. Keys must start with a letter or underscore and contain only letters, digits, or underscores."));
+            gtk.Widget.setVisible(p.environment_error.as(gtk.Widget), 1);
+            gtk.Widget.setSensitive(p.environment_save.as(gtk.Widget), 0);
+            return;
+        };
+        defer std.heap.c_allocator.free(json);
+        gtk.Widget.setVisible(p.environment_error.as(gtk.Widget), 0);
+        gtk.Widget.setSensitive(p.environment_save.as(gtk.Widget), @intFromBool(p.environment_dirty));
+    }
+
+    fn save_environment(self: *Self) callconv(.c) void {
+        const p = self.priv();
+        const index = p.selected_index orelse return;
+        const app = p.apps[index];
+        const text = get_environment_text(self);
+        defer glib.free(text.ptr);
+        const json = @import("../models/appimage.zig").environmentJson(std.heap.c_allocator, text) catch return;
+        defer std.heap.c_allocator.free(json);
+        const argv = ShellyCommands.configure_appimage_environment(std.heap.c_allocator, app.Name, json) catch return;
+        defer std.heap.c_allocator.free(argv);
+        const win = support.getWindow(ShellyWindow, self) orelse return;
+        gtk.Widget.setSensitive(p.environment_save.as(gtk.Widget), 0);
+        win.startTransaction(.{
+            .title = translations._("Saving AppImage environment"),
+            .argv = argv,
+            .packages = &.{app.Name},
+            .on_complete = &on_environment_saved,
+            .ctx = self,
+            .privileged = false,
+        });
+    }
+
+    fn on_environment_saved(ctx: *anyopaque, success: bool) void {
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        if (success) self.priv().environment_dirty = false else validate_environment(self);
+        on_op_complete(ctx, success);
+    }
+
     fn save_config(self: *Self) callconv(.c) void {
         const p = self.priv();
+        if (p.environment_dirty) return;
         const index = p.selected_index orelse return;
         const app = p.apps[index];
 
@@ -883,7 +964,28 @@ pub const AppImagePage = extern struct {
     }
 
     fn back_to_list(self: *Self) callconv(.c) void {
+        if (self.priv().environment_dirty) {
+            const dialog = ConfirmDialog.new(translations._("Discard environment changes?"), translations._("Your environment changes have not been saved."), &on_discard_environment, self);
+            dialog.setButtons(translations._("Discard"), translations._("Cancel"));
+            if (support.getWindow(ShellyWindow, self)) |win| win.showLockout(dialog.as(gtk.Widget));
+            return;
+        }
         show_list(self);
+    }
+
+    fn on_discard_environment(ctx: ?*anyopaque, confirmed: bool) void {
+        const self: *Self = @ptrCast(@alignCast(ctx.?));
+        if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
+        if (confirmed) {
+            self.priv().environment_dirty = false;
+            show_list(self);
+        }
+    }
+
+    fn dispose(self: *Self) callconv(.c) void {
+        self.priv().environment_dirty = false;
+        self.onUnmap();
+        gobject.Object.virtual_methods.dispose.call(Class.parent, self.as(Parent));
     }
 
     const template_children = .{
@@ -905,6 +1007,9 @@ pub const AppImagePage = extern struct {
         .{ "AllowPrereleaseCheckButton", @offsetOf(Private, "prerelease_check") },
         .{ "InstallPathEntry", @offsetOf(Private, "install_path_entry") },
         .{ "LaunchFlagsEntry", @offsetOf(Private, "launch_flags_entry") },
+        .{ "EnvironmentView", @offsetOf(Private, "environment_view") },
+        .{ "EnvironmentError", @offsetOf(Private, "environment_error") },
+        .{ "SaveEnvironmentButton", @offsetOf(Private, "environment_save") },
         .{ "SyncButton", @offsetOf(Private, "sync_button") },
         .{ "SaveConfigButton", @offsetOf(Private, "save_button") },
         .{ "RemoveAppImageButton", @offsetOf(Private, "remove_button") },
@@ -919,6 +1024,7 @@ pub const AppImagePage = extern struct {
         pub const Instance = Self;
 
         fn init(class: *Class) callconv(.c) void {
+            gobject.Object.virtual_methods.dispose.implement(class, &dispose);
             const wc = gobject.ext.as(gtk.Widget.Class, class);
             gtk.Widget.Class.setTemplateFromResource(wc, resource_path);
             inline for (template_children) |c| {
@@ -929,6 +1035,7 @@ pub const AppImagePage = extern struct {
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "sync_all_appimage", @ptrCast(&sync_all_appimage));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "sync_appimage", @ptrCast(&sync_appimage));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "save_config", @ptrCast(&save_config));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "save_environment", @ptrCast(&save_environment));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "remove_appimage", @ptrCast(&remove_appimage));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "back_to_list", @ptrCast(&back_to_list));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "search_changed", @ptrCast(&on_search_changed));

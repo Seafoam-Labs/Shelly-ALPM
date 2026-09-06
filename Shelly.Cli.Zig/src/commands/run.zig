@@ -276,8 +276,35 @@ fn runAppImage(context: *runtime.RuntimeContext, query: []const u8, kill: bool) 
 }
 
 fn launchAppImage(context: *runtime.RuntimeContext, target: []const u8) !bool {
+    const config_home = try xdg.configHome(context);
+    defer context.allocator.free(config_home);
+    const database = try std.fs.path.join(context.allocator, &.{ config_home, "shelly", "appimage-metadata-v2.db" });
+    defer context.allocator.free(database);
+    var manager = Zigalpm.AppImageManager{
+        .allocator = context.allocator,
+        .io = context.io,
+        .environ = context.environ,
+        .install_directory = std.fs.path.dirname(target) orelse ".",
+        .local_db_path = database,
+    };
+    defer manager.deinit();
+    const apps = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(apps);
+    var environment = try context.environ.createMap(context.allocator);
+    defer environment.deinit();
+    const resolved_target = try std.Io.Dir.cwd().realPathFileAlloc(context.io, target, context.allocator);
+    defer context.allocator.free(resolved_target);
+    for (apps) |app| {
+        const resolved_app = std.Io.Dir.cwd().realPathFileAlloc(context.io, app.path, context.allocator) catch continue;
+        defer context.allocator.free(resolved_app);
+        if (std.mem.eql(u8, resolved_target, resolved_app)) {
+            try Zigalpm.appimage.environment.overlay(&environment, app.environment_variables);
+            break;
+        }
+    }
     var child = try std.process.spawn(context.io, .{
         .argv = &.{target},
+        .environ_map = &environment,
         .stdin = .ignore,
         .stdout = .ignore,
         .stderr = .ignore,

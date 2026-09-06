@@ -428,6 +428,10 @@ pub const ShellyCommands = struct {
         return argv.toOwnedSlice(alloc);
     }
 
+    pub fn configure_appimage_environment(alloc: std.mem.Allocator, name: []const u8, json: []const u8) ![]const []const u8 {
+        return alloc.dupe([]const u8, &.{ "config", "appimage", name, "--replace-env", json });
+    }
+
     pub fn configure_appimage(
         alloc: std.mem.Allocator,
         name: []const u8,
