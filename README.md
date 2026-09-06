@@ -68,6 +68,35 @@ paru -Rns shelly
   Flatpak applications alongside native packages without making Flatpak a
   runtime dependency of the base Shelly package.
 
+## Upgrade cache cleaning
+
+To skip the package-cache cleanup prompt and deletion during `shelly upgrade all`:
+
+```bash
+shelly config set DisableCacheClean true
+```
+
+This also applies to upgrade-all aliases and takes precedence over
+`AutoConfirmCacheClean`. The setting defaults to `false`; restore the existing
+cleanup behavior with `shelly config set DisableCacheClean false`.
+Standalone `shelly upgrade standard` keeps its existing cleanup behavior.
+You can still clean the cache manually with `shelly purify standard --cache`.
+
+Add `--aur-cache` to also delete **all** built AUR package archives and their
+matching signatures from the invoking user's `$XDG_CACHE_HOME/Shelly` cache
+(default: `~/.cache/Shelly`):
+
+```bash
+shelly purify standard --cache --aur-cache --dry-run
+shelly purify standard --cache --aur-cache
+```
+
+The command previews the files and asks for confirmation before deleting them.
+`--aur-cache` can also be used without `--cache`; standard purify still checks
+for corrupted archives. AUR PKGBUILDs, checkout history, source files, and build
+directories are retained. Archives in custom build output destinations outside
+Shelly's cache are not included.
+
 ## Roadmap
 
 Upcoming features and development targets:
@@ -153,12 +182,25 @@ CLI provides the same core functionality as the UI but in a scriptable, terminal
 
 Full documentation can be viewed on the [Shelly CLI Reference](https://www.seafoam-labs.org/shelly-alpm/docs/cli-reference/) page.
 
+The versioned JSON contracts used by unattended package-building services are
+documented in [Remora automation contract](docs/remora-automation.md). Probe an
+installed binary with `shelly --version --json` before scheduling a build.
+
 Generate makepkg-compatible SRCINFO from a reviewed PKGBUILD without running
 its build lifecycle:
 
 ```bash
 shelly build --makesrcinfo --reviewed PKGBUILD > .SRCINFO
 ```
+
+The AUR builder extracts source archives and decompresses standalone gzip/Unix
+compress (`.gz`, `.z`, `.Z`), bzip2 (`.bz2`, `.bz`), xz (`.xz`), and zstd (`.zst`)
+files before running `prepare()`. Standalone files must have matching compression
+content and extensions. The output uses the source alias with its compression
+extension removed: `dsearch-x86_64-1.6.0.gz` becomes `dsearch-x86_64-1.6.0`.
+The original compressed file remains in `src`, and `noextract` entries stay
+compressed. Decompression rejects output collisions and files exceeding 4 GiB;
+failed source preparation discards the staging tree.
 
 ### CLI Configuration
 

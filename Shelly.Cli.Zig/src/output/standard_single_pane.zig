@@ -77,12 +77,14 @@ pub fn output(
             try renderer.finishCancelled();
             return true;
         }
-        if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
-            try renderer.reportError(message);
+        if (renderer.reported_failure.load(.acquire)) {
+            try renderer.reportTechnicalDetails(err);
             try renderer.finishWithMessage(false, failure_message);
             return false;
         }
-        const message = try std.fmt.allocPrint(context.allocator, "{t}", .{err});
+        const message = try Zigalpm.user_errors.format(context.allocator, err, .{
+            .subject = if (invocation.positionals.len == 1) invocation.positionals[0] else null,
+        });
         defer context.allocator.free(message);
         try renderer.reportError(message);
         try renderer.finishWithMessage(false, failure_message);
@@ -110,6 +112,7 @@ pub const Renderer = struct {
     emitted_retrieving: bool = false,
     frame: usize = 0,
     write_failed: std.atomic.Value(bool) = .init(false),
+    reported_failure: std.atomic.Value(bool) = .init(false),
 
     pub fn init(
         context: *runtime.RuntimeContext,
@@ -195,6 +198,13 @@ pub const Renderer = struct {
         try self.flush();
     }
 
+    pub fn reportTechnicalDetails(self: *Renderer, err: anyerror) !void {
+        self.mutex.lockUncancelable(self.context.io);
+        defer self.mutex.unlock(self.context.io);
+        try self.writeColoredLine(.white, "Technical details: {t}", .{err});
+        try self.flush();
+    }
+
     pub fn finishCancelled(self: *Renderer) !void {
         self.mutex.lockUncancelable(self.context.io);
         defer self.mutex.unlock(self.context.io);
@@ -220,10 +230,16 @@ pub const Renderer = struct {
             .progress => |progress| try self.writeProgress(progress),
             .status => |status| try self.writeStatus(status),
             .failure => |failure| {
+                const message = try Zigalpm.user_errors.format(self.context.allocator, failure.err, .{
+                    .subject = failure.envelope.subject,
+                    .detail = failure.message,
+                });
+                defer self.context.allocator.free(message);
                 if (failure.recoverable) {
-                    try self.writeColoredLine(.yellow, "warning: {s}", .{failure.message});
+                    try self.writeColoredLine(.yellow, "warning: {s}", .{message});
                 } else {
-                    try self.writeColoredLine(.red, "error: {s}", .{failure.message});
+                    try self.writeColoredLine(.red, "error: {s}", .{message});
+                    self.reported_failure.store(true, .release);
                 }
             },
             .completed => |completed| try self.completeOperation(completed.envelope.operation_id),
@@ -603,7 +619,7 @@ pub const Renderer = struct {
         if (review.findings.len > 0) {
             try self.writeColoredLine(
                 .red,
-                "PKGBUILD security warnings — these commands fetch/execute code outside pacman's control:",
+                "PKGBUILD security warnings — these commands fetch/execute code outside Shelly's control:",
                 .{},
             );
             for (review.findings) |finding| {

@@ -2328,7 +2328,7 @@ test "remove_packages returns NoPackageFound for an unknown target" {
         error.NoPackageFound,
         mgr.remove_packages(&package_names, .{}, true),
     );
-    try testing.expectEqualStrings("Failed to find package", capture.text());
+    try testing.expectEqualStrings("Could not remove \"shelly-package-that-does-not-exist\" because it is not installed. Check the package name and try again.", capture.text());
 }
 
 test "remove_packages cancels removal of a held package without confirmation" {
@@ -3262,6 +3262,19 @@ test "Manager.init applies configured libalpm options and callback contexts" {
     var usage: c_int = 0;
     try testing.expectEqual(@as(c_int, 0), rawLibalpm.alpm_db_get_usage(database.ptr, &usage));
     try testing.expectEqual(rawLibalpm.ALPM_DB_USAGE_SYNC | rawLibalpm.ALPM_DB_USAGE_SEARCH, usage);
+
+    mgr.disable_transaction_hooks();
+    try testing.expect(!rawDirectoryListContains(rawLibalpm.alpm_option_get_hookdirs(mgr.handle), hook_path));
+    try testing.expect(rawDirectoryListContains(
+        rawLibalpm.alpm_option_get_hookdirs(mgr.handle),
+        "/nonexistent/shelly-no-hooks",
+    ));
+    try mgr.refresh();
+    try testing.expect(!rawDirectoryListContains(rawLibalpm.alpm_option_get_hookdirs(mgr.handle), hook_path));
+    try testing.expect(rawDirectoryListContains(
+        rawLibalpm.alpm_option_get_hookdirs(mgr.handle),
+        "/nonexistent/shelly-no-hooks",
+    ));
 }
 
 test "get_foreign_packages hides ignored packages until hidden packages are enabled" {

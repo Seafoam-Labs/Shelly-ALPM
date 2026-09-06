@@ -4,6 +4,7 @@ const arrays = @import("../pkgbuild/parser/arrays.zig");
 const fields = @import("../pkgbuild/parser/fields.zig");
 const function_body = @import("../pkgbuild/parser/function_body.zig");
 const variables = @import("../pkgbuild/parser/variables.zig");
+const dependencies = @import("../pkgbuild/parser/dependencies.zig");
 
 const PkgbuildParser = pkgbuild_parser.PkgbuildParser;
 
@@ -266,6 +267,154 @@ pub const Info = struct {
     }
 };
 
+/// Dependency fields selected from evaluated SRCINFO. This is deliberately
+/// separate from the statically parsed PKGBUILD so dependency planning does
+/// not mutate the content and review state later used by the builder.
+pub const DependencyMetadata = struct {
+    depends: [][]const u8,
+    make_depends: [][]const u8,
+    check_depends: [][]const u8,
+    opt_depends: [][]const u8,
+    parsed_depends: []pkgbuild_parser.parsed_dep,
+    parsed_make_depends: []pkgbuild_parser.parsed_dep,
+    parsed_check_depends: []pkgbuild_parser.parsed_dep,
+
+    pub fn deinit(self: *DependencyMetadata, allocator: std.mem.Allocator) void {
+        freeValues(allocator, self.depends);
+        freeValues(allocator, self.make_depends);
+        freeValues(allocator, self.check_depends);
+        freeValues(allocator, self.opt_depends);
+        freeParsedDependencies(allocator, self.parsed_depends);
+        freeParsedDependencies(allocator, self.parsed_make_depends);
+        freeParsedDependencies(allocator, self.parsed_check_depends);
+        self.* = undefined;
+    }
+};
+
+const DependencyField = enum { runtime, build, check, optional };
+
+/// Parses the effective global and selected-package dependency declarations
+/// for the active architecture from makepkg-compatible SRCINFO output.
+pub fn parseDependencyMetadata(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    content: []const u8,
+    selected_package_names: []const []const u8,
+    carch: []const u8,
+) !DependencyMetadata {
+    var runtime: std.ArrayList([]const u8) = .empty;
+    errdefer freeValueList(allocator, &runtime);
+    var build: std.ArrayList([]const u8) = .empty;
+    errdefer freeValueList(allocator, &build);
+    var check: std.ArrayList([]const u8) = .empty;
+    errdefer freeValueList(allocator, &check);
+    var optional: std.ArrayList([]const u8) = .empty;
+    errdefer freeValueList(allocator, &optional);
+
+    var in_package_scope = false;
+    var selected_scope = false;
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |raw| {
+        const line = std.mem.trim(u8, raw, " \t\r");
+        if (line.len == 0 or line[0] == '#') continue;
+        const equal = std.mem.indexOfScalar(u8, line, '=') orelse continue;
+        const key = std.mem.trim(u8, line[0..equal], " \t");
+        const value = std.mem.trim(u8, line[equal + 1 ..], " \t");
+        if (std.mem.eql(u8, key, "pkgname")) {
+            in_package_scope = true;
+            selected_scope = containsString(selected_package_names, value);
+            continue;
+        }
+        if (value.len == 0 or (in_package_scope and !selected_scope)) continue;
+        switch (dependencyField(key, carch) orelse continue) {
+            .runtime => try appendOwnedValue(allocator, &runtime, value),
+            .build => try appendOwnedValue(allocator, &build, value),
+            .check => try appendOwnedValue(allocator, &check, value),
+            .optional => try appendOwnedValue(allocator, &optional, value),
+        }
+    }
+
+    const runtime_values = try runtime.toOwnedSlice(allocator);
+    errdefer freeValues(allocator, runtime_values);
+    const build_values = try build.toOwnedSlice(allocator);
+    errdefer freeValues(allocator, build_values);
+    const check_values = try check.toOwnedSlice(allocator);
+    errdefer freeValues(allocator, check_values);
+    const optional_values = try optional.toOwnedSlice(allocator);
+    errdefer freeValues(allocator, optional_values);
+
+    const parser = PkgbuildParser{ .allocator = allocator, .io = io };
+    const parsed_runtime = try dependencies.parse_dependencies(parser, runtime_values);
+    errdefer freeParsedDependencies(allocator, parsed_runtime);
+    const parsed_build = try dependencies.parse_dependencies(parser, build_values);
+    errdefer freeParsedDependencies(allocator, parsed_build);
+    const parsed_check = try dependencies.parse_dependencies(parser, check_values);
+    errdefer freeParsedDependencies(allocator, parsed_check);
+    return .{
+        .depends = runtime_values,
+        .make_depends = build_values,
+        .check_depends = check_values,
+        .opt_depends = optional_values,
+        .parsed_depends = parsed_runtime,
+        .parsed_make_depends = parsed_build,
+        .parsed_check_depends = parsed_check,
+    };
+}
+
+fn dependencyField(
+    key: []const u8,
+    carch: []const u8,
+) ?DependencyField {
+    inline for (.{
+        .{ "depends", DependencyField.runtime },
+        .{ "makedepends", DependencyField.build },
+        .{ "checkdepends", DependencyField.check },
+        .{ "optdepends", DependencyField.optional },
+    }) |entry| {
+        if (std.mem.eql(u8, key, entry[0])) return entry[1];
+        if (key.len == entry[0].len + carch.len + 1 and
+            std.mem.startsWith(u8, key, entry[0]) and
+            key[entry[0].len] == '_' and
+            std.mem.eql(u8, key[entry[0].len + 1 ..], carch)) return entry[1];
+    }
+    return null;
+}
+
+fn appendOwnedValue(
+    allocator: std.mem.Allocator,
+    values: *std.ArrayList([]const u8),
+    value: []const u8,
+) !void {
+    const owned = try allocator.dupe(u8, value);
+    values.append(allocator, owned) catch |err| {
+        allocator.free(owned);
+        return err;
+    };
+}
+
+fn containsString(values: []const []const u8, expected: []const u8) bool {
+    for (values) |value| if (std.mem.eql(u8, value, expected)) return true;
+    return false;
+}
+
+fn freeValueList(allocator: std.mem.Allocator, values: *std.ArrayList([]const u8)) void {
+    for (values.items) |value| allocator.free(value);
+    values.deinit(allocator);
+}
+
+fn freeValues(allocator: std.mem.Allocator, values: [][]const u8) void {
+    for (values) |value| allocator.free(value);
+    allocator.free(values);
+}
+
+fn freeParsedDependencies(
+    allocator: std.mem.Allocator,
+    parsed: []pkgbuild_parser.parsed_dep,
+) void {
+    for (parsed) |dependency| dependency.deinit(allocator);
+    allocator.free(parsed);
+}
+
 pub fn parse(allocator: std.mem.Allocator, content: []const u8) !Info {
     var package_base: ?[]u8 = null;
     errdefer if (package_base) |value| allocator.free(value);
@@ -325,6 +474,32 @@ test ".SRCINFO parser resolves split package members" {
     try std.testing.expect(info.contains("demo-suite"));
     try std.testing.expect(!info.contains("missing"));
     try std.testing.expectEqual(@as(usize, 2), info.package_names.len);
+}
+
+test ".SRCINFO dependency parser merges global selected and architecture scopes" {
+    const allocator = std.testing.allocator;
+    var metadata = try parseDependencyMetadata(allocator, std.testing.io,
+        \\pkgbase = demo-suite
+        \\    depends = global-runtime
+        \\    makedepends = cmake
+        \\    makedepends_x86_64 = architecture-tool
+        \\    makedepends_aarch64 = wrong-architecture
+        \\pkgname = demo-cli
+        \\    depends = cli-runtime>=2
+        \\    optdepends = cli-docs: documentation
+        \\pkgname = demo-ui
+        \\    depends = ui-runtime
+    , &.{"demo-cli"}, "x86_64");
+    defer metadata.deinit(allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), metadata.depends.len);
+    try std.testing.expectEqualStrings("global-runtime", metadata.depends[0]);
+    try std.testing.expectEqualStrings("cli-runtime", metadata.parsed_depends[1].name);
+    try std.testing.expectEqualStrings(">=", metadata.parsed_depends[1].operator);
+    try std.testing.expectEqual(@as(usize, 2), metadata.make_depends.len);
+    try std.testing.expectEqualStrings("architecture-tool", metadata.make_depends[1]);
+    try std.testing.expectEqual(@as(usize, 1), metadata.opt_depends.len);
+    try std.testing.expectEqualStrings("cli-docs: documentation", metadata.opt_depends[0]);
 }
 
 test ".SRCINFO writer preserves global package and architecture scopes" {

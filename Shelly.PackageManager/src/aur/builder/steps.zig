@@ -231,6 +231,9 @@ pub fn runStep(
         return error.PrivilegedPackageOperationUnsupported;
     if (exit_code != 0) {
         if (sandbox_enabled) writeSandboxFailureHint(self);
+        const message = try @import("../../shared/user_errors.zig").buildFailed(self.allocator, package_name, step_name, exit_code);
+        defer self.allocator.free(message);
+        operation.reportError(error.StepFailed, message, "build", exit_code, false);
         return error.StepFailed;
     }
     if (capture_pkgver) {
@@ -826,6 +829,9 @@ pub fn evaluateDynamicMetadata(
     if (self.active_log) |log| try log.ensureHealthy();
     if (exit_code != 0) {
         if (sandbox_enabled) writeSandboxFailureHint(self);
+        const message = try @import("../../shared/user_errors.zig").buildFailed(self.allocator, self.requested_names[0], "dynamic metadata evaluation", exit_code);
+        defer self.allocator.free(message);
+        operation.reportError(error.StepFailed, message, "build", exit_code, false);
         return error.StepFailed;
     }
 
@@ -998,6 +1004,7 @@ pub fn buildEnvironment(
             self.shellybuild_config.build.distcc_hosts
         else
             null,
+        .source_date_epoch = self.source_date_epoch,
         .ccache = self.shellybuild_config.build.ccache,
         .distcc = self.shellybuild_config.build.distcc,
     };

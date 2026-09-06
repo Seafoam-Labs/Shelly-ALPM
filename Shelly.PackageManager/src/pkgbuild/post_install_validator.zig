@@ -116,7 +116,7 @@ pub const PostInstallValidator = struct {
                 else
                     try std.fmt.allocPrint(
                         self.allocator,
-                        "'{s}' is invoked in {s}() — this fetches/executes external code outside pacman's control.",
+                        "'{s}' is invoked in {s}() — this fetches/executes external code outside Shelly's control.",
                         .{ tool, hook },
                     );
                 const dup_hook = try self.allocator.dupe(u8, hook);

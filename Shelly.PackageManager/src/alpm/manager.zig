@@ -9,6 +9,7 @@ const os_tool = @import("distribution-hooks/os_utilities.zig");
 const TransFlag = bindings.libalpm.TransFlag;
 const cachyos = @import("distribution-hooks/CachyOS/update_notice.zig");
 const operation_api = @import("operation_context");
+const user_errors = @import("../shared/user_errors.zig");
 
 const libalpm = bindings.libalpm; // typed aliases (Handle, Database, Config, ...)
 const rawLibalpm = bindings.libalpm.alpm;
@@ -168,7 +169,32 @@ pub const InitOptions = struct {
     use_root: bool = false,
     temp_root_path: ?[]const u8 = null,
     operation_context: ?*operation_api.OperationContext = null,
+    /// Explicit libalpm paths used when provisioning a new root. These are
+    /// applied after parsing pacman.conf so repository and signature policy is
+    /// retained while all mutable transaction state stays under the target.
+    root_directory: ?[]const u8 = null,
+    database_path: ?[]const u8 = null,
+    cache_directory: ?[]const u8 = null,
+    log_file: ?[]const u8 = null,
+    gpg_directory: ?[]const u8 = null,
 };
+
+fn applyInitPathOverrides(
+    config: *configuration.Configuration.Config,
+    options: InitOptions,
+) std.mem.Allocator.Error!void {
+    const allocator = config.arena.allocator();
+    if (options.root_directory) |value|
+        config.root_directory = try allocator.dupeSentinel(u8, value, 0);
+    if (options.database_path) |value|
+        config.database_path = try allocator.dupeSentinel(u8, value, 0);
+    if (options.cache_directory) |value|
+        config.cache_directory = try allocator.dupeSentinel(u8, value, 0);
+    if (options.log_file) |value|
+        config.log_file = try allocator.dupeSentinel(u8, value, 0);
+    if (options.gpg_directory) |value|
+        config.gpg_directory = try allocator.dupeSentinel(u8, value, 0);
+}
 
 pub const Manager = struct {
     handle: libalpm.Handle = null,
@@ -249,6 +275,7 @@ pub const Manager = struct {
         };
         errdefer self.config.deinitialize();
         errdefer self.sync_dbs.deinit(self.allocator);
+        applyInitPathOverrides(&self.config, options) catch return InitError.InitFailed;
         if (os_tool.prettyName(self.allocator, self.io())) |pretty_name| {
             defer self.allocator.free(pretty_name);
             if (std.ascii.eqlIgnoreCase("cachyos", pretty_name)) self.detected_cachyos = true;
@@ -935,7 +962,9 @@ pub const Manager = struct {
                 // Check for group name
                 const group_ptr = rawLibalpm.alpm_db_get_group(local_db, pkg.ptr) orelse {
                     const satisfier = rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(local_db), pkg.ptr) orelse {
-                        self.dispatcher.raiseError(.{ .message = "Failed to find package" });
+                        const message = std.fmt.allocPrint(self.allocator, "Could not remove \"{s}\" because it is not installed. Check the package name and try again.", .{pkg}) catch return TransactionError.OutOfMemory;
+                        defer self.allocator.free(message);
+                        self.dispatcher.raiseError(.{ .message = message });
                         return TransactionError.NoPackageFound;
                     };
                     package_pointers.append(self.allocator, satisfier) catch {
@@ -1544,8 +1573,8 @@ pub const Manager = struct {
     /// refreshes that re-initialize libalpm and re-apply the configuration.
     /// Hook directories are replaced with a nonexistent path because
     /// clearing the list falls back to libalpm's compiled-in default
-    /// directory. Intended for hermetic tests that commit transactions
-    /// against fixture roots and must not execute host system hooks.
+    /// directory. Intended for hermetic tests and initial root provisioning,
+    /// which must not execute host system hooks in a foreign or empty root.
     pub fn disable_transaction_hooks(self: *Manager) void {
         self.hooks_disabled = true;
         if (self.handle) |handle| {
@@ -2560,12 +2589,12 @@ pub const Manager = struct {
     }
 
     fn reportAllMirrorsFailed(self: *Manager, subject: []const u8, err: downloader.DownloadError) void {
-        const message = std.fmt.allocPrint(
-            self.allocator,
-            "All mirrors failed for {s}: {s}",
-            .{ subject, @errorName(err) },
-        ) catch {
-            self.dispatcher.raiseError(.{ .message = "All configured mirrors failed" });
+        const message = downloader.failureMessage(self.allocator, .{
+            .event_type = .Error,
+            .destination_path = subject,
+            .download_error = err,
+        }) catch {
+            self.dispatcher.raiseError(.{ .message = "Could not download the required files from any configured mirror. Check your internet connection and try again." });
             return;
         };
         defer self.allocator.free(message);
@@ -2884,12 +2913,12 @@ pub const Manager = struct {
                 });
             },
 
-            .Error => self.dispatcher.raiseError(.{
-                .message = if (event.download_error) |err|
-                    @errorName(err)
-                else
-                    "download failed",
-            }),
+            .Error => {
+                if (event.download_error) |err| if (err == error.Cancelled) return;
+                const message = downloader.failureMessage(self.allocator, event) catch return TransactionError.OutOfMemory;
+                defer self.allocator.free(message);
+                self.dispatcher.raiseError(.{ .message = message });
+            },
 
             .Skipped => {},
         }
@@ -3268,28 +3297,33 @@ pub const Manager = struct {
             .Ok => {},
             .Memory => try details.appendSlice(self.allocator, "Memory allocation failed.\n"),
             .System => try details.appendSlice(self.allocator, "System error.\n"),
-            .BadPerms => try details.appendSlice(self.allocator, "Bad permissions.\n"),
-            .NotAFile => try details.appendSlice(self.allocator, "Expected a file, did not receive a file. How did you mess this up?\n"),
-            .NotADir => try details.appendSlice(self.allocator, "Expected a directory, did not receive a directory. I'm sorry what?\n"),
-            .WrongArgs => try details.appendSlice(self.allocator, "Wrong or NULL arguments\n"),
-            .DiskSpace => try details.appendSlice(self.allocator, "Not enough disk space\n Why is your disk so small?\n"),
-            .HandleNull => try details.appendSlice(self.allocator, "Lost the handle. Kinda like a plot but more important.\n"),
-            .HandleNotNull => try details.appendSlice(self.allocator, "Handle is not null. Normally you would want this but at this point I'm unsure.\n"),
-            .HandleLock => try details.appendSlice(self.allocator, "You have a db.lck. It's at /var/lib/pacman/db.lck. You should probably delete that.\n"),
+            .BadPerms => try details.appendSlice(self.allocator, "Could not access the package database or required files. Check that you have permission to access them.\n"),
+            .NotAFile => try details.appendSlice(self.allocator, "Expected a file at the supplied path. Check the path and try again.\n"),
+            .NotADir => try details.appendSlice(self.allocator, "Expected a directory at the supplied path. Check the path and try again.\n"),
+            .WrongArgs => try details.appendSlice(self.allocator, "Could not start the package operation because a required argument is missing or invalid.\n"),
+            .DiskSpace => try details.appendSlice(self.allocator, "There is not enough free space to continue. Free up space on the destination filesystem, then try again.\n"),
+            .HandleNull => try details.appendSlice(self.allocator, "Could not access the package database because it has not been initialized.\n"),
+            .HandleNotNull => try details.appendSlice(self.allocator, "Could not initialize the package database because it is already open.\n"),
+            .HandleLock => {
+                const message = try user_errors.databaseLocked(self.allocator, self.config.database_path);
+                defer self.allocator.free(message);
+                try details.appendSlice(self.allocator, message);
+                try details.appendSlice(self.allocator, "\n");
+            },
             .DbOpen => try details.appendSlice(self.allocator, "Failed to open the database.\n"),
             .DbCreate => try details.appendSlice(self.allocator, "Failed to create the database.\n"),
-            .DbNull => try details.appendSlice(self.allocator, "Database is null.\n"),
-            .DbNotNull => try details.appendSlice(self.allocator, "Database is not null.\n"),
+            .DbNull => try details.appendSlice(self.allocator, "Could not access the package database because it has not been opened.\n"),
+            .DbNotNull => try details.appendSlice(self.allocator, "Could not open the package database because it is already registered.\n"),
             .DbNotFound => try details.appendSlice(self.allocator, "Database not found.\n"),
             .DbInvalid => try details.appendSlice(self.allocator, "Database is invalid.\n"),
-            .DbInvalidSig => try details.appendSlice(self.allocator, "Database signature is invalid.\n"),
+            .DbInvalidSig => try details.appendSlice(self.allocator, "Could not verify the repository database signature. Refresh the package signing keys and package lists. If verification still fails, contact the repository.\n"),
             .DbVersion => try details.appendSlice(self.allocator, "Database version is invalid.\n"),
             .DbWrite => try details.appendSlice(self.allocator, "Failed to write to the database.\n"),
             .DbRemove => try details.appendSlice(self.allocator, "Failed to remove the database.\n"),
             .ServerBadUrl => try details.appendSlice(self.allocator, "Server URL is invalid.\n"),
             .ServerNone => try details.appendSlice(self.allocator, "No server found.\n"),
-            .TransNotNull => try details.appendSlice(self.allocator, "Transaction is not null.\n"),
-            .TransNull => try details.appendSlice(self.allocator, "Transaction is null.\n"),
+            .TransNotNull => try details.appendSlice(self.allocator, "Could not start the package operation because another transaction is already active.\n"),
+            .TransNull => try details.appendSlice(self.allocator, "Could not continue because there is no active package transaction.\n"),
             .TransDupTarget => try details.appendSlice(self.allocator, "Transaction target is duplicated.\n"),
             .TransDupFilename => try details.appendSlice(self.allocator, "Transaction filename is duplicated.\n"),
             .TransNotInitialized => try details.appendSlice(self.allocator, "Transaction is not initialized.\n"),
@@ -3298,11 +3332,11 @@ pub const Manager = struct {
             .TransType => try details.appendSlice(self.allocator, "Transaction type is invalid.\n"),
             .TransNotLocked => try details.appendSlice(self.allocator, "Transaction is not locked.\n"),
             .TransHookFailed => try details.appendSlice(self.allocator, "Transaction hook failed.\n"),
-            .PkgNotFound => try details.appendSlice(self.allocator, "Package not found.\n"),
+            .PkgNotFound => try details.appendSlice(self.allocator, "Could not find the requested package in the selected package sources. Check the package name or search for it in another source.\n"),
             .PkgIgnored => try details.appendSlice(self.allocator, "Package ignored.\n"),
             .PkgInvalid => try details.appendSlice(self.allocator, "Package is invalid.\n"),
             .PkgInvalidChecksum => try details.appendSlice(self.allocator, "Package checksum is invalid.\n"),
-            .PkgInvalidSig => try details.appendSlice(self.allocator, "Package signature is invalid.\n"),
+            .PkgInvalidSig => try details.appendSlice(self.allocator, "Could not verify the package signature. Refresh the package signing keys and download the package again. If verification still fails, contact the package source.\n"),
             .PkgMissingSig => try details.appendSlice(self.allocator, "Package signature is missing.\n"),
             .PkgOpen => try details.appendSlice(self.allocator, "Failed to open package.\n"),
             .PkgCantRemove => try details.appendSlice(self.allocator, "Failed to remove package.\n"),
@@ -3318,8 +3352,9 @@ pub const Manager = struct {
             },
             .PkgInvalidArch => try details.appendSlice(self.allocator, "Package architecture is invalid.\n"),
             .SigMissing => try details.appendSlice(self.allocator, "Signature is missing.\n"),
-            .SigInvalid => try details.appendSlice(self.allocator, "Signature is invalid.\n"),
+            .SigInvalid => try details.appendSlice(self.allocator, "Could not verify the signature. Refresh the package signing keys and download the file again. If verification still fails, contact the package source.\n"),
             .UnsatisfiedDeps => {
+                if (data_ptr == null) try details.appendSlice(self.allocator, "Could not continue because a required dependency is unavailable. Review the package dependencies and try again.\n");
                 var node = data_ptr;
                 while (node != null) : (node = node.?.next) {
                     const data = node.?.data orelse continue;
@@ -3327,10 +3362,19 @@ pub const Manager = struct {
                     const target = spanC(miss.target) orelse "unknown";
                     const dep_str = rawLibalpm.alpm_dep_compute_string(miss.depend);
                     defer if (dep_str != null) std.c.free(dep_str);
-                    try details.print(self.allocator, "{s} => {s}\n", .{ target, std.mem.span(dep_str) });
+                    const dependency = spanC(dep_str) orelse "an unknown dependency";
+                    const removing = if (self.dispatcher.operation) |operation| operation.envelope.kind == .remove else false;
+                    if (removing) {
+                        try details.print(self.allocator, "Could not remove the selected packages because \"{s}\" still requires \"{s}\". Review the dependent packages before continuing.\n", .{ target, dependency });
+                    } else if (spanC(miss.causingpkg)) |cause| {
+                        try details.print(self.allocator, "Could not install \"{s}\" because it would remove a package that provides \"{s}\", which \"{s}\" requires. Review the affected packages before continuing.\n", .{ cause, dependency, target });
+                    } else {
+                        try details.print(self.allocator, "Could not install \"{s}\" because it requires \"{s}\", which is unavailable. Refresh the package lists and try again.\n", .{ target, dependency });
+                    }
                 }
             },
             .ConflictingDeps => {
+                if (data_ptr == null) try details.appendSlice(self.allocator, "The selected packages cannot be installed together. Review which packages you want to keep before continuing.\n");
                 var node = data_ptr;
                 while (node != null) : (node = node.?.next) {
                     const data = node.?.data orelse continue;
@@ -3340,29 +3384,34 @@ pub const Manager = struct {
                     if (conflict.ptr.reason) |rp| {
                         const computed = rawLibalpm.alpm_dep_compute_string(rp);
                         defer if (computed != null) std.c.free(computed);
-                        try details.print(self.allocator, "{s} conflicts with {s} because of {s}\n", .{ pkg1_name, pkg2_name, std.mem.span(computed) });
+                        try details.print(self.allocator, "\"{s}\" cannot be installed alongside \"{s}\" (conflict: {s}). Review which package you want to keep before continuing.\n", .{ pkg1_name, pkg2_name, std.mem.span(computed) });
                     } else {
-                        try details.print(self.allocator, "{s} conflicts with {s}\n", .{ pkg1_name, pkg2_name });
+                        try details.print(self.allocator, "\"{s}\" cannot be installed alongside \"{s}\". Review which package you want to keep before continuing.\n", .{ pkg1_name, pkg2_name });
                     }
                 }
             },
             .FileConflicts => {
+                if (data_ptr == null) try details.appendSlice(self.allocator, "Could not install the selected packages because their files conflict. Review the conflicting files before replacing or removing them.\n");
                 var node = data_ptr;
                 while (node != null) : (node = node.?.next) {
                     const data = node.?.data orelse continue;
                     const fc: *rawLibalpm.alpm_fileconflict_t = @ptrCast(@alignCast(data));
                     const target = spanC(fc.target) orelse "unknown";
                     const file = spanC(fc.file) orelse "";
-                    try details.print(self.allocator, "{s} in file {s}\n", .{ target, file });
+                    if (fc.type == rawLibalpm.ALPM_FILECONFLICT_TARGET) {
+                        try details.print(self.allocator, "\"{s}\" and \"{s}\" both install \"{s}\". Review which package you want to keep before continuing.\n", .{ target, spanC(fc.ctarget) orelse "another package", file });
+                    } else {
+                        try details.print(self.allocator, "Could not install \"{s}\" because \"{s}\" already exists. Check which package owns this file before replacing or removing it.\n", .{ target, file });
+                    }
                 }
             },
-            .DownloadFailed => try details.appendSlice(self.allocator, "Download failed.\n"),
+            .DownloadFailed => try details.appendSlice(self.allocator, "Could not download the required files. Check your internet connection and try again. If the problem continues, the server may be unavailable.\n"),
             .Gpgme => try details.appendSlice(self.allocator, "Gpgme error.\n"),
             .ExternalDownload => try details.appendSlice(self.allocator, "External download failed.\n"),
             .SandboxFailed => try details.appendSlice(self.allocator, "Sandbox failed.\n"),
         }
 
-        const full_error = try std.fmt.allocPrint(self.allocator, "{s}\n{s}", .{ error_msg, details.items });
+        const full_error = try std.fmt.allocPrint(self.allocator, "{s}\nTechnical details: {s}", .{ details.items, error_msg });
         defer self.allocator.free(full_error);
         self.dispatcher.raiseError(.{ .message = full_error });
     }
@@ -4770,6 +4819,7 @@ test "onDownloadEvent does not duplicate progress when a common operation is att
 
 test "onDownloadEvent reports concrete and fallback errors and ignores skipped events" {
     var mgr: Manager = undefined;
+    mgr.allocator = testing.allocator;
     mgr.dispatcher = events.Dispatcher.init(testing.allocator);
     defer mgr.dispatcher.deinit();
 
@@ -4790,10 +4840,10 @@ test "onDownloadEvent reports concrete and fallback errors and ignores skipped e
         .event_type = .Error,
         .download_error = downloader.DownloadError.NetworkError,
     });
-    try testing.expectEqualStrings("NetworkError", error_cap.text());
+    try testing.expect(std.mem.indexOf(u8, error_cap.text(), "Technical details: NetworkError") != null);
 
     Manager.onDownloadEvent(@ptrCast(&mgr), .{ .event_type = .Error });
-    try testing.expectEqualStrings("download failed", error_cap.text());
+    try testing.expect(std.mem.startsWith(u8, error_cap.text(), "Could not download"));
 
     error_cap.len = 0;
     Manager.onDownloadEvent(@ptrCast(&mgr), .{
@@ -5027,6 +5077,7 @@ fn newErrorManager() Manager {
     var mgr: Manager = undefined;
     mgr.allocator = testing.allocator;
     mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    mgr.config.database_path = "/var/lib/pacman/";
     return mgr;
 }
 
@@ -5057,11 +5108,10 @@ test "handleErrorMessage emits the expected database lock error" {
 
     try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.HandleLock), null);
 
-    try testing.expectEqualStrings(
-        "unable to lock database\n" ++
-            "You have a db.lck. It's at /var/lib/pacman/db.lck. You should probably delete that.\n",
-        cap.text(),
-    );
+    try testing.expect(std.mem.startsWith(u8, cap.text(), "Could not start the package operation because the package database is locked."));
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Lock file: /var/lib/pacman/db.lck") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "sudo rm -- '/var/lib/pacman/db.lck'") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "If no package manager is running") != null);
 }
 
 test "handleErrorMessage handles the Ok error without details" {
@@ -5196,7 +5246,7 @@ test "handleErrorMessage formats populated unsatisfied dependency details" {
     try testing.expect(std.mem.indexOf(
         u8,
         cap.text(),
-        "target-package => libexample>=2\n",
+        "Could not install \"target-package\" because it requires \"libexample>=2\", which is unavailable.",
     ) != null);
 }
 
@@ -5224,7 +5274,7 @@ test "handleErrorMessage formats populated file conflict details" {
     try testing.expect(std.mem.indexOf(
         u8,
         cap.text(),
-        "target-package in file /usr/bin/example\n",
+        "Could not install \"target-package\" because \"/usr/bin/example\" already exists. Check which package owns this file before replacing or removing it.\n",
     ) != null);
 }
 
@@ -5257,28 +5307,28 @@ test "handleErrorMessage emits descriptions for every scalar libalpm error" {
     const cases = [_]Case{
         .{ .err = .Memory, .detail = "Memory allocation failed." },
         .{ .err = .System, .detail = "System error." },
-        .{ .err = .BadPerms, .detail = "Bad permissions." },
-        .{ .err = .NotAFile, .detail = "Expected a file, did not receive a file." },
-        .{ .err = .NotADir, .detail = "Expected a directory, did not receive a directory." },
-        .{ .err = .WrongArgs, .detail = "Wrong or NULL arguments" },
-        .{ .err = .DiskSpace, .detail = "Not enough disk space" },
-        .{ .err = .HandleNull, .detail = "Lost the handle." },
-        .{ .err = .HandleNotNull, .detail = "Handle is not null." },
-        .{ .err = .HandleLock, .detail = "You have a db.lck." },
+        .{ .err = .BadPerms, .detail = "Could not access the package database or required files. Check that you have permission to access them." },
+        .{ .err = .NotAFile, .detail = "Expected a file at the supplied path." },
+        .{ .err = .NotADir, .detail = "Expected a directory at the supplied path." },
+        .{ .err = .WrongArgs, .detail = "Could not start the package operation because a required argument is missing or invalid." },
+        .{ .err = .DiskSpace, .detail = "There is not enough free space" },
+        .{ .err = .HandleNull, .detail = "Could not access the package database because it has not been initialized." },
+        .{ .err = .HandleNotNull, .detail = "Could not initialize the package database because it is already open." },
+        .{ .err = .HandleLock, .detail = "Lock file: /var/lib/pacman/db.lck" },
         .{ .err = .DbOpen, .detail = "Failed to open the database." },
         .{ .err = .DbCreate, .detail = "Failed to create the database." },
-        .{ .err = .DbNull, .detail = "Database is null." },
-        .{ .err = .DbNotNull, .detail = "Database is not null." },
+        .{ .err = .DbNull, .detail = "Could not access the package database because it has not been opened." },
+        .{ .err = .DbNotNull, .detail = "Could not open the package database because it is already registered." },
         .{ .err = .DbNotFound, .detail = "Database not found." },
         .{ .err = .DbInvalid, .detail = "Database is invalid." },
-        .{ .err = .DbInvalidSig, .detail = "Database signature is invalid." },
+        .{ .err = .DbInvalidSig, .detail = "Could not verify the repository database signature. Refresh the package signing keys and package lists. If verification still fails, contact the repository." },
         .{ .err = .DbVersion, .detail = "Database version is invalid." },
         .{ .err = .DbWrite, .detail = "Failed to write to the database." },
         .{ .err = .DbRemove, .detail = "Failed to remove the database." },
         .{ .err = .ServerBadUrl, .detail = "Server URL is invalid." },
         .{ .err = .ServerNone, .detail = "No server found." },
-        .{ .err = .TransNotNull, .detail = "Transaction is not null." },
-        .{ .err = .TransNull, .detail = "Transaction is null." },
+        .{ .err = .TransNotNull, .detail = "Could not start the package operation because another transaction is already active." },
+        .{ .err = .TransNull, .detail = "Could not continue because there is no active package transaction." },
         .{ .err = .TransDupTarget, .detail = "Transaction target is duplicated." },
         .{ .err = .TransDupFilename, .detail = "Transaction filename is duplicated." },
         .{ .err = .TransNotInitialized, .detail = "Transaction is not initialized." },
@@ -5287,18 +5337,18 @@ test "handleErrorMessage emits descriptions for every scalar libalpm error" {
         .{ .err = .TransType, .detail = "Transaction type is invalid." },
         .{ .err = .TransNotLocked, .detail = "Transaction is not locked." },
         .{ .err = .TransHookFailed, .detail = "Transaction hook failed." },
-        .{ .err = .PkgNotFound, .detail = "Package not found." },
+        .{ .err = .PkgNotFound, .detail = "Could not find the requested package in the selected package sources. Check the package name or search for it in another source." },
         .{ .err = .PkgIgnored, .detail = "Package ignored." },
         .{ .err = .PkgInvalid, .detail = "Package is invalid." },
         .{ .err = .PkgInvalidChecksum, .detail = "Package checksum is invalid." },
-        .{ .err = .PkgInvalidSig, .detail = "Package signature is invalid." },
+        .{ .err = .PkgInvalidSig, .detail = "Could not verify the package signature. Refresh the package signing keys and download the package again. If verification still fails, contact the package source." },
         .{ .err = .PkgMissingSig, .detail = "Package signature is missing." },
         .{ .err = .PkgOpen, .detail = "Failed to open package." },
         .{ .err = .PkgCantRemove, .detail = "Failed to remove package." },
         .{ .err = .PkgInvalidArch, .detail = "Package architecture is invalid." },
         .{ .err = .SigMissing, .detail = "Signature is missing." },
-        .{ .err = .SigInvalid, .detail = "Signature is invalid." },
-        .{ .err = .DownloadFailed, .detail = "Download failed." },
+        .{ .err = .SigInvalid, .detail = "Could not verify the signature. Refresh the package signing keys and download the file again. If verification still fails, contact the package source." },
+        .{ .err = .DownloadFailed, .detail = "Could not download the required files. Check your internet connection and try again. If the problem continues, the server may be unavailable." },
         .{ .err = .Gpgme, .detail = "Gpgme error." },
         .{ .err = .ExternalDownload, .detail = "External download failed." },
         .{ .err = .SandboxFailed, .detail = "Sandbox failed." },
@@ -5452,4 +5502,61 @@ fn choiceResponder(data: ?*anyopaque, args: events.QuestionArgs) void {
     _ = args;
     const ctx: *ChoiceResponder = @ptrCast(@alignCast(data));
     ctx.disp.respond(ctx.io, .{ .choice = ctx.choice });
+}
+
+test "ALPM init path overrides replace parsed host paths for target provisioning" {
+    const arena = try testing.allocator.create(std.heap.ArenaAllocator);
+    arena.* = .init(testing.allocator);
+    var config = try configuration.Configuration.Config.initialize_with_defaults(arena);
+    defer config.deinitialize();
+
+    try applyInitPathOverrides(&config, .{
+        .root_directory = "/target",
+        .database_path = "/target/var/lib/pacman",
+        .cache_directory = "/target/var/cache/pacman/pkg",
+        .log_file = "/target/var/log/pacman.log",
+        .gpg_directory = "/target/etc/pacman.d/gnupg",
+    });
+
+    try testing.expectEqualStrings("/target", config.root_directory);
+    try testing.expectEqualStrings("/target/var/lib/pacman", config.database_path);
+    try testing.expectEqualStrings("/target/var/cache/pacman/pkg", config.cache_directory);
+    try testing.expectEqualStrings("/target/var/log/pacman.log", config.log_file);
+    try testing.expectEqualStrings("/target/etc/pacman.d/gnupg", config.gpg_directory);
+}
+
+test "database lock error uses the configured database directory" {
+    var mgr = newErrorManager();
+    defer mgr.dispatcher.deinit();
+    mgr.config.database_path = "/custom/pacman database/";
+    var cap = ErrorCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{ .function = captureError, .data = @ptrCast(&cap) });
+    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.HandleLock), null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Lock file: /custom/pacman database/db.lck") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "sudo rm -- '/custom/pacman database/db.lck'") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "/var/lib/pacman") == null);
+}
+
+test "dependency errors explain the dependent package during removal" {
+    var mgr = newErrorManager();
+    defer mgr.dispatcher.deinit();
+    var context = operation_api.OperationContext.init(testing.allocator, std.testing.io);
+    defer context.deinit();
+    var operation = context.begin(.{ .backend = .alpm, .kind = .remove, .subject = "libexample" });
+    defer operation.finish(.failed);
+    mgr.dispatcher.operation = &operation;
+    var cap = ErrorCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{ .function = captureError, .data = @ptrCast(&cap) });
+    var dependency: rawLibalpm.alpm_depend_t = .{
+        .name = @ptrCast(@constCast("libexample")),
+        .mod = @intCast(rawLibalpm.ALPM_DEP_MOD_ANY),
+    };
+    var missing: rawLibalpm.alpm_depmissing_t = .{
+        .target = @ptrCast(@constCast("installed-app")),
+        .depend = &dependency,
+    };
+    var node: rawLibalpm.alpm_list_t = .{ .data = @ptrCast(&missing) };
+    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.UnsatisfiedDeps), &node);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Could not remove the selected packages because \"installed-app\" still requires \"libexample\"") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Could not install") == null);
 }

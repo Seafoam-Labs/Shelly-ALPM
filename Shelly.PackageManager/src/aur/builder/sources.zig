@@ -154,10 +154,35 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
         if (source.source.kind == .git) {
             try materializeGitSource(self, operation, source.source, source.destination, materialized);
         } else {
-            try std.Io.Dir.copyFile(.cwd(), source.destination, .cwd(), materialized, self.io, .{});
-            if (source_spec.isExtractableArchive(source.source.name) and
-                !source_spec.containsString(package_build.no_extract orelse &.{}, source.source.name))
-                try extractSourceArchive(self, operation, source.destination, extraction_staging);
+            const no_extract = source_spec.containsString(
+                package_build.no_extract orelse &.{},
+                source.source.name,
+            );
+            if (no_extract) {
+                try std.Io.Dir.copyFile(.cwd(), source.destination, .cwd(), materialized, self.io, .{});
+                continue;
+            }
+
+            // Extract before materializing the raw payload. An extensionless
+            // renamed source may have the same name as the archive's root
+            // directory; in that case the extracted entry owns the path and
+            // the raw archive must not overwrite it.
+            _ = std.Io.Dir.cwd().statFile(self.io, materialized, .{ .follow_symlinks = false }) catch |err| switch (err) {
+                error.FileNotFound => {
+                    const extracted = try extractSourceArchiveIfRecognized(
+                        self,
+                        operation,
+                        source.destination,
+                        extraction_staging,
+                    );
+                    if (!extracted) try decompressStandaloneSource(self, operation, source, prepared, extraction_staging);
+                    if (!extracted or !pathExistsNoFollow(self.io, materialized))
+                        try std.Io.Dir.copyFile(.cwd(), source.destination, .cwd(), materialized, self.io, .{});
+                    continue;
+                },
+                else => return err,
+            };
+            return error.UnsafeSourceArchivePath;
         }
     }
     // Only a fully prepared staging tree is committed. Sources are
@@ -643,19 +668,75 @@ fn decompressSignedPayload(
     if (term != .exited or term.exited != 0) return error.SourceDecompressionFailed;
 }
 
-fn extractSourceArchive(
+fn decompressStandaloneSource(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: *const source_spec.PreparedSource,
+    prepared: []const source_spec.PreparedSource,
+    destination_root: []const u8,
+) !void {
+    const compression = (try archive.StandaloneCompression.fromFile(self.io, source.destination)) orelse return;
+    const output_name = compression.outputName(source.source.name) orelse return;
+    const relative = try archive.normalizeEntryPath(self.allocator, output_name);
+    defer self.allocator.free(relative);
+    // Reserve source aliases even when they occur later or are in noextract.
+    for (prepared) |other| {
+        if (std.mem.eql(u8, relative, other.source.name)) return error.UnsafeSourceArchivePath;
+    }
+    const destination = try std.fs.path.join(self.allocator, &.{ destination_root, relative });
+    defer self.allocator.free(destination);
+    try ensureSafeArchivePath(self, destination_root, relative, false);
+    try rejectExistingDestination(self.io, destination);
+
+    decompressStandalonePayload(self, operation, source.destination, destination, compression) catch |err| {
+        if (err == error.SourceDecompressionFailed or err == error.SourcePayloadTooLarge) {
+            const reason: []const u8 = if (err == error.SourcePayloadTooLarge)
+                "The decompressed file exceeds the 4 GiB source size limit."
+            else
+                "The compressed file is damaged or incomplete. Download it again and retry the build.";
+            const message = try std.fmt.allocPrint(self.allocator, "Could not decompress source \"{s}\". {s}", .{ source.source.name, reason });
+            defer self.allocator.free(message);
+            operation.reportError(err, message, "sources", null, false);
+        }
+        return err;
+    };
+}
+
+fn decompressStandalonePayload(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source_path: []const u8,
+    destination: []const u8,
+    compression: archive.StandaloneCompression,
+) !void {
+    try operation.checkCancelled();
+    var reader = try archive.CompressedReader.init(self.allocator, self.io, source_path, compression);
+    defer reader.deinit();
+    var output = try std.Io.Dir.cwd().createFile(self.io, destination, .{ .exclusive = true });
+    defer output.close(self.io);
+    errdefer std.Io.Dir.cwd().deleteFile(self.io, destination) catch {};
+    var writer = output.writer(self.io, &.{});
+    try reader.copyTo(&writer.interface, 4 * 1024 * 1024 * 1024, operation);
+}
+
+fn extractSourceArchiveIfRecognized(
     self: *PackageBuilder,
     operation: *op_context.Operation,
     archive_path: []const u8,
     destination_root: []const u8,
-) !void {
+) !bool {
     const DirectoryTimestamp = struct {
         path: []u8,
         mtime: std.Io.Timestamp,
     };
 
-    var reader = try archive.Reader.initAll(self.allocator, archive_path);
+    var reader = (try archive.Reader.initAllIfRecognized(self.allocator, archive_path)) orelse return false;
     defer reader.deinit();
+    const first_entry = switch (try reader.probe()) {
+        .not_archive => return false,
+        .archive => |entry| entry,
+    };
+    if (reader.isCompressedPlainFile()) return false;
     var directory_timestamps: std.ArrayList(DirectoryTimestamp) = .empty;
     defer {
         for (directory_timestamps.items) |timestamp| self.allocator.free(timestamp.path);
@@ -664,13 +745,15 @@ fn extractSourceArchive(
     var buffer: [64 * 1024]u8 = undefined;
     var entry_count: usize = 0;
     var total_size: u64 = 0;
-    while (try reader.next()) |entry| {
+    var next_entry = first_entry;
+    while (next_entry) |entry| {
         try operation.checkCancelled();
         entry_count += 1;
         if (entry_count > 1_000_000 or entry.size > 4 * 1024 * 1024 * 1024)
             return error.SourceArchiveTooLarge;
         if (isArchiveRootDirectoryEntry(entry.kind, entry.path)) {
             try reader.skip();
+            next_entry = try reader.next();
             continue;
         }
         const relative = try archive.normalizeEntryPath(self.allocator, entry.path);
@@ -691,7 +774,7 @@ fn extractSourceArchive(
             },
             .regular_file => {
                 try ensureSafeArchivePath(self, destination_root, relative, false);
-                try rejectSymlinkDestination(self.io, destination);
+                try rejectExistingDestination(self.io, destination);
                 var output = try std.Io.Dir.cwd().createFile(self.io, destination, .{
                     .truncate = true,
                     .permissions = std.Io.File.Permissions.fromMode(entry.permissions & 0o777),
@@ -731,6 +814,7 @@ fn extractSourceArchive(
             },
             .other => return error.UnsupportedSourceArchiveEntry,
         }
+        next_entry = try reader.next();
     }
 
     // Creating children changes directory mtimes. Restore recorded directory
@@ -742,6 +826,12 @@ fn extractSourceArchive(
             .modify_timestamp = .{ .new = timestamp.mtime },
         });
     }
+    return true;
+}
+
+fn pathExistsNoFollow(io: std.Io, path: []const u8) bool {
+    _ = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch return false;
+    return true;
 }
 
 fn isArchiveRootDirectoryEntry(kind: archive.EntryKind, path: []const u8) bool {
@@ -821,14 +911,6 @@ fn raiseSourceMessage(self: *PackageBuilder, package_build: *const PackageBuild,
         .stage = "sources",
         .message = package_build.pkg_name orelse message,
     });
-}
-
-fn rejectSymlinkDestination(io: std.Io, path: []const u8) !void {
-    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
-        error.FileNotFound => return,
-        else => return err,
-    };
-    if (stat.kind == .sym_link or stat.kind == .directory) return error.UnsafeSourceArchivePath;
 }
 
 fn rejectExistingDestination(io: std.Io, path: []const u8) !void {

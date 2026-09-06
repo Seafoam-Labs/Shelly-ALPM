@@ -28,7 +28,7 @@ pub const Failure = struct {
 
 pub const Outcome = union(enum) {
     help: *const spec.Command,
-    version,
+    version: GlobalOptions,
     dispatch: Invocation,
     failure: Failure,
 };
@@ -123,7 +123,7 @@ pub fn parse(
     }
 
     if (help_requested) return .{ .help = command };
-    if (version_requested) return .version;
+    if (version_requested) return .{ .version = globals };
 
     if (command.isBranch and positionals.items.len == 0) {
         if (manifest.findDefaultChild(command)) |default_child| command = default_child;
@@ -360,6 +360,11 @@ test "command-local AUR install version does not trigger program version output"
 
     const program_version = try parse(arena.allocator(), &manifest, &.{"--version"});
     try std.testing.expect(program_version == .version);
+    try std.testing.expect(!program_version.version.json);
+
+    const machine_version = try parse(arena.allocator(), &manifest, &.{ "--version", "--json" });
+    try std.testing.expect(machine_version == .version);
+    try std.testing.expect(machine_version.version.json);
 
     const install_version = try parse(arena.allocator(), &manifest, &.{
         "install",

@@ -30,7 +30,7 @@ fn runTranslated(
     const outcome = try parser.parse(context.allocator, manifest, arguments);
     return switch (outcome) {
         .help => |command| renderHelp(context, manifest, command),
-        .version => printVersion(context, manifest),
+        .version => |globals| printVersion(context, manifest, globals.json),
         .dispatch => |invocation| context.dispatch(&invocation),
         .failure => |failure| renderFailure(context, manifest, failure),
     };
@@ -58,8 +58,52 @@ fn renderHelp(
     return 0;
 }
 
-fn printVersion(context: *runtime.RuntimeContext, manifest: *const spec.Manifest) !u8 {
-    try context.stdout.print("{s}\n", .{manifest.informationalVersion});
+const AutomationCapability = struct {
+    name: []const u8,
+    version: u32,
+};
+
+const automation_capabilities = [_]AutomationCapability{
+    .{ .name = "remora.build-backend", .version = 1 },
+    .{ .name = "build.review", .version = 1 },
+    .{ .name = "build.result", .version = 1 },
+    .{ .name = "build.isolated", .version = 1 },
+    .{ .name = "build.package-destination", .version = 1 },
+    .{ .name = "operation.cancellation", .version = 1 },
+    .{ .name = "resolve.package-base", .version = 1 },
+};
+
+fn printVersion(
+    context: *runtime.RuntimeContext,
+    manifest: *const spec.Manifest,
+    json_output: bool,
+) !u8 {
+    if (!json_output) {
+        try context.stdout.print("{s}\n", .{manifest.informationalVersion});
+        return 0;
+    }
+
+    var json: std.json.Stringify = .{ .writer = context.stdout };
+    try json.beginObject();
+    try json.objectField("schemaVersion");
+    try json.write(1);
+    try json.objectField("name");
+    try json.write(manifest.binary);
+    try json.objectField("version");
+    try json.write(manifest.version);
+    try json.objectField("capabilities");
+    try json.beginArray();
+    for (automation_capabilities) |capability| {
+        try json.beginObject();
+        try json.objectField("name");
+        try json.write(capability.name);
+        try json.objectField("version");
+        try json.write(capability.version);
+        try json.endObject();
+    }
+    try json.endArray();
+    try json.endObject();
+    try context.stdout.writeByte('\n');
     return 0;
 }
 
@@ -205,6 +249,45 @@ test "no arguments dispatch upgrade all through the injected runtime" {
 
     try std.testing.expectEqual(@as(u8, 37), try run(&context, &.{}));
     try std.testing.expect(observed);
+}
+
+test "version remains human-readable unless JSON capabilities are requested" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+
+    try std.testing.expectEqual(@as(u8, 0), try run(&context, &.{"--version"}));
+    const manifest = try spec.Manifest.load(arena.allocator());
+    const expected_plain = try std.fmt.allocPrint(arena.allocator(), "{s}\n", .{manifest.informationalVersion});
+    try std.testing.expectEqualStrings(expected_plain, stdout.writer.buffered());
+    try std.testing.expectEqual(@as(usize, 0), stderr.writer.buffered().len);
+
+    stdout.writer.end = 0;
+    try std.testing.expectEqual(@as(u8, 0), try run(&context, &.{ "--version", "--json" }));
+    var parsed = try std.json.parseFromSlice(std.json.Value, arena.allocator(), stdout.writer.buffered(), .{});
+    defer parsed.deinit();
+    try std.testing.expect(parsed.value == .object);
+    const object = parsed.value.object;
+    try std.testing.expectEqual(@as(i64, 1), object.get("schemaVersion").?.integer);
+    try std.testing.expectEqualStrings("shelly", object.get("name").?.string);
+    try std.testing.expectEqualStrings(manifest.version, object.get("version").?.string);
+    const capabilities = object.get("capabilities").?.array.items;
+    try std.testing.expectEqual(automation_capabilities.len, capabilities.len);
+    try std.testing.expectEqualStrings(
+        "remora.build-backend",
+        capabilities[0].object.get("name").?.string,
+    );
+    try std.testing.expectEqual(@as(i64, 1), capabilities[0].object.get("version").?.integer);
+    try std.testing.expectEqual(@as(usize, 0), stderr.writer.buffered().len);
 }
 
 test "help and parser errors bypass dispatch" {

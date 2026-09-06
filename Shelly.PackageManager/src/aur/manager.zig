@@ -89,9 +89,11 @@ const PreparedPackage = struct {
     new_pkgbuild: []u8,
     digest: [std.crypto.hash.sha2.Sha256.digest_length]u8,
     info: PkgbuildInfo,
+    dependency_metadata: ?srcinfo.DependencyMetadata = null,
     validation_results: PkgbuildValidation,
 
     fn deinit(self: *PreparedPackage, allocator: std.mem.Allocator) void {
+        if (self.dependency_metadata) |*metadata| metadata.deinit(allocator);
         self.validation_results.deinit(allocator);
         self.info.deinit(allocator);
         allocator.free(self.package_name);
@@ -105,6 +107,25 @@ const PreparedPackage = struct {
         self.* = undefined;
     }
 };
+
+fn dependencyPlanningInfo(prepared: *const PreparedPackage) PkgbuildInfo {
+    var info = prepared.info;
+    if (prepared.dependency_metadata) |metadata| {
+        info.depends = metadata.depends;
+        info.make_depends = metadata.make_depends;
+        info.check_depends = metadata.check_depends;
+        info.opt_depends = metadata.opt_depends;
+        info.parsed_depends = metadata.parsed_depends;
+        info.parsed_make_depends = metadata.parsed_make_depends;
+        info.parsed_check_depends = metadata.parsed_check_depends;
+    }
+    return info;
+}
+
+fn dependencyOptionalValues(prepared: *const PreparedPackage) []const []const u8 {
+    if (prepared.dependency_metadata) |metadata| return metadata.opt_depends;
+    return prepared.info.opt_depends orelse &.{};
+}
 
 const ApprovedReview = struct {
     commit: []u8,
@@ -710,8 +731,10 @@ pub const Manager = struct {
         self.raisePackageProgress(.aur_download_start, package_name, 1, 1, "Downloading PKGBUILD to analyze dependencies");
         var prepared = try self.preparePackageForBuild(package_name, null);
         defer prepared.deinit(self.allocator);
+        try self.requirePkgbuildApproval(&prepared);
+        try self.resolvePreparedDependencies(&prepared, &.{package_name});
 
-        var selected = prepared.info;
+        var selected = dependencyPlanningInfo(&prepared);
         selected.parsed_check_depends = null;
         if (!include_make_dependencies) selected.parsed_make_depends = null;
 
@@ -724,8 +747,7 @@ pub const Manager = struct {
             visited.deinit();
         }
         try visited.put(try self.allocator.dupe(u8, prepared.package_base), {});
-        try self.collectDependenciesRecursive(&selected, &collection, &visited);
-        try self.requirePkgbuildApproval(&prepared);
+        try self.collectDependencyInfoRecursive(&selected, &collection, &visited);
         try self.requireDependencyApprovals(&collection);
         if (collection.repo.items.len == 0 and collection.aur.items.len == 0) {
             self.raisePackageProgress(.aur_package_completed, package_name, 1, 1, "All dependencies are already installed");
@@ -774,7 +796,10 @@ pub const Manager = struct {
             defer if (prepared_live) prepared.deinit(self.allocator);
             if (visited.contains(prepared.package_base)) continue;
             try visited.put(try self.allocator.dupe(u8, prepared.package_base), {});
-            try self.collectDependenciesRecursive(&prepared.info, &collection, &visited);
+            try self.requirePkgbuildApproval(&prepared);
+            try self.resolvePreparedDependencies(&prepared, &.{dependency_name});
+            var dependency_info = dependencyPlanningInfo(&prepared);
+            try self.collectDependencyInfoRecursive(&dependency_info, &collection, &visited);
             try collection.addAur(&prepared, .build);
             prepared_live = false;
             prepared_count += 1;
@@ -959,16 +984,28 @@ pub const Manager = struct {
             for (plans.items) |*plan| plan.deinit(self.allocator);
             plans.deinit(self.allocator);
         }
-        // Discovery is deliberately completed for the whole operation before
-        // the first review is shown. Only after every prepared checkout has
-        // been approved may dependency installation or package execution begin.
+        // Approve every requested PKGBUILD before sourcing any of them. Their
+        // evaluated dependency trees are then fully reviewed before package
+        // installation or build execution begins.
         if (plans.items.len > 0) {
-            try self.requireInstallPlanApprovals(plans.items);
-            for (plans.items) |*plan|
-                plan.selected_optional = try self.selectOptionalDependencies(
+            for (plans.items) |*plan| try self.requirePkgbuildApproval(&plan.prepared);
+            for (plans.items) |*plan| {
+                var visited = std.StringHashMap(void).init(self.allocator);
+                defer {
+                    var keys = visited.keyIterator();
+                    while (keys.next()) |key| self.allocator.free(key.*);
+                    visited.deinit();
+                }
+                try visited.put(try self.allocator.dupe(u8, plan.prepared.package_base), {});
+                try self.resolvePreparedDependencies(&plan.prepared, plan.requested_names.items);
+                var dependency_info = dependencyPlanningInfo(&plan.prepared);
+                try self.collectDependencyInfoRecursive(&dependency_info, &plan.dependencies, &visited);
+                try self.requireDependencyApprovals(&plan.dependencies);
+                plan.selected_optional = try self.selectOptionalDependencyValues(
                     plan.prepared.package_name,
-                    &plan.prepared.info,
+                    dependencyOptionalValues(&plan.prepared),
                 );
+            }
             try self.confirmInstallPlans(plans.items);
         }
 
@@ -979,7 +1016,8 @@ pub const Manager = struct {
 
             const selected_optional = plan.selected_optional orelse &.{};
             const backend = self.dependencyBackend();
-            const build_only = try dependency_resolver.collectBuildOnlyDependencies(self.allocator, &prepared.info, self.no_check, backend);
+            var dependency_info = dependencyPlanningInfo(prepared);
+            const build_only = try dependency_resolver.collectBuildOnlyDependencies(self.allocator, &dependency_info, self.no_check, backend);
             defer builder.deinitPaths(self.allocator, build_only);
             // Build-only dependencies are also removed when the operation
             // fails: the errdefer covers hard errors propagating out of
@@ -1085,14 +1123,6 @@ pub const Manager = struct {
 
         var dependencies = DependencyCollection.init(self.allocator);
         errdefer dependencies.deinit();
-        var visited = std.StringHashMap(void).init(self.allocator);
-        defer {
-            var keys = visited.keyIterator();
-            while (keys.next()) |key| self.allocator.free(key.*);
-            visited.deinit();
-        }
-        try visited.put(try self.allocator.dupe(u8, prepared.package_base), {});
-        try self.collectDependenciesRecursive(&prepared.info, &dependencies, &visited);
 
         var requested_names: std.ArrayList([]u8) = .empty;
         errdefer {
@@ -1110,13 +1140,6 @@ pub const Manager = struct {
             .dependencies = dependencies,
             .requested_names = requested_names,
         };
-    }
-
-    fn requireInstallPlanApprovals(self: *Self, plans: []PreparedInstall) !void {
-        for (plans) |*plan| {
-            try self.requirePkgbuildApproval(&plan.prepared);
-            try self.requireDependencyApprovals(&plan.dependencies);
-        }
     }
 
     fn requireDependencyApprovals(self: *Self, dependencies: *const DependencyCollection) !void {
@@ -1226,7 +1249,10 @@ pub const Manager = struct {
         defer prepared.deinit(self.allocator);
         self.raisePackageProgress(.aur_download_done, package_name, 1, 1, "");
         try self.alpm.sync(false);
-        const build_only = try dependency_resolver.collectBuildOnlyDependencies(self.allocator, &prepared.info, self.no_check, self.dependencyBackend());
+        try self.requirePkgbuildApproval(&prepared);
+        try self.resolvePreparedDependencies(&prepared, &.{package_name});
+        var dependency_info = dependencyPlanningInfo(&prepared);
+        const build_only = try dependency_resolver.collectBuildOnlyDependencies(self.allocator, &dependency_info, self.no_check, self.dependencyBackend());
         defer builder.deinitPaths(self.allocator, build_only);
         // Build-only dependencies are also removed when the build, artifact
         // selection, or installation below fails.
@@ -1240,8 +1266,7 @@ pub const Manager = struct {
             visited.deinit();
         }
         try visited.put(try self.allocator.dupe(u8, prepared.package_base), {});
-        try self.collectDependenciesRecursive(&prepared.info, &collection, &visited);
-        try self.requirePkgbuildApproval(&prepared);
+        try self.collectDependencyInfoRecursive(&dependency_info, &collection, &visited);
         try self.requireDependencyApprovals(&collection);
         try self.installCollection(&collection);
         self.raisePackageProgress(.aur_build_start, package_name, 1, 1, "Building package");
@@ -1282,7 +1307,7 @@ pub const Manager = struct {
         return self.alpm.find_remote_satisfier_for_dependency(dependency) catch null;
     }
 
-    fn collectDependenciesRecursive(
+    fn collectDependencyInfoRecursive(
         self: *Self,
         info: *const PkgbuildInfo,
         collection: *DependencyCollection,
@@ -1318,7 +1343,10 @@ pub const Manager = struct {
                 defer self.allocator.free(child_version);
                 if (!(try version.satisfies(self.allocator, child_version, preferred.operator, preferred.version))) continue;
             }
-            try self.collectDependenciesRecursive(&prepared.info, collection, visited);
+            try self.requirePkgbuildApproval(&prepared);
+            try self.resolvePreparedDependencies(&prepared, &.{preferred.name});
+            var dependency_info = dependencyPlanningInfo(&prepared);
+            try self.collectDependencyInfoRecursive(&dependency_info, collection, visited);
             try collection.addAur(&prepared, dependency.role);
             prepared_live = false;
         }
@@ -1429,8 +1457,16 @@ pub const Manager = struct {
         package_name: []const u8,
         info: *const PkgbuildInfo,
     ) ![][]const u8 {
+        return self.selectOptionalDependencyValues(package_name, info.opt_depends orelse &.{});
+    }
+
+    fn selectOptionalDependencyValues(
+        self: *Self,
+        package_name: []const u8,
+        raw_options: []const []const u8,
+    ) ![][]const u8 {
         if (self.skip_optional_dependency_prompt) return self.allocator.alloc([]const u8, 0);
-        const raw_options = info.opt_depends orelse return self.allocator.alloc([]const u8, 0);
+        if (raw_options.len == 0) return self.allocator.alloc([]const u8, 0);
         var options: std.ArrayList(events.ProviderOption) = .empty;
         defer options.deinit(self.allocator);
         for (raw_options) |raw| {
@@ -1944,6 +1980,190 @@ pub const Manager = struct {
         }, null, 120);
         defer result.deinit(self.allocator);
         return result.exit_code == 0;
+    }
+
+    fn resolvePreparedDependencies(
+        self: *Self,
+        prepared: *PreparedPackage,
+        selected_package_names: []const []const u8,
+    ) !void {
+        if (prepared.dependency_metadata != null) return;
+        const generated = try self.generateReviewedSrcinfo(prepared);
+        defer self.allocator.free(generated);
+        prepared.dependency_metadata = try srcinfo.parseDependencyMetadata(
+            self.allocator,
+            self.io(),
+            generated,
+            selected_package_names,
+            self.shellybuild_config.build.carch,
+        );
+    }
+
+    /// Evaluates the already-approved PKGBUILD through the same sandboxed
+    /// SRCINFO path used by the builder. The external form returns metadata on
+    /// stdout, so no coordinator files are created inside the AUR checkout.
+    fn generateReviewedSrcinfo(self: *Self, prepared: *const PreparedPackage) ![]u8 {
+        if (prepared.target_commit.len != 0) {
+            try self.verifyPreparedPackage(prepared);
+        } else {
+            const current = try std.Io.Dir.cwd().readFileAlloc(
+                self.io(),
+                prepared.pkgbuild_path,
+                self.allocator,
+                .limited(max_file_size),
+            );
+            defer self.allocator.free(current);
+            const digest = try reviewDigest(
+                self.allocator,
+                self.io(),
+                prepared.cache_path,
+                current,
+                &prepared.info,
+            );
+            if (!std.mem.eql(u8, &digest, &prepared.digest))
+                return error.ReviewedPkgbuildChanged;
+        }
+        var names = try (pkgbuild_parser.PkgbuildParser{
+            .allocator = self.allocator,
+            .io = self.io(),
+            .package_carch = self.shellybuild_config.build.carch,
+        }).package_names_content(prepared.new_pkgbuild);
+        defer names.deinit(self.allocator);
+
+        const package_builds = try self.allocator.alloc(PkgbuildInfo, names.items.len);
+        var parsed_count: usize = 0;
+        defer {
+            for (package_builds[0..parsed_count]) |*package_build| package_build.deinit(self.allocator);
+            self.allocator.free(package_builds);
+        }
+        for (names.items, package_builds) |name, *package_build| {
+            package_build.* = try (pkgbuild_parser.PkgbuildParser{
+                .allocator = self.allocator,
+                .io = self.io(),
+                .selected_package_name = name,
+                .package_carch = self.shellybuild_config.build.carch,
+            }).parser_content(prepared.new_pkgbuild, prepared.cache_path);
+            parsed_count += 1;
+        }
+        var review = try package_builder.preparePkgbuildReview(
+            self.allocator,
+            self.io(),
+            prepared.cache_path,
+            prepared.new_pkgbuild,
+            package_builds,
+        );
+        defer review.deinit();
+
+        if (self.build_command) |command_path|
+            return self.generateReviewedSrcinfoWithCommand(command_path, prepared, review.digest);
+        return self.generateReviewedSrcinfoInProcess(prepared, package_builds, names.items, &review);
+    }
+
+    fn generateReviewedSrcinfoWithCommand(
+        self: *Self,
+        command_path: []const u8,
+        prepared: *const PreparedPackage,
+        reviewed_digest: package_builder.pkgbuild_review.Digest,
+    ) ![]u8 {
+        const digest_hex = std.fmt.bytesToHex(reviewed_digest, .lower);
+        var command = try builder.invokingUserCleanCommand(
+            self.allocator,
+            self.io(),
+            self.environ,
+            command_path,
+            &.{
+                "build",
+                "--makesrcinfo",
+                "--review-digest",
+                &digest_hex,
+                "--no-confirm",
+                prepared.pkgbuild_path,
+            },
+        );
+        defer command.deinit(self.allocator);
+        var result = try builder.runWithEnvironment(
+            self.allocator,
+            self.io(),
+            self.environ,
+            command.asConst(),
+            prepared.cache_path,
+            120,
+        );
+        defer result.deinit(self.allocator);
+        if (result.exit_code != 0) return error.BuildFailed;
+        return self.allocator.dupe(u8, result.stdout);
+    }
+
+    fn generateReviewedSrcinfoInProcess(
+        self: *Self,
+        prepared: *const PreparedPackage,
+        package_builds: []PkgbuildInfo,
+        requested_names: []const []const u8,
+        review: *const package_builder.PreparedPkgbuildReview,
+    ) ![]u8 {
+        var standalone_context = operation_api.OperationContext.init(self.allocator, self.io());
+        defer standalone_context.deinit();
+        var standalone_operation: ?operation_api.Operation = null;
+        var standalone_completion: operation_api.CompletionStatus = .failed;
+        defer if (standalone_operation) |*active| active.finish(standalone_completion);
+        const operation = self.dispatcher.operation orelse blk: {
+            standalone_operation = standalone_context.begin(.{
+                .backend = .aur,
+                .kind = .build,
+                .subject = prepared.package_name,
+            });
+            break :blk &standalone_operation.?;
+        };
+
+        const active_context = self.operation_context orelse operation.context;
+        const work_directory = if (self.shellybuild_config.destinations.build) |build_root|
+            try package_builder.uniqueWorkDirectory(
+                self.allocator,
+                self.io(),
+                build_root,
+                prepared.package_base,
+            )
+        else
+            try self.allocator.dupe(u8, prepared.cache_path);
+        defer self.allocator.free(work_directory);
+        const ephemeral_work_directory = self.shellybuild_config.destinations.build != null;
+        if (ephemeral_work_directory)
+            try std.Io.Dir.cwd().createDirPath(self.io(), work_directory);
+        defer if (ephemeral_work_directory)
+            std.Io.Dir.cwd().deleteTree(self.io(), work_directory) catch {};
+
+        var package_build = try package_builder.PackageBuilder.init(
+            self.allocator,
+            package_builds,
+            active_context,
+            self.shellybuild_config.*,
+            requested_names,
+            .{
+                .run_check = false,
+                .overwrite = false,
+                .clean_after_success = false,
+                .skip_source_pgp_verification = true,
+                .sign = false,
+                .start_directory = prepared.cache_path,
+                .work_directory = work_directory,
+                .package_destination = prepared.cache_path,
+                .source_destination = prepared.cache_path,
+                .log_destination = prepared.cache_path,
+                .pkgbuild_path = prepared.pkgbuild_path,
+                .reviewed_pkgbuild_digest = review.digest,
+                .install_scripts = review.install_scripts,
+                .reviewed_files = review.reviewed_files,
+                .build_all_members = true,
+            },
+            self.environ,
+            self.io(),
+        );
+        defer package_build.deinit();
+        var output: std.Io.Writer.Allocating = .init(self.allocator);
+        errdefer output.deinit();
+        try package_build.writeSrcinfoWithOperation(operation, &output.writer);
+        standalone_completion = .success;
+        return output.toOwnedSlice();
     }
 
     fn readCachedPkgbuild(self: *Self, package_name: []const u8) !?[]u8 {
@@ -3307,6 +3527,51 @@ fn initFixtureAurManager(
             .user = paths.shellybuild_user_path,
         },
     });
+}
+
+test "AUR dependency planning uses sandbox-evaluated conditional arrays" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+
+    try createAurFixtureRepository(allocator, io, paths.remote_root, "dynamic-deps", null);
+    const remote = try std.fs.path.join(allocator, &.{ paths.remote_root, "dynamic-deps.git" });
+    defer allocator.free(remote);
+    const pkgbuild_path = try std.fs.path.join(allocator, &.{ remote, "PKGBUILD" });
+    defer allocator.free(pkgbuild_path);
+    try writeFixtureFile(
+        io,
+        pkgbuild_path,
+        "pkgname=dynamic-deps\npkgver=1\npkgrel=1\narch=('any')\n" ++
+            "_enable_plasmoid=${SYNCTHING_TRAY_ENABLE_PLASMOID:-1}\n" ++
+            "makedepends=('cmake')\n" ++
+            "[[ $_enable_plasmoid ]] && makedepends+=('libplasma' 'extra-cmake-modules')\n" ++
+            "package() { :; }\n",
+        false,
+    );
+    try runFixtureCommand(allocator, io, &.{ "git", "add", "PKGBUILD" }, remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "commit", "-m", "conditional dependencies" }, remote);
+
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+    _ = try manager.cachePkgbase("dynamic-deps", "dynamic-deps");
+    const Approval = struct {
+        fn answer(_: ?*anyopaque, _: PkgbuildDiffRequest) bool {
+            return true;
+        }
+    };
+    manager.setPkgbuildApprovalHandler(.{ .function = Approval.answer });
+
+    var prepared = try manager.preparePackageForBuild("dynamic-deps", null);
+    defer prepared.deinit(allocator);
+    try manager.requirePkgbuildApproval(&prepared);
+    try manager.resolvePreparedDependencies(&prepared, &.{"dynamic-deps"});
+    const metadata = prepared.dependency_metadata.?;
+    try std.testing.expectEqual(@as(usize, 3), metadata.parsed_make_depends.len);
+    try std.testing.expectEqualStrings("cmake", metadata.parsed_make_depends[0].name);
+    try std.testing.expectEqualStrings("libplasma", metadata.parsed_make_depends[1].name);
+    try std.testing.expectEqualStrings("extra-cmake-modules", metadata.parsed_make_depends[2].name);
 }
 
 test "custom AUR base fetches PKGBUILDs from its Git checkout" {

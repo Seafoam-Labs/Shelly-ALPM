@@ -2,7 +2,7 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgbase=shelly-git
 pkgname=('shelly-git' 'shelly-flatpak-backend-git')
-pkgver=3.1.2
+pkgver=3.1.3
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
@@ -24,7 +24,7 @@ sha256sums=('SKIP'
 pkgver() {
   cd "${srcdir}/${pkgname}"
 
-  printf '3.1.2r%s.g%s' \
+  printf '3.1.3r%s.g%s' \
     "$(git rev-list --count HEAD)" \
     "$(git rev-parse --short=7 HEAD)"
 }
@@ -128,11 +128,11 @@ package_shelly-git() {
       'json-glib'
   )
   optdepends=(
-      'arch-install-scripts: provision fresh roots for --isolated builds'
       'fish: Fish shell completions'
       'zsh: Zsh shell completions'
       'libstarfish: dependency viewer for arch packages'
       'shelly-flatpak-backend-git: Flatpak package management support'
+      'util-linux: isolate fresh-root provisioning for --isolated builds'
       'fuse2: run AppImages that require FUSE 2'
   )
 

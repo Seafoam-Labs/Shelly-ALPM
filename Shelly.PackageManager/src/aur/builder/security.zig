@@ -61,6 +61,7 @@ pub fn narrowBuilderError(err: anyerror) BuilderErrors {
         error.BuildDirectoryNotWritable => BuilderErrors.BuildDirectoryNotWritable,
         error.PrivilegedPackageOperationUnsupported => BuilderErrors.PrivilegedPackageOperationUnsupported,
         error.SandboxUnsupported => BuilderErrors.SandboxUnsupported,
+        error.InvalidSourceDateEpoch => BuilderErrors.InvalidSourceDateEpoch,
         else => BuilderErrors.BuildFailed,
     };
 }

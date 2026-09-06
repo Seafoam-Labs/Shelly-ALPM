@@ -27,6 +27,15 @@ tests.
 - [ ] Installing a package shows progress correctly
 - [ ] Installation completes successfully
 
+### Error Messages
+
+- [ ] In a disposable package database, trigger a database lock failure. CLI, GTK, and TUI show the configured `db.lck` path and the matching, quoted removal command. The message says to remove the file only when no package manager is running.
+- [ ] Trigger missing dependencies and file conflicts in a disposable environment. The explanation names the affected packages or paths and provides a next step; technical details follow it.
+- [ ] Fail an AUR build step. The message includes the package name and failed stage, and build output remains available.
+- [ ] Deny a GTK authorization request. The failure explains that permission was not granted.
+- [ ] Verify GTK retains the specific failure in its final status and TUI displays the full explanation, including multiline lock instructions.
+- [ ] Verify recoverable cleanup failures appear as warnings and cancellation does not claim that an unexpected error occurred.
+
 ### Dynamic AUR Sources
 
 - [ ] `shelly install aur gpu-screen-recorder-ui-git` resolves its `$(sed ...)` source URL and reaches normal Git source acquisition
@@ -271,6 +280,11 @@ package first); for bash and zsh use a clean shell, and regenerate
 - [ ] Root/sudo operations work correctly
 - [ ] Permission errors are handled gracefully
 - [ ] User is prompted for elevation when needed
+- [ ] `Shelly.Cli.Zig/scripts/test-elevation-cancellation.sh` passes without
+  privileges for both SIGINT and SIGTERM
+- [ ] From a normal user session with a working elevator,
+  `Shelly.Cli.Zig/scripts/test-isolated-cancellation.sh` exits successfully and
+  leaves neither nspawn descendants nor an isolated operation directory
 
 ### File System
 

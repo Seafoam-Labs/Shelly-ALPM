@@ -1783,7 +1783,7 @@ test "install backend failures return a failing exit code and transaction result
         @as(u8, 1),
         try executeWithRunner(&tc.context, &outcome.dispatch, Failure{}),
     );
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "error: TestInstallFailure") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Technical details: TestInstallFailure") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), ":: Transaction failed.") != null);
 }
 
@@ -2019,4 +2019,53 @@ test "appimage install relaunch forwards positionals and install-path" {
         "install", "appimage", "--no-confirm", "--install-path", "/opt/appimages", "/tmp/demo.AppImage",
     };
     try std.testing.expectEqualSlices([]const u8, &expected_full, full_args);
+}
+
+test "install preserves actionable lock errors once in terminal and UI output" {
+    const Failure = struct {
+        pub fn run(_: @This(), context: *runtime.RuntimeContext, operations: *Zigalpm.OperationContext, _: *const parser.Invocation) !void {
+            var operation = operations.begin(.{ .backend = .alpm, .kind = .install, .subject = "demo" });
+            defer operation.finish(.failed);
+            const message = try Zigalpm.user_errors.databaseLocked(context.allocator, "/custom/package database/");
+            defer context.allocator.free(message);
+            operation.reportError(error.AlpmOperationFailed, message, "alpm", null, false);
+            return error.TransInitFailed;
+        }
+    };
+    for ([_]bool{ false, true }) |ui_mode| {
+        var tc: test_support.TestContext = .{};
+        tc.init();
+        defer tc.deinit();
+        const alloc = tc.arena.allocator();
+        const manifest = try spec.Manifest.load(alloc);
+        const args: []const []const u8 = if (ui_mode)
+            &.{ "install", "standard", "demo", "--ui-mode" }
+        else
+            &.{ "install", "standard", "demo" };
+        const outcome = try parser.parse(alloc, &manifest, args);
+        try std.testing.expectEqual(@as(u8, 1), try executeWithRunner(&tc.context, &outcome.dispatch, Failure{}));
+        var decoded_output: std.Io.Writer.Allocating = .init(alloc);
+        defer decoded_output.deinit();
+        var error_frames: usize = 0;
+        if (ui_mode) {
+            var frames = std.mem.splitSequence(u8, tc.stdout.written(), "[JSON]");
+            _ = frames.next();
+            while (frames.next()) |frame| {
+                const end = std.mem.indexOf(u8, frame, "[/JSON]") orelse return error.InvalidFrame;
+                const encoded = frame[0..end];
+                const bytes = try alloc.alloc(u8, try std.base64.standard.Decoder.calcSizeForSlice(encoded));
+                try std.base64.standard.Decoder.decode(bytes, encoded);
+                if (std.mem.indexOf(u8, bytes, "\"$kind\":\"alpm.error\"") != null) error_frames += 1;
+                try decoded_output.writer.writeAll(bytes);
+            }
+            try std.testing.expectEqual(@as(usize, 1), error_frames);
+        } else try decoded_output.writer.writeAll(tc.stdout.written());
+        const rendered = decoded_output.written();
+        try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, rendered, "because the package database is locked"));
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "Lock file: /custom/package database/db.lck") != null);
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "sudo rm -- '/custom/package database/db.lck'") != null);
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "If no package manager is running") != null);
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "TransInitFailed") != null);
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "unexpected error") == null);
+    }
 }

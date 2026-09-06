@@ -124,6 +124,12 @@ pub fn validatePinnedKeys(keys: []const []const u8) !void {
     }
 }
 
+/// Mirrors makepkg's parse_gpg_statusfile: signature records are evaluated
+/// sequentially and later records override earlier ones, so a dual-signed
+/// artifact passes when a later signature is good and pinned even if an
+/// earlier signature referenced a key that is not present. NO_PUBKEY carries
+/// no decision on its own — makepkg's status filter drops it, and a missing
+/// key is classified through ERRSIG's return code instead.
 pub fn evaluateStatus(
     allocator: std.mem.Allocator,
     status_output: []const u8,
@@ -132,11 +138,9 @@ pub fn evaluateStatus(
 ) !Verification {
     try validatePinnedKeys(valid_pgp_keys);
     var saw_new_signature = false;
-    var successful = false;
+    var status: signature_status = .none;
     var trusted = false;
-    var warning: Warning = .none;
     var fingerprint: ?[]const u8 = null;
-    var failure: ?anyerror = null;
 
     var lines = std.mem.splitScalar(u8, status_output, '\n');
     while (lines.next()) |raw_line| {
@@ -147,24 +151,16 @@ pub fn evaluateStatus(
         if (std.mem.eql(u8, record, "NEWSIG")) {
             saw_new_signature = true;
         } else if (std.mem.eql(u8, record, "GOODSIG")) {
-            successful = true;
+            status = .good;
         } else if (std.mem.eql(u8, record, "EXPSIG")) {
-            successful = true;
-            warning = .expired_signature;
+            status = .expired_signature;
         } else if (std.mem.eql(u8, record, "EXPKEYSIG")) {
-            successful = true;
-            warning = .expired_key;
+            status = .expired_key;
         } else if (std.mem.eql(u8, record, "REVKEYSIG")) {
-            successful = false;
-            failure = error.RevokedPgpKey;
+            status = .revoked_key;
         } else if (std.mem.eql(u8, record, "BADSIG")) {
-            successful = false;
-            failure = error.BadPgpSignature;
-        } else if (std.mem.eql(u8, record, "NO_PUBKEY")) {
-            successful = false;
-            failure = error.MissingPgpKey;
+            status = .bad;
         } else if (std.mem.eql(u8, record, "ERRSIG")) {
-            successful = false;
             var field_index: usize = 0;
             var return_code: ?[]const u8 = null;
             while (fields.next()) |value| : (field_index += 1) {
@@ -173,10 +169,10 @@ pub fn evaluateStatus(
                     break;
                 }
             }
-            failure = if (return_code != null and std.mem.eql(u8, return_code.?, "9"))
-                error.MissingPgpKey
+            status = if (return_code != null and std.mem.eql(u8, return_code.?, "9"))
+                .missing_key
             else
-                error.PgpVerificationFailed;
+                .verification_error;
         } else if (std.mem.eql(u8, record, "VALIDSIG")) {
             var values: [10]?[]const u8 = .{null} ** 10;
             var count: usize = 0;
@@ -197,13 +193,18 @@ pub fn evaluateStatus(
         }
     }
 
-    if (failure) |err| return err;
     if (!saw_new_signature) return error.MissingPgpSignature;
     // makepkg decides from GnuPG's machine-readable status records. In
     // particular, expired signatures can be accepted with a warning even if
     // the command's process status is non-zero.
     _ = exit_code;
-    if (!successful) return error.PgpVerificationFailed;
+    switch (status) {
+        .none, .verification_error => return error.PgpVerificationFailed,
+        .revoked_key => return error.RevokedPgpKey,
+        .bad => return error.BadPgpSignature,
+        .missing_key => return error.MissingPgpKey,
+        .good, .expired_signature, .expired_key => {},
+    }
     const primary = fingerprint orelse return error.InvalidPgpStatus;
     if (valid_pgp_keys.len > 0) {
         var pinned = false;
@@ -218,9 +219,24 @@ pub fn evaluateStatus(
 
     return .{
         .primary_fingerprint = try allocator.dupe(u8, primary),
-        .warning = warning,
+        .warning = switch (status) {
+            .expired_signature => .expired_signature,
+            .expired_key => .expired_key,
+            else => .none,
+        },
     };
 }
+
+const signature_status = enum {
+    none,
+    good,
+    expired_signature,
+    expired_key,
+    revoked_key,
+    bad,
+    missing_key,
+    verification_error,
+};
 
 test "source PGP status accepts a pinned primary key used through a subkey" {
     const primary = "0123456789ABCDEF0123456789ABCDEF01234567";
@@ -259,8 +275,10 @@ test "source PGP status rejects bad missing and unpinned signatures" {
         error.BadPgpSignature,
         evaluateStatus(std.testing.allocator, "[GNUPG:] NEWSIG\n[GNUPG:] BADSIG DEADBEEF bad\n", 1, &.{fingerprint}),
     );
+    // makepkg's status filter drops NO_PUBKEY records, so one without an
+    // accompanying ERRSIG degrades to a generic verification failure.
     try std.testing.expectError(
-        error.MissingPgpKey,
+        error.PgpVerificationFailed,
         evaluateStatus(std.testing.allocator, "[GNUPG:] NEWSIG\n[GNUPG:] NO_PUBKEY DEADBEEF\n", 2, &.{fingerprint}),
     );
     try std.testing.expectError(
@@ -280,6 +298,94 @@ test "source PGP status rejects bad missing and unpinned signatures" {
     try std.testing.expectError(
         error.InvalidPgpKey,
         evaluateStatus(std.testing.allocator, status, 0, &.{fingerprint}),
+    );
+}
+
+test "source PGP status accepts dual-signed artifacts when the pinned signature is good" {
+    // Real status output for sdl2-compat-2.32.72.tar.gz.sig: the release is
+    // signed by a new key that is not in validpgpkeys and by the pinned key.
+    // makepkg accepts it because the later GOODSIG overrides the earlier
+    // ERRSIG; Shelly previously failed the whole build with MissingPgpKey.
+    const pinned = "0900104363B4C9D4223DE149D913FE7D4B61D39B";
+    const status =
+        "[GNUPG:] NEWSIG\n" ++
+        "[GNUPG:] ERRSIG 30A59377A7763BE6 17 2 00 1788368120 9 1528635D8053A57F77D1E08630A59377A7763BE6\n" ++
+        "[GNUPG:] NO_PUBKEY 30A59377A7763BE6\n" ++
+        "[GNUPG:] NEWSIG\n" ++
+        "[GNUPG:] KEY_CONSIDERED " ++ pinned ++ " 0\n" ++
+        "[GNUPG:] SIG_ID T06SwK95Z19UH/CTAzqR5PPShPo 2026-09-02 1788368120\n" ++
+        "[GNUPG:] GOODSIG D913FE7D4B61D39B Sam Lantinga <slouken@libsdl.org>\n" ++
+        "[GNUPG:] VALIDSIG " ++ pinned ++ " 2026-09-02 1788368120 0 4 0 1 8 00 " ++ pinned ++ "\n" ++
+        "[GNUPG:] TRUST_UNDEFINED 0 pgp\n" ++
+        "[GNUPG:] FAILURE gpg-exit 33554433\n";
+    var verification = try evaluateStatus(std.testing.allocator, status, 2, &.{pinned});
+    defer verification.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings(pinned, verification.primary_fingerprint);
+    try std.testing.expectEqual(Warning.none, verification.warning);
+}
+
+test "source PGP status keeps the last signature verdict like makepkg" {
+    const pinned = "0900104363B4C9D4223DE149D913FE7D4B61D39B";
+    const good_first =
+        "[GNUPG:] NEWSIG\n" ++
+        "[GNUPG:] GOODSIG D913FE7D4B61D39B Sam Lantinga <slouken@libsdl.org>\n" ++
+        "[GNUPG:] VALIDSIG " ++ pinned ++ " 2026-09-02 1788368120 0 4 0 1 8 00 " ++ pinned ++ "\n";
+    // A later ERRSIG with a missing key overrides the earlier good signature,
+    // matching makepkg's sequential parse.
+    try std.testing.expectError(
+        error.MissingPgpKey,
+        evaluateStatus(
+            std.testing.allocator,
+            good_first ++ "[GNUPG:] NEWSIG\n[GNUPG:] ERRSIG 30A59377A7763BE6 17 2 00 1788368120 9\n",
+            2,
+            &.{pinned},
+        ),
+    );
+    try std.testing.expectError(
+        error.PgpVerificationFailed,
+        evaluateStatus(
+            std.testing.allocator,
+            good_first ++ "[GNUPG:] NEWSIG\n[GNUPG:] ERRSIG 30A59377A7763BE6 17 2 00 1788368120 4\n",
+            2,
+            &.{pinned},
+        ),
+    );
+    try std.testing.expectError(
+        error.BadPgpSignature,
+        evaluateStatus(
+            std.testing.allocator,
+            good_first ++ "[GNUPG:] NEWSIG\n[GNUPG:] BADSIG 30A59377A7763BE6 bad\n",
+            2,
+            &.{pinned},
+        ),
+    );
+}
+
+test "source PGP status derives the warning from the final signature verdict" {
+    const pinned = "0900104363B4C9D4223DE149D913FE7D4B61D39B";
+    var expired = try evaluateStatus(
+        std.testing.allocator,
+        "[GNUPG:] NEWSIG\n" ++
+            "[GNUPG:] EXPSIG D913FE7D4B61D39B Sam Lantinga <slouken@libsdl.org>\n" ++
+            "[GNUPG:] VALIDSIG " ++ pinned ++ " 2026-09-02 1788368120 0 4 0 1 8 00 " ++ pinned ++ "\n",
+        0,
+        &.{pinned},
+    );
+    defer expired.deinit(std.testing.allocator);
+    try std.testing.expectEqual(Warning.expired_signature, expired.warning);
+
+    // A later bad signature suppresses the expired-signature warning.
+    try std.testing.expectError(
+        error.BadPgpSignature,
+        evaluateStatus(
+            std.testing.allocator,
+            "[GNUPG:] NEWSIG\n" ++
+                "[GNUPG:] EXPSIG D913FE7D4B61D39B Sam Lantinga <slouken@libsdl.org>\n" ++
+                "[GNUPG:] NEWSIG\n" ++
+                "[GNUPG:] BADSIG D913FE7D4B61D39B bad\n",
+            2,
+            &.{pinned},
+        ),
     );
 }
 
