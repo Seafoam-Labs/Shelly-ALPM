@@ -619,7 +619,7 @@ pub const Renderer = struct {
         if (review.findings.len > 0) {
             try self.writeColoredLine(
                 .red,
-                "PKGBUILD security warnings — these commands fetch/execute code outside pacman's control:",
+                "PKGBUILD security warnings — these commands fetch/execute code outside Shelly's control:",
                 .{},
             );
             for (review.findings) |finding| {

@@ -169,7 +169,7 @@ pub fn printHelp(writer: *std.Io.Writer) !void {
         \\Usage: {s} [OPTIONS] operation [targets]
         \\
         \\Operations:
-        \\  --init [dir]              Initialize the pacman keyring (default: {s})
+        \\  --init [dir]              Initialize the package-signing keyring (default: {s})
         \\  --populate [keyring...]   Reload keys from the given keyrings, or every
         \\                            keyring found in the source directory
         \\  -u, --updatedb            Update the trust database
@@ -483,7 +483,7 @@ test "printHelp prints the expected usage text" {
         \\Usage: shelly-key [OPTIONS] operation [targets]
         \\
         \\Operations:
-        \\  --init [dir]              Initialize the pacman keyring (default: /etc/pacman.d/gnupg)
+        \\  --init [dir]              Initialize the package-signing keyring (default: /etc/pacman.d/gnupg)
         \\  --populate [keyring...]   Reload keys from the given keyrings, or every
         \\                            keyring found in the source directory
         \\  -u, --updatedb            Update the trust database

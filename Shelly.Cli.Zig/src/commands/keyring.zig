@@ -225,7 +225,7 @@ fn openingMessage(
     user_keyring: bool,
 ) ![]const u8 {
     return switch (action) {
-        .init => allocator.dupe(u8, "Initializing pacman keyring..."),
+        .init => allocator.dupe(u8, "Initializing the package-signing keyring..."),
         .list => allocator.dupe(u8, "Listing keys in keyring..."),
         .refresh => allocator.dupe(u8, "Refreshing keys from keyserver..."),
         .lsign => joinedMessage(allocator, "Locally signing keys: ", values),

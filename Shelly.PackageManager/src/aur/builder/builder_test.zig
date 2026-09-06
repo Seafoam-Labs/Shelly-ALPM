@@ -2071,6 +2071,7 @@ test "PackageBuilder strips ELF debug sections unless PKGBUILD disables strip" {
         \\}
         \\package() {
         \\  install -Dm755 demo "$pkgdir/usr/bin/strip-demo"
+        \\  ln "$pkgdir/usr/bin/strip-demo" "$pkgdir/usr/bin/strip-demo-link"
         \\}
     ;
     var stripped_fixture = try Fixture.create(allocator, common, null, null);
@@ -2083,6 +2084,10 @@ test "PackageBuilder strips ELF debug sections unless PKGBUILD disables strip" {
     defer stripped_sections.deinit(allocator);
     try testing.expectEqual(@as(u8, 0), stripped_sections.exit_code);
     try testing.expect(std.mem.indexOf(u8, stripped_sections.stdout, ".debug_info") == null);
+    const stripped_stat = try stripped_fixture.temporary.dir.statFile(io, "pkg/strip-demo/usr/bin/strip-demo", .{});
+    const linked_stat = try stripped_fixture.temporary.dir.statFile(io, "pkg/strip-demo/usr/bin/strip-demo-link", .{});
+    try testing.expectEqual(stripped_stat.inode, linked_stat.inode);
+    try testing.expectEqual(@as(u32, 0o755), stripped_stat.permissions.toMode() & 0o7777);
 
     const no_strip =
         \\pkgname=strip-demo
@@ -2108,6 +2113,125 @@ test "PackageBuilder strips ELF debug sections unless PKGBUILD disables strip" {
     defer unstripped_sections.deinit(allocator);
     try testing.expectEqual(@as(u8, 0), unstripped_sections.exit_code);
     try testing.expect(std.mem.indexOf(u8, unstripped_sections.stdout, ".debug_info") != null);
+}
+
+test "PackageBuilder preserves unsupported ELF binaries and reports strip warnings" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    const WarningCapture = struct {
+        seen: bool = false,
+
+        fn handle(data: ?*anyopaque, event: op_context.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (event) {
+                .status => |status| {
+                    if (std.mem.indexOf(u8, status.message, "Could not strip usr/bin/foreign") != null)
+                        self.seen = true;
+                },
+                else => {},
+            }
+        }
+    };
+    var capture = WarningCapture{};
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=mixed-strip-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\build() {
+        \\  printf 'int main(void) { return 0; }\n' > demo.c
+        \\  cc -g -o native demo.c
+        \\  cp native foreign
+        \\  printf '\377\377' | dd of=foreign bs=1 seek=18 conv=notrunc status=none
+        \\}
+        \\package() {
+        \\  install -Dm755 native "$pkgdir/usr/bin/native"
+        \\  install -Dm755 foreign "$pkgdir/usr/bin/foreign"
+        \\}
+    , .{ .function = WarningCapture.handle, .data = &capture }, null);
+    defer fixture.destroy();
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const original = try fixture.temporary.dir.readFileAlloc(io, "src/foreign", allocator, .unlimited);
+    defer allocator.free(original);
+    const packaged = try readPackageEntry(allocator, artifacts[0].path, "usr/bin/foreign");
+    defer allocator.free(packaged);
+    try testing.expectEqualSlices(u8, original, packaged);
+    try testing.expect(capture.seen);
+    const log = try readOnlyBuildLog(allocator, io, fixture.build_dir);
+    defer allocator.free(log);
+    try testing.expect(std.mem.indexOf(u8, log, "Could not strip usr/bin/foreign") != null);
+    try testing.expect(std.mem.indexOf(u8, log, "strip:") != null);
+    const native_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "pkg/mixed-strip-demo/usr/bin/native" });
+    defer allocator.free(native_path);
+    var sections = try process_runner.run(allocator, io, &.{ "readelf", "-S", native_path }, null, null);
+    defer sections.deinit(allocator);
+    try testing.expectEqual(@as(u8, 0), sections.exit_code);
+    try testing.expect(std.mem.indexOf(u8, sections.stdout, ".debug_info") == null);
+}
+
+test "PackageBuilder discards partial output from failed strip commands" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=failed-strip-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/bin"
+        \\  printf '\177ELF\002\001\001\000\000\000\000\000\000\000\000\000\002\000\076\000original payload' > "$pkgdir/usr/bin/demo"
+        \\  cp "$pkgdir/usr/bin/demo" "$startdir/original"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    try fixture.temporary.dir.createDirPath(io, "tools");
+    try fixture.temporary.dir.writeFile(io, .{
+        .sub_path = "tools/strip",
+        .flags = .{ .permissions = .fromMode(0o755) },
+        .data =
+        \\#!/bin/sh
+        \\while [ "$#" -gt 0 ]; do
+        \\  if [ "$1" = '-o' ]; then
+        \\    shift
+        \\    printf 'partial strip output' > "$1"
+        \\  fi
+        \\  shift
+        \\done
+        \\echo 'simulated strip failure' >&2
+        \\exit 1
+        ,
+    });
+    const path = try std.fmt.allocPrint(allocator, "{s}/tools:/usr/bin:/bin", .{fixture.build_dir});
+    defer allocator.free(path);
+    var environment = try testing.environ.createMap(allocator);
+    defer environment.deinit();
+    try environment.put("PATH", path);
+    const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
+    defer environ.block.deinit(allocator);
+    // Zig's process lookup uses the Io environment's PATH, independently of
+    // the environment passed to the child.
+    var threaded = std.Io.Threaded.init(allocator, .{ .environ = environ });
+    defer threaded.deinit();
+    fixture.builder.io = threaded.io();
+    defer fixture.builder.io = io;
+    fixture.builder.environ = environ;
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const original = try fixture.temporary.dir.readFileAlloc(io, "original", allocator, .unlimited);
+    defer allocator.free(original);
+    const packaged = try readPackageEntry(allocator, artifacts[0].path, "usr/bin/demo");
+    defer allocator.free(packaged);
+    try testing.expectEqualSlices(u8, original, packaged);
+    const log = try readOnlyBuildLog(allocator, io, fixture.build_dir);
+    defer allocator.free(log);
+    try testing.expect(std.mem.indexOf(u8, log, "simulated strip failure") != null);
+    var directory = try std.Io.Dir.cwd().openDir(io, fixture.build_dir, .{ .iterate = true });
+    defer directory.close(io);
+    var iterator = directory.iterate();
+    while (try iterator.next(io)) |entry| {
+        try testing.expect(!std.mem.startsWith(u8, entry.name, ".shelly-strip-"));
+    }
 }
 
 test "PackageBuilder runs local declarations and reviewed helper functions inside package steps" {
