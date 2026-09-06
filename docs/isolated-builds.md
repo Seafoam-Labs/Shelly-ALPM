@@ -57,6 +57,15 @@ Requirements:
 - `unshare` (provided by Arch's `util-linux` package) for private provisioning
 - an invoking-user-preserving elevator such as sudo, doas, run0, or pkexec
 
+Dependency review refreshes the repositories configured in the host's
+`/etc/pacman.conf` into a private temporary database before classifying
+dependencies. This lets newly published local repository packages participate
+without refreshing or modifying the host package database. The temporary
+database is removed after review; provisioning refreshes and verifies the
+repositories again using the configured signature policy. Local repository
+servers must be readable by the invoking user during review. A built archive
+must be published in a configured repository's database to be resolved here.
+
 Current limitations are deliberately fail-closed:
 
 - `--sign` is rejected because private signing keys are never copied or mounted
