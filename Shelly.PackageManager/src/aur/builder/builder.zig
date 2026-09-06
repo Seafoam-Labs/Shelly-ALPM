@@ -246,7 +246,14 @@ pub const PackageBuilder = struct {
                 completion = .cancelled;
                 return err;
             }
-            operation.reportError(err, "Failed to build package", "build", null, false);
+            if (err != error.StepFailed) {
+                const message = try @import("../../shared/user_errors.zig").format(self.allocator, err, .{
+                    .operation = "the package build",
+                    .subject = if (self.requested_names.len > 0) self.requested_names[0] else null,
+                });
+                defer self.allocator.free(message);
+                operation.reportError(err, message, "build", null, false);
+            }
             return err;
         };
         completion = .success;
@@ -558,7 +565,11 @@ pub const PackageBuilder = struct {
             for ([_][]const u8{ "src", "pkg" }) |name| {
                 const path = try std.fs.path.join(self.allocator, &.{ self.options.work_directory, name });
                 defer self.allocator.free(path);
-                std.Io.Dir.cwd().deleteTree(self.io, path) catch {};
+                std.Io.Dir.cwd().deleteTree(self.io, path) catch |err| {
+                    const message = try std.fmt.allocPrint(self.allocator, "The build completed, but Shelly could not remove the temporary files in \"{s}\". You can remove them when they are no longer needed.", .{path});
+                    defer self.allocator.free(message);
+                    operation.reportError(err, message, "build", null, true);
+                };
             }
         }
 

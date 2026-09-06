@@ -41,6 +41,9 @@ fn containsPackageName(packages: []const Package, name: []const u8) bool {
 }
 
 pub const ShellyCli = struct {
+    /// Optional explanation for a failed subprocess. Initialize to null;
+    /// the caller owns the returned slice using this client's allocator.
+    failure_detail: ?*?[]u8 = null,
     allocator: std.mem.Allocator,
     io: Io,
 
@@ -109,6 +112,10 @@ pub const ShellyCli = struct {
                 result.stderr[0..@min(500, result.stderr.len)],
                 result.stdout[0..@min(500, result.stdout.len)],
             });
+            if (self.failure_detail) |detail| {
+                detail.* = try JsonPackFrame.failureMessage(self.allocator, result.stdout) orelse
+                    try self.allocator.dupe(u8, if (result.stderr.len > 0) result.stderr else "Could not complete the package operation. No error details were returned by Shelly.");
+            }
             return error.CommandFailed;
         }
 

@@ -70,6 +70,8 @@ pub const TransactionPage = extern struct {
         operation: ?*ShellyOperation,
         progress_lines: std.StringHashMapUnmanaged(ProgressLine),
         finished: bool,
+        failure_message: ?[]const u8,
+        privileged: bool,
         cancelled: bool,
         terminal_visible: bool,
         scratch: [1024]u8 = undefined,
@@ -104,6 +106,8 @@ pub const TransactionPage = extern struct {
         p.terminal_lines = .empty;
         p.operation = null;
         p.finished = false;
+        p.failure_message = null;
+        p.privileged = false;
         p.cancelled = false;
         p.terminal_visible = true;
         p.progress_lines = .empty;
@@ -153,6 +157,7 @@ pub const TransactionPage = extern struct {
         op.io = op.threaded.io();
         p.operation = op;
 
+        p.privileged = request.privileged;
         p.on_complete = request.on_complete;
         p.on_complete_ctx = request.ctx;
 
@@ -192,6 +197,7 @@ pub const TransactionPage = extern struct {
 
     fn reset(self: *Self) void {
         const p = self.priv();
+        p.failure_message = null;
         p.cancelled = false;
         p.finished = false;
         gtk.Widget.setVisible(p.status_icon.as(gtk.Widget), 0);
@@ -288,7 +294,13 @@ pub const TransactionPage = extern struct {
                     }
                 }
             },
-            .err => |e| append_terminal(self, e.message),
+            .err => |e| {
+                append_terminal(self, e.message);
+                const p = self.priv();
+                if (p.failure_message == null) {
+                    if (p.arena) |arena| p.failure_message = arena.allocator().dupe(u8, e.message) catch null;
+                }
+            },
             .alpm_progress => |pr| {
                 appendAlpmProgress(self, pr);
 
@@ -567,8 +579,14 @@ pub const TransactionPage = extern struct {
             .success => self.showFinishedUI(outcome, translations._("All operations finished successfully.")),
             .failed => {
                 var fail_buf: [128]u8 = undefined;
-                const detail = std.fmt.bufPrint(&fail_buf, "{s} ({s} {d})", .{ translations._("Operation failed"), translations._("exit"), exit_code }) catch translations._("Operation failed");
-                self.showFinishedUI(outcome, detail);
+                const fallback = if (p.privileged and (exit_code == 126 or exit_code == 127))
+                    translations._("Permission to manage packages was not granted. Try again and approve the authorization request to continue.")
+                else
+                    std.fmt.bufPrint(&fail_buf, "{s} ({s} {d})", .{ translations._("Operation failed"), translations._("exit"), exit_code }) catch translations._("Operation failed");
+                const detail = p.failure_message orelse fallback;
+                const end = std.mem.indexOf(u8, detail, "\n\nTechnical details:") orelse
+                    std.mem.indexOf(u8, detail, "\nTechnical details:") orelse detail.len;
+                self.showFinishedUI(outcome, detail[0..end]);
             },
         }
 
@@ -799,7 +817,7 @@ pub const TransactionPage = extern struct {
         }
         return fallback;
     }
-    
+
     fn handle_question(self: *Self, pending: *PendingQuestion) void {
         const p = self.priv();
         log.debug("handle_question: question_layer={*}", .{p.question_layer});
@@ -809,7 +827,7 @@ pub const TransactionPage = extern struct {
                 const qa = pending.arena.allocator();
 
                 const text = getQuestionText(q.question_kind, q.question_text);
-                
+
                 const text_z = qa.dupeZ(u8, text) catch {
                     pending.operation.answerYesNo(q.question_id, false) catch {};
                     pending.destroy();

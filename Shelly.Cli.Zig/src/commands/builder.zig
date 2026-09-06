@@ -233,7 +233,9 @@ fn executeSourcePgpKeyPreparation(context: *runtime.RuntimeContext, invocation: 
     try renderer.attach(&operation_context);
     try renderer.begin("Preparing isolated source-signing keys...");
     const keys = prepareSourcePgpKeyExport(context, invocation, &operation_context) catch |err| {
-        try renderer.reportError(@errorName(err));
+        const message = try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = "source-signing key preparation" });
+        defer context.allocator.free(message);
+        if (!renderer.reported_failure.load(.acquire)) try renderer.reportError(message);
         try renderer.finishWithMessage(false, "Source-signing key preparation failed.");
         try std.json.Stringify.value(SourcePgpKeyResult{ .failure = @errorName(err) }, .{}, stdout);
         try stdout.writeByte('\n');
@@ -305,7 +307,7 @@ fn executeReviewOnly(
     try renderer.begin("Reviewing PKGBUILD inputs...");
 
     var result = prepareReviewOnly(context, &operation_context, invocation) catch |err| {
-        const detail = try std.fmt.allocPrint(context.allocator, "{t}", .{err});
+        const detail = try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = "the PKGBUILD review" });
         defer context.allocator.free(detail);
         try renderer.reportError(detail);
         try renderer.finishWithMessage(false, "PKGBUILD review failed.");
@@ -537,9 +539,9 @@ fn executeJson(
         if (err == error.Cancelled) {
             try renderer.finishCancelled();
         } else {
-            const detail = try std.fmt.allocPrint(context.allocator, "{t}", .{err});
+            const detail = try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = "the package build" });
             defer context.allocator.free(detail);
-            try renderer.reportError(detail);
+            if (!renderer.reported_failure.load(.acquire)) try renderer.reportError(detail);
             try renderer.finishWithMessage(false, "Build failed.");
         }
         context.stdout = stdout;
@@ -2800,6 +2802,7 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
     const pkgbuild_content = try std.fmt.allocPrint(
         test_context.arena.allocator(),
         "pkgname=demo\npkgver=1\npkgrel=1\npkgdesc=$(printf 'Dynamic description')\narch=(any)\n" ++
+            "install=''\nchangelog=\"\"\n" ++
             "_enable_plasmoid=${{SYNCTHING_TRAY_ENABLE_PLASMOID:-1}}\n" ++
             "makedepends=('cmake')\n" ++
             "[[ $_enable_plasmoid ]] && makedepends+=('libplasma' 'extra-cmake-modules')\n" ++

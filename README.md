@@ -164,6 +164,15 @@ its build lifecycle:
 shelly build --makesrcinfo --reviewed PKGBUILD > .SRCINFO
 ```
 
+The AUR builder extracts source archives and decompresses standalone gzip/Unix
+compress (`.gz`, `.z`, `.Z`), bzip2 (`.bz2`, `.bz`), xz (`.xz`), and zstd (`.zst`)
+files before running `prepare()`. Standalone files must have matching compression
+content and extensions. The output uses the source alias with its compression
+extension removed: `dsearch-x86_64-1.6.0.gz` becomes `dsearch-x86_64-1.6.0`.
+The original compressed file remains in `src`, and `noextract` entries stay
+compressed. Decompression rejects output collisions and files exceeding 4 GiB;
+failed source preparation discards the staging tree.
+
 ### CLI Configuration
 
 Shelly-CLI uses a JSON configuration file to customize its behavior. On the first run, it automatically creates a

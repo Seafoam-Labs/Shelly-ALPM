@@ -291,6 +291,10 @@ pub fn build(b: *std.Build) void {
         .root_module = mod,
         .filters = &.{
             "PKGBUILD validation combines post-install and homograph findings",
+            "PKGBUILD review accepts empty auxiliary selections and rejects missing files",
+            "parser_content: empty optional filenames mean no auxiliary file",
+            "parser_content: empty split auxiliary overrides clear global filenames",
+            "parser_content: nonempty optional filenames retain exact bytes",
             "review digest covers exact local source contents and missing sources fail closed",
             "fixture checkout cannot invoke fake makepkg before review and integrity gates pass",
             "embedded whitespace does not bypass homograph analysis",
@@ -663,6 +667,7 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder leaves packages unsigned when signing is disabled",
             "PackageBuilder rejects a source checksum mismatch without committing srcdir",
             "PackageBuilder extracts source archives into srcdir",
+            "PackageBuilder standalone",
             "PackageBuilder detects source archives by content including zip and tar zstd",
             "PackageBuilder extracts an extensionless source over its matching archive root",
             "PackageBuilder rejects an archive root colliding with another staged source",
@@ -719,6 +724,14 @@ pub fn build(b: *std.Build) void {
     const run_aur_tests = b.addRunArtifact(aur_tests);
     const aur_test_step = b.step("aur-test", "Run safe AUR manager and event tests");
     aur_test_step.dependOn(&run_aur_tests.step);
+    const source_compression_tests = b.addTest(.{
+        .name = "source-compression-test",
+        .root_module = archive_mod,
+        .filters = &.{"standalone compression"},
+    });
+    const run_source_compression_tests = b.addRunArtifact(source_compression_tests);
+    aur_test_step.dependOn(&run_source_compression_tests.step);
+    test_step.dependOn(&run_source_compression_tests.step);
 
     const appimage_tests = b.addTest(.{
         .name = "appimage-test",

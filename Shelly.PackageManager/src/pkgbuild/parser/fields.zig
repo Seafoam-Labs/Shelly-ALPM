@@ -42,6 +42,21 @@ pub fn resolve_file_assignment(
     return assignment;
 }
 
+/// Empty optional file selections mean no auxiliary file, as in makepkg.
+/// Keep SRCINFO serialization on the raw string resolver.
+pub fn resolve_optional_file_string(
+    self: PkgbuildParser,
+    assignment: FileAssignment,
+    vars: *std.StringHashMap([]const u8),
+) !?[]const u8 {
+    const resolved = try resolve_file_string(self, assignment, vars);
+    if (resolved.len == 0) {
+        self.allocator.free(resolved);
+        return null;
+    }
+    return resolved;
+}
+
 pub fn resolve_file_string(
     self: PkgbuildParser,
     assignment: FileAssignment,
