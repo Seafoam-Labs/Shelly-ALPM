@@ -397,12 +397,14 @@ fn prepareReviewOnly(
     var dependency_plan: ?SyncDependencyPlan = null;
     errdefer if (dependency_plan) |*plan| plan.deinit(context.allocator);
     if (optionEnabled(invocation, "--review-dependencies")) {
-        const manager = try Zigalpm.AlpmManager.init(
-            context.allocator,
-            context.environ,
-            .{ .use_root = false, .operation_context = operation_context },
+        var repositories = try ReviewRepositories.init(
+            context,
+            operation_context,
+            optionEnabled(invocation, "--review-host-dependencies"),
+            null,
         );
-        defer manager.deinit();
+        defer repositories.deinit(context);
+        const manager = repositories.manager;
         if (optionEnabled(invocation, "--review-host-dependencies")) {
             var resolver_context: AlpmResolverContext = .{ .manager = manager };
             dependency_plan = try resolveSyncDependencies(
@@ -1812,8 +1814,65 @@ const AlpmResolverContext = struct {
     }
 };
 
+/// Isolated dependency review must see newly published repository packages
+/// before the coordinator decides whether provisioning can proceed. Keep its
+/// refresh private: updating the host sync database here would affect later
+/// host transactions, and using its local database would hide guest needs.
+const ReviewRepositories = struct {
+    manager: *Zigalpm.AlpmManager,
+    database_path: ?[]u8,
+
+    fn init(
+        context: *runtime.RuntimeContext,
+        operation_context: ?*Zigalpm.OperationContext,
+        host_dependencies: bool,
+        config_path: ?[]const u8,
+    ) !ReviewRepositories {
+        var database_path: ?[]u8 = null;
+        errdefer if (database_path) |path| {
+            std.Io.Dir.cwd().deleteTree(context.io, path) catch {};
+            context.allocator.free(path);
+        };
+        if (!host_dependencies) {
+            var random: [16]u8 = undefined;
+            context.io.random(&random);
+            const suffix = std.fmt.bytesToHex(random, .lower);
+            const path = try std.fmt.allocPrint(context.allocator, "/tmp/shelly-build-review-{s}", .{suffix});
+            errdefer context.allocator.free(path);
+            try std.Io.Dir.cwd().createDir(context.io, path, .fromMode(0o700));
+            database_path = path;
+        }
+        const log_path = if (database_path) |path|
+            try std.fs.path.join(context.allocator, &.{ path, "alpm.log" })
+        else
+            null;
+        defer if (log_path) |path| context.allocator.free(path);
+        const manager = try Zigalpm.AlpmManager.init(context.allocator, context.environ, .{
+            .config_path = config_path,
+            .use_root = false,
+            .operation_context = operation_context,
+            .database_path = database_path,
+            .log_file = log_path,
+        });
+        errdefer manager.deinit();
+        // Like an unprivileged upgrade preview, defer signature enforcement
+        // to the provisioning transaction, which uses the host trust policy.
+        if (database_path != null) try manager.sync_for_update_check(false);
+        return .{ .manager = manager, .database_path = database_path };
+    }
+
+    fn deinit(self: *ReviewRepositories, context: *runtime.RuntimeContext) void {
+        self.manager.deinit();
+        if (self.database_path) |path| {
+            std.Io.Dir.cwd().deleteTree(context.io, path) catch {};
+            context.allocator.free(path);
+        }
+        self.* = undefined;
+    }
+};
+
 /// An isolated root starts with no host packages. Repository metadata is
-/// shared for resolution, but the host local database must not suppress a
+/// freshly synchronized, but the host local database must not suppress a
 /// dependency that still needs to be provisioned into the guest.
 const IsolatedResolverContext = struct {
     manager: *Zigalpm.AlpmManager,
@@ -2980,6 +3039,73 @@ test "isolated configuration preserves build policy and forces guest-local desti
 test "isolated dependency state never inherits host installations" {
     var dependency = [_:0]u8{ 'd', 'e', 'm', 'o' };
     try std.testing.expect(!isolatedDependencyInstalled(null, &dependency));
+}
+
+test "isolated dependency review refreshes local repositories without changing host metadata" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    try temporary.dir.createDirPath(io, "host/sync");
+    try temporary.dir.createDir(io, "mirror", .default_dir);
+    const fixture = struct {
+        fn writeDatabase(dir: std.Io.Dir, path: []const u8, name: []const u8) !void {
+            const desc = try std.fmt.allocPrint(std.testing.allocator, "%FILENAME%\n{s}-2-1-any.pkg.tar.zst\n\n%NAME%\n{s}\n\n" ++
+                "%VERSION%\n2-1\n\n%ARCH%\nany\n\n%PROVIDES%\naqueous-provider=2\n\n", .{ name, name });
+            defer std.testing.allocator.free(desc);
+            var file = try dir.createFile(std.testing.io, path, .{});
+            defer file.close(std.testing.io);
+            var buffer: [4096]u8 = undefined;
+            var writer = file.writer(std.testing.io, &buffer);
+            var archive: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+            const entry = try std.fmt.allocPrint(std.testing.allocator, "{s}-2-1/desc", .{name});
+            defer std.testing.allocator.free(entry);
+            try archive.writeFileBytes(entry, desc, .{ .mode = 0o644 });
+            try archive.finishPedantically();
+            try writer.interface.flush();
+        }
+    };
+    try fixture.writeDatabase(temporary.dir, "host/sync/local-builds.db", "old-package");
+    try fixture.writeDatabase(temporary.dir, "mirror/local-builds.db", "dms-aqueous");
+    const old_database = try temporary.dir.readFileAlloc(io, "host/sync/local-builds.db", allocator, .limited(1024 * 1024));
+    defer allocator.free(old_database);
+    const configuration = try std.fmt.allocPrint(allocator, "[options]\nArchitecture = auto\nDBPath = {s}/host\nSigLevel = Never\n" ++
+        "[local-builds]\nServer = file://{s}/mirror\n", .{ directory, directory });
+    defer allocator.free(configuration);
+    try temporary.dir.writeFile(io, .{ .sub_path = "pacman.conf", .data = configuration });
+    const config_path = try std.fs.path.join(allocator, &.{ directory, "pacman.conf" });
+    defer allocator.free(config_path);
+    var output = std.Io.Writer.Allocating.init(allocator);
+    defer output.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = allocator,
+        .io = io,
+        .environ = std.testing.environ,
+        .stdout = &output.writer,
+        .stderr = &output.writer,
+    };
+    var build = try (Zigalpm.pkgbuild.Parser{ .allocator = allocator, .io = io }).parser_content("pkgname=aqueous-git\npkgver=1\npkgrel=1\narch=('any')\n" ++
+        "depends=('dms-aqueous>=2' 'aqueous-provider>=2')\n", null);
+    defer build.deinit(allocator);
+    const database_path = blk: {
+        var repositories = try ReviewRepositories.init(&context, null, false, config_path);
+        defer repositories.deinit(&context);
+        var resolver: IsolatedResolverContext = .{ .manager = repositories.manager };
+        var plan = try resolveSyncDependencies(allocator, &.{build}, false, resolver.backend());
+        defer plan.deinit(allocator);
+        try std.testing.expectEqual(@as(usize, 0), plan.aur_dependencies.len);
+        try std.testing.expectEqual(@as(usize, 1), plan.repo_dependencies.len);
+        try std.testing.expectEqualStrings("dms-aqueous", plan.repo_dependencies[0].name);
+        break :blk try allocator.dupe(u8, repositories.database_path.?);
+    };
+    defer allocator.free(database_path);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, database_path, .{}));
+    const unchanged = try temporary.dir.readFileAlloc(io, "host/sync/local-builds.db", allocator, .limited(1024 * 1024));
+    defer allocator.free(unchanged);
+    try std.testing.expectEqualSlices(u8, old_database, unchanged);
+    try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, "host/local", .{}));
 }
 
 test "coordinator child builds never re-enter the sync deps coordinator" {

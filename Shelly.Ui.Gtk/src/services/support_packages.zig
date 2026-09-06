@@ -1,5 +1,6 @@
 const std = @import("std");
 const options = @import("options");
+const ShellyCli = @import("shelly_cli.zig").ShellyCli;
 
 pub const Feature = enum {
     flatpak,
@@ -37,6 +38,23 @@ pub fn selectedDependencies(
             buffer[len] = package;
             len += 1;
         }
+    }
+    return buffer[0..len];
+}
+
+pub fn missingPackages(
+    alloc: std.mem.Allocator,
+    io: std.Io,
+    packages: []const []const u8,
+    buffer: [][]const u8,
+) []const []const u8 {
+    const cli = ShellyCli{ .allocator = alloc, .io = io };
+    var len: usize = 0;
+    for (packages) |package| {
+        if (len == buffer.len) break;
+        if (cli.isPackageInstalled(package) catch false) continue;
+        buffer[len] = package;
+        len += 1;
     }
     return buffer[0..len];
 }
