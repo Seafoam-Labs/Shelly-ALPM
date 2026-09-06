@@ -82,6 +82,21 @@ cleanup behavior with `shelly config set DisableCacheClean false`.
 Standalone `shelly upgrade standard` keeps its existing cleanup behavior.
 You can still clean the cache manually with `shelly purify standard --cache`.
 
+Add `--aur-cache` to also delete **all** built AUR package archives and their
+matching signatures from the invoking user's `$XDG_CACHE_HOME/Shelly` cache
+(default: `~/.cache/Shelly`):
+
+```bash
+shelly purify standard --cache --aur-cache --dry-run
+shelly purify standard --cache --aur-cache
+```
+
+The command previews the files and asks for confirmation before deleting them.
+`--aur-cache` can also be used without `--cache`; standard purify still checks
+for corrupted archives. AUR PKGBUILDs, checkout history, source files, and build
+directories are retained. Archives in custom build output destinations outside
+Shelly's cache are not included.
+
 ## Roadmap
 
 Upcoming features and development targets:
