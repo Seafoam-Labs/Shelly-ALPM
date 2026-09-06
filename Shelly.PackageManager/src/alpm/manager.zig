@@ -3324,6 +3324,7 @@ pub const Manager = struct {
             .SigMissing => try details.appendSlice(self.allocator, "Signature is missing.\n"),
             .SigInvalid => try details.appendSlice(self.allocator, "Could not verify the signature. Refresh the package signing keys and download the file again. If verification still fails, contact the package source.\n"),
             .UnsatisfiedDeps => {
+                if (data_ptr == null) try details.appendSlice(self.allocator, "Could not continue because a required dependency is unavailable. Review the package dependencies and try again.\n");
                 var node = data_ptr;
                 while (node != null) : (node = node.?.next) {
                     const data = node.?.data orelse continue;
@@ -3331,10 +3332,19 @@ pub const Manager = struct {
                     const target = spanC(miss.target) orelse "unknown";
                     const dep_str = rawLibalpm.alpm_dep_compute_string(miss.depend);
                     defer if (dep_str != null) std.c.free(dep_str);
-                    try details.print(self.allocator, "Could not install \"{s}\" because it requires \"{s}\", which is unavailable. Refresh the package lists and try again.\n", .{ target, spanC(dep_str) orelse "an unknown dependency" });
+                    const dependency = spanC(dep_str) orelse "an unknown dependency";
+                    const removing = if (self.dispatcher.operation) |operation| operation.envelope.kind == .remove else false;
+                    if (removing) {
+                        try details.print(self.allocator, "Could not remove the selected packages because \"{s}\" still requires \"{s}\". Review the dependent packages before continuing.\n", .{ target, dependency });
+                    } else if (spanC(miss.causingpkg)) |cause| {
+                        try details.print(self.allocator, "Could not install \"{s}\" because it would remove a package that provides \"{s}\", which \"{s}\" requires. Review the affected packages before continuing.\n", .{ cause, dependency, target });
+                    } else {
+                        try details.print(self.allocator, "Could not install \"{s}\" because it requires \"{s}\", which is unavailable. Refresh the package lists and try again.\n", .{ target, dependency });
+                    }
                 }
             },
             .ConflictingDeps => {
+                if (data_ptr == null) try details.appendSlice(self.allocator, "The selected packages cannot be installed together. Review which packages you want to keep before continuing.\n");
                 var node = data_ptr;
                 while (node != null) : (node = node.?.next) {
                     const data = node.?.data orelse continue;
@@ -3351,6 +3361,7 @@ pub const Manager = struct {
                 }
             },
             .FileConflicts => {
+                if (data_ptr == null) try details.appendSlice(self.allocator, "Could not install the selected packages because their files conflict. Review the conflicting files before replacing or removing them.\n");
                 var node = data_ptr;
                 while (node != null) : (node = node.?.next) {
                     const data = node.?.data orelse continue;
@@ -5458,4 +5469,28 @@ test "database lock error uses the configured database directory" {
     try testing.expect(std.mem.indexOf(u8, cap.text(), "Lock file: /custom/pacman database/db.lck") != null);
     try testing.expect(std.mem.indexOf(u8, cap.text(), "sudo rm -- '/custom/pacman database/db.lck'") != null);
     try testing.expect(std.mem.indexOf(u8, cap.text(), "/var/lib/pacman") == null);
+}
+
+test "dependency errors explain the dependent package during removal" {
+    var mgr = newErrorManager();
+    defer mgr.dispatcher.deinit();
+    var context = operation_api.OperationContext.init(testing.allocator, std.testing.io);
+    defer context.deinit();
+    var operation = context.begin(.{ .backend = .alpm, .kind = .remove, .subject = "libexample" });
+    defer operation.finish(.failed);
+    mgr.dispatcher.operation = &operation;
+    var cap = ErrorCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{ .function = captureError, .data = @ptrCast(&cap) });
+    var dependency: rawLibalpm.alpm_depend_t = .{
+        .name = @ptrCast(@constCast("libexample")),
+        .mod = @intCast(rawLibalpm.ALPM_DEP_MOD_ANY),
+    };
+    var missing: rawLibalpm.alpm_depmissing_t = .{
+        .target = @ptrCast(@constCast("installed-app")),
+        .depend = &dependency,
+    };
+    var node: rawLibalpm.alpm_list_t = .{ .data = @ptrCast(&missing) };
+    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.UnsatisfiedDeps), &node);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Could not remove the selected packages because \"installed-app\" still requires \"libexample\"") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Could not install") == null);
 }
