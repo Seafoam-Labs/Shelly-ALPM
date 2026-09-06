@@ -23,6 +23,7 @@ const appimage_command_path = "shelly upgrade appimage";
 const aur_command_path = "shelly upgrade aur";
 const flatpak_command_path = "shelly upgrade flatpak";
 const auto_confirm_cache_clean_option = "--auto-confirm-cache-clean";
+const disable_cache_clean_option = "--disable-cache-clean";
 
 const UpgradeError = error{
     BackendFailed,
@@ -633,6 +634,18 @@ fn runStandard(
             .{ failure.service, failure.message },
         );
     }
+    var cleaner = Zigalpm.CacheManager.init(context.allocator, context.io, .{ .cache_directory = manager.config.cache_directory, .handle = manager.handle });
+    try runCacheClean(context, operation_context, invocation, &cleaner);
+}
+
+fn runCacheClean(
+    context: *runtime.RuntimeContext,
+    operation_context: *Zigalpm.OperationContext,
+    invocation: *const parser.Invocation,
+    cleaner: *Zigalpm.CacheManager,
+) !void {
+    if (disableCacheClean(context, invocation)) return;
+
     var cache_operation = operation_context.begin(.{ .backend = .alpm, .kind = .cleanup });
     var cache_completion: Zigalpm.OperationCompletionStatus = .failed;
     defer cache_operation.finish(cache_completion);
@@ -642,9 +655,9 @@ fn runStandard(
         autoConfirmCacheClean(context, invocation),
     );
     if (clean_up) {
-        var cleaner = Zigalpm.CacheManager.init(context.allocator, context.io, .{ .cache_directory = manager.config.cache_directory, .handle = manager.handle });
         cleaner.setOperationContext(operation_context);
-        const plan = try cleaner.plan_cache_cleanup(.{ .keep = 3, .dry_run = false });
+        var plan = try cleaner.plan_cache_cleanup(.{ .keep = 3, .dry_run = false });
+        defer plan.deinit(context.allocator);
         _ = try cleaner.execute_cache_removal_plan(&plan);
     }
     cache_completion = .success;
@@ -1108,6 +1121,16 @@ fn autoConfirmCacheClean(
     return configuredAutoConfirmCacheClean(&configuration, invocation);
 }
 
+fn disableCacheClean(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+) bool {
+    if (!upgradesAll(invocation)) return false;
+    if (optionEnabled(invocation, disable_cache_clean_option)) return true;
+    const configuration = config_manager.Manager.init(context).read() catch return false;
+    return boolValue(&configuration, "DisableCacheClean") orelse false;
+}
+
 fn elevatedUpgradeArguments(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
@@ -1123,6 +1146,7 @@ fn elevatedUpgradeArguments(
         context.allocator,
         aur_arguments,
         autoConfirmCacheClean(context, invocation),
+        disableCacheClean(context, invocation),
     );
 }
 
@@ -1130,14 +1154,16 @@ fn upgradeArgumentsWithCacheCleanPolicy(
     allocator: std.mem.Allocator,
     arguments: []const []const u8,
     auto_confirm: bool,
+    disabled: bool,
 ) ![]const []const u8 {
+    const policy_option = if (disabled) disable_cache_clean_option else auto_confirm_cache_clean_option;
     const already_present = for (arguments) |argument| {
-        if (std.mem.eql(u8, argument, auto_confirm_cache_clean_option)) break true;
+        if (std.mem.eql(u8, argument, policy_option)) break true;
     } else false;
-    const extra_count: usize = if (auto_confirm and !already_present) 1 else 0;
+    const extra_count: usize = if ((disabled or auto_confirm) and !already_present) 1 else 0;
     const result = try allocator.alloc([]const u8, arguments.len + extra_count);
     @memcpy(result[0..arguments.len], arguments);
-    if (extra_count == 1) result[arguments.len] = auto_confirm_cache_clean_option;
+    if (extra_count == 1) result[arguments.len] = policy_option;
     return result;
 }
 
@@ -1254,6 +1280,126 @@ test "aggregate upgrade carries cache clean policy across elevation" {
     try std.testing.expect(autoConfirmCacheClean(&elevated_tc.context, &elevated.dispatch));
 }
 
+test "disabled cache cleaning is limited to aggregate upgrades and survives elevation" {
+    const shortcodes = @import("../cli/shortcodes.zig");
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const absolute_length = try temporary.dir.realPath(std.testing.io, &absolute_buffer);
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    var environment = std.process.Environ.Map.init(tc.arena.allocator());
+    try environment.put("XDG_CONFIG_HOME", absolute_buffer[0..absolute_length]);
+    tc.context.environment = &environment;
+    const manager = config_manager.Manager.init(&tc.context);
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+
+    const aliases = [_][]const []const u8{
+        &.{},
+        &.{ "upgrade", "all" },
+        &.{ "upgrade", "standard", "--all" },
+        &.{ "upgrade", "standard", "-a" },
+        &.{"-U"},
+        &.{"-Ux"},
+        &.{"-Usa"},
+    };
+    for (aliases) |arguments| {
+        const translated = try shortcodes.translate(tc.arena.allocator(), &manifest, arguments);
+        const original = try parser.parse(tc.arena.allocator(), &manifest, translated.arguments().?);
+        try std.testing.expect(original == .dispatch);
+        try std.testing.expect(try manager.update("DisableCacheClean", "false"));
+        try std.testing.expect(!disableCacheClean(&tc.context, &original.dispatch));
+        try std.testing.expect(try manager.update("DisableCacheClean", "true"));
+        try std.testing.expect(try manager.update("AutoConfirmCacheClean", "true"));
+        try std.testing.expect(disableCacheClean(&tc.context, &original.dispatch));
+        const elevated_arguments = try elevatedUpgradeArguments(&tc.context, &original.dispatch);
+        defer tc.context.allocator.free(elevated_arguments);
+        const elevated = try parser.parse(tc.arena.allocator(), &manifest, elevated_arguments);
+        try std.testing.expect(elevated == .dispatch);
+        try std.testing.expect(optionEnabled(&elevated.dispatch, disable_cache_clean_option));
+        try std.testing.expect(!optionEnabled(&elevated.dispatch, auto_confirm_cache_clean_option));
+
+        // The elevated process need not have access to the invoking user's config.
+        try manager.reset();
+        try std.testing.expect(disableCacheClean(&tc.context, &elevated.dispatch));
+        const repeated = try elevatedUpgradeArguments(&tc.context, &elevated.dispatch);
+        defer tc.context.allocator.free(repeated);
+        try std.testing.expectEqual(elevated_arguments.len, repeated.len);
+    }
+
+    try std.testing.expect(try manager.update("DisableCacheClean", "true"));
+    const standalone = try parser.parse(tc.arena.allocator(), &manifest, &.{ "upgrade", "standard", disable_cache_clean_option });
+    try std.testing.expect(standalone == .dispatch);
+    try std.testing.expect(!disableCacheClean(&tc.context, &standalone.dispatch));
+    const manual = try parser.parse(tc.arena.allocator(), &manifest, &.{ "purify", "standard", "--cache" });
+    try std.testing.expect(manual == .dispatch);
+    try std.testing.expect(!disableCacheClean(&tc.context, &manual.dispatch));
+}
+
+test "disabled cleanup emits no operations or questions and preserves cached versions" {
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const absolute_length = try temporary.dir.realPath(std.testing.io, &absolute_buffer);
+    const cache_directory = absolute_buffer[0..absolute_length];
+    const fixtures = [_][]const u8{
+        "example-1.0-1-any.pkg.tar.zst",
+        "example-2.0-1-any.pkg.tar.zst",
+        "example-3.0-1-any.pkg.tar.zst",
+        "example-4.0-1-any.pkg.tar.zst",
+    };
+    for (fixtures) |name|
+        try temporary.dir.writeFile(std.testing.io, .{ .sub_path = name, .data = "cached package" });
+
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    var environment = std.process.Environ.Map.init(tc.arena.allocator());
+    try environment.put("XDG_CONFIG_HOME", cache_directory);
+    tc.context.environment = &environment;
+    const manager = config_manager.Manager.init(&tc.context);
+    try std.testing.expect(try manager.update("DisableCacheClean", "true"));
+    try std.testing.expect(try manager.update("AutoConfirmCacheClean", "true"));
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const invocation = try parser.parse(tc.arena.allocator(), &manifest, &.{ "upgrade", "all", "--no-confirm", auto_confirm_cache_clean_option });
+    try std.testing.expect(invocation == .dispatch);
+    var operation_context = Zigalpm.OperationContext.init(tc.arena.allocator(), std.testing.io);
+    defer operation_context.deinit();
+    const Capture = struct {
+        events: usize = 0,
+        questions: usize = 0,
+
+        fn receive(data: ?*anyopaque, _: Zigalpm.OperationEvent) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            self.events += 1;
+        }
+
+        fn answer(data: ?*anyopaque, _: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            self.questions += 1;
+            return .accepted;
+        }
+    };
+    var capture: Capture = .{};
+    _ = try operation_context.subscribe(.{ .function = Capture.receive, .data = &capture });
+    operation_context.setQuestionHandler(.{ .function = Capture.answer, .data = &capture });
+    var cleaner = Zigalpm.CacheManager.init(tc.arena.allocator(), std.testing.io, .{ .cache_directory = cache_directory });
+    try runCacheClean(&tc.context, &operation_context, &invocation.dispatch, &cleaner);
+    try std.testing.expectEqual(@as(usize, 0), capture.events);
+    try std.testing.expectEqual(@as(usize, 0), capture.questions);
+    for (fixtures) |name| {
+        const contents = try temporary.dir.readFileAlloc(std.testing.io, name, tc.arena.allocator(), .limited(1024));
+        try std.testing.expectEqualStrings("cached package", contents);
+    }
+
+    // Re-enabling cleanup restores the existing three-version retention policy.
+    try std.testing.expect(try manager.update("DisableCacheClean", "false"));
+    try runCacheClean(&tc.context, &operation_context, &invocation.dispatch, &cleaner);
+    try std.testing.expect(capture.events > 0);
+    try std.testing.expectError(error.FileNotFound, temporary.dir.readFileAlloc(std.testing.io, fixtures[0], tc.arena.allocator(), .limited(1024)));
+}
+
 test "upgrade carries AUR URL override across elevation" {
     var tc: test_support.TestContext = .{};
     tc.init();
@@ -1275,11 +1421,12 @@ test "upgrade carries AUR URL override across elevation" {
     );
 }
 
-test "disabled cache clean policy does not alter elevated arguments" {
+test "default cache clean policy does not alter elevated arguments" {
     const original = [_][]const u8{ "upgrade", "all" };
     const elevated = try upgradeArgumentsWithCacheCleanPolicy(
         std.testing.allocator,
         &original,
+        false,
         false,
     );
     defer std.testing.allocator.free(elevated);
@@ -1299,6 +1446,7 @@ test "bare aggregate upgrade carries cache clean policy across elevation" {
         arena.allocator(),
         original.dispatch.arguments,
         true,
+        false,
     );
     const elevated = try parser.parse(arena.allocator(), &manifest, elevated_arguments);
     try std.testing.expect(elevated == .dispatch);
