@@ -12,6 +12,14 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
+msgid ""
+"{package_one}-{version_one} conflicts with "
+"{package_two}-{version_two}. Remove {package_to_remove}?"
+msgstr ""
+"{package_one}-{version_one} entra em conflito com "
+"{package_two}-{version_two}. Remover {package_to_remove}?"
+
+
 msgid "Would you like to remove extra cache entries?"
 msgstr "Você gostaria de remover entradas adicionais do cache?"
 

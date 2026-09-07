@@ -2,7 +2,7 @@
 
 pkgbase=shelly-cli
 pkgname=('shelly-cli' 'shelly-cli-flatpak-backend')
-pkgver=3.1.2
+pkgver=3.1.3
 pkgrel=1
 arch=('x86_64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
@@ -24,7 +24,7 @@ conflicts=('shelly' 'shelly-git' 'shelly-bin')
 pkgver() {
   cd "${srcdir}/${pkgname}"
 
-  printf '3.1.2r%s.g%s' \
+  printf '3.1.3r%s.g%s' \
     "$(git rev-list --count HEAD)" \
     "$(git rev-parse --short=7 HEAD)"
 }
@@ -84,7 +84,6 @@ package_shelly-cli() {
     'sudo'
   )
   optdepends=(
-    'arch-install-scripts: provision fresh roots for --isolated builds'
     'base-devel: build and install AUR packages'
     'devtools: build AUR packages in a clean chroot'
     'desktop-file-utils: update AppImage desktop entries'
@@ -93,6 +92,7 @@ package_shelly-cli() {
     'gtk-update-icon-cache: update AppImage icons'
     'opendoas: alternative privilege elevator to sudo'
     'plocate: locate-based pacfile discovery'
+    'util-linux: isolate fresh-root provisioning for --isolated builds'
     'vim: default visual pacfile diff viewer'
   )
 

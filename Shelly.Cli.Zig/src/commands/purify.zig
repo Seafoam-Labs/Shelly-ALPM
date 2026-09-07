@@ -8,6 +8,8 @@ const ui_operation = @import("../output/ui_operation.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const elevation = @import("../runtime/elevation.zig");
+const xdg = @import("../runtime/xdg.zig");
+const aur_cache = @import("purify_aur_cache.zig");
 
 const standard_command_path = "shelly purify standard";
 const flatpak_command_path = "shelly purify flatpak";
@@ -23,14 +25,18 @@ const Options = struct {
     dry_run: bool = false,
     orphans: bool = false,
     cache_versions: ?usize = null,
+    aur_cache: bool = false,
+    aur_cache_root: ?[]const u8 = null,
     plan_only: bool = false,
     cache_plan: ?*const Zigalpm.alpm.CacheRemovalPlan = null,
+    aur_cache_plans: ?[]const Zigalpm.alpm.CacheRemovalPlan = null,
 };
 
 const Result = struct {
     targets: []const [:0]const u8 = &.{},
     owns_targets: bool = false,
     cache_plan: ?Zigalpm.alpm.CacheRemovalPlan = null,
+    aur_cache_plans: []Zigalpm.alpm.CacheRemovalPlan = &.{},
 
     fn deinit(self: *Result, allocator: std.mem.Allocator) void {
         if (self.owns_targets) {
@@ -38,6 +44,7 @@ const Result = struct {
             allocator.free(self.targets);
         }
         if (self.cache_plan) |*cache_plan| cache_plan.deinit(allocator);
+        aur_cache.deinitPlans(allocator, self.aur_cache_plans);
         self.* = undefined;
     }
 };
@@ -60,6 +67,11 @@ const Real = struct {
                 manager.setOperationContext(operation_context);
                 defer manager.setOperationContext(null);
                 const planning = options.plan_only or options.dry_run;
+
+                if (!planning and options.aur_cache) {
+                    const plans = options.aur_cache_plans orelse return PurifyError.CachePlanMissing;
+                    try aur_cache.execute(context, operation_context, plans);
+                }
 
                 if (!planning and options.cache_versions != null) {
                     const cache_plan = options.cache_plan orelse return PurifyError.CachePlanMissing;
@@ -97,8 +109,14 @@ const Real = struct {
                             .dry_run = options.dry_run,
                         });
                         errdefer cache_plan.deinit(context.allocator);
-                        try appendCacheTargets(context.allocator, &result, &cache_plan);
+                        try appendCacheTargets(context.allocator, &result, &cache_plan, "cache");
                         result.cache_plan = cache_plan;
+                    }
+                    if (options.aur_cache) {
+                        const root = options.aur_cache_root orelse try xdg.shellyCache(context, &.{});
+                        result.aur_cache_plans = try aur_cache.plan(context, operation_context, root, options.dry_run);
+                        for (result.aur_cache_plans) |*cache_plan|
+                            try appendCacheTargets(context.allocator, &result, cache_plan, "aur-cache");
                     }
                 }
                 return result;
@@ -141,13 +159,27 @@ pub fn dispatch(
 ) !?u8 {
     const backend = backendForPath(invocation.command.path) orelse return null;
     if (backend == .standard and !invocation.globals.ui_mode) {
-        const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
+        const arguments = try elevatedPurifyArguments(context, invocation);
+        defer context.allocator.free(arguments);
+        const elevated_exit = elevation.relaunchIfNeeded(context, arguments) catch |err| {
             try context.stderr.print("Unable to elevate purify: {t}\n", .{err});
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
     }
     return dispatchWithRunner(context, invocation, Real{});
+}
+
+fn elevatedPurifyArguments(context: *runtime.RuntimeContext, invocation: *const parser.Invocation) ![]const []const u8 {
+    const options = optionsFor(invocation);
+    if (!options.aur_cache or options.aur_cache_root != null)
+        return context.allocator.dupe([]const u8, invocation.arguments);
+    const arguments = try context.allocator.alloc([]const u8, invocation.arguments.len + 2);
+    errdefer context.allocator.free(arguments);
+    @memcpy(arguments[0..invocation.arguments.len], invocation.arguments);
+    arguments[invocation.arguments.len] = "--aur-cache-root";
+    arguments[invocation.arguments.len + 1] = try xdg.shellyCache(context, &.{});
+    return arguments;
 }
 
 fn dispatchWithRunner(
@@ -175,6 +207,7 @@ fn dispatchWithRunner(
     }
     var execution_options = options;
     if (plan.cache_plan) |*cache_plan| execution_options.cache_plan = cache_plan;
+    execution_options.aur_cache_plans = plan.aur_cache_plans;
     return try executeWithRunner(context, invocation, backend, execution_options, runner);
 }
 
@@ -388,6 +421,7 @@ fn appendCacheTargets(
     allocator: std.mem.Allocator,
     result: *Result,
     cache_plan: *const Zigalpm.alpm.CacheRemovalPlan,
+    label: []const u8,
 ) !void {
     std.debug.assert(result.owns_targets);
     var additional: usize = 0;
@@ -407,9 +441,10 @@ fn appendCacheTargets(
         if (cacheTargetAlreadyPresent(result.targets, item.package.full_path)) continue;
         combined[initialized] = try std.fmt.allocPrintSentinel(
             allocator,
-            "[cache] {s} {s} ({d} B)",
+            "[{s}] {s} {s} ({d} B)",
             .{
-                item.package.name,
+                label,
+                if (std.mem.eql(u8, label, "aur-cache")) item.package.full_path else item.package.name,
                 item.package.version_release,
                 item.package.file_size +| item.signature_size,
             },
@@ -544,7 +579,16 @@ fn optionsFor(invocation: *const parser.Invocation) Options {
         .dry_run = optionEnabled(invocation, "--dry-run"),
         .orphans = optionEnabled(invocation, "--orphans"),
         .cache_versions = optionalUnsigned(invocation, "--cache", 3),
+        .aur_cache = optionEnabled(invocation, "--aur-cache"),
+        .aur_cache_root = optionValue(invocation, "--aur-cache-root"),
     };
+}
+
+fn optionValue(invocation: *const parser.Invocation, name: []const u8) ?[]const u8 {
+    for (invocation.options) |option| {
+        if (std.mem.eql(u8, option.name, name)) return option.value;
+    }
+    return null;
 }
 
 fn optionalUnsigned(
@@ -663,6 +707,102 @@ test "purify long forms and shortcodes route with standard modifiers" {
     const expected_flatpak = [_][]const u8{ "purify", "flatpak" };
     for (flatpak.translated, &expected_flatpak) |actual, expected|
         try std.testing.expectEqualStrings(expected, actual);
+}
+
+test "AUR cache option preserves the invoking user's custom cache through elevation" {
+    const spec = @import("../cli/spec.zig");
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    var environment = std.process.Environ.Map.init(tc.arena.allocator());
+    try environment.put("HOME", "/home/tester");
+    try environment.put("XDG_CACHE_HOME", "/tmp/custom user cache");
+    tc.context.environment = &environment;
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const invocation = try parser.parse(tc.arena.allocator(), &manifest, &.{ "purify", "standard", "--cache", "--aur-cache" });
+    try std.testing.expect(invocation == .dispatch);
+    try std.testing.expect(optionsFor(&invocation.dispatch).aur_cache);
+    try std.testing.expectEqual(@as(?usize, 3), optionsFor(&invocation.dispatch).cache_versions);
+    const arguments = try elevatedPurifyArguments(&tc.context, &invocation.dispatch);
+    defer tc.context.allocator.free(arguments);
+    const elevated = try parser.parse(tc.arena.allocator(), &manifest, arguments);
+    try std.testing.expect(elevated == .dispatch);
+    try std.testing.expectEqualStrings("/tmp/custom user cache/Shelly", optionsFor(&elevated.dispatch).aur_cache_root.?);
+    try environment.put("XDG_CACHE_HOME", "/root/.cache");
+    const repeated = try elevatedPurifyArguments(&tc.context, &elevated.dispatch);
+    defer tc.context.allocator.free(repeated);
+    try std.testing.expectEqualSlices([]const u8, arguments, repeated);
+    const flatpak = try parser.parse(tc.arena.allocator(), &manifest, &.{ "purify", "flatpak", "--aur-cache" });
+    try std.testing.expect(flatpak == .failure);
+    const ordinary = try parser.parse(tc.arena.allocator(), &manifest, &.{ "purify", "standard", "--cache" });
+    try std.testing.expect(!optionsFor(&ordinary.dispatch).aur_cache);
+    const unchanged = try elevatedPurifyArguments(&tc.context, &ordinary.dispatch);
+    defer tc.context.allocator.free(unchanged);
+    try std.testing.expectEqualSlices([]const u8, ordinary.dispatch.arguments, unchanged);
+}
+
+test "AUR cache cleanup previews files and deletes only after confirmation" {
+    const spec = @import("../cli/spec.zig");
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const absolute_length = try temporary.dir.realPath(std.testing.io, &absolute_buffer);
+    try temporary.dir.createDirPath(std.testing.io, "Shelly/example");
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "Shelly/example/PKGBUILD", .data = "pkgname=example" });
+    const archive = "Shelly/example/example-1-1-any.pkg.tar.zst";
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = archive, .data = "fixture" });
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    var environment = std.process.Environ.Map.init(tc.arena.allocator());
+    try environment.put("XDG_CACHE_HOME", absolute_buffer[0..absolute_length]);
+    tc.context.environment = &environment;
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const Runner = struct {
+        mutations: usize = 0,
+
+        fn run(self: *@This(), context: *runtime.RuntimeContext, operations: *Zigalpm.OperationContext, backend: Backend, options: Options) !Result {
+            try std.testing.expectEqual(Backend.standard, backend);
+            try std.testing.expect(options.aur_cache);
+            if (options.plan_only) {
+                var result: Result = .{
+                    .targets = try context.allocator.alloc([:0]const u8, 0),
+                    .owns_targets = true,
+                };
+                errdefer result.deinit(context.allocator);
+                result.aur_cache_plans = try aur_cache.plan(context, operations, try xdg.shellyCache(context, &.{}), options.dry_run);
+                for (result.aur_cache_plans) |*cache_plan|
+                    try appendCacheTargets(context.allocator, &result, cache_plan, "aur-cache");
+                return result;
+            }
+            self.mutations += 1;
+            try aur_cache.execute(context, operations, options.aur_cache_plans.?);
+            return .{};
+        }
+    };
+    var runner: Runner = .{};
+    const cases = [_]struct { arguments: []const []const u8, response: []const u8 }{
+        .{ .arguments = &.{ "purify", "standard", "--aur-cache", "--dry-run" }, .response = "yes\n" },
+        .{ .arguments = &.{ "purify", "standard", "--aur-cache" }, .response = "no\n" },
+        .{ .arguments = &.{ "purify", "standard", "--aur-cache" }, .response = "yes\n" },
+    };
+    for (cases, 0..) |case, index| {
+        tc.stdout.writer.end = 0;
+        var stdin = std.Io.Reader.fixed(case.response);
+        tc.context.stdin = &stdin;
+        const invocation = try parser.parse(tc.arena.allocator(), &manifest, case.arguments);
+        try std.testing.expect(invocation == .dispatch);
+        try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &invocation.dispatch, &runner));
+        const preview = std.mem.indexOf(u8, tc.stdout.writer.buffered(), "[aur-cache]").?;
+        if (index != 0)
+            try std.testing.expect(preview < std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Proceed with purify?").?);
+        if (index < 2) {
+            try std.testing.expectEqual(@as(usize, 0), runner.mutations);
+            _ = try temporary.dir.statFile(std.testing.io, archive, .{});
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 1), runner.mutations);
+    try std.testing.expectError(error.FileNotFound, temporary.dir.statFile(std.testing.io, archive, .{}));
 }
 
 test "purify confirmation is default deny" {

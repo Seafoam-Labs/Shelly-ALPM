@@ -64,10 +64,26 @@ fn tidyPackage(self: *PackageBuilder, package_build: *const PackageBuild, pkgdir
             .shared => self.shellybuild_config.package.strip_shared,
             .static => self.shellybuild_config.package.strip_static,
         };
+        // Keep strip's output outside the payload tree. A failed strip may
+        // leave partial output, and bundled binaries may target another CPU.
+        var random_suffix: [16]u8 = undefined;
+        self.io.random(&random_suffix);
+        const temporary_directory = try std.fmt.allocPrint(
+            self.allocator,
+            "{s}/.shelly-strip-{s}",
+            .{ self.options.work_directory, std.fmt.bytesToHex(random_suffix, .lower) },
+        );
+        defer self.allocator.free(temporary_directory);
+        try std.Io.Dir.cwd().createDir(self.io, temporary_directory, .fromMode(0o700));
+        defer std.Io.Dir.cwd().deleteTree(self.io, temporary_directory) catch {};
+        const output_path = try std.fs.path.join(self.allocator, &.{ temporary_directory, "output" });
+        defer self.allocator.free(output_path);
+
         var command: std.ArrayList([]const u8) = .empty;
         defer command.deinit(self.allocator);
         try command.append(self.allocator, "strip");
         for (flags) |flag| try command.append(self.allocator, flag);
+        try command.appendSlice(self.allocator, &.{ "-o", output_path, "--" });
         try command.append(self.allocator, path);
         var result = try process_runner.runWithEnvironment(
             self.allocator,
@@ -78,7 +94,44 @@ fn tidyPackage(self: *PackageBuilder, package_build: *const PackageBuild, pkgdir
             60,
         );
         defer result.deinit(self.allocator);
-        if (result.exit_code != 0) return error.StripFailed;
+        if (self.active_operation) |operation| try operation.checkCancelled();
+        if (result.exit_code != 0) {
+            const warning = try std.fmt.allocPrint(
+                self.allocator,
+                "Could not strip {s} (exit {d}); keeping original file.\n{s}",
+                .{ entry.path, result.exit_code, std.mem.trimEnd(u8, result.stderr, "\r\n") },
+            );
+            defer self.allocator.free(warning);
+            if (self.active_operation) |operation| {
+                var context = steps.StepStreamContext{
+                    .operation = operation,
+                    .package_name = package_build.pkg_name orelse "",
+                    .log = self.active_log,
+                };
+                steps.forwardStepLine(&context, .stderr, warning);
+            } else if (self.active_log) |log| {
+                log.writeStream(.stderr, warning);
+            }
+            if (self.active_log) |log| try log.ensureHealthy();
+            continue;
+        }
+
+        // Write through the existing inode, as makepkg does, so hardlinks and
+        // ownership survive. Only successful strip output reaches the payload.
+        var output = try std.Io.Dir.cwd().openFile(self.io, output_path, .{});
+        defer output.close(self.io);
+        var original = try entry.dir.openFile(self.io, entry.basename, .{ .mode = .write_only });
+        defer original.close(self.io);
+        var buffer: [64 * 1024]u8 = undefined;
+        var offset: u64 = 0;
+        while (true) {
+            const amount = try output.readPositionalAll(self.io, &buffer, offset);
+            if (amount == 0) break;
+            try original.writePositionalAll(self.io, buffer[0..amount], offset);
+            offset += amount;
+        }
+        try original.setLength(self.io, offset);
+        try original.setPermissions(self.io, stat.permissions);
     }
 }
 

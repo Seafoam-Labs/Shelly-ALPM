@@ -1,8 +1,10 @@
 [Desktop Entry]
 Name=Shelly Notifications
+Name[it]=Notifiche Shelly
 Name[ru]=Уведомления Shelly
 Name[pl]=Powiadomienia Shelly
 Comment=Notification service for Shelly package manager
+Comment[it]=Servizio di notifica per il gestore pacchetti Shelly
 Comment[ru]=Служба уведомлений менеджера пакетов Shelly
 Comment[pl]=Usługa powiadomień dla menedżera pakietów Shelly
 Exec=/usr/bin/shelly-notifications
@@ -10,6 +12,7 @@ Icon=shelly-tray
 Type=Application
 Categories=System;Utility;
 Keywords=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;
+Keywords[it]=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;programma;pacchetto;aggiungi;installa;disinstalla;rimuovi;aggiorna;app;applicazioni;
 Keywords[ru]=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;программа;приложение;магазин;репозиторий;пакет;добавить;установить;удалить;обновить;приложения;
 Keywords[pl]=program;software;store;repository;package;add;install;uninstall;remove;update;apps;applications;flatpak;pacman;aur;appimage;aplikacja;oprogramowanie;sklep;repozytorium;pakiet;dodaj;zainstaluj;odinstaluj;usuń;zaktualizuj;apki;aplikacje;
 Terminal=false

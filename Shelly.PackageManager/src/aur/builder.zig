@@ -994,20 +994,39 @@ test "streaming process execution terminates when the shared operation is cancel
         fn onLine(_: ?*anyopaque, _: StreamKind, _: []const u8) void {}
     };
 
-    var context = operation_api.OperationContext.init(std.testing.allocator, std.testing.io);
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(directory);
+    const marker = try std.fs.path.join(std.testing.allocator, &.{ directory, "child-started" });
+    defer std.testing.allocator.free(marker);
+
+    var context = operation_api.OperationContext.init(std.testing.allocator, io);
     defer context.deinit();
-    context.cancel();
     var operation = context.begin(.{ .backend = .aur, .kind = .build, .subject = "cancelled-build" });
     defer operation.finish(.cancelled);
-
-    try std.testing.expectError(error.Cancelled, runStreamingWithEnvironmentOperation(
+    var future = try io.concurrent(runStreamingWithEnvironmentOperation, .{
         std.testing.allocator,
-        std.testing.io,
+        io,
         std.testing.environ,
-        &.{ "sh", "-c", "sleep 5" },
+        &.{ "sh", "-c", "touch \"$1\"; exec sleep 30", "sh", marker },
         null,
         null,
-        .{ .function = Capture.onLine },
+        LineHandler{ .function = Capture.onLine },
         &operation,
-    ));
+    });
+    var attempts: usize = 0;
+    while (attempts < 200) : (attempts += 1) {
+        std.Io.Dir.cwd().access(io, marker, .{}) catch {
+            io.sleep(.fromMilliseconds(5), .awake) catch {};
+            continue;
+        };
+        break;
+    }
+    try std.testing.expect(attempts < 200);
+    context.cancel();
+    try std.testing.expectError(error.Cancelled, future.await(io));
 }

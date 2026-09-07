@@ -37,7 +37,7 @@ pub const variants = [_]types.Variant{
         .type_code = 'a',
         .description = "Find installed foreign packages with newer AUR or VCS revisions, then build and install all available upgrades.",
         .implementation = "Zigalpm.AurManager.getPackagesNeedingUpdate / updatePackages",
-        .options = &.{ flag("--check", &.{}, "Run each PKGBUILD check() function during AUR upgrade builds"), flag("--no-check", &.{}, "Skip each PKGBUILD check() function during AUR upgrade builds"), flag("--sign", &.{}, "Sign upgraded AUR packages with GPG"), flag("--nosign", &.{}, "Skip signing upgraded AUR packages"), flag("--singlepane", &.{}, "Use the shared pacman-style linear output (already the native Zig non-UI output mode)"), flag("--no-devel", &.{}, "Skip checking -git packages") },
+        .options = &.{ flag("--check", &.{}, "Run each PKGBUILD check() function during AUR upgrade builds"), flag("--no-check", &.{}, "Skip each PKGBUILD check() function during AUR upgrade builds"), flag("--sign", &.{}, "Sign upgraded AUR packages with GPG"), flag("--nosign", &.{}, "Skip signing upgraded AUR packages"), flag("--singlepane", &.{}, "Use single-pane terminal output."), flag("--no-devel", &.{}, "Skip checking -git packages") },
     },
     .{
         .action = .upgrade,

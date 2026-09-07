@@ -98,7 +98,7 @@ test "creates, updates, and reloads the XDG config file" {
     };
     const manager = Manager.init(&context);
     const config = try manager.read();
-    try std.testing.expectEqualStrings("10", (try config.getDisplay(arena.allocator(), "ParallelDownloadCount")).?);
+    try std.testing.expectEqualStrings("100", (try config.getDisplay(arena.allocator(), "ParallelDownloadCount")).?);
     try std.testing.expectEqualStrings(
         "PreferIPv4",
         (try config.getDisplay(arena.allocator(), "DownloadAddressFamilyPolicy")).?,
@@ -135,4 +135,11 @@ test "creates, updates, and reloads the XDG config file" {
         (try manager.get("AutoConfirmCacheClean")).?,
     );
     try std.testing.expect(!try manager.update("AutoConfirmCacheClean", "yes"));
+    try std.testing.expectEqualStrings("False", (try manager.get("DisableCacheClean")).?);
+    try std.testing.expect(try manager.update("disablecacheclean", "TrUe"));
+    try std.testing.expectEqualStrings("True", (try manager.get("DisableCacheClean")).?);
+    try std.testing.expect(!try manager.update("DisableCacheClean", "yes"));
+    try std.testing.expectEqualStrings("True", (try manager.get("DisableCacheClean")).?);
+    try manager.reset();
+    try std.testing.expectEqualStrings("False", (try manager.get("DisableCacheClean")).?);
 }

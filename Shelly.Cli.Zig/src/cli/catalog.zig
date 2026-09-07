@@ -21,6 +21,7 @@ const update = @import("catalog/update.zig");
 const upgrade = @import("catalog/upgrade.zig");
 const utility = @import("catalog/utility.zig");
 const builder = @import("catalog/builder.zig");
+const resolve = @import("catalog/resolve.zig");
 
 pub const Action = core.Action;
 pub const Argument = core.Argument;
@@ -53,6 +54,10 @@ pub const root_options = [_]Option{
     hiddenGlobalFlag(
         "--auto-confirm-cache-clean",
         "Preserve the invoking user's cache-clean policy across elevation",
+    ),
+    hiddenGlobalFlag(
+        "--disable-cache-clean",
+        "Preserve disabled upgrade-all cache cleaning across elevation",
     ),
 };
 
@@ -97,7 +102,8 @@ pub const variants = search.variants ++
     config.variants ++
     keyring.variants ++
     run.variants ++
-    builder.variants;
+    builder.variants ++
+    resolve.variants;
 
 pub const shared_modifiers = [_]SharedModifier{
     .{

@@ -26,6 +26,7 @@ const flatpak_command_path = "shelly search flatpak";
 
 pub const StandardPackage = struct {
     name: []const u8,
+    package_base: []const u8 = "",
     version: []const u8,
     size: i64 = 0,
     description: []const u8 = "",
@@ -209,12 +210,8 @@ fn executeWithRunner(
             return writeFailure(context, invocation, message);
         const message = switch (failure) {
             error.NoPackageSpecified => "No package specified",
-            error.PackageNotFound => try std.fmt.allocPrint(
-                context.allocator,
-                "No package named {s} found",
-                .{if (invocation.positionals.len > 0) invocation.positionals[0] else ""},
-            ),
-            else => try std.fmt.allocPrint(context.allocator, "Search failed: {t}", .{failure}),
+            error.PackageNotFound => try Zigalpm.user_errors.missingPackage(context.allocator, if (invocation.positionals.len > 0) invocation.positionals[0] else "the requested package"),
+            else => try Zigalpm.user_errors.format(context.allocator, failure, .{ .operation = "the package search" }),
         };
         return writeFailure(context, invocation, message);
     };
@@ -866,6 +863,7 @@ fn writeStandardPackageJson(writer: *std.Io.Writer, package: StandardPackage) !v
 fn writeStandardPackageJsonWith(json: *std.json.Stringify, package: StandardPackage) !void {
     try json.beginObject();
     try field(json, "Name", package.name);
+    try field(json, "PackageBase", package.package_base);
     try field(json, "Version", package.version);
     try field(json, "Size", package.size);
     try field(json, "Description", package.description);
@@ -1009,6 +1007,7 @@ fn copyStandardPackage(
     const repository = package.repository() orelse "";
     return .{
         .name = try allocator.dupe(u8, package.name() orelse ""),
+        .package_base = try allocator.dupe(u8, package.base()),
         .version = try allocator.dupe(u8, package.version() orelse ""),
         .size = package.download_size(),
         .description = try allocator.dupe(u8, package.description() orelse ""),
@@ -1326,6 +1325,7 @@ test "standard package detail serializes optional dependency installation state"
     defer output_buffer.deinit();
     try writeStandardPackageJson(&output_buffer.writer, .{
         .name = "editor",
+        .package_base = "editor-suite",
         .version = "1.0",
         .optional_depends = &.{ "spellcheck: Spell checking", "plugins>=2: Plugin support" },
         .optional_depends_installed = &.{ true, false },
@@ -1333,6 +1333,7 @@ test "standard package detail serializes optional dependency installation state"
 
     const rendered = output_buffer.writer.buffered();
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\"OptDependsInstalled\":[true,false]") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"PackageBase\":\"editor-suite\"") != null);
     try std.testing.expectEqualStrings("plugins>=1:2", optionalDependencyExpression("plugins>=1:2: Plugin support"));
     try std.testing.expectEqualStrings("spellcheck", optionalDependencyExpression("spellcheck: Spell checking"));
 }

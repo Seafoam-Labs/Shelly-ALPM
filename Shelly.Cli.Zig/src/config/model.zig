@@ -24,6 +24,10 @@ pub const Config = struct {
         var iterator = self.values.iterator();
         while (iterator.next()) |entry| {
             const incoming = object.get(entry.key_ptr.*) orelse continue;
+            // Older versions accepted arbitrary numbers. Keep the default
+            // for an invalid saved limit without discarding other settings.
+            if (std.mem.eql(u8, entry.key_ptr.*, "ParallelDownloadCount") and
+                parallelDownloadCount(incoming) == null) continue;
             if (!compatible(entry.key_ptr.*, entry.value_ptr.*, incoming))
                 return error.InvalidConfig;
             entry.value_ptr.* = incoming;
@@ -64,6 +68,35 @@ pub const Config = struct {
     }
 };
 
+pub fn parallelDownloadCount(value: std.json.Value) ?u8 {
+    if (value != .integer or value.integer < 1 or value.integer > std.math.maxInt(u8)) return null;
+    return @intCast(value.integer);
+}
+
+test "parallel download limits reject invalid updates and repair invalid saved values" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var config = try Config.defaults(allocator);
+    for ([_][]const u8{ "1", "3", "100", "255" }) |value| {
+        try std.testing.expect(try config.set(allocator, "ParallelDownloadCount", value));
+        try std.testing.expectEqualStrings(value, (try config.getDisplay(allocator, "ParallelDownloadCount")).?);
+    }
+    for ([_][]const u8{ "0", "-1", "256", "999999999999999999999999", "1.5", "many" }) |value| {
+        try std.testing.expect(!try config.set(allocator, "ParallelDownloadCount", value));
+        try std.testing.expectEqualStrings("255", (try config.getDisplay(allocator, "ParallelDownloadCount")).?);
+    }
+    for ([_]std.json.Value{ .{ .integer = 0 }, .{ .integer = -1 }, .{ .integer = 256 }, .{ .float = 1.5 }, .{ .string = "1" }, .null }) |value| {
+        config = try Config.defaults(allocator);
+        var saved: std.json.ObjectMap = .empty;
+        try saved.put(allocator, "ParallelDownloadCount", value);
+        try saved.put(allocator, "DownloadAddressFamilyPolicy", .{ .string = "IPv6Only" });
+        try config.overlay(saved);
+        try std.testing.expectEqualStrings("100", (try config.getDisplay(allocator, "ParallelDownloadCount")).?);
+        try std.testing.expectEqualStrings("IPv6Only", (try config.getDisplay(allocator, "DownloadAddressFamilyPolicy")).?);
+    }
+}
+
 fn compatible(key: []const u8, default: std.json.Value, incoming: std.json.Value) bool {
     if (incoming == .null) return nullableString(key) or std.mem.eql(u8, key, "Time");
     return switch (default) {
@@ -83,6 +116,11 @@ fn convertValue(
     current: std.json.Value,
     text: []const u8,
 ) !std.json.Value {
+    if (std.mem.eql(u8, key, "ParallelDownloadCount")) {
+        const value: std.json.Value = .{ .integer = try std.fmt.parseInt(i64, text, 10) };
+        if (parallelDownloadCount(value) == null) return error.InvalidValue;
+        return value;
+    }
     if (std.mem.eql(u8, key, "DaysOfWeek"))
         return .{ .array = try parseDays(allocator, text) };
     if (std.mem.eql(u8, key, "AurUrl")) {
@@ -251,7 +289,7 @@ test "defaults preserve reflection order and display conventions" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const config = try Config.defaults(arena.allocator());
-    try std.testing.expectEqual(@as(usize, 9), config.values.count());
+    try std.testing.expectEqual(@as(usize, 10), config.values.count());
     try std.testing.expectEqualStrings("FileSizeDisplay", config.values.keys()[0]);
     try std.testing.expectEqualStrings(
         "False",
@@ -284,4 +322,16 @@ test "updates typed and enumerated values case-insensitively" {
         (try config.getDisplay(arena.allocator(), "AutoConfirmCacheClean")).?,
     );
     try std.testing.expect(!try config.set(arena.allocator(), "AutoConfirmCacheClean", "yes"));
+}
+
+test "older configs default to enabled cache cleaning" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var config = try Config.defaults(arena.allocator());
+    var older: std.json.ObjectMap = .empty;
+    try older.put(arena.allocator(), "AutoConfirmCacheClean", .{ .bool = true });
+    try config.overlay(older);
+    try std.testing.expectEqualStrings("False", (try config.getDisplay(arena.allocator(), "DisableCacheClean")).?);
+    try older.put(arena.allocator(), "DisableCacheClean", .{ .string = "true" });
+    try std.testing.expectError(error.InvalidConfig, config.overlay(older));
 }

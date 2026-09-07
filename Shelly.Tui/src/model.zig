@@ -706,8 +706,8 @@ pub const Model = struct {
             const stdout = multi_reader.toOwnedSlice(0) catch &.{};
             defer if (stderr.len > 0) alloc.free(stderr);
             defer if (stdout.len > 0) alloc.free(stdout);
-            const source = if (stderr.len > 0) stderr else stdout;
-            job.error_detail = dupeTail(alloc, std.mem.trim(u8, source, " \t\r\n"), 300);
+            job.error_detail = (@import("ui_decode.zig").JsonPackFrame.failureMessage(alloc, stdout) catch null) orelse
+                (alloc.dupe(u8, if (stderr.len > 0) std.mem.trim(u8, stderr, " \t\r\n") else "Could not complete the installation. No error details were returned by Shelly.") catch "");
             job.failed = true;
         }
     }
@@ -717,12 +717,6 @@ pub const Model = struct {
             "../Shelly.Cli.Zig/zig-out/bin/shelly"
         else
             "shelly";
-    }
-
-    fn dupeTail(alloc: Allocator, source: []const u8, max_len: usize) []const u8 {
-        if (source.len == 0) return "";
-        const start = source.len -| max_len;
-        return alloc.dupe(u8, source[start..]) catch "";
     }
 
     fn popGrapheme(list: *std.ArrayList(u8)) void {

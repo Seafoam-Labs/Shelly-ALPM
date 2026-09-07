@@ -5,6 +5,7 @@ const flatpak_backend_loader = @import("flatpak/backend_loader.zig");
 
 pub const alpm = struct {
     pub const manager = @import("alpm/manager.zig");
+    pub const bootstrap = @import("alpm/bootstrap.zig");
     pub const bindings = @import("alpm/bindings.zig");
     pub const events = @import("alpm/events.zig");
     pub const configuration = @import("alpm/configuration.zig");
@@ -14,6 +15,8 @@ pub const alpm = struct {
 
     pub const InitOptions = manager.InitOptions;
     pub const Manager = manager.Manager;
+    pub const BootstrapOptions = bootstrap.Options;
+    pub const BootstrapResult = bootstrap.Result;
     pub const TransFlag = bindings.libalpm.TransFlag;
     pub const SigLevel = bindings.libalpm.SigLevel;
     pub const OwnedPackage = bindings.libalpm.OwnedPackage;
@@ -62,9 +65,12 @@ pub const alpm = struct {
     pub const parse_pacfile_path = pacfile_manager.parsePacfilePath;
 };
 
+pub const user_errors = @import("shared/user_errors.zig");
+
 pub const aur = @import("aur/manager.zig");
 
 pub const builder = @import("aur/builder/builder.zig");
+pub const process_runner = @import("aur/builder.zig");
 pub const source_pgp_verifier = @import("shared/source_pgp_verifier.zig");
 pub const source_pgp_keyring = @import("shared/source_pgp_keyring.zig");
 pub const package_signer = @import("shared/package_signer.zig");
@@ -115,6 +121,7 @@ pub const flatpak = struct {
 };
 
 pub const appimage = struct {
+    pub const environment = @import("appimage/environment.zig");
     pub const manager = @import("appimage/manager.zig");
     pub const update_manager = @import("appimage/update_manager.zig");
     pub const bindings = @import("appimage/bindings.zig");
@@ -173,6 +180,7 @@ pub const HttpClient = @import("ShellyHttp");
 pub const shared = struct {
     pub const archive = @import("archive");
     pub const downloader = @import("shared/downloader.zig");
+    pub const download_queue = @import("shared/download_queue.zig");
     pub const list_dictionary = @import("shared/list_dictionary.zig");
     pub const xdg_paths = @import("shared/xdg_paths.zig");
     pub const operation_context = operation;
@@ -479,6 +487,7 @@ test "ALPM and AUR questions use the shared response hook" {
 
 test {
     _ = @import("alpm/bindings.zig");
+    _ = @import("alpm/bootstrap.zig");
     _ = @import("alpm/manager.zig");
     _ = @import("alpm/manager_test.zig");
     _ = @import("alpm/events.zig");

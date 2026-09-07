@@ -1255,6 +1255,24 @@ pub const Request = struct {
 
             connection.closing = !head.keep_alive or !r.keep_alive;
 
+            if (head.status.class() == .redirect and head.status != .not_modified and
+                r.redirect_behavior != .unhandled)
+            {
+                if (r.redirect_behavior == .not_allowed) {
+                    // Connection can still be reused by skipping the body.
+                    if (r.method != .HEAD) {
+                        const reader = r.reader.bodyReader(&.{}, head.transfer_encoding, head.content_length);
+                        _ = reader.discardRemaining() catch |err| switch (err) {
+                            error.ReadFailed => connection.closing = true,
+                        };
+                    }
+                    return error.TooManyHttpRedirects;
+                }
+                try r.redirect(head, &aux_buf);
+                try r.sendBodiless();
+                continue;
+            }
+
             // Any response to a HEAD request and any response with a 1xx
             // (Informational), 204 (No Content), or 304 (Not Modified) status
             // code is always terminated by the first empty line after the
@@ -1270,20 +1288,6 @@ pub const Request = struct {
                 r.response_transfer_encoding = .none;
                 r.response_content_length = 0;
                 return response;
-            }
-
-            if (head.status.class() == .redirect and r.redirect_behavior != .unhandled) {
-                if (r.redirect_behavior == .not_allowed) {
-                    // Connection can still be reused by skipping the body.
-                    const reader = r.reader.bodyReader(&.{}, head.transfer_encoding, head.content_length);
-                    _ = reader.discardRemaining() catch |err| switch (err) {
-                        error.ReadFailed => connection.closing = true,
-                    };
-                    return error.TooManyHttpRedirects;
-                }
-                try r.redirect(head, &aux_buf);
-                try r.sendBodiless();
-                continue;
             }
 
             if (!r.accept_encoding[@intFromEnum(head.content_encoding)])
@@ -1307,7 +1311,8 @@ pub const Request = struct {
         if (new_location.len > aux_buf.*.len) return error.HttpRedirectLocationOversize;
         const location = aux_buf.*[0..new_location.len];
         @memcpy(location, new_location);
-        {
+        if (r.method != .HEAD) {
+            // HEAD responses have no body, even when Content-Length is present.
             // Skip the body of the redirect response to leave the connection in
             // the correct state. This causes `new_location` to be invalidated.
             const reader = r.reader.bodyReader(&.{}, head.transfer_encoding, head.content_length);
@@ -1341,7 +1346,7 @@ pub const Request = struct {
         }
 
         if (switch (head.status) {
-            .see_other => true,
+            .see_other => r.method != .HEAD,
             .moved_permanently, .found => r.method == .POST,
             else => false,
         }) {
@@ -3629,4 +3634,94 @@ test "resolved addresses remain partitioned by family" {
     try testing.expectEqual(@as(usize, 1), resolved.ip6.len);
     try testing.expect(resolved.ip4Slice()[0] == .ip4);
     try testing.expect(resolved.ip6Slice()[0] == .ip6);
+}
+
+const HeadRedirectTestServer = struct {
+    io: Io,
+    server: *Io.net.Server,
+    responses: []const []const u8,
+
+    fn serve(self: HeadRedirectTestServer) !void {
+        for (self.responses) |response| {
+            var stream = try self.server.accept(self.io);
+            defer stream.close(self.io);
+            var read_buffer: [2048]u8 = undefined;
+            var reader = stream.reader(self.io, &read_buffer);
+            const line = (try reader.interface.takeDelimiter('\n')) orelse return error.EndOfStream;
+            try testing.expect(std.mem.startsWith(u8, line, "HEAD /"));
+            try consumeTestRequestHead(&reader.interface);
+            var write_buffer: [1024]u8 = undefined;
+            var writer = stream.writer(self.io, &write_buffer);
+            try writer.interface.writeAll(response);
+            try writer.interface.flush();
+        }
+    }
+};
+
+fn testHeadRedirects(behavior: Request.RedirectBehavior, responses: []const []const u8, expected_status: ?http.Status) !void {
+    var threaded: Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var address: IpAddress = .{ .ip4 = .loopback(0) };
+    var server = try address.listen(io, .{ .reuse_address = true });
+    defer server.deinit(io);
+    var future = try io.concurrent(HeadRedirectTestServer.serve, .{HeadRedirectTestServer{
+        .io = io,
+        .server = &server,
+        .responses = responses,
+    }});
+    defer _ = future.cancel(io) catch {};
+    const url = try std.fmt.allocPrint(testing.allocator, "http://127.0.0.1:{d}/source", .{server.socket.address.getPort()});
+    defer testing.allocator.free(url);
+    var client: Client = .{ .allocator = testing.allocator, .io = io };
+    defer client.deinit();
+    var req = try client.request(.HEAD, try Uri.parse(url), .{ .redirect_behavior = behavior });
+    defer req.deinit();
+    try req.sendBodiless();
+    var redirect_buffer: [4096]u8 = undefined;
+    if (expected_status) |status| {
+        const response = try req.receiveHead(&redirect_buffer);
+        try testing.expectEqual(status, response.head.status);
+        try testing.expectEqual(@as(?u64, 12345), response.head.content_length);
+        try testing.expectEqual(@as(?u64, 0), req.response_content_length);
+        if (status == .ok) {
+            var headers = response.head.iterateHeaders();
+            var found_etag = false;
+            while (headers.next()) |header| {
+                if (std.ascii.eqlIgnoreCase(header.name, "etag")) {
+                    try testing.expectEqualStrings("\"new-release\"", header.value);
+                    found_etag = true;
+                }
+            }
+            try testing.expect(found_etag);
+        }
+    } else {
+        try testing.expectError(error.TooManyHttpRedirects, req.receiveHead(&redirect_buffer));
+    }
+    try future.await(io);
+}
+
+const head_redirect_response = "HTTP/1.1 302 Found\r\nLocation: /next\r\nContent-Length: 12345\r\nConnection: close\r\n\r\n";
+
+test "HEAD follows redirect chains without reading bodies and preserves HEAD for 303" {
+    try testHeadRedirects(.init(5), &.{
+        "HTTP/1.1 301 Moved Permanently\r\nLocation: /first\r\nContent-Length: 12345\r\nConnection: close\r\n\r\n",
+        head_redirect_response,
+        "HTTP/1.1 303 See Other\r\nLocation: /third\r\nContent-Length: 12345\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 307 Temporary Redirect\r\nLocation: /fourth\r\nContent-Length: 12345\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 308 Permanent Redirect\r\nLocation: /final\r\nContent-Length: 12345\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 200 OK\r\nContent-Length: 12345\r\nETag: \"new-release\"\r\nConnection: close\r\n\r\n",
+    }, .ok);
+}
+
+test "HEAD leaves redirects unhandled when requested" {
+    try testHeadRedirects(.unhandled, &.{head_redirect_response}, .found);
+}
+
+test "HEAD enforces redirect limit without reading a nonexistent body" {
+    try testHeadRedirects(.init(1), &.{ head_redirect_response, head_redirect_response }, null);
+}
+
+test "HEAD returns 304 without treating it as a redirect" {
+    try testHeadRedirects(.init(1), &.{"HTTP/1.1 304 Not Modified\r\nContent-Length: 12345\r\nConnection: close\r\n\r\n"}, .not_modified);
 }
