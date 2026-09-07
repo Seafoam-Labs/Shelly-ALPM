@@ -871,14 +871,7 @@ pub const Manager = struct {
                     .is_installed = rawLibalpm.alpm_find_satisfier(local_cache, name.ptr) != null,
                 });
             }
-            var all_installed = options.items.len > 0;
-            for (options.items) |opt| {
-                if (!opt.is_installed) {
-                    all_installed = false;
-                    break;
-                }
-            }
-            if (options.items.len == 0 or all_installed or
+            if (options.items.len == 0 or
                 (self.dispatcher.operation == null and self.dispatcher.question.items.len == 0)) continue;
             const pkg_name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse "package";
             const prompt = try std.fmt.allocPrint(self.allocator, "Select an optional dependency for {s}", .{pkg_name});
@@ -3207,25 +3200,25 @@ pub const Manager = struct {
                 const package_two_version = pkg_two.version() orelse "?";
 
                 const text = formatConflictQuestion(
-                     &buf,
-                     package_one_name,
-                     package_one_version,
-                     package_two_name,
-                     package_two_version,
-                 );
+                    &buf,
+                    package_one_name,
+                    package_one_version,
+                    package_two_name,
+                    package_two_version,
+                );
 
-                 q.confirm_removal(self.askYesNoWithArguments(
-                        manager_io,
-                        qtype,
-                        text,
-                        &.{
-                            package_one_name,
-                            package_one_version,
-                            package_two_name,
-                            package_two_version,
-                            package_two_name,
-                        },
-                    ));
+                q.confirm_removal(self.askYesNoWithArguments(
+                    manager_io,
+                    qtype,
+                    text,
+                    &.{
+                        package_one_name,
+                        package_one_version,
+                        package_two_name,
+                        package_two_version,
+                        package_two_name,
+                    },
+                ));
             },
             .corrupted_package => {
                 const q = libalpm.RemoveCorruptedPackagesQuestion.from(data).?;
@@ -3258,7 +3251,12 @@ pub const Manager = struct {
         }
     }
 
-    fn askYesNo(self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, ) bool {
+    fn askYesNo(
+        self: *Manager,
+        manager_io: std.Io,
+        qtype: c_int,
+        text: []const u8,
+    ) bool {
         return self.askYesNoWithArguments(
             manager_io,
             qtype,
@@ -3267,7 +3265,13 @@ pub const Manager = struct {
         );
     }
 
-    fn askYesNoWithArguments( self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, arguments: []const []const u8, ) bool {
+    fn askYesNoWithArguments(
+        self: *Manager,
+        manager_io: std.Io,
+        qtype: c_int,
+        text: []const u8,
+        arguments: []const []const u8,
+    ) bool {
         const yes_no = [_][]const u8{ "yes", "no" };
         const resp = self.dispatcher.raiseQuestion(manager_io, .{
             .question = text,
