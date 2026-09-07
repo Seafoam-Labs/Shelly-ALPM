@@ -423,6 +423,7 @@ pub fn build(b: *std.Build) void {
             "install_local_packages predownloads repository dependencies before commit",
             "Manager.init applies configured libalpm options and callback contexts",
             "ALPM queries honor shared cancellation",
+            "Manager.sync exposes cancellable logical database downloads during mirror failover",
             "single-server repositories receive a three second setup timeout",
             "multi-mirror repositories receive a one second setup timeout",
             "database downloads defer file durability to the batch barrier",

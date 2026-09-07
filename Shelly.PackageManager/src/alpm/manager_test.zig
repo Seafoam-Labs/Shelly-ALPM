@@ -888,7 +888,7 @@ test "Manager.sync exposes cancellable logical database downloads during mirror 
     _ = try context.subscribe(.{ .function = CancelOnDownload.handle, .data = &cancel_download });
     mgr.setOperationContext(&context);
 
-    try testing.expectError(error.UpdateFetchFailed, mgr.sync(true));
+    try testing.expectError(error.Cancelled, mgr.sync(true));
     try testing.expect(cancel_download.saw_download.load(.acquire));
 }
 
