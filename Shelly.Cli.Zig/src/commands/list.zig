@@ -64,6 +64,7 @@ pub const AppImageItem = struct {
     repo_name: ?[]const u8 = null,
     update_type: i32 = 0,
     allow_prerelease: bool = false,
+    environment_variables: []const Zigalpm.appimage.environment.Variable = &.{},
     command_line_args: ?[]const u8 = null,
     path: ?[]const u8 = null,
 };
@@ -656,6 +657,15 @@ fn writeAppImageJson(json: *std.json.Stringify, item: AppImageItem) !void {
     try field(json, "RepoName", item.repo_name);
     try field(json, "UpdateType", item.update_type);
     try field(json, "AllowPrerelease", item.allow_prerelease);
+    try json.objectField("EnvironmentVariables");
+    try json.beginArray();
+    for (item.environment_variables) |variable| {
+        try json.beginObject();
+        try field(json, "Key", variable.key);
+        try field(json, "Value", variable.value);
+        try json.endObject();
+    }
+    try json.endArray();
     try field(json, "CommandLineArgs", item.command_line_args);
     try field(json, "Path", item.path);
     try json.endObject();
@@ -1047,6 +1057,7 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
         .repo_name = try copyOptionalString(allocator, native.repo_name),
         .update_type = @intCast(@intFromEnum(native.update_type)),
         .allow_prerelease = native.allow_prerelease,
+        .environment_variables = try Zigalpm.appimage.environment.clone(allocator, native.environment_variables),
         .command_line_args = try allocator.dupe(u8, native.command_line_args),
         .path = try allocator.dupe(u8, native.path),
     };
@@ -1464,6 +1475,7 @@ test "AppImage and Flatpak lists emit compatibility JSON and stable ordering" {
         .version = "3.0",
         .size_on_disk = 4096,
         .update_type = 2,
+        .environment_variables = &.{.{ .key = "WEBKIT_DISABLE_DMABUF_RENDERER", .value = "1" }},
         .command_line_args = "--safe",
         .path = "/apps/editor.AppImage",
     }};
@@ -1473,6 +1485,7 @@ test "AppImage and Flatpak lists emit compatibility JSON and stable ordering" {
     try writeJson(std.testing.allocator, &output_buffer.writer, &app_invocation, &app_result);
     try std.testing.expect(std.mem.indexOf(u8, output_buffer.writer.buffered(), "\"UpdateURl\":\"\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, output_buffer.writer.buffered(), "\"UpdateType\":2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output_buffer.writer.buffered(), "\"EnvironmentVariables\":[{\"Key\":\"WEBKIT_DISABLE_DMABUF_RENDERER\",\"Value\":\"1\"}]") != null);
 
     output_buffer.writer.end = 0;
     const flatpaks = [_]FlatpakItem{

@@ -121,6 +121,7 @@ pub const flatpak = struct {
 };
 
 pub const appimage = struct {
+    pub const environment = @import("appimage/environment.zig");
     pub const manager = @import("appimage/manager.zig");
     pub const update_manager = @import("appimage/update_manager.zig");
     pub const bindings = @import("appimage/bindings.zig");

@@ -2947,15 +2947,14 @@ pub const Manager = struct {
         event: [*c]rawLibalpm.alpm_event_t,
     ) callconv(.c) void {
         const self: *Manager = @ptrCast(@alignCast(ctx));
-    
+
         self.handleEvent(event) catch return;
     }
 
     fn handleEvent(
         self: *Manager,
         event: [*c]rawLibalpm.alpm_event_t,
-    ) TransactionError!void { 
-
+    ) TransactionError!void {
         if (event == null) return;
         const type_value: u32 = @intCast(event.*.type);
         if (type_value < rawLibalpm.ALPM_EVENT_CHECKDEPS_START or type_value > rawLibalpm.ALPM_EVENT_HOOK_RUN_DONE) return;
@@ -2968,79 +2967,79 @@ pub const Manager = struct {
             },
             .package_operation_start => {
                 const operation = event.*.package_operation;
-            
+
                 const message = (switch (operation.operation) {
                     rawLibalpm.ALPM_PACKAGE_INSTALL => blk: {
                         const pkg = operation.newpkg orelse return;
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
                         const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Installing package: {s}-{s}",
                             .{ name, version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_UPGRADE => blk: {
                         const oldpkg = operation.oldpkg orelse return;
                         const newpkg = operation.newpkg orelse return;
-            
+
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(newpkg)) orelse return;
                         const old_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(oldpkg)) orelse return;
                         const new_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(newpkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Upgrading package: {s} {s} -> {s}",
                             .{ name, old_version, new_version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_REINSTALL => blk: {
                         const pkg = operation.newpkg orelse return;
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
                         const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Reinstalling package: {s}-{s}",
                             .{ name, version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_DOWNGRADE => blk: {
                         const oldpkg = operation.oldpkg orelse return;
                         const newpkg = operation.newpkg orelse return;
-            
+
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(newpkg)) orelse return;
                         const old_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(oldpkg)) orelse return;
                         const new_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(newpkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Downgrading package: {s} {s} -> {s}",
                             .{ name, old_version, new_version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_REMOVE => blk: {
                         const pkg = operation.oldpkg orelse return;
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
                         const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Removing package: {s}-{s}",
                             .{ name, version },
                         );
                     },
-            
+
                     else => return,
                 }) catch return TransactionError.OutOfMemory;
-            
+
                 defer self.allocator.free(message);
-            
+
                 self.dispatcher.raiseInformational(.{
                     .event_type = event_type,
                     .message = message,
@@ -3068,7 +3067,6 @@ pub const Manager = struct {
                     .event_type = event_type,
                     .message = message,
                 });
-
             },
             .pacnew_created => self.dispatcher.raisePacnew(.{
                 .file = spanC(event.*.pacnew_created.file),
@@ -3086,7 +3084,6 @@ pub const Manager = struct {
             },
             else => self.handleInformationMessage(event_type),
         }
-
     }
     fn handleInformationMessage(self: *Manager, event_type: libalpm.EventType) void {
         const message = switch (event_type) {
@@ -3167,11 +3164,34 @@ pub const Manager = struct {
             .conflict_package => {
                 const q = libalpm.ConflictQuestion.from(data).?;
                 const conflict = q.conflict();
-                const text = std.fmt.bufPrint(&buf, "{s} conflicts with {s}. Remove?", .{
-                    conflict.packageOne().name() orelse "unknown",
-                    conflict.packageTwo().name() orelse "unknown",
-                }) catch "Remove the conflicting package?";
-                q.confirm_removal(self.askYesNo(manager_io, qtype, text));
+                const pkg_one = conflict.packageOne();
+                const pkg_two = conflict.packageTwo();
+
+                const package_one_name = pkg_one.name() orelse "unknown";
+                const package_one_version = pkg_one.version() orelse "?";
+                const package_two_name = pkg_two.name() orelse "unknown";
+                const package_two_version = pkg_two.version() orelse "?";
+
+                const text = formatConflictQuestion(
+                     &buf,
+                     package_one_name,
+                     package_one_version,
+                     package_two_name,
+                     package_two_version,
+                 );
+
+                 q.confirm_removal(self.askYesNoWithArguments(
+                        manager_io,
+                        qtype,
+                        text,
+                        &.{
+                            package_one_name,
+                            package_one_version,
+                            package_two_name,
+                            package_two_version,
+                            package_two_name,
+                        },
+                    ));
             },
             .corrupted_package => {
                 const q = libalpm.RemoveCorruptedPackagesQuestion.from(data).?;
@@ -3204,11 +3224,21 @@ pub const Manager = struct {
         }
     }
 
-    fn askYesNo(self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8) bool {
+    fn askYesNo(self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, ) bool {
+        return self.askYesNoWithArguments(
+            manager_io,
+            qtype,
+            text,
+            &.{},
+        );
+    }
+
+    fn askYesNoWithArguments( self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, arguments: []const []const u8, ) bool {
         const yes_no = [_][]const u8{ "yes", "no" };
         const resp = self.dispatcher.raiseQuestion(manager_io, .{
             .question = text,
             .question_type = qtype,
+            .arguments = arguments,
             .options = &yes_no,
         });
         return (resp.answer orelse 0) != 0;
@@ -3436,6 +3466,26 @@ fn stalePartSweepDirectory(
         if (age_ns < max_age.nanoseconds) continue;
         dir.deleteFile(io, entry.path) catch {};
     }
+}
+
+fn formatConflictQuestion(
+    buf: []u8,
+    package_one_name: []const u8,
+    package_one_version: []const u8,
+    package_two_name: []const u8,
+    package_two_version: []const u8,
+) []const u8 {
+    return std.fmt.bufPrint(
+        buf,
+        "{s}-{s} conflicts with {s}-{s}. Remove {s}?",
+        .{
+            package_one_name,
+            package_one_version,
+            package_two_name,
+            package_two_version,
+            package_two_name,
+        },
+    ) catch "Remove the conflicting package?";
 }
 
 fn mirrorDownloadConfiguration(
@@ -4948,6 +4998,22 @@ test "questionCallback applies affirmative answers to simple libalpm questions" 
     } };
     Manager.questionCallback(@ptrCast(&mgr), &import_key);
     try testing.expectEqual(@as(c_int, 1), import_key.import_key.import);
+}
+
+test "conflict question identifies the package to remove" {
+    var buf: [512]u8 = undefined;
+
+    const text = formatConflictQuestion(
+        &buf,
+        "qemu-common",
+        "11.1.0-1",
+        "qemu-block-gluster",
+        "11.0.2-4",
+    );
+    try testing.expectEqualStrings(
+        "qemu-common-11.1.0-1 conflicts with qemu-block-gluster-11.0.2-4. Remove qemu-block-gluster?",
+        text,
+    );
 }
 
 test "questionCallback keeps unknown answers and applies selected provider choices" {
