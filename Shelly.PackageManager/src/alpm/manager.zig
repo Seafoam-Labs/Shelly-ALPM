@@ -4,6 +4,7 @@ const events = @import("events.zig");
 const configuration = @import("configuration.zig");
 const builtin = @import("builtin");
 const downloader = @import("../shared/downloader.zig");
+const download_queue = @import("../shared/download_queue.zig");
 const listDictionary = @import("../shared/list_dictionary.zig");
 const os_tool = @import("distribution-hooks/os_utilities.zig");
 const TransFlag = bindings.libalpm.TransFlag;
@@ -20,6 +21,7 @@ const database_directory_permissions = std.Io.File.Permissions.fromMode(0o755);
 var default_download_address_family_policy = std.atomic.Value(u8).init(
     @intFromEnum(downloader.AddressFamilyPolicy.prefer_ipv4),
 );
+var default_parallel_download_count = std.atomic.Value(u8).init(download_queue.default_limit);
 
 const DatabaseSignaturePolicy = enum {
     disabled,
@@ -214,6 +216,7 @@ pub const Manager = struct {
     temp_root_path: []const u8,
     show_hidden_packages: bool = false,
     download_address_family_policy: downloader.AddressFamilyPolicy = .prefer_ipv4,
+    parallel_download_count: u8 = download_queue.default_limit,
     operation_context: ?*operation_api.OperationContext = null,
     unexpected_fetch_reported: std.atomic.Value(bool) = .init(false),
 
@@ -225,6 +228,16 @@ pub const Manager = struct {
     /// Returns the current process-wide policy for newly created managers.
     pub fn defaultDownloadAddressFamilyPolicy() downloader.AddressFamilyPolicy {
         return @enumFromInt(default_download_address_family_policy.load(.acquire));
+    }
+
+    /// Sets the limit inherited by subsequently created managers, including
+    /// those owned by AUR operations. Zero restores the native default.
+    pub fn setDefaultParallelDownloadCount(count: u8) void {
+        default_parallel_download_count.store(download_queue.normalizeLimit(count), .release);
+    }
+
+    pub fn defaultParallelDownloadCount() u8 {
+        return default_parallel_download_count.load(.acquire);
     }
 
     /// If null is passed for config it will use the default /etc/pacman.conf.
@@ -260,6 +273,7 @@ pub const Manager = struct {
             .is_root = options.use_root,
             .temp_root_path = options.temp_root_path orelse "",
             .download_address_family_policy = defaultDownloadAddressFamilyPolicy(),
+            .parallel_download_count = defaultParallelDownloadCount(),
             .operation_context = options.operation_context,
         };
 
@@ -433,10 +447,6 @@ pub const Manager = struct {
             return TransactionError.SyncDbFailed;
         };
 
-        const database_future = std.Io.Future(downloader.DownloadError!void);
-        var futures: std.ArrayList(database_future) = .empty;
-        defer futures.deinit(self.allocator);
-
         // All repositories in this synchronization share one certificate
         // bundle and HTTP connection pool. Per-repository setup deadlines are
         // still enforced by each lightweight downloader; the session carries
@@ -449,32 +459,46 @@ pub const Manager = struct {
         );
         defer download_session.deinit();
 
-        var failed = false;
+        const DatabaseJob = struct {
+            name: []const u8,
+            urls: std.ArrayList([]const u8),
+            signature_policy: DatabaseSignaturePolicy,
+        };
+        var jobs: std.ArrayList(DatabaseJob) = .empty;
+        defer jobs.deinit(self.allocator);
         var dict_iterator = dict.map.iterator();
         while (dict_iterator.next()) |entry| {
-            const database_name = entry.key_ptr.*;
-            const urls = entry.value_ptr.*;
-            const signature_policy = signature_policies.get(database_name) orelse .disabled;
-            const future = self.io().concurrent(download_database, .{ self, &download_session, database_name, urls, syncDirectory, force, signature_policy }) catch {
-                self.download_database(&download_session, database_name, urls, syncDirectory, force, signature_policy) catch {
-                    failed = true;
-                };
-                continue;
-            };
-
-            futures.append(self.allocator, future) catch {
-                var f = future;
-                f.await(self.io()) catch {
-                    failed = true;
-                };
-            };
+            jobs.append(self.allocator, .{
+                .name = entry.key_ptr.*,
+                .urls = entry.value_ptr.*,
+                .signature_policy = signature_policies.get(entry.key_ptr.*) orelse .disabled,
+            }) catch return TransactionError.OutOfMemory;
         }
+        const Batch = struct {
+            manager: *Manager,
+            session: *downloader.DownloadSession,
+            jobs: []const DatabaseJob,
+            directory: []const u8,
+            force: bool,
 
-        for (futures.items) |*future| {
-            future.await(self.io()) catch {
-                failed = true;
-            };
-        }
+            fn execute(batch: @This(), index: usize) !void {
+                try batch.manager.checkOperationCancelled();
+                const job = batch.jobs[index];
+                try batch.manager.download_database(batch.session, job.name, job.urls, batch.directory, batch.force, job.signature_policy);
+            }
+        };
+        var failed = false;
+        var cancelled = false;
+        download_queue.run(self.io(), self.parallel_download_count, jobs.items.len, Batch{
+            .manager = self,
+            .session = &download_session,
+            .jobs = jobs.items,
+            .directory = syncDirectory,
+            .force = force,
+        }, Batch.execute) catch |err| {
+            failed = true;
+            cancelled = err == error.Cancelled;
+        };
 
         // Database downloads close and atomically rename their temporary files
         // without individually forcing a filesystem transaction. Commit the
@@ -484,6 +508,7 @@ pub const Manager = struct {
             failed = true;
         };
 
+        if (cancelled) return TransactionError.Cancelled;
         if (failed) return TransactionError.UpdateFetchFailed;
 
         if (enforce_signature_verification) {
@@ -2493,10 +2518,12 @@ pub const Manager = struct {
 
     fn download_prepared_packages(self: *Manager) TransactionError!void {
         self.stalePartSweep(std.Io.Duration.fromSeconds(500));
-        const download_future = std.Io.Future(downloader.DownloadError!void);
-
-        var futures: std.ArrayList(download_future) = .empty;
-        defer futures.deinit(self.allocator);
+        const PackageJob = struct {
+            package: libalpm.Package,
+            database: libalpm.Database,
+        };
+        var jobs: std.ArrayList(PackageJob) = .empty;
+        defer jobs.deinit(self.allocator);
 
         var failed = false;
         var packages = rawLibalpm.alpm_trans_get_add(self.handle);
@@ -2515,26 +2542,26 @@ pub const Manager = struct {
                 continue;
             };
 
-            var future = self.io().concurrent(download_package, .{ self, package, database }) catch {
-                // Fall back to a synchronous download when concurrency fails to allocate
-                self.download_package(package, database) catch {
-                    failed = true;
-                };
-                continue;
-            };
-
-            futures.append(self.allocator, future) catch {
-                future.await(self.io()) catch {
-                    failed = true;
-                };
-            };
+            jobs.append(self.allocator, .{ .package = package, .database = database }) catch
+                return TransactionError.OutOfMemory;
         }
+        const Batch = struct {
+            manager: *Manager,
+            jobs: []const PackageJob,
 
-        for (futures.items) |*future_item| {
-            future_item.await(self.io()) catch {
-                failed = true;
-            };
-        }
+            fn execute(batch: @This(), index: usize) !void {
+                try batch.manager.checkOperationCancelled();
+                const job = batch.jobs[index];
+                try batch.manager.download_package(job.package, job.database);
+            }
+        };
+        download_queue.run(self.io(), self.parallel_download_count, jobs.items.len, Batch{
+            .manager = self,
+            .jobs = jobs.items,
+        }, Batch.execute) catch |err| switch (err) {
+            error.Cancelled => return TransactionError.Cancelled,
+            error.DownloadFailed => failed = true,
+        };
 
         if (failed) return TransactionError.UpdateFetchFailed;
     }

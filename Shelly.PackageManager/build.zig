@@ -340,6 +340,19 @@ pub fn build(b: *std.Build) void {
     const run_downloader_tests = b.addRunArtifact(downloader_tests);
     const downloader_test_step = b.step("downloader-test", "Run safe downloader and cancellation tests");
     downloader_test_step.dependOn(&run_downloader_tests.step);
+    const download_queue_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("src/shared/download_queue.zig"),
+        .target = target,
+        .optimize = optimize,
+    }) });
+    const run_download_queue_tests = b.addRunArtifact(download_queue_tests);
+    downloader_test_step.dependOn(&run_download_queue_tests.step);
+    const download_limit_tests = b.addTest(.{
+        .root_module = mod,
+        .filters = &.{"ALPM package and database downloads honor limits across mirror retries"},
+    });
+    const run_download_limit_tests = b.addRunArtifact(download_limit_tests);
+    downloader_test_step.dependOn(&run_download_limit_tests.step);
 
     const cache_test_module = b.createModule(.{
         .root_source_file = b.path("src/alpm/cache_manager.zig"),
@@ -410,11 +423,13 @@ pub fn build(b: *std.Build) void {
             "install_local_packages predownloads repository dependencies before commit",
             "Manager.init applies configured libalpm options and callback contexts",
             "ALPM queries honor shared cancellation",
+            "Manager.sync exposes cancellable logical database downloads during mirror failover",
             "single-server repositories receive a three second setup timeout",
             "multi-mirror repositories receive a one second setup timeout",
             "database downloads defer file durability to the batch barrier",
             "database batch barrier synchronizes its directory",
             "process-wide address-family default is configurable",
+            "ALPM managers inherit the configured parallel download count",
             "onDownloadEvent does not duplicate progress when a common operation is attached",
             "OperationScope does not duplicate a detailed ALPM error",
             "OperationScope emits one generic ALPM error when no detail was reported",
