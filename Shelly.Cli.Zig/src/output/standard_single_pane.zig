@@ -1150,6 +1150,50 @@ test "redirected single-pane output suppresses intermediate progress and finaliz
     try std.testing.expect(std.mem.indexOf(u8, rendered, " 50%") == null);
 }
 
+test "single-pane suppresses optional dependency prompt when every option is already installed" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var stdin = std.Io.Reader.fixed("1\n");
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdin = &stdin,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var renderer = try Renderer.init(&context, false);
+    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    defer {
+        renderer.detach();
+        operation_context.deinit();
+        renderer.deinit();
+    }
+    try renderer.attach(&operation_context);
+
+    const options = [_]Zigalpm.OperationQuestionOption{
+        .{ .id = "foot-terminfo", .label = "foot-terminfo", .description = "Terminal info", .is_installed = true },
+        .{ .id = "libnotify", .label = "libnotify", .description = "Desktop notifications", .is_installed = true },
+    };
+    var operation = operation_context.begin(.{ .backend = .aur, .kind = .install, .subject = "foot-git" });
+    var answer = try operation.ask(.{
+        .kind = .select_optional_dependencies,
+        .prompt = "Select optional dependencies for foot-git",
+        .options = &options,
+    });
+    defer answer.deinit(arena.allocator());
+    operation.finish(.success);
+
+    try std.testing.expect(answer.response == .choices);
+    try std.testing.expectEqual(@as(usize, 0), answer.response.choices.len);
+    const rendered = stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "All optional dependencies are already installed.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Select numbers separated by commas") == null);
+}
+
 test "single-pane clears unknown-length bars on completion and suppresses AUR metadata" {
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();

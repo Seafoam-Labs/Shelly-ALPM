@@ -819,3 +819,49 @@ test "UI handles provider and generic selection questions" {
     try std.testing.expectEqual(@as(usize, 2), provider_frames);
     try std.testing.expectEqual(@as(usize, 1), multiple_frames);
 }
+
+test "UI skips optional dependency question when every option is already installed" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var stdin = std.Io.Reader.fixed("");
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdin = &stdin,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    defer operation_context.deinit();
+    var responder: QuestionResponder = .{
+        .context = &context,
+        .operation_context = &operation_context,
+        .no_confirm = false,
+    };
+    responder.attach();
+    defer responder.detach();
+
+    const options = [_]Zigalpm.OperationQuestionOption{
+        .{ .id = "foot-terminfo", .label = "foot-terminfo", .description = "Terminal info", .is_installed = true },
+        .{ .id = "libnotify", .label = "libnotify", .description = "Desktop notifications", .is_installed = true },
+    };
+    var operation = operation_context.begin(.{ .backend = .aur, .kind = .install, .subject = "foot-git" });
+    var answer = try operation.ask(.{
+        .kind = .select_optional_dependencies,
+        .prompt = "Select optional dependencies for foot-git",
+        .options = &options,
+        .dependency_name = "demo",
+    });
+    defer answer.deinit(arena.allocator());
+    operation.finish(.success);
+
+    try std.testing.expect(answer.response == .choices);
+    try std.testing.expectEqual(@as(usize, 0), answer.response.choices.len);
+    const rendered = stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "[JSON]") == null);
+}
+
