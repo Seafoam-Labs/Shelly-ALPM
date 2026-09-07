@@ -220,14 +220,6 @@ pub fn containsString(values: []const []const u8, needle: []const u8) bool {
     return false;
 }
 
-pub fn isExtractableArchive(name: []const u8) bool {
-    const suffixes = [_][]const u8{
-        ".tar", ".tar.gz", ".tgz", ".tar.zst", ".tar.xz", ".txz", ".tar.bz2", ".tbz", ".tbz2", ".zip", ".vsix", ".deb", ".crate",
-    };
-    for (suffixes) |suffix| if (std.ascii.endsWithIgnoreCase(name, suffix)) return true;
-    return false;
-}
-
 /// Returns the target text that may safely be materialized in the extraction
 /// tree. The caller owns the returned slice. Archive-absolute targets are
 /// interpreted relative to the archive root and rewritten as relative links
@@ -399,19 +391,6 @@ test "validateSourceName rejects unsafe names" {
     try std.testing.expectError(error.InvalidSourceName, validateSourceName("dir/file"));
     try std.testing.expectError(error.InvalidSourceName, validateSourceName("back\\slash"));
     try validateSourceName("valid-name.tar.gz");
-}
-
-test "isExtractableArchive recognizes archive suffixes case-insensitively" {
-    try std.testing.expect(isExtractableArchive("pkg.tar.gz"));
-    try std.testing.expect(isExtractableArchive("pkg.TAR.ZST"));
-    try std.testing.expect(isExtractableArchive("pkg.zip"));
-    try std.testing.expect(isExtractableArchive("pkg.vsix"));
-    try std.testing.expect(isExtractableArchive("pkg.VSIX"));
-    try std.testing.expect(isExtractableArchive("pkg.tbz2"));
-    try std.testing.expect(isExtractableArchive("pkg.deb"));
-    try std.testing.expect(isExtractableArchive("pkg.DEB"));
-    try std.testing.expect(!isExtractableArchive("pkg.tar.gz.sig"));
-    try std.testing.expect(!isExtractableArchive("package"));
 }
 
 test "archiveLinkTarget contains relative traversal and rebases absolute targets" {

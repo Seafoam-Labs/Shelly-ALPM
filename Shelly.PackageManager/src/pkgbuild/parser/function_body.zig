@@ -209,8 +209,11 @@ fn find_brace_body_end(content: []const u8, start: usize) function_scan_error!us
             continue;
         }
 
+        // The previous-byte check rejects the second `<` of a here-string
+        // (`<<<`), which would otherwise parse as a quoted heredoc.
         if (c == '<' and i + 1 < content.len and content[i + 1] == '<' and
-            (i + 2 >= content.len or content[i + 2] != '<'))
+            (i + 2 >= content.len or content[i + 2] != '<') and
+            (i == 0 or content[i - 1] != '<'))
         {
             if (parse_heredoc_declaration(content, i + 2)) |declaration| {
                 if (pending_count == pending.len) return error.TooManyHeredocs;
@@ -339,8 +342,11 @@ fn find_subshell_body_end(content: []const u8, start: usize) function_scan_error
             continue;
         }
 
+        // The previous-byte check rejects the second `<` of a here-string
+        // (`<<<`), which would otherwise parse as a quoted heredoc.
         if (c == '<' and i + 1 < content.len and content[i + 1] == '<' and
-            (i + 2 >= content.len or content[i + 2] != '<'))
+            (i + 2 >= content.len or content[i + 2] != '<') and
+            (i == 0 or content[i - 1] != '<'))
         {
             if (parse_heredoc_declaration(content, i + 2)) |declaration| {
                 if (pending_count == pending.len) return error.TooManyHeredocs;
@@ -874,6 +880,38 @@ test "parser_content: unclosed subshell consumes to end of content" {
     const content = "build() (\n  return 1;";
     const result = try extract_function_body(content, "build");
     try std.testing.expectEqualStrings("return 1;", result.?);
+}
+
+test "parser_content: here-string does not open a heredoc in brace bodies" {
+    // Issue 1848: the second `<` of `<<<` re-triggered heredoc detection,
+    // swallowing the rest of the file into a phantom heredoc body.
+    const content =
+        \\build() {
+        \\  mapfile -t deps <<< "$(sed -n '/dependencies:/,/^$/ {/dependencies:/d; p }' list.txt)"
+        \\  echo done
+        \\}
+        \\package() { echo package; }
+    ;
+    const result = (try extract_function_body(content, "build")).?;
+    try std.testing.expectEqualStrings(
+        \\mapfile -t deps <<< "$(sed -n '/dependencies:/,/^$/ {/dependencies:/d; p }' list.txt)"
+        \\  echo done
+    , result);
+}
+
+test "parser_content: here-string does not open a heredoc in subshell bodies" {
+    const content =
+        \\build() (
+        \\  mapfile -t deps <<< "$dependency_list"
+        \\  echo done
+        \\)
+        \\package() { echo package; }
+    ;
+    const result = (try extract_function_body(content, "build")).?;
+    try std.testing.expectEqualStrings(
+        \\mapfile -t deps <<< "$dependency_list"
+        \\  echo done
+    , result);
 }
 
 test "parser_content: non-compound function delimiters remain unsupported" {

@@ -2,7 +2,7 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgbase=shelly
 pkgname=('shelly' 'shelly-flatpak-backend')
-pkgver=3.1.2
+pkgver=3.1.3
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
@@ -16,11 +16,11 @@ source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALP
         'com.shellyorg.shelly-notifications.desktop'
         'shelly-flatpak-integrate')
 
-sha256sums=('80ee02aeabf10e97d8a33856464167c8001fbc1201656e5074e7c8f057d5b408'
+sha256sums=('42a177be3b44f4de116b3457d3e7f1e175af73d3f7a47b27d24f7748b7aa1bf0'
             '0aff9177498bd94e90c937076d15ac76116c628ec3504a7c1b8c9ea086336ca6'
-            '4ddb7d9960b55cd26a0a78c57a5ee23819544012354eeb988491d617adff6fe9'
-            '971c63db0721040e41cb437876842bfbd6845f00a54d5a53b51efae0e0af8455'
-            'e4c506bc6ac4b03d09b249baf3c2c893d1567938734e19730d0942e434640bd4')
+            '2cdefd69e5e1a2ecaa9a787ef04137af16d55690361034420f4dfcbb575e8627'
+            '05f39f65a0f0797ea8a45b10cb693a197908aec298b2a17422a6d942ad1dee36'
+            'da6ed2f71966aef9cc20f7dcd3a5aa87afd3d57d2fccebfe71be62e4d9ae64d5')
 # GitHub replaces "+" with "-" in archive top-level directory names.
 _source_dir="Shelly-ALPM-${pkgver//+/-}"
 
@@ -121,11 +121,11 @@ package_shelly() {
       'json-glib'
   )
   optdepends=(
-      'arch-install-scripts: provision fresh roots for --isolated builds'
       'fish: Fish shell completions'
       'zsh: Zsh shell completions'
       'libstarfish: dependency viewer for arch packages'
       'shelly-flatpak-backend: Flatpak package management support'
+      'util-linux: isolate fresh-root provisioning for --isolated builds'
       'fuse2: run AppImages that require FUSE 2'
   )
 

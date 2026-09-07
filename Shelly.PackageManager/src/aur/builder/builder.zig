@@ -91,6 +91,9 @@ pub const BuildOptions = struct {
     /// Digest of the PKGBUILD and its reviewed local/install files. Every
     /// caller must prepare and verify this snapshot before execution.
     reviewed_pkgbuild_digest: ?[std.crypto.hash.sha2.Sha256.digest_length]u8 = null,
+    /// True when the digest is an unattended caller's policy boundary. A
+    /// changed final input set must fail instead of asking another question.
+    review_digest_is_automation: bool = false,
     /// SHA-256 of only the PKGBUILD, for BUILDINFO v2.
     pkgbuild_sha256sum: ?[std.crypto.hash.sha2.Sha256.digest_length]u8 = null,
     /// Optional deterministic build-environment snapshot. Production callers
@@ -123,6 +126,7 @@ pub const BuilderErrors = error{
     BuildDirectoryNotWritable,
     PrivilegedPackageOperationUnsupported,
     SandboxUnsupported,
+    InvalidSourceDateEpoch,
 };
 
 pub const FailureLocation = struct {
@@ -143,6 +147,9 @@ pub const PackageBuilder = struct {
     failure_location: FailureLocation = .{},
     active_operation: ?*op_context.Operation = null,
     active_log: ?*steps.BuildLog = null,
+    /// Resolved once before any PKGBUILD code runs. A caller-provided value is
+    /// retained; otherwise this is the native builder's start timestamp.
+    source_date_epoch: ?i64 = null,
     /// Owned package names produced when sandboxed top-level evaluation turns
     /// statically unresolved split-package names into their final values.
     evaluated_requested_names: ?[][]const u8 = null,
@@ -202,6 +209,26 @@ pub const PackageBuilder = struct {
         self.virtual_ownership_tracker = null;
     }
 
+    fn resolveSourceDateEpoch(self: *PackageBuilder) !void {
+        if (self.source_date_epoch != null) return;
+
+        if (self.environ.getPosix("SOURCE_DATE_EPOCH")) |value| {
+            // makepkg treats an empty variable like an unset one, but rejects
+            // every non-empty value containing anything except decimal digits.
+            if (value.len > 0) {
+                for (value) |byte| if (!std.ascii.isDigit(byte))
+                    return error.InvalidSourceDateEpoch;
+                self.source_date_epoch = std.fmt.parseInt(i64, value, 10) catch
+                    return error.InvalidSourceDateEpoch;
+                return;
+            }
+        }
+
+        const now = std.Io.Clock.real.now(self.io).toSeconds();
+        if (now < 0) return error.InvalidSourceDateEpoch;
+        self.source_date_epoch = now;
+    }
+
     pub fn BuildPackage(self: *PackageBuilder) BuilderErrors![]BuildArtifact {
         const artifacts = self.run() catch |err|
             return security.narrowBuilderError(err);
@@ -219,7 +246,14 @@ pub const PackageBuilder = struct {
                 completion = .cancelled;
                 return err;
             }
-            operation.reportError(err, "Failed to build package", "build", null, false);
+            if (err != error.StepFailed) {
+                const message = try @import("../../shared/user_errors.zig").format(self.allocator, err, .{
+                    .operation = "the package build",
+                    .subject = if (self.requested_names.len > 0) self.requested_names[0] else null,
+                });
+                defer self.allocator.free(message);
+                operation.reportError(err, message, "build", null, false);
+            }
             return err;
         };
         completion = .success;
@@ -260,6 +294,7 @@ pub const PackageBuilder = struct {
         if (self.active_operation != null) return error.BuildAlreadyRunning;
         self.active_operation = operation;
         defer self.active_operation = null;
+        try self.resolveSourceDateEpoch();
         try steps.validateBuildDirectories(self);
         var log = try steps.openBuildLog(self);
         defer log.close();
@@ -275,6 +310,41 @@ pub const PackageBuilder = struct {
             return err;
         };
         return artifacts;
+    }
+
+    /// Evaluates only top-level PKGBUILD metadata in the normal lifecycle
+    /// sandbox, reparses the resulting package set, and returns the complete
+    /// review snapshot. No sources are acquired and no lifecycle function is
+    /// invoked. The returned review is owned by the caller.
+    pub fn prepareFinalReviewWithOperation(
+        self: *PackageBuilder,
+        operation: *op_context.Operation,
+    ) !PreparedPkgbuildReview {
+        const pkgbuild_path = self.options.pkgbuild_path orelse
+            return error.UnreviewedBuilderRequest;
+        if (self.active_operation != null) return error.BuildAlreadyRunning;
+        self.active_operation = operation;
+        defer self.active_operation = null;
+        try security.secureBuilderProcess();
+        try self.requireSandboxAvailability();
+        try self.resolveSourceDateEpoch();
+
+        var evaluated = try self.resolveEvaluatedBuilds(operation);
+        defer evaluated.deinit(self.allocator);
+        const content = try std.Io.Dir.cwd().readFileAlloc(
+            self.io,
+            pkgbuild_path,
+            self.allocator,
+            .limited(32 * 1024 * 1024),
+        );
+        defer self.allocator.free(content);
+        return preparePkgbuildReview(
+            self.allocator,
+            self.io,
+            self.options.start_directory,
+            content,
+            self.package_builds,
+        );
     }
 
     /// Resolves reviewed top-level PKGBUILD metadata in the normal lifecycle
@@ -316,6 +386,7 @@ pub const PackageBuilder = struct {
         defer self.active_operation = null;
         try security.secureBuilderProcess();
         try self.requireSandboxAvailability();
+        try self.resolveSourceDateEpoch();
 
         var evaluated = try self.resolveEvaluatedBuilds(operation);
         defer evaluated.deinit(self.allocator);
@@ -327,22 +398,8 @@ pub const PackageBuilder = struct {
             self.package_builds,
         );
         defer resolved_review.deinit();
-        if (!std.mem.eql(u8, &reviewed_digest, &resolved_review.digest)) {
-            var answer = try operation.ask(.{
-                .kind = .review_changes,
-                .prompt = "Review files discovered by sandboxed PKGBUILD evaluation?",
-                .review = .{
-                    .subject = self.requested_names[0],
-                    .old_content = current_pkgbuild,
-                    .new_content = current_pkgbuild,
-                    .findings = resolved_review.findings,
-                    .related_files = resolved_review.related_files,
-                },
-                .default_response = .declined,
-            });
-            defer answer.deinit(self.allocator);
-            if (answer.response != .accepted) return error.PkgbuildReviewDeclined;
-        }
+        if (!std.mem.eql(u8, &reviewed_digest, &resolved_review.digest))
+            return error.ReviewedPkgbuildChanged;
         try resolved_review.verifyCurrent(
             self.allocator,
             self.io,
@@ -406,6 +463,8 @@ pub const PackageBuilder = struct {
             const prior_digest = original_review_digest orelse
                 return error.UnreviewedBuilderRequest;
             if (!std.mem.eql(u8, &prior_digest, &review.digest)) {
+                if (self.options.review_digest_is_automation)
+                    return error.ReviewedPkgbuildChanged;
                 var answer = try operation.ask(.{
                     .kind = .review_changes,
                     .prompt = "Review files discovered by sandboxed PKGBUILD evaluation?",
@@ -506,7 +565,11 @@ pub const PackageBuilder = struct {
             for ([_][]const u8{ "src", "pkg" }) |name| {
                 const path = try std.fs.path.join(self.allocator, &.{ self.options.work_directory, name });
                 defer self.allocator.free(path);
-                std.Io.Dir.cwd().deleteTree(self.io, path) catch {};
+                std.Io.Dir.cwd().deleteTree(self.io, path) catch |err| {
+                    const message = try std.fmt.allocPrint(self.allocator, "The build completed, but Shelly could not remove the temporary files in \"{s}\". You can remove them when they are no longer needed.", .{path});
+                    defer self.allocator.free(message);
+                    operation.reportError(err, message, "build", null, true);
+                };
             }
         }
 

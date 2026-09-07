@@ -514,6 +514,7 @@ pub const AurPage = extern struct {
         applyOptionsFromConfig(self);
         self.update_selection_ui();
         _ = gtk.Widget.grabFocus(p.search_entry.as(gtk.Widget));
+        restore_current_view(self);
     }
 
     fn applyOptionsFromConfig(self: *Self) void {
@@ -732,10 +733,9 @@ pub const AurPage = extern struct {
         self.start_load(.search);
     }
 
-    fn on_installed_toggled(self: *Self) callconv(.c) void {
+    fn restore_current_view(self: *Self) void {
         const p = self.priv();
-        p.installed_mode = gtk.CheckButton.getActive(p.installed_toggle) != 0;
-
+        
         if (p.installed_mode) {
             self.start_load(.installed);
         } else if (p.last_query_len > 0) {
@@ -745,6 +745,12 @@ pub const AurPage = extern struct {
             self.update_selection_ui();
             self.set_state(.prompt);
         }
+    }
+    
+    fn on_installed_toggled(self: *Self) callconv(.c) void {
+        const p = self.priv();
+        p.installed_mode = gtk.CheckButton.getActive(p.installed_toggle) != 0;
+        restore_current_view(self);
     }
 
     fn on_install_clicked(self: *Self) callconv(.c) void {
@@ -853,15 +859,8 @@ pub const AurPage = extern struct {
     fn on_transaction_complete(ctx: *anyopaque, success: bool) void {
         const self: *AurPage = @ptrCast(@alignCast(ctx));
         if (!success) return;
-
-        const p = self.priv();
         self.clear_selection();
-
-        if (p.installed_mode) {
-            self.start_load(.installed);
-        } else if (p.last_query_len > 0) {
-            self.start_load(.search);
-        }
+        restore_current_view(self);
     }
 
     const template_children = .{

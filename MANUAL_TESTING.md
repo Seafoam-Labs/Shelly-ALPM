@@ -13,6 +13,25 @@ tests.
 - [ ] Application responds to window resize operations
 - [ ] Application can be minimized/maximized/closed properly
 
+### AppImage Environment Variables (#1719)
+
+- [ ] Open an installed AppImage and enter `WEBKIT_DISABLE_DMABUF_RENDERER=1` in Environment Variables, then select Save Environment.
+- [ ] Launch from the desktop menu and `shelly run appimage <name>`; confirm the variable reaches the application.
+- [ ] Restart Shelly, sync one/all AppImages, update, and replace the AppImage with a newer filename; confirm the setting survives.
+- [ ] Add/edit/remove multiple lines, including an empty value (`KEY=`); verify duplicate or invalid keys prevent saving.
+- [ ] Navigate away with unsaved changes and return; confirm the draft remains. Back prompts to discard it.
+- [ ] Verify a failed save keeps the draft and the previously saved launcher/settings.
+- [ ] Remove the variable's line and save; confirm the normal inherited/bundled environment is restored.
+- [ ] On an NVIDIA system affected by #1719, verify YARC launches successfully with the workaround.
+
+CLI equivalents (use the exact installed name):
+
+```sh
+shelly config appimage YARC --set-env WEBKIT_DISABLE_DMABUF_RENDERER=1
+shelly config appimage YARC --unset-env WEBKIT_DISABLE_DMABUF_RENDERER
+shelly config appimage YARC --clear-env
+```
+
 ### Package Search & Display
 
 - [ ] Search functionality returns relevant results
@@ -26,6 +45,15 @@ tests.
 
 - [ ] Installing a package shows progress correctly
 - [ ] Installation completes successfully
+
+### Error Messages
+
+- [ ] In a disposable package database, trigger a database lock failure. CLI, GTK, and TUI show the configured `db.lck` path and the matching, quoted removal command. The message says to remove the file only when no package manager is running.
+- [ ] Trigger missing dependencies and file conflicts in a disposable environment. The explanation names the affected packages or paths and provides a next step; technical details follow it.
+- [ ] Fail an AUR build step. The message includes the package name and failed stage, and build output remains available.
+- [ ] Deny a GTK authorization request. The failure explains that permission was not granted.
+- [ ] Verify GTK retains the specific failure in its final status and TUI displays the full explanation, including multiline lock instructions.
+- [ ] Verify recoverable cleanup failures appear as warnings and cancellation does not claim that an unexpected error occurred.
 
 ### Dynamic AUR Sources
 
@@ -271,6 +299,11 @@ package first); for bash and zsh use a clean shell, and regenerate
 - [ ] Root/sudo operations work correctly
 - [ ] Permission errors are handled gracefully
 - [ ] User is prompted for elevation when needed
+- [ ] `Shelly.Cli.Zig/scripts/test-elevation-cancellation.sh` passes without
+  privileges for both SIGINT and SIGTERM
+- [ ] From a normal user session with a working elevator,
+  `Shelly.Cli.Zig/scripts/test-isolated-cancellation.sh` exits successfully and
+  leaves neither nspawn descendants nor an isolated operation directory
 
 ### File System
 

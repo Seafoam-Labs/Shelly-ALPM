@@ -18,6 +18,27 @@ pub const JsonPackFrame = struct {
         return output[start..suff];
     }
 
+    /// Returns an owned explanation from a failed command, skipping progress,
+    /// warnings, and malformed frames. Prefer the first (most specific) failure.
+    pub fn failureMessage(alloc: std.mem.Allocator, output: []const u8) !?[]u8 {
+        const Failure = struct {
+            @"$kind": []const u8 = "",
+            ErrorMessage: []const u8 = "",
+            Level: []const u8 = "Error",
+        };
+        var iterator = frames(output);
+        while (iterator.next()) |payload| {
+            const json = decodeBase64(alloc, payload) catch continue;
+            defer alloc.free(json);
+            const parsed = std.json.parseFromSlice(Failure, alloc, json, .{ .ignore_unknown_fields = true }) catch continue;
+            defer parsed.deinit();
+            if (std.mem.eql(u8, parsed.value.@"$kind", "alpm.error") and
+                std.mem.eql(u8, parsed.value.Level, "Error") and parsed.value.ErrorMessage.len > 0)
+                return try alloc.dupe(u8, parsed.value.ErrorMessage);
+        }
+        return null;
+    }
+
     pub fn decodeBase64(alloc: std.mem.Allocator, base64: []const u8) ![]u8 {
         const decoder = std.base64.standard.Decoder;
         const len = try decoder.calcSizeForSlice(base64);
@@ -196,4 +217,23 @@ test "decode parses an array payload" {
     try testing.expectEqual(@as(usize, 2), parsed.value.len);
     try testing.expectEqualStrings("a", parsed.value[0].name);
     try testing.expectEqualStrings("b", parsed.value[1].name);
+}
+
+test "failureMessage skips invalid and informational frames and owns the full explanation" {
+    const alloc = std.testing.allocator;
+    const explanation = "Could not start the package operation because the package database is locked.\n\n" ++
+        "Lock file: /custom/pacman/db.lck\n\n" ++
+        "Wait for any running package manager to finish. If no package manager is running, remove the leftover lock file, then try again:\n" ++
+        "sudo rm -- '/custom/pacman/db.lck'";
+    const json = try std.json.Stringify.valueAlloc(alloc, .{ .@"$kind" = "alpm.error", .ErrorMessage = explanation }, .{});
+    defer alloc.free(json);
+    const encoded = try alloc.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+    defer alloc.free(encoded);
+    _ = std.base64.standard.Encoder.encode(encoded, json);
+    const output = try std.fmt.allocPrint(alloc, "[JSON]invalid![/JSON][JSON]e30=[/JSON][JSON]{s}[/JSON][JSON]e30=[/JSON]", .{encoded});
+    const message = (try JsonPackFrame.failureMessage(alloc, output)).?;
+    alloc.free(output);
+    defer alloc.free(message);
+    try std.testing.expectEqualStrings(explanation, message);
+    try std.testing.expect((try JsonPackFrame.failureMessage(alloc, "[JSON]bad[/JSON]")) == null);
 }

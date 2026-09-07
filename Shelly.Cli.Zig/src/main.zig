@@ -33,6 +33,23 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(exit_code);
     }
 
+    // Isolated-root provisioning is also served before normal CLI setup. The
+    // coordinator launches this reserved mode inside a private mount/PID
+    // namespace; it performs one target-root libalpm transaction and emits no
+    // normal command output.
+    if (arguments.len > 0 and std.mem.eql(u8, arguments[0], Zigalpm.alpm.bootstrap.wrapper_argument)) {
+        Zigalpm.HttpClient.setDefaultProxyEnvironment(init.environ_map);
+        const exit_code = Zigalpm.alpm.bootstrap.runInternal(
+            arena,
+            io,
+            init.minimal.environ,
+            stderr_writer,
+            arguments[1..],
+        );
+        stderr_writer.flush() catch {};
+        std.process.exit(exit_code);
+    }
+
     const proxy_environment = try Shelly_Cli_Zig.proxy_environment.prepare(
         arena,
         &stdin_file_reader.interface,
@@ -43,7 +60,10 @@ pub fn main(init: std.process.Init) !void {
     const effective_environment_map = proxy_environment.map(init.environ_map);
     Zigalpm.HttpClient.setDefaultProxyEnvironment(effective_environment_map);
 
-    Shelly_Cli_Zig.signals.installInterruptHandler();
+    const graceful_cancellation = Shelly_Cli_Zig.signals.argumentsRequestGracefulCancellation(
+        effective_arguments,
+    );
+    Shelly_Cli_Zig.signals.installInterruptHandler(graceful_cancellation);
     var session_log = Shelly_Cli_Zig.log.SessionLog.tryOpen(io);
     defer if (session_log) |*log| log.close();
     if (session_log) |*log| log.writeSessionHeader(arena, effective_arguments);
@@ -66,10 +86,23 @@ pub fn main(init: std.process.Init) !void {
         .transaction_log = if (transaction_log) |*log| log else null,
     };
     Shelly_Cli_Zig.download_policy.applyProcessDefault(&context);
-    const exit_code = Shelly_Cli_Zig.app.run(&context, effective_arguments) catch |err| code: {
-        stderr_writer.print("shelly: {t}\n", .{err}) catch {};
+    const command_exit_code = Shelly_Cli_Zig.app.run(&context, effective_arguments) catch |err| code: {
+        const message = Zigalpm.user_errors.format(arena, err, .{}) catch "Could not complete the package operation. Shelly could not allocate memory to explain the error.";
+        var ui_mode = false;
+        for (effective_arguments) |argument| {
+            if (std.mem.eql(u8, argument, "--ui-mode")) ui_mode = true;
+        }
+        if (ui_mode) {
+            Shelly_Cli_Zig.config_output.writeErrorFrame(&context, message) catch {};
+        } else {
+            stderr_writer.print("shelly: {s}\n", .{message}) catch {};
+        }
         break :code 1;
     };
+    const exit_code: u8 = if (Shelly_Cli_Zig.signals.wasInterrupted()) code: {
+        stderr_writer.writeAll("Operation cancelled.\n") catch {};
+        break :code 130;
+    } else command_exit_code;
     if (session_log) |*log| log.writeSessionFooter(arena, exit_code);
 
     try stdout_writer.flush();

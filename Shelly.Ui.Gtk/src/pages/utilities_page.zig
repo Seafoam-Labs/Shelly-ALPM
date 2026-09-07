@@ -98,9 +98,12 @@ pub const ShellyUtilitiesPage = extern struct {
         var threaded: std.Io.Threaded = .init(arena.allocator(), .{});
         defer threaded.deinit();
 
-        const cli = ShellyCli{ .allocator = arena.allocator(), .io = threaded.io() };
+        var failure_detail: ?[]u8 = null;
+        const cli = ShellyCli{ .allocator = arena.allocator(), .io = threaded.io(), .failure_detail = &failure_detail };
         const parsed = cli.repair_db() catch |err| {
             std.log.err("utilities: repair-db failed: {any}", .{err});
+            const message = arena.allocator().dupeZ(u8, failure_detail orelse "Could not remove the database lock. No error details were returned by Shelly.") catch return;
+            self.priv().toast.show(.@"error", message);
             return;
         };
         defer parsed.deinit();
@@ -109,7 +112,8 @@ pub const ShellyUtilitiesPage = extern struct {
         if (response.isSuccess()) {
             self.priv().toast.show(.success, translations._("Database lock removed successfully"));
         } else {
-            self.priv().toast.show(.@"error", translations._("Failed to remove database lock"));
+            const message = arena.allocator().dupeZ(u8, response.text()) catch return;
+            self.priv().toast.show(.@"error", message);
         }
     }
 

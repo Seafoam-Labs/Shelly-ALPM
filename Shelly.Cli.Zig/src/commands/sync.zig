@@ -1070,7 +1070,7 @@ test "sync reports backend failures and returns a failure exit code" {
     };
 
     try std.testing.expectEqual(@as(u8, 1), try executeWithRunner(&tc.context, &outcome.dispatch, Failure{}));
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "error: TestSyncFailure") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Technical details: TestSyncFailure") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), ":: Transaction failed.") != null);
     try std.testing.expectEqual(@as(usize, 0), tc.stderr.writer.buffered().len);
 }

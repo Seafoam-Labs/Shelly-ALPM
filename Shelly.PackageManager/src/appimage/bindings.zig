@@ -19,6 +19,7 @@ pub const appimage = struct {
         description: []const u8 = "",
         desktop_name: []const u8 = "",
         size_on_disk: u64 = 0,
+        environment_variables: []const @import("environment.zig").Variable = &.{},
         command_line_args: []const u8 = "",
         path: []const u8 = "",
         update_url: []const u8 = "",

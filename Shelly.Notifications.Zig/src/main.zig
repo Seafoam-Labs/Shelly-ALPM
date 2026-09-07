@@ -190,14 +190,26 @@ const Worker = struct {
     running: std.atomic.Value(bool) = std.atomic.Value(bool).init(true),
 
     fn run(self: *Worker) void {
+        var initial_check_done = false;
         while (self.running.load(.seq_cst)) {
             if (self.config.dirty.swap(false, .seq_cst)) {
                 self.applyConfigChange();
             }
 
-            self.pollOnce() catch |e| {
-                log_worker.err("check failed: {any}", .{e});
+            const skip_initial_check = blk: {
+                self.config.mutex.lockUncancelable(self.io);
+                defer self.config.mutex.unlock(self.io);
+                const cfg = self.config.get() catch break :blk false;
+                break :blk !initial_check_done and next_notification.isCronMode(cfg);
             };
+            if (skip_initial_check) {
+                log_worker.info("cron mode: skipping initial check", .{});
+            } else {
+                self.pollOnce() catch |e| {
+                    log_worker.err("check failed: {any}", .{e});
+                };
+            }
+            initial_check_done = true;
 
             const secs: u32 = blk: {
                 self.config.mutex.lockUncancelable(self.io);

@@ -360,7 +360,7 @@ pub const libalpm = struct {
             return file_name_str;
         }
 
-        pub fn base(self: Package) [:0]const u8 {
+        pub fn base(self: Package) ?[:0]const u8 {
             return str(alpm.alpm_pkg_get_base(self.ptr));
         }
     };
@@ -371,6 +371,7 @@ pub const libalpm = struct {
     /// `OwnedPackage` remains valid after the originating handle is released.
     pub const OwnedPackage = struct {
         name_value: [:0]u8,
+        base_value: [:0]u8,
         version_value: [:0]u8,
         description_value: ?[:0]u8,
         url_value: ?[:0]u8,
@@ -402,6 +403,9 @@ pub const libalpm = struct {
         ) std.mem.Allocator.Error!OwnedPackage {
             const name_value = try allocator.dupeZ(u8, package.name() orelse "");
             errdefer allocator.free(name_value);
+
+            const base_value = try allocator.dupeZ(u8, package.base() orelse package.name() orelse "");
+            errdefer allocator.free(base_value);
 
             const version_value = try allocator.dupeZ(u8, package.version() orelse "");
             errdefer allocator.free(version_value);
@@ -453,6 +457,7 @@ pub const libalpm = struct {
 
             return .{
                 .name_value = name_value,
+                .base_value = base_value,
                 .version_value = version_value,
                 .description_value = description_value,
                 .url_value = url_value,
@@ -547,6 +552,7 @@ pub const libalpm = struct {
 
         pub fn deinit(self: *OwnedPackage, allocator: std.mem.Allocator) void {
             allocator.free(self.name_value);
+            allocator.free(self.base_value);
             allocator.free(self.version_value);
             if (self.description_value) |value| allocator.free(value);
             if (self.url_value) |value| allocator.free(value);
@@ -575,6 +581,10 @@ pub const libalpm = struct {
 
         pub fn name(self: OwnedPackage) ?[:0]const u8 {
             return self.name_value;
+        }
+
+        pub fn base(self: OwnedPackage) [:0]const u8 {
+            return self.base_value;
         }
 
         pub fn version(self: OwnedPackage) ?[:0]const u8 {

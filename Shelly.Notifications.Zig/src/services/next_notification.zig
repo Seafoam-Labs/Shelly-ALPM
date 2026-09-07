@@ -9,10 +9,17 @@ pub const NowInfo = struct {
     seconds_of_day: i32,
 };
 
+pub fn isCronMode(config: *const ShellyConfig) bool {
+    return config.TrayRunAsCron and
+        config.UseWeeklySchedule and
+        config.DaysOfWeek.len > 0 and
+        !std.mem.eql(u8, config.Time, "");
+}
+
 pub fn computeNextSeconds(now: NowInfo, config: *const ShellyConfig) u32 {
     const fallback: u32 = config.TrayCheckIntervalHours * 3600;
 
-    if (!config.UseSymbolicTray or
+    if (!config.UseWeeklySchedule or
         config.DaysOfWeek.len == 0 or
         std.mem.eql(u8, config.Time, ""))
     {
@@ -154,4 +161,23 @@ test "dayInSchedule basic" {
     try testing.expect(dayInSchedule(@intFromEnum(DayOfWeek.thursday), &.{.thursday}));
     try testing.expect(!dayInSchedule(2, &.{ .monday, .thursday, .friday }));
     try testing.expect(!dayInSchedule(0, &.{}));
+}
+
+test "cron mode requires cron flag and a complete weekly schedule" {
+    var cfg = testConfig(true, &[_]DayOfWeek{.monday}, "9:00", 24.0);
+    try testing.expect(!isCronMode(&cfg));
+
+    cfg.TrayRunAsCron = true;
+    try testing.expect(isCronMode(&cfg));
+
+    cfg.UseWeeklySchedule = false;
+    try testing.expect(!isCronMode(&cfg));
+    cfg.UseWeeklySchedule = true;
+
+    cfg.DaysOfWeek = &.{};
+    try testing.expect(!isCronMode(&cfg));
+
+    cfg.DaysOfWeek = &[_]DayOfWeek{.monday};
+    cfg.Time = "";
+    try testing.expect(!isCronMode(&cfg));
 }

@@ -33,7 +33,17 @@ pub const CliMessage = struct {
     }
 };
 
+fn containsPackageName(packages: []const Package, name: []const u8) bool {
+    for (packages) |pkg| {
+        if (std.mem.eql(u8, pkg.Name, name)) return true;
+    }
+    return false;
+}
+
 pub const ShellyCli = struct {
+    /// Optional explanation for a failed subprocess. Initialize to null;
+    /// the caller owns the returned slice using this client's allocator.
+    failure_detail: ?*?[]u8 = null,
     allocator: std.mem.Allocator,
     io: Io,
 
@@ -102,6 +112,10 @@ pub const ShellyCli = struct {
                 result.stderr[0..@min(500, result.stderr.len)],
                 result.stdout[0..@min(500, result.stdout.len)],
             });
+            if (self.failure_detail) |detail| {
+                detail.* = try JsonPackFrame.failureMessage(self.allocator, result.stdout) orelse
+                    try self.allocator.dupe(u8, if (result.stderr.len > 0) result.stderr else "Could not complete the package operation. No error details were returned by Shelly.");
+            }
             return error.CommandFailed;
         }
 
@@ -132,7 +146,18 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode([]Package, self.allocator, result.stdout);
     }
 
-    pub fn get_remotes(self: ShellyCli) !std.json.Parsed([]Remote) {
+    pub fn isPackageInstalled(self: ShellyCli, name: []const u8) !bool {
+        const result = try self.run(&.{ "-Ssi", name });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        const parsed = JsonPackFrame.decode([]Package, self.allocator, result.stdout) catch return false;
+        defer parsed.deinit();
+
+        return containsPackageName(parsed.value, name);
+    }
+
+    pub fn getRemotes(self: ShellyCli) !std.json.Parsed([]Remote) {
         const result = try self.run(&.{ "list", "flatpak", "remote" });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
@@ -140,7 +165,7 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode([]Remote, self.allocator, result.stdout);
     }
 
-    pub fn get_installed_flatpaks(self: ShellyCli) !std.json.Parsed([]Flatpak) {
+    pub fn getInstalledFlatpaks(self: ShellyCli) !std.json.Parsed([]Flatpak) {
         const result = try self.run(&.{"-Lf"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
@@ -148,7 +173,7 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode([]Flatpak, self.allocator, result.stdout);
     }
 
-    pub fn get_remote_appstream_apps(self: ShellyCli) !std.json.Parsed([]AppstreamApp) {
+    pub fn getRemoteAppstreamApps(self: ShellyCli) !std.json.Parsed([]AppstreamApp) {
         const result = try self.run(&.{ "list", "flatpak", "remote", "all" });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
@@ -356,4 +381,16 @@ test "get_flatpaks" {
 
     try std.testing.expect(parsed.value.len > 0);
     std.debug.print("{s} {t}\n", .{ parsed.value[0].Name, parsed.value[0].InstallLevel });
+}
+
+test "installed lookup only accepts an exact package name" {
+    const packages = [_]Package{
+        .{ .Name = "noctalia", .Repository = "local" },
+        .{ .Name = "aqueous-configs", .Repository = "local" },
+    };
+
+    try std.testing.expect(containsPackageName(&packages, "noctalia"));
+    try std.testing.expect(!containsPackageName(&packages, "noct"));
+    try std.testing.expect(!containsPackageName(&packages, "flatpak"));
+    try std.testing.expect(!containsPackageName(&[_]Package{}, "fuse2"));
 }

@@ -1171,7 +1171,7 @@ test "aggregate list-updates skips an unavailable Flatpak backend without failin
     try std.testing.expect(std.mem.indexOf(
         u8,
         tc.stderr.writer.buffered(),
-        "Install shelly-flatpak-backend and Flatpak",
+        "Install flatpak and shelly-flatpak-backend",
     ) != null);
 }
 

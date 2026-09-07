@@ -55,7 +55,7 @@ pub const AppstreamAppObject = extern struct {
         return self;
     }
 
-    pub fn getApp(self: *const Self) *const flatpak.AppstreamApp {
+    pub fn getApp(self: *const Self) *flatpak.AppstreamApp {
         return &@constCast(self).priv().app;
     }
 
@@ -143,6 +143,14 @@ pub const AppstreamAppObject = extern struct {
         const p = self.priv();
 
         return p.permissions;
+    }
+
+    pub fn isInstalled(self: *const Self) bool {
+        return self.getApp().Installed;
+    }
+
+    pub fn setInstalled(self: *Self, installed: bool) void {
+        self.getApp().Installed = installed;
     }
 
     pub fn setPermissions(self: *Self, permissions: []const []const u8) void {
@@ -243,6 +251,7 @@ pub const AppstreamAppObject = extern struct {
             .Remotes = remotes,
             .Extends = if (source.Extends) |value| try allocator.dupeZ(u8, value) else null,
             .Addons = addons,
+            .Installed = source.Installed,
         };
     }
 

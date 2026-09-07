@@ -1041,7 +1041,7 @@ pub const ShellySearchPage = extern struct {
         const argv = switch (next.source) {
             .standard => ShellyCommands.install(std.heap.c_allocator, next.names),
             .aur => ShellyCommands.install_aur(std.heap.c_allocator, next.names),
-            .flatpak => ShellyCommands.install_flatpak(std.heap.c_allocator, next.names[0], .system, next.remote),
+            .flatpak => ShellyCommands.installFlatpak(std.heap.c_allocator, next.names[0], .system, next.remote),
         } catch {
             self.drainPendingInstalls();
             p.install_running = false;

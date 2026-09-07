@@ -48,8 +48,8 @@ pub fn fromCode(code: []const u8) Error {
 
 pub fn unavailableMessage(err: anyerror) ?[]const u8 {
     return switch (err) {
-        Error.FlatpakBackendUnavailable => "Flatpak support is unavailable. Install shelly-flatpak-backend and Flatpak.",
-        Error.FlatpakBackendIncompatible => "The installed Shelly Flatpak backend is incompatible. Upgrade Shelly and shelly-flatpak-backend together.",
+        Error.FlatpakBackendUnavailable => "Flatpak support is not installed. Install flatpak and shelly-flatpak-backend, then try again.",
+        Error.FlatpakBackendIncompatible => "Shelly and its Flatpak backend have incompatible versions. Upgrade shelly and shelly-flatpak-backend together, then try again.",
         else => null,
     };
 }

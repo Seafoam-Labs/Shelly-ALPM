@@ -249,8 +249,11 @@ fn conditional_depth(self: PkgbuildParser, input: []const u8) !usize {
             word_start = false;
             continue;
         }
+        // The previous-byte check rejects the second `<` of a here-string
+        // (`<<<`), which would otherwise parse as a quoted heredoc.
         if (c == '<' and i + 1 < input.len and input[i + 1] == '<' and
-            (i + 2 >= input.len or input[i + 2] != '<'))
+            (i + 2 >= input.len or input[i + 2] != '<') and
+            (i == 0 or input[i - 1] != '<'))
         {
             if (try parse_heredoc_declaration(self, input, i + 2)) |declaration| {
                 errdefer self.allocator.free(declaration.delimiter);
@@ -455,8 +458,11 @@ pub fn split_shell_segments(self: PkgbuildParser, input: []const u8) ![]shell_se
             continue;
         }
 
+        // The previous-byte check rejects the second `<` of a here-string
+        // (`<<<`), which would otherwise parse as a quoted heredoc.
         if (c == '<' and !in_double and i + 1 < input.len and input[i + 1] == '<' and
-            (i + 2 >= input.len or input[i + 2] != '<'))
+            (i + 2 >= input.len or input[i + 2] != '<') and
+            (i == 0 or input[i - 1] != '<'))
         {
             if (try parse_heredoc_declaration(self, input, i + 2)) |declaration| {
                 errdefer self.allocator.free(declaration.delimiter);
@@ -668,4 +674,18 @@ test "is_inside_conditional_block: only command-position keywords affect depth" 
     ;
     const position = std.mem.indexOf(u8, content, "pkgname").?;
     try std.testing.expect(try is_inside_conditional_block(parser, content, position));
+}
+
+test "is_inside_conditional_block: here-string does not swallow the closing fi" {
+    // Issue 1848: the second `<` of `<<<` re-triggered heredoc detection,
+    // and the phantom body skip consumed every following line.
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const content =
+        \\if true; then
+        \\  mapfile -t deps <<< "$(cat list)"
+        \\fi
+        \\pkgname=foo
+    ;
+    const position = std.mem.indexOf(u8, content, "pkgname").?;
+    try std.testing.expect(!try is_inside_conditional_block(parser, content, position));
 }

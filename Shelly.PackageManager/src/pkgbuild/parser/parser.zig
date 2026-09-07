@@ -126,13 +126,13 @@ pub const PkgbuildParser = struct {
         const install_assignment = try fields.resolve_file_assignment(self, content, &vars, "install");
         defer if (install_assignment) |assignment| self.allocator.free(assignment.value);
         const install_file = if (install_assignment) |assignment|
-            try fields.resolve_file_string(self, assignment, &vars)
+            try fields.resolve_optional_file_string(self, assignment, &vars)
         else
             null;
         const changelog_assignment = try fields.resolve_file_assignment(self, content, &vars, "changelog");
         defer if (changelog_assignment) |assignment| self.allocator.free(assignment.value);
         const changelog_file = if (changelog_assignment) |assignment|
-            try fields.resolve_file_string(self, assignment, &vars)
+            try fields.resolve_optional_file_string(self, assignment, &vars)
         else
             null;
 
@@ -508,6 +508,60 @@ test "parser_content: resolves install filename without reading hook bodies" {
     var info = try parse_test_pkgbuild(parser, content, base_dir);
     defer info.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("myapp.install", info.install_file.?);
+}
+
+test "parser_content: empty optional filenames mean no auxiliary file" {
+    const allocator = std.testing.allocator;
+    const parser = PkgbuildParser{ .allocator = allocator, .io = std.testing.io };
+    for ([_][]const u8{ "", "''", "\"\"", "\"$_empty\"" }) |value| {
+        const content = try std.fmt.allocPrint(allocator, "pkgname=demo\n_empty=''\ninstall={s}\nchangelog={s}\n", .{ value, value });
+        defer allocator.free(content);
+        var info = try parse_test_pkgbuild(parser, content, null);
+        defer info.deinit(allocator);
+        try std.testing.expect(info.install_file == null);
+        try std.testing.expect(info.changelog_file == null);
+    }
+}
+
+test "parser_content: empty split auxiliary overrides clear global filenames" {
+    const allocator = std.testing.allocator;
+    for ([_][]const u8{ "", "''", "\"\"", "\"$_empty\"" }) |value| {
+        const content = try std.fmt.allocPrint(allocator, "pkgname=('demo-one' 'demo-two')\n_empty=''\n" ++
+            "install=common.install\nchangelog=common.changelog\n" ++
+            "package_demo-one() {{\n install={s}\n changelog={s}\n}}\n" ++
+            "package_demo-two() {{\n true\n}}\n", .{ value, value });
+        defer allocator.free(content);
+        var info = try parse_test_pkgbuild(.{
+            .allocator = allocator,
+            .io = std.testing.io,
+            .selected_package_name = "demo-one",
+        }, content, null);
+        defer info.deinit(allocator);
+        try std.testing.expect(info.install_file == null);
+        try std.testing.expect(info.changelog_file == null);
+
+        var sibling = try parse_test_pkgbuild(.{
+            .allocator = allocator,
+            .io = std.testing.io,
+            .selected_package_name = "demo-two",
+        }, content, null);
+        defer sibling.deinit(allocator);
+        try std.testing.expectEqualStrings("common.install", sibling.install_file.?);
+        try std.testing.expectEqualStrings("common.changelog", sibling.changelog_file.?);
+    }
+}
+
+test "parser_content: nonempty optional filenames retain exact bytes" {
+    const allocator = std.testing.allocator;
+    const parser = PkgbuildParser{ .allocator = allocator, .io = std.testing.io };
+    for ([_][]const u8{ " ", "demo.install", "missing.install", "../evil.install", "/tmp/demo.install" }) |value| {
+        const content = try std.fmt.allocPrint(allocator, "pkgname=demo\ninstall='{s}'\nchangelog='{s}'\n", .{ value, value });
+        defer allocator.free(content);
+        var info = try parse_test_pkgbuild(parser, content, null);
+        defer info.deinit(allocator);
+        try std.testing.expectEqualStrings(value, info.install_file.?);
+        try std.testing.expectEqualStrings(value, info.changelog_file.?);
+    }
 }
 
 test "parser_content: flutter-3382-bin resolves dependencies declared in package" {
@@ -2215,6 +2269,37 @@ test "parser_content: execution step expansion does not mistake arithmetic shift
         \\echo 1
         \\  echo "hello"
     , steps[0].expanded_body);
+}
+
+test "parser_content: execution step expansion does not mistake here-strings for heredocs" {
+    // Issue 1848 (rime-ice-pinyin-git): `<<<` with a quoted command
+    // substitution was treated as a heredoc introducer, swallowing the
+    // rest of the function body.
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const content =
+        \\pkgname=hello
+        \\
+        \\build() {
+        \\  mapfile -t deps <<< "$(sed -n '/dependencies:/,/^$/ {/dependencies:/d; p }' list.txt)"
+        \\  echo "$pkgname"
+        \\}
+        \\
+        \\package() {
+        \\  echo "$pkgname"
+        \\}
+    ;
+    var info = try parse_test_pkgbuild(parser, content, null);
+    defer info.deinit(std.testing.allocator);
+
+    const steps = info.execution.?.steps;
+    try std.testing.expectEqual(@as(usize, 2), steps.len);
+    try std.testing.expectEqualStrings("build", steps[0].name);
+    try std.testing.expectEqualStrings(
+        \\mapfile -t deps <<< "$(sed -n '/dependencies:/,/^$/ {/dependencies:/d; p }' list.txt)"
+        \\  echo "hello"
+    , steps[0].expanded_body);
+    try std.testing.expectEqualStrings("package", steps[1].name);
+    try std.testing.expectEqualStrings("echo \"hello\"", steps[1].expanded_body);
 }
 
 test "parser_content: architecture sources and b2 sums follow makepkg ordering" {
