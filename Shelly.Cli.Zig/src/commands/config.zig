@@ -75,7 +75,7 @@ pub fn dispatch(
         } else {
             try output.writeFailure(context, message);
         }
-        return 0;
+        return if (updated) 0 else 1;
     }
 
     if (std.mem.eql(u8, invocation.command.path, "shelly config reset")) {
@@ -94,7 +94,7 @@ pub fn dispatch(
         const message = if (updated)
             try std.fmt.allocPrint(context.allocator, "Set parallel downloads to {s}", .{value})
         else
-            "Failed to set parallel downloads.";
+            "Parallel downloads must be an integer from 1 to 255.";
         if (invocation.globals.ui_mode) {
             if (updated) try output.writeInfoFrame(context, message) else try output.writeErrorFrame(context, message);
         } else if (updated) {
@@ -102,7 +102,7 @@ pub fn dispatch(
         } else {
             try output.writeFailure(context, message);
         }
-        return 0;
+        return if (updated) 0 else 1;
     }
 
     return null;

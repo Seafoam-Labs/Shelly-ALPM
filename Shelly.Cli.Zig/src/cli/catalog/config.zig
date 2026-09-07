@@ -61,7 +61,7 @@ pub const variants = [_]types.Variant{
         .implementation = "config_manager.Manager.update(\"ParallelDownloadCount\", value)",
         .arguments = &.{integerArgument(
             "downloadCount",
-            "Maximum number of parallel downloads",
+            "Maximum number of parallel downloads (1-255; default: 100)",
         )},
     },
 };

@@ -180,6 +180,7 @@ pub const HttpClient = @import("ShellyHttp");
 pub const shared = struct {
     pub const archive = @import("archive");
     pub const downloader = @import("shared/downloader.zig");
+    pub const download_queue = @import("shared/download_queue.zig");
     pub const list_dictionary = @import("shared/list_dictionary.zig");
     pub const xdg_paths = @import("shared/xdg_paths.zig");
     pub const operation_context = operation;

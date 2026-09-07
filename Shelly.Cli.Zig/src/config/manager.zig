@@ -98,7 +98,7 @@ test "creates, updates, and reloads the XDG config file" {
     };
     const manager = Manager.init(&context);
     const config = try manager.read();
-    try std.testing.expectEqualStrings("10", (try config.getDisplay(arena.allocator(), "ParallelDownloadCount")).?);
+    try std.testing.expectEqualStrings("100", (try config.getDisplay(arena.allocator(), "ParallelDownloadCount")).?);
     try std.testing.expectEqualStrings(
         "PreferIPv4",
         (try config.getDisplay(arena.allocator(), "DownloadAddressFamilyPolicy")).?,

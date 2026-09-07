@@ -70,7 +70,6 @@ pub const DownloadConfiguration = struct {
     max_retries: u8 = 3,
     retry_delay_secs: u32 = 1,
     verify_ssl: bool = true,
-    parallel_downloads: u8 = 10,
     file_durability: FileDurability = .sync_before_rename,
     /// When set, completed downloads are normalized to this exact mode. The
     /// default preserves the downloader's historical umask-dependent behavior
@@ -990,7 +989,6 @@ test "DownloadConfiguration.default() returns correct default values" {
     try std.testing.expectEqual(@as(u8, 3), config.max_retries);
     try std.testing.expectEqual(@as(u32, 1), config.retry_delay_secs);
     try std.testing.expectEqual(true, config.verify_ssl);
-    try std.testing.expectEqual(@as(u8, 10), config.parallel_downloads);
     try std.testing.expectEqual(FileDurability.sync_before_rename, config.file_durability);
     try std.testing.expect(config.final_permissions == null);
 }
