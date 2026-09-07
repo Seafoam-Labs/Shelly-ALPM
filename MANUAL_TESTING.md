@@ -13,6 +13,25 @@ tests.
 - [ ] Application responds to window resize operations
 - [ ] Application can be minimized/maximized/closed properly
 
+### AppImage Environment Variables (#1719)
+
+- [ ] Open an installed AppImage and enter `WEBKIT_DISABLE_DMABUF_RENDERER=1` in Environment Variables, then select Save Environment.
+- [ ] Launch from the desktop menu and `shelly run appimage <name>`; confirm the variable reaches the application.
+- [ ] Restart Shelly, sync one/all AppImages, update, and replace the AppImage with a newer filename; confirm the setting survives.
+- [ ] Add/edit/remove multiple lines, including an empty value (`KEY=`); verify duplicate or invalid keys prevent saving.
+- [ ] Navigate away with unsaved changes and return; confirm the draft remains. Back prompts to discard it.
+- [ ] Verify a failed save keeps the draft and the previously saved launcher/settings.
+- [ ] Remove the variable's line and save; confirm the normal inherited/bundled environment is restored.
+- [ ] On an NVIDIA system affected by #1719, verify YARC launches successfully with the workaround.
+
+CLI equivalents (use the exact installed name):
+
+```sh
+shelly config appimage YARC --set-env WEBKIT_DISABLE_DMABUF_RENDERER=1
+shelly config appimage YARC --unset-env WEBKIT_DISABLE_DMABUF_RENDERER
+shelly config appimage YARC --clear-env
+```
+
 ### Package Search & Display
 
 - [ ] Search functionality returns relevant results

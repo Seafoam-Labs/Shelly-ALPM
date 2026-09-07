@@ -739,6 +739,9 @@ pub fn build(b: *std.Build) void {
         .name = "appimage-test",
         .root_module = mod,
         .filters = &.{
+            "environment ",
+            "desktop composition",
+            "configureEnvironment",
             "AppImage dispatcher forwards typed status and download progress",
             "AppImage classification is case insensitive and extension based",
             "AppImage metadata discovery rejects symlinks outside the extraction root",
