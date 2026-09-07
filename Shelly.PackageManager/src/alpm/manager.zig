@@ -871,7 +871,14 @@ pub const Manager = struct {
                     .is_installed = rawLibalpm.alpm_find_satisfier(local_cache, name.ptr) != null,
                 });
             }
-            if (options.items.len == 0 or
+            var all_installed = options.items.len > 0;
+            for (options.items) |opt| {
+                if (!opt.is_installed) {
+                    all_installed = false;
+                    break;
+                }
+            }
+            if (options.items.len == 0 or all_installed or
                 (self.dispatcher.operation == null and self.dispatcher.question.items.len == 0)) continue;
             const pkg_name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse "package";
             const prompt = try std.fmt.allocPrint(self.allocator, "Select an optional dependency for {s}", .{pkg_name});

@@ -1480,7 +1480,14 @@ pub const Manager = struct {
                 .is_installed = self.alpm.is_package_installed(name_z),
             });
         }
-        if (options.items.len == 0) return self.allocator.alloc([]const u8, 0);
+        var all_installed = options.items.len>0;
+        for (options.items) |opt| {
+            if (!opt.is_installed){
+                all_installed = false;
+                break;
+            }
+        }
+        if (options.items.len == 0 or all_installed) return self.allocator.alloc([]const u8, 0);
         const question = try std.fmt.allocPrint(
             self.allocator,
             "Select optional dependencies for {s}",

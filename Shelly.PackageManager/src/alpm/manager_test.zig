@@ -1804,6 +1804,73 @@ test "toggle_hidden_packages flips state and returns the new value" {
 // install_packages
 // ---------------------------------------------------------------------------
 
+test "install_packages skips optional dependency question when all optdeps are already installed" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.addLocalPackage(allocator, "installed-option", "1.0-1");
+    try workspace.addLocalPackage(allocator, "optional-one", "1.0-1");
+    try workspace.addLocalPackage(allocator, "optional-two", "1.0-1");
+    try workspace.createOptionalDependencySyncDatabase(allocator);
+    const cache_path = try std.fmt.allocPrint(allocator, "{s}/cache", .{workspace.root});
+    defer allocator.free(cache_path);
+    try std.Io.Dir.cwd().createDirPath(io, cache_path);
+    const config = try std.fmt.allocPrint(
+        allocator,
+        "[options]\nArchitecture = auto\nSigLevel = Never\nDBPath = {s}\nCacheDir = {s}\n\n" ++
+            "[seafoam-labs]\nServer = file://{s}/mirror\n",
+        .{ workspace.db_path, cache_path, workspace.root },
+    );
+    defer allocator.free(config);
+    {
+        var config_file = try std.Io.Dir.cwd().createFile(io, workspace.config_path, .{});
+        defer config_file.close(io);
+        try config_file.writeStreamingAll(io, config);
+    }
+
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+    const Capture = struct {
+        saw_optional_question: bool = false,
+        saw_plan: bool = false,
+
+        fn answer(data: ?*anyopaque, question: operations.Question) operations.QuestionResponse {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (question.kind == .select_optional_dependencies) {
+                self.saw_optional_question = true;
+                return .{ .choices = &.{} };
+            }
+            if (question.kind != .confirm_transaction) return .accepted;
+
+            const plan = question.transaction_plan orelse return .declined;
+            for (plan.packages) |package| {
+                if (std.mem.eql(u8, package.name, "optional-parent")) {
+                    testing.expectEqual(operations.TransactionPackageRole.requested, package.role) catch unreachable;
+                } else {
+                    unreachable;
+                }
+            }
+            testing.expectEqual(@as(usize, 1), plan.packages.len) catch unreachable;
+            self.saw_plan = true;
+            return .declined;
+        }
+    };
+    var capture: Capture = .{};
+    var context = operations.OperationContext.init(allocator, io);
+    defer context.deinit();
+    context.setQuestionHandler(.{ .function = Capture.answer, .data = &capture });
+    mgr.setOperationContext(&context);
+
+    var package_names = [_][:0]const u8{"optional-parent"};
+    try testing.expectError(error.Cancelled, mgr.install_packages(&package_names, .{}));
+    try testing.expect(!capture.saw_optional_question);
+    try testing.expect(capture.saw_plan);
+}
+
 test "install_packages returns NoHandle when the handle is null" {
     var mgr: Manager = undefined;
     mgr.handle = null;
