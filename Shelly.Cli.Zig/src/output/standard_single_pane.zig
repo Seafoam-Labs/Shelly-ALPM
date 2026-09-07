@@ -537,7 +537,11 @@ pub const Renderer = struct {
                 break :blk if (try self.confirm(question.prompt, default_approved)) .accepted else .declined;
             },
             .select_one, .select_provider => .{ .choice = try self.selectOne(question) },
-            .select_many, .select_optional_dependencies => .{ .choices = try self.selectMany(question) },
+            .select_optional_dependencies => if (allOptionalDependenciesInstalled(question)) blk: {
+                try self.writeColoredLine(.gray, "All optional dependencies are already installed.", .{});
+                break :blk .{ .choices = &.{} };
+            } else .{ .choices = try self.selectMany(question) },
+            .select_many => .{ .choices = try self.selectMany(question) },
         };
     }
 
@@ -1038,6 +1042,14 @@ fn safeReviewDefault(question: Zigalpm.OperationQuestion) Zigalpm.OperationQuest
 fn hasSecurityFindings(question: Zigalpm.OperationQuestion) bool {
     const review = question.review orelse return false;
     return review.findings.len != 0;
+}
+
+fn allOptionalDependenciesInstalled(question: Zigalpm.OperationQuestion) bool {
+    if (question.options.len == 0) return false;
+    for (question.options) |option| {
+        if (!option.is_installed) return false;
+    }
+    return true;
 }
 
 fn defaultResponse(question: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
