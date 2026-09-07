@@ -14,6 +14,7 @@ pub const ProgressArgs = struct {
 pub const QuestionArgs = struct {
     question: ?[]const u8,
     question_type: c_int,
+    arguments: []const []const u8 = &.{},
     options: []const []const u8,
     response: ?c_int = null,
     provider_options: ?[]const ProviderOption = null,
@@ -319,7 +320,9 @@ pub const Dispatcher = struct {
                 const common_kind = commonQuestionKind(args);
                 var answer = operation.ask(.{
                     .kind = common_kind,
+                    .purpose = commonQuestionPurpose(args),
                     .prompt = args.question orelse "Continue?",
+                    .arguments = args.arguments,
                     .options = common_options,
                     .dependency_name = args.dependency_name,
                 }) catch |err| {
@@ -520,6 +523,20 @@ fn mapCommonQuestionResponse(
             .package => |pkg| .{ .pkg = pkg },
             .default, .deferred => null,
         },
+    };
+}
+
+fn commonQuestionPurpose(args: QuestionArgs) operation_api.QuestionPurpose {
+    const question_type = if (args.question_type < 0)
+        bindings.libalpm.QuestionType.unknown
+    else
+        bindings.libalpm.QuestionType.fromQuestionType(
+            @intCast(args.question_type),
+        );
+
+    return switch (question_type) {
+        .conflict_package => .package_conflict,
+        else => .generic,
     };
 }
 
