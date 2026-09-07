@@ -150,11 +150,21 @@ pub const QuestionResponder = struct {
         }
     }
 
+    fn allOptionalDependenciesInstalled(question: Zigalpm.OperationQuestion) bool {
+        if (question.options.len == 0) return false;
+        for (question.options) |opt| {
+            if (!opt.is_installed) return false;
+        }
+        return true;
+    }
+
     fn handle(
         data: ?*anyopaque,
         question: Zigalpm.OperationQuestion,
     ) Zigalpm.OperationQuestionResponse {
         const self: *QuestionResponder = @ptrCast(@alignCast(data.?));
+        if (question.kind == .select_optional_dependencies and allOptionalDependenciesInstalled(question))
+            return .{ .choices = &.{} };
         if (self.no_confirm) {
             if (question.kind == .review_changes) {
                 if (hasSecurityFindings(question)) return self.handleInteractive(question);
