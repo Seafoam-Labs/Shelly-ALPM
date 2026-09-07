@@ -3970,6 +3970,154 @@ test "AUR optional dependency prompts identify their package" {
     try std.testing.expect(capture.prompts_match);
 }
 
+test "AUR optional dependency skips optional dependency question when all optdepends are installed" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(root);
+
+    const cache_root = try std.fs.path.join(allocator, &.{ root, "cache" });
+    defer allocator.free(cache_root);
+
+    const alpm_root = try std.fs.path.join(allocator, &.{ root, "alpm-root" });
+    defer allocator.free(alpm_root);
+
+    const db_path = try std.fs.path.join(allocator, &.{ root, "db" });
+    defer allocator.free(db_path);
+
+    const package_cache = try std.fs.path.join(allocator, &.{ root, "packages" });
+    defer allocator.free(package_cache);
+
+    const shellybuild_system_path = try std.fs.path.join(
+        allocator,
+        &.{ root, "missing-system-shellybuild.conf" },
+    );
+    defer allocator.free(shellybuild_system_path);
+
+    const shellybuild_user_path = try std.fs.path.join(
+        allocator,
+        &.{ root, "missing-user-shellybuild.conf" },
+    );
+    defer allocator.free(shellybuild_user_path);
+
+    try std.Io.Dir.cwd().createDirPath(io, cache_root);
+    try std.Io.Dir.cwd().createDirPath(io, alpm_root);
+    try std.Io.Dir.cwd().createDirPath(io, package_cache);
+
+    const local_db_path = try std.fs.path.join(allocator, &.{ db_path, "local" });
+    defer allocator.free(local_db_path);
+    try std.Io.Dir.cwd().createDirPath(io, local_db_path);
+
+    const db_version_path = try std.fs.path.join(
+        allocator,
+        &.{ local_db_path, "ALPM_DB_VERSION" },
+    );
+    defer allocator.free(db_version_path);
+    try writeFixtureFile(io, db_version_path, "9\n", false);
+
+    for ([_][]const u8{ "foot-terminfo", "libnotify" }) |package_name| {
+        const package_dir = try std.fmt.allocPrint(
+            allocator,
+            "{s}/{s}-1.0-1",
+            .{ local_db_path, package_name },
+        );
+        defer allocator.free(package_dir);
+        try std.Io.Dir.cwd().createDirPath(io, package_dir);
+
+        const desc_path = try std.fs.path.join(
+            allocator,
+            &.{ package_dir, "desc" },
+        );
+        defer allocator.free(desc_path);
+
+        const desc = try std.fmt.allocPrint(
+            allocator,
+            "%NAME%\n{s}\n\n" ++
+                "%VERSION%\n1.0-1\n\n" ++
+                "%DESC%\nInstalled optional dependency fixture\n\n" ++
+                "%ARCH%\nany\n\n" ++
+                "%REASON%\n0\n\n" ++
+                "%VALIDATION%\nnone\n\n",
+            .{package_name},
+        );
+        defer allocator.free(desc);
+
+        try writeFixtureFile(io, desc_path, desc, false);
+    }
+
+    const config_path = try std.fs.path.join(
+        allocator,
+        &.{ root, "pacman.conf" },
+    );
+    defer allocator.free(config_path);
+
+    const config = try std.fmt.allocPrint(
+        allocator,
+        "[options]\n" ++
+            "Architecture = auto\n" ++
+            "SigLevel = Never\n" ++
+            "RootDir = {s}\n" ++
+            "DBPath = {s}\n" ++
+            "CacheDir = {s}\n",
+        .{ alpm_root, db_path, package_cache },
+    );
+    defer allocator.free(config);
+    try writeFixtureFile(io, config_path, config, false);
+
+    var manager = try Manager.init(allocator, std.testing.environ, .{
+        .config_path = config_path,
+        .cache_root = cache_root,
+        .shellybuild_configuration_paths = .{
+            .system = shellybuild_system_path,
+            .user = shellybuild_user_path,
+        },
+    });
+    defer manager.deinit();
+
+    const Capture = struct {
+        saw_question: bool = false,
+
+        fn answer(
+            data: ?*anyopaque,
+            question: events.QuestionArgs,
+        ) events.QuestionResponse {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (question.question_type == .select_optional_dependencies) {
+                self.saw_question = true;
+            }
+            return .{};
+        }
+    };
+
+    var capture: Capture = .{};
+    manager.dispatcher.setQuestionHandler(.{
+        .function = Capture.answer,
+        .data = &capture,
+    });
+
+    var options = [_][]const u8{
+        "foot-terminfo: terminal info",
+        "libnotify: notifications",
+    };
+    var info = PkgbuildInfo{
+        .opt_depends = options[0..],
+        .variables = std.StringHashMap([]const u8).init(allocator),
+        .local_source_contents = std.StringHashMap([]const u8).init(allocator),
+    };
+    defer info.variables.deinit();
+    defer info.local_source_contents.deinit();
+
+    const selected = try manager.selectOptionalDependencies("test-pkg", &info);
+    defer allocator.free(selected);
+
+    try std.testing.expect(!capture.saw_question);
+    try std.testing.expectEqual(@as(usize, 0), selected.len);
+}
+
 test "prepared non-chroot split package builds use the custom builder" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;
