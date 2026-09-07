@@ -27,6 +27,7 @@ const VersionHistoryDialog = @import("../../dialog/page/version_history.zig").Ve
 const Entry = @import("../../dialog/page/version_history.zig").Entry;
 const Flatpak = @import("../../models/flatpak.zig").Flatpak;
 const FlatpakRemoveDialog = @import("../../dialog/page/flatpak_remove_dialog.zig").FlatpakRemoveDialog;
+const StringHelper = @import("../../helpers/string_helpers.zig").StringHelper;
 const translations = @import("../../helpers/translations.zig");
 
 extern fn g_get_user_data_dir() [*:0]const u8;
@@ -361,7 +362,7 @@ pub const FlatpakInstallView = extern struct {
             if (remote.Scope == .user) "user" else "system",
         });
 
-        const argv = ShellyCommands.installFlatpak(std.heap.c_allocator, app.getId(), remote.Scope, remote.Name) catch return;
+        const argv = ShellyCommands.installFlatpak(std.heap.c_allocator, stripDesktopName(app.getId()), remote.Scope, remote.Name) catch return;
         defer std.mem.Allocator.free(std.heap.c_allocator, argv);
 
         var names: std.ArrayListUnmanaged([]const u8) = .empty;
@@ -379,6 +380,14 @@ pub const FlatpakInstallView = extern struct {
                 .ctx = self,
             });
         }
+    }
+
+    fn stripDesktopName(name: []const u8) []const u8 {
+        if (StringHelper.countCharacter(name, '.') > 2) {
+            const trimmed = StringHelper.stripSuffix(name, ".desktop");
+            return trimmed;
+        }
+        return name;
     }
 
     fn onUninstallClicked(_: *gtk.Button, self: *Self) callconv(.c) void {
@@ -723,7 +732,7 @@ pub const FlatpakInstallView = extern struct {
         var threaded: std.Io.Threaded = .init(std.heap.c_allocator, .{});
         defer threaded.deinit();
         const cli: ShellyCli = .{ .allocator = std.heap.c_allocator, .io = threaded.io() };
-        const parsed = cli.get_flatpak_remote_info(load.app_id) catch {
+        const parsed = cli.get_flatpak_remote_info(stripDesktopName(load.app_id)) catch {
             load.failed = true;
             _ = glib.idleAdd(&remoteInfoComplete, load);
             return;
