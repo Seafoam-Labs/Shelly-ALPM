@@ -17,11 +17,11 @@ source=(
     'shelly-flatpak-integrate'
 )
 
-sha256sums=('8501bb9e7758efe505990f247004c9cb2c014fe625c911c55b7fca0ba8d8af9c'
-            'fa0cf740f0ff323fa30fb9028c7b283ade31e9b9587a0337b7c1694903d94496'
+sha256sums=('8f777209c841d79aafc9cfacd7f54a12fbb5626e4ee05628261b939233bb930c'
+            '1eea0b5b5119fce8ceb4f8fb37cfc5af58ed9dcbe1fae6b89d335a9ef0189410'
             '0aff9177498bd94e90c937076d15ac76116c628ec3504a7c1b8c9ea086336ca6'
-            '2cdefd69e5e1a2ecaa9a787ef04137af16d55690361034420f4dfcbb575e8627'
-            '05f39f65a0f0797ea8a45b10cb693a197908aec298b2a17422a6d942ad1dee36'
+            'a4bd3c27ac9f92beeaa9bfcac2030629a9b3e221f7a9b3fc3dd33b7cbd90d953'
+            'cf0dc0a6d1865b9010054b36941e7bf4d445c3e7549219889f07ab08283c5c0f'
             'da6ed2f71966aef9cc20f7dcd3a5aa87afd3d57d2fccebfe71be62e4d9ae64d5')
 
 package_shelly-bin() {
