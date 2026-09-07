@@ -55,6 +55,10 @@ pub const root_options = [_]Option{
         "--auto-confirm-cache-clean",
         "Preserve the invoking user's cache-clean policy across elevation",
     ),
+    hiddenGlobalFlag(
+        "--disable-cache-clean",
+        "Preserve disabled upgrade-all cache cleaning across elevation",
+    ),
 };
 
 pub const root_arguments = [_]Argument{.{

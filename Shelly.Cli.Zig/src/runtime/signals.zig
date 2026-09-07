@@ -100,7 +100,8 @@ fn isGlobalBooleanOption(argument: []const u8) bool {
         std.mem.eql(u8, argument, "-n") or
         std.mem.eql(u8, argument, "--ui-mode") or
         std.mem.eql(u8, argument, "-U") or
-        std.mem.eql(u8, argument, "--auto-confirm-cache-clean");
+        std.mem.eql(u8, argument, "--auto-confirm-cache-clean") or
+        std.mem.eql(u8, argument, "--disable-cache-clean");
 }
 
 fn isAssignedGlobalBooleanOption(argument: []const u8) bool {
@@ -110,7 +111,8 @@ fn isAssignedGlobalBooleanOption(argument: []const u8) bool {
         std.mem.startsWith(u8, argument, "-n=") or
         std.mem.startsWith(u8, argument, "--ui-mode=") or
         std.mem.startsWith(u8, argument, "-U=") or
-        std.mem.startsWith(u8, argument, "--auto-confirm-cache-clean=");
+        std.mem.startsWith(u8, argument, "--auto-confirm-cache-clean=") or
+        std.mem.startsWith(u8, argument, "--disable-cache-clean=");
 }
 
 fn isBooleanValue(argument: []const u8) bool {
@@ -199,6 +201,8 @@ test "all public isolated spellings request graceful cancellation" {
     try std.testing.expect(argumentsRequestGracefulCancellation(&.{ "build", "--isolated", "true" }));
     try std.testing.expect(argumentsRequestGracefulCancellation(&.{ "build", "-i" }));
     try std.testing.expect(argumentsRequestGracefulCancellation(&.{ "--json", "build", "-i" }));
+    try std.testing.expect(argumentsRequestGracefulCancellation(&.{ "--disable-cache-clean", "build", "-i" }));
+    try std.testing.expect(argumentsRequestGracefulCancellation(&.{ "--disable-cache-clean=false", "build", "-i" }));
     try std.testing.expect(argumentsRequestGracefulCancellation(&.{ "--json", "true", "--aur-url", "https://aur.example", "build", "-i" }));
     try std.testing.expect(argumentsRequestGracefulCancellation(&.{"-Ai"}));
     try std.testing.expect(argumentsRequestGracefulCancellation(&.{ "-Air", "PKGBUILD" }));

@@ -150,6 +150,7 @@ pub const QuestionOption = struct {
 pub const QuestionPurpose = enum {
     generic,
     cache_clean_extra_entries,
+    package_conflict,
 }; 
 
 pub const QuestionAttachment = struct {
@@ -242,6 +243,7 @@ pub const QuestionRequest = struct {
     kind: QuestionKind,
     purpose: QuestionPurpose = .generic,
     prompt: []const u8,
+    arguments: []const []const u8 = &.{},
     options: []const QuestionOption = &.{},
     attachments: []const QuestionAttachment = &.{},
     review: ?ReviewPayload = null,
@@ -257,6 +259,7 @@ pub const Question = struct {
     kind: QuestionKind,
     purpose: QuestionPurpose,
     prompt: []const u8,
+    arguments: []const []const u8,
     options: []const QuestionOption,
     attachments: []const QuestionAttachment,
     review: ?ReviewPayload,
@@ -535,6 +538,7 @@ pub const OperationContext = struct {
             .purpose = request.purpose,
             .kind = request.kind,
             .prompt = request.prompt,
+            .arguments = request.arguments,
             .options = request.options,
             .attachments = request.attachments,
             .review = request.review,

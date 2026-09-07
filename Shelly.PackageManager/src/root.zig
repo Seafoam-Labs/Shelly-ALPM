@@ -65,6 +65,8 @@ pub const alpm = struct {
     pub const parse_pacfile_path = pacfile_manager.parsePacfilePath;
 };
 
+pub const user_errors = @import("shared/user_errors.zig");
+
 pub const aur = @import("aur/manager.zig");
 
 pub const builder = @import("aur/builder/builder.zig");
@@ -119,6 +121,7 @@ pub const flatpak = struct {
 };
 
 pub const appimage = struct {
+    pub const environment = @import("appimage/environment.zig");
     pub const manager = @import("appimage/manager.zig");
     pub const update_manager = @import("appimage/update_manager.zig");
     pub const bindings = @import("appimage/bindings.zig");
@@ -177,6 +180,7 @@ pub const HttpClient = @import("ShellyHttp");
 pub const shared = struct {
     pub const archive = @import("archive");
     pub const downloader = @import("shared/downloader.zig");
+    pub const download_queue = @import("shared/download_queue.zig");
     pub const list_dictionary = @import("shared/list_dictionary.zig");
     pub const xdg_paths = @import("shared/xdg_paths.zig");
     pub const operation_context = operation;

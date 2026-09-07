@@ -210,12 +210,8 @@ fn executeWithRunner(
             return writeFailure(context, invocation, message);
         const message = switch (failure) {
             error.NoPackageSpecified => "No package specified",
-            error.PackageNotFound => try std.fmt.allocPrint(
-                context.allocator,
-                "No package named {s} found",
-                .{if (invocation.positionals.len > 0) invocation.positionals[0] else ""},
-            ),
-            else => try std.fmt.allocPrint(context.allocator, "Search failed: {t}", .{failure}),
+            error.PackageNotFound => try Zigalpm.user_errors.missingPackage(context.allocator, if (invocation.positionals.len > 0) invocation.positionals[0] else "the requested package"),
+            else => try Zigalpm.user_errors.format(context.allocator, failure, .{ .operation = "the package search" }),
         };
         return writeFailure(context, invocation, message);
     };

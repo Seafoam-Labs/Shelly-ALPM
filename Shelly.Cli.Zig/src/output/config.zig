@@ -255,6 +255,12 @@ pub fn writeYesNoQuestionFrame(
         try json.objectField("Fingerprint");
         try json.write(key.fingerprint);
     }
+    try json.objectField("Arguments");
+    try json.beginArray();
+    for (question.arguments) |argument| {
+        try json.write(argument);
+    }
+    try json.endArray();
     try json.endObject();
     try writeFrame(context, payload.writer.buffered());
 }
@@ -379,6 +385,7 @@ fn questionKindName(question: Zigalpm.OperationQuestion) []const u8 {
     
     switch(question.purpose) {
         .cache_clean_extra_entries => return "CacheCleanExtraEntries",
+        .package_conflict => return "PackageConflict",
         .generic => {},
     }
     
@@ -407,6 +414,7 @@ test "cache clean question uses cache clean wire kind" {
         .options = &.{},
         .attachments = &.{},
         .review = null,
+        .arguments = &.{},
         .transaction_plan = null,
         .dependency_name = null,
         .pgp_key_import = null,

@@ -133,21 +133,26 @@ fn runAction(
                     @as(usize, if (keyserver == null) 0 else 2),
             );
             defer context.allocator.free(arguments);
-            const key_offset: usize = if (user_receive) 4 else 2;
+            // gpg treats option-looking tokens after --recv-keys key IDs as key IDs,
+            // so --keyserver must be emitted before the command.
+            var next: usize = 0;
             if (user_receive) {
-                arguments[0] = "gpg";
-                arguments[1] = "--batch";
-                arguments[2] = "--no-tty";
-                arguments[3] = "--recv-keys";
+                arguments[next] = "gpg";
+                arguments[next + 1] = "--batch";
+                arguments[next + 2] = "--no-tty";
+                next += 3;
             } else {
-                arguments[0] = "pacman-key";
-                arguments[1] = "--recv-keys";
+                arguments[next] = "pacman-key";
+                next += 1;
             }
-            @memcpy(arguments[key_offset .. invocation.positionals.len + key_offset], invocation.positionals);
             if (keyserver) |server| {
-                arguments[invocation.positionals.len + key_offset] = "--keyserver";
-                arguments[invocation.positionals.len + key_offset + 1] = server;
+                arguments[next] = "--keyserver";
+                arguments[next + 1] = server;
+                next += 2;
             }
+            arguments[next] = "--recv-keys";
+            next += 1;
+            @memcpy(arguments[next..], invocation.positionals);
             return .{ .exit_code = try runner.call(context, arguments) };
         },
     }
@@ -220,7 +225,7 @@ fn openingMessage(
     user_keyring: bool,
 ) ![]const u8 {
     return switch (action) {
-        .init => allocator.dupe(u8, "Initializing pacman keyring..."),
+        .init => allocator.dupe(u8, "Initializing the package-signing keyring..."),
         .list => allocator.dupe(u8, "Listing keys in keyring..."),
         .refresh => allocator.dupe(u8, "Refreshing keys from keyserver..."),
         .lsign => joinedMessage(allocator, "Locally signing keys: ", values),
@@ -342,8 +347,8 @@ test "keyring maps every action to structured backend arguments" {
         &.{ "pacman-key", "--lsign-key", "AAAA" },
         &.{ "pacman-key", "--lsign-key", "BBBB" },
         &.{ "pacman-key", "--populate", "archlinux", "cachyos" },
-        &.{ "pacman-key", "--recv-keys", "CCCC", "DDDD", "--keyserver", "hkps://keys.example" },
-        &.{ "gpg", "--batch", "--no-tty", "--recv-keys", "EEEE", "--keyserver", "hkps://keys.example" },
+        &.{ "pacman-key", "--keyserver", "hkps://keys.example", "--recv-keys", "CCCC", "DDDD" },
+        &.{ "gpg", "--batch", "--no-tty", "--keyserver", "hkps://keys.example", "--recv-keys", "EEEE" },
     };
     const Capture = struct {
         expected: []const []const []const u8,

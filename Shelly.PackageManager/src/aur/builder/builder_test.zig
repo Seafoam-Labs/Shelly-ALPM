@@ -2071,6 +2071,7 @@ test "PackageBuilder strips ELF debug sections unless PKGBUILD disables strip" {
         \\}
         \\package() {
         \\  install -Dm755 demo "$pkgdir/usr/bin/strip-demo"
+        \\  ln "$pkgdir/usr/bin/strip-demo" "$pkgdir/usr/bin/strip-demo-link"
         \\}
     ;
     var stripped_fixture = try Fixture.create(allocator, common, null, null);
@@ -2083,6 +2084,10 @@ test "PackageBuilder strips ELF debug sections unless PKGBUILD disables strip" {
     defer stripped_sections.deinit(allocator);
     try testing.expectEqual(@as(u8, 0), stripped_sections.exit_code);
     try testing.expect(std.mem.indexOf(u8, stripped_sections.stdout, ".debug_info") == null);
+    const stripped_stat = try stripped_fixture.temporary.dir.statFile(io, "pkg/strip-demo/usr/bin/strip-demo", .{});
+    const linked_stat = try stripped_fixture.temporary.dir.statFile(io, "pkg/strip-demo/usr/bin/strip-demo-link", .{});
+    try testing.expectEqual(stripped_stat.inode, linked_stat.inode);
+    try testing.expectEqual(@as(u32, 0o755), stripped_stat.permissions.toMode() & 0o7777);
 
     const no_strip =
         \\pkgname=strip-demo
@@ -2108,6 +2113,125 @@ test "PackageBuilder strips ELF debug sections unless PKGBUILD disables strip" {
     defer unstripped_sections.deinit(allocator);
     try testing.expectEqual(@as(u8, 0), unstripped_sections.exit_code);
     try testing.expect(std.mem.indexOf(u8, unstripped_sections.stdout, ".debug_info") != null);
+}
+
+test "PackageBuilder preserves unsupported ELF binaries and reports strip warnings" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    const WarningCapture = struct {
+        seen: bool = false,
+
+        fn handle(data: ?*anyopaque, event: op_context.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (event) {
+                .status => |status| {
+                    if (std.mem.indexOf(u8, status.message, "Could not strip usr/bin/foreign") != null)
+                        self.seen = true;
+                },
+                else => {},
+            }
+        }
+    };
+    var capture = WarningCapture{};
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=mixed-strip-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\build() {
+        \\  printf 'int main(void) { return 0; }\n' > demo.c
+        \\  cc -g -o native demo.c
+        \\  cp native foreign
+        \\  printf '\377\377' | dd of=foreign bs=1 seek=18 conv=notrunc status=none
+        \\}
+        \\package() {
+        \\  install -Dm755 native "$pkgdir/usr/bin/native"
+        \\  install -Dm755 foreign "$pkgdir/usr/bin/foreign"
+        \\}
+    , .{ .function = WarningCapture.handle, .data = &capture }, null);
+    defer fixture.destroy();
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const original = try fixture.temporary.dir.readFileAlloc(io, "src/foreign", allocator, .unlimited);
+    defer allocator.free(original);
+    const packaged = try readPackageEntry(allocator, artifacts[0].path, "usr/bin/foreign");
+    defer allocator.free(packaged);
+    try testing.expectEqualSlices(u8, original, packaged);
+    try testing.expect(capture.seen);
+    const log = try readOnlyBuildLog(allocator, io, fixture.build_dir);
+    defer allocator.free(log);
+    try testing.expect(std.mem.indexOf(u8, log, "Could not strip usr/bin/foreign") != null);
+    try testing.expect(std.mem.indexOf(u8, log, "strip:") != null);
+    const native_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "pkg/mixed-strip-demo/usr/bin/native" });
+    defer allocator.free(native_path);
+    var sections = try process_runner.run(allocator, io, &.{ "readelf", "-S", native_path }, null, null);
+    defer sections.deinit(allocator);
+    try testing.expectEqual(@as(u8, 0), sections.exit_code);
+    try testing.expect(std.mem.indexOf(u8, sections.stdout, ".debug_info") == null);
+}
+
+test "PackageBuilder discards partial output from failed strip commands" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=failed-strip-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/bin"
+        \\  printf '\177ELF\002\001\001\000\000\000\000\000\000\000\000\000\002\000\076\000original payload' > "$pkgdir/usr/bin/demo"
+        \\  cp "$pkgdir/usr/bin/demo" "$startdir/original"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    try fixture.temporary.dir.createDirPath(io, "tools");
+    try fixture.temporary.dir.writeFile(io, .{
+        .sub_path = "tools/strip",
+        .flags = .{ .permissions = .fromMode(0o755) },
+        .data =
+        \\#!/bin/sh
+        \\while [ "$#" -gt 0 ]; do
+        \\  if [ "$1" = '-o' ]; then
+        \\    shift
+        \\    printf 'partial strip output' > "$1"
+        \\  fi
+        \\  shift
+        \\done
+        \\echo 'simulated strip failure' >&2
+        \\exit 1
+        ,
+    });
+    const path = try std.fmt.allocPrint(allocator, "{s}/tools:/usr/bin:/bin", .{fixture.build_dir});
+    defer allocator.free(path);
+    var environment = try testing.environ.createMap(allocator);
+    defer environment.deinit();
+    try environment.put("PATH", path);
+    const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
+    defer environ.block.deinit(allocator);
+    // Zig's process lookup uses the Io environment's PATH, independently of
+    // the environment passed to the child.
+    var threaded = std.Io.Threaded.init(allocator, .{ .environ = environ });
+    defer threaded.deinit();
+    fixture.builder.io = threaded.io();
+    defer fixture.builder.io = io;
+    fixture.builder.environ = environ;
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const original = try fixture.temporary.dir.readFileAlloc(io, "original", allocator, .unlimited);
+    defer allocator.free(original);
+    const packaged = try readPackageEntry(allocator, artifacts[0].path, "usr/bin/demo");
+    defer allocator.free(packaged);
+    try testing.expectEqualSlices(u8, original, packaged);
+    const log = try readOnlyBuildLog(allocator, io, fixture.build_dir);
+    defer allocator.free(log);
+    try testing.expect(std.mem.indexOf(u8, log, "simulated strip failure") != null);
+    var directory = try std.Io.Dir.cwd().openDir(io, fixture.build_dir, .{ .iterate = true });
+    defer directory.close(io);
+    var iterator = directory.iterate();
+    while (try iterator.next(io)) |entry| {
+        try testing.expect(!std.mem.startsWith(u8, entry.name, ".shelly-strip-"));
+    }
 }
 
 test "PackageBuilder runs local declarations and reviewed helper functions inside package steps" {
@@ -4621,4 +4745,150 @@ test "PackageBuilder records a sandbox hint when a confined step fails" {
     const build_log = try readOnlyBuildLog(allocator, io, fixture.build_dir);
     defer allocator.free(build_log);
     try testing.expect(std.mem.indexOf(u8, build_log, "[sandbox] step failed inside the Landlock sandbox") != null);
+}
+
+test "PackageBuilder standalone files use aliases and are available before prepare" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('renamed.gz::download.gz' 'unix.Z' 'lower.z' 'bzip.bz2' 'short.bz' 'xz.xz' 'zstd.zst' 'empty.gz' 'empty-xz.xz' 'empty-zstd.zst' 'ordinary.gz' 'keep.gz' 'mismatch.xz' 'extensionless')
+        \\sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        \\noextract=('keep.gz')
+        \\prepare() {
+        \\  for name in renamed unix lower bzip short xz zstd; do
+        \\    test "$(cat "$srcdir/$name")" = payload || return 1
+        \\  done
+        \\  test -f "$srcdir/empty" && test ! -s "$srcdir/empty"
+        \\  test -f "$srcdir/renamed.gz" && test -f "$srcdir/keep.gz"
+        \\  test "$(cat "$srcdir/ordinary.gz")" = plain
+        \\  for name in download embedded-name keep mismatch ordinary; do
+        \\    test ! -e "$srcdir/$name" || return 1
+        \\  done
+        \\}
+        \\package() {
+        \\  install -Dm644 "$srcdir/renamed" "$pkgdir/usr/share/demo/payload"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    const fixtures = .{
+        .{ "download.gz", archive.FixtureCompression.gzip },
+        .{ "unix.Z", archive.FixtureCompression.compress },
+        .{ "lower.z", archive.FixtureCompression.gzip },
+        .{ "bzip.bz2", archive.FixtureCompression.bzip2 },
+        .{ "short.bz", archive.FixtureCompression.bzip2 },
+        .{ "xz.xz", archive.FixtureCompression.xz },
+        .{ "zstd.zst", archive.FixtureCompression.zstd },
+        .{ "keep.gz", archive.FixtureCompression.gzip },
+        .{ "mismatch.xz", archive.FixtureCompression.gzip },
+        .{ "extensionless", archive.FixtureCompression.gzip },
+    };
+    inline for (fixtures) |item| {
+        const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, item[0] });
+        defer allocator.free(path);
+        try archive.writeCompressedFixture(allocator, path, item[1], "payload\n");
+    }
+    const gzip_bytes = try fixture.temporary.dir.readFileAlloc(io, "download.gz", allocator, .limited(1024));
+    defer allocator.free(gzip_bytes);
+    gzip_bytes[3] |= 8; // FNAME: the embedded name must not determine the output path.
+    const named_gzip = try std.mem.concat(allocator, u8, &.{ gzip_bytes[0..10], "embedded-name\x00", gzip_bytes[10..] });
+    defer allocator.free(named_gzip);
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "download.gz", .data = named_gzip });
+    // noextract must bypass the decoder even when the compressed input is damaged.
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "keep.gz", .data = "\x1f\x8btruncated" });
+    inline for (.{ .{ "empty.gz", archive.FixtureCompression.gzip }, .{ "empty-xz.xz", archive.FixtureCompression.xz }, .{ "empty-zstd.zst", archive.FixtureCompression.zstd } }) |item| {
+        const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, item[0] });
+        defer allocator.free(path);
+        try archive.writeCompressedFixture(allocator, path, item[1], "");
+    }
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "ordinary.gz", .data = "plain\n" });
+    fixture.builder.options.sources_prepared = false;
+    const artifacts = fixture.builder.BuildPackage() catch |err| {
+        const log = try readOnlyBuildLog(allocator, io, fixture.build_dir);
+        defer allocator.free(log);
+        std.debug.print("{s}\n", .{log});
+        return err;
+    };
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 1), artifacts.len);
+    inline for (.{ "empty", "empty-xz", "empty-zstd" }) |name| {
+        const stat = try fixture.temporary.dir.statFile(io, "src/" ++ name, .{});
+        try testing.expectEqual(@as(u64, 0), stat.size);
+    }
+}
+
+test "PackageBuilder standalone damaged streams preserve the previous srcdir" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    inline for (.{ archive.FixtureCompression.gzip, .bzip2, .xz, .zstd }) |compression| {
+        const suffix = switch (compression) {
+            .gzip => "gz",
+            .bzip2 => "bz2",
+            .xz => "xz",
+            .zstd => "zst",
+            else => unreachable,
+        };
+        for ([_]bool{ false, true }) |truncate| {
+            var fixture = try Fixture.create(allocator, "pkgname=demo\npkgver=1\npkgrel=1\narch=('any')\nsource=('payload." ++ suffix ++ "')\nsha256sums=('SKIP')\npackage() { touch \"$startdir/package-ran\"; }\n", null, null);
+            defer fixture.destroy();
+            const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "payload." ++ suffix });
+            defer allocator.free(path);
+            try archive.writeCompressedFixture(allocator, path, compression, "payload\n");
+            const compressed = try fixture.temporary.dir.readFileAlloc(io, "payload." ++ suffix, allocator, .limited(1024));
+            defer allocator.free(compressed);
+            if (!truncate) compressed[compressed.len / 2] ^= 0xff;
+            try fixture.temporary.dir.writeFile(io, .{ .sub_path = "payload." ++ suffix, .data = compressed[0 .. compressed.len - @as(usize, if (truncate) 4 else 0)] });
+            try fixture.temporary.dir.writeFile(io, .{ .sub_path = "src/marker", .data = "previous\n" });
+            fixture.builder.options.sources_prepared = false;
+            if (fixture.builder.BuildPackage()) |artifacts| {
+                defer builder_mod.deinitArtifacts(allocator, artifacts);
+                std.debug.print("unexpected success: {s}, truncated={}\n", .{ @tagName(compression), truncate });
+                return error.TestExpectedError;
+            } else |err| try testing.expectEqual(error.BuildFailed, err);
+            try fixture.temporary.dir.access(io, "src/marker", .{});
+            try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, ".src.shelly-staging", .{}));
+            try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, "package-ran", .{}));
+        }
+    }
+}
+
+test "PackageBuilder standalone rejects collisions in either source order including noextract" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    inline for (.{ "'payload.gz' 'payload'", "'payload' 'payload.gz'", "'payload.gz' 'payload.xz'" }) |sources| {
+        var fixture = try Fixture.create(allocator, "pkgname=demo\npkgver=1\npkgrel=1\narch=('any')\nsource=(" ++ sources ++ ")\nsha256sums=('SKIP' 'SKIP')\nnoextract=('payload')\npackage() { :; }\n", null, null);
+        defer fixture.destroy();
+        inline for (.{ .{ "payload.gz", archive.FixtureCompression.gzip }, .{ "payload.xz", archive.FixtureCompression.xz } }) |item| {
+            const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, item[0] });
+            defer allocator.free(path);
+            try archive.writeCompressedFixture(allocator, path, item[1], "payload\n");
+        }
+        try fixture.temporary.dir.writeFile(io, .{ .sub_path = "payload", .data = "original\n" });
+        try fixture.temporary.dir.writeFile(io, .{ .sub_path = "src/marker", .data = "previous\n" });
+        fixture.builder.options.sources_prepared = false;
+        try testing.expectError(error.BuildFailed, fixture.builder.BuildPackage());
+        try fixture.temporary.dir.access(io, "src/marker", .{});
+        try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, ".src.shelly-staging", .{}));
+    }
+}
+
+test "PackageBuilder standalone rejects output symlinks and unsafe stripped names" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    inline for (.{ "payload.gz", "..gz", "...gz", ".gz" }) |name| {
+        var fixture = try Fixture.create(allocator, "pkgname=demo\npkgver=1\npkgrel=1\narch=('any')\nsource=('link.tar' '" ++ name ++ "')\nsha256sums=('SKIP' 'SKIP')\npackage() { :; }\n", null, null);
+        defer fixture.destroy();
+        const tar_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "link.tar" });
+        defer allocator.free(tar_path);
+        try archive.writeFixture(allocator, tar_path, .none, &.{ .{ .path = "target", .contents = "original" }, .{ .path = "payload", .link_target = "target" } });
+        const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, name });
+        defer allocator.free(path);
+        try archive.writeCompressedFixture(allocator, path, .gzip, "replacement\n");
+        fixture.builder.options.sources_prepared = false;
+        try testing.expectError(error.BuildFailed, fixture.builder.BuildPackage());
+        try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, ".src.shelly-staging", .{}));
+    }
 }

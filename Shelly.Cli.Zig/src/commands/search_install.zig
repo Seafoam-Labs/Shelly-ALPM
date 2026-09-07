@@ -90,13 +90,16 @@ fn executeWith(
     const aur_override: ?[]const u8 = aur_base;
 
     const discovery = discoverer.call(context, query, aur_base) catch |err| {
-        try context.stderr.print("Package search failed: {t}\n", .{err});
+        const message = try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = "the package search" });
+        defer context.allocator.free(message);
+        try context.stderr.print("{s}\n", .{message});
         return 1;
     };
+    const partial_results = if (discovery.candidates.len > 0) " Results from the other package sources are still available." else "";
     if (discovery.standard_error) |err|
-        try context.stderr.print("warning: standard package search failed: {t}\n", .{err});
+        try context.stderr.print("warning: Could not refresh standard package information.{s}\n\nTechnical details: {t}\n", .{ partial_results, err });
     if (discovery.aur_error) |err|
-        try context.stderr.print("warning: AUR package search failed: {t}\n", .{err});
+        try context.stderr.print("warning: Could not refresh AUR package information.{s}\n\nTechnical details: {t}\n", .{ partial_results, err });
 
     const candidates = try prepareCandidates(context.allocator, discovery.candidates, query);
     if (candidates.len == 0) {
@@ -557,5 +560,5 @@ test "no-confirm installs the final closest candidate and preserves partial resu
     try std.testing.expectEqual(Source.standard, capture.source.?);
     try std.testing.expect(capture.no_confirm);
     try std.testing.expectEqualStrings(aur_url.default_base, capture.aur_override.?);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stderr.writer.buffered(), "warning: AUR package search failed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stderr.writer.buffered(), "warning: Could not refresh AUR package information") != null);
 }

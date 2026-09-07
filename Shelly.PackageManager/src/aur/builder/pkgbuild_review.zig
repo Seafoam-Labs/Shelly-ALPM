@@ -273,6 +273,41 @@ fn stringBefore(_: void, left: []const u8, right: []const u8) bool {
     return std.mem.order(u8, left, right) == .lt;
 }
 
+test "PKGBUILD review accepts empty auxiliary selections and rejects missing files" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const build_directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(build_directory);
+
+    for ([_][]const u8{ "", "''", "\"\"", "\"$_empty\"", "' '", "'missing.install'" }) |value| {
+        const content = try std.fmt.allocPrint(allocator, "pkgname=demo\npkgver=1\npkgrel=1\narch=('any')\n" ++
+            "_empty=''\ninstall={s}\nchangelog={s}\npackage() {{\n true\n}}\n", .{ value, value });
+        defer allocator.free(content);
+        var build = try (pkgbuild_parser.PkgbuildParser{
+            .allocator = allocator,
+            .io = io,
+            .selected_package_name = "demo",
+        }).parser_content(content, build_directory);
+        defer build.deinit(allocator);
+        if (std.mem.eql(u8, value, "' '") or std.mem.eql(u8, value, "'missing.install'")) {
+            try std.testing.expectError(error.MissingPkgbuildSourceFile, preparePkgbuildReview(allocator, io, build_directory, content, &.{build}));
+            continue;
+        }
+
+        try review_integrity.requireReviewInputs(allocator, io, build_directory, &build);
+        _ = try review_integrity.reviewDigest(allocator, io, build_directory, content, &build);
+        var review = try preparePkgbuildReview(allocator, io, build_directory, content, &.{build});
+        defer review.deinit();
+        try std.testing.expectEqual(@as(usize, 0), review.related_files.len);
+        try std.testing.expectEqual(@as(usize, 0), review.reviewed_files.len);
+        try std.testing.expectEqual(@as(usize, 0), review.install_scripts.len);
+    }
+
+    try std.testing.expectError(error.UnsafePkgbuildSourcePath, review_integrity.requireReviewedFile(allocator, io, build_directory, ""));
+}
+
 test "aggregate split-package review includes member-specific files and detects changes" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;

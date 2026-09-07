@@ -4,11 +4,13 @@ const events = @import("events.zig");
 const configuration = @import("configuration.zig");
 const builtin = @import("builtin");
 const downloader = @import("../shared/downloader.zig");
+const download_queue = @import("../shared/download_queue.zig");
 const listDictionary = @import("../shared/list_dictionary.zig");
 const os_tool = @import("distribution-hooks/os_utilities.zig");
 const TransFlag = bindings.libalpm.TransFlag;
 const cachyos = @import("distribution-hooks/CachyOS/update_notice.zig");
 const operation_api = @import("operation_context");
+const user_errors = @import("../shared/user_errors.zig");
 
 const libalpm = bindings.libalpm; // typed aliases (Handle, Database, Config, ...)
 const rawLibalpm = bindings.libalpm.alpm;
@@ -19,6 +21,7 @@ const database_directory_permissions = std.Io.File.Permissions.fromMode(0o755);
 var default_download_address_family_policy = std.atomic.Value(u8).init(
     @intFromEnum(downloader.AddressFamilyPolicy.prefer_ipv4),
 );
+var default_parallel_download_count = std.atomic.Value(u8).init(download_queue.default_limit);
 
 const DatabaseSignaturePolicy = enum {
     disabled,
@@ -213,6 +216,7 @@ pub const Manager = struct {
     temp_root_path: []const u8,
     show_hidden_packages: bool = false,
     download_address_family_policy: downloader.AddressFamilyPolicy = .prefer_ipv4,
+    parallel_download_count: u8 = download_queue.default_limit,
     operation_context: ?*operation_api.OperationContext = null,
     unexpected_fetch_reported: std.atomic.Value(bool) = .init(false),
 
@@ -224,6 +228,16 @@ pub const Manager = struct {
     /// Returns the current process-wide policy for newly created managers.
     pub fn defaultDownloadAddressFamilyPolicy() downloader.AddressFamilyPolicy {
         return @enumFromInt(default_download_address_family_policy.load(.acquire));
+    }
+
+    /// Sets the limit inherited by subsequently created managers, including
+    /// those owned by AUR operations. Zero restores the native default.
+    pub fn setDefaultParallelDownloadCount(count: u8) void {
+        default_parallel_download_count.store(download_queue.normalizeLimit(count), .release);
+    }
+
+    pub fn defaultParallelDownloadCount() u8 {
+        return default_parallel_download_count.load(.acquire);
     }
 
     /// If null is passed for config it will use the default /etc/pacman.conf.
@@ -259,6 +273,7 @@ pub const Manager = struct {
             .is_root = options.use_root,
             .temp_root_path = options.temp_root_path orelse "",
             .download_address_family_policy = defaultDownloadAddressFamilyPolicy(),
+            .parallel_download_count = defaultParallelDownloadCount(),
             .operation_context = options.operation_context,
         };
 
@@ -432,10 +447,6 @@ pub const Manager = struct {
             return TransactionError.SyncDbFailed;
         };
 
-        const database_future = std.Io.Future(downloader.DownloadError!void);
-        var futures: std.ArrayList(database_future) = .empty;
-        defer futures.deinit(self.allocator);
-
         // All repositories in this synchronization share one certificate
         // bundle and HTTP connection pool. Per-repository setup deadlines are
         // still enforced by each lightweight downloader; the session carries
@@ -448,32 +459,46 @@ pub const Manager = struct {
         );
         defer download_session.deinit();
 
-        var failed = false;
+        const DatabaseJob = struct {
+            name: []const u8,
+            urls: std.ArrayList([]const u8),
+            signature_policy: DatabaseSignaturePolicy,
+        };
+        var jobs: std.ArrayList(DatabaseJob) = .empty;
+        defer jobs.deinit(self.allocator);
         var dict_iterator = dict.map.iterator();
         while (dict_iterator.next()) |entry| {
-            const database_name = entry.key_ptr.*;
-            const urls = entry.value_ptr.*;
-            const signature_policy = signature_policies.get(database_name) orelse .disabled;
-            const future = self.io().concurrent(download_database, .{ self, &download_session, database_name, urls, syncDirectory, force, signature_policy }) catch {
-                self.download_database(&download_session, database_name, urls, syncDirectory, force, signature_policy) catch {
-                    failed = true;
-                };
-                continue;
-            };
-
-            futures.append(self.allocator, future) catch {
-                var f = future;
-                f.await(self.io()) catch {
-                    failed = true;
-                };
-            };
+            jobs.append(self.allocator, .{
+                .name = entry.key_ptr.*,
+                .urls = entry.value_ptr.*,
+                .signature_policy = signature_policies.get(entry.key_ptr.*) orelse .disabled,
+            }) catch return TransactionError.OutOfMemory;
         }
+        const Batch = struct {
+            manager: *Manager,
+            session: *downloader.DownloadSession,
+            jobs: []const DatabaseJob,
+            directory: []const u8,
+            force: bool,
 
-        for (futures.items) |*future| {
-            future.await(self.io()) catch {
-                failed = true;
-            };
-        }
+            fn execute(batch: @This(), index: usize) !void {
+                try batch.manager.checkOperationCancelled();
+                const job = batch.jobs[index];
+                try batch.manager.download_database(batch.session, job.name, job.urls, batch.directory, batch.force, job.signature_policy);
+            }
+        };
+        var failed = false;
+        var cancelled = false;
+        download_queue.run(self.io(), self.parallel_download_count, jobs.items.len, Batch{
+            .manager = self,
+            .session = &download_session,
+            .jobs = jobs.items,
+            .directory = syncDirectory,
+            .force = force,
+        }, Batch.execute) catch |err| {
+            failed = true;
+            cancelled = err == error.Cancelled;
+        };
 
         // Database downloads close and atomically rename their temporary files
         // without individually forcing a filesystem transaction. Commit the
@@ -483,6 +508,7 @@ pub const Manager = struct {
             failed = true;
         };
 
+        if (cancelled) return TransactionError.Cancelled;
         if (failed) return TransactionError.UpdateFetchFailed;
 
         if (enforce_signature_verification) {
@@ -961,7 +987,9 @@ pub const Manager = struct {
                 // Check for group name
                 const group_ptr = rawLibalpm.alpm_db_get_group(local_db, pkg.ptr) orelse {
                     const satisfier = rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(local_db), pkg.ptr) orelse {
-                        self.dispatcher.raiseError(.{ .message = "Failed to find package" });
+                        const message = std.fmt.allocPrint(self.allocator, "Could not remove \"{s}\" because it is not installed. Check the package name and try again.", .{pkg}) catch return TransactionError.OutOfMemory;
+                        defer self.allocator.free(message);
+                        self.dispatcher.raiseError(.{ .message = message });
                         return TransactionError.NoPackageFound;
                     };
                     package_pointers.append(self.allocator, satisfier) catch {
@@ -2490,10 +2518,12 @@ pub const Manager = struct {
 
     fn download_prepared_packages(self: *Manager) TransactionError!void {
         self.stalePartSweep(std.Io.Duration.fromSeconds(500));
-        const download_future = std.Io.Future(downloader.DownloadError!void);
-
-        var futures: std.ArrayList(download_future) = .empty;
-        defer futures.deinit(self.allocator);
+        const PackageJob = struct {
+            package: libalpm.Package,
+            database: libalpm.Database,
+        };
+        var jobs: std.ArrayList(PackageJob) = .empty;
+        defer jobs.deinit(self.allocator);
 
         var failed = false;
         var packages = rawLibalpm.alpm_trans_get_add(self.handle);
@@ -2512,26 +2542,26 @@ pub const Manager = struct {
                 continue;
             };
 
-            var future = self.io().concurrent(download_package, .{ self, package, database }) catch {
-                // Fall back to a synchronous download when concurrency fails to allocate
-                self.download_package(package, database) catch {
-                    failed = true;
-                };
-                continue;
-            };
-
-            futures.append(self.allocator, future) catch {
-                future.await(self.io()) catch {
-                    failed = true;
-                };
-            };
+            jobs.append(self.allocator, .{ .package = package, .database = database }) catch
+                return TransactionError.OutOfMemory;
         }
+        const Batch = struct {
+            manager: *Manager,
+            jobs: []const PackageJob,
 
-        for (futures.items) |*future_item| {
-            future_item.await(self.io()) catch {
-                failed = true;
-            };
-        }
+            fn execute(batch: @This(), index: usize) !void {
+                try batch.manager.checkOperationCancelled();
+                const job = batch.jobs[index];
+                try batch.manager.download_package(job.package, job.database);
+            }
+        };
+        download_queue.run(self.io(), self.parallel_download_count, jobs.items.len, Batch{
+            .manager = self,
+            .jobs = jobs.items,
+        }, Batch.execute) catch |err| switch (err) {
+            error.Cancelled => return TransactionError.Cancelled,
+            error.DownloadFailed => failed = true,
+        };
 
         if (failed) return TransactionError.UpdateFetchFailed;
     }
@@ -2586,12 +2616,12 @@ pub const Manager = struct {
     }
 
     fn reportAllMirrorsFailed(self: *Manager, subject: []const u8, err: downloader.DownloadError) void {
-        const message = std.fmt.allocPrint(
-            self.allocator,
-            "All mirrors failed for {s}: {s}",
-            .{ subject, @errorName(err) },
-        ) catch {
-            self.dispatcher.raiseError(.{ .message = "All configured mirrors failed" });
+        const message = downloader.failureMessage(self.allocator, .{
+            .event_type = .Error,
+            .destination_path = subject,
+            .download_error = err,
+        }) catch {
+            self.dispatcher.raiseError(.{ .message = "Could not download the required files from any configured mirror. Check your internet connection and try again." });
             return;
         };
         defer self.allocator.free(message);
@@ -2855,7 +2885,7 @@ pub const Manager = struct {
 
     fn onDownloadEvent(ctx: ?*anyopaque, event: downloader.DownloadEvent) void {
         const self: *Manager = @ptrCast(@alignCast(ctx));
-        self.handleDownloadEvent(event) catch return;   
+        self.handleDownloadEvent(event) catch return;
     }
 
     fn handleDownloadEvent(
@@ -2863,7 +2893,7 @@ pub const Manager = struct {
         event: downloader.DownloadEvent,
     ) TransactionError!void {
         const path = event.destination_path orelse "";
-    
+
         switch (event.event_type) {
             .Start => {
                 const message = std.fmt.allocPrint(
@@ -2871,15 +2901,15 @@ pub const Manager = struct {
                     "Retrieving package: {s}",
                     .{std.fs.path.basename(path)},
                 ) catch return TransactionError.OutOfMemory;
-    
+
                 defer self.allocator.free(message);
-    
+
                 self.dispatcher.raiseInformational(.{
                     .event_type = .pkg_retrieve_start,
                     .message = message,
                 });
             },
-    
+
             .Progress => if (event.progress) |p| {
                 // CoreDownloader forwards rich byte progress to the logical
                 // download operation. Retain this fallback only for legacy
@@ -2894,33 +2924,33 @@ pub const Manager = struct {
                     });
                 }
             },
-    
+
             .Complete => {
                 const message = std.fmt.allocPrint(
                     self.allocator,
                     "Package retrieval completed: {s}",
                     .{std.fs.path.basename(path)},
                 ) catch return TransactionError.OutOfMemory;
-    
+
                 defer self.allocator.free(message);
-    
+
                 self.dispatcher.raiseInformational(.{
                     .event_type = .pkg_retrieve_done,
                     .message = message,
                 });
             },
-    
-            .Error => self.dispatcher.raiseError(.{
-                .message = if (event.download_error) |err|
-                    @errorName(err)
-                else
-                    "download failed",
-            }),
-    
+
+            .Error => {
+                if (event.download_error) |err| if (err == error.Cancelled) return;
+                const message = downloader.failureMessage(self.allocator, event) catch return TransactionError.OutOfMemory;
+                defer self.allocator.free(message);
+                self.dispatcher.raiseError(.{ .message = message });
+            },
+
             .Skipped => {},
         }
     }
-    
+
     fn progressCallback(
         ctx: ?*anyopaque,
         progress: rawLibalpm.alpm_progress_t,
@@ -2944,15 +2974,14 @@ pub const Manager = struct {
         event: [*c]rawLibalpm.alpm_event_t,
     ) callconv(.c) void {
         const self: *Manager = @ptrCast(@alignCast(ctx));
-    
+
         self.handleEvent(event) catch return;
     }
 
     fn handleEvent(
         self: *Manager,
         event: [*c]rawLibalpm.alpm_event_t,
-    ) TransactionError!void { 
-
+    ) TransactionError!void {
         if (event == null) return;
         const type_value: u32 = @intCast(event.*.type);
         if (type_value < rawLibalpm.ALPM_EVENT_CHECKDEPS_START or type_value > rawLibalpm.ALPM_EVENT_HOOK_RUN_DONE) return;
@@ -2965,79 +2994,79 @@ pub const Manager = struct {
             },
             .package_operation_start => {
                 const operation = event.*.package_operation;
-            
+
                 const message = (switch (operation.operation) {
                     rawLibalpm.ALPM_PACKAGE_INSTALL => blk: {
                         const pkg = operation.newpkg orelse return;
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
                         const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Installing package: {s}-{s}",
                             .{ name, version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_UPGRADE => blk: {
                         const oldpkg = operation.oldpkg orelse return;
                         const newpkg = operation.newpkg orelse return;
-            
+
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(newpkg)) orelse return;
                         const old_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(oldpkg)) orelse return;
                         const new_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(newpkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Upgrading package: {s} {s} -> {s}",
                             .{ name, old_version, new_version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_REINSTALL => blk: {
                         const pkg = operation.newpkg orelse return;
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
                         const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Reinstalling package: {s}-{s}",
                             .{ name, version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_DOWNGRADE => blk: {
                         const oldpkg = operation.oldpkg orelse return;
                         const newpkg = operation.newpkg orelse return;
-            
+
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(newpkg)) orelse return;
                         const old_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(oldpkg)) orelse return;
                         const new_version = libalpm.str(rawLibalpm.alpm_pkg_get_version(newpkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Downgrading package: {s} {s} -> {s}",
                             .{ name, old_version, new_version },
                         );
                     },
-            
+
                     rawLibalpm.ALPM_PACKAGE_REMOVE => blk: {
                         const pkg = operation.oldpkg orelse return;
                         const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
                         const version = libalpm.str(rawLibalpm.alpm_pkg_get_version(pkg)) orelse return;
-            
+
                         break :blk std.fmt.allocPrint(
                             self.allocator,
                             "Removing package: {s}-{s}",
                             .{ name, version },
                         );
                     },
-            
+
                     else => return,
                 }) catch return TransactionError.OutOfMemory;
-            
+
                 defer self.allocator.free(message);
-            
+
                 self.dispatcher.raiseInformational(.{
                     .event_type = event_type,
                     .message = message,
@@ -3065,7 +3094,6 @@ pub const Manager = struct {
                     .event_type = event_type,
                     .message = message,
                 });
-
             },
             .pacnew_created => self.dispatcher.raisePacnew(.{
                 .file = spanC(event.*.pacnew_created.file),
@@ -3083,7 +3111,6 @@ pub const Manager = struct {
             },
             else => self.handleInformationMessage(event_type),
         }
-
     }
     fn handleInformationMessage(self: *Manager, event_type: libalpm.EventType) void {
         const message = switch (event_type) {
@@ -3164,11 +3191,34 @@ pub const Manager = struct {
             .conflict_package => {
                 const q = libalpm.ConflictQuestion.from(data).?;
                 const conflict = q.conflict();
-                const text = std.fmt.bufPrint(&buf, "{s} conflicts with {s}. Remove?", .{
-                    conflict.packageOne().name() orelse "unknown",
-                    conflict.packageTwo().name() orelse "unknown",
-                }) catch "Remove the conflicting package?";
-                q.confirm_removal(self.askYesNo(manager_io, qtype, text));
+                const pkg_one = conflict.packageOne();
+                const pkg_two = conflict.packageTwo();
+
+                const package_one_name = pkg_one.name() orelse "unknown";
+                const package_one_version = pkg_one.version() orelse "?";
+                const package_two_name = pkg_two.name() orelse "unknown";
+                const package_two_version = pkg_two.version() orelse "?";
+
+                const text = formatConflictQuestion(
+                     &buf,
+                     package_one_name,
+                     package_one_version,
+                     package_two_name,
+                     package_two_version,
+                 );
+
+                 q.confirm_removal(self.askYesNoWithArguments(
+                        manager_io,
+                        qtype,
+                        text,
+                        &.{
+                            package_one_name,
+                            package_one_version,
+                            package_two_name,
+                            package_two_version,
+                            package_two_name,
+                        },
+                    ));
             },
             .corrupted_package => {
                 const q = libalpm.RemoveCorruptedPackagesQuestion.from(data).?;
@@ -3201,11 +3251,21 @@ pub const Manager = struct {
         }
     }
 
-    fn askYesNo(self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8) bool {
+    fn askYesNo(self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, ) bool {
+        return self.askYesNoWithArguments(
+            manager_io,
+            qtype,
+            text,
+            &.{},
+        );
+    }
+
+    fn askYesNoWithArguments( self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, arguments: []const []const u8, ) bool {
         const yes_no = [_][]const u8{ "yes", "no" };
         const resp = self.dispatcher.raiseQuestion(manager_io, .{
             .question = text,
             .question_type = qtype,
+            .arguments = arguments,
             .options = &yes_no,
         });
         return (resp.answer orelse 0) != 0;
@@ -3264,28 +3324,33 @@ pub const Manager = struct {
             .Ok => {},
             .Memory => try details.appendSlice(self.allocator, "Memory allocation failed.\n"),
             .System => try details.appendSlice(self.allocator, "System error.\n"),
-            .BadPerms => try details.appendSlice(self.allocator, "Bad permissions.\n"),
-            .NotAFile => try details.appendSlice(self.allocator, "Expected a file, did not receive a file. How did you mess this up?\n"),
-            .NotADir => try details.appendSlice(self.allocator, "Expected a directory, did not receive a directory. I'm sorry what?\n"),
-            .WrongArgs => try details.appendSlice(self.allocator, "Wrong or NULL arguments\n"),
-            .DiskSpace => try details.appendSlice(self.allocator, "Not enough disk space\n Why is your disk so small?\n"),
-            .HandleNull => try details.appendSlice(self.allocator, "Lost the handle. Kinda like a plot but more important.\n"),
-            .HandleNotNull => try details.appendSlice(self.allocator, "Handle is not null. Normally you would want this but at this point I'm unsure.\n"),
-            .HandleLock => try details.appendSlice(self.allocator, "You have a db.lck. It's at /var/lib/pacman/db.lck. You should probably delete that.\n"),
+            .BadPerms => try details.appendSlice(self.allocator, "Could not access the package database or required files. Check that you have permission to access them.\n"),
+            .NotAFile => try details.appendSlice(self.allocator, "Expected a file at the supplied path. Check the path and try again.\n"),
+            .NotADir => try details.appendSlice(self.allocator, "Expected a directory at the supplied path. Check the path and try again.\n"),
+            .WrongArgs => try details.appendSlice(self.allocator, "Could not start the package operation because a required argument is missing or invalid.\n"),
+            .DiskSpace => try details.appendSlice(self.allocator, "There is not enough free space to continue. Free up space on the destination filesystem, then try again.\n"),
+            .HandleNull => try details.appendSlice(self.allocator, "Could not access the package database because it has not been initialized.\n"),
+            .HandleNotNull => try details.appendSlice(self.allocator, "Could not initialize the package database because it is already open.\n"),
+            .HandleLock => {
+                const message = try user_errors.databaseLocked(self.allocator, self.config.database_path);
+                defer self.allocator.free(message);
+                try details.appendSlice(self.allocator, message);
+                try details.appendSlice(self.allocator, "\n");
+            },
             .DbOpen => try details.appendSlice(self.allocator, "Failed to open the database.\n"),
             .DbCreate => try details.appendSlice(self.allocator, "Failed to create the database.\n"),
-            .DbNull => try details.appendSlice(self.allocator, "Database is null.\n"),
-            .DbNotNull => try details.appendSlice(self.allocator, "Database is not null.\n"),
+            .DbNull => try details.appendSlice(self.allocator, "Could not access the package database because it has not been opened.\n"),
+            .DbNotNull => try details.appendSlice(self.allocator, "Could not open the package database because it is already registered.\n"),
             .DbNotFound => try details.appendSlice(self.allocator, "Database not found.\n"),
             .DbInvalid => try details.appendSlice(self.allocator, "Database is invalid.\n"),
-            .DbInvalidSig => try details.appendSlice(self.allocator, "Database signature is invalid.\n"),
+            .DbInvalidSig => try details.appendSlice(self.allocator, "Could not verify the repository database signature. Refresh the package signing keys and package lists. If verification still fails, contact the repository.\n"),
             .DbVersion => try details.appendSlice(self.allocator, "Database version is invalid.\n"),
             .DbWrite => try details.appendSlice(self.allocator, "Failed to write to the database.\n"),
             .DbRemove => try details.appendSlice(self.allocator, "Failed to remove the database.\n"),
             .ServerBadUrl => try details.appendSlice(self.allocator, "Server URL is invalid.\n"),
             .ServerNone => try details.appendSlice(self.allocator, "No server found.\n"),
-            .TransNotNull => try details.appendSlice(self.allocator, "Transaction is not null.\n"),
-            .TransNull => try details.appendSlice(self.allocator, "Transaction is null.\n"),
+            .TransNotNull => try details.appendSlice(self.allocator, "Could not start the package operation because another transaction is already active.\n"),
+            .TransNull => try details.appendSlice(self.allocator, "Could not continue because there is no active package transaction.\n"),
             .TransDupTarget => try details.appendSlice(self.allocator, "Transaction target is duplicated.\n"),
             .TransDupFilename => try details.appendSlice(self.allocator, "Transaction filename is duplicated.\n"),
             .TransNotInitialized => try details.appendSlice(self.allocator, "Transaction is not initialized.\n"),
@@ -3294,11 +3359,11 @@ pub const Manager = struct {
             .TransType => try details.appendSlice(self.allocator, "Transaction type is invalid.\n"),
             .TransNotLocked => try details.appendSlice(self.allocator, "Transaction is not locked.\n"),
             .TransHookFailed => try details.appendSlice(self.allocator, "Transaction hook failed.\n"),
-            .PkgNotFound => try details.appendSlice(self.allocator, "Package not found.\n"),
+            .PkgNotFound => try details.appendSlice(self.allocator, "Could not find the requested package in the selected package sources. Check the package name or search for it in another source.\n"),
             .PkgIgnored => try details.appendSlice(self.allocator, "Package ignored.\n"),
             .PkgInvalid => try details.appendSlice(self.allocator, "Package is invalid.\n"),
             .PkgInvalidChecksum => try details.appendSlice(self.allocator, "Package checksum is invalid.\n"),
-            .PkgInvalidSig => try details.appendSlice(self.allocator, "Package signature is invalid.\n"),
+            .PkgInvalidSig => try details.appendSlice(self.allocator, "Could not verify the package signature. Refresh the package signing keys and download the package again. If verification still fails, contact the package source.\n"),
             .PkgMissingSig => try details.appendSlice(self.allocator, "Package signature is missing.\n"),
             .PkgOpen => try details.appendSlice(self.allocator, "Failed to open package.\n"),
             .PkgCantRemove => try details.appendSlice(self.allocator, "Failed to remove package.\n"),
@@ -3314,8 +3379,9 @@ pub const Manager = struct {
             },
             .PkgInvalidArch => try details.appendSlice(self.allocator, "Package architecture is invalid.\n"),
             .SigMissing => try details.appendSlice(self.allocator, "Signature is missing.\n"),
-            .SigInvalid => try details.appendSlice(self.allocator, "Signature is invalid.\n"),
+            .SigInvalid => try details.appendSlice(self.allocator, "Could not verify the signature. Refresh the package signing keys and download the file again. If verification still fails, contact the package source.\n"),
             .UnsatisfiedDeps => {
+                if (data_ptr == null) try details.appendSlice(self.allocator, "Could not continue because a required dependency is unavailable. Review the package dependencies and try again.\n");
                 var node = data_ptr;
                 while (node != null) : (node = node.?.next) {
                     const data = node.?.data orelse continue;
@@ -3323,10 +3389,19 @@ pub const Manager = struct {
                     const target = spanC(miss.target) orelse "unknown";
                     const dep_str = rawLibalpm.alpm_dep_compute_string(miss.depend);
                     defer if (dep_str != null) std.c.free(dep_str);
-                    try details.print(self.allocator, "{s} => {s}\n", .{ target, std.mem.span(dep_str) });
+                    const dependency = spanC(dep_str) orelse "an unknown dependency";
+                    const removing = if (self.dispatcher.operation) |operation| operation.envelope.kind == .remove else false;
+                    if (removing) {
+                        try details.print(self.allocator, "Could not remove the selected packages because \"{s}\" still requires \"{s}\". Review the dependent packages before continuing.\n", .{ target, dependency });
+                    } else if (spanC(miss.causingpkg)) |cause| {
+                        try details.print(self.allocator, "Could not install \"{s}\" because it would remove a package that provides \"{s}\", which \"{s}\" requires. Review the affected packages before continuing.\n", .{ cause, dependency, target });
+                    } else {
+                        try details.print(self.allocator, "Could not install \"{s}\" because it requires \"{s}\", which is unavailable. Refresh the package lists and try again.\n", .{ target, dependency });
+                    }
                 }
             },
             .ConflictingDeps => {
+                if (data_ptr == null) try details.appendSlice(self.allocator, "The selected packages cannot be installed together. Review which packages you want to keep before continuing.\n");
                 var node = data_ptr;
                 while (node != null) : (node = node.?.next) {
                     const data = node.?.data orelse continue;
@@ -3336,29 +3411,34 @@ pub const Manager = struct {
                     if (conflict.ptr.reason) |rp| {
                         const computed = rawLibalpm.alpm_dep_compute_string(rp);
                         defer if (computed != null) std.c.free(computed);
-                        try details.print(self.allocator, "{s} conflicts with {s} because of {s}\n", .{ pkg1_name, pkg2_name, std.mem.span(computed) });
+                        try details.print(self.allocator, "\"{s}\" cannot be installed alongside \"{s}\" (conflict: {s}). Review which package you want to keep before continuing.\n", .{ pkg1_name, pkg2_name, std.mem.span(computed) });
                     } else {
-                        try details.print(self.allocator, "{s} conflicts with {s}\n", .{ pkg1_name, pkg2_name });
+                        try details.print(self.allocator, "\"{s}\" cannot be installed alongside \"{s}\". Review which package you want to keep before continuing.\n", .{ pkg1_name, pkg2_name });
                     }
                 }
             },
             .FileConflicts => {
+                if (data_ptr == null) try details.appendSlice(self.allocator, "Could not install the selected packages because their files conflict. Review the conflicting files before replacing or removing them.\n");
                 var node = data_ptr;
                 while (node != null) : (node = node.?.next) {
                     const data = node.?.data orelse continue;
                     const fc: *rawLibalpm.alpm_fileconflict_t = @ptrCast(@alignCast(data));
                     const target = spanC(fc.target) orelse "unknown";
                     const file = spanC(fc.file) orelse "";
-                    try details.print(self.allocator, "{s} in file {s}\n", .{ target, file });
+                    if (fc.type == rawLibalpm.ALPM_FILECONFLICT_TARGET) {
+                        try details.print(self.allocator, "\"{s}\" and \"{s}\" both install \"{s}\". Review which package you want to keep before continuing.\n", .{ target, spanC(fc.ctarget) orelse "another package", file });
+                    } else {
+                        try details.print(self.allocator, "Could not install \"{s}\" because \"{s}\" already exists. Check which package owns this file before replacing or removing it.\n", .{ target, file });
+                    }
                 }
             },
-            .DownloadFailed => try details.appendSlice(self.allocator, "Download failed.\n"),
+            .DownloadFailed => try details.appendSlice(self.allocator, "Could not download the required files. Check your internet connection and try again. If the problem continues, the server may be unavailable.\n"),
             .Gpgme => try details.appendSlice(self.allocator, "Gpgme error.\n"),
             .ExternalDownload => try details.appendSlice(self.allocator, "External download failed.\n"),
             .SandboxFailed => try details.appendSlice(self.allocator, "Sandbox failed.\n"),
         }
 
-        const full_error = try std.fmt.allocPrint(self.allocator, "{s}\n{s}", .{ error_msg, details.items });
+        const full_error = try std.fmt.allocPrint(self.allocator, "{s}\nTechnical details: {s}", .{ details.items, error_msg });
         defer self.allocator.free(full_error);
         self.dispatcher.raiseError(.{ .message = full_error });
     }
@@ -3413,6 +3493,26 @@ fn stalePartSweepDirectory(
         if (age_ns < max_age.nanoseconds) continue;
         dir.deleteFile(io, entry.path) catch {};
     }
+}
+
+fn formatConflictQuestion(
+    buf: []u8,
+    package_one_name: []const u8,
+    package_one_version: []const u8,
+    package_two_name: []const u8,
+    package_two_version: []const u8,
+) []const u8 {
+    return std.fmt.bufPrint(
+        buf,
+        "{s}-{s} conflicts with {s}-{s}. Remove {s}?",
+        .{
+            package_one_name,
+            package_one_version,
+            package_two_name,
+            package_two_version,
+            package_two_name,
+        },
+    ) catch "Remove the conflicting package?";
 }
 
 fn mirrorDownloadConfiguration(
@@ -4430,7 +4530,7 @@ test "handleInformationMessage emits every generic informational description" {
     defer mgr.dispatcher.deinit();
 
     var cap = InfoCapture{};
-    defer cap.deinit(testing.allocator);    
+    defer cap.deinit(testing.allocator);
     _ = try mgr.dispatcher.addInformationalHandler(.{
         .function = captureInfo,
         .data = @ptrCast(&cap),
@@ -4549,7 +4649,8 @@ test "eventCallback ignores null out-of-range and empty scriptlet events" {
     defer mgr.dispatcher.deinit();
 
     var info_cap = InfoCapture{};
-    defer info_cap.deinit(testing.allocator);    var scriptlet_cap = ScriptletCapture{};
+    defer info_cap.deinit(testing.allocator);
+    var scriptlet_cap = ScriptletCapture{};
     _ = try mgr.dispatcher.addInformationalHandler(.{
         .function = captureInfo,
         .data = @ptrCast(&info_cap),
@@ -4745,6 +4846,7 @@ test "onDownloadEvent does not duplicate progress when a common operation is att
 
 test "onDownloadEvent reports concrete and fallback errors and ignores skipped events" {
     var mgr: Manager = undefined;
+    mgr.allocator = testing.allocator;
     mgr.dispatcher = events.Dispatcher.init(testing.allocator);
     defer mgr.dispatcher.deinit();
 
@@ -4765,10 +4867,10 @@ test "onDownloadEvent reports concrete and fallback errors and ignores skipped e
         .event_type = .Error,
         .download_error = downloader.DownloadError.NetworkError,
     });
-    try testing.expectEqualStrings("NetworkError", error_cap.text());
+    try testing.expect(std.mem.indexOf(u8, error_cap.text(), "Technical details: NetworkError") != null);
 
     Manager.onDownloadEvent(@ptrCast(&mgr), .{ .event_type = .Error });
-    try testing.expectEqualStrings("download failed", error_cap.text());
+    try testing.expect(std.mem.startsWith(u8, error_cap.text(), "Could not download"));
 
     error_cap.len = 0;
     Manager.onDownloadEvent(@ptrCast(&mgr), .{
@@ -4925,6 +5027,22 @@ test "questionCallback applies affirmative answers to simple libalpm questions" 
     try testing.expectEqual(@as(c_int, 1), import_key.import_key.import);
 }
 
+test "conflict question identifies the package to remove" {
+    var buf: [512]u8 = undefined;
+
+    const text = formatConflictQuestion(
+        &buf,
+        "qemu-common",
+        "11.1.0-1",
+        "qemu-block-gluster",
+        "11.0.2-4",
+    );
+    try testing.expectEqualStrings(
+        "qemu-common-11.1.0-1 conflicts with qemu-block-gluster-11.0.2-4. Remove qemu-block-gluster?",
+        text,
+    );
+}
+
 test "questionCallback keeps unknown answers and applies selected provider choices" {
     var mgr: Manager = undefined;
     mgr.allocator = testing.allocator;
@@ -4986,6 +5104,7 @@ fn newErrorManager() Manager {
     var mgr: Manager = undefined;
     mgr.allocator = testing.allocator;
     mgr.dispatcher = events.Dispatcher.init(testing.allocator);
+    mgr.config.database_path = "/var/lib/pacman/";
     return mgr;
 }
 
@@ -5016,11 +5135,10 @@ test "handleErrorMessage emits the expected database lock error" {
 
     try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.HandleLock), null);
 
-    try testing.expectEqualStrings(
-        "unable to lock database\n" ++
-            "You have a db.lck. It's at /var/lib/pacman/db.lck. You should probably delete that.\n",
-        cap.text(),
-    );
+    try testing.expect(std.mem.startsWith(u8, cap.text(), "Could not start the package operation because the package database is locked."));
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Lock file: /var/lib/pacman/db.lck") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "sudo rm -- '/var/lib/pacman/db.lck'") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "If no package manager is running") != null);
 }
 
 test "handleErrorMessage handles the Ok error without details" {
@@ -5155,7 +5273,7 @@ test "handleErrorMessage formats populated unsatisfied dependency details" {
     try testing.expect(std.mem.indexOf(
         u8,
         cap.text(),
-        "target-package => libexample>=2\n",
+        "Could not install \"target-package\" because it requires \"libexample>=2\", which is unavailable.",
     ) != null);
 }
 
@@ -5183,7 +5301,7 @@ test "handleErrorMessage formats populated file conflict details" {
     try testing.expect(std.mem.indexOf(
         u8,
         cap.text(),
-        "target-package in file /usr/bin/example\n",
+        "Could not install \"target-package\" because \"/usr/bin/example\" already exists. Check which package owns this file before replacing or removing it.\n",
     ) != null);
 }
 
@@ -5216,28 +5334,28 @@ test "handleErrorMessage emits descriptions for every scalar libalpm error" {
     const cases = [_]Case{
         .{ .err = .Memory, .detail = "Memory allocation failed." },
         .{ .err = .System, .detail = "System error." },
-        .{ .err = .BadPerms, .detail = "Bad permissions." },
-        .{ .err = .NotAFile, .detail = "Expected a file, did not receive a file." },
-        .{ .err = .NotADir, .detail = "Expected a directory, did not receive a directory." },
-        .{ .err = .WrongArgs, .detail = "Wrong or NULL arguments" },
-        .{ .err = .DiskSpace, .detail = "Not enough disk space" },
-        .{ .err = .HandleNull, .detail = "Lost the handle." },
-        .{ .err = .HandleNotNull, .detail = "Handle is not null." },
-        .{ .err = .HandleLock, .detail = "You have a db.lck." },
+        .{ .err = .BadPerms, .detail = "Could not access the package database or required files. Check that you have permission to access them." },
+        .{ .err = .NotAFile, .detail = "Expected a file at the supplied path." },
+        .{ .err = .NotADir, .detail = "Expected a directory at the supplied path." },
+        .{ .err = .WrongArgs, .detail = "Could not start the package operation because a required argument is missing or invalid." },
+        .{ .err = .DiskSpace, .detail = "There is not enough free space" },
+        .{ .err = .HandleNull, .detail = "Could not access the package database because it has not been initialized." },
+        .{ .err = .HandleNotNull, .detail = "Could not initialize the package database because it is already open." },
+        .{ .err = .HandleLock, .detail = "Lock file: /var/lib/pacman/db.lck" },
         .{ .err = .DbOpen, .detail = "Failed to open the database." },
         .{ .err = .DbCreate, .detail = "Failed to create the database." },
-        .{ .err = .DbNull, .detail = "Database is null." },
-        .{ .err = .DbNotNull, .detail = "Database is not null." },
+        .{ .err = .DbNull, .detail = "Could not access the package database because it has not been opened." },
+        .{ .err = .DbNotNull, .detail = "Could not open the package database because it is already registered." },
         .{ .err = .DbNotFound, .detail = "Database not found." },
         .{ .err = .DbInvalid, .detail = "Database is invalid." },
-        .{ .err = .DbInvalidSig, .detail = "Database signature is invalid." },
+        .{ .err = .DbInvalidSig, .detail = "Could not verify the repository database signature. Refresh the package signing keys and package lists. If verification still fails, contact the repository." },
         .{ .err = .DbVersion, .detail = "Database version is invalid." },
         .{ .err = .DbWrite, .detail = "Failed to write to the database." },
         .{ .err = .DbRemove, .detail = "Failed to remove the database." },
         .{ .err = .ServerBadUrl, .detail = "Server URL is invalid." },
         .{ .err = .ServerNone, .detail = "No server found." },
-        .{ .err = .TransNotNull, .detail = "Transaction is not null." },
-        .{ .err = .TransNull, .detail = "Transaction is null." },
+        .{ .err = .TransNotNull, .detail = "Could not start the package operation because another transaction is already active." },
+        .{ .err = .TransNull, .detail = "Could not continue because there is no active package transaction." },
         .{ .err = .TransDupTarget, .detail = "Transaction target is duplicated." },
         .{ .err = .TransDupFilename, .detail = "Transaction filename is duplicated." },
         .{ .err = .TransNotInitialized, .detail = "Transaction is not initialized." },
@@ -5246,18 +5364,18 @@ test "handleErrorMessage emits descriptions for every scalar libalpm error" {
         .{ .err = .TransType, .detail = "Transaction type is invalid." },
         .{ .err = .TransNotLocked, .detail = "Transaction is not locked." },
         .{ .err = .TransHookFailed, .detail = "Transaction hook failed." },
-        .{ .err = .PkgNotFound, .detail = "Package not found." },
+        .{ .err = .PkgNotFound, .detail = "Could not find the requested package in the selected package sources. Check the package name or search for it in another source." },
         .{ .err = .PkgIgnored, .detail = "Package ignored." },
         .{ .err = .PkgInvalid, .detail = "Package is invalid." },
         .{ .err = .PkgInvalidChecksum, .detail = "Package checksum is invalid." },
-        .{ .err = .PkgInvalidSig, .detail = "Package signature is invalid." },
+        .{ .err = .PkgInvalidSig, .detail = "Could not verify the package signature. Refresh the package signing keys and download the package again. If verification still fails, contact the package source." },
         .{ .err = .PkgMissingSig, .detail = "Package signature is missing." },
         .{ .err = .PkgOpen, .detail = "Failed to open package." },
         .{ .err = .PkgCantRemove, .detail = "Failed to remove package." },
         .{ .err = .PkgInvalidArch, .detail = "Package architecture is invalid." },
         .{ .err = .SigMissing, .detail = "Signature is missing." },
-        .{ .err = .SigInvalid, .detail = "Signature is invalid." },
-        .{ .err = .DownloadFailed, .detail = "Download failed." },
+        .{ .err = .SigInvalid, .detail = "Could not verify the signature. Refresh the package signing keys and download the file again. If verification still fails, contact the package source." },
+        .{ .err = .DownloadFailed, .detail = "Could not download the required files. Check your internet connection and try again. If the problem continues, the server may be unavailable." },
         .{ .err = .Gpgme, .detail = "Gpgme error." },
         .{ .err = .ExternalDownload, .detail = "External download failed." },
         .{ .err = .SandboxFailed, .detail = "Sandbox failed." },
@@ -5432,4 +5550,40 @@ test "ALPM init path overrides replace parsed host paths for target provisioning
     try testing.expectEqualStrings("/target/var/cache/pacman/pkg", config.cache_directory);
     try testing.expectEqualStrings("/target/var/log/pacman.log", config.log_file);
     try testing.expectEqualStrings("/target/etc/pacman.d/gnupg", config.gpg_directory);
+}
+
+test "database lock error uses the configured database directory" {
+    var mgr = newErrorManager();
+    defer mgr.dispatcher.deinit();
+    mgr.config.database_path = "/custom/pacman database/";
+    var cap = ErrorCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{ .function = captureError, .data = @ptrCast(&cap) });
+    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.HandleLock), null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Lock file: /custom/pacman database/db.lck") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "sudo rm -- '/custom/pacman database/db.lck'") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "/var/lib/pacman") == null);
+}
+
+test "dependency errors explain the dependent package during removal" {
+    var mgr = newErrorManager();
+    defer mgr.dispatcher.deinit();
+    var context = operation_api.OperationContext.init(testing.allocator, std.testing.io);
+    defer context.deinit();
+    var operation = context.begin(.{ .backend = .alpm, .kind = .remove, .subject = "libexample" });
+    defer operation.finish(.failed);
+    mgr.dispatcher.operation = &operation;
+    var cap = ErrorCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{ .function = captureError, .data = @ptrCast(&cap) });
+    var dependency: rawLibalpm.alpm_depend_t = .{
+        .name = @ptrCast(@constCast("libexample")),
+        .mod = @intCast(rawLibalpm.ALPM_DEP_MOD_ANY),
+    };
+    var missing: rawLibalpm.alpm_depmissing_t = .{
+        .target = @ptrCast(@constCast("installed-app")),
+        .depend = &dependency,
+    };
+    var node: rawLibalpm.alpm_list_t = .{ .data = @ptrCast(&missing) };
+    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.UnsatisfiedDeps), &node);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Could not remove the selected packages because \"installed-app\" still requires \"libexample\"") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Could not install") == null);
 }

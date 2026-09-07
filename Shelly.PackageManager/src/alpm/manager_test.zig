@@ -888,7 +888,7 @@ test "Manager.sync exposes cancellable logical database downloads during mirror 
     _ = try context.subscribe(.{ .function = CancelOnDownload.handle, .data = &cancel_download });
     mgr.setOperationContext(&context);
 
-    try testing.expectError(error.UpdateFetchFailed, mgr.sync(true));
+    try testing.expectError(error.Cancelled, mgr.sync(true));
     try testing.expect(cancel_download.saw_download.load(.acquire));
 }
 
@@ -1885,6 +1885,120 @@ test "install_packages returns PackageFetchFailed when a target cannot be resolv
     );
 }
 
+test "ALPM managers inherit the configured parallel download count" {
+    const previous = Manager.defaultParallelDownloadCount();
+    defer Manager.setDefaultParallelDownloadCount(previous);
+    var workspace = try SyncTestWorkspace.create(testing.allocator, testing.io);
+    defer workspace.cleanup(testing.allocator);
+    for ([_]u8{ 1, 3, 100, 255, 0 }) |count| {
+        Manager.setDefaultParallelDownloadCount(count);
+        const mgr = try Manager.init(testing.allocator, testing.environ, .{ .config_path = workspace.config_path });
+        defer mgr.deinit();
+        try testing.expectEqual(if (count == 0) @as(u8, 100) else count, mgr.parallel_download_count);
+        // Defaults are captured at construction, not changed during a batch.
+        Manager.setDefaultParallelDownloadCount(2);
+        try testing.expectEqual(if (count == 0) @as(u8, 100) else count, mgr.parallel_download_count);
+    }
+}
+
+const CountingDownloadServer = struct {
+    io: std.Io,
+    server: std.Io.net.Server,
+    active: std.atomic.Value(usize) = .init(0),
+    peak: std.atomic.Value(usize) = .init(0),
+    requests: std.atomic.Value(usize) = .init(0),
+    failed: std.atomic.Value(bool) = .init(false),
+
+    fn serve(self: *@This()) !void {
+        var handlers: std.Io.Group = .init;
+        defer handlers.cancel(self.io);
+        while (true) {
+            const stream = try self.server.accept(self.io);
+            handlers.concurrent(self.io, respond, .{ self, stream }) catch |err| {
+                stream.close(self.io);
+                return err;
+            };
+        }
+    }
+
+    fn respond(self: *@This(), stream: std.Io.net.Stream) void {
+        defer stream.close(self.io);
+        self.respondInner(stream) catch {
+            self.failed.store(true, .release);
+        };
+    }
+
+    fn respondInner(self: *@This(), stream: std.Io.net.Stream) !void {
+        var read_buffer: [2048]u8 = undefined;
+        var reader = stream.reader(self.io, &read_buffer);
+        while (try reader.interface.takeDelimiter('\n')) |line| {
+            if (std.mem.eql(u8, line, "\r")) break;
+        } else return error.EndOfStream;
+        _ = self.requests.fetchAdd(1, .monotonic);
+        const active = self.active.fetchAdd(1, .monotonic) + 1;
+        _ = self.peak.fetchMax(active, .monotonic);
+        {
+            defer _ = self.active.fetchSub(1, .monotonic);
+            // Keep requests overlapping long enough to observe the scheduler.
+            try self.io.sleep(std.Io.Duration.fromMilliseconds(40), .awake);
+        }
+        var write_buffer: [256]u8 = undefined;
+        var writer = stream.writer(self.io, &write_buffer);
+        // A missing artifact exercises the next mirror without allowing an
+        // installation or repository replacement to occur in this test.
+        try writer.interface.writeAll("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        try writer.interface.flush();
+    }
+};
+
+test "ALPM package and database downloads honor limits across mirror retries" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    const previous = Manager.defaultParallelDownloadCount();
+    defer Manager.setDefaultParallelDownloadCount(previous);
+    for ([_]u8{ 1, 3 }) |limit| {
+        for ([_]bool{ false, true }) |packages| {
+            var workspace = try SyncTestWorkspace.create(allocator, io);
+            defer workspace.cleanup(allocator);
+            try workspace.createSyncDatabase(allocator);
+            const address = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
+            var server: CountingDownloadServer = .{ .io = io, .server = try address.listen(io, .{ .reuse_address = true }) };
+            defer server.server.deinit(io);
+            var server_future = try io.concurrent(CountingDownloadServer.serve, .{&server});
+            defer _ = server_future.cancel(io) catch {};
+
+            var config: std.Io.Writer.Allocating = .init(allocator);
+            defer config.deinit();
+            try config.writer.print(
+                "[options]\nArchitecture = auto\nSigLevel = Never\nDBPath = {s}\nCacheDir = {s}/cache\n",
+                .{ workspace.db_path, workspace.root },
+            );
+            const port = server.server.socket.address.getPort();
+            const repositories: []const []const u8 = if (packages) &.{"seafoam-labs"} else &.{ "one", "two", "three", "four", "five" };
+            for (repositories) |repo| try config.writer.print(
+                "[{s}]\nServer = http://127.0.0.1:{d}/first\nServer = http://127.0.0.1:{d}/second\n",
+                .{ repo, port, port },
+            );
+            try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = workspace.config_path, .data = config.written() });
+            Manager.setDefaultParallelDownloadCount(limit);
+            const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+            defer mgr.deinit();
+            if (packages) {
+                var names = [_][:0]const u8{ "remote-provider", "alpha-provider", "literal-target", "version-provider", "versioned-target" };
+                try testing.expectError(error.UpdateFetchFailed, mgr.install_packages(&names, .{}));
+            } else {
+                try testing.expectError(error.UpdateFetchFailed, mgr.sync_for_update_check(true));
+            }
+            try testing.expectEqual(@as(usize, 10), server.requests.load(.acquire));
+            try testing.expectEqual(@as(usize, 0), server.active.load(.acquire));
+            try testing.expect(!server.failed.load(.acquire));
+            const peak = server.peak.load(.acquire);
+            try testing.expect(peak <= limit);
+            try testing.expect(if (limit == 1) peak == 1 else peak > 1);
+        }
+    }
+}
+
 test "install_packages predownloads prepared repository packages before commit" {
     const allocator = testing.allocator;
 
@@ -1930,7 +2044,7 @@ test "install_packages predownloads prepared repository packages before commit" 
 
     var package_names = [_][:0]const u8{"remote-provider"};
     try testing.expectError(
-        error.UpdateFetchFailed,
+        error.Cancelled,
         mgr.install_packages(&package_names, .{}),
     );
     try testing.expect(cancel_download.saw_download.load(.acquire));
@@ -2328,7 +2442,7 @@ test "remove_packages returns NoPackageFound for an unknown target" {
         error.NoPackageFound,
         mgr.remove_packages(&package_names, .{}, true),
     );
-    try testing.expectEqualStrings("Failed to find package", capture.text());
+    try testing.expectEqualStrings("Could not remove \"shelly-package-that-does-not-exist\" because it is not installed. Check the package name and try again.", capture.text());
 }
 
 test "remove_packages cancels removal of a held package without confirmation" {

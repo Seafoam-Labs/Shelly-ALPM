@@ -87,7 +87,16 @@ pub fn main(init: std.process.Init) !void {
     };
     Shelly_Cli_Zig.download_policy.applyProcessDefault(&context);
     const command_exit_code = Shelly_Cli_Zig.app.run(&context, effective_arguments) catch |err| code: {
-        stderr_writer.print("shelly: {t}\n", .{err}) catch {};
+        const message = Zigalpm.user_errors.format(arena, err, .{}) catch "Could not complete the package operation. Shelly could not allocate memory to explain the error.";
+        var ui_mode = false;
+        for (effective_arguments) |argument| {
+            if (std.mem.eql(u8, argument, "--ui-mode")) ui_mode = true;
+        }
+        if (ui_mode) {
+            Shelly_Cli_Zig.config_output.writeErrorFrame(&context, message) catch {};
+        } else {
+            stderr_writer.print("shelly: {s}\n", .{message}) catch {};
+        }
         break :code 1;
     };
     const exit_code: u8 = if (Shelly_Cli_Zig.signals.wasInterrupted()) code: {
