@@ -17,6 +17,8 @@ pub const Command = union(enum) {
     list_sigs,
     export_keys,
     lsign_key,
+    recv_keys,
+    refresh_keys,
 };
 
 pub const Options = struct {
@@ -26,6 +28,8 @@ pub const Options = struct {
     populate_from: []const u8 = default_populate_from,
     populate_keyrings: []const []const u8 = &.{},
     key_ids: []const []const u8 = &.{},
+    keyserver: ?[]const u8 = null,
+    user: bool = false,
 };
 
 pub const ParseError = error{
@@ -48,89 +52,48 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
             opts.command = .help;
             return opts;
         } else if (std.mem.eql(u8, arg, "--init")) {
-            if (opts.command == .populate) return error.MultipleOperations;
-            if (opts.command == .updatedb) return error.MultipleOperations;
-            if (opts.command == .list_keys) return error.MultipleOperations;
-            if (opts.command == .finger) return error.MultipleOperations;
-            if (opts.command == .list_sigs) return error.MultipleOperations;
-            if (opts.command == .export_keys) return error.MultipleOperations;
-            if (opts.command == .lsign_key) return error.MultipleOperations;
-            opts.command = .init;
+            try setOperation(&opts, .init);
         } else if (std.mem.eql(u8, arg, "--updatedb") or std.mem.eql(u8, arg, "-u")) {
-            if (opts.command == .init) return error.MultipleOperations;
-            if (opts.command == .populate) return error.MultipleOperations;
-            if (opts.command == .list_keys) return error.MultipleOperations;
-            if (opts.command == .finger) return error.MultipleOperations;
-            if (opts.command == .list_sigs) return error.MultipleOperations;
-            if (opts.command == .export_keys) return error.MultipleOperations;
-            if (opts.command == .lsign_key) return error.MultipleOperations;
-            opts.command = .updatedb;
+            try setOperation(&opts, .updatedb);
         } else if (std.mem.eql(u8, arg, "--populate")) {
-            if (opts.command == .init) return error.MultipleOperations;
-            if (opts.command == .updatedb) return error.MultipleOperations;
-            if (opts.command == .list_keys) return error.MultipleOperations;
-            if (opts.command == .finger) return error.MultipleOperations;
-            if (opts.command == .list_sigs) return error.MultipleOperations;
-            if (opts.command == .export_keys) return error.MultipleOperations;
-            if (opts.command == .lsign_key) return error.MultipleOperations;
-            opts.command = .populate;
+            try setOperation(&opts, .populate);
         } else if (std.mem.eql(u8, arg, "--list-keys") or std.mem.eql(u8, arg, "-l")) {
-            if (opts.command == .init) return error.MultipleOperations;
-            if (opts.command == .populate) return error.MultipleOperations;
-            if (opts.command == .updatedb) return error.MultipleOperations;
-            if (opts.command == .finger) return error.MultipleOperations;
-            if (opts.command == .list_sigs) return error.MultipleOperations;
-            if (opts.command == .export_keys) return error.MultipleOperations;
-            if (opts.command == .lsign_key) return error.MultipleOperations;
-            opts.command = .list_keys;
+            try setOperation(&opts, .list_keys);
         } else if (std.mem.eql(u8, arg, "--finger") or std.mem.eql(u8, arg, "-f")) {
-            if (opts.command == .init) return error.MultipleOperations;
-            if (opts.command == .populate) return error.MultipleOperations;
-            if (opts.command == .updatedb) return error.MultipleOperations;
-            if (opts.command == .list_keys) return error.MultipleOperations;
-            if (opts.command == .list_sigs) return error.MultipleOperations;
-            if (opts.command == .export_keys) return error.MultipleOperations;
-            if (opts.command == .lsign_key) return error.MultipleOperations;
-            opts.command = .finger;
+            try setOperation(&opts, .finger);
         } else if (std.mem.eql(u8, arg, "--list-sigs")) {
-            if (opts.command == .init) return error.MultipleOperations;
-            if (opts.command == .populate) return error.MultipleOperations;
-            if (opts.command == .updatedb) return error.MultipleOperations;
-            if (opts.command == .list_keys) return error.MultipleOperations;
-            if (opts.command == .finger) return error.MultipleOperations;
-            if (opts.command == .export_keys) return error.MultipleOperations;
-            if (opts.command == .lsign_key) return error.MultipleOperations;
-            opts.command = .list_sigs;
+            try setOperation(&opts, .list_sigs);
         } else if (std.mem.eql(u8, arg, "--export") or std.mem.eql(u8, arg, "-e")) {
-            if (opts.command == .init) return error.MultipleOperations;
-            if (opts.command == .populate) return error.MultipleOperations;
-            if (opts.command == .updatedb) return error.MultipleOperations;
-            if (opts.command == .list_keys) return error.MultipleOperations;
-            if (opts.command == .finger) return error.MultipleOperations;
-            if (opts.command == .list_sigs) return error.MultipleOperations;
-            if (opts.command == .lsign_key) return error.MultipleOperations;
-            opts.command = .export_keys;
+            try setOperation(&opts, .export_keys);
         } else if (std.mem.eql(u8, arg, "--lsign-key")) {
-            if (opts.command == .init) return error.MultipleOperations;
-            if (opts.command == .updatedb) return error.MultipleOperations;
-            if (opts.command == .populate) return error.MultipleOperations;
-            if (opts.command == .list_keys) return error.MultipleOperations;
-            if (opts.command == .finger) return error.MultipleOperations;
-            if (opts.command == .list_sigs) return error.MultipleOperations;
-            if (opts.command == .export_keys) return error.MultipleOperations;
-            opts.command = .lsign_key;
+            try setOperation(&opts, .lsign_key);
+        } else if (std.mem.eql(u8, arg, "--recv-keys") or std.mem.eql(u8, arg, "-r")) {
+            try setOperation(&opts, .recv_keys);
+        } else if (std.mem.eql(u8, arg, "--refresh-keys")) {
+            try setOperation(&opts, .refresh_keys);
         } else if (std.mem.eql(u8, arg, "--gpgdir")) {
             if (i + 1 >= args.len or std.mem.startsWith(u8, args[i + 1], "-")) {
                 return error.MissingArgumentValue;
             }
             i += 1;
             opts.gpgdir = args[i];
+            // An explicit `--init <dir>` positional is applied after the loop
+            // and overrides this, matching pacman-key's uniform keyring dir.
+            opts.init_path = args[i];
         } else if (std.mem.eql(u8, arg, "--populate-from")) {
             if (i + 1 >= args.len or std.mem.startsWith(u8, args[i + 1], "-")) {
                 return error.MissingArgumentValue;
             }
             i += 1;
             opts.populate_from = args[i];
+        } else if (std.mem.eql(u8, arg, "--keyserver")) {
+            if (i + 1 >= args.len or std.mem.startsWith(u8, args[i + 1], "-")) {
+                return error.MissingArgumentValue;
+            }
+            i += 1;
+            opts.keyserver = args[i];
+        } else if (std.mem.eql(u8, arg, "--user")) {
+            opts.user = true;
         } else if (std.mem.startsWith(u8, arg, "-")) {
             return error.UnknownArgument;
         } else {
@@ -149,7 +112,7 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
         .updatedb => {
             if (positionals.items.len > 0) return error.UnknownArgument;
         },
-        .list_keys, .finger, .list_sigs, .export_keys, .lsign_key => {
+        .list_keys, .finger, .list_sigs, .export_keys, .lsign_key, .recv_keys, .refresh_keys => {
             if (positionals.items.len > 0) {
                 opts.key_ids = try positionals.toOwnedSlice(allocator);
             }
@@ -162,6 +125,14 @@ pub fn parse(allocator: std.mem.Allocator, args: []const []const u8) ParseError!
     }
 
     return opts;
+}
+
+fn setOperation(opts: *Options, command: Command) ParseError!void {
+    // Repeating the same operation is accepted (e.g. `--populate --populate`);
+    // combining different operations is not.
+    if (std.meta.eql(opts.command, command)) return;
+    if (opts.command != .help) return error.MultipleOperations;
+    opts.command = command;
 }
 
 pub fn printHelp(writer: *std.Io.Writer) !void {
@@ -178,11 +149,17 @@ pub fn printHelp(writer: *std.Io.Writer) !void {
         \\  --list-sigs [ids...]      List keys and their signatures
         \\  -e, --export [ids...]     Export public or secret keys
         \\  --lsign-key <ids...>      Locally sign keys with your master key
+        \\  -r, --recv-keys <ids...>  Receive keys from a keyserver
+        \\  --refresh-keys [ids...]   Refresh keys via WKD or a keyserver
         \\
         \\Options:
         \\  --gpgdir <dir>            Set the GnuPG directory (default: {s})
         \\  --populate-from <dir>     Set the source directory for --populate
         \\                            (default: {s})
+        \\  --keyserver <url>         Set the keyserver for --recv-keys/--refresh-keys
+        \\  --user                    Operate on the invoking user's GnuPG keyring
+        \\                            without root privileges (only with
+        \\                            --recv-keys/--refresh-keys)
         \\  -h, --help                Show this help message
         \\
     , .{ exe_name, default_gpgdir, default_gpgdir, default_populate_from });
@@ -492,14 +469,124 @@ test "printHelp prints the expected usage text" {
         \\  --list-sigs [ids...]      List keys and their signatures
         \\  -e, --export [ids...]     Export public or secret keys
         \\  --lsign-key <ids...>      Locally sign keys with your master key
+        \\  -r, --recv-keys <ids...>  Receive keys from a keyserver
+        \\  --refresh-keys [ids...]   Refresh keys via WKD or a keyserver
         \\
         \\Options:
         \\  --gpgdir <dir>            Set the GnuPG directory (default: /etc/pacman.d/gnupg)
         \\  --populate-from <dir>     Set the source directory for --populate
         \\                            (default: /usr/share/pacman/keyrings)
+        \\  --keyserver <url>         Set the keyserver for --recv-keys/--refresh-keys
+        \\  --user                    Operate on the invoking user's GnuPG keyring
+        \\                            without root privileges (only with
+        \\                            --recv-keys/--refresh-keys)
         \\  -h, --help                Show this help message
         \\
     ,
         aw.written(),
     );
+}
+
+test "parse recognizes --recv-keys with a single key id" {
+    const args: []const []const u8 = &.{ exe_name, "--recv-keys", "ABC1234" };
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.key_ids);
+
+    try std.testing.expectEqual(Command.recv_keys, opts.command);
+    try std.testing.expectEqual(@as(usize, 1), opts.key_ids.len);
+    try std.testing.expectEqualStrings("ABC1234", opts.key_ids[0]);
+    try std.testing.expect(opts.keyserver == null);
+    try std.testing.expect(!opts.user);
+}
+
+test "parse recognizes the -r alias with multiple key ids" {
+    const args: []const []const u8 = &.{ exe_name, "-r", "ABC1234", "DEF5678" };
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.key_ids);
+
+    try std.testing.expectEqual(Command.recv_keys, opts.command);
+    try std.testing.expectEqual(@as(usize, 2), opts.key_ids.len);
+    try std.testing.expectEqualStrings("ABC1234", opts.key_ids[0]);
+    try std.testing.expectEqualStrings("DEF5678", opts.key_ids[1]);
+}
+
+test "parse recognizes --refresh-keys without key ids" {
+    const args: []const []const u8 = &.{exe_name, "--refresh-keys"};
+    const opts = try parse(std.testing.allocator, args);
+
+    try std.testing.expectEqual(Command.refresh_keys, opts.command);
+    try std.testing.expectEqual(@as(usize, 0), opts.key_ids.len);
+}
+
+test "parse collects key ids after --refresh-keys" {
+    const args: []const []const u8 = &.{ exe_name, "--refresh-keys", "ABC1234" };
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.key_ids);
+
+    try std.testing.expectEqual(Command.refresh_keys, opts.command);
+    try std.testing.expectEqual(@as(usize, 1), opts.key_ids.len);
+    try std.testing.expectEqualStrings("ABC1234", opts.key_ids[0]);
+}
+
+test "parse rejects --recv-keys combined with --refresh-keys" {
+    const args: []const []const u8 = &.{ exe_name, "--recv-keys", "--refresh-keys" };
+
+    try std.testing.expectError(error.MultipleOperations, parse(std.testing.allocator, args));
+}
+
+test "parse recognizes --keyserver" {
+    const args: []const []const u8 = &.{
+        exe_name,
+        "--keyserver",
+        "hkps://keyserver.ubuntu.com",
+        "--recv-keys",
+        "ABC1234",
+    };
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.key_ids);
+
+    try std.testing.expectEqual(Command.recv_keys, opts.command);
+    try std.testing.expectEqualStrings("hkps://keyserver.ubuntu.com", opts.keyserver.?);
+}
+
+test "parse rejects --keyserver without a value" {
+    const args: []const []const u8 = &.{ exe_name, "--keyserver" };
+
+    try std.testing.expectError(error.MissingArgumentValue, parse(std.testing.allocator, args));
+}
+
+test "parse recognizes --user with --recv-keys" {
+    const args: []const []const u8 = &.{ exe_name, "--user", "--recv-keys", "ABC1234" };
+    const opts = try parse(std.testing.allocator, args);
+    defer std.testing.allocator.free(opts.key_ids);
+
+    try std.testing.expectEqual(Command.recv_keys, opts.command);
+    try std.testing.expect(opts.user);
+}
+
+test "parse defaults init_path to --gpgdir" {
+    const args: []const []const u8 = &.{ exe_name, "--gpgdir", "/tmp/sk", "--init" };
+    const opts = try parse(std.testing.allocator, args);
+
+    try std.testing.expectEqual(Command.init, opts.command);
+    try std.testing.expectEqualStrings("/tmp/sk", opts.gpgdir);
+    try std.testing.expectEqualStrings("/tmp/sk", opts.init_path);
+}
+
+test "parse keeps an explicit --init directory over --gpgdir" {
+    const args: []const []const u8 = &.{ exe_name, "--gpgdir", "/tmp/sk", "--init", "/custom" };
+    const opts = try parse(std.testing.allocator, args);
+
+    try std.testing.expectEqual(Command.init, opts.command);
+    try std.testing.expectEqualStrings("/tmp/sk", opts.gpgdir);
+    try std.testing.expectEqualStrings("/custom", opts.init_path);
+}
+
+test "parse keeps an explicit --init directory over a later --gpgdir" {
+    const args: []const []const u8 = &.{ exe_name, "--init", "/custom", "--gpgdir", "/tmp/sk" };
+    const opts = try parse(std.testing.allocator, args);
+
+    try std.testing.expectEqual(Command.init, opts.command);
+    try std.testing.expectEqualStrings("/tmp/sk", opts.gpgdir);
+    try std.testing.expectEqualStrings("/custom", opts.init_path);
 }

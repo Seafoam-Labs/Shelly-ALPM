@@ -23,13 +23,13 @@ ls -ld /tmp/test-gnupg # 0755
 ls -l /tmp/test-gnupg/
 ```
 
-| Path             | Mode   |
-| ---------------- | ------ |
-| `gnupg/`         | `0755` |
-| `pubring.gpg`    | `0644` |
-| `secring.gpg`    | `0600` |
-| `trustdb.gpg`    | `0644` |
-| `gpg.conf`       | `0644` |
+| Path | Mode |
+| --- | --- |
+| `gnupg/` | `0755` |
+| `pubring.gpg` | `0644` |
+| `secring.gpg` | `0600` |
+| `trustdb.gpg` | `0644` |
+| `gpg.conf` | `0644` |
 | `gpg-agent.conf` | `0644` |
 
 `pubring.gpg` must contain the generated public master key and
@@ -63,7 +63,7 @@ Then confirm the key exists:
 
 ```bash
 sudo gpg --homedir /tmp/test-gnupg -K
-# -> Pacman Keyring Master Key <pacman@localhost>
+# -> Shelly Keyring Master Key <shelly@localhost>
 
 sudo gpg --homedir /tmp/test-gnupg --list-secret-keys --with-colons
 # -> a "sec:u:4096:..." line
@@ -102,11 +102,11 @@ The source keyring files must exist under the `--populate-from` directory
 `archlinux-keyring` package. For each keyring `<id>` the populate pipeline may
 read:
 
-| File           | Purpose                                           |
-| -------------- | ------------------------------------------------- |
-| `<id>.gpg`     | Public keys to import (required)                  |
+| File | Purpose |
+| --- | --- |
+| `<id>.gpg` | Public keys to import (required) |
 | `<id>-trusted` | Trusted fingerprints to locally sign + ownertrust |
-| `<id>-revoked` | Revoked fingerprints to disable                   |
+| `<id>-revoked` | Revoked fingerprints to disable |
 
 If the files are missing or live elsewhere, override with `--populate-from`.
 
@@ -216,11 +216,11 @@ sudo gpg --homedir /tmp/test-gnupg --with-colons --list-key "$FP" \
 
 All of these exit nonzero and print a one-line `error:` message.
 
-| Scenario                        | How to trigger                                 |
-| ------------------------------- | ---------------------------------------------- |
-| Target not initialized          | `--gpgdir /tmp/empty-gnupg` (no `trustdb.gpg`) |
-| Requested keyring file missing  | `--populate nonexistent`                       |
-| Source directory has no `*.gpg` | `--populate-from /tmp/empty-dir --populate`    |
+| Scenario | How to trigger |
+| --- | --- |
+| Target not initialized | `--gpgdir /tmp/empty-gnupg` (no `trustdb.gpg`) |
+| Requested keyring file missing | `--populate nonexistent` |
+| Source directory has no `*.gpg` | `--populate-from /tmp/empty-dir --populate` |
 
 ### Idempotency
 
@@ -302,7 +302,8 @@ FP=$(sudo gpg --homedir /tmp/test-gnupg --list-keys --with-colons | awk -F: '/^f
 ./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --lsign-key "$FP"
 ```
 
-NB: It might pick an already-signed key if you previously ran `--populate`. If so, pick a different fingerprint from the list of imported keys.
+NB: It might pick an already-signed key if you previously ran `--populate`. If so, pick a different fingerprint from the
+list of imported keys.
 
 Expected output, in order:
 
@@ -374,12 +375,12 @@ All of these exit nonzero. The first four print a one-line `error:` message on
 stderr; the nonexistent-key case fails during the existence check before any
 signing is attempted.
 
-| Scenario                    | How to trigger                                        |
-| --------------------------- | ----------------------------------------------------- |
-| No targets specified        | `--lsign-key` with no key ID                          |
-| Nonexistent key id          | `--lsign-key NONEXISTENTKEY1234567890ABCDEF`          |
-| Keyring not initialized     | `--gpgdir /tmp/empty-gnupg --lsign-key <fp>`          |
-| No secret key to sign with  | `--init` skipped; or keyring with no `sec` record     |
+| Scenario | How to trigger |
+| --- | --- |
+| No targets specified | `--lsign-key` with no key ID |
+| Nonexistent key id | `--lsign-key NONEXISTENTKEY1234567890ABCDEF` |
+| Keyring not initialized | `--gpgdir /tmp/empty-gnupg --lsign-key <fp>` |
+| No secret key to sign with | `--init` skipped; or keyring with no `sec` record |
 
 ### Revert
 
@@ -389,6 +390,248 @@ signing is attempted.
 gpgconf --homedir /tmp/test-gnupg --kill gpg-agent
 sudo rm -rf /tmp/test-gnupg
 ```
+
+## `shelly-key --recv-keys`
+
+`--recv-keys` (alias `-r`) receives one or more public keys from a keyserver
+into the keyring. In the default mode it requires root (the tool
+self-elevates), operates on the `--gpgdir` keyring, and updates the trust
+database afterwards. With `--user` it runs unprivileged against the current
+user's own GnuPG home instead (see the user mode section below).
+
+### Prerequisites
+
+- Network access to a keyserver. `--keyserver` overrides the keyserver for
+  the receive; without it gpg uses its built-in default.
+- A throwaway keyring (reuse the `--init`ed `/tmp/test-gnupg` from above):
+
+```bash
+zig build
+./zig-out/bin/shelly-key --init /tmp/test-gnupg
+```
+
+- A key ID or fingerprint to receive. Any published key works; to pick one
+  from a public keyserver:
+
+```bash
+gpg --keyserver hkps://keyserver.ubuntu.com --search-keys someone@example.org
+```
+
+Substitute the printed key ID for `<KEY_ID>` in the examples below.
+
+### Run
+
+```bash
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --recv-keys <KEY_ID>
+```
+
+Expected (gpg output is inherited verbatim, then the trust database update):
+
+```text
+gpg: key <KEY_ID>: public key "..." imported
+Updating trust database...
+```
+
+Exit code 0.
+
+### Verify
+
+```bash
+sudo gpg --homedir /tmp/test-gnupg --list-keys <KEY_ID>
+```
+
+Expected: exactly the received key block.
+
+### Idempotency
+
+Re-receiving the same key succeeds and leaves the key unchanged:
+
+```bash
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --recv-keys <KEY_ID>
+```
+
+```text
+gpg: key <KEY_ID>: "..." not changed
+Updating trust database...
+```
+
+### Error cases
+
+All of these exit nonzero and print a one-line `error:` message.
+
+| Scenario | How to trigger |
+| --- | --- |
+| No targets specified | `--recv-keys` with no key ID |
+| Key not on the keyserver | `--recv-keys NONEXISTENTKEY1234567890ABCDEF` |
+| Unreachable keyserver | `--keyserver hkps://invalid.invalid --recv-keys <KEY_ID>` |
+| Conflicting operations | `--recv-keys --refresh-keys` |
+
+The first prints `error: no targets specified.`; the two keyserver failures
+print `error: remote key not fetched correctly from keyserver.`; the conflict
+prints `error: multiple operations specified; run each operation separately.`
+
+### Revert
+
+`--recv-keys` writes only into the target keyring directory:
+
+```bash
+gpgconf --homedir /tmp/test-gnupg --kill gpg-agent
+sudo rm -rf /tmp/test-gnupg
+```
+
+## `shelly-key --refresh-keys`
+
+`--refresh-keys` updates already-imported public keys. Per key it first tries
+a WKD lookup by mailbox and falls back to the keyserver; `--keyserver` is used
+only for that fallback. Local master keys are never refreshed - neither the
+`shelly@localhost` master key nor the legacy `pacman@localhost` master key of
+shared `pacman-key`-initialized keyrings - because they do not exist on
+remotes. In the default mode it requires root (self-elevates); `--user` runs
+unprivileged. Refreshing does not update the trust database.
+
+### Prerequisites
+
+Reuse the initialized keyring from above and import public keys without
+populating (so nothing is pre-signed or pre-refreshed):
+
+```bash
+zig build
+./zig-out/bin/shelly-key --init /tmp/test-gnupg
+sudo gpg --homedir /tmp/test-gnupg --import /usr/share/pacman/keyrings/archlinux.gpg
+```
+
+Refreshing without targets contacts the network once per imported key and can
+take minutes; refresh a single key while testing.
+
+### Run (single key)
+
+The first `pub` record in the keyring is the local master key, which is always
+excluded; pick the key ID of any imported key:
+
+```bash
+KEY=$(sudo gpg --homedir /tmp/test-gnupg --with-colons --list-keys \
+  | awk -F: '/^pub/ {n++; if (n == 2) {print $5; exit}}')
+
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --refresh-keys "$KEY"
+```
+
+Expected:
+
+```text
+Refreshing key <KEY>...
+```
+
+Exit code 0.
+
+### Master keys are excluded
+
+Passing the local master key explicitly is accepted but skipped: nothing is
+fetched and the exit code is 0.
+
+```bash
+MASTER_KEYID=$(sudo gpg --homedir /tmp/test-gnupg --list-secret-keys --with-colons \
+  | awk -F: '/^sec/ {print $5; exit}')
+
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg --refresh-keys "$MASTER_KEYID"
+```
+
+Expected: no output, exit 0. A target-less run against a freshly initialized
+keyring (no imported keys) is equally a silent no-op, since the only local key
+is the master key:
+
+```bash
+./zig-out/bin/shelly-key --init /tmp/refresh-only
+./zig-out/bin/shelly-key --gpgdir /tmp/refresh-only --refresh-keys
+```
+
+### Failure per key
+
+A key that cannot be updated is reported and the remaining keys are still
+attempted; the command exits nonzero once at the end. The WKD stage fails for
+mailboxes without a WKD record and the keyserver stage fails when the server
+is unreachable - a scratch key with an `.invalid` mailbox plus a bogus
+keyserver triggers both:
+
+```bash
+gpg --batch --homedir /tmp/refresh-scratch --passphrase '' \
+  --quick-generate-key 'Refresh Test <refresh-test@example.invalid>' default default never
+SCRATCH_FPR=$(gpg --homedir /tmp/refresh-scratch --with-colons --list-secret-keys \
+  | awk -F: '/^fpr/ {print $10; exit}')
+gpg --homedir /tmp/refresh-scratch --armor --export "$SCRATCH_FPR" \
+  | sudo gpg --homedir /tmp/test-gnupg --import
+
+./zig-out/bin/shelly-key --gpgdir /tmp/test-gnupg \
+  --keyserver hkps://invalid.invalid --refresh-keys "$SCRATCH_FPR"
+```
+
+Expected:
+
+```text
+Refreshing key <SCRATCH_FPR>...
+Could not update key: <SCRATCH_FPR>
+error: could not update the specified key(s).
+```
+
+### Error cases
+
+| Scenario | How to trigger |
+| --- | --- |
+| Explicit key not in the keyring | `--refresh-keys NONEXISTENTKEY1234567890ABCDEF` |
+| Key unreachable (WKD + server) | scratch key + `--keyserver hkps://invalid.invalid` |
+
+The first prints
+`error: a specified key could not be found locally.` before anything is
+fetched; the second prints `Could not update key: <KEY>` per failed key
+followed by `error: could not update the specified key(s).`
+
+### Revert
+
+`--refresh-keys` does not modify the keyring. Remove the throwaway
+directories when done:
+
+```bash
+gpgconf --homedir /tmp/test-gnupg --kill gpg-agent
+sudo rm -rf /tmp/test-gnupg /tmp/refresh-only /tmp/refresh-scratch
+```
+
+## User mode: `--user`
+
+`--user` switches `--recv-keys` and `--refresh-keys` from the root-owned
+package keyring to the current user's own GnuPG home: the tool does not
+elevate, gpg runs with `--batch --no-tty`, `--gpgdir` is not forwarded, and
+the post-receive trust database update is skipped. It is meant for PKGBUILD
+source-signing keys, not package-signing keys.
+
+### Elevation check
+
+The quickest check needs no network: a missing target fails immediately,
+without a sudo/doas/pkexec prompt:
+
+```bash
+./zig-out/bin/shelly-key --user --recv-keys
+# -> error: no targets specified.
+```
+
+### Isolated receive
+
+`--user` always targets the default GnuPG home, so redirect `GNUPGHOME` to
+keep the personal keyring clean:
+
+```bash
+export GNUPGHOME=/tmp/user-gnupg
+mkdir -m 700 -p "$GNUPGHOME"
+
+./zig-out/bin/shelly-key --user --recv-keys <KEY_ID>
+
+gpg --list-keys <KEY_ID>
+unset GNUPGHOME
+rm -rf /tmp/user-gnupg
+```
+
+Expected: gpg's import output only - no `Updating trust database...` line -
+and no elevation prompt at any point. `gpg` honours `GNUPGHOME` as well, so
+the final `gpg --list-keys` inspects the same throwaway home. The same
+applies to `--user --refresh-keys`.
 
 ## Read-only operations: `--list-keys`, `--finger`, `--list-sigs`, `--export`
 
@@ -506,8 +749,9 @@ key ID:
 
 ### Multiple operation conflict
 
-All read-only operations conflict with each other and with `--init`, `--populate`,
-and `--updatedb`. Specifying more than one operation exits nonzero:
+All read-only operations conflict with each other and with `--init`,
+`--populate`, `--updatedb`, `--recv-keys`, and `--refresh-keys`. Specifying
+more than one operation exits nonzero:
 
 ```bash
 ./zig-out/bin/shelly-key --list-keys --finger

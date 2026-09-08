@@ -102,14 +102,14 @@ fn runAction(
     runner: anytype,
 ) anyerror!RunOutcome {
     switch (action) {
-        .init => return .{ .exit_code = try runner.call(context, &.{ "pacman-key", "--init" }) },
-        .list => return .{ .exit_code = try runner.call(context, &.{ "pacman-key", "--list-keys" }) },
-        .refresh => return .{ .exit_code = try runner.call(context, &.{ "pacman-key", "--refresh-keys" }) },
+        .init => return .{ .exit_code = try runner.call(context, &.{ "shelly-key", "--init" }) },
+        .list => return .{ .exit_code = try runner.call(context, &.{ "shelly-key", "--list-keys" }) },
+        .refresh => return .{ .exit_code = try runner.call(context, &.{ "shelly-key", "--refresh-keys" }) },
         .lsign => {
             for (invocation.positionals) |key| {
                 const exit_code = try runner.call(
                     context,
-                    &.{ "pacman-key", "--lsign-key", key },
+                    &.{ "shelly-key", "--lsign-key", key },
                 );
                 if (exit_code != 0) return .{ .exit_code = exit_code, .failed_key = key };
             }
@@ -118,7 +118,7 @@ fn runAction(
         .populate => {
             const arguments = try context.allocator.alloc([]const u8, invocation.positionals.len + 2);
             defer context.allocator.free(arguments);
-            arguments[0] = "pacman-key";
+            arguments[0] = "shelly-key";
             arguments[1] = "--populate";
             @memcpy(arguments[2..], invocation.positionals);
             return .{ .exit_code = try runner.call(context, arguments) };
@@ -129,20 +129,15 @@ fn runAction(
             const arguments = try context.allocator.alloc(
                 []const u8,
                 invocation.positionals.len +
-                    @as(usize, if (user_receive) 4 else 2) +
+                    @as(usize, if (user_receive) 3 else 2) +
                     @as(usize, if (keyserver == null) 0 else 2),
             );
             defer context.allocator.free(arguments);
-            // gpg treats option-looking tokens after --recv-keys key IDs as key IDs,
-            // so --keyserver must be emitted before the command.
             var next: usize = 0;
+            arguments[next] = "shelly-key";
+            next += 1;
             if (user_receive) {
-                arguments[next] = "gpg";
-                arguments[next + 1] = "--batch";
-                arguments[next + 2] = "--no-tty";
-                next += 3;
-            } else {
-                arguments[next] = "pacman-key";
+                arguments[next] = "--user";
                 next += 1;
             }
             if (keyserver) |server| {
@@ -341,14 +336,14 @@ test "keyring maps every action to structured backend arguments" {
     const manifest = try spec.Manifest.load(arena.allocator());
 
     const expected_calls = [_][]const []const u8{
-        &.{ "pacman-key", "--init" },
-        &.{ "pacman-key", "--list-keys" },
-        &.{ "pacman-key", "--refresh-keys" },
-        &.{ "pacman-key", "--lsign-key", "AAAA" },
-        &.{ "pacman-key", "--lsign-key", "BBBB" },
-        &.{ "pacman-key", "--populate", "archlinux", "cachyos" },
-        &.{ "pacman-key", "--keyserver", "hkps://keys.example", "--recv-keys", "CCCC", "DDDD" },
-        &.{ "gpg", "--batch", "--no-tty", "--keyserver", "hkps://keys.example", "--recv-keys", "EEEE" },
+        &.{ "shelly-key", "--init" },
+        &.{ "shelly-key", "--list-keys" },
+        &.{ "shelly-key", "--refresh-keys" },
+        &.{ "shelly-key", "--lsign-key", "AAAA" },
+        &.{ "shelly-key", "--lsign-key", "BBBB" },
+        &.{ "shelly-key", "--populate", "archlinux", "cachyos" },
+        &.{ "shelly-key", "--keyserver", "hkps://keys.example", "--recv-keys", "CCCC", "DDDD" },
+        &.{ "shelly-key", "--user", "--keyserver", "hkps://keys.example", "--recv-keys", "EEEE" },
     };
     const Capture = struct {
         expected: []const []const []const u8,
