@@ -151,7 +151,6 @@ pub const QuestionResponder = struct {
     }
 
     fn allOptionalDependenciesInstalled(question: Zigalpm.OperationQuestion) bool {
-        if (question.options.len == 0) return false;
         for (question.options) |opt| {
             if (!opt.is_installed) return false;
         }
@@ -823,7 +822,7 @@ test "UI handles provider and generic selection questions" {
 test "UI skips optional dependency question when every option is already installed" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var stdin = std.Io.Reader.fixed("");
+    var stdin = std.Io.Reader.fixed("1\n");
     var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer stdout.deinit();
     var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
@@ -849,19 +848,43 @@ test "UI skips optional dependency question when every option is already install
         .{ .id = "foot-terminfo", .label = "foot-terminfo", .description = "Terminal info", .is_installed = true },
         .{ .id = "libnotify", .label = "libnotify", .description = "Desktop notifications", .is_installed = true },
     };
-    var operation = operation_context.begin(.{ .backend = .aur, .kind = .install, .subject = "foot-git" });
+    var operation = operation_context.begin(.{
+        .backend = .aur,
+        .kind = .install,
+        .subject = "foot-git",
+    });
+    const stdout_before = stdout.writer.buffered().len;
+    const stderr_before = stderr.writer.buffered().len;
+
     var answer = try operation.ask(.{
         .kind = .select_optional_dependencies,
         .prompt = "Select optional dependencies for foot-git",
         .options = &options,
-        .dependency_name = "demo",
+        .dependency_name = "foot-git",
     });
     defer answer.deinit(arena.allocator());
-    operation.finish(.success);
 
     try std.testing.expect(answer.response == .choices);
     try std.testing.expectEqual(@as(usize, 0), answer.response.choices.len);
-    const rendered = stdout.writer.buffered();
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "[JSON]") == null);
-}
+    try std.testing.expectEqual(stdout_before, stdout.writer.buffered().len);
+    try std.testing.expectEqual(stderr_before, stderr.writer.buffered().len);
 
+    var empty_answer = try operation.ask(.{
+        .kind = .select_optional_dependencies,
+        .prompt = "This empty optional dependency question must not be displayed",
+        .options = &.{},
+        .dependency_name = "foot-git",
+    });
+    defer empty_answer.deinit(arena.allocator());
+
+    try std.testing.expect(empty_answer.response == .choices);
+    try std.testing.expectEqual(@as(usize, 0), empty_answer.response.choices.len);
+    try std.testing.expectEqual(stdout_before, stdout.writer.buffered().len);
+    try std.testing.expectEqual(stderr_before, stderr.writer.buffered().len);
+
+    const remaining_input = try stdin.takeDelimiter('\n');
+    try std.testing.expect(remaining_input != null);
+    try std.testing.expectEqualStrings("1", remaining_input.?);
+
+    operation.finish(.success);
+}

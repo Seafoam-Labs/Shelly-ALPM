@@ -493,6 +493,11 @@ pub const Renderer = struct {
         const self: *Renderer = @ptrCast(@alignCast(data.?));
         self.mutex.lockUncancelable(self.context.io);
         defer self.mutex.unlock(self.context.io);
+        if (question.kind == .select_optional_dependencies and
+            allOptionalDependenciesInstalled(question))
+        {
+            return .{ .choices = &.{} };
+        }
         if (self.no_confirm) {
             if (question.kind == .confirm_transaction) {
                 self.clearBars() catch self.write_failed.store(true, .release);
@@ -537,11 +542,9 @@ pub const Renderer = struct {
                 break :blk if (try self.confirm(question.prompt, default_approved)) .accepted else .declined;
             },
             .select_one, .select_provider => .{ .choice = try self.selectOne(question) },
-            .select_optional_dependencies => if (allOptionalDependenciesInstalled(question)) blk: {
-                try self.writeColoredLine(.gray, "All optional dependencies are already installed.", .{});
-                break :blk .{ .choices = &.{} };
-            } else .{ .choices = try self.selectMany(question) },
-            .select_many => .{ .choices = try self.selectMany(question) },
+            .select_many, .select_optional_dependencies => .{
+                .choices = try self.selectMany(question),
+            },
         };
     }
 
@@ -1045,7 +1048,6 @@ fn hasSecurityFindings(question: Zigalpm.OperationQuestion) bool {
 }
 
 fn allOptionalDependenciesInstalled(question: Zigalpm.OperationQuestion) bool {
-    if (question.options.len == 0) return false;
     for (question.options) |option| {
         if (!option.is_installed) return false;
     }
@@ -1178,22 +1180,44 @@ test "single-pane suppresses optional dependency prompt when every option is alr
         .{ .id = "foot-terminfo", .label = "foot-terminfo", .description = "Terminal info", .is_installed = true },
         .{ .id = "libnotify", .label = "libnotify", .description = "Desktop notifications", .is_installed = true },
     };
-    var operation = operation_context.begin(.{ .backend = .aur, .kind = .install, .subject = "foot-git" });
+    var operation = operation_context.begin(.{
+        .backend = .aur,
+        .kind = .install,
+        .subject = "foot-git",
+    });
+    const stdout_before = stdout.writer.buffered().len;
+    const stderr_before = stderr.writer.buffered().len;
+
     var answer = try operation.ask(.{
         .kind = .select_optional_dependencies,
         .prompt = "Select optional dependencies for foot-git",
         .options = &options,
     });
     defer answer.deinit(arena.allocator());
-    operation.finish(.success);
 
     try std.testing.expect(answer.response == .choices);
     try std.testing.expectEqual(@as(usize, 0), answer.response.choices.len);
-    const rendered = stdout.writer.buffered();
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "All optional dependencies are already installed.") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "Select numbers separated by commas") == null);
-}
+    try std.testing.expectEqual(stdout_before, stdout.writer.buffered().len);
+    try std.testing.expectEqual(stderr_before, stderr.writer.buffered().len);
 
+    var empty_answer = try operation.ask(.{
+        .kind = .select_optional_dependencies,
+        .prompt = "This empty optional dependency question must not be displayed",
+        .options = &.{},
+    });
+    defer empty_answer.deinit(arena.allocator());
+
+    try std.testing.expect(empty_answer.response == .choices);
+    try std.testing.expectEqual(@as(usize, 0), empty_answer.response.choices.len);
+    try std.testing.expectEqual(stdout_before, stdout.writer.buffered().len);
+    try std.testing.expectEqual(stderr_before, stderr.writer.buffered().len);
+
+    const remaining_input = try stdin.takeDelimiter('\n');
+    try std.testing.expect(remaining_input != null);
+    try std.testing.expectEqualStrings("1", remaining_input.?);
+
+    operation.finish(.success);
+}
 test "single-pane clears unknown-length bars on completion and suppresses AUR metadata" {
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
