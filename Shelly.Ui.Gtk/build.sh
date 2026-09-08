@@ -14,6 +14,9 @@ fi
 CLI_DIR="../Shelly.Cli.Zig"
 FLATPAK_BACKEND_DIR="../Shelly.Flatpak.Backend"
 
+echo "==> Updating translations..."
+./update-translations.sh
+
 echo "==> Building Flatpak backend ($FLATPAK_BACKEND_DIR)..."
 ( cd "$FLATPAK_BACKEND_DIR" && zig build "$@" )
 

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
+"POT-Creation-Date: 2026-09-06 16:45-0400\n"
 "PO-Revision-Date: 2026-06-17 11:40-0400\n"
 "Last-Translator: Ulaş Çakmak <celonfix@protonmail.com>\n"
 "Language-Team: Turkish (Turkiye)<>\n"
@@ -18,6 +18,27 @@ msgstr ""
 msgid "Close"
 msgstr "Kapat"
 
+msgid "Enable AUR?"
+msgstr "AUR Etkinleştirilsin mi?"
+
+msgid ""
+"The Arch User Repository contains build scripts that are known as PKGBUILDs. "
+"Those scripts are uploaded by users, and are not verified or vetted in any "
+"way. Only enable this feature if you are comfortable in verifying the build "
+"scripts."
+msgstr ""
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+"Safety Guide</a>"
+msgstr ""
+
+msgid "Enable"
+msgstr ""
+
+msgid "Cancel"
+msgstr "İptal"
+
 msgid "Keep configuration"
 msgstr ""
 
@@ -32,9 +53,6 @@ msgstr ""
 
 msgid "Confirm"
 msgstr "Onayla"
-
-msgid "Cancel"
-msgstr "İptal"
 
 msgid "Skip"
 msgstr ""
@@ -138,6 +156,16 @@ msgstr "Kurulum Yolu"
 msgid "Launch Flags"
 msgstr "Başlatma Parametreleri"
 
+msgid "Environment Variables"
+msgstr ""
+
+msgid ""
+"One KEY=value per line. Remove a line to restore the normal environment."
+msgstr ""
+
+msgid "Save Environment"
+msgstr ""
+
 msgid "Save"
 msgstr "Kaydet"
 
@@ -180,7 +208,7 @@ msgstr "Popülerlik"
 msgid "Search the AUR"
 msgstr ""
 
-msgid "The AUR has no browsable index type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
 msgid "Run checks"
@@ -220,6 +248,10 @@ msgstr "kullanıcı"
 
 msgid "Install"
 msgstr "Kur"
+
+#| msgid "No changelog entries found"
+msgid "No matching applications found"
+msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Flatpak Verileri Yükleniyor..."
@@ -356,6 +388,10 @@ msgstr "Depo"
 msgid "Install Date"
 msgstr ""
 
+#| msgid "No changelog entries found"
+msgid "No matching packages found"
+msgstr ""
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 
@@ -428,8 +464,8 @@ msgid "Search everywhere"
 msgstr ""
 
 msgid ""
-"Search standard repositories, the AUR and Flatpak at once. Type a name to "
-"begin."
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
 msgstr ""
 
 msgid "General"
@@ -458,6 +494,14 @@ msgstr "Sistem Tepsisini Otomatik Başlatmaya Ekle"
 
 msgid "Use weekly schedule"
 msgstr "Haftalık program kullan"
+
+#| msgid "Tray Updates Icon"
+msgid "Run Tray as cron"
+msgstr ""
+
+#| msgid "Tray Updates Icon"
+msgid "Tray update with ui"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Tepsi Kontrol Aralığı (Saat)"
@@ -542,9 +586,6 @@ msgstr "Onay Yok"
 msgid "Enable Shelly Search"
 msgstr "Shelly Aramayı Etkinleştir"
 
-msgid "Enable Package Downgrade"
-msgstr "Paket Sürüm Düşürmeyi Etkinleştir"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Webview Görselleştirmeyi Etkinleştir (Deneysel)"
 
@@ -570,6 +611,9 @@ msgid "Sponsor"
 msgstr "Sponsor"
 
 msgid "Toggle output"
+msgstr ""
+
+msgid "Done"
 msgstr ""
 
 msgid "Available Updates"
@@ -765,9 +809,6 @@ msgstr ""
 msgid "used in"
 msgstr ""
 
-msgid "Warning"
-msgstr ""
-
 msgid "Install Anyway"
 msgstr "Yine de Kur"
 
@@ -842,6 +883,14 @@ msgstr ""
 msgid "Syncing AppImage"
 msgstr ""
 
+msgid ""
+"Use unique KEY=value lines. Keys must start with a letter or underscore and "
+"contain only letters, digits, or underscores."
+msgstr ""
+
+msgid "Saving AppImage environment"
+msgstr ""
+
 msgid "Saving update configuration"
 msgstr ""
 
@@ -861,6 +910,15 @@ msgid "Operation completed successfully"
 msgstr ""
 
 msgid "Operation failed"
+msgstr ""
+
+msgid "Discard environment changes?"
+msgstr ""
+
+msgid "Your environment changes have not been saved."
+msgstr ""
+
+msgid "Discard"
 msgstr ""
 
 msgid "Maintainer"
@@ -969,6 +1027,15 @@ msgid "Show less"
 msgstr ""
 
 msgid "Installing flatpak"
+msgstr ""
+
+msgid "Remove this Flatpak?"
+msgstr ""
+
+msgid "Remove Flatpak"
+msgstr ""
+
+msgid "Removing Flatpak"
 msgstr ""
 
 msgid "Permissions"
@@ -1113,24 +1180,12 @@ msgstr ""
 msgid "Adding Remote"
 msgstr ""
 
-msgid "Remove this Flatpak?"
-msgstr ""
-
-#| msgid "Flatpak"
-msgid "Remove Flatpak"
-msgstr ""
-
-msgid "Removing Flatpak"
-msgstr ""
-
 msgid "App ID"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
-#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1152,7 +1207,6 @@ msgstr "Hayır"
 msgid "Keywords"
 msgstr ""
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1224,10 +1278,14 @@ msgstr ""
 msgid "Installing packages"
 msgstr ""
 
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
+
 msgid "Search failed"
 msgstr ""
 
-#| msgid "Installation Path"
 msgid "Installation in progress"
 msgstr ""
 
@@ -1237,11 +1295,9 @@ msgstr ""
 msgid "Enable at least one source filter above."
 msgstr ""
 
-#| msgid "Install Local"
 msgid "Install Packages"
 msgstr ""
 
-#| msgid "Install Selected"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1320,17 +1376,6 @@ msgstr ""
 
 msgid "Systemd startup service removed."
 msgstr "Systemd başlangıç hizmeti kaldırıldı."
-
-msgid "Enable AUR?"
-msgstr "AUR Etkinleştirilsin mi?"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-
-msgid "Enable"
-msgstr ""
 
 msgid "AUR enabled"
 msgstr ""
@@ -1440,10 +1485,16 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
-msgid "Done"
+msgid "Failed"
 msgstr ""
 
-msgid "Failed"
+msgid "Transaction Completed"
+msgstr ""
+
+msgid "Transaction Failed"
+msgstr ""
+
+msgid "Transaction Cancelled"
 msgstr ""
 
 msgid "Finished"
@@ -1452,7 +1503,26 @@ msgstr ""
 msgid "exit"
 msgstr ""
 
+msgid "The operation was cancelled."
+msgstr ""
+
+msgid "All operations finished successfully."
+msgstr ""
+
+msgid ""
+"Permission to manage packages was not granted. Try again and approve the "
+"authorization request to continue."
+msgstr ""
+
 msgid "Cancelled"
+msgstr ""
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"
@@ -1485,9 +1555,6 @@ msgstr ""
 msgid "Database lock removed successfully"
 msgstr ""
 
-msgid "Failed to remove database lock"
-msgstr ""
-
 msgid "Fixing permissions"
 msgstr ""
 
@@ -1498,11 +1565,6 @@ msgid "Cleaning package cache"
 msgstr ""
 
 msgid "Welcome"
-msgstr ""
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
 msgstr ""
 
 msgid "Enable Recommended?"
