@@ -13,14 +13,23 @@ pub const default_gpgdir = "/etc/pacman.d/gnupg";
 /// Default source directory for `--populate`, used when `--populate-from` is not given.
 pub const default_populate_from = "/usr/share/pacman/keyrings";
 
+/// UID of the locally generated master key, excluded from `--refresh-keys`
+/// because it does not exist on remote servers.
+pub const master_key_uid = "shelly@localhost";
+
+/// Master key UID found on keyrings initialized by pacman-key (or earlier
+/// shelly-key releases); excluded from refreshes as well, since shelly shares
+/// `/etc/pacman.d/gnupg` with pacman.
+pub const legacy_master_key_uid = "pacman@localhost";
+
 /// Batch parameters for `gpg --gen-key --batch` to create local signing key.
 const master_key_batch =
     \\%echo Generating keyring master key...
     \\Key-Type: RSA
     \\Key-Length: 4096
     \\Key-Usage: sign
-    \\Name-Real: Pacman Keyring Master Key
-    \\Name-Email: pacman@localhost
+    \\Name-Real: Shelly Keyring Master Key
+    \\Name-Email: shelly@localhost
     \\Expire-Date: 0
     \\%no-protection
     \\%commit
@@ -173,6 +182,79 @@ pub fn lsignKey(
     try stdout.print("Updating trust database...\n", .{});
     try stdout.flush();
     try gpg_cli.checkTrustdb();
+}
+
+pub fn recvKeys(
+    io: Io,
+    allocator: std.mem.Allocator,
+    args: []const []const u8,
+    path_env: []const u8,
+    gpgdir: []const u8,
+    key_ids: []const []const u8,
+    keyserver: ?[]const u8,
+    user_mode: bool,
+    stdout: *Io.Writer,
+) !void {
+    if (!user_mode) try elevate.ensureRoot(io, allocator, args, path_env);
+
+    if (key_ids.len == 0) return error.NoTargetsSpecified;
+
+    const gpg_cli: gpg.Gpg = .{ .io = io, .homedir = if (user_mode) null else gpgdir };
+
+    try gpg_cli.recvKeys(keyserver, key_ids);
+
+    // Evaluate trust for the freshly received keys, as pacman-key does.
+    if (!user_mode) {
+        try stdout.print("Updating trust database...\n", .{});
+        try stdout.flush();
+        try gpg_cli.checkTrustdb();
+    }
+}
+
+pub fn refreshKeys(
+    io: Io,
+    allocator: std.mem.Allocator,
+    args: []const []const u8,
+    path_env: []const u8,
+    gpgdir: []const u8,
+    key_ids: []const []const u8,
+    keyserver: ?[]const u8,
+    user_mode: bool,
+    stdout: *Io.Writer,
+) !void {
+    if (!user_mode) try elevate.ensureRoot(io, allocator, args, path_env);
+
+    const gpg_cli: gpg.Gpg = .{ .io = io, .homedir = if (user_mode) null else gpgdir };
+
+    if (key_ids.len > 0) try checkKeyIdsExist(allocator, gpg_cli, key_ids);
+
+    const master_keys = try collectMasterKeys(allocator, gpg_cli);
+    defer {
+        for (master_keys) |id| allocator.free(id);
+        allocator.free(master_keys);
+    }
+
+    const ids = try listPublicKeyIds(allocator, gpg_cli, key_ids);
+    defer {
+        for (ids) |id| allocator.free(id);
+        allocator.free(ids);
+    }
+
+    var had_failure = false;
+    for (ids) |id| {
+        if (isMasterKey(master_keys, id)) continue;
+
+        try stdout.print("Refreshing key {s}...\n", .{id});
+        try stdout.flush();
+
+        if (try refreshSingleKey(allocator, gpg_cli, keyserver, id)) continue;
+
+        try stdout.print("Could not update key: {s}\n", .{id});
+        try stdout.flush();
+        had_failure = true;
+    }
+
+    if (had_failure) return error.GpgFailed;
 }
 
 pub fn populate(
@@ -386,4 +468,144 @@ fn ensureKeyExists(allocator: std.mem.Allocator, gpg_cli: gpg.Gpg, key_id: []con
         "--with-colons", "--list-key", "--quiet", key_id,
     });
     defer allocator.free(output);
+}
+
+fn checkKeyIdsExist(
+    allocator: std.mem.Allocator,
+    gpg_cli: gpg.Gpg,
+    key_ids: []const []const u8,
+) !void {
+    for (key_ids) |key_id| {
+        _ = gpg_cli.runCapture(allocator, &.{ "--list-keys", "--quiet", key_id }) catch
+            return error.KeyNotFoundLocally;
+    }
+}
+
+fn isMasterKey(master_keys: []const []const u8, id: []const u8) bool {
+    for (master_keys) |master_key| {
+        if (std.mem.eql(u8, master_key, id)) return true;
+    }
+    return false;
+}
+
+fn pubKeyIdsFromListing(allocator: std.mem.Allocator, output: []const u8) ![][]const u8 {
+    var ids: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (ids.items) |id| allocator.free(id);
+        ids.deinit(allocator);
+    }
+
+    var it = std.mem.splitScalar(u8, output, '\n');
+    while (it.next()) |line| {
+        if (!std.mem.eql(u8, gpg.colonField(line, 0), "pub")) continue;
+        const id = gpg.colonField(line, 4);
+        if (id.len == 0) continue;
+        try ids.append(allocator, try allocator.dupe(u8, id));
+    }
+
+    return ids.toOwnedSlice(allocator);
+}
+
+fn collectMasterKeys(allocator: std.mem.Allocator, gpg_cli: gpg.Gpg) ![][]const u8 {
+    var keys: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (keys.items) |id| allocator.free(id);
+        keys.deinit(allocator);
+    }
+
+    for ([_][]const u8{ master_key_uid, legacy_master_key_uid }) |uid| {
+        // A keyring without that master key must not block refreshing;
+        // pacman-key likewise ends up with an empty exclusion list here.
+        const output = gpg_cli.runCapture(allocator, &.{
+            "--with-colons", "--list-keys", "--quiet", uid,
+        }) catch |err| switch (err) {
+            error.GpgFailed => continue,
+            else => |e| return e,
+        };
+        defer allocator.free(output);
+
+        const ids = try pubKeyIdsFromListing(allocator, output);
+        defer allocator.free(ids);
+        for (ids) |id| try keys.append(allocator, id);
+    }
+
+    return keys.toOwnedSlice(allocator);
+}
+
+fn listPublicKeyIds(
+    allocator: std.mem.Allocator,
+    gpg_cli: gpg.Gpg,
+    patterns: []const []const u8,
+) ![][]const u8 {
+    var extra: std.ArrayList([]const u8) = .empty;
+    defer extra.deinit(allocator);
+    try extra.appendSlice(allocator, &.{ "--with-colons", "--list-keys", "--quiet" });
+    try extra.appendSlice(allocator, patterns);
+
+    // Nothing matches (e.g. an empty keyring for a global refresh): refresh no
+    // keys instead of failing, matching pacman-key's silent no-op.
+    const output = gpg_cli.runCapture(allocator, extra.items) catch |err| switch (err) {
+        error.GpgFailed => return &.{},
+        else => |e| return e,
+    };
+    defer allocator.free(output);
+
+    return pubKeyIdsFromListing(allocator, output);
+}
+
+/// Collect the mailboxes (`show-only-fpr-mbox`) of every uid on `id`.
+fn collectMboxes(allocator: std.mem.Allocator, gpg_cli: gpg.Gpg, id: []const u8) ![][]const u8 {
+    const output = gpg_cli.runCapture(allocator, &.{
+        "--list-options", "show-only-fpr-mbox", id,
+    }) catch |err| switch (err) {
+        error.GpgFailed => return &.{},
+        else => |e| return e,
+    };
+    defer allocator.free(output);
+
+    var mboxes: std.ArrayList([]const u8) = .empty;
+    errdefer {
+        for (mboxes.items) |mbox| allocator.free(mbox);
+        mboxes.deinit(allocator);
+    }
+
+    var it = std.mem.splitScalar(u8, output, '\n');
+    while (it.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \t\r");
+        var fields = std.mem.tokenizeAny(u8, trimmed, " \t");
+        _ = fields.next() orelse continue; // fingerprint; we refresh via the mailbox
+        const mbox = fields.next() orelse continue;
+        try mboxes.append(allocator, try allocator.dupe(u8, mbox));
+    }
+
+    return mboxes.toOwnedSlice(allocator);
+}
+
+/// Refresh one key: WKD lookup by mailbox first, keyserver fallback second.
+/// Returns false when every lookup failed.
+fn refreshSingleKey(
+    allocator: std.mem.Allocator,
+    gpg_cli: gpg.Gpg,
+    keyserver: ?[]const u8,
+    id: []const u8,
+) !bool {
+    const mboxes = try collectMboxes(allocator, gpg_cli, id);
+    defer {
+        for (mboxes) |mbox| allocator.free(mbox);
+        allocator.free(mboxes);
+    }
+
+    for (mboxes) |mbox| {
+        gpg_cli.locateExternalKeys(mbox) catch |err| switch (err) {
+            error.GpgFailed => continue,
+            else => |e| return e,
+        };
+        return true;
+    }
+
+    gpg_cli.refreshKeys(keyserver, id) catch |err| switch (err) {
+        error.GpgFailed => return false,
+        else => |e| return e,
+    };
+    return true;
 }

@@ -42,6 +42,11 @@ build() {
     -Dcpu=baseline \
     -Doptimize=ReleaseSmall)
 
+  (cd Shelly.Key && zig build --verbose \
+    --prefix "${srcdir}/zig-out-key" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSmall)
+
   for shell in bash fish zsh; do
     "${srcdir}/zig-out/bin/shelly" utility --completions "${shell}" \
       > "${srcdir}/shelly.${shell}"
@@ -79,6 +84,7 @@ package_shelly-cli() {
     'diffutils'
     'git'
     'glibc'
+    'gnupg'
     'libarchive'
     'pacman'
     'sudo'
@@ -100,6 +106,8 @@ package_shelly-cli() {
 
   install -Dm755 "${srcdir}/zig-out/bin/shelly" \
     "${pkgdir}/usr/bin/shelly"
+  install -Dm755 "${srcdir}/zig-out-key/bin/shelly-key" \
+    "${pkgdir}/usr/bin/shelly-key"
   install -Dm644 "${srcdir}/shellybuild.conf" \
     "${pkgdir}/etc/shellybuild.conf"
   install -Dm644 "${srcdir}/shelly.bash" \
