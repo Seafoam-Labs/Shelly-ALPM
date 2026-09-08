@@ -542,7 +542,7 @@ pub const Renderer = struct {
                 break :blk if (try self.confirm(question.prompt, default_approved)) .accepted else .declined;
             },
             .select_one, .select_provider => .{ .choice = try self.selectOne(question) },
-            .select_many, .select_optional_dependencies => .{.choices = try self.selectMany(question),},
+            .select_many, .select_optional_dependencies => .{.choices = try self.selectMany(question) },
         };
     }
 
