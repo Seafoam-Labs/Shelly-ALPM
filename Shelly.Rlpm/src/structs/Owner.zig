@@ -18,6 +18,7 @@ ignore_groups: [][]const u8,
 assume_installed: [][]const u8,
 
 pub fn init(
+    io: std.Io,
     allocator: std.mem.Allocator,
     root: []const u8,
     database_path: []const u8,
@@ -30,6 +31,8 @@ pub fn init(
     ignore_groups: [][]const u8,
     assume_installed: [][]const u8,
 ) !Owner {
+    var local = try Database.init(allocator, "local", database_path);
+    local.loadDatabase(io);
     return .{
         .allocator = allocator,
         .root = root,
@@ -42,5 +45,6 @@ pub fn init(
         .ignore_pacakages = ignore_pacakages,
         .ignore_groups = ignore_groups,
         .assume_installed = assume_installed,
+        .local = local,
     };
 }

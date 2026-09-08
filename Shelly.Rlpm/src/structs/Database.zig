@@ -32,7 +32,7 @@ allocator: std.mem.Allocator,
 arena: std.heap.ArenaAllocator,
 
 name: []u8,
-path: ?[]u8 = null,
+path: []u8,
 
 packages: PackageIndex = .{},
 groups: GroupIndex = .{},
@@ -47,9 +47,10 @@ usage: DatabaseUsage = .{},
 pub fn init(
     allocator: std.mem.Allocator,
     name: []const u8,
-    path: ?[]const u8,
+    path: []const u8,
 ) !Database {
     var result: Database = .{
+        .path = "",
         .allocator = allocator,
         .arena = std.heap.ArenaAllocator.init(allocator),
         .name = undefined,
@@ -58,9 +59,7 @@ pub fn init(
 
     const database_allocator = result.arena.allocator();
     result.name = try database_allocator.dupe(u8, name);
-    if (path) |database_path| {
-        result.path = try database_allocator.dupe(u8, database_path);
-    }
+    result.path = try database_allocator.dupe(u8, path);
 
     return result;
 }
@@ -72,13 +71,12 @@ pub fn deinit(self: *Database) void {
 
 pub fn loadDatabase(
     self: *Database,
-    path: []const u8,
     io: std.Io,
 ) !void {
     if (self.status.package_cache_loaded) return error.DatabaseAlreadyLoaded;
     const allocator = self.arena.allocator();
 
-    var root_dir = try std.Io.Dir.cwd().openDir(io, path, .{
+    var root_dir = try std.Io.Dir.cwd().openDir(io, self.path, .{
         .iterate = true,
         .access_sub_paths = true,
     });
@@ -750,7 +748,7 @@ test "loadDatabase owns and indexes parsed packages" {
 
     var database = try Database.init(std.testing.allocator, "local", path);
     defer database.deinit();
-    try database.loadDatabase(path, std.testing.io);
+    try database.loadDatabase(std.testing.io);
 
     try std.testing.expect(database.status.package_cache_loaded);
     try std.testing.expectEqual(@as(usize, 1), database.packages.packages.items.len);
@@ -766,7 +764,7 @@ test "loadDatabase owns and indexes parsed packages" {
     try std.testing.expectEqualStrings("demo", group.packages.items[0].name);
     try std.testing.expectError(
         error.DatabaseAlreadyLoaded,
-        database.loadDatabase(path, std.testing.io),
+        database.loadDatabase(std.testing.io),
     );
 }
 
@@ -804,7 +802,7 @@ test "loadDatabase skips missing and malformed package descriptions" {
 
     var database = try Database.init(std.testing.allocator, "local", path);
     defer database.deinit();
-    try database.loadDatabase(path, std.testing.io);
+    try database.loadDatabase(std.testing.io);
 
     try std.testing.expectEqual(@as(usize, 1), database.packages.packages.items.len);
     try std.testing.expect(database.packages.by_name.contains("valid"));
@@ -826,7 +824,7 @@ test "integration parses the actual local package database" {
 
     var database = try Database.init(std.testing.allocator, "local", local_database_path);
     defer database.deinit();
-    try database.loadDatabase(local_database_path, std.testing.io);
+    try database.loadDatabase(std.testing.io);
 
     try std.testing.expect(database.status.package_cache_loaded);
     try std.testing.expect(database.packages.packages.items.len > 0);
