@@ -1,8 +1,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
-"Report-Msgid-Bugs-To: csnyder@seafoamlabs.org\n"
-"POT-Creation-Date: 2026-08-13 00:37+0200\n"
+"Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
+"POT-Creation-Date: 2026-09-06 16:45-0400\n"
 "PO-Revision-Date: 2026-08-13 11:51+0200\n"
 "Last-Translator: Impostor0729\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -20,6 +20,27 @@ msgstr "Nem állnak rendelkezésre telepíthető kiegészítők"
 msgid "Close"
 msgstr "Bezárás"
 
+msgid "Enable AUR?"
+msgstr "Engedélyezi az AUR-t?"
+
+msgid ""
+"The Arch User Repository contains build scripts that are known as PKGBUILDs. "
+"Those scripts are uploaded by users, and are not verified or vetted in any "
+"way. Only enable this feature if you are comfortable in verifying the build "
+"scripts."
+msgstr ""
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+"Safety Guide</a>"
+msgstr ""
+
+msgid "Enable"
+msgstr "Engedélyezés"
+
+msgid "Cancel"
+msgstr "Mégse"
+
 msgid "Keep configuration"
 msgstr "Tartsa meg a beállításokat"
 
@@ -34,9 +55,6 @@ msgstr "Az alkalmazás adatai véglegesen törlésre kerülnek."
 
 msgid "Confirm"
 msgstr "Megerősítés"
-
-msgid "Cancel"
-msgstr "Mégse"
 
 msgid "Skip"
 msgstr "Kihagyás"
@@ -151,6 +169,18 @@ msgstr "Telepítési útvonal"
 msgid "Launch Flags"
 msgstr "Indítási paraméterek"
 
+#| msgid "Environment"
+msgid "Environment Variables"
+msgstr ""
+
+msgid ""
+"One KEY=value per line. Remove a line to restore the normal environment."
+msgstr ""
+
+#| msgid "Environment"
+msgid "Save Environment"
+msgstr ""
+
 msgid "Save"
 msgstr "Mentés"
 
@@ -236,6 +266,10 @@ msgstr "felhasználó"
 
 msgid "Install"
 msgstr "Telepítés"
+
+#| msgid "No changelog entries found"
+msgid "No matching applications found"
+msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Flatpak adatok betöltése..."
@@ -372,6 +406,10 @@ msgstr "Tároló"
 msgid "Install Date"
 msgstr "Telepítés dátuma"
 
+#| msgid "No packages found"
+msgid "No matching packages found"
+msgstr ""
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Probléma lépett fel a csomagok betöltésekor. Ellenőrizze, hogy van-e db zár."
@@ -446,12 +484,13 @@ msgstr "Forrás"
 msgid "Search everywhere"
 msgstr "Keressen mindenhol"
 
+#| msgid ""
+#| "Search standard repositories, the AUR and Flatpak at once. Type a name to "
+#| "begin."
 msgid ""
-"Search standard repositories, the AUR and Flatpak at once. Type a name to "
-"begin."
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
 msgstr ""
-"Keresés a hivatalos tárolókban, az AUR-ban és a Flatpakben egyszerre. Írjon "
-"be egy nevet a kezdéshez."
 
 msgid "General"
 msgstr "Általános"
@@ -479,6 +518,14 @@ msgstr "Tálcaikon hozzáadása az automatikus indításhoz"
 
 msgid "Use weekly schedule"
 msgstr "Heti ütemezés használata"
+
+#| msgid "Tray Updates Icon"
+msgid "Run Tray as cron"
+msgstr ""
+
+#| msgid "Tray Updates Icon"
+msgid "Tray update with ui"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Tálcaellenőrzési időköz (órákban)"
@@ -566,9 +613,6 @@ msgstr "Megerősítés kihagyása"
 msgid "Enable Shelly Search"
 msgstr "Shelly keresés engedélyezése"
 
-msgid "Enable Package Downgrade"
-msgstr "Korábbi verzióra váltás engedélyezése"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Webview vizualizáció engedélyezése (kísérleti)"
 
@@ -595,6 +639,9 @@ msgstr "Támogató"
 
 msgid "Toggle output"
 msgstr "Kimenet váltása"
+
+msgid "Done"
+msgstr "Kész"
 
 msgid "Available Updates"
 msgstr "Elérhető frissítések"
@@ -797,9 +844,6 @@ msgstr "A biztonsági ellenőrzés befejeződött – nem található probléma.
 msgid "used in"
 msgstr "használt"
 
-msgid "Warning"
-msgstr "Figyelmeztetés"
-
 msgid "Install Anyway"
 msgstr "Telepítés mindenképpen"
 
@@ -878,6 +922,15 @@ msgstr "AppImage-k szinkronizálása"
 msgid "Syncing AppImage"
 msgstr "AppImage szinkronizálása"
 
+msgid ""
+"Use unique KEY=value lines. Keys must start with a letter or underscore and "
+"contain only letters, digits, or underscores."
+msgstr ""
+
+#| msgid "Syncing AppImage"
+msgid "Saving AppImage environment"
+msgstr ""
+
 msgid "Saving update configuration"
 msgstr "Frissítési konfiguráció mentése"
 
@@ -898,6 +951,16 @@ msgstr "A művelet sikeresen befejeződött"
 
 msgid "Operation failed"
 msgstr "A művelet sikertelen"
+
+msgid "Discard environment changes?"
+msgstr ""
+
+msgid "Your environment changes have not been saved."
+msgstr ""
+
+#| msgid "Discover"
+msgid "Discard"
+msgstr ""
 
 msgid "Maintainer"
 msgstr "Karbantartó"
@@ -1009,6 +1072,15 @@ msgstr "Mutasson kevesebbet"
 
 msgid "Installing flatpak"
 msgstr "Flatpak telepítése"
+
+msgid "Remove this Flatpak?"
+msgstr "Eltávolítja ezt a Flatpak csomagot?"
+
+msgid "Remove Flatpak"
+msgstr "Flatpak eltávolítása"
+
+msgid "Removing Flatpak"
+msgstr "Flatpak eltávolítása"
 
 msgid "Permissions"
 msgstr "Jogosultságok"
@@ -1151,15 +1223,6 @@ msgstr "Távoli tároló eltávolítása"
 msgid "Adding Remote"
 msgstr "Távoli tároló hozzáadása"
 
-msgid "Remove this Flatpak?"
-msgstr "Eltávolítja ezt a Flatpak csomagot?"
-
-msgid "Remove Flatpak"
-msgstr "Flatpak eltávolítása"
-
-msgid "Removing Flatpak"
-msgstr "Flatpak eltávolítása"
-
 msgid "App ID"
 msgstr "App ID"
 
@@ -1259,6 +1322,13 @@ msgstr "Csomagok eltávolítása"
 msgid "Installing packages"
 msgstr "Csomagok telepítése"
 
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
+"Keresés a hivatalos tárolókban, az AUR-ban és a Flatpakben egyszerre. Írjon "
+"be egy nevet a kezdéshez."
+
 msgid "Search failed"
 msgstr "A keresés sikertelen"
 
@@ -1352,20 +1422,6 @@ msgstr "Nem sikerült eltávolítani a rendszerindítási szolgáltatást"
 
 msgid "Systemd startup service removed."
 msgstr "Indítási szolgáltatás eltávolítva a Systemd-ből."
-
-msgid "Enable AUR?"
-msgstr "Engedélyezi az AUR-t?"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"Az Arch User Repository (AUR) egy közösség által irányított adattár. A "
-"csomagokat a felhasználók állítják elő, és kockázatokat tartalmazhatnak. "
-"Szeretné engedélyezni?"
-
-msgid "Enable"
-msgstr "Engedélyezés"
 
 msgid "AUR enabled"
 msgstr "AUR engedélyezve"
@@ -1475,11 +1531,20 @@ msgstr "Lemezterület ellenőrzése"
 msgid "Working"
 msgstr "Dolgozom"
 
-msgid "Done"
-msgstr "Kész"
-
 msgid "Failed"
 msgstr "Sikertelen"
+
+#| msgid "Installation complete."
+msgid "Transaction Completed"
+msgstr ""
+
+#| msgid "Operation failed"
+msgid "Transaction Failed"
+msgstr ""
+
+#| msgid "Cancelled"
+msgid "Transaction Cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "Befejezett"
@@ -1487,8 +1552,28 @@ msgstr "Befejezett"
 msgid "exit"
 msgstr "kilépés"
 
+msgid "The operation was cancelled."
+msgstr ""
+
+#| msgid "Operation completed successfully"
+msgid "All operations finished successfully."
+msgstr ""
+
+msgid ""
+"Permission to manage packages was not granted. Try again and approve the "
+"authorization request to continue."
+msgstr ""
+
 msgid "Cancelled"
 msgstr "Törölt<"
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
 
 msgid "System package update"
 msgstr "Rendszercsomag frissítése"
@@ -1522,9 +1607,6 @@ msgstr "Csomagadatbázisok frissítése"
 msgid "Database lock removed successfully"
 msgstr "Az adatbázis zárolása sikeresen eltávolítva"
 
-msgid "Failed to remove database lock"
-msgstr "Nem sikerült eltávolítani az adatbázis zárolását"
-
 msgid "Fixing permissions"
 msgstr "Engedélyek javítása"
 
@@ -1536,14 +1618,6 @@ msgstr "Csomaggyorsítótár tisztítása"
 
 msgid "Welcome"
 msgstr "Üdvözöljük"
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-"Az Arch User Repository közösségileg karbantartott. A csomagok nincsenek "
-"hivatalosan ellenőrizve - csak akkor engedélyezze, ha megbízik abban, amit "
-"telepít."
 
 msgid "Enable Recommended?"
 msgstr "Engedélyezi az ajánlottakat?"

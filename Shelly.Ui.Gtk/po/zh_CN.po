@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
+"POT-Creation-Date: 2026-09-06 16:45-0400\n"
 "PO-Revision-Date: 2026-09-3 12:00+0800\n"
 "Last-Translator: DeepSeek AI\n"
 "Language-Team: China (Simplified)\n"
@@ -16,6 +16,27 @@ msgstr "没有可安装的插件"
 
 msgid "Close"
 msgstr "关闭"
+
+msgid "Enable AUR?"
+msgstr "启用 AUR？"
+
+msgid ""
+"The Arch User Repository contains build scripts that are known as PKGBUILDs. "
+"Those scripts are uploaded by users, and are not verified or vetted in any "
+"way. Only enable this feature if you are comfortable in verifying the build "
+"scripts."
+msgstr ""
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+"Safety Guide</a>"
+msgstr ""
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Cancel"
+msgstr "取消"
 
 msgid "Keep configuration"
 msgstr "保留配置"
@@ -31,9 +52,6 @@ msgstr "应用数据将会永久删除。"
 
 msgid "Confirm"
 msgstr "确认"
-
-msgid "Cancel"
-msgstr "取消"
 
 msgid "Skip"
 msgstr "跳过"
@@ -134,6 +152,18 @@ msgstr "安装路径"
 msgid "Launch Flags"
 msgstr "启动标志"
 
+#| msgid "Environment"
+msgid "Environment Variables"
+msgstr ""
+
+msgid ""
+"One KEY=value per line. Remove a line to restore the normal environment."
+msgstr ""
+
+#| msgid "Environment"
+msgid "Save Environment"
+msgstr ""
+
 msgid "Save"
 msgstr "保存"
 
@@ -176,7 +206,8 @@ msgstr "流行度"
 msgid "Search the AUR"
 msgstr "搜索AUR"
 
-msgid "The AUR has no browsable index type a package name to begin."
+#| msgid "The AUR has no browsable index — type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
 msgid "Run checks"
@@ -216,6 +247,10 @@ msgstr "用户"
 
 msgid "Install"
 msgstr "安装"
+
+#| msgid "No changelog entries found"
+msgid "No matching applications found"
+msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "正在加载 Flatpak 数据..."
@@ -352,6 +387,10 @@ msgstr "仓库"
 msgid "Install Date"
 msgstr "安装日期"
 
+#| msgid "No packages found"
+msgid "No matching packages found"
+msgstr ""
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr "加载软件包时出错。请检查是否有数据库锁。"
 
@@ -423,9 +462,10 @@ msgstr ""
 msgid "Search everywhere"
 msgstr "全局搜索"
 
+#| msgid "Search standard repositories, AUR and Flatpak"
 msgid ""
-"Search standard repositories, the AUR and Flatpak at once. Type a name to "
-"begin."
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
 msgstr ""
 
 msgid "General"
@@ -454,6 +494,14 @@ msgstr "添加到开机自启动"
 
 msgid "Use weekly schedule"
 msgstr "启动每周更新计划"
+
+#| msgid "Tray Updates Icon"
+msgid "Run Tray as cron"
+msgstr ""
+
+#| msgid "Tray Updates Icon"
+msgid "Tray update with ui"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "托盘检查间隔（小时）"
@@ -537,9 +585,6 @@ msgstr "无需确认"
 msgid "Enable Shelly Search"
 msgstr "启用 Shelly 搜索"
 
-msgid "Enable Package Downgrade"
-msgstr "启用软件包降级"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "启用 Webview 可视化（实验性）"
 
@@ -566,6 +611,9 @@ msgstr "赞助"
 
 msgid "Toggle output"
 msgstr ""
+
+msgid "Done"
+msgstr "完成"
 
 msgid "Available Updates"
 msgstr "可用更新"
@@ -650,7 +698,8 @@ msgstr "欢迎使用Shelly v3"
 msgid ""
 "Shelly is a modern package manager for Arch Linux. Configure your sources "
 "and preferences to get started."
-msgstr "Shelly 是一个现代的 Arch Linux 软件包管理器。配置您的软件源和偏好以开始使用。"
+msgstr ""
+"Shelly 是一个现代的 Arch Linux 软件包管理器。配置您的软件源和偏好以开始使用。"
 
 msgid "Select Your Sources"
 msgstr "选择您的软件源"
@@ -684,7 +733,8 @@ msgstr "外观"
 msgid ""
 "Customize how Shelly looks and behaves. All of these can be changed later in "
 "preferences."
-msgstr "自定义 Shelly 的外观和行为方式。所有这些设置稍后都可以在偏好设置中更改。"
+msgstr ""
+"自定义 Shelly 的外观和行为方式。所有这些设置稍后都可以在偏好设置中更改。"
 
 msgid "Navigation Style"
 msgstr "导航样式"
@@ -757,9 +807,6 @@ msgstr "安全扫描已完成 — 未发现问题。"
 
 msgid "used in"
 msgstr "用于"
-
-msgid "Warning"
-msgstr "警告"
 
 msgid "Install Anyway"
 msgstr "仍然安装"
@@ -835,6 +882,15 @@ msgstr "正在同步 AppImage"
 msgid "Syncing AppImage"
 msgstr "正在同步 AppImage"
 
+msgid ""
+"Use unique KEY=value lines. Keys must start with a letter or underscore and "
+"contain only letters, digits, or underscores."
+msgstr ""
+
+#| msgid "Syncing AppImage"
+msgid "Saving AppImage environment"
+msgstr ""
+
 msgid "Saving update configuration"
 msgstr "正在保存更新配置"
 
@@ -855,6 +911,16 @@ msgstr "操作成功完成"
 
 msgid "Operation failed"
 msgstr "操作失败"
+
+msgid "Discard environment changes?"
+msgstr ""
+
+msgid "Your environment changes have not been saved."
+msgstr ""
+
+#| msgid "Discover"
+msgid "Discard"
+msgstr ""
 
 msgid "Maintainer"
 msgstr "维护者"
@@ -963,6 +1029,15 @@ msgstr "收起"
 
 msgid "Installing flatpak"
 msgstr "正在安装 Flatpak"
+
+msgid "Remove this Flatpak?"
+msgstr "移除此 Flatpak？"
+
+msgid "Remove Flatpak"
+msgstr "移除 Flatpak"
+
+msgid "Removing Flatpak"
+msgstr "正在移除 Flatpak"
 
 msgid "Permissions"
 msgstr "权限"
@@ -1105,24 +1180,12 @@ msgstr "正在移除远程仓库"
 msgid "Adding Remote"
 msgstr "正在添加远程仓库"
 
-msgid "Remove this Flatpak?"
-msgstr "移除此 Flatpak？"
-
-#| msgid "Flatpak"
-msgid "Remove Flatpak"
-msgstr "移除 Flatpak"
-
-msgid "Removing Flatpak"
-msgstr "正在移除 Flatpak"
-
 msgid "App ID"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Remote"
 msgstr "远程仓库"
 
-#| msgid "Development"
 msgid "Developer"
 msgstr "开发者"
 
@@ -1144,7 +1207,6 @@ msgstr "否"
 msgid "Keywords"
 msgstr "关键词"
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr "Flathub"
 
@@ -1202,7 +1264,8 @@ msgstr "已选择"
 msgid "Mixed selection"
 msgstr "混合选择"
 
-msgid "Select only installed packages to remove, or only available ones to install."
+msgid ""
+"Select only installed packages to remove, or only available ones to install."
 msgstr "请仅选择已安装的软件包进行移除，或仅选择可用的软件包进行安装。"
 
 msgid "Remove the selected packages?"
@@ -1214,10 +1277,14 @@ msgstr "正在移除软件包"
 msgid "Installing packages"
 msgstr "正在安装软件包"
 
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
+
 msgid "Search failed"
 msgstr "搜索失败"
 
-#| msgid "Installation Path"
 msgid "Installation in progress"
 msgstr "正在安装"
 
@@ -1227,11 +1294,9 @@ msgstr "未选择任何源"
 msgid "Enable at least one source filter above."
 msgstr "请启用上方至少一个来源筛选器。"
 
-#| msgid "Install Local"
 msgid "Install Packages"
 msgstr "安装软件包"
 
-#| msgid "Install Selected"
 msgid "Install the selected packages?"
 msgstr "安装所选软件包？"
 
@@ -1309,19 +1374,6 @@ msgstr "移除 systemd 启动服务失败"
 
 msgid "Systemd startup service removed."
 msgstr "已删除 systemd 启动服务"
-
-msgid "Enable AUR?"
-msgstr "启用 AUR？"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"Arch 用户仓库 (AUR) 是一个社区驱动的仓库。软件包由用户制作，可能包含风险。是"
-"否启用？"
-
-msgid "Enable"
-msgstr "启用"
 
 msgid "AUR enabled"
 msgstr "AUR 已启用"
@@ -1431,11 +1483,20 @@ msgstr "正在检查磁盘空间"
 msgid "Working"
 msgstr "处理中"
 
-msgid "Done"
-msgstr "完成"
-
 msgid "Failed"
 msgstr "失败"
+
+#| msgid "Installation complete."
+msgid "Transaction Completed"
+msgstr ""
+
+#| msgid "Operation failed"
+msgid "Transaction Failed"
+msgstr ""
+
+#| msgid "Cancelled"
+msgid "Transaction Cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "已完成"
@@ -1443,8 +1504,28 @@ msgstr "已完成"
 msgid "exit"
 msgstr "退出"
 
+msgid "The operation was cancelled."
+msgstr ""
+
+#| msgid "Operation completed successfully"
+msgid "All operations finished successfully."
+msgstr ""
+
+msgid ""
+"Permission to manage packages was not granted. Try again and approve the "
+"authorization request to continue."
+msgstr ""
+
 msgid "Cancelled"
 msgstr "已取消"
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
 
 msgid "System package update"
 msgstr "系统软件包更新"
@@ -1476,9 +1557,6 @@ msgstr "正在刷新软件包数据库"
 msgid "Database lock removed successfully"
 msgstr "数据库锁已成功移除"
 
-msgid "Failed to remove database lock"
-msgstr "移除数据库锁失败"
-
 msgid "Fixing permissions"
 msgstr "正在修复权限"
 
@@ -1491,14 +1569,14 @@ msgstr "正在清理软件包缓存"
 msgid "Welcome"
 msgstr "欢迎"
 
-msgid "The Arch User Repository is community-maintained. Packages are not officially vetted — only enable if you trust what you install."
-msgstr "Arch 用户仓库由社区维护。软件包未经官方审核 — 请仅在信任要安装的内容时启用。"
-
 msgid "Enable Recommended?"
 msgstr "启用推荐功能？"
 
-msgid "Recommended shows curated package suggestions based on your installed software. Package data is fetched from external sources."
-msgstr "推荐功能会根据您已安装的软件显示精选的软件包建议。软件包数据从外部来源获取。"
+msgid ""
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
+msgstr ""
+"推荐功能会根据您已安装的软件显示精选的软件包建议。软件包数据从外部来源获取。"
 
 msgid "Installing Flatpak and AppImage support"
 msgstr "正在安装 Flatpak 和 AppImage 支持"
