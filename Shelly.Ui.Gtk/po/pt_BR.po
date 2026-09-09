@@ -408,7 +408,7 @@ msgid "Install Date"
 msgstr "Data de instalação"
 
 msgid "No matching packages found"
-msgstr "Nenhum pacote correspondente encontrados"
+msgstr "Nenhum pacote correspondente encontrado"
 
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
