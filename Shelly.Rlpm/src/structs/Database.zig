@@ -7,6 +7,7 @@ const DatabaseStatus = @import("DatabaseStatus.zig");
 const SignaturePolicy = @import("SignaturePolicy.zig");
 const DatabaseUsage = @import("DatabaseUsage.zig");
 const ParsedDescription = @import("ParsedDescription.zig");
+const ShellyKey = @import("Shelly_Key");
 
 pub const PackageId = enum(u32) {
     _,
@@ -454,6 +455,27 @@ const DescSection = enum {
     replaces,
     xdata,
 };
+
+fn validateSignature(self: *Database) !bool {
+    _ = self;
+    const gpg: ShellyKey.gpg.Gpg = .{
+        .io = io,
+        .homedir = "/etc/pacman.d/gnupg",
+    };
+
+    const status = try gpg.runCapture(allocator, &.{
+        "--batch",
+        "--no-auto-check-trustdb",
+        "--status-fd",
+        "1",
+        "--verify",
+        "/var/lib/pacman/sync/cachyos.db.sig",
+        "/var/lib/pacman/sync/cachyos.db",
+    });
+    defer allocator.free(status);
+
+    return false;
+}
 
 test "parseDescription parses a local database desc entry" {
     const contents =
