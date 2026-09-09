@@ -492,7 +492,7 @@ msgid ""
 "name to begin."
 msgstr ""
 "Pesquise os repositórios padrão, o AUR e o Flatpak todos ao mesmo tempo. Digite um "
-"nome para começar".
+"nome para começar."
 
 msgid "General"
 msgstr "Geral"
