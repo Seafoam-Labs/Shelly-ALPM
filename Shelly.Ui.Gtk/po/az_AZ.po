@@ -1,0 +1,1622 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
+"Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
+"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"PO-Revision-Date: 2026-09-09 12:00+0400\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Azerbaijani <az@li.org>\n"
+"Language: az\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Weblate 2026.7\n"
+
+msgid "No installable addons available"
+msgstr "Quraşdırıla bilən əlavələr yoxdur"
+
+msgid "Close"
+msgstr "Bağla"
+
+msgid "Enable AUR?"
+msgstr "AUR aktivləşdirilsin?"
+
+msgid ""
+"The Arch User Repository contains build scripts that are known as PKGBUILDs. "
+"Those scripts are uploaded by users, and are not verified or vetted in any "
+"way. Only enable this feature if you are comfortable in verifying the build "
+"scripts."
+msgstr ""
+"Arch istifadəçi anbarında PKGBUILD adlanan qurma skriptləri var. Bu "
+"skriptlər istifadəçilər tərəfindən yüklənir və heç bir şəkildə yoxlanılmır "
+"və ya nəzərdən keçirilmir. Bu funksiyanı yalnız qurma skriptlərini yoxlaya "
+"bildiyinizə əminsinizsə aktivləşdirin."
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+"Safety Guide</a>"
+msgstr ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+"təhlükəsizlik bələdçisi</a>"
+
+msgid "Enable"
+msgstr "Aktivləşdir"
+
+msgid "Cancel"
+msgstr "Ləğv et"
+
+msgid "Keep configuration"
+msgstr "Konfiqurasiyanı saxla"
+
+msgid "App data and settings will be kept."
+msgstr "Tətbiqin məlumatları və parametrləri saxlanılacaq."
+
+msgid "Remove configuration"
+msgstr "Konfiqurasiyanı sil"
+
+msgid "App data will be permanently removed."
+msgstr "Tətbiqin məlumatları həmişəlik silinəcək."
+
+msgid "Confirm"
+msgstr "Təsdiqlə"
+
+msgid "Skip"
+msgstr "Ötür"
+
+msgid "No special permissions requested"
+msgstr "Xüsusi icazələr tələb olunmur"
+
+msgid "Review PKGBUILD changes"
+msgstr "PKGBUILD dəyişikliklərini nəzərdən keçir"
+
+msgid "Changes"
+msgstr "Dəyişikliklər"
+
+msgid "Warnings"
+msgstr "Xəbərdarlıqlar"
+
+msgid ""
+"These commands fetch and execute code outside of shelly and libalpm's "
+"control. Review them before continuing."
+msgstr ""
+"Bu əmrlər shelly tətbiqinin və libalpm kitabxanasının nəzarətindən kənarda kod əldə edib icra edir. "
+"Davam etməzdən əvvəl onları nəzərdən keçirin."
+
+msgid "Source Files"
+msgstr "Mənbə faylları"
+
+msgid "polkit is required"
+msgstr "polkit tələb olunur"
+
+msgid ""
+"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
+"privileged actions, but it wasn't found on the system bus.\n"
+"\n"
+"Install and enable it, then retry.\n"
+"\n"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
+"labs.org/shelly-alpm/docs/polkit</a>"
+msgstr ""
+"Shelly qrafik interfeysində imtiyazlı əməliyyatlara icazə vermək üçün "
+"<b>polkit</b> quraşdırılıb işləməlidir, lakin sistem şinində tapılmadı.\n"
+"\n"
+"Onu quraşdırıb aktivləşdirin, sonra yenidən cəhd edin.\n"
+"\n"
+"<a "
+"href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-labs.org/shelly-alpm/docs/polkit</a>"
+
+msgid "Review PKGBUILD"
+msgstr "PKGBUILD faylını nəzərdən keçir"
+
+msgid "Search..."
+msgstr "Axtarış..."
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr "Bütün AppImage tətbiqlərinin metaməlumatlarını sinxronlaşdırın. AppImage özünü yeniləyibsə faydalıdır."
+
+msgid "Sync All"
+msgstr "Hamısını sinxronlaşdır"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "Bütün AppImage tətbiqlərini ən son versiyalarına yeniləyin"
+
+msgid "Upgrade All"
+msgstr "Hamısını yenilə"
+
+msgid "Install a new AppImage from a file"
+msgstr "Fayldan yeni AppImage quraşdırın"
+
+msgid "Install AppImage"
+msgstr "AppImage quraşdır"
+
+msgid "Drop AppImage here to install"
+msgstr "Quraşdırmaq üçün AppImage faylını buraya buraxın"
+
+msgid "App Name"
+msgstr "Tətbiqin adı"
+
+msgid "Version"
+msgstr "Versiya"
+
+msgid "Description goes here..."
+msgstr "Təsvir burada göstərilir..."
+
+msgid "Size on Disk"
+msgstr "Diskdəki ölçü"
+
+msgid "Update Strategy"
+msgstr "Yeniləmə strategiyası"
+
+msgid "Update URL / Repository Info"
+msgstr "Yeniləmə URL ünvanı / anbar məlumatı"
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr "Yeniləmə URL ünvanı / anbar məlumatı haqqında daha çox məlumat əldə edin"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "məsələn, owner/repo və ya https://..."
+
+msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+msgstr "Yanlış format. owner/repo formatından istifadə edin (məsələn, seafoam-labs/shelly-alpm)"
+
+msgid "Allow Prerelease"
+msgstr "İlkin buraxılışa icazə ver"
+
+msgid "Installation Path"
+msgstr "Quraşdırma yolu"
+
+msgid "Launch Flags"
+msgstr "Başlatma bayraqları"
+
+msgid "Environment Variables"
+msgstr "Mühit dəyişənləri"
+
+msgid ""
+"One KEY=value per line. Remove a line to restore the normal environment."
+msgstr ""
+"Hər sətirdə bir KEY=value yazın. Adi mühiti bərpa etmək üçün sətri silin."
+
+msgid "Save Environment"
+msgstr "Mühiti yadda saxla"
+
+msgid "Save"
+msgstr "Yadda saxla"
+
+msgid "Sync"
+msgstr "Sinxronlaşdır"
+
+msgid "Remove"
+msgstr "Sil"
+
+msgid "Information"
+msgstr "Məlumat"
+
+msgid "Preview Pkgbuild"
+msgstr "PKGBUILD önbaxışını göstər"
+
+msgid "Search the AUR by name or keyword"
+msgstr "AUR anbarında ada və ya açar sözə görə axtarış aparın"
+
+msgid "Installed Only"
+msgstr "Yalnız quraşdırılanlar"
+
+msgid "Show only installed packages"
+msgstr "Yalnız quraşdırılmış paketləri göstər"
+
+msgid "Additional Options"
+msgstr "Əlavə seçimlər"
+
+msgid "Install Selected"
+msgstr "Seçilənləri quraşdır"
+
+msgid "Name"
+msgstr "Ad"
+
+msgid "Votes"
+msgstr "Səslər"
+
+msgid "Popularity"
+msgstr "Populyarlıq"
+
+msgid "Search the AUR"
+msgstr "AUR anbarında axtarış apar"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr "AUR anbarında nəzərdən keçirilə bilən indeks yoxdur. Başlamaq üçün paket adı yazın."
+
+msgid "Run checks"
+msgstr "Yoxlamaları işə sal"
+
+msgid "Run the --check function during package build"
+msgstr "Paket qurularkən --check funksiyasını işə sal"
+
+msgid "Hide Detail Pane"
+msgstr "Təfərrüat panelini gizlət"
+
+msgid "Hide the detail pane on the right"
+msgstr "Sağdakı təfərrüat panelini gizlət"
+
+msgid "Install a local Flatpak"
+msgstr "Yerli Flatpak quraşdır"
+
+msgid ""
+"Choose a .flatpak bundle from your system and install it for the current "
+"user or system-wide."
+msgstr ""
+"Sisteminizdən .flatpak paketini seçin və cari istifadəçi üçün və ya bütün "
+"sistem üzrə quraşdırın."
+
+msgid "Bundle"
+msgstr "Tətbiq paketi"
+
+msgid "Choose file…"
+msgstr "Fayl seç…"
+
+msgid "Install for"
+msgstr "Quraşdırma hədəfi"
+
+msgid "system"
+msgstr "sistem"
+
+msgid "user"
+msgstr "istifadəçi"
+
+msgid "Install"
+msgstr "Quraşdır"
+
+msgid "No matching applications found"
+msgstr "Uyğun tətbiqlər tapılmadı"
+
+msgid "Loading Flatpak Data..."
+msgstr "Flatpak məlumatları yüklənir..."
+
+msgid "Back"
+msgstr "Geri qayıt"
+
+msgid "Addons"
+msgstr "Əlavələr"
+
+msgid "Install source"
+msgstr "Quraşdırma mənbəyi"
+
+msgid "Author"
+msgstr "Müəllif"
+
+msgid "Version: -"
+msgstr "Versiya: -"
+
+msgid "Size: -"
+msgstr "Ölçü: -"
+
+msgid "License: -"
+msgstr "Lisenziya: -"
+
+msgid "Summary"
+msgstr "Xülasə"
+
+msgid "Show more"
+msgstr "Daha çox göstər"
+
+msgid "App Permissions"
+msgstr "Tətbiq icazələri"
+
+msgid "Version History"
+msgstr "Versiya tarixçəsi"
+
+msgid "Search packages..."
+msgstr "Paket axtarışı..."
+
+msgid "Browse"
+msgstr "Nəzərdən keçir"
+
+msgid "Manage"
+msgstr "İdarə et"
+
+msgid "Manage Remote Refs"
+msgstr "Uzaq istinadları idarə et"
+
+msgid "Install Local"
+msgstr "Yerli paket quraşdır"
+
+msgid "Delete Selected Remote"
+msgstr "Seçilmiş uzaq anbarı sil"
+
+msgid "Add Remote"
+msgstr "Uzaq anbar əlavə et"
+
+msgid "Add New Flatpak Remote"
+msgstr "Yeni Flatpak uzaq anbarı əlavə et"
+
+msgid "Add"
+msgstr "Əlavə et"
+
+msgid "Remote Name"
+msgstr "Uzaq anbarın adı"
+
+msgid "e.g., flathub"
+msgstr "məsələn, flathub"
+
+msgid "Remote URL"
+msgstr "Uzaq anbarın URL ünvanı"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "məsələn, https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "Əhatə dairəsi"
+
+msgid "Show Runtimes"
+msgstr "İcra mühitlərini göstər"
+
+msgid "Flatpak Repair"
+msgstr "Flatpak təmiri"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Flatpak quraşdırmasını təmir edir (sınaq mərhələsindədir)"
+
+msgid "About"
+msgstr "Haqqında"
+
+msgid "Shelly"
+msgstr "Shelly"
+
+msgid "Reinstall"
+msgstr "Yenidən quraşdır"
+
+msgid "Add Ignore"
+msgstr "İstisna siyahısına əlavə et"
+
+msgid "Add Hold"
+msgstr "Saxlanılanlar siyahısına əlavə et"
+
+msgid "Make Explicit"
+msgstr "Birbaşa quraşdırılmış kimi işarələ"
+
+msgid "Mark Dependency"
+msgstr "Asılılıq kimi işarələ"
+
+msgid "Package actions"
+msgstr "Paket əməliyyatları"
+
+msgid "Package Group Filter"
+msgstr "Paket qrupu süzgəci"
+
+msgid "Selected Packages"
+msgstr "Seçilmiş paketlər"
+
+msgid "0 Selected"
+msgstr "0 paket seçilib"
+
+msgid "Grid View"
+msgstr "Tor görünüşü"
+
+msgid "List View"
+msgstr "Siyahı görünüşü"
+
+msgid "Size"
+msgstr "Ölçü"
+
+msgid "Repository"
+msgstr "Anbar"
+
+msgid "Install Date"
+msgstr "Quraşdırma tarixi"
+
+msgid "No matching packages found"
+msgstr "Uyğun paketlər tapılmadı"
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
+msgstr "Paketləriniz yüklənərkən problem yarandı. Verilənlər bazasının kilidlənib-kilidlənmədiyini yoxlayın."
+
+msgid "Perform Upgrade"
+msgstr "Yeniləməni icra et"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "Quraşdırma ilə birlikdə sistemi tam yenilə (-u)"
+
+msgid "Show Hidden"
+msgstr "Gizlədilənləri göstər"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "pacman.conf faylındakı IgnorePkg siyahısında olan paketləri göstər"
+
+msgid "Show Explicit Only"
+msgstr "Yalnız birbaşa quraşdırılanları göstər"
+
+msgid "Show only explicitly installed packages"
+msgstr "Yalnız birbaşa quraşdırılmış paketləri göstər"
+
+msgid "Show Dependency Only"
+msgstr "Yalnız asılılıqları göstər"
+
+msgid "Show dependency packages only"
+msgstr "Yalnız asılılıq paketlərini göstər"
+
+msgid "Recommended Packages"
+msgstr "Tövsiyə olunan paketlər"
+
+msgid "Curated suggestions from Seafoam Labs"
+msgstr "Seafoam Labs tərəfindən seçilmiş tövsiyələr"
+
+msgid "Refresh the recommended packages list from the network"
+msgstr "Tövsiyə olunan paketlərin siyahısını şəbəkədən yenilə"
+
+msgid "Loading Recommended Packages..."
+msgstr "Tövsiyə olunan paketlər yüklənir..."
+
+msgid ""
+"No recommendations found. Please check your internet connection and try "
+"again."
+msgstr ""
+"Tövsiyələr tapılmadı. İnternetə qoşulmanızı yoxlayıb yenidən cəhd edin."
+
+msgid "Search standard repositories, AUR and Flatpak"
+msgstr "Standart anbarlarda, AUR və Flatpak mənbələrində axtarış apar"
+
+msgid "Standard"
+msgstr "Standart"
+
+msgid "Show results from the configured ALPM sync databases"
+msgstr "Tənzimlənmiş ALPM sinxronlaşdırma bazalarından nəticələri göstər"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Show results from the Arch User Repository"
+msgstr "Arch istifadəçi anbarından nəticələri göstər"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Show results from the configured Flatpak remotes"
+msgstr "Tənzimlənmiş Flatpak uzaq anbarlarından nəticələri göstər"
+
+msgid "Source"
+msgstr "Mənbə"
+
+msgid "Search everywhere"
+msgstr "Hər yerdə axtarış apar"
+
+msgid ""
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
+msgstr ""
+"Standart anbarlarda, AUR və Flatpak mənbələrində eyni anda axtarış aparın. "
+"Başlamaq üçün ad yazın."
+
+msgid "General"
+msgstr "Ümumi"
+
+msgid "Enable AUR"
+msgstr "AUR anbarını aktivləşdir"
+
+msgid "Language"
+msgstr "Dil"
+
+msgid "Enable Flatpak"
+msgstr "Flatpak dəstəyini aktivləşdir"
+
+msgid "Enable Recommended"
+msgstr "Tövsiyələri aktivləşdir"
+
+msgid "Enable AppImage"
+msgstr "AppImage dəstəyini aktivləşdir"
+
+msgid "Enable Tray Icon"
+msgstr "Sistem treyi nişanını aktivləşdir"
+
+msgid "Add Tray To Auto Start"
+msgstr "Sistem treyini avtomatik başlatmaya əlavə et"
+
+msgid "Use weekly schedule"
+msgstr "Həftəlik cədvəldən istifadə et"
+
+msgid "Run Tray as cron"
+msgstr "Sistem treyini cron tapşırığı kimi işə sal"
+
+msgid "Tray update with ui"
+msgstr "Sistem treyindən interfeys vasitəsilə yeniləmə"
+
+msgid "Tray Check Interval (Hours)"
+msgstr "Sistem treyində yoxlama intervalı (saat)"
+
+msgid "Weekly Schedule"
+msgstr "Həftəlik cədvəl"
+
+msgid "Sun"
+msgstr "B."
+
+msgid "Mon"
+msgstr "B.e."
+
+msgid "Tue"
+msgstr "Ç.a."
+
+msgid "Wed"
+msgstr "Ç."
+
+msgid "Thu"
+msgstr "C.a."
+
+msgid "Fri"
+msgstr "C."
+
+msgid "Sat"
+msgstr "Ş."
+
+msgid "Update Time (24h):"
+msgstr "Yeniləmə vaxtı (24 saat):"
+
+msgid ":"
+msgstr ":"
+
+msgid "Look & Feel"
+msgstr "Görünüş və davranış"
+
+msgid "Icons Enabled"
+msgstr "Nişanlar aktivdir"
+
+msgid ""
+"If enabled, Shelly will use appstream icons in the package list and details "
+"pages."
+msgstr ""
+"Aktivləşdirildikdə Shelly paket siyahısında və təfərrüat səhifələrində "
+"AppStream nişanlarından istifadə edəcək."
+
+msgid "Use Symbolic Tray Icon"
+msgstr "Simvolik sistem treyi nişanından istifadə et"
+
+msgid ""
+"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"one."
+msgstr ""
+"Aktivləşdirildikdə Shelly standart şəkil nişanının əvəzinə simvolik SVG "
+"nişanından istifadə edəcək."
+
+msgid "Tray Icon"
+msgstr "Sistem treyi nişanı"
+
+msgid "Select File"
+msgstr "Fayl seç"
+
+msgid "Clear"
+msgstr "Təmizlə"
+
+msgid "Tray Updates Icon"
+msgstr "Sistem treyində yeniləmələr nişanı"
+
+msgid "Default page"
+msgstr "Standart səhifə"
+
+msgid "Navigation style"
+msgstr "Naviqasiya üslubu"
+
+msgid "Advanced"
+msgstr "Qabaqcıl"
+
+msgid "Remove Cache on Uninstall"
+msgstr "Sistemdən silərkən keşi sil"
+
+msgid "No Confirm"
+msgstr "Təsdiqsiz"
+
+msgid "Enable Shelly Search"
+msgstr "Shelly axtarışını aktivləşdir"
+
+msgid "Enable Webview Visualization (experimental)"
+msgstr "Veb görünüşü ilə vizuallaşdırmanı aktivləşdir (sınaq mərhələsindədir)"
+
+msgid "AppImage Install Path"
+msgstr "AppImage quraşdırma yolu"
+
+msgid "Select Directory"
+msgstr "Qovluq seç"
+
+msgid "View Changelog"
+msgstr "Dəyişiklik jurnalına bax"
+
+msgid "v0.0.0"
+msgstr "v0.0.0"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "Community fluxer"
+msgstr "İcmanın fluxer səhifəsi"
+
+msgid "Sponsor"
+msgstr "Sponsor ol"
+
+msgid "Toggle output"
+msgstr "Çıxışı göstər və ya gizlət"
+
+msgid "Done"
+msgstr "Hazırdır"
+
+msgid "Available Updates"
+msgstr "Mövcud yeniləmələr"
+
+msgid "7 of 7 updates included"
+msgstr "7 yeniləmədən 7-si daxildir"
+
+msgid "Check all enabled sources again"
+msgstr "Bütün aktiv mənbələri yenidən yoxla"
+
+msgid "Check Again"
+msgstr "Yenidən yoxla"
+
+msgid "Upgrade"
+msgstr "Yenilə"
+
+msgid "System"
+msgstr "Sistem"
+
+msgid "Checking for updates…"
+msgstr "Yeniləmələr yoxlanılır…"
+
+msgid "Your system is up to date"
+msgstr "Sisteminiz ən son vəziyyətdədir"
+
+msgid "Could not check for updates"
+msgstr "Yeniləmələri yoxlamaq mümkün olmadı"
+
+msgid "Utilities"
+msgstr "Yardımçı alətlər"
+
+msgid "Maintenance and repair tools for your Shelly installation."
+msgstr "Shelly quraşdırmanız üçün texniki xidmət və təmir alətləri."
+
+msgid "Force Database Update"
+msgstr "Verilənlər bazasını məcburi yenilə"
+
+msgid "Force a synchronization of the package database."
+msgstr "Paket bazasını məcburi sinxronlaşdırın."
+
+msgid "Run"
+msgstr "İşə sal"
+
+msgid "Remove db.lck"
+msgstr "db.lck faylını sil"
+
+msgid ""
+"Removes the db.lck file if it was left behind by an interrupted alpm process."
+msgstr ""
+"Yarımçıq qalmış alpm prosesindən sonra qalan db.lck faylını silir."
+
+msgid "Fix Permissions"
+msgstr "İcazələri düzəlt"
+
+msgid ""
+"Restores correct user ownership of Shelly configuration and cache folders if "
+"they were accidentally created by root."
+msgstr ""
+"Shelly konfiqurasiya və keş qovluqları səhvən root tərəfindən yaradılıbsa, "
+"onların aid olduğu istifadəçini bərpa edir."
+
+msgid "Purify Packages"
+msgstr "Paketləri təmizlə"
+
+msgid "Remove corrupted/orphaned packages."
+msgstr "Zədələnmiş və ya artıq tələb olunmayan paketləri silin."
+
+msgid "Clean Package Cache"
+msgstr "Paket keşini təmizlə"
+
+msgid ""
+"Removes old cached package versions, keeping the selected number per package."
+msgstr ""
+"Hər paket üçün seçilmiş sayda versiya saxlayaraq keşdəki köhnə paket "
+"versiyalarını silir."
+
+msgid "Keep"
+msgstr "Saxla"
+
+msgid "Number of cached versions to keep per package"
+msgstr "Hər paket üçün keşdə saxlanılacaq versiyaların sayı"
+
+msgid "Welcome to Shelly v3"
+msgstr "Shelly v3 tətbiqinə xoş gəlmisiniz"
+
+msgid ""
+"Shelly is a modern package manager for Arch Linux. Configure your sources "
+"and preferences to get started."
+msgstr ""
+"Shelly Arch Linux üçün müasir paket meneceridir. Başlamaq üçün "
+"mənbələrinizi və seçimlərinizi tənzimləyin."
+
+msgid "Select Your Sources"
+msgstr "Mənbələrinizi seçin"
+
+msgid ""
+"Choose which package sources you want to browse. You can always change this "
+"later in settings."
+msgstr ""
+"Nəzərdən keçirmək istədiyiniz paket mənbələrini seçin. Bunu sonradan "
+"parametrlərdə istənilən vaxt dəyişə bilərsiniz."
+
+msgid "Arch User Repository community packages"
+msgstr "Arch istifadəçi anbarının icma paketləri"
+
+msgid "Sandboxed universal Linux applications"
+msgstr "Təcrid olunmuş mühitdə işləyən universal Linux tətbiqləri"
+
+msgid "AppImage"
+msgstr "AppImage"
+
+msgid "Portable self-contained application bundles"
+msgstr "Daşına bilən, müstəqil tətbiq paketləri"
+
+msgid "Recommended"
+msgstr "Tövsiyə olunanlar"
+
+msgid "Curated picks from Shelly"
+msgstr "Shelly tərəfindən seçilmiş paketlər"
+
+msgid "Look and Feel"
+msgstr "Görünüş və davranış"
+
+msgid ""
+"Customize how Shelly looks and behaves. All of these can be changed later in "
+"preferences."
+msgstr ""
+"Shelly tətbiqinin görünüşünü və davranışını tənzimləyin. Bunların hamısını "
+"sonradan seçimlərdə dəyişmək olar."
+
+msgid "Navigation Style"
+msgstr "Naviqasiya üslubu"
+
+msgid "Sidebar"
+msgstr "Yan panel"
+
+msgid "Vertical icon rail on the left"
+msgstr "Solda şaquli nişan zolağı"
+
+msgid "Top Bar"
+msgstr "Üst panel"
+
+msgid "Horizontal tab switcher at the top"
+msgstr "Yuxarıda üfüqi vərəq dəyişdiricisi"
+
+msgid "System Tray"
+msgstr "Sistem treyi"
+
+msgid "Run in system tray when minimized"
+msgstr "Kiçildildikdə sistem treyində işlət"
+
+msgid "Next"
+msgstr "Davam et"
+
+msgid "Start Shelly"
+msgstr "Shelly tətbiqini başlat"
+
+msgid "Filesystem"
+msgstr "Fayl sistemi"
+
+msgid "Devices"
+msgstr "Qurğular"
+
+msgid "Sockets"
+msgstr "Soketlər"
+
+msgid "Shared"
+msgstr "Paylaşılanlar"
+
+msgid "Environment"
+msgstr "Mühit"
+
+msgid "Session bus"
+msgstr "Seans şini"
+
+msgid "System bus"
+msgstr "Sistem şini"
+
+msgid "Other"
+msgstr "Digər"
+
+msgid "Review PKGBUILD changes for"
+msgstr "Bu paket üçün PKGBUILD dəyişikliklərini nəzərdən keçir"
+
+msgid "Review Changes"
+msgstr "Dəyişiklikləri nəzərdən keçir"
+
+msgid "Security scan completed -"
+msgstr "Təhlükəsizlik yoxlaması tamamlandı:"
+
+msgid "warning(s) found."
+msgstr "xəbərdarlıq tapıldı."
+
+msgid "Security scan completed - warnings found."
+msgstr "Təhlükəsizlik yoxlaması tamamlandı. Xəbərdarlıqlar tapıldı."
+
+msgid "Security scan completed - no issues found."
+msgstr "Təhlükəsizlik yoxlaması tamamlandı. Problem tapılmadı."
+
+msgid "used in"
+msgstr "istifadə olunduğu yer"
+
+msgid "Install Anyway"
+msgstr "Hər halda quraşdır"
+
+msgid "package(s)"
+msgstr "paket"
+
+msgid "to"
+msgstr "üçün"
+
+msgid "download"
+msgstr "endirmə"
+
+msgid "net"
+msgstr "xalis"
+
+msgid "Dismiss"
+msgstr "Bağla"
+
+msgid "None"
+msgstr "Yoxdur"
+
+msgid "Static URL"
+msgstr "Sabit URL ünvanı"
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+msgid "Update Available"
+msgstr "Yeniləmə mövcuddur"
+
+msgid "Version ?"
+msgstr "Versiya ?"
+
+msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgstr "Yanlış format. owner/repo formatından istifadə edin (məsələn, seafoam-labs/shelly-alpm)"
+
+msgid "Invalid URL. Must start with http:// or https://"
+msgstr "Yanlış URL ünvanı. http:// və ya https:// ilə başlamalıdır"
+
+msgid ""
+"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
+"repo/releases"
+msgstr ""
+"Yanlış Forgejo URL ünvanı. http(s)://host/owner/repo və ya "
+"http(s)://host/owner/repo/releases formatından istifadə edin"
+
+msgid "Choose an AppImage file"
+msgstr "AppImage faylı seçin"
+
+msgid "AppImage files"
+msgstr "AppImage faylları"
+
+msgid "Only .AppImage files can be installed"
+msgstr "Yalnız .AppImage faylları quraşdırıla bilər"
+
+msgid "Installing AppImage"
+msgstr "AppImage quraşdırılır"
+
+msgid "No AppImages need to be upgraded"
+msgstr "Yenilənməli AppImage tətbiqi yoxdur"
+
+msgid "Upgrading AppImages"
+msgstr "AppImage tətbiqləri yenilənir"
+
+msgid "Syncing AppImages"
+msgstr "AppImage tətbiqləri sinxronlaşdırılır"
+
+msgid "Syncing AppImage"
+msgstr "AppImage sinxronlaşdırılır"
+
+msgid ""
+"Use unique KEY=value lines. Keys must start with a letter or underscore and "
+"contain only letters, digits, or underscores."
+msgstr ""
+"Təkrarlanmayan KEY=value sətirlərindən istifadə edin. Açarlar hərf və ya "
+"alt xətlə başlamalı və yalnız hərflərdən, rəqəmlərdən və ya alt xətlərdən "
+"ibarət olmalıdır."
+
+msgid "Saving AppImage environment"
+msgstr "AppImage mühiti yadda saxlanılır"
+
+msgid "Saving update configuration"
+msgstr "Yeniləmə konfiqurasiyası yadda saxlanılır"
+
+msgid "Configuration files will be kept."
+msgstr "Konfiqurasiya faylları saxlanılacaq."
+
+msgid "Remove this AppImage?"
+msgstr "Bu AppImage silinsin?"
+
+msgid "Remove AppImage"
+msgstr "AppImage tətbiqini sil"
+
+msgid "Removing AppImage"
+msgstr "AppImage silinir"
+
+msgid "Operation completed successfully"
+msgstr "Əməliyyat uğurla tamamlandı"
+
+msgid "Operation failed"
+msgstr "Əməliyyat uğursuz oldu"
+
+msgid "Discard environment changes?"
+msgstr "Mühit dəyişikliklərindən imtina edilsin?"
+
+msgid "Your environment changes have not been saved."
+msgstr "Mühit dəyişiklikləriniz yadda saxlanılmayıb."
+
+msgid "Discard"
+msgstr "İmtina et"
+
+msgid "Maintainer"
+msgstr "Baxıcı"
+
+msgid "Last Modified"
+msgstr "Son dəyişiklik"
+
+msgid "First Submitted"
+msgstr "İlk təqdim edilmə"
+
+msgid "URL"
+msgstr "URL ünvanı"
+
+msgid "Licenses"
+msgstr "Lisenziyalar"
+
+msgid "Depends"
+msgstr "Asılılıqlar"
+
+msgid "Optional Depends"
+msgstr "İxtiyari asılılıqlar"
+
+msgid "Make Depends"
+msgstr "Qurma asılılıqları"
+
+msgid "Section"
+msgstr "Bölmə"
+
+msgid "The AUR has no browsable index — type a package name to begin."
+msgstr "AUR anbarında nəzərdən keçirilə bilən indeks yoxdur. Başlamaq üçün paket adı yazın."
+
+msgid "No packages found"
+msgstr "Paketlər tapılmadı"
+
+msgid "Try a shorter or more general keyword."
+msgstr "Daha qısa və ya daha ümumi açar sözlə cəhd edin."
+
+msgid "Could not reach the AUR"
+msgstr "AUR anbarına qoşulmaq mümkün olmadı"
+
+msgid "Check your connection and try again."
+msgstr "Şəbəkəyə qoşulmanızı yoxlayıb yenidən cəhd edin."
+
+msgid "Flagged out of date"
+msgstr "Köhnəlmiş kimi işarələnib"
+
+msgid "Installed"
+msgstr "Quraşdırılıb"
+
+msgid "Remove Selected"
+msgstr "Seçilənləri sil"
+
+msgid "Select one or more packages"
+msgstr "Bir və ya bir neçə paket seçin"
+
+msgid "Package(s)"
+msgstr "Paketlər"
+
+msgid "Remove Packages"
+msgstr "Paketləri sil"
+
+msgid "Remove the selected AUR packages?"
+msgstr "Seçilmiş AUR paketləri silinsin?"
+
+msgid "Build from AUR"
+msgstr "AUR mənbəyindən qur"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr "Seçilmiş paketlər qurulsun və quraşdırılsın? Bu, bir qədər vaxt apara bilər."
+
+msgid "Build"
+msgstr "Qur"
+
+msgid "Installing AUR packages"
+msgstr "AUR paketləri quraşdırılır"
+
+msgid "Removing AUR packages"
+msgstr "AUR paketləri silinir"
+
+msgid "Choose a Flatpak file"
+msgstr "Flatpak faylı seçin"
+
+msgid "Flatpak files"
+msgstr "Flatpak faylları"
+
+msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+msgstr "Dəstəklənməyən fayl növü. .flatpak və ya .flatpakref faylı seçin."
+
+msgid "Installing local flatpak"
+msgstr "Yerli Flatpak quraşdırılır"
+
+msgid "Installation failed."
+msgstr "Quraşdırma uğursuz oldu."
+
+msgid "Installation complete."
+msgstr "Quraşdırma tamamlandı."
+
+msgid "Choose file..."
+msgstr "Fayl seç..."
+
+msgid "Verified"
+msgstr "Doğrulanıb"
+
+msgid "Show less"
+msgstr "Daha az göstər"
+
+msgid "Installing flatpak"
+msgstr "Flatpak quraşdırılır"
+
+msgid "Remove this Flatpak?"
+msgstr "Bu Flatpak silinsin?"
+
+msgid "Remove Flatpak"
+msgstr "Flatpak tətbiqini sil"
+
+msgid "Removing Flatpak"
+msgstr "Flatpak silinir"
+
+msgid "Permissions"
+msgstr "İcazələr"
+
+msgid "Available Addons"
+msgstr "Mövcud əlavələr"
+
+msgid "Installing flatpak addon"
+msgstr "Flatpak əlavəsi quraşdırılır"
+
+msgid "Unknown developer"
+msgstr "Naməlum tərtibatçı"
+
+msgid "Unknown"
+msgstr "Naməlum"
+
+msgid "Version: Unknown"
+msgstr "Versiya: naməlum"
+
+msgid "Size: Loading..."
+msgstr "Ölçü: yüklənir..."
+
+msgid "Size: Unknown"
+msgstr "Ölçü: naməlum"
+
+msgid "License"
+msgstr "Lisenziya"
+
+msgid "License: Unknown"
+msgstr "Lisenziya: naməlum"
+
+msgid "No summary available"
+msgstr "Xülasə yoxdur"
+
+msgid "Size: Unavailable"
+msgstr "Ölçü: əlçatan deyil"
+
+msgid "Download"
+msgstr "Endir"
+
+msgid "No description available."
+msgstr "Təsvir yoxdur."
+
+msgid "Unable to load screenshot"
+msgstr "Ekran görüntüsünü yükləmək mümkün olmadı"
+
+msgid "Unable to download screenshot"
+msgstr "Ekran görüntüsünü endirmək mümkün olmadı"
+
+msgid "Unable to display screenshot"
+msgstr "Ekran görüntüsünü göstərmək mümkün olmadı"
+
+msgid "Open link in browser"
+msgstr "Keçidi brauzerdə aç"
+
+msgid "Homepage"
+msgstr "Ana səhifə"
+
+msgid "Bug tracker"
+msgstr "Xəta izləyicisi"
+
+msgid "Donation"
+msgstr "İanə"
+
+msgid "FAQ"
+msgstr "Tez-tez verilən suallar"
+
+msgid "Help"
+msgstr "Kömək"
+
+msgid "Vcs-browser"
+msgstr "Versiyaya nəzarət sisteminin brauzeri"
+
+msgid "Contact"
+msgstr "Əlaqə"
+
+msgid "Translate"
+msgstr "Tərcümə et"
+
+msgid "Unable to allocate memory while loading Flatpak data."
+msgstr "Flatpak məlumatları yüklənərkən yaddaş ayırmaq mümkün olmadı."
+
+msgid "Unable to start the Flatpak data loader."
+msgstr "Flatpak məlumat yükləyicisini başlatmaq mümkün olmadı."
+
+msgid "Unable to load Flatpak applications."
+msgstr "Flatpak tətbiqlərini yükləmək mümkün olmadı."
+
+msgid "No Flatpak applications are available."
+msgstr "Mövcud Flatpak tətbiqi yoxdur."
+
+msgid "Discover"
+msgstr "Kəşf et"
+
+msgid "Categories"
+msgstr "Kateqoriyalar"
+
+msgid "All Applications"
+msgstr "Bütün tətbiqlər"
+
+msgid "Most Wanted"
+msgstr "Ən çox tələb olunanlar"
+
+msgid "Recently Added"
+msgstr "Son əlavə olunanlar"
+
+msgid "Recently Updated"
+msgstr "Son yenilənənlər"
+
+msgid "Audio & Video"
+msgstr "Səs və video"
+
+msgid "Development"
+msgstr "Proqramlaşdırma"
+
+msgid "Education"
+msgstr "Təhsil"
+
+msgid "Game"
+msgstr "Oyun"
+
+msgid "Graphics"
+msgstr "Qrafika"
+
+msgid "Network"
+msgstr "Şəbəkə"
+
+msgid "Office"
+msgstr "Ofis"
+
+msgid "Science"
+msgstr "Elm"
+
+msgid "Utility"
+msgstr "Yardımçı alət"
+
+msgid "Removing Remote"
+msgstr "Uzaq anbar silinir"
+
+msgid "Adding Remote"
+msgstr "Uzaq anbar əlavə olunur"
+
+msgid "App ID"
+msgstr "Tətbiq identifikatoru"
+
+msgid "Remote"
+msgstr "Uzaq anbar"
+
+msgid "Developer"
+msgstr "Tərtibatçı"
+
+msgid "Type"
+msgstr "Növ"
+
+msgid "Download Size"
+msgstr "Endirmə ölçüsü"
+
+msgid "Installed Size"
+msgstr "Quraşdırılmış ölçü"
+
+msgid "Yes"
+msgstr "Bəli"
+
+msgid "No"
+msgstr "Xeyr"
+
+msgid "Keywords"
+msgstr "Açar sözlər"
+
+msgid "Flathub"
+msgstr "Flathub"
+
+msgid "Loading..."
+msgstr "Yüklənir..."
+
+msgid "Build Date"
+msgstr "Qurma tarixi"
+
+msgid "Install Reason"
+msgstr "Quraşdırma səbəbi"
+
+msgid "Provides"
+msgstr "Təmin etdikləri"
+
+msgid "Conflicts"
+msgstr "Toqquşmalar"
+
+msgid "Required By"
+msgstr "Tələb edənlər"
+
+msgid "Reinstalling package"
+msgstr "Paket yenidən quraşdırılır"
+
+msgid "Adding to package ignore"
+msgstr "Paket istisna siyahısına əlavə olunur"
+
+msgid "Adding to package to hold"
+msgstr "Paket saxlanılanlar siyahısına əlavə olunur"
+
+msgid "Making Package Explicit"
+msgstr "Paket birbaşa quraşdırılmış kimi işarələnir"
+
+msgid "Making Package Dependency"
+msgstr "Paket asılılıq kimi işarələnir"
+
+msgid "Package is already installed"
+msgstr "Paket artıq quraşdırılıb"
+
+msgid "Remove from selection"
+msgstr "Seçimdən çıxar"
+
+msgid "remove"
+msgstr "sil"
+
+msgid "install"
+msgstr "quraşdır"
+
+msgid "No packages selected"
+msgstr "Heç bir paket seçilməyib"
+
+msgid "Selected"
+msgstr "Seçilib"
+
+msgid "Mixed selection"
+msgstr "Qarışıq seçim"
+
+msgid ""
+"Select only installed packages to remove, or only available ones to install."
+msgstr ""
+"Silmək üçün yalnız quraşdırılmış paketləri, quraşdırmaq üçün isə yalnız "
+"mövcud paketləri seçin."
+
+msgid "Remove the selected packages?"
+msgstr "Seçilmiş paketlər silinsin?"
+
+msgid "Removing packages"
+msgstr "Paketlər silinir"
+
+msgid "Installing packages"
+msgstr "Paketlər quraşdırılır"
+
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
+"Standart anbarlarda, AUR və Flatpak mənbələrində eyni anda axtarış aparın. "
+"Başlamaq üçün ad yazın."
+
+msgid "Search failed"
+msgstr "Axtarış uğursuz oldu"
+
+msgid "Installation in progress"
+msgstr "Quraşdırma davam edir"
+
+msgid "No sources selected"
+msgstr "Heç bir mənbə seçilməyib"
+
+msgid "Enable at least one source filter above."
+msgstr "Yuxarıdakı mənbə süzgəclərindən ən azı birini aktivləşdirin."
+
+msgid "Install Packages"
+msgstr "Paketləri quraşdır"
+
+msgid "Install the selected packages?"
+msgstr "Seçilmiş paketlər quraşdırılsın?"
+
+msgid "Failed to save settings"
+msgstr "Parametrləri yadda saxlamaq mümkün olmadı"
+
+msgid "Settings saved"
+msgstr "Parametrlər yadda saxlanıldı"
+
+msgid "Installing Flatpak support"
+msgstr "Flatpak dəstəyi quraşdırılır"
+
+msgid "Installing AppImage support"
+msgstr "AppImage dəstəyi quraşdırılır"
+
+msgid "Failed to start Flatpak support installation"
+msgstr "Flatpak dəstəyinin quraşdırılmasını başlatmaq mümkün olmadı"
+
+msgid "Failed to start AppImage support installation"
+msgstr "AppImage dəstəyinin quraşdırılmasını başlatmaq mümkün olmadı"
+
+msgid "Flatpak support installation failed"
+msgstr "Flatpak dəstəyinin quraşdırılması uğursuz oldu"
+
+msgid "AppImage support installation failed"
+msgstr "AppImage dəstəyinin quraşdırılması uğursuz oldu"
+
+msgid "Flatpak support enabled"
+msgstr "Flatpak dəstəyi aktivləşdirildi"
+
+msgid "AppImage support enabled"
+msgstr "AppImage dəstəyi aktivləşdirildi"
+
+msgid "No changelog entries found"
+msgstr "Dəyişiklik jurnalında qeydlər tapılmadı"
+
+msgid "No details for this release"
+msgstr "Bu buraxılış üçün təfərrüatlar yoxdur"
+
+msgid "Failed to load changelog"
+msgstr "Dəyişiklik jurnalını yükləmək mümkün olmadı"
+
+msgid "Changelog"
+msgstr "Dəyişiklik jurnalı"
+
+msgid "Select Tray Icon"
+msgstr "Sistem treyi nişanını seç"
+
+msgid "Select Icon"
+msgstr "Nişan seç"
+
+msgid "Select Tray Updates Icon"
+msgstr "Sistem treyində yeniləmələr nişanını seç"
+
+msgid "Select AppImage Install Directory"
+msgstr "AppImage quraşdırma qovluğunu seç"
+
+msgid "Tray enabled"
+msgstr "Sistem treyi aktivləşdirildi"
+
+msgid "Tray disabled, but autostart service remains"
+msgstr "Sistem treyi söndürüldü, lakin avtomatik başlatma xidməti qalır"
+
+msgid "Tray disabled"
+msgstr "Sistem treyi söndürüldü"
+
+msgid "Failed to add systemd startup service"
+msgstr "systemd başlatma xidmətini əlavə etmək mümkün olmadı"
+
+msgid "Systemd startup service added."
+msgstr "systemd başlatma xidməti əlavə olundu."
+
+msgid "Failed to remove systemd startup service"
+msgstr "systemd başlatma xidmətini silmək mümkün olmadı"
+
+msgid "Systemd startup service removed."
+msgstr "systemd başlatma xidməti silindi."
+
+msgid "AUR enabled"
+msgstr "AUR aktivləşdirildi"
+
+msgid "System Default"
+msgstr "Sistem standartı"
+
+msgid "English"
+msgstr "İngilis dili"
+
+msgid "Bulgarian"
+msgstr "Bolqar dili"
+
+msgid "Català"
+msgstr "Katalan dili"
+
+msgid "Deutsch"
+msgstr "Alman dili"
+
+msgid "Español"
+msgstr "İspan dili"
+
+msgid "Français"
+msgstr "Fransız dili"
+
+msgid "Magyar"
+msgstr "Macar dili"
+
+msgid "日本語"
+msgstr "Yapon dili"
+
+msgid "Polski"
+msgstr "Polyak dili"
+
+msgid "Português (Brasil)"
+msgstr "Portuqal dili (Braziliya)"
+
+msgid "Português (Portugal)"
+msgstr "Portuqal dili (Portuqaliya)"
+
+msgid "Русский"
+msgstr "Rus dili"
+
+msgid "Türkçe"
+msgstr "Türk dili"
+
+msgid "中文（简体）"
+msgstr "Çin dili (sadələşdirilmiş)"
+
+msgid "Packages"
+msgstr "Paketlər"
+
+msgid "Shelly Search"
+msgstr "Shelly axtarışı"
+
+msgid "Update"
+msgstr "Yenilə"
+
+msgid "Failed to start operation."
+msgstr "Əməliyyatı başlatmaq mümkün olmadı."
+
+msgid "Pending"
+msgstr "Gözləyir"
+
+msgid "Synchronizing databases"
+msgstr "Verilənlər bazaları sinxronlaşdırılır"
+
+msgid "Building"
+msgstr "Qurulur"
+
+msgid "Downloading"
+msgstr "Endirilir"
+
+msgid "Packaging"
+msgstr "Paketlənir"
+
+msgid "Installing"
+msgstr "Quraşdırılır"
+
+msgid "Upgrading"
+msgstr "Yenilənir"
+
+msgid "Downgrading"
+msgstr "Əvvəlki versiyaya qaytarılır"
+
+msgid "Reinstalling"
+msgstr "Yenidən quraşdırılır"
+
+msgid "Removing"
+msgstr "Silinir"
+
+msgid "Checking keyring"
+msgstr "Açar dəsti yoxlanılır"
+
+msgid "Checking integrity"
+msgstr "Bütövlük yoxlanılır"
+
+msgid "Loading packages"
+msgstr "Paketlər yüklənir"
+
+msgid "Checking conflicts"
+msgstr "Toqquşmalar yoxlanılır"
+
+msgid "Checking disk space"
+msgstr "Disk sahəsi yoxlanılır"
+
+msgid "Working"
+msgstr "İşləyir"
+
+msgid "Failed"
+msgstr "Uğursuz oldu"
+
+msgid "Transaction Completed"
+msgstr "Əməliyyat tamamlandı"
+
+msgid "Transaction Failed"
+msgstr "Əməliyyat uğursuz oldu"
+
+msgid "Transaction Cancelled"
+msgstr "Əməliyyat ləğv edildi"
+
+msgid "Finished"
+msgstr "Bitdi"
+
+msgid "exit"
+msgstr "çıx"
+
+msgid "The operation was cancelled."
+msgstr "Əməliyyat ləğv edildi."
+
+msgid "All operations finished successfully."
+msgstr "Bütün əməliyyatlar uğurla tamamlandı."
+
+msgid ""
+"Permission to manage packages was not granted. Try again and approve the "
+"authorization request to continue."
+msgstr ""
+"Paketləri idarə etmək üçün icazə verilmədi. Yenidən cəhd edin və davam "
+"etmək üçün səlahiyyət sorğusunu təsdiqləyin."
+
+msgid "Cancelled"
+msgstr "Ləğv edildi"
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+"{package_one}-{version_one} paketi {package_two}-{version_two} paketi ilə "
+"toqquşur. {package_to_remove} silinsin?"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr "Əlavə keş qeydlərini silmək istəyirsiniz?"
+
+msgid "System package update"
+msgstr "Sistem paketlərinin yenilənməsi"
+
+msgid "AUR package update"
+msgstr "AUR paketlərinin yenilənməsi"
+
+msgid "Could not run shelly check-updates. Check the CLI output and try again."
+msgstr "shelly check-updates əmrini işə salmaq mümkün olmadı. Əmr sətri çıxışını yoxlayıb yenidən cəhd edin."
+
+msgid "Update this package"
+msgstr "Bu paketi yenilə"
+
+msgid "of"
+msgstr "/"
+
+msgid "updates included"
+msgstr "yeniləmə daxildir"
+
+msgid "Updates included"
+msgstr "Daxil edilmiş yeniləmələr"
+
+msgid "Upgrading packages"
+msgstr "Paketlər yenilənir"
+
+msgid "Refreshing package databases"
+msgstr "Paket bazaları yenilənir"
+
+msgid "Database lock removed successfully"
+msgstr "Verilənlər bazasının kilidi uğurla silindi"
+
+msgid "Fixing permissions"
+msgstr "İcazələr düzəldilir"
+
+msgid "Purifying packages"
+msgstr "Paketlər təmizlənir"
+
+msgid "Cleaning package cache"
+msgstr "Paket keşi təmizlənir"
+
+msgid "Welcome"
+msgstr "Xoş gəlmisiniz"
+
+msgid "Enable Recommended?"
+msgstr "Tövsiyələr aktivləşdirilsin?"
+
+msgid ""
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
+msgstr ""
+"Tövsiyələr bölməsi quraşdırılmış proqramlarınıza əsasən seçilmiş paket "
+"tövsiyələrini göstərir. Paket məlumatları xarici mənbələrdən əldə edilir."
+
+msgid "Installing Flatpak and AppImage support"
+msgstr "Flatpak və AppImage dəstəyi quraşdırılır"
+
+msgid "Settings"
+msgstr "Parametrlər"
+
+msgid "Package"
+msgstr "Paket"
