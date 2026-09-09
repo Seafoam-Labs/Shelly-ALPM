@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-09-3 12:00+0800\n"
 "Last-Translator: DeepSeek AI\n"
 "Language-Team: China (Simplified)\n"
@@ -152,7 +152,6 @@ msgstr "安装路径"
 msgid "Launch Flags"
 msgstr "启动标志"
 
-#| msgid "Environment"
 msgid "Environment Variables"
 msgstr ""
 
@@ -160,7 +159,6 @@ msgid ""
 "One KEY=value per line. Remove a line to restore the normal environment."
 msgstr ""
 
-#| msgid "Environment"
 msgid "Save Environment"
 msgstr ""
 
@@ -206,7 +204,6 @@ msgstr "流行度"
 msgid "Search the AUR"
 msgstr "搜索AUR"
 
-#| msgid "The AUR has no browsable index — type a package name to begin."
 msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
@@ -248,7 +245,6 @@ msgstr "用户"
 msgid "Install"
 msgstr "安装"
 
-#| msgid "No changelog entries found"
 msgid "No matching applications found"
 msgstr ""
 
@@ -387,7 +383,6 @@ msgstr "仓库"
 msgid "Install Date"
 msgstr "安装日期"
 
-#| msgid "No packages found"
 msgid "No matching packages found"
 msgstr ""
 
@@ -462,7 +457,6 @@ msgstr ""
 msgid "Search everywhere"
 msgstr "全局搜索"
 
-#| msgid "Search standard repositories, AUR and Flatpak"
 msgid ""
 "Search the standard repositories, the AUR, and Flatpak all at once. Type a "
 "name to begin."
@@ -495,11 +489,9 @@ msgstr "添加到开机自启动"
 msgid "Use weekly schedule"
 msgstr "启动每周更新计划"
 
-#| msgid "Tray Updates Icon"
 msgid "Run Tray as cron"
 msgstr ""
 
-#| msgid "Tray Updates Icon"
 msgid "Tray update with ui"
 msgstr ""
 
@@ -887,7 +879,6 @@ msgid ""
 "contain only letters, digits, or underscores."
 msgstr ""
 
-#| msgid "Syncing AppImage"
 msgid "Saving AppImage environment"
 msgstr ""
 
@@ -918,7 +909,6 @@ msgstr ""
 msgid "Your environment changes have not been saved."
 msgstr ""
 
-#| msgid "Discover"
 msgid "Discard"
 msgstr ""
 
@@ -1486,15 +1476,12 @@ msgstr "处理中"
 msgid "Failed"
 msgstr "失败"
 
-#| msgid "Installation complete."
 msgid "Transaction Completed"
 msgstr ""
 
-#| msgid "Operation failed"
 msgid "Transaction Failed"
 msgstr ""
 
-#| msgid "Cancelled"
 msgid "Transaction Cancelled"
 msgstr ""
 
@@ -1507,7 +1494,6 @@ msgstr "退出"
 msgid "The operation was cancelled."
 msgstr ""
 
-#| msgid "Operation completed successfully"
 msgid "All operations finished successfully."
 msgstr ""
 
