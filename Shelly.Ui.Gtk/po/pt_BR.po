@@ -490,7 +490,7 @@ msgid ""
 "Search the standard repositories, the AUR, and Flatpak all at once. Type a "
 "name to begin."
 msgstr ""
-"Pesquise nos repositórios padrão, na AUR e no Flatpak ao mesmo tempo Digite "
+"Pesquise nos repositórios padrão, na AUR e no Flatpak ao mesmo tempo. Digite "
 "um nome para começar."
 
 msgid "General"
@@ -521,7 +521,7 @@ msgid "Use weekly schedule"
 msgstr "Usar agenda semanal"
 
 msgid "Run Tray as cron"
-msgstr "Execute a bandeja como tarefa cron"
+msgstr "Executar a bandeja como tarefa cron"
 
 msgid "Tray update with ui"
 msgstr "Atualização da bandeja com interface gráfica"
@@ -1086,7 +1086,7 @@ msgid "Available Addons"
 msgstr "Addons disponíveis"
 
 msgid "Installing flatpak addon"
-msgstr "Instalando addon flatpak"
+msgstr "Instalando addon Flatpak"
 
 msgid "Unknown developer"
 msgstr "Desenvolvedor desconhecido"
