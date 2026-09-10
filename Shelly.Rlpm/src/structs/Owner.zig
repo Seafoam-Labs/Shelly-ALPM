@@ -32,7 +32,8 @@ pub fn init(
     assume_installed: [][]const u8,
 ) !Owner {
     var local = try Database.init(allocator, "local", database_path);
-    local.loadDatabase(io);
+    errdefer local.deinit();
+    try local.loadDatabase(io, gpg_directory);
     return .{
         .allocator = allocator,
         .root = root,

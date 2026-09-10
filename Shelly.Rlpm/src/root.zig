@@ -30,4 +30,5 @@ test {
     _ = @import("structs/DatabaseUsage.zig");
     _ = @import("structs/SignaturePolicy.zig");
     _ = @import("structs/Database.zig");
+    _ = @import("structs/DatabaseValidationTests.zig");
 }

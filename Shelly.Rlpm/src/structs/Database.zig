@@ -72,6 +72,7 @@ pub fn deinit(self: *Database) void {
 pub fn loadDatabase(
     self: *Database,
     io: std.Io,
+    gnupg_path: ?[]const u8,
 ) !void {
     if (self.status.package_cache_loaded) return error.DatabaseAlreadyLoaded;
     const allocator = self.arena.allocator();
@@ -144,6 +145,11 @@ pub fn loadDatabase(
     }
 
     try self.buildGroupIndex(allocator);
+    if (self.signature_policy.database == .required and !try self.validateSignature(
+        io,
+        gnupg_path,
+    ))
+        return error.InvalidSignature;
     self.status.markValid();
     self.status.package_cache_loaded = true;
     self.status.group_cache_loaded = true;
@@ -455,20 +461,24 @@ const DescSection = enum {
     xdata,
 };
 
-fn validateSignature(
+pub fn validateSignature(
     self: *Database,
     io: std.Io,
+    gnupg_path: ?[]const u8,
 ) !bool {
+    const gpg_path = if (gnupg_path) |path| path else "/etc/pacman.d/gnupg";
     const gpg: ShellyKey.gpg.Gpg = .{
         .io = io,
-        .homedir = "/etc/pacman.d/gnupg",
+        .homedir = gpg_path,
     };
-    const db_path = try std.fs.path.join(self.allocator, &.{ self.path, self.name, ".db" });
+    const db_name = try std.fmt.allocPrint(self.allocator, "{s}.db", .{self.name});
+    defer self.allocator.free(db_name);
+    const db_path = try std.fs.path.join(self.allocator, &.{ self.path, db_name });
     defer self.allocator.free(db_path);
     const sig_path = try std.fmt.allocPrint(self.allocator, "{s}.sig", .{db_path});
     defer self.allocator.free(sig_path);
 
-    const status = try gpg.runCapture(self.allocator, &.{
+    const status = gpg.runCapture(self.allocator, &.{
         "--batch",
         "--no-auto-check-trustdb",
         "--status-fd",
@@ -777,7 +787,8 @@ test "loadDatabase owns and indexes parsed packages" {
 
     var database = try Database.init(std.testing.allocator, "local", path);
     defer database.deinit();
-    try database.loadDatabase(std.testing.io);
+    database.signature_policy.database = .disabled;
+    try database.loadDatabase(std.testing.io, null);
 
     try std.testing.expect(database.status.package_cache_loaded);
     try std.testing.expectEqual(@as(usize, 1), database.packages.packages.items.len);
@@ -793,7 +804,7 @@ test "loadDatabase owns and indexes parsed packages" {
     try std.testing.expectEqualStrings("demo", group.packages.items[0].name);
     try std.testing.expectError(
         error.DatabaseAlreadyLoaded,
-        database.loadDatabase(std.testing.io),
+        database.loadDatabase(std.testing.io, null),
     );
 }
 
@@ -831,7 +842,8 @@ test "loadDatabase skips missing and malformed package descriptions" {
 
     var database = try Database.init(std.testing.allocator, "local", path);
     defer database.deinit();
-    try database.loadDatabase(std.testing.io);
+    database.signature_policy.database = .disabled;
+    try database.loadDatabase(std.testing.io, null);
 
     try std.testing.expectEqual(@as(usize, 1), database.packages.packages.items.len);
     try std.testing.expect(database.packages.by_name.contains("valid"));
@@ -853,7 +865,8 @@ test "integration parses the actual local package database" {
 
     var database = try Database.init(std.testing.allocator, "local", local_database_path);
     defer database.deinit();
-    try database.loadDatabase(std.testing.io);
+    database.signature_policy.database = .disabled;
+    try database.loadDatabase(std.testing.io, null);
 
     try std.testing.expect(database.status.package_cache_loaded);
     try std.testing.expect(database.packages.packages.items.len > 0);
