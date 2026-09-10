@@ -61,7 +61,6 @@ pub fn init(
     const database_allocator = result.arena.allocator();
     result.name = try database_allocator.dupe(u8, name);
     result.path = try database_allocator.dupe(u8, path);
-
     return result;
 }
 
@@ -456,14 +455,16 @@ const DescSection = enum {
     xdata,
 };
 
-fn validateSignature(self: *Database) !bool {
-    _ = self;
+fn validateSignature(
+    self: *Database,
+    io: std.Io,
+) !bool { v
     const gpg: ShellyKey.gpg.Gpg = .{
         .io = io,
         .homedir = "/etc/pacman.d/gnupg",
     };
 
-    const status = try gpg.runCapture(allocator, &.{
+    const status = try gpg.runCapture(self.allocator, &.{
         "--batch",
         "--no-auto-check-trustdb",
         "--status-fd",
@@ -472,7 +473,7 @@ fn validateSignature(self: *Database) !bool {
         "/var/lib/pacman/sync/cachyos.db.sig",
         "/var/lib/pacman/sync/cachyos.db",
     });
-    defer allocator.free(status);
+    defer self.allocator.free(status);
 
     return false;
 }
