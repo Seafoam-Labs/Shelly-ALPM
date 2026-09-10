@@ -265,7 +265,9 @@ fn resolve_execution_array(
     return resolved.toOwnedSlice(self.allocator);
 }
 
-fn collect_top_level_array_names(
+/// Names whose static array declarations must be replaced by evaluated shell
+/// values or explicit unsets when the builder sources the base PKGBUILD.
+pub fn collect_top_level_array_names(
     self: PkgbuildParser,
     content: []const u8,
 ) !std.ArrayList([]const u8) {
