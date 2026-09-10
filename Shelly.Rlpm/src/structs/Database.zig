@@ -458,11 +458,15 @@ const DescSection = enum {
 fn validateSignature(
     self: *Database,
     io: std.Io,
-) !bool { v
+) !bool {
     const gpg: ShellyKey.gpg.Gpg = .{
         .io = io,
         .homedir = "/etc/pacman.d/gnupg",
     };
+    const db_path = try std.fs.path.join(self.allocator, &.{ self.path, self.name, ".db" });
+    defer self.allocator.free(db_path);
+    const sig_path = try std.fmt.allocPrint(self.allocator, "{s}.sig", .{db_path});
+    defer self.allocator.free(sig_path);
 
     const status = try gpg.runCapture(self.allocator, &.{
         "--batch",
@@ -470,12 +474,14 @@ fn validateSignature(
         "--status-fd",
         "1",
         "--verify",
-        "/var/lib/pacman/sync/cachyos.db.sig",
-        "/var/lib/pacman/sync/cachyos.db",
-    });
+        sig_path,
+        db_path,
+    }) catch |err| switch (err) {
+        error.GpgFailed => return false,
+        else => return err,
+    };
     defer self.allocator.free(status);
-
-    return false;
+    return true;
 }
 
 test "parseDescription parses a local database desc entry" {
