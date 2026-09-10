@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.3\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-05-16 11:00+EST\n"
 "Last-Translator: momchil.nikolov@outlook.com\n"
 "Language-Team: Bulgarian (Bulgaria) momchil.nikolov@outlook.com\n"
@@ -247,7 +247,6 @@ msgstr "потребителски"
 msgid "Install"
 msgstr "Инсталирай"
 
-#| msgid "No changelog entries found"
 msgid "No matching applications found"
 msgstr ""
 
@@ -386,7 +385,6 @@ msgstr "Хранилище"
 msgid "Install Date"
 msgstr ""
 
-#| msgid "No changelog entries found"
 msgid "No matching packages found"
 msgstr ""
 
@@ -495,11 +493,9 @@ msgstr ""
 msgid "Use weekly schedule"
 msgstr "Използване на седмичен график"
 
-#| msgid "Tray Updates Icon"
 msgid "Run Tray as cron"
 msgstr ""
 
-#| msgid "Tray Updates Icon"
 msgid "Tray update with ui"
 msgstr ""
 

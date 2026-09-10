@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -169,7 +169,6 @@ msgstr "Instalazio-bidea"
 msgid "Launch Flags"
 msgstr "Abiarazteko banderak"
 
-#| msgid "Environment"
 msgid "Environment Variables"
 msgstr ""
 
@@ -177,7 +176,6 @@ msgid ""
 "One KEY=value per line. Remove a line to restore the normal environment."
 msgstr ""
 
-#| msgid "Environment"
 msgid "Save Environment"
 msgstr ""
 
@@ -223,7 +221,6 @@ msgstr "Ospea"
 msgid "Search the AUR"
 msgstr "Bilatu AURen"
 
-#| msgid "The AUR has no browsable index type a package name to begin."
 msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
@@ -267,7 +264,6 @@ msgstr "erabiltzailea"
 msgid "Install"
 msgstr "Instalatu"
 
-#| msgid "No changelog entries found"
 msgid "No matching applications found"
 msgstr ""
 
@@ -406,7 +402,6 @@ msgstr "Biltegia"
 msgid "Install Date"
 msgstr "Instalazio-data"
 
-#| msgid "No packages found"
 msgid "No matching packages found"
 msgstr ""
 
@@ -517,11 +512,9 @@ msgstr "Gehitu erretilua hasiera automatikoan"
 msgid "Use weekly schedule"
 msgstr "Erabili asteko ordutegia"
 
-#| msgid "Tray Updates Icon"
 msgid "Run Tray as cron"
 msgstr ""
 
-#| msgid "Tray Updates Icon"
 msgid "Tray update with ui"
 msgstr ""
 
@@ -923,7 +916,6 @@ msgid ""
 "contain only letters, digits, or underscores."
 msgstr ""
 
-#| msgid "Syncing AppImage"
 msgid "Saving AppImage environment"
 msgstr ""
 
@@ -954,7 +946,6 @@ msgstr ""
 msgid "Your environment changes have not been saved."
 msgstr ""
 
-#| msgid "Discover"
 msgid "Discard"
 msgstr ""
 
@@ -1531,15 +1522,12 @@ msgstr "Lanean"
 msgid "Failed"
 msgstr "Huts egin du"
 
-#| msgid "Installation complete."
 msgid "Transaction Completed"
 msgstr ""
 
-#| msgid "Operation failed"
 msgid "Transaction Failed"
 msgstr ""
 
-#| msgid "Cancelled"
 msgid "Transaction Cancelled"
 msgstr ""
 
@@ -1552,7 +1540,6 @@ msgstr "irten"
 msgid "The operation was cancelled."
 msgstr ""
 
-#| msgid "Operation completed successfully"
 msgid "All operations finished successfully."
 msgstr ""
 

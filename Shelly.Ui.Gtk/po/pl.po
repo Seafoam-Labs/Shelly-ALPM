@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-08-29 16:14+0200\n"
 "Last-Translator: hotline1337 <denuvo at tuta dot io>\n"
 "Language-Team: Polish\n"
@@ -171,7 +171,6 @@ msgstr "Ścieżka instalacji"
 msgid "Launch Flags"
 msgstr "Flagi uruchamiania"
 
-#| msgid "Environment"
 msgid "Environment Variables"
 msgstr ""
 
@@ -179,7 +178,6 @@ msgid ""
 "One KEY=value per line. Remove a line to restore the normal environment."
 msgstr ""
 
-#| msgid "Environment"
 msgid "Save Environment"
 msgstr ""
 
@@ -225,7 +223,6 @@ msgstr "Popularność"
 msgid "Search the AUR"
 msgstr "Przeszukaj AUR"
 
-#| msgid "The AUR has no browsable index type a package name to begin."
 msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
@@ -269,7 +266,6 @@ msgstr "użytkownika"
 msgid "Install"
 msgstr "Zainstaluj"
 
-#| msgid "No changelog entries found"
 msgid "No matching applications found"
 msgstr ""
 
@@ -408,7 +404,6 @@ msgstr "Repozytorium"
 msgid "Install Date"
 msgstr "Data instalacji"
 
-#| msgid "No packages found"
 msgid "No matching packages found"
 msgstr ""
 
@@ -487,9 +482,6 @@ msgstr "Źródło"
 msgid "Search everywhere"
 msgstr "Szukaj wszędzie"
 
-#| msgid ""
-#| "Search standard repositories, the AUR and Flatpak at once. Type a name to "
-#| "begin."
 msgid ""
 "Search the standard repositories, the AUR, and Flatpak all at once. Type a "
 "name to begin."
@@ -522,11 +514,9 @@ msgstr "Uruchom ikonę w zasobniku przy starcie systemu"
 msgid "Use weekly schedule"
 msgstr "Użyj harmonogramu tygodniowego"
 
-#| msgid "Tray Updates Icon"
 msgid "Run Tray as cron"
 msgstr ""
 
-#| msgid "Tray Updates Icon"
 msgid "Tray update with ui"
 msgstr ""
 
@@ -932,7 +922,6 @@ msgid ""
 "contain only letters, digits, or underscores."
 msgstr ""
 
-#| msgid "Syncing AppImage"
 msgid "Saving AppImage environment"
 msgstr ""
 
@@ -963,7 +952,6 @@ msgstr ""
 msgid "Your environment changes have not been saved."
 msgstr ""
 
-#| msgid "Discover"
 msgid "Discard"
 msgstr ""
 
@@ -1538,15 +1526,12 @@ msgstr "Przetwarzanie"
 msgid "Failed"
 msgstr "Niepowodzenie"
 
-#| msgid "Installation complete."
 msgid "Transaction Completed"
 msgstr ""
 
-#| msgid "Operation failed"
 msgid "Transaction Failed"
 msgstr ""
 
-#| msgid "Cancelled"
 msgid "Transaction Cancelled"
 msgstr ""
 
@@ -1559,7 +1544,6 @@ msgstr "wyjście"
 msgid "The operation was cancelled."
 msgstr ""
 
-#| msgid "Operation completed successfully"
 msgid "All operations finished successfully."
 msgstr ""
 

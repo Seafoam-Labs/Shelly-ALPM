@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-05-24 15:21+0100\n"
 "Last-Translator: André Moreira <afrmscb@gmail.com>, 2026\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -249,7 +249,6 @@ msgstr "utilizador"
 msgid "Install"
 msgstr "Instalar"
 
-#| msgid "No changelog entries found"
 msgid "No matching applications found"
 msgstr ""
 
@@ -388,7 +387,6 @@ msgstr "Repositório"
 msgid "Install Date"
 msgstr ""
 
-#| msgid "No changelog entries found"
 msgid "No matching packages found"
 msgstr ""
 
@@ -497,11 +495,9 @@ msgstr "Adicionar Ícone ao Arranque Automático"
 msgid "Use weekly schedule"
 msgstr "Utilizar agendamento semanal"
 
-#| msgid "Tray Updates Icon"
 msgid "Run Tray as cron"
 msgstr ""
 
-#| msgid "Tray Updates Icon"
 msgid "Tray update with ui"
 msgstr ""
 
