@@ -870,6 +870,144 @@ test "PackageBuilder evaluates conditional source and checksum arrays atomically
     );
 }
 
+test "PackageBuilder preserves issue 1891 defaults after final review and build" {
+    const allocator = testing.allocator;
+    const content =
+        \\VAR_SPECIFIED=value
+        \\VAR_FALLBACK=${OTHER_VAR:-defaultvalue}
+        \\
+        \\pkgname=default-variable-test
+        \\pkgver=2.1.4
+        \\arch=('x86_64')
+        \\
+        \\build() {
+        \\    echo VAR_SPECIFIED: ${VAR_SPECIFIED}
+        \\    echo VAR_FALLBACK: ${VAR_FALLBACK}
+        \\    echo Expression on echo: ${OTHER_VAR:-defaultvalue}
+        \\}
+        \\
+        \\package() {
+        \\    echo ""
+        \\}
+    ;
+    const Output = struct {
+        specified: std.atomic.Value(bool) = .init(false),
+        fallback: std.atomic.Value(bool) = .init(false),
+        expression: std.atomic.Value(bool) = .init(false),
+
+        fn handle(data: ?*anyopaque, event: op_context.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (event == .status) {
+                const message = event.status.message;
+                if (std.mem.eql(u8, message, "VAR_SPECIFIED: value")) self.specified.store(true, .release);
+                if (std.mem.eql(u8, message, "VAR_FALLBACK: defaultvalue")) self.fallback.store(true, .release);
+                if (std.mem.eql(u8, message, "Expression on echo: defaultvalue")) self.expression.store(true, .release);
+            }
+        }
+    };
+    var output: Output = .{};
+    var fixture = try Fixture.create(allocator, content, .{ .function = Output.handle, .data = &output }, null);
+    defer fixture.destroy();
+    try fixture.temporary.dir.writeFile(testing.io, .{ .sub_path = "PKGBUILD", .data = content });
+    const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "PKGBUILD" });
+    defer allocator.free(path);
+    fixture.builder.options.pkgbuild_path = path;
+
+    var operation = fixture.operation_context.begin(.{ .backend = .aur, .kind = .build });
+    defer operation.finish(.success);
+    var review = try fixture.builder.prepareFinalReviewWithOperation(&operation);
+    defer review.deinit();
+    fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+    fixture.builder.options.reviewed_files = review.reviewed_files;
+    fixture.builder.options.install_scripts = review.install_scripts;
+    try testing.expectEqualStrings("defaultvalue", fixture.package_builds[0].variables.get("VAR_FALLBACK").?);
+
+    const artifacts = try fixture.builder.runWithOperation(&operation);
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expect(output.specified.load(.acquire));
+    try testing.expect(output.fallback.load(.acquire));
+    try testing.expect(output.expression.load(.acquire));
+    try testing.expectEqualStrings("defaultvalue", fixture.package_builds[0].variables.get("VAR_FALLBACK").?);
+}
+
+test "PackageBuilder preserves issue 1891 shell state across repeated evaluation" {
+    const allocator = testing.allocator;
+    const content =
+        \\pkgname=repeated-shell-state
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\_self=${_self:-fallback}
+        \\_empty=''
+        \\_empty_default=${_empty:-fallback}
+        \\_value=populated
+        \\_populated=${_value:-fallback}
+        \\_before=${_later:-earlier}
+        \\_later=after
+        \\_literal='$_value'
+        \\_escaped="\$_value"
+        \\_chain=$_literal
+        \\_command="$(printf '%s' '$_value')"
+        \\_unchanged='$_value'
+        \\_from_env=${_provided:-fallback}
+        \\_append+=piece
+        \\_removed=present
+        \\unset _removed
+        \\_removed_array=(present)
+        \\unset _removed_array
+        \\_items=('$_value' "$_self")
+        \\if [[ $_self = fallback ]]; then
+        \\  _items+=('two words')
+        \\  _conditional=created
+        \\fi
+        \\build() {
+        \\  [[ $_self = fallback && $_empty_default = fallback && $_populated = populated ]]
+        \\  [[ $_before = earlier && $_append = piece && $_conditional = created ]]
+        \\  [[ ${_empty+x} = x && -z $_empty ]]
+        \\  [[ ! ${_removed+x} && ! ${_removed_array+x} ]]
+        \\  [[ $_literal = '$_value' && $_escaped = '$_value' && $_chain = '$_value' && $_command = '$_value' ]]
+        \\  [[ $_unchanged = '$_value' && $_from_env = environment ]]
+        \\  [[ ${#_items[@]} = 3 && ${_items[0]} = '$_value' && ${_items[1]} = fallback && ${_items[2]} = 'two words' ]]
+        \\}
+        \\package() {
+        \\  [[ $_self = fallback && $_append = piece && ! ${_removed+x} && ! ${_removed_array+x} ]]
+        \\  mkdir -p "$pkgdir/usr/share/repeated-shell-state"
+        \\  printf '%s\n' "$_chain" > "$pkgdir/usr/share/repeated-shell-state/value"
+        \\}
+    ;
+    var environment = std.process.Environ.Map.init(allocator);
+    defer environment.deinit();
+    try environment.put("PATH", "/usr/bin:/bin");
+    try environment.put("_unchanged", "$_value");
+    try environment.put("_provided", "environment");
+    const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
+    defer environ.block.deinit(allocator);
+    var fixture = try Fixture.create(allocator, content, null, null);
+    defer fixture.destroy();
+    fixture.builder.environ = environ;
+    try fixture.temporary.dir.writeFile(testing.io, .{ .sub_path = "PKGBUILD", .data = content });
+    const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "PKGBUILD" });
+    defer allocator.free(path);
+    fixture.builder.options.pkgbuild_path = path;
+    var operation = fixture.operation_context.begin(.{ .backend = .aur, .kind = .build });
+    defer operation.finish(.success);
+    var first_review = try fixture.builder.prepareFinalReviewWithOperation(&operation);
+    defer first_review.deinit();
+    var review = try fixture.builder.prepareFinalReviewWithOperation(&operation);
+    defer review.deinit();
+    try testing.expectEqualSlices(u8, &first_review.digest, &review.digest);
+    fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+    fixture.builder.options.reviewed_files = review.reviewed_files;
+    fixture.builder.options.install_scripts = review.install_scripts;
+
+    const artifacts = try fixture.builder.runWithOperation(&operation);
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const value = try readPackageEntry(allocator, artifacts[0].path, "usr/share/repeated-shell-state/value");
+    defer allocator.free(value);
+    try testing.expectEqualStrings("$_value\n", value);
+    try testing.expect(fixture.package_builds[0].variables.get("_removed") == null);
+}
+
 test "PackageBuilder preserves generic shell-created scalar defaults for lifecycle steps" {
     const allocator = testing.allocator;
     const io = testing.io;
