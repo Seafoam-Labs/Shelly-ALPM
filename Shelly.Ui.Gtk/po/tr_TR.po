@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-06-17 11:40-0400\n"
 "Last-Translator: Ulaş Çakmak <celonfix@protonmail.com>\n"
 "Language-Team: Turkish (Turkiye)<>\n"
@@ -249,7 +249,6 @@ msgstr "kullanıcı"
 msgid "Install"
 msgstr "Kur"
 
-#| msgid "No changelog entries found"
 msgid "No matching applications found"
 msgstr ""
 
@@ -388,7 +387,6 @@ msgstr "Depo"
 msgid "Install Date"
 msgstr ""
 
-#| msgid "No changelog entries found"
 msgid "No matching packages found"
 msgstr ""
 
@@ -495,11 +493,9 @@ msgstr "Sistem Tepsisini Otomatik Başlatmaya Ekle"
 msgid "Use weekly schedule"
 msgstr "Haftalık program kullan"
 
-#| msgid "Tray Updates Icon"
 msgid "Run Tray as cron"
 msgstr ""
 
-#| msgid "Tray Updates Icon"
 msgid "Tray update with ui"
 msgstr ""
 

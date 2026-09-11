@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-06-29 21:36+0330\n"
 "Last-Translator: Sohrab Behdani <behdanisohrab@proton.me>\n"
 "Language-Team: fa\n"
@@ -255,7 +255,6 @@ msgstr "کاربر"
 msgid "Install"
 msgstr "نصب"
 
-#| msgid "No changelog entries found"
 msgid "No matching applications found"
 msgstr ""
 
@@ -394,7 +393,6 @@ msgstr "مخزن"
 msgid "Install Date"
 msgstr ""
 
-#| msgid "No changelog entries found"
 msgid "No matching packages found"
 msgstr ""
 
@@ -505,11 +503,9 @@ msgstr "افزودن نماد سینی به اجرای اولیه"
 msgid "Use weekly schedule"
 msgstr "استفاده از زمان‌بندی هفتگی"
 
-#| msgid "Tray Updates Icon"
 msgid "Run Tray as cron"
 msgstr ""
 
-#| msgid "Tray Updates Icon"
 msgid "Tray update with ui"
 msgstr ""
 

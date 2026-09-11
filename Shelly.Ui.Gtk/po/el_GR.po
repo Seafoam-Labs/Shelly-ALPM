@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -164,7 +164,6 @@ msgstr "Διαδρομή εγκατάστασης"
 msgid "Launch Flags"
 msgstr "Παράμετροι εκκίνησης"
 
-#| msgid "Environment"
 msgid "Environment Variables"
 msgstr ""
 
@@ -172,7 +171,6 @@ msgid ""
 "One KEY=value per line. Remove a line to restore the normal environment."
 msgstr ""
 
-#| msgid "Environment"
 msgid "Save Environment"
 msgstr ""
 
@@ -218,7 +216,6 @@ msgstr "Δημοτικότητα"
 msgid "Search the AUR"
 msgstr "Αναζήτηση στο AUR"
 
-#| msgid "The AUR has no browsable index type a package name to begin."
 msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
@@ -262,7 +259,6 @@ msgstr "χρήστης"
 msgid "Install"
 msgstr "Εγκατάσταση"
 
-#| msgid "No changelog entries found"
 msgid "No matching applications found"
 msgstr ""
 
@@ -401,7 +397,6 @@ msgstr "Αποθετήριο"
 msgid "Install Date"
 msgstr ""
 
-#| msgid "No packages found"
 msgid "No matching packages found"
 msgstr ""
 
@@ -512,11 +507,9 @@ msgstr "Αυτόματη εκκίνηση εικονιδίου tray"
 msgid "Use weekly schedule"
 msgstr "Χρήση εβδομαδιαίου προγράμματος"
 
-#| msgid "Tray Updates Icon"
 msgid "Run Tray as cron"
 msgstr ""
 
-#| msgid "Tray Updates Icon"
 msgid "Tray update with ui"
 msgstr ""
 
@@ -917,7 +910,6 @@ msgid ""
 "contain only letters, digits, or underscores."
 msgstr ""
 
-#| msgid "Syncing AppImage"
 msgid "Saving AppImage environment"
 msgstr ""
 
@@ -948,7 +940,6 @@ msgstr ""
 msgid "Your environment changes have not been saved."
 msgstr ""
 
-#| msgid "Discover"
 msgid "Discard"
 msgstr ""
 
@@ -1525,15 +1516,12 @@ msgstr "Σε εξέλιξη"
 msgid "Failed"
 msgstr "Απέτυχε"
 
-#| msgid "Installation complete."
 msgid "Transaction Completed"
 msgstr ""
 
-#| msgid "Operation failed"
 msgid "Transaction Failed"
 msgstr ""
 
-#| msgid "Cancelled"
 msgid "Transaction Cancelled"
 msgstr ""
 
@@ -1546,7 +1534,6 @@ msgstr "έξοδος"
 msgid "The operation was cancelled."
 msgstr ""
 
-#| msgid "Operation completed successfully"
 msgid "All operations finished successfully."
 msgstr ""
 

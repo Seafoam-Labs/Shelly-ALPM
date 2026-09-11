@@ -150,11 +150,20 @@ pub const QuestionResponder = struct {
         }
     }
 
+    fn allOptionalDependenciesInstalled(question: Zigalpm.OperationQuestion) bool {
+        for (question.options) |opt| {
+            if (!opt.is_installed) return false;
+        }
+        return true;
+    }
+
     fn handle(
         data: ?*anyopaque,
         question: Zigalpm.OperationQuestion,
     ) Zigalpm.OperationQuestionResponse {
         const self: *QuestionResponder = @ptrCast(@alignCast(data.?));
+        if (question.kind == .select_optional_dependencies and allOptionalDependenciesInstalled(question))
+            return .{ .choices = &.{} };
         if (self.no_confirm) {
             if (question.kind == .review_changes) {
                 if (hasSecurityFindings(question)) return self.handleInteractive(question);
@@ -238,7 +247,7 @@ pub const QuestionResponder = struct {
         }
 
         const accepted = switch (kind) {
-            .confirmation => self.readBooleanAnswer(question_id, "a.yesno", "Accept") catch false,
+            .confirmation, .import_pgp_key => self.readBooleanAnswer(question_id, "a.yesno", "Accept") catch false,
             .confirm_transaction => self.readBooleanAnswer(question_id, "a.transaction", "Accept") catch false,
             .review_changes => self.readBooleanAnswer(question_id, "a.pkgbuilddiff", "ProceedWithUpdate") catch false,
             else => false,
@@ -408,6 +417,86 @@ fn automaticResponse(kind: Zigalpm.OperationQuestionKind) Zigalpm.OperationQuest
 
 test "non-interactive UI declines source key imports" {
     try std.testing.expect(automaticResponse(.import_pgp_key) == .declined);
+}
+
+test "UI source key import reads yes/no answers and declines on EOF" {
+    const fingerprint = "562E5DB9A14497782C008834BBDA885ADD3E0AD0";
+    const cases = [_]struct {
+        accept: ?bool,
+        expected: Zigalpm.OperationQuestionResponse,
+    }{
+        .{ .accept = true, .expected = .accepted },
+        .{ .accept = false, .expected = .declined },
+        .{ .accept = null, .expected = .declined },
+    };
+    for (cases) |case| {
+        const response_json = if (case.accept == true)
+            "{\"$kind\":\"a.yesno\",\"QuestionId\":\"1\",\"Accept\":true}"
+        else
+            "{\"$kind\":\"a.yesno\",\"QuestionId\":\"1\",\"Accept\":false}";
+
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const encoded_size = std.base64.standard.Encoder.calcSize(response_json.len);
+        const encoded = try arena.allocator().alloc(u8, encoded_size);
+        const encoded_response = std.base64.standard.Encoder.encode(encoded, response_json);
+        const response_frame = if (case.accept != null) try std.fmt.allocPrint(
+            arena.allocator(),
+            "[JSON]{s}[/JSON]\n",
+            .{encoded_response},
+        ) else "";
+        var stdin = std.Io.Reader.fixed(response_frame);
+        var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stdout.deinit();
+        var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stderr.deinit();
+        var context: runtime.RuntimeContext = .{
+            .allocator = arena.allocator(),
+            .io = std.testing.io,
+            .stdin = &stdin,
+            .stdout = &stdout.writer,
+            .stderr = &stderr.writer,
+        };
+        var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+        defer operation_context.deinit();
+        var responder: QuestionResponder = .{
+            .context = &context,
+            .operation_context = &operation_context,
+            .no_confirm = false,
+        };
+        responder.attach();
+        defer responder.detach();
+
+        var operation = operation_context.begin(.{ .backend = .aur, .kind = .build, .subject = "xpipe" });
+        var answer = try operation.ask(.{
+            .kind = .import_pgp_key,
+            .prompt = "PKGBUILD xpipe requires source-signing key. Import it?",
+            .pgp_key_import = .{
+                .package_name = "xpipe",
+                .fingerprint = fingerprint,
+            },
+            .default_response = .declined,
+        });
+        defer answer.deinit(arena.allocator());
+        operation.finish(if (case.accept == true) .success else .failed);
+
+        try std.testing.expectEqual(case.expected, answer.response);
+
+        // A rejected answer must also be consumed, rather than declined immediately.
+        try std.testing.expectEqual(@as(usize, 0), stdin.buffered().len);
+
+        const rendered = stdout.writer.buffered();
+        const prefix_end = (std.mem.indexOf(u8, rendered, "[JSON]") orelse return error.MissingFrame) + "[JSON]".len;
+        const suffix_start = std.mem.indexOfPos(u8, rendered, prefix_end, "[/JSON]") orelse return error.MissingFrame;
+        const payload = rendered[prefix_end..suffix_start];
+        const decoded_size = try std.base64.standard.Decoder.calcSizeForSlice(payload);
+        const decoded = try arena.allocator().alloc(u8, decoded_size);
+        try std.base64.standard.Decoder.decode(decoded, payload);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"$kind\":\"q.yesno\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"QuestionKind\":\"ImportPgpKey\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"PackageName\":\"xpipe\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"Fingerprint\":\"") != null);
+    }
 }
 
 pub fn flush(context: *runtime.RuntimeContext) !void {
@@ -808,4 +897,74 @@ test "UI handles provider and generic selection questions" {
     }
     try std.testing.expectEqual(@as(usize, 2), provider_frames);
     try std.testing.expectEqual(@as(usize, 1), multiple_frames);
+}
+
+test "UI skips optional dependency question when every option is already installed" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var stdin = std.Io.Reader.fixed("1\n");
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdin = &stdin,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    defer operation_context.deinit();
+    var responder: QuestionResponder = .{
+        .context = &context,
+        .operation_context = &operation_context,
+        .no_confirm = false,
+    };
+    responder.attach();
+    defer responder.detach();
+
+    const options = [_]Zigalpm.OperationQuestionOption{
+        .{ .id = "foot-terminfo", .label = "foot-terminfo", .description = "Terminal info", .is_installed = true },
+        .{ .id = "libnotify", .label = "libnotify", .description = "Desktop notifications", .is_installed = true },
+    };
+    var operation = operation_context.begin(.{
+        .backend = .aur,
+        .kind = .install,
+        .subject = "foot-git",
+    });
+    const stdout_before = stdout.writer.buffered().len;
+    const stderr_before = stderr.writer.buffered().len;
+
+    var answer = try operation.ask(.{
+        .kind = .select_optional_dependencies,
+        .prompt = "Select optional dependencies for foot-git",
+        .options = &options,
+        .dependency_name = "foot-git",
+    });
+    defer answer.deinit(arena.allocator());
+
+    try std.testing.expect(answer.response == .choices);
+    try std.testing.expectEqual(@as(usize, 0), answer.response.choices.len);
+    try std.testing.expectEqual(stdout_before, stdout.writer.buffered().len);
+    try std.testing.expectEqual(stderr_before, stderr.writer.buffered().len);
+
+    var empty_answer = try operation.ask(.{
+        .kind = .select_optional_dependencies,
+        .prompt = "This empty optional dependency question must not be displayed",
+        .options = &.{},
+        .dependency_name = "foot-git",
+    });
+    defer empty_answer.deinit(arena.allocator());
+
+    try std.testing.expect(empty_answer.response == .choices);
+    try std.testing.expectEqual(@as(usize, 0), empty_answer.response.choices.len);
+    try std.testing.expectEqual(stdout_before, stdout.writer.buffered().len);
+    try std.testing.expectEqual(stderr_before, stderr.writer.buffered().len);
+
+    const remaining_input = try stdin.takeDelimiter('\n');
+    try std.testing.expect(remaining_input != null);
+    try std.testing.expectEqualStrings("1", remaining_input.?);
+
+    operation.finish(.success);
 }
