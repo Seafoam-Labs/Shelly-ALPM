@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-06-30 10:06+0400\n"
 "Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\\nLanguage-Team: "
 "Russian (Russia) <anton@azdanov.dev>\n"
@@ -21,14 +21,33 @@ msgstr "Нет доступных дополнений для установки
 msgid "Close"
 msgstr "Закрыть"
 
-#| msgid "Saving update configuration"
+msgid "Enable AUR?"
+msgstr "Включить AUR?"
+
+msgid ""
+"The Arch User Repository contains build scripts that are known as PKGBUILDs. "
+"Those scripts are uploaded by users, and are not verified or vetted in any "
+"way. Only enable this feature if you are comfortable in verifying the build "
+"scripts."
+msgstr ""
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+"Safety Guide</a>"
+msgstr ""
+
+msgid "Enable"
+msgstr "Включить"
+
+msgid "Cancel"
+msgstr "Отмена"
+
 msgid "Keep configuration"
 msgstr "Сохранить конфигурацию"
 
 msgid "App data and settings will be kept."
 msgstr "Данные приложения и настройки будут сохранены."
 
-#| msgid "Saving update configuration"
 msgid "Remove configuration"
 msgstr "Удалить конфигурацию"
 
@@ -37,9 +56,6 @@ msgstr "Данные приложения будут безвозвратно у
 
 msgid "Confirm"
 msgstr "Подтвердить"
-
-msgid "Cancel"
-msgstr "Отмена"
 
 msgid "Skip"
 msgstr "Пропустить"
@@ -153,6 +169,16 @@ msgstr "Путь установки"
 msgid "Launch Flags"
 msgstr "Флаги запуска"
 
+msgid "Environment Variables"
+msgstr ""
+
+msgid ""
+"One KEY=value per line. Remove a line to restore the normal environment."
+msgstr ""
+
+msgid "Save Environment"
+msgstr ""
+
 msgid "Save"
 msgstr "Сохранить"
 
@@ -195,8 +221,8 @@ msgstr "Популярность"
 msgid "Search the AUR"
 msgstr "Поиск в AUR"
 
-msgid "The AUR has no browsable index type a package name to begin."
-msgstr "В AUR нет индекса для просмотра — введите имя пакета для начала."
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr ""
 
 msgid "Run checks"
 msgstr "Выполнить проверки"
@@ -237,6 +263,9 @@ msgstr "пользователь"
 
 msgid "Install"
 msgstr "Установить"
+
+msgid "No matching applications found"
+msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Загрузка данных Flatpak..."
@@ -373,6 +402,9 @@ msgstr "Репозиторий"
 msgid "Install Date"
 msgstr "Дата установки"
 
+msgid "No matching packages found"
+msgstr ""
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Возникла проблема при загрузке пакетов. Проверьте, нет ли блокировки базы "
@@ -442,7 +474,6 @@ msgstr "Flatpak"
 msgid "Show results from the configured Flatpak remotes"
 msgstr "Показывать результаты из настроенных удалённых источников Flatpak"
 
-#| msgid "Source Files"
 msgid "Source"
 msgstr "Источник"
 
@@ -450,11 +481,9 @@ msgid "Search everywhere"
 msgstr "Искать везде"
 
 msgid ""
-"Search standard repositories, the AUR and Flatpak at once. Type a name to "
-"begin."
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
 msgstr ""
-"Искать одновременно в стандартных репозиториях, AUR и Flatpak. Введите имя "
-"для начала."
 
 msgid "General"
 msgstr "Общие"
@@ -482,6 +511,12 @@ msgstr "Добавить значок трея в автозапуск"
 
 msgid "Use weekly schedule"
 msgstr "Использовать недельное расписание"
+
+msgid "Run Tray as cron"
+msgstr ""
+
+msgid "Tray update with ui"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Интервал проверки в трее (часы)"
@@ -569,9 +604,6 @@ msgstr "Без подтверждения"
 msgid "Enable Shelly Search"
 msgstr "Включить поиск Shelly"
 
-msgid "Enable Package Downgrade"
-msgstr "Включить понижение версии пакетов"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Включить визуализацию WebView (экспериментально)"
 
@@ -598,6 +630,9 @@ msgstr "Поддержать"
 
 msgid "Toggle output"
 msgstr "Включить/отключить вывод"
+
+msgid "Done"
+msgstr "Готово"
 
 msgid "Available Updates"
 msgstr "Доступные обновления"
@@ -799,9 +834,6 @@ msgstr "Сканирование безопасности завершено —
 msgid "used in"
 msgstr "используется в"
 
-msgid "Warning"
-msgstr "Предупреждение"
-
 msgid "Install Anyway"
 msgstr "Всё равно установить"
 
@@ -880,6 +912,14 @@ msgstr "Синхронизация AppImage"
 msgid "Syncing AppImage"
 msgstr "Синхронизация AppImage"
 
+msgid ""
+"Use unique KEY=value lines. Keys must start with a letter or underscore and "
+"contain only letters, digits, or underscores."
+msgstr ""
+
+msgid "Saving AppImage environment"
+msgstr ""
+
 msgid "Saving update configuration"
 msgstr "Сохранение конфигурации обновления"
 
@@ -900,6 +940,15 @@ msgstr "Операция успешно завершена"
 
 msgid "Operation failed"
 msgstr "Операция не удалась"
+
+msgid "Discard environment changes?"
+msgstr ""
+
+msgid "Your environment changes have not been saved."
+msgstr ""
+
+msgid "Discard"
+msgstr ""
 
 msgid "Maintainer"
 msgstr "Сопровождающий"
@@ -1009,6 +1058,15 @@ msgstr "Показать меньше"
 
 msgid "Installing flatpak"
 msgstr "Установка flatpak"
+
+msgid "Remove this Flatpak?"
+msgstr "Удалить этот Flatpak?"
+
+msgid "Remove Flatpak"
+msgstr "Удалить Flatpak"
+
+msgid "Removing Flatpak"
+msgstr "Удаление Flatpak"
 
 msgid "Permissions"
 msgstr "Разрешения"
@@ -1151,25 +1209,12 @@ msgstr "Удаление источника"
 msgid "Adding Remote"
 msgstr "Добавление источника"
 
-#| msgid "Removing Flatpak"
-msgid "Remove this Flatpak?"
-msgstr "Удалить этот Flatpak?"
-
-#| msgid "Removing Flatpak"
-msgid "Remove Flatpak"
-msgstr "Удалить Flatpak"
-
-msgid "Removing Flatpak"
-msgstr "Удаление Flatpak"
-
 msgid "App ID"
 msgstr "Идентификатор приложения"
 
-#| msgid "Remove"
 msgid "Remote"
 msgstr "Удалённый источник"
 
-#| msgid "Development"
 msgid "Developer"
 msgstr "Разработчик"
 
@@ -1191,7 +1236,6 @@ msgstr "Нет"
 msgid "Keywords"
 msgstr "Ключевые слова"
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr "Flathub"
 
@@ -1264,26 +1308,28 @@ msgstr "Удаление пакетов"
 msgid "Installing packages"
 msgstr "Установка пакетов"
 
-#| msgid "Operation failed"
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
+"Искать одновременно в стандартных репозиториях, AUR и Flatpak. Введите имя "
+"для начала."
+
 msgid "Search failed"
 msgstr "Поиск не удался"
 
-#| msgid "Installation failed."
 msgid "Installation in progress"
 msgstr "Установка в процессе"
 
-#| msgid "No packages selected"
 msgid "No sources selected"
 msgstr "Источники не выбраны"
 
 msgid "Enable at least one source filter above."
 msgstr "Включите хотя бы один фильтр источников выше."
 
-#| msgid "Installing packages"
 msgid "Install Packages"
 msgstr "Установить пакеты"
 
-#| msgid "Remove the selected packages?"
 msgid "Install the selected packages?"
 msgstr "Установить выбранные пакеты?"
 
@@ -1361,20 +1407,6 @@ msgstr "Не удалось удалить службу автозапуска s
 
 msgid "Systemd startup service removed."
 msgstr "Служба автозапуска systemd удалена."
-
-msgid "Enable AUR?"
-msgstr "Включить AUR?"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"Arch User Repository (AUR) - это репозиторий, поддерживаемый сообществом. "
-"Пакеты создаются пользователями и могут быть небезопасны. Хотите включить "
-"его?"
-
-msgid "Enable"
-msgstr "Включить"
 
 msgid "AUR enabled"
 msgstr "AUR включён"
@@ -1484,11 +1516,17 @@ msgstr "Проверка свободного места на диске"
 msgid "Working"
 msgstr "Выполнение"
 
-msgid "Done"
-msgstr "Готово"
-
 msgid "Failed"
 msgstr "Ошибка"
+
+msgid "Transaction Completed"
+msgstr ""
+
+msgid "Transaction Failed"
+msgstr ""
+
+msgid "Transaction Cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "Завершено"
@@ -1496,8 +1534,27 @@ msgstr "Завершено"
 msgid "exit"
 msgstr "выход"
 
+msgid "The operation was cancelled."
+msgstr ""
+
+msgid "All operations finished successfully."
+msgstr ""
+
+msgid ""
+"Permission to manage packages was not granted. Try again and approve the "
+"authorization request to continue."
+msgstr ""
+
 msgid "Cancelled"
 msgstr "Отменено"
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
 
 msgid "System package update"
 msgstr "Обновление системного пакета"
@@ -1531,9 +1588,6 @@ msgstr "Обновление баз данных пакетов"
 msgid "Database lock removed successfully"
 msgstr "Блокировка базы данных успешно удалена"
 
-msgid "Failed to remove database lock"
-msgstr "Не удалось удалить блокировку базы данных"
-
 msgid "Fixing permissions"
 msgstr "Исправление разрешений"
 
@@ -1545,13 +1599,6 @@ msgstr "Очистка кэша пакетов"
 
 msgid "Welcome"
 msgstr "Добро пожаловать"
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-"Arch User Repository поддерживается сообществом. Пакеты официально не "
-"проверяются — включайте, только если доверяете тому, что устанавливаете."
 
 msgid "Enable Recommended?"
 msgstr "Включить рекомендации?"

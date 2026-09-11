@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
-"PO-Revision-Date: 2026-08-25 10:10-0300\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
+"PO-Revision-Date: 2026-09-09 20:54-0300\n"
 "Last-Translator: Vinícius Fonseca <viniqf@proton.me>\n"
 "Language-Team: Portuguese (Brazil) <viniqf@proton.me>\n"
 "Language: pt_BR\n"
@@ -12,31 +12,45 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-msgid ""
-"{package_one}-{version_one} conflicts with "
-"{package_two}-{version_two}. Remove {package_to_remove}?"
-msgstr ""
-"{package_one}-{version_one} entra em conflito com "
-"{package_two}-{version_two}. Remover {package_to_remove}?"
-
-
-msgid "Would you like to remove extra cache entries?"
-msgstr "Você gostaria de remover entradas adicionais do cache?"
-
 msgid "No installable addons available"
 msgstr "Nenhum addon instalável disponível"
 
 msgid "Close"
 msgstr "Fechar"
 
-#| msgid "Saving update configuration"
+msgid "Enable AUR?"
+msgstr "Ativar AUR"
+
+msgid ""
+"The Arch User Repository contains build scripts that are known as PKGBUILDs. "
+"Those scripts are uploaded by users, and are not verified or vetted in any "
+"way. Only enable this feature if you are comfortable in verifying the build "
+"scripts."
+msgstr ""
+"O Arch User Repository contém scripts de compilação conhecidos como "
+"PKGBUILDs. Esses scripts são enviados por usuários e não são verificados nem "
+"validados de nenhuma forma. Só ative essa funcionalidade se você se sentir à "
+"vontade para verificar os scripts de compilação."
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+"Safety Guide</a>"
+msgstr ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Guia "
+"de segurança da AUR</a>"
+
+msgid "Enable"
+msgstr "Ativar"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
 msgid "Keep configuration"
 msgstr "Manter configuração"
 
 msgid "App data and settings will be kept."
 msgstr "Os dados e as configurações do aplicativo serão mantidos."
 
-#| msgid "Saving update configuration"
 msgid "Remove configuration"
 msgstr "Remover configuração"
 
@@ -45,9 +59,6 @@ msgstr "Os dados do aplicativo serão removidos permanentemente"
 
 msgid "Confirm"
 msgstr "Confirmar"
-
-msgid "Cancel"
-msgstr "Cancelar"
 
 msgid "Skip"
 msgstr "Pular"
@@ -86,9 +97,9 @@ msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
 "labs.org/shelly-alpm/docs/polkit</a>"
 msgstr ""
-"A GUI do Shelly precisa do <b>polkit</b> instalado e em execução para autorizar "
-"ações privilegiadas, mas não foi encontrada no barramento de memória do sistema. "
-"\n"
+"A GUI do Shelly precisa do <b>polkit</b> instalado e em execução para "
+"autorizar ações privilegiadas, mas não foi encontrada no barramento de "
+"memória do sistema. \n"
 "Instale e habilite-o e tente novamente \n"
 "\n"
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
@@ -161,6 +172,17 @@ msgstr "Caminho de Instalação"
 msgid "Launch Flags"
 msgstr "Flags de inicialização"
 
+msgid "Environment Variables"
+msgstr "Variáveis de Ambiente"
+
+msgid ""
+"One KEY=value per line. Remove a line to restore the normal environment."
+msgstr ""
+"Uma CHAVE=valor por linha. Remova uma linha para restaurar o ambiente normal."
+
+msgid "Save Environment"
+msgstr "Salvar Ambiente"
+
 msgid "Save"
 msgstr "Salvar"
 
@@ -203,10 +225,9 @@ msgstr "Popularidade"
 msgid "Search the AUR"
 msgstr "Pesquisar na AUR"
 
-msgid "The AUR has no browsable index type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
-"A AUR não possui um índice visualizável. Digite o nome de um pacote para "
-"começar. "
+"A AUR não possui um índice navegável. Digite um nome de pacote para começar."
 
 msgid "Run checks"
 msgstr "Executar verificações"
@@ -247,6 +268,9 @@ msgstr "usuário"
 
 msgid "Install"
 msgstr "Instalar"
+
+msgid "No matching applications found"
+msgstr "Nenhum aplicativo correspondente encontrado"
 
 msgid "Loading Flatpak Data..."
 msgstr "Carregando dados do Flatpak..."
@@ -383,6 +407,9 @@ msgstr "Repositório"
 msgid "Install Date"
 msgstr "Data de instalação"
 
+msgid "No matching packages found"
+msgstr "Nenhum pacote correspondente encontrado"
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Não foi possível carregar seus pacotes. Verifique se há um bloqueio no banco "
@@ -438,7 +465,8 @@ msgid "Standard"
 msgstr "Padrão"
 
 msgid "Show results from the configured ALPM sync databases"
-msgstr "Mostrar resultados dos bancos de dados de sincronização ALPM configurados"
+msgstr ""
+"Mostrar resultados dos bancos de dados de sincronização ALPM configurados"
 
 msgid "AUR"
 msgstr "AUR"
@@ -452,7 +480,6 @@ msgstr "Flatpak"
 msgid "Show results from the configured Flatpak remotes"
 msgstr "Mostrar resultados dos remotos Flatpak configurados"
 
-#| msgid "Source Files"
 msgid "Source"
 msgstr "Fonte"
 
@@ -460,11 +487,11 @@ msgid "Search everywhere"
 msgstr "Procurar em todos os lugares"
 
 msgid ""
-"Search standard repositories, the AUR and Flatpak at once. Type a name to "
-"begin."
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
 msgstr ""
-"Pesquise por repositórios padrão, o AUR e o Flatpak de uma só vez. Digite um nome para "
-"começar."
+"Pesquise nos repositórios padrão, na AUR e no Flatpak ao mesmo tempo. Digite "
+"um nome para começar."
 
 msgid "General"
 msgstr "Geral"
@@ -492,6 +519,12 @@ msgstr "Adicionar bandeja à inicialização automática"
 
 msgid "Use weekly schedule"
 msgstr "Usar agenda semanal"
+
+msgid "Run Tray as cron"
+msgstr "Executar a bandeja como tarefa cron"
+
+msgid "Tray update with ui"
+msgstr "Atualização da bandeja com interface gráfica"
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalo de verificação da bandeja (horas)"
@@ -579,9 +612,6 @@ msgstr "Sem confirmação"
 msgid "Enable Shelly Search"
 msgstr "Ativar pesquisa Shelly"
 
-msgid "Enable Package Downgrade"
-msgstr "Ativar downgrade de pacotes"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Ativar visualização webview (experimental)"
 
@@ -608,6 +638,9 @@ msgstr "Patrocinar"
 
 msgid "Toggle output"
 msgstr "Exibir resultado"
+
+msgid "Done"
+msgstr "Concluído"
 
 msgid "Available Updates"
 msgstr "Atualizações disponíveis"
@@ -696,6 +729,8 @@ msgid ""
 "Shelly is a modern package manager for Arch Linux. Configure your sources "
 "and preferences to get started."
 msgstr ""
+"Shelly é um gerenciador de pacotes moderno para o Arch Linux. Configure suas "
+"fontes e preferências para começar."
 
 msgid "Select Your Sources"
 msgstr "Selecione suas fontes"
@@ -723,7 +758,7 @@ msgid "Recommended"
 msgstr "Recomendado"
 
 msgid "Curated picks from Shelly"
-msgstr ""
+msgstr "Seleção do Shelly"
 
 msgid "Look and Feel"
 msgstr "Aparência e estilo"
@@ -807,9 +842,6 @@ msgstr "Scan de segurança concluído - nenhum problema encontrado."
 msgid "used in"
 msgstr "usado em"
 
-msgid "Warning"
-msgstr "Aviso"
-
 msgid "Install Anyway"
 msgstr "Instalar mesmo assim"
 
@@ -860,6 +892,8 @@ msgid ""
 "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
 "repo/releases"
 msgstr ""
+"URL do Forgejo inválida. Use http(s)://host/owner/repo ou http(s)://host/"
+"owner/repo/releases"
 
 msgid "Choose an AppImage file"
 msgstr "Escolha um arquivo AppImage"
@@ -885,6 +919,17 @@ msgstr "Sincronizando AppImages"
 msgid "Syncing AppImage"
 msgstr "Sincronizando AppImage"
 
+msgid ""
+"Use unique KEY=value lines. Keys must start with a letter or underscore and "
+"contain only letters, digits, or underscores."
+msgstr ""
+"Use uma entrada CHAVE=valor por linha, sem repetir as chaves. As chaves "
+"devem começar com uma letra ou sublinhado e conter apenas letras, dígitos ou "
+"sublinhados."
+
+msgid "Saving AppImage environment"
+msgstr "Salvando ambiente AppImage"
+
 msgid "Saving update configuration"
 msgstr "Salvando configuração das atualizações"
 
@@ -905,6 +950,15 @@ msgstr "Operação concluída com sucesso"
 
 msgid "Operation failed"
 msgstr "Operação falhou"
+
+msgid "Discard environment changes?"
+msgstr "Descartar mudanças de ambiente?"
+
+msgid "Your environment changes have not been saved."
+msgstr "Suas mudanças de ambiente não foram salvas."
+
+msgid "Discard"
+msgstr "Descartar"
 
 msgid "Maintainer"
 msgstr "Mantenedor"
@@ -1016,6 +1070,15 @@ msgstr "Mostrar menos"
 msgid "Installing flatpak"
 msgstr "Instalando Flatpak"
 
+msgid "Remove this Flatpak?"
+msgstr "Remover esse Flatpak?"
+
+msgid "Remove Flatpak"
+msgstr "Remover Flatpak"
+
+msgid "Removing Flatpak"
+msgstr "Removendo Flatpak"
+
 msgid "Permissions"
 msgstr "Permissões"
 
@@ -1023,7 +1086,7 @@ msgid "Available Addons"
 msgstr "Addons disponíveis"
 
 msgid "Installing flatpak addon"
-msgstr ""
+msgstr "Instalando addon Flatpak"
 
 msgid "Unknown developer"
 msgstr "Desenvolvedor desconhecido"
@@ -1157,25 +1220,12 @@ msgstr "Removendo o remoto"
 msgid "Adding Remote"
 msgstr "Adicionando o remoto"
 
-#| msgid "Removing Flatpak"
-msgid "Remove this Flatpak?"
-msgstr "Remover esse Flatpak?"
-
-#| msgid "Removing Flatpak"
-msgid "Remove Flatpak"
-msgstr "Remover Flatpak"
-
-msgid "Removing Flatpak"
-msgstr "Removendo Flatpak"
-
 msgid "App ID"
 msgstr "ID do aplicativo"
 
-#| msgid "Remove"
 msgid "Remote"
 msgstr "Remoto"
 
-#| msgid "Development"
 msgid "Developer"
 msgstr "Desenvolvedor"
 
@@ -1197,7 +1247,6 @@ msgstr "Não"
 msgid "Keywords"
 msgstr "Palavras-chave"
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1270,26 +1319,28 @@ msgstr "Removendo pacotes"
 msgid "Installing packages"
 msgstr "Instalando pacotes"
 
-#| msgid "Operation failed"
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
+"Pesquise por repositórios padrão, o AUR e o Flatpak de uma só vez. Digite um "
+"nome para começar."
+
 msgid "Search failed"
 msgstr "Falha na pesquisa"
 
-#| msgid "Installation failed."
 msgid "Installation in progress"
 msgstr "Instalação em andamento"
 
-#| msgid "No packages selected"
 msgid "No sources selected"
 msgstr "Nenhuma fonte selecionada"
 
 msgid "Enable at least one source filter above."
 msgstr "Habilite pelo menos um filtro de origem acima."
 
-#| msgid "Installing packages"
 msgid "Install Packages"
 msgstr "Instalar pacotes"
 
-#| msgid "Remove the selected packages?"
 msgid "Install the selected packages?"
 msgstr "Instalar os pacotes selecionados?"
 
@@ -1367,19 +1418,6 @@ msgstr "Falha ao remover serviço de inicialização do systemd"
 
 msgid "Systemd startup service removed."
 msgstr "Serviço de atualização Systemd removido"
-
-msgid "Enable AUR?"
-msgstr "Ativar AUR"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"O Arch User Repository (AUR) é um repositório mantido pela comunidade. Os "
-"pacotes são produzidos por usuários e podem conter riscos. Deseja ativá-lo?"
-
-msgid "Enable"
-msgstr "Ativar"
 
 msgid "AUR enabled"
 msgstr "AUR habilitada"
@@ -1489,11 +1527,17 @@ msgstr "Verificando o espaço em disco"
 msgid "Working"
 msgstr "Trabalhando"
 
-msgid "Done"
-msgstr "Concluído"
-
 msgid "Failed"
 msgstr "Falhou"
+
+msgid "Transaction Completed"
+msgstr "Transação concluída"
+
+msgid "Transaction Failed"
+msgstr "Transação falhou"
+
+msgid "Transaction Cancelled"
+msgstr "Transação cancelada"
 
 msgid "Finished"
 msgstr "Finalizado"
@@ -1501,8 +1545,31 @@ msgstr "Finalizado"
 msgid "exit"
 msgstr "Saída"
 
+msgid "The operation was cancelled."
+msgstr "A operação foi cancelada."
+
+msgid "All operations finished successfully."
+msgstr "Todas as operações foram concluídas com sucesso."
+
+msgid ""
+"Permission to manage packages was not granted. Try again and approve the "
+"authorization request to continue."
+msgstr ""
+"A permissão para gerenciar pacotes não foi concedida. Tente novamente e "
+"aprove o pedido de autorização para continuar."
+
 msgid "Cancelled"
 msgstr "Cancelado"
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+"{package_one}-{version_one} entra em conflito com {package_two}-"
+"{version_two}. Remover {package_to_remove}?"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr "Você gostaria de remover entradas adicionais do cache?"
 
 msgid "System package update"
 msgstr "Atualização de pacotes do sistema"
@@ -1536,9 +1603,6 @@ msgstr "Atualizando bases de dados de pacote"
 msgid "Database lock removed successfully"
 msgstr "Trava de banco de dados (db.lck) removida com sucesso"
 
-msgid "Failed to remove database lock"
-msgstr "Falha ao remover trava de banco de dados (db.lck)"
-
 msgid "Fixing permissions"
 msgstr "Corrigindo permissões"
 
@@ -1550,14 +1614,6 @@ msgstr "Limpando cache de pacotes"
 
 msgid "Welcome"
 msgstr "Bem vindo(a)"
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-"O Arch User Repository (AUR) é mantido pela comunidade. Pacotes não são "
-"verificadas oficialmente. Só habilite essa funcionalidade se você confia no "
-"que está instalando."
 
 msgid "Enable Recommended?"
 msgstr "Ativar pacotes recomendados?"

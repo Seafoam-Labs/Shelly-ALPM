@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-06-29 21:36+0330\n"
 "Last-Translator: Sohrab Behdani <behdanisohrab@proton.me>\n"
 "Language-Team: fa\n"
@@ -23,6 +23,27 @@ msgstr ""
 msgid "Close"
 msgstr "بستن"
 
+msgid "Enable AUR?"
+msgstr "فعال‌سازی AUR؟"
+
+msgid ""
+"The Arch User Repository contains build scripts that are known as PKGBUILDs. "
+"Those scripts are uploaded by users, and are not verified or vetted in any "
+"way. Only enable this feature if you are comfortable in verifying the build "
+"scripts."
+msgstr ""
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+"Safety Guide</a>"
+msgstr ""
+
+msgid "Enable"
+msgstr ""
+
+msgid "Cancel"
+msgstr "صرف‌نظر"
+
 msgid "Keep configuration"
 msgstr ""
 
@@ -37,9 +58,6 @@ msgstr ""
 
 msgid "Confirm"
 msgstr "تایید"
-
-msgid "Cancel"
-msgstr "صرف‌نظر"
 
 msgid "Skip"
 msgstr ""
@@ -144,6 +162,16 @@ msgstr "مسیر نصب"
 msgid "Launch Flags"
 msgstr "پرچم اجرایی"
 
+msgid "Environment Variables"
+msgstr ""
+
+msgid ""
+"One KEY=value per line. Remove a line to restore the normal environment."
+msgstr ""
+
+msgid "Save Environment"
+msgstr ""
+
 msgid "Save"
 msgstr "ذخیره"
 
@@ -186,7 +214,7 @@ msgstr "محبوبیت"
 msgid "Search the AUR"
 msgstr ""
 
-msgid "The AUR has no browsable index type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
 msgid "Run checks"
@@ -226,6 +254,9 @@ msgstr "کاربر"
 
 msgid "Install"
 msgstr "نصب"
+
+msgid "No matching applications found"
+msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "درحال بارگزاری اطلاعات فلت‌پک...."
@@ -362,6 +393,9 @@ msgstr "مخزن"
 msgid "Install Date"
 msgstr ""
 
+msgid "No matching packages found"
+msgstr ""
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "در هنگام بازکردن بسته‌های شما خطایی رخ داد. بررسی کنید که آیا دیتابیس قفل شده "
@@ -438,8 +472,8 @@ msgid "Search everywhere"
 msgstr ""
 
 msgid ""
-"Search standard repositories, the AUR and Flatpak at once. Type a name to "
-"begin."
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
 msgstr ""
 
 msgid "General"
@@ -468,6 +502,12 @@ msgstr "افزودن نماد سینی به اجرای اولیه"
 
 msgid "Use weekly schedule"
 msgstr "استفاده از زمان‌بندی هفتگی"
+
+msgid "Run Tray as cron"
+msgstr ""
+
+msgid "Tray update with ui"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "فاصلهٔ بررسی در سینی (ساعت)"
@@ -555,9 +595,6 @@ msgstr "بدون تأیید"
 msgid "Enable Shelly Search"
 msgstr "فعال‌سازی جست‌جوی Shelly"
 
-msgid "Enable Package Downgrade"
-msgstr "فعال‌سازی بازگردانی نگارش بسته"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "فعال‌سازی مجازی‌سازی WebView (آزمایشی)"
 
@@ -583,6 +620,9 @@ msgid "Sponsor"
 msgstr "حامی"
 
 msgid "Toggle output"
+msgstr ""
+
+msgid "Done"
 msgstr ""
 
 msgid "Available Updates"
@@ -779,9 +819,6 @@ msgstr "اسکن امنیتی پایان یافت - هیچ مشکلی یافت �
 msgid "used in"
 msgstr ""
 
-msgid "Warning"
-msgstr ""
-
 msgid "Install Anyway"
 msgstr "درهرحال نصب شود"
 
@@ -858,6 +895,14 @@ msgstr ""
 msgid "Syncing AppImage"
 msgstr ""
 
+msgid ""
+"Use unique KEY=value lines. Keys must start with a letter or underscore and "
+"contain only letters, digits, or underscores."
+msgstr ""
+
+msgid "Saving AppImage environment"
+msgstr ""
+
 msgid "Saving update configuration"
 msgstr ""
 
@@ -877,6 +922,15 @@ msgid "Operation completed successfully"
 msgstr ""
 
 msgid "Operation failed"
+msgstr ""
+
+msgid "Discard environment changes?"
+msgstr ""
+
+msgid "Your environment changes have not been saved."
+msgstr ""
+
+msgid "Discard"
 msgstr ""
 
 msgid "Maintainer"
@@ -985,6 +1039,15 @@ msgid "Show less"
 msgstr ""
 
 msgid "Installing flatpak"
+msgstr ""
+
+msgid "Remove this Flatpak?"
+msgstr ""
+
+msgid "Remove Flatpak"
+msgstr ""
+
+msgid "Removing Flatpak"
 msgstr ""
 
 msgid "Permissions"
@@ -1128,24 +1191,12 @@ msgstr ""
 msgid "Adding Remote"
 msgstr ""
 
-msgid "Remove this Flatpak?"
-msgstr ""
-
-#| msgid "Flatpak"
-msgid "Remove Flatpak"
-msgstr ""
-
-msgid "Removing Flatpak"
-msgstr ""
-
 msgid "App ID"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
-#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1167,7 +1218,6 @@ msgstr "نه"
 msgid "Keywords"
 msgstr ""
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1238,10 +1288,14 @@ msgstr ""
 msgid "Installing packages"
 msgstr ""
 
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
+
 msgid "Search failed"
 msgstr ""
 
-#| msgid "Installation Path"
 msgid "Installation in progress"
 msgstr ""
 
@@ -1251,11 +1305,9 @@ msgstr ""
 msgid "Enable at least one source filter above."
 msgstr ""
 
-#| msgid "Install Local"
 msgid "Install Packages"
 msgstr ""
 
-#| msgid "Install Selected"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1333,19 +1385,6 @@ msgstr ""
 
 msgid "Systemd startup service removed."
 msgstr "سرویس اجرای اولیه سیستم‌دی حذف شد."
-
-msgid "Enable AUR?"
-msgstr "فعال‌سازی AUR؟"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"مخزن کاربران آرچ (AUR) یک مخزن جامعه‌محور است. بسته‌ها توسط کاربران تولید "
-"می‌شوند و ممکن است خطراتی داشته باشند. آیا می‌خواهید آن را فعال کنید؟"
-
-msgid "Enable"
-msgstr ""
 
 msgid "AUR enabled"
 msgstr ""
@@ -1455,10 +1494,16 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
-msgid "Done"
+msgid "Failed"
 msgstr ""
 
-msgid "Failed"
+msgid "Transaction Completed"
+msgstr ""
+
+msgid "Transaction Failed"
+msgstr ""
+
+msgid "Transaction Cancelled"
 msgstr ""
 
 msgid "Finished"
@@ -1467,7 +1512,26 @@ msgstr ""
 msgid "exit"
 msgstr ""
 
+msgid "The operation was cancelled."
+msgstr ""
+
+msgid "All operations finished successfully."
+msgstr ""
+
+msgid ""
+"Permission to manage packages was not granted. Try again and approve the "
+"authorization request to continue."
+msgstr ""
+
 msgid "Cancelled"
+msgstr ""
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"
@@ -1500,9 +1564,6 @@ msgstr ""
 msgid "Database lock removed successfully"
 msgstr ""
 
-msgid "Failed to remove database lock"
-msgstr ""
-
 msgid "Fixing permissions"
 msgstr ""
 
@@ -1513,11 +1574,6 @@ msgid "Cleaning package cache"
 msgstr ""
 
 msgid "Welcome"
-msgstr ""
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
 msgstr ""
 
 msgid "Enable Recommended?"

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -21,14 +21,33 @@ msgstr "Ez dago instalatzeko addonik eskuragarri"
 msgid "Close"
 msgstr "Itxi"
 
-#| msgid "Saving update configuration"
+msgid "Enable AUR?"
+msgstr "Gaitu AUR?"
+
+msgid ""
+"The Arch User Repository contains build scripts that are known as PKGBUILDs. "
+"Those scripts are uploaded by users, and are not verified or vetted in any "
+"way. Only enable this feature if you are comfortable in verifying the build "
+"scripts."
+msgstr ""
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+"Safety Guide</a>"
+msgstr ""
+
+msgid "Enable"
+msgstr "Gaitu"
+
+msgid "Cancel"
+msgstr "Utzi"
+
 msgid "Keep configuration"
 msgstr ""
 
 msgid "App data and settings will be kept."
 msgstr ""
 
-#| msgid "Saving update configuration"
 msgid "Remove configuration"
 msgstr ""
 
@@ -37,9 +56,6 @@ msgstr ""
 
 msgid "Confirm"
 msgstr "Berretsi"
-
-msgid "Cancel"
-msgstr "Utzi"
 
 msgid "Skip"
 msgstr "Eskapatu"
@@ -77,7 +93,14 @@ msgid ""
 "\n"
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
 "labs.org/shelly-alpm/docs/polkit</a>"
-msgstr "Shelly-ren GUIak <b>polkit</b> instalatuta eta martxan behar du ekintza pribilegiatuak baimentzeko, baina ez da sistema-busean aurkitu.\n\nInstalatu eta gaitu, eta saiatu berriro.\n\n<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-labs.org/shelly-alpm/docs/polkit</a>"
+msgstr ""
+"Shelly-ren GUIak <b>polkit</b> instalatuta eta martxan behar du ekintza "
+"pribilegiatuak baimentzeko, baina ez da sistema-busean aurkitu.\n"
+"\n"
+"Instalatu eta gaitu, eta saiatu berriro.\n"
+"\n"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
+"labs.org/shelly-alpm/docs/polkit</a>"
 
 msgid "Review PKGBUILD"
 msgstr "Berrikusi PKGBUILD"
@@ -146,6 +169,16 @@ msgstr "Instalazio-bidea"
 msgid "Launch Flags"
 msgstr "Abiarazteko banderak"
 
+msgid "Environment Variables"
+msgstr ""
+
+msgid ""
+"One KEY=value per line. Remove a line to restore the normal environment."
+msgstr ""
+
+msgid "Save Environment"
+msgstr ""
+
 msgid "Save"
 msgstr "Gorde"
 
@@ -188,10 +221,8 @@ msgstr "Ospea"
 msgid "Search the AUR"
 msgstr "Bilatu AURen"
 
-msgid "The AUR has no browsable index type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
-"AURek ez du arakatu daitekeen indexaziorik, idatzi pakete baten izena "
-"hasteko."
 
 msgid "Run checks"
 msgstr "Exekutatu egiaztapenak"
@@ -232,6 +263,9 @@ msgstr "erabiltzailea"
 
 msgid "Install"
 msgstr "Instalatu"
+
+msgid "No matching applications found"
+msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Flatpak datuak kargatzen..."
@@ -368,6 +402,9 @@ msgstr "Biltegia"
 msgid "Install Date"
 msgstr "Instalazio-data"
 
+msgid "No matching packages found"
+msgstr ""
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Arazo bat egon da paketeak kargatzean. Egiaztatu datu-basea blokeatuta "
@@ -437,7 +474,6 @@ msgstr "Flatpak"
 msgid "Show results from the configured Flatpak remotes"
 msgstr ""
 
-#| msgid "Source Files"
 msgid "Source"
 msgstr ""
 
@@ -445,8 +481,8 @@ msgid "Search everywhere"
 msgstr ""
 
 msgid ""
-"Search standard repositories, the AUR and Flatpak at once. Type a name to "
-"begin."
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
 msgstr ""
 
 msgid "General"
@@ -475,6 +511,12 @@ msgstr "Gehitu erretilua hasiera automatikoan"
 
 msgid "Use weekly schedule"
 msgstr "Erabili asteko ordutegia"
+
+msgid "Run Tray as cron"
+msgstr ""
+
+msgid "Tray update with ui"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Erretiluko egiaztapen-tartea (ordutan)"
@@ -562,9 +604,6 @@ msgstr "Berrespenik gabe"
 msgid "Enable Shelly Search"
 msgstr "Gaitu Shelly bilaketa"
 
-msgid "Enable Package Downgrade"
-msgstr "Gaitu paketeen bertsio-jaitsiera"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Gaitu Webview ikuspegia (esperimentala)"
 
@@ -591,6 +630,9 @@ msgstr "Babeslea"
 
 msgid "Toggle output"
 msgstr "Txandakatu irteera"
+
+msgid "Done"
+msgstr "Eginda"
 
 msgid "Available Updates"
 msgstr "Eguneraketa eskuragarriak"
@@ -792,9 +834,6 @@ msgstr "Segurtasun azterketa osatuta - ez da arazorik aurkitu."
 msgid "used in"
 msgstr "hemen erabilita:"
 
-msgid "Warning"
-msgstr "Oharra"
-
 msgid "Install Anyway"
 msgstr "Instalatu hala ere"
 
@@ -872,6 +911,14 @@ msgstr "AppImage-ak sinkronizatzen"
 msgid "Syncing AppImage"
 msgstr "AppImage sinkronizatzen"
 
+msgid ""
+"Use unique KEY=value lines. Keys must start with a letter or underscore and "
+"contain only letters, digits, or underscores."
+msgstr ""
+
+msgid "Saving AppImage environment"
+msgstr ""
+
 msgid "Saving update configuration"
 msgstr "Eguneratze-konfigurazioa gordetzen"
 
@@ -892,6 +939,15 @@ msgstr "Eragiketa ondo osatu da"
 
 msgid "Operation failed"
 msgstr "Eragiketak huts egin du"
+
+msgid "Discard environment changes?"
+msgstr ""
+
+msgid "Your environment changes have not been saved."
+msgstr ""
+
+msgid "Discard"
+msgstr ""
 
 msgid "Maintainer"
 msgstr "Mantenitzailea"
@@ -1006,6 +1062,15 @@ msgstr "Erakutsi gutxiago"
 
 msgid "Installing flatpak"
 msgstr "Flatpak instalatzen"
+
+msgid "Remove this Flatpak?"
+msgstr ""
+
+msgid "Remove Flatpak"
+msgstr ""
+
+msgid "Removing Flatpak"
+msgstr "Flatpak kentzen"
 
 msgid "Permissions"
 msgstr "Baimenak"
@@ -1148,25 +1213,12 @@ msgstr "Urruneko jatorria kentzen"
 msgid "Adding Remote"
 msgstr "Urruneko jatorria gehitzen"
 
-#| msgid "Removing Flatpak"
-msgid "Remove this Flatpak?"
-msgstr ""
-
-#| msgid "Removing Flatpak"
-msgid "Remove Flatpak"
-msgstr ""
-
-msgid "Removing Flatpak"
-msgstr "Flatpak kentzen"
-
 msgid "App ID"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Remote"
 msgstr ""
 
-#| msgid "Development"
 msgid "Developer"
 msgstr ""
 
@@ -1188,7 +1240,6 @@ msgstr "Ez"
 msgid "Keywords"
 msgstr ""
 
-#| msgid "e.g., flathub"
 msgid "Flathub"
 msgstr ""
 
@@ -1261,26 +1312,26 @@ msgstr "Paketeak kentzen"
 msgid "Installing packages"
 msgstr "Paketeak instalatzen"
 
-#| msgid "Operation failed"
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
+
 msgid "Search failed"
 msgstr ""
 
-#| msgid "Installation failed."
 msgid "Installation in progress"
 msgstr ""
 
-#| msgid "No packages selected"
 msgid "No sources selected"
 msgstr ""
 
 msgid "Enable at least one source filter above."
 msgstr ""
 
-#| msgid "Installing packages"
 msgid "Install Packages"
 msgstr ""
 
-#| msgid "Remove the selected packages?"
 msgid "Install the selected packages?"
 msgstr ""
 
@@ -1359,20 +1410,6 @@ msgstr "Huts egin du systemd abiarazte-zerbitzua kentzean"
 
 msgid "Systemd startup service removed."
 msgstr "Systemd hasierako zerbitzua kenduta."
-
-msgid "Enable AUR?"
-msgstr "Gaitu AUR?"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"Arch Erabiltzaileen Biltegia (AUR) komunitateak kudeatutako biltegi bat da. "
-"Paketeak erabiltzaileek sortuak dira eta arriskuak izan ditzakete. Gaitu "
-"nahi duzu?"
-
-msgid "Enable"
-msgstr "Gaitu"
 
 msgid "AUR enabled"
 msgstr "AUR gaituta"
@@ -1482,11 +1519,17 @@ msgstr "Disko-espazioa egiaztatzen"
 msgid "Working"
 msgstr "Lanean"
 
-msgid "Done"
-msgstr "Eginda"
-
 msgid "Failed"
 msgstr "Huts egin du"
+
+msgid "Transaction Completed"
+msgstr ""
+
+msgid "Transaction Failed"
+msgstr ""
+
+msgid "Transaction Cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "Amaituta"
@@ -1494,8 +1537,27 @@ msgstr "Amaituta"
 msgid "exit"
 msgstr "irten"
 
+msgid "The operation was cancelled."
+msgstr ""
+
+msgid "All operations finished successfully."
+msgstr ""
+
+msgid ""
+"Permission to manage packages was not granted. Try again and approve the "
+"authorization request to continue."
+msgstr ""
+
 msgid "Cancelled"
 msgstr "Ezeztatuta"
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
 
 msgid "System package update"
 msgstr "Sistemako paketeen eguneraketa"
@@ -1529,9 +1591,6 @@ msgstr "Paketeen datu-baseak freskatzen"
 msgid "Database lock removed successfully"
 msgstr "Datu-basearen blokeoa ondo kendu da"
 
-msgid "Failed to remove database lock"
-msgstr "Ezin izan da datu-basearen blokeoa kendu"
-
 msgid "Fixing permissions"
 msgstr "Baimenak bideratzen"
 
@@ -1543,13 +1602,6 @@ msgstr "Pakete-cachea garbitzen"
 
 msgid "Welcome"
 msgstr "Ongi etorri"
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-"Arch User Repository komunitateak mantentzen du. Paketeak ez dira ofizialki "
-"egiaztatzen — soilik gaitu instalatzen duzunaz fidatzen bazara."
 
 msgid "Enable Recommended?"
 msgstr "Gaitu gomendatutakoak?"
@@ -1569,23 +1621,3 @@ msgstr "Ezarpenak"
 
 msgid "Package"
 msgstr "Paketea"
-
-#~ msgid ""
-#~ "Shelly's GUI needs <b>polkit</b> installed and running to authorize "
-#~ "privileged actions, but it wasn't found on the system bus.\n"
-#~ "\n"
-#~ "Install and enable it, then retry.\n"
-#~ "\n"
-#~ "<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/"
-#~ "title/Polkit</a>"
-#~ msgstr ""
-#~ "Shelly-ren GUIak <b>polkit</b> instalatuta eta martxan behar du ekintza "
-#~ "pribilegiatuak baimentzeko, baina ez da sistema-busean aurkitu.\n"
-#~ "\n"
-#~ "Instalatu eta gaitu, eta saiatu berriro.\n"
-#~ "\n"
-#~ "<a href=\"https://wiki.archlinux.org/title/Polkit\">wiki.archlinux.org/"
-#~ "title/Polkit</a>"
-
-#~ msgid "Show dependency packages on;y"
-#~ msgstr "Erakutsi menpekotasun-paketeak soilik"

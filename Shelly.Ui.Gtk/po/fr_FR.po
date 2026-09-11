@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-08-12 09:19-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-08-13 18:50+0200\n"
 "Last-Translator: Roxfr <roxfr-dev@outlook.com>\n"
 "Language-Team: French\n"
@@ -19,6 +19,27 @@ msgstr "Aucun module complémentaire installable disponible"
 msgid "Close"
 msgstr "Fermer"
 
+msgid "Enable AUR?"
+msgstr "Activer l'AUR ?"
+
+msgid ""
+"The Arch User Repository contains build scripts that are known as PKGBUILDs. "
+"Those scripts are uploaded by users, and are not verified or vetted in any "
+"way. Only enable this feature if you are comfortable in verifying the build "
+"scripts."
+msgstr ""
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+"Safety Guide</a>"
+msgstr ""
+
+msgid "Enable"
+msgstr "Activer"
+
+msgid "Cancel"
+msgstr "Annuler"
+
 msgid "Keep configuration"
 msgstr "Conserver la configuration"
 
@@ -33,9 +54,6 @@ msgstr "Les données de l'application seront définitivement supprimées."
 
 msgid "Confirm"
 msgstr "Confirmer"
-
-msgid "Cancel"
-msgstr "Annuler"
 
 msgid "Skip"
 msgstr "Ignorer"
@@ -152,6 +170,16 @@ msgstr "Chemin d'installation"
 msgid "Launch Flags"
 msgstr "Options de lancement"
 
+msgid "Environment Variables"
+msgstr ""
+
+msgid ""
+"One KEY=value per line. Remove a line to restore the normal environment."
+msgstr ""
+
+msgid "Save Environment"
+msgstr ""
+
 msgid "Save"
 msgstr "Enregistrer"
 
@@ -194,9 +222,8 @@ msgstr "Popularité"
 msgid "Search the AUR"
 msgstr "Rechercher dans l'AUR"
 
-msgid "The AUR has no browsable index type a package name to begin."
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
-"L'AUR n'a pas d'index consultable. Tapez un nom de paquet pour commencer."
 
 msgid "Run checks"
 msgstr "Exécuter les vérifications"
@@ -237,6 +264,9 @@ msgstr "utilisateur"
 
 msgid "Install"
 msgstr "Installer"
+
+msgid "No matching applications found"
+msgstr ""
 
 msgid "Loading Flatpak Data..."
 msgstr "Chargement des données Flatpak…"
@@ -373,6 +403,9 @@ msgstr "Dépôt"
 msgid "Install Date"
 msgstr "Date d'installation"
 
+msgid "No matching packages found"
+msgstr ""
+
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 "Un problème est survenu lors du chargement de vos paquets. Vérifiez si un "
@@ -453,11 +486,9 @@ msgid "Search everywhere"
 msgstr "Rechercher partout"
 
 msgid ""
-"Search standard repositories, the AUR and Flatpak at once. Type a name to "
-"begin."
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
 msgstr ""
-"Rechercher simultanément dans les dépôts standards, l'AUR et Flatpak. Tapez "
-"un nom pour commencer."
 
 msgid "General"
 msgstr "Général"
@@ -485,6 +516,12 @@ msgstr "Ajouter la zone de notification au démarrage automatique"
 
 msgid "Use weekly schedule"
 msgstr "Utiliser une planification hebdomadaire"
+
+msgid "Run Tray as cron"
+msgstr ""
+
+msgid "Tray update with ui"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalle de vérification de la zone de notification (heures)"
@@ -572,9 +609,6 @@ msgstr "Ne pas demander de confirmation"
 msgid "Enable Shelly Search"
 msgstr "Activer la recherche Shelly"
 
-msgid "Enable Package Downgrade"
-msgstr "Activer la rétrogradation des paquets"
-
 msgid "Enable Webview Visualization (experimental)"
 msgstr "Activer la visualisation WebView (expérimental)"
 
@@ -601,6 +635,9 @@ msgstr "Sponsoriser"
 
 msgid "Toggle output"
 msgstr "Afficher/masquer la sortie"
+
+msgid "Done"
+msgstr "Terminé"
 
 msgid "Available Updates"
 msgstr "Mises à jour disponibles"
@@ -805,9 +842,6 @@ msgstr "Analyse de sécurité terminée : aucun problème trouvé."
 msgid "used in"
 msgstr "utilisé dans"
 
-msgid "Warning"
-msgstr "Avertissement"
-
 msgid "Install Anyway"
 msgstr "Installer quand même"
 
@@ -886,6 +920,14 @@ msgstr "Synchronisation des AppImages"
 msgid "Syncing AppImage"
 msgstr "Synchronisation de l'AppImage"
 
+msgid ""
+"Use unique KEY=value lines. Keys must start with a letter or underscore and "
+"contain only letters, digits, or underscores."
+msgstr ""
+
+msgid "Saving AppImage environment"
+msgstr ""
+
 msgid "Saving update configuration"
 msgstr "Enregistrement de la configuration de mise à jour"
 
@@ -906,6 +948,15 @@ msgstr "Opération terminée avec succès"
 
 msgid "Operation failed"
 msgstr "Échec de l'opération"
+
+msgid "Discard environment changes?"
+msgstr ""
+
+msgid "Your environment changes have not been saved."
+msgstr ""
+
+msgid "Discard"
+msgstr ""
 
 msgid "Maintainer"
 msgstr "Mainteneur"
@@ -1019,6 +1070,15 @@ msgstr "Afficher moins"
 
 msgid "Installing flatpak"
 msgstr "Installation de Flatpak"
+
+msgid "Remove this Flatpak?"
+msgstr "Supprimer ce Flatpak ?"
+
+msgid "Remove Flatpak"
+msgstr "Supprimer le Flatpak"
+
+msgid "Removing Flatpak"
+msgstr "Suppression du Flatpak"
 
 msgid "Permissions"
 msgstr "Permissions"
@@ -1162,15 +1222,6 @@ msgstr "Suppression du dépôt distant"
 msgid "Adding Remote"
 msgstr "Ajout du dépôt distant"
 
-msgid "Remove this Flatpak?"
-msgstr "Supprimer ce Flatpak ?"
-
-msgid "Remove Flatpak"
-msgstr "Supprimer le Flatpak"
-
-msgid "Removing Flatpak"
-msgstr "Suppression du Flatpak"
-
 msgid "App ID"
 msgstr "ID de l'application"
 
@@ -1270,6 +1321,13 @@ msgstr "Suppression des paquets"
 msgid "Installing packages"
 msgstr "Installation des paquets"
 
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
+"Rechercher simultanément dans les dépôts standards, l'AUR et Flatpak. Tapez "
+"un nom pour commencer."
+
 msgid "Search failed"
 msgstr "Échec de la recherche"
 
@@ -1364,20 +1422,6 @@ msgstr "Échec de la suppression du service de démarrage systemd"
 
 msgid "Systemd startup service removed."
 msgstr "Service de démarrage systemd supprimé."
-
-msgid "Enable AUR?"
-msgstr "Activer l'AUR ?"
-
-msgid ""
-"The Arch User Repository (AUR) is a community-driven repository. Packages "
-"are user-produced and may contain risks. Do you want to enable it?"
-msgstr ""
-"L'Arch User Repository (AUR) est un dépôt géré par la communauté. Les "
-"paquets sont créés par les utilisateurs et peuvent présenter des risques. "
-"Voulez-vous l'activer ?"
-
-msgid "Enable"
-msgstr "Activer"
 
 msgid "AUR enabled"
 msgstr "AUR activé"
@@ -1487,11 +1531,17 @@ msgstr "Vérification de l'espace disque"
 msgid "Working"
 msgstr "En cours"
 
-msgid "Done"
-msgstr "Terminé"
-
 msgid "Failed"
 msgstr "Échec"
+
+msgid "Transaction Completed"
+msgstr ""
+
+msgid "Transaction Failed"
+msgstr ""
+
+msgid "Transaction Cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "Terminé"
@@ -1499,8 +1549,27 @@ msgstr "Terminé"
 msgid "exit"
 msgstr "quitter"
 
+msgid "The operation was cancelled."
+msgstr ""
+
+msgid "All operations finished successfully."
+msgstr ""
+
+msgid ""
+"Permission to manage packages was not granted. Try again and approve the "
+"authorization request to continue."
+msgstr ""
+
 msgid "Cancelled"
 msgstr "Annulé"
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
 
 msgid "System package update"
 msgstr "Mise à jour des paquets système"
@@ -1534,9 +1603,6 @@ msgstr "Actualisation des bases de données des paquets"
 msgid "Database lock removed successfully"
 msgstr "Verrou de base de données supprimé avec succès"
 
-msgid "Failed to remove database lock"
-msgstr "Échec de la suppression du verrou de base de données"
-
 msgid "Fixing permissions"
 msgstr "Correction des permissions"
 
@@ -1548,14 +1614,6 @@ msgstr "Nettoyage du cache des paquets"
 
 msgid "Welcome"
 msgstr "Bienvenue"
-
-msgid ""
-"The Arch User Repository is community-maintained. Packages are not "
-"officially vetted — only enable if you trust what you install."
-msgstr ""
-"L'Arch User Repository est géré par la communauté. Les paquets ne sont pas "
-"officiellement vérifiés — activez-le uniquement si vous faites confiance à "
-"ce que vous installez."
 
 msgid "Enable Recommended?"
 msgstr "Activer les recommandations ?"

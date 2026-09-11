@@ -46,6 +46,7 @@ pub fn resolve_or_parse(self: PkgbuildParser, content: []const u8, var_name: []c
     if (vars.get(var_name)) |val| {
         return try self.allocator.dupe(u8, val);
     }
+    if (dynamicallyUnset(self, var_name)) return null;
     const parsed = try parse_variable(content, var_name) orelse return null;
     return try self.allocator.dupe(u8, parsed);
 }
@@ -180,6 +181,9 @@ pub fn build_var_hashmap(self: PkgbuildParser, content: []const u8) !std.StringH
         while (key_it.next()) |k| try keys.append(self.allocator, k.*);
 
         for (keys.items) |key| {
+            // Bash has already evaluated these values. Expanding again would
+            // corrupt quoted literals, escaped dollars and command output.
+            if (dynamicOverride(self, key) != null) continue;
             const original = vars.get(key).?;
             const resolved = try expansion.resolve_string(self, original, &vars);
             defer self.allocator.free(resolved);
@@ -256,6 +260,18 @@ fn inject_array_pkgname(
     vars: *std.StringHashMap([]const u8),
 ) !void {
     if (vars.contains("pkgname")) return;
+
+    if (self.dynamic_array_overrides) |overrides| if (overrides.get("pkgname")) |names| {
+        if (names.len == 0) return;
+        const key = try self.allocator.dupe(u8, "pkgname");
+        errdefer self.allocator.free(key);
+        const value = try self.allocator.dupe(u8, names[0]);
+        errdefer self.allocator.free(value);
+        try vars.put(key, value);
+        return;
+    };
+    if (dynamicallyUnset(self, "pkgname")) return;
+    if (self.dynamic_array_unsets) |unsets| if (unsets.contains("pkgname")) return;
 
     const names = try arrays.parse_array(self, content, "pkgname");
     defer {

@@ -57,7 +57,7 @@ fn succeeded(term: std.process.Child.Term) bool {
 test "isolated source public keys reach a clean guest and signatures remain enforced" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;
-    var temporary = std.testing.tmpDir(.{});
+    var temporary = try @import("test_support.zig").PgpTmpDir.init();
     defer temporary.cleanup();
     const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
     defer allocator.free(directory);

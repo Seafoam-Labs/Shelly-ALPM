@@ -2969,7 +2969,7 @@ test "isolated source key preparation checks the digest and refuses unapproved i
     var context: test_support.TestContext = .{};
     context.init();
     defer context.deinit();
-    var temporary = std.testing.tmpDir(.{});
+    var temporary = try test_support.PgpTmpDir.init();
     defer temporary.cleanup();
     const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
     defer allocator.free(directory);
