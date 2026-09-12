@@ -96,6 +96,7 @@ pub const PackageDetail = extern struct {
         gtk.Label.setLabel(p.name_label, c_string.cstr(&buf, package.Name));
         p.name_label.setSelectable(1);
         gtk.Label.setLabel(p.description_label, if (package.Description) |desc| c_string.cstr(&buf, desc) else "");
+        p.description_label.setSelectable(1);
 
         clear_box(p.spec_box);
         clear_box(p.sections_box);
@@ -166,6 +167,7 @@ pub const PackageDetail = extern struct {
         gtk.Widget.setHexpand(val.as(gtk.Widget), 1);
         gtk.Label.setXalign(val, 1);
         gtk.Label.setEllipsize(val, .end);
+        gtk.Label.setSelectable(val, 1);
         gtk.Widget.addCssClass(val.as(gtk.Widget), "spec-value");
         gtk.Box.append(row, val.as(gtk.Widget));
         gtk.Box.append(box, row.as(gtk.Widget));
@@ -191,6 +193,7 @@ pub const PackageDetail = extern struct {
         gtk.Widget.setHexpand(val.as(gtk.Widget), 1);
         gtk.Label.setXalign(val, 1);
         gtk.Label.setEllipsize(val, .end);
+        gtk.Label.setSelectable(val, 1);
 
         gtk.Box.append(row, val.as(gtk.Widget));
 
@@ -228,6 +231,7 @@ pub const PackageDetail = extern struct {
         gtk.Label.setXalign(val, 1);
         gtk.Label.setWrap(val, 1);
         gtk.Label.setJustify(val, .right);
+        gtk.Label.setSelectable(val, 1);
         gtk.Widget.addCssClass(val.as(gtk.Widget), "spec-value");
         gtk.Box.append(row, val.as(gtk.Widget));
         gtk.Box.append(box, row.as(gtk.Widget));
@@ -260,6 +264,7 @@ pub const PackageDetail = extern struct {
                 gtk.Widget.setHalign(lbl.as(gtk.Widget), .start);
                 gtk.Label.setXalign(lbl, 0);
                 gtk.Label.setEllipsize(lbl, .end);
+                gtk.Label.setSelectable(lbl, 1);
                 gtk.Widget.addCssClass(lbl.as(gtk.Widget), "spec-value");
                 gtk.Button.setChild(row_btn, lbl.as(gtk.Widget));
                 const name_owned = std.heap.c_allocator.dupeZ(u8, dep_name) catch continue;
@@ -271,6 +276,7 @@ pub const PackageDetail = extern struct {
                 gtk.Widget.setHalign(lbl.as(gtk.Widget), .start);
                 gtk.Label.setXalign(lbl, 0);
                 gtk.Label.setEllipsize(lbl, .end);
+                gtk.Label.setSelectable(lbl, 1);
                 gtk.Widget.addCssClass(lbl.as(gtk.Widget), "spec-value");
                 gtk.Widget.addCssClass(lbl.as(gtk.Widget), "dim-label");
                 gtk.Widget.addCssClass(lbl.as(gtk.Widget), "dep-row-static");
