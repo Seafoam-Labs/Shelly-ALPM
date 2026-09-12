@@ -153,13 +153,17 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig base-devel gtk4 glibc git vala
+          pacman -S --needed --noconfirm zig base-devel gtk4 glibc git vala xorg-server-xvfb xorg-xauth
       - uses: actions/checkout@v6
-      - name: Build GTK GUI and test
+      - name: Build GTK GUI and test without a display
         run: |
           cd Shelly.Ui.Gtk
           zig build
-          zig build test
+          env -u DISPLAY -u WAYLAND_DISPLAY zig build test
+      - name: Test GTK widgets with a virtual display
+        run: |
+          cd Shelly.Ui.Gtk
+          GDK_BACKEND=x11 GSK_RENDERER=cairo GTK_A11Y=none xvfb-run -a zig build test
 
   tui:
     needs: changes

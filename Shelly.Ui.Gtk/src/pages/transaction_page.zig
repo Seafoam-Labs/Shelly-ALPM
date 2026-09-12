@@ -1277,7 +1277,7 @@ test "transaction cancellation and success preserve confirmed package results" {
 }
 
 test "transaction events keep successful rows when an AUR package fails" {
-    if (gtk.initCheck() == 0) return error.SkipZigTest;
+    try @import("../helpers/gtk_test.zig").requireDisplay();
     const page = TransactionPage.new();
     _ = page.as(gobject.Object).refSink();
     defer page.as(gobject.Object).unref();

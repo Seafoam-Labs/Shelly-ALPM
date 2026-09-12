@@ -378,7 +378,7 @@ pub const Toast = extern struct {
 };
 
 test "toast reveals on show and hides on dismiss" {
-    if (gtk.initCheck() == 0) return error.SkipZigTest;
+    try @import("../gtk_test.zig").requireDisplay();
 
     const toast = Toast.new();
     _ = toast.as(gobject.Object).refSink();
