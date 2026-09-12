@@ -979,7 +979,10 @@ fn runStandard(context: *runtime.RuntimeContext, options: ListOptions) !Result {
         .{ .use_root = false },
     );
     defer manager.deinit();
-    if (options.show_hidden and !manager.show_hidden_packages) _ = manager.toggle_hidden_packages();
+    return collectStandard(context, manager, options);
+}
+
+fn collectStandard(context: *runtime.RuntimeContext, manager: *Zigalpm.AlpmManager, options: ListOptions) !Result {
     const native_items = try manager.get_installed_packages_with_reverse_dependencies(.{
         .required_by = options.required_by,
         .optional_for = options.optional_for,
@@ -992,7 +995,6 @@ fn runStandard(context: *runtime.RuntimeContext, options: ListOptions) !Result {
     var items: std.ArrayList(StandardItem) = .empty;
     for (native_items) |native| {
         const name = native.name() orelse continue;
-        if (!options.show_hidden and ignoredStandardPackage(manager, name)) continue;
         try items.append(allocator, .{
             .name = try allocator.dupe(u8, name),
             .version = try allocator.dupe(u8, native.version() orelse ""),
@@ -1193,13 +1195,6 @@ fn copyStrings(allocator: std.mem.Allocator, values: anytype) ![]const []const u
     return copies;
 }
 
-fn ignoredStandardPackage(manager: *Zigalpm.AlpmManager, name: []const u8) bool {
-    for (manager.config.ignore_package.items) |ignored| {
-        if (std.mem.eql(u8, ignored, name)) return true;
-    }
-    return false;
-}
-
 fn parseTestArguments(
     allocator: std.mem.Allocator,
     manifest: *const spec.Manifest,
@@ -1355,6 +1350,98 @@ test "list reverse dependency modifiers are selective and backend scoped" {
         &.{ "list", "flatpak", "--optional-for" },
     );
     try std.testing.expect(flatpak == .failure);
+}
+
+test "standard listing includes ignored installed packages with install-reason filters" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const allocator = tc.context.allocator;
+    const io = tc.context.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    const packages = [_]struct { name: []const u8, reason: u8 }{
+        .{ .name = "ignored-explicit", .reason = 0 },
+        .{ .name = "ignored-dependency", .reason = 1 },
+        .{ .name = "visible-explicit", .reason = 0 },
+    };
+    for (packages) |package| {
+        const directory = try std.fmt.allocPrint(allocator, "db/local/{s}-1.0-1", .{package.name});
+        try temporary.dir.createDirPath(io, directory);
+        const description = try std.fmt.allocPrint(
+            allocator,
+            "%NAME%\n{s}\n\n%VERSION%\n1.0-1\n\n%DESC%\nListing regression fixture\n\n%ARCH%\nany\n\n%REASON%\n{d}\n\n%VALIDATION%\nnone\n\n",
+            .{ package.name, package.reason },
+        );
+        try temporary.dir.writeFile(io, .{
+            .sub_path = try std.fmt.allocPrint(allocator, "{s}/desc", .{directory}),
+            .data = description,
+        });
+        try temporary.dir.writeFile(io, .{
+            .sub_path = try std.fmt.allocPrint(allocator, "{s}/files", .{directory}),
+            .data = "%FILES%\n\n",
+        });
+    }
+    try temporary.dir.writeFile(io, .{ .sub_path = "db/local/ALPM_DB_VERSION", .data = "9\n" });
+    try temporary.dir.writeFile(io, .{
+        .sub_path = "pacman.conf",
+        .data = try std.fmt.allocPrint(
+            allocator,
+            "[options]\nArchitecture = auto\nSigLevel = Never\nDBPath = {s}/db\nIgnorePkg = ignored-explicit ignored-dependency\n",
+            .{root},
+        ),
+    });
+    const manager = try Zigalpm.AlpmManager.init(allocator, std.testing.environ, .{
+        .config_path = try std.fs.path.join(allocator, &.{ root, "pacman.conf" }),
+    });
+    defer manager.deinit();
+    try std.testing.expectEqual(@as(usize, 2), manager.config.ignore_package.items.len);
+
+    // Inject only the manager: collection, reason filtering, and rendering all
+    // use the production path rather than preassembled result fixtures.
+    const Fixture = struct {
+        manager: *Zigalpm.AlpmManager,
+
+        fn list(self: @This(), context: *runtime.RuntimeContext, backend: Backend, options: ListOptions) !Result {
+            try std.testing.expectEqual(Backend.standard, backend);
+            return collectStandard(context, self.manager, options);
+        }
+    };
+    const manifest = try spec.Manifest.load(allocator);
+    const cases = [_]struct { filter: ?[]const u8, explicit: bool, dependency: bool }{
+        .{ .filter = null, .explicit = true, .dependency = true },
+        .{ .filter = "--explicitOnly", .explicit = true, .dependency = false },
+        .{ .filter = "--dependencyOnly", .explicit = false, .dependency = true },
+    };
+    for ([_]bool{ false, true }) |json| {
+        for (cases) |case| {
+            var baseline: []const u8 = "";
+            for ([_]?[]const u8{ null, "--show-hidden", "-w" }) |hidden_flag| {
+                tc.stdout.writer.end = 0;
+                var arguments: std.ArrayList([]const u8) = .empty;
+                try arguments.appendSlice(allocator, &.{ "list", "standard" });
+                if (json) try arguments.append(allocator, "--json");
+                if (case.filter) |filter| try arguments.append(allocator, filter);
+                if (hidden_flag) |flag| try arguments.append(allocator, flag);
+                const outcome = try parseTestArguments(allocator, &manifest, arguments.items);
+                try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &outcome.dispatch, Fixture{ .manager = manager }));
+                try std.testing.expect(!manager.show_hidden_packages);
+                const rendered = tc.stdout.writer.buffered();
+                for (packages) |package| {
+                    try std.testing.expectEqual(
+                        if (package.reason == 0) case.explicit else case.dependency,
+                        std.mem.indexOf(u8, rendered, package.name) != null,
+                    );
+                }
+                if (hidden_flag == null) {
+                    baseline = try allocator.dupe(u8, rendered);
+                } else {
+                    try std.testing.expectEqualStrings(baseline, rendered);
+                }
+            }
+        }
+    }
 }
 
 test "standard install-reason filters apply to structured output" {
