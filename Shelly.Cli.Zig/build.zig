@@ -63,6 +63,15 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_module_tests.step);
     test_step.dependOn(&run_executable_tests.step);
 
+    const account_tests = b.addTest(.{
+        .name = "user-account-test",
+        .root_module = cli,
+        .filters = &.{ "NSS", "invoking identity", "invoking user", "elevation resolves", "elevation takes precedence", "XDG" },
+    });
+    const run_account_tests = b.addRunArtifact(account_tests);
+    const account_test_step = b.step("user-account-test", "Test NSS caller identity and per-user paths");
+    account_test_step.dependOn(&run_account_tests.step);
+
     const builder_test_module = b.createModule(.{
         .root_source_file = b.path("src/builder_command_test.zig"),
         .target = target,

@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Zigalpm = @import("Zigalpm");
+const user_account = Zigalpm.user_account;
 const context_module = @import("context.zig");
 const signals = @import("signals.zig");
 
@@ -526,139 +527,49 @@ const InvokingIdentity = struct {
     }
 };
 
-/// Resolves the username and uid of the user who invoked the current elevated
-/// process, recognizing sudo, doas, pkexec, and run0. Returns null when the process
-/// was not elevated by one of these tools or when the invoking user was root.
-/// Both returned strings are owned by the caller.
+/// Resolves the original non-root caller through NSS. All strings are owned.
 fn invokingUser(context: *const context_module.RuntimeContext) !?InvokingIdentity {
     const environment = context.environment orelse return null;
-    if (environment.get("SUDO_USER") == null and
-        environment.get("DOAS_USER") == null and
-        environment.get("PKEXEC_UID") == null) return null;
-    const passwd = std.Io.Dir.cwd().readFileAlloc(
-        context.io,
-        "/etc/passwd",
-        context.allocator,
-        .limited(1024 * 1024),
-    ) catch return null;
-    defer context.allocator.free(passwd);
-    return invokingIdentity(context.allocator, environment, passwd);
+    return invokingIdentity(context.allocator, environment, user_account);
 }
 
 fn invokingIdentity(
     allocator: std.mem.Allocator,
     environment: *const std.process.Environ.Map,
-    passwd: []const u8,
+    comptime accounts: type,
 ) !?InvokingIdentity {
-    if (environment.get("SUDO_USER")) |user| {
-        if (validInvokingUser(user)) return try identityForUsername(allocator, passwd, user);
-    }
-    if (environment.get("DOAS_USER")) |user| {
-        if (validInvokingUser(user)) return try identityForUsername(allocator, passwd, user);
-    }
-    const uid = environment.get("PKEXEC_UID") orelse return null;
-    if (uid.len == 0) return null;
-    const username = try usernameForUidInPasswd(allocator, passwd, uid) orelse return null;
-    defer allocator.free(username);
-    return identityForUsername(allocator, passwd, username);
-}
-
-fn identityForUsername(
-    allocator: std.mem.Allocator,
-    passwd: []const u8,
-    username: []const u8,
-) !?InvokingIdentity {
-    const uid = try uidForUsernameInPasswd(allocator, passwd, username) orelse return null;
-    errdefer allocator.free(uid);
-    const gid = try gidForUsernameInPasswd(allocator, passwd, username) orelse return null;
-    errdefer allocator.free(gid);
-    return InvokingIdentity{
-        .username = try allocator.dupe(u8, username),
-        .uid = uid,
-        .gid = gid,
+    const account = blk: {
+        if (environment.get("SUDO_USER")) |user| {
+            if (validInvokingUser(user)) break :blk try accounts.byName(allocator, user);
+        }
+        if (environment.get("DOAS_USER")) |user| {
+            if (validInvokingUser(user)) break :blk try accounts.byName(allocator, user);
+        }
+        const uid = environment.get("PKEXEC_UID") orelse return null;
+        break :blk try accounts.byUidText(allocator, uid);
     };
+    const found = account orelse return null;
+    defer found.deinit(allocator);
+    if (found.uid == 0 or !validInvokingUser(found.username)) return null;
+    const uid = try std.fmt.allocPrint(allocator, "{d}", .{found.uid});
+    errdefer allocator.free(uid);
+    const gid = try std.fmt.allocPrint(allocator, "{d}", .{found.gid});
+    errdefer allocator.free(gid);
+    return .{ .username = try allocator.dupe(u8, found.username), .uid = uid, .gid = gid };
 }
 
 fn validInvokingUser(user: []const u8) bool {
     return user.len > 0 and !std.mem.eql(u8, user, "root");
 }
 
-fn usernameForUidInPasswd(
-    allocator: std.mem.Allocator,
-    passwd: []const u8,
-    wanted_uid: []const u8,
-) !?[]const u8 {
-    var lines = std.mem.splitScalar(u8, passwd, '\n');
-    while (lines.next()) |line| {
-        var fields = std.mem.splitScalar(u8, line, ':');
-        const username = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        const uid = fields.next() orelse continue;
-        if (std.mem.eql(u8, uid, wanted_uid) and validInvokingUser(username))
-            return try allocator.dupe(u8, username);
-    }
-    return null;
-}
-
-fn uidForUsernameInPasswd(
-    allocator: std.mem.Allocator,
-    passwd: []const u8,
-    wanted_username: []const u8,
-) !?[]const u8 {
-    var lines = std.mem.splitScalar(u8, passwd, '\n');
-    while (lines.next()) |line| {
-        var fields = std.mem.splitScalar(u8, line, ':');
-        const username = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        const uid = fields.next() orelse continue;
-        if (std.mem.eql(u8, username, wanted_username) and uid.len > 0)
-            return try allocator.dupe(u8, uid);
-    }
-    return null;
-}
-
-fn gidForUsernameInPasswd(
-    allocator: std.mem.Allocator,
-    passwd: []const u8,
-    wanted_username: []const u8,
-) !?[]const u8 {
-    var lines = std.mem.splitScalar(u8, passwd, '\n');
-    while (lines.next()) |line| {
-        var fields = std.mem.splitScalar(u8, line, ':');
-        const username = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        const gid = fields.next() orelse continue;
-        if (std.mem.eql(u8, username, wanted_username) and gid.len > 0)
-            return try allocator.dupe(u8, gid);
-    }
-    return null;
-}
-
 fn invokingUserHome(
     context: *const context_module.RuntimeContext,
     user: []const u8,
 ) ![]u8 {
-    const contents = std.Io.Dir.cwd().readFileAlloc(
-        context.io,
-        "/etc/passwd",
-        context.allocator,
-        .limited(1024 * 1024),
-    ) catch return Error.ElevationFailed;
-    defer context.allocator.free(contents);
-    var lines = std.mem.splitScalar(u8, contents, '\n');
-    while (lines.next()) |line| {
-        var fields = std.mem.splitScalar(u8, line, ':');
-        const candidate = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        const home = fields.next() orelse continue;
-        if (std.mem.eql(u8, candidate, user) and home.len > 0)
-            return context.allocator.dupe(u8, home);
-    }
-    return Error.ElevationFailed;
+    const account = (try user_account.byName(context.allocator, user)) orelse return Error.ElevationFailed;
+    defer account.deinit(context.allocator);
+    if (account.home.len == 0) return Error.ElevationFailed;
+    return context.allocator.dupe(u8, account.home);
 }
 
 fn exitCode(term: std.process.Child.Term) Error!u8 {
@@ -915,22 +826,30 @@ test "run0 invoking-user arguments use native options" {
     for (expected, actual) |wanted, value| try std.testing.expectEqualStrings(wanted, value);
 }
 
-const sample_passwd =
-    "root:x:0:0:root:/root:/usr/bin/zsh\n" ++
-    "tester:x:1000:1000::/home/tester:/usr/bin/zsh\n" ++
-    "other:x:2000:2000::/home/other:/usr/bin/zsh\n";
+const TestAccounts = struct {
+    fn byName(allocator: std.mem.Allocator, name: []const u8) !?user_account.Account {
+        const uid: std.c.uid_t = if (std.mem.eql(u8, name, "tester")) 60123 else if (std.mem.eql(u8, name, "other")) 60124 else if (std.mem.eql(u8, name, "root") or std.mem.eql(u8, name, "root-alias")) 0 else return null;
+        const username = try allocator.dupe(u8, name);
+        errdefer allocator.free(username);
+        return .{ .username = username, .home = try allocator.dupe(u8, "/home/custom-home"), .uid = uid, .gid = uid + 1 };
+    }
 
-test "pkexec elevation resolves the invoking identity from passwd" {
+    fn byUidText(allocator: std.mem.Allocator, uid: []const u8) !?user_account.Account {
+        return byName(allocator, if (std.mem.eql(u8, uid, "60123")) "tester" else if (std.mem.eql(u8, uid, "60124")) "other" else if (std.mem.eql(u8, uid, "0")) "root" else return null);
+    }
+};
+
+test "pkexec elevation resolves the invoking identity through NSS" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var environment = std.process.Environ.Map.init(arena.allocator());
-    try environment.put("PKEXEC_UID", "1000");
+    try environment.put("PKEXEC_UID", "60123");
 
-    const identity = (try invokingIdentity(std.testing.allocator, &environment, sample_passwd)).?;
+    const identity = (try invokingIdentity(std.testing.allocator, &environment, TestAccounts)).?;
     defer identity.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("tester", identity.username);
-    try std.testing.expectEqualStrings("1000", identity.uid);
-    try std.testing.expectEqualStrings("1000", identity.gid);
+    try std.testing.expectEqualStrings("60123", identity.uid);
+    try std.testing.expectEqualStrings("60124", identity.gid);
 }
 
 test "run0 elevation resolves its SUDO_USER invoking identity" {
@@ -939,11 +858,11 @@ test "run0 elevation resolves its SUDO_USER invoking identity" {
     var environment = std.process.Environ.Map.init(arena.allocator());
     try environment.put("SUDO_USER", "tester");
 
-    const identity = (try invokingIdentity(std.testing.allocator, &environment, sample_passwd)).?;
+    const identity = (try invokingIdentity(std.testing.allocator, &environment, TestAccounts)).?;
     defer identity.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("tester", identity.username);
-    try std.testing.expectEqualStrings("1000", identity.uid);
-    try std.testing.expectEqualStrings("1000", identity.gid);
+    try std.testing.expectEqualStrings("60123", identity.uid);
+    try std.testing.expectEqualStrings("60124", identity.gid);
 }
 
 test "sudo elevation takes precedence over pkexec and resolves its uid" {
@@ -951,13 +870,13 @@ test "sudo elevation takes precedence over pkexec and resolves its uid" {
     defer arena.deinit();
     var environment = std.process.Environ.Map.init(arena.allocator());
     try environment.put("SUDO_USER", "tester");
-    try environment.put("PKEXEC_UID", "2000");
+    try environment.put("PKEXEC_UID", "60124");
 
-    const identity = (try invokingIdentity(std.testing.allocator, &environment, sample_passwd)).?;
+    const identity = (try invokingIdentity(std.testing.allocator, &environment, TestAccounts)).?;
     defer identity.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("tester", identity.username);
-    try std.testing.expectEqualStrings("1000", identity.uid);
-    try std.testing.expectEqualStrings("1000", identity.gid);
+    try std.testing.expectEqualStrings("60123", identity.uid);
+    try std.testing.expectEqualStrings("60124", identity.gid);
 }
 
 test "root callers are not treated as an invoking user" {
@@ -970,8 +889,30 @@ test "root callers are not treated as an invoking user" {
     try std.testing.expect(try invokingIdentity(
         std.testing.allocator,
         &environment,
-        sample_passwd,
+        TestAccounts,
     ) == null);
+}
+
+test "doas elevation takes precedence over pkexec through NSS" {
+    var environment = std.process.Environ.Map.init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("DOAS_USER", "tester");
+    try environment.put("PKEXEC_UID", "60124");
+    const identity = (try invokingIdentity(std.testing.allocator, &environment, TestAccounts)).?;
+    defer identity.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("tester", identity.username);
+    try std.testing.expectEqualStrings("60123", identity.uid);
+    try std.testing.expectEqualStrings("60124", identity.gid);
+}
+
+test "NSS elevation rejects missing accounts and aliases with UID zero" {
+    var environment = std.process.Environ.Map.init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("PKEXEC_UID", "60123");
+    for ([_][]const u8{ "missing", "root-alias" }) |name| {
+        try environment.put("SUDO_USER", name);
+        try std.testing.expect(try invokingIdentity(std.testing.allocator, &environment, TestAccounts) == null);
+    }
 }
 
 test "invoking identity is null without elevation markers" {
@@ -983,6 +924,6 @@ test "invoking identity is null without elevation markers" {
     try std.testing.expect(try invokingIdentity(
         std.testing.allocator,
         &environment,
-        sample_passwd,
+        TestAccounts,
     ) == null);
 }
