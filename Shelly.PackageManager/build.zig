@@ -399,6 +399,7 @@ pub fn build(b: *std.Build) void {
         .root_module = mod,
         .filters = &.{
             "public ALPM query helpers expose typed results",
+            "ALPM package completion events preserve package identity and action",
             "compare_package_versions uses libalpm ordering",
             "dependencyName strips constraints",
             "is_cachyos exposes the detected manager state",

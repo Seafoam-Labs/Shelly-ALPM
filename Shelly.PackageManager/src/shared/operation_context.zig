@@ -95,6 +95,7 @@ pub const StatusEvent = struct {
     message: []const u8,
     code: ?[]const u8 = null,
     native_code: ?i64 = null,
+    package_name: ?[]const u8 = null,
 };
 
 pub const ErrorEvent = struct {
@@ -621,12 +622,25 @@ pub const Operation = struct {
         code: ?[]const u8,
         native_code: ?i64,
     ) void {
+        self.packageStatus(level, message, code, native_code, null);
+    }
+
+    /// Package identity can differ from the enclosing batch operation's subject.
+    pub fn packageStatus(
+        self: *const Operation,
+        level: StatusLevel,
+        message: []const u8,
+        code: ?[]const u8,
+        native_code: ?i64,
+        package_name: ?[]const u8,
+    ) void {
         self.context.emit(.{ .status = .{
             .envelope = self.envelope,
             .level = level,
             .message = message,
             .code = code,
             .native_code = native_code,
+            .package_name = package_name,
         } });
     }
 

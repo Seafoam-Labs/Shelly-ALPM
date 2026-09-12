@@ -1117,6 +1117,9 @@ test "redirected single-pane output suppresses intermediate progress and finaliz
     operation.finish(.success);
     var install = operation_context.begin(.{ .backend = .alpm, .kind = .install, .subject = "demo" });
     install.progress(.{ .completed = 1, .total = 1, .percentage = 100, .native_code = 1 });
+    const before_completion = stdout.writer.buffered().len;
+    install.packageStatus(.information, "Package operation completed.", "alpm.package_upgraded", 12, "demo");
+    try std.testing.expectEqual(before_completion, stdout.writer.buffered().len);
     install.finish(.success);
     var flatpak = operation_context.begin(.{ .backend = .flatpak, .kind = .install, .subject = "org.example.App" });
     flatpak.progress(.{ .percentage = 100, .stage = "Downloading", .message = "org.example.App" });

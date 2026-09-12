@@ -107,10 +107,11 @@ pub const Reporter = struct {
 
     fn write(self: *Reporter, event: Zigalpm.OperationEvent) !void {
         switch (event) {
-            .status => |status| try output.writeAlpmInfoFrame(
+            .status => |status| try output.writeAlpmPackageInfoFrame(
                 self.context,
-                "InformationalOutput",
+                packageEventType(status.code) orelse "InformationalOutput",
                 status.message,
+                status.package_name,
             ),
             .progress => |progress| try output.writeOperationProgressFrame(self.context, progress),
             .failure => |failure| {
@@ -131,6 +132,21 @@ pub const Reporter = struct {
         try flush(self.context);
     }
 };
+
+fn packageEventType(code: ?[]const u8) ?[]const u8 {
+    const value = code orelse return null;
+    const mappings = .{
+        .{ "alpm.package_installed", "PackageInstalled" },
+        .{ "alpm.package_upgraded", "PackageUpgraded" },
+        .{ "alpm.package_downgraded", "PackageDowngraded" },
+        .{ "alpm.package_reinstalled", "PackageReinstalled" },
+        .{ "alpm.package_removed", "PackageRemoved" },
+    };
+    inline for (mappings) |mapping| {
+        if (std.mem.eql(u8, value, mapping[0])) return mapping[1];
+    }
+    return null;
+}
 
 pub const QuestionResponder = struct {
     context: *runtime.RuntimeContext,
@@ -502,6 +518,50 @@ test "UI source key import reads yes/no answers and declines on EOF" {
 pub fn flush(context: *runtime.RuntimeContext) !void {
     try context.stdout.flush();
     try context.stderr.flush();
+}
+
+test "UI operation reporter forwards package completion identity and action" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var stdout = std.Io.Writer.Allocating.init(allocator);
+    var stderr = std.Io.Writer.Allocating.init(allocator);
+    var context: runtime.RuntimeContext = .{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var operation_context = Zigalpm.OperationContext.init(allocator, std.testing.io);
+    defer operation_context.deinit();
+    var reporter: Reporter = .{ .context = &context };
+    _ = try operation_context.subscribe(.{ .function = Reporter.handle, .data = &reporter });
+    var operation = operation_context.begin(.{ .backend = .alpm, .kind = .update, .subject = "batch" });
+    const cases = .{
+        .{ "alpm.package_installed", "PackageInstalled" },
+        .{ "alpm.package_upgraded", "PackageUpgraded" },
+        .{ "alpm.package_downgraded", "PackageDowngraded" },
+        .{ "alpm.package_reinstalled", "PackageReinstalled" },
+        .{ "alpm.package_removed", "PackageRemoved" },
+    };
+    inline for (cases) |case|
+        operation.packageStatus(.information, "Package operation completed.", case[0], 12, "demo");
+    operation.finish(.success);
+    var frames = std.mem.splitSequence(u8, stdout.writer.buffered(), "[/JSON]\n");
+    inline for (cases) |case| {
+        const frame = frames.next() orelse return error.MissingFrame;
+        try std.testing.expect(std.mem.startsWith(u8, frame, "[JSON]"));
+        const encoded = frame["[JSON]".len..];
+        const decoded = try allocator.alloc(u8, try std.base64.standard.Decoder.calcSizeForSlice(encoded));
+        try std.base64.standard.Decoder.decode(decoded, encoded);
+        const parsed = try std.json.parseFromSlice(std.json.Value, allocator, decoded, .{});
+        try std.testing.expectEqualStrings("alpm.info", parsed.value.object.get("$kind").?.string);
+        try std.testing.expectEqualStrings(case[1], parsed.value.object.get("EventType").?.string);
+        try std.testing.expectEqualStrings("demo", parsed.value.object.get("PackageName").?.string);
+    }
+    try std.testing.expectEqualStrings("", frames.next().?);
+    try std.testing.expect(frames.next() == null);
+    try std.testing.expect(!reporter.failed());
 }
 
 test "UI operation reporter preserves percentages for every progress frame shape" {

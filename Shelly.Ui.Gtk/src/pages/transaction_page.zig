@@ -37,6 +37,66 @@ const PackageRow = struct {
     progress: *gtk.ProgressBar,
     stage: ?[]const u8 = null,
     pulse_source: c_uint = 0,
+    result: PackageResult = .pending,
+};
+
+const PackageResult = enum {
+    pending,
+    running,
+    done,
+    installed,
+    upgraded,
+    downgraded,
+    reinstalled,
+    removed,
+    failed,
+    not_processed,
+    interrupted,
+    cancelled,
+
+    fn terminal(self: PackageResult) bool {
+        return self != .pending and self != .running;
+    }
+
+    fn finish(self: PackageResult, outcome: TransactionPage.Outcome) PackageResult {
+        if (self.terminal()) return self;
+        return switch (outcome) {
+            .success => .done,
+            .failed => if (self == .pending) .not_processed else .interrupted,
+            .cancelled => .cancelled,
+        };
+    }
+
+    fn fromEvent(event_type: []const u8) ?PackageResult {
+        const mappings = .{
+            .{ "PackageInstalled", PackageResult.installed },
+            .{ "PackageUpgraded", PackageResult.upgraded },
+            .{ "PackageDowngraded", PackageResult.downgraded },
+            .{ "PackageReinstalled", PackageResult.reinstalled },
+            .{ "PackageRemoved", PackageResult.removed },
+        };
+        inline for (mappings) |mapping| {
+            if (std.mem.eql(u8, event_type, mapping[0])) return mapping[1];
+        }
+        return null;
+    }
+
+    fn label(self: PackageResult) [:0]const u8 {
+        return switch (self) {
+            .pending => translations._("Pending"),
+            .running => translations._("Working"),
+            .done => translations._("Done"),
+            .installed => translations._("Installed"),
+            .upgraded => translations._("Upgraded"),
+            .downgraded => translations._("Downgraded"),
+            .reinstalled => translations._("Reinstalled"),
+            .removed => translations._("Removed"),
+            .failed => translations._("Failed"),
+            .not_processed => translations._("Not processed"),
+            .interrupted => translations._("Interrupted"),
+            .cancelled => translations._("Cancelled"),
+        };
+    }
 };
 
 const ProgressLine = struct {
@@ -280,17 +340,16 @@ pub const TransactionPage = extern struct {
                 if (std.mem.eql(u8, i.event_type, "TransactionCancelled"))
                     self.priv().cancelled = true;
 
-                if (std.mem.eql(u8, i.event_type, "TransactionStart")) {
-                    // optionally set a global status line
-                } else if (std.mem.eql(u8, i.event_type, "TransactionDone")) {
-                    var it = self.priv().rows.valueIterator();
-                    while (it.next()) |row| mark_row_done(row.*);
-                } else if (std.mem.eql(u8, i.event_type, "TransactionFailed")) {
-                    var it = self.priv().rows.valueIterator();
-                    while (it.next()) |row| mark_row_failed(row.*);
-                } else if (i.package_name) |name| {
+                // Transaction frames describe the batch, not each package's result.
+                if (i.package_name) |name| {
+                    if (PackageResult.fromEvent(i.event_type)) |result| {
+                        if (ensure_row_named(self, name, name)) |row| {
+                            if (row.result != .failed) setRowResult(row, result);
+                        }
+                        return;
+                    }
                     if (find_row(self, name)) |row| {
-                        setLabel(row.status_label, i.event_type);
+                        if (!row.result.terminal()) setLabel(row.status_label, i.event_type);
                     }
                 }
             },
@@ -320,11 +379,6 @@ pub const TransactionPage = extern struct {
                     pr.package_name;
 
                 if (ensure_row_named(self, pr.package_name, display_name)) |row| {
-                    const stage = nonEmpty(pr.stage) orelse pr.progress_type;
-                    if (rowStageChanged(self, row, stage)) {
-                        stopRowPulse(row);
-                        gtk.ProgressBar.setFraction(row.progress, 0.0);
-                    }
                     if (isAurPackageFailed(pr.stage)) {
                         var key_buf: [256]u8 = undefined;
                         finalizeProgressKey(self, progressKey(&key_buf, pr));
@@ -334,6 +388,18 @@ pub const TransactionPage = extern struct {
                     if (isAurPackageCompleted(pr.stage)) {
                         var key_buf: [256]u8 = undefined;
                         finalizeProgressKey(self, progressKey(&key_buf, pr));
+                        mark_row_done(row);
+                        return;
+                    }
+                    // Late build/cleanup progress must not erase confirmed results.
+                    if (row.result.terminal()) return;
+                    row.result = .running;
+                    const stage = nonEmpty(pr.stage) orelse pr.progress_type;
+                    if (rowStageChanged(self, row, stage)) {
+                        stopRowPulse(row);
+                        gtk.ProgressBar.setFraction(row.progress, 0.0);
+                    }
+                    if (is_database and pr.percent >= 100) {
                         mark_row_done(row);
                         return;
                     }
@@ -499,17 +565,28 @@ pub const TransactionPage = extern struct {
     }
 
     fn mark_row_done(row: *PackageRow) void {
-        stopRowPulse(row);
-        gtk.Label.setLabel(row.status_label, translations._("Done"));
-        gtk.ProgressBar.setFraction(row.progress, 1.0);
-        gtk.Widget.addCssClass(row.status_label.as(gtk.Widget), "status-done");
+        if (!row.result.terminal()) setRowResult(row, .done);
     }
 
     fn mark_row_failed(row: *PackageRow) void {
+        setRowResult(row, .failed);
+    }
+
+    fn setRowResult(row: *PackageRow, result: PackageResult) void {
         stopRowPulse(row);
-        gtk.Label.setLabel(row.status_label, translations._("Failed"));
-        gtk.ProgressBar.setFraction(row.progress, 1.0);
-        gtk.Widget.addCssClass(row.status_label.as(gtk.Widget), "status-failed");
+        row.result = result;
+        gtk.Label.setLabel(row.status_label, result.label());
+        const widget = row.status_label.as(gtk.Widget);
+        gtk.Widget.removeCssClass(widget, "status-done");
+        gtk.Widget.removeCssClass(widget, "status-failed");
+        switch (result) {
+            .done, .installed, .upgraded, .downgraded, .reinstalled, .removed => {
+                gtk.ProgressBar.setFraction(row.progress, 1.0);
+                gtk.Widget.addCssClass(widget, "status-done");
+            },
+            .failed => gtk.Widget.addCssClass(widget, "status-failed"),
+            else => {},
+        }
     }
 
     const Outcome = enum { success, failed, cancelled };
@@ -593,14 +670,7 @@ pub const TransactionPage = extern struct {
         var it = p.rows.valueIterator();
         while (it.next()) |row_ptr| {
             const row = row_ptr.*;
-            switch (outcome) {
-                .success => mark_row_done(row),
-                .failed => mark_row_failed(row),
-                .cancelled => {
-                    stopRowPulse(row);
-                    gtk.Label.setLabel(row.status_label, translations._("Cancelled"));
-                },
-            }
+            setRowResult(row, row.result.finish(outcome));
         }
 
         if (p.on_complete) |cb| {
@@ -655,6 +725,8 @@ pub const TransactionPage = extern struct {
         } else |_| {}
 
         if (ensure_row_named(self, backend, backend)) |row| {
+            if (row.result.terminal()) return;
+            row.result = .running;
             setLabel(row.status_label, message);
             gtk.ProgressBar.setFraction(row.progress, fractionFromPercent(percentage));
         }
@@ -1181,6 +1253,84 @@ pub const TransactionPage = extern struct {
         gobject.Object.virtual_methods.finalize.call(parent_class, self.as(gobject.Object));
     }
 };
+
+test "transaction failure preserves successful packages and identifies unfinished rows" {
+    const upgraded = PackageResult.fromEvent("PackageUpgraded").?;
+    const installed = PackageResult.fromEvent("PackageInstalled").?;
+    const results = [_]PackageResult{ upgraded, installed, .done, .failed, .pending, .running };
+    const expected = [_]PackageResult{ .upgraded, .installed, .done, .failed, .not_processed, .interrupted };
+    for (results, expected) |result, want| {
+        try std.testing.expectEqual(want, result.finish(.failed));
+        try std.testing.expectEqual(want, result.finish(.failed).finish(.failed));
+    }
+    try std.testing.expectEqualStrings("Upgraded", upgraded.finish(.failed).label());
+}
+
+test "transaction cancellation and success preserve confirmed package results" {
+    const terminal_results = [_]PackageResult{ .done, .installed, .upgraded, .downgraded, .reinstalled, .removed, .failed };
+    for (terminal_results) |result| {
+        try std.testing.expectEqual(result, result.finish(.cancelled));
+        try std.testing.expectEqual(result, result.finish(.success));
+    }
+    try std.testing.expectEqual(PackageResult.cancelled, PackageResult.pending.finish(.cancelled));
+    try std.testing.expectEqual(PackageResult.cancelled, PackageResult.running.finish(.cancelled));
+}
+
+test "transaction events keep successful rows when an AUR package fails" {
+    if (gtk.initCheck() == 0) return error.SkipZigTest;
+    const page = TransactionPage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const arena = try std.heap.c_allocator.create(std.heap.ArenaAllocator);
+    arena.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    page.priv().arena = arena;
+    // reset owns arena cleanup; this also stops pending pulse timers.
+    defer page.reset();
+    const repo = TransactionPage.ensure_row_named(page, "repo", "repo").?;
+    const aur_ok = TransactionPage.ensure_row_named(page, "aur-ok", "aur-ok").?;
+    const aur_bad = TransactionPage.ensure_row_named(page, "aur-bad", "aur-bad").?;
+    const pending = TransactionPage.ensure_row_named(page, "pending", "pending").?;
+    const download = TransactionPage.ensure_row_named(page, "download", "download").?;
+    page.handle_event(.{ .info = .{
+        .event_type = "PackageUpgraded",
+        .message = "Package operation completed.",
+        .package_name = "repo",
+        .current = null,
+        .total = null,
+    } });
+    const cases = .{
+        .{ "aur-ok", "aur_package_completed", "AddStart" },
+        .{ "aur-bad", "aur_package_failed", "MakepkgBuild" },
+        .{ "repo", "aur_cleanup_done", "RemoveStart" },
+        .{ "download", "download", "PackageDownload" },
+    };
+    inline for (cases) |case| page.handle_event(.{ .alpm_progress = .{
+        .package_name = case[0],
+        .stage = case[1],
+        .progress_type = case[2],
+        .percent = 100,
+        .current_download = 100,
+        .total_download = 100,
+        .message = null,
+    } });
+    page.handle_event(.{ .info = .{
+        .event_type = "TransactionFailed",
+        .message = "Update failed.",
+        .package_name = null,
+        .current = null,
+        .total = null,
+    } });
+    try std.testing.expectEqual(PackageResult.upgraded, repo.result);
+    try std.testing.expectEqual(PackageResult.done, aur_ok.result);
+    page.handle_done(1);
+    try std.testing.expectEqual(PackageResult.upgraded, repo.result);
+    try std.testing.expectEqual(PackageResult.done, aur_ok.result);
+    try std.testing.expectEqual(PackageResult.failed, aur_bad.result);
+    try std.testing.expectEqual(PackageResult.not_processed, pending.result);
+    try std.testing.expectEqual(PackageResult.interrupted, download.result);
+    try std.testing.expectEqualStrings("Upgraded", std.mem.span(gtk.Label.getLabel(repo.status_label)));
+    try std.testing.expectEqualStrings("Failed", std.mem.span(gtk.Label.getLabel(aur_bad.status_label)));
+}
 
 test "transaction progress helpers preserve determinate percentages" {
     try std.testing.expectEqual(@as(f64, 0.0), TransactionPage.fractionFromPercent(-1));

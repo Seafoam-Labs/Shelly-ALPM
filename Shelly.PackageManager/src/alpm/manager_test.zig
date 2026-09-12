@@ -2463,6 +2463,67 @@ test "install_local_packages predownloads repository dependencies before commit"
     try testing.expect(!capture.saw_unexpected_fetch);
 }
 
+test "ALPM package completion events preserve package identity and action" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    const archive_path = try workspace.createPackageArchive(allocator, "completed-package", "1.0-1");
+    defer allocator.free(archive_path);
+    const path_z = try allocator.dupeZ(u8, archive_path);
+    defer allocator.free(path_z);
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+    var pkg: ?*rawLibalpm.alpm_pkg_t = null;
+    try testing.expectEqual(@as(c_int, 0), rawLibalpm.alpm_pkg_load(mgr.handle, path_z, 0, 0, &pkg));
+    defer _ = rawLibalpm.alpm_pkg_free(pkg);
+
+    const Capture = struct {
+        expected_code: []const u8 = "",
+        matched: bool = false,
+        fn handle(data: ?*anyopaque, event: operations.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (event == .status) {
+                const status = event.status;
+                self.matched = std.mem.eql(u8, status.package_name orelse "", "completed-package") and
+                    std.mem.eql(u8, status.code orelse "", self.expected_code) and
+                    std.mem.eql(u8, status.message, "Package operation completed.") and
+                    status.native_code == 12;
+            }
+        }
+    };
+    var context = operations.OperationContext.init(allocator, io);
+    defer context.deinit();
+    var capture: Capture = .{};
+    _ = try context.subscribe(.{ .function = Capture.handle, .data = &capture });
+    var operation = context.begin(.{ .backend = .alpm, .kind = .update, .subject = "batch" });
+    defer operation.finish(.success);
+    mgr.dispatcher.setOperation(&operation);
+    defer mgr.dispatcher.setOperation(null);
+
+    const callback = rawLibalpm.alpm_option_get_eventcb(mgr.handle).?;
+    const callback_context = rawLibalpm.alpm_option_get_eventcb_ctx(mgr.handle);
+    const cases = .{
+        .{ rawLibalpm.ALPM_PACKAGE_INSTALL, "alpm.package_installed" },
+        .{ rawLibalpm.ALPM_PACKAGE_UPGRADE, "alpm.package_upgraded" },
+        .{ rawLibalpm.ALPM_PACKAGE_DOWNGRADE, "alpm.package_downgraded" },
+        .{ rawLibalpm.ALPM_PACKAGE_REINSTALL, "alpm.package_reinstalled" },
+        .{ rawLibalpm.ALPM_PACKAGE_REMOVE, "alpm.package_removed" },
+    };
+    inline for (cases) |case| {
+        capture.expected_code = case[1];
+        capture.matched = false;
+        var event: rawLibalpm.alpm_event_t = .{ .package_operation = .{
+            .type = rawLibalpm.ALPM_EVENT_PACKAGE_OPERATION_DONE,
+            .operation = case[0],
+            .oldpkg = if (case[0] == rawLibalpm.ALPM_PACKAGE_INSTALL) null else pkg,
+            .newpkg = if (case[0] == rawLibalpm.ALPM_PACKAGE_REMOVE) null else pkg,
+        } };
+        callback(callback_context, &event);
+        try testing.expect(capture.matched);
+    }
+}
+
 test "install_local_packages installs multiple archives in a DB-only transaction" {
     const allocator = testing.allocator;
 
