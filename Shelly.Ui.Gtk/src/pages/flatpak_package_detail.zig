@@ -241,8 +241,7 @@ pub const FlatpakPackageDetail = extern struct {
             try out.append(allocator, c);
         }
 
-        try out.append(allocator, 0);
-        return out.items[0 .. out.items.len - 1 :0];
+        return out.toOwnedSliceSentinel(allocator, 0);
     }
 
     fn add_spec_row(box: *gtk.Box, label: []const u8, value: [:0]const u8) void {
@@ -389,7 +388,7 @@ test "formatDescription preserves plain text paragraphs" {
 }
 
 test "formatDescription strips inline tags and decodes entities" {
-    const raw = "An <em>emphasized</em> app &mdash; with <a href=\"https://example.org\">links</a&gt; inside.";
+    const raw = "An <em>emphasized</em> app &mdash; with <a href=\"https://example.org\">links</a> inside.";
     const out = try FlatpakPackageDetail.formatDescription(std.testing.allocator, raw);
     defer std.testing.allocator.free(out);
     try std.testing.expectEqualStrings("An emphasized app \u{2014} with links inside.", out);

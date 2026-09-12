@@ -967,27 +967,27 @@ test "progress percentages are clamped to the GTK protocol range" {
 }
 
 test "flatpak install argv adds --user only for user scope" {
-    const system_argv = try ShellyCommands.install_flatpak(std.testing.allocator, "org.example.App", .system, "");
+    const system_argv = try ShellyCommands.installFlatpak(std.testing.allocator, "org.example.App", .system, "");
     defer std.testing.allocator.free(system_argv);
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App" }, system_argv);
 
-    const user_argv = try ShellyCommands.install_flatpak(std.testing.allocator, "org.example.App", .user, "");
+    const user_argv = try ShellyCommands.installFlatpak(std.testing.allocator, "org.example.App", .user, "");
     defer std.testing.allocator.free(user_argv);
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App", "--user" }, user_argv);
 }
 
 test "flatpak install argv passes --remote when a remote name is supplied" {
-    const argv = try ShellyCommands.install_flatpak(std.testing.allocator, "org.example.App", .system, "flathub");
+    const argv = try ShellyCommands.installFlatpak(std.testing.allocator, "org.example.App", .system, "flathub");
     defer std.testing.allocator.free(argv);
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App", "--remote", "flathub" }, argv);
 
-    const with_user = try ShellyCommands.install_flatpak_ex(std.testing.allocator, "org.example.App", .user, "flathub-beta", false);
+    const with_user = try ShellyCommands.installFlatpakEx(std.testing.allocator, "org.example.App", .user, "flathub-beta", false);
     defer std.testing.allocator.free(with_user);
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App", "--user", "--remote", "flathub-beta" }, with_user);
 }
 
 test "flatpak addon install argv marks addon refs as runtimes" {
-    const argv = try ShellyCommands.install_flatpak_ex(std.testing.allocator, "org.example.App.Plugin", .user, "", true);
+    const argv = try ShellyCommands.installFlatpakEx(std.testing.allocator, "org.example.App.Plugin", .user, "", true);
     defer std.testing.allocator.free(argv);
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "flatpak", "org.example.App.Plugin", "--user", "--runtime" }, argv);
 }

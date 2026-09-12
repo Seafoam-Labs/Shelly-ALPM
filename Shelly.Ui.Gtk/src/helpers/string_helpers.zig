@@ -19,10 +19,10 @@ pub const StringHelper = struct {
 
 test "StringHelper.countCharacter" {
     const count = StringHelper.countCharacter("hello", 'l');
-    std.testing.expectEqual(count, 2);
+    try std.testing.expectEqual(@as(usize, 2), count);
 }
 
 test "StringHelper.stripSuffix" {
     const result = StringHelper.stripSuffix("hello.desktop", ".desktop");
-    std.testing.expectEqualStrings(result, "hello");
+    try std.testing.expectEqualStrings("hello", result);
 }
