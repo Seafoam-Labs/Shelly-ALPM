@@ -1,4 +1,5 @@
 const std = @import("std");
+const user_account = @import("user_account");
 const operation_api = @import("operation_context");
 
 pub const ProcessResult = struct {
@@ -353,76 +354,35 @@ pub fn buildExecutionPath(allocator: std.mem.Allocator, environ: std.process.Env
     );
 }
 
-pub fn resolveUsernameForUidFromPasswd(uid: []const u8, passwd: []const u8) []const u8 {
-    if (uid.len == 0) return uid;
-    var lines = std.mem.splitScalar(u8, passwd, '\n');
-    while (lines.next()) |line| {
-        const trimmed = std.mem.trim(u8, line, " \t\r");
-        if (trimmed.len == 0 or trimmed[0] == '#') continue;
-        var fields = std.mem.splitScalar(u8, trimmed, ':');
-        const username = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        const field_uid = fields.next() orelse continue;
-        if (std.mem.eql(u8, uid, field_uid)) return username;
-    }
-    return uid;
-}
-
 pub fn resolveUsernameForUid(
     allocator: std.mem.Allocator,
-    io: std.Io,
+    _: std.Io,
     uid: []const u8,
 ) ![]u8 {
-    if (uid.len == 0) return allocator.dupe(u8, uid);
-    const passwd = std.Io.Dir.cwd().readFileAlloc(io, "/etc/passwd", allocator, .limited(4 * 1024 * 1024)) catch
-        return allocator.dupe(u8, uid);
-    defer allocator.free(passwd);
-    return allocator.dupe(u8, resolveUsernameForUidFromPasswd(uid, passwd));
+    const account = (try user_account.byUidText(allocator, uid)) orelse return error.InvokingUserUnavailable;
+    defer account.deinit(allocator);
+    return allocator.dupe(u8, account.username);
 }
 
 pub fn resolveInvokingUserHome(
     allocator: std.mem.Allocator,
-    io: std.Io,
+    _: std.Io,
     environ: std.process.Environ,
 ) ![]u8 {
+    const account = if (environ.getPosix("SUDO_USER")) |user|
+        (if (user.len != 0 and !std.mem.eql(u8, user, "root")) try user_account.byName(allocator, user) else null)
+    else if (environ.getPosix("DOAS_USER")) |user|
+        (if (user.len != 0 and !std.mem.eql(u8, user, "root")) try user_account.byName(allocator, user) else null)
+    else if (environ.getPosix("PKEXEC_UID")) |uid|
+        try user_account.byUidText(allocator, uid)
+    else
+        null;
+    if (account) |found| {
+        defer found.deinit(allocator);
+        if (found.home.len != 0) return allocator.dupe(u8, found.home);
+    }
     const fallback = environ.getPosix("HOME") orelse return error.HomeNotSet;
-    const passwd = std.Io.Dir.cwd().readFileAlloc(io, "/etc/passwd", allocator, .limited(4 * 1024 * 1024)) catch
-        return allocator.dupe(u8, fallback);
-    defer allocator.free(passwd);
-
-    if (environ.getPosix("SUDO_USER")) |user| {
-        if (user.len != 0 and !std.mem.eql(u8, user, "root")) {
-            if (homeFromPasswd(passwd, user, null)) |home| return allocator.dupe(u8, home);
-        }
-    } else if (environ.getPosix("DOAS_USER")) |user| {
-        if (user.len != 0 and !std.mem.eql(u8, user, "root")) {
-            if (homeFromPasswd(passwd, user, null)) |home| return allocator.dupe(u8, home);
-        }
-    } else if (environ.getPosix("PKEXEC_UID")) |uid| {
-        if (homeFromPasswd(passwd, null, uid)) |home| return allocator.dupe(u8, home);
-    }
     return allocator.dupe(u8, fallback);
-}
-
-pub fn homeFromPasswd(passwd: []const u8, username: ?[]const u8, uid: ?[]const u8) ?[]const u8 {
-    var lines = std.mem.splitScalar(u8, passwd, '\n');
-    while (lines.next()) |line| {
-        const trimmed = std.mem.trim(u8, line, " \t\r");
-        if (trimmed.len == 0 or trimmed[0] == '#') continue;
-        var fields = std.mem.splitScalar(u8, trimmed, ':');
-        const field_user = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        const field_uid = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        const home = fields.next() orelse continue;
-        if (username) |expected| {
-            if (std.mem.eql(u8, field_user, expected)) return home;
-        } else if (uid) |expected| {
-            if (std.mem.eql(u8, field_uid, expected)) return home;
-        }
-    }
-    return null;
 }
 
 pub fn invokingUserCommand(
@@ -464,20 +424,18 @@ pub fn invokingUserCleanCommand(
 ) !OwnedCommand {
     const username = try invokingUsername(allocator, io, environ);
     defer allocator.free(username);
-    const home = try resolveInvokingUserHome(allocator, io, environ);
-    defer allocator.free(home);
-    const passwd = try std.Io.Dir.cwd().readFileAlloc(io, "/etc/passwd", allocator, .limited(4 * 1024 * 1024));
-    defer allocator.free(passwd);
-    const uid = uidForUsernameFromPasswd(username, passwd) orelse
-        return error.InvokingUserUnavailable;
-    if (std.mem.eql(u8, uid, "0")) return error.InvokingUserUnavailable;
+    const account = (try user_account.byName(allocator, username)) orelse return error.InvokingUserUnavailable;
+    defer account.deinit(allocator);
+    if (account.uid == 0 or account.home.len == 0) return error.InvokingUserUnavailable;
+    var uid_buffer: [10]u8 = undefined;
+    const uid = try std.fmt.bufPrint(&uid_buffer, "{d}", .{account.uid});
     const path = try buildExecutionPath(allocator, environ);
     defer allocator.free(path);
 
     return cleanUserCommand(
         allocator,
         username,
-        home,
+        account.home,
         uid,
         path,
         environ.getPosix("SOURCE_DATE_EPOCH"),
@@ -560,39 +518,22 @@ pub fn invokingUsername(
     if (environ.getPosix("DOAS_USER")) |username|
         return validateInvokingUsername(allocator, io, username);
     if (environ.getPosix("PKEXEC_UID")) |uid| {
-        if (uid.len == 0 or std.mem.eql(u8, uid, "0")) return error.InvokingUserUnavailable;
-        const username = try resolveUsernameForUid(allocator, io, uid);
-        errdefer allocator.free(username);
-        if (username.len == 0 or std.mem.eql(u8, username, "root") or std.mem.eql(u8, username, "0"))
+        const account = (try user_account.byUidText(allocator, uid)) orelse return error.InvokingUserUnavailable;
+        defer account.deinit(allocator);
+        if (account.uid == 0 or account.username.len == 0 or std.mem.eql(u8, account.username, "root") or std.mem.eql(u8, account.username, "0"))
             return error.InvokingUserUnavailable;
-        return username;
+        return allocator.dupe(u8, account.username);
     }
     return error.InvokingUserUnavailable;
 }
 
-fn validateInvokingUsername(allocator: std.mem.Allocator, io: std.Io, username: []const u8) ![]u8 {
+fn validateInvokingUsername(allocator: std.mem.Allocator, _: std.Io, username: []const u8) ![]u8 {
     if (username.len == 0 or std.mem.eql(u8, username, "root") or std.mem.eql(u8, username, "0"))
         return error.InvokingUserUnavailable;
-    const passwd = std.Io.Dir.cwd().readFileAlloc(io, "/etc/passwd", allocator, .limited(4 * 1024 * 1024)) catch
-        return error.InvokingUserUnavailable;
-    defer allocator.free(passwd);
-    const uid = uidForUsernameFromPasswd(username, passwd) orelse return error.InvokingUserUnavailable;
-    if (std.mem.eql(u8, uid, "0")) return error.InvokingUserUnavailable;
-    return allocator.dupe(u8, username);
-}
-
-pub fn uidForUsernameFromPasswd(username: []const u8, passwd: []const u8) ?[]const u8 {
-    var lines = std.mem.splitScalar(u8, passwd, '\n');
-    while (lines.next()) |line| {
-        const trimmed = std.mem.trim(u8, line, " \t\r");
-        if (trimmed.len == 0 or trimmed[0] == '#') continue;
-        var fields = std.mem.splitScalar(u8, trimmed, ':');
-        const field_user = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        const field_uid = fields.next() orelse continue;
-        if (std.mem.eql(u8, username, field_user)) return field_uid;
-    }
-    return null;
+    const account = (try user_account.byName(allocator, username)) orelse return error.InvokingUserUnavailable;
+    defer account.deinit(allocator);
+    if (account.uid == 0) return error.InvokingUserUnavailable;
+    return allocator.dupe(u8, account.username);
 }
 
 fn appendOwned(allocator: std.mem.Allocator, list: *std.ArrayList([]u8), values: []const []const u8) !void {
@@ -783,16 +724,7 @@ test "disabled build environment removes inherited flags and hosts" {
     try std.testing.expectEqualStrings("x86_64-pc-linux-gnu", effective.get("CHOST").?);
 }
 
-test "UID lookup and VCS build commands replicate invoking-user behavior" {
-    const passwd = "root:x:0:0::/root:/bin/bash\nzoey:x:1000:1000::/home/zoey:/bin/bash\n";
-    try std.testing.expectEqualStrings("zoey", resolveUsernameForUidFromPasswd("1000", passwd));
-    try std.testing.expectEqualStrings("55", resolveUsernameForUidFromPasswd("55", passwd));
-    try std.testing.expectEqualStrings("1000", uidForUsernameFromPasswd("zoey", passwd).?);
-    try std.testing.expectEqualStrings("0", uidForUsernameFromPasswd("root", passwd).?);
-    try std.testing.expect(uidForUsernameFromPasswd("missing", passwd) == null);
-    try std.testing.expectEqualStrings("/home/zoey", homeFromPasswd(passwd, "zoey", null).?);
-    try std.testing.expectEqualStrings("/home/zoey", homeFromPasswd(passwd, null, "1000").?);
-
+test "VCS build commands replicate invoking-user behavior" {
     var command = try makechrootpkgCommand(
         std.testing.allocator,
         std.testing.io,
@@ -808,6 +740,50 @@ test "UID lookup and VCS build commands replicate invoking-user behavior" {
     try std.testing.expectEqualStrings("-c", command.argv[index + 1]);
     try std.testing.expectEqualStrings("-r", command.argv[index + 2]);
     try std.testing.expectEqualStrings("/var/lib/shelly/chroot", command.argv[index + 3]);
+}
+
+test "NSS invoking-user commands resolve all elevators without HOME" {
+    const allocator = std.testing.allocator;
+    const account = (try user_account.byName(allocator, "nobody")) orelse return error.SkipZigTest;
+    defer account.deinit(allocator);
+    const uid = try std.fmt.allocPrint(allocator, "{d}", .{account.uid});
+    defer allocator.free(uid);
+    const resolved = try resolveUsernameForUid(allocator, std.testing.io, uid);
+    defer allocator.free(resolved);
+    try std.testing.expectEqualStrings(account.username, resolved);
+    for ([_][]const u8{ "SUDO_USER", "DOAS_USER", "PKEXEC_UID" }) |marker| {
+        var environment = std.process.Environ.Map.init(allocator);
+        defer environment.deinit();
+        try environment.put(marker, if (std.mem.eql(u8, marker, "PKEXEC_UID")) uid else account.username);
+        const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
+        defer environ.block.deinit(allocator);
+        const home = try resolveInvokingUserHome(allocator, std.testing.io, environ);
+        defer allocator.free(home);
+        try std.testing.expectEqualStrings(account.home, home);
+        var command = try invokingUserCleanCommand(allocator, std.testing.io, environ, "shelly", &.{"build"});
+        defer command.deinit(allocator);
+        try std.testing.expectEqualStrings(account.username, command.argv[2]);
+        const expected_home = try std.fmt.allocPrint(allocator, "HOME={s}", .{account.home});
+        defer allocator.free(expected_home);
+        try std.testing.expectEqualStrings(expected_home, command.argv[6]);
+        const expected_runtime = try std.fmt.allocPrint(allocator, "XDG_RUNTIME_DIR=/run/user/{s}", .{uid});
+        defer allocator.free(expected_runtime);
+        try std.testing.expectEqualStrings(expected_runtime, command.argv[11]);
+    }
+}
+
+test "NSS invoking-user validation rejects root and unresolved accounts" {
+    const allocator = std.testing.allocator;
+    for ([_][]const u8{ "root", "0", "", "shelly-nonexistent-user-1843" }) |name|
+        try std.testing.expectError(error.InvokingUserUnavailable, validateInvokingUsername(allocator, std.testing.io, name));
+    for ([_][]const u8{ "0", "000", "invalid", "4294967296" }) |uid| {
+        var environment = std.process.Environ.Map.init(allocator);
+        defer environment.deinit();
+        try environment.put("PKEXEC_UID", uid);
+        const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
+        defer environ.block.deinit(allocator);
+        try std.testing.expectError(error.InvokingUserUnavailable, invokingUserCleanCommand(allocator, std.testing.io, environ, "shelly", &.{}));
+    }
 }
 
 test "clean invoking-user build command drops the elevated environment" {

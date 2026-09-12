@@ -66,6 +66,7 @@ pub const alpm = struct {
 };
 
 pub const user_errors = @import("shared/user_errors.zig");
+pub const user_account = @import("user_account");
 
 pub const aur = @import("aur/manager.zig");
 
