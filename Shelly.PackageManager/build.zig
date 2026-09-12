@@ -714,6 +714,7 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder rejects unsupported source protocols",
             "PackageBuilder cancels source preparation without committing srcdir",
             "PackageBuilder runs relative VCS paths from srcdir before pkgver",
+            "PackageBuilder resolves relative Git submodules after staging cleanup",
             "PackageBuilder verifies real checksums for pinned VCS sources",
             "PackageBuilder applies generic patch arrays and propagates dynamic pkgver",
             "PackageBuilder rejects invalid dynamic pkgver output",

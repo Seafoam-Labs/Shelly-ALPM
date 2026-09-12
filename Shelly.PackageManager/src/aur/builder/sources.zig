@@ -442,6 +442,11 @@ fn materializeGitSource(
         acquired_repository,
         destination,
     });
+    // Relative submodule URLs must resolve against upstream, not the
+    // acquisition directory that is removed before PKGBUILD steps run.
+    try runSourceCommand(self, operation, &.{
+        "-C", destination, "remote", "set-url", "origin", source.location,
+    });
     if (source.reference) |reference| switch (reference.kind) {
         .branch => try runSourceCommand(self, operation, &.{
             "-C",

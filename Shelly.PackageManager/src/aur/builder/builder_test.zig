@@ -3594,6 +3594,84 @@ test "PackageBuilder runs relative VCS paths from srcdir before pkgver" {
     try testing.expectEqualStrings("refreshed\n", refreshed);
 }
 
+test "PackageBuilder resolves relative Git submodules after staging cleanup" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var upstream = std.testing.tmpDir(.{});
+    defer upstream.cleanup();
+    try upstream.dir.createDirPath(io, "parent");
+    try upstream.dir.createDirPath(io, "contrib");
+    const parent_path = try upstream.dir.realPathFileAlloc(io, "parent", allocator);
+    defer allocator.free(parent_path);
+    const contrib_path = try upstream.dir.realPathFileAlloc(io, "contrib", allocator);
+    defer allocator.free(contrib_path);
+    for ([_][]const u8{ parent_path, contrib_path }) |path| {
+        try runTestCommand(allocator, io, &.{ "git", "init", "-b", "main" }, path);
+        try runTestCommand(allocator, io, &.{ "git", "config", "user.email", "shelly-tests@example.invalid" }, path);
+        try runTestCommand(allocator, io, &.{ "git", "config", "user.name", "Shelly Tests" }, path);
+        try runTestCommand(allocator, io, &.{ "git", "config", "commit.gpgsign", "false" }, path);
+    }
+    try upstream.dir.writeFile(io, .{ .sub_path = "contrib/source-marker", .data = "submodule payload\n" });
+    try runTestCommand(allocator, io, &.{ "git", "add", "source-marker" }, contrib_path);
+    try runTestCommand(allocator, io, &.{ "git", "commit", "-m", "submodule fixture" }, contrib_path);
+    // Allow file transport only for these local fixture commands.
+    try runTestCommand(allocator, io, &.{ "git", "-c", "protocol.file.allow=always", "submodule", "add", "../contrib", "contrib" }, parent_path);
+    try runTestCommand(allocator, io, &.{ "git", "commit", "-m", "relative submodule" }, parent_path);
+    try runTestCommand(allocator, io, &.{ "git", "-c", "tag.gpgsign=false", "tag", "1" }, parent_path);
+    var head = try process_runner.run(allocator, io, &.{ "git", "rev-parse", "HEAD" }, parent_path, null);
+    defer head.deinit(allocator);
+    try testing.expectEqual(@as(u8, 0), head.exit_code);
+    const commit_reference = try std.fmt.allocPrint(allocator, "#commit={s}", .{std.mem.trim(u8, head.stdout, "\r\n")});
+    defer allocator.free(commit_reference);
+    const upstream_url = try std.fmt.allocPrint(allocator, "file://{s}", .{parent_path});
+    defer allocator.free(upstream_url);
+
+    for ([_][]const u8{ "", "#branch=main", "#tag=1", commit_reference }) |reference| {
+        const pkgbuild = try std.fmt.allocPrint(allocator,
+            \\pkgname=shelly-submodule
+            \\pkgver=1
+            \\pkgrel=1
+            \\arch=('any')
+            \\source=('repo::git+{s}{s}')
+            \\sha256sums=('SKIP')
+            \\prepare() {{
+            \\  test ! -e "$srcdir/../.sources.shelly-staging" || return 1
+            \\  cd repo
+            \\  git -c protocol.file.allow=always submodule update --init --recursive
+            \\}}
+            \\package() {{
+            \\  mkdir -p "$pkgdir/usr/share/shelly"
+            \\  cp repo/contrib/source-marker "$pkgdir/usr/share/shelly/source-marker"
+            \\}}
+        , .{ upstream_url, reference });
+        defer allocator.free(pkgbuild);
+        var fixture = try Fixture.create(allocator, pkgbuild, null, null);
+        defer fixture.destroy();
+        fixture.builder.options.sources_prepared = false;
+        const repository_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "src/repo" });
+        defer allocator.free(repository_path);
+
+        // Exercise both a fresh acquisition and a rebuild using the cached mirror.
+        for (0..2) |_| {
+            const artifacts = try fixture.builder.BuildPackage();
+            defer builder_mod.deinitArtifacts(allocator, artifacts);
+            try testing.expectEqual(@as(usize, 1), artifacts.len);
+            const payload = try fixture.temporary.dir.readFileAlloc(
+                io,
+                "pkg/shelly-submodule/usr/share/shelly/source-marker",
+                allocator,
+                .unlimited,
+            );
+            defer allocator.free(payload);
+            try testing.expectEqualStrings("submodule payload\n", payload);
+            var origin = try process_runner.run(allocator, io, &.{ "git", "remote", "get-url", "origin" }, repository_path, null);
+            defer origin.deinit(allocator);
+            try testing.expectEqual(@as(u8, 0), origin.exit_code);
+            try testing.expectEqualStrings(upstream_url, std.mem.trim(u8, origin.stdout, "\r\n"));
+        }
+    }
+}
+
 test "PackageBuilder verifies real checksums for pinned VCS sources" {
     const allocator = testing.allocator;
     const io = testing.io;
