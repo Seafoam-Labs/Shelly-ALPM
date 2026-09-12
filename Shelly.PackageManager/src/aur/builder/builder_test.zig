@@ -2195,6 +2195,168 @@ test "PackageBuilder packages exact reviewed install and changelog files" {
     try testing.expect(saw_changelog);
 }
 
+test "PackageBuilder purges standard targets before archive metadata generation" {
+    const allocator = testing.allocator;
+    const targets = [_][]const u8{
+        "usr/info/dir",                 "usr/share/info/dir",          ".packlist",
+        "usr/lib/perl5/auto/.packlist", "usr/share/perl5/example.pod", ".pod",
+    };
+    const content =
+        \\pkgname=purge-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/info" "$pkgdir/usr/share/info" \
+        \\    "$pkgdir/usr/lib/perl5/auto" "$pkgdir/usr/share/perl5"
+        \\  for file in usr/info/dir usr/share/info/dir .packlist \
+        \\    usr/lib/perl5/auto/.packlist usr/share/perl5/example.pod .pod; do
+        \\    printf 'unwanted\n' > "$pkgdir/$file"
+        \\  done
+        \\  printf 'keep\n' > "$pkgdir/usr/share/info/example.info"
+        \\}
+    ;
+    var fixture = try Fixture.create(allocator, content, null, null);
+    defer fixture.destroy();
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    for (targets) |path| {
+        try testing.expectError(error.MissingPackageEntry, readPackageEntry(allocator, artifacts[0].path, path));
+    }
+    const kept = try readPackageEntry(allocator, artifacts[0].path, "usr/share/info/example.info");
+    defer allocator.free(kept);
+    try testing.expectEqualStrings("keep\n", kept);
+    const pkg_info = try readPkgInfo(allocator, artifacts[0].path);
+    defer allocator.free(pkg_info);
+    try testing.expect(std.mem.indexOf(u8, pkg_info, "\nsize = 5\n") != null);
+    const mtree_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "pkg/purge-demo/.MTREE" });
+    defer allocator.free(mtree_path);
+    var gzip = try process_runner.run(allocator, testing.io, &.{ "gzip", "-dc", mtree_path }, null, null);
+    defer gzip.deinit(allocator);
+    try testing.expectEqual(@as(u8, 0), gzip.exit_code);
+    for (targets) |path| {
+        const mtree_entry = try std.fmt.allocPrint(allocator, "./{s} ", .{path});
+        defer allocator.free(mtree_entry);
+        try testing.expect(std.mem.indexOf(u8, gzip.stdout, mtree_entry) == null);
+    }
+    try testing.expect(std.mem.indexOf(u8, gzip.stdout, "./usr/share/info/example.info ") != null);
+}
+
+test "PackageBuilder purge honors configuration and PKGBUILD overrides independently of strip" {
+    const allocator = testing.allocator;
+    const cases = [_]struct {
+        configured: []const []const u8,
+        overrides: []const u8,
+        removed: bool,
+    }{
+        .{ .configured = &.{"purge"}, .overrides = "options=('!strip')", .removed = true },
+        .{ .configured = &.{"purge"}, .overrides = "options=('!purge')", .removed = false },
+        .{ .configured = &.{"!purge"}, .overrides = "", .removed = false },
+        .{ .configured = &.{}, .overrides = "", .removed = false },
+        .{ .configured = &.{"!purge"}, .overrides = "options=('purge' '!strip')", .removed = true },
+    };
+    for (cases) |case| {
+        const content = try std.mem.concat(allocator, u8, &.{
+            "pkgname=purge-options\npkgver=1\npkgrel=1\narch=('any')\n",
+            case.overrides,
+            "\npackage() { mkdir -p \"$pkgdir/usr/share/info\"; printf 'index\\n' > \"$pkgdir/usr/share/info/dir\"; }\n",
+        });
+        defer allocator.free(content);
+        var fixture = try Fixture.create(allocator, content, null, null);
+        defer fixture.destroy();
+        fixture.builder.shellybuild_config.package.options = case.configured;
+        const artifacts = try fixture.builder.BuildPackage();
+        defer builder_mod.deinitArtifacts(allocator, artifacts);
+        if (case.removed) {
+            try testing.expectError(error.MissingPackageEntry, readPackageEntry(allocator, artifacts[0].path, "usr/share/info/dir"));
+        } else {
+            const kept = try readPackageEntry(allocator, artifacts[0].path, "usr/share/info/dir");
+            defer allocator.free(kept);
+            try testing.expectEqualStrings("index\n", kept);
+        }
+    }
+}
+
+test "PackageBuilder purge isolates split package function overrides" {
+    const allocator = testing.allocator;
+    const content =
+        \\pkgname=('purge-keep' 'purge-remove')
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\options=('!strip')
+        \\payload() {
+        \\  mkdir -p "$pkgdir/usr/share/info"
+        \\  printf 'index\n' > "$pkgdir/usr/share/info/dir"
+        \\}
+        \\package_purge-keep() { options=('!purge'); payload; }
+        \\package_purge-remove() { payload; }
+    ;
+    var fixture = try Fixture.createMany(allocator, content, &.{ "purge-keep", "purge-remove" }, null);
+    defer fixture.destroy();
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 2), artifacts.len);
+    const kept = try readPackageEntry(allocator, artifacts[0].path, "usr/share/info/dir");
+    defer allocator.free(kept);
+    try testing.expectEqualStrings("index\n", kept);
+    try testing.expectError(error.MissingPackageEntry, readPackageEntry(allocator, artifacts[1].path, "usr/share/info/dir"));
+}
+
+test "PackageBuilder purge preserves directories unrelated files and external symlink targets" {
+    const allocator = testing.allocator;
+    const content =
+        \\pkgname=purge-links
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\options=('!strip')
+        \\package() {
+        \\  mkdir -p "$startdir/external" "$pkgdir/usr/share/info" \
+        \\    "$pkgdir/keep.pod" "$pkgdir/.packlist" "$pkgdir/other"
+        \\  printf 'outside\n' > "$startdir/external/dir"
+        \\  printf 'outside\n' > "$startdir/external/external.pod"
+        \\  ln -s "$startdir/external" "$pkgdir/usr/info"
+        \\  ln -s "$startdir/external" "$pkgdir/external-link"
+        \\  ln -s "$startdir/external/dir" "$pkgdir/usr/share/info/dir"
+        \\  ln -s "$startdir/external/external.pod" "$pkgdir/link.pod"
+        \\  ln -s "$startdir/external" "$pkgdir/directory-link.pod"
+        \\  ln -s nonexistent "$pkgdir/dangling.pod"
+        \\  for file in keep.pod/data .packlist/data other/dir \
+        \\    other/example.pod.bak other/.packlist.bak other/example.POD; do
+        \\    printf 'keep\n' > "$pkgdir/$file"
+        \\  done
+        \\  printf 'remove\n' > "$pkgdir/keep.pod/nested.pod"
+        \\}
+    ;
+    var fixture = try Fixture.create(allocator, content, null, null);
+    defer fixture.destroy();
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    for ([_][]const u8{
+        "usr/share/info/dir", "link.pod", "directory-link.pod", "dangling.pod", "keep.pod/nested.pod",
+    }) |path| {
+        try testing.expectError(error.MissingPackageEntry, readPackageEntry(allocator, artifacts[0].path, path));
+    }
+    for ([_][]const u8{
+        "keep.pod/data",         ".packlist/data",      "other/dir",
+        "other/example.pod.bak", "other/.packlist.bak", "other/example.POD",
+    }) |path| {
+        const kept = try readPackageEntry(allocator, artifacts[0].path, path);
+        defer allocator.free(kept);
+        try testing.expectEqualStrings("keep\n", kept);
+    }
+    for ([_][]const u8{ "external/dir", "external/external.pod" }) |path| {
+        const kept = try fixture.temporary.dir.readFileAlloc(testing.io, path, allocator, .unlimited);
+        defer allocator.free(kept);
+        try testing.expectEqualStrings("outside\n", kept);
+    }
+    for ([_][]const u8{ "usr/info", "external-link" }) |path| {
+        const kept = try readPackageEntry(allocator, artifacts[0].path, path);
+        defer allocator.free(kept);
+    }
+}
+
 test "PackageBuilder strips ELF debug sections unless PKGBUILD disables strip" {
     const allocator = testing.allocator;
     const io = testing.io;
