@@ -35,7 +35,7 @@ pub fn preparePackageDirectory(self: *PackageBuilder, package_build: *const Pack
 }
 
 /// Applies the small, content-affecting subset of makepkg's tidy phase
-/// currently modeled by Shelly. PKGBUILD options override makepkg.conf
+/// currently modeled by Shelly. PKGBUILD options override shellybuild.conf
 /// options using the same `option`/`!option` convention as makepkg.
 fn tidyPackage(self: *PackageBuilder, package_build: *const PackageBuild, pkgdir: []const u8) !void {
     const effective = try metadata.effectivePackageOptions(
@@ -44,6 +44,14 @@ fn tidyPackage(self: *PackageBuilder, package_build: *const PackageBuild, pkgdir
         package_build.options orelse &.{},
     );
     defer metadata.freeOwnedStrings(self.allocator, effective);
+    if (metadata.optionEnabled(effective, "purge")) {
+        var directory = try std.Io.Dir.cwd().openDir(self.io, pkgdir, .{
+            .iterate = true,
+            .follow_symlinks = false,
+        });
+        defer directory.close(self.io);
+        try purgePackageDirectory(self, directory, "");
+    }
     if (!metadata.optionEnabled(effective, "strip")) return;
 
     var directory = try std.Io.Dir.cwd().openDir(self.io, pkgdir, .{ .iterate = true });
@@ -132,6 +140,33 @@ fn tidyPackage(self: *PackageBuilder, package_build: *const PackageBuild, pkgdir
         }
         try original.setLength(self.io, offset);
         try original.setPermissions(self.io, stat.permissions);
+    }
+}
+
+/// Standard makepkg PURGE_TARGETS: path targets are package-root relative,
+/// while .packlist and *.pod match non-directory basenames at any depth.
+/// Open each directory component without following symlinks, and unlink only
+/// basenames relative to its handle so a package link cannot redirect cleanup.
+fn purgePackageDirectory(self: *PackageBuilder, directory: std.Io.Dir, relative_path: []const u8) !void {
+    var iterator = directory.iterate();
+    while (try iterator.next(self.io)) |entry| {
+        if (self.active_operation) |operation| try operation.checkCancelled();
+        const path = try std.fs.path.join(self.allocator, &.{ relative_path, entry.name });
+        defer self.allocator.free(path);
+        if (entry.kind == .directory) {
+            var child = try directory.openDir(self.io, entry.name, .{
+                .iterate = true,
+                .follow_symlinks = false,
+            });
+            defer child.close(self.io);
+            try purgePackageDirectory(self, child, path);
+        } else if (std.mem.eql(u8, path, "usr/info/dir") or
+            std.mem.eql(u8, path, "usr/share/info/dir") or
+            std.mem.eql(u8, entry.name, ".packlist") or
+            std.mem.endsWith(u8, entry.name, ".pod"))
+        {
+            try directory.deleteFile(self.io, entry.name);
+        }
     }
 }
 

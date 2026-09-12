@@ -223,6 +223,15 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
 
+    const builder_tests = b.addTest(.{
+        .name = "builder-test",
+        .root_module = mod,
+        .filters = &.{"PackageBuilder"},
+    });
+    const run_builder_tests = b.addRunArtifact(builder_tests);
+    const builder_test_step = b.step("builder-test", "Run native package builder regressions");
+    builder_test_step.dependOn(&run_builder_tests.step);
+
     const shellybuild_test_module = b.createModule(.{
         .root_source_file = b.path("src/aur/shellybuild.zig"),
         .target = target,

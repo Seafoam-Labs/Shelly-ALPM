@@ -20,6 +20,7 @@ printf '%s\n' \
   "pkgrel=1" \
   "arch=('any')" \
   "license=('MIT')" \
+  "options=('!strip')" \
   "source=('reviewed.txt')" \
   "sha256sums=('$source_digest')" \
   "build() {" \
@@ -33,6 +34,10 @@ printf '%s\n' \
   "package() {" \
   "  install -Dm644 /dev/null \"\$pkgdir/usr/share/shelly-isolated-smoke/marker\"" \
   "  chown root:root \"\$pkgdir/usr/share/shelly-isolated-smoke/marker\"" \
+  "  mkdir -p \"\$pkgdir/usr/info\" \"\$pkgdir/usr/share/info\"" \
+  "  for target in usr/info/dir usr/share/info/dir .packlist smoke.pod; do" \
+  "    printf 'purge me\\n' > \"\$pkgdir/\$target\"" \
+  "  done" \
   "}" >"$fixture_dir/PKGBUILD"
 
 if [[ -z ${SHELLY_BIN:-} ]]; then
@@ -58,4 +63,10 @@ jq -e '.relatedFiles[] | select(.name == "reviewed.txt" and .permissions == 432)
 artifact="$fixture_dir/shelly-isolated-smoke-1-1-any.pkg.tar.zst"
 test -f "$artifact"
 test "$(stat -c %u "$artifact")" = "$(id -u)"
+tar -tf "$artifact" >"$fixture_dir/archive-entries"
+grep -Fxq 'usr/share/shelly-isolated-smoke/marker' "$fixture_dir/archive-entries"
+if grep -Exq '(\./)?(usr/info/dir|usr/share/info/dir|\.packlist|smoke\.pod)' "$fixture_dir/archive-entries"; then
+  printf 'isolated package retained a purge target\n' >&2
+  exit 1
+fi
 printf 'isolated build smoke test passed: %s\n' "$artifact"
