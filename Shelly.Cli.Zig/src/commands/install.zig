@@ -497,7 +497,7 @@ fn runStandard(
     if (repository_packages.items.len > 0)
         try installRepositoryPackages(context, operation_context, invocation, repository_packages.items);
     for (local_packages.items) |path|
-        try installLocalPackage(context, operation_context, path);
+        try installLocalPackage(context, operation_context, invocation, path);
 }
 
 fn installRepositoryPackages(
@@ -527,19 +527,27 @@ fn installRepositoryPackages(
         try manager.install_dependencies_only(
             names[0],
             optionEnabled(invocation, "--make-deps"),
-            .{},
+            .{ .needed = optionEnabled(invocation, "--needed") },
         );
         return;
     }
     try manager.install_packages(
         names,
-        if (optionEnabled(invocation, "--no-deps")) .{ .nodeps = true } else .{},
+        repositoryInstallFlags(invocation),
     );
+}
+
+fn repositoryInstallFlags(invocation: *const parser.Invocation) Zigalpm.alpm.TransFlag {
+    return .{
+        .needed = optionEnabled(invocation, "--needed"),
+        .nodeps = optionEnabled(invocation, "--no-deps"),
+    };
 }
 
 fn installLocalPackage(
     context: *runtime.RuntimeContext,
     operation_context: *Zigalpm.OperationContext,
+    invocation: *const parser.Invocation,
     location: []const u8,
 ) !void {
     std.Io.Dir.cwd().access(context.io, location, .{}) catch return error.FileNotFound;
@@ -554,7 +562,9 @@ fn installLocalPackage(
         defer manager.deinit();
         manager.setOperationContext(operation_context);
         defer manager.setOperationContext(null);
-        try manager.install_local_packages(&.{absolute_path}, .{});
+        try manager.install_local_packages(&.{absolute_path}, .{
+            .needed = optionEnabled(invocation, "--needed"),
+        });
         return;
     }
     if (try inspector.isBinariesPackage(absolute_path)) {
@@ -1371,6 +1381,45 @@ test "Flatpak file install modifiers reject conflicting modes and repository opt
         tc.stdout.writer.buffered(),
         "Cannot combine --ref-file or --bundle with --remote, --branch, or --runtime.",
     ) != null);
+}
+
+test "standard install needed flag works before and after targets and preserves other flags" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const shortcodes = @import("../cli/shortcodes.zig");
+    const cases = [_]struct {
+        args: []const []const u8,
+        names: []const []const u8 = &.{"zed"},
+        needed: bool = true,
+        nodeps: bool = false,
+        no_confirm: bool = false,
+    }{
+        .{ .args = &.{ "-Is", "--needed", "zed" } },
+        .{ .args = &.{ "-Is", "zed", "--needed" } },
+        .{ .args = &.{ "-Is", "zed", "git", "--needed" }, .names = &.{ "zed", "git" } },
+        .{ .args = &.{ "-Is", "zed", "--needed", "git" }, .names = &.{ "zed", "git" } },
+        .{ .args = &.{ "-Is", "--needed", "-n", "zed", "--no-deps" }, .nodeps = true, .no_confirm = true },
+        .{ .args = &.{ "-Is", "zed", "--no-deps", "--needed", "-n" }, .nodeps = true, .no_confirm = true },
+        .{ .args = &.{ "install", "standard", "zed", "--needed" } },
+        .{ .args = &.{ "-Is", "demo.pkg.tar.zst", "--needed" }, .names = &.{"demo.pkg.tar.zst"} },
+        .{ .args = &.{ "-Is", "zed" }, .needed = false },
+        .{ .args = &.{ "-Is", "zed", "-n", "--no-deps" }, .needed = false, .nodeps = true, .no_confirm = true },
+    };
+    for (cases) |case| {
+        const translation = try shortcodes.translate(tc.arena.allocator(), &manifest, case.args);
+        const outcome = try parser.parse(tc.arena.allocator(), &manifest, translation.arguments().?);
+        const invocation = outcome.dispatch;
+        try std.testing.expectEqualStrings(standard_command_path, invocation.command.path);
+        try std.testing.expectEqual(case.names.len, invocation.positionals.len);
+        for (case.names, invocation.positionals) |expected, actual|
+            try std.testing.expectEqualStrings(expected, actual);
+        const flags = repositoryInstallFlags(&invocation);
+        try std.testing.expectEqual(case.needed, flags.needed);
+        try std.testing.expectEqual(case.nodeps, flags.nodeps);
+        try std.testing.expectEqual(case.no_confirm, invocation.globals.no_confirm);
+    }
 }
 
 test "install routes every action-first backend and forwards type-specific options" {

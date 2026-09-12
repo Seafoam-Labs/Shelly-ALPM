@@ -22,6 +22,7 @@ pub const variants = [_]types.Variant{
             flag("--make-deps", &.{"-m"}, "Install make dependencies for the requested packages"),
             flag("--no-deps", &.{"-d"}, "Pass the ALPM nodeps transaction flag when installing repository packages"),
             flag("--upgrade", &.{"-u"}, "After confirmation, synchronize and upgrade the standard system before installing the requested repository packages"),
+            flag("--needed", &.{}, "Skip reinstalling ALPM packages that are already up to date"),
         },
     },
     .{
