@@ -9,10 +9,10 @@ pub const variants = [_]types.Variant{
         .action = .list,
         .name = "standard",
         .type_code = 's',
-        .description = "List packages installed in the local ALPM database, with optional IgnorePkg and install-reason filters.",
+        .description = "List packages installed in the local ALPM database, including ignored packages, with optional install-reason filters.",
         .implementation = "Zigalpm.AlpmManager.get_installed_packages",
         .options = &.{
-            flag("--show-hidden", &.{"-w"}, "Include hidden packages"),
+            flag("--show-hidden", &.{"-w"}, "Accepted for compatibility; ignored packages are always included"),
             flag("--explicitOnly", &.{"-e"}, "List explicitly installed packages only"),
             flag("--dependencyOnly", &.{"-d"}, "List dependency-installed packages only"),
             flag("--required-by", &.{}, "Include packages that directly require each listed package"),
