@@ -132,6 +132,33 @@ const ApprovedReview = struct {
     digest: [std.crypto.hash.sha2.Sha256.digest_length]u8,
 };
 
+/// Decisions belong to one upgrade, including any dependency installs it starts.
+const UpgradeReviews = struct {
+    declined: std.StringHashMap(void),
+    skipped: std.ArrayList([]const u8) = .empty,
+
+    fn init(allocator: std.mem.Allocator) UpgradeReviews {
+        return .{
+            .declined = std.StringHashMap(void).init(allocator),
+        };
+    }
+
+    fn deinit(self: *UpgradeReviews) void {
+        var keys = self.declined.keyIterator();
+        while (keys.next()) |key| self.declined.allocator.free(key.*);
+        for (self.skipped.items) |key| self.declined.allocator.free(key);
+        self.skipped.deinit(self.declined.allocator);
+        self.declined.deinit();
+    }
+
+    fn decline(self: *UpgradeReviews, package_base: []const u8) !void {
+        if (self.declined.contains(package_base)) return;
+        const name = try self.declined.allocator.dupe(u8, package_base);
+        errdefer self.declined.allocator.free(name);
+        try self.declined.put(name, {});
+    }
+};
+
 pub const InstalledSnapshot = struct {
     name: []const u8,
     version: []const u8,
@@ -211,6 +238,7 @@ pub const Manager = struct {
     skip_optional_dependency_prompt: bool = false,
     pkgbuild_approval_handler: ?PkgbuildApprovalHandler = null,
     operation_context: ?*operation_api.OperationContext = null,
+    upgrade_reviews: ?*UpgradeReviews = null,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -643,6 +671,12 @@ pub const Manager = struct {
         operation_scope.attach();
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
+        var reviews = UpgradeReviews.init(self.allocator);
+        defer reviews.deinit();
+        const previous_reviews = self.upgrade_reviews;
+        self.upgrade_reviews = &reviews;
+        defer self.upgrade_reviews = previous_reviews;
+        defer self.reportUpgradeSkips(&reviews);
         try self.checkCancelled();
         const message = try std.mem.join(self.allocator, ", ", package_names);
         defer self.allocator.free(message);
@@ -987,29 +1021,11 @@ pub const Manager = struct {
         // Approve every requested PKGBUILD before sourcing any of them. Their
         // evaluated dependency trees are then fully reviewed before package
         // installation or build execution begins.
-        if (plans.items.len > 0) {
-            for (plans.items) |*plan| try self.requirePkgbuildApproval(&plan.prepared);
-            for (plans.items) |*plan| {
-                var visited = std.StringHashMap(void).init(self.allocator);
-                defer {
-                    var keys = visited.keyIterator();
-                    while (keys.next()) |key| self.allocator.free(key.*);
-                    visited.deinit();
-                }
-                try visited.put(try self.allocator.dupe(u8, plan.prepared.package_base), {});
-                try self.resolvePreparedDependencies(&plan.prepared, plan.requested_names.items);
-                var dependency_info = dependencyPlanningInfo(&plan.prepared);
-                try self.collectDependencyInfoRecursive(&dependency_info, &plan.dependencies, &visited);
-                try self.requireDependencyApprovals(&plan.dependencies);
-                plan.selected_optional = try self.selectOptionalDependencyValues(
-                    plan.prepared.package_name,
-                    dependencyOptionalValues(&plan.prepared),
-                );
-            }
-            try self.confirmInstallPlans(plans.items);
-        }
+        try self.reviewInstallPlans(&plans);
+        if (plans.items.len > 0) try self.confirmInstallPlans(plans.items);
 
         for (plans.items, 0..) |*plan, index| {
+            try self.checkCancelled();
             const prepared = &plan.prepared;
             const package_name = prepared.package_name;
             const current = index + 1;
@@ -1025,12 +1041,28 @@ pub const Manager = struct {
             // the cleanup explicitly before skipping to the next package.
             errdefer self.removeBuildOnlyDependencies(package_name, @ptrCast(build_only), current, plans.items.len);
 
-            try self.installCollection(&plan.dependencies);
+            self.requirePkgbuildApproval(prepared) catch |err| {
+                try self.skipDeclinedPlan(plan, err);
+                self.removeBuildOnlyDependencies(package_name, @ptrCast(build_only), current, plans.items.len);
+                continue;
+            };
+            self.installCollection(&plan.dependencies) catch |err| {
+                try self.skipDeclinedPlan(plan, err);
+                self.removeBuildOnlyDependencies(package_name, @ptrCast(build_only), current, plans.items.len);
+                continue;
+            };
 
             try self.prepareBuildDirectory(prepared.cache_path);
             self.raisePackageProgress(.aur_build_start, package_name, current, plans.items.len, "Building package");
             const requested_names: []const []const u8 = @ptrCast(plan.requested_names.items);
             const artifacts = self.buildPreparedPackage(prepared, requested_names, false) catch |err| {
+                try self.checkCancelled();
+                if (err == error.Cancelled or err == error.OutOfMemory) return err;
+                if (err == error.PkgbuildReviewDeclined and self.upgrade_reviews != null) {
+                    try self.skipDeclinedPlan(plan, err);
+                    self.removeBuildOnlyDependencies(package_name, @ptrCast(build_only), current, plans.items.len);
+                    continue;
+                }
                 const owned_name = try self.allocator.dupe(u8, package_name);
                 failures.append(self.allocator, .{
                     .package_name = owned_name,
@@ -1064,8 +1096,11 @@ pub const Manager = struct {
             for (requested_names) |requested_name|
                 self.updateVcsStoreForPackage(requested_name, prepared.pkgbuild_path) catch |err|
                     self.raiseBestEffortFailure(requested_name, "Failed to update VCS metadata", err);
-            self.installSelectedOptionalDependencies(package_name, selected_optional) catch |err|
+            self.installSelectedOptionalDependencies(package_name, selected_optional) catch |err| {
+                try self.checkCancelled();
                 self.raiseBestEffortFailure(package_name, "Failed to install some optional dependencies", err);
+            };
+            try self.checkCancelled();
             self.removeBuildOnlyDependencies(package_name, @ptrCast(build_only), current, plans.items.len);
             if (self.use_chroot or self.makepkg_command != null)
                 self.cleanBuildArtifacts(prepared.cache_path);
@@ -1073,6 +1108,90 @@ pub const Manager = struct {
                 self.raisePackageProgress(.aur_package_completed, requested_name, current, plans.items.len, "");
         }
         return .{ .failures = try failures.toOwnedSlice(self.allocator) };
+    }
+
+    fn reviewInstallPlans(self: *Self, plans: *std.ArrayList(PreparedInstall)) !void {
+        var index: usize = 0;
+        while (index < plans.items.len) {
+            const plan = &plans.items[index];
+            self.requirePkgbuildApproval(&plan.prepared) catch |err| {
+                try self.skipDeclinedPlan(plan, err);
+                var removed = plans.orderedRemove(index);
+                removed.deinit(self.allocator);
+                continue;
+            };
+            index += 1;
+        }
+        index = 0;
+        while (index < plans.items.len) {
+            const plan = &plans.items[index];
+            self.preparePlanDependencies(plan) catch |err| {
+                try self.skipDeclinedPlan(plan, err);
+                var removed = plans.orderedRemove(index);
+                removed.deinit(self.allocator);
+                continue;
+            };
+            index += 1;
+        }
+    }
+
+    fn preparePlanDependencies(self: *Self, plan: *PreparedInstall) !void {
+        try self.checkCancelled();
+        var visited = std.StringHashMap(void).init(self.allocator);
+        defer {
+            var keys = visited.keyIterator();
+            while (keys.next()) |key| self.allocator.free(key.*);
+            visited.deinit();
+        }
+        const base = try self.allocator.dupe(u8, plan.prepared.package_base);
+        visited.put(base, {}) catch |err| {
+            self.allocator.free(base);
+            return err;
+        };
+        try self.resolvePreparedDependencies(&plan.prepared, plan.requested_names.items);
+        var dependency_info = dependencyPlanningInfo(&plan.prepared);
+        try self.collectDependencyInfoRecursive(&dependency_info, &plan.dependencies, &visited);
+        try self.requireDependencyApprovals(&plan.dependencies);
+        plan.selected_optional = try self.selectOptionalDependencyValues(
+            plan.prepared.package_name,
+            dependencyOptionalValues(&plan.prepared),
+        );
+        try self.checkCancelled();
+    }
+
+    fn skipDeclinedPlan(self: *Self, plan: *const PreparedInstall, err: anyerror) !void {
+        try self.checkCancelled();
+        if (err != error.PkgbuildReviewDeclined) return err;
+        const reviews = self.upgrade_reviews orelse return err;
+        const reason = if (reviews.declined.contains(plan.prepared.package_base))
+            "review declined"
+        else
+            "required AUR dependency review declined";
+        for (plan.requested_names.items) |name| {
+            if (containsConst(reviews.skipped.items, name)) continue;
+            const owned_name = try self.allocator.dupe(u8, name);
+            reviews.skipped.append(self.allocator, owned_name) catch |put_err| {
+                self.allocator.free(owned_name);
+                return put_err;
+            };
+            const message = try std.fmt.allocPrint(self.allocator, "Skipped {s}: {s}", .{ name, reason });
+            defer self.allocator.free(message);
+            self.raiseInfo(.informational_output, name, message, null, null);
+        }
+    }
+
+    fn reportUpgradeSkips(self: *Self, reviews: *const UpgradeReviews) void {
+        if (reviews.skipped.items.len == 0) return;
+        const names = std.mem.join(self.allocator, ", ", reviews.skipped.items) catch return;
+        defer self.allocator.free(names);
+        const message = std.fmt.allocPrint(self.allocator, "Skipped {d} AUR package(s): {s}", .{ reviews.skipped.items.len, names }) catch return;
+        defer self.allocator.free(message);
+        self.raiseInfo(.informational_output, null, message, null, null);
+    }
+
+    fn isDeclinedPackage(self: *Self, name: []const u8) bool {
+        const reviews = self.upgrade_reviews orelse return false;
+        return reviews.declined.contains(self.pkgbase_cache.get(name) orelse name);
     }
 
     fn prepareInstallPlans(
@@ -1189,6 +1308,7 @@ pub const Manager = struct {
 
             for (plan.selected_optional orelse &.{}) |raw| {
                 const parsed = dependency_resolver.parseOptionalDependency(raw);
+                if (self.isDeclinedPackage(parsed.name)) continue;
                 const name_z = try allocator.dupeZ(u8, parsed.name);
                 const repository_name = self.alpm.find_remote_satisfier_for_dependency(name_z) catch null;
                 try appendTransactionPackage(&packages, allocator, .{
@@ -1353,6 +1473,9 @@ pub const Manager = struct {
     }
 
     fn installCollection(self: *Self, collection: *const DependencyCollection) !void {
+        // Recheck before installing even repository dependencies: a later review
+        // may have declined an AUR base shared with an earlier plan.
+        try self.requireDependencyApprovals(collection);
         if (collection.repo.items.len > 0) {
             const names = try self.allocator.alloc([]const u8, collection.repo.items.len);
             defer self.allocator.free(names);
@@ -1375,6 +1498,8 @@ pub const Manager = struct {
         defer if (start_message) |message| self.allocator.free(message);
         self.raisePackageProgress(.aur_build_start, dependency.package_name, 1, 1, start_message orelse "Building AUR dependency");
         const artifacts = self.buildPreparedPackage(dependency, &.{dependency.package_name}, false) catch |err| {
+            try self.checkCancelled();
+            if (err == error.PkgbuildReviewDeclined and self.upgrade_reviews != null) return err;
             const failure_message = std.fmt.allocPrint(self.allocator, "Failed to build AUR dependency {s}: {s}", .{ dependency.package_name, @errorName(err) }) catch null;
             defer if (failure_message) |message| self.allocator.free(message);
             self.raisePackageProgress(.aur_package_failed, dependency.package_name, 1, 1, failure_message orelse "Failed to build AUR dependency");
@@ -1472,6 +1597,7 @@ pub const Manager = struct {
         for (raw_options) |raw| {
             const parsed = dependency_resolver.parseOptionalDependency(raw);
             if (!dependency_resolver.isValidPackageName(parsed.name)) continue;
+            if (self.isDeclinedPackage(parsed.name)) continue;
             const name_z = try self.allocator.dupeZ(u8, parsed.name);
             defer self.allocator.free(name_z);
             try options.append(self.allocator, .{
@@ -1508,6 +1634,7 @@ pub const Manager = struct {
         defer aur_names.deinit(self.allocator);
         for (selected) |raw| {
             const parsed = dependency_resolver.parseOptionalDependency(raw);
+            if (self.isDeclinedPackage(parsed.name)) continue;
             const name_z = try self.allocator.dupeZ(u8, parsed.name);
             defer self.allocator.free(name_z);
             if (self.alpm.find_remote_satisfier_for_dependency(name_z)) |satisfier| {
@@ -1538,6 +1665,7 @@ pub const Manager = struct {
                 self.dispatcher.raiseError(.{ .message = message });
                 continue;
             };
+            if (self.isDeclinedPackage(chosen)) continue;
             var recoverable_errors = self.alpm.dispatcher.beginRecoverableErrors("Failed to configure optional AUR dependency");
             defer recoverable_errors.deinit();
             self.installPackages(&.{chosen}) catch continue;
@@ -1642,6 +1770,10 @@ pub const Manager = struct {
     }
 
     fn requirePkgbuildApproval(self: *Self, prepared: *const PreparedPackage) !void {
+        try self.checkCancelled();
+        if (self.upgrade_reviews) |reviews| {
+            if (reviews.declined.contains(prepared.package_base)) return error.PkgbuildReviewDeclined;
+        }
         if (self.approved_pkgbuild_reviews.get(prepared.package_base)) |review| {
             if (std.mem.eql(u8, review.commit, prepared.target_commit) and
                 std.mem.eql(u8, &review.digest, &prepared.digest)) return;
@@ -1656,7 +1788,11 @@ pub const Manager = struct {
             .warnings = findings,
             .source_files = &prepared.info.local_source_contents,
         });
-        if (!approved) return error.PkgbuildReviewDeclined;
+        try self.checkCancelled();
+        if (!approved) {
+            if (self.upgrade_reviews) |reviews| try reviews.decline(prepared.package_base);
+            return error.PkgbuildReviewDeclined;
+        }
         try self.rememberApprovedReview(
             prepared.package_base,
             prepared.target_commit,
@@ -1770,6 +1906,21 @@ pub const Manager = struct {
     /// approval and integrity checks adjacent prevents callers from accidentally
     /// building content that was declined or changed after it was reviewed.
     fn buildPreparedPackage(
+        self: *Self,
+        prepared: *const PreparedPackage,
+        requested_names: []const []const u8,
+        historical: bool,
+    ) ![]package_builder.BuildArtifact {
+        return self.buildPreparedPackageImpl(prepared, requested_names, historical) catch |err| {
+            try self.checkCancelled();
+            if (err == error.PkgbuildReviewDeclined) {
+                if (self.upgrade_reviews) |reviews| try reviews.decline(prepared.package_base);
+            }
+            return err;
+        };
+    }
+
+    fn buildPreparedPackageImpl(
         self: *Self,
         prepared: *const PreparedPackage,
         requested_names: []const []const u8,
@@ -4504,6 +4655,245 @@ test "all requested PKGBUILDs are reviewed before the first build" {
         manager.updatePackages(&.{"missing-review-fixture"}),
     );
     try std.testing.expectEqual(@as(usize, 1), failure_capture.count);
+}
+
+test "AUR upgrades skip declined reviews and continue independent packages" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(root);
+    const remote_root = try std.fs.path.join(allocator, &.{ root, "remotes" });
+    defer allocator.free(remote_root);
+    const names = [_][]const u8{ "skip-one", "skip-two", "skip-three", "needs-two", "also-needs-two", "skip-suite", "skip-addon", "optional-two" };
+    for (names[0..5]) |name| {
+        try createAurFixtureRepository(allocator, io, remote_root, name, if (std.mem.endsWith(u8, name, "needs-two")) "skip-two>=1" else null);
+    }
+    try createSplitAurFixtureRepository(allocator, io, remote_root, "skip-suite", &.{ "skip-suite", "skip-addon" });
+    try createAurFixtureRepository(allocator, io, remote_root, "optional-two", null);
+    const optional_remote = try std.fs.path.join(allocator, &.{ remote_root, "optional-two.git" });
+    defer allocator.free(optional_remote);
+    const optional_pkgbuild = try std.fs.path.join(allocator, &.{ optional_remote, "PKGBUILD" });
+    defer allocator.free(optional_pkgbuild);
+    try writeFixtureFile(io, optional_pkgbuild, "pkgname=optional-two\npkgver=1\npkgrel=1\narch=('any')\noptdepends=('skip-two: optional tool')\npackage() { :; }\n", false);
+    try runFixtureCommand(allocator, io, &.{ "git", "add", "PKGBUILD" }, optional_remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "commit", "-m", "optional dependency" }, optional_remote);
+
+    const Mode = enum { initial, late, cancel_review, cancel_transaction, cancel_build, install };
+    const Case = struct {
+        label: []const u8,
+        requested: []const []const u8,
+        declined: []const []const u8 = &.{"skip-two"},
+        installed: []const []const u8 = &.{},
+        skipped: []const []const u8 = &.{},
+        mode: Mode = .initial,
+        seed_two: bool = false,
+        seed_old_two: bool = false,
+    };
+    const cases = [_]Case{
+        .{ .label = "first", .requested = &.{ "skip-two", "skip-one", "skip-three" }, .installed = &.{ "skip-one", "skip-three" }, .skipped = &.{"skip-two"} },
+        .{ .label = "middle", .requested = &.{ "skip-one", "skip-two", "skip-three" }, .installed = &.{ "skip-one", "skip-three" }, .skipped = &.{"skip-two"} },
+        .{ .label = "all", .requested = &.{ "skip-one", "skip-two" }, .declined = &.{ "skip-one", "skip-two" }, .skipped = &.{ "skip-one", "skip-two" } },
+        .{ .label = "split", .requested = &.{ "skip-suite", "skip-addon", "skip-suite", "skip-three" }, .declined = &.{"skip-suite"}, .installed = &.{"skip-three"}, .skipped = &.{ "skip-suite", "skip-addon" } },
+        .{ .label = "required", .requested = &.{ "skip-two", "needs-two", "also-needs-two", "skip-three" }, .installed = &.{"skip-three"}, .skipped = &.{ "skip-two", "needs-two", "also-needs-two" } },
+        .{ .label = "shared", .requested = &.{ "needs-two", "also-needs-two", "skip-three" }, .installed = &.{"skip-three"}, .skipped = &.{ "needs-two", "also-needs-two" } },
+        .{ .label = "satisfied", .requested = &.{ "skip-two", "needs-two", "skip-three" }, .installed = &.{ "skip-two", "needs-two", "skip-three" }, .skipped = &.{"skip-two"}, .seed_two = true },
+        .{ .label = "too-old", .requested = &.{ "skip-two", "needs-two", "skip-three" }, .installed = &.{ "skip-two", "skip-three" }, .skipped = &.{ "skip-two", "needs-two" }, .seed_two = true, .seed_old_two = true },
+        .{ .label = "optional", .requested = &.{ "skip-two", "optional-two", "skip-three" }, .installed = &.{ "optional-two", "skip-three" }, .skipped = &.{"skip-two"} },
+        .{ .label = "late", .requested = &.{ "skip-one", "skip-two", "skip-three" }, .installed = &.{ "skip-one", "skip-three" }, .skipped = &.{"skip-two"}, .mode = .late },
+        .{ .label = "late-shared", .requested = &.{ "needs-two", "also-needs-two", "skip-three" }, .installed = &.{"skip-three"}, .skipped = &.{ "needs-two", "also-needs-two" }, .mode = .late },
+        .{ .label = "cancel-review", .requested = &.{ "skip-two", "skip-three" }, .mode = .cancel_review },
+        .{ .label = "cancel-transaction", .requested = &.{ "skip-two", "skip-three" }, .declined = &.{}, .mode = .cancel_transaction },
+        .{ .label = "cancel-build", .requested = &.{ "skip-two", "skip-three" }, .mode = .cancel_build },
+        .{ .label = "install", .requested = &.{ "skip-two", "skip-three" }, .mode = .install },
+    };
+    for (cases) |case| {
+        errdefer std.debug.print("AUR upgrade skip case: {s}\n", .{case.label});
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        const paths = arena.allocator();
+        const case_root = try std.fs.path.join(paths, &.{ root, case.label });
+        const cache_root = try std.fs.path.join(paths, &.{ case_root, "cache" });
+        const alpm_root = try std.fs.path.join(paths, &.{ case_root, "root" });
+        const db_path = try std.fs.path.join(paths, &.{ case_root, "db" });
+        const package_cache = try std.fs.path.join(paths, &.{ case_root, "packages" });
+        for ([_][]const u8{ cache_root, alpm_root, db_path, package_cache }) |path| try std.Io.Dir.cwd().createDirPath(io, path);
+        const marker = try std.fs.path.join(paths, &.{ case_root, "built" });
+        const build_version = try std.fs.path.join(paths, &.{ case_root, "version" });
+        try writeFixtureFile(io, build_version, if (case.seed_old_two) "0-1" else "1-1", false);
+        const makepkg = try std.fs.path.join(paths, &.{ case_root, "makepkg" });
+        const script = try std.fmt.allocPrint(paths,
+            \\#!/bin/sh
+            \\set -eu
+            \\name=$(sed -n 's/^pkgname=//p' PKGBUILD)
+            \\printf '%s\n' "$name" >> '{s}'
+            \\pkgver=$(cat '{s}')
+            \\printf 'pkgname = %s\npkgbase = %s\npkgver = %s\npkgdesc = skip fixture\nbuilddate = 1700000000\npackager = Shelly Tests\nsize = 0\narch = any\n' "$name" "$name" "$pkgver" > .PKGINFO
+            \\sed -n 's/^[[:space:]]*depends = /depend = /p' .SRCINFO >> .PKGINFO
+            \\tar -czf "$name-$pkgver-any.pkg.tar.gz" .PKGINFO
+            \\rm -f .PKGINFO
+            \\
+        , .{ marker, build_version });
+        try writeFixtureFile(io, makepkg, script, true);
+        const config_path = try std.fs.path.join(paths, &.{ case_root, "pacman.conf" });
+        const config = try std.fmt.allocPrint(paths, "[options]\nArchitecture = auto\nSigLevel = Never\nRootDir = {s}\nDBPath = {s}\nCacheDir = {s}\n", .{ alpm_root, db_path, package_cache });
+        try writeFixtureFile(io, config_path, config, false);
+
+        var operation_context = operation_api.OperationContext.init(allocator, io);
+        defer operation_context.deinit();
+        var manager = try Manager.init(allocator, std.testing.environ, .{
+            .config_path = config_path,
+            .cache_root = cache_root,
+            .aur_git_base_url = remote_root,
+            .makepkg_command = makepkg,
+        });
+        defer manager.deinit();
+        manager.alpm.disable_transaction_hooks();
+        manager.setOperationContext(&operation_context);
+        defer manager.setOperationContext(null);
+        for (names) |name| _ = try manager.cachePkgbase(name, if (std.mem.eql(u8, name, "skip-addon")) "skip-suite" else name);
+        try manager.bin_variant_cache.put(try allocator.dupe(u8, "skip-two"), null);
+
+        const Capture = struct {
+            case: Case,
+            manager: *Manager,
+            context: *operation_api.OperationContext,
+            seeding: bool = false,
+            late: bool = false,
+            declines: usize = 0,
+            transactions: usize = 0,
+            skip_count: usize = 0,
+            summaries: usize = 0,
+            failures: usize = 0,
+            completion: ?operation_api.CompletionStatus = null,
+
+            fn answer(data: ?*anyopaque, question: operation_api.Question) operation_api.QuestionResponse {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (self.seeding) return .accepted;
+                if (question.kind == .select_optional_dependencies) return .accepted;
+                if (question.kind == .review_changes) {
+                    const name = question.review.?.subject;
+                    if (containsConst(self.case.declined, name)) {
+                        if (self.case.mode == .cancel_review) self.context.cancel();
+                        if ((self.case.mode == .late and !self.late) or self.case.mode == .cancel_build) return .accepted;
+                        self.declines += 1;
+                        return .declined;
+                    }
+                    return .accepted;
+                }
+                if (question.kind == .confirm_transaction) {
+                    // Repository/local ALPM transactions have their own confirmations.
+                    if (question.envelope.backend != .aur) return .accepted;
+                    self.transactions += 1;
+                    if (self.case.mode == .cancel_transaction) return .declined;
+                    for (question.transaction_plan.?.packages) |package| {
+                        if (self.case.mode != .late)
+                            std.testing.expect(!containsConst(self.case.skipped, package.name)) catch unreachable;
+                    }
+                    return .accepted;
+                }
+                return .default;
+            }
+
+            fn info(data: ?*anyopaque, args: events.InformationalArgs) void {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (self.seeding) return;
+                if (args.event_type == .aur_package_failed) self.failures += 1;
+                if (args.event_type == .aur_build_start) {
+                    const name = args.package_name orelse return;
+                    if (!containsConst(self.case.declined, name)) return;
+                    if (self.case.mode == .cancel_build) self.context.cancel();
+                    if (self.case.mode == .late and !self.late) {
+                        // Force the build boundary to ask for renewed approval,
+                        // after planning has already approved this shared base.
+                        self.late = true;
+                        if (self.manager.approved_pkgbuild_reviews.fetchRemove(name)) |old| {
+                            self.manager.allocator.free(old.key);
+                            self.manager.allocator.free(old.value.commit);
+                        }
+                    }
+                }
+                if (std.mem.startsWith(u8, args.message, "Skipped ")) {
+                    if (args.package_name) |name| {
+                        self.skip_count += 1;
+                        std.testing.expect(containsConst(self.case.skipped, name)) catch unreachable;
+                        std.testing.expect(std.mem.endsWith(u8, args.message, "review declined")) catch unreachable;
+                    } else {
+                        self.summaries += 1;
+                        for (self.case.skipped) |name|
+                            std.testing.expect(std.mem.indexOf(u8, args.message, name) != null) catch unreachable;
+                    }
+                }
+            }
+
+            fn event(data: ?*anyopaque, value: operation_api.Event) void {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (self.seeding) return;
+                switch (value) {
+                    .failure => |failure| {
+                        if (!failure.recoverable and failure.envelope.backend == .aur and failure.envelope.parent_id == null) {
+                            self.failures += 1;
+                        }
+                    },
+                    .completed => |completed| {
+                        if (completed.envelope.backend == .aur and completed.envelope.parent_id == null)
+                            self.completion = completed.status;
+                    },
+                    else => {},
+                }
+            }
+        };
+        var capture = Capture{ .case = case, .manager = manager, .context = &operation_context };
+        operation_context.setQuestionHandler(.{ .function = Capture.answer, .data = &capture });
+        const subscription = try operation_context.subscribe(.{ .function = Capture.event, .data = &capture });
+        defer _ = operation_context.unsubscribe(subscription);
+        _ = try manager.dispatcher.addInformationalHandler(.{ .function = Capture.info, .data = &capture });
+        if (case.seed_two) {
+            capture.seeding = true;
+            try manager.installPackages(&.{"skip-two"});
+            const approved = manager.approved_pkgbuild_reviews.fetchRemove("skip-two").?;
+            allocator.free(approved.key);
+            allocator.free(approved.value.commit);
+            try std.Io.Dir.cwd().deleteFile(io, marker);
+            try writeFixtureFile(io, build_version, "1-1", false);
+            capture.seeding = false;
+        }
+
+        switch (case.mode) {
+            .initial, .late => {
+                try manager.updatePackages(case.requested);
+                try std.testing.expectEqual(operation_api.CompletionStatus.success, capture.completion.?);
+                try std.testing.expectEqual(@as(usize, 0), capture.failures);
+                try std.testing.expectEqual(case.declined.len, capture.declines);
+                try std.testing.expectEqual(@as(usize, if (case.installed.len == 0) 0 else 1), capture.transactions);
+            },
+            .cancel_review, .cancel_transaction, .cancel_build => {
+                try std.testing.expectError(error.Cancelled, manager.updatePackages(case.requested));
+                try std.testing.expectEqual(operation_api.CompletionStatus.cancelled, capture.completion.?);
+            },
+            .install => try std.testing.expectError(error.PkgbuildReviewDeclined, manager.installPackages(case.requested)),
+        }
+        try std.testing.expect(manager.upgrade_reviews == null);
+        try std.testing.expectEqual(case.skipped.len, capture.skip_count);
+        try std.testing.expectEqual(@as(usize, if (case.skipped.len == 0) 0 else 1), capture.summaries);
+        for (names) |name| {
+            const name_z = try paths.dupeZ(u8, name);
+            try std.testing.expectEqual(containsConst(case.installed, name), manager.alpm.is_package_installed(name_z));
+        }
+        const built = std.Io.Dir.cwd().readFileAlloc(io, marker, paths, .limited(4096)) catch |err| switch (err) {
+            error.FileNotFound => "",
+            else => return err,
+        };
+        for (case.declined) |name| try std.testing.expect(std.mem.indexOf(u8, built, name) == null);
+        if (std.mem.eql(u8, case.label, "all")) {
+            // A decline is scoped to this run; the same manager can retry later.
+            capture.seeding = true;
+            try manager.updatePackages(case.requested);
+            try std.testing.expect(manager.alpm.is_package_installed("skip-one"));
+            try std.testing.expect(manager.alpm.is_package_installed("skip-two"));
+        }
+    }
 }
 
 test "AUR package failures are emitted after all builds and fail the operation" {

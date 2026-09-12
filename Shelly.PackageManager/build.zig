@@ -636,6 +636,7 @@ pub fn build(b: *std.Build) void {
             "helper cache identity recognizes installed split-package members",
             "prepared non-chroot split package builds use the custom builder",
             "all requested PKGBUILDs are reviewed before the first build",
+            "AUR upgrades skip declined reviews",
             "AUR package failures are emitted after all builds and fail the operation",
             "AUR package preparation failure does not stop valid packages",
             "build-only dependencies are removed after a failed build",
