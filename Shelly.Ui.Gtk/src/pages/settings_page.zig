@@ -1437,7 +1437,7 @@ test "Flatpak support uses libflatpak and the configured companion backend" {
     const packages = support_packages.dependenciesForFeature(.flatpak);
     try std.testing.expectEqualStrings("flatpak", packages[0]);
 
-    const argv = try ShellyCommands.install(std.testing.allocator, &packages);
+    const argv = try ShellyCommands.install(std.testing.allocator, packages);
     defer std.testing.allocator.free(argv);
     try std.testing.expectEqualSlices(
         []const u8,
@@ -1467,7 +1467,7 @@ test "AppImage support installs fuse2" {
     const packages = support_packages.dependenciesForFeature(.appimage);
     try std.testing.expectEqualStrings("fuse2", packages[0]);
 
-    const argv = try ShellyCommands.install(std.testing.allocator, &packages);
+    const argv = try ShellyCommands.install(std.testing.allocator, packages);
     defer std.testing.allocator.free(argv);
     try std.testing.expectEqualSlices(
         []const u8,

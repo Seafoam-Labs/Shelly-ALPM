@@ -146,8 +146,9 @@ pub fn build(b: *std.Build) void {
     const valgrind_step = b.step("valgrind", "Run the app under Valgrind (memcheck) to check for memory leaks");
     valgrind_step.dependOn(&valgrind_cmd.step);
 
-    const root_tests = b.addTest(.{ .root_module = shelly_ui_gtk });
-    const exe_tests = b.addTest(.{ .root_module = exe.root_module });
+    const test_filters = b.option([]const []const u8, "test-filter", "Run tests whose names contain this text") orelse &.{};
+    const root_tests = b.addTest(.{ .root_module = shelly_ui_gtk, .filters = test_filters });
+    const exe_tests = b.addTest(.{ .root_module = exe.root_module, .filters = test_filters });
 
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&b.addRunArtifact(root_tests).step);

@@ -3096,6 +3096,28 @@ pub const Manager = struct {
                     .message = message,
                 });
             },
+            .package_operation_done => {
+                const operation = event.*.package_operation;
+                const pkg = (if (operation.operation == rawLibalpm.ALPM_PACKAGE_REMOVE)
+                    operation.oldpkg
+                else
+                    operation.newpkg) orelse return;
+                const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
+                const code: []const u8 = switch (operation.operation) {
+                    rawLibalpm.ALPM_PACKAGE_INSTALL => "alpm.package_installed",
+                    rawLibalpm.ALPM_PACKAGE_UPGRADE => "alpm.package_upgraded",
+                    rawLibalpm.ALPM_PACKAGE_DOWNGRADE => "alpm.package_downgraded",
+                    rawLibalpm.ALPM_PACKAGE_REINSTALL => "alpm.package_reinstalled",
+                    rawLibalpm.ALPM_PACKAGE_REMOVE => "alpm.package_removed",
+                    else => return,
+                };
+                self.dispatcher.raiseInformational(.{
+                    .event_type = event_type,
+                    .message = "Package operation completed.",
+                    .package_name = name,
+                    .code = code,
+                });
+            },
             .hook_run_start => {
                 const hook = event.*.hook_run;
                 const name = spanC(hook.name);

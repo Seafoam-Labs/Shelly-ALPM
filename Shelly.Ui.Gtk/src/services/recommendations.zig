@@ -225,6 +225,21 @@ test "load serves a fresh cache without requiring network" {
 }
 
 test "refresh still serves cache when the network is unreachable" {
+    const Offline = struct {
+        fn lookup(
+            _: ?*anyopaque,
+            _: std.Io.net.HostName,
+            resolved: *std.Io.Queue(std.Io.net.HostName.LookupResult),
+            _: std.Io.net.HostName.LookupOptions,
+        ) std.Io.net.HostName.LookupError!void {
+            resolved.close(std.testing.io);
+            return error.UnknownHostName;
+        }
+    };
+    var offline_vtable = std.testing.io.vtable.*;
+    offline_vtable.netLookup = Offline.lookup;
+    const offline_io: std.Io = .{ .userdata = std.testing.io.userdata, .vtable = &offline_vtable };
+
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
@@ -249,7 +264,7 @@ test "refresh still serves cache when the network is unreachable" {
 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const cats = reload(arena.allocator(), std.testing.io, &env);
+    const cats = reload(arena.allocator(), offline_io, &env);
     try std.testing.expectEqual(@as(usize, 1), cats.len);
     try std.testing.expectEqualStrings("dev", cats[0].name);
     try std.testing.expectEqualStrings("base-devel", cats[0].packages[0]);

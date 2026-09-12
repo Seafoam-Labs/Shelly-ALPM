@@ -378,7 +378,7 @@ pub const Toast = extern struct {
 };
 
 test "toast reveals on show and hides on dismiss" {
-    if (gtk.initCheck() == 0) return error.SkipZigTest;
+    try @import("../gtk_test.zig").requireDisplay();
 
     const toast = Toast.new();
     _ = toast.as(gobject.Object).refSink();
@@ -389,10 +389,10 @@ test "toast reveals on show and hides on dismiss" {
     toast.show(.info, "Test message");
     try std.testing.expect(toast.isShowing());
 
-    const revealer = gtk.Widget.getFirstChild(toast.as(gtk.Widget)).?;
-    try std.testing.expectEqual(@as(c_uint, 1), gtk.Revealer.getRevealChild(revealer));
+    const revealer = gobject.ext.cast(gtk.Revealer, gtk.Widget.getFirstChild(toast.as(gtk.Widget)).?).?;
+    try std.testing.expectEqual(@as(c_int, 1), gtk.Revealer.getRevealChild(revealer));
 
     toast.hide();
     try std.testing.expect(!toast.isShowing());
-    try std.testing.expectEqual(@as(c_uint, 0), gtk.Revealer.getRevealChild(revealer));
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Revealer.getRevealChild(revealer));
 }

@@ -34,6 +34,8 @@ pub const ErrorArgs = struct {
 pub const InformationalArgs = struct {
     event_type: bindings.libalpm.EventType,
     message: []const u8,
+    package_name: ?[]const u8 = null,
+    code: ?[]const u8 = null,
 };
 
 pub const ScriptletArgs = struct {
@@ -411,7 +413,7 @@ pub const Dispatcher = struct {
     }
 
     pub fn raiseInformational(self: *Dispatcher, args: InformationalArgs) void {
-        if (self.operation) |operation| operation.status(.information, args.message, "alpm.information", @intFromEnum(args.event_type));
+        if (self.operation) |operation| operation.packageStatus(.information, args.message, args.code orelse "alpm.information", @intFromEnum(args.event_type), args.package_name);
         self.dispatch(InformationalArgs, &self.informational, args);
     }
 
