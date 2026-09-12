@@ -182,6 +182,19 @@ CLI provides the same core functionality as the UI but in a scriptable, terminal
 
 Full documentation can be viewed on the [Shelly CLI Reference](https://www.seafoam-labs.org/shelly-alpm/docs/cli-reference/) page.
 
+Use `--needed` with standard installs to skip same-version reinstalls while still
+installing missing packages and allowing upgrades. The flag works before or after
+package names, and `-n` remains the separate no-confirm option:
+
+```bash
+shelly -Is zed --needed
+shelly -Is --needed zed git -n
+```
+
+This also applies to local Arch package archives. URL archives are downloaded
+before their package metadata can be checked. Without `--needed`, reinstall
+behavior is unchanged; AUR builds and Shelly binary archives are unaffected.
+
 The versioned JSON contracts used by unattended package-building services are
 documented in [Remora automation contract](docs/remora-automation.md). Probe an
 installed binary with `shelly --version --json` before scheduling a build.

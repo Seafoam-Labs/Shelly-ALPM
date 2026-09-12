@@ -2112,6 +2112,147 @@ test "install_packages exposes its prepared plan and decline prevents downloads"
     try testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, archive_path, .{}));
 }
 
+const NeededInstallCapture = struct {
+    questions: usize = 0,
+    no_op: bool = false,
+    completed: bool = false,
+    saw_download: bool = false,
+    saw_transaction: bool = false,
+
+    fn answer(data: ?*anyopaque, _: operations.Question) operations.QuestionResponse {
+        const self: *@This() = @ptrCast(@alignCast(data.?));
+        self.questions += 1;
+        return .declined;
+    }
+
+    fn handle(data: ?*anyopaque, event: operations.Event) void {
+        const self: *@This() = @ptrCast(@alignCast(data.?));
+        switch (event) {
+            .started => |started| {
+                if (started.envelope.backend == .download) self.saw_download = true;
+            },
+            .status => |status| {
+                if (std.mem.eql(u8, status.message, "Nothing to install.")) self.no_op = true;
+                if (status.native_code == @intFromEnum(libalpm.EventType.transaction_start) or
+                    status.native_code == @intFromEnum(libalpm.EventType.hook_start)) self.saw_transaction = true;
+            },
+            .completed => |completed| {
+                if (completed.envelope.backend == .alpm and completed.envelope.kind == .install)
+                    self.completed = completed.status == .success;
+            },
+            else => {},
+        }
+    }
+};
+
+test "install_packages needed skips current targets without questions downloads or commit" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.createOptionalDependencySyncDatabase(allocator);
+    try workspace.addLocalPackage(allocator, "optional-parent", "1.0-1");
+
+    var context = operations.OperationContext.init(allocator, io);
+    defer context.deinit();
+    var capture: NeededInstallCapture = .{};
+    _ = try context.subscribe(.{ .function = NeededInstallCapture.handle, .data = &capture });
+    context.setQuestionHandler(.{ .function = NeededInstallCapture.answer, .data = &capture });
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+    mgr.setOperationContext(&context);
+
+    // Repeating the operation also verifies that the empty transaction releases
+    // its database lock. Qualified names must use the same installed check.
+    for ([_][:0]const u8{ "optional-parent", "seafoam-labs/optional-parent" }) |target| {
+        capture = .{};
+        var names = [_][:0]const u8{target};
+        try mgr.install_packages(&names, .{ .needed = true });
+        try testing.expect(capture.no_op and capture.completed);
+        try testing.expectEqual(@as(usize, 0), capture.questions);
+        try testing.expect(!capture.saw_download and !capture.saw_transaction);
+    }
+}
+
+test "install_packages needed preserves missing targets upgrades and opt-in reinstall behavior" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const cases = [_]struct {
+        installed: ?[]const u8,
+        needed: bool = true,
+        mixed: bool = false,
+        expected: []const u8 = "remote-provider",
+    }{
+        .{ .installed = null },
+        .{ .installed = "1.0-1" },
+        .{ .installed = "2.0-1", .needed = false },
+        .{ .installed = "2.0-1", .mixed = true, .expected = "alpha-provider" },
+    };
+    for (cases) |case| {
+        var workspace = try SyncTestWorkspace.create(allocator, io);
+        defer workspace.cleanup(allocator);
+        try workspace.createSyncDatabase(allocator);
+        if (case.installed) |version| try workspace.addLocalPackage(allocator, "remote-provider", version);
+
+        const Capture = struct {
+            expected: []const u8,
+            saw_plan: bool = false,
+
+            fn answer(data: ?*anyopaque, question: operations.Question) operations.QuestionResponse {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (question.kind != .confirm_transaction) return .declined;
+                const plan = question.transaction_plan.?;
+                testing.expectEqual(@as(usize, 1), plan.packages.len) catch unreachable;
+                testing.expectEqualStrings(self.expected, plan.packages[0].name) catch unreachable;
+                testing.expectEqualStrings("2.0-1", plan.packages[0].version.?) catch unreachable;
+                testing.expectEqual(@as(?u64, 1), plan.total_download_size) catch unreachable;
+                self.saw_plan = true;
+                return .declined;
+            }
+        };
+        var capture: Capture = .{ .expected = case.expected };
+        var context = operations.OperationContext.init(allocator, io);
+        defer context.deinit();
+        context.setQuestionHandler(.{ .function = Capture.answer, .data = &capture });
+        const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+        defer mgr.deinit();
+        mgr.setOperationContext(&context);
+        var names = [_][:0]const u8{ "remote-provider", "alpha-provider" };
+        try testing.expectError(error.Cancelled, mgr.install_packages(names[0..if (case.mixed) 2 else 1], .{ .needed = case.needed }));
+        try testing.expect(capture.saw_plan);
+    }
+}
+
+test "install_local_packages needed skips current archives without commit" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.addLocalPackage(allocator, "shelly-local-needed", "1.0-1");
+    const path = try workspace.createPackageArchive(allocator, "shelly-local-needed", "1.0-1");
+    defer allocator.free(path);
+
+    var context = operations.OperationContext.init(allocator, io);
+    defer context.deinit();
+    var capture: NeededInstallCapture = .{};
+    _ = try context.subscribe(.{ .function = NeededInstallCapture.handle, .data = &capture });
+    context.setQuestionHandler(.{ .function = NeededInstallCapture.answer, .data = &capture });
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+    mgr.setOperationContext(&context);
+
+    try mgr.install_local_packages(&.{path}, .{ .needed = true });
+    try testing.expect(capture.no_op and capture.completed);
+    try testing.expectEqual(@as(usize, 0), capture.questions);
+    try testing.expect(!capture.saw_download and !capture.saw_transaction);
+}
+
 test "install_packages preserves every optional dependency selection after an installed first choice" {
     const allocator = testing.allocator;
     var threaded: std.Io.Threaded = .init(allocator, .{});

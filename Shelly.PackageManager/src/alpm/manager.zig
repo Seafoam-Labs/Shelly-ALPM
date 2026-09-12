@@ -855,6 +855,18 @@ pub const Manager = struct {
         // legacy handlers may still return a single package name in `pkg`.
         const initial_count = packages.items.len;
         for (packages.items[0..initial_count]) |pkg| {
+            // libalpm will skip these targets when adding them to the
+            // transaction. Do not prompt for their optional dependencies.
+            if (trans_flags_arg.needed) {
+                const local_db = rawLibalpm.alpm_get_localdb(self.handle);
+                const name = rawLibalpm.alpm_pkg_get_name(pkg);
+                if (rawLibalpm.alpm_db_get_pkg(local_db, name)) |local| {
+                    if (rawLibalpm.alpm_pkg_vercmp(
+                        rawLibalpm.alpm_pkg_get_version(local),
+                        rawLibalpm.alpm_pkg_get_version(pkg),
+                    ) == 0) continue;
+                }
+            }
             var names: std.ArrayList([]const u8) = .empty;
             defer names.deinit(self.allocator);
             var options: std.ArrayList(events.ProviderOption) = .empty;
@@ -939,6 +951,7 @@ pub const Manager = struct {
             self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {};
             return TransactionError.PrepareFailed;
         }
+        if (self.preparedInstallIsEmpty()) return;
         try self.confirmPreparedInstall(packages.items, optional_names.items, trans_flags);
         try self.predownloadPreparedPackages(trans_flags);
 
@@ -1583,6 +1596,7 @@ pub const Manager = struct {
             return TransactionError.PrepareFailed;
         }
 
+        if (self.preparedInstallIsEmpty()) return;
         try self.predownloadPreparedPackages(flags);
 
         data = null;
@@ -2427,7 +2441,17 @@ pub const Manager = struct {
         return .required;
     }
 
-    /// Downloads every repository package selected by a prepared transaction
+    /// Report an empty transaction before confirmation, downloads, or commit.
+    fn preparedInstallIsEmpty(self: *Manager) bool {
+        if (rawLibalpm.alpm_trans_get_add(self.handle) != null or
+            rawLibalpm.alpm_trans_get_remove(self.handle) != null) return false;
+        self.dispatcher.raiseInformational(.{
+            .event_type = .nothing_to_do,
+            .message = "Nothing to install.",
+        });
+        return true;
+    }
+
     fn confirmPreparedInstall(
         self: *Manager,
         requested_packages: []const *rawLibalpm.alpm_pkg_t,
