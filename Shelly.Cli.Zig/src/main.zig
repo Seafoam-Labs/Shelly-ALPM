@@ -64,7 +64,7 @@ pub fn main(init: std.process.Init) !void {
         effective_arguments,
     );
     Shelly_Cli_Zig.signals.installInterruptHandler(graceful_cancellation);
-    var session_log = Shelly_Cli_Zig.log.SessionLog.tryOpen(io);
+    var session_log = Shelly_Cli_Zig.log.SessionLog.tryOpenWithFallback(arena, io, proxy_environment.environ);
     defer if (session_log) |*log| log.close();
     if (session_log) |*log| log.writeSessionHeader(arena, effective_arguments);
     var transaction_log: ?Shelly_Cli_Zig.log.TransactionLog = if (session_log) |*log|

@@ -317,10 +317,19 @@ pub fn build(b: *std.Build) void {
     operation_test_step.dependOn(&run_operation_tests.step);
     operation_test_step.dependOn(&run_adapter_tests.step);
 
+    const parser_tests = b.addTest(.{
+        .name = "pkgbuild-parser-test",
+        .root_module = mod,
+        .filters = &.{ "pkgbuild.parser", "issue 1880" },
+    });
+    const run_parser_tests = b.addRunArtifact(parser_tests);
+    b.step("pkgbuild-parser-test", "Test static shell word and PKGBUILD semantics").dependOn(&run_parser_tests.step);
+
     const pkgbuild_review_tests = b.addTest(.{
         .name = "pkgbuild-review-test",
         .root_module = mod,
         .filters = &.{
+            "issue 1880",
             "PKGBUILD validation combines post-install and homograph findings",
             "PKGBUILD review accepts empty auxiliary selections and rejects missing files",
             "parser_content: empty optional filenames mean no auxiliary file",

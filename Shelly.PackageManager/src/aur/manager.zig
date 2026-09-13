@@ -238,6 +238,7 @@ pub const Manager = struct {
     skip_optional_dependency_prompt: bool = false,
     pkgbuild_approval_handler: ?PkgbuildApprovalHandler = null,
     operation_context: ?*operation_api.OperationContext = null,
+    preparation_diagnostic: ?review_integrity.Diagnostic = null,
     upgrade_reviews: ?*UpgradeReviews = null,
 
     pub fn init(
@@ -329,6 +330,7 @@ pub const Manager = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        if (self.preparation_diagnostic) |*diagnostic| diagnostic.deinit();
         const allocator = self.allocator;
         self.vcs_store.saveFile(self.io(), self.vcs_store_path) catch {};
         self.vcs_store.deinit();
@@ -951,6 +953,15 @@ pub const Manager = struct {
     const PackageFailure = struct {
         package_name: []const u8,
         reason: []const u8,
+        diagnostic: ?review_integrity.Diagnostic = null,
+
+        fn deinit(self: PackageFailure, allocator: std.mem.Allocator) void {
+            allocator.free(self.package_name);
+            if (self.diagnostic) |value| {
+                var diagnostic = value;
+                diagnostic.deinit();
+            }
+        }
     };
 
     const PackageResult = struct {
@@ -958,7 +969,7 @@ pub const Manager = struct {
 
         fn deinit(self: *PackageResult, allocator: std.mem.Allocator) void {
             for (self.failures) |failure|
-                allocator.free(failure.package_name);
+                failure.deinit(allocator);
             allocator.free(self.failures);
         }
     };
@@ -999,8 +1010,12 @@ pub const Manager = struct {
             else => try self.appendPackageFailure(
                 failures,
                 package_name,
-                preparationFailureReason(err),
+                if (self.preparation_diagnostic) |diagnostic| diagnostic.message else preparationFailureReason(err),
             ),
+        }
+        if (self.preparation_diagnostic) |diagnostic| {
+            failures.items[failures.items.len - 1].diagnostic = diagnostic;
+            self.preparation_diagnostic = null;
         }
     }
 
@@ -1009,7 +1024,7 @@ pub const Manager = struct {
 
         var failures: std.ArrayList(PackageFailure) = .empty;
         errdefer {
-            for (failures.items) |failure| self.allocator.free(failure.package_name);
+            for (failures.items) |failure| failure.deinit(self.allocator);
             failures.deinit(self.allocator);
         }
 
@@ -1703,7 +1718,9 @@ pub const Manager = struct {
         self: *Self,
         package_name: []const u8,
         historical_commit: ?[]const u8,
-    ) !PreparedPackage {
+    ) anyerror!PreparedPackage {
+        if (self.preparation_diagnostic) |*diagnostic| diagnostic.deinit();
+        self.preparation_diagnostic = null;
         try self.checkCancelled();
         const resolved_base = try self.resolvePkgbase(package_name);
         const package_base = try self.allocator.dupe(u8, resolved_base);
@@ -1743,12 +1760,18 @@ pub const Manager = struct {
 
         var info = try (pkgbuild_parser.PkgbuildParser{
             .allocator = self.allocator,
+            .diagnostic = &self.preparation_diagnostic,
             .io = self.io(),
             .selected_package_name = package_name,
             .package_carch = self.shellybuild_config.build.carch,
         }).parser(pkgbuild_path);
         errdefer info.deinit(self.allocator);
-        try requireReviewInputs(self.allocator, self.io(), cache_path, &info);
+        requireReviewInputs(self.allocator, self.io(), cache_path, &info) catch |err| {
+            self.preparation_diagnostic = review_integrity.diagnoseFailure(self.allocator, self.io(), cache_path, new_pkgbuild, &.{info}, err) catch null;
+            if (self.preparation_diagnostic) |diagnostic| if (self.dispatcher.operation) |operation|
+                operation.reportError(err, diagnostic.message, "preparation", null, true);
+            return err;
+        };
 
         var validation_results = try validatePkgbuildInfo(self.allocator, self.io(), &info, cache_path, new_pkgbuild);
         errdefer validation_results.deinit(self.allocator);
@@ -4567,7 +4590,7 @@ test "all requested PKGBUILDs are reviewed before the first build" {
 
     var split_failures: std.ArrayList(Manager.PackageFailure) = .empty;
     defer {
-        for (split_failures.items) |failure| allocator.free(failure.package_name);
+        for (split_failures.items) |failure| failure.deinit(allocator);
         split_failures.deinit(allocator);
     }
     var split_plans = try manager.prepareInstallPlans(

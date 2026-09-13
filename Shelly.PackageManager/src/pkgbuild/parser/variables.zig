@@ -8,200 +8,101 @@ const PkgbuildParser = @import("parser.zig").PkgbuildParser;
 
 const kvp = types.kvp;
 
+const word = @import("word.zig");
+
+/// Returns source syntax, including quotes, for callers that inspect assignment
+/// presence. Values must be evaluated with resolve_word, never stripped here.
 pub fn parse_variable(content: []const u8, var_name: []const u8) !?[]const u8 {
-    var lines = std.mem.splitScalar(u8, content, '\n');
-    while (lines.next()) |line| {
-        const trimmed = std.mem.trimStart(u8, line, " \t\r");
-        if (!std.mem.startsWith(u8, trimmed, var_name)) continue;
-
-        const after_name = trimmed[var_name.len..];
-        if (after_name.len == 0 or after_name[0] != '=') continue;
-
-        const value_part = after_name[1..];
-        if (value_part.len == 0) return "";
-
-        return switch (value_part[0]) {
-            '"' => extract_quoted(value_part, '"'),
-            '\'' => extract_quoted(value_part, '\''),
-            else => extract_bare_token(value_part),
-        };
+    var assignments = word.Assignments{ .input = content };
+    while (try assignments.next(std.heap.page_allocator)) |assignment| {
+        if (std.mem.eql(u8, assignment.name, var_name)) return assignment.raw;
     }
     return null;
 }
 
-fn extract_quoted(s: []const u8, quote: u8) ?[]const u8 {
-    const rest = s[1..];
-    if (std.mem.indexOfScalar(u8, rest, quote)) |end| {
-        return rest[0..end];
-    }
-    return null;
+pub fn resolve_or_parse(self: PkgbuildParser, _: []const u8, var_name: []const u8, vars: *const std.StringHashMap([]const u8)) !?[]const u8 {
+    const value = vars.get(var_name) orelse return null;
+    return try self.allocator.dupe(u8, value);
 }
 
-fn extract_bare_token(s: []const u8) []const u8 {
-    const end = std.mem.indexOfAny(u8, s, " \t\r\n") orelse s.len;
-    return s[0..end];
+fn putValue(self: PkgbuildParser, vars: *std.StringHashMap([]const u8), key: []const u8, value: []const u8) !void {
+    const owned_key = try self.allocator.dupe(u8, key);
+    errdefer self.allocator.free(owned_key);
+    const owned_value = try self.allocator.dupe(u8, value);
+    errdefer self.allocator.free(owned_value);
+    if (vars.fetchRemove(key)) |old| {
+        self.allocator.free(old.key);
+        self.allocator.free(old.value);
+    }
+    try vars.put(owned_key, owned_value);
 }
 
-pub fn resolve_or_parse(self: PkgbuildParser, content: []const u8, var_name: []const u8, vars: *const std.StringHashMap([]const u8)) !?[]const u8 {
-    if (vars.get(var_name)) |val| {
-        return try self.allocator.dupe(u8, val);
-    }
-    if (dynamicallyUnset(self, var_name)) return null;
-    const parsed = try parse_variable(content, var_name) orelse return null;
-    return try self.allocator.dupe(u8, parsed);
-}
-
-fn parse_kvp(line: []const u8) ?kvp {
-    var pos: usize = 0;
-    while (pos < line.len and shell_scan.is_word(line[pos])) : (pos += 1) {}
-    if (pos == 0) return null;
-    const key = line[0..pos];
-
-    const append = pos < line.len and line[pos] == '+';
-    if (append) pos += 1;
-    if (pos >= line.len or line[pos] != '=') return null;
-    pos += 1;
-    if (pos >= line.len) return null;
-
-    if (line[pos] == '"') {
-        const start = pos + 1;
-        const end = std.mem.indexOfScalarPos(u8, line, start, '"') orelse return null;
-        return kvp{ .key = key, .value = line[start..end], .append = append };
-    }
-
-    if (line[pos] == '\'') {
-        const start = pos + 1;
-        const end = std.mem.indexOfScalarPos(u8, line, start, '\'') orelse return null;
-        return kvp{ .key = key, .value = line[start..end], .append = append };
-    }
-
-    const start = pos;
-    while (pos < line.len and !std.ascii.isWhitespace(line[pos])) : (pos += 1) {}
-    if (pos == start) return null;
-    return kvp{ .key = key, .value = line[start..pos], .append = append };
-}
-
-pub fn build_var_hashmap(self: PkgbuildParser, content: []const u8) !std.StringHashMap([]const u8) {
-    var vars = std.StringHashMap([]const u8).init(self.allocator);
-    errdefer free_vars(self.allocator, &vars);
-
-    var line_itr = std.mem.splitScalar(u8, content, '\n');
-    while (line_itr.next()) |full_line| {
-        const line = std.mem.trimEnd(u8, full_line, "\r");
-        const executable_line = try shell_scan.strip_comment(line);
-        const parsed = parse_kvp(executable_line) orelse continue;
-
-        if (std.mem.startsWith(u8, parsed.value, "(")) continue;
-        if (shell_scan.contains_command_substitution(executable_line)) {
-            if (dynamicOverride(self, parsed.key)) |override_value| {
-                const key_owned = try self.allocator.dupe(u8, parsed.key);
-                const value_owned = try self.allocator.dupe(u8, override_value);
-                if (vars.fetchRemove(key_owned)) |old| {
-                    self.allocator.free(old.key);
-                    self.allocator.free(old.value);
+pub fn apply_assignments(self: PkgbuildParser, content: []const u8, vars: *std.StringHashMap([]const u8)) !void {
+    var assignments = word.Assignments{ .input = content };
+    while (try assignments.next(self.allocator)) |assignment| {
+        if (dynamicOverride(self, assignment.name) != null or dynamicallyUnset(self, assignment.name)) continue;
+        if (std.mem.startsWith(u8, assignment.raw, "(")) {
+            if (self.dynamic_array_overrides) |overrides| if (overrides.contains(assignment.name)) continue;
+            if (self.dynamic_array_unsets) |unsets| if (unsets.contains(assignment.name)) continue;
+            // Bash exposes the first pkgname array member as scalar pkgname.
+            if (std.mem.eql(u8, assignment.name, "pkgname") and !assignment.deferred) {
+                const items = try arrays.parse_array_body_syntax(self.allocator, assignment.raw[1 .. assignment.raw.len - 1]);
+                defer freeStringSlice(self.allocator, items);
+                if (items.len > 0) {
+                    const value = try expansion.resolve_word(self, items[0], vars);
+                    defer self.allocator.free(value.value);
+                    try putValue(self, vars, assignment.name, value.value);
+                    if (self.unresolved_variables) |unresolved| {
+                        if (value.unresolved) try unresolved.put(assignment.name, {}) else _ = unresolved.remove(assignment.name);
+                    }
                 }
-                vars.put(key_owned, value_owned) catch |err| {
-                    self.allocator.free(key_owned);
-                    self.allocator.free(value_owned);
-                    return err;
-                };
             }
-            // A dynamic assignment without an override is skipped: the static
-            // parser never executes command substitution. The builder evaluates
-            // the recorded assignments post-review and re-parses with their
-            // values seeded as overrides.
             continue;
         }
-
-        const key_owned = try self.allocator.dupe(u8, parsed.key);
-        errdefer self.allocator.free(key_owned);
-        const value_owned = if (parsed.append and vars.get(parsed.key) != null)
-            try std.mem.concat(self.allocator, u8, &.{ vars.get(parsed.key).?, parsed.value })
+        if (assignment.deferred or shell_scan.contains_command_substitution(assignment.raw)) {
+            // Keep uncertain assignments out of the value map. In particular,
+            // an earlier value cannot stand in for a later dynamic replacement.
+            if (self.unresolved_variables) |unresolved| try unresolved.put(assignment.name, {});
+            if (vars.fetchRemove(assignment.name)) |old| {
+                self.allocator.free(old.key);
+                self.allocator.free(old.value);
+            }
+            continue;
+        }
+        const value = try expansion.resolve_word(self, assignment.raw, vars);
+        defer self.allocator.free(value.value);
+        const was_unresolved = if (self.unresolved_variables) |unresolved| unresolved.contains(assignment.name) else false;
+        const joined = if (assignment.append)
+            try std.mem.concat(self.allocator, u8, &.{ vars.get(assignment.name) orelse "", value.value })
         else
-            try self.allocator.dupe(u8, parsed.value);
-        errdefer self.allocator.free(value_owned);
-
-        if (vars.fetchRemove(key_owned)) |old| {
-            self.allocator.free(old.key);
-            self.allocator.free(old.value);
+            try self.allocator.dupe(u8, value.value);
+        defer self.allocator.free(joined);
+        try putValue(self, vars, assignment.name, joined);
+        if (self.unresolved_variables) |unresolved| {
+            if (value.unresolved or (assignment.append and was_unresolved))
+                try unresolved.put(assignment.name, {})
+            else
+                _ = unresolved.remove(assignment.name);
         }
-        try vars.put(key_owned, value_owned);
     }
+}
 
-    // A reviewed PKGBUILD may create or change scalars through shell syntax
-    // that the static assignment scanner intentionally does not execute
-    // (`${name:=default}`, conditionals, helper calls, ...). Apply the
-    // sandboxed snapshot before resolving references so every dependent field
-    // and lifecycle declaration sees the effective value.
+pub fn build_var_hashmap(context: PkgbuildParser, content: []const u8) !std.StringHashMap([]const u8) {
+    var unresolved = std.StringHashMap(void).init(context.allocator);
+    defer unresolved.deinit();
+    var self = context;
+    if (self.unresolved_variables == null) self.unresolved_variables = &unresolved;
+    var vars = std.StringHashMap([]const u8).init(self.allocator);
+    errdefer free_vars(self.allocator, &vars);
+    try putValue(self, &vars, "CARCH", self.package_carch);
+    // Sandbox snapshots are final values. Seed them before evaluating dependent
+    // syntax, and never expand or overwrite them during the static reparse.
     if (self.dynamic_overrides) |overrides| {
-        var override_it = overrides.iterator();
-        while (override_it.next()) |entry| {
-            const key_owned = try self.allocator.dupe(u8, entry.key_ptr.*);
-            errdefer self.allocator.free(key_owned);
-            const value_owned = try self.allocator.dupe(u8, entry.value_ptr.*);
-            errdefer self.allocator.free(value_owned);
-            if (vars.fetchRemove(entry.key_ptr.*)) |old| {
-                self.allocator.free(old.key);
-                self.allocator.free(old.value);
-            }
-            try vars.put(key_owned, value_owned);
-        }
+        var it = overrides.iterator();
+        while (it.next()) |entry| try putValue(self, &vars, entry.key_ptr.*, entry.value_ptr.*);
     }
-    if (self.dynamic_unsets) |unsets| {
-        var unset_it = unsets.keyIterator();
-        while (unset_it.next()) |name| {
-            if (vars.fetchRemove(name.*)) |old| {
-                self.allocator.free(old.key);
-                self.allocator.free(old.value);
-            }
-        }
-    }
-
-    // makepkg exposes CARCH to every top-level assignment, so metadata that
-    // references it (most commonly source=() URLs) resolves statically. Seed
-    // it unless the PKGBUILD defined its own value.
-    if (!vars.contains("CARCH")) {
-        const key_owned = try self.allocator.dupe(u8, "CARCH");
-        const value_owned = try self.allocator.dupe(u8, self.package_carch);
-        vars.put(key_owned, value_owned) catch |err| {
-            self.allocator.free(key_owned);
-            self.allocator.free(value_owned);
-            return err;
-        };
-    }
-
-    try inject_array_pkgname(self, content, &vars);
-
-    var pass: usize = 0;
-    while (pass < 10) : (pass += 1) {
-        var changed = false;
-        var keys: std.ArrayList([]const u8) = .empty;
-        defer keys.deinit(self.allocator);
-        var key_it = vars.keyIterator();
-        while (key_it.next()) |k| try keys.append(self.allocator, k.*);
-
-        for (keys.items) |key| {
-            // Bash has already evaluated these values. Expanding again would
-            // corrupt quoted literals, escaped dollars and command output.
-            if (dynamicOverride(self, key) != null) continue;
-            const original = vars.get(key).?;
-            const resolved = try expansion.resolve_string(self, original, &vars);
-            defer self.allocator.free(resolved);
-
-            if (!std.mem.eql(u8, resolved, original)) {
-                const resolved_owned = try self.allocator.dupe(u8, resolved);
-                errdefer self.allocator.free(resolved_owned);
-
-                if (vars.fetchRemove(key)) |old| {
-                    self.allocator.free(old.value);
-                    try vars.put(old.key, resolved_owned);
-                }
-                changed = true;
-            }
-        }
-        if (!changed) break;
-    }
-
+    try inject_array_pkgname(self, "", &vars);
+    try apply_assignments(self, content, &vars);
     return vars;
 }
 
@@ -229,16 +130,13 @@ pub fn collect_dynamic_assignments(self: PkgbuildParser, content: []const u8) ![
         list.deinit(self.allocator);
     }
 
-    var line_itr = std.mem.splitScalar(u8, content, '\n');
-    while (line_itr.next()) |full_line| {
-        const line = std.mem.trimEnd(u8, full_line, "\r");
-        const executable_line = try shell_scan.strip_comment(line);
-        const parsed = parse_kvp(executable_line) orelse continue;
-        if (std.mem.startsWith(u8, parsed.value, "(")) continue;
-        if (!shell_scan.contains_command_substitution(executable_line)) continue;
-        if (dynamicOverride(self, parsed.key) != null or dynamicallyUnset(self, parsed.key)) continue;
-
-        const name_owned = try self.allocator.dupe(u8, parsed.key);
+    var assignments = word.Assignments{ .input = content };
+    while (try assignments.next(self.allocator)) |parsed| {
+        if (std.mem.startsWith(u8, parsed.raw, "(")) continue;
+        if (!shell_scan.contains_command_substitution(parsed.raw)) continue;
+        if (dynamicOverride(self, parsed.name) != null or dynamicallyUnset(self, parsed.name)) continue;
+        const executable_line = content[parsed.offset .. parsed.offset + parsed.name.len + @as(usize, if (parsed.append) 2 else 1) + parsed.raw.len];
+        const name_owned = try self.allocator.dupe(u8, parsed.name);
         const statement_owned = try self.allocator.dupe(u8, std.mem.trim(u8, executable_line, " \t"));
         list.append(self.allocator, .{ .name = name_owned, .statement = statement_owned }) catch |err| {
             self.allocator.free(name_owned);
@@ -317,7 +215,7 @@ test "parse_variable: quoted value containing spaces" {
     const content = "pkgdesc=\"a package with spaces\"\n";
     const result = try parse_variable(content, "pkgdesc");
     try std.testing.expect(result != null);
-    try std.testing.expectEqualStrings("a package with spaces", result.?);
+    try std.testing.expectEqualStrings("\"a package with spaces\"", result.?);
 }
 
 test "parse_variable: variable not found returns null" {
@@ -624,4 +522,75 @@ test "inject_array_pkgname: global value is independent of selected name buffer"
     name_buffer[0] = 'x';
 
     try std.testing.expectEqualStrings("alpha", vars.get("pkgname").?);
+}
+
+test "issue 1880 ordered scalar assignments preserve literal and adjacent segments" {
+    const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const cases = .{
+        .{ "_name=mypkg\ninstall=\"${_name}\".install", "mypkg.install" },
+        .{ "_name=mypkg\ninstall=${_name}\".install\"", "mypkg.install" },
+        .{ "install=''my\"pkg\".install", "mypkg.install" },
+        .{ "install=old\ninstall=", "" },
+        .{ "install=my\ninstall+=\"pkg\".install", "mypkg.install" },
+        .{ "_name=old\ninstall=$_name.install\n_name=new", "old.install" },
+        .{ "install=my\\ pkg.install;", "my pkg.install" },
+        .{ "install=\"my\\\"pkg.install\"", "my\"pkg.install" },
+        .{ "_name=expanded\ninstall='${_name}.install'", "${_name}.install" },
+        .{ "_name=expanded\n_literal='$'\ninstall=${_literal}{_name}.install", "${_name}.install" },
+        .{ "_name=expanded\n_literal='${_name}'\ninstall=${_literal,,}.install", "${_name}.install" },
+        .{ "install=my\\\npkg.install", "mypkg.install" },
+        .{ "install=mypkg{a,b}.install", "mypkg{a,b}.install" },
+        .{ "install=mypkg#hash.install # comment", "mypkg#hash.install" },
+        .{ "install=global.install\nf() {\ninstall=wrong.install\n}\n", "global.install" },
+    };
+    inline for (cases) |case| {
+        var vars = try build_var_hashmap(parser, case[0]);
+        defer free_vars(std.testing.allocator, &vars);
+        try std.testing.expectEqualStrings(case[1], vars.get("install").?);
+    }
+}
+
+test "issue 1880 trusted Bash differential word matrix" {
+    const allocator = std.testing.allocator;
+    const parser = PkgbuildParser{ .allocator = allocator, .io = std.testing.io };
+    // Only these authored grammar fragments reach Bash. Never feed this oracle
+    // downloaded PKGBUILDs, arbitrary input, or command substitutions.
+    const prefixes = [_][]const u8{ "mypkg", "\"mypkg\"", "'mypkg'", "\"${_name}\"", "${_name}", "''mypkg", "my\\ pkg", "'${literal}'" };
+    const suffixes = [_][]const u8{ ".install", "\".install\"", "'.install'", "\\.install", "''" };
+    for (prefixes) |prefix| for (suffixes) |suffix| {
+        const content = try std.fmt.allocPrint(allocator, "_name=mypkg\ninstall={s}{s}\n", .{ prefix, suffix });
+        defer allocator.free(content);
+        const script = try std.mem.concat(allocator, u8, &.{ content, "printf '%s' \"$install\"" });
+        defer allocator.free(script);
+        const bash = try std.process.run(allocator, std.testing.io, .{ .argv = &.{ "/bin/bash", "--noprofile", "--norc", "-c", script } });
+        defer allocator.free(bash.stdout);
+        defer allocator.free(bash.stderr);
+        try std.testing.expect(bash.term == .exited and bash.term.exited == 0);
+        var vars = try build_var_hashmap(parser, content);
+        defer free_vars(allocator, &vars);
+        try std.testing.expectEqualStrings(bash.stdout, vars.get("install").?);
+    };
+}
+
+test "issue 1880 heredoc contents and skipped function bodies are never assignments" {
+    const allocator = std.testing.allocator;
+    const content =
+        \\install=good.install
+        \\cat <<'END'
+        \\install=wrong.install
+        \\arbitrary='unterminated
+        \\END
+        \\f() {
+        \\  cat <<'END'
+        \\}
+        \\install=also-wrong.install
+        \\END
+        \\}
+        \\suffix=.install
+    ;
+    var vars = try build_var_hashmap(.{ .allocator = allocator, .io = std.testing.io }, content);
+    defer free_vars(allocator, &vars);
+    try std.testing.expectEqualStrings("good.install", vars.get("install").?);
+    try std.testing.expectEqualStrings(".install", vars.get("suffix").?);
+    try std.testing.expect(!vars.contains("arbitrary"));
 }

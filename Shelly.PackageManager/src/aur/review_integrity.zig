@@ -1,6 +1,29 @@
 const std = @import("std");
 const pkgbuild_parser = @import("../pkgbuild/pkgbuild_parser.zig");
 
+pub const Diagnostic = @import("../pkgbuild/parser/diagnostic.zig").Diagnostic;
+
+/// Diagnostic-only recheck after a failed review; it never grants approval.
+pub fn diagnoseFailure(allocator: std.mem.Allocator, io: std.Io, directory: []const u8, content: []const u8, builds: []const pkgbuild_parser.Pkgbuild, original: anyerror) !?Diagnostic {
+    const path = try std.fs.path.join(allocator, &.{ directory, "PKGBUILD" });
+    defer allocator.free(path);
+    for (builds) |build| {
+        inline for (.{ "install", "changelog" }) |field| {
+            if (@field(build, field ++ "_file")) |filename| {
+                requireReviewedFile(allocator, io, directory, filename) catch |err| {
+                    if (err == original) return try Diagnostic.init(allocator, content, path, build.pkg_name orelse "unknown", field, filename, err);
+                };
+            }
+        }
+        if (build.local_source_files) |files| for (files) |filename| {
+            requireReviewedFile(allocator, io, directory, filename) catch |err| {
+                if (err == original) return try Diagnostic.init(allocator, content, path, build.pkg_name orelse "unknown", "source", filename, err);
+            };
+        };
+    }
+    return null;
+}
+
 const max_file_size = 32 * 1024 * 1024;
 
 fn hashReviewField(
@@ -24,6 +47,8 @@ pub fn requireReviewInputs(
 ) !void {
     if (info.install_file) |install_file|
         try requireReviewedFile(allocator, io, cache_path, install_file);
+    if (info.changelog_file) |file_name|
+        try requireReviewedFile(allocator, io, cache_path, file_name);
     if (info.local_source_files) |files| for (files) |file_name| {
         try requireReviewedFile(allocator, io, cache_path, file_name);
         if (!info.local_source_contents.contains(file_name)) return error.MissingPkgbuildSourceFile;
