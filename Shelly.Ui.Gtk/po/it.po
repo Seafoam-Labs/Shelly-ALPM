@@ -839,11 +839,18 @@ msgstr "usato in"
 msgid "Install Anyway"
 msgstr "Installa comunque"
 
+msgid "Unknown"
+msgstr "Sconosciuto"
+
 msgid "package(s)"
 msgstr "pacchetto/i"
 
 msgid "to"
 msgstr "a"
+
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "scaricamento"
@@ -1084,9 +1091,6 @@ msgstr "Installazione componente aggiuntivo Flatpak in corso"
 
 msgid "Unknown developer"
 msgstr "Sviluppatore sconosciuto"
-
-msgid "Unknown"
-msgstr "Sconosciuto"
 
 msgid "Version: Unknown"
 msgstr "Versione: Sconosciuta"
@@ -1470,11 +1474,42 @@ msgstr "Ricerca Shelly"
 msgid "Update"
 msgstr "Aggiorna"
 
-msgid "Failed to start operation."
-msgstr "Impossibile avviare l'operazione."
-
 msgid "Pending"
 msgstr "In attesa"
+
+msgid "Working"
+msgstr "In funzione"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Fallito"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Cancellato"
+
+msgid "Failed to start operation."
+msgstr "Impossibile avviare l'operazione."
 
 msgid "Synchronizing databases"
 msgstr "Sincronizzazione dei database in corso"
@@ -1518,12 +1553,6 @@ msgstr "Controllo conflitti in corso"
 msgid "Checking disk space"
 msgstr "Controllo spazio su disco in corso"
 
-msgid "Working"
-msgstr "In funzione"
-
-msgid "Failed"
-msgstr "Fallito"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1550,9 +1579,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr "Cancellato"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1567,6 +1593,10 @@ msgstr "Aggiornamento pacchetto di sistema"
 msgid "AUR package update"
 msgstr "Aggiornamento pacchetto AUR"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 "Impossibile eseguire shelly check-updates. Controlla l'output della riga di "
@@ -1574,6 +1604,11 @@ msgstr ""
 
 msgid "Update this package"
 msgstr "Aggiorna questo pacchetto"
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
+msgstr ""
 
 msgid "of"
 msgstr "di"

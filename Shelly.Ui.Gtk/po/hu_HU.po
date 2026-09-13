@@ -838,11 +838,18 @@ msgstr "használt"
 msgid "Install Anyway"
 msgstr "Telepítés mindenképpen"
 
+msgid "Unknown"
+msgstr "Ismeretlen"
+
 msgid "package(s)"
 msgstr "csomag(ok)"
 
 msgid "to"
 msgstr "hogy"
+
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "letöltés"
@@ -1082,9 +1089,6 @@ msgstr "Flatpak-bővítmény telepítése"
 
 msgid "Unknown developer"
 msgstr "Ismeretlen fejlesztő"
-
-msgid "Unknown"
-msgstr "Ismeretlen"
 
 msgid "Version: Unknown"
 msgstr "Verzió: Ismeretlen"
@@ -1469,11 +1473,42 @@ msgstr "Shelly-keresés"
 msgid "Update"
 msgstr "Frissítés"
 
-msgid "Failed to start operation."
-msgstr "Nem sikerült elindítani a műveletet."
-
 msgid "Pending"
 msgstr "Függőben"
+
+msgid "Working"
+msgstr "Dolgozom"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Sikertelen"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Törölt<"
+
+msgid "Failed to start operation."
+msgstr "Nem sikerült elindítani a műveletet."
 
 msgid "Synchronizing databases"
 msgstr "Adatbázisok szinkronizálása"
@@ -1517,12 +1552,6 @@ msgstr "Konfliktusok ellenőrzése"
 msgid "Checking disk space"
 msgstr "Lemezterület ellenőrzése"
 
-msgid "Working"
-msgstr "Dolgozom"
-
-msgid "Failed"
-msgstr "Sikertelen"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1549,9 +1578,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr "Törölt<"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1566,6 +1592,10 @@ msgstr "Rendszercsomag frissítése"
 msgid "AUR package update"
 msgstr "AUR csomag frissítése"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 "Nem sikerült futtatni a shelly check-updates parancsot. Ellenőrizze a CLI "
@@ -1573,6 +1603,11 @@ msgstr ""
 
 msgid "Update this package"
 msgstr "Frissítse ezt a csomagot"
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
+msgstr ""
 
 msgid "of"
 msgstr "közülük"

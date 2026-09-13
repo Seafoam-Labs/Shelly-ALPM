@@ -831,11 +831,18 @@ msgstr ""
 msgid "Install Anyway"
 msgstr "Instalar de todos modos"
 
+msgid "Unknown"
+msgstr "Desconocido"
+
 msgid "package(s)"
 msgstr "paquete(s)"
 
 msgid "to"
 msgstr "a"
+
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "descarga"
@@ -1074,9 +1081,6 @@ msgstr ""
 
 msgid "Unknown developer"
 msgstr "Desarrollador desconocido"
-
-msgid "Unknown"
-msgstr "Desconocido"
 
 msgid "Version: Unknown"
 msgstr "Versión: Desconocida"
@@ -1458,11 +1462,42 @@ msgstr "Búsqueda de Shelly"
 msgid "Update"
 msgstr "Actualizacion"
 
-msgid "Failed to start operation."
-msgstr "No se pudo iniciar la operación."
-
 msgid "Pending"
 msgstr "Pendiente"
+
+msgid "Working"
+msgstr "Trabajando"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Fallado"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Cancelado"
+
+msgid "Failed to start operation."
+msgstr "No se pudo iniciar la operación."
 
 msgid "Synchronizing databases"
 msgstr "Sincronizando bases de datos"
@@ -1506,12 +1541,6 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
-msgid "Working"
-msgstr "Trabajando"
-
-msgid "Failed"
-msgstr "Fallado"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1538,9 +1567,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr "Cancelado"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1555,6 +1581,10 @@ msgstr "Actualización del paquete del sistema"
 msgid "AUR package update"
 msgstr "Actualización del paquete AUR"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 "No podía hacer un chequeo completo. Revise la salida CLI y vuelva a "
@@ -1562,6 +1592,11 @@ msgstr ""
 
 msgid "Update this package"
 msgstr "Actualizar este paquete"
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
+msgstr ""
 
 msgid "of"
 msgstr "de"

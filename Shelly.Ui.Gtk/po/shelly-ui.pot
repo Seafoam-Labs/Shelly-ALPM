@@ -804,10 +804,16 @@ msgstr ""
 msgid "Install Anyway"
 msgstr ""
 
+msgid "Unknown"
+msgstr ""
+
 msgid "package(s)"
 msgstr ""
 
 msgid "to"
+msgstr ""
+
+msgid "removed size"
 msgstr ""
 
 msgid "download"
@@ -1040,9 +1046,6 @@ msgid "Installing flatpak addon"
 msgstr ""
 
 msgid "Unknown developer"
-msgstr ""
-
-msgid "Unknown"
 msgstr ""
 
 msgid "Version: Unknown"
@@ -1423,10 +1426,37 @@ msgstr ""
 msgid "Update"
 msgstr ""
 
-msgid "Failed to start operation."
+msgid "Pending"
 msgstr ""
 
-msgid "Pending"
+msgid "Working"
+msgstr ""
+
+msgid "Upgraded"
+msgstr ""
+
+msgid "Downgraded"
+msgstr ""
+
+msgid "Reinstalled"
+msgstr ""
+
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr ""
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr ""
+
+msgid "Failed to start operation."
 msgstr ""
 
 msgid "Synchronizing databases"
@@ -1471,12 +1501,6 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
-msgid "Working"
-msgstr ""
-
-msgid "Failed"
-msgstr ""
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1503,9 +1527,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr ""
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1520,10 +1541,18 @@ msgstr ""
 msgid "AUR package update"
 msgstr ""
 
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 
 msgid "Update this package"
+msgstr ""
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
 msgstr ""
 
 msgid "of"

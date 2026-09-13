@@ -832,11 +832,18 @@ msgstr "χρησιμοποιείται σε"
 msgid "Install Anyway"
 msgstr "Εγκατάσταση οπωσδήποτε"
 
+msgid "Unknown"
+msgstr "Άγνωστο"
+
 msgid "package(s)"
 msgstr "πακέτο(α)"
 
 msgid "to"
 msgstr "σε"
+
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "λήψη"
@@ -1076,9 +1083,6 @@ msgstr ""
 
 msgid "Unknown developer"
 msgstr "Άγνωστος δημιουργός"
-
-msgid "Unknown"
-msgstr "Άγνωστο"
 
 msgid "Version: Unknown"
 msgstr "Έκδοση: Άγνωστη"
@@ -1462,11 +1466,42 @@ msgstr "Αναζήτηση Shelly"
 msgid "Update"
 msgstr "Ενημέρωση"
 
-msgid "Failed to start operation."
-msgstr "Αποτυχία εκκίνησης της διεργασίας."
-
 msgid "Pending"
 msgstr "Σε εκκρεμότητα"
+
+msgid "Working"
+msgstr "Σε εξέλιξη"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Απέτυχε"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Ακυρώθηκε"
+
+msgid "Failed to start operation."
+msgstr "Αποτυχία εκκίνησης της διεργασίας."
 
 msgid "Synchronizing databases"
 msgstr "Συγχρονισμός βάσεων δεδομένων"
@@ -1510,12 +1545,6 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
-msgid "Working"
-msgstr "Σε εξέλιξη"
-
-msgid "Failed"
-msgstr "Απέτυχε"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1542,9 +1571,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr "Ακυρώθηκε"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1559,12 +1585,21 @@ msgstr "Ενημέρωση πακέτου συστήματος"
 msgid "AUR package update"
 msgstr "Ενημέρωση πακέτου AUR"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 "Αδυναμία εκτέλεσης της εντολής shelly check-updates. Ελέγξτε την γραμμή "
 "εντολών και δοκιμάστε ξανά."
 
 msgid "Update this package"
+msgstr ""
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
 msgstr ""
 
 msgid "of"

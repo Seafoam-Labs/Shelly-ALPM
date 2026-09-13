@@ -837,11 +837,18 @@ msgstr "используется в"
 msgid "Install Anyway"
 msgstr "Всё равно установить"
 
+msgid "Unknown"
+msgstr "Неизвестно"
+
 msgid "package(s)"
 msgstr "пакет(ов)"
 
 msgid "to"
 msgstr "к"
+
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "скачать"
@@ -1079,9 +1086,6 @@ msgstr "Установка дополнения flatpak"
 
 msgid "Unknown developer"
 msgstr "Неизвестный разработчик"
-
-msgid "Unknown"
-msgstr "Неизвестно"
 
 msgid "Version: Unknown"
 msgstr "Версия: неизвестна"
@@ -1465,11 +1469,42 @@ msgstr "Поиск Shelly"
 msgid "Update"
 msgstr "Обновить"
 
-msgid "Failed to start operation."
-msgstr "Не удалось начать операцию."
-
 msgid "Pending"
 msgstr "Ожидание"
+
+msgid "Working"
+msgstr "Выполнение"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Ошибка"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Отменено"
+
+msgid "Failed to start operation."
+msgstr "Не удалось начать операцию."
 
 msgid "Synchronizing databases"
 msgstr "Синхронизация баз данных"
@@ -1513,12 +1548,6 @@ msgstr "Проверка конфликтов"
 msgid "Checking disk space"
 msgstr "Проверка свободного места на диске"
 
-msgid "Working"
-msgstr "Выполнение"
-
-msgid "Failed"
-msgstr "Ошибка"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1545,9 +1574,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr "Отменено"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1562,6 +1588,10 @@ msgstr "Обновление системного пакета"
 msgid "AUR package update"
 msgstr "Обновление пакета AUR"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 "Не удалось выполнить shelly check-updates. Проверьте вывод CLI и попробуйте "
@@ -1569,6 +1599,11 @@ msgstr ""
 
 msgid "Update this package"
 msgstr "Обновить этот пакет"
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
+msgstr ""
 
 msgid "of"
 msgstr "из"

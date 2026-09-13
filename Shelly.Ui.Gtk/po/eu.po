@@ -837,11 +837,18 @@ msgstr "hemen erabilita:"
 msgid "Install Anyway"
 msgstr "Instalatu hala ere"
 
+msgid "Unknown"
+msgstr "Ezezaguna"
+
 msgid "package(s)"
 msgstr "paketea(k)"
 
 msgid "to"
 msgstr "honi:"
+
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "deskargatu"
@@ -1083,9 +1090,6 @@ msgstr "Flatpak addona instalatzen"
 
 msgid "Unknown developer"
 msgstr "Garatzaile ezezaguna"
-
-msgid "Unknown"
-msgstr "Ezezaguna"
 
 msgid "Version: Unknown"
 msgstr "Bertsioa: Ezezaguna"
@@ -1468,11 +1472,42 @@ msgstr "Shelly bilaketa"
 msgid "Update"
 msgstr "Eguneratu"
 
-msgid "Failed to start operation."
-msgstr "Ezin izan da eragiketa abiarazi."
-
 msgid "Pending"
 msgstr "Zorrotz / Zazke"
+
+msgid "Working"
+msgstr "Lanean"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Huts egin du"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Ezeztatuta"
+
+msgid "Failed to start operation."
+msgstr "Ezin izan da eragiketa abiarazi."
 
 msgid "Synchronizing databases"
 msgstr "Datu-baseak sinkronizatzen"
@@ -1516,12 +1551,6 @@ msgstr "Gatazkak egiaztatzen"
 msgid "Checking disk space"
 msgstr "Disko-espazioa egiaztatzen"
 
-msgid "Working"
-msgstr "Lanean"
-
-msgid "Failed"
-msgstr "Huts egin du"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1548,9 +1577,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr "Ezeztatuta"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1565,6 +1591,10 @@ msgstr "Sistemako paketeen eguneraketa"
 msgid "AUR package update"
 msgstr "AUR paketeen eguneraketa"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 "Ezin izan da shelly check-updates exekutatu. Egiaztatu CLI irteera eta "
@@ -1572,6 +1602,11 @@ msgstr ""
 
 msgid "Update this package"
 msgstr "Eguneratu pakete hau"
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
+msgstr ""
 
 msgid "of"
 msgstr "itzat"

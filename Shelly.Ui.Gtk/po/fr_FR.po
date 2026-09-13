@@ -845,11 +845,18 @@ msgstr "utilisé dans"
 msgid "Install Anyway"
 msgstr "Installer quand même"
 
+msgid "Unknown"
+msgstr "Inconnu"
+
 msgid "package(s)"
 msgstr "paquet(s)"
 
 msgid "to"
 msgstr "vers"
+
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "télécharger"
@@ -1091,9 +1098,6 @@ msgstr "Installation du module complémentaire Flatpak"
 
 msgid "Unknown developer"
 msgstr "Développeur inconnu"
-
-msgid "Unknown"
-msgstr "Inconnu"
 
 msgid "Version: Unknown"
 msgstr "Version : inconnue"
@@ -1480,11 +1484,42 @@ msgstr "Recherche Shelly"
 msgid "Update"
 msgstr "Mettre à jour"
 
-msgid "Failed to start operation."
-msgstr "Échec du démarrage de l'opération."
-
 msgid "Pending"
 msgstr "En attente"
+
+msgid "Working"
+msgstr "En cours"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Échec"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Annulé"
+
+msgid "Failed to start operation."
+msgstr "Échec du démarrage de l'opération."
 
 msgid "Synchronizing databases"
 msgstr "Synchronisation des bases de données"
@@ -1528,12 +1563,6 @@ msgstr "Vérification des conflits"
 msgid "Checking disk space"
 msgstr "Vérification de l'espace disque"
 
-msgid "Working"
-msgstr "En cours"
-
-msgid "Failed"
-msgstr "Échec"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1560,9 +1589,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr "Annulé"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1577,6 +1603,10 @@ msgstr "Mise à jour des paquets système"
 msgid "AUR package update"
 msgstr "Mise à jour des paquets AUR"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 "Impossible d'exécuter shelly check-updates. Vérifiez la sortie de la ligne "
@@ -1584,6 +1614,11 @@ msgstr ""
 
 msgid "Update this package"
 msgstr "Mettre à jour ce paquet"
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
+msgstr ""
 
 msgid "of"
 msgstr "sur"

@@ -837,11 +837,18 @@ msgstr "verwendet in"
 msgid "Install Anyway"
 msgstr "Trotzdem installieren"
 
+msgid "Unknown"
+msgstr "Unbekannt"
+
 msgid "package(s)"
 msgstr "Paket(e)"
 
 msgid "to"
 msgstr "zu"
+
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "herunterladen"
@@ -1081,9 +1088,6 @@ msgstr "Flatpak-Addon installieren"
 
 msgid "Unknown developer"
 msgstr "Unbekannter Entwickler"
-
-msgid "Unknown"
-msgstr "Unbekannt"
 
 msgid "Version: Unknown"
 msgstr "Version: Unbekannt"
@@ -1467,11 +1471,42 @@ msgstr "Shelly-Suche"
 msgid "Update"
 msgstr "Update"
 
-msgid "Failed to start operation."
-msgstr "Vorgang starten nicht möglich."
-
 msgid "Pending"
 msgstr "Ausstehend"
+
+msgid "Working"
+msgstr "Berabeitung"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Fehlgeschlagen"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Abgebrochen"
+
+msgid "Failed to start operation."
+msgstr "Vorgang starten nicht möglich."
 
 msgid "Synchronizing databases"
 msgstr "Datenbanken synchronisieren"
@@ -1515,12 +1550,6 @@ msgstr "Auf Konflikte überprüfen"
 msgid "Checking disk space"
 msgstr "Festplattenspeicher überprüfen"
 
-msgid "Working"
-msgstr "Berabeitung"
-
-msgid "Failed"
-msgstr "Fehlgeschlagen"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1547,9 +1576,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr "Abgebrochen"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1564,6 +1590,10 @@ msgstr "Systempaket-Update"
 msgid "AUR package update"
 msgstr "AUR-Paket-Update"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 "Befehl - shelly check-updates - konnte nicht ausgeführt werden. Überprüfe "
@@ -1571,6 +1601,11 @@ msgstr ""
 
 msgid "Update this package"
 msgstr "Dieses Paket aktualisieren"
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
+msgstr ""
 
 msgid "of"
 msgstr "von"

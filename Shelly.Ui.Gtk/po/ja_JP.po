@@ -834,11 +834,18 @@ msgstr "次で使用"
 msgid "Install Anyway"
 msgstr "このままインストール"
 
+msgid "Unknown"
+msgstr "不明"
+
 msgid "package(s)"
 msgstr "個のパッケージ"
 
 msgid "to"
 msgstr "to"
+
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "ダウンロード"
@@ -1081,9 +1088,6 @@ msgstr "Flatpak アドオンをインストール中"
 
 msgid "Unknown developer"
 msgstr "不明な開発者"
-
-msgid "Unknown"
-msgstr "不明"
 
 msgid "Version: Unknown"
 msgstr "バージョン: 不明"
@@ -1465,11 +1469,42 @@ msgstr "Shelly 検索"
 msgid "Update"
 msgstr "アップデート"
 
-msgid "Failed to start operation."
-msgstr "操作の開始に失敗しました。"
-
 msgid "Pending"
 msgstr "保留中"
+
+msgid "Working"
+msgstr "作業中"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "失敗"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "キャンセル"
+
+msgid "Failed to start operation."
+msgstr "操作の開始に失敗しました。"
 
 msgid "Synchronizing databases"
 msgstr "データベースを同期中"
@@ -1513,12 +1548,6 @@ msgstr "競合を確認中"
 msgid "Checking disk space"
 msgstr "ディスク容量を確認中"
 
-msgid "Working"
-msgstr "作業中"
-
-msgid "Failed"
-msgstr "失敗"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1545,9 +1574,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr "キャンセル"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1562,6 +1588,10 @@ msgstr "システムパッケージのアップデート"
 msgid "AUR package update"
 msgstr "AUR パッケージのアップデート"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 "Shelly の check-updates を実行できませんでした。CLI の出力を確認して、再度試"
@@ -1569,6 +1599,11 @@ msgstr ""
 
 msgid "Update this package"
 msgstr "このパッケージをアップデート"
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
+msgstr ""
 
 msgid "of"
 msgstr "of"

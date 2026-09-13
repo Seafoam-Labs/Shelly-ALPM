@@ -845,11 +845,18 @@ msgstr "istifadə olunduğu yer"
 msgid "Install Anyway"
 msgstr "Hər halda quraşdır"
 
+msgid "Unknown"
+msgstr "Naməlum"
+
 msgid "package(s)"
 msgstr "paket"
 
 msgid "to"
 msgstr "üçün"
+
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "endirmə"
@@ -1092,9 +1099,6 @@ msgstr "Flatpak əlavəsi quraşdırılır"
 
 msgid "Unknown developer"
 msgstr "Naməlum tərtibatçı"
-
-msgid "Unknown"
-msgstr "Naməlum"
 
 msgid "Version: Unknown"
 msgstr "Versiya: naməlum"
@@ -1478,11 +1482,42 @@ msgstr "Shelly axtarışı"
 msgid "Update"
 msgstr "Yenilə"
 
-msgid "Failed to start operation."
-msgstr "Əməliyyatı başlatmaq mümkün olmadı."
-
 msgid "Pending"
 msgstr "Gözləyir"
+
+msgid "Working"
+msgstr "İşləyir"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Uğursuz oldu"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Ləğv edildi"
+
+msgid "Failed to start operation."
+msgstr "Əməliyyatı başlatmaq mümkün olmadı."
 
 msgid "Synchronizing databases"
 msgstr "Verilənlər bazaları sinxronlaşdırılır"
@@ -1526,12 +1561,6 @@ msgstr "Toqquşmalar yoxlanılır"
 msgid "Checking disk space"
 msgstr "Disk sahəsi yoxlanılır"
 
-msgid "Working"
-msgstr "İşləyir"
-
-msgid "Failed"
-msgstr "Uğursuz oldu"
-
 msgid "Transaction Completed"
 msgstr "Əməliyyat tamamlandı"
 
@@ -1560,9 +1589,6 @@ msgstr ""
 "Paketləri idarə etmək üçün icazə verilmədi. Yenidən cəhd edin və davam etmək "
 "üçün səlahiyyət sorğusunu təsdiqləyin."
 
-msgid "Cancelled"
-msgstr "Ləğv edildi"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1579,6 +1605,10 @@ msgstr "Sistem paketlərinin yenilənməsi"
 msgid "AUR package update"
 msgstr "AUR paketlərinin yenilənməsi"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 "shelly check-updates əmrini işə salmaq mümkün olmadı. Əmr sətri çıxışını "
@@ -1586,6 +1616,11 @@ msgstr ""
 
 msgid "Update this package"
 msgstr "Bu paketi yenilə"
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
+msgstr ""
 
 msgid "of"
 msgstr "/"

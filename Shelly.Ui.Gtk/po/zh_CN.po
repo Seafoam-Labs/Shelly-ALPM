@@ -803,10 +803,17 @@ msgstr "用于"
 msgid "Install Anyway"
 msgstr "仍然安装"
 
+msgid "Unknown"
+msgstr "未知"
+
 msgid "package(s)"
 msgstr ""
 
 msgid "to"
+msgstr ""
+
+#| msgid "remove"
+msgid "removed size"
 msgstr ""
 
 msgid "download"
@@ -1040,9 +1047,6 @@ msgstr "正在安装 Flatpak 附加组件"
 
 msgid "Unknown developer"
 msgstr "未知开发者"
-
-msgid "Unknown"
-msgstr "未知"
 
 msgid "Version: Unknown"
 msgstr "版本：未知"
@@ -1422,11 +1426,42 @@ msgstr "Shelly 搜索"
 msgid "Update"
 msgstr "更新"
 
-msgid "Failed to start operation."
-msgstr "启动操作失败。"
-
 msgid "Pending"
 msgstr "等待中"
+
+msgid "Working"
+msgstr "处理中"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "失败"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "已取消"
+
+msgid "Failed to start operation."
+msgstr "启动操作失败。"
 
 msgid "Synchronizing databases"
 msgstr "正在同步数据库"
@@ -1470,12 +1505,6 @@ msgstr "正在检查冲突"
 msgid "Checking disk space"
 msgstr "正在检查磁盘空间"
 
-msgid "Working"
-msgstr "处理中"
-
-msgid "Failed"
-msgstr "失败"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1502,9 +1531,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr "已取消"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1519,11 +1545,20 @@ msgstr "系统软件包更新"
 msgid "AUR package update"
 msgstr "AUR 软件包更新"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr "无法运行 shelly check-updates。请检查 CLI 输出后重试。"
 
 msgid "Update this package"
 msgstr "更新此软件包"
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
+msgstr ""
 
 msgid "of"
 msgstr ""

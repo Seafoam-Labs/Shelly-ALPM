@@ -842,11 +842,18 @@ msgstr "używane w"
 msgid "Install Anyway"
 msgstr "Zainstaluj mimo to"
 
+msgid "Unknown"
+msgstr "Nieznane"
+
 msgid "package(s)"
 msgstr "pakiet(y)"
 
 msgid "to"
 msgstr "do"
+
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "pobrania"
@@ -1084,9 +1091,6 @@ msgstr "Instalowanie dodatku Flatpak"
 
 msgid "Unknown developer"
 msgstr "Nieznany twórca"
-
-msgid "Unknown"
-msgstr "Nieznane"
 
 msgid "Version: Unknown"
 msgstr "Wersja: nieznana"
@@ -1472,11 +1476,42 @@ msgstr "Wyszukiwarka Shelly"
 msgid "Update"
 msgstr "Zaktualizuj"
 
-msgid "Failed to start operation."
-msgstr "Nie udało się rozpocząć operacji."
-
 msgid "Pending"
 msgstr "Oczekuje"
+
+msgid "Working"
+msgstr "Przetwarzanie"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Niepowodzenie"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Anulowano"
+
+msgid "Failed to start operation."
+msgstr "Nie udało się rozpocząć operacji."
 
 msgid "Synchronizing databases"
 msgstr "Synchronizowanie baz danych"
@@ -1520,12 +1555,6 @@ msgstr "Sprawdzanie konfliktów"
 msgid "Checking disk space"
 msgstr "Sprawdzanie miejsca na dysku"
 
-msgid "Working"
-msgstr "Przetwarzanie"
-
-msgid "Failed"
-msgstr "Niepowodzenie"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1552,9 +1581,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid "Cancelled"
-msgstr "Anulowano"
-
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
@@ -1569,6 +1595,10 @@ msgstr "Aktualizacja pakietu systemowego"
 msgid "AUR package update"
 msgstr "Aktualizacja pakietu AUR"
 
+#| msgid "Update Available"
+msgid "Update available"
+msgstr ""
+
 msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 "Nie udało się wykonać polecenia „shelly check-updates”. Sprawdź wyjście w "
@@ -1576,6 +1606,11 @@ msgstr ""
 
 msgid "Update this package"
 msgstr "Zaktualizuj ten pakiet"
+
+msgid ""
+"Maximum download size, excluding dependencies. The actual download may be "
+"smaller."
+msgstr ""
 
 msgid "of"
 msgstr "z"
