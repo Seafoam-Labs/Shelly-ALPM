@@ -25,6 +25,7 @@ pub const RuntimeContext = struct {
     stdin_is_tty: bool = false,
     stdout_is_tty: bool = false,
     dispatcher: Dispatcher = .{},
+    preparation_diagnostic: ?*?Zigalpm.pkgbuild.parser.Diagnostic = null,
     transaction_log: ?*log.TransactionLog = null,
 
     pub fn dispatch(self: *RuntimeContext, invocation: *const parser.Invocation) !u8 {

@@ -7,6 +7,8 @@ const max_log_size = 5 * 1024 * 1024;
 
 pub const SessionLog = struct {
     io: std.Io,
+    path: []const u8 = log_path,
+    owned_path: ?struct { allocator: std.mem.Allocator, bytes: []u8 } = null,
     file: std.Io.File,
     offset: u64,
     mutex: std.Io.Mutex = .init,
@@ -15,25 +17,61 @@ pub const SessionLog = struct {
         return tryOpenAt(io, log_path, rotated_log_path);
     }
 
+    pub fn tryOpenWithFallback(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ?SessionLog {
+        if (tryOpen(io)) |session| return session;
+        const uid = std.c.geteuid();
+        // Elevated processes must not follow a caller-controlled state path.
+        // Their fallback uses the effective account's NSS home; the original
+        // unprivileged CLI keeps its own session log across elevation.
+        const account = (Zigalpm.user_account.byUid(allocator, uid) catch null) orelse return null;
+        defer account.deinit(allocator);
+        const configured = if (uid != 0) environ.getPosix("XDG_STATE_HOME") else null;
+        const state = if (configured) |path| blk: {
+            if (std.fs.path.isAbsolute(path)) break :blk allocator.dupe(u8, path) catch return null;
+            break :blk std.fs.path.join(allocator, &.{ account.home, ".local", "state" }) catch return null;
+        } else std.fs.path.join(allocator, &.{ account.home, ".local", "state" }) catch return null;
+        defer allocator.free(state);
+        return tryOpenState(allocator, io, state);
+    }
+
+    pub fn tryOpenState(allocator: std.mem.Allocator, io: std.Io, state: []const u8) ?SessionLog {
+        const directory = std.fs.path.join(allocator, &.{ state, "shelly" }) catch return null;
+        defer allocator.free(directory);
+        _ = std.Io.Dir.cwd().createDirPathStatus(io, directory, .fromMode(0o700)) catch return null;
+        const path = std.fs.path.join(allocator, &.{ directory, "shelly.log" }) catch return null;
+        const rotated = std.mem.concat(allocator, u8, &.{ path, ".1" }) catch {
+            allocator.free(path);
+            return null;
+        };
+        defer allocator.free(rotated);
+        var session = tryOpenAt(io, path, rotated) orelse {
+            allocator.free(path);
+            return null;
+        };
+        session.owned_path = .{ .allocator = allocator, .bytes = path };
+        return session;
+    }
+
     pub fn tryOpenAt(io: std.Io, path: []const u8, rotated_path: []const u8) ?SessionLog {
         rotateIfNeeded(io, path, rotated_path);
         const file = std.Io.Dir.createFileAbsolute(io, path, .{
             .read = true,
             .truncate = false,
+            .permissions = .fromMode(0o600),
         }) catch return null;
         const stat = file.stat(io) catch {
             file.close(io);
             return null;
         };
-        return .{ .io = io, .file = file, .offset = stat.size };
+        return .{ .io = io, .path = path, .file = file, .offset = stat.size };
     }
 
     pub fn close(self: *SessionLog) void {
         self.file.close(self.io);
+        if (self.owned_path) |path| path.allocator.free(path.bytes);
         self.* = undefined;
     }
 
-    
     pub fn writeSessionHeader(
         self: *SessionLog,
         allocator: std.mem.Allocator,
@@ -52,7 +90,7 @@ pub const SessionLog = struct {
         for (arguments) |argument| {
             buffer.writer.print(" {s}", .{argument}) catch return;
         }
-        buffer.writer.writeAll("\n=====================================\n") catch return;        
+        buffer.writer.writeAll("\n=====================================\n") catch return;
         self.append(buffer.writer.buffered());
     }
 
@@ -70,7 +108,8 @@ pub const SessionLog = struct {
             "] SESSION END — exit code: {d}\n",
             .{exit_code},
         ) catch return;
-        self.append(buffer.writer.buffered());    }
+        self.append(buffer.writer.buffered());
+    }
 
     fn append(self: *SessionLog, bytes: []const u8) void {
         self.mutex.lockUncancelable(self.io);
@@ -135,7 +174,10 @@ pub const TransactionLog = struct {
         };
         buffer.writer.writeAll("[") catch return;
         writeUtcTime(&buffer.writer, raw) catch return;
-        buffer.writer.print("] {s} [{s}]: {s}\n",.{ level_str, source_str, message },) catch return;        
+        buffer.writer.print(
+            "] {s} [{s}]: {s}\n",
+            .{ level_str, source_str, message },
+        ) catch return;
         self.session.append(buffer.writer.buffered());
     }
 
@@ -186,7 +228,10 @@ pub const TransactionLog = struct {
     }
 };
 
-fn writeUtcTime(writer: *std.Io.Writer, unix_seconds: u64,) !void {
+fn writeUtcTime(
+    writer: *std.Io.Writer,
+    unix_seconds: u64,
+) !void {
     const epoch_seconds = std.time.epoch.EpochSeconds{
         .secs = unix_seconds,
     };
@@ -343,7 +388,10 @@ test "transaction log converts timestamp to UTC time" {
 
     try writeUtcTime(&writer, 0);
 
-    try std.testing.expectEqualStrings("1970-01-01T00:00:00Z", writer.buffered(),);
+    try std.testing.expectEqualStrings(
+        "1970-01-01T00:00:00Z",
+        writer.buffered(),
+    );
 }
 
 test "transaction log appends after existing content" {

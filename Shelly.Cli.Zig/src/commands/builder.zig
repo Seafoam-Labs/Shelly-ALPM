@@ -56,6 +56,14 @@ pub fn dispatch(
     invocation: *const parser.Invocation,
 ) !?u8 {
     if (!std.mem.eql(u8, invocation.command.path, command_path)) return null;
+    var diagnostic: ?Zigalpm.pkgbuild.parser.Diagnostic = null;
+    const previous_diagnostic = context.preparation_diagnostic;
+    context.preparation_diagnostic = &diagnostic;
+    defer {
+        context.preparation_diagnostic = previous_diagnostic;
+        if (diagnostic) |*value| value.deinit();
+    }
+
     if (optionEnabled(invocation, "--review-only"))
         return try executeReviewOnly(context, invocation);
     if (optionEnabled(invocation, "--makesrcinfo"))
@@ -291,6 +299,13 @@ fn executeReviewOnly(
         return 2;
     }
 
+    var owned_diagnostic: ?Zigalpm.pkgbuild.parser.Diagnostic = null;
+    const previous_diagnostic = context.preparation_diagnostic;
+    if (context.preparation_diagnostic == null) context.preparation_diagnostic = &owned_diagnostic;
+    defer {
+        context.preparation_diagnostic = previous_diagnostic;
+        if (owned_diagnostic) |*value| value.deinit();
+    }
     var operation_context = Zigalpm.OperationContext.init(context.allocator, context.io);
     context.attachTransactionLog(&operation_context);
     defer operation_context.deinit();
@@ -307,12 +322,12 @@ fn executeReviewOnly(
     try renderer.begin("Reviewing PKGBUILD inputs...");
 
     var result = prepareReviewOnly(context, &operation_context, invocation) catch |err| {
-        const detail = try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = "the PKGBUILD review" });
+        const detail = try preparationErrorMessage(context, err);
         defer context.allocator.free(detail);
         try renderer.reportError(detail);
         try renderer.finishWithMessage(false, "PKGBUILD review failed.");
         context.stdout = stdout;
-        try writeBuildJson(context.stdout, null, err, false);
+        try writeBuildJsonWithDiagnostic(context.stdout, null, err, false, contextDiagnostic(context), contextLogPath(context));
         try context.stdout.writeByte('\n');
         try context.stdout.flush();
         context.stdout = context.stderr;
@@ -333,6 +348,18 @@ fn prepareReviewOnly(
     operation_context: *Zigalpm.OperationContext,
     invocation: *const parser.Invocation,
 ) !ReviewOnlyResult {
+    var operation = operation_context.begin(.{
+        .backend = .aur,
+        .kind = .build,
+        .subject = if (invocation.positionals.len == 0) "PKGBUILD" else invocation.positionals[0],
+    });
+    var completion: Zigalpm.OperationCompletionStatus = .failed;
+    defer operation.finish(completion);
+    errdefer |err| {
+        const message = preparationErrorMessage(context, err) catch null;
+        defer if (message) |value| context.allocator.free(value);
+        operation.reportError(err, message orelse buildErrorMessage(err), "preparation", null, false);
+    }
     var request = try parseBuildRequest(context, invocation);
     defer request.deinit(context);
     const content = try std.Io.Dir.cwd().readFileAlloc(
@@ -342,12 +369,13 @@ fn prepareReviewOnly(
         .limited(32 * 1024 * 1024),
     );
     defer context.allocator.free(content);
-    var static_review = try Zigalpm.builder.preparePkgbuildReview(
+    var static_review = try Zigalpm.builder.pkgbuild_review.prepareWithDiagnostic(
         context.allocator,
         context.io,
         request.build_directory,
         content,
         request.package_builds,
+        context.preparation_diagnostic,
     );
     defer static_review.deinit();
     const requested_names = try context.allocator.alloc([]const u8, request.package_builds.len);
@@ -355,13 +383,6 @@ fn prepareReviewOnly(
     for (request.package_builds, requested_names) |package_build, *name|
         name.* = package_build.pkg_name orelse return error.MissingPackageName;
 
-    var operation = operation_context.begin(.{
-        .backend = .aur,
-        .kind = .build,
-        .subject = request.pkgbuild_path,
-    });
-    var completion: Zigalpm.OperationCompletionStatus = .failed;
-    defer operation.finish(completion);
     const builder = try PackageBuilder.init(
         context.allocator,
         request.package_builds,
@@ -539,7 +560,7 @@ fn executeJson(
         if (err == error.Cancelled) {
             try renderer.finishCancelled();
         } else {
-            const detail = try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = "the package build" });
+            const detail = try preparationErrorMessage(context, err);
             defer context.allocator.free(detail);
             if (!renderer.reported_failure.load(.acquire)) try renderer.reportError(detail);
             try renderer.finishWithMessage(false, "Build failed.");
@@ -554,7 +575,7 @@ fn executeJson(
             return runner.child_exit_code;
         }
         try runner.setFailure(context.allocator, err);
-        try writeBuildJson(context.stdout, runner.result, err, isolatedRequested(invocation));
+        try writeBuildJsonWithDiagnostic(context.stdout, runner.result, err, isolatedRequested(invocation), contextDiagnostic(context), contextLogPath(context));
         try context.stdout.writeByte('\n');
         try context.stdout.flush();
         context.stdout = context.stderr;
@@ -812,7 +833,7 @@ const Real = struct {
         context: *runtime.RuntimeContext,
         operation_context: *Zigalpm.OperationContext,
         invocation: *const parser.Invocation,
-    ) !void {
+    ) anyerror!void {
         var cancellation_watcher: signals.CancellationWatcher = .{};
         try cancellation_watcher.start(context.io, operation_context);
         defer cancellation_watcher.deinit();
@@ -897,6 +918,8 @@ const Real = struct {
             const parse_name = if (containsString(names.items, name)) name else names.items[0];
             pkgbuild.* = try (Zigalpm.pkgbuild.Parser{
                 .allocator = context.allocator,
+                .diagnostic = context.preparation_diagnostic,
+                .pkgbuild_path = pkgbuild_path,
                 .io = context.io,
                 .selected_package_name = parse_name,
                 .package_carch = shellybuild.build.carch,
@@ -914,13 +937,19 @@ const Real = struct {
         else
             null;
 
-        var review = try Zigalpm.builder.preparePkgbuildReview(
+        var review = Zigalpm.builder.pkgbuild_review.prepareWithDiagnostic(
             context.allocator,
             context.io,
             build_directory,
             pkgbuild_content,
             package_builds,
-        );
+            context.preparation_diagnostic,
+        ) catch |err| {
+            const message = try preparationErrorMessage(context, err);
+            defer context.allocator.free(message);
+            operation.reportError(err, message, "preparation", null, false);
+            return err;
+        };
         defer review.deinit();
         const package_destination = if (optionValue(invocation, "--package-destination")) |path| blk: {
             try validatePackageDestination(path);
@@ -1227,6 +1256,8 @@ fn parseBuildRequest(
     defer context.allocator.free(pkgbuild_content);
     var names = try (Zigalpm.pkgbuild.Parser{
         .allocator = context.allocator,
+        .diagnostic = context.preparation_diagnostic,
+        .pkgbuild_path = pkgbuild_path,
         .io = context.io,
         .package_carch = shellybuild.build.carch,
     }).package_names_content(pkgbuild_content);
@@ -1255,6 +1286,8 @@ fn parseBuildRequest(
         const parse_name = if (containsString(names.items, name)) name else names.items[0];
         pkgbuild.* = try (Zigalpm.pkgbuild.Parser{
             .allocator = context.allocator,
+            .diagnostic = context.preparation_diagnostic,
+            .pkgbuild_path = pkgbuild_path,
             .io = context.io,
             .selected_package_name = parse_name,
             .package_carch = shellybuild.build.carch,
@@ -2315,11 +2348,45 @@ fn buildErrorMessage(err: anyerror) []const u8 {
     };
 }
 
+fn contextDiagnostic(context: *runtime.RuntimeContext) ?Zigalpm.pkgbuild.parser.Diagnostic {
+    return if (context.preparation_diagnostic) |value| value.* else null;
+}
+
+fn contextLogPath(context: *runtime.RuntimeContext) ?[]const u8 {
+    return if (context.transaction_log) |log| log.session.path else null;
+}
+
+fn preparationErrorMessage(context: *runtime.RuntimeContext, err: anyerror) ![]u8 {
+    const fallback = if (contextDiagnostic(context) == null)
+        try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = "the PKGBUILD preparation" })
+    else
+        null;
+    defer if (fallback) |message| context.allocator.free(message);
+    const message = if (contextDiagnostic(context)) |diagnostic| diagnostic.message else fallback.?;
+    if (contextLogPath(context)) |path| {
+        const escaped = try std.json.Stringify.valueAlloc(context.allocator, path, .{});
+        defer context.allocator.free(escaped);
+        return std.fmt.allocPrint(context.allocator, "{s}. Log: {s}", .{ message, escaped });
+    }
+    return context.allocator.dupe(u8, message);
+}
+
 fn writeBuildJson(
     writer: *std.Io.Writer,
     result: ?BuildCommandResult,
     failure: ?anyerror,
     isolated_hint: bool,
+) !void {
+    return writeBuildJsonWithDiagnostic(writer, result, failure, isolated_hint, null, null);
+}
+
+fn writeBuildJsonWithDiagnostic(
+    writer: *std.Io.Writer,
+    result: ?BuildCommandResult,
+    failure: ?anyerror,
+    isolated_hint: bool,
+    diagnostic: ?Zigalpm.pkgbuild.parser.Diagnostic,
+    log_path: ?[]const u8,
 ) !void {
     var json: std.json.Stringify = .{ .writer = writer };
     try json.beginObject();
@@ -2358,7 +2425,11 @@ fn writeBuildJson(
         try json.objectField("code");
         try json.write(if (stored) |value| value.code else @errorName(err));
         try json.objectField("message");
-        try json.write(if (stored) |value| value.message else buildErrorMessage(err));
+        try json.write(if (diagnostic) |value| value.message else if (stored) |value| value.message else buildErrorMessage(err));
+        if (diagnostic) |value| {
+            try json.objectField("context");
+            try json.write(.{ .packageName = value.package_name, .pkgbuildPath = value.pkgbuild_path, .line = value.line, .field = value.field, .expression = value.expression, .resolvedFilename = value.resolved_filename, .stage = "preparation", .logPath = log_path });
+        }
         try json.endObject();
     } else try json.write(null);
     try json.endObject();
@@ -3599,4 +3670,44 @@ test "configured work directories exist before final review and remain command-u
     // Returning from the helper does not remove the directory. Real builds
     // leave retention decisions to PackageBuilder.clean_after_success.
     try std.Io.Dir.cwd().access(io, configured, .{});
+}
+
+test "issue 1880 preparation failure reaches JSON and persistent log before build" {
+    const spec = @import("../cli/spec.zig");
+    const logging = @import("../runtime/log.zig");
+    var test_context: test_support.TestContext = .{};
+    test_context.init();
+    defer test_context.deinit();
+    const allocator = test_context.arena.allocator();
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    const path = try std.fs.path.join(allocator, &.{ directory, "PKGBUILD" });
+    try temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = "_pkgname=mypkg\npkgname=mypkg\npkgver=1\npkgrel=1\narch=('any')\ninstall=\"${_pkgname}\".install\npackage() { :; }\n" });
+    // Inject an unwritable/nonexistent system-log location and use the same
+    // state fallback as startup, without writing the real user's logs.
+    try std.testing.expect(logging.SessionLog.tryOpenAt(io, "/proc/shelly-test.log", "/proc/shelly-test.log.1") == null);
+    var session = logging.SessionLog.tryOpenState(std.testing.allocator, io, directory) orelse return error.LogUnavailable;
+    defer session.close();
+    var log = logging.TransactionLog.init(&session, allocator);
+    test_context.context.transaction_log = &log;
+    const environ = try testEnvironWithHome(std.testing.allocator, directory);
+    defer environ.block.deinit(std.testing.allocator);
+    test_context.context.environ = environ;
+    const manifest = try spec.Manifest.load(allocator);
+    const invocation = try parser.parse(allocator, &manifest, &.{ "build", path, "--review-only", "--json" });
+    try std.testing.expectEqual(@as(u8, 1), try executeReviewOnly(&test_context.context, &invocation.dispatch));
+    const document = try std.json.parseFromSlice(std.json.Value, allocator, test_context.stdout.writer.buffered(), .{});
+    const failure = document.value.object.get("error").?.object;
+    try std.testing.expectEqualStrings("MissingPkgbuildSourceFile", failure.get("code").?.string);
+    const detail = failure.get("context").?.object;
+    try std.testing.expectEqualStrings("mypkg", detail.get("packageName").?.string);
+    try std.testing.expectEqualStrings("install", detail.get("field").?.string);
+    try std.testing.expectEqualStrings("mypkg.install", detail.get("resolvedFilename").?.string);
+    try std.testing.expectEqualStrings(session.path, detail.get("logPath").?.string);
+    const log_content = try std.Io.Dir.cwd().readFileAlloc(io, session.path, allocator, .unlimited);
+    try std.testing.expect(std.mem.indexOf(u8, log_content, "mypkg.install") != null);
+    try std.testing.expect(std.mem.indexOf(u8, log_content, "(preparation)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, test_context.stderr.writer.buffered(), session.path) != null);
 }

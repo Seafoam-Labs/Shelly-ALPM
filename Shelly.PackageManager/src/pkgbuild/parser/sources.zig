@@ -20,7 +20,8 @@ pub fn extract_local_source_files(self: PkgbuildParser, source: [][]const u8) ![
     for (source) |line| {
         // Dynamic source entries remain inert text until the reviewed builder
         // evaluates them. Never classify a partial expression as a local file.
-        if (shell_scan.contains_command_substitution(line)) continue;
+        const deferred = if (self.deferred_source_words) |words| words.contains(@intFromPtr(line.ptr)) else shell_scan.contains_command_substitution(line);
+        if (deferred) continue;
         const entry = split_source_entry(line);
         if (try is_remote_source(entry.location)) continue;
 

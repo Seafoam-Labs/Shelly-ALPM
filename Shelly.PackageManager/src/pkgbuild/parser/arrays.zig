@@ -5,6 +5,14 @@ const shell_scan = @import("shell_scan.zig");
 const PkgbuildParser = @import("parser.zig").PkgbuildParser;
 
 pub fn parse_array(self: PkgbuildParser, content: []const u8, variable_name: []const u8) ![][]const u8 {
+    return parse_array_mode(self, content, variable_name, false);
+}
+
+pub fn parse_array_syntax(self: PkgbuildParser, content: []const u8, variable_name: []const u8) ![][]const u8 {
+    return parse_array_mode(self, content, variable_name, true);
+}
+
+fn parse_array_mode(self: PkgbuildParser, content: []const u8, variable_name: []const u8, syntax: bool) ![][]const u8 {
     var result: std.ArrayList([]const u8) = .empty;
     errdefer {
         for (result.items) |it| self.allocator.free(it);
@@ -44,7 +52,7 @@ pub fn parse_array(self: PkgbuildParser, content: []const u8, variable_name: []c
             try cleaned.appendSlice(self.allocator, stripped);
         }
 
-        const items = try scan_array_items(self.allocator, cleaned.items);
+        const items = try scan_array_items(self.allocator, cleaned.items, syntax);
         defer self.allocator.free(items);
         for (items) |item| {
             try result.append(self.allocator, item);
@@ -107,6 +115,14 @@ pub fn find_next_scoped_array_start(
 }
 
 pub fn parse_array_body_items(allocator: std.mem.Allocator, body: []const u8) ![][]const u8 {
+    return parse_array_body_mode(allocator, body, false);
+}
+
+pub fn parse_array_body_syntax(allocator: std.mem.Allocator, body: []const u8) ![][]const u8 {
+    return parse_array_body_mode(allocator, body, true);
+}
+
+fn parse_array_body_mode(allocator: std.mem.Allocator, body: []const u8, syntax: bool) ![][]const u8 {
     var cleaned: std.ArrayList(u8) = .empty;
     defer cleaned.deinit(allocator);
     var lines = std.mem.splitScalar(u8, body, '\n');
@@ -116,7 +132,7 @@ pub fn parse_array_body_items(allocator: std.mem.Allocator, body: []const u8) ![
         first_line = false;
         try cleaned.appendSlice(allocator, try shell_scan.strip_comment(line));
     }
-    return scan_array_items(allocator, cleaned.items);
+    return scan_array_items(allocator, cleaned.items, syntax);
 }
 
 pub fn scan_array_body(allocator: std.mem.Allocator, content: []const u8, start: usize) !struct { body: []u8, end: usize } {
@@ -294,85 +310,39 @@ fn append_expanded_array_word(
     }
 }
 
-fn scan_array_items(allocator: std.mem.Allocator, cleaned: []const u8) ![][]const u8 {
+fn scan_array_items(allocator: std.mem.Allocator, cleaned: []const u8, syntax: bool) ![][]const u8 {
+    const shell_word = @import("word.zig");
     var items: std.ArrayList([]const u8) = .empty;
     errdefer {
-        for (items.items) |it| allocator.free(it);
+        for (items.items) |item| allocator.free(item);
         items.deinit(allocator);
     }
-
     var i: usize = 0;
     while (i < cleaned.len) {
-        while (i < cleaned.len and std.ascii.isWhitespace(cleaned[i])) : (i += 1) {}
-        if (i >= cleaned.len) break;
-
-        var word: std.ArrayList(u8) = .empty;
+        while (i < cleaned.len and std.ascii.isWhitespace(cleaned[i])) i += 1;
+        if (i == cleaned.len) break;
+        const word = try shell_word.read(allocator, cleaned, i);
         defer word.deinit(allocator);
-        var expandable: std.ArrayList(bool) = .empty;
-        defer expandable.deinit(allocator);
-        var quote: ArrayWordQuote = .none;
-        var word_started = false;
-
-        while (i < cleaned.len) {
-            const c = cleaned[i];
-            if (quote == .none and std.ascii.isWhitespace(c)) break;
-
-            if (c == '\'' and quote != .double) {
-                word_started = true;
-                quote = if (quote == .single) .none else .single;
-                i += 1;
-                continue;
-            }
-            if (c == '"' and quote != .single) {
-                word_started = true;
-                quote = if (quote == .double) .none else .double;
-                i += 1;
-                continue;
-            }
-            if (c == '\\' and quote != .single) {
-                word_started = true;
-                if (i + 1 >= cleaned.len) {
-                    try word.append(allocator, c);
-                    try expandable.append(allocator, false);
-                    i += 1;
-                    continue;
-                }
-                const escaped = cleaned[i + 1];
-                if (escaped == '\n') {
-                    i += 2;
-                    continue;
-                }
-                if (quote == .double and escaped != '$' and escaped != '`' and escaped != '"' and escaped != '\\') {
-                    try word.append(allocator, c);
-                    try expandable.append(allocator, false);
-                    i += 1;
-                    continue;
-                }
-                try word.append(allocator, escaped);
-                try expandable.append(allocator, false);
-                i += 2;
-                continue;
-            }
-
-            word_started = true;
-            try word.append(allocator, c);
-            try expandable.append(allocator, quote == .none);
-            i += 1;
-        }
-
-        if (word_started) {
-            var expansion_count: usize = 0;
-            try append_expanded_array_word(
-                allocator,
-                &items,
-                word.items,
-                expandable.items,
-                0,
-                &expansion_count,
-            );
-        }
+        if (word.end == i) return error.UnsupportedShellWord;
+        const raw = cleaned[i..word.end];
+        const expandable = try allocator.alloc(bool, raw.len);
+        defer allocator.free(expandable);
+        @memset(expandable, false);
+        for (word.parts) |part| if (part.kind == .unquoted) {
+            @memset(expandable[part.start - i .. part.end - i], true);
+        };
+        var count: usize = 0;
+        const first = items.items.len;
+        try append_expanded_array_word(allocator, &items, raw, expandable, 0, &count);
+        if (!syntax) for (items.items[first..]) |*item| {
+            const expanded_word = try shell_word.read(allocator, item.*, 0);
+            defer expanded_word.deinit(allocator);
+            const decoded = try expanded_word.decoded(allocator, item.*);
+            allocator.free(item.*);
+            item.* = decoded;
+        };
+        i = word.end;
     }
-
     return items.toOwnedSlice(allocator);
 }
 

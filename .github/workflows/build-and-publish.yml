@@ -36,6 +36,7 @@ jobs:
               - 'Shelly.PackageManager/**'
             cli:
               - 'Shelly.Cli.Zig/**'
+              - 'Shelly.PackageManager/**'
               - 'Shelly.Flatpak.Backend/**'
               - 'scripts/**'
             gtk:
