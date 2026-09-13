@@ -421,11 +421,19 @@ pub const Manager = struct {
             null,
         );
         defer parsed.deinit();
-        return cloneSlice(
+        const updates = try cloneSlice(
             types.InstalledRef,
             self.allocator,
             parsed.value,
         );
+        errdefer types.InstalledRef.deinitSlice(self.allocator, updates);
+        try @import("update_metadata.zig").enrich(self.allocator, updates, appstreams.AppstreamManager{
+            .allocator = self.allocator,
+            .io = self.io,
+            .operation_context = self.operation_context,
+            .cancellation = self.cancellation,
+        });
+        return updates;
     }
 
     pub fn list_unused_dependencies(

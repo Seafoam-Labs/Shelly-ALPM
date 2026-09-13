@@ -970,18 +970,39 @@ pub const Manager = struct {
         const installation_user = rawflatpak.flatpak_installation_new_user(cancellable, &g_error);
 
         var list: std.ArrayList(flatpak.InstalledFlatpak) = .empty;
-        errdefer list.deinit(self.allocator);
+        errdefer {
+            for (list.items) |item| {
+                item.deinitPermissions(self.allocator);
+                rawflatpak.g_object_unref(item.ptr);
+            }
+            list.deinit(self.allocator);
+        }
+
+        defer if (installation_system != null) rawflatpak.g_object_unref(installation_system);
+        defer if (installation_user != null) rawflatpak.g_object_unref(installation_user);
 
         if (installation_system != null) {
             const sys_result = try get_updates_ptr(self, installation_system, flatpak.Scope.SYSTEM);
             defer self.allocator.free(sys_result);
-            try list.appendSlice(self.allocator, sys_result);
+            list.appendSlice(self.allocator, sys_result) catch |err| {
+                for (sys_result) |item| {
+                    item.deinitPermissions(self.allocator);
+                    rawflatpak.g_object_unref(item.ptr);
+                }
+                return err;
+            };
         }
 
         if (installation_user != null) {
             const user_result = try get_updates_ptr(self, installation_user, flatpak.Scope.USER);
             defer self.allocator.free(user_result);
-            try list.appendSlice(self.allocator, user_result);
+            list.appendSlice(self.allocator, user_result) catch |err| {
+                for (user_result) |item| {
+                    item.deinitPermissions(self.allocator);
+                    rawflatpak.g_object_unref(item.ptr);
+                }
+                return err;
+            };
         }
 
         return list.toOwnedSlice(self.allocator);
@@ -1069,7 +1090,13 @@ pub const Manager = struct {
         defer cancellation_bridge.deinit();
 
         var list: std.ArrayList(flatpak.InstalledFlatpak) = .empty;
-        errdefer list.deinit(self.allocator);
+        errdefer {
+            for (list.items) |item| {
+                item.deinitPermissions(self.allocator);
+                rawflatpak.g_object_unref(item.ptr);
+            }
+            list.deinit(self.allocator);
+        }
 
         const update_refs_ptr = rawflatpak.flatpak_installation_list_installed_refs_for_update(installation, cancellable, &g_error);
         if (update_refs_ptr == null) {
@@ -1090,7 +1117,10 @@ pub const Manager = struct {
             const raw: *rawflatpak.FlatpakRef = @ptrCast(@alignCast(update_refs_ptr.*.pdata[j]));
             _ = rawflatpak.g_object_ref(raw); // keep this ref alive after the array is freed //TODO: Re-visit this but works for now.
             const flatpak_ref = flatpak.InstalledFlatpak.new(raw, scope);
-            try list.append(self.allocator, flatpak_ref);
+            list.append(self.allocator, flatpak_ref) catch |err| {
+                rawflatpak.g_object_unref(raw);
+                return err;
+            };
 
             const ref_string = try flatpak.refToString(self.allocator, raw);
             defer self.allocator.free(ref_string);
@@ -1101,6 +1131,8 @@ pub const Manager = struct {
         _ = rawflatpak.g_signal_connect_data(trans_ptr, "ready", @ptrCast(&onReadyDiffPermissions), &ctx, null, 0);
         _ = rawflatpak.flatpak_transaction_run(trans_ptr, cancellable, null);
 
+        try self.checkCancelled();
+        if (ctx.failure) |err| return err;
         return list.toOwnedSlice(self.allocator);
     }
 
@@ -1112,23 +1144,47 @@ pub const Manager = struct {
             const operation_ptr: *rawflatpak.FlatpakTransactionOperation = @ptrCast(@alignCast(operation.data));
             const ref_c = rawflatpak.flatpak_transaction_operation_get_ref(operation_ptr);
 
-            if (ref_c != null) {
-                const ref_str = std.mem.span(ref_c);
-
-                for (ctx.list.items) |*item| {
-                    const id = item.id();
-                    if (std.mem.indexOf(u8, ref_str, id) != null) {
-                        const new_kf = rawflatpak.flatpak_transaction_operation_get_metadata(operation_ptr);
-                        const old_kf = rawflatpak.flatpak_transaction_operation_get_old_metadata(operation_ptr);
-
-                        item.permissions = diffPermissions(ctx.manager, new_kf, old_kf) catch &.{};
-                        break;
-                    }
-                }
+            if (ref_c != null and rawflatpak.flatpak_transaction_operation_get_operation_type(operation_ptr) == rawflatpak.FLATPAK_TRANSACTION_OPERATION_UPDATE) {
+                const commit = rawflatpak.flatpak_transaction_operation_get_commit(operation_ptr);
+                recordResolvedUpdate(
+                    ctx,
+                    std.mem.span(ref_c),
+                    if (commit != null) std.mem.span(commit) else null,
+                    rawflatpak.flatpak_transaction_operation_get_download_size(operation_ptr),
+                    rawflatpak.flatpak_transaction_operation_get_metadata(operation_ptr),
+                    rawflatpak.flatpak_transaction_operation_get_old_metadata(operation_ptr),
+                ) catch |err| {
+                    ctx.failure = err;
+                    return 0;
+                };
             }
             operations = operation.next;
         }
         return 0; // FALSE — stop before applying anything
+    }
+
+    fn recordResolvedUpdate(
+        ctx: *DiffContext,
+        operation_ref: []const u8,
+        target_commit: ?[]const u8,
+        download_size: u64,
+        new_metadata: ?*rawflatpak.GKeyFile,
+        old_metadata: ?*rawflatpak.GKeyFile,
+    ) !void {
+        const allocator = ctx.manager.allocator;
+        for (ctx.list.items) |*item| {
+            const reference = try flatpak.refToString(allocator, item.ptr);
+            defer allocator.free(reference);
+            if (!std.mem.eql(u8, operation_ref, reference)) continue;
+            const commit = if (target_commit) |value| try allocator.dupe(u8, value) else null;
+            errdefer if (commit) |value| allocator.free(value);
+            const permissions = try diffPermissions(ctx.manager, new_metadata, old_metadata);
+            item.deinitPermissions(allocator);
+            item.target_commit = commit;
+            item.download_size = download_size;
+            item.permissions = permissions;
+            return;
+        }
     }
 
     fn diffPermissions(self: Manager, new_kf: ?*rawflatpak.GKeyFile, old_kf: ?*rawflatpak.GKeyFile) ![]const [:0]u8 {
@@ -1196,6 +1252,7 @@ pub const Manager = struct {
     }
 
     fn get_permissions_from_key_file(self: Manager, key_file_ptr: ?*rawflatpak.GKeyFile, permissions: *std.ArrayList([:0]u8)) ![]const [:0]u8 {
+        if (key_file_ptr == null) return permissions.toOwnedSlice(self.allocator);
         const groups = [_][:0]const u8{ "Context", "ExtensionBus", "Shared", "Sockets", "Filesystems", "SessionBus", "SystemBus" };
 
         for (groups) |group| {
@@ -2015,6 +2072,7 @@ pub const Manager = struct {
     const DiffContext = struct {
         manager: Manager,
         list: *std.ArrayList(flatpak.InstalledFlatpak),
+        failure: ?anyerror = null,
     };
 };
 
@@ -2377,3 +2435,49 @@ test "test getRemoteRefInfo resolves an empty branch from the remote" {
 //     const result = try manager.install_from_bundle_flatpak("/home/caro/Downloads/deadlock-mod-manager.flatpak", flatpak.Scope.USER);
 //     try std.testing.expect(result);
 // }
+
+test "Flatpak update preview records only the exact ref and preserves permission differences" {
+    const allocator = std.testing.allocator;
+    var list: std.ArrayList(flatpak.InstalledFlatpak) = .empty;
+    defer {
+        for (list.items) |item| {
+            item.deinitPermissions(allocator);
+            rawflatpak.g_object_unref(item.ptr);
+        }
+        list.deinit(allocator);
+    }
+    // Put the app before its extension to catch the former substring match.
+    for ([_][:0]const u8{
+        "app/org.example.App/x86_64/stable",
+        "app/org.example.App.Plugin/x86_64/stable",
+        "app/org.example.App/x86_64/beta",
+        "app/org.example.App/aarch64/stable",
+    }) |reference| {
+        const ptr = rawflatpak.flatpak_ref_parse(reference, null) orelse return error.InvalidRef;
+        try list.append(allocator, flatpak.InstalledFlatpak.new(ptr, .USER));
+    }
+    var ctx: Manager.DiffContext = .{
+        .manager = .{ .allocator = allocator, .io = std.testing.io },
+        .list = &list,
+    };
+    const old_metadata = rawflatpak.g_key_file_new();
+    defer rawflatpak.g_key_file_free(old_metadata);
+    const new_metadata = rawflatpak.g_key_file_new();
+    defer rawflatpak.g_key_file_free(new_metadata);
+    const contents = "[Context]\nshared=network;\n";
+    try std.testing.expect(rawflatpak.g_key_file_load_from_data(new_metadata, contents, contents.len, 0, null) != 0);
+    try Manager.recordResolvedUpdate(&ctx, "app/org.example.App.Plugin/x86_64/stable", "extension-commit", 2048, new_metadata, old_metadata);
+    for ([_]usize{ 0, 2, 3 }) |index| {
+        try std.testing.expect(list.items[index].target_commit == null);
+        try std.testing.expect(list.items[index].download_size == null);
+    }
+    try std.testing.expectEqualStrings("extension-commit", list.items[1].target_commit.?);
+    try std.testing.expectEqual(@as(?u64, 2048), list.items[1].download_size);
+    try std.testing.expectEqual(@as(usize, 1), list.items[1].permissions.len);
+    try std.testing.expectEqualStrings("+ Context=shared:network", list.items[1].permissions[0]);
+    // Replacing resolved data releases the old owned metadata; zero is known.
+    try Manager.recordResolvedUpdate(&ctx, "app/org.example.App.Plugin/x86_64/stable", "next-commit", 0, old_metadata, new_metadata);
+    try std.testing.expectEqualStrings("next-commit", list.items[1].target_commit.?);
+    try std.testing.expectEqual(@as(?u64, 0), list.items[1].download_size);
+    try std.testing.expectEqualStrings("- Context=shared:network", list.items[1].permissions[0]);
+}

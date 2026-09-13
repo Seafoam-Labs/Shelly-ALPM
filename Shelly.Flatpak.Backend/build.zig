@@ -141,6 +141,7 @@ pub fn build(b: *std.Build) void {
         .name = "flatpak-backend-parity-test",
         .root_module = backend_module,
         .filters = &.{
+            "Flatpak update preview",
             "installed Flatpak resolution matches IDs and friendly names",
             "Flatpak manager exposes strict-parity operations",
             "shared cancellation propagates to GLib cancellables",

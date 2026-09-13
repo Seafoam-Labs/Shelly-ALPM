@@ -22,6 +22,7 @@ pub const AppstreamManager = struct {
     io: ?std.Io = null,
     operation_context: ?*operation_api.OperationContext = null,
     parent_operation: ?*const operation_api.Operation = null,
+    cancellation: ?events.Cancellation = null,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -132,6 +133,26 @@ pub const AppstreamManager = struct {
         return catalogs.toOwnedSlice(allocator);
     }
 
+    /// Refresh only the installation/remote/architecture needed by this update
+    /// check. A failed refresh must not turn a stale catalog into a target version.
+    pub fn getUpdateCatalog(
+        self: AppstreamManager,
+        scope: types.Scope,
+        remote_name: []const u8,
+        arch: []const u8,
+    ) !AppstreamCatalog {
+        var parsed = try self.call(
+            wire.CatalogLocation,
+            wire.Method.get_remote_catalog,
+            wire.CatalogArguments{ .scope = scope.toWire(), .remote = remote_name, .arch = arch, .refresh = true },
+            .search,
+            remote_name,
+        );
+        defer parsed.deinit();
+        const location = parsed.value;
+        return self.loadCatalogFromPath(location.remote, .fromWire(location.scope), location.arch, location.path);
+    }
+
     /// AppStream XML parsing is deliberately PackageManager-owned and does not
     /// require the optional native backend once a catalog path is known.
     pub fn loadCatalogFromPath(
@@ -152,6 +173,7 @@ pub const AppstreamManager = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try operation_scope.checkCancelled();
+        try self.checkCancellation();
         const allocator = self.allocator orelse return Error.NotInitialized;
         const io = self.io orelse return Error.NotInitialized;
 
@@ -166,6 +188,7 @@ pub const AppstreamManager = struct {
         };
         const apps = try appstream_parser.parseFile(path);
         try operation_scope.checkCancelled();
+        try self.checkCancellation();
         return .{
             .owner_allocator = allocator,
             .arena_state = arena_state,
@@ -198,6 +221,7 @@ pub const AppstreamManager = struct {
         defer scope.finish(.success);
         errdefer scope.fail();
         try scope.checkCancelled();
+        try self.checkCancellation();
         return (client_api.Client{ .allocator = allocator }).call(
             T,
             method,
@@ -208,9 +232,15 @@ pub const AppstreamManager = struct {
                 else
                     null,
                 .context = self.operation_context,
+                .cancellation = self.cancellation,
                 .failure_reported = &scope.failure_reported,
             },
         );
+    }
+
+    fn checkCancellation(self: AppstreamManager) !void {
+        if (self.cancellation) |cancellation|
+            if (cancellation.isCancelled()) return error.Cancelled;
     }
 };
 
@@ -266,4 +296,19 @@ test "Flatpak AppStream operation-hooked public APIs compile" {
     _ = AppstreamManager.getRemoteCatalog;
     _ = AppstreamManager.getAllRemoteCatalogs;
     _ = AppstreamManager.loadCatalogFromPath;
+}
+
+test "Flatpak update metadata cancels before catalog refresh or parsing" {
+    const Cancellation = struct {
+        fn cancelled(_: ?*anyopaque) bool {
+            return true;
+        }
+    };
+    const manager: AppstreamManager = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .cancellation = .{ .function = Cancellation.cancelled },
+    };
+    try std.testing.expectError(error.Cancelled, manager.getUpdateCatalog(.user, "flathub", "x86_64"));
+    try std.testing.expectError(error.Cancelled, manager.loadCatalogFromPath("flathub", .user, "x86_64", "/nonexistent/appstream.xml"));
 }

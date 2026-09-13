@@ -543,6 +543,7 @@ pub fn build(b: *std.Build) void {
         .name = "flatpak-test",
         .root_module = mod,
         .filters = &.{
+            "Flatpak update metadata",
             "Flatpak public facade does not expose generated native bindings",
             "Flatpak dispatcher forwards typed status and progress",
             "parseStream parses a full component with description, icons, screenshots, releases, urls and verification",

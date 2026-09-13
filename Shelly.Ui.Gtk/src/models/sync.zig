@@ -39,6 +39,8 @@ pub const CheckUpdatesAur = struct {
 };
 
 pub const CheckUpdatesFlatpak = struct {
+    NewVersion: ?[]const u8 = null,
+    DownloadSize: ?u64 = null,
     Id: []const u8 = "",
     Name: []const u8 = "",
     Version: []const u8 = "",

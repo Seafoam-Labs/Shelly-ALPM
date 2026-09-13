@@ -24,7 +24,7 @@ CLI / UI
 PackageManager-owned Flatpak facade and owned domain values
     |
     v
-strict JSON schema 2 over C ABI 1
+strict JSON schema 3 over C ABI 1
     |
     v
 libshelly-flatpak-backend.so.1
@@ -113,17 +113,42 @@ state. Both sides unsubscribe borrowed cancellation handlers and drain any
 callbacks that were already snapshotted before destroying the backend handle
 or its `GCancellable`.
 
-## Wire schema 2
+## Wire schema 3
 
-Messages are UTF-8 JSON and are limited to 16 MiB. Schema 2 is strict:
+Messages are UTF-8 JSON and are limited to 16 MiB. Schema 3 is strict:
 duplicate fields, unknown fields, missing required fields, invalid enum tags,
 truncated JSON, and oversized messages are rejected.
+
+Schema 3 adds nullable `target_commit` and `download_size` to the
+`list_updates` result (`InstalledRef`). They come from the resolved update
+transaction, which stops at `ready` before applying any changes. Download
+size is the maximum for that operation, excludes dependencies, and can be
+zero; null means resolution did not provide a size.
+
+`get_remote_catalog` accepts optional `scope` and a `refresh` flag. Refresh
+requires a scope and refreshes the requested architecture in that installation.
+Existing catalog consumers can omit these fields. PackageManager refreshes
+each needed scope/remote/architecture once per update check, parses Flatpak
+bundle references, and selects the most recent unambiguous AppStream release
+for the exact reference. Missing or failed catalog lookups leave the target
+version unknown without hiding the update. Runtimes and unresolved targets
+also retain an unknown application version.
+
+The CLI adds nullable `NewVersion` and `DownloadSize` to both Flatpak update
+JSON forms. `Version` remains the installed version and `InstalledSize` remains
+the installed size. The UI uses “Update available” and “Unknown” for missing
+metadata, and labels known sizes as maximum download estimates in a tooltip.
+
+Migration from schema 2 requires rebuilding and distributing the base package
+and optional backend together. The backend depends on the exact base
+`pkgver-pkgrel` in all packaging variants. Schema 2 peers are rejected; the C
+table and SONAME remain ABI 1.
 
 Request:
 
 ```json
 {
-  "schema": 2,
+  "schema": 3,
   "operation_id": 42,
   "method": "list_installed",
   "arguments": {
@@ -136,7 +161,7 @@ Success:
 
 ```json
 {
-  "schema": 2,
+  "schema": 3,
   "operation_id": 42,
   "result": []
 }
@@ -146,7 +171,7 @@ Failure:
 
 ```json
 {
-  "schema": 2,
+  "schema": 3,
   "operation_id": 42,
   "error": {
     "code": "flatpak.not_found",
@@ -172,7 +197,7 @@ which avoids callback reentrancy through loader state.
 
 ## Operations
 
-Schema 2 covers:
+Schema 3 covers:
 
 - install by ref, `.flatpakref`, or bundle;
 - update, uninstall, repair, upgrade-all, and unused-runtime removal;

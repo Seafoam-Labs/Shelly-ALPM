@@ -498,6 +498,8 @@ fn listUpdates(state: *State, request: wire.RequestEnvelope) ![]u8 {
             .version = value.version(),
             .summary = value.summary(),
             .latest_commit = value.last_commit(),
+            .target_commit = value.target_commit,
+            .download_size = value.download_size,
             .installed_size = value.installed_size(),
             .kind = kindFromNative(value.kind()),
             .scope = scopeToWire(value.get_scope()),
@@ -731,6 +733,7 @@ fn updateRemoteAppstream(
     try manager.updateRemote(
         scopeFromWire(args.value.scope),
         args.value.remote,
+        null,
     );
     return successResponse(request.operation_id, wire.EmptyArguments{});
 }
@@ -742,10 +745,17 @@ fn getRemoteCatalog(
     var args = try parseArgs(wire.CatalogArguments, request);
     defer args.deinit();
     var manager = catalogManagerFor(state);
-    const location = try manager.getRemote(
-        args.value.remote,
-        args.value.arch,
-    );
+    if (args.value.refresh) {
+        const scope = args.value.scope orelse return error.InvalidArgument;
+        try manager.updateRemote(scopeFromWire(scope), args.value.remote, args.value.arch);
+    }
+    const location = if (args.value.scope) |scope|
+        (try manager.getRemoteForScope(args.value.remote, args.value.arch, scopeFromWire(scope))) orelse return error.CatalogNotFound
+    else
+        try manager.getRemote(
+            args.value.remote,
+            args.value.arch,
+        );
     defer native_catalogs.Manager.deinitLocation(allocator, location);
     return successResponse(request.operation_id, location);
 }

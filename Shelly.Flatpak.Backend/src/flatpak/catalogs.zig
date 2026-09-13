@@ -44,6 +44,7 @@ pub const Manager = struct {
         self: Manager,
         scope_value: flatpak.Scope,
         remote_name: []const u8,
+        requested_arch: ?[]const u8,
     ) !void {
         var scope = events.OperationScope.init(
             self.operation_context,
@@ -74,8 +75,9 @@ pub const Manager = struct {
             &g_error,
         );
         defer raw.g_object_unref(installation);
-        const arch = raw.flatpak_get_default_arch();
-        _ = raw.flatpak_installation_update_appstream_sync(
+        const arch = try self.allocator.dupeZ(u8, requested_arch orelse std.mem.span(raw.flatpak_get_default_arch()));
+        defer self.allocator.free(arch);
+        const refreshed = raw.flatpak_installation_update_appstream_sync(
             installation,
             name_z,
             arch,
@@ -83,6 +85,7 @@ pub const Manager = struct {
             cancellable,
             &g_error,
         );
+        try scope.checkCancelled();
         if (g_error) |value| {
             scope.reportError(
                 error.FlatpakError,
@@ -91,6 +94,7 @@ pub const Manager = struct {
             );
             return error.FlatpakError;
         }
+        if (refreshed == 0) return error.FlatpakError;
         scope.status(
             .success,
             "Flatpak AppStream catalog updated",
@@ -174,11 +178,11 @@ pub const Manager = struct {
             if (raw.flatpak_remote_get_disabled(remote) != 0) continue;
             const name_ptr = raw.flatpak_remote_get_name(remote);
             if (name_ptr == null) continue;
-            try self.updateRemote(scope_value, std.mem.span(name_ptr));
+            try self.updateRemote(scope_value, std.mem.span(name_ptr), null);
         }
     }
 
-    fn getRemoteForScope(
+    pub fn getRemoteForScope(
         self: Manager,
         remote_name: []const u8,
         requested_arch: ?[]const u8,

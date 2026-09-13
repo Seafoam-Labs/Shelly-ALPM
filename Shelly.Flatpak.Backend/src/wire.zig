@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const schema_version: u32 = 2;
+pub const schema_version: u32 = 3;
 pub const max_message_size: usize = 16 * 1024 * 1024;
 
 pub const Method = struct {
@@ -164,6 +164,8 @@ pub const RemoteRefArguments = struct {
 pub const CatalogArguments = struct {
     remote: []const u8,
     arch: ?[]const u8 = null,
+    scope: ?Scope = null,
+    refresh: bool = false,
 };
 
 pub const CatalogsArguments = struct {
@@ -235,6 +237,8 @@ pub const InstalledRef = struct {
     version: []const u8,
     summary: []const u8,
     latest_commit: []const u8,
+    target_commit: ?[]const u8 = null,
+    download_size: ?u64 = null,
     installed_size: u64,
     kind: RefKind,
     scope: Scope,

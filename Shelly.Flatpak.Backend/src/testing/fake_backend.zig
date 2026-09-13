@@ -80,6 +80,8 @@ fn execute(
         waitForCancellation(state, operation_id)
     else if (std.mem.eql(u8, request.value.method, "fake.stats"))
         stats(state, operation_id)
+    else if (std.mem.eql(u8, request.value.method, wire.Method.list_updates))
+        updateFixture(operation_id)
     else
         unknownMethod(operation_id);
 
@@ -99,6 +101,36 @@ fn cancel(
         state.pending_cancel_operation.store(operation_id, .release);
     }
     return .success;
+}
+
+fn updateFixture(operation_id: u64) ![]u8 {
+    const update: wire.InstalledRef = .{
+        .id = "org.example.App",
+        .name = "Example",
+        .arch = "x86_64",
+        .branch = "stable",
+        .reference = "app/org.example.App/x86_64/stable",
+        .origin = "flathub",
+        .version = "0.9.0",
+        .summary = "Example app",
+        .latest_commit = "cached-commit",
+        .target_commit = "resolved-commit",
+        .download_size = 0,
+        .installed_size = 4096,
+        .kind = .app,
+        .scope = .user,
+        .permissions = &.{"+ network"},
+        .eol = "Deprecated",
+        .eol_rebase = "org.example.NewApp",
+    };
+    var unknown = update;
+    unknown.target_commit = null;
+    unknown.download_size = null;
+    return std.json.Stringify.valueAlloc(allocator, .{
+        .schema = wire.schema_version,
+        .operation_id = operation_id,
+        .result = &[_]wire.InstalledRef{ update, unknown },
+    }, .{});
 }
 
 fn freeResponse(

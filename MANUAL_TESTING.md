@@ -94,6 +94,31 @@ shelly config appimage YARC --clear-env
 
 ### Flatpak Integration
 
+#### Update metadata (#1652)
+
+- [ ] With a pending application update (for example MangoJuice), run
+  `shelly list-updates flatpak --json` and `shelly list-updates all --json`.
+  Both report the installed `Version`, target `NewVersion`, and nullable
+  `DownloadSize` consistently.
+- [ ] Open the Update page. Confirm the application shows its installed and
+  target versions rather than “Installed”, and its download estimate matches
+  the CLI. Compare the estimate with Flatpak's update preview; it is a maximum
+  per reference, not the installed size or total including dependencies.
+- [ ] Check a runtime or application without release metadata: the new-version
+  label says “Update available”. An unresolved size says “Unknown”; a known
+  zero says `0 B`.
+- [ ] Check an update with a changed commit but unchanged application version;
+  the update remains listed.
+- [ ] Check different branches and remotes, including the same remote name in
+  both user and system installations. Each version comes from its own catalog.
+- [ ] A failed AppStream refresh leaves the update visible with an unknown
+  target version. Cancelling update discovery still cancels the operation.
+- [ ] Opening or refreshing the page does not install updates. Permission
+  changes, EOL/rebase annotations in CLI JSON, and normal update actions still
+  work.
+
+#### Backend and operations
+
 - [ ] A base-only installation does not install `flatpak` or
   `shelly-flatpak-backend` as a required dependency
 - [ ] `shelly --help`, `shelly --version`, and completion generation work with

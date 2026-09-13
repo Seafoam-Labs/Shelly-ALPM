@@ -134,6 +134,9 @@ pub const InstalledRef = struct {
     version: []u8,
     summary: []u8,
     latest_commit: []u8,
+    target_commit: ?[]u8 = null,
+    new_version: ?[]u8 = null,
+    download_size: ?u64 = null,
     installed_size: u64,
     kind: RefKind,
     scope: Scope,
@@ -166,6 +169,8 @@ pub const InstalledRef = struct {
             value.latest_commit,
         );
         errdefer allocator.free(latest_commit);
+        const target_commit = if (value.target_commit) |text| try allocator.dupe(u8, text) else null;
+        errdefer if (target_commit) |text| allocator.free(text);
         const permissions = try dupeStrings(allocator, value.permissions);
         errdefer freeStrings(allocator, permissions);
         const eol = if (value.eol) |text| try allocator.dupe(u8, text) else null;
@@ -182,6 +187,8 @@ pub const InstalledRef = struct {
             .version = version,
             .summary = summary,
             .latest_commit = latest_commit,
+            .target_commit = target_commit,
+            .download_size = value.download_size,
             .installed_size = value.installed_size,
             .kind = .fromWire(value.kind),
             .scope = .fromWire(value.scope),
@@ -204,6 +211,8 @@ pub const InstalledRef = struct {
         allocator.free(self.version);
         allocator.free(self.summary);
         allocator.free(self.latest_commit);
+        if (self.target_commit) |value| allocator.free(value);
+        if (self.new_version) |value| allocator.free(value);
         freeStrings(allocator, self.permissions);
         if (self.eol) |value| allocator.free(value);
         if (self.eol_rebase) |value| allocator.free(value);
@@ -523,6 +532,8 @@ pub const AppstreamRelease = struct {
 };
 
 pub const AppstreamApp = struct {
+    // Full Flatpak bundle references distinguish architecture and branch.
+    flatpak_refs: []const []const u8 = &.{},
     type: []const u8,
     id: []const u8,
     name: []const u8,

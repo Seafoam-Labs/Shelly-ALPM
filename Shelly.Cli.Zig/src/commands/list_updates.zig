@@ -71,6 +71,8 @@ pub const FlatpakUpdate = struct {
     id: []const u8,
     name: []const u8,
     version: []const u8,
+    new_version: ?[]const u8 = null,
+    download_size: ?u64 = null,
     arch: []const u8,
     branch: []const u8,
     latest_commit: []const u8,
@@ -477,6 +479,8 @@ fn writeFlatpakJson(json: *std.json.Stringify, update: FlatpakUpdate) !void {
     try field(json, "Id", update.id);
     try field(json, "Name", update.name);
     try field(json, "Version", update.version);
+    try field(json, "NewVersion", update.new_version);
+    try field(json, "DownloadSize", update.download_size);
     try field(json, "Arch", update.arch);
     try field(json, "Branch", update.branch);
     try field(json, "LatestCommit", update.latest_commit);
@@ -830,9 +834,11 @@ fn runFlatpak(context: *runtime.RuntimeContext) !Result {
             .id = try allocator.dupe(u8, native.id),
             .name = try allocator.dupe(u8, native.name),
             .version = try allocator.dupe(u8, native.version),
+            .new_version = if (native.new_version) |value| try allocator.dupe(u8, value) else null,
+            .download_size = native.download_size,
             .arch = try allocator.dupe(u8, native.arch),
             .branch = try allocator.dupe(u8, native.branch),
-            .latest_commit = try allocator.dupe(u8, native.latest_commit),
+            .latest_commit = try allocator.dupe(u8, native.target_commit orelse native.latest_commit),
             .summary = try allocator.dupe(u8, native.summary),
             .kind = @intFromEnum(native.kind),
             .remote = try allocator.dupe(u8, native.origin),
@@ -1529,6 +1535,8 @@ test "Flatpak list-updates sorts compatibility JSON and renders table" {
                     .id = "org.zeta.App",
                     .name = "Zeta",
                     .version = "2.0",
+                    .new_version = "2.1",
+                    .download_size = 0,
                     .arch = "x86_64",
                     .branch = "stable",
                     .latest_commit = "zeta-commit",
@@ -1579,6 +1587,22 @@ test "Flatpak list-updates sorts compatibility JSON and renders table" {
     try std.testing.expect(std.mem.indexOf(u8, decoded, "\"Permissions\":[\"Add: network\",\"Remove: ipc\"]") != null);
     try std.testing.expect(std.mem.indexOf(u8, decoded, "\"FullRef\":\"flathub:app/org.zeta.App/x86_64/stable\"") != null);
     try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, framed, "[JSON]"));
+
+    const UpdateMetadata = struct { NewVersion: ?[]const u8, DownloadSize: ?u64 };
+    var metadata = try std.json.parseFromSlice([]UpdateMetadata, tc.arena.allocator(), decoded, .{ .ignore_unknown_fields = true });
+    defer metadata.deinit();
+    try std.testing.expectEqual(@as(?u64, null), metadata.value[0].DownloadSize);
+    try std.testing.expectEqual(@as(?[]const u8, null), metadata.value[0].NewVersion);
+    try std.testing.expectEqual(@as(?u64, 0), metadata.value[1].DownloadSize);
+    try std.testing.expectEqualStrings("2.1", metadata.value[1].NewVersion.?);
+
+    var aggregate = std.Io.Writer.Allocating.init(tc.arena.allocator());
+    defer aggregate.deinit();
+    const fixture = try (FlatpakFixture{}).collect(&tc.context, .flatpak, .{});
+    try writeAllJson(tc.arena.allocator(), &aggregate.writer, &.{fixture});
+    var all = try std.json.parseFromSlice(struct { Flatpak: []UpdateMetadata }, tc.arena.allocator(), aggregate.writer.buffered(), .{ .ignore_unknown_fields = true });
+    defer all.deinit();
+    try std.testing.expectEqualDeep(metadata.value, all.value.Flatpak);
 
     tc.stdout.writer.end = 0;
     outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "list-updates", "flatpak" });

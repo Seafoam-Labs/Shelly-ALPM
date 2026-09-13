@@ -194,13 +194,18 @@ test "ABI tables use C-compatible data-only fields" {
         @sizeOf(usize) + @sizeOf(u32) + 5 * @sizeOf(usize));
 }
 
-test "request parser accepts schema two and rejects incompatible schemas" {
+test "request parser accepts schema three and rejects incompatible schemas" {
     var request = try parseRequest(
         std.testing.allocator,
-        "{\"schema\":2,\"operation_id\":42,\"method\":\"list_installed\",\"arguments\":{}}",
+        "{\"schema\":3,\"operation_id\":42,\"method\":\"list_installed\",\"arguments\":{}}",
     );
     defer request.deinit();
     try std.testing.expectEqual(@as(u64, 42), request.value.operation_id);
+
+    try std.testing.expectError(error.UnsupportedSchema, parseRequest(
+        std.testing.allocator,
+        "{\"schema\":2,\"operation_id\":42,\"method\":\"list_updates\",\"arguments\":{}}",
+    ));
 
     try std.testing.expectError(
         error.UnsupportedSchema,
@@ -216,14 +221,14 @@ test "request parser rejects duplicates, missing fields, and oversized messages"
         error.DuplicateField,
         parseRequest(
             std.testing.allocator,
-            "{\"schema\":2,\"schema\":2,\"operation_id\":1,\"method\":\"list_installed\",\"arguments\":{}}",
+            "{\"schema\":3,\"schema\":3,\"operation_id\":1,\"method\":\"list_installed\",\"arguments\":{}}",
         ),
     );
     try std.testing.expectError(
         error.MissingField,
         parseRequest(
             std.testing.allocator,
-            "{\"schema\":2,\"operation_id\":1,\"arguments\":{}}",
+            "{\"schema\":3,\"operation_id\":1,\"arguments\":{}}",
         ),
     );
     const oversized = try std.testing.allocator.alloc(u8, wire.max_message_size + 1);
@@ -238,7 +243,7 @@ test "request parser rejects duplicates, missing fields, and oversized messages"
 test "argument parser rejects invalid enums and unknown fields" {
     var request = try parseRequest(
         std.testing.allocator,
-        "{\"schema\":2,\"operation_id\":3,\"method\":\"install\",\"arguments\":{\"id\":\"org.example.App\",\"remote\":\"flathub\",\"scope\":\"system\",\"branch\":\"stable\"}}",
+        "{\"schema\":3,\"operation_id\":3,\"method\":\"install\",\"arguments\":{\"id\":\"org.example.App\",\"remote\":\"flathub\",\"scope\":\"system\",\"branch\":\"stable\"}}",
     );
     defer request.deinit();
     var arguments = try parseArguments(wire.InstallArguments, std.testing.allocator, request.value.arguments);
@@ -247,7 +252,7 @@ test "argument parser rejects invalid enums and unknown fields" {
 
     var invalid = try parseRequest(
         std.testing.allocator,
-        "{\"schema\":2,\"operation_id\":3,\"method\":\"install\",\"arguments\":{\"id\":\"org.example.App\",\"remote\":\"flathub\",\"scope\":\"machine\",\"branch\":\"stable\"}}",
+        "{\"schema\":3,\"operation_id\":3,\"method\":\"install\",\"arguments\":{\"id\":\"org.example.App\",\"remote\":\"flathub\",\"scope\":\"machine\",\"branch\":\"stable\"}}",
     );
     defer invalid.deinit();
     try std.testing.expectError(
@@ -257,7 +262,7 @@ test "argument parser rejects invalid enums and unknown fields" {
 
     var unknown = try parseRequest(
         std.testing.allocator,
-        "{\"schema\":2,\"operation_id\":3,\"method\":\"install\",\"arguments\":{\"id\":\"org.example.App\",\"remote\":\"flathub\",\"scope\":\"system\",\"branch\":\"stable\",\"future\":true}}",
+        "{\"schema\":3,\"operation_id\":3,\"method\":\"install\",\"arguments\":{\"id\":\"org.example.App\",\"remote\":\"flathub\",\"scope\":\"system\",\"branch\":\"stable\",\"future\":true}}",
     );
     defer unknown.deinit();
     try std.testing.expectError(
@@ -338,6 +343,8 @@ test "all request argument families round-trip under schema one" {
     try expectRoundTrip(wire.CatalogArguments, .{
         .remote = "flathub",
         .arch = "x86_64",
+        .scope = .user,
+        .refresh = true,
     });
     try expectRoundTrip(wire.CatalogsArguments, .{ .arch = "x86_64" });
     try expectRoundTrip(wire.UpdateAppstreamArguments, .{
@@ -405,6 +412,8 @@ test "backend-neutral result records round-trip without native pointers" {
         .version = "1.0",
         .summary = "Example app",
         .latest_commit = "abc",
+        .target_commit = "def",
+        .download_size = 1024,
         .installed_size = 42,
         .kind = .app,
         .scope = .system,
@@ -459,14 +468,14 @@ test "backend-neutral result records round-trip without native pointers" {
 test "response and event parsers reject malformed truncated oversized and ambiguous messages" {
     var success = try parseResponse(
         std.testing.allocator,
-        "{\"schema\":2,\"operation_id\":9,\"result\":{\"value\":true}}",
+        "{\"schema\":3,\"operation_id\":9,\"result\":{\"value\":true}}",
     );
     defer success.deinit();
     try std.testing.expectEqual(@as(u64, 9), success.value.operation_id);
 
     var failure = try parseResponse(
         std.testing.allocator,
-        "{\"schema\":2,\"operation_id\":9,\"error\":{\"code\":\"flatpak.failed\",\"message\":\"failed\",\"native_code\":7}}",
+        "{\"schema\":3,\"operation_id\":9,\"error\":{\"code\":\"flatpak.failed\",\"message\":\"failed\",\"native_code\":7}}",
     );
     defer failure.deinit();
     try std.testing.expectEqualStrings(
@@ -478,30 +487,30 @@ test "response and event parsers reject malformed truncated oversized and ambigu
         error.InvalidResponseShape,
         parseResponse(
             std.testing.allocator,
-            "{\"schema\":2,\"operation_id\":9}",
+            "{\"schema\":3,\"operation_id\":9}",
         ),
     );
     try std.testing.expectError(
         error.InvalidResponseShape,
         parseResponse(
             std.testing.allocator,
-            "{\"schema\":2,\"operation_id\":9,\"result\":{},\"error\":{\"code\":\"x\",\"message\":\"x\"}}",
+            "{\"schema\":3,\"operation_id\":9,\"result\":{},\"error\":{\"code\":\"x\",\"message\":\"x\"}}",
         ),
     );
     try std.testing.expectError(
         error.InvalidResponseShape,
         parseResponse(
             std.testing.allocator,
-            "{\"schema\":2,\"operation_id\":9,\"error\":{\"code\":\"\",\"message\":\"failed\"}}",
+            "{\"schema\":3,\"operation_id\":9,\"error\":{\"code\":\"\",\"message\":\"failed\"}}",
         ),
     );
-    if (parseResponse(std.testing.allocator, "{\"schema\":2")) |parsed| {
+    if (parseResponse(std.testing.allocator, "{\"schema\":3")) |parsed| {
         parsed.deinit();
         return error.TestExpectedTruncatedResponse;
     } else |_| {}
     if (parseResponse(
         std.testing.allocator,
-        "{\"schema\":2,\"operation_id\":9,\"result\":{},\"future\":true}",
+        "{\"schema\":3,\"operation_id\":9,\"result\":{},\"future\":true}",
     )) |parsed| {
         parsed.deinit();
         return error.TestExpectedUnknownResponseField;
@@ -509,7 +518,7 @@ test "response and event parsers reject malformed truncated oversized and ambigu
 
     var event = try parseEvent(
         std.testing.allocator,
-        "{\"schema\":2,\"operation_id\":9,\"kind\":\"progress\",\"code\":\"flatpak.progress\",\"message\":\"Downloading org.example.App\",\"stage\":\"Downloading\",\"subject\":\"runtime/org.example.App/x86_64/stable\",\"percentage\":50}",
+        "{\"schema\":3,\"operation_id\":9,\"kind\":\"progress\",\"code\":\"flatpak.progress\",\"message\":\"Downloading org.example.App\",\"stage\":\"Downloading\",\"subject\":\"runtime/org.example.App/x86_64/stable\",\"percentage\":50}",
     );
     defer event.deinit();
     try std.testing.expectEqual(wire.EventKind.progress, event.value.kind);

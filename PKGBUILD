@@ -206,7 +206,7 @@ EOF
 
 package_shelly-flatpak-backend() {
   pkgdesc="Optional native Flatpak backend for Shelly"
-  depends=("shelly=${pkgver}" 'flatpak')
+  depends=("shelly=${pkgver}-${pkgrel}" 'flatpak')
   provides=("shelly-flatpak-backend=${pkgver}")
   conflicts=('shelly-flatpak-backend-git' 'shelly-flatpak-backend-bin')
 

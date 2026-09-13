@@ -5,6 +5,29 @@ const errors = @import("errors.zig");
 const loader = @import("backend_loader.zig");
 const operation_api = @import("operation_context");
 
+test "Flatpak update metadata survives response release with zero and unknown sizes" {
+    const types = @import("types.zig");
+    const wire = @import("Shelly_Flatpak_Protocol").wire;
+    const client: client_api.Client = .{ .allocator = std.testing.allocator };
+    var owned: types.InstalledRef = undefined;
+    {
+        var response = try client.call([]wire.InstalledRef, wire.Method.list_updates, .{}, .{});
+        defer response.deinit();
+        try std.testing.expectEqual(@as(usize, 2), response.value.len);
+        try std.testing.expectEqual(@as(?u64, null), response.value[1].download_size);
+        try std.testing.expectEqual(@as(?[]const u8, null), response.value[1].target_commit);
+        owned = try types.InstalledRef.fromWire(std.testing.allocator, response.value[0]);
+    }
+    defer owned.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("resolved-commit", owned.target_commit.?);
+    try std.testing.expectEqual(@as(?u64, 0), owned.download_size);
+    try std.testing.expectEqualStrings("0.9.0", owned.version);
+    try std.testing.expectEqual(@as(u64, 4096), owned.installed_size);
+    try std.testing.expectEqualStrings("+ network", owned.permissions[0]);
+    try std.testing.expectEqualStrings("Deprecated", owned.eol.?);
+    try std.testing.expectEqualStrings("org.example.NewApp", owned.eol_rebase.?);
+}
+
 const SuccessResult = struct {
     ok: bool,
     value: []const u8,

@@ -146,6 +146,7 @@ pub const AppstreamParser = struct {
             .verification_method = null,
             .addons = &.{},
         };
+        var flatpak_refs: std.ArrayList([]const u8) = .empty;
         var icons: std.ArrayList(AppstreamIcon) = .empty;
         var screenshots: std.ArrayList(AppstreamScreenshot) = .empty;
         var releases: std.ArrayList(AppstreamRelease) = .empty;
@@ -225,6 +226,11 @@ pub const AppstreamParser = struct {
                         const url_type = try attributeDupe(reader, scratch, "type");
                         const value = try readElementText(reader, scratch);
                         if (url_type) |key| try app.urls.put(scratch, key, value);
+                    } else if (std.mem.eql(u8, name, "bundle")) {
+                        const bundle_type = try attributeDupe(reader, scratch, "type");
+                        const reference = try readElementText(reader, scratch);
+                        if (bundle_type != null and std.mem.eql(u8, bundle_type.?, "flatpak"))
+                            try flatpak_refs.append(scratch, std.mem.trim(u8, reference, " \t\r\n"));
                     } else if (std.mem.eql(u8, name, "icon")) {
                         if (try parseIcon(reader, scratch)) |icon|
                             try icons.append(scratch, icon);
@@ -249,6 +255,7 @@ pub const AppstreamParser = struct {
         }
 
         if (!developer_seen) app.developer_name = fallback_developer;
+        app.flatpak_refs = try flatpak_refs.toOwnedSlice(scratch);
         app.icons = try icons.toOwnedSlice(scratch);
         app.screenshots = try screenshots.toOwnedSlice(scratch);
         app.releases = try releases.toOwnedSlice(scratch);
@@ -654,6 +661,7 @@ fn cloneApp(allocator: Allocator, app: AppstreamApp) !AppstreamApp {
     for (app.addons, addons) |addon, *copy| copy.* = try cloneApp(allocator, addon);
 
     return .{
+        .flatpak_refs = try cloneTextSlice(allocator, app.flatpak_refs),
         .type = try cloneText(allocator, app.type),
         .id = try cloneText(allocator, app.id),
         .name = try cloneText(allocator, app.name),

@@ -60,7 +60,7 @@ pub const UpdatePage = extern struct {
         description: []const u8,
         old_version: []const u8,
         new_version: []const u8,
-        size: i64,
+        size: ?i64,
     };
 
     const LoadResult = struct {
@@ -247,11 +247,27 @@ pub const UpdatePage = extern struct {
         }
         if (flatpak_enabled) {
             for (response.Flatpak) |package| {
-                updates[index] = .{ .source = .flatpak, .name = package.Name, .description = package.Id, .old_version = package.Version, .new_version = translations._("Installed"), .size = 0 };
+                updates[index] = flatpakUpdateItem(package);
                 index += 1;
             }
         }
         return updates;
+    }
+
+    fn flatpakUpdateItem(package: @import("../models/sync.zig").CheckUpdatesFlatpak) UpdateItem {
+        const version = package.NewVersion orelse "";
+        return .{
+            .source = .flatpak,
+            .name = package.Name,
+            .description = package.Id,
+            .old_version = package.Version,
+            .new_version = if (version.len > 0) version else translations._("Update available"),
+            .size = if (package.DownloadSize) |size| std.math.cast(i64, size) else null,
+        };
+    }
+
+    fn updateSizeText(buf: []u8, size: ?i64) [:0]const u8 {
+        return if (size) |bytes| size_helper.convert_null_term(buf, bytes) else translations._("Unknown");
     }
 
     fn post_result(page: *Self, updates: []UpdateItem, arena: *std.heap.ArenaAllocator, generation: u64, failed: bool) void {
@@ -293,7 +309,7 @@ pub const UpdatePage = extern struct {
         const allocator = result.arena.allocator();
         var buf: [32]u8 = undefined;
         for (result.updates[result.index..end]) |update| {
-            const object = UpdateObject.new(allocator, update.source, update.name, update.description, update.old_version, update.new_version, size_helper.convert_null_term(&buf, update.size));
+            const object = UpdateObject.new(allocator, update.source, update.name, update.description, update.old_version, update.new_version, updateSizeText(&buf, update.size));
             gio.ListStore.append(p.list_store, object.as(gobject.Object));
             object.as(gobject.Object).unref();
         }
@@ -468,6 +484,10 @@ pub const UpdatePage = extern struct {
         gtk.Label.setLabel(size, update.getSize());
 
         const src = update.getSource();
+        gtk.Widget.setTooltipText(size.as(gtk.Widget), if (src == .flatpak)
+            translations._("Maximum download size, excluding dependencies. The actual download may be smaller.")
+        else
+            null);
         gtk.Widget.setVisible(update_btn.as(gtk.Widget), @intFromBool(src == .aur or src == .flatpak));
     }
 
@@ -620,3 +640,20 @@ pub const UpdatePage = extern struct {
         }
     };
 };
+
+test "Flatpak update rows preserve versions and distinguish unknown from zero size" {
+    const known = UpdatePage.flatpakUpdateItem(.{ .Version = "0.9.0", .NewVersion = "1.0.0", .DownloadSize = 2048 });
+    try std.testing.expectEqualStrings("0.9.0", known.old_version);
+    try std.testing.expectEqualStrings("1.0.0", known.new_version);
+    var buf: [32]u8 = undefined;
+    try std.testing.expectEqualStrings("2.00 KB", UpdatePage.updateSizeText(&buf, known.size));
+    const missing = UpdatePage.flatpakUpdateItem(.{ .Version = "0.9.0" });
+    try std.testing.expectEqualStrings(translations._("Update available"), missing.new_version);
+    try std.testing.expectEqualStrings(translations._("Unknown"), UpdatePage.updateSizeText(&buf, missing.size));
+    const zero = UpdatePage.flatpakUpdateItem(.{ .Version = "1.0.0", .NewVersion = "1.0.0", .DownloadSize = 0 });
+    try std.testing.expectEqualStrings("1.0.0", zero.new_version);
+    try std.testing.expectEqualStrings("0 B", UpdatePage.updateSizeText(&buf, zero.size));
+    const empty = UpdatePage.flatpakUpdateItem(.{ .NewVersion = "", .DownloadSize = std.math.maxInt(u64) });
+    try std.testing.expectEqualStrings(translations._("Update available"), empty.new_version);
+    try std.testing.expectEqual(@as(?i64, null), empty.size);
+}

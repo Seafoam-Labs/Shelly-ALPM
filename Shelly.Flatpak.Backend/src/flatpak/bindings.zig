@@ -163,6 +163,8 @@ pub const libflatpak = struct {
         ptr: *flatpak.FlatpakRef,
         scope: Scope,
         permissions: []const [:0]const u8 = &.{},
+        target_commit: ?[]u8 = null,
+        download_size: ?u64 = null,
 
         fn installedRef(self: InstalledFlatpak) *flatpak.FlatpakInstalledRef {
             return @ptrCast(self.ptr);
@@ -229,6 +231,7 @@ pub const libflatpak = struct {
         pub fn deinitPermissions(self: InstalledFlatpak, allocator: std.mem.Allocator) void {
             for (self.permissions) |p| allocator.free(p);
             allocator.free(self.permissions);
+            if (self.target_commit) |value| allocator.free(value);
         }
     };
 
