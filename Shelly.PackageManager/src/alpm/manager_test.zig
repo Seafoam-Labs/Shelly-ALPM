@@ -2673,6 +2673,137 @@ test "remove_packages cancels removal of a held package without confirmation" {
     try testing.expectEqualStrings("Held package removal cancelled.", capture.text());
 }
 
+test "remove_packages previews resolved recursive and optional dependencies before cancellation" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.addLocalPackageWithDependencyTypes(allocator, "remove-parent", "1.0-1", &.{"remove-dependency"}, &.{ "remove-optional", "remove-shared" });
+    try workspace.addLocalPackage(allocator, "remove-dependency", "1.0-1");
+    try workspace.addLocalPackage(allocator, "remove-optional", "1.0-1");
+    try workspace.addLocalPackage(allocator, "remove-shared", "1.0-1");
+    try workspace.addLocalPackageWithDependencies(allocator, "keep-parent", "1.0-1", &.{"remove-shared"});
+    for ([_][]const u8{ "remove-parent", "remove-dependency", "remove-optional" }, 1..) |name, index| {
+        const path = try std.fmt.allocPrint(allocator, "{s}/local/{s}-1.0-1/desc", .{ workspace.db_path, name });
+        defer allocator.free(path);
+        const original = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited);
+        defer allocator.free(original);
+        const sized = try std.fmt.allocPrint(allocator, "{s}%SIZE%\n{d}\n\n", .{ original, index * 1024 });
+        defer allocator.free(sized);
+        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = sized });
+    }
+
+    const mgr = try Manager.init(allocator, testing.environ, .{
+        .config_path = workspace.config_path,
+        .root_directory = workspace.root,
+    });
+    defer mgr.deinit();
+    for ([_][:0]const u8{ "remove-dependency", "remove-optional", "remove-shared" }) |name|
+        try mgr.update_package_reason(name, .Dependency);
+
+    const Capture = struct {
+        mgr: *Manager,
+        questions: usize = 0,
+        failure: ?anyerror = null,
+
+        fn verify(self: *@This(), question: operations.Question) !void {
+            try testing.expectEqual(operations.QuestionKind.confirm_transaction, question.kind);
+            try testing.expect(question.default_response == .accepted);
+            const plan = question.transaction_plan orelse return error.MissingPlan;
+            try testing.expectEqual(operations.TransactionAction.remove, plan.action);
+            try testing.expectEqual(@as(usize, 3), plan.packages.len);
+            try testing.expectEqual(@as(?u64, null), plan.total_download_size);
+            try testing.expectEqual(@as(?u64, 6144), plan.total_installed_size);
+            try testing.expectEqual(@as(?i64, -6144), plan.net_installed_size);
+            var seen: [3]bool = @splat(false);
+            for (plan.packages) |pkg| {
+                const index: usize = if (std.mem.eql(u8, pkg.name, "remove-parent")) 0 else if (std.mem.eql(u8, pkg.name, "remove-dependency")) 1 else if (std.mem.eql(u8, pkg.name, "remove-optional")) 2 else return error.UnexpectedPackage;
+                try testing.expect(!seen[index]);
+                seen[index] = true;
+                const roles = [_]operations.TransactionPackageRole{ .requested, .dependency, .optional_dependency };
+                try testing.expectEqual(roles[index], pkg.role);
+                try testing.expectEqualStrings("1.0-1", pkg.version.?);
+            }
+            for ([_][:0]const u8{ "remove-parent", "remove-dependency", "remove-optional", "remove-shared", "keep-parent" }) |name|
+                try testing.expect(self.mgr.is_package_installed(name));
+        }
+
+        fn answer(data: ?*anyopaque, question: operations.Question) operations.QuestionResponse {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            self.questions += 1;
+            self.verify(question) catch |err| {
+                self.failure = err;
+            };
+            return .declined;
+        }
+    };
+    var capture: Capture = .{ .mgr = mgr };
+    var context = operations.OperationContext.init(allocator, io);
+    defer context.deinit();
+    context.setQuestionHandler(.{ .function = Capture.answer, .data = &capture });
+    mgr.setOperationContext(&context);
+    defer mgr.setOperationContext(null);
+    var names = [_][:0]const u8{"remove-parent"};
+    // DBONLY forces NODEPS, so use a real prepared transaction and decline it.
+    try testing.expectError(error.Cancelled, mgr.remove_packages(&names, .{ .recurse = true }, false));
+    if (capture.failure) |err| return err;
+    try testing.expectEqual(@as(usize, 1), capture.questions);
+    mgr.setOperationContext(null);
+    for ([_][:0]const u8{ "remove-parent", "remove-dependency", "remove-optional", "remove-shared", "keep-parent" }) |name|
+        try testing.expect(mgr.is_package_installed(name));
+    // A fresh transaction proves cancellation released the libalpm lock.
+    try testing.expectEqual(@as(c_int, 0), rawLibalpm.alpm_trans_init(mgr.handle, 0));
+    try testing.expectEqual(@as(c_int, 0), rawLibalpm.alpm_trans_release(mgr.handle));
+}
+
+test "remove_packages acceptance cancellation and approved cleanup use an isolated database" {
+    const allocator = testing.allocator;
+    // libalpm requires root even for a DB-only commit.
+    if (builtin.os.tag != .linux or std.os.linux.geteuid() != 0) return error.SkipZigTest;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    for ([_]enum { accept, cancel, cleanup }{ .accept, .cancel, .cleanup }) |mode| {
+        var workspace = try SyncTestWorkspace.create(allocator, io);
+        defer workspace.cleanup(allocator);
+        try workspace.addLocalPackage(allocator, "remove-confirmed", "1.0-1");
+        const mgr = try Manager.init(allocator, testing.environ, .{
+            .config_path = workspace.config_path,
+            .root_directory = workspace.root,
+        });
+        defer mgr.deinit();
+        try testing.expectEqual(@as(c_int, 0), rawLibalpm.alpm_option_set_hookdirs(mgr.handle, null));
+        var context = operations.OperationContext.init(allocator, io);
+        defer context.deinit();
+        const Capture = struct {
+            context: *operations.OperationContext,
+            cancel: bool,
+            questions: usize = 0,
+            fn answer(data: ?*anyopaque, _: operations.Question) operations.QuestionResponse {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                self.questions += 1;
+                if (self.cancel) self.context.cancel();
+                return .accepted;
+            }
+        };
+        var capture: Capture = .{ .context = &context, .cancel = mode == .cancel };
+        context.setQuestionHandler(.{ .function = Capture.answer, .data = &capture });
+        mgr.setOperationContext(&context);
+        defer mgr.setOperationContext(null);
+        var names = [_][:0]const u8{"remove-confirmed"};
+        if (mode == .cancel) {
+            try testing.expectError(error.Cancelled, mgr.remove_packages(&names, .{ .dbonly = true }, true));
+        } else {
+            try mgr.remove_packages_with_confirmation(&names, .{ .dbonly = true }, true, if (mode == .cleanup) .already_approved else .required);
+        }
+        try testing.expectEqual(@as(usize, if (mode == .cleanup) 0 else 1), capture.questions);
+        mgr.setOperationContext(null);
+        try testing.expectEqual(mode == .cancel, mgr.is_package_installed("remove-confirmed"));
+    }
+}
+
 test "remove_packages removes an installed package in a DB-only transaction when root" {
     const allocator = testing.allocator;
 

@@ -501,7 +501,10 @@ pub const Renderer = struct {
         if (self.no_confirm) {
             if (question.kind == .confirm_transaction) {
                 self.clearBars() catch self.write_failed.store(true, .release);
-                self.renderTransactionPlan(question) catch self.write_failed.store(true, .release);
+                self.renderTransactionPlan(question) catch {
+                    self.write_failed.store(true, .release);
+                    if (isRemovalQuestion(question)) return .declined;
+                };
                 self.drawBars() catch self.write_failed.store(true, .release);
                 return .accepted;
             }
@@ -521,6 +524,7 @@ pub const Renderer = struct {
         }
         return self.askQuestion(question) catch {
             self.write_failed.store(true, .release);
+            if (isRemovalQuestion(question)) return .declined;
             return defaultResponse(question);
         };
     }
@@ -534,6 +538,9 @@ pub const Renderer = struct {
             .confirm_transaction => blk: {
                 try self.renderTransactionPlan(question);
                 const default_approved = defaultResponse(question) == .accepted;
+                if (isRemovalQuestion(question)) {
+                    break :blk if (try self.confirmInput(question.prompt, default_approved, true)) .accepted else .declined;
+                }
                 break :blk if (try self.confirm(question.prompt, default_approved)) .accepted else .declined;
             },
             .review_changes => blk: {
@@ -542,7 +549,7 @@ pub const Renderer = struct {
                 break :blk if (try self.confirm(question.prompt, default_approved)) .accepted else .declined;
             },
             .select_one, .select_provider => .{ .choice = try self.selectOne(question) },
-            .select_many, .select_optional_dependencies => .{.choices = try self.selectMany(question) },
+            .select_many, .select_optional_dependencies => .{ .choices = try self.selectMany(question) },
         };
     }
 
@@ -561,7 +568,7 @@ pub const Renderer = struct {
                 package.download_size,
                 package.source,
             );
-            const installed = transactionSizeText(
+            const installed = if (plan.action == .remove and package.installed_size == null) "Unknown" else transactionSizeText(
                 &installed_buffer,
                 self.settings.size_display,
                 package.installed_size,
@@ -569,14 +576,18 @@ pub const Renderer = struct {
             );
             try self.writeColoredLine(.white, "  {s} {s} [{s}, {s}]", .{
                 package.name,
-                package.version orelse "version determined during build",
+                package.version orelse (if (plan.action == .remove) "unknown version" else "version determined during build"),
                 transactionRoleName(package.role),
                 transactionSourceName(package.source),
             });
-            try self.writeColoredLine(.gray, "    download: {s}; installed: {s}", .{
-                download,
-                installed,
-            });
+            if (plan.action == .remove) {
+                try self.writeColoredLine(.gray, "    removed size: {s}", .{installed});
+            } else {
+                try self.writeColoredLine(.gray, "    download: {s}; installed: {s}", .{
+                    download,
+                    installed,
+                });
+            }
         }
         if (plan.total_download_size) |size| {
             var buffer: [64]u8 = undefined;
@@ -586,7 +597,8 @@ pub const Renderer = struct {
         }
         if (plan.total_installed_size) |size| {
             var buffer: [64]u8 = undefined;
-            try self.writeColoredLine(.cyan, "Total installed: {s}", .{
+            try self.writeColoredLine(.cyan, "{s}: {s}", .{
+                if (plan.action == .remove) "Total removed size" else "Total installed",
                 transactionSizeText(&buffer, self.settings.size_display, size, .repository),
             });
         }
@@ -599,6 +611,7 @@ pub const Renderer = struct {
                 value,
             });
         }
+        try self.context.stdout.flush();
     }
 
     fn renderReview(
@@ -646,11 +659,23 @@ pub const Renderer = struct {
     }
 
     fn confirm(self: *Renderer, prompt: []const u8, default_value: bool) !bool {
-        const reader = self.context.stdin orelse return default_value;
+        return self.confirmInput(prompt, default_value, false);
+    }
+
+    fn confirmInput(self: *Renderer, prompt: []const u8, default_value: bool, require_newline: bool) !bool {
+        const reader = self.context.stdin orelse return if (require_newline) false else default_value;
         while (true) {
             try self.context.stdout.print("{s} ({s}) ", .{ prompt, if (default_value) "Y/n" else "y/N" });
             try self.context.stdout.flush();
-            const input = (try reader.takeDelimiter('\n')) orelse return default_value;
+            // Removal requires a submitted answer. EOF, including an unfinished
+            // line of whitespace, must not be mistaken for pressing Enter.
+            const input = if (require_newline)
+                reader.takeDelimiterInclusive('\n') catch |err| switch (err) {
+                    error.EndOfStream => return false,
+                    else => return err,
+                }
+            else
+                (try reader.takeDelimiter('\n')) orelse return default_value;
             const answer = std.mem.trim(u8, input, " \t\r\n");
             if (answer.len == 0) return default_value;
             if (std.ascii.eqlIgnoreCase(answer, "y") or std.ascii.eqlIgnoreCase(answer, "yes")) return true;
@@ -1050,6 +1075,11 @@ fn allOptionalDependenciesInstalled(question: Zigalpm.OperationQuestion) bool {
         if (!option.is_installed) return false;
     }
     return true;
+}
+
+fn isRemovalQuestion(question: Zigalpm.OperationQuestion) bool {
+    return question.kind == .confirm_transaction and
+        question.transaction_plan != null and question.transaction_plan.?.action == .remove;
 }
 
 fn defaultResponse(question: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {

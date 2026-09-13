@@ -1362,7 +1362,7 @@ pub const Manager = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try self.checkCancelled();
-        try self.removeRepoPackages(package_names, flags, !remove_optional_dependencies);
+        try self.removeRepoPackages(package_names, flags, !remove_optional_dependencies, .required);
         for (package_names) |package_name| {
             self.vcs_store.remove(package_name);
             const package_base = try self.resolvePkgbase(package_name);
@@ -1549,14 +1549,14 @@ pub const Manager = struct {
         try self.alpm.install_packages(terminated.items, flags);
     }
 
-    fn removeRepoPackages(self: *Self, names: []const []const u8, flags: TransFlag, keep_optional_dependencies: bool) !void {
+    fn removeRepoPackages(self: *Self, names: []const []const u8, flags: TransFlag, keep_optional_dependencies: bool, confirmation: AlpmManager.RemovalConfirmation) !void {
         var terminated: std.ArrayList([:0]const u8) = .empty;
         defer {
             for (terminated.items) |name| self.allocator.free(name);
             terminated.deinit(self.allocator);
         }
         for (names) |name| try terminated.append(self.allocator, try self.allocator.dupeZ(u8, name));
-        try self.alpm.remove_packages(terminated.items, flags, keep_optional_dependencies);
+        try self.alpm.remove_packages_with_confirmation(terminated.items, flags, keep_optional_dependencies, confirmation);
     }
 
     /// Removes build-only dependencies after a build, keeping optional
@@ -1588,7 +1588,7 @@ pub const Manager = struct {
         self.raisePackageProgress(.aur_cleanup_start, package_name, current, total, "Removing build-only dependencies");
         var recoverable_errors = self.alpm.dispatcher.beginRecoverableErrors("Failed to remove build-only dependencies");
         defer recoverable_errors.deinit();
-        self.removeRepoPackages(installed.items, .{}, true) catch {};
+        self.removeRepoPackages(installed.items, .{}, true, .already_approved) catch {};
         self.raisePackageProgress(.aur_cleanup_done, package_name, current, total, "");
     }
 

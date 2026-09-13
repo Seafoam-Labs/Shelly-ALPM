@@ -695,6 +695,87 @@ test "routes every removal backend through shared output lifecycles" {
     try std.testing.expectEqual(@as(usize, 4), capture.calls);
 }
 
+test "remove confirmation accepts Enter but cancels on EOF and input failure" {
+    const spec = @import("../cli/spec.zig");
+    const shortcodes = @import("../cli/shortcodes.zig");
+    const cases = [_]struct {
+        input: ?[]const u8 = null,
+        failing: bool = false,
+        no_confirm: bool = false,
+        accepted: bool = false,
+    }{
+        .{ .input = "\n", .accepted = true },
+        .{ .input = "yes\n", .accepted = true },
+        .{ .input = "invalid\ny\n", .accepted = true },
+        .{ .input = "n\n" },
+        .{ .input = "" },
+        .{ .input = " " },
+        .{ .input = "yes" },
+        .{},
+        .{ .failing = true },
+        .{ .no_confirm = true, .accepted = true },
+    };
+    for ([_][]const []const u8{
+        &.{ "-Rso", "demo" },
+        &.{ "remove", "standard", "--opt-deps", "demo" },
+    }) |arguments| {
+        for (cases) |case| {
+            var tc: test_support.TestContext = .{};
+            tc.init();
+            defer tc.deinit();
+            var stdin = if (case.failing) std.Io.Reader.failing else std.Io.Reader.fixed(case.input orelse "");
+            tc.context.stdin = if (case.input != null or case.failing) &stdin else null;
+            const allocator = tc.arena.allocator();
+            const manifest = try spec.Manifest.load(allocator);
+            const args = if (case.no_confirm) try std.mem.concat(allocator, []const u8, &.{ arguments, &.{"-n"} }) else arguments;
+            const translation = try shortcodes.translate(allocator, &manifest, args);
+            const translated = switch (translation) {
+                .unchanged, .translated => |value| value,
+                else => return error.UnexpectedTranslation,
+            };
+            const outcome = try parser.parse(allocator, &manifest, translated);
+            const Runner = struct {
+                committed: bool = false,
+                pub fn run(self: *@This(), _: *runtime.RuntimeContext, context: *Zigalpm.OperationContext, invocation: *const parser.Invocation) !void {
+                    try std.testing.expectEqualStrings(standard_command_path, invocation.command.path);
+                    try std.testing.expect(optionEnabled(invocation, "--opt-deps"));
+                    var operation = context.begin(.{ .backend = .alpm, .kind = .remove, .subject = "demo" });
+                    defer operation.finish(if (self.committed) .success else .cancelled);
+                    const packages = [_]Zigalpm.OperationTransactionPackage{
+                        .{ .name = "demo", .version = "1.0-1", .source = .local, .role = .requested, .installed_size = 1024 },
+                        .{ .name = "demo-helper", .version = "2.0-1", .source = .local, .role = .optional_dependency, .installed_size = 2048 },
+                    };
+                    var answer = try operation.ask(.{
+                        .kind = .confirm_transaction,
+                        .prompt = "Proceed with package removal?",
+                        .transaction_plan = .{ .action = .remove, .packages = &packages, .total_installed_size = 3072, .net_installed_size = -3072 },
+                        .default_response = .accepted,
+                    });
+                    defer answer.deinit(context.allocator);
+                    if (answer.response != .accepted) {
+                        context.cancel();
+                        return error.Cancelled;
+                    }
+                    self.committed = true;
+                }
+            };
+            var runner = Runner{};
+            _ = try executeWithRunner(&tc.context, &outcome.dispatch, &runner);
+            try std.testing.expectEqual(case.accepted, runner.committed);
+            const rendered = tc.stdout.writer.buffered();
+            try std.testing.expect(std.mem.indexOf(u8, rendered, "Packages to remove:") != null);
+            try std.testing.expect(std.mem.indexOf(u8, rendered, "demo-helper 2.0-1") != null);
+            try std.testing.expect(std.mem.indexOf(u8, rendered, "Total removed size:") != null);
+            try std.testing.expect(std.mem.indexOf(u8, rendered, "download:") == null);
+            if (case.no_confirm) {
+                try std.testing.expect(std.mem.indexOf(u8, rendered, "Proceed with package removal?") == null);
+            } else if (tc.context.stdin != null) {
+                try std.testing.expect(std.mem.indexOf(u8, rendered, "Proceed with package removal? (Y/n)") != null);
+            }
+        }
+    }
+}
+
 test "remove backend failures return a nonzero status" {
     const spec = @import("../cli/spec.zig");
     var tc: test_support.TestContext = .{};
