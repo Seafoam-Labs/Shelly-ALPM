@@ -425,6 +425,14 @@ pub fn build(b: *std.Build) void {
     const archive_test_step = b.step("archive-test", "Run safe ALPM downgrade archive tests");
     archive_test_step.dependOn(&run_archive_tests.step);
 
+    const removal_tests = b.addTest(.{
+        .name = "alpm-removal-test",
+        .root_module = mod,
+        .filters = &.{"remove_packages"},
+    });
+    const removal_test_step = b.step("alpm-removal-test", "Test removal plans and cancellation using isolated databases");
+    removal_test_step.dependOn(&b.addRunArtifact(removal_tests).step);
+
     const alpm_query_tests = b.addTest(.{
         .name = "alpm-query-test",
         .root_module = mod,

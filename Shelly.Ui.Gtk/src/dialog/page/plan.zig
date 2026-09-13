@@ -77,6 +77,23 @@ pub const PlanDialog = extern struct {
         var net_buf: [32]u8 = undefined;
         var buf: [256]u8 = undefined;
 
+        if (std.mem.eql(u8, q.action, "remove")) {
+            const removed = if (q.total_installed_size) |size|
+                SizeConverter.convert_null_term(&dl_buf, @intCast(size))
+            else
+                translations._("Unknown");
+            const text = std.fmt.bufPrintZ(&buf, "{d} {s} {s} {s} — {s} {s}", .{
+                q.packages.len,
+                translations._("package(s)"),
+                translations._("to"),
+                q.action,
+                removed,
+                translations._("removed size"),
+            }) catch "";
+            gtk.Label.setLabel(p.summary_label, text);
+            return;
+        }
+
         const dl = SizeConverter.convert_null_term(&dl_buf, @intCast(q.total_download_size orelse 0));
         const net = SizeConverter.convert_null_term(&net_buf, q.net_installed_size orelse 0);
 

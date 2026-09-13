@@ -801,6 +801,63 @@ test "UI transaction plan preserves package roles sizes and unknown AUR sizes" {
     try std.testing.expect(std.mem.indexOf(u8, decoded, "\"DownloadSize\":1024") != null);
 }
 
+test "UI removal plan honors accept decline and EOF" {
+    for ([_]?bool{ true, false, null }) |accepted| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+        const response_json = try std.fmt.allocPrint(
+            allocator,
+            "{{\"$kind\":\"a.transaction\",\"QuestionId\":\"1\",\"Accept\":{s}}}",
+            .{if (accepted orelse false) "true" else "false"},
+        );
+        const encoded = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(response_json.len));
+        const frame = try std.fmt.allocPrint(allocator, "[JSON]{s}[/JSON]\n", .{std.base64.standard.Encoder.encode(encoded, response_json)});
+        var stdin = std.Io.Reader.fixed(if (accepted != null) frame else "");
+        var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stdout.deinit();
+        var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stderr.deinit();
+        var context: runtime.RuntimeContext = .{
+            .allocator = allocator,
+            .io = std.testing.io,
+            .stdin = &stdin,
+            .stdout = &stdout.writer,
+            .stderr = &stderr.writer,
+        };
+        var operation_context = Zigalpm.OperationContext.init(allocator, std.testing.io);
+        defer operation_context.deinit();
+        var responder: QuestionResponder = .{
+            .context = &context,
+            .operation_context = &operation_context,
+            .no_confirm = false,
+        };
+        responder.attach();
+        defer responder.detach();
+        var operation = operation_context.begin(.{ .backend = .alpm, .kind = .remove });
+        const packages = [_]Zigalpm.OperationTransactionPackage{
+            .{ .name = "demo", .version = "1.0-1", .source = .local, .role = .requested, .installed_size = 1024 },
+        };
+        var answer = try operation.ask(.{
+            .kind = .confirm_transaction,
+            .prompt = "Proceed with package removal?",
+            .transaction_plan = .{ .action = .remove, .packages = &packages, .total_installed_size = 1024, .net_installed_size = -1024 },
+            .default_response = .accepted,
+        });
+        defer answer.deinit(allocator);
+        operation.finish(.success);
+        try std.testing.expectEqual(accepted orelse false, answer.response == .accepted);
+        const rendered = stdout.writer.buffered();
+        const start = (std.mem.indexOf(u8, rendered, "[JSON]") orelse return error.MissingFrame) + "[JSON]".len;
+        const end = std.mem.indexOfPos(u8, rendered, start, "[/JSON]") orelse return error.MissingFrame;
+        const payload = rendered[start..end];
+        const decoded = try allocator.alloc(u8, try std.base64.standard.Decoder.calcSizeForSlice(payload));
+        try std.base64.standard.Decoder.decode(decoded, payload);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"Action\":\"remove\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"NetInstalledSize\":-1024") != null);
+    }
+}
+
 test "UI optional dependencies emit C# compatible choices and accept selected indices" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

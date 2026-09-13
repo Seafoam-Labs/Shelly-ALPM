@@ -166,6 +166,31 @@ shelly config appimage YARC --clear-env
 - [ ] `shelly update` updates all packages
 - [ ] `shelly info <package>` shows package details
 
+### Removal Confirmation (#1845)
+
+Use disposable packages in a VM/container with an unused dependency and an
+unused optional dependency; keep another optional dependency required by a
+separate installed package.
+
+- [ ] `shelly -Rso <package>` lists the complete removal set, versions, and
+  total removed size before `Proceed with package removal? (Y/n)`.
+- [ ] The unused dependencies appear; the dependency still required elsewhere
+  stays installed and does not appear in the removal plan.
+- [ ] `n`, Ctrl-D/EOF, and Ctrl-C cancel without removing packages or associated
+  configuration. A subsequent transaction can acquire the database lock.
+- [ ] Enter and `y` remove the displayed packages.
+- [ ] `shelly remove standard --opt-deps <package>` behaves identically.
+- [ ] `-n`/`--no-confirm` displays the plan and removes packages without prompting.
+- [ ] AUR removal confirms before removal and cache cleanup; declining preserves
+  both. GTK removal shows the plan and honors accept/cancel.
+- [ ] `purify` and automatic build-dependency cleanup retain their existing
+  approval flow without a second removal prompt.
+
+Automated coverage: `(cd Shelly.PackageManager && zig build alpm-removal-test)`
+and `(cd Shelly.Cli.Zig && zig build test)`. Run the focused removal target as
+root in the disposable environment to exercise DB-only commits; those cases
+are skipped when unprivileged.
+
 ### Repository Operations
 
 - [ ] `shelly sync` synchronizes repositories

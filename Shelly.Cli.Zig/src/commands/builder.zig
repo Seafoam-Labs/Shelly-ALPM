@@ -2165,10 +2165,10 @@ const BuildDependencyCleanup = struct {
         }
         if (targets.items.len == 0) return;
 
-        manager.remove_packages(targets.items, .{
+        manager.remove_packages_with_confirmation(targets.items, .{
             .recurse = true,
             .unneeded = true,
-        }, true) catch |err| {
+        }, true, .already_approved) catch |err| {
             completion = .failed;
             reportCleanupFailure(context.allocator, &operation, err, targets.items);
             return;
