@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 17:45-0300\n"
+"POT-Creation-Date: 2026-09-14 16:25-0300\n"
 "PO-Revision-Date: 2026-08-13 18:50+0200\n"
 "Last-Translator: Roxfr <roxfr-dev@outlook.com>\n"
 "Language-Team: French\n"
@@ -608,9 +608,6 @@ msgstr "Ne pas demander de confirmation"
 
 msgid "Enable Shelly Search"
 msgstr "Activer la recherche Shelly"
-
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Activer la visualisation WebView (expérimental)"
 
 msgid "AppImage Install Path"
 msgstr "Chemin d'installation des AppImages"

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 17:45-0300\n"
+"POT-Creation-Date: 2026-09-14 16:25-0300\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -598,9 +598,6 @@ msgstr "Χωρίς επιβεβαίωση"
 
 msgid "Enable Shelly Search"
 msgstr "Ενεργοποίηση αναζήτησης Shelly"
-
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Ενεργοποίηση οπτικοποίησης Webview (πειραματικό)"
 
 msgid "AppImage Install Path"
 msgstr "Διαδρομή εγκατάστασης AppImage"

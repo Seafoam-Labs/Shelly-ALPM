@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 17:45-0300\n"
+"POT-Creation-Date: 2026-09-14 16:25-0300\n"
 "PO-Revision-Date: 2026-09-09 12:00+0400\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: Azerbaijani <az@li.org>\n"
@@ -611,9 +611,6 @@ msgstr "Təsdiqsiz"
 
 msgid "Enable Shelly Search"
 msgstr "Shelly axtarışını aktivləşdir"
-
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Veb görünüşü ilə vizuallaşdırmanı aktivləşdir (sınaq mərhələsindədir)"
 
 msgid "AppImage Install Path"
 msgstr "AppImage quraşdırma yolu"

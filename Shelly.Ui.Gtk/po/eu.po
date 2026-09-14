@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 17:45-0300\n"
+"POT-Creation-Date: 2026-09-14 16:25-0300\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -603,9 +603,6 @@ msgstr "Berrespenik gabe"
 
 msgid "Enable Shelly Search"
 msgstr "Gaitu Shelly bilaketa"
-
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Gaitu Webview ikuspegia (esperimentala)"
 
 msgid "AppImage Install Path"
 msgstr "AppImage-ren instalazio-bidea"
