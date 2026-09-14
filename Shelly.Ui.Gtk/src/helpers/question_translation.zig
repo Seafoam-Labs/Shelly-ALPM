@@ -1,3 +1,56 @@
+//! Adding a translatable prompt
+//!
+//! Choose a unique PascalCase wire kind name (e.g. MyNewPrompt).
+//! The same prompt is represented by three synchronized identifiers:
+//!     .my_new_prompt  ->  "MyNewPrompt"  ->  .MyNewPrompt
+//!     QuestionPurpose     wire kind         WireKind
+//!
+//! 1. Purpose
+//!    Shelly.PackageManager/src/shared/operation_context.zig:
+//!        add .my_new_prompt to QuestionPurpose.
+//!    Shelly.Flatpak.Backend/src/operation_context.zig:
+//!        mirror the same variant.
+//!
+//! 2. Emit side: set .purpose and .arguments where the question is raised:
+//!
+//!    a. Direct operation.ask(...) call: (Shelly.PackageManager/src/alpm/manager.zig or CLI commands)
+//!           .purpose   = .my_new_prompt,
+//!           .arguments = &.{ pkg, ver },
+//!           .prompt    = "template with {pkg} and {ver}",
+//!
+//!    b. ALPM dispatcher: (Shelly.PackageManager/src/alpm/events.zig)
+//!       inside commonQuestionPurpose, map the qtype:
+//!           .my_question_type => .my_new_prompt,
+//!       Pass .arguments directly through raiseQuestion(...).
+//!
+//!    c. AUR dispatcher: (Shelly.PackageManager/src/aur/events.zig)
+//!       inside ask(), map the qtype and pass .arguments the same way.
+//!
+//! 3. Wire kind (Shelly.Cli.Zig/src/output/config.zig), questionKindName():
+//!        .my_new_prompt => "MyNewPrompt"
+//!
+//! 4. GTK translation: (Shelly.Ui.Gtk/src/helpers/question_translation.zig)
+//!    a. WireKind enum       add  MyNewPrompt,
+//!    b. Table               add  .{ .wire_kind = .MyNewPrompt,
+//!                                   .placeholders = &.{ "pkg", "ver" } },
+//!                            Omit .placeholders when the prompt has no values.
+//!    c. localized() switch  add  .MyNewPrompt => translations._("template with {pkg} and {ver}"),
+//!                            The literal must byte-match the emit-side prompt exactly. 
+//!                            It has to match it's msgid or translations will fail silently.
+//! 
+//!
+//! 5. Translations: From Shelly.Ui.Gtk, run ./update-translations.sh.
+//!    The new msgid is extracted into po/shelly-ui.pot, and empty entries
+//!    are merged into every po/<lang>.po.
+//!
+//! 6. Tests — add the wire-kind row to the table test (Shelly.Cli.Zig/src/output/config.zig).
+//!    For a new frame shape, add a QuestionKind assertion in the matching ui_operation test.
+//!
+//! Invariants:
+//!    QuestionPurpose is snake_case; the wire kind and WireKind are PascalCase.
+//!    The emit-side prompt and the localized() msgid must byte-match exactly, including placeholders.
+//!    Placeholder order in the translation table must match argument order on the emit side.
+
 const std = @import("std");
 const translations = @import("translations.zig");
 
