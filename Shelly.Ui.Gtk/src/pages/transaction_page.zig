@@ -18,6 +18,7 @@ const PkgbuildReviewDialog = @import("../dialog/page/pkg_build.zig").PkgbuildRev
 const PlanDialog = @import("../dialog/page/plan.zig").PlanDialog;
 const ProviderDialog = @import("../dialog/page/provider.zig").ProviderDialog;
 const translations = @import("../helpers/translations.zig");
+const question_translations = @import("../helpers/question_translation.zig");
 
 const log = std.log.scoped(.transaction_page);
 
