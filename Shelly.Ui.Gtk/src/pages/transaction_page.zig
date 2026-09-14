@@ -999,7 +999,12 @@ pub const TransactionPage = extern struct {
             .transaction => |q| {
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
-                const dialog = PlanDialog.new(q, &on_plan_response, pending);
+            
+                const qa = pending.arena.allocator();
+                var question = q;
+                question.question_text = question_translations.translateFromWire(qa, q.question_kind, &.{}, q.question_text) catch q.question_text;
+                const dialog = PlanDialog.new(question, &on_plan_response, pending);
+            
                 gtk.Box.append(p.question_layer, dialog.as(gtk.Widget));
                 gtk.Widget.setVisible(p.question_layer.as(gtk.Widget), 1);
             },
