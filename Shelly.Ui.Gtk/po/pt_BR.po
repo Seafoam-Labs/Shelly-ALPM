@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
 "POT-Creation-Date: 2026-09-06 17:45-0300\n"
-"PO-Revision-Date: 2026-09-09 20:54-0300\n"
+"PO-Revision-Date: 2026-09-14 14:14-0300\n"
 "Last-Translator: Vinícius Fonseca <viniqf@proton.me>\n"
 "Language-Team: Portuguese (Brazil) <viniqf@proton.me>\n"
 "Language: pt_BR\n"
@@ -845,13 +845,11 @@ msgstr "usado em"
 msgid "Install Anyway"
 msgstr "Instalar mesmo assim"
 
-#| msgid "remove"
 msgid "to remove"
-msgstr ""
+msgstr "para remover"
 
-#| msgid "install"
 msgid "to install"
-msgstr ""
+msgstr "para instalar"
 
 msgid "Unknown"
 msgstr "Desconhecido"
@@ -859,9 +857,8 @@ msgstr "Desconhecido"
 msgid "package(s)"
 msgstr "pacote(s)"
 
-#| msgid "remove"
 msgid "removed size"
-msgstr ""
+msgstr "tamanho removido"
 
 msgid "download"
 msgstr "baixar"
@@ -882,52 +879,50 @@ msgstr ""
 "{package_one}-{version_one} entra em conflito com {package_two}-"
 "{version_two}. Remover {package_to_remove}?"
 
-#| msgid "Installing packages"
 msgid "Install ignored package: {package}?"
-msgstr ""
+msgstr "Instalar pacote ignorado: {package}?"
 
-#| msgid ""
-#| "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-#| "Remove {package_to_remove}?"
 msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
 msgstr ""
+"Substituir {package_one}-{version_one} por {package_two}-{version_two}?"
 
 msgid "Corrupted package {file}. Delete?"
-msgstr ""
+msgstr "Pacote corrompido {file}. Apagar?"
 
 msgid "Some packages must be removed to proceed. Skip them instead?"
 msgstr ""
+"Alguns pacotes devem ser removidos para prosseguir. Ignorar eles em vez "
+"disso?"
 
 msgid "Import PGP key {key_id}?"
-msgstr ""
+msgstr "Importar chave PGP {key_id}?"
 
 msgid "Proceed with this partial upgrade?"
-msgstr ""
+msgstr "Prosseguir com esta atualização parcial?"
 
 msgid "Proceed with the standard system upgrade?"
-msgstr ""
+msgstr "Prosseguir com a atualização padrão do sistema?"
 
 msgid "Proceed with package installation?"
-msgstr ""
+msgstr "Prosseguir com a instalação do pacote?"
 
 msgid "Proceed with package removal?"
-msgstr ""
+msgstr "Prosseguir com a remoção do pacote?"
 
 msgid "Proceed with AUR package installation?"
-msgstr ""
+msgstr "Prosseguir com a instalação de pacote AUR?"
 
-#| msgid "Select File"
 msgid "Select Provider"
-msgstr ""
+msgstr "Selecionar provedor"
 
 msgid "Select an optional dependency for {pkg}"
-msgstr ""
+msgstr "Selecione uma dependência opcional para {pkg}"
 
 msgid "Select optional dependencies for {pkg}"
-msgstr ""
+msgstr "Selecione dependências opcionais para {pkg}"
 
 msgid "Proceed with purify?"
-msgstr ""
+msgstr "Prosseguir com a purificação de pacotes?"
 
 msgid "None"
 msgstr "Nenhum"
@@ -1548,30 +1543,26 @@ msgstr "Em espera"
 msgid "Working"
 msgstr "Trabalhando"
 
-#| msgid "Upgrade"
 msgid "Upgraded"
-msgstr ""
+msgstr "Atualizado"
 
-#| msgid "Downgrading"
 msgid "Downgraded"
-msgstr ""
+msgstr "Rebaixado"
 
-#| msgid "Reinstall"
 msgid "Reinstalled"
-msgstr ""
+msgstr "Reinstalado"
 
-#| msgid "Remove"
 msgid "Removed"
-msgstr ""
+msgstr "Removido"
 
 msgid "Failed"
 msgstr "Falhou"
 
 msgid "Not processed"
-msgstr ""
+msgstr "Não realizado"
 
 msgid "Interrupted"
-msgstr ""
+msgstr "Interrompido"
 
 msgid "Cancelled"
 msgstr "Cancelado"
