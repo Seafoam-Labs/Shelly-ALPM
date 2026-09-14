@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-08-13 18:50+0200\n"
 "Last-Translator: Roxfr <roxfr-dev@outlook.com>\n"
 "Language-Team: French\n"
@@ -845,11 +845,23 @@ msgstr "utilisé dans"
 msgid "Install Anyway"
 msgstr "Installer quand même"
 
+#| msgid "remove"
+msgid "to remove"
+msgstr ""
+
+#| msgid "install"
+msgid "to install"
+msgstr ""
+
+msgid "Unknown"
+msgstr "Inconnu"
+
 msgid "package(s)"
 msgstr "paquet(s)"
 
-msgid "to"
-msgstr "vers"
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "télécharger"
@@ -859,6 +871,58 @@ msgstr "réseau"
 
 msgid "Dismiss"
 msgstr "Ignorer"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+#| msgid "Installing packages"
+msgid "Install ignored package: {package}?"
+msgstr ""
+
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+
+msgid "Corrupted package {file}. Delete?"
+msgstr ""
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+
+msgid "Import PGP key {key_id}?"
+msgstr ""
+
+msgid "Proceed with this partial upgrade?"
+msgstr ""
+
+msgid "Proceed with the standard system upgrade?"
+msgstr ""
+
+msgid "Proceed with package installation?"
+msgstr ""
+
+msgid "Proceed with package removal?"
+msgstr ""
+
+msgid "Proceed with AUR package installation?"
+msgstr ""
+
+#| msgid "Select File"
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select an optional dependency for {pkg}"
+msgstr ""
+
+msgid "Select optional dependencies for {pkg}"
+msgstr ""
+
+msgid "Proceed with purify?"
+msgstr ""
 
 msgid "None"
 msgstr "Aucun"
@@ -1091,9 +1155,6 @@ msgstr "Installation du module complémentaire Flatpak"
 
 msgid "Unknown developer"
 msgstr "Développeur inconnu"
-
-msgid "Unknown"
-msgstr "Inconnu"
 
 msgid "Version: Unknown"
 msgstr "Version : inconnue"
@@ -1480,11 +1541,42 @@ msgstr "Recherche Shelly"
 msgid "Update"
 msgstr "Mettre à jour"
 
-msgid "Failed to start operation."
-msgstr "Échec du démarrage de l'opération."
-
 msgid "Pending"
 msgstr "En attente"
+
+msgid "Working"
+msgstr "En cours"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Échec"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Annulé"
+
+msgid "Failed to start operation."
+msgstr "Échec du démarrage de l'opération."
 
 msgid "Synchronizing databases"
 msgstr "Synchronisation des bases de données"
@@ -1528,12 +1620,6 @@ msgstr "Vérification des conflits"
 msgid "Checking disk space"
 msgstr "Vérification de l'espace disque"
 
-msgid "Working"
-msgstr "En cours"
-
-msgid "Failed"
-msgstr "Échec"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1558,17 +1644,6 @@ msgstr ""
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
-msgstr ""
-
-msgid "Cancelled"
-msgstr "Annulé"
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

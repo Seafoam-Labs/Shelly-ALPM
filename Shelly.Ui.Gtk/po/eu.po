@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -837,11 +837,23 @@ msgstr "hemen erabilita:"
 msgid "Install Anyway"
 msgstr "Instalatu hala ere"
 
+#| msgid "remove"
+msgid "to remove"
+msgstr ""
+
+#| msgid "install"
+msgid "to install"
+msgstr ""
+
+msgid "Unknown"
+msgstr "Ezezaguna"
+
 msgid "package(s)"
 msgstr "paketea(k)"
 
-msgid "to"
-msgstr "honi:"
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "deskargatu"
@@ -851,6 +863,58 @@ msgstr "sarea"
 
 msgid "Dismiss"
 msgstr "Baztertu"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+#| msgid "Installing packages"
+msgid "Install ignored package: {package}?"
+msgstr ""
+
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+
+msgid "Corrupted package {file}. Delete?"
+msgstr ""
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+
+msgid "Import PGP key {key_id}?"
+msgstr ""
+
+msgid "Proceed with this partial upgrade?"
+msgstr ""
+
+msgid "Proceed with the standard system upgrade?"
+msgstr ""
+
+msgid "Proceed with package installation?"
+msgstr ""
+
+msgid "Proceed with package removal?"
+msgstr ""
+
+msgid "Proceed with AUR package installation?"
+msgstr ""
+
+#| msgid "Select File"
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select an optional dependency for {pkg}"
+msgstr ""
+
+msgid "Select optional dependencies for {pkg}"
+msgstr ""
+
+msgid "Proceed with purify?"
+msgstr ""
 
 msgid "None"
 msgstr "Batek ere ez"
@@ -1083,9 +1147,6 @@ msgstr "Flatpak addona instalatzen"
 
 msgid "Unknown developer"
 msgstr "Garatzaile ezezaguna"
-
-msgid "Unknown"
-msgstr "Ezezaguna"
 
 msgid "Version: Unknown"
 msgstr "Bertsioa: Ezezaguna"
@@ -1468,11 +1529,42 @@ msgstr "Shelly bilaketa"
 msgid "Update"
 msgstr "Eguneratu"
 
-msgid "Failed to start operation."
-msgstr "Ezin izan da eragiketa abiarazi."
-
 msgid "Pending"
 msgstr "Zorrotz / Zazke"
+
+msgid "Working"
+msgstr "Lanean"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Huts egin du"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Ezeztatuta"
+
+msgid "Failed to start operation."
+msgstr "Ezin izan da eragiketa abiarazi."
 
 msgid "Synchronizing databases"
 msgstr "Datu-baseak sinkronizatzen"
@@ -1516,12 +1608,6 @@ msgstr "Gatazkak egiaztatzen"
 msgid "Checking disk space"
 msgstr "Disko-espazioa egiaztatzen"
 
-msgid "Working"
-msgstr "Lanean"
-
-msgid "Failed"
-msgstr "Huts egin du"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1546,17 +1632,6 @@ msgstr ""
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
-msgstr ""
-
-msgid "Cancelled"
-msgstr "Ezeztatuta"
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

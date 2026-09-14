@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-06-30 10:06+0400\n"
 "Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\\nLanguage-Team: "
 "Russian (Russia) <anton@azdanov.dev>\n"
@@ -837,11 +837,23 @@ msgstr "используется в"
 msgid "Install Anyway"
 msgstr "Всё равно установить"
 
+#| msgid "remove"
+msgid "to remove"
+msgstr ""
+
+#| msgid "install"
+msgid "to install"
+msgstr ""
+
+msgid "Unknown"
+msgstr "Неизвестно"
+
 msgid "package(s)"
 msgstr "пакет(ов)"
 
-msgid "to"
-msgstr "к"
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "скачать"
@@ -851,6 +863,58 @@ msgstr "сеть"
 
 msgid "Dismiss"
 msgstr "Отклонить"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+#| msgid "Installing packages"
+msgid "Install ignored package: {package}?"
+msgstr ""
+
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+
+msgid "Corrupted package {file}. Delete?"
+msgstr ""
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+
+msgid "Import PGP key {key_id}?"
+msgstr ""
+
+msgid "Proceed with this partial upgrade?"
+msgstr ""
+
+msgid "Proceed with the standard system upgrade?"
+msgstr ""
+
+msgid "Proceed with package installation?"
+msgstr ""
+
+msgid "Proceed with package removal?"
+msgstr ""
+
+msgid "Proceed with AUR package installation?"
+msgstr ""
+
+#| msgid "Select File"
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select an optional dependency for {pkg}"
+msgstr ""
+
+msgid "Select optional dependencies for {pkg}"
+msgstr ""
+
+msgid "Proceed with purify?"
+msgstr ""
 
 msgid "None"
 msgstr "Нет"
@@ -1079,9 +1143,6 @@ msgstr "Установка дополнения flatpak"
 
 msgid "Unknown developer"
 msgstr "Неизвестный разработчик"
-
-msgid "Unknown"
-msgstr "Неизвестно"
 
 msgid "Version: Unknown"
 msgstr "Версия: неизвестна"
@@ -1465,11 +1526,42 @@ msgstr "Поиск Shelly"
 msgid "Update"
 msgstr "Обновить"
 
-msgid "Failed to start operation."
-msgstr "Не удалось начать операцию."
-
 msgid "Pending"
 msgstr "Ожидание"
+
+msgid "Working"
+msgstr "Выполнение"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Ошибка"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Отменено"
+
+msgid "Failed to start operation."
+msgstr "Не удалось начать операцию."
 
 msgid "Synchronizing databases"
 msgstr "Синхронизация баз данных"
@@ -1513,12 +1605,6 @@ msgstr "Проверка конфликтов"
 msgid "Checking disk space"
 msgstr "Проверка свободного места на диске"
 
-msgid "Working"
-msgstr "Выполнение"
-
-msgid "Failed"
-msgstr "Ошибка"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1543,17 +1629,6 @@ msgstr ""
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
-msgstr ""
-
-msgid "Cancelled"
-msgstr "Отменено"
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

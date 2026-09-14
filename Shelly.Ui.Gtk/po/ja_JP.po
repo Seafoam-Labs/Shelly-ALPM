@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-13 12:09+0900\n"
+"POT-Creation-Date: 2026-09-06 17:45-0300\n"
 "PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -848,14 +848,19 @@ msgstr "次で使用"
 msgid "Install Anyway"
 msgstr "このままインストール"
 
+#| msgid "remove"
+msgid "to remove"
+msgstr ""
+
+#| msgid "install"
+msgid "to install"
+msgstr ""
+
 msgid "Unknown"
 msgstr "不明"
 
 msgid "package(s)"
 msgstr "個のパッケージ"
-
-msgid "to"
-msgstr "to"
 
 msgid "removed size"
 msgstr "削除されるサイズ"
@@ -868,6 +873,63 @@ msgstr "使用"
 
 msgid "Dismiss"
 msgstr "却下"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr "余分なキャッシュエントリーを削除しますか？"
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+"{package_one}-{version_one} は {package_two}-{version_two} と競合します。"
+"{package_to_remove} を削除しますか？"
+
+#| msgid "Installing packages"
+msgid "Install ignored package: {package}?"
+msgstr ""
+
+#| msgid ""
+#| "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+#| "Remove {package_to_remove}?"
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+
+msgid "Corrupted package {file}. Delete?"
+msgstr ""
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+
+msgid "Import PGP key {key_id}?"
+msgstr ""
+
+msgid "Proceed with this partial upgrade?"
+msgstr ""
+
+msgid "Proceed with the standard system upgrade?"
+msgstr ""
+
+msgid "Proceed with package installation?"
+msgstr ""
+
+msgid "Proceed with package removal?"
+msgstr ""
+
+msgid "Proceed with AUR package installation?"
+msgstr ""
+
+#| msgid "Select File"
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select an optional dependency for {pkg}"
+msgstr ""
+
+msgid "Select optional dependencies for {pkg}"
+msgstr ""
+
+msgid "Proceed with purify?"
+msgstr ""
 
 msgid "None"
 msgstr "なし"
@@ -1588,16 +1650,6 @@ msgid ""
 msgstr ""
 "パッケージを管理する権限が許可されませんでした。続行するには再度試行し、承認"
 "リクエストを許可してください。"
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-"{package_one}-{version_one} は {package_two}-{version_two} と競合します。"
-"{package_to_remove} を削除しますか？"
-
-msgid "Would you like to remove extra cache entries?"
-msgstr "余分なキャッシュエントリーを削除しますか？"
 
 msgid "System package update"
 msgstr "システムパッケージのアップデート"
