@@ -891,6 +891,7 @@ pub const Manager = struct {
             const response = self.dispatcher.raiseQuestion(self.io(), .{
                 .question = prompt,
                 .question_type = @intFromEnum(libalpm.QuestionType.select_optional_dependencies),
+                .arguments = &.{pkg_name},
                 .options = names.items,
                 .provider_options = options.items,
             });
@@ -3304,19 +3305,24 @@ pub const Manager = struct {
                 const text = std.fmt.bufPrint(&buf, "Install ignored package: {s}?", .{
                     q.package().name() orelse "unknown",
                 }) catch "Install ignored package?";
-                q.confirm_install(self.askYesNo(manager_io, qtype, text));
+                const install_name = q.package().name() orelse "unknown";
+                q.confirm_install(self.askYesNoWithArguments(manager_io, qtype, text, &.{install_name}));
             },
             .replace_package => {
                 const q = libalpm.ReplacePackageQuestion.from(data).?;
                 const old_pkg = q.old_package();
                 const new_pkg = q.new_package();
+                const old_name = old_pkg.name() orelse "unknown";
+                const old_version = old_pkg.version() orelse "?";
+                const new_name = new_pkg.name() orelse "unknown";
+                const new_version = new_pkg.version() orelse "?";
                 const text = std.fmt.bufPrint(&buf, "Replace {s}-{s} with {s}-{s}?", .{
                     old_pkg.name() orelse "unknown",
                     old_pkg.version() orelse "?",
                     new_pkg.name() orelse "unknown",
                     new_pkg.version() orelse "?",
                 }) catch "Replace package?";
-                q.confirm_replace(self.askYesNo(manager_io, qtype, text));
+                q.confirm_replace(self.askYesNoWithArguments(manager_io, qtype, text, &.{ old_name, old_version, new_name, new_version }));
             },
             .conflict_package => {
                 const q = libalpm.ConflictQuestion.from(data).?;
@@ -3355,7 +3361,7 @@ pub const Manager = struct {
                 const text = std.fmt.bufPrint(&buf, "Corrupted package {s}. Delete?", .{
                     q.filepath(),
                 }) catch "Delete the corrupted package file?";
-                q.confirm_remove(self.askYesNo(manager_io, qtype, text));
+                q.confirm_remove(self.askYesNoWithArguments(manager_io, qtype, text, &.{@as([]const u8, q.filepath())}));
             },
             .remove_packages => {
                 const q = libalpm.RemovePackagesQuestion.from(data).?;
@@ -3367,10 +3373,11 @@ pub const Manager = struct {
             },
             .import_key => {
                 const q = libalpm.ImportKeyQuestion.from(data).?;
+                const uid = q.uid() orelse "unknown";
                 const text = std.fmt.bufPrint(&buf, "Import PGP key {s}?", .{
                     q.uid() orelse "unknown",
                 }) catch "Import the PGP key?";
-                q.import(self.askYesNo(manager_io, qtype, text));
+                q.import(self.askYesNoWithArguments(manager_io, qtype, text, &.{uid}));
             },
             .select_provider => {
                 self.handleSelectProvider(libalpm.SelectProviderQuestion.from(data).?, qtype);

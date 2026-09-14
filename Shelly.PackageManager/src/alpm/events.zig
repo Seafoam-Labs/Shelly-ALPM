@@ -536,10 +536,16 @@ fn commonQuestionPurpose(args: QuestionArgs) operation_api.QuestionPurpose {
             @intCast(args.question_type),
         );
 
-    return switch (question_type) {
-        .conflict_package => .package_conflict,
-        else => .generic,
-    };
+        return switch (question_type) {
+            .conflict_package => .package_conflict,
+            .install_ignore => .install_ignored,
+            .replace_package => .replace_package,
+            .corrupted_package => .corrupted_package,
+            .remove_packages => .remove_packages_skip,
+            .select_provider => .select_provider,
+            .select_optional_dependencies => .select_optional_dependency, // Similar wording
+            else => .generic,
+        };
 }
 
 fn mapConfirmationChoice(choice: usize, options: []const operation_api.QuestionOption) ?QuestionResponse {
