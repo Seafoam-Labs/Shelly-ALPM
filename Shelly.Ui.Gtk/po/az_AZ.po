@@ -845,11 +845,9 @@ msgstr "istifadə olunduğu yer"
 msgid "Install Anyway"
 msgstr "Hər halda quraşdır"
 
-#| msgid "remove"
 msgid "to remove"
 msgstr ""
 
-#| msgid "install"
 msgid "to install"
 msgstr ""
 
@@ -859,7 +857,6 @@ msgstr "Naməlum"
 msgid "package(s)"
 msgstr "paket"
 
-#| msgid "remove"
 msgid "removed size"
 msgstr ""
 
@@ -882,13 +879,9 @@ msgstr ""
 "{package_one}-{version_one} paketi {package_two}-{version_two} paketi ilə "
 "toqquşur. {package_to_remove} silinsin?"
 
-#| msgid "Installing packages"
 msgid "Install ignored package: {package}?"
 msgstr ""
 
-#| msgid ""
-#| "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-#| "Remove {package_to_remove}?"
 msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
 msgstr ""
 
@@ -916,7 +909,6 @@ msgstr ""
 msgid "Proceed with AUR package installation?"
 msgstr ""
 
-#| msgid "Select File"
 msgid "Select Provider"
 msgstr ""
 
@@ -1550,19 +1542,15 @@ msgstr "Gözləyir"
 msgid "Working"
 msgstr "İşləyir"
 
-#| msgid "Upgrade"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Downgrading"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Reinstall"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 

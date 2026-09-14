@@ -808,11 +808,9 @@ msgstr ""
 msgid "Install Anyway"
 msgstr "Yine de Kur"
 
-#| msgid "Remove"
 msgid "to remove"
 msgstr ""
 
-#| msgid "Install"
 msgid "to install"
 msgstr ""
 
@@ -872,7 +870,6 @@ msgstr ""
 msgid "Proceed with AUR package installation?"
 msgstr ""
 
-#| msgid "Select File"
 msgid "Select Provider"
 msgstr ""
 
@@ -1495,19 +1492,15 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
-#| msgid "Upgrade All"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Download"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Installed"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 

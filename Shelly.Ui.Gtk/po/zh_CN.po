@@ -803,11 +803,9 @@ msgstr "用于"
 msgid "Install Anyway"
 msgstr "仍然安装"
 
-#| msgid "remove"
 msgid "to remove"
 msgstr ""
 
-#| msgid "install"
 msgid "to install"
 msgstr ""
 
@@ -817,7 +815,6 @@ msgstr "未知"
 msgid "package(s)"
 msgstr ""
 
-#| msgid "remove"
 msgid "removed size"
 msgstr ""
 
@@ -838,7 +835,6 @@ msgid ""
 "Remove {package_to_remove}?"
 msgstr ""
 
-#| msgid "Installing packages"
 msgid "Install ignored package: {package}?"
 msgstr ""
 
@@ -869,7 +865,6 @@ msgstr ""
 msgid "Proceed with AUR package installation?"
 msgstr ""
 
-#| msgid "Select File"
 msgid "Select Provider"
 msgstr ""
 
@@ -1489,19 +1484,15 @@ msgstr "等待中"
 msgid "Working"
 msgstr "处理中"
 
-#| msgid "Upgrade"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Downgrading"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Reinstall"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 

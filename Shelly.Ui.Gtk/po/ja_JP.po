@@ -848,11 +848,9 @@ msgstr "次で使用"
 msgid "Install Anyway"
 msgstr "このままインストール"
 
-#| msgid "remove"
 msgid "to remove"
 msgstr ""
 
-#| msgid "install"
 msgid "to install"
 msgstr ""
 
@@ -884,13 +882,9 @@ msgstr ""
 "{package_one}-{version_one} は {package_two}-{version_two} と競合します。"
 "{package_to_remove} を削除しますか？"
 
-#| msgid "Installing packages"
 msgid "Install ignored package: {package}?"
 msgstr ""
 
-#| msgid ""
-#| "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-#| "Remove {package_to_remove}?"
 msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
 msgstr ""
 
@@ -918,7 +912,6 @@ msgstr ""
 msgid "Proceed with AUR package installation?"
 msgstr ""
 
-#| msgid "Select File"
 msgid "Select Provider"
 msgstr ""
 

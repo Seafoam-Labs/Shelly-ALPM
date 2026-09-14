@@ -832,11 +832,9 @@ msgstr "χρησιμοποιείται σε"
 msgid "Install Anyway"
 msgstr "Εγκατάσταση οπωσδήποτε"
 
-#| msgid "remove"
 msgid "to remove"
 msgstr ""
 
-#| msgid "install"
 msgid "to install"
 msgstr ""
 
@@ -846,7 +844,6 @@ msgstr "Άγνωστο"
 msgid "package(s)"
 msgstr "πακέτο(α)"
 
-#| msgid "remove"
 msgid "removed size"
 msgstr ""
 
@@ -867,7 +864,6 @@ msgid ""
 "Remove {package_to_remove}?"
 msgstr ""
 
-#| msgid "Installing packages"
 msgid "Install ignored package: {package}?"
 msgstr ""
 
@@ -898,7 +894,6 @@ msgstr ""
 msgid "Proceed with AUR package installation?"
 msgstr ""
 
-#| msgid "Select File"
 msgid "Select Provider"
 msgstr ""
 
@@ -1529,19 +1524,15 @@ msgstr "Σε εκκρεμότητα"
 msgid "Working"
 msgstr "Σε εξέλιξη"
 
-#| msgid "Upgrade"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Downgrading"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Reinstall"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 

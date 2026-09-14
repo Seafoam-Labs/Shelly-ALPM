@@ -845,11 +845,9 @@ msgstr "utilisé dans"
 msgid "Install Anyway"
 msgstr "Installer quand même"
 
-#| msgid "remove"
 msgid "to remove"
 msgstr ""
 
-#| msgid "install"
 msgid "to install"
 msgstr ""
 
@@ -859,7 +857,6 @@ msgstr "Inconnu"
 msgid "package(s)"
 msgstr "paquet(s)"
 
-#| msgid "remove"
 msgid "removed size"
 msgstr ""
 
@@ -880,7 +877,6 @@ msgid ""
 "Remove {package_to_remove}?"
 msgstr ""
 
-#| msgid "Installing packages"
 msgid "Install ignored package: {package}?"
 msgstr ""
 
@@ -911,7 +907,6 @@ msgstr ""
 msgid "Proceed with AUR package installation?"
 msgstr ""
 
-#| msgid "Select File"
 msgid "Select Provider"
 msgstr ""
 
@@ -1547,19 +1542,15 @@ msgstr "En attente"
 msgid "Working"
 msgstr "En cours"
 
-#| msgid "Upgrade"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Downgrading"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Reinstall"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 

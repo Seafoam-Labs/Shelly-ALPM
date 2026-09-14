@@ -837,11 +837,9 @@ msgstr "hemen erabilita:"
 msgid "Install Anyway"
 msgstr "Instalatu hala ere"
 
-#| msgid "remove"
 msgid "to remove"
 msgstr ""
 
-#| msgid "install"
 msgid "to install"
 msgstr ""
 
@@ -851,7 +849,6 @@ msgstr "Ezezaguna"
 msgid "package(s)"
 msgstr "paketea(k)"
 
-#| msgid "remove"
 msgid "removed size"
 msgstr ""
 
@@ -872,7 +869,6 @@ msgid ""
 "Remove {package_to_remove}?"
 msgstr ""
 
-#| msgid "Installing packages"
 msgid "Install ignored package: {package}?"
 msgstr ""
 
@@ -903,7 +899,6 @@ msgstr ""
 msgid "Proceed with AUR package installation?"
 msgstr ""
 
-#| msgid "Select File"
 msgid "Select Provider"
 msgstr ""
 
@@ -1535,19 +1530,15 @@ msgstr "Zorrotz / Zazke"
 msgid "Working"
 msgstr "Lanean"
 
-#| msgid "Upgrade"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Downgrading"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Reinstall"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 
