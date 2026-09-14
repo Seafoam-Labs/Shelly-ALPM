@@ -878,6 +878,11 @@ msgstr ""
 msgid "Proceed with purify?"
 msgstr ""
 
+msgid ""
+"PKGBUILD {package} requires source-signing key {fingerprint}. Import it "
+"using `shelly keyring recv --user`?"
+msgstr ""
+
 msgid "None"
 msgstr ""
 

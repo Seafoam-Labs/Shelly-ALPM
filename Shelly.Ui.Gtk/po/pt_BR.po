@@ -924,6 +924,11 @@ msgstr "Selecione dependências opcionais para {pkg}"
 msgid "Proceed with purify?"
 msgstr "Prosseguir com a purificação de pacotes?"
 
+msgid ""
+"PKGBUILD {package} requires source-signing key {fingerprint}. Import it "
+"using `shelly keyring recv --user`?"
+msgstr ""
+
 msgid "None"
 msgstr "Nenhum"
 
