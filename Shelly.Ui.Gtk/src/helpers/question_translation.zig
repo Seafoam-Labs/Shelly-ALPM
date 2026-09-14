@@ -18,6 +18,7 @@ pub const WireKind = enum {
     SelectOptionalDependency,
     SelectOptionalDependencies,
     PurifyConfirm,
+    ImportSourceSigningKey,
 };
 
 pub const QuestionTemplate = struct {
@@ -49,6 +50,7 @@ pub const Table: []const QuestionTemplate = &.{
     .{ .wire_kind = .SelectOptionalDependency, .placeholders = &. {"pkg"} },
     .{ .wire_kind = .SelectOptionalDependencies, .placeholders = &.{"pkg"} },
     .{ .wire_kind = .PurifyConfirm },
+    .{ .wire_kind = .ImportSourceSigningKey, .placeholders = &.{ "package", "fingerprint" } },
 };
 
 
@@ -70,6 +72,7 @@ fn localized(row: QuestionTemplate) [:0]const u8 {
         .SelectOptionalDependency  => translations._("Select an optional dependency for {pkg}"),
         .SelectOptionalDependencies => translations._("Select optional dependencies for {pkg}"),
         .PurifyConfirm             => translations._("Proceed with purify?"),
+        .ImportSourceSigningKey => translations._("PKGBUILD {package} requires source-signing key {fingerprint}. Import it using `shelly keyring recv --user`?"),
     };
 }
 

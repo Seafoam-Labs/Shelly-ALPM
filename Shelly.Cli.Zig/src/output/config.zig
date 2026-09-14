@@ -416,6 +416,7 @@ fn questionKindName(question: Zigalpm.OperationQuestion) []const u8 {
         .select_optional_dependency => "SelectOptionalDependency",
         .select_optional_dependencies => "SelectOptionalDependencies",
         .purify => "PurifyConfirm",
+        .import_source_signing_key => "ImportSourceSigningKey",
     };
 }
 

@@ -2511,6 +2511,7 @@ pub const Manager = struct {
 
         var answer = operation.ask(.{
             .kind = .confirm_transaction,
+            .purpose = .transaction_remove,
             .prompt = "Proceed with package removal?",
             .transaction_plan = .{
                 .action = .remove,
@@ -2590,6 +2591,7 @@ pub const Manager = struct {
 
         var answer = operation.ask(.{
             .kind = .confirm_transaction,
+            .purpose =.transaction_install,
             .prompt = "Proceed with package installation?",
             .transaction_plan = .{
                 .action = .install,

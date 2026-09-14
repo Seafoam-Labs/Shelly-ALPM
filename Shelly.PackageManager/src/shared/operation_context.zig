@@ -165,6 +165,7 @@ pub const QuestionPurpose = enum {
     select_optional_dependency,   
     select_optional_dependencies, 
     purify,
+    import_source_signing_key,
 };
 
 pub const QuestionAttachment = struct {
