@@ -478,6 +478,7 @@ test "every question purpose maps to its wire kind" {
         .{ .purpose = .select_optional_dependency, .expected = "SelectOptionalDependency" },
         .{ .purpose = .select_optional_dependencies, .expected = "SelectOptionalDependencies" },
         .{ .purpose = .purify, .expected = "PurifyConfirm" },
+        .{ .purpose = .import_source_signing_key, .expected = "ImportSourceSigningKey"},
     };
     for (cases) |case| {
         const question: Zigalpm.OperationQuestion = .{
