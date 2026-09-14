@@ -892,7 +892,7 @@ pub const TransactionPage = extern struct {
             .yes_no => |q| {
                 const qa = pending.arena.allocator();
 
-                const text_z =  question_translations.translateFromWire(qa, q.question_kind, q.arguments, q.question_text) catch {
+                const text_z = question_translations.translateFromWire(qa, q.question_kind, q.arguments, q.question_text) catch {
                     pending.operation.answerYesNo(q.question_id, false) catch {};
                     pending.destroy();
                     return;
@@ -915,7 +915,7 @@ pub const TransactionPage = extern struct {
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
 
-                const qa = pending.arena.allocator();    
+                const qa = pending.arena.allocator();
                 const translation_title = question_translations.translateFromWire(qa, q.question_kind, q.arguments, q.prompt) catch q.prompt;
                 const dialog = MultiSelectDialog.new(
                     pending.arena.allocator(),
@@ -999,12 +999,12 @@ pub const TransactionPage = extern struct {
             .transaction => |q| {
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
-            
+
                 const qa = pending.arena.allocator();
                 var question = q;
                 question.question_text = question_translations.translateFromWire(qa, q.question_kind, &.{}, q.question_text) catch q.question_text;
                 const dialog = PlanDialog.new(question, &on_plan_response, pending);
-            
+
                 gtk.Box.append(p.question_layer, dialog.as(gtk.Widget));
                 gtk.Widget.setVisible(p.question_layer.as(gtk.Widget), 1);
             },

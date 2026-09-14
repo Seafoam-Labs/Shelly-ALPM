@@ -81,7 +81,7 @@ pub const PlanDialog = extern struct {
             translations._("to remove")
         else
             translations._("to install");
-        
+
         if (std.mem.eql(u8, q.action, "remove")) {
             const removed = if (q.total_installed_size) |size|
                 SizeConverter.convert_null_term(&dl_buf, @intCast(size))

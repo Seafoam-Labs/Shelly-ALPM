@@ -822,7 +822,6 @@ fn parseYesNo(op: *ShellyOperation, json: []const u8) !?*PendingQuestion {
     return pending;
 }
 
-
 fn parseTransaction(op: *ShellyOperation, json: []const u8) !?*PendingQuestion {
     const e = try std.json.parseFromSlice(TransactionRequest, op.allocator, json, .{ .ignore_unknown_fields = true });
     defer e.deinit();
@@ -878,7 +877,7 @@ fn parseSelection(op: *ShellyOperation, json: []const u8, kind: []const u8) !?*P
 
     const qid = try qa.dupe(u8, e.value.QuestionId);
     const question_kind = try qa.dupe(u8, e.value.QuestionKind);
-    
+
     const arguments = try qa.alloc([]const u8, e.value.Arguments.len);
     for (e.value.Arguments, arguments) |argument, *owned| {
         owned.* = try qa.dupe(u8, argument);

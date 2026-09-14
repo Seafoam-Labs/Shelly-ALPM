@@ -200,7 +200,7 @@ pub const Dispatcher = struct {
                 var answer = operation.ask(.{
                     .kind = switch (args.question_type) {
                         .select_optional_dependencies => .select_optional_dependencies,
-                        .select_provider => .select_provider,    
+                        .select_provider => .select_provider,
                     },
                     .purpose = switch (args.question_type) {
                         .select_optional_dependencies => .select_optional_dependencies, // plural AUR wording
