@@ -92,7 +92,7 @@ fn formatTemplate(allocator: std.mem.Allocator, template: []const u8, placeholde
     return current;
 }
 
-pub fn translate(allocator: std.mem.Allocator, wire_kind: WireKind, arguments: []const []const u8, fallback: []const u8,) ![:0]const u8 {
+fn translate(allocator: std.mem.Allocator, wire_kind: WireKind, arguments: []const []const u8, fallback: []const u8,) ![:0]const u8 {
     const row = lookup(wire_kind) orelse return allocator.dupeZ(u8, fallback);
     if (arguments.len < row.placeholders.len) return allocator.dupeZ(u8, fallback);
     const translated = localized(row);
@@ -101,12 +101,19 @@ pub fn translate(allocator: std.mem.Allocator, wire_kind: WireKind, arguments: [
     return allocator.dupeZ(u8, formatted);
 }
 
+pub fn translateFromWire(allocator: std.mem.Allocator, wire_kind: []const u8, arguments: []const []const u8, fallback: []const u8,) ![:0]const u8 {
+    if (std.meta.stringToEnum(WireKind, wire_kind)) |kind| {
+        return translate(allocator, kind, arguments, fallback);
+    }
+    return allocator.dupeZ(u8, fallback);
+}
+
 
 test "table covers every wire kind and renders every arm" {
-    for (std.meta.fields(WireKind)) |field| {
+    inline for (std.meta.fields(WireKind)) |field| {
         const kind: WireKind = @enumFromInt(field.value);
         const row = lookup(kind) orelse return error.TableMissingWireKind;
-        _ = localized(row); // panics if the row's localized arm still hits `unreachable`
+        _ = localized(row);
         for (row.placeholders) |p| try std.testing.expect(p.len > 0);
     }
 }
