@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-14 16:25-0300\n"
 "PO-Revision-Date: 2026-06-17 11:40-0400\n"
 "Last-Translator: Ulaş Çakmak <celonfix@protonmail.com>\n"
 "Language-Team: Turkish (Turkiye)<>\n"
@@ -582,9 +582,6 @@ msgstr "Onay Yok"
 msgid "Enable Shelly Search"
 msgstr "Shelly Aramayı Etkinleştir"
 
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Webview Görselleştirmeyi Etkinleştir (Deneysel)"
-
 msgid "AppImage Install Path"
 msgstr "AppImage Kurulum Yolu"
 
@@ -808,10 +805,19 @@ msgstr ""
 msgid "Install Anyway"
 msgstr "Yine de Kur"
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
+msgid "Unknown"
+msgstr "Bilinmeyen"
+
 msgid "package(s)"
 msgstr ""
 
-msgid "to"
+msgid "removed size"
 msgstr ""
 
 msgid "download"
@@ -821,6 +827,61 @@ msgid "net"
 msgstr ""
 
 msgid "Dismiss"
+msgstr ""
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Install ignored package: {package}?"
+msgstr ""
+
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+
+msgid "Corrupted package {file}. Delete?"
+msgstr ""
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+
+msgid "Import PGP key {key_id}?"
+msgstr ""
+
+msgid "Proceed with this partial upgrade?"
+msgstr ""
+
+msgid "Proceed with the standard system upgrade?"
+msgstr ""
+
+msgid "Proceed with package installation?"
+msgstr ""
+
+msgid "Proceed with package removal?"
+msgstr ""
+
+msgid "Proceed with AUR package installation?"
+msgstr ""
+
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select an optional dependency for {pkg}"
+msgstr ""
+
+msgid "Select optional dependencies for {pkg}"
+msgstr ""
+
+msgid "Proceed with purify?"
+msgstr ""
+
+msgid ""
+"PKGBUILD {package} requires source-signing key {fingerprint}. Import it "
+"using `shelly keyring recv --user`?"
 msgstr ""
 
 msgid "None"
@@ -1045,9 +1106,6 @@ msgstr ""
 
 msgid "Unknown developer"
 msgstr ""
-
-msgid "Unknown"
-msgstr "Bilinmeyen"
 
 msgid "Version: Unknown"
 msgstr ""
@@ -1430,10 +1488,37 @@ msgstr "Shelly Arama"
 msgid "Update"
 msgstr ""
 
-msgid "Failed to start operation."
+msgid "Pending"
 msgstr ""
 
-msgid "Pending"
+msgid "Working"
+msgstr ""
+
+msgid "Upgraded"
+msgstr ""
+
+msgid "Downgraded"
+msgstr ""
+
+msgid "Reinstalled"
+msgstr ""
+
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr ""
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr ""
+
+msgid "Failed to start operation."
 msgstr ""
 
 msgid "Synchronizing databases"
@@ -1478,12 +1563,6 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
-msgid "Working"
-msgstr ""
-
-msgid "Failed"
-msgstr ""
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1508,17 +1587,6 @@ msgstr ""
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
-msgstr ""
-
-msgid "Cancelled"
-msgstr ""
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

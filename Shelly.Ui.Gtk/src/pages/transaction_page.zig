@@ -18,6 +18,7 @@ const PkgbuildReviewDialog = @import("../dialog/page/pkg_build.zig").PkgbuildRev
 const PlanDialog = @import("../dialog/page/plan.zig").PlanDialog;
 const ProviderDialog = @import("../dialog/page/provider.zig").ProviderDialog;
 const translations = @import("../helpers/translations.zig");
+const question_translations = @import("../helpers/question_translation.zig");
 
 const log = std.log.scoped(.transaction_page);
 
@@ -883,98 +884,6 @@ pub const TransactionPage = extern struct {
         self.handle_question(pending);
     }
 
-    const Replacement = struct {
-        placeholder: []const u8,
-        value: []const u8,
-    };
-    
-    fn replacePlaceholders(allocator: std.mem.Allocator, template: []const u8, replacements: []const Replacement,) ![]u8 {
-        var current = try allocator.dupe(u8, template);
-        errdefer allocator.free(current);
-    
-        for (replacements) |replacement| {
-            const next = try std.mem.replaceOwned(
-                u8,
-                allocator,
-                current,
-                replacement.placeholder,
-                replacement.value,
-            );
-            allocator.free(current);
-            current = next;
-        }
-    
-        return current;
-    }
-
-    fn formatPackageConflictQuestion(allocator: std.mem.Allocator, arguments: []const []const u8,) ![]u8 {
-        if (arguments.len < 5) return error.MissingQuestionArguments;
-    
-        const template = translations._(
-            "{package_one}-{version_one} conflicts with {package_two}-{version_two}. Remove {package_to_remove}?",
-        );
-    
-        const replacements = [_]Replacement{
-            .{
-                .placeholder = "{package_one}",
-                .value = arguments[0],
-            },
-            .{
-                .placeholder = "{version_one}",
-                .value = arguments[1],
-            },
-            .{
-                .placeholder = "{package_two}",
-                .value = arguments[2],
-            },
-            .{
-                .placeholder = "{version_two}",
-                .value = arguments[3],
-            },
-            .{
-                .placeholder = "{package_to_remove}",
-                .value = arguments[4],
-            },
-        };
-    
-        return replacePlaceholders(
-            allocator,
-            template,
-            &replacements,
-        );
-    }
-
-    fn getQuestionText(allocator: std.mem.Allocator, question_kind: []const u8, arguments: []const []const u8, fallback: []const u8,) ![:0]const u8 {
-        if (std.mem.eql(
-            u8,
-            question_kind,
-            "CacheCleanExtraEntries",
-        )) {
-            return allocator.dupeZ(
-                u8,
-                translations._(
-                    "Would you like to remove extra cache entries?",
-                ),
-            );
-        }
-    
-        if (std.mem.eql(u8, question_kind, "PackageConflict")) {
-            if (arguments.len < 5) {
-                return allocator.dupeZ(u8, fallback);
-            }
-    
-            const formatted = try formatPackageConflictQuestion(
-                allocator,
-                arguments,
-            );
-            defer allocator.free(formatted);
-    
-            return allocator.dupeZ(u8, formatted);
-        }
-    
-        return allocator.dupeZ(u8, fallback);
-    }
-
     fn handle_question(self: *Self, pending: *PendingQuestion) void {
         const p = self.priv();
         log.debug("handle_question: question_layer={*}", .{p.question_layer});
@@ -983,7 +892,7 @@ pub const TransactionPage = extern struct {
             .yes_no => |q| {
                 const qa = pending.arena.allocator();
 
-                const text_z = getQuestionText(qa, q.question_kind, q.arguments,q.question_text,) catch {
+                const text_z = question_translations.translateFromWire(qa, q.question_kind, q.arguments, q.question_text) catch {
                     pending.operation.answerYesNo(q.question_id, false) catch {};
                     pending.destroy();
                     return;
@@ -1006,9 +915,11 @@ pub const TransactionPage = extern struct {
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
 
+                const qa = pending.arena.allocator();
+                const translation_title = question_translations.translateFromWire(qa, q.question_kind, q.arguments, q.prompt) catch q.prompt;
                 const dialog = MultiSelectDialog.new(
                     pending.arena.allocator(),
-                    q.prompt,
+                    translation_title,
                     q.options,
                     &on_multiselect_response,
                     pending,
@@ -1021,10 +932,11 @@ pub const TransactionPage = extern struct {
                 log.debug("select_one: {s}", .{q.prompt});
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
-
+                const qa = pending.arena.allocator();
+                const translation_title = question_translations.translateFromWire(qa, q.question_kind, q.arguments, "Select Provider") catch "Select Provider";
                 const dialog = ProviderDialog.new(
                     pending.arena.allocator(),
-                    "Select Provider",
+                    translation_title,
                     q.options,
                     &on_single_select_response,
                     pending,
@@ -1087,7 +999,12 @@ pub const TransactionPage = extern struct {
             .transaction => |q| {
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
-                const dialog = PlanDialog.new(q, &on_plan_response, pending);
+
+                const qa = pending.arena.allocator();
+                var question = q;
+                question.question_text = question_translations.translateFromWire(qa, q.question_kind, &.{}, q.question_text) catch q.question_text;
+                const dialog = PlanDialog.new(question, &on_plan_response, pending);
+
                 gtk.Box.append(p.question_layer, dialog.as(gtk.Widget));
                 gtk.Widget.setVisible(p.question_layer.as(gtk.Widget), 1);
             },

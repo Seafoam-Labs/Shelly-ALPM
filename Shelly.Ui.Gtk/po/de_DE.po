@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-14 16:25-0300\n"
 "PO-Revision-Date: 2026-08-25 16:49+0200\n"
 "Last-Translator: helge1o1o1@gmail.com\n"
 "Language-Team: Deutschland (Deutsch) helge1o1o1@gmail.com\n"
@@ -600,9 +600,6 @@ msgstr "Keine Bestätigung"
 msgid "Enable Shelly Search"
 msgstr "Shelly-Suche aktivieren"
 
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Webview-Visualisierung aktivieren (experimentell)"
-
 msgid "AppImage Install Path"
 msgstr "AppImage-Installationspfad"
 
@@ -837,11 +834,20 @@ msgstr "verwendet in"
 msgid "Install Anyway"
 msgstr "Trotzdem installieren"
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
+msgid "Unknown"
+msgstr "Unbekannt"
+
 msgid "package(s)"
 msgstr "Paket(e)"
 
-msgid "to"
-msgstr "zu"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "herunterladen"
@@ -851,6 +857,61 @@ msgstr "net"
 
 msgid "Dismiss"
 msgstr "Verwerfen"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Install ignored package: {package}?"
+msgstr ""
+
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+
+msgid "Corrupted package {file}. Delete?"
+msgstr ""
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+
+msgid "Import PGP key {key_id}?"
+msgstr ""
+
+msgid "Proceed with this partial upgrade?"
+msgstr ""
+
+msgid "Proceed with the standard system upgrade?"
+msgstr ""
+
+msgid "Proceed with package installation?"
+msgstr ""
+
+msgid "Proceed with package removal?"
+msgstr ""
+
+msgid "Proceed with AUR package installation?"
+msgstr ""
+
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select an optional dependency for {pkg}"
+msgstr ""
+
+msgid "Select optional dependencies for {pkg}"
+msgstr ""
+
+msgid "Proceed with purify?"
+msgstr ""
+
+msgid ""
+"PKGBUILD {package} requires source-signing key {fingerprint}. Import it "
+"using `shelly keyring recv --user`?"
+msgstr ""
 
 msgid "None"
 msgstr "Keine"
@@ -1081,9 +1142,6 @@ msgstr "Flatpak-Addon installieren"
 
 msgid "Unknown developer"
 msgstr "Unbekannter Entwickler"
-
-msgid "Unknown"
-msgstr "Unbekannt"
 
 msgid "Version: Unknown"
 msgstr "Version: Unbekannt"
@@ -1467,11 +1525,38 @@ msgstr "Shelly-Suche"
 msgid "Update"
 msgstr "Update"
 
-msgid "Failed to start operation."
-msgstr "Vorgang starten nicht möglich."
-
 msgid "Pending"
 msgstr "Ausstehend"
+
+msgid "Working"
+msgstr "Berabeitung"
+
+msgid "Upgraded"
+msgstr ""
+
+msgid "Downgraded"
+msgstr ""
+
+msgid "Reinstalled"
+msgstr ""
+
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Fehlgeschlagen"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Abgebrochen"
+
+msgid "Failed to start operation."
+msgstr "Vorgang starten nicht möglich."
 
 msgid "Synchronizing databases"
 msgstr "Datenbanken synchronisieren"
@@ -1515,12 +1600,6 @@ msgstr "Auf Konflikte überprüfen"
 msgid "Checking disk space"
 msgstr "Festplattenspeicher überprüfen"
 
-msgid "Working"
-msgstr "Berabeitung"
-
-msgid "Failed"
-msgstr "Fehlgeschlagen"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1545,17 +1624,6 @@ msgstr ""
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
-msgstr ""
-
-msgid "Cancelled"
-msgstr "Abgebrochen"
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

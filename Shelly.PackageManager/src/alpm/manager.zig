@@ -891,6 +891,7 @@ pub const Manager = struct {
             const response = self.dispatcher.raiseQuestion(self.io(), .{
                 .question = prompt,
                 .question_type = @intFromEnum(libalpm.QuestionType.select_optional_dependencies),
+                .arguments = &.{pkg_name},
                 .options = names.items,
                 .provider_options = options.items,
             });
@@ -2510,6 +2511,7 @@ pub const Manager = struct {
 
         var answer = operation.ask(.{
             .kind = .confirm_transaction,
+            .purpose = .transaction_remove,
             .prompt = "Proceed with package removal?",
             .transaction_plan = .{
                 .action = .remove,
@@ -2589,6 +2591,7 @@ pub const Manager = struct {
 
         var answer = operation.ask(.{
             .kind = .confirm_transaction,
+            .purpose = .transaction_install,
             .prompt = "Proceed with package installation?",
             .transaction_plan = .{
                 .action = .install,
@@ -3304,19 +3307,24 @@ pub const Manager = struct {
                 const text = std.fmt.bufPrint(&buf, "Install ignored package: {s}?", .{
                     q.package().name() orelse "unknown",
                 }) catch "Install ignored package?";
-                q.confirm_install(self.askYesNo(manager_io, qtype, text));
+                const install_name = q.package().name() orelse "unknown";
+                q.confirm_install(self.askYesNoWithArguments(manager_io, qtype, text, &.{install_name}));
             },
             .replace_package => {
                 const q = libalpm.ReplacePackageQuestion.from(data).?;
                 const old_pkg = q.old_package();
                 const new_pkg = q.new_package();
+                const old_name = old_pkg.name() orelse "unknown";
+                const old_version = old_pkg.version() orelse "?";
+                const new_name = new_pkg.name() orelse "unknown";
+                const new_version = new_pkg.version() orelse "?";
                 const text = std.fmt.bufPrint(&buf, "Replace {s}-{s} with {s}-{s}?", .{
                     old_pkg.name() orelse "unknown",
                     old_pkg.version() orelse "?",
                     new_pkg.name() orelse "unknown",
                     new_pkg.version() orelse "?",
                 }) catch "Replace package?";
-                q.confirm_replace(self.askYesNo(manager_io, qtype, text));
+                q.confirm_replace(self.askYesNoWithArguments(manager_io, qtype, text, &.{ old_name, old_version, new_name, new_version }));
             },
             .conflict_package => {
                 const q = libalpm.ConflictQuestion.from(data).?;
@@ -3330,32 +3338,32 @@ pub const Manager = struct {
                 const package_two_version = pkg_two.version() orelse "?";
 
                 const text = formatConflictQuestion(
-                     &buf,
-                     package_one_name,
-                     package_one_version,
-                     package_two_name,
-                     package_two_version,
-                 );
+                    &buf,
+                    package_one_name,
+                    package_one_version,
+                    package_two_name,
+                    package_two_version,
+                );
 
-                 q.confirm_removal(self.askYesNoWithArguments(
-                        manager_io,
-                        qtype,
-                        text,
-                        &.{
-                            package_one_name,
-                            package_one_version,
-                            package_two_name,
-                            package_two_version,
-                            package_two_name,
-                        },
-                    ));
+                q.confirm_removal(self.askYesNoWithArguments(
+                    manager_io,
+                    qtype,
+                    text,
+                    &.{
+                        package_one_name,
+                        package_one_version,
+                        package_two_name,
+                        package_two_version,
+                        package_two_name,
+                    },
+                ));
             },
             .corrupted_package => {
                 const q = libalpm.RemoveCorruptedPackagesQuestion.from(data).?;
                 const text = std.fmt.bufPrint(&buf, "Corrupted package {s}. Delete?", .{
                     q.filepath(),
                 }) catch "Delete the corrupted package file?";
-                q.confirm_remove(self.askYesNo(manager_io, qtype, text));
+                q.confirm_remove(self.askYesNoWithArguments(manager_io, qtype, text, &.{@as([]const u8, q.filepath())}));
             },
             .remove_packages => {
                 const q = libalpm.RemovePackagesQuestion.from(data).?;
@@ -3367,10 +3375,11 @@ pub const Manager = struct {
             },
             .import_key => {
                 const q = libalpm.ImportKeyQuestion.from(data).?;
+                const uid = q.uid() orelse "unknown";
                 const text = std.fmt.bufPrint(&buf, "Import PGP key {s}?", .{
                     q.uid() orelse "unknown",
                 }) catch "Import the PGP key?";
-                q.import(self.askYesNo(manager_io, qtype, text));
+                q.import(self.askYesNoWithArguments(manager_io, qtype, text, &.{uid}));
             },
             .select_provider => {
                 self.handleSelectProvider(libalpm.SelectProviderQuestion.from(data).?, qtype);
@@ -3381,7 +3390,12 @@ pub const Manager = struct {
         }
     }
 
-    fn askYesNo(self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, ) bool {
+    fn askYesNo(
+        self: *Manager,
+        manager_io: std.Io,
+        qtype: c_int,
+        text: []const u8,
+    ) bool {
         return self.askYesNoWithArguments(
             manager_io,
             qtype,
@@ -3390,7 +3404,13 @@ pub const Manager = struct {
         );
     }
 
-    fn askYesNoWithArguments( self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, arguments: []const []const u8, ) bool {
+    fn askYesNoWithArguments(
+        self: *Manager,
+        manager_io: std.Io,
+        qtype: c_int,
+        text: []const u8,
+        arguments: []const []const u8,
+    ) bool {
         const yes_no = [_][]const u8{ "yes", "no" };
         const resp = self.dispatcher.raiseQuestion(manager_io, .{
             .question = text,

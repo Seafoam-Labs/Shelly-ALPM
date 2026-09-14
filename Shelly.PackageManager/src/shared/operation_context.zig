@@ -152,7 +152,21 @@ pub const QuestionPurpose = enum {
     generic,
     cache_clean_extra_entries,
     package_conflict,
-}; 
+    install_ignored,
+    replace_package,
+    corrupted_package,
+    remove_packages_skip,
+    partial_upgrade,
+    standard_upgrade,
+    transaction_install,
+    transaction_remove,
+    transaction_aur_install,
+    select_provider,
+    select_optional_dependency,
+    select_optional_dependencies,
+    purify,
+    import_source_signing_key,
+};
 
 pub const QuestionAttachment = struct {
     name: []const u8,
