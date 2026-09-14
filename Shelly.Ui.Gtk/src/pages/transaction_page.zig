@@ -915,9 +915,11 @@ pub const TransactionPage = extern struct {
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
 
+                const qa = pending.arena.allocator();    
+                const translation_title = question_translations.translateFromWire(qa, q.question_kind, q.arguments, q.prompt) catch q.prompt;
                 const dialog = MultiSelectDialog.new(
                     pending.arena.allocator(),
-                    q.prompt,
+                    translation_title,
                     q.options,
                     &on_multiselect_response,
                     pending,
@@ -930,10 +932,11 @@ pub const TransactionPage = extern struct {
                 log.debug("select_one: {s}", .{q.prompt});
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
-
+                const qa = pending.arena.allocator();
+                const translation_title = question_translations.translateFromWire(qa, q.question_kind, q.arguments, "Select Provider") catch "Select Provider";
                 const dialog = ProviderDialog.new(
                     pending.arena.allocator(),
-                    "Select Provider",
+                    translation_title,
                     q.options,
                     &on_single_select_response,
                     pending,

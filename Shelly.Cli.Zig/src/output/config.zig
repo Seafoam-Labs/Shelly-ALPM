@@ -292,6 +292,8 @@ pub fn writeTransactionQuestionFrame(
     try json.write(question_id);
     try json.objectField("QuestionText");
     try json.write(question.prompt);
+    try json.objectField("QuestionKind");
+    try json.write(questionKindName(question));
     try json.objectField("Action");
     try json.write(@tagName(plan.action));
     try json.objectField("Packages");
@@ -360,6 +362,12 @@ fn writeSelectionQuestionFrame(
     try json.write(wire_kind);
     try json.objectField("QuestionId");
     try json.write(question_id);
+    try json.objectField("QuestionKind");
+    try json.write(questionKindName(question));
+    try json.objectField("Arguments");
+    try json.beginArray();
+    for (question.arguments) |argument| try json.write(argument);
+    try json.endArray();
     try json.objectField("DependencyName");
     try json.write(question.dependency_name orelse switch (question.kind) {
         .select_one, .select_many => question.prompt,

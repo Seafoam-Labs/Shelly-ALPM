@@ -77,16 +77,20 @@ pub const PlanDialog = extern struct {
         var net_buf: [32]u8 = undefined;
         var buf: [256]u8 = undefined;
 
+        const action = if (std.mem.eql(u8, q.action, "remove"))
+            translations._("to remove")
+        else
+            translations._("to install");
+        
         if (std.mem.eql(u8, q.action, "remove")) {
             const removed = if (q.total_installed_size) |size|
                 SizeConverter.convert_null_term(&dl_buf, @intCast(size))
             else
                 translations._("Unknown");
-            const text = std.fmt.bufPrintZ(&buf, "{d} {s} {s} {s} — {s} {s}", .{
+            const text = std.fmt.bufPrintZ(&buf, "{d} {s} {s} — {s} {s}", .{
                 q.packages.len,
                 translations._("package(s)"),
-                translations._("to"),
-                q.action,
+                action,
                 removed,
                 translations._("removed size"),
             }) catch "";
@@ -99,12 +103,11 @@ pub const PlanDialog = extern struct {
 
         const text = std.fmt.bufPrintZ(
             &buf,
-            "{d} {s} {s} {s} — {s} {s}, {s} {s}",
+            "{d} {s} {s} — {s} {s}, {s} {s}",
             .{
                 q.packages.len,
                 translations._("package(s)"),
-                translations._("to"),
-                q.action,
+                action,
                 dl,
                 translations._("download"),
                 net,
