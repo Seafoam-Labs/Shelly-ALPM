@@ -99,6 +99,15 @@ pub fn writeAlpmInfoFrame(
     event_type: []const u8,
     message: []const u8,
 ) !void {
+    try writeAlpmPackageInfoFrame(context, event_type, message, null);
+}
+
+pub fn writeAlpmPackageInfoFrame(
+    context: *runtime.RuntimeContext,
+    event_type: []const u8,
+    message: []const u8,
+    package_name: ?[]const u8,
+) !void {
     var payload = std.Io.Writer.Allocating.init(context.allocator);
     defer payload.deinit();
     var json: std.json.Stringify = .{ .writer = &payload.writer };
@@ -110,7 +119,7 @@ pub fn writeAlpmInfoFrame(
     try json.objectField("Message");
     try json.write(message);
     try json.objectField("PackageName");
-    try json.write(null);
+    try json.write(package_name);
     try json.objectField("CurrentIndex");
     try json.write(null);
     try json.objectField("TotalCount");

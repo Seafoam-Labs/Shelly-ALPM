@@ -289,7 +289,7 @@ test "defaults preserve reflection order and display conventions" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const config = try Config.defaults(arena.allocator());
-    try std.testing.expectEqual(@as(usize, 10), config.values.count());
+    try std.testing.expectEqual(@as(usize, 13), config.values.count());
     try std.testing.expectEqualStrings("FileSizeDisplay", config.values.keys()[0]);
     try std.testing.expectEqualStrings(
         "False",
@@ -334,4 +334,38 @@ test "older configs default to enabled cache cleaning" {
     try std.testing.expectEqualStrings("False", (try config.getDisplay(arena.allocator(), "DisableCacheClean")).?);
     try older.put(arena.allocator(), "DisableCacheClean", .{ .string = "true" });
     try std.testing.expectError(error.InvalidConfig, config.overlay(older));
+}
+
+test "older configs default to collapsed PKGBUILD diffs and validate saved booleans" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var config = try Config.defaults(allocator);
+    var saved: std.json.ObjectMap = .empty;
+    try saved.put(allocator, "AutoConfirmCacheClean", .{ .bool = true });
+    try config.overlay(saved);
+    try std.testing.expect(config.values.get("CollapsePkgbuildDiff").?.bool);
+    try saved.put(allocator, "CollapsePkgbuildDiff", .{ .bool = false });
+    try config.overlay(saved);
+    try std.testing.expect(!config.values.get("CollapsePkgbuildDiff").?.bool);
+    try saved.put(allocator, "CollapsePkgbuildDiff", .{ .string = "true" });
+    try std.testing.expectError(error.InvalidConfig, config.overlay(saved));
+}
+
+test "older configs keep optional backend update checks enabled and validate saved booleans" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    for ([_][]const u8{ "DisableAppImageUpdateCheck", "DisableFlatpakUpdateCheck" }) |key| {
+        var config = try Config.defaults(allocator);
+        var saved: std.json.ObjectMap = .empty;
+        try saved.put(allocator, "CollapsePkgbuildDiff", .{ .bool = false });
+        try config.overlay(saved);
+        try std.testing.expect(!config.values.get(key).?.bool);
+        try saved.put(allocator, key, .{ .bool = true });
+        try config.overlay(saved);
+        try std.testing.expect(config.values.get(key).?.bool);
+        try saved.put(allocator, key, .{ .string = "true" });
+        try std.testing.expectError(error.InvalidConfig, config.overlay(saved));
+    }
 }

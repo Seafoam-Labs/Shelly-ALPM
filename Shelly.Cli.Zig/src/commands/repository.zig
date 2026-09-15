@@ -18,7 +18,7 @@ const Real = struct {
         context: *runtime.RuntimeContext,
         key: []const u8,
     ) !u8 {
-        return runPacmanKey(context, &.{ "pacman-key", "--lsign-key", key });
+        return runShellyKey(context, &.{ "shelly-key", "--lsign-key", key });
     }
 
     fn list(
@@ -176,7 +176,7 @@ fn executeMutation(
             if (lsign_code != 0) {
                 const message = try std.fmt.allocPrint(
                     context.allocator,
-                    "Failed to locally sign key {s} (pacman-key exited with code {d}).",
+                    "Failed to locally sign key {s} (shelly-key exited with code {d}).",
                     .{ key, lsign_code },
                 );
                 defer context.allocator.free(message);
@@ -424,7 +424,7 @@ fn syncReal(
     try manager.sync(true);
 }
 
-fn runPacmanKey(
+fn runShellyKey(
     context: *runtime.RuntimeContext,
     arguments: []const []const u8,
 ) !u8 {

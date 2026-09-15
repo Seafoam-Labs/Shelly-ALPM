@@ -176,6 +176,11 @@ fn executeWithRunner(
     invocation: *const parser.Invocation,
     runner: anytype,
 ) anyerror!u8 {
+    // Refresh after the transaction unwinds, including partially applied updates.
+    // The GUI already sends its own refresh signal for UI-mode operations.
+    defer if (!invocation.globals.ui_mode) {
+        context.tray_refresh_requested = true;
+    };
     const opening = try openingMessage(context.allocator, invocation);
     defer context.allocator.free(opening);
     return if (invocation.globals.ui_mode)
@@ -475,10 +480,11 @@ test "routes every update backend through shared output lifecycles" {
 
         pub fn run(
             self: *@This(),
-            _: *runtime.RuntimeContext,
+            context: *runtime.RuntimeContext,
             _: *Zigalpm.OperationContext,
             invocation: *const parser.Invocation,
         ) !void {
+            try std.testing.expect(!context.tray_refresh_requested);
             self.paths[self.calls] = invocation.command.path;
             self.calls += 1;
             if (std.mem.eql(u8, invocation.command.path, aur_command_path))
@@ -492,8 +498,10 @@ test "routes every update backend through shared output lifecycles" {
         &.{ "update", "aur", "--check", "demo-git" },
         &.{ "update", "flatpak", "--ui-mode", "org.example.App" },
     }) |arguments| {
+        tc.context.tray_refresh_requested = false;
         const outcome = try parser.parse(tc.arena.allocator(), &manifest, arguments);
         try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &outcome.dispatch, &capture));
+        try std.testing.expectEqual(!outcome.dispatch.globals.ui_mode, tc.context.tray_refresh_requested);
     }
     try std.testing.expectEqual(@as(usize, 3), capture.calls);
     try std.testing.expectEqualStrings(standard_command_path, capture.paths[0]);
@@ -599,6 +607,7 @@ test "update backend failures return a nonzero status" {
         @as(u8, 1),
         try executeWithRunner(&tc.context, &outcome.dispatch, Failure{}),
     );
+    try std.testing.expect(tc.context.tray_refresh_requested);
 }
 
 test "confirmed elevated standard updates append no-confirm exactly once" {

@@ -2,7 +2,7 @@
 
 pkgbase=shelly-cli
 pkgname=('shelly-cli' 'shelly-cli-flatpak-backend')
-pkgver=3.1.3
+pkgver=3.1.4
 pkgrel=1
 arch=('x86_64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
@@ -24,7 +24,7 @@ conflicts=('shelly' 'shelly-git' 'shelly-bin')
 pkgver() {
   cd "${srcdir}/${pkgname}"
 
-  printf '3.1.3r%s.g%s' \
+  printf '3.1.4r%s.g%s' \
     "$(git rev-list --count HEAD)" \
     "$(git rev-parse --short=7 HEAD)"
 }
@@ -39,6 +39,11 @@ build() {
 
   (cd Shelly.Cli.Zig && zig build --verbose \
     --prefix "${srcdir}/zig-out" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSmall)
+
+  (cd Shelly.Key && zig build --verbose \
+    --prefix "${srcdir}/zig-out-key" \
     -Dcpu=baseline \
     -Doptimize=ReleaseSmall)
 
@@ -79,6 +84,7 @@ package_shelly-cli() {
     'diffutils'
     'git'
     'glibc'
+    'gnupg'
     'libarchive'
     'pacman'
     'sudo'
@@ -100,6 +106,8 @@ package_shelly-cli() {
 
   install -Dm755 "${srcdir}/zig-out/bin/shelly" \
     "${pkgdir}/usr/bin/shelly"
+  install -Dm755 "${srcdir}/zig-out-key/bin/shelly-key" \
+    "${pkgdir}/usr/bin/shelly-key"
   install -Dm644 "${srcdir}/shellybuild.conf" \
     "${pkgdir}/etc/shellybuild.conf"
   install -Dm644 "${srcdir}/shelly.bash" \

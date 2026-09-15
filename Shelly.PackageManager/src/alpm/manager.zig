@@ -855,6 +855,18 @@ pub const Manager = struct {
         // legacy handlers may still return a single package name in `pkg`.
         const initial_count = packages.items.len;
         for (packages.items[0..initial_count]) |pkg| {
+            // libalpm will skip these targets when adding them to the
+            // transaction. Do not prompt for their optional dependencies.
+            if (trans_flags_arg.needed) {
+                const local_db = rawLibalpm.alpm_get_localdb(self.handle);
+                const name = rawLibalpm.alpm_pkg_get_name(pkg);
+                if (rawLibalpm.alpm_db_get_pkg(local_db, name)) |local| {
+                    if (rawLibalpm.alpm_pkg_vercmp(
+                        rawLibalpm.alpm_pkg_get_version(local),
+                        rawLibalpm.alpm_pkg_get_version(pkg),
+                    ) == 0) continue;
+                }
+            }
             var names: std.ArrayList([]const u8) = .empty;
             defer names.deinit(self.allocator);
             var options: std.ArrayList(events.ProviderOption) = .empty;
@@ -939,6 +951,7 @@ pub const Manager = struct {
             self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {};
             return TransactionError.PrepareFailed;
         }
+        if (self.preparedInstallIsEmpty()) return;
         try self.confirmPreparedInstall(packages.items, optional_names.items, trans_flags);
         try self.predownloadPreparedPackages(trans_flags);
 
@@ -956,6 +969,14 @@ pub const Manager = struct {
     }
 
     pub fn remove_packages(self: *Manager, packages_names: [][:0]const u8, flags: TransFlag, keep_optional_dependencis: bool) TransactionError!void {
+        return self.remove_packages_with_confirmation(packages_names, flags, keep_optional_dependencis, .required);
+    }
+
+    pub const RemovalConfirmation = enum { required, already_approved };
+
+    /// `already_approved` is reserved for cleanup covered by an enclosing
+    /// operation's approval. Interactive remove commands must use `required`.
+    pub fn remove_packages_with_confirmation(self: *Manager, packages_names: [][:0]const u8, flags: TransFlag, keep_optional_dependencis: bool, confirmation: RemovalConfirmation) TransactionError!void {
         if (self.handle == null) return TransactionError.NoHandle;
         var operation_scope = OperationScope.init(self, .remove, if (packages_names.len == 0) null else packages_names[0]);
         operation_scope.attach();
@@ -1013,6 +1034,7 @@ pub const Manager = struct {
             };
         }
 
+        const requested_count = package_pointers.items.len;
         if (!keep_optional_dependencis) {
             const current_count = package_pointers.items.len;
             var package_index: usize = 0;
@@ -1114,6 +1136,13 @@ pub const Manager = struct {
             self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {};
             return TransactionError.PrepareFailed;
         }
+        if (confirmation == .required) {
+            try self.confirmPreparedRemoval(
+                package_pointers.items[0..requested_count],
+                package_pointers.items[requested_count..],
+            );
+        }
+        try self.checkOperationCancelled();
         if (rawLibalpm.alpm_trans_commit(self.handle, &data) != 0) {
             self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {};
             return TransactionError.CommitFailed;
@@ -1583,6 +1612,7 @@ pub const Manager = struct {
             return TransactionError.PrepareFailed;
         }
 
+        if (self.preparedInstallIsEmpty()) return;
         try self.predownloadPreparedPackages(flags);
 
         data = null;
@@ -1857,11 +1887,11 @@ pub const Manager = struct {
                 };
             }
             if (!dry_run) {
-                self.remove_packages(target_names.items, TransFlag{
+                self.remove_packages_with_confirmation(target_names.items, TransFlag{
                     .nosave = true,
                     .recurse = true,
                     .unneeded = true,
-                }, true) catch |err| {
+                }, true, .already_approved) catch |err| {
                     return err;
                 };
             }
@@ -2427,7 +2457,85 @@ pub const Manager = struct {
         return .required;
     }
 
-    /// Downloads every repository package selected by a prepared transaction
+    /// Report an empty transaction before confirmation, downloads, or commit.
+    fn preparedInstallIsEmpty(self: *Manager) bool {
+        if (rawLibalpm.alpm_trans_get_add(self.handle) != null or
+            rawLibalpm.alpm_trans_get_remove(self.handle) != null) return false;
+        self.dispatcher.raiseInformational(.{
+            .event_type = .nothing_to_do,
+            .message = "Nothing to install.",
+        });
+        return true;
+    }
+
+    fn confirmPreparedRemoval(
+        self: *Manager,
+        requested_packages: []const *rawLibalpm.alpm_pkg_t,
+        optional_packages: []const *rawLibalpm.alpm_pkg_t,
+    ) TransactionError!void {
+        const operation = self.dispatcher.operation orelse return;
+        var plan_packages: std.ArrayList(operation_api.TransactionPackage) = .empty;
+        defer plan_packages.deinit(self.allocator);
+
+        var total_removed: ?u64 = 0;
+        var net_installed: ?i64 = 0;
+        var packages = rawLibalpm.alpm_trans_get_remove(self.handle);
+        while (packages != null) : (packages = packages.*.next) {
+            const data = packages.*.data orelse continue;
+            const package = libalpm.Package{ .ptr = @ptrCast(@alignCast(data)) };
+            const name = package.name() orelse "unknown";
+            const installed_size = nonNegativeSize(package.install_size());
+            total_removed = addOptionalSize(total_removed, installed_size);
+            net_installed = addOptionalDelta(net_installed, if (installed_size != null)
+                std.math.sub(i64, 0, package.install_size()) catch null
+            else
+                null);
+
+            // Prepared removal entries can be copies of the local DB packages.
+            const role: operation_api.TransactionPackageRole = if (containsPackageName(requested_packages, name))
+                .requested
+            else if (containsPackageName(optional_packages, name))
+                .optional_dependency
+            else
+                .dependency;
+            try plan_packages.append(self.allocator, .{
+                .name = name,
+                .version = package.version(),
+                .source = .local,
+                .role = role,
+                .installed_size = installed_size,
+            });
+        }
+        if (plan_packages.items.len == 0) return;
+
+        var answer = operation.ask(.{
+            .kind = .confirm_transaction,
+            .prompt = "Proceed with package removal?",
+            .transaction_plan = .{
+                .action = .remove,
+                .packages = plan_packages.items,
+                .total_installed_size = total_removed,
+                .net_installed_size = net_installed,
+            },
+            .default_response = .accepted,
+        }) catch |err| switch (err) {
+            error.Cancelled => return TransactionError.Cancelled,
+            else => return TransactionError.OutOfMemory,
+        };
+        defer answer.deinit(self.allocator);
+        if (answer.response == .accepted) return;
+        operation.context.cancel();
+        return TransactionError.Cancelled;
+    }
+
+    fn containsPackageName(packages: []const *rawLibalpm.alpm_pkg_t, name: []const u8) bool {
+        for (packages) |ptr| {
+            const candidate = (libalpm.Package{ .ptr = ptr }).name() orelse continue;
+            if (std.mem.eql(u8, candidate, name)) return true;
+        }
+        return false;
+    }
+
     fn confirmPreparedInstall(
         self: *Manager,
         requested_packages: []const *rawLibalpm.alpm_pkg_t,
@@ -3070,6 +3178,28 @@ pub const Manager = struct {
                 self.dispatcher.raiseInformational(.{
                     .event_type = event_type,
                     .message = message,
+                });
+            },
+            .package_operation_done => {
+                const operation = event.*.package_operation;
+                const pkg = (if (operation.operation == rawLibalpm.ALPM_PACKAGE_REMOVE)
+                    operation.oldpkg
+                else
+                    operation.newpkg) orelse return;
+                const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg)) orelse return;
+                const code: []const u8 = switch (operation.operation) {
+                    rawLibalpm.ALPM_PACKAGE_INSTALL => "alpm.package_installed",
+                    rawLibalpm.ALPM_PACKAGE_UPGRADE => "alpm.package_upgraded",
+                    rawLibalpm.ALPM_PACKAGE_DOWNGRADE => "alpm.package_downgraded",
+                    rawLibalpm.ALPM_PACKAGE_REINSTALL => "alpm.package_reinstalled",
+                    rawLibalpm.ALPM_PACKAGE_REMOVE => "alpm.package_removed",
+                    else => return,
+                };
+                self.dispatcher.raiseInformational(.{
+                    .event_type = event_type,
+                    .message = "Package operation completed.",
+                    .package_name = name,
+                    .code = code,
                 });
             },
             .hook_run_start => {

@@ -106,6 +106,48 @@ fn run(init: std.process.Init) !void {
             },
             else => return err,
         },
+        .recv_keys => Shelly_Key.keyring.recvKeys(
+            init.io,
+            init.arena.allocator(),
+            args,
+            init.environ_map.get("PATH").?,
+            opts.gpgdir,
+            opts.key_ids,
+            opts.keyserver,
+            opts.user,
+            stdout,
+        ) catch |err| switch (err) {
+            error.NoTargetsSpecified => {
+                stderrPrint(init.io, "error: no targets specified.", .{});
+                std.process.exit(1);
+            },
+            error.GpgFailed => {
+                stderrPrint(init.io, "error: remote key not fetched correctly from keyserver.", .{});
+                std.process.exit(1);
+            },
+            else => return err,
+        },
+        .refresh_keys => Shelly_Key.keyring.refreshKeys(
+            init.io,
+            init.arena.allocator(),
+            args,
+            init.environ_map.get("PATH").?,
+            opts.gpgdir,
+            opts.key_ids,
+            opts.keyserver,
+            opts.user,
+            stdout,
+        ) catch |err| switch (err) {
+            error.KeyNotFoundLocally => {
+                stderrPrint(init.io, "error: a specified key could not be found locally.", .{});
+                std.process.exit(1);
+            },
+            error.GpgFailed => {
+                stderrPrint(init.io, "error: could not update the specified key(s).", .{});
+                std.process.exit(1);
+            },
+            else => return err,
+        },
         .populate => Shelly_Key.keyring.populate(
             init.io,
             init.arena.allocator(),

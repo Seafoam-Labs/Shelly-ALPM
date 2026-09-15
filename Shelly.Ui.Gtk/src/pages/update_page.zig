@@ -247,7 +247,8 @@ pub const UpdatePage = extern struct {
         }
         if (flatpak_enabled) {
             for (response.Flatpak) |package| {
-                updates[index] = .{ .source = .flatpak, .name = package.Name, .description = package.Id, .old_version = package.Version, .new_version = translations._("Installed"), .size = 0 };
+                const new_version = if (package.NewVersion.len > 0) package.NewVersion else translations._("Unknown");
+                updates[index] = .{ .source = .flatpak, .name = package.Name, .description = package.Id, .old_version = package.Version, .new_version = new_version, .size = package.DownloadSize };
                 index += 1;
             }
         }

@@ -86,8 +86,14 @@ fn resolve_variable_references_mode(self: PkgbuildParser, content: []const u8, v
     }
 
     for (items) |item| {
-        if (match_array_ref(item)) |referenced_var| {
-            const referenced_items = try arrays.parse_array(self, content, referenced_var);
+        const word = try @import("word.zig").read(self.allocator, item, 0);
+        defer word.deinit(self.allocator);
+        const reference = if (word.parts.len == 1 and word.parts[0].kind == .parameter)
+            match_array_ref(item[word.parts[0].start..word.parts[0].end])
+        else
+            null;
+        if (reference) |referenced_var| {
+            const referenced_items = try arrays.parse_array_syntax(self, content, referenced_var);
             defer {
                 for (referenced_items) |it| self.allocator.free(it);
                 self.allocator.free(referenced_items);
@@ -99,15 +105,14 @@ fn resolve_variable_references_mode(self: PkgbuildParser, content: []const u8, v
                 try resolved.append(self.allocator, it);
             }
         } else {
-            const resolved_item = if (preserve_commands)
-                try expansion.resolve_step_string(self, item, vars)
-            else
-                try expansion.resolve_string(self, item, vars);
-            try resolved.append(self.allocator, resolved_item);
+            const value = try expansion.resolve_word(self, item, vars);
+            errdefer self.allocator.free(value.value);
+            if (value.unresolved) if (self.deferred_source_words) |deferred| try deferred.put(@intFromPtr(value.value.ptr), {});
+            try resolved.append(self.allocator, value.value);
         }
     }
 
-    for (resolved.items, 0..) |dep, idx| {
+    if (self.deferred_source_words == null) for (resolved.items, 0..) |dep, idx| {
         var cleaned = strip_version_constraint(dep);
         if (std.mem.eql(u8, cleaned, dep)) {
             cleaned = strip_dangling_operator(dep);
@@ -118,7 +123,7 @@ fn resolve_variable_references_mode(self: PkgbuildParser, content: []const u8, v
             self.allocator.free(dep);
             resolved.items[idx] = cleaned_owned;
         }
-    }
+    };
 
     return resolved.toOwnedSlice(self.allocator);
 }
@@ -357,7 +362,7 @@ test "resolve_variable_references: strips dangling greater-than-or-equal" {
     var vars: std.StringHashMap([]const u8) = .init(std.testing.allocator);
     defer vars.deinit();
 
-    var items = [_][]const u8{"bash>="};
+    var items = [_][]const u8{"\"bash>=\""};
     const result = try resolve_variable_references(parser, "", &vars, &items);
     defer {
         for (result) |it| parser.allocator.free(it);
@@ -372,7 +377,7 @@ test "resolve_variable_references: strips dangling less-than" {
     var vars: std.StringHashMap([]const u8) = .init(std.testing.allocator);
     defer vars.deinit();
 
-    var items = [_][]const u8{"foo<"};
+    var items = [_][]const u8{"\"foo<\""};
     const result = try resolve_variable_references(parser, "", &vars, &items);
     defer {
         for (result) |it| parser.allocator.free(it);
@@ -453,7 +458,7 @@ test "resolve_variable_references: strips dangling operator from array expanded 
     var vars: std.StringHashMap([]const u8) = .init(std.testing.allocator);
     defer vars.deinit();
 
-    const content = "mydep=(x>= y<)\n";
+    const content = "mydep=(\"x>=\" \"y<\")\n";
     var items = [_][]const u8{"${mydep[@]}"};
     const result = try resolve_variable_references(parser, content, &vars, &items);
     defer {

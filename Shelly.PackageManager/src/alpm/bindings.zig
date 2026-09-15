@@ -1098,6 +1098,7 @@ pub const libalpm = struct {
         failed_optional_dependency_operation = 200,
         package_explicit = 201,
         failed_add_local_package = 202,
+        nothing_to_do = 203,
 
         pub fn from_libalpm(c_type: c_int) EventType {
             return @enumFromInt(@as(u32, @intCast(c_type)));

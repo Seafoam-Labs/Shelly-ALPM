@@ -1122,6 +1122,7 @@ pub const Manager = struct {
                         const old_kf = rawflatpak.flatpak_transaction_operation_get_old_metadata(operation_ptr);
 
                         item.permissions = diffPermissions(ctx.manager, new_kf, old_kf) catch &.{};
+                        item.download_size = rawflatpak.flatpak_transaction_operation_get_download_size(operation_ptr);
                         break;
                     }
                 }

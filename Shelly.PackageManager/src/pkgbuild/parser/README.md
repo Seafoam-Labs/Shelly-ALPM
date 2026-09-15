@@ -11,8 +11,8 @@ reviewable text for the builder's post-review shell evaluation.
 
 ```
 PkgbuildParser.parser_content (parser.zig)
-  1. build_var_hashmap          top-level assignments → variable map
-                                (variables.zig; rejects command substitution)
+  1. build_var_hashmap          ordered top-level assignments → variable map
+                                (variables.zig + word.zig; defers command substitution)
   2. defer source-integrity control flow and arbitrary dynamic indexed arrays to reviewed sandbox evaluation
      (execution.zig)
   3. validate_selected_package / arch directives             (validation.zig)
@@ -39,12 +39,14 @@ sourcing the reviewed PKGBUILD in the build sandbox.
 |---|---|
 | `parser.zig` | **Orchestrator.** `PkgbuildParser` with the four entry points: `parser` (from disk), `parser_content`, `package_names`, `package_names_content`. Sequences the stages above into the `Pkgbuild` result. Also carries the 56 end-to-end fixture tests (real-world PKGBUILDs incl. split packages, scx, flutter-bin) and the `test {}` block that aggregates every module's unit tests. |
 | `types.zig` | **Result types.** `Pkgbuild`, `PackageNames`, dynamic scalar/source assignment records, dependency and execution-plan types, their `deinit`s, and shared helpers. |
+| `word.zig` | **Shared shell-word scanner.** Retains literal/parameter/unquoted segments, joins adjacent quotes, handles escapes and continuations, and walks ordered assignments while excluding function and heredoc bodies. Arrays retain syntax through brace expansion and use the same word evaluator. |
+| `diagnostic.zig` | **Owned preparation diagnostic.** Keeps package, PKGBUILD path/line, field expression and selected filename; control characters are escaped in the human-readable message. |
 | `shell_scan.zig` | **Shell text primitives.** Quote-aware comment stripping, `if/fi` conditional tracking, heredoc declaration parsing, `$(…)` detection, and `split_shell_segments` — tags every slice of a snippet as expandable or literal (single-quoted/escaped) exactly like bash. Foundation of the expansion engine. |
 | `function_body.zig` | **Function extraction.** `extract_function_body` pulls a named function's body out of the PKGBUILD, supporting brace (`name() { … }`) and subshell (`name() ( … )`) compound commands plus the optional `function` keyword. Subshell scanning accounts for nesting, quotes, comments, arithmetic, `case` patterns, and heredocs; `selected_package_body` picks `package_<name>()` with fallback to `package()`. Public entry kept on `PkgbuildParser` via alias for the install-script validators. |
 | `arithmetic.zig` | **`$((…))` evaluator.** Recursive-descent arithmetic with correct precedence, parentheses, and `$var` substitution of integer variables. |
 | `expansion.zig` | **The expansion engine.** Resolves bash parameter expansions against the variable map: plain `$var`/`${var}`, case conversion `${v,}`/`${v,,}`/`${v^}`/`${v^^}`, trim `${v#p}`/`${v##p}`/`${v%p}`/`${v%%p}`, replacement `${v/a/b}` (+ `//`, `/#`, `/%`), substring `${v:o:l}`, arithmetic, and command substitution (stripped for metadata, preserved for step bodies). Two modes: `.metadata` (destructive — unknowns fail later validation) and `.execution` (lossless — the shell resolves the rest at runtime). Honors quoting and heredoc semantics via `shell_scan`. |
 | `arrays.zig` | **Array parsing.** `parse_array` with quoted words, escapes, per-line comments, `+=` appends, brace expansion (`pkg-{a,b}.tar` cartesian product, bounded), conditional-block skipping, and scoped `package_<name>` arrays. |
-| `variables.zig` | **Variable map.** `build_var_hashmap` collects top-level `key=value` assignments (quotes, appends), avoids executing command substitution, overlays sandbox-captured scalar values and unsets, then fixpoint-resolves chained references; `inject_array_pkgname` overlays the first split-package name; `parse_variable`, `resolve_or_parse`, and the string-freeing helpers. |
+| `variables.zig` | **Variable map.** `build_var_hashmap` evaluates supported scalar assignments in declaration order, including empty replacements and appends, preserves unresolved-state flags, and seeds sandbox-captured values without re-expanding them; `inject_array_pkgname` overlays the first split-package name; `parse_variable`, `resolve_or_parse`, and the string-freeing helpers. |
 | `dependencies.zig` | **Dependency handling.** `parse_dependencies` splits `name>=version` into `parsed_dep`; `resolve_variable_references` expands `$var`/`${arr[@]}` items and strips dangling constraints on unresolvable variables (with a warning). |
 | `sources.zig` | **Local source handling.** Classifies resolved `source=()` entries (remote vs local, `name::url` renames), ignores deferred command-substitution entries until the sandboxed reparse, reads local files for review (32 MB cap), and labels binary content. |
 | `fields.zig` | **Field resolution.** Resolves each metadata field with makepkg semantics, merges `${CARCH}`-suffixed arrays, preserves deferred source commands during analysis, and consumes sandbox-produced array overrides during the final reparse. |
@@ -96,6 +98,8 @@ the resulting circular imports are intentional and legal in Zig.
 
 ```sh
 cd Shelly.PackageManager
+zig build pkgbuild-parser-test  # parser fixtures + trusted Bash differential cases
+zig build pkgbuild-review-test  # input integrity, review, and diagnostic regressions
 zig build test    # full suite incl. all parser module + E2E tests
 zig fmt --check src/pkgbuild/parser/
 ```
@@ -103,3 +107,21 @@ zig fmt --check src/pkgbuild/parser/
 External consumers compile against the facade
 (`src/pkgbuild/pkgbuild_parser.zig`), so `zig build` + the CLI tests also
 exercise the public surface.
+
+## Scalar evaluation and compatibility boundary
+
+Scalar values and array syntax are distinct. `parse_variable` returns borrowed
+source syntax (including quotes); `resolve_word` expands each original parameter
+once and returns an owned value plus an unresolved flag. Never feed the returned
+value back into shell expansion. Literal dollars, quotes and backslashes in a
+value are data. Scalar assignment does not perform array brace expansion, word
+splitting or globbing. Static global arrays expand against scalar state at each
+assignment, so later reassignments do not change earlier elements.
+
+Unknown, conditional and command-produced scalar selections remain unresolved.
+Auxiliary file selection fails closed with a contextual diagnostic when static
+evaluation cannot determine the file. This change does not introduce host-shell
+evaluation or make every Bash construct statically supported. Existing sandbox
+snapshots and supplemental review remain authoritative for dynamic metadata.
+Malformed words produce `UnsupportedShellWord`; original command substitutions
+are retained intact for reviewed evaluation, including their inner quoting.

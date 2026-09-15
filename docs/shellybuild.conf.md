@@ -59,7 +59,9 @@ extra_write = []
 
 Flag and host arrays are joined with spaces only when a child process is launched. `ccache` prepends `/usr/lib/ccache/bin` to `PATH`; `distcc` prepends `/usr/lib/distcc/bin` and exports `DISTCC_HOSTS`. Shelly does not install those tools.
 
-Supported package options are `strip`, `docs`, `libtool`, `staticlibs`, `emptydirs`, `zipman`, `purge`, `debug`, `lto`, `autodeps`, `buildflags`, and `makeflags`. Content tidy operations remain limited as described in the [makepkg compatibility gaps](makepkg-compatibility-gaps.md).
+Supported package options are `strip`, `docs`, `libtool`, `staticlibs`, `emptydirs`, `zipman`, `purge`, `debug`, `lto`, `autodeps`, `buildflags`, and `makeflags`. Content tidy operations currently implement stripping and standard purge cleanup.
+
+`purge` is enabled by default. Before writing package metadata and the archive, it removes `usr/info/dir` and `usr/share/info/dir` relative to `$pkgdir`, plus non-directory entries named `.packlist` or matching `*.pod` anywhere in that package tree. Directories are preserved, and cleanup does not follow symlinks. PKGBUILD `options=('!purge')` disables this cleanup, including when set inside a split-package function. Purge runs independently of `strip`, so `!strip` does not disable it. Custom `PURGE_TARGETS` and makepkg shell configuration are not read by the native builder. This behavior also applies to `shelly build --isolated`.
 
 ## PKGBUILD and CLI overrides
 

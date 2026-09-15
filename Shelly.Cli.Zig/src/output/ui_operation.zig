@@ -107,10 +107,11 @@ pub const Reporter = struct {
 
     fn write(self: *Reporter, event: Zigalpm.OperationEvent) !void {
         switch (event) {
-            .status => |status| try output.writeAlpmInfoFrame(
+            .status => |status| try output.writeAlpmPackageInfoFrame(
                 self.context,
-                "InformationalOutput",
+                packageEventType(status.code) orelse "InformationalOutput",
                 status.message,
+                status.package_name,
             ),
             .progress => |progress| try output.writeOperationProgressFrame(self.context, progress),
             .failure => |failure| {
@@ -132,6 +133,21 @@ pub const Reporter = struct {
     }
 };
 
+fn packageEventType(code: ?[]const u8) ?[]const u8 {
+    const value = code orelse return null;
+    const mappings = .{
+        .{ "alpm.package_installed", "PackageInstalled" },
+        .{ "alpm.package_upgraded", "PackageUpgraded" },
+        .{ "alpm.package_downgraded", "PackageDowngraded" },
+        .{ "alpm.package_reinstalled", "PackageReinstalled" },
+        .{ "alpm.package_removed", "PackageRemoved" },
+    };
+    inline for (mappings) |mapping| {
+        if (std.mem.eql(u8, value, mapping[0])) return mapping[1];
+    }
+    return null;
+}
+
 pub const QuestionResponder = struct {
     context: *runtime.RuntimeContext,
     operation_context: *Zigalpm.OperationContext,
@@ -150,11 +166,20 @@ pub const QuestionResponder = struct {
         }
     }
 
+    fn allOptionalDependenciesInstalled(question: Zigalpm.OperationQuestion) bool {
+        for (question.options) |opt| {
+            if (!opt.is_installed) return false;
+        }
+        return true;
+    }
+
     fn handle(
         data: ?*anyopaque,
         question: Zigalpm.OperationQuestion,
     ) Zigalpm.OperationQuestionResponse {
         const self: *QuestionResponder = @ptrCast(@alignCast(data.?));
+        if (question.kind == .select_optional_dependencies and allOptionalDependenciesInstalled(question))
+            return .{ .choices = &.{} };
         if (self.no_confirm) {
             if (question.kind == .review_changes) {
                 if (hasSecurityFindings(question)) return self.handleInteractive(question);
@@ -238,7 +263,7 @@ pub const QuestionResponder = struct {
         }
 
         const accepted = switch (kind) {
-            .confirmation => self.readBooleanAnswer(question_id, "a.yesno", "Accept") catch false,
+            .confirmation, .import_pgp_key => self.readBooleanAnswer(question_id, "a.yesno", "Accept") catch false,
             .confirm_transaction => self.readBooleanAnswer(question_id, "a.transaction", "Accept") catch false,
             .review_changes => self.readBooleanAnswer(question_id, "a.pkgbuilddiff", "ProceedWithUpdate") catch false,
             else => false,
@@ -410,9 +435,133 @@ test "non-interactive UI declines source key imports" {
     try std.testing.expect(automaticResponse(.import_pgp_key) == .declined);
 }
 
+test "UI source key import reads yes/no answers and declines on EOF" {
+    const fingerprint = "562E5DB9A14497782C008834BBDA885ADD3E0AD0";
+    const cases = [_]struct {
+        accept: ?bool,
+        expected: Zigalpm.OperationQuestionResponse,
+    }{
+        .{ .accept = true, .expected = .accepted },
+        .{ .accept = false, .expected = .declined },
+        .{ .accept = null, .expected = .declined },
+    };
+    for (cases) |case| {
+        const response_json = if (case.accept == true)
+            "{\"$kind\":\"a.yesno\",\"QuestionId\":\"1\",\"Accept\":true}"
+        else
+            "{\"$kind\":\"a.yesno\",\"QuestionId\":\"1\",\"Accept\":false}";
+
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const encoded_size = std.base64.standard.Encoder.calcSize(response_json.len);
+        const encoded = try arena.allocator().alloc(u8, encoded_size);
+        const encoded_response = std.base64.standard.Encoder.encode(encoded, response_json);
+        const response_frame = if (case.accept != null) try std.fmt.allocPrint(
+            arena.allocator(),
+            "[JSON]{s}[/JSON]\n",
+            .{encoded_response},
+        ) else "";
+        var stdin = std.Io.Reader.fixed(response_frame);
+        var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stdout.deinit();
+        var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stderr.deinit();
+        var context: runtime.RuntimeContext = .{
+            .allocator = arena.allocator(),
+            .io = std.testing.io,
+            .stdin = &stdin,
+            .stdout = &stdout.writer,
+            .stderr = &stderr.writer,
+        };
+        var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+        defer operation_context.deinit();
+        var responder: QuestionResponder = .{
+            .context = &context,
+            .operation_context = &operation_context,
+            .no_confirm = false,
+        };
+        responder.attach();
+        defer responder.detach();
+
+        var operation = operation_context.begin(.{ .backend = .aur, .kind = .build, .subject = "xpipe" });
+        var answer = try operation.ask(.{
+            .kind = .import_pgp_key,
+            .prompt = "PKGBUILD xpipe requires source-signing key. Import it?",
+            .pgp_key_import = .{
+                .package_name = "xpipe",
+                .fingerprint = fingerprint,
+            },
+            .default_response = .declined,
+        });
+        defer answer.deinit(arena.allocator());
+        operation.finish(if (case.accept == true) .success else .failed);
+
+        try std.testing.expectEqual(case.expected, answer.response);
+
+        // A rejected answer must also be consumed, rather than declined immediately.
+        try std.testing.expectEqual(@as(usize, 0), stdin.buffered().len);
+
+        const rendered = stdout.writer.buffered();
+        const prefix_end = (std.mem.indexOf(u8, rendered, "[JSON]") orelse return error.MissingFrame) + "[JSON]".len;
+        const suffix_start = std.mem.indexOfPos(u8, rendered, prefix_end, "[/JSON]") orelse return error.MissingFrame;
+        const payload = rendered[prefix_end..suffix_start];
+        const decoded_size = try std.base64.standard.Decoder.calcSizeForSlice(payload);
+        const decoded = try arena.allocator().alloc(u8, decoded_size);
+        try std.base64.standard.Decoder.decode(decoded, payload);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"$kind\":\"q.yesno\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"QuestionKind\":\"ImportPgpKey\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"PackageName\":\"xpipe\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"Fingerprint\":\"") != null);
+    }
+}
+
 pub fn flush(context: *runtime.RuntimeContext) !void {
     try context.stdout.flush();
     try context.stderr.flush();
+}
+
+test "UI operation reporter forwards package completion identity and action" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var stdout = std.Io.Writer.Allocating.init(allocator);
+    var stderr = std.Io.Writer.Allocating.init(allocator);
+    var context: runtime.RuntimeContext = .{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var operation_context = Zigalpm.OperationContext.init(allocator, std.testing.io);
+    defer operation_context.deinit();
+    var reporter: Reporter = .{ .context = &context };
+    _ = try operation_context.subscribe(.{ .function = Reporter.handle, .data = &reporter });
+    var operation = operation_context.begin(.{ .backend = .alpm, .kind = .update, .subject = "batch" });
+    const cases = .{
+        .{ "alpm.package_installed", "PackageInstalled" },
+        .{ "alpm.package_upgraded", "PackageUpgraded" },
+        .{ "alpm.package_downgraded", "PackageDowngraded" },
+        .{ "alpm.package_reinstalled", "PackageReinstalled" },
+        .{ "alpm.package_removed", "PackageRemoved" },
+    };
+    inline for (cases) |case|
+        operation.packageStatus(.information, "Package operation completed.", case[0], 12, "demo");
+    operation.finish(.success);
+    var frames = std.mem.splitSequence(u8, stdout.writer.buffered(), "[/JSON]\n");
+    inline for (cases) |case| {
+        const frame = frames.next() orelse return error.MissingFrame;
+        try std.testing.expect(std.mem.startsWith(u8, frame, "[JSON]"));
+        const encoded = frame["[JSON]".len..];
+        const decoded = try allocator.alloc(u8, try std.base64.standard.Decoder.calcSizeForSlice(encoded));
+        try std.base64.standard.Decoder.decode(decoded, encoded);
+        const parsed = try std.json.parseFromSlice(std.json.Value, allocator, decoded, .{});
+        try std.testing.expectEqualStrings("alpm.info", parsed.value.object.get("$kind").?.string);
+        try std.testing.expectEqualStrings(case[1], parsed.value.object.get("EventType").?.string);
+        try std.testing.expectEqualStrings("demo", parsed.value.object.get("PackageName").?.string);
+    }
+    try std.testing.expectEqualStrings("", frames.next().?);
+    try std.testing.expect(frames.next() == null);
+    try std.testing.expect(!reporter.failed());
 }
 
 test "UI operation reporter preserves percentages for every progress frame shape" {
@@ -652,6 +801,63 @@ test "UI transaction plan preserves package roles sizes and unknown AUR sizes" {
     try std.testing.expect(std.mem.indexOf(u8, decoded, "\"DownloadSize\":1024") != null);
 }
 
+test "UI removal plan honors accept decline and EOF" {
+    for ([_]?bool{ true, false, null }) |accepted| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+        const response_json = try std.fmt.allocPrint(
+            allocator,
+            "{{\"$kind\":\"a.transaction\",\"QuestionId\":\"1\",\"Accept\":{s}}}",
+            .{if (accepted orelse false) "true" else "false"},
+        );
+        const encoded = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(response_json.len));
+        const frame = try std.fmt.allocPrint(allocator, "[JSON]{s}[/JSON]\n", .{std.base64.standard.Encoder.encode(encoded, response_json)});
+        var stdin = std.Io.Reader.fixed(if (accepted != null) frame else "");
+        var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stdout.deinit();
+        var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stderr.deinit();
+        var context: runtime.RuntimeContext = .{
+            .allocator = allocator,
+            .io = std.testing.io,
+            .stdin = &stdin,
+            .stdout = &stdout.writer,
+            .stderr = &stderr.writer,
+        };
+        var operation_context = Zigalpm.OperationContext.init(allocator, std.testing.io);
+        defer operation_context.deinit();
+        var responder: QuestionResponder = .{
+            .context = &context,
+            .operation_context = &operation_context,
+            .no_confirm = false,
+        };
+        responder.attach();
+        defer responder.detach();
+        var operation = operation_context.begin(.{ .backend = .alpm, .kind = .remove });
+        const packages = [_]Zigalpm.OperationTransactionPackage{
+            .{ .name = "demo", .version = "1.0-1", .source = .local, .role = .requested, .installed_size = 1024 },
+        };
+        var answer = try operation.ask(.{
+            .kind = .confirm_transaction,
+            .prompt = "Proceed with package removal?",
+            .transaction_plan = .{ .action = .remove, .packages = &packages, .total_installed_size = 1024, .net_installed_size = -1024 },
+            .default_response = .accepted,
+        });
+        defer answer.deinit(allocator);
+        operation.finish(.success);
+        try std.testing.expectEqual(accepted orelse false, answer.response == .accepted);
+        const rendered = stdout.writer.buffered();
+        const start = (std.mem.indexOf(u8, rendered, "[JSON]") orelse return error.MissingFrame) + "[JSON]".len;
+        const end = std.mem.indexOfPos(u8, rendered, start, "[/JSON]") orelse return error.MissingFrame;
+        const payload = rendered[start..end];
+        const decoded = try allocator.alloc(u8, try std.base64.standard.Decoder.calcSizeForSlice(payload));
+        try std.base64.standard.Decoder.decode(decoded, payload);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"Action\":\"remove\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"NetInstalledSize\":-1024") != null);
+    }
+}
+
 test "UI optional dependencies emit C# compatible choices and accept selected indices" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -808,4 +1014,74 @@ test "UI handles provider and generic selection questions" {
     }
     try std.testing.expectEqual(@as(usize, 2), provider_frames);
     try std.testing.expectEqual(@as(usize, 1), multiple_frames);
+}
+
+test "UI skips optional dependency question when every option is already installed" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var stdin = std.Io.Reader.fixed("1\n");
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdin = &stdin,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    defer operation_context.deinit();
+    var responder: QuestionResponder = .{
+        .context = &context,
+        .operation_context = &operation_context,
+        .no_confirm = false,
+    };
+    responder.attach();
+    defer responder.detach();
+
+    const options = [_]Zigalpm.OperationQuestionOption{
+        .{ .id = "foot-terminfo", .label = "foot-terminfo", .description = "Terminal info", .is_installed = true },
+        .{ .id = "libnotify", .label = "libnotify", .description = "Desktop notifications", .is_installed = true },
+    };
+    var operation = operation_context.begin(.{
+        .backend = .aur,
+        .kind = .install,
+        .subject = "foot-git",
+    });
+    const stdout_before = stdout.writer.buffered().len;
+    const stderr_before = stderr.writer.buffered().len;
+
+    var answer = try operation.ask(.{
+        .kind = .select_optional_dependencies,
+        .prompt = "Select optional dependencies for foot-git",
+        .options = &options,
+        .dependency_name = "foot-git",
+    });
+    defer answer.deinit(arena.allocator());
+
+    try std.testing.expect(answer.response == .choices);
+    try std.testing.expectEqual(@as(usize, 0), answer.response.choices.len);
+    try std.testing.expectEqual(stdout_before, stdout.writer.buffered().len);
+    try std.testing.expectEqual(stderr_before, stderr.writer.buffered().len);
+
+    var empty_answer = try operation.ask(.{
+        .kind = .select_optional_dependencies,
+        .prompt = "This empty optional dependency question must not be displayed",
+        .options = &.{},
+        .dependency_name = "foot-git",
+    });
+    defer empty_answer.deinit(arena.allocator());
+
+    try std.testing.expect(empty_answer.response == .choices);
+    try std.testing.expectEqual(@as(usize, 0), empty_answer.response.choices.len);
+    try std.testing.expectEqual(stdout_before, stdout.writer.buffered().len);
+    try std.testing.expectEqual(stderr_before, stderr.writer.buffered().len);
+
+    const remaining_input = try stdin.takeDelimiter('\n');
+    try std.testing.expect(remaining_input != null);
+    try std.testing.expectEqualStrings("1", remaining_input.?);
+
+    operation.finish(.success);
 }

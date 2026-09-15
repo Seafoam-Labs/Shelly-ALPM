@@ -551,12 +551,14 @@ pub const Reader = struct {
         self.* = undefined;
     }
 
-    /// Mtree's permissive text bidder also accepts ordinary compressed text.
+    /// Source extraction must preserve mtree-detected text as a file: mtree's
+    /// permissive bidder also accepts ordinary templates and configuration.
     /// Empty decompressed streams likewise describe a file, not an archive.
-    pub fn isCompressedPlainFile(self: *Reader) bool {
+    /// Explicit mtree readers can still consume entries through next().
+    pub fn isPlainSourceFile(self: *Reader) bool {
         const format = c.archive_format(self.handle);
-        return c.archive_filter_count(self.handle) > 1 and
-            (format == c.ARCHIVE_FORMAT_MTREE or format == c.ARCHIVE_FORMAT_EMPTY);
+        return format == c.ARCHIVE_FORMAT_MTREE or
+            (c.archive_filter_count(self.handle) > 1 and format == c.ARCHIVE_FORMAT_EMPTY);
     }
 
     /// Result of asking libarchive's registered format bidders to classify
@@ -898,7 +900,10 @@ test "archive virtual ownership is shared by package and mtree writers" {
         defer reader.deinit();
         var saw_data = false;
         while (try reader.next()) |entry| {
-            if (!std.mem.eql(u8, entry.path, "usr/share/demo/data")) continue;
+            // Mtree paths may carry a ./ prefix that tar paths omit.
+            const normalized = try normalizeEntryPath(testing.allocator, entry.path);
+            defer testing.allocator.free(normalized);
+            if (!std.mem.eql(u8, normalized, "usr/share/demo/data")) continue;
             saw_data = true;
             try testing.expectEqual(@as(i64, 42), entry.uid);
             try testing.expectEqual(@as(i64, 84), entry.gid);

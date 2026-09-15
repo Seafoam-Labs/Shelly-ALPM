@@ -179,7 +179,7 @@ pub const Carousel = extern struct {
 };
 
 test "carousel navigates between every page and clears its children" {
-    if (gtk.initCheck() == 0) return error.SkipZigTest;
+    try @import("../gtk_test.zig").requireDisplay();
 
     const carousel = Carousel.new();
     _ = carousel.as(gobject.Object).refSink();

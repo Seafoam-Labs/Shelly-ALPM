@@ -24,6 +24,8 @@ const aur_command_path = "shelly upgrade aur";
 const flatpak_command_path = "shelly upgrade flatpak";
 const auto_confirm_cache_clean_option = "--auto-confirm-cache-clean";
 const disable_cache_clean_option = "--disable-cache-clean";
+const disable_appimage_update_check_option = "--disable-appimage-update-check";
+const disable_flatpak_update_check_option = "--disable-flatpak-update-check";
 
 const UpgradeError = error{
     BackendFailed,
@@ -221,8 +223,12 @@ fn buildAllUpgradePlan(
 
     try context.stdout.writeAll("Building upgrade plan...\n");
     try context.stdout.flush();
+    const skip_appimage = disableAppImageUpdateCheck(context, invocation);
+    const skip_flatpak = disableFlatpakUpdateCheck(context, invocation);
     for (all_backends) |backend| {
         if (!backendEnabled(invocation, backend)) continue;
+        if (backend == .appimage and skip_appimage) continue;
+        if (backend == .flatpak and skip_flatpak) continue;
         // Flatpak is optional. When the backend is not installed there is
         // nothing to plan, so the step stays unmentioned instead of printing
         // a collecting line that can never produce a result.
@@ -477,6 +483,11 @@ fn executeWithRunner(
     invocation: *const parser.Invocation,
     runner: anytype,
 ) anyerror!u8 {
+    // Defer the tray check until all selected backends have released their locks.
+    // Some backends may have succeeded even when the combined upgrade fails.
+    defer if (!invocation.globals.ui_mode) {
+        context.tray_refresh_requested = true;
+    };
     const Selected = struct {
         inner: @TypeOf(runner),
 
@@ -544,8 +555,12 @@ fn runSelected(
     }
 
     var failed = false;
+    const skip_appimage = disableAppImageUpdateCheck(context, invocation);
+    const skip_flatpak = disableFlatpakUpdateCheck(context, invocation);
     for (all_backends) |backend| {
         if (!backendEnabled(invocation, backend)) continue;
+        if (backend == .appimage and skip_appimage) continue;
+        if (backend == .flatpak and skip_flatpak) continue;
         runner.run(context, operation_context, backend, invocation) catch |err| {
             if (isUnavailableFlatpak(backend, err)) continue;
             if (backend == .flatpak) {
@@ -1131,6 +1146,26 @@ fn disableCacheClean(
     return boolValue(&configuration, "DisableCacheClean") orelse false;
 }
 
+fn disableAppImageUpdateCheck(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+) bool {
+    if (!upgradesAll(invocation)) return false;
+    if (optionEnabled(invocation, disable_appimage_update_check_option)) return true;
+    const configuration = config_manager.Manager.init(context).read() catch return false;
+    return boolValue(&configuration, "DisableAppImageUpdateCheck") orelse false;
+}
+
+fn disableFlatpakUpdateCheck(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+) bool {
+    if (!upgradesAll(invocation)) return false;
+    if (optionEnabled(invocation, disable_flatpak_update_check_option)) return true;
+    const configuration = config_manager.Manager.init(context).read() catch return false;
+    return boolValue(&configuration, "DisableFlatpakUpdateCheck") orelse false;
+}
+
 fn elevatedUpgradeArguments(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
@@ -1142,12 +1177,29 @@ fn elevatedUpgradeArguments(
     else
         invocation.arguments;
     defer if (carries_aur) context.allocator.free(aur_arguments);
-    return upgradeArgumentsWithCacheCleanPolicy(
+    const arguments = try upgradeArgumentsWithCacheCleanPolicy(
         context.allocator,
         aur_arguments,
         autoConfirmCacheClean(context, invocation),
         disableCacheClean(context, invocation),
     );
+    // Carry the user's preferences even if elevation resolves a different config.
+    const carry_appimage = disableAppImageUpdateCheck(context, invocation) and
+        !optionEnabled(invocation, disable_appimage_update_check_option) and
+        !optionEnabled(invocation, "--no-appimage");
+    const carry_flatpak = disableFlatpakUpdateCheck(context, invocation) and
+        !optionEnabled(invocation, disable_flatpak_update_check_option) and
+        !optionEnabled(invocation, "--no-flatpak");
+    const extra_count = @as(usize, @intFromBool(carry_appimage)) + @as(usize, @intFromBool(carry_flatpak));
+    if (extra_count > 0) {
+        defer context.allocator.free(arguments);
+        const result = try context.allocator.alloc([]const u8, arguments.len + extra_count);
+        @memcpy(result[0..arguments.len], arguments);
+        if (carry_appimage) result[arguments.len] = disable_appimage_update_check_option;
+        if (carry_flatpak) result[result.len - 1] = disable_flatpak_update_check_option;
+        return result;
+    }
+    return arguments;
 }
 
 fn upgradeArgumentsWithCacheCleanPolicy(
@@ -1278,6 +1330,123 @@ test "aggregate upgrade carries cache clean policy across elevation" {
     elevated_tc.init();
     defer elevated_tc.deinit();
     try std.testing.expect(autoConfirmCacheClean(&elevated_tc.context, &elevated.dispatch));
+}
+
+test "optional backend update check preferences skip combined planning and execution and survive elevation" {
+    const shortcodes = @import("../cli/shortcodes.zig");
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const path_length = try temporary.dir.realPath(std.testing.io, &path_buffer);
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    var environment = std.process.Environ.Map.init(tc.arena.allocator());
+    try environment.put("XDG_CONFIG_HOME", path_buffer[0..path_length]);
+    tc.context.environment = &environment;
+    const manager = config_manager.Manager.init(&tc.context);
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    var operations = Zigalpm.OperationContext.init(tc.arena.allocator(), std.testing.io);
+    defer operations.deinit();
+    const Capture = struct {
+        collected: std.ArrayList(Backend) = .empty,
+        ran: std.ArrayList(Backend) = .empty,
+        probe_calls: usize = 0,
+
+        fn installed(self: *@This()) bool {
+            self.probe_calls += 1;
+            return true;
+        }
+
+        fn collect(self: *@This(), context: *runtime.RuntimeContext, backend: Backend, _: *const parser.Invocation) !list_updates.Result {
+            try self.collected.append(context.allocator, backend);
+            return switch (backend) {
+                .standard => .{ .standard = .{ .items = &.{} } },
+                .aur => .{ .aur = .{ .items = &.{} } },
+                .flatpak => .{ .flatpak = .{ .items = &.{} } },
+                .appimage => .{ .appimage = .{ .items = &.{} } },
+            };
+        }
+
+        fn run(self: *@This(), context: *runtime.RuntimeContext, _: *Zigalpm.OperationContext, backend: Backend, _: *const parser.Invocation) !void {
+            try self.ran.append(context.allocator, backend);
+        }
+    };
+    const aliases = [_][]const []const u8{
+        &.{},
+        &.{ "upgrade", "all" },
+        &.{ "upgrade", "standard", "--all" },
+        &.{ "upgrade", "standard", "-a" },
+        &.{ "upgrade", "all", "--ui-mode" },
+        &.{"-U"},
+        &.{"-Ux"},
+        &.{"-Usa"},
+    };
+    for (aliases) |arguments| {
+        const translated = try shortcodes.translate(tc.arena.allocator(), &manifest, arguments);
+        const outcome = try parser.parse(tc.arena.allocator(), &manifest, translated.arguments().?);
+        try std.testing.expect(outcome == .dispatch);
+        for ([_]struct { appimage: bool, flatpak: bool, expected: []const Backend }{
+            .{ .appimage = false, .flatpak = false, .expected = &all_backends },
+            .{ .appimage = true, .flatpak = false, .expected = &.{ .standard, .aur, .flatpak } },
+            .{ .appimage = false, .flatpak = true, .expected = &.{ .standard, .aur, .appimage } },
+            .{ .appimage = true, .flatpak = true, .expected = &.{ .standard, .aur } },
+        }) |disabled| {
+            try std.testing.expect(try manager.update("DisableAppImageUpdateCheck", if (disabled.appimage) "true" else "false"));
+            try std.testing.expect(try manager.update("DisableFlatpakUpdateCheck", if (disabled.flatpak) "true" else "false"));
+            var capture: Capture = .{};
+            const output_start = tc.stdout.writer.buffered().len;
+            var plan = try buildAllUpgradePlan(&tc.context, &outcome.dispatch, &capture, &capture);
+            defer plan.deinit(tc.context.allocator);
+            try runSelected(&capture, &tc.context, &operations, &outcome.dispatch);
+            try std.testing.expectEqualSlices(Backend, disabled.expected, capture.collected.items);
+            try std.testing.expectEqualSlices(Backend, disabled.expected, capture.ran.items);
+            try std.testing.expectEqual(!disabled.appimage, plan.find(.appimage) != null);
+            try std.testing.expectEqual(!disabled.flatpak, plan.find(.flatpak) != null);
+            try std.testing.expectEqual(@as(usize, if (disabled.flatpak) 0 else 1), capture.probe_calls);
+            if (disabled.appimage) try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered()[output_start..], "AppImage") == null);
+            if (disabled.flatpak) try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered()[output_start..], "Flatpak") == null);
+
+            const elevated_arguments = try elevatedUpgradeArguments(&tc.context, &outcome.dispatch);
+            defer tc.context.allocator.free(elevated_arguments);
+            const elevated = try parser.parse(tc.arena.allocator(), &manifest, elevated_arguments);
+            try std.testing.expect(elevated == .dispatch);
+            try std.testing.expectEqual(disabled.appimage, optionEnabled(&elevated.dispatch, disable_appimage_update_check_option));
+            try std.testing.expectEqual(disabled.flatpak, optionEnabled(&elevated.dispatch, disable_flatpak_update_check_option));
+            try manager.reset();
+            capture = .{};
+            try runSelected(&capture, &tc.context, &operations, &elevated.dispatch);
+            try std.testing.expectEqualSlices(Backend, disabled.expected, capture.ran.items);
+            const repeated = try elevatedUpgradeArguments(&tc.context, &elevated.dispatch);
+            defer tc.context.allocator.free(repeated);
+            try std.testing.expectEqual(elevated_arguments.len, repeated.len);
+        }
+    }
+
+    try std.testing.expect(try manager.update("DisableAppImageUpdateCheck", "true"));
+    try std.testing.expect(try manager.update("DisableFlatpakUpdateCheck", "true"));
+    for ([_]Backend{ .appimage, .flatpak }) |backend| {
+        const standalone = try parser.parse(tc.arena.allocator(), &manifest, &.{ "upgrade", @tagName(backend) });
+        try std.testing.expect(standalone == .dispatch);
+        var capture: Capture = .{};
+        try runSelected(&capture, &tc.context, &operations, &standalone.dispatch);
+        try std.testing.expectEqualSlices(Backend, &.{backend}, capture.ran.items);
+    }
+
+    try manager.reset();
+    for ([_]struct { flag: []const u8, expected: []const Backend }{
+        .{ .flag = "--no-appimage", .expected = &.{ .standard, .aur, .flatpak } },
+        .{ .flag = "--no-flatpak", .expected = &.{ .standard, .aur, .appimage } },
+    }) |case| {
+        const explicit_skip = try parser.parse(tc.arena.allocator(), &manifest, &.{ "upgrade", "all", case.flag });
+        try std.testing.expect(explicit_skip == .dispatch);
+        var capture: Capture = .{};
+        var plan = try buildAllUpgradePlan(&tc.context, &explicit_skip.dispatch, &capture, &capture);
+        defer plan.deinit(tc.context.allocator);
+        try runSelected(&capture, &tc.context, &operations, &explicit_skip.dispatch);
+        try std.testing.expectEqualSlices(Backend, case.expected, capture.collected.items);
+        try std.testing.expectEqualSlices(Backend, case.expected, capture.ran.items);
+    }
 }
 
 test "disabled cache cleaning is limited to aggregate upgrades and survives elevation" {
@@ -1843,6 +2012,7 @@ test "upgrade routes every action-first type through the combined handler" {
         var observed: Observed = .{};
 
         try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&context, &outcome.dispatch, &observed));
+        try std.testing.expect(context.tray_refresh_requested);
         try std.testing.expectEqual(expected.backend, observed.backend.?);
         try std.testing.expect(std.mem.indexOf(
             u8,
@@ -1942,11 +2112,12 @@ test "upgrade all continues after a failed backend and returns failure" {
 
         fn run(
             self: *@This(),
-            _: *runtime.RuntimeContext,
+            context: *runtime.RuntimeContext,
             _: *Zigalpm.OperationContext,
             backend: Backend,
             _: *const parser.Invocation,
         ) !void {
+            try std.testing.expect(!context.tray_refresh_requested);
             try self.backends.append(std.testing.allocator, backend);
             if (backend == .aur) return error.SyntheticAurFailure;
         }
@@ -1955,6 +2126,7 @@ test "upgrade all continues after a failed backend and returns failure" {
     defer calls.backends.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(u8, 1), try executeWithRunner(&tc.context, &outcome.dispatch, &calls));
+    try std.testing.expect(tc.context.tray_refresh_requested);
     try std.testing.expectEqualSlices(Backend, &all_backends, calls.backends.items);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Could not complete the AUR upgrade") != null);
     try std.testing.expect(std.mem.indexOf(
@@ -2120,6 +2292,7 @@ test "upgrade UI mode emits backend percentage frames" {
     };
 
     try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &outcome.dispatch, Progress{}));
+    try std.testing.expect(!tc.context.tray_refresh_requested);
     const rendered = tc.stdout.writer.buffered();
     try std.testing.expectEqual(@as(usize, 3), std.mem.count(u8, rendered, "[JSON]"));
     try std.testing.expect(std.mem.indexOf(u8, rendered, "[/JSON]") != null);

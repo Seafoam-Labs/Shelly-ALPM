@@ -502,6 +502,7 @@ fn listUpdates(state: *State, request: wire.RequestEnvelope) ![]u8 {
             .kind = kindFromNative(value.kind()),
             .scope = scopeToWire(value.get_scope()),
             .permissions = permissions,
+            .download_size = value.download_size,
             .eol = eol,
             .eol_rebase = eol_rebase,
         };

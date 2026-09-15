@@ -11,6 +11,33 @@ pub const DiffLine = struct {
     text: []const u8,
 };
 
+/// A half-open range in the full diff, including three lines of context.
+pub const DiffSection = struct {
+    start: usize,
+    end: usize,
+};
+
+/// Select display ranges without modifying the full diff used by UI frames.
+/// Overlapping and adjacent context ranges are emitted only once.
+pub fn collapsedSections(allocator: std.mem.Allocator, lines: []const DiffLine) ![]DiffSection {
+    var sections: std.ArrayList(DiffSection) = .empty;
+    errdefer sections.deinit(allocator);
+    for (lines, 0..) |line, index| {
+        if (line.kind == .unchanged) continue;
+        const start = index -| 3;
+        const end = index + 1 + @min(@as(usize, 3), lines.len - index - 1);
+        if (sections.items.len > 0) {
+            const previous = &sections.items[sections.items.len - 1];
+            if (start <= previous.end) {
+                previous.end = end;
+                continue;
+            }
+        }
+        try sections.append(allocator, .{ .start = start, .end = end });
+    }
+    return sections.toOwnedSlice(allocator);
+}
+
 pub fn buildDiff(
     allocator: std.mem.Allocator,
     old_content: []const u8,
@@ -91,4 +118,55 @@ test "diff preserves C# LCS ordering and line kinds" {
     try std.testing.expectEqualStrings("three", lines[1].text);
     try std.testing.expectEqual(DiffKind.removed, lines[2].kind);
     try std.testing.expectEqualStrings("two", lines[2].text);
+}
+
+test "collapsed diff keeps three context lines around replacements" {
+    const allocator = std.testing.allocator;
+    const lines = try buildDiff(allocator, "a\nb\nc\nd\nold\nf\ng\nh\ni", "a\nb\nc\nd\nnew\nf\ng\nh\ni");
+    defer allocator.free(lines);
+    const sections = try collapsedSections(allocator, lines);
+    defer allocator.free(sections);
+    try std.testing.expectEqualDeep(&[_]DiffSection{.{ .start = 1, .end = 9 }}, sections);
+}
+
+test "collapsed diff merges nearby changes and separates distant changes" {
+    const allocator = std.testing.allocator;
+    for (0..10) |gap| {
+        var lines: std.ArrayList(DiffLine) = .empty;
+        defer lines.deinit(allocator);
+        try lines.append(allocator, .{ .kind = .added, .text = "first" });
+        try lines.appendNTimes(allocator, .{ .kind = .unchanged, .text = "context" }, gap);
+        try lines.append(allocator, .{ .kind = .removed, .text = "last" });
+        const sections = try collapsedSections(allocator, lines.items);
+        defer allocator.free(sections);
+        if (gap <= 6) {
+            try std.testing.expectEqualDeep(&[_]DiffSection{.{ .start = 0, .end = gap + 2 }}, sections);
+        } else {
+            try std.testing.expectEqualDeep(&[_]DiffSection{
+                .{ .start = 0, .end = 4 },
+                .{ .start = gap - 2, .end = gap + 2 },
+            }, sections);
+        }
+    }
+}
+
+test "collapsed diff handles identical empty and entirely changed files" {
+    const allocator = std.testing.allocator;
+    for ([_]struct { old: []const u8, new: []const u8, changed: bool }{
+        .{ .old = "", .new = "", .changed = false },
+        .{ .old = "same\r\ncontent\r\n", .new = "same\ncontent\n", .changed = false },
+        .{ .old = "", .new = "one\ntwo", .changed = true },
+        .{ .old = "one\ntwo", .new = "", .changed = true },
+        .{ .old = "old", .new = "new", .changed = true },
+    }) |case| {
+        const lines = try buildDiff(allocator, case.old, case.new);
+        defer allocator.free(lines);
+        const sections = try collapsedSections(allocator, lines);
+        defer allocator.free(sections);
+        if (case.changed) {
+            try std.testing.expectEqualDeep(&[_]DiffSection{.{ .start = 0, .end = lines.len }}, sections);
+        } else {
+            try std.testing.expectEqual(@as(usize, 0), sections.len);
+        }
+    }
 }

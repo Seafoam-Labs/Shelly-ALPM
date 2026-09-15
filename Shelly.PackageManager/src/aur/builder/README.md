@@ -35,6 +35,13 @@ operation/log. `writeSrcinfoWithOperation` shares the reviewed sandboxed
 metadata-evaluation stage, then serializes SRCINFO through `aur/srcinfo.zig`
 without acquiring sources or invoking lifecycle functions.
 
+Each metadata evaluation sources the base PKGBUILD in a fresh Bash environment
+with the configured build flags and makepkg directory/architecture context.
+Previously evaluated declarations are never used as input. Names recognized by
+the static parser are tracked without assigning them, so the snapshot preserves
+unchanged values and explicit unsets as well as shell-created state. This keeps
+final review and the subsequent build consistent across repeated evaluations.
+
 ## Files
 
 | File | Role |
@@ -47,7 +54,7 @@ without acquiring sources or invoking lifecycle functions.
 | `security.zig` | **Privilege guards.** Non-root effective-UID policy, `prctl(NO_NEW_PRIVS)` process lockdown (`setNoNewPrivs` is shared with the sandbox wrapper), randomized unique work directories, and `narrowBuilderError` (anyerror → `BuilderErrors`). |
 | `sandbox.zig` | **Landlock step confinement.** Raw Landlock syscalls (ruleset create/add-rule/restrict-self), the ABI probe, the base and per-build allow-list, the `__sandbox-exec` wrapper protocol (`parseWrapperArguments`/`buildWrappedCommand`), and their unit tests. Steps re-execute through the CLI wrapper so only the untrusted bash children are confined. |
 | `sources.zig` | **Source pipeline.** Copies local files, downloads HTTP sources into the cache, mirror-clones git sources, verifies checksums and PGP signatures (including compressed `.sig` payloads), runs the optional `verify()` step, and safely extracts archives into the staging tree (path traversal, symlink, and size limits). |
-| `steps.zig` | **Step execution.** Build-directory validation, build logging, lifecycle Bash execution, and atomic sandboxed capture of the reviewed PKGBUILD's changed scalar and indexed-array state. Scalar and array set/unset records are NUL-delimited, validated, and bounded before becoming parser overrides. Also owns messaging/virtual-metadata preludes, stream forwarding, `pkgver()` capture, and package-metadata capture. |
+| `steps.zig` | **Step execution.** Build-directory validation, build logging, lifecycle Bash execution, and atomic sandboxed capture of the base PKGBUILD's scalar and indexed-array state. Scalar and array set/unset records are NUL-delimited, validated, and bounded before becoming parser overrides. Also owns messaging/virtual-metadata preludes, stream forwarding, `pkgver()` capture, and package-metadata capture. |
 | `package_file.zig` | **Package assembly.** `tidy`/strip handling, `.PKGINFO` and `.BUILDINFO` writers, install-script/changelog placement from reviewed contents, `.MTREE` generation, archive creation via the Shelly archive writer, detached OpenPGP signing, and rollback cleanup. |
 | `pkgbuild_review.zig` | **Review snapshot.** `preparePkgbuildReview` hashes the PKGBUILD plus its local/install/auxiliary files into a `Digest` and keeps byte-exact copies (`ReviewedFile`); the builder re-checks this digest immediately before executing anything, so a PKGBUILD changed after approval is rejected. |
 | `pkgbuild_validation.zig` | **Validation facade.** Runs the pkgbuild validator suite (shared validator, homograph, post-install/install-script scanners, local-source checks) over parsed PKGBUILDs and reports findings. |

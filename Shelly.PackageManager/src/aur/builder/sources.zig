@@ -107,18 +107,13 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
     // makepkg runs the optional verify() function in $startdir after
     // built-in integrity checks and before extracting any source. Expose
     // staged remote/renamed sources there through temporary symlinks;
-    // existing direct local sources are already visible in $startdir.
+    // existing direct local sources and the default HTTP cache are already
+    // visible in $startdir.
     if (self.options.run_verify and !self.options.skip_source_pgp_verification) {
         const execution = package_build.execution orelse return error.MissingExecutionSteps;
         if (execution.verify_step) |step| {
-            const links = try exposeSourcesForVerify(self, prepared);
-            defer {
-                for (links) |path| {
-                    std.Io.Dir.cwd().deleteFile(self.io, path) catch {};
-                    self.allocator.free(path);
-                }
-                self.allocator.free(links);
-            }
+            var view = try exposeSourcesForVerify(self, prepared);
+            defer view.deinit(self);
             try steps.runStep(
                 self,
                 operation,
@@ -137,6 +132,10 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
             {
                 try copyLocalSource(self, source.source.location, source.destination);
             };
+            for (view.cached_sources.items) |index| {
+                const source = &prepared[index];
+                try copyLocalSource(self, source.source.name, source.destination);
+            }
         }
     }
 
@@ -275,36 +274,60 @@ fn copyLocalSource(self: *PackageBuilder, source_name: []const u8, destination: 
     try std.Io.Dir.copyFile(.cwd(), source_path, .cwd(), destination, self.io, .{});
 }
 
-fn exposeSourcesForVerify(self: *PackageBuilder, prepared: []const source_spec.PreparedSource) ![][]u8 {
-    var links: std.ArrayList([]u8) = .empty;
-    errdefer {
-        for (links.items) |path| {
+const SourceVerificationView = struct {
+    links: std.ArrayList([]u8) = .empty,
+    cached_sources: std.ArrayList(usize) = .empty,
+
+    fn deinit(view: *SourceVerificationView, self: *PackageBuilder) void {
+        for (view.links.items) |path| {
             std.Io.Dir.cwd().deleteFile(self.io, path) catch {};
             self.allocator.free(path);
         }
-        links.deinit(self.allocator);
+        view.links.deinit(self.allocator);
+        view.cached_sources.deinit(self.allocator);
     }
-    for (prepared) |*source| {
+};
+
+fn exposeSourcesForVerify(self: *PackageBuilder, prepared: []const source_spec.PreparedSource) !SourceVerificationView {
+    var view: SourceVerificationView = .{};
+    errdefer view.deinit(self);
+    const start_directory = try std.Io.Dir.cwd().realPathFileAlloc(self.io, self.options.start_directory, self.allocator);
+    defer self.allocator.free(start_directory);
+    const source_directory = try std.Io.Dir.cwd().realPathFileAlloc(self.io, self.options.source_destination, self.allocator);
+    defer self.allocator.free(source_directory);
+    const cache_in_startdir = std.mem.eql(u8, start_directory, source_directory);
+
+    for (prepared, 0..) |*source, index| {
         const visible_path = try std.fs.path.join(
             self.allocator,
             &.{ self.options.start_directory, source.source.name },
         );
         errdefer self.allocator.free(visible_path);
-        const exists = if (std.Io.Dir.cwd().statFile(
+        const existing = std.Io.Dir.cwd().statFile(
             self.io,
             visible_path,
             .{ .follow_symlinks = false },
-        )) |_| true else |err| switch (err) {
-            error.FileNotFound => false,
+        ) catch |err| switch (err) {
+            error.FileNotFound => null,
             else => return err,
         };
-        if (exists) {
+        if (existing) |stat| {
             // A direct local source already occupies its makepkg-visible
             // path. Never replace an unrelated user path for a renamed,
             // downloaded, or VCS source.
             if (source.source.kind == .local and
                 std.mem.eql(u8, source.source.location, source.source.name))
             {
+                self.allocator.free(visible_path);
+                continue;
+            }
+            if (source.source.kind == .http and cache_in_startdir and stat.kind == .file) {
+                // Acquisition created or validated this exact cache entry.
+                // Expose the bytes that passed integrity checks, then copy
+                // any successful verify() changes back into staging. Keep
+                // cached files out of the temporary-link cleanup list.
+                try std.Io.Dir.copyFile(.cwd(), source.destination, .cwd(), visible_path, self.io, .{});
+                try view.cached_sources.append(self.allocator, index);
                 self.allocator.free(visible_path);
                 continue;
             }
@@ -317,9 +340,9 @@ fn exposeSourcesForVerify(self: *PackageBuilder, prepared: []const source_spec.P
             .{ .is_directory = source.source.kind == .git },
         );
         errdefer std.Io.Dir.cwd().deleteFile(self.io, visible_path) catch {};
-        try links.append(self.allocator, visible_path);
+        try view.links.append(self.allocator, visible_path);
     }
-    return links.toOwnedSlice(self.allocator);
+    return view;
 }
 
 fn downloadSource(
@@ -441,6 +464,11 @@ fn materializeGitSource(
         "--",
         acquired_repository,
         destination,
+    });
+    // Relative submodule URLs must resolve against upstream, not the
+    // acquisition directory that is removed before PKGBUILD steps run.
+    try runSourceCommand(self, operation, &.{
+        "-C", destination, "remote", "set-url", "origin", source.location,
     });
     if (source.reference) |reference| switch (reference.kind) {
         .branch => try runSourceCommand(self, operation, &.{
@@ -736,7 +764,7 @@ fn extractSourceArchiveIfRecognized(
         .not_archive => return false,
         .archive => |entry| entry,
     };
-    if (reader.isCompressedPlainFile()) return false;
+    if (reader.isPlainSourceFile()) return false;
     var directory_timestamps: std.ArrayList(DirectoryTimestamp) = .empty;
     defer {
         for (directory_timestamps.items) |timestamp| self.allocator.free(timestamp.path);

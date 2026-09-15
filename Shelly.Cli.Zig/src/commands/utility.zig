@@ -1,4 +1,5 @@
 const std = @import("std");
+const user_account = @import("Zigalpm").user_account;
 const test_support = @import("test_support.zig");
 const completions = @import("../cli/completions.zig");
 const documentation = @import("../cli/documentation.zig");
@@ -268,22 +269,22 @@ fn validInvokingUser(user: []const u8) bool {
 }
 
 fn usernameForUid(context: *const runtime.RuntimeContext, wanted_uid: []const u8) !?[]const u8 {
-    const passwd = std.Io.Dir.cwd().readFileAlloc(
-        context.io,
-        "/etc/passwd",
-        context.allocator,
-        .limited(1024 * 1024),
-    ) catch return null;
-    var lines = std.mem.splitScalar(u8, passwd, '\n');
-    while (lines.next()) |line| {
-        var fields = std.mem.splitScalar(u8, line, ':');
-        const username = fields.next() orelse continue;
-        _ = fields.next() orelse continue;
-        const uid = fields.next() orelse continue;
-        if (std.mem.eql(u8, uid, wanted_uid) and validInvokingUser(username))
-            return username;
-    }
-    return null;
+    const account = (try user_account.byUidText(context.allocator, wanted_uid)) orelse return null;
+    defer account.deinit(context.allocator);
+    if (account.uid == 0 or !validInvokingUser(account.username)) return null;
+    return try context.allocator.dupe(u8, account.username);
+}
+
+test "NSS utility ownership lookup resolves UIDs and rejects root" {
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    const allocator = context.context.allocator;
+    const account = (try user_account.byName(allocator, "nobody")) orelse return error.SkipZigTest;
+    const uid = try std.fmt.allocPrint(allocator, "{d}", .{account.uid});
+    try std.testing.expectEqualStrings(account.username, (try usernameForUid(&context.context, uid)).?);
+    try std.testing.expect(try usernameForUid(&context.context, "0") == null);
+    try std.testing.expect(try usernameForUid(&context.context, "invalid") == null);
 }
 
 fn parseInvocation(

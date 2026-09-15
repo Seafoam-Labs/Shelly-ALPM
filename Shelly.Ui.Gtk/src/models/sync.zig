@@ -42,6 +42,7 @@ pub const CheckUpdatesFlatpak = struct {
     Id: []const u8 = "",
     Name: []const u8 = "",
     Version: []const u8 = "",
+    NewVersion: []const u8 = "",
     Arch: []const u8 = "",
     Branch: []const u8 = "",
     LatestCommit: []const u8 = "",
@@ -51,6 +52,7 @@ pub const CheckUpdatesFlatpak = struct {
     InstallLevel: i32 = 0,
     Permissions: []const []const u8 = &.{},
     InstalledSize: u64 = 0,
+    DownloadSize: i64 = 0,
     Ref: []const u8 = "",
     FullRef: []const u8 = "",
 };

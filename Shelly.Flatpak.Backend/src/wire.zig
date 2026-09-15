@@ -239,6 +239,7 @@ pub const InstalledRef = struct {
     kind: RefKind,
     scope: Scope,
     permissions: []const []const u8 = &.{},
+    download_size: ?u64 = null,
     eol: ?[]const u8 = null,
     eol_rebase: ?[]const u8 = null,
 };

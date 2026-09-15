@@ -5,6 +5,8 @@
 
 const parser = @import("parser/parser.zig");
 
+pub const Diagnostic = parser.Diagnostic;
+
 pub const Pkgbuild = parser.Pkgbuild;
 pub const PackageNames = parser.PackageNames;
 pub const parsed_dep = parser.parsed_dep;

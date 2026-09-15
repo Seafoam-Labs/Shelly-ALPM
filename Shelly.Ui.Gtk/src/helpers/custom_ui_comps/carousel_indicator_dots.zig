@@ -140,7 +140,7 @@ fn countDots(indicator: *CarouselIndicatorDots) usize {
 
 test "indicator follows page changes and safely owns its carousel connection" {
     if (true) return error.SkipZigTest;
-    if (gtk.initCheck() == 0) return error.SkipZigTest;
+    try @import("../gtk_test.zig").requireDisplay();
 
     const carousel = Carousel.new();
     _ = carousel.as(gobject.Object).refSink();

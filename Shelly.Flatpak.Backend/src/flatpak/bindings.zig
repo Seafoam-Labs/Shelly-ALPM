@@ -163,6 +163,7 @@ pub const libflatpak = struct {
         ptr: *flatpak.FlatpakRef,
         scope: Scope,
         permissions: []const [:0]const u8 = &.{},
+        download_size: u64 = 0,
 
         fn installedRef(self: InstalledFlatpak) *flatpak.FlatpakInstalledRef {
             return @ptrCast(self.ptr);

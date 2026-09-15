@@ -9,6 +9,59 @@ pub fn resolve_string(self: PkgbuildParser, input: []const u8, vars: *std.String
     return resolve_expansions(self, input, vars, .metadata);
 }
 
+pub const WordValue = struct {
+    value: []const u8,
+    unresolved: bool = false,
+};
+
+/// Expand each original expression once. Substituted bytes are data, never a
+/// new input to another expansion pass (even if they contain dollars/quotes).
+pub fn resolve_word(self: PkgbuildParser, input: []const u8, vars: *std.StringHashMap([]const u8)) !WordValue {
+    const word = try @import("word.zig").read(self.allocator, input, 0);
+    defer word.deinit(self.allocator);
+    if (word.end != input.len) return error.UnsupportedShellWord;
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(self.allocator);
+    var unresolved = false;
+    for (word.parts) |part| {
+        const text = input[part.start..part.end];
+        if (part.kind != .parameter) {
+            try out.appendSlice(self.allocator, text);
+            continue;
+        }
+        const expanded = try resolve_word_parameter(self, text, vars);
+        defer self.allocator.free(expanded.value);
+        unresolved = unresolved or expanded.unresolved;
+        try out.appendSlice(self.allocator, expanded.value);
+    }
+    return .{ .value = try out.toOwnedSlice(self.allocator), .unresolved = unresolved };
+}
+
+fn resolve_word_parameter(self: PkgbuildParser, text: []const u8, vars: *std.StringHashMap([]const u8)) !WordValue {
+    if (std.mem.startsWith(u8, text, "$(("))
+        return .{ .value = try replace_arithmetic(self, text, vars) };
+    const braced = std.mem.startsWith(u8, text, "${");
+    const start: usize = if (braced) 2 else 1;
+    const end = shell_scan.scan_word_chars(text, start);
+    const name = text[start..end];
+    const tainted = if (self.unresolved_variables) |unresolved| unresolved.contains(name) else false;
+    const known = text[0] == '$' and name.len > 0 and vars.contains(name);
+    if (!known) return .{ .value = try self.allocator.dupe(u8, text), .unresolved = true };
+    const value = if (!braced or (end < text.len and text[end] == '}'))
+        try self.allocator.dupe(u8, vars.get(name).?)
+    else switch (text[end]) {
+        ',', '^' => try replace_case_expansion(self, text, vars),
+        '#', '%' => try replace_trim_expansion(self, text, vars),
+        '/' => try replace_replacement_expansion(self, text, vars),
+        ':' => if (end + 1 < text.len and std.mem.indexOfScalar(u8, "=-+?", text[end + 1]) != null)
+            return .{ .value = try self.allocator.dupe(u8, text), .unresolved = true }
+        else
+            try replace_substring_expansion(self, text, vars),
+        else => return .{ .value = try self.allocator.dupe(u8, text), .unresolved = true },
+    };
+    return .{ .value = value, .unresolved = tainted };
+}
+
 const expansion_mode = enum { metadata, execution };
 
 fn resolve_expansions(

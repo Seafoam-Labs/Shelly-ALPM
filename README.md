@@ -68,6 +68,54 @@ paru -Rns shelly
   Flatpak applications alongside native packages without making Flatpak a
   runtime dependency of the base Shelly package.
 
+## PKGBUILD review
+
+Terminal PKGBUILD reviews show changed lines with three unchanged lines of
+context before and after each change. Nearby changes share their context;
+omitted sections are marked with the number of hidden lines. First reviews
+without a previous PKGBUILD show the complete file.
+
+`CollapsePkgbuildDiff` defaults to `true`, including for existing configurations
+that do not contain the setting. To show the full file during review:
+
+```bash
+shelly config set CollapsePkgbuildDiff false
+```
+
+Restore the collapsed view with `shelly config set CollapsePkgbuildDiff true`.
+Security warnings, attached source files, and approval prompts are always
+handled as before. This setting controls terminal review output; GUI reviews
+continue to receive the complete diff.
+
+## AppImage checks during combined upgrades
+
+To skip AppImage update checks and upgrades during `shelly upgrade all`:
+
+```bash
+shelly config set DisableAppImageUpdateCheck true
+```
+
+This also applies to combined-upgrade aliases, including bare `shelly` and
+`shelly -U`. The setting defaults to `false`; restore AppImage checks with
+`shelly config set DisableAppImageUpdateCheck false`. Explicit
+`shelly upgrade appimage` and `shelly list-updates` checks remain available.
+The one-time `shelly upgrade all --no-appimage` flag also skips AppImages.
+
+## Flatpak checks during combined upgrades
+
+To skip Flatpak update checks and upgrades during `shelly upgrade all`:
+
+```bash
+shelly config set DisableFlatpakUpdateCheck true
+```
+
+This also applies to combined-upgrade aliases, including bare `shelly` and
+`shelly -U`. The setting defaults to `false`; restore Flatpak checks with
+`shelly config set DisableFlatpakUpdateCheck false`. Explicit
+`shelly upgrade flatpak` and `shelly list-updates` checks remain available.
+The one-time `shelly upgrade all --no-flatpak` flag also skips Flatpak.
+This preference can be used together with `DisableAppImageUpdateCheck`.
+
 ## Upgrade cache cleaning
 
 To skip the package-cache cleanup prompt and deletion during `shelly upgrade all`:
@@ -181,6 +229,19 @@ CLI provides the same core functionality as the UI but in a scriptable, terminal
 ### CLI Commands
 
 Full documentation can be viewed on the [Shelly CLI Reference](https://www.seafoam-labs.org/shelly-alpm/docs/cli-reference/) page.
+
+Use `--needed` with standard installs to skip same-version reinstalls while still
+installing missing packages and allowing upgrades. The flag works before or after
+package names, and `-n` remains the separate no-confirm option:
+
+```bash
+shelly -Is zed --needed
+shelly -Is --needed zed git -n
+```
+
+This also applies to local Arch package archives. URL archives are downloaded
+before their package metadata can be checked. Without `--needed`, reinstall
+behavior is unchanged; AUR builds and Shelly binary archives are unaffected.
 
 The versioned JSON contracts used by unattended package-building services are
 documented in [Remora automation contract](docs/remora-automation.md). Probe an

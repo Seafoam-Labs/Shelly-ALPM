@@ -48,6 +48,12 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    const user_account_mod = b.createModule(.{
+        .root_source_file = b.path("src/shared/user_account.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
     const archive_mod = b.createModule(.{
         .root_source_file = b.path("src/shared/archive.zig"),
         .target = target,
@@ -80,6 +86,7 @@ pub fn build(b: *std.Build) void {
     mod.addImport("alpm_c", alpm_c);
     mod.addImport("archive", archive_mod);
     mod.addImport("operation_context", operation_context_mod);
+    mod.addImport("user_account", user_account_mod);
     mod.addImport("ShellyHttp", shelly_http.module("ShellyHttp"));
     mod.addImport("toml", toml.module("toml"));
     const package_options = b.addOptions();
@@ -223,13 +230,37 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
 
+    const account_tests = b.addTest(.{
+        .name = "user-account-test",
+        .root_module = mod,
+        .filters = &.{ "NSS", "invoking-user", "VCS build commands" },
+    });
+    const run_account_tests = b.addRunArtifact(account_tests);
+    const account_test_step = b.step("user-account-test", "Test NSS account resolution and invoking-user build commands");
+    account_test_step.dependOn(&run_account_tests.step);
+    const account_lookup_tests = b.addTest(.{ .root_module = user_account_mod });
+    const run_account_lookup_tests = b.addRunArtifact(account_lookup_tests);
+    account_test_step.dependOn(&run_account_lookup_tests.step);
+    test_step.dependOn(&run_account_lookup_tests.step);
+
+    const builder_tests = b.addTest(.{
+        .name = "builder-test",
+        .root_module = mod,
+        .filters = &.{"PackageBuilder"},
+    });
+    const run_builder_tests = b.addRunArtifact(builder_tests);
+    const builder_test_step = b.step("builder-test", "Run native package builder regressions");
+    builder_test_step.dependOn(&run_builder_tests.step);
+
     const shellybuild_test_module = b.createModule(.{
         .root_source_file = b.path("src/aur/shellybuild.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     shellybuild_test_module.addImport("toml", toml.module("toml"));
     shellybuild_test_module.addImport("operation_context", operation_context_mod);
+    shellybuild_test_module.addImport("user_account", user_account_mod);
     const shellybuild_tests = b.addTest(.{
         .name = "shellybuild-test",
         .root_module = shellybuild_test_module,
@@ -286,10 +317,19 @@ pub fn build(b: *std.Build) void {
     operation_test_step.dependOn(&run_operation_tests.step);
     operation_test_step.dependOn(&run_adapter_tests.step);
 
+    const parser_tests = b.addTest(.{
+        .name = "pkgbuild-parser-test",
+        .root_module = mod,
+        .filters = &.{ "pkgbuild.parser", "issue 1880" },
+    });
+    const run_parser_tests = b.addRunArtifact(parser_tests);
+    b.step("pkgbuild-parser-test", "Test static shell word and PKGBUILD semantics").dependOn(&run_parser_tests.step);
+
     const pkgbuild_review_tests = b.addTest(.{
         .name = "pkgbuild-review-test",
         .root_module = mod,
         .filters = &.{
+            "issue 1880",
             "PKGBUILD validation combines post-install and homograph findings",
             "PKGBUILD review accepts empty auxiliary selections and rejects missing files",
             "parser_content: empty optional filenames mean no auxiliary file",
@@ -309,6 +349,7 @@ pub fn build(b: *std.Build) void {
             "parser_content: conditional source integrity arrays are deferred as one family",
             "PackageBuilder resolves issue 1750 source command substitution after review",
             "PackageBuilder evaluates conditional source and checksum arrays atomically",
+            "PackageBuilder preserves issue 1891",
             "PackageBuilder preserves generic shell-created scalar defaults for lifecycle steps",
             "PackageBuilder preserves generic conditional indexed arrays for lifecycle steps",
             "PackageBuilder remaps shell-resolved split package names by reviewed order",
@@ -384,11 +425,20 @@ pub fn build(b: *std.Build) void {
     const archive_test_step = b.step("archive-test", "Run safe ALPM downgrade archive tests");
     archive_test_step.dependOn(&run_archive_tests.step);
 
+    const removal_tests = b.addTest(.{
+        .name = "alpm-removal-test",
+        .root_module = mod,
+        .filters = &.{"remove_packages"},
+    });
+    const removal_test_step = b.step("alpm-removal-test", "Test removal plans and cancellation using isolated databases");
+    removal_test_step.dependOn(&b.addRunArtifact(removal_tests).step);
+
     const alpm_query_tests = b.addTest(.{
         .name = "alpm-query-test",
         .root_module = mod,
         .filters = &.{
             "public ALPM query helpers expose typed results",
+            "ALPM package completion events preserve package identity and action",
             "compare_package_versions uses libalpm ordering",
             "dependencyName strips constraints",
             "is_cachyos exposes the detected manager state",
@@ -419,6 +469,8 @@ pub fn build(b: *std.Build) void {
             "dependency query APIs resolve exact, versioned, and virtual remote packages",
             "install_packages predownloads prepared repository packages before commit",
             "install_packages exposes its prepared plan and decline prevents downloads",
+            "install_packages needed",
+            "install_local_packages needed",
             "install_local_packages installs multiple archives in a DB-only transaction",
             "install_local_packages predownloads repository dependencies before commit",
             "Manager.init applies configured libalpm options and callback contexts",
@@ -633,6 +685,7 @@ pub fn build(b: *std.Build) void {
             "helper cache identity recognizes installed split-package members",
             "prepared non-chroot split package builds use the custom builder",
             "all requested PKGBUILDs are reviewed before the first build",
+            "AUR upgrades skip declined reviews",
             "AUR package failures are emitted after all builds and fail the operation",
             "AUR package preparation failure does not stop valid packages",
             "build-only dependencies are removed after a failed build",
@@ -640,6 +693,7 @@ pub fn build(b: *std.Build) void {
             "non-root builder guard rejects root effective uid",
             "PackageBuilder rejects a PKGBUILD changed after review",
             "PackageBuilder resolves issue 1750 source command substitution after review",
+            "PackageBuilder preserves issue 1891",
             "PackageBuilder preserves generic shell-created scalar defaults for lifecycle steps",
             "PackageBuilder preserves generic conditional indexed arrays for lifecycle steps",
             "PackageBuilder remaps shell-resolved split package names by reviewed order",
@@ -699,6 +753,7 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder rejects unsupported source protocols",
             "PackageBuilder cancels source preparation without committing srcdir",
             "PackageBuilder runs relative VCS paths from srcdir before pkgver",
+            "PackageBuilder resolves relative Git submodules after staging cleanup",
             "PackageBuilder verifies real checksums for pinned VCS sources",
             "PackageBuilder applies generic patch arrays and propagates dynamic pkgver",
             "PackageBuilder rejects invalid dynamic pkgver output",

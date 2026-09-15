@@ -10,6 +10,8 @@ const fields = @import("fields.zig");
 const validation = @import("validation.zig");
 const execution = @import("execution.zig");
 
+pub const Diagnostic = @import("diagnostic.zig").Diagnostic;
+
 pub const Pkgbuild = types.Pkgbuild;
 pub const PackageNames = types.PackageNames;
 pub const parsed_dep = types.parsed_dep;
@@ -37,6 +39,13 @@ test {
 
 pub const PkgbuildParser = struct {
     allocator: std.mem.Allocator,
+    diagnostic: ?*?Diagnostic = null,
+    pkgbuild_path: []const u8 = "PKGBUILD",
+    /// Names whose static values still require reviewed shell evaluation.
+    unresolved_variables: ?*std.StringHashMap(void) = null,
+    /// Allocation identities of source results that still contain deferred
+    /// syntax. Identical literal bytes must not inherit another word's state.
+    deferred_source_words: ?*std.AutoHashMap(usize, void) = null,
     io: std.Io,
     selected_package_name: ?[]const u8 = null,
     package_carch: []const u8 = "x86_64",
@@ -56,6 +65,12 @@ pub const PkgbuildParser = struct {
     /// Indexed arrays removed while sourcing the reviewed PKGBUILD.
     dynamic_array_unsets: ?*const std.StringHashMap(void) = null,
 
+    fn capture_file_error(self: PkgbuildParser, content: []const u8, package: []const u8, field: []const u8, value: ?[]const u8, err: anyerror) void {
+        const destination = self.diagnostic orelse return;
+        if (destination.*) |*old| old.deinit();
+        destination.* = Diagnostic.init(self.allocator, content, self.pkgbuild_path, self.selected_package_name orelse package, field, value, err) catch null;
+    }
+
     /// Public entry point kept on the parser type for existing callers;
     /// implemented in `function_body.zig`.
     pub const extract_function_body = function_body.extract_function_body;
@@ -65,7 +80,9 @@ pub const PkgbuildParser = struct {
         defer self.allocator.free(content);
 
         const base_dir = std.fs.path.dirname(path);
-        return self.parser_content(content, base_dir);
+        var context = self;
+        context.pkgbuild_path = path;
+        return context.parser_content(content, base_dir);
     }
 
     /// Reads a PKGBUILD and returns every package named by its top-level
@@ -99,7 +116,11 @@ pub const PkgbuildParser = struct {
         return .{ .items = items };
     }
 
-    pub fn parser_content(self: PkgbuildParser, content: []const u8, base_dir: ?[]const u8) !Pkgbuild {
+    pub fn parser_content(context: PkgbuildParser, content: []const u8, base_dir: ?[]const u8) !Pkgbuild {
+        var unresolved = std.StringHashMap(void).init(context.allocator);
+        defer unresolved.deinit();
+        var self = context;
+        self.unresolved_variables = &unresolved;
         var vars = try variables.build_var_hashmap(self, content);
         errdefer {
             var iterator = vars.iterator();
@@ -123,24 +144,42 @@ pub const PkgbuildParser = struct {
         try validation.validate_architecture_directives(self, content, &vars);
         const package_functions = try validation.inspect_package_functions(self, content, &vars);
 
-        const install_assignment = try fields.resolve_file_assignment(self, content, &vars, "install");
+        const install_assignment = fields.resolve_file_assignment(self, content, &vars, "install") catch |err| {
+            self.capture_file_error(content, vars.get("pkgname") orelse "unknown", "install", null, err);
+            return err;
+        };
         defer if (install_assignment) |assignment| self.allocator.free(assignment.value);
         const install_file = if (install_assignment) |assignment|
-            try fields.resolve_optional_file_string(self, assignment, &vars)
+            fields.resolve_optional_file_string(self, assignment, &vars) catch |err| {
+                self.capture_file_error(content, vars.get("pkgname") orelse "unknown", "install", assignment.value, err);
+                return err;
+            }
         else
             null;
-        const changelog_assignment = try fields.resolve_file_assignment(self, content, &vars, "changelog");
+        errdefer if (install_file) |value| self.allocator.free(value);
+        const changelog_assignment = fields.resolve_file_assignment(self, content, &vars, "changelog") catch |err| {
+            self.capture_file_error(content, vars.get("pkgname") orelse "unknown", "changelog", null, err);
+            return err;
+        };
         defer if (changelog_assignment) |assignment| self.allocator.free(assignment.value);
         const changelog_file = if (changelog_assignment) |assignment|
-            try fields.resolve_optional_file_string(self, assignment, &vars)
+            fields.resolve_optional_file_string(self, assignment, &vars) catch |err| {
+                self.capture_file_error(content, vars.get("pkgname") orelse "unknown", "changelog", assignment.value, err);
+                return err;
+            }
         else
             null;
 
+        errdefer if (changelog_file) |value| self.allocator.free(value);
+        var deferred_sources = std.AutoHashMap(usize, void).init(self.allocator);
+        defer deferred_sources.deinit();
+        var source_parser = self;
+        source_parser.deferred_source_words = &deferred_sources;
         const source = if (dynamic_source_assignments.len > 0)
-            try fields.resolve_dynamic_source_array_field(self, content, &vars)
+            try fields.resolve_dynamic_source_array_field(source_parser, content, &vars)
         else
-            try fields.resolve_arch_array_field(self, content, &vars, "source");
-        const local_source_files = try sources.extract_local_source_files(self, source);
+            try fields.resolve_arch_array_field(source_parser, content, &vars, "source");
+        const local_source_files = try sources.extract_local_source_files(source_parser, source);
         const local_source_contents = try sources.resolve_local_source_contents(self, local_source_files, base_dir);
 
         const depends = try fields.resolve_package_array_field(self, content, &vars, "depends");
@@ -442,7 +481,7 @@ test "parser_content: array reference expansion via ${arr[@]}" {
     const content =
         \\pkgname=myapp
         \\_common_deps=('bash' 'coreutils')
-        \\depends=('${_common_deps[@]}' 'extra-pkg')
+        \\depends=("${_common_deps[@]}" 'extra-pkg')
     ;
     var info = try parse_test_pkgbuild(parser, content, null);
     defer info.deinit(std.testing.allocator);
@@ -1048,7 +1087,7 @@ test "parser: full PKGBUILD exercises the whole pipeline" {
         \\license=('MIT')
         \\arch=('x86_64')
         \\_common_deps=('libfoo' 'libbar')
-        \\depends=('bash' 'coreutils>=8.0' '${_common_deps[@]}' 'somelib>=$_missing_var')
+        \\depends=('bash' 'coreutils>=8.0' "${_common_deps[@]}" 'somelib>=$_missing_var')
         \\makedepends=('cmake' 'ninja')
         \\checkdepends=('pytest')
         \\optdepends=('extra-tool: for extra features')
@@ -1650,7 +1689,7 @@ test "parser_content: issue 1750 source command substitution is deferred and ove
     try std.testing.expectEqualStrings("sha256sums", initial.dynamic_source_assignments[1].name);
     try std.testing.expectEqual(@as(usize, 1), initial.source.?.len);
     try std.testing.expectEqualStrings(
-        "gpu-screen-recorder-ui::git+$(sed 's&//git\\.&//repo.&' <<< https://git.dec05eba.com/gpu-screen-recorder-ui)",
+        "gpu-screen-recorder-ui::git+$(sed 's&//git\\.&//repo.&' <<< \"$url\")",
         initial.source.?[0],
     );
     try std.testing.expectEqual(@as(usize, 0), initial.local_source_files.?.len);
@@ -2488,4 +2527,89 @@ test "parser_content: resolves validpgpkeys as a global array" {
         "0123456789ABCDEF0123456789ABCDEF01234567",
         info.valid_pgp_keys.?[0],
     );
+}
+
+test "issue 1880 fields preserve literal dollars and scoped assignment ordering" {
+    const allocator = std.testing.allocator;
+    const content =
+        \\pkgname=(demo-one demo-two)
+        \\_literal='${not_a_variable}'
+        \\install="${_literal}".install
+        \\changelog="${_literal}".changelog
+        \\source=('${not_a_variable}.patch' "${_literal}".patch)
+        \\package_demo-one() {
+        \\  _name="$pkgname"
+        \\  install=old.install
+        \\  install=
+        \\  install+="${_name}".install
+        \\  changelog="${_name}".changelog
+        \\  _name=changed
+        \\}
+        \\package_demo-two() { :; }
+    ;
+    var one = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io, .selected_package_name = "demo-one" }, content, null);
+    defer one.deinit(allocator);
+    try std.testing.expectEqualStrings("demo-one.install", one.install_file.?);
+    try std.testing.expectEqualStrings("demo-one.changelog", one.changelog_file.?);
+    for (one.source.?) |source| try std.testing.expectEqualStrings("${not_a_variable}.patch", source);
+    var two = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io, .selected_package_name = "demo-two" }, content, null);
+    defer two.deinit(allocator);
+    try std.testing.expectEqualStrings("${not_a_variable}.install", two.install_file.?);
+    try std.testing.expectEqualStrings("${not_a_variable}.changelog", two.changelog_file.?);
+}
+
+test "issue 1880 unknown and conditional auxiliary selections fail closed" {
+    // Arena also frees partial parser results when a later optional field fails.
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser = PkgbuildParser{ .allocator = arena.allocator(), .io = std.testing.io };
+    for ([_][]const u8{
+        "install=\"${unknown}\".install",
+        "install=old.install\nif false; then\n install=other.install\nfi",
+        "install=$(printf should-not-run)",
+    }) |assignment| {
+        const content = try std.mem.concat(arena.allocator(), u8, &.{ "pkgname=demo\n", assignment });
+        try std.testing.expectError(error.UnresolvedPkgbuildVariable, parse_test_pkgbuild(parser, content, null));
+    }
+}
+
+test "issue 1880 literal command-shaped sources remain review inputs" {
+    const allocator = std.testing.allocator;
+    var info = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io },
+        \\pkgname=demo
+        \\source=('$(touch should-not-execute).patch' 'literal>=.patch')
+    , null);
+    defer info.deinit(allocator);
+    try std.testing.expectEqualStrings("$(touch should-not-execute).patch", info.source.?[0]);
+    try std.testing.expectEqualStrings(info.source.?[0], info.local_source_files.?[0]);
+    try std.testing.expectEqualStrings("literal>=.patch", info.source.?[1]);
+}
+
+test "issue 1880 array assignments expand in declaration order" {
+    const allocator = std.testing.allocator;
+    var info = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io },
+        \\pkgname=demo
+        \\_name=first
+        \\source=("${_name}".patch)
+        \\_name=second
+        \\source+=("${_name}".patch)
+        \\_name=third
+    , null);
+    defer info.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), info.source.?.len);
+    try std.testing.expectEqualStrings("first.patch", info.source.?[0]);
+    try std.testing.expectEqualStrings("second.patch", info.source.?[1]);
+}
+
+test "issue 1880 identical literal and deferred source bytes retain distinct provenance" {
+    const allocator = std.testing.allocator;
+    var info = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io },
+        \\pkgname=demo
+        \\source=("$(printf file).patch" '$(printf file).patch')
+        \\sha256sums=(SKIP SKIP)
+    , null);
+    defer info.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), info.source.?.len);
+    try std.testing.expectEqual(@as(usize, 1), info.local_source_files.?.len);
+    try std.testing.expectEqualStrings("$(printf file).patch", info.local_source_files.?[0]);
 }

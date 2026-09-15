@@ -71,6 +71,7 @@ pub const FlatpakUpdate = struct {
     id: []const u8,
     name: []const u8,
     version: []const u8,
+    new_version: []const u8 = "",
     arch: []const u8,
     branch: []const u8,
     latest_commit: []const u8,
@@ -80,6 +81,7 @@ pub const FlatpakUpdate = struct {
     install_level: i32,
     permissions: []const []const u8,
     installed_size: u64,
+    download_size: u64 = 0,
     ref: []const u8,
     full_ref: []const u8,
     eol: []const u8 = "",
@@ -477,6 +479,7 @@ fn writeFlatpakJson(json: *std.json.Stringify, update: FlatpakUpdate) !void {
     try field(json, "Id", update.id);
     try field(json, "Name", update.name);
     try field(json, "Version", update.version);
+    try field(json, "NewVersion", update.new_version);
     try field(json, "Arch", update.arch);
     try field(json, "Branch", update.branch);
     try field(json, "LatestCommit", update.latest_commit);
@@ -490,6 +493,7 @@ fn writeFlatpakJson(json: *std.json.Stringify, update: FlatpakUpdate) !void {
     try field(json, "InstallLevel", update.install_level);
     try field(json, "Permissions", update.permissions);
     try field(json, "InstalledSize", update.installed_size);
+    try field(json, "DownloadSize", update.download_size);
     try field(json, "Ref", update.ref);
     try field(json, "FullRef", update.full_ref);
     try field(json, "Eol", update.eol);
@@ -839,6 +843,7 @@ fn runFlatpak(context: *runtime.RuntimeContext) !Result {
             .install_level = @intFromEnum(native.scope),
             .permissions = try dupeStrings(allocator, native.permissions),
             .installed_size = native.installed_size,
+            .download_size = native.download_size,
             .ref = ref,
             .full_ref = try std.fmt.allocPrint(
                 allocator,
@@ -849,7 +854,55 @@ fn runFlatpak(context: *runtime.RuntimeContext) !Result {
             .eol_rebase = if (native.eol_rebase) |value| try allocator.dupe(u8, value) else "",
         };
     }
+    applyAvailableVersions(manager, allocator, updates);
     return .{ .flatpak = .{ .items = updates, .arena = arena } };
+}
+
+fn applyAvailableVersions(
+    manager: Zigalpm.FlatpakManager,
+    allocator: std.mem.Allocator,
+    updates: []FlatpakUpdate,
+) void {
+    for (updates, 0..) |*update, index| {
+        var already_loaded = false;
+        for (updates[0..index]) |earlier| {
+            if (std.mem.eql(u8, earlier.remote, update.remote)) {
+                already_loaded = true;
+                break;
+            }
+        }
+        if (already_loaded or update.remote.len == 0) continue;
+
+        var catalog = manager.get_remote_appstream(update.remote, null) catch continue;
+        defer catalog.deinit();
+        for (updates) |*target| {
+            if (target.new_version.len != 0) continue;
+            if (!std.mem.eql(u8, target.remote, update.remote)) continue;
+            const version = catalogVersion(catalog.apps, target.id) orelse continue;
+            target.new_version = allocator.dupe(u8, version) catch "";
+        }
+    }
+}
+
+fn catalogVersion(
+    apps: []const Zigalpm.flatpak.AppstreamApp,
+    id: []const u8,
+) ?[]const u8 {
+    for (apps) |app| {
+        if (!isSameApp(app.id, id)) continue;
+        if (app.releases.len == 0) return null;
+        if (app.releases[0].version.len == 0) return null;
+        return app.releases[0].version;
+    }
+    return null;
+}
+
+const desktop_suffix = ".desktop";
+
+fn isSameApp(app_id: []const u8, id: []const u8) bool {
+    if (std.mem.eql(u8, app_id, id)) return true;
+    if (!std.mem.endsWith(u8, app_id, desktop_suffix)) return false;
+    return std.mem.eql(u8, app_id[0 .. app_id.len - desktop_suffix.len], id);
 }
 
 fn stringValue(configuration: *const config_model.Config, key: []const u8) ?[]const u8 {
@@ -1648,4 +1701,65 @@ test "Flatpak list-updates renders EOL annotations in JSON output" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\"Eol\":\"Deprecated.\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\"EolRebase\":\"no.bragefuglseth.Keypunch\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\"Eol\":\"No longer maintained\"") != null);
+}
+
+test "Flatpak available version resolves from AppStream releases" {
+    const releases = [_]Zigalpm.flatpak.AppstreamRelease{
+        .{ .version = "1.4.0", .type = "stable", .timestamp = null, .description = "" },
+        .{ .version = "1.2.0", .type = "stable", .timestamp = null, .description = "" },
+    };
+    const base = Zigalpm.flatpak.AppstreamApp{
+        .type = "desktop-application",
+        .id = "",
+        .name = "Example",
+        .summary = "",
+        .project_license = "",
+        .developer_name = "",
+        .extends = null,
+        .description = "",
+        .categories = &.{},
+        .keywords = &.{},
+        .urls = .empty,
+        .icons = &.{},
+        .screenshots = &.{},
+        .releases = &releases,
+        .is_verified = false,
+        .verification_method = null,
+        .addons = &.{},
+    };
+    var apps = [_]Zigalpm.flatpak.AppstreamApp{ base, base, base };
+    apps[0].id = "org.example.App";
+    apps[1].id = "org.example.Suffixed.desktop";
+    apps[2].id = "org.freedesktop.Platform";
+    apps[2].releases = &.{};
+
+    try std.testing.expectEqualStrings("1.4.0", catalogVersion(&apps, "org.example.App").?);
+    try std.testing.expectEqualStrings("1.4.0", catalogVersion(&apps, "org.example.Suffixed").?);
+    try std.testing.expectEqual(@as(?[]const u8, null), catalogVersion(&apps, "org.freedesktop.Platform"));
+    try std.testing.expectEqual(@as(?[]const u8, null), catalogVersion(&apps, "org.example.Absent"));
+
+    var output_buffer = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer output_buffer.deinit();
+    const updates = [_]FlatpakUpdate{.{
+        .id = "org.example.App",
+        .name = "Example",
+        .version = "1.2.0",
+        .new_version = "1.4.0",
+        .arch = "x86_64",
+        .branch = "stable",
+        .latest_commit = "abc1234567890",
+        .summary = "",
+        .kind = 0,
+        .remote = "flathub",
+        .install_level = 1,
+        .permissions = &.{},
+        .installed_size = 0,
+        .ref = "app/org.example.App/x86_64/stable",
+        .full_ref = "flathub:app/org.example.App/x86_64/stable",
+    }};
+    const result: Result = .{ .flatpak = .{ .items = &updates } };
+    try writeJson(std.testing.allocator, &output_buffer.writer, &result);
+    try std.testing.expect(
+        std.mem.indexOf(u8, output_buffer.writer.buffered(), "\"Version\":\"1.2.0\",\"NewVersion\":\"1.4.0\"") != null,
+    );
 }

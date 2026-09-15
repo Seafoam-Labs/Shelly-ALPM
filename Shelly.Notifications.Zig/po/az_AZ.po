@@ -1,0 +1,42 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Shelly Notifications 0.0.1\n"
+"Report-Msgid-Bugs-To: https://github.com/Seafoam-Labs/conch/issues\n"
+"POT-Creation-Date: 2026-08-03 19:39+0300\n"
+"PO-Revision-Date: 2026-09-09 12:00+0400\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Azerbaijani <az@li.org>\n"
+"Language: az\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "updates available"
+msgstr "yeniləmələr mövcuddur"
+
+msgid "Updates available"
+msgstr "Yeniləmələr mövcuddur"
+
+msgid "Open Shelly"
+msgstr "Shelly tətbiqini aç"
+
+msgid "Update Packages"
+msgstr "Paketləri yenilə"
+
+msgid "Check for updates"
+msgstr "Yeniləmələri yoxla"
+
+msgid "Last Check: Never"
+msgstr "Son yoxlama: heç vaxt"
+
+msgid "No updates"
+msgstr "Yeniləmə yoxdur"
+
+msgid "Exit"
+msgstr "Çıx"
+
+msgid "Last Check: never"
+msgstr "Son yoxlama: heç vaxt"
+
+msgid "Last Check:"
+msgstr "Son yoxlama:"

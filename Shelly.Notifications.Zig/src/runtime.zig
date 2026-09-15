@@ -17,9 +17,7 @@ pub fn setup(init: std.process.Init) void {
 }
 
 pub fn wakeWorker() void {
-    const next = wake_gen.load(.acquire) + 1;
-
-    wake_gen.store(next, .release);
+    _ = wake_gen.fetchAdd(1, .release);
 
     io.futexWake(u32, &wake_gen.raw, 1);
 }

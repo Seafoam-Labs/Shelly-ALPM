@@ -13,6 +13,8 @@ const sandbox = @import("sandbox.zig");
 const virtual_ownership = @import("virtual_ownership.zig");
 const PackageBuilder = @import("builder.zig").PackageBuilder;
 const ExecutionStep = @import("../../pkgbuild/pkgbuild_parser.zig").execution_step;
+const PkgbuildParser = @import("../../pkgbuild/pkgbuild_parser.zig").PkgbuildParser;
+const parser_execution = @import("../../pkgbuild/parser/execution.zig");
 
 pub fn validateBuildDirectories(self: *PackageBuilder) !void {
     const cwd = std.Io.Dir.cwd();
@@ -699,8 +701,9 @@ fn parseDynamicArrayOutput(
 }
 
 /// Sources the reviewed PKGBUILD in the same sandbox used for lifecycle steps
-/// and captures one coherent snapshot of changed scalar and indexed-array
-/// state. Sourcing preserves arbitrary top-level
+/// and captures one coherent snapshot of PKGBUILD scalar and indexed-array
+/// state. Each evaluation starts from the base PKGBUILD, never from a previous
+/// evaluation's declarations. Sourcing preserves arbitrary top-level
 /// parameter defaults, `if`, `case`, helper calls, and short-circuit control
 /// flow; lifecycle functions are defined by Bash but are not invoked here.
 pub fn evaluateDynamicMetadata(
@@ -708,7 +711,29 @@ pub fn evaluateDynamicMetadata(
     operation: *op_context.Operation,
 ) !DynamicMetadataOverrides {
     const package_build = &self.package_builds[0];
-    const execution = package_build.execution orelse return error.MissingExecutionSteps;
+    if (package_build.execution == null) return error.MissingExecutionSteps;
+    const pkgbuild_path = self.options.pkgbuild_path orelse
+        return error.UnreviewedBuilderRequest;
+    const canonical_pkgbuild_path = try std.Io.Dir.cwd().realPathFileAlloc(self.io, pkgbuild_path, self.allocator);
+    defer self.allocator.free(canonical_pkgbuild_path);
+    const content = try std.Io.Dir.cwd().readFileAlloc(self.io, canonical_pkgbuild_path, self.allocator, .limited(32 * 1024 * 1024));
+    defer self.allocator.free(content);
+    const parser: PkgbuildParser = .{
+        .allocator = self.allocator,
+        .io = self.io,
+        .package_carch = self.shellybuild_config.build.carch,
+    };
+    var base = try parser.parser_content(content, self.options.start_directory);
+    defer base.deinit(self.allocator);
+    var array_names = try parser_execution.collect_top_level_array_names(parser, content);
+    defer {
+        for (array_names.items) |name| self.allocator.free(name);
+        array_names.deinit(self.allocator);
+    }
+    const srcdir = try std.fs.path.join(self.allocator, &.{ self.options.work_directory, "src" });
+    defer self.allocator.free(srcdir);
+    const pkgdir = try std.fs.path.join(self.allocator, &.{ self.options.work_directory, "pkg", base.pkg_name orelse "" });
+    defer self.allocator.free(pkgdir);
 
     var array_result: DynamicArrayOverrides = .init(self.allocator);
     errdefer deinitDynamicArrayOverrides(self.allocator, &array_result);
@@ -724,7 +749,10 @@ pub fn evaluateDynamicMetadata(
     const writer = &script.writer;
     try writer.writeAll(messagingShellPrelude);
     try writer.writeAll("\n");
-    try writer.writeAll(execution.shared_prelude);
+    // Only makepkg context belongs in the bootstrap. Seeding PKGBUILD values
+    // changes Bash defaults/appends and causes repeated evaluation to lose
+    // unchanged values when the snapshot is applied to a fresh static parse.
+    try writer.writeAll("declare -- startdir=\"$5\" srcdir=\"$6\" pkgdir=\"$7\" CARCH=\"$8\"\n");
     try writer.writeAll("\n");
     try writer.writeAll(dynamic_scalar_capture_prelude);
     try writer.writeAll("\n");
@@ -732,8 +760,20 @@ pub fn evaluateDynamicMetadata(
     try writer.writeAll(
         "\n__shelly_clear_user_arrays\n" ++
             "__shelly_snapshot_scalars\n" ++
-            "__shelly_snapshot_arrays\n" ++
-            "__shelly_before_bashopts=$BASHOPTS\n" ++
+            "__shelly_snapshot_arrays\n",
+    );
+    // Track names from the original static parse without assigning them in
+    // Bash. An empty declaration forces capture even when the final value
+    // equals the inherited environment; absent names produce unset records.
+    // This prevents static assignments from resurrecting explicitly unset
+    // variables or arrays, including during the second review/build pass.
+    var names = base.variables.keyIterator();
+    while (names.next()) |name| try writeTrackedMetadataName(writer, name.*, "scalar");
+    for (base.dynamic_assignments) |assignment|
+        try writeTrackedMetadataName(writer, assignment.name, "scalar");
+    for (array_names.items) |name| try writeTrackedMetadataName(writer, name, "array");
+    try writer.writeAll(
+        "__shelly_before_bashopts=$BASHOPTS\n" ++
             "__shelly_before_shellopts=$SHELLOPTS\n" ++
             "source \"$4\"\n" ++
             "__shelly_capture_scalar_changes \"$1\"\n" ++
@@ -774,15 +814,6 @@ pub fn evaluateDynamicMetadata(
     };
     defer std.Io.Dir.cwd().deleteFile(self.io, shell_option_result_path) catch {};
 
-    const pkgbuild_path = self.options.pkgbuild_path orelse
-        return error.UnreviewedBuilderRequest;
-    const canonical_pkgbuild_path = try std.Io.Dir.cwd().realPathFileAlloc(
-        self.io,
-        pkgbuild_path,
-        self.allocator,
-    );
-    defer self.allocator.free(canonical_pkgbuild_path);
-
     try logPhase(self, "dynamic-metadata");
     try operation.checkCancelled();
     self.failure_location = .{
@@ -798,7 +829,7 @@ pub fn evaluateDynamicMetadata(
     const effective_options = try metadata.effectivePackageOptions(
         self.allocator,
         self.shellybuild_config.package.options,
-        package_build.options orelse &.{},
+        base.options orelse &.{},
     );
     defer metadata.freeOwnedStrings(self.allocator, effective_options);
     const argv: []const []const u8 = &.{
@@ -811,6 +842,10 @@ pub fn evaluateDynamicMetadata(
         array_result_path,
         shell_option_result_path,
         canonical_pkgbuild_path,
+        self.options.start_directory,
+        srcdir,
+        pkgdir,
+        self.shellybuild_config.build.carch,
     };
     const sandbox_enabled = self.shellybuild_config.sandbox.enabled;
     const wrapped = if (sandbox_enabled) try wrapStepCommand(self, argv) else null;
@@ -877,6 +912,14 @@ pub fn evaluateDynamicMetadata(
         .unset_arrays = unset_array_result,
         .shell_options = shell_options,
     };
+}
+
+fn writeTrackedMetadataName(writer: *std.Io.Writer, name: []const u8, comptime kind: []const u8) !void {
+    if (!isShellVariableName(name)) return;
+    try writer.print(
+        "if ! __shelly_ignore_{s} {s}; then __shelly_before_{s}s[{s}]=''; fi\n",
+        .{ kind, name, kind, name },
+    );
 }
 
 test "dynamic scalar output preserves values, newlines, empty strings, and unsets" {

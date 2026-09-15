@@ -192,6 +192,9 @@ const Worker = struct {
     fn run(self: *Worker) void {
         var initial_check_done = false;
         while (self.running.load(.seq_cst)) {
+            // A refresh received during a check must trigger another pass,
+            // rather than being consumed by the subsequent scheduled wait.
+            const expected = runtime.wake_gen.load(.acquire);
             if (self.config.dirty.swap(false, .seq_cst)) {
                 self.applyConfigChange();
             }
@@ -227,7 +230,6 @@ const Worker = struct {
             log_worker.info("next check in: {d}s (or on request)", .{secs});
             log_worker.debug("waiting {d}s until next check (interruptible)", .{secs});
 
-            const expected = runtime.wake_gen.load(.acquire);
             if (!self.running.load(.seq_cst)) return;
             if (self.config.dirty.load(.seq_cst)) continue;
             self.io.futexWaitTimeout(

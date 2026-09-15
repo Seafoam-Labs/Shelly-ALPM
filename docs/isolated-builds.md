@@ -123,6 +123,8 @@ Shelly.Cli.Zig/scripts/test-isolated-build.sh
 The smoke fixture reviews a group-writable (`0660`) local source, passes the
 returned digest through `--review-digest`, checks the staged input in the guest,
 and verifies that the package artifact is exported to the invoking user.
+It also checks that standard purge targets are absent from the archive when
+stripping is disabled.
 
 Cancellation across the elevation boundary has a rootless integration fixture
 that uses a deterministic fake elevator:

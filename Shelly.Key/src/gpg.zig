@@ -12,9 +12,14 @@ pub const GpgError = error{
 ///
 /// Every command is invoked as
 /// `gpg --homedir <homedir> --no-permission-warning <command...>`.
+///
+/// When `homedir` is null (the `--user` mode) the homedir boilerplate is
+/// omitted and `--batch --no-tty` is passed instead, so GnuPG manages the
+/// invoking user's `$GNUPGHOME` (or `~/.gnupg`) without a permission warning
+/// about an unsafe directory we did not create.
 pub const Gpg = struct {
     io: Io,
-    homedir: []const u8,
+    homedir: ?[]const u8,
 
     /// Run `gpg --homedir <dir> --no-permission-warning --update-trustdb`
     pub fn updateTrustdb(self: Gpg) !void {
@@ -159,6 +164,29 @@ pub const Gpg = struct {
         try self.run(&.{ "--armor", "--export" }, ids, null, null);
     }
 
+    /// Run `gpg ... [--keyserver <keyserver>] --recv-keys <ids...>`.
+    pub fn recvKeys(self: Gpg, keyserver: ?[]const u8, ids: []const []const u8) !void {
+        if (keyserver) |ks| {
+            try self.run(&.{ "--keyserver", ks, "--recv-keys" }, ids, null, null);
+        } else {
+            try self.run(&.{"--recv-keys"}, ids, null, null);
+        }
+    }
+
+    /// Run `gpg ... [--keyserver <keyserver>] --refresh-keys <id>`.
+    pub fn refreshKeys(self: Gpg, keyserver: ?[]const u8, id: []const u8) !void {
+        if (keyserver) |ks| {
+            try self.run(&.{ "--keyserver", ks, "--refresh-keys" }, &.{id}, null, null);
+        } else {
+            try self.run(&.{"--refresh-keys"}, &.{id}, null, null);
+        }
+    }
+
+    /// Run `gpg ... --locate-external-keys <mbox>` (Web Key Directory lookup).
+    pub fn locateExternalKeys(self: Gpg, mbox: []const u8) !void {
+        try self.run(&.{ "--locate-external-keys", mbox }, null, null, null);
+    }
+
     pub fn runCapture(self: Gpg, allocator: std.mem.Allocator, extra: []const []const u8) ![]u8 {
         var argv: [argv_capacity][]const u8 = undefined;
         const argv_len = buildArgv(&argv, extra, self.homedir, null);
@@ -227,18 +255,25 @@ pub const Gpg = struct {
 fn buildArgv(
     argv: *[argv_capacity][]const u8,
     extra: []const []const u8,
-    homedir: []const u8,
+    homedir: ?[]const u8,
     ids: ?[]const []const u8,
 ) usize {
     var n: usize = 0;
     argv[n] = "gpg";
     n += 1;
-    argv[n] = "--homedir";
-    n += 1;
-    argv[n] = homedir;
-    n += 1;
-    argv[n] = "--no-permission-warning";
-    n += 1;
+    if (homedir) |dir| {
+        argv[n] = "--homedir";
+        n += 1;
+        argv[n] = dir;
+        n += 1;
+        argv[n] = "--no-permission-warning";
+        n += 1;
+    } else {
+        argv[n] = "--batch";
+        n += 1;
+        argv[n] = "--no-tty";
+        n += 1;
+    }
     for (extra) |arg| {
         argv[n] = arg;
         n += 1;
@@ -259,7 +294,7 @@ fn checkTerm(term: process.Child.Term) GpgError!void {
     }
 }
 
-fn colonField(line: []const u8, index: usize) []const u8 {
+pub fn colonField(line: []const u8, index: usize) []const u8 {
     var i: usize = 0;
     var start: usize = 0;
     for (line, 0..) |c, pos| {
@@ -317,6 +352,18 @@ test "buildArgv prefixes every command with the homedir boilerplate" {
     try testing.expectEqualStrings("--no-permission-warning", argv[3]);
     try testing.expectEqualStrings("-K", argv[4]);
     try testing.expectEqualStrings("--with-colons", argv[5]);
+}
+
+test "buildArgv omits the homedir boilerplate in --user mode" {
+    var argv: [argv_capacity][]const u8 = undefined;
+    const n = buildArgv(&argv, &.{"--recv-keys"}, null, &.{"ABC12345"});
+
+    try testing.expectEqual(@as(usize, 5), n);
+    try testing.expectEqualStrings("gpg", argv[0]);
+    try testing.expectEqualStrings("--batch", argv[1]);
+    try testing.expectEqualStrings("--no-tty", argv[2]);
+    try testing.expectEqualStrings("--recv-keys", argv[3]);
+    try testing.expectEqualStrings("ABC12345", argv[4]);
 }
 
 test "checkTerm accepts a zero exit code" {

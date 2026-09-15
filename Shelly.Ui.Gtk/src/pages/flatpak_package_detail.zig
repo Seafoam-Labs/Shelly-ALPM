@@ -76,6 +76,7 @@ pub const FlatpakPackageDetail = extern struct {
         gtk.Label.setLabel(p.name_label, c_string.cstr(&buf, display_name));
         p.name_label.setSelectable(1);
         gtk.Label.setLabel(p.summary_label, c_string.cstr(&buf, hit.summary));
+        p.summary_label.setSelectable(1);
 
         clear_box(p.spec_box);
 
@@ -105,6 +106,7 @@ pub const FlatpakPackageDetail = extern struct {
         const has_about = hit.description.len > 0;
         gtk.Widget.setVisible(p.about_header.as(gtk.Widget), @intFromBool(has_about));
         gtk.Widget.setVisible(p.about_label.as(gtk.Widget), @intFromBool(has_about));
+        p.about_label.setSelectable(1);
         if (has_about) {
             const about = formatDescription(allocator, hit.description) catch "";
             gtk.Label.setLabel(p.about_label, about);
@@ -239,8 +241,7 @@ pub const FlatpakPackageDetail = extern struct {
             try out.append(allocator, c);
         }
 
-        try out.append(allocator, 0);
-        return out.items[0 .. out.items.len - 1 :0];
+        return out.toOwnedSliceSentinel(allocator, 0);
     }
 
     fn add_spec_row(box: *gtk.Box, label: []const u8, value: [:0]const u8) void {
@@ -259,6 +260,7 @@ pub const FlatpakPackageDetail = extern struct {
         gtk.Widget.setHexpand(val.as(gtk.Widget), 1);
         gtk.Label.setXalign(val, 1);
         gtk.Label.setEllipsize(val, .end);
+        gtk.Label.setSelectable(val, 1);
         gtk.Widget.addCssClass(val.as(gtk.Widget), "spec-value");
         gtk.Box.append(row, val.as(gtk.Widget));
         gtk.Box.append(box, row.as(gtk.Widget));
@@ -284,6 +286,7 @@ pub const FlatpakPackageDetail = extern struct {
         gtk.Widget.setHexpand(val.as(gtk.Widget), 1);
         gtk.Label.setXalign(val, 1);
         gtk.Label.setEllipsize(val, .end);
+        gtk.Label.setSelectable(val, 1);
 
         gtk.Box.append(row, val.as(gtk.Widget));
 
@@ -321,6 +324,7 @@ pub const FlatpakPackageDetail = extern struct {
         gtk.Label.setXalign(val, 1);
         gtk.Label.setWrap(val, 1);
         gtk.Label.setJustify(val, .right);
+        gtk.Label.setSelectable(val, 1);
         gtk.Widget.addCssClass(val.as(gtk.Widget), "spec-value");
         gtk.Box.append(row, val.as(gtk.Widget));
         gtk.Box.append(box, row.as(gtk.Widget));
@@ -384,7 +388,7 @@ test "formatDescription preserves plain text paragraphs" {
 }
 
 test "formatDescription strips inline tags and decodes entities" {
-    const raw = "An <em>emphasized</em> app &mdash; with <a href=\"https://example.org\">links</a&gt; inside.";
+    const raw = "An <em>emphasized</em> app &mdash; with <a href=\"https://example.org\">links</a> inside.";
     const out = try FlatpakPackageDetail.formatDescription(std.testing.allocator, raw);
     defer std.testing.allocator.free(out);
     try std.testing.expectEqualStrings("An emphasized app \u{2014} with links inside.", out);

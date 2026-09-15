@@ -59,6 +59,14 @@ pub const root_options = [_]Option{
         "--disable-cache-clean",
         "Preserve disabled upgrade-all cache cleaning across elevation",
     ),
+    hiddenGlobalFlag(
+        "--disable-appimage-update-check",
+        "Preserve disabled upgrade-all AppImage checks across elevation",
+    ),
+    hiddenGlobalFlag(
+        "--disable-flatpak-update-check",
+        "Preserve disabled upgrade-all Flatpak checks across elevation",
+    ),
 };
 
 pub const root_arguments = [_]Argument{.{

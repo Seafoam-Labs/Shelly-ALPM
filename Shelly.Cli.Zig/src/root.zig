@@ -4,6 +4,7 @@ pub const runtime = @import("runtime/context.zig");
 pub const log = @import("runtime/log.zig");
 pub const signals = @import("runtime/signals.zig");
 pub const elevation = @import("runtime/elevation.zig");
+pub const tray = @import("runtime/tray.zig");
 pub const proxy_environment = @import("runtime/proxy_environment.zig");
 pub const xdg = @import("runtime/xdg.zig");
 pub const shortcodes = @import("cli/shortcodes.zig");
@@ -47,6 +48,7 @@ test {
     _ = log;
     _ = signals;
     _ = elevation;
+    _ = tray;
     _ = proxy_environment;
     _ = xdg;
     _ = shortcodes;
