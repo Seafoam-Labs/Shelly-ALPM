@@ -49,12 +49,14 @@ pub fn init(
     allocator: std.mem.Allocator,
     name: []const u8,
     path: []const u8,
+    signature_policy: SignaturePolicy,
 ) !Database {
     var result: Database = .{
         .path = "",
         .allocator = allocator,
         .arena = std.heap.ArenaAllocator.init(allocator),
         .name = undefined,
+        .signature_policy = signature_policy,
     };
     errdefer result.arena.deinit();
 
@@ -785,7 +787,7 @@ test "loadDatabase owns and indexes parsed packages" {
     const path = try temporary.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
     defer std.testing.allocator.free(path);
 
-    var database = try Database.init(std.testing.allocator, "local", path);
+    var database = try Database.init(std.testing.allocator, "local", path, .{});
     defer database.deinit();
     database.signature_policy.database = .disabled;
     try database.loadDatabase(std.testing.io, null);
@@ -840,7 +842,7 @@ test "loadDatabase skips missing and malformed package descriptions" {
     const path = try temporary.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
     defer std.testing.allocator.free(path);
 
-    var database = try Database.init(std.testing.allocator, "local", path);
+    var database = try Database.init(std.testing.allocator, "local", path, .{});
     defer database.deinit();
     database.signature_policy.database = .disabled;
     try database.loadDatabase(std.testing.io, null);
@@ -863,7 +865,7 @@ test "integration parses the actual local package database" {
     std.testing.log_level = .err;
     defer std.testing.log_level = previous_log_level;
 
-    var database = try Database.init(std.testing.allocator, "local", local_database_path);
+    var database = try Database.init(std.testing.allocator, "local", local_database_path, .{});
     defer database.deinit();
     database.signature_policy.database = .disabled;
     try database.loadDatabase(std.testing.io, null);

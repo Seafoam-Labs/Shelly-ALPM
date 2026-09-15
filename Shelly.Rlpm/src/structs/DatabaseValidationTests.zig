@@ -139,7 +139,7 @@ test "integration validateSignature accepts a real detached signature" {
     defer fixture.deinit() catch |err| {
         std.debug.panic("signature fixture cleanup failed: {t}", .{err});
     };
-    var database = try Database.init(std.testing.allocator, "test", fixture.path);
+    var database = try Database.init(std.testing.allocator, "test", fixture.path, .{});
     defer database.deinit();
 
     try std.testing.expect(try database.validateSignature(std.testing.io, fixture.verifier_home));
@@ -150,7 +150,7 @@ test "integration validateSignature rejects tampered database contents" {
     defer fixture.deinit() catch |err| {
         std.debug.panic("signature fixture cleanup failed: {t}", .{err});
     };
-    var database = try Database.init(std.testing.allocator, "test", fixture.path);
+    var database = try Database.init(std.testing.allocator, "test", fixture.path, .{});
     defer database.deinit();
 
     try std.testing.expect(try database.validateSignature(std.testing.io, fixture.verifier_home));
@@ -165,7 +165,7 @@ test "integration validateSignature rejects a missing detached signature" {
     defer fixture.deinit() catch |err| {
         std.debug.panic("signature fixture cleanup failed: {t}", .{err});
     };
-    var database = try Database.init(std.testing.allocator, "test", fixture.path);
+    var database = try Database.init(std.testing.allocator, "test", fixture.path, .{});
     defer database.deinit();
 
     try std.testing.expect(try database.validateSignature(std.testing.io, fixture.verifier_home));
@@ -178,7 +178,7 @@ test "integration validateSignature rejects a corrupted detached signature" {
     defer fixture.deinit() catch |err| {
         std.debug.panic("signature fixture cleanup failed: {t}", .{err});
     };
-    var database = try Database.init(std.testing.allocator, "test", fixture.path);
+    var database = try Database.init(std.testing.allocator, "test", fixture.path, .{});
     defer database.deinit();
 
     try std.testing.expect(try database.validateSignature(std.testing.io, fixture.verifier_home));
@@ -200,7 +200,7 @@ test "integration validateSignature rejects an unknown signing key" {
     defer fixture.deinit() catch |err| {
         std.debug.panic("signature fixture cleanup failed: {t}", .{err});
     };
-    var database = try Database.init(std.testing.allocator, "test", fixture.path);
+    var database = try Database.init(std.testing.allocator, "test", fixture.path, .{});
     defer database.deinit();
 
     try std.testing.expect(try database.validateSignature(std.testing.io, fixture.verifier_home));
@@ -285,7 +285,7 @@ const SignatureTestIo = struct {
 };
 
 test "validateSignature accepts a successful GPG exit" {
-    var database = try Database.init(std.testing.allocator, "extra", "/test/sync");
+    var database = try Database.init(std.testing.allocator, "extra", "/test/sync", .{});
     defer database.deinit();
 
     var fake: SignatureTestIo = .{};
@@ -295,7 +295,7 @@ test "validateSignature accepts a successful GPG exit" {
 }
 
 test "validateSignature rejects unsuccessful GPG termination" {
-    var database = try Database.init(std.testing.allocator, "extra", "/test/sync");
+    var database = try Database.init(std.testing.allocator, "extra", "/test/sync", .{});
     defer database.deinit();
 
     const terms: []const std.process.Child.Term = &.{
@@ -314,7 +314,7 @@ test "validateSignature rejects unsuccessful GPG termination" {
 }
 
 test "validateSignature propagates process and read errors" {
-    var database = try Database.init(std.testing.allocator, "extra", "/test/sync");
+    var database = try Database.init(std.testing.allocator, "extra", "/test/sync", .{});
     defer database.deinit();
 
     var missing_gpg: SignatureTestIo = .{ .spawn_error = error.FileNotFound };
@@ -330,7 +330,7 @@ test "validateSignature propagates process and read errors" {
 test "validateSignature cleans up allocation failures" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, struct {
         fn check(allocator: std.mem.Allocator) !void {
-            var database = try Database.init(allocator, "extra", "/test/sync");
+            var database = try Database.init(allocator, "extra", "/test/sync", .{});
             defer database.deinit();
             var fake: SignatureTestIo = .{};
             try std.testing.expect(try database.validateSignature(fake.io(), null));

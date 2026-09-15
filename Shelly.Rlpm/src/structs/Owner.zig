@@ -2,6 +2,7 @@ const Owner = @This();
 
 const std = @import("std");
 const Database = @import("Database.zig");
+const DatabaseConfiguration = @import("DatabaseConfiguration.zig");
 
 allocator: std.mem.Allocator,
 local: Database,
@@ -30,7 +31,17 @@ pub fn init(
     ignore_pacakages: [][]const u8,
     ignore_groups: [][]const u8,
     assume_installed: [][]const u8,
+    database_configurations: []DatabaseConfiguration,
 ) !Owner {
+    for (database_configurations) |config| {
+        const database = try Database.init(
+            allocator,
+            config.database_name,
+            database_path,
+            config.signature_policy,
+        );
+        _ = database;
+    }
     var local = try Database.init(allocator, "local", database_path);
     errdefer local.deinit();
     try local.loadDatabase(io, gpg_directory);
