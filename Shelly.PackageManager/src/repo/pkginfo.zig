@@ -229,6 +229,11 @@ fn freeValues(allocator: std.mem.Allocator, values: []const []const u8) void {
     allocator.free(values);
 }
 
+/// Frees the paths returned by `listFilePaths`.
+pub fn freeFilePaths(allocator: Allocator, paths: []const []const u8) void {
+    freeValues(allocator, paths);
+}
+
 fn freeList(allocator: std.mem.Allocator, list: *std.ArrayList([]const u8)) void {
     for (list.items) |value| allocator.free(value);
     list.deinit(allocator);
