@@ -10,6 +10,7 @@ const mark = @import("mark.zig");
 const news = @import("news.zig");
 const purify = @import("purify.zig");
 const remove = @import("remove.zig");
+const repo_db = @import("repo_db.zig");
 const run = @import("run.zig");
 const search = @import("search.zig");
 const search_install = @import("search_install.zig");
@@ -42,6 +43,7 @@ pub fn dispatch(
     if (try config.dispatch(context, invocation)) |exit_code| return exit_code;
     if (try purify.dispatch(context, invocation)) |exit_code| return exit_code;
     if (try remove.dispatch(context, invocation)) |exit_code| return exit_code;
+    if (try repo_db.dispatch(context, invocation)) |exit_code| return exit_code;
     if (try run.dispatch(context, invocation)) |exit_code| return exit_code;
     if (try utility.dispatch(context, invocation)) |exit_code| return exit_code;
     if (try builder.dispatch(context, invocation)) |exit_code| return exit_code;
