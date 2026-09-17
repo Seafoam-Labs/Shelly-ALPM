@@ -871,12 +871,14 @@ msgid "Dismiss"
 msgstr "Verwerfen"
 
 msgid "Would you like to remove extra cache entries?"
-msgstr ""
+msgstr "Möchtest du zusätzliche Cache-Einträge entfernen?"
 
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
 msgstr ""
+"{package_one}-{version_one} steht im Konflikt mit {package_two}-"
+"{version_two}. {package_to_remove} entfernen?"
 
 msgid "Install ignored package: {package}?"
 msgstr ""
@@ -1642,19 +1644,6 @@ msgid ""
 msgstr ""
 "Die Berechtigung zur Verwaltung von Paketen wurde nicht erteilt. Versuche es "
 "erneut und bestätige die Autorisierungsanfrage, um fortzufahren."
-
-msgid "Cancelled"
-msgstr "Abgebrochen"
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-"{package_one}-{version_one} steht im Konflikt mit {package_two}-"
-"{version_two}. {package_to_remove} entfernen?"
-
-msgid "Would you like to remove extra cache entries?"
-msgstr "Möchtest du zusätzliche Cache-Einträge entfernen?"
 
 msgid "System package update"
 msgstr "Systempaket-Update"
