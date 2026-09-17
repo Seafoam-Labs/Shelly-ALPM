@@ -885,6 +885,7 @@ pub fn build(b: *std.Build) void {
             "removing the last entry produces valid empty databases",
             "publication keeps one old generation and refreshes the extension-less symlink",
             "remove old files deletes package and signature only after publication",
+            "remove with remove old files deletes each matched package after publication",
             "lock contention fails without modifying the database",
             "database derives the files path and rejects unsupported extensions",
             "publication signs each database archive and rotates the signature into place",

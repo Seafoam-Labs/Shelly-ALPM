@@ -2121,6 +2121,64 @@ test "remove old files deletes package and signature only after publication" {
     try expectPresent(second.dir, "demo-1.0-1-any.pkg.tar.zst.sig");
 }
 
+test "remove with remove old files deletes each matched package after publication" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const db_path = try fixturePath(&tmp.sub_path, "demo.db.tar.zst");
+    defer testing.allocator.free(db_path);
+    const demo_path = try fixturePath(&tmp.sub_path, "demo-1.0-1-any.pkg.tar.zst");
+    defer testing.allocator.free(demo_path);
+    const extra_path = try fixturePath(&tmp.sub_path, "extra-1.0-1-any.pkg.tar.zst");
+    defer testing.allocator.free(extra_path);
+    try writePackage(demo_path, "demo", "1.0-1");
+    try writePackage(extra_path, "extra", "1.0-1");
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "demo-1.0-1-any.pkg.tar.zst.sig", .data = "old signature" });
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "extra-1.0-1-any.pkg.tar.zst.sig", .data = "old signature" });
+
+    var db = try Database.open(testing.allocator, testing.io, db_path);
+    defer db.deinit();
+    var seed = try db.addPackages(&.{ demo_path, extra_path }, .{});
+    defer seed.deinit(testing.allocator);
+    try testing.expect(seed.published);
+
+    var removed = try db.removePackages(&.{ "demo", "extra" }, .{ .remove_old_files = true });
+    defer removed.deinit(testing.allocator);
+    try testing.expect(removed.published);
+    try testing.expect(removed.published_empty);
+    try testing.expectEqual(@as(usize, 2), removed.removed_entries.len);
+    try testing.expectEqual(@as(usize, 2), removed.removed_files.len);
+    try testing.expectEqualStrings("demo-1.0-1-any.pkg.tar.zst", removed.removed_files[0]);
+    try testing.expectEqualStrings("extra-1.0-1-any.pkg.tar.zst", removed.removed_files[1]);
+    try expectMissing(tmp.dir, "demo-1.0-1-any.pkg.tar.zst");
+    try expectMissing(tmp.dir, "demo-1.0-1-any.pkg.tar.zst.sig");
+    try expectMissing(tmp.dir, "extra-1.0-1-any.pkg.tar.zst");
+    try expectMissing(tmp.dir, "extra-1.0-1-any.pkg.tar.zst.sig");
+
+    // An unmatched name withholds publication, so no matched file is deleted.
+    var second = testing.tmpDir(.{});
+    defer second.cleanup();
+    const second_db_path = try fixturePath(&second.sub_path, "demo.db.tar.zst");
+    defer testing.allocator.free(second_db_path);
+    const second_package = try fixturePath(&second.sub_path, "demo-1.0-1-any.pkg.tar.zst");
+    defer testing.allocator.free(second_package);
+    try writePackage(second_package, "demo", "1.0-1");
+    try second.dir.writeFile(testing.io, .{ .sub_path = "demo-1.0-1-any.pkg.tar.zst.sig", .data = "old signature" });
+
+    var second_db = try Database.open(testing.allocator, testing.io, second_db_path);
+    defer second_db.deinit();
+    var second_seed = try second_db.addPackages(&.{second_package}, .{});
+    defer second_seed.deinit(testing.allocator);
+    try testing.expect(second_seed.published);
+
+    var failing = try second_db.removePackages(&.{ "demo", "ghost" }, .{ .remove_old_files = true });
+    defer failing.deinit(testing.allocator);
+    try testing.expect(!failing.published);
+    try testing.expectEqual(@as(usize, 1), failing.removed_entries.len);
+    try testing.expectEqual(@as(usize, 0), failing.removed_files.len);
+    try expectPresent(second.dir, "demo-1.0-1-any.pkg.tar.zst");
+    try expectPresent(second.dir, "demo-1.0-1-any.pkg.tar.zst.sig");
+}
+
 test "lock contention fails without modifying the database" {
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
