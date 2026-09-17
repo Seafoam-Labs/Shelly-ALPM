@@ -172,6 +172,13 @@ pub const local = struct {
     pub const MessageLevel = events.Level;
 };
 
+/// Maintenance of Arch repository databases and the package metadata behind them.
+pub const repo = struct {
+    pub const pkginfo = @import("repo/pkginfo.zig");
+
+    pub const PkgInfo = pkginfo.PkgInfo;
+};
+
 /// Backend-neutral lifecycle, event, question, and cancellation API.
 pub const operation = @import("operation_context");
 
@@ -332,6 +339,7 @@ test "public library surface exposes package manager APIs" {
     _ = local.XdgIntegration;
     _ = local.MessageLevel;
     _ = local.events.Dispatcher;
+    _ = repo.PkgInfo;
     _ = shared.Downloader;
     _ = OperationContext;
     _ = Operation;
@@ -520,6 +528,7 @@ test {
     _ = @import("pkgbuild/install_script.zig");
     _ = @import("pkgbuild/install_script_scanner.zig");
     _ = @import("pkgbuild/homograph_validator.zig");
+    _ = @import("repo/pkginfo.zig");
     _ = @import("aur/manager.zig");
     _ = @import("aur/builder/builder_test.zig");
     _ = @import("local/manager.zig");

@@ -862,6 +862,21 @@ pub fn build(b: *std.Build) void {
     const appimage_test_step = b.step("appimage-test", "Run safe AppImage parity tests");
     appimage_test_step.dependOn(&run_appimage_tests.step);
 
+    const repo_db_tests = b.addTest(.{
+        .name = "repo-db-test",
+        .root_module = mod,
+        .filters = &.{
+            "pkginfo parses keys and repeated values",
+            "pkginfo reads the PKGINFO entry from a package archive",
+            "pkginfo rejects archives without PKGINFO",
+            "package file list excludes archive root dotfiles and keeps nested dotfiles",
+            "package file list is byte-sorted and deduplicated",
+        },
+    });
+    const run_repo_db_tests = b.addRunArtifact(repo_db_tests);
+    const repo_db_test_step = b.step("repo-db-test", "Run repository database tests");
+    repo_db_test_step.dependOn(&run_repo_db_tests.step);
+
     // Just like flags, top level steps are also listed in the `--help` menu.
     //
     // The Zig build system is entirely implemented in userland, which means
