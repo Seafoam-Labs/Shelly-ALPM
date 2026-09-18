@@ -187,7 +187,7 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
 
     if (!options.skip_background_services) tryStartTray(runtime.io, std.heap.c_allocator);
 
-    setupGnomeThemePreference();
+    setup9ThemePreference();
 
     const window = ShellyWindow.new(app);
     dispatchPendingNavigation(window);
@@ -202,14 +202,10 @@ fn tryStartTray(io: std.Io, alloc: std.mem.Allocator) void {
     tray_service.start(io, alloc);
 }
 
-fn setupGnomeThemePreference() void {
+fn setupThemePreference() void {
     const desktop = runtime.environ_map.get("XDG_CURRENT_DESKTOP") orelse return;
 
     std.debug.print("desktop = {s}\n", .{desktop});
-
-    if (!std.mem.containsAtLeast(u8, desktop, 1, "GNOME")) {
-        return;
-    }
 
     const settings = gio.Settings.new("org.gnome.desktop.interface");
 
