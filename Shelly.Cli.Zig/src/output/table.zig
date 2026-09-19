@@ -353,11 +353,24 @@ fn writeCellText(writer: *std.Io.Writer, value: []const u8) !void {
 
 fn nextUnit(value: []const u8, index: usize) Unit {
     const first = value[index];
-    if (first == 0x1b and index + 1 < value.len and value[index + 1] == '[') {
-        var end = index + 2;
-        while (end < value.len) : (end += 1) {
-            if (value[end] >= 0x40 and value[end] <= 0x7e)
-                return .{ .length = end - index + 1, .width = 0 };
+    if (first == 0x1b and index + 1 < value.len) {
+        if (value[index + 1] == '[') {
+            var end = index + 2;
+            while (end < value.len) : (end += 1) {
+                if (value[end] >= 0x40 and value[end] <= 0x7e)
+                    return .{ .length = end - index + 1, .width = 0 };
+            }
+            return .{ .length = 1, .width = 1 };
+        }
+        if (value[index + 1] == ']') {
+            var end = index + 2;
+            while (end < value.len) : (end += 1) {
+                if (value[end] == 0x1b and end + 1 < value.len and value[end + 1] == 0x5c)
+                    return .{ .length = end + 2 - index, .width = 0 };
+                if (value[end] == 0x07)
+                    return .{ .length = end + 1 - index, .width = 0 };
+            }
+            return .{ .length = 1, .width = 0 };
         }
     }
     if (first < 0x80) return .{

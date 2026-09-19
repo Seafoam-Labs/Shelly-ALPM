@@ -126,6 +126,7 @@ const AurResult = struct {
     standard_packages: []const StandardPackage = &.{},
     pkgbuilds: ?[]const PackageBuild = null,
     detail: ?AurPackage = null,
+    aur_base: []const u8 = "",
 };
 
 const FlatpakResult = struct {
@@ -492,6 +493,7 @@ fn runAur(
     return .{
         .packages = packages,
         .standard_packages = try standard_packages.toOwnedSlice(context.allocator),
+        .aur_base = try context.allocator.dupe(u8, aur_base),
     };
 }
 
@@ -707,8 +709,25 @@ fn renderAur(
     var index: usize = 0;
     while (index < result.packages.len and rows.items.len < display_count) : (index += 1) {
         const package = result.packages[index];
+        var link_base: []const u8 = "";
+        var path_segment: []const u8 = "";
+        if (std.mem.indexOf(u8, result.aur_base, "atoll") != null) {
+            link_base = result.aur_base;
+            path_segment = "/package/";
+        } else if (std.mem.indexOf(u8, result.aur_base, "aur.archlinux") != null) {
+            link_base = result.aur_base;
+            path_segment = "/packages/";
+        } else {
+            package.name;
+        }
+        const hyper_path = std.mem.concat(context.allocator, u8, &.{ path_segment, package.name, "/" }) catch continue;
+        defer context.allocator.free(hyper_path);
+        const name_cell = if (link_base.len > 0)
+            hyperlink(context.allocator, link_base, hyper_path, package.name, context)
+        else
+            package.name;
         try rows.append(context.allocator, try row(context.allocator, &.{
-            package.name,
+            name_cell,
             package.version,
             package.maintainer orelse "Unknown Maintainer",
             try formatDateTime(context.allocator, package.last_modified),
@@ -1254,6 +1273,22 @@ fn joinedQuery(allocator: std.mem.Allocator, values: []const []const u8) ![]cons
 
 fn row(allocator: std.mem.Allocator, values: []const []const u8) ![]const []const u8 {
     return allocator.dupe([]const u8, values);
+}
+
+fn hyperlink(
+    allocator: std.mem.Allocator,
+    aur_base: []const u8,
+    url_path: []const u8,
+    text: []const u8,
+    context: *runtime.RuntimeContext,
+) []const u8 {
+    if (!output.supportsAnsi(context)) return text;
+
+    const url = std.mem.concat(allocator, u8, &.{ aur_base, url_path }) catch return text;
+    defer allocator.free(url);
+
+    const parts = [_][]const u8{ "\x1b]8;;", url, "\x1b\\", text, "\x1b]8;;\x1b\\" };
+    return std.mem.concat(allocator, u8, &parts) catch text;
 }
 
 test "search routes all action-first types through one handler" {
