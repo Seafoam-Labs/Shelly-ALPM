@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-14 16:25-0300\n"
 "PO-Revision-Date: 2026-09-09 12:00+0400\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: Azerbaijani <az@li.org>\n"
@@ -612,9 +612,6 @@ msgstr "Təsdiqsiz"
 msgid "Enable Shelly Search"
 msgstr "Shelly axtarışını aktivləşdir"
 
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Veb görünüşü ilə vizuallaşdırmanı aktivləşdir (sınaq mərhələsindədir)"
-
 msgid "AppImage Install Path"
 msgstr "AppImage quraşdırma yolu"
 
@@ -845,11 +842,20 @@ msgstr "istifadə olunduğu yer"
 msgid "Install Anyway"
 msgstr "Hər halda quraşdır"
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
+msgid "Unknown"
+msgstr "Naməlum"
+
 msgid "package(s)"
 msgstr "paket"
 
-msgid "to"
-msgstr "üçün"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "endirmə"
@@ -859,6 +865,63 @@ msgstr "xalis"
 
 msgid "Dismiss"
 msgstr "Bağla"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr "Əlavə keş qeydlərini silmək istəyirsiniz?"
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+"{package_one}-{version_one} paketi {package_two}-{version_two} paketi ilə "
+"toqquşur. {package_to_remove} silinsin?"
+
+msgid "Install ignored package: {package}?"
+msgstr ""
+
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+
+msgid "Corrupted package {file}. Delete?"
+msgstr ""
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+
+msgid "Import PGP key {key_id}?"
+msgstr ""
+
+msgid "Proceed with this partial upgrade?"
+msgstr ""
+
+msgid "Proceed with the standard system upgrade?"
+msgstr ""
+
+msgid "Proceed with package installation?"
+msgstr ""
+
+msgid "Proceed with package removal?"
+msgstr ""
+
+msgid "Proceed with AUR package installation?"
+msgstr ""
+
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select an optional dependency for {pkg}"
+msgstr ""
+
+msgid "Select optional dependencies for {pkg}"
+msgstr ""
+
+msgid "Proceed with purify?"
+msgstr ""
+
+msgid ""
+"PKGBUILD {package} requires source-signing key {fingerprint}. Import it "
+"using `shelly keyring recv --user`?"
+msgstr ""
 
 msgid "None"
 msgstr "Yoxdur"
@@ -1092,9 +1155,6 @@ msgstr "Flatpak əlavəsi quraşdırılır"
 
 msgid "Unknown developer"
 msgstr "Naməlum tərtibatçı"
-
-msgid "Unknown"
-msgstr "Naməlum"
 
 msgid "Version: Unknown"
 msgstr "Versiya: naməlum"
@@ -1478,11 +1538,38 @@ msgstr "Shelly axtarışı"
 msgid "Update"
 msgstr "Yenilə"
 
-msgid "Failed to start operation."
-msgstr "Əməliyyatı başlatmaq mümkün olmadı."
-
 msgid "Pending"
 msgstr "Gözləyir"
+
+msgid "Working"
+msgstr "İşləyir"
+
+msgid "Upgraded"
+msgstr ""
+
+msgid "Downgraded"
+msgstr ""
+
+msgid "Reinstalled"
+msgstr ""
+
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Uğursuz oldu"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Ləğv edildi"
+
+msgid "Failed to start operation."
+msgstr "Əməliyyatı başlatmaq mümkün olmadı."
 
 msgid "Synchronizing databases"
 msgstr "Verilənlər bazaları sinxronlaşdırılır"
@@ -1526,12 +1613,6 @@ msgstr "Toqquşmalar yoxlanılır"
 msgid "Checking disk space"
 msgstr "Disk sahəsi yoxlanılır"
 
-msgid "Working"
-msgstr "İşləyir"
-
-msgid "Failed"
-msgstr "Uğursuz oldu"
-
 msgid "Transaction Completed"
 msgstr "Əməliyyat tamamlandı"
 
@@ -1559,19 +1640,6 @@ msgid ""
 msgstr ""
 "Paketləri idarə etmək üçün icazə verilmədi. Yenidən cəhd edin və davam etmək "
 "üçün səlahiyyət sorğusunu təsdiqləyin."
-
-msgid "Cancelled"
-msgstr "Ləğv edildi"
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-"{package_one}-{version_one} paketi {package_two}-{version_two} paketi ilə "
-"toqquşur. {package_to_remove} silinsin?"
-
-msgid "Would you like to remove extra cache entries?"
-msgstr "Əlavə keş qeydlərini silmək istəyirsiniz?"
 
 msgid "System package update"
 msgstr "Sistem paketlərinin yenilənməsi"

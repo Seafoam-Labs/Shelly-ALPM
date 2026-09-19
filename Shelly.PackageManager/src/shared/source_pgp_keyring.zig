@@ -35,6 +35,7 @@ pub fn ensurePinnedKeys(
         defer allocator.free(prompt);
         var answer = try operation.ask(.{
             .kind = .import_pgp_key,
+            .purpose = .import_source_signing_key,
             .prompt = prompt,
             .pgp_key_import = .{
                 .package_name = package_name,

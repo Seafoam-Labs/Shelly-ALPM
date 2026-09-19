@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-14 16:25-0300\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -599,9 +599,6 @@ msgstr "Χωρίς επιβεβαίωση"
 msgid "Enable Shelly Search"
 msgstr "Ενεργοποίηση αναζήτησης Shelly"
 
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Ενεργοποίηση οπτικοποίησης Webview (πειραματικό)"
-
 msgid "AppImage Install Path"
 msgstr "Διαδρομή εγκατάστασης AppImage"
 
@@ -832,11 +829,20 @@ msgstr "χρησιμοποιείται σε"
 msgid "Install Anyway"
 msgstr "Εγκατάσταση οπωσδήποτε"
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
+msgid "Unknown"
+msgstr "Άγνωστο"
+
 msgid "package(s)"
 msgstr "πακέτο(α)"
 
-msgid "to"
-msgstr "σε"
+msgid "removed size"
+msgstr ""
 
 msgid "download"
 msgstr "λήψη"
@@ -846,6 +852,61 @@ msgstr "καθαρό"
 
 msgid "Dismiss"
 msgstr "Παράβλεψη"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Install ignored package: {package}?"
+msgstr ""
+
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+
+msgid "Corrupted package {file}. Delete?"
+msgstr ""
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+
+msgid "Import PGP key {key_id}?"
+msgstr ""
+
+msgid "Proceed with this partial upgrade?"
+msgstr ""
+
+msgid "Proceed with the standard system upgrade?"
+msgstr ""
+
+msgid "Proceed with package installation?"
+msgstr ""
+
+msgid "Proceed with package removal?"
+msgstr ""
+
+msgid "Proceed with AUR package installation?"
+msgstr ""
+
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select an optional dependency for {pkg}"
+msgstr ""
+
+msgid "Select optional dependencies for {pkg}"
+msgstr ""
+
+msgid "Proceed with purify?"
+msgstr ""
+
+msgid ""
+"PKGBUILD {package} requires source-signing key {fingerprint}. Import it "
+"using `shelly keyring recv --user`?"
+msgstr ""
 
 msgid "None"
 msgstr "Κανένα"
@@ -1076,9 +1137,6 @@ msgstr ""
 
 msgid "Unknown developer"
 msgstr "Άγνωστος δημιουργός"
-
-msgid "Unknown"
-msgstr "Άγνωστο"
 
 msgid "Version: Unknown"
 msgstr "Έκδοση: Άγνωστη"
@@ -1462,11 +1520,38 @@ msgstr "Αναζήτηση Shelly"
 msgid "Update"
 msgstr "Ενημέρωση"
 
-msgid "Failed to start operation."
-msgstr "Αποτυχία εκκίνησης της διεργασίας."
-
 msgid "Pending"
 msgstr "Σε εκκρεμότητα"
+
+msgid "Working"
+msgstr "Σε εξέλιξη"
+
+msgid "Upgraded"
+msgstr ""
+
+msgid "Downgraded"
+msgstr ""
+
+msgid "Reinstalled"
+msgstr ""
+
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Απέτυχε"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Ακυρώθηκε"
+
+msgid "Failed to start operation."
+msgstr "Αποτυχία εκκίνησης της διεργασίας."
 
 msgid "Synchronizing databases"
 msgstr "Συγχρονισμός βάσεων δεδομένων"
@@ -1510,12 +1595,6 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
-msgid "Working"
-msgstr "Σε εξέλιξη"
-
-msgid "Failed"
-msgstr "Απέτυχε"
-
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1540,17 +1619,6 @@ msgstr ""
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
-msgstr ""
-
-msgid "Cancelled"
-msgstr "Ακυρώθηκε"
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

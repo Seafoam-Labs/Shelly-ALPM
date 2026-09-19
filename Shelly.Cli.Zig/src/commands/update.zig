@@ -151,6 +151,7 @@ fn confirmStandardUpdateUi(
     var answer = try operation.ask(.{
         .kind = .confirmation,
         .prompt = "Proceed with this partial upgrade?",
+        .purpose = .partial_upgrade,
         .default_response = .declined,
     });
     defer answer.deinit(context.allocator);
@@ -560,7 +561,7 @@ test "standard UI confirmation uses C sharp compatible yes-no frames" {
         try std.base64.standard.Decoder.decode(decoded, payload);
         if (std.mem.indexOf(u8, decoded, "\"$kind\":\"q.yesno\"") == null) continue;
         found_confirmation = true;
-        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"QuestionKind\":\"ConflictPkg\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "\"QuestionKind\":\"PartialUpgrade\"") != null);
         try std.testing.expect(std.mem.indexOf(u8, decoded, "Proceed with this partial upgrade?") != null);
     }
     try std.testing.expect(found_confirmation);

@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
-"PO-Revision-Date: 2026-09-09 20:54-0300\n"
+"POT-Creation-Date: 2026-09-14 16:25-0300\n"
+"PO-Revision-Date: 2026-09-14 15:07-0300\n"
 "Last-Translator: Vinícius Fonseca <viniqf@proton.me>\n"
 "Language-Team: Portuguese (Brazil) <viniqf@proton.me>\n"
 "Language: pt_BR\n"
@@ -612,9 +612,6 @@ msgstr "Sem confirmação"
 msgid "Enable Shelly Search"
 msgstr "Ativar pesquisa Shelly"
 
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Ativar visualização webview (experimental)"
-
 msgid "AppImage Install Path"
 msgstr "Caminho de instalação das AppImages"
 
@@ -845,11 +842,20 @@ msgstr "usado em"
 msgid "Install Anyway"
 msgstr "Instalar mesmo assim"
 
+msgid "to remove"
+msgstr "para remover"
+
+msgid "to install"
+msgstr "para instalar"
+
+msgid "Unknown"
+msgstr "Desconhecido"
+
 msgid "package(s)"
 msgstr "pacote(s)"
 
-msgid "to"
-msgstr "para"
+msgid "removed size"
+msgstr "tamanho removido"
 
 msgid "download"
 msgstr "baixar"
@@ -859,6 +865,68 @@ msgstr ""
 
 msgid "Dismiss"
 msgstr "Ignorar"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr "Você gostaria de remover entradas adicionais do cache?"
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+"{package_one}-{version_one} entra em conflito com {package_two}-"
+"{version_two}. Remover {package_to_remove}?"
+
+msgid "Install ignored package: {package}?"
+msgstr "Instalar pacote ignorado: {package}?"
+
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+"Substituir {package_one}-{version_one} por {package_two}-{version_two}?"
+
+msgid "Corrupted package {file}. Delete?"
+msgstr "Pacote corrompido {file}. Apagar?"
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+"Alguns pacotes devem ser removidos para prosseguir. Ignorar eles em vez "
+"disso?"
+
+msgid "Import PGP key {key_id}?"
+msgstr "Importar chave PGP {key_id}?"
+
+msgid "Proceed with this partial upgrade?"
+msgstr "Prosseguir com esta atualização parcial?"
+
+msgid "Proceed with the standard system upgrade?"
+msgstr "Prosseguir com a atualização padrão do sistema?"
+
+msgid "Proceed with package installation?"
+msgstr "Prosseguir com a instalação do pacote?"
+
+msgid "Proceed with package removal?"
+msgstr "Prosseguir com a remoção do pacote?"
+
+msgid "Proceed with AUR package installation?"
+msgstr "Prosseguir com a instalação de pacote AUR?"
+
+msgid "Select Provider"
+msgstr "Selecionar provedor"
+
+msgid "Select an optional dependency for {pkg}"
+msgstr "Selecione uma dependência opcional para {pkg}"
+
+msgid "Select optional dependencies for {pkg}"
+msgstr "Selecione dependências opcionais para {pkg}"
+
+msgid "Proceed with purify?"
+msgstr "Prosseguir com a purificação de pacotes?"
+
+msgid ""
+"PKGBUILD {package} requires source-signing key {fingerprint}. Import it "
+"using `shelly keyring recv --user`?"
+msgstr ""
+"O PKGBUILD {package} requer a chave de assinatura de fonte {fingerprint}. "
+"Importá-la usando 'shelly keyring recv --user'?"
 
 msgid "None"
 msgstr "Nenhum"
@@ -1090,9 +1158,6 @@ msgstr "Instalando addon Flatpak"
 
 msgid "Unknown developer"
 msgstr "Desenvolvedor desconhecido"
-
-msgid "Unknown"
-msgstr "Desconhecido"
 
 msgid "Version: Unknown"
 msgstr "Versão: Desconhecida"
@@ -1476,11 +1541,38 @@ msgstr "Pesquisa Shelly"
 msgid "Update"
 msgstr "Atualizar"
 
-msgid "Failed to start operation."
-msgstr "Falha ao inicializar a operação."
-
 msgid "Pending"
 msgstr "Em espera"
+
+msgid "Working"
+msgstr "Trabalhando"
+
+msgid "Upgraded"
+msgstr "Atualizado"
+
+msgid "Downgraded"
+msgstr "Rebaixado"
+
+msgid "Reinstalled"
+msgstr "Reinstalado"
+
+msgid "Removed"
+msgstr "Removido"
+
+msgid "Failed"
+msgstr "Falhou"
+
+msgid "Not processed"
+msgstr "Não realizado"
+
+msgid "Interrupted"
+msgstr "Interrompido"
+
+msgid "Cancelled"
+msgstr "Cancelado"
+
+msgid "Failed to start operation."
+msgstr "Falha ao inicializar a operação."
 
 msgid "Synchronizing databases"
 msgstr "Sincronizando bases de dados"
@@ -1524,12 +1616,6 @@ msgstr "Verificando conflitos"
 msgid "Checking disk space"
 msgstr "Verificando o espaço em disco"
 
-msgid "Working"
-msgstr "Trabalhando"
-
-msgid "Failed"
-msgstr "Falhou"
-
 msgid "Transaction Completed"
 msgstr "Transação concluída"
 
@@ -1557,19 +1643,6 @@ msgid ""
 msgstr ""
 "A permissão para gerenciar pacotes não foi concedida. Tente novamente e "
 "aprove o pedido de autorização para continuar."
-
-msgid "Cancelled"
-msgstr "Cancelado"
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-"{package_one}-{version_one} entra em conflito com {package_two}-"
-"{version_two}. Remover {package_to_remove}?"
-
-msgid "Would you like to remove extra cache entries?"
-msgstr "Você gostaria de remover entradas adicionais do cache?"
 
 msgid "System package update"
 msgstr "Atualização de pacotes do sistema"

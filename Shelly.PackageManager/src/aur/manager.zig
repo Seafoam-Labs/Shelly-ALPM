@@ -1343,6 +1343,7 @@ pub const Manager = struct {
 
         var answer = try operation.ask(.{
             .kind = .confirm_transaction,
+            .purpose = .transaction_aur_install,
             .prompt = "Proceed with AUR package installation?",
             .transaction_plan = .{
                 .action = .install,
@@ -1647,6 +1648,7 @@ pub const Manager = struct {
             .question_type = .select_optional_dependencies,
             .question = question,
             .options = options.items,
+            .arguments = &.{package_name},
         });
         var selected: std.ArrayList([]const u8) = .empty;
         errdefer selected.deinit(self.allocator);
