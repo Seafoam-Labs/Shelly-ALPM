@@ -75,6 +75,26 @@ pub const FlatpakInstallLocalView = extern struct {
         p.loaded = false;
     }
 
+    pub fn setSelectedPath(self: *Self, path: []const u8) void {
+        const p = self.priv();
+        if (p.disposed) return;
+
+        const duped = std.heap.c_allocator.dupeZ(u8, path) catch return;
+        if (p.selected_path) |old| std.heap.c_allocator.free(old);
+        p.selected_path = duped;
+
+        const base = std.fs.path.basename(duped);
+        var name_buffer: [std.fs.max_name_bytes + 1]u8 = undefined;
+        const name = std.fmt.bufPrintZ(
+            &name_buffer,
+            "{s}",
+            .{base},
+        ) catch duped;
+
+        gtk.Label.setLabel(p.chosen_file_label, name);
+        gtk.Widget.setSensitive(p.install_button.as(gtk.Widget), 1);
+    }
+
     fn onChooseClicked(_: *gtk.Button, self: *Self) callconv(.c) void {
         const dialog = gtk.FileDialog.new();
         gtk.FileDialog.setTitle(dialog, translations._("Choose a Flatpak file"));

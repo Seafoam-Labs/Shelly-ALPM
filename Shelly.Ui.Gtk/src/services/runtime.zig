@@ -9,6 +9,15 @@ pub var io: std.Io = undefined;
 pub var environ_map: *std.process.Environ.Map = undefined;
 pub var data_home: []const u8 = "";
 
+pub const PendingLocalFile = struct {
+    buffer: [deep_link.max_file_path_len + 1]u8,
+    len: usize,
+
+    pub fn path(self: *const PendingLocalFile) [:0]const u8 {
+        return self.buffer[0..self.len :0];
+    }
+};
+
 pub const PendingApp = struct {
     buffer: [deep_link.max_app_id_len + 1]u8,
     len: usize,
@@ -21,6 +30,7 @@ pub const PendingApp = struct {
 pub const PendingNavigation = union(enum) {
     page: deep_link.PageTarget,
     flatpak_app: PendingApp,
+    local_flatpak_file: PendingLocalFile,
 };
 
 pub var pending_navigation: ?PendingNavigation = null;
@@ -37,6 +47,15 @@ pub fn queueFlatpakApp(app_id: []const u8) void {
     pending.len = app_id.len;
 
     pending_navigation = .{ .flatpak_app = pending };
+}
+
+pub fn queueLocalFlatpakPath(path: []const u8) void {
+    if (path.len == 0 or path.len > deep_link.max_file_path_len) return;
+    var pending: PendingLocalFile = undefined;
+    @memcpy(pending.buffer[0..path.len], path);
+    pending.buffer[path.len] = 0;
+    pending.len = path.len;
+    pending_navigation = .{ .local_flatpak_file = pending };
 }
 
 pub fn takePendingNavigation() ?PendingNavigation {
