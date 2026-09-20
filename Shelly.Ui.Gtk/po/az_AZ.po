@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-19 13:14-0400\n"
 "PO-Revision-Date: 2026-09-09 12:00+0400\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: Azerbaijani <az@li.org>\n"
@@ -159,10 +159,10 @@ msgstr ""
 msgid "e.g. owner/repo or https://..."
 msgstr "məsələn, owner/repo və ya https://..."
 
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgid ""
+"Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
-"Yanlış format. owner/repo formatından istifadə edin (məsələn, seafoam-labs/"
-"shelly-alpm)"
 
 msgid "Allow Prerelease"
 msgstr "İlkin buraxılışa icazə ver"
@@ -612,9 +612,6 @@ msgstr "Təsdiqsiz"
 msgid "Enable Shelly Search"
 msgstr "Shelly axtarışını aktivləşdir"
 
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Veb görünüşü ilə vizuallaşdırmanı aktivləşdir (sınaq mərhələsindədir)"
-
 msgid "AppImage Install Path"
 msgstr "AppImage quraşdırma yolu"
 
@@ -666,8 +663,9 @@ msgstr "Yeniləmələr yoxlanılır…"
 msgid "Your system is up to date"
 msgstr "Sisteminiz ən son vəziyyətdədir"
 
-msgid "Could not check for updates"
-msgstr "Yeniləmələri yoxlamaq mümkün olmadı"
+#| msgid "Could not check for updates"
+msgid "Could not check for updates."
+msgstr ""
 
 msgid "Utilities"
 msgstr "Yardımçı alətlər"
@@ -845,17 +843,27 @@ msgstr "istifadə olunduğu yer"
 msgid "Install Anyway"
 msgstr "Hər halda quraşdır"
 
+msgid "Unknown"
+msgstr "Naməlum"
+
 msgid "package(s)"
 msgstr "paket"
 
 msgid "to"
 msgstr "üçün"
 
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
+
 msgid "download"
 msgstr "endirmə"
 
 msgid "net"
 msgstr "xalis"
+
+msgid "Could not load the PKGBUILD preview."
+msgstr ""
 
 msgid "Dismiss"
 msgstr "Bağla"
@@ -881,20 +889,17 @@ msgstr "Yeniləmə mövcuddur"
 msgid "Version ?"
 msgstr "Versiya ?"
 
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+#| msgid "Invalid URL. Must start with http:// or https://"
+msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
-"Yanlış format. owner/repo formatından istifadə edin (məsələn, seafoam-labs/"
-"shelly-alpm)"
 
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "Yanlış URL ünvanı. http:// və ya https:// ilə başlamalıdır"
-
+#| msgid ""
+#| "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/"
+#| "owner/repo/releases"
 msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
+"Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
+"host/owner/repo/releases."
 msgstr ""
-"Yanlış Forgejo URL ünvanı. http(s)://host/owner/repo və ya http(s)://host/"
-"owner/repo/releases formatından istifadə edin"
 
 msgid "Choose an AppImage file"
 msgstr "AppImage faylı seçin"
@@ -902,8 +907,9 @@ msgstr "AppImage faylı seçin"
 msgid "AppImage files"
 msgstr "AppImage faylları"
 
-msgid "Only .AppImage files can be installed"
-msgstr "Yalnız .AppImage faylları quraşdırıla bilər"
+#| msgid "Only .AppImage files can be installed"
+msgid "Only.AppImage files can be installed"
+msgstr ""
 
 msgid "Installing AppImage"
 msgstr "AppImage quraşdırılır"
@@ -949,8 +955,8 @@ msgstr "AppImage silinir"
 msgid "Operation completed successfully"
 msgstr "Əməliyyat uğurla tamamlandı"
 
-msgid "Operation failed"
-msgstr "Əməliyyat uğursuz oldu"
+msgid "Could not complete the requested operation."
+msgstr ""
 
 msgid "Discard environment changes?"
 msgstr "Mühit dəyişikliklərindən imtina edilsin?"
@@ -999,8 +1005,9 @@ msgstr "Paketlər tapılmadı"
 msgid "Try a shorter or more general keyword."
 msgstr "Daha qısa və ya daha ümumi açar sözlə cəhd edin."
 
-msgid "Could not reach the AUR"
-msgstr "AUR anbarına qoşulmaq mümkün olmadı"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the configured AUR service."
+msgstr ""
 
 msgid "Check your connection and try again."
 msgstr "Şəbəkəyə qoşulmanızı yoxlayıb yenidən cəhd edin."
@@ -1048,14 +1055,16 @@ msgstr "Flatpak faylı seçin"
 msgid "Flatpak files"
 msgstr "Flatpak faylları"
 
-msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
-msgstr "Dəstəklənməyən fayl növü. .flatpak və ya .flatpakref faylı seçin."
+#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
+msgstr ""
 
 msgid "Installing local flatpak"
 msgstr "Yerli Flatpak quraşdırılır"
 
-msgid "Installation failed."
-msgstr "Quraşdırma uğursuz oldu."
+#| msgid "Install the selected packages?"
+msgid "Could not install the selected packages."
+msgstr ""
 
 msgid "Installation complete."
 msgstr "Quraşdırma tamamlandı."
@@ -1093,9 +1102,6 @@ msgstr "Flatpak əlavəsi quraşdırılır"
 msgid "Unknown developer"
 msgstr "Naməlum tərtibatçı"
 
-msgid "Unknown"
-msgstr "Naməlum"
-
 msgid "Version: Unknown"
 msgstr "Versiya: naməlum"
 
@@ -1123,14 +1129,16 @@ msgstr "Endir"
 msgid "No description available."
 msgstr "Təsvir yoxdur."
 
-msgid "Unable to load screenshot"
-msgstr "Ekran görüntüsünü yükləmək mümkün olmadı"
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load this application screenshot."
+msgstr ""
 
-msgid "Unable to download screenshot"
-msgstr "Ekran görüntüsünü endirmək mümkün olmadı"
+#| msgid "Unable to download screenshot"
+msgid "Could not download this application screenshot."
+msgstr ""
 
-msgid "Unable to display screenshot"
-msgstr "Ekran görüntüsünü göstərmək mümkün olmadı"
+msgid "Could not display the downloaded application screenshot."
+msgstr ""
 
 msgid "Open link in browser"
 msgstr "Keçidi brauzerdə aç"
@@ -1159,14 +1167,18 @@ msgstr "Əlaqə"
 msgid "Translate"
 msgstr "Tərcümə et"
 
-msgid "Unable to allocate memory while loading Flatpak data."
-msgstr "Flatpak məlumatları yüklənərkən yaddaş ayırmaq mümkün olmadı."
+msgid ""
+"Could not load Flatpak applications because Shelly ran out of memory. Close "
+"other applications and try again."
+msgstr ""
 
-msgid "Unable to start the Flatpak data loader."
-msgstr "Flatpak məlumat yükləyicisini başlatmaq mümkün olmadı."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not start loading Flatpak applications."
+msgstr ""
 
-msgid "Unable to load Flatpak applications."
-msgstr "Flatpak tətbiqlərini yükləmək mümkün olmadı."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load Flatpak applications from the selected remote."
+msgstr ""
 
 msgid "No Flatpak applications are available."
 msgstr "Mövcud Flatpak tətbiqi yoxdur."
@@ -1328,8 +1340,9 @@ msgstr ""
 "Standart anbarlarda, AUR və Flatpak mənbələrində eyni anda axtarış aparın. "
 "Başlamaq üçün ad yazın."
 
-msgid "Search failed"
-msgstr "Axtarış uğursuz oldu"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the selected sources."
+msgstr ""
 
 msgid "Installation in progress"
 msgstr "Quraşdırma davam edir"
@@ -1346,8 +1359,10 @@ msgstr "Paketləri quraşdır"
 msgid "Install the selected packages?"
 msgstr "Seçilmiş paketlər quraşdırılsın?"
 
-msgid "Failed to save settings"
-msgstr "Parametrləri yadda saxlamaq mümkün olmadı"
+msgid ""
+"Could not save settings to the configured file. Your latest changes were not "
+"saved."
+msgstr ""
 
 msgid "Settings saved"
 msgstr "Parametrlər yadda saxlanıldı"
@@ -1358,17 +1373,21 @@ msgstr "Flatpak dəstəyi quraşdırılır"
 msgid "Installing AppImage support"
 msgstr "AppImage dəstəyi quraşdırılır"
 
-msgid "Failed to start Flatpak support installation"
-msgstr "Flatpak dəstəyinin quraşdırılmasını başlatmaq mümkün olmadı"
+#| msgid "Installing Flatpak support"
+msgid "Could not start installing Flatpak support."
+msgstr ""
 
-msgid "Failed to start AppImage support installation"
-msgstr "AppImage dəstəyinin quraşdırılmasını başlatmaq mümkün olmadı"
+#| msgid "Installing AppImage support"
+msgid "Could not start installing AppImage support."
+msgstr ""
 
-msgid "Flatpak support installation failed"
-msgstr "Flatpak dəstəyinin quraşdırılması uğursuz oldu"
+#| msgid "Installing Flatpak support"
+msgid "Could not install Flatpak support."
+msgstr ""
 
-msgid "AppImage support installation failed"
-msgstr "AppImage dəstəyinin quraşdırılması uğursuz oldu"
+#| msgid "Installing AppImage support"
+msgid "Could not install AppImage support."
+msgstr ""
 
 msgid "Flatpak support enabled"
 msgstr "Flatpak dəstəyi aktivləşdirildi"
@@ -1382,8 +1401,9 @@ msgstr "Dəyişiklik jurnalında qeydlər tapılmadı"
 msgid "No details for this release"
 msgstr "Bu buraxılış üçün təfərrüatlar yoxdur"
 
-msgid "Failed to load changelog"
-msgstr "Dəyişiklik jurnalını yükləmək mümkün olmadı"
+#| msgid "Could not check for updates"
+msgid "Could not load the release notes."
+msgstr ""
 
 msgid "Changelog"
 msgstr "Dəyişiklik jurnalı"
@@ -1403,20 +1423,23 @@ msgstr "AppImage quraşdırma qovluğunu seç"
 msgid "Tray enabled"
 msgstr "Sistem treyi aktivləşdirildi"
 
-msgid "Tray disabled, but autostart service remains"
-msgstr "Sistem treyi söndürüldü, lakin avtomatik başlatma xidməti qalır"
+msgid ""
+"The tray is disabled, but its autostart service could not be removed. It may "
+"start again at the next login."
+msgstr ""
 
 msgid "Tray disabled"
 msgstr "Sistem treyi söndürüldü"
 
-msgid "Failed to add systemd startup service"
-msgstr "systemd başlatma xidmətini əlavə etmək mümkün olmadı"
+msgid "Could not enable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service added."
 msgstr "systemd başlatma xidməti əlavə olundu."
 
-msgid "Failed to remove systemd startup service"
-msgstr "systemd başlatma xidmətini silmək mümkün olmadı"
+#| msgid "Tray disabled, but autostart service remains"
+msgid "Could not disable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service removed."
 msgstr "systemd başlatma xidməti silindi."
@@ -1478,11 +1501,43 @@ msgstr "Shelly axtarışı"
 msgid "Update"
 msgstr "Yenilə"
 
-msgid "Failed to start operation."
-msgstr "Əməliyyatı başlatmaq mümkün olmadı."
-
 msgid "Pending"
 msgstr "Gözləyir"
+
+msgid "Working"
+msgstr "İşləyir"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Uğursuz oldu"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Ləğv edildi"
+
+#| msgid "Failed to start operation."
+msgid "Could not start the requested operation."
+msgstr ""
 
 msgid "Synchronizing databases"
 msgstr "Verilənlər bazaları sinxronlaşdırılır"
@@ -1526,20 +1581,15 @@ msgstr "Toqquşmalar yoxlanılır"
 msgid "Checking disk space"
 msgstr "Disk sahəsi yoxlanılır"
 
-msgid "Working"
-msgstr "İşləyir"
-
-msgid "Failed"
-msgstr "Uğursuz oldu"
-
 msgid "Transaction Completed"
 msgstr "Əməliyyat tamamlandı"
 
-msgid "Transaction Failed"
+msgid "Operation failed"
 msgstr "Əməliyyat uğursuz oldu"
 
-msgid "Transaction Cancelled"
-msgstr "Əməliyyat ləğv edildi"
+#| msgid "Operation failed"
+msgid "Operation cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "Bitdi"
@@ -1547,8 +1597,9 @@ msgstr "Bitdi"
 msgid "exit"
 msgstr "çıx"
 
-msgid "The operation was cancelled."
-msgstr "Əməliyyat ləğv edildi."
+#| msgid "The operation was cancelled."
+msgid "Operation cancelled."
+msgstr ""
 
 msgid "All operations finished successfully."
 msgstr "Bütün əməliyyatlar uğurla tamamlandı."
@@ -1559,9 +1610,6 @@ msgid ""
 msgstr ""
 "Paketləri idarə etmək üçün icazə verilmədi. Yenidən cəhd edin və davam etmək "
 "üçün səlahiyyət sorğusunu təsdiqləyin."
-
-msgid "Cancelled"
-msgstr "Ləğv edildi"
 
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
@@ -1578,11 +1626,6 @@ msgstr "Sistem paketlərinin yenilənməsi"
 
 msgid "AUR package update"
 msgstr "AUR paketlərinin yenilənməsi"
-
-msgid "Could not run shelly check-updates. Check the CLI output and try again."
-msgstr ""
-"shelly check-updates əmrini işə salmaq mümkün olmadı. Əmr sətri çıxışını "
-"yoxlayıb yenidən cəhd edin."
 
 msgid "Update this package"
 msgstr "Bu paketi yenilə"

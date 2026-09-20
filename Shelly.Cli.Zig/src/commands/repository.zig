@@ -62,7 +62,7 @@ pub fn dispatch(
     const mutates = action != .list;
     if (mutates and !invocation.globals.ui_mode and !elevation.isRoot()) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-            try context.stderr.print("Unable to elevate repository operation: {t}\n", .{err});
+            try context.stderr.print("Could not obtain administrator privileges for repository operation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -108,8 +108,8 @@ fn executeList(
     var names = runner.list(context, &operation_context) catch |err| {
         const message = try std.fmt.allocPrint(
             context.allocator,
-            "Unable to list repositories: {t}",
-            .{err},
+            "Could not list repositories: {0s}\n\nTechnical details: {1s}",
+            .{ @import("diagnostics").cause(err), @errorName(err) },
         );
         defer context.allocator.free(message);
         return reportFailure(context, invocation, message);
@@ -167,8 +167,8 @@ fn executeMutation(
             const lsign_code = runner.lsign(context, key) catch |err| {
                 const message = try std.fmt.allocPrint(
                     context.allocator,
-                    "Failed to locally sign key {s}: {t}",
-                    .{ key, err },
+                    "Could not locally sign repository key {0f}. {1s} Review the keyring command output before trying again.\n\nTechnical details: {2s}",
+                    .{ @import("diagnostics").safe(key), @import("diagnostics").cause(err), @errorName(err) },
                 );
                 defer context.allocator.free(message);
                 return reportFailure(context, invocation, message);
@@ -176,8 +176,8 @@ fn executeMutation(
             if (lsign_code != 0) {
                 const message = try std.fmt.allocPrint(
                     context.allocator,
-                    "Failed to locally sign key {s} (shelly-key exited with code {d}).",
-                    .{ key, lsign_code },
+                    "Could not locally sign repository key {0f}. Review the keyring command output before trying again.\n\nTechnical details: {1d}",
+                    .{ @import("diagnostics").safe(key), lsign_code },
                 );
                 defer context.allocator.free(message);
                 return reportFailure(context, invocation, message);
@@ -203,8 +203,8 @@ fn executeMutation(
         runner.sync(context, &operation_context) catch |err| {
             const message = try std.fmt.allocPrint(
                 context.allocator,
-                "{s} but the database refresh failed: {t}",
-                .{ successVerbPast(action), err },
+                "{0f}, but the repository package lists could not be refreshed. {1s}\n\nTechnical details: {2s}",
+                .{ @import("diagnostics").safe(successVerbPast(action)), @import("diagnostics").cause(err), @errorName(err) },
             );
             defer context.allocator.free(message);
             if (invocation.globals.ui_mode) {
@@ -241,7 +241,7 @@ fn validationMessage(invocation: *const parser.Invocation) ?[]const u8 {
         .list => null,
         .add, .remove => blk: {
             if (invocation.positionals.len == 0 or isBlank(invocation.positionals[0]))
-                break :blk "No repository name specified.";
+                break :blk "Specify the repository name to add or remove.";
             for (invocation.positionals) |positional| {
                 if (isBlank(positional)) break :blk "Repository arguments cannot be empty.";
             }
@@ -320,9 +320,9 @@ fn successMessage(
 
 fn failureVerb(action: Action) []const u8 {
     return switch (action) {
-        .add => "Failed to add repository",
-        .remove => "Failed to remove repository",
-        .list => "Failed to list repositories",
+        .add => "Could not add the selected repository.",
+        .remove => "Could not remove the selected repository.",
+        .list => "Could not list repositories.",
     };
 }
 
@@ -517,7 +517,7 @@ test "repository requires exactly one action flag and add needs a url" {
     tc.stdout.writer.end = 0;
     const missing_name = try parseInvocation(tc.arena.allocator(), &.{ "utility", "repository", "--remove" });
     try std.testing.expectEqual(@as(?u8, 1), try dispatchWithRunner(&tc.context, &missing_name, TestRunner{}));
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "No repository name specified") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Specify the repository name") != null);
 }
 
 test "repository list prints configured names in plain and JSON output" {
@@ -596,7 +596,7 @@ test "repository remove reports unknown repos and syncs on success" {
     const remove = try parseInvocation(tc.arena.allocator(), &.{ "utility", "repository", "--remove", "missing" });
     try std.testing.expectEqual(@as(?u8, 1), try dispatchWithRunner(&tc.context, &remove, &capture));
     try std.testing.expect(capture.mutate_action == null);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Failed to remove repository") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Could not remove the selected repository") != null);
 
     tc.stdout.writer.end = 0;
     capture.configured = true;
@@ -619,7 +619,7 @@ test "repository add surfaces lsign failures before writing config" {
     });
     try std.testing.expectEqual(@as(?u8, 1), try dispatchWithRunner(&tc.context, &add, &capture));
     try std.testing.expect(capture.mutate_action == null);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Failed to locally sign key BAD") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Could not locally sign repository key BAD") != null);
 }
 
 const TestRunner = struct {

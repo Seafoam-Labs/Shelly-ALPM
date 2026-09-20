@@ -1,5 +1,6 @@
 const std = @import("std");
 const spec = @import("spec.zig");
+const diagnostics = @import("diagnostics");
 
 pub const GlobalOptions = struct {
     no_confirm: bool = false,
@@ -68,7 +69,7 @@ pub fn parse(
                     value = arguments[index];
                 }
                 if (value != null and !isBoolean(value.?))
-                    return invalidValue(allocator, command, option.name, value.?);
+                    return invalidValue(allocator, command, option, value.?);
                 if (value == null) value = "true";
             } else {
                 if (value == null) {
@@ -79,8 +80,8 @@ pub fn parse(
                         return .{ .failure = .{
                             .message = try std.fmt.allocPrint(
                                 allocator,
-                                "Required argument missing for option: '{s}'.",
-                                .{option.name},
+                                "Option '{f}' needs a value. See '{f} --help' for the expected value.",
+                                .{ diagnostics.safe(option.name), diagnostics.safe(command.path) },
                             ),
                             .help_command = command,
                         } };
@@ -91,9 +92,9 @@ pub fn parse(
                 }
                 if (value) |provided| {
                     if (!validTypedValue(option.type, provided))
-                        return invalidValue(allocator, command, option.name, provided);
+                        return invalidValue(allocator, command, option, provided);
                     if (!inChoices(option.choices, provided))
-                        return invalidValue(allocator, command, option.name, provided);
+                        return invalidValue(allocator, command, option, provided);
                 }
             }
 
@@ -141,8 +142,8 @@ pub fn parse(
         if (!present) return .{ .failure = .{
             .message = try std.fmt.allocPrint(
                 allocator,
-                "Option '{s}' is required.",
-                .{option.name},
+                "Command '{f}' requires option '{f}'. See '{f} --help'.",
+                .{ diagnostics.safe(command.path), diagnostics.safe(option.name), diagnostics.safe(command.path) },
             ),
             .help_command = command,
         } };
@@ -154,7 +155,7 @@ pub fn parse(
         return unrecognized(allocator, command, positionals.items[0], false);
     } else if (command.isBranch and !command.hasAction) {
         return .{ .failure = .{
-            .message = "Required command was not provided.",
+            .message = "Choose a Shelly command to run. See 'shelly --help' for available commands.",
             .help_command = command,
         } };
     }
@@ -185,8 +186,8 @@ fn validateArguments(
             return .{
                 .message = try std.fmt.allocPrint(
                     allocator,
-                    "Required argument '{s}' missing for command: '{s}'.",
-                    .{ argument.name, command.name },
+                    "Command '{f}' requires '{f}'. See '{f} --help'.",
+                    .{ diagnostics.safe(command.path), diagnostics.safe(argument.name), diagnostics.safe(command.path) },
                 ),
                 .help_command = command,
             };
@@ -195,11 +196,13 @@ fn validateArguments(
         const take = @min(maximum, available - later_minimum);
         for (values[value_index .. value_index + take]) |value| {
             if (!validTypedValue(argument.type, value) or !inChoices(argument.choices, value)) {
+                const hint = try valueHint(allocator, argument.type, argument.choices);
+                defer allocator.free(hint);
                 return .{
                     .message = try std.fmt.allocPrint(
                         allocator,
-                        "Cannot parse argument '{s}' for command: '{s}'.",
-                        .{ value, command.name },
+                        "Invalid value '{f}' for argument '{f}' in '{f}'. Expected {s}.",
+                        .{ diagnostics.safe(value), diagnostics.safe(argument.name), diagnostics.safe(command.path), hint },
                     ),
                     .help_command = command,
                 };
@@ -221,8 +224,8 @@ fn unrecognized(
     return .{ .failure = .{
         .message = try std.fmt.allocPrint(
             allocator,
-            "Unrecognized command or argument '{s}'.",
-            .{token},
+            "Unrecognized command or argument '{f}'. See '{f} --help' for valid commands and options.",
+            .{ diagnostics.safe(token), diagnostics.safe(command.path) },
         ),
         .help_command = command,
         .leading_help_newline = leading_help_newline,
@@ -232,17 +235,31 @@ fn unrecognized(
 fn invalidValue(
     allocator: std.mem.Allocator,
     command: *const spec.Command,
-    option_name: []const u8,
+    option: *const spec.Option,
     value: []const u8,
 ) !Outcome {
+    const hint = try valueHint(allocator, option.type, option.choices);
+    defer allocator.free(hint);
     return .{ .failure = .{
         .message = try std.fmt.allocPrint(
             allocator,
-            "Cannot parse argument '{s}' for option '{s}'.",
-            .{ value, option_name },
+            "Invalid value '{f}' for option '{f}'. Expected {s}.",
+            .{ diagnostics.safe(value), diagnostics.safe(option.name), hint },
         ),
         .help_command = command,
     } };
+}
+
+fn valueHint(allocator: std.mem.Allocator, value_type: []const u8, choices: []const []const u8) ![]u8 {
+    if (choices.len > 0) return std.mem.join(allocator, ", ", choices);
+    return allocator.dupe(u8, if (std.mem.eql(u8, value_type, "bool"))
+        "true or false"
+    else if (std.mem.eql(u8, value_type, "int"))
+        "an integer"
+    else if (std.mem.eql(u8, value_type, "uint"))
+        "a non-negative integer"
+    else
+        "a text value");
 }
 
 const SplitOption = struct { name: []const u8, value: ?[]const u8 };
@@ -314,11 +331,11 @@ test "verbose options are not accepted by commands" {
 
     const long = try parse(arena.allocator(), &manifest, &.{ "search", "standard", "firefox", "--verbose" });
     try std.testing.expect(long == .failure);
-    try std.testing.expectEqualStrings("Unrecognized command or argument '--verbose'.", long.failure.message);
+    try std.testing.expectEqualStrings("Unrecognized command or argument '--verbose'. See 'shelly search standard --help' for valid commands and options.", long.failure.message);
 
     const short = try parse(arena.allocator(), &manifest, &.{ "install", "flatpak", "demo-git", "-v" });
     try std.testing.expect(short == .failure);
-    try std.testing.expectEqualStrings("Unrecognized command or argument '-v'.", short.failure.message);
+    try std.testing.expectEqualStrings("Unrecognized command or argument '-v'. See 'shelly install flatpak --help' for valid commands and options.", short.failure.message);
 }
 
 test "removed commands are treated as root package queries" {
@@ -431,7 +448,7 @@ test "unknown old root paths fall back to search while known commands still vali
     const implicit_standard = try parse(arena.allocator(), &manifest, &.{ "install", "firefox" });
     try std.testing.expect(implicit_standard == .failure);
     try std.testing.expectEqualStrings(
-        "Unrecognized command or argument 'firefox'.",
+        "Unrecognized command or argument 'firefox'. See 'shelly install --help' for valid commands and options.",
         implicit_standard.failure.message,
     );
 

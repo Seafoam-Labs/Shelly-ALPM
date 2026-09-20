@@ -75,13 +75,7 @@ pub const Root = struct {
     succeeded: bool = false,
 
     pub fn create(allocator: std.mem.Allocator, io: std.Io) !Root {
-        try std.Io.Dir.cwd().createDirPath(io, operation_parent);
-        try std.Io.Dir.cwd().setFilePermissions(
-            io,
-            operation_parent,
-            .fromMode(0o700),
-            .{},
-        );
+        try createPrivateDirectory(io, operation_parent);
 
         var random: [16]u8 = undefined;
         io.random(&random);
@@ -93,9 +87,8 @@ pub const Root = struct {
         );
         errdefer allocator.free(operation_path);
         try validateOperationPath(operation_path);
-        try std.Io.Dir.cwd().createDirPath(io, operation_path);
         errdefer std.Io.Dir.cwd().deleteTree(io, operation_path) catch {};
-        try std.Io.Dir.cwd().setFilePermissions(io, operation_path, .fromMode(0o700), .{});
+        try createPrivateDirectory(io, operation_path);
 
         const root_path = try std.fs.path.join(allocator, &.{ operation_path, "root" });
         errdefer allocator.free(root_path);
@@ -103,6 +96,7 @@ pub const Root = struct {
         errdefer allocator.free(source_path);
         const artifact_path = try std.fs.path.join(allocator, &.{ root_path, "build/artifacts" });
         errdefer allocator.free(artifact_path);
+        try createGuestLayout(allocator, io, root_path);
         try std.Io.Dir.cwd().createDirPath(io, source_path);
         try std.Io.Dir.cwd().createDirPath(io, artifact_path);
         const marker_path = try std.fs.path.join(allocator, &.{ root_path, Zigalpm.alpm.bootstrap.marker_name });
@@ -181,8 +175,6 @@ pub const Root = struct {
 
         const home_path = try self.rootJoin("home/shelly-build");
         defer self.allocator.free(home_path);
-        const executable_directory = try self.rootJoin("usr/local/libexec/shelly");
-        defer self.allocator.free(executable_directory);
         const work_path = try self.rootJoin("build/work");
         defer self.allocator.free(work_path);
         const sources_path = try self.rootJoin("build/sources");
@@ -190,7 +182,7 @@ pub const Root = struct {
         const logs_path = try self.rootJoin("build/logs");
         defer self.allocator.free(logs_path);
         try std.Io.Dir.cwd().createDirPath(self.io, home_path);
-        try std.Io.Dir.cwd().createDirPath(self.io, executable_directory);
+        try self.prepareExecutableDirectory();
         try std.Io.Dir.cwd().createDirPath(self.io, work_path);
         try std.Io.Dir.cwd().createDirPath(self.io, sources_path);
         try std.Io.Dir.cwd().createDirPath(self.io, logs_path);
@@ -254,6 +246,7 @@ pub const Root = struct {
         // nspawn mounts a fresh tmpfs on /run, so coordinator payloads staged
         // there would be hidden before execve(). /usr/local remains part of
         // the operation-scoped root and is not exported from the guest.
+        try self.prepareExecutableDirectory();
         const destination = try self.rootJoin(guest_executable_relative);
         defer self.allocator.free(destination);
         try std.Io.Dir.copyFile(.cwd(), executable, .cwd(), destination, self.io, .{});
@@ -261,6 +254,7 @@ pub const Root = struct {
     }
 
     pub fn stageSourcePgpKeys(self: *Root, contents: []const u8) !void {
+        try self.prepareExecutableDirectory();
         const path = try self.rootJoin(source_keys_relative);
         defer self.allocator.free(path);
         const file = try std.Io.Dir.cwd().createFile(self.io, path, .{ .permissions = .fromMode(0o600) });
@@ -273,11 +267,14 @@ pub const Root = struct {
     pub fn writeBuildConfiguration(self: *Root, contents: []const u8) !void {
         const path = try self.rootJoin("etc/shellybuild.conf");
         defer self.allocator.free(path);
-        try std.Io.Dir.cwd().writeFile(self.io, .{
-            .sub_path = path,
-            .data = contents,
-            .flags = .{ .permissions = .fromMode(0o644) },
+        const file = try std.Io.Dir.cwd().createFile(self.io, path, .{
+            .permissions = .fromMode(0o600),
         });
+        defer file.close(self.io);
+        try file.writeStreamingAll(self.io, contents);
+        // Creation modes are filtered by umask, and existing files retain
+        // their old mode. The unprivileged guest must be able to read both.
+        try file.setPermissions(self.io, .fromMode(0o644));
     }
 
     pub fn run(
@@ -386,6 +383,18 @@ pub const Root = struct {
         return std.fs.path.join(self.allocator, &.{ self.root_path, relative });
     }
 
+    fn prepareExecutableDirectory(self: *Root) !void {
+        // Preserve existing bootstrap-managed ancestors, but make newly
+        // created ones traversable even under a restrictive coordinator umask.
+        for ([_][]const u8{ "usr", "usr/local", "usr/local/libexec", "usr/local/libexec/shelly" }, 0..) |relative, index| {
+            const path = try self.rootJoin(relative);
+            defer self.allocator.free(path);
+            const status = try std.Io.Dir.cwd().createDirPathStatus(self.io, path, .default_dir);
+            if (status == .created or index >= 2)
+                try std.Io.Dir.cwd().setFilePermissions(self.io, path, .fromMode(0o755), .{});
+        }
+    }
+
     fn runCancellable(
         self: *Root,
         environ: std.process.Environ,
@@ -406,6 +415,22 @@ pub const Root = struct {
         if (exit_code != 0) return error.IsolatedCommandFailed;
     }
 };
+
+fn createPrivateDirectory(io: std.Io, path: []const u8) !void {
+    try std.Io.Dir.cwd().createDirPath(io, path);
+    try std.Io.Dir.cwd().setFilePermissions(io, path, .fromMode(0o700), .{});
+}
+
+fn createGuestLayout(allocator: std.mem.Allocator, io: std.Io, root_path: []const u8) !void {
+    // Only guest traversal directories are public. Their enclosing host
+    // operation directory remains 0700, and build leaf ownership is set later.
+    try std.Io.Dir.cwd().createDirPath(io, root_path);
+    try std.Io.Dir.cwd().setFilePermissions(io, root_path, .fromMode(0o755), .{});
+    const build_path = try std.fs.path.join(allocator, &.{ root_path, "build" });
+    defer allocator.free(build_path);
+    try std.Io.Dir.cwd().createDirPath(io, build_path);
+    try std.Io.Dir.cwd().setFilePermissions(io, build_path, .fromMode(0o755), .{});
+}
 
 /// Constructs the re-exec boundary used instead of pacstrap. All returned
 /// strings are borrowed; only the slice itself is owned by the caller.
@@ -679,6 +704,118 @@ test "staged reviewed inputs preserve the host digest and reject real changes" {
     try review.verifyCurrent(allocator, io, guest_pkgbuild, guest_path);
     try guest.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = content ++ "\n# changed\n" });
     try std.testing.expectError(error.ReviewedPkgbuildChanged, review.verifyCurrent(allocator, io, guest_pkgbuild, guest_path));
+}
+
+// Uses the same private-boundary and guest-layout helpers as Root.create,
+// without requiring access to the system operation parent.
+fn permissionTestRoot(parent: []const u8) !Root {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    const operations = try std.fs.path.join(allocator, &.{ parent, "operations" });
+    defer allocator.free(operations);
+    try createPrivateDirectory(io, operations);
+    const operation = try std.fs.path.join(allocator, &.{ operations, "test" });
+    errdefer allocator.free(operation);
+    try createPrivateDirectory(io, operation);
+    const root = try std.fs.path.join(allocator, &.{ operation, "root" });
+    errdefer allocator.free(root);
+    try createGuestLayout(allocator, io, root);
+    const source = try std.fs.path.join(allocator, &.{ root, "build/source" });
+    errdefer allocator.free(source);
+    try std.Io.Dir.cwd().createDirPath(io, source);
+    const artifacts = try std.fs.path.join(allocator, &.{ root, "build/artifacts" });
+    errdefer allocator.free(artifacts);
+    try std.Io.Dir.cwd().createDirPath(io, artifacts);
+    return .{
+        .allocator = allocator,
+        .io = io,
+        .operation_path = operation,
+        .root_path = root,
+        .source_path = source,
+        .artifact_path = artifacts,
+    };
+}
+
+fn expectMode(path: []const u8, mode: u32) !void {
+    const stat = try std.Io.Dir.cwd().statFile(std.testing.io, path, .{});
+    try std.testing.expectEqual(mode, stat.permissions.toMode() & 0o7777);
+}
+
+test "isolated guest traversal permissions survive restrictive umasks" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const parent = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(parent);
+    var root = try permissionTestRoot(parent);
+    defer root.deinit();
+    const executable_contents = "#!/bin/sh\nexit 0\n";
+    try temporary.dir.writeFile(io, .{ .sub_path = "builder", .data = executable_contents });
+    const executable_path = try temporary.dir.realPathFileAlloc(io, "builder", allocator);
+    defer allocator.free(executable_path);
+    try root.stageExecutable(executable_path);
+    var guest = try std.Io.Dir.cwd().openDir(io, root.root_path, .{});
+    defer guest.close(io);
+    try expectStagedInput(guest, guest_executable_relative, executable_contents, 0o755);
+    try root.writeReviewedInput("nested/reviewed.txt", "reviewed bytes\n", 0o660);
+
+    for ([_][]const u8{ "", "build", "usr", "usr/local", "usr/local/libexec", "usr/local/libexec/shelly" }) |relative| {
+        const path = try root.rootJoin(relative);
+        defer allocator.free(path);
+        try expectMode(path, 0o755);
+    }
+    try expectMode(root.operation_path, 0o700);
+    try expectMode(std.fs.path.dirname(root.operation_path).?, 0o700);
+
+    // Repair owned traversal paths without recursively changing reviewed files
+    // or changing the existing bootstrap-managed ancestors.
+    for ([_][]const u8{ "", "build", "usr/local/libexec", "usr/local/libexec/shelly" }) |relative| {
+        const path = try root.rootJoin(relative);
+        defer allocator.free(path);
+        try std.Io.Dir.cwd().setFilePermissions(io, path, .fromMode(0o700), .{});
+    }
+    const usr_path = try root.rootJoin("usr");
+    defer allocator.free(usr_path);
+    try std.Io.Dir.cwd().setFilePermissions(io, usr_path, .fromMode(0o2755), .{});
+    const local_path = try root.rootJoin("usr/local");
+    defer allocator.free(local_path);
+    try std.Io.Dir.cwd().setFilePermissions(io, local_path, .fromMode(0o2755), .{});
+    try createGuestLayout(allocator, io, root.root_path);
+    try root.prepareExecutableDirectory();
+    for ([_][]const u8{ "", "build", "usr/local/libexec", "usr/local/libexec/shelly" }) |relative| {
+        const path = try root.rootJoin(relative);
+        defer allocator.free(path);
+        try expectMode(path, 0o755);
+    }
+    try expectMode(usr_path, 0o2755);
+    try expectMode(local_path, 0o2755);
+    try expectMode(root.operation_path, 0o700);
+    try expectMode(std.fs.path.dirname(root.operation_path).?, 0o700);
+    var source = try std.Io.Dir.cwd().openDir(io, root.source_path, .{});
+    defer source.close(io);
+    try expectStagedInput(source, "nested/reviewed.txt", "reviewed bytes\n", 0o660);
+}
+
+test "isolated configuration permissions survive restrictive umasks and replacement" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const parent = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(parent);
+    var root = try permissionTestRoot(parent);
+    defer root.deinit();
+    var directory = try std.Io.Dir.cwd().openDir(io, root.root_path, .{});
+    defer directory.close(io);
+    try directory.createDirPath(io, "etc");
+    const configuration = "[sandbox]\nenabled = false\n";
+    try root.writeBuildConfiguration(configuration);
+    try expectStagedInput(directory, "etc/shellybuild.conf", configuration, 0o644);
+    try directory.setFilePermissions(io, "etc/shellybuild.conf", .fromMode(0o600), .{});
+    const replacement = "[build]\ncheck = false\n";
+    try root.writeBuildConfiguration(replacement);
+    try expectStagedInput(directory, "etc/shellybuild.conf", replacement, 0o644);
 }
 
 test "isolated public source key bundle is readable under restrictive umasks" {

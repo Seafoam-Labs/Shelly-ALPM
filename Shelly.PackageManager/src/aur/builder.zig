@@ -1,4 +1,5 @@
 const std = @import("std");
+pub const build_path = @import("build_path.zig");
 const user_account = @import("user_account");
 const operation_api = @import("operation_context");
 
@@ -96,6 +97,28 @@ pub fn runWithEnvironment(
     return runWithEnvironmentMap(allocator, io, argv, working_directory, timeout_seconds, &environ_map);
 }
 
+/// Runs a native build helper with executable lookup using the build PATH.
+pub fn runWithBuildEnvironment(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    argv: []const []const u8,
+    working_directory: ?[]const u8,
+    timeout_seconds: ?u32,
+) !ProcessResult {
+    var environment = try environ.createMap(allocator);
+    defer environment.deinit();
+    const command = try buildHelperCommand(allocator, argv);
+    defer allocator.free(command);
+    return runWithEnvironmentMap(allocator, io, command, working_directory, timeout_seconds, &environment);
+}
+
+// Zig searches argv[0] using the Io parent's PATH, not environ_map. env
+// performs that lookup after receiving the native build's environment.
+fn buildHelperCommand(allocator: std.mem.Allocator, argv: []const []const u8) ![][]const u8 {
+    return std.mem.concat(allocator, []const u8, &.{ &.{ "/usr/bin/env", "--" }, argv });
+}
+
 pub fn runStreamingWithEnvironment(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -156,8 +179,10 @@ pub fn runStreamingWithBuildEnvironmentOperation(
     else
         try executionEnvironment(allocator, environ);
     defer environ_map.deinit();
+    const build_command = if (build_environment != null) try buildHelperCommand(allocator, argv) else null;
+    defer if (build_command) |command| allocator.free(command);
     var child = try std.process.spawn(io, .{
-        .argv = argv,
+        .argv = build_command orelse argv,
         .cwd = if (working_directory) |path| .{ .path = path } else .inherit,
         .environ_map = &environ_map,
         .stdin = .ignore,
@@ -285,7 +310,7 @@ pub fn executionEnvironmentWithBuild(
     environ: std.process.Environ,
     build: BuildEnvironment,
 ) !std.process.Environ.Map {
-    var environ_map = try executionEnvironment(allocator, environ);
+    var environ_map = try environ.createMap(allocator);
     errdefer environ_map.deinit();
 
     try putJoinedOrRemove(allocator, &environ_map, "CPPFLAGS", build.cppflags);
@@ -307,13 +332,9 @@ pub fn executionEnvironmentWithBuild(
         try environ_map.put("SOURCE_DATE_EPOCH", epoch_text);
     }
 
-    const base_path = environ_map.get("PATH") orelse "";
-    var prefixed_path: std.ArrayList(u8) = .empty;
-    defer prefixed_path.deinit(allocator);
-    if (build.ccache) try prefixed_path.appendSlice(allocator, "/usr/lib/ccache/bin:");
-    if (build.distcc) try prefixed_path.appendSlice(allocator, "/usr/lib/distcc/bin:");
-    try prefixed_path.appendSlice(allocator, base_path);
-    try environ_map.put("PATH", prefixed_path.items);
+    const path = try build_path.withWrappers(allocator, environ_map.get("PATH") orelse build_path.baseline, build.ccache, build.distcc);
+    defer allocator.free(path);
+    try environ_map.put("PATH", path);
     return environ_map;
 }
 
@@ -429,15 +450,12 @@ pub fn invokingUserCleanCommand(
     if (account.uid == 0 or account.home.len == 0) return error.InvokingUserUnavailable;
     var uid_buffer: [10]u8 = undefined;
     const uid = try std.fmt.bufPrint(&uid_buffer, "{d}", .{account.uid});
-    const path = try buildExecutionPath(allocator, environ);
-    defer allocator.free(path);
-
     return cleanUserCommand(
         allocator,
         username,
         account.home,
         uid,
-        path,
+        build_path.baseline,
         environ.getPosix("SOURCE_DATE_EPOCH"),
         command,
         arguments,
@@ -490,7 +508,7 @@ fn cleanUserCommand(
         "-u",
         username,
         "--",
-        "env",
+        "/usr/bin/env",
         "-i",
         home_environment,
         config_environment,
@@ -755,6 +773,7 @@ test "NSS invoking-user commands resolve all elevators without HOME" {
         var environment = std.process.Environ.Map.init(allocator);
         defer environment.deinit();
         try environment.put(marker, if (std.mem.eql(u8, marker, "PKEXEC_UID")) uid else account.username);
+        try environment.put("PATH", "/root/bin:/untrusted/toolchain");
         const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
         defer environ.block.deinit(allocator);
         const home = try resolveInvokingUserHome(allocator, std.testing.io, environ);
@@ -763,6 +782,8 @@ test "NSS invoking-user commands resolve all elevators without HOME" {
         var command = try invokingUserCleanCommand(allocator, std.testing.io, environ, "shelly", &.{"build"});
         defer command.deinit(allocator);
         try std.testing.expectEqualStrings(account.username, command.argv[2]);
+        try std.testing.expectEqualStrings("/usr/bin/env", command.argv[4]);
+        try std.testing.expectEqualStrings("PATH=" ++ build_path.baseline, command.argv[13]);
         const expected_home = try std.fmt.allocPrint(allocator, "HOME={s}", .{account.home});
         defer allocator.free(expected_home);
         try std.testing.expectEqualStrings(expected_home, command.argv[6]);
@@ -803,7 +824,7 @@ test "clean invoking-user build command drops the elevated environment" {
         "-u",
         "zoey",
         "--",
-        "env",
+        "/usr/bin/env",
         "-i",
         "HOME=/home/zoey",
         "XDG_CONFIG_HOME=/home/zoey/.config",

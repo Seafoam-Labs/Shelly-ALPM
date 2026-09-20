@@ -118,7 +118,7 @@ fn resolve_variable_references_mode(self: PkgbuildParser, content: []const u8, v
             cleaned = strip_dangling_operator(dep);
         }
         if (!std.mem.eql(u8, cleaned, dep)) {
-            std.debug.print("[Shelly] Warning: Stripped unresolved version constraint: {s} -> {s}\n", .{ dep, cleaned });
+            std.debug.print("Could not resolve dependency version constraint {0f}; using {1f}. Review the dependency requirements before building.\n", .{ @import("diagnostics").safe(dep), @import("diagnostics").safe(cleaned) });
             const cleaned_owned = try self.allocator.dupe(u8, cleaned);
             self.allocator.free(dep);
             resolved.items[idx] = cleaned_owned;

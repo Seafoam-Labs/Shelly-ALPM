@@ -294,18 +294,18 @@ pub const ShellySettingsPage = extern struct {
         p.loaded = true;
 
         const version = std.fmt.allocPrintSentinel(std.heap.c_allocator, "v{f}", .{options.version}, 0) catch |err| {
-            std.log.err("failed to format version: {s}", .{@errorName(err)});
+            std.log.err("Could not display the Shelly version. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return;
         };
         defer std.heap.c_allocator.free(version);
         p.version_label.setLabel(version);
 
         const svc = obtainConfigService() catch |err| {
-            std.log.warn("settings: could not open config service: {t}", .{err});
+            std.log.warn("Could not open the settings service. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return;
         };
         const cfg = svc.get() catch |err| {
-            std.log.warn("settings: config not loaded: {t}", .{err});
+            std.log.warn("Could not load settings from the configured file. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return;
         };
 
@@ -329,8 +329,8 @@ pub const ShellySettingsPage = extern struct {
 
     fn onSaveClicked(_: *gtk.Button, self: *Self) callconv(.c) void {
         self.save() catch |err| {
-            std.log.err("settings: save failed: {t}", .{err});
-            self.priv().toast.show(.@"error", translations._("Failed to save settings"));
+            std.log.err("Could not save settings to the configured file. {0s} Your latest changes were not saved.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            self.priv().toast.show(.@"error", translations._("Could not save settings to the configured file. Your latest changes were not saved."));
             return;
         };
         self.priv().toast.show(.success, translations._("Settings saved"));
@@ -388,11 +388,11 @@ pub const ShellySettingsPage = extern struct {
             !std.mem.eql(u8, updated.Culture, cfg.Culture);
 
         svc.set(updated) catch {
-            p.toast.show(.@"error", translations._("Failed to save settings"));
+            p.toast.show(.@"error", translations._("Could not save settings to the configured file. Your latest changes were not saved."));
             return;
         };
         svc.save() catch {
-            p.toast.show(.@"error", translations._("Failed to save settings"));
+            p.toast.show(.@"error", translations._("Could not save settings to the configured file. Your latest changes were not saved."));
             return;
         };
 
@@ -583,7 +583,7 @@ pub const ShellySettingsPage = extern struct {
         };
         save_result catch {
             self.restoreSupportSwitch(feature, false);
-            p.toast.show(.@"error", translations._("Failed to save settings"));
+            p.toast.show(.@"error", translations._("Could not save settings to the configured file. Your latest changes were not saved."));
             return;
         };
 
@@ -636,15 +636,15 @@ pub const ShellySettingsPage = extern struct {
 
     fn supportStartFailureMessage(feature: SupportFeature) [:0]const u8 {
         return switch (feature) {
-            .flatpak => translations._("Failed to start Flatpak support installation"),
-            .appimage => translations._("Failed to start AppImage support installation"),
+            .flatpak => translations._("Could not start installing Flatpak support."),
+            .appimage => translations._("Could not start installing AppImage support."),
         };
     }
 
     fn supportFailureMessage(feature: SupportFeature) [:0]const u8 {
         return switch (feature) {
-            .flatpak => translations._("Flatpak support installation failed"),
-            .appimage => translations._("AppImage support installation failed"),
+            .flatpak => translations._("Could not install Flatpak support."),
+            .appimage => translations._("Could not install AppImage support."),
         };
     }
 
@@ -682,11 +682,11 @@ pub const ShellySettingsPage = extern struct {
             .location = .{ .url = url },
             .response_writer = &body.writer,
         }) catch |err| {
-            std.log.warn("settings: changelog fetch failed: {any}", .{err});
+            std.log.warn("Could not download the release notes. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return err;
         };
         if (fetch_result.status != .ok) {
-            std.log.warn("settings: changelog fetch returned status {d}", .{@intFromEnum(fetch_result.status)});
+            std.log.warn("Could not download the release notes: the server returned HTTP {0d}.", .{@intFromEnum(fetch_result.status)});
             return error.HttpRequestFailed;
         }
 
@@ -701,7 +701,7 @@ pub const ShellySettingsPage = extern struct {
             body.written(),
             .{ .ignore_unknown_fields = true, .allocate = .alloc_always },
         ) catch |err| {
-            std.log.warn("settings: changelog JSON parse failed: {any}", .{err});
+            std.log.warn("Could not read the release notes because the server response is invalid. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return err;
         };
         defer parsed.deinit();
@@ -743,7 +743,7 @@ pub const ShellySettingsPage = extern struct {
         }
 
         if (entries.items.len == 0) {
-            self.priv().toast.show(.@"error", translations._("Failed to load changelog"));
+            self.priv().toast.show(.@"error", translations._("Could not load the release notes."));
             return;
         }
 
@@ -757,8 +757,8 @@ pub const ShellySettingsPage = extern struct {
 
     fn onChangelogClicked(_: *gtk.Button, self: *Self) callconv(.c) void {
         self.showChangelog() catch |err| {
-            std.log.err("settings: failed to load changelog: {any}", .{err});
-            self.priv().toast.show(.@"error", translations._("Failed to load changelog"));
+            std.log.err("Could not load the release notes. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            self.priv().toast.show(.@"error", translations._("Could not load the release notes."));
         };
     }
 
@@ -795,7 +795,7 @@ pub const ShellySettingsPage = extern struct {
         const file = gtk.FileDialog.openFinish(dialog, result, &err);
         if (err) |e| {
             if (e.f_code != @intFromEnum(gio.IOErrorEnum.cancelled)) {
-                std.log.warn("settings: file selection failed: {s}", .{e.f_message orelse ""});
+                std.log.warn("Could not select an icon file. {0f}", .{@import("diagnostics").safe(e.f_message orelse "")});
             }
             glib.Error.free(e);
             return;
@@ -850,7 +850,7 @@ pub const ShellySettingsPage = extern struct {
         const file = gtk.FileDialog.openFinish(dialog, result, &err);
         if (err) |e| {
             if (e.f_code != @intFromEnum(gio.IOErrorEnum.cancelled)) {
-                std.log.warn("settings: file selection failed: {s}", .{e.f_message orelse ""});
+                std.log.warn("Could not select an icon file. {0f}", .{@import("diagnostics").safe(e.f_message orelse "")});
             }
             glib.Error.free(e);
             return;
@@ -905,7 +905,7 @@ pub const ShellySettingsPage = extern struct {
         const file = gtk.FileDialog.selectFolderFinish(dialog, result, &err);
         if (err) |e| {
             if (e.f_code != @intFromEnum(gio.IOErrorEnum.cancelled)) {
-                std.log.warn("settings: folder selection failed: {s}", .{e.f_message orelse ""});
+                std.log.warn("Could not select the AppImage installation directory. {0f}", .{@import("diagnostics").safe(e.f_message orelse "")});
             }
             glib.Error.free(e);
             return;
@@ -928,14 +928,14 @@ pub const ShellySettingsPage = extern struct {
     fn saveAppImageInstallPath(self: *Self, path: []const u8) void {
         const p = self.priv();
         var resolver = CliConfigResolver.init(std.heap.c_allocator, runtime.io, runtime.environ_map) catch {
-            p.toast.show(.@"error", translations._("Failed to save settings"));
+            p.toast.show(.@"error", translations._("Could not save settings to the configured file. Your latest changes were not saved."));
             return;
         };
         defer resolver.deinit();
 
         resolver.writeAppImageInstallPath(path) catch |err| {
-            std.log.err("settings: failed to save AppImage install path: {t}", .{err});
-            p.toast.show(.@"error", translations._("Failed to save settings"));
+            std.log.err("Could not save the configured AppImage installation directory. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            p.toast.show(.@"error", translations._("Could not save settings to the configured file. Your latest changes were not saved."));
         };
     }
 
@@ -972,8 +972,8 @@ pub const ShellySettingsPage = extern struct {
             updateConfigField(.TrayEnabled, active);
 
             systemd_tray.removeService(std.heap.c_allocator, runtime.io) catch |err| {
-                std.log.err("failed to remove systemd tray service: {s}", .{@errorName(err)});
-                p.toast.show(.@"error", translations._("Tray disabled, but autostart service remains"));
+                std.log.err("Could not disable the tray autostart service. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+                p.toast.show(.@"error", translations._("The tray is disabled, but its autostart service could not be removed. It may start again at the next login."));
                 return;
             };
 
@@ -1000,17 +1000,17 @@ pub const ShellySettingsPage = extern struct {
 
         if (active) {
             systemd_tray.addService(arena.allocator(), threaded.io()) catch |err| {
-                std.log.err("settings: failed to add systemd tray service: {t}", .{err});
+                std.log.err("Could not enable the tray autostart service. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
                 gtk.Switch.setActive(p.tray_auto_switch, 0);
-                p.toast.show(.@"error", translations._("Failed to add systemd startup service"));
+                p.toast.show(.@"error", translations._("Could not enable the tray autostart service."));
                 return;
             };
             p.toast.show(.success, translations._("Systemd startup service added."));
         } else {
             systemd_tray.removeService(arena.allocator(), threaded.io()) catch |err| {
-                std.log.err("settings: failed to remove systemd tray service: {t}", .{err});
+                std.log.err("Could not disable the tray autostart service. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
                 gtk.Switch.setActive(p.tray_auto_switch, 1);
-                p.toast.show(.@"error", translations._("Failed to remove systemd startup service"));
+                p.toast.show(.@"error", translations._("Could not disable the tray autostart service."));
                 return;
             };
             p.toast.show(.success, translations._("Systemd startup service removed."));
@@ -1288,11 +1288,11 @@ fn updateConfigField(
     var updated = cfg.*;
     @field(updated, @tagName(field)) = value;
     svc.set(updated) catch |set_err| {
-        std.log.err("settings: failed to update config: {t}", .{set_err});
+        std.log.err("Could not update setting {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(@tagName(field)), @import("diagnostics").cause(set_err), @errorName(set_err) });
         return;
     };
     svc.save() catch |save_err| {
-        std.log.err("settings: failed to save config: {t}", .{save_err});
+        std.log.err("Could not save settings to the configured file. {0s} Your latest changes were not saved.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(save_err), @errorName(save_err) });
     };
 }
 
@@ -1360,7 +1360,7 @@ fn applyAppImageInstallPath(p: *ShellySettingsPage.Private) void {
     defer resolver.deinit();
 
     const path = resolver.readAppImageInstallPath() catch |err| {
-        std.log.warn("settings: could not read AppImage install path: {t}", .{err});
+        std.log.warn("Could not read the configured AppImage installation directory. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
         setButtonLabel(p.appimage_install_path_button, allocator, "", translations._("Select Directory"));
         return;
     };

@@ -180,7 +180,7 @@
             </child>
             <child>
               <object class="GtkLabel" id="error_label">
-                <property name="label" translatable="yes">Could not check for updates</property>
+                <property name="label" translatable="yes">Could not check for updates.</property>
                 <property name="wrap">true</property>
                 <property name="justify">center</property>
               </object>

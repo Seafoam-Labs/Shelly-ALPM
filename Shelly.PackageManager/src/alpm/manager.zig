@@ -352,13 +352,13 @@ pub const Manager = struct {
 
         self.handle = rawLibalpm.alpm_initialize(self.config.root_directory, self.config.database_path, &err) orelse {
             const code: c_int = @intCast(err);
-            const message = std.fmt.allocPrint(self.allocator, "alpm_initialize failed: {s}", .{std.mem.span(rawLibalpm.alpm_strerror(err))}) catch "Unknown Failure";
+            const message = std.fmt.allocPrint(self.allocator, "Could not open the package databases. {0f}", .{@import("diagnostics").safe(std.mem.span(rawLibalpm.alpm_strerror(err)))}) catch "Could not open the package databases. Shelly could not allocate memory for the error details.";
             defer self.allocator.free(message);
 
             if (init_operation) |*operation| {
                 operation.reportError(error.InitFailed, message, "alpm", code, false);
             } else {
-                std.log.err("alpm_initialize failed: {s}", .{std.mem.span(rawLibalpm.alpm_strerror(err))});
+                std.log.err("Could not open the package databases. {0f}", .{@import("diagnostics").safe(std.mem.span(rawLibalpm.alpm_strerror(err)))});
             }
             return error.InitFailed;
         };
@@ -439,11 +439,11 @@ pub const Manager = struct {
         defer self.allocator.free(syncDirectory);
 
         std.Io.Dir.cwd().createDirPath(self.io(), syncDirectory) catch |err| {
-            std.log.err("failed to create database sync directory {s}: {}", .{ syncDirectory, err });
+            std.log.err("Could not create database sync directory {0f}: {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(syncDirectory), @import("diagnostics").cause(err), @errorName(err) });
             return TransactionError.SyncDbFailed;
         };
         std.Io.Dir.cwd().setFilePermissions(self.io(), syncDirectory, database_directory_permissions, .{}) catch |err| {
-            std.log.err("failed to set database sync directory permissions on {s}: {}", .{ syncDirectory, err });
+            std.log.err("Could not set database sync directory permissions on {0f}: {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(syncDirectory), @import("diagnostics").cause(err), @errorName(err) });
             return TransactionError.SyncDbFailed;
         };
 
@@ -504,7 +504,7 @@ pub const Manager = struct {
         // without individually forcing a filesystem transaction. Commit the
         // directory entries once after every worker has finished instead.
         syncDatabaseDirectory(self.io(), syncDirectory) catch |err| {
-            std.log.err("failed to synchronize database directory {s}: {}", .{ syncDirectory, err });
+            std.log.err("Could not synchronize database directory {0f}: {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(syncDirectory), @import("diagnostics").cause(err), @errorName(err) });
             failed = true;
         };
 
@@ -529,7 +529,7 @@ pub const Manager = struct {
             if (failed_dbs.items.len != 0) {
                 const failed_items = std.mem.join(self.allocator, ", ", failed_dbs.items) catch return TransactionError.OutOfMemory;
                 defer self.allocator.free(failed_items);
-                const error_message = std.fmt.allocPrint(self.allocator, "Failed to verify signature for: {s}", .{failed_items}) catch return TransactionError.OutOfMemory;
+                const error_message = std.fmt.allocPrint(self.allocator, "Could not verify signatures for {0f}. Check the signing keys and obtain valid package signatures before retrying.", .{@import("diagnostics").safe(failed_items)}) catch return TransactionError.OutOfMemory;
                 defer self.allocator.free(error_message);
                 self.dispatcher.raiseError(.{ .message = error_message });
 
@@ -587,7 +587,7 @@ pub const Manager = struct {
         const database = rawLibalpm.alpm_get_localdb(self.handle);
         const package = rawLibalpm.alpm_db_get_pkg(database, package_name.ptr);
         if (package == null) {
-            std.log.debug("Failed to find {s}", .{package_name});
+            std.log.debug("Could not find installed package {0f}. Check the installed-package list and package name.", .{@import("diagnostics").safe(package_name)});
             return null;
         }
 
@@ -992,7 +992,7 @@ pub const Manager = struct {
                     defer self.allocator.free(prompt);
                     const response = self.askYesNo(self.io(), @intFromEnum(libalpm.QuestionType.remove_packages), prompt);
                     if (!response) {
-                        self.dispatcher.raiseError(.{ .message = "Held package removal cancelled." });
+                        self.dispatcher.raiseError(.{ .message = "Removal cancelled because permission to remove held packages was declined." });
                         return TransactionError.PrepareFailed;
                     }
                 }
@@ -1045,7 +1045,7 @@ pub const Manager = struct {
                     const dep_name = deps.name() orelse continue;
                     // looks for local package, then the satisfier, continues on if failes to find.
                     const local_ptr = rawLibalpm.alpm_db_get_pkg(local_db, dep_name.ptr) orelse rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(local_db), dep_name.ptr) orelse {
-                        const message = try std.fmt.allocPrint(self.allocator, "Failed to find {s} in local database. Skipping...", .{dep_name});
+                        const message = try std.fmt.allocPrint(self.allocator, "Could not find {0f} in the local package database; it was skipped. Check the installed-package list before retrying.", .{@import("diagnostics").safe(dep_name)});
                         defer self.allocator.free(message);
                         self.dispatcher.raiseInformational(.{
                             .event_type = libalpm.EventType.failed_optional_dependency_operation,
@@ -1111,17 +1111,17 @@ pub const Manager = struct {
             if (rawLibalpm.alpm_remove_pkg(self.handle, pkg_ptr) == 0) continue;
             const errno = rawLibalpm.alpm_errno(self.handle);
             const reason = libalpm.str(rawLibalpm.alpm_strerror(errno)) orelse
-                "Unknown libalpm error";
+                "libalpm did not provide an error description.";
             const name = libalpm.str(rawLibalpm.alpm_pkg_get_name(pkg_ptr)) orelse
                 "unknown package";
 
             const message = std.fmt.allocPrint(
                 self.allocator,
-                "Failed to queue {s} for removal: {s}",
-                .{ name, reason },
+                "Could not add {0f} to the removal transaction. {1f}",
+                .{ @import("diagnostics").safe(name), @import("diagnostics").safe(reason) },
             ) catch {
                 self.dispatcher.raiseError(.{
-                    .message = "Failed to queue package for removal.",
+                    .message = "Could not add the requested package to the removal transaction.",
                 });
                 return TransactionError.RemovalFailed;
             };
@@ -1467,11 +1467,11 @@ pub const Manager = struct {
                 const failure_message = if (stderr.len != 0)
                     self.allocator.dupe(u8, stderr) catch return error.OutOfMemory
                 else if (exit_code) |code|
-                    std.fmt.allocPrint(self.allocator, "systemctl exited with status {d}", .{code}) catch return error.OutOfMemory
+                    std.fmt.allocPrint(self.allocator, "Could not restart the affected service: systemctl exited with code {0d}. Review the service command output.", .{code}) catch return error.OutOfMemory
                 else
                     self.allocator.dupe(
                         u8,
-                        "systemctl was terminated before it exited",
+                        "Could not confirm the restart of the affected service because systemctl was terminated. Check the service status.",
                     ) catch return error.OutOfMemory;
                 const failure_service = self.allocator.dupe(u8, service) catch {
                     self.allocator.free(failure_message);
@@ -2289,7 +2289,7 @@ pub const Manager = struct {
             const refresh_result = rawLibalpm.alpm_release(self.handle);
             if (refresh_result != 0) {
                 self.dispatcher.raiseError(.{
-                    .message = "Failed to release the ALPM handle while reloading package databases",
+                    .message = "Could not close the package database before reloading it.",
                 });
                 return TransactionError.RefreshFailed;
             }
@@ -2304,9 +2304,9 @@ pub const Manager = struct {
             var message_buffer: [512]u8 = undefined;
             const message = std.fmt.bufPrint(
                 &message_buffer,
-                "Failed to reinitialize ALPM while reloading package databases: {s}",
-                .{std.mem.span(rawLibalpm.alpm_strerror(err2))},
-            ) catch "Failed to reinitialize ALPM while reloading package databases";
+                "Could not reopen the package database while refreshing package state. {0f}",
+                .{@import("diagnostics").safe(std.mem.span(rawLibalpm.alpm_strerror(err2)))},
+            ) catch "Could not reopen the package database while refreshing package state.";
             self.dispatcher.raiseError(.{ .message = message });
             return TransactionError.RefreshFailed;
         }
@@ -2807,7 +2807,7 @@ pub const Manager = struct {
 
         const resolved_arch = resolveArchitecture(config.architecture);
         const resolved_arch_z = self.allocator.dupeSentinel(u8, resolved_arch, 0) catch {
-            std.log.err("out of memory resolving architecture; skipping repository registration", .{});
+            std.log.err("Could not register repositories because Shelly ran out of memory while resolving the architecture. Close other applications and retry; repository registration was skipped.", .{});
             return;
         };
         defer self.allocator.free(resolved_arch_z);
@@ -2828,10 +2828,7 @@ pub const Manager = struct {
 
     fn check(self: *Manager, what: [:0]const u8, ret: c_int) void {
         if (ret != 0) {
-            std.log.warn("alpm option '{s}' failed: {s}", .{
-                what,
-                std.mem.span(rawLibalpm.alpm_strerror(rawLibalpm.alpm_errno(self.handle))),
-            });
+            std.log.warn("Could not apply package database setting '{0f}'. {1f}", .{ @import("diagnostics").safe(what), @import("diagnostics").safe(std.mem.span(rawLibalpm.alpm_strerror(rawLibalpm.alpm_errno(self.handle)))) });
         }
     }
 
@@ -2865,10 +2862,7 @@ pub const Manager = struct {
         defer self.allocator.free(name_z);
 
         const db = rawLibalpm.alpm_register_syncdb(self.handle, name_z.ptr, effective_sig) orelse {
-            std.log.err("alpm_register_syncdb('{s}') failed: {s}", .{
-                repo.name,
-                std.mem.span(rawLibalpm.alpm_strerror(rawLibalpm.alpm_errno(self.handle))),
-            });
+            std.log.err("Could not register repository {0f} with the package database. {1f}", .{ @import("diagnostics").safe(repo.name), @import("diagnostics").safe(std.mem.span(rawLibalpm.alpm_strerror(rawLibalpm.alpm_errno(self.handle)))) });
             return;
         };
 
@@ -2974,7 +2968,7 @@ pub const Manager = struct {
     fn reportUnexpectedFetch(self: *Manager) void {
         if (self.unexpected_fetch_reported.swap(true, .acq_rel)) return;
         self.dispatcher.raiseError(.{
-            .message = "Unexpected libalpm fetch request: prepared package is missing from the cache.",
+            .message = "Could not continue the installation because a prepared package is missing from the package cache. Retry the operation so Shelly can prepare the download again.",
         });
     }
 
@@ -3261,14 +3255,14 @@ pub const Manager = struct {
             .load_done => "Packages loaded.",
             .db_retrieve_start => "Retrieving database...",
             .db_retrieve_done => "Database retrieved.",
-            .db_retrieve_failed => "Failed to retrieve database.",
+            .db_retrieve_failed => "Could not download the selected repository database.",
             .pkg_retrieve_start => "Retrieving package...",
             .pkg_retrieve_done => "Package retrieved.",
-            .pkg_retrieve_failed => "Package retrieval failed.",
+            .pkg_retrieve_failed => "Could not download the requested package.",
             .diskspace_start => "Checking disk space...",
             .diskspace_done => "Disk space check finished.",
             .optdep_removal => "Removing optional dependencies...",
-            .database_missing => "Database missing. Please run `shelly keyring init` to initialize the keyring.",
+            .database_missing => "The selected repository database is missing. Refresh the configured package databases and try again.",
             .keyring_start => "Checking keyring...",
             .keyring_done => "Keyring check finished.",
             .key_download_start => "Downloading key...",
@@ -3277,9 +3271,9 @@ pub const Manager = struct {
             .hook_done => "Finished running hooks.",
             .hook_run_done => "Finished running hook.",
             .scriptlet_info, .pacnew_created, .pacsave_created, .hook_run_start => return,
-            .failed_optional_dependency_operation => "Failed to remove optional dependency.",
+            .failed_optional_dependency_operation => "Could not remove the selected optional dependency.",
             .package_explicit => "Package marked as explicitly installed.",
-            .failed_add_local_package => "Failed to add local package.",
+            .failed_add_local_package => "Could not add the selected local package archive to the transaction.",
             else => return,
         };
 
@@ -3330,25 +3324,25 @@ pub const Manager = struct {
                 const package_two_version = pkg_two.version() orelse "?";
 
                 const text = formatConflictQuestion(
-                     &buf,
-                     package_one_name,
-                     package_one_version,
-                     package_two_name,
-                     package_two_version,
-                 );
+                    &buf,
+                    package_one_name,
+                    package_one_version,
+                    package_two_name,
+                    package_two_version,
+                );
 
-                 q.confirm_removal(self.askYesNoWithArguments(
-                        manager_io,
-                        qtype,
-                        text,
-                        &.{
-                            package_one_name,
-                            package_one_version,
-                            package_two_name,
-                            package_two_version,
-                            package_two_name,
-                        },
-                    ));
+                q.confirm_removal(self.askYesNoWithArguments(
+                    manager_io,
+                    qtype,
+                    text,
+                    &.{
+                        package_one_name,
+                        package_one_version,
+                        package_two_name,
+                        package_two_version,
+                        package_two_name,
+                    },
+                ));
             },
             .corrupted_package => {
                 const q = libalpm.RemoveCorruptedPackagesQuestion.from(data).?;
@@ -3381,7 +3375,12 @@ pub const Manager = struct {
         }
     }
 
-    fn askYesNo(self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, ) bool {
+    fn askYesNo(
+        self: *Manager,
+        manager_io: std.Io,
+        qtype: c_int,
+        text: []const u8,
+    ) bool {
         return self.askYesNoWithArguments(
             manager_io,
             qtype,
@@ -3390,7 +3389,13 @@ pub const Manager = struct {
         );
     }
 
-    fn askYesNoWithArguments( self: *Manager, manager_io: std.Io, qtype: c_int, text: []const u8, arguments: []const []const u8, ) bool {
+    fn askYesNoWithArguments(
+        self: *Manager,
+        manager_io: std.Io,
+        qtype: c_int,
+        text: []const u8,
+        arguments: []const []const u8,
+    ) bool {
         const yes_no = [_][]const u8{ "yes", "no" };
         const resp = self.dispatcher.raiseQuestion(manager_io, .{
             .question = text,
@@ -3449,54 +3454,54 @@ pub const Manager = struct {
 
         const max_err = @intFromEnum(libalpm.Error.SandboxFailed);
         if (error_number < 0 or error_number > max_err) {
-            try details.print(self.allocator, "Unknown error: {d}\n", .{error_number});
+            try details.print(self.allocator, "Could not complete the requested operation. libalpm returned an unrecognized error. Include the technical details when reporting this problem. Native error: {0d}.\n", .{error_number});
         } else switch (@as(libalpm.Error, @enumFromInt(error_number))) {
             .Ok => {},
-            .Memory => try details.appendSlice(self.allocator, "Memory allocation failed.\n"),
-            .System => try details.appendSlice(self.allocator, "System error.\n"),
+            .Memory => try details.appendSlice(self.allocator, "Could not complete the requested operation because Shelly ran out of memory. Close other applications and try again.\n"),
+            .System => try details.appendSlice(self.allocator, "Could not complete the requested operation because an operating-system operation failed.\n"),
             .BadPerms => try details.appendSlice(self.allocator, "Could not access the package database or required files. Check that you have permission to access them.\n"),
-            .NotAFile => try details.appendSlice(self.allocator, "Expected a file at the supplied path. Check the path and try again.\n"),
-            .NotADir => try details.appendSlice(self.allocator, "Expected a directory at the supplied path. Check the path and try again.\n"),
+            .NotAFile => try details.appendSlice(self.allocator, "Expected a file. Check the selected path and try again.\n"),
+            .NotADir => try details.appendSlice(self.allocator, "Expected a directory. Check the selected path and try again.\n"),
             .WrongArgs => try details.appendSlice(self.allocator, "Could not start the package operation because a required argument is missing or invalid.\n"),
             .DiskSpace => try details.appendSlice(self.allocator, "There is not enough free space to continue. Free up space on the destination filesystem, then try again.\n"),
-            .HandleNull => try details.appendSlice(self.allocator, "Could not access the package database because it has not been initialized.\n"),
-            .HandleNotNull => try details.appendSlice(self.allocator, "Could not initialize the package database because it is already open.\n"),
+            .HandleNull => try details.appendSlice(self.allocator, "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details.\n"),
+            .HandleNotNull => try details.appendSlice(self.allocator, "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details.\n"),
             .HandleLock => {
                 const message = try user_errors.databaseLocked(self.allocator, self.config.database_path);
                 defer self.allocator.free(message);
                 try details.appendSlice(self.allocator, message);
                 try details.appendSlice(self.allocator, "\n");
             },
-            .DbOpen => try details.appendSlice(self.allocator, "Failed to open the database.\n"),
-            .DbCreate => try details.appendSlice(self.allocator, "Failed to create the database.\n"),
-            .DbNull => try details.appendSlice(self.allocator, "Could not access the package database because it has not been opened.\n"),
-            .DbNotNull => try details.appendSlice(self.allocator, "Could not open the package database because it is already registered.\n"),
-            .DbNotFound => try details.appendSlice(self.allocator, "Database not found.\n"),
-            .DbInvalid => try details.appendSlice(self.allocator, "Database is invalid.\n"),
+            .DbOpen => try details.appendSlice(self.allocator, "Could not open the configured package database.\n"),
+            .DbCreate => try details.appendSlice(self.allocator, "Could not create the configured package database.\n"),
+            .DbNull => try details.appendSlice(self.allocator, "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details.\n"),
+            .DbNotNull => try details.appendSlice(self.allocator, "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details.\n"),
+            .DbNotFound => try details.appendSlice(self.allocator, "Could not find the configured package database. Check the configured database path and refresh the package lists.\n"),
+            .DbInvalid => try details.appendSlice(self.allocator, "Could not read the configured package database because its contents are invalid.\n"),
             .DbInvalidSig => try details.appendSlice(self.allocator, "Could not verify the repository database signature. Refresh the package signing keys and package lists. If verification still fails, contact the repository.\n"),
-            .DbVersion => try details.appendSlice(self.allocator, "Database version is invalid.\n"),
-            .DbWrite => try details.appendSlice(self.allocator, "Failed to write to the database.\n"),
-            .DbRemove => try details.appendSlice(self.allocator, "Failed to remove the database.\n"),
-            .ServerBadUrl => try details.appendSlice(self.allocator, "Server URL is invalid.\n"),
-            .ServerNone => try details.appendSlice(self.allocator, "No server found.\n"),
-            .TransNotNull => try details.appendSlice(self.allocator, "Could not start the package operation because another transaction is already active.\n"),
-            .TransNull => try details.appendSlice(self.allocator, "Could not continue because there is no active package transaction.\n"),
-            .TransDupTarget => try details.appendSlice(self.allocator, "Transaction target is duplicated.\n"),
-            .TransDupFilename => try details.appendSlice(self.allocator, "Transaction filename is duplicated.\n"),
-            .TransNotInitialized => try details.appendSlice(self.allocator, "Transaction is not initialized.\n"),
-            .TransNotPrepared => try details.appendSlice(self.allocator, "Transaction is not prepared.\n"),
-            .TransAbort => try details.appendSlice(self.allocator, "Transaction aborted.\n"),
-            .TransType => try details.appendSlice(self.allocator, "Transaction type is invalid.\n"),
-            .TransNotLocked => try details.appendSlice(self.allocator, "Transaction is not locked.\n"),
-            .TransHookFailed => try details.appendSlice(self.allocator, "Transaction hook failed.\n"),
+            .DbVersion => try details.appendSlice(self.allocator, "Could not read the configured package database because its format version is unsupported. Check that Shelly and libalpm are compatible with this database.\n"),
+            .DbWrite => try details.appendSlice(self.allocator, "Could not write the configured package database.\n"),
+            .DbRemove => try details.appendSlice(self.allocator, "Could not remove the configured package database.\n"),
+            .ServerBadUrl => try details.appendSlice(self.allocator, "The server address configured for the selected repository is invalid. Correct the repository URL and retry.\n"),
+            .ServerNone => try details.appendSlice(self.allocator, "The selected repository has no configured download server. Add a valid server to its configuration and retry.\n"),
+            .TransNotNull => try details.appendSlice(self.allocator, "Could not start the requested operation because another package transaction is active. Wait for it to finish and try again.\n"),
+            .TransNull => try details.appendSlice(self.allocator, "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details.\n"),
+            .TransDupTarget => try details.appendSlice(self.allocator, "Could not prepare the transaction because the requested package was added more than once. Review the selected targets and retry.\n"),
+            .TransDupFilename => try details.appendSlice(self.allocator, "Could not prepare the transaction because the selected file was added more than once. Review the selected package archives and retry.\n"),
+            .TransNotInitialized => try details.appendSlice(self.allocator, "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details.\n"),
+            .TransNotPrepared => try details.appendSlice(self.allocator, "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details.\n"),
+            .TransAbort => try details.appendSlice(self.allocator, "The package transaction was stopped before completion.\n"),
+            .TransType => try details.appendSlice(self.allocator, "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details.\n"),
+            .TransNotLocked => try details.appendSlice(self.allocator, "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details.\n"),
+            .TransHookFailed => try details.appendSlice(self.allocator, "A package hook failed during the build. Review the hook output and the transaction results before retrying.\n"),
             .PkgNotFound => try details.appendSlice(self.allocator, "Could not find the requested package in the selected package sources. Check the package name or search for it in another source.\n"),
-            .PkgIgnored => try details.appendSlice(self.allocator, "Package ignored.\n"),
-            .PkgInvalid => try details.appendSlice(self.allocator, "Package is invalid.\n"),
-            .PkgInvalidChecksum => try details.appendSlice(self.allocator, "Package checksum is invalid.\n"),
+            .PkgIgnored => try details.appendSlice(self.allocator, "The selected package was skipped because it is ignored by the package-manager configuration. Review the ignore setting before choosing to include it.\n"),
+            .PkgInvalid => try details.appendSlice(self.allocator, "Could not read the selected package archive because it is invalid. Obtain a complete archive or rebuild the package.\n"),
+            .PkgInvalidChecksum => try details.appendSlice(self.allocator, "The selected package archive does not match its expected checksum. Download it again; if verification still fails, contact the package source.\n"),
             .PkgInvalidSig => try details.appendSlice(self.allocator, "Could not verify the package signature. Refresh the package signing keys and download the package again. If verification still fails, contact the package source.\n"),
-            .PkgMissingSig => try details.appendSlice(self.allocator, "Package signature is missing.\n"),
-            .PkgOpen => try details.appendSlice(self.allocator, "Failed to open package.\n"),
-            .PkgCantRemove => try details.appendSlice(self.allocator, "Failed to remove package.\n"),
+            .PkgMissingSig => try details.appendSlice(self.allocator, "The selected package archive has no required signature. Obtain the package signature from its source before installing it.\n"),
+            .PkgOpen => try details.appendSlice(self.allocator, "Could not open the selected package archive.\n"),
+            .PkgCantRemove => try details.appendSlice(self.allocator, "Could not remove the requested package.\n"),
             .PkgInvalidName => {
                 var node = data_ptr;
                 while (node != null) : (node = node.?.next) {
@@ -3507,8 +3512,8 @@ pub const Manager = struct {
                     }
                 }
             },
-            .PkgInvalidArch => try details.appendSlice(self.allocator, "Package architecture is invalid.\n"),
-            .SigMissing => try details.appendSlice(self.allocator, "Signature is missing.\n"),
+            .PkgInvalidArch => try details.appendSlice(self.allocator, "The selected package targets a different architecture, which is incompatible with this system. Select a compatible build.\n"),
+            .SigMissing => try details.appendSlice(self.allocator, "The required signature for the selected path is missing. Obtain the signature from the file source before continuing.\n"),
             .SigInvalid => try details.appendSlice(self.allocator, "Could not verify the signature. Refresh the package signing keys and download the file again. If verification still fails, contact the package source.\n"),
             .UnsatisfiedDeps => {
                 if (data_ptr == null) try details.appendSlice(self.allocator, "Could not continue because a required dependency is unavailable. Review the package dependencies and try again.\n");
@@ -3563,14 +3568,14 @@ pub const Manager = struct {
                 }
             },
             .DownloadFailed => try details.appendSlice(self.allocator, "Could not download the required files. Check your internet connection and try again. If the problem continues, the server may be unavailable.\n"),
-            .Gpgme => try details.appendSlice(self.allocator, "Gpgme error.\n"),
-            .ExternalDownload => try details.appendSlice(self.allocator, "External download failed.\n"),
-            .SandboxFailed => try details.appendSlice(self.allocator, "Sandbox failed.\n"),
+            .Gpgme => try details.appendSlice(self.allocator, "Could not verify the signature because the signing service failed.\n"),
+            .ExternalDownload => try details.appendSlice(self.allocator, "Could not download the selected file using the configured download command. Review the downloader output and configuration.\n"),
+            .SandboxFailed => try details.appendSlice(self.allocator, "Could not apply the package download sandbox.\n"),
         }
 
-        const full_error = try std.fmt.allocPrint(self.allocator, "{s}\nTechnical details: {s}", .{ details.items, error_msg });
+        const full_error = try std.fmt.allocPrint(self.allocator, "{f}\nDatabase path: {f}\n\nTechnical details: libalpm ({d}): {f}", .{ @import("diagnostics").safe(details.items), @import("diagnostics").safe(self.config.database_path), error_number, @import("diagnostics").safe(error_msg) });
         defer self.allocator.free(full_error);
-        self.dispatcher.raiseError(.{ .message = full_error });
+        self.dispatcher.raiseError(.{ .message = full_error, .native_code = error_number });
     }
 
     fn spanC(ptr: [*c]const u8) ?[]const u8 {
@@ -3850,7 +3855,7 @@ const OperationScope = struct {
             if (!operation.isCancelled() and
                 self.manager.dispatcher.errorGeneration() == self.initial_error_generation)
             {
-                self.manager.dispatcher.raiseError(.{ .message = "ALPM operation failed" });
+                self.manager.dispatcher.raiseError(.{ .message = "Could not complete the package operation." });
             }
         }
         const status: operation_api.CompletionStatus = if (self.operation) |*operation|
@@ -3956,7 +3961,7 @@ test "OperationScope emits one generic ALPM error when no detail was reported" {
     scope.fail();
 
     try testing.expectEqual(@as(usize, 1), capture.failures);
-    try testing.expectEqualStrings("ALPM operation failed", capture.last_message);
+    try testing.expectEqualStrings("Could not complete the package operation.", capture.last_message);
 }
 
 test "OperationScope turns best-effort ALPM failures into contextual recoverable errors" {
@@ -3973,7 +3978,7 @@ test "OperationScope turns best-effort ALPM failures into contextual recoverable
                     self.contextual = std.mem.eql(
                         u8,
                         failure.message,
-                        "Failed to remove build-only dependencies: ALPM operation failed",
+                        "Failed to remove build-only dependencies: Could not complete the package operation.",
                     );
                     self.recoverable = failure.recoverable;
                 },
@@ -4496,7 +4501,7 @@ test "fetchCallback accepts prepared cache entries and rejects missing artifacts
         0,
     ));
     try testing.expectEqualStrings(
-        "Unexpected libalpm fetch request: prepared package is missing from the cache.",
+        "Could not continue the installation because a prepared package is missing from the package cache. Retry the operation so Shelly can prepare the download again.",
         capture.text(),
     );
     try testing.expectEqual(@as(usize, 1), capture.count);
@@ -4635,14 +4640,14 @@ test "handleInformationMessage emits every generic informational description" {
         .{ .event_type = .load_done, .message = "Packages loaded." },
         .{ .event_type = .db_retrieve_start, .message = "Retrieving database..." },
         .{ .event_type = .db_retrieve_done, .message = "Database retrieved." },
-        .{ .event_type = .db_retrieve_failed, .message = "Failed to retrieve database." },
+        .{ .event_type = .db_retrieve_failed, .message = "Could not download the selected repository database." },
         .{ .event_type = .pkg_retrieve_start, .message = "Retrieving package..." },
         .{ .event_type = .pkg_retrieve_done, .message = "Package retrieved." },
-        .{ .event_type = .pkg_retrieve_failed, .message = "Package retrieval failed." },
+        .{ .event_type = .pkg_retrieve_failed, .message = "Could not download the requested package." },
         .{ .event_type = .diskspace_start, .message = "Checking disk space..." },
         .{ .event_type = .diskspace_done, .message = "Disk space check finished." },
         .{ .event_type = .optdep_removal, .message = "Removing optional dependencies..." },
-        .{ .event_type = .database_missing, .message = "Database missing. Please run `shelly keyring init` to initialize the keyring." },
+        .{ .event_type = .database_missing, .message = "The selected repository database is missing. Refresh the configured package databases and try again." },
         .{ .event_type = .keyring_start, .message = "Checking keyring..." },
         .{ .event_type = .keyring_done, .message = "Keyring check finished." },
         .{ .event_type = .key_download_start, .message = "Downloading key..." },
@@ -4650,9 +4655,9 @@ test "handleInformationMessage emits every generic informational description" {
         .{ .event_type = .hook_start, .message = "Running hooks..." },
         .{ .event_type = .hook_done, .message = "Finished running hooks." },
         .{ .event_type = .hook_run_done, .message = "Finished running hook." },
-        .{ .event_type = .failed_optional_dependency_operation, .message = "Failed to remove optional dependency." },
+        .{ .event_type = .failed_optional_dependency_operation, .message = "Could not remove the selected optional dependency." },
         .{ .event_type = .package_explicit, .message = "Package marked as explicitly installed." },
-        .{ .event_type = .failed_add_local_package, .message = "Failed to add local package." },
+        .{ .event_type = .failed_add_local_package, .message = "Could not add the selected local package archive to the transaction." },
     };
 
     var mgr: Manager = undefined;
@@ -5250,7 +5255,7 @@ test "handleErrorMessage emits a known error description" {
 
     try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.Memory), null);
 
-    try testing.expect(std.mem.indexOf(u8, cap.text(), "Memory allocation failed.") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Could not complete the requested operation because Shelly ran out of memory. Close other applications and try again.") != null);
 }
 
 test "handleErrorMessage emits the expected database lock error" {
@@ -5299,7 +5304,7 @@ test "handleErrorMessage reports an out-of-range error number as unknown" {
 
     try mgr.handleErrorMessage(9999, null);
 
-    try testing.expect(std.mem.indexOf(u8, cap.text(), "Unknown error: 9999") != null);
+    try testing.expect(std.mem.indexOf(u8, cap.text(), "Native error: 9999") != null);
 }
 
 test "handleErrorMessage propagates allocation failures without dispatching" {
@@ -5462,53 +5467,53 @@ test "handleErrorMessage emits descriptions for every scalar libalpm error" {
         detail: []const u8,
     };
     const cases = [_]Case{
-        .{ .err = .Memory, .detail = "Memory allocation failed." },
-        .{ .err = .System, .detail = "System error." },
+        .{ .err = .Memory, .detail = "Could not complete the requested operation because Shelly ran out of memory. Close other applications and try again." },
+        .{ .err = .System, .detail = "Could not complete the requested operation because an operating-system operation failed." },
         .{ .err = .BadPerms, .detail = "Could not access the package database or required files. Check that you have permission to access them." },
-        .{ .err = .NotAFile, .detail = "Expected a file at the supplied path." },
-        .{ .err = .NotADir, .detail = "Expected a directory at the supplied path." },
+        .{ .err = .NotAFile, .detail = "Expected a file. Check the selected path and try again." },
+        .{ .err = .NotADir, .detail = "Expected a directory. Check the selected path and try again." },
         .{ .err = .WrongArgs, .detail = "Could not start the package operation because a required argument is missing or invalid." },
         .{ .err = .DiskSpace, .detail = "There is not enough free space" },
-        .{ .err = .HandleNull, .detail = "Could not access the package database because it has not been initialized." },
-        .{ .err = .HandleNotNull, .detail = "Could not initialize the package database because it is already open." },
+        .{ .err = .HandleNull, .detail = "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details." },
+        .{ .err = .HandleNotNull, .detail = "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details." },
         .{ .err = .HandleLock, .detail = "Lock file: /var/lib/pacman/db.lck" },
-        .{ .err = .DbOpen, .detail = "Failed to open the database." },
-        .{ .err = .DbCreate, .detail = "Failed to create the database." },
-        .{ .err = .DbNull, .detail = "Could not access the package database because it has not been opened." },
-        .{ .err = .DbNotNull, .detail = "Could not open the package database because it is already registered." },
-        .{ .err = .DbNotFound, .detail = "Database not found." },
-        .{ .err = .DbInvalid, .detail = "Database is invalid." },
+        .{ .err = .DbOpen, .detail = "Could not open the configured package database." },
+        .{ .err = .DbCreate, .detail = "Could not create the configured package database." },
+        .{ .err = .DbNull, .detail = "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details." },
+        .{ .err = .DbNotNull, .detail = "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details." },
+        .{ .err = .DbNotFound, .detail = "Could not find the configured package database. Check the configured database path and refresh the package lists." },
+        .{ .err = .DbInvalid, .detail = "Could not read the configured package database because its contents are invalid." },
         .{ .err = .DbInvalidSig, .detail = "Could not verify the repository database signature. Refresh the package signing keys and package lists. If verification still fails, contact the repository." },
-        .{ .err = .DbVersion, .detail = "Database version is invalid." },
-        .{ .err = .DbWrite, .detail = "Failed to write to the database." },
-        .{ .err = .DbRemove, .detail = "Failed to remove the database." },
-        .{ .err = .ServerBadUrl, .detail = "Server URL is invalid." },
-        .{ .err = .ServerNone, .detail = "No server found." },
-        .{ .err = .TransNotNull, .detail = "Could not start the package operation because another transaction is already active." },
-        .{ .err = .TransNull, .detail = "Could not continue because there is no active package transaction." },
-        .{ .err = .TransDupTarget, .detail = "Transaction target is duplicated." },
-        .{ .err = .TransDupFilename, .detail = "Transaction filename is duplicated." },
-        .{ .err = .TransNotInitialized, .detail = "Transaction is not initialized." },
-        .{ .err = .TransNotPrepared, .detail = "Transaction is not prepared." },
-        .{ .err = .TransAbort, .detail = "Transaction aborted." },
-        .{ .err = .TransType, .detail = "Transaction type is invalid." },
-        .{ .err = .TransNotLocked, .detail = "Transaction is not locked." },
-        .{ .err = .TransHookFailed, .detail = "Transaction hook failed." },
+        .{ .err = .DbVersion, .detail = "Could not read the configured package database because its format version is unsupported. Check that Shelly and libalpm are compatible with this database." },
+        .{ .err = .DbWrite, .detail = "Could not write the configured package database." },
+        .{ .err = .DbRemove, .detail = "Could not remove the configured package database." },
+        .{ .err = .ServerBadUrl, .detail = "The server address configured for the selected repository is invalid. Correct the repository URL and retry." },
+        .{ .err = .ServerNone, .detail = "The selected repository has no configured download server. Add a valid server to its configuration and retry." },
+        .{ .err = .TransNotNull, .detail = "Could not start the requested operation because another package transaction is active. Wait for it to finish and try again." },
+        .{ .err = .TransNull, .detail = "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details." },
+        .{ .err = .TransDupTarget, .detail = "Could not prepare the transaction because the requested package was added more than once. Review the selected targets and retry." },
+        .{ .err = .TransDupFilename, .detail = "Could not prepare the transaction because the selected file was added more than once. Review the selected package archives and retry." },
+        .{ .err = .TransNotInitialized, .detail = "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details." },
+        .{ .err = .TransNotPrepared, .detail = "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details." },
+        .{ .err = .TransAbort, .detail = "The package transaction was stopped before completion." },
+        .{ .err = .TransType, .detail = "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details." },
+        .{ .err = .TransNotLocked, .detail = "Could not continue the requested operation because the package transaction is in an unexpected internal state. Restart the operation; if it fails again, report the technical details." },
+        .{ .err = .TransHookFailed, .detail = "A package hook failed during the build. Review the hook output and the transaction results before retrying." },
         .{ .err = .PkgNotFound, .detail = "Could not find the requested package in the selected package sources. Check the package name or search for it in another source." },
-        .{ .err = .PkgIgnored, .detail = "Package ignored." },
-        .{ .err = .PkgInvalid, .detail = "Package is invalid." },
-        .{ .err = .PkgInvalidChecksum, .detail = "Package checksum is invalid." },
+        .{ .err = .PkgIgnored, .detail = "The selected package was skipped because it is ignored by the package-manager configuration. Review the ignore setting before choosing to include it." },
+        .{ .err = .PkgInvalid, .detail = "Could not read the selected package archive because it is invalid. Obtain a complete archive or rebuild the package." },
+        .{ .err = .PkgInvalidChecksum, .detail = "The selected package archive does not match its expected checksum. Download it again; if verification still fails, contact the package source." },
         .{ .err = .PkgInvalidSig, .detail = "Could not verify the package signature. Refresh the package signing keys and download the package again. If verification still fails, contact the package source." },
-        .{ .err = .PkgMissingSig, .detail = "Package signature is missing." },
-        .{ .err = .PkgOpen, .detail = "Failed to open package." },
-        .{ .err = .PkgCantRemove, .detail = "Failed to remove package." },
-        .{ .err = .PkgInvalidArch, .detail = "Package architecture is invalid." },
-        .{ .err = .SigMissing, .detail = "Signature is missing." },
+        .{ .err = .PkgMissingSig, .detail = "The selected package archive has no required signature. Obtain the package signature from its source before installing it." },
+        .{ .err = .PkgOpen, .detail = "Could not open the selected package archive." },
+        .{ .err = .PkgCantRemove, .detail = "Could not remove the requested package." },
+        .{ .err = .PkgInvalidArch, .detail = "The selected package targets a different architecture, which is incompatible with this system. Select a compatible build." },
+        .{ .err = .SigMissing, .detail = "The required signature for the selected path is missing. Obtain the signature from the file source before continuing." },
         .{ .err = .SigInvalid, .detail = "Could not verify the signature. Refresh the package signing keys and download the file again. If verification still fails, contact the package source." },
         .{ .err = .DownloadFailed, .detail = "Could not download the required files. Check your internet connection and try again. If the problem continues, the server may be unavailable." },
-        .{ .err = .Gpgme, .detail = "Gpgme error." },
-        .{ .err = .ExternalDownload, .detail = "External download failed." },
-        .{ .err = .SandboxFailed, .detail = "Sandbox failed." },
+        .{ .err = .Gpgme, .detail = "Could not verify the signature because the signing service failed." },
+        .{ .err = .ExternalDownload, .detail = "Could not download the selected file using the configured download command. Review the downloader output and configuration." },
+        .{ .err = .SandboxFailed, .detail = "Could not apply the package download sandbox." },
     };
 
     var mgr = newErrorManager();

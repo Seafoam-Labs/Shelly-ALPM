@@ -989,17 +989,17 @@ fn errorCode(err: anyerror) []const u8 {
 
 fn errorMessage(err: anyerror) []const u8 {
     return switch (err) {
-        error.Cancelled => "The Flatpak operation was cancelled.",
-        error.RemoteNotFound => "The requested Flatpak remote was not found.",
-        error.CatalogNotFound => "The requested AppStream catalog was not found.",
-        error.FlatpakNotFound => "The requested Flatpak application was not found.",
-        error.FlatpakOriginMissing => "The installed Flatpak is missing its origin remote.",
-        error.FlatpakScopeUnknown => "The installed Flatpak has an unknown installation scope.",
-        error.UnknownMethod => "The Flatpak backend does not support the requested operation.",
-        error.UnsupportedSchema => "The Flatpak request uses an unsupported wire schema.",
-        error.InvalidMessageSize => "The Flatpak request exceeds the protocol size limit.",
-        error.OutOfMemory => "The Flatpak backend ran out of memory.",
-        else => @errorName(err),
+        error.Cancelled => "Operation cancelled.",
+        error.RemoteNotFound => "Could not find the selected Flatpak remote. Check the remote name and selected installation scope.",
+        error.CatalogNotFound => "Could not find the AppStream catalog for the selected Flatpak remote. Refresh the remote metadata and retry.",
+        error.FlatpakNotFound => "Could not find the selected Flatpak. Check its application ID, branch, architecture, and installation scope.",
+        error.FlatpakOriginMissing => "Could not update the selected Flatpak because its origin remote is missing. Restore that remote or select a supported replacement source.",
+        error.FlatpakScopeUnknown => "Could not determine whether the selected Flatpak is installed for the current user or the system. Check both installed-application lists before retrying.",
+        error.UnknownMethod => "Shelly and its Flatpak backend do not agree on the requested operation or protocol. Upgrade shelly and shelly-flatpak-backend together, then retry.",
+        error.UnsupportedSchema => "Shelly and its Flatpak backend do not agree on the requested operation or protocol. Upgrade shelly and shelly-flatpak-backend together, then retry.",
+        error.InvalidMessageSize => "Could not send the Flatpak request because it exceeds the protocol size limit. Try a smaller selection; if the problem persists, report the technical details.",
+        error.OutOfMemory => "Could not complete the Flatpak operation because its backend ran out of memory. Close other applications and try again.",
+        else => @import("diagnostics").cause(err),
     };
 }
 
@@ -1066,8 +1066,8 @@ fn forwardOperationEvent(
             },
             .message = switch (value.status) {
                 .success => "Flatpak operation completed",
-                .failed => "Flatpak operation failed",
-                .cancelled => "Flatpak operation cancelled",
+                .failed => "Could not complete the package operation.",
+                .cancelled => "Operation cancelled.",
             },
             .level = switch (value.status) {
                 .success => .success,

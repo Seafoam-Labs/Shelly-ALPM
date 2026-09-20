@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-19 13:14-0400\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -156,9 +156,10 @@ msgstr ""
 msgid "e.g. owner/repo or https://..."
 msgstr "adib. jabea/biltegia edo https://..."
 
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgid ""
+"Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
-"Formatu baliogabea. Erabili jabea/biltegia (adib. seafoam-labs/shelly-alpm)"
 
 msgid "Allow Prerelease"
 msgstr "Onartu aurre-bertsioak"
@@ -604,9 +605,6 @@ msgstr "Berrespenik gabe"
 msgid "Enable Shelly Search"
 msgstr "Gaitu Shelly bilaketa"
 
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Gaitu Webview ikuspegia (esperimentala)"
-
 msgid "AppImage Install Path"
 msgstr "AppImage-ren instalazio-bidea"
 
@@ -658,8 +656,9 @@ msgstr "Eguneraketak bilatzen…"
 msgid "Your system is up to date"
 msgstr "Zure sistema eguneratuta dago"
 
-msgid "Could not check for updates"
-msgstr "Ezin izan dira eguneraketak egiaztatu"
+#| msgid "Could not check for updates"
+msgid "Could not check for updates."
+msgstr ""
 
 msgid "Utilities"
 msgstr "Utilitateak"
@@ -837,17 +836,27 @@ msgstr "hemen erabilita:"
 msgid "Install Anyway"
 msgstr "Instalatu hala ere"
 
+msgid "Unknown"
+msgstr "Ezezaguna"
+
 msgid "package(s)"
 msgstr "paketea(k)"
 
 msgid "to"
 msgstr "honi:"
 
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
+
 msgid "download"
 msgstr "deskargatu"
 
 msgid "net"
 msgstr "sarea"
+
+msgid "Could not load the PKGBUILD preview."
+msgstr ""
 
 msgid "Dismiss"
 msgstr "Baztertu"
@@ -873,19 +882,17 @@ msgstr "Eguneraketa eskuragarri"
 msgid "Version ?"
 msgstr "Bertsioa ?"
 
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+#| msgid "Invalid URL. Must start with http:// or https://"
+msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
-"Formatu baliogabea. Erabili jabea/biltegia (adib. seafoam-labs/shelly-alpm)"
 
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "URL baliogabea. http:// edo https:// erabiliz hasi behar da"
-
+#| msgid ""
+#| "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/"
+#| "owner/repo/releases"
 msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
+"Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
+"host/owner/repo/releases."
 msgstr ""
-"Forgejo URL baliogabea. Erabili http(s)://host/owner/repo edo http(s)://host/"
-"owner/repo/releases"
 
 msgid "Choose an AppImage file"
 msgstr "Hautatu AppImage fitxategi bat"
@@ -893,8 +900,9 @@ msgstr "Hautatu AppImage fitxategi bat"
 msgid "AppImage files"
 msgstr "AppImage fitxategiak"
 
-msgid "Only .AppImage files can be installed"
-msgstr ".AppImage fitxategiak bakarrik instalatu daitezke"
+#| msgid "Only .AppImage files can be installed"
+msgid "Only.AppImage files can be installed"
+msgstr ""
 
 msgid "Installing AppImage"
 msgstr "AppImage instalatzen"
@@ -937,8 +945,8 @@ msgstr "AppImage-a kentzen"
 msgid "Operation completed successfully"
 msgstr "Eragiketa ondo osatu da"
 
-msgid "Operation failed"
-msgstr "Eragiketak huts egin du"
+msgid "Could not complete the requested operation."
+msgstr ""
 
 msgid "Discard environment changes?"
 msgstr ""
@@ -987,8 +995,9 @@ msgstr "Ez da paketerik aurkitu"
 msgid "Try a shorter or more general keyword."
 msgstr "Saiatu gako-hitz laburrago edo orokorrago batekin."
 
-msgid "Could not reach the AUR"
-msgstr "Ezin izan da AURera iritsi"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the configured AUR service."
+msgstr ""
 
 msgid "Check your connection and try again."
 msgstr "Egiaztatu zure konexioa eta saiatu berriro."
@@ -1037,16 +1046,16 @@ msgstr "Hautatu Flatpak fitxategi bat"
 msgid "Flatpak files"
 msgstr "Flatpak fitxategiak"
 
-msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
-"Euskarri gabeko fitxategi mota. Hautatu .flatpak edo .flatpakref fitxategi "
-"bat."
 
 msgid "Installing local flatpak"
 msgstr "Tokiko Flatpak instalatzen"
 
-msgid "Installation failed."
-msgstr "Instalazioak huts egin du."
+#| msgid "Build and install the selected packages? This may take a while."
+msgid "Could not install the selected packages."
+msgstr ""
 
 msgid "Installation complete."
 msgstr "Instalazioa osatu da."
@@ -1084,9 +1093,6 @@ msgstr "Flatpak addona instalatzen"
 msgid "Unknown developer"
 msgstr "Garatzaile ezezaguna"
 
-msgid "Unknown"
-msgstr "Ezezaguna"
-
 msgid "Version: Unknown"
 msgstr "Bertsioa: Ezezaguna"
 
@@ -1114,14 +1120,16 @@ msgstr "Deskargatu"
 msgid "No description available."
 msgstr "Ez dago deskribapenik eskuragarri."
 
-msgid "Unable to load screenshot"
-msgstr "Ezin izan da pantaila-argazkia kargatu"
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load this application screenshot."
+msgstr ""
 
-msgid "Unable to download screenshot"
-msgstr "Ezin izan da pantaila-argazkia deskargatu"
+#| msgid "Unable to download screenshot"
+msgid "Could not download this application screenshot."
+msgstr ""
 
-msgid "Unable to display screenshot"
-msgstr "Ezin izan da pantaila-argazkia erakutsi"
+msgid "Could not display the downloaded application screenshot."
+msgstr ""
 
 msgid "Open link in browser"
 msgstr "Ireki esteka nabigatzailean"
@@ -1150,14 +1158,18 @@ msgstr "Kontaktua"
 msgid "Translate"
 msgstr "Itzuli"
 
-msgid "Unable to allocate memory while loading Flatpak data."
-msgstr "Ezin izan da memoria esleitu Flatpak datuak kargatzean."
+msgid ""
+"Could not load Flatpak applications because Shelly ran out of memory. Close "
+"other applications and try again."
+msgstr ""
 
-msgid "Unable to start the Flatpak data loader."
-msgstr "Ezin izan da Flatpak datu-kargatzailea abiarazi."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not start loading Flatpak applications."
+msgstr ""
 
-msgid "Unable to load Flatpak applications."
-msgstr "Ezin izan dira Flatpak aplikazioak kargatu."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load Flatpak applications from the selected remote."
+msgstr ""
 
 msgid "No Flatpak applications are available."
 msgstr "Ez dago Flatpak aplikaziorik eskuragarri."
@@ -1317,7 +1329,8 @@ msgid ""
 "begin."
 msgstr ""
 
-msgid "Search failed"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the selected sources."
 msgstr ""
 
 msgid "Installation in progress"
@@ -1335,8 +1348,10 @@ msgstr ""
 msgid "Install the selected packages?"
 msgstr ""
 
-msgid "Failed to save settings"
-msgstr "Ezin izan dira ezarpenak gorde"
+msgid ""
+"Could not save settings to the configured file. Your latest changes were not "
+"saved."
+msgstr ""
 
 msgid "Settings saved"
 msgstr "Ezarpenak gorde dira"
@@ -1347,17 +1362,21 @@ msgstr "Flatpak euskarria instalatzen"
 msgid "Installing AppImage support"
 msgstr "AppImage euskarria instalatzen"
 
-msgid "Failed to start Flatpak support installation"
-msgstr "Huts egin du Flatpak euskarriaren instalazioa abiatzean"
+#| msgid "Installing Flatpak support"
+msgid "Could not start installing Flatpak support."
+msgstr ""
 
-msgid "Failed to start AppImage support installation"
-msgstr "Huts egin du AppImage euskarriaren instalazioa abiatzean"
+#| msgid "Installing AppImage support"
+msgid "Could not start installing AppImage support."
+msgstr ""
 
-msgid "Flatpak support installation failed"
-msgstr "Flatpak euskarriaren instalazioak huts egin du"
+#| msgid "Installing Flatpak support"
+msgid "Could not install Flatpak support."
+msgstr ""
 
-msgid "AppImage support installation failed"
-msgstr "AppImage euskarriaren instalazioak huts egin du"
+#| msgid "Installing AppImage support"
+msgid "Could not install AppImage support."
+msgstr ""
 
 msgid "Flatpak support enabled"
 msgstr "Flatpak euskarria gaituta"
@@ -1371,8 +1390,9 @@ msgstr "Ez da aldaketa-erregistrorik aurkitu"
 msgid "No details for this release"
 msgstr "Ez dago xehetasunik bertsio honetarako"
 
-msgid "Failed to load changelog"
-msgstr "Ezin izan da aldaketen erregistroa kargatu"
+#| msgid "Could not check for updates"
+msgid "Could not load the release notes."
+msgstr ""
 
 msgid "Changelog"
 msgstr "Aldaketen erregistroa"
@@ -1392,21 +1412,23 @@ msgstr "Hautatu AppImage instalatzeko direktorioa"
 msgid "Tray enabled"
 msgstr "Erretilua gaituta"
 
-msgid "Tray disabled, but autostart service remains"
+msgid ""
+"The tray is disabled, but its autostart service could not be removed. It may "
+"start again at the next login."
 msgstr ""
-"Erretilua desgaituta, baina abiarazte automatikoko zerbitzua mantentzen da"
 
 msgid "Tray disabled"
 msgstr "Erretilua desgaituta"
 
-msgid "Failed to add systemd startup service"
-msgstr "Huts egin du systemd abiarazte-zerbitzua gehitzean"
+msgid "Could not enable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service added."
 msgstr "Systemd hasierako zerbitzua gehituta."
 
-msgid "Failed to remove systemd startup service"
-msgstr "Huts egin du systemd abiarazte-zerbitzua kentzean"
+#| msgid "Tray disabled, but autostart service remains"
+msgid "Could not disable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service removed."
 msgstr "Systemd hasierako zerbitzua kenduta."
@@ -1468,11 +1490,43 @@ msgstr "Shelly bilaketa"
 msgid "Update"
 msgstr "Eguneratu"
 
-msgid "Failed to start operation."
-msgstr "Ezin izan da eragiketa abiarazi."
-
 msgid "Pending"
 msgstr "Zorrotz / Zazke"
+
+msgid "Working"
+msgstr "Lanean"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Huts egin du"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Ezeztatuta"
+
+#| msgid "Failed to start operation."
+msgid "Could not start the requested operation."
+msgstr ""
 
 msgid "Synchronizing databases"
 msgstr "Datu-baseak sinkronizatzen"
@@ -1516,19 +1570,14 @@ msgstr "Gatazkak egiaztatzen"
 msgid "Checking disk space"
 msgstr "Disko-espazioa egiaztatzen"
 
-msgid "Working"
-msgstr "Lanean"
-
-msgid "Failed"
-msgstr "Huts egin du"
-
 msgid "Transaction Completed"
 msgstr ""
 
-msgid "Transaction Failed"
-msgstr ""
+msgid "Operation failed"
+msgstr "Eragiketak huts egin du"
 
-msgid "Transaction Cancelled"
+#| msgid "Operation failed"
+msgid "Operation cancelled"
 msgstr ""
 
 msgid "Finished"
@@ -1537,7 +1586,8 @@ msgstr "Amaituta"
 msgid "exit"
 msgstr "irten"
 
-msgid "The operation was cancelled."
+#| msgid "Operation failed"
+msgid "Operation cancelled."
 msgstr ""
 
 msgid "All operations finished successfully."
@@ -1547,9 +1597,6 @@ msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
 msgstr ""
-
-msgid "Cancelled"
-msgstr "Ezeztatuta"
 
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
@@ -1564,11 +1611,6 @@ msgstr "Sistemako paketeen eguneraketa"
 
 msgid "AUR package update"
 msgstr "AUR paketeen eguneraketa"
-
-msgid "Could not run shelly check-updates. Check the CLI output and try again."
-msgstr ""
-"Ezin izan da shelly check-updates exekutatu. Egiaztatu CLI irteera eta "
-"saiatu berriro."
 
 msgid "Update this package"
 msgstr "Eguneratu pakete hau"

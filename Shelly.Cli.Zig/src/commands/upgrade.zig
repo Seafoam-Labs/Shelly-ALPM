@@ -83,7 +83,7 @@ pub fn dispatch(
     const running_as_root = elevation.isRoot();
     if (shouldPrepareAllPreview(invocation, running_as_root)) {
         const preview = prepareAllUpgradePreview(context, invocation) catch |err| {
-            try context.stderr.print("Unable to prepare combined upgrade plan: {t}\n", .{err});
+            try context.stderr.print("Could not prepare the upgrade plan across the selected package sources. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (!preview.proceed or !preview.has_updates) return 0;
@@ -92,7 +92,7 @@ pub fn dispatch(
     if (!invocation.globals.ui_mode and requiresElevation(invocation)) {
         if (shouldPrepareStandardPreview(invocation, running_as_root)) {
             const preview = prepareStandardUpgradePreview(context, invocation) catch |err| {
-                try context.stderr.print("Unable to prepare upgrade plan: {t}\n", .{err});
+                try context.stderr.print("Could not prepare the package upgrade plan. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                 return 1;
             };
             if (!preview.proceed or !preview.has_updates) return 0;
@@ -100,7 +100,7 @@ pub fn dispatch(
         const elevated_arguments = try elevatedUpgradeArguments(context, invocation);
         defer context.allocator.free(elevated_arguments);
         const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
-            try context.stderr.print("Unable to elevate upgrade: {t}\n", .{err});
+            try context.stderr.print("Could not obtain administrator privileges for the system upgrade. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -206,7 +206,7 @@ fn prepareAllUpgradePlanWith(
 
     const proceed = try confirmPreparedUpgrade(context, "Proceed with all upgrades?");
     if (!proceed) {
-        try context.stdout.writeAll("Upgrade cancelled.\n");
+        try context.stdout.writeAll("Operation cancelled.\n");
         try context.stdout.flush();
     }
     return .{ .has_updates = true, .proceed = proceed };
@@ -244,10 +244,7 @@ fn buildAllUpgradePlan(
                     continue;
                 }
             }
-            try context.stdout.print("Error collecting {s} upgrades: {t}\n", .{
-                backend.displayName(),
-                err,
-            });
+            try context.stdout.print("Could not check for {0f} upgrades. {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(backend.displayName()), @import("diagnostics").cause(err), @errorName(err) });
             try context.stdout.flush();
             continue;
         };
@@ -413,7 +410,7 @@ fn prepareStandardUpgradePreview(
 
     const proceed = try confirmPreparedUpgrade(context, "Proceed with upgrade?");
     if (!proceed) {
-        try context.stdout.writeAll("Upgrade cancelled.\n");
+        try context.stdout.writeAll("Operation cancelled.\n");
         try context.stdout.flush();
     }
     return .{ .has_updates = true, .proceed = proceed };
@@ -533,7 +530,7 @@ fn executeUi(
         .opening = openingMessage(invocation),
         .success_message = successMessage(invocation),
         .failure_message = failureMessage(invocation),
-        .failure_label = "Upgrade failed",
+        .failure_label = "The upgrade did not complete successfully. Failed steps: see the individual operation results.",
         .report_flatpak_unavailable = true,
     }, runner);
 }
@@ -807,8 +804,8 @@ fn rebaseEolFlatpaks(
             else => {
                 const warning = try std.fmt.allocPrint(
                     context.allocator,
-                    "Failed to rebase {s}: continuing with the upgrade pass.",
-                    .{status.id},
+                    "Could not replace end-of-life Flatpak {0f} with {1f}. {2s} Continuing with the remaining upgrades.\n\nTechnical details: {3s}",
+                    .{ @import("diagnostics").safe(status.id), @import("diagnostics").safe(target.id), @import("diagnostics").cause(err), @errorName(err) },
                 );
                 defer context.allocator.free(warning);
                 Zigalpm.flatpak.eol.emitStatus(operation_context, .update, .warning, status.id, warning);
@@ -818,8 +815,8 @@ fn rebaseEolFlatpaks(
         if (!rebase_ok) {
             const warning = try std.fmt.allocPrint(
                 context.allocator,
-                "Failed to rebase {s}: continuing with the upgrade pass.",
-                .{status.id},
+                "Could not replace end-of-life Flatpak {0f} with {1f}. Continuing with the remaining upgrades.",
+                .{ @import("diagnostics").safe(status.id), @import("diagnostics").safe(target.id) },
             );
             defer context.allocator.free(warning);
             Zigalpm.flatpak.eol.emitStatus(operation_context, .update, .warning, status.id, warning);
@@ -1096,12 +1093,12 @@ fn successMessage(invocation: *const parser.Invocation) []const u8 {
 
 fn failureMessage(invocation: *const parser.Invocation) []const u8 {
     if (upgradesAll(invocation))
-        return "One or more upgrade steps failed.";
+        return "The upgrade did not complete successfully. Failed steps: see the individual operation results.";
     return switch (backendForPath(invocation.command.path) orelse unreachable) {
-        .standard => "System upgrade failed.",
-        .aur => "AUR upgrade failed.",
-        .flatpak => "Flatpak upgrade failed.",
-        .appimage => "AppImage upgrade failed.",
+        .standard => "Could not complete the standard-package upgrade.",
+        .aur => "Could not complete the AUR upgrade.",
+        .flatpak => "Could not complete the Flatpak upgrade.",
+        .appimage => "Could not complete the AppImage upgrade.",
     };
 }
 
@@ -1815,7 +1812,7 @@ test "combined upgrade plan defaults to approval, supports decline, and no-confi
     try std.testing.expect(defaulted_preview.has_updates);
     try std.testing.expect(defaulted_preview.proceed);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Proceed with all upgrades? (Y/n)") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Upgrade cancelled.") == null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Operation cancelled.") == null);
 
     tc.stdout.writer.end = 0;
     var decline_stdin = std.Io.Reader.fixed("n\n");
@@ -1827,7 +1824,7 @@ test "combined upgrade plan defaults to approval, supports decline, and no-confi
     );
     try std.testing.expect(declined_preview.has_updates);
     try std.testing.expect(!declined_preview.proceed);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Upgrade cancelled.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Operation cancelled.") != null);
 
     tc.stdout.writer.end = 0;
     tc.context.stdin = null;
@@ -2132,7 +2129,7 @@ test "upgrade all continues after a failed backend and returns failure" {
     try std.testing.expect(std.mem.indexOf(
         u8,
         tc.stdout.writer.buffered(),
-        ":: One or more upgrade steps failed.",
+        ":: The upgrade did not complete successfully.",
     ) != null);
 }
 
@@ -2256,7 +2253,7 @@ test "upgrade all reports a broken Flatpak backend as a failure" {
     try std.testing.expect(std.mem.indexOf(
         u8,
         tc.stdout.writer.buffered(),
-        "One or more upgrade steps failed",
+        "The upgrade did not complete successfully",
     ) != null);
 }
 

@@ -156,9 +156,9 @@ pub fn dispatch(
 
     if (isAurVersionInstall(invocation)) {
         if (invocation.positionals.len == 0)
-            return try reportValidationFailure(context, invocation, "No package specified.");
+            return try reportValidationFailure(context, invocation, "Specify at least one package name. See the command help for usage.");
         if (invocation.positionals.len == 1)
-            return try reportValidationFailure(context, invocation, "No commit specified.");
+            return try reportValidationFailure(context, invocation, "Specify the AUR Git commit to install with --version.");
         if (invocation.positionals.len > 2)
             return try reportValidationFailure(
                 context,
@@ -208,9 +208,9 @@ pub fn dispatch(
             context,
             invocation,
             if (std.mem.eql(u8, invocation.command.path, standard_command_path))
-                "Error: No packages specified"
+                "Specify at least one package name. See the command help for usage."
             else
-                "No packages specified.",
+                "Specify at least one package name. See the command help for usage.",
         );
     if (optionEnabled(invocation, "--build-deps") and dependencyTargetCount(invocation) > 1)
         return try reportValidationFailure(
@@ -225,12 +225,12 @@ pub fn dispatch(
                 try context.stderr.print("{s}\n", .{message});
                 return 1;
             }
-            try context.stderr.print("Unable to inspect Flatpak before repair: {t}\n", .{err});
+            try context.stderr.print("Could not inspect the Flatpak installation before repair. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevate) {
             const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-                try context.stderr.print("Unable to elevate Flatpak repair: {t}\n", .{err});
+                try context.stderr.print("Could not obtain administrator privileges for Flatpak repair. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                 return 1;
             };
             if (elevated_exit) |exit_code| return exit_code;
@@ -243,7 +243,7 @@ pub fn dispatch(
             invocation.arguments;
         defer if (carries_aur) context.allocator.free(elevated_arguments);
         const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
-            try context.stderr.print("Unable to elevate install: {t}\n", .{err});
+            try context.stderr.print("Could not obtain administrator privileges for package installation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -281,7 +281,7 @@ fn requestsStandardUpgrade(invocation: *const parser.Invocation) bool {
 
 fn confirmStandardUpgrade(context: *runtime.RuntimeContext) !bool {
     var result = list_updates.collectUpdates(context, .standard, .{}) catch |err| {
-        try context.stderr.print("Unable to prepare the standard upgrade plan: {t}\n", .{err});
+        try context.stderr.print("Could not prepare the full standard-package upgrade before installation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
         try context.stderr.flush();
         return err;
     };
@@ -308,7 +308,7 @@ fn confirmStandardUpgradeWithUpdates(
 
     try writeStandardUpgradePreview(context.stdout, updates);
     const reader = context.stdin orelse {
-        try context.stdout.writeAll("Operation cancelled: confirmation input is unavailable.\n");
+        try context.stdout.writeAll("Operation cancelled because confirmation input is unavailable. Run the command in an interactive terminal to review and confirm the operation.\n");
         try context.stdout.flush();
         return false;
     };
@@ -339,8 +339,8 @@ fn confirmStandardUpgradeUi(context: *runtime.RuntimeContext) !bool {
     var result = list_updates.collectUpdates(context, .standard, .{}) catch |err| {
         const message = try std.fmt.allocPrint(
             context.allocator,
-            "Unable to prepare the standard upgrade plan: {t}",
-            .{err},
+            "Could not prepare the full standard-package upgrade before installation. {0s}\n\nTechnical details: {1s}",
+            .{ @import("diagnostics").cause(err), @errorName(err) },
         );
         defer context.allocator.free(message);
         output.writeErrorFrame(context, message) catch {};
@@ -451,8 +451,8 @@ fn executeUi(
         .opening = opening,
         .success_message = successMessage(invocation),
         .failure_message = failureMessage(invocation),
-        .failure_label = "Installation failed",
-        .cancelled_message = "Installation cancelled.",
+        .failure_label = "Could not install the selected packages.",
+        .cancelled_message = "Operation cancelled.",
         .report_flatpak_unavailable = true,
     }, runner);
 }
@@ -1080,9 +1080,9 @@ fn successMessage(invocation: *const parser.Invocation) []const u8 {
 
 fn failureMessage(invocation: *const parser.Invocation) []const u8 {
     if (std.mem.eql(u8, invocation.command.path, aur_command_path) and
-        optionEnabled(invocation, "--build-deps")) return "Dependency installation failed.";
-    if (isFlatpakRepair(invocation)) return "Flatpak repair failed.";
-    return "Installation failed.";
+        optionEnabled(invocation, "--build-deps")) return "Could not install the dependencies for the requested package.";
+    if (isFlatpakRepair(invocation)) return "Could not repair the Flatpak installation.";
+    return "Could not install the selected packages.";
 }
 
 fn classifyPackageSource(value: []const u8) PackageSource {
@@ -1533,7 +1533,7 @@ test "AUR version install validates package commit and incompatible dependency m
         &.{ "install", "aur", "--version", "demo-git" },
     );
     try std.testing.expectEqual(@as(?u8, 1), try dispatch(&tc.context, &outcome.dispatch));
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "No commit specified.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Specify the AUR Git commit to install with --version.") != null);
 
     tc.stdout.writer.end = 0;
     outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
@@ -1833,7 +1833,7 @@ test "install backend failures return a failing exit code and transaction result
         try executeWithRunner(&tc.context, &outcome.dispatch, Failure{}),
     );
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Technical details: TestInstallFailure") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), ":: Transaction failed.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Could not complete the requested operation.") != null);
 }
 
 test "standard source classification preserves dotted repository names files and URLs" {

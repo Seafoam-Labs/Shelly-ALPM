@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-19 13:14-0400\n"
 "PO-Revision-Date: 2026-08-29 16:14+0200\n"
 "Last-Translator: hotline1337 <denuvo at tuta dot io>\n"
 "Language-Team: Polish\n"
@@ -157,10 +157,10 @@ msgstr ""
 msgid "e.g. owner/repo or https://..."
 msgstr "np. właściciel/repozytorium lub https://..."
 
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgid ""
+"Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
-"Nieprawidłowy format. Użyj formatu właściciel/repozytorium (np. seafoam-labs/"
-"shelly-alpm)"
 
 msgid "Allow Prerelease"
 msgstr "Zezwalaj na wersje przedpremierowe"
@@ -606,9 +606,6 @@ msgstr "Bez potwierdzania"
 msgid "Enable Shelly Search"
 msgstr "Włącz wyszukiwarkę Shelly"
 
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Włącz wizualizację WebView (eksperymentalne)"
-
 msgid "AppImage Install Path"
 msgstr "Ścieżka instalacji AppImage"
 
@@ -660,8 +657,9 @@ msgstr "Sprawdzanie dostępności aktualizacji…"
 msgid "Your system is up to date"
 msgstr "System jest aktualny"
 
-msgid "Could not check for updates"
-msgstr "Nie udało się sprawdzić dostępności aktualizacji"
+#| msgid "Could not check for updates"
+msgid "Could not check for updates."
+msgstr ""
 
 msgid "Utilities"
 msgstr "Narzędzia"
@@ -842,17 +840,27 @@ msgstr "używane w"
 msgid "Install Anyway"
 msgstr "Zainstaluj mimo to"
 
+msgid "Unknown"
+msgstr "Nieznane"
+
 msgid "package(s)"
 msgstr "pakiet(y)"
 
 msgid "to"
 msgstr "do"
 
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
+
 msgid "download"
 msgstr "pobrania"
 
 msgid "net"
 msgstr "netto"
+
+msgid "Could not load the PKGBUILD preview."
+msgstr ""
 
 msgid "Dismiss"
 msgstr "Odrzuć"
@@ -878,20 +886,17 @@ msgstr "Dostępna aktualizacja"
 msgid "Version ?"
 msgstr "Wersja: ?"
 
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+#| msgid "Invalid URL. Must start with http:// or https://"
+msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
-"Nieprawidłowy format. Użyj formatu właściciel/repozytorium (np. seafoam-labs/"
-"shelly-alpm)"
 
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "Nieprawidłowy adres URL. Musi zaczynać się od http:// lub https://"
-
+#| msgid ""
+#| "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/"
+#| "owner/repo/releases"
 msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
+"Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
+"host/owner/repo/releases."
 msgstr ""
-"Nieprawidłowy adres URL Forgejo. Użyj http(s)://host/właściciel/repozytorium "
-"lub http(s)://host/właściciel/repozytorium/releases"
 
 msgid "Choose an AppImage file"
 msgstr "Wybierz plik AppImage"
@@ -899,8 +904,9 @@ msgstr "Wybierz plik AppImage"
 msgid "AppImage files"
 msgstr "Pliki AppImage"
 
-msgid "Only .AppImage files can be installed"
-msgstr "Można instalować wyłącznie pliki .AppImage"
+#| msgid "Only .AppImage files can be installed"
+msgid "Only.AppImage files can be installed"
+msgstr ""
 
 msgid "Installing AppImage"
 msgstr "Instalowanie AppImage"
@@ -943,8 +949,8 @@ msgstr "Usuwanie AppImage"
 msgid "Operation completed successfully"
 msgstr "Operacja zakończona pomyślnie"
 
-msgid "Operation failed"
-msgstr "Operacja nie powiodła się"
+msgid "Could not complete the requested operation."
+msgstr ""
 
 msgid "Discard environment changes?"
 msgstr ""
@@ -992,8 +998,9 @@ msgstr "Nie znaleziono pakietów"
 msgid "Try a shorter or more general keyword."
 msgstr "Spróbuj użyć krótszego lub bardziej ogólnego słowa kluczowego."
 
-msgid "Could not reach the AUR"
-msgstr "Nie udało się połączyć z AUR"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the configured AUR service."
+msgstr ""
 
 msgid "Check your connection and try again."
 msgstr "Sprawdź połączenie sieciowe i spróbuj ponownie."
@@ -1040,14 +1047,16 @@ msgstr "Wybierz plik Flatpak"
 msgid "Flatpak files"
 msgstr "Pliki Flatpak"
 
-msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
-msgstr "Nieobsługiwany format pliku. Wybierz plik .flatpak lub .flatpakref."
+#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
+msgstr ""
 
 msgid "Installing local flatpak"
 msgstr "Instalowanie lokalnego pakietu Flatpak"
 
-msgid "Installation failed."
-msgstr "Instalacja nie powiodła się."
+#| msgid "Install the selected packages?"
+msgid "Could not install the selected packages."
+msgstr ""
 
 msgid "Installation complete."
 msgstr "Instalacja ukończona."
@@ -1085,9 +1094,6 @@ msgstr "Instalowanie dodatku Flatpak"
 msgid "Unknown developer"
 msgstr "Nieznany twórca"
 
-msgid "Unknown"
-msgstr "Nieznane"
-
 msgid "Version: Unknown"
 msgstr "Wersja: nieznana"
 
@@ -1115,14 +1121,16 @@ msgstr "Pobierz"
 msgid "No description available."
 msgstr "Brak dostępnego opisu."
 
-msgid "Unable to load screenshot"
-msgstr "Nie można wczytać zrzutu ekranu"
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load this application screenshot."
+msgstr ""
 
-msgid "Unable to download screenshot"
-msgstr "Nie można pobrać zrzutu ekranu"
+#| msgid "Unable to download screenshot"
+msgid "Could not download this application screenshot."
+msgstr ""
 
-msgid "Unable to display screenshot"
-msgstr "Nie można wyświetlić zrzutu ekranu"
+msgid "Could not display the downloaded application screenshot."
+msgstr ""
 
 msgid "Open link in browser"
 msgstr "Otwórz odnośnik w przeglądarce"
@@ -1151,14 +1159,18 @@ msgstr "Kontakt"
 msgid "Translate"
 msgstr "Tłumacz"
 
-msgid "Unable to allocate memory while loading Flatpak data."
-msgstr "Nie można przydzielić pamięci podczas wczytywania danych Flatpak."
+msgid ""
+"Could not load Flatpak applications because Shelly ran out of memory. Close "
+"other applications and try again."
+msgstr ""
 
-msgid "Unable to start the Flatpak data loader."
-msgstr "Nie można uruchomić modułu wczytywania danych Flatpak."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not start loading Flatpak applications."
+msgstr ""
 
-msgid "Unable to load Flatpak applications."
-msgstr "Nie można wczytać aplikacji Flatpak."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load Flatpak applications from the selected remote."
+msgstr ""
 
 msgid "No Flatpak applications are available."
 msgstr "Brak dostępnych aplikacji Flatpak."
@@ -1320,8 +1332,9 @@ msgstr ""
 "Przeszukuj jednocześnie standardowe repozytoria, AUR i Flatpak. Wpisz nazwę, "
 "aby rozpocząć."
 
-msgid "Search failed"
-msgstr "Wyszukiwanie nie powiodło się"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the selected sources."
+msgstr ""
 
 msgid "Installation in progress"
 msgstr "Trwa instalacja"
@@ -1338,8 +1351,10 @@ msgstr "Zainstaluj pakiety"
 msgid "Install the selected packages?"
 msgstr "Zainstalować wybrane pakiety?"
 
-msgid "Failed to save settings"
-msgstr "Nie udało się zapisać ustawień"
+msgid ""
+"Could not save settings to the configured file. Your latest changes were not "
+"saved."
+msgstr ""
 
 msgid "Settings saved"
 msgstr "Ustawienia zapisano"
@@ -1350,17 +1365,21 @@ msgstr "Instalowanie obsługi Flatpak"
 msgid "Installing AppImage support"
 msgstr "Instalowanie obsługi AppImage"
 
-msgid "Failed to start Flatpak support installation"
-msgstr "Nie udało się rozpocząć instalacji obsługi Flatpak"
+#| msgid "Installing Flatpak support"
+msgid "Could not start installing Flatpak support."
+msgstr ""
 
-msgid "Failed to start AppImage support installation"
-msgstr "Nie udało się rozpocząć instalacji obsługi AppImage"
+#| msgid "Installing AppImage support"
+msgid "Could not start installing AppImage support."
+msgstr ""
 
-msgid "Flatpak support installation failed"
-msgstr "Instalacja obsługi Flatpak nie powiodła się"
+#| msgid "Installing Flatpak support"
+msgid "Could not install Flatpak support."
+msgstr ""
 
-msgid "AppImage support installation failed"
-msgstr "Instalacja obsługi AppImage nie powiodła się"
+#| msgid "Installing AppImage support"
+msgid "Could not install AppImage support."
+msgstr ""
 
 msgid "Flatpak support enabled"
 msgstr "Obsługa Flatpak została włączona"
@@ -1374,8 +1393,9 @@ msgstr "Nie znaleziono wpisów w dzienniku zmian"
 msgid "No details for this release"
 msgstr "Brak szczegółów dla tego wydania"
 
-msgid "Failed to load changelog"
-msgstr "Nie udało się wczytać dziennika zmian"
+#| msgid "Could not check for updates"
+msgid "Could not load the release notes."
+msgstr ""
 
 msgid "Changelog"
 msgstr "Dziennik zmian"
@@ -1395,22 +1415,23 @@ msgstr "Wybierz katalog instalacji AppImage"
 msgid "Tray enabled"
 msgstr "Zasobnik systemowy włączony"
 
-msgid "Tray disabled, but autostart service remains"
+msgid ""
+"The tray is disabled, but its autostart service could not be removed. It may "
+"start again at the next login."
 msgstr ""
-"Zasobnik systemowy wyłączony, ale usługa automatycznego uruchamiania "
-"pozostała"
 
 msgid "Tray disabled"
 msgstr "Zasobnik systemowy wyłączony"
 
-msgid "Failed to add systemd startup service"
-msgstr "Nie udało się dodać usługi autostartu systemd"
+msgid "Could not enable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service added."
 msgstr "Dodano usługę autostartu systemd."
 
-msgid "Failed to remove systemd startup service"
-msgstr "Nie udało się usunąć usługi autostartu systemd"
+#| msgid "Tray disabled, but autostart service remains"
+msgid "Could not disable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service removed."
 msgstr "Usunięto usługę autostartu systemd."
@@ -1472,11 +1493,43 @@ msgstr "Wyszukiwarka Shelly"
 msgid "Update"
 msgstr "Zaktualizuj"
 
-msgid "Failed to start operation."
-msgstr "Nie udało się rozpocząć operacji."
-
 msgid "Pending"
 msgstr "Oczekuje"
+
+msgid "Working"
+msgstr "Przetwarzanie"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Niepowodzenie"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Anulowano"
+
+#| msgid "Failed to start operation."
+msgid "Could not start the requested operation."
+msgstr ""
 
 msgid "Synchronizing databases"
 msgstr "Synchronizowanie baz danych"
@@ -1520,19 +1573,14 @@ msgstr "Sprawdzanie konfliktów"
 msgid "Checking disk space"
 msgstr "Sprawdzanie miejsca na dysku"
 
-msgid "Working"
-msgstr "Przetwarzanie"
-
-msgid "Failed"
-msgstr "Niepowodzenie"
-
 msgid "Transaction Completed"
 msgstr ""
 
-msgid "Transaction Failed"
-msgstr ""
+msgid "Operation failed"
+msgstr "Operacja nie powiodła się"
 
-msgid "Transaction Cancelled"
+#| msgid "Operation failed"
+msgid "Operation cancelled"
 msgstr ""
 
 msgid "Finished"
@@ -1541,7 +1589,8 @@ msgstr "Zakończono"
 msgid "exit"
 msgstr "wyjście"
 
-msgid "The operation was cancelled."
+#| msgid "Operation failed"
+msgid "Operation cancelled."
 msgstr ""
 
 msgid "All operations finished successfully."
@@ -1551,9 +1600,6 @@ msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
 msgstr ""
-
-msgid "Cancelled"
-msgstr "Anulowano"
 
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
@@ -1568,11 +1614,6 @@ msgstr "Aktualizacja pakietu systemowego"
 
 msgid "AUR package update"
 msgstr "Aktualizacja pakietu AUR"
-
-msgid "Could not run shelly check-updates. Check the CLI output and try again."
-msgstr ""
-"Nie udało się wykonać polecenia „shelly check-updates”. Sprawdź wyjście w "
-"terminalu i spróbuj ponownie."
 
 msgid "Update this package"
 msgstr "Zaktualizuj ten pakiet"

@@ -70,7 +70,7 @@ pub fn setupConfig(allocator: std.mem.Allocator) !*ConfigResolver {
 
 fn migrateLegacyAppImageInstallPath(allocator: std.mem.Allocator) void {
     var resolver = cli_config_resolver.CliConfigResolver.init(allocator, io, environ_map) catch |err| {
-        std.log.warn("appimage: could not open CLI config for legacy migration: {t}", .{err});
+        std.log.warn("Could not read the CLI settings during AppImage settings migration. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
         return;
     };
     defer resolver.deinit();

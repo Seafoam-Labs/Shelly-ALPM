@@ -45,8 +45,8 @@ pub const Signer = struct {
         };
         if (exit_code != 0) {
             std.log.warn(
-                "package signing failed for {s} (gpg exit {d}): {s}",
-                .{ payload_path, exit_code, result.stderr },
+                "Could not sign package archive {0f}. {1f} Review the GPG output and selected signing key.\n\nTechnical details: {2d}",
+                .{ @import("diagnostics").safe(payload_path), @import("diagnostics").safe(result.stderr), exit_code },
             );
             return error.PackageSigningFailed;
         }

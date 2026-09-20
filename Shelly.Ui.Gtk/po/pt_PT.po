@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-19 13:14-0400\n"
 "PO-Revision-Date: 2026-05-24 15:21+0100\n"
 "Last-Translator: André Moreira <afrmscb@gmail.com>, 2026\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -144,7 +144,8 @@ msgstr ""
 msgid "e.g. owner/repo or https://..."
 msgstr ""
 
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+msgid ""
+"Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
 
 msgid "Allow Prerelease"
@@ -583,9 +584,6 @@ msgstr "Não Confirmar"
 msgid "Enable Shelly Search"
 msgstr "Ativar Procura do Shelly"
 
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Ativar Visualização Webview (experimental)"
-
 msgid "AppImage Install Path"
 msgstr ""
 
@@ -637,7 +635,7 @@ msgstr ""
 msgid "Your system is up to date"
 msgstr ""
 
-msgid "Could not check for updates"
+msgid "Could not check for updates."
 msgstr ""
 
 msgid "Utilities"
@@ -808,16 +806,25 @@ msgstr ""
 msgid "Install Anyway"
 msgstr ""
 
+msgid "Unknown"
+msgstr "Desconhecido"
+
 msgid "package(s)"
 msgstr ""
 
 msgid "to"
 msgstr ""
 
+msgid "removed size"
+msgstr ""
+
 msgid "download"
 msgstr ""
 
 msgid "net"
+msgstr ""
+
+msgid "Could not load the PKGBUILD preview."
 msgstr ""
 
 msgid "Dismiss"
@@ -844,15 +851,12 @@ msgstr ""
 msgid "Version ?"
 msgstr ""
 
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
-msgstr ""
-
-msgid "Invalid URL. Must start with http:// or https://"
+msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
 
 msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
+"Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
+"host/owner/repo/releases."
 msgstr ""
 
 msgid "Choose an AppImage file"
@@ -861,7 +865,7 @@ msgstr ""
 msgid "AppImage files"
 msgstr ""
 
-msgid "Only .AppImage files can be installed"
+msgid "Only.AppImage files can be installed"
 msgstr ""
 
 msgid "Installing AppImage"
@@ -905,7 +909,7 @@ msgstr ""
 msgid "Operation completed successfully"
 msgstr ""
 
-msgid "Operation failed"
+msgid "Could not complete the requested operation."
 msgstr ""
 
 msgid "Discard environment changes?"
@@ -953,7 +957,7 @@ msgstr ""
 msgid "Try a shorter or more general keyword."
 msgstr ""
 
-msgid "Could not reach the AUR"
+msgid "Could not search the configured AUR service."
 msgstr ""
 
 msgid "Check your connection and try again."
@@ -1001,13 +1005,13 @@ msgstr ""
 msgid "Flatpak files"
 msgstr ""
 
-msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
 msgid "Installing local flatpak"
 msgstr ""
 
-msgid "Installation failed."
+msgid "Could not install the selected packages."
 msgstr ""
 
 msgid "Installation complete."
@@ -1046,9 +1050,6 @@ msgstr ""
 msgid "Unknown developer"
 msgstr ""
 
-msgid "Unknown"
-msgstr "Desconhecido"
-
 msgid "Version: Unknown"
 msgstr ""
 
@@ -1076,13 +1077,13 @@ msgstr "Transferência"
 msgid "No description available."
 msgstr "Nenhuma descrição disponível."
 
-msgid "Unable to load screenshot"
+msgid "Could not load this application screenshot."
 msgstr ""
 
-msgid "Unable to download screenshot"
+msgid "Could not download this application screenshot."
 msgstr ""
 
-msgid "Unable to display screenshot"
+msgid "Could not display the downloaded application screenshot."
 msgstr ""
 
 msgid "Open link in browser"
@@ -1112,13 +1113,15 @@ msgstr ""
 msgid "Translate"
 msgstr ""
 
-msgid "Unable to allocate memory while loading Flatpak data."
+msgid ""
+"Could not load Flatpak applications because Shelly ran out of memory. Close "
+"other applications and try again."
 msgstr ""
 
-msgid "Unable to start the Flatpak data loader."
+msgid "Could not start loading Flatpak applications."
 msgstr ""
 
-msgid "Unable to load Flatpak applications."
+msgid "Could not load Flatpak applications from the selected remote."
 msgstr ""
 
 msgid "No Flatpak applications are available."
@@ -1277,7 +1280,7 @@ msgid ""
 "begin."
 msgstr ""
 
-msgid "Search failed"
+msgid "Could not search the selected sources."
 msgstr ""
 
 msgid "Installation in progress"
@@ -1295,7 +1298,9 @@ msgstr ""
 msgid "Install the selected packages?"
 msgstr ""
 
-msgid "Failed to save settings"
+msgid ""
+"Could not save settings to the configured file. Your latest changes were not "
+"saved."
 msgstr ""
 
 msgid "Settings saved"
@@ -1307,16 +1312,16 @@ msgstr ""
 msgid "Installing AppImage support"
 msgstr ""
 
-msgid "Failed to start Flatpak support installation"
+msgid "Could not start installing Flatpak support."
 msgstr ""
 
-msgid "Failed to start AppImage support installation"
+msgid "Could not start installing AppImage support."
 msgstr ""
 
-msgid "Flatpak support installation failed"
+msgid "Could not install Flatpak support."
 msgstr ""
 
-msgid "AppImage support installation failed"
+msgid "Could not install AppImage support."
 msgstr ""
 
 msgid "Flatpak support enabled"
@@ -1331,8 +1336,8 @@ msgstr "Nenhum registo de alterações encontrado"
 msgid "No details for this release"
 msgstr "Nenhum detalhe sobre este lançamento"
 
-msgid "Failed to load changelog"
-msgstr "Falha ao carregar o registo de alterações"
+msgid "Could not load the release notes."
+msgstr ""
 
 msgid "Changelog"
 msgstr ""
@@ -1352,19 +1357,21 @@ msgstr ""
 msgid "Tray enabled"
 msgstr ""
 
-msgid "Tray disabled, but autostart service remains"
+msgid ""
+"The tray is disabled, but its autostart service could not be removed. It may "
+"start again at the next login."
 msgstr ""
 
 msgid "Tray disabled"
 msgstr ""
 
-msgid "Failed to add systemd startup service"
+msgid "Could not enable the tray autostart service."
 msgstr ""
 
 msgid "Systemd startup service added."
 msgstr "Serviço de arranque do Systemd adicionado."
 
-msgid "Failed to remove systemd startup service"
+msgid "Could not disable the tray autostart service."
 msgstr ""
 
 msgid "Systemd startup service removed."
@@ -1427,10 +1434,41 @@ msgstr "Procura do Shelly"
 msgid "Update"
 msgstr ""
 
-msgid "Failed to start operation."
+msgid "Pending"
 msgstr ""
 
-msgid "Pending"
+msgid "Working"
+msgstr ""
+
+#| msgid "Upgrade All"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Download"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Installed"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr ""
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr ""
+
+msgid "Could not start the requested operation."
 msgstr ""
 
 msgid "Synchronizing databases"
@@ -1475,19 +1513,13 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
-msgid "Working"
-msgstr ""
-
-msgid "Failed"
-msgstr ""
-
 msgid "Transaction Completed"
 msgstr ""
 
-msgid "Transaction Failed"
+msgid "Operation failed"
 msgstr ""
 
-msgid "Transaction Cancelled"
+msgid "Operation cancelled"
 msgstr ""
 
 msgid "Finished"
@@ -1496,7 +1528,7 @@ msgstr ""
 msgid "exit"
 msgstr ""
 
-msgid "The operation was cancelled."
+msgid "Operation cancelled."
 msgstr ""
 
 msgid "All operations finished successfully."
@@ -1505,9 +1537,6 @@ msgstr ""
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
-msgstr ""
-
-msgid "Cancelled"
 msgstr ""
 
 msgid ""
@@ -1522,9 +1551,6 @@ msgid "System package update"
 msgstr ""
 
 msgid "AUR package update"
-msgstr ""
-
-msgid "Could not run shelly check-updates. Check the CLI output and try again."
 msgstr ""
 
 msgid "Update this package"

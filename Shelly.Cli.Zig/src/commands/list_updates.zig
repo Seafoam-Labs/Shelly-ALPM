@@ -278,8 +278,8 @@ fn writeQueryFailure(
     }
     const message = try std.fmt.allocPrint(
         context.allocator,
-        "Unable to query {s} updates: {t}",
-        .{ @tagName(backend), err },
+        "Could not check for {0f} updates. {1s}\n\nTechnical details: {2s}",
+        .{ @import("diagnostics").safe(@tagName(backend)), @import("diagnostics").cause(err), @errorName(err) },
     );
     defer context.allocator.free(message);
     if (invocation.globals.ui_mode) {
@@ -1181,7 +1181,7 @@ test "bare list-updates shortcode continues after a backend failure" {
         "{\"Packages\":[],\"Aur\":[],\"AppImage\":[],\"Flatpak\":[]}\n",
         tc.stdout.writer.buffered(),
     );
-    try std.testing.expect(std.mem.indexOf(u8, tc.stderr.writer.buffered(), "Unable to query appimage updates") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stderr.writer.buffered(), "Could not check for appimage updates") != null);
 }
 
 test "aggregate list-updates skips an unavailable Flatpak backend without failing" {

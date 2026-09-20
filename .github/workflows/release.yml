@@ -32,6 +32,9 @@ jobs:
           (cd Shelly.Flatpak.Backend && zig build abi-test)
           (cd Shelly.Flatpak.Backend && zig build integration-test)
 
+      - name: Test shared diagnostics
+        run: cd Shelly.Diagnostics && zig build test
+
       - name: Test HTTP client
         run: cd Shelly.Http && zig build test
 

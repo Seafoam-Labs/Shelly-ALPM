@@ -162,7 +162,7 @@ pub fn dispatch(
         const arguments = try elevatedPurifyArguments(context, invocation);
         defer context.allocator.free(arguments);
         const elevated_exit = elevation.relaunchIfNeeded(context, arguments) catch |err| {
-            try context.stderr.print("Unable to elevate purify: {t}\n", .{err});
+            try context.stderr.print("Could not obtain administrator privileges for unneeded-package removal. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -231,7 +231,7 @@ fn buildPlan(
 
 fn confirmPurify(context: *runtime.RuntimeContext) !bool {
     const reader = context.stdin orelse {
-        try context.stdout.writeAll("Operation cancelled: confirmation input is unavailable.\n");
+        try context.stdout.writeAll("Operation cancelled because confirmation input is unavailable. Run the command in an interactive terminal to review and confirm the operation.\n");
         try context.stdout.flush();
         return false;
     };
@@ -363,7 +363,7 @@ fn executeQuiet(
         backend,
         options,
     ) catch |err| {
-        try context.stderr.print("Purify failed: {t}\n", .{err});
+        try context.stderr.print("Could not remove unneeded packages. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
         return 1;
     };
     defer result.deinit(context.allocator);
@@ -403,7 +403,7 @@ fn executeUi(
         backend,
         options,
     ) catch |err| {
-        const message = try std.fmt.allocPrint(context.allocator, "Purify failed: {t}", .{err});
+        const message = try std.fmt.allocPrint(context.allocator, "Could not remove unneeded packages. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
         defer context.allocator.free(message);
         try output.writeErrorFrame(context, message);
         try output.writeAlpmInfoFrame(context, "TransactionFailed", failureMessage(backend));
@@ -555,8 +555,8 @@ fn writePlanFailure(
     }
     const message = try std.fmt.allocPrint(
         context.allocator,
-        "Unable to build the {s} purify plan: {t}",
-        .{ @tagName(backend), err },
+        "Could not determine which {0f} packages can be removed. {1s}\n\nTechnical details: {2s}",
+        .{ @import("diagnostics").safe(@tagName(backend)), @import("diagnostics").cause(err), @errorName(err) },
     );
     defer context.allocator.free(message);
     if (invocation.globals.ui_mode)
@@ -635,8 +635,8 @@ fn successMessage(backend: Backend, options: Options) []const u8 {
 
 fn failureMessage(backend: Backend) []const u8 {
     return switch (backend) {
-        .standard => "Package purification failed.",
-        .flatpak => "Flatpak dependency cleanup failed.",
+        .standard => "Could not remove unneeded packages.",
+        .flatpak => "Could not remove unused Flatpak dependencies.",
     };
 }
 

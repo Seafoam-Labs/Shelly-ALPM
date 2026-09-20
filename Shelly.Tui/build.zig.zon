@@ -32,6 +32,7 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        .shelly_diagnostics = .{ .path = "../Shelly.Diagnostics" },
         .vaxis = .{
             .url = "git+https://github.com/rockorager/libvaxis#82cec0db8fc57c32f2ce4c1c3fc377052f4c86ba",
             .hash = "vaxis-0.6.0-BWNV_KwYCgB-L5MNRY8I8HGbKDE6KOxDPAVSaZ8-3lJ8",

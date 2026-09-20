@@ -36,7 +36,7 @@ fn runSystemctl(allocator: std.mem.Allocator, io: std.Io, args: []const []const 
         .argv = argv,
         .environ_map = runtime.environ_map,
     }) catch |err| {
-        std.log.err("systemd_tray: failed to spawn systemctl: {t}", .{err});
+        std.log.err("Could not start systemctl to manage the tray autostart service. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
         return err;
     };
     defer allocator.free(result.stdout);
@@ -44,8 +44,8 @@ fn runSystemctl(allocator: std.mem.Allocator, io: std.Io, args: []const []const 
 
     if (result.term != .exited or result.term.exited != 0) {
         std.log.err(
-            "systemd_tray: systemctl exited with term={any} stderr='{s}'",
-            .{ result.term, result.stderr },
+            "Could not manage the tray autostart service.\n\nTechnical details: {0any}; {1f}",
+            .{ result.term, @import("diagnostics").safe(result.stderr) },
         );
         return error.CommandFailed;
     }
@@ -76,11 +76,11 @@ pub fn addService(allocator: std.mem.Allocator, io: std.Io) !void {
 
 pub fn removeService(allocator: std.mem.Allocator, io: std.Io) !void {
     runSystemctl(allocator, io, &.{ "--user", "disable", "--now", SERVICE_NAME }) catch |err| {
-        std.log.warn("systemd_tray: disable --now failed (expected if never installed): {t}", .{err});
+        std.log.warn("Could not disable the tray autostart service. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
     };
 
     const dir_path = serviceDir(allocator) catch |err| {
-        std.log.warn("systemd_tray: could not resolve service dir: {t}", .{err});
+        std.log.warn("Could not locate the user service directory for tray autostart. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
         try runSystemctl(allocator, io, &.{ "--user", "daemon-reload" });
         return;
     };

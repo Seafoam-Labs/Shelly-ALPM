@@ -745,7 +745,7 @@ pub const PackagePage = extern struct {
     ) void {
         const svc = runtime.config orelse return;
         svc.updateField(field, value) catch |err| {
-            std.log.err("package page: failed to update config: {t}", .{err});
+            std.log.err("Could not update setting {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(@tagName(field)), @import("diagnostics").cause(err), @errorName(err) });
         };
     }
 
@@ -790,7 +790,7 @@ pub const PackagePage = extern struct {
 
         const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
         const parsed = cli.get_packages(show_hidden) catch |err| {
-            std.debug.print("get_packages failed: {t}\n", .{err});
+            std.debug.print("Could not load the standard-package list. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             arena_ptr.deinit();
             std.heap.c_allocator.destroy(arena_ptr);
             return;

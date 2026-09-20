@@ -186,7 +186,7 @@ fn executeWithRunner(
                 const message = if (std.mem.trim(u8, query, " \t\r\n").len == 0)
                     "Query cannot be empty."
                 else
-                    "Error: Query must be at least 2 characters long";
+                    "Enter a search query containing at least two characters.";
                 return writeFailure(context, invocation, message);
             }
         }
@@ -209,7 +209,7 @@ fn executeWithRunner(
         if (Zigalpm.flatpak.errors.unavailableMessage(failure)) |message|
             return writeFailure(context, invocation, message);
         const message = switch (failure) {
-            error.NoPackageSpecified => "No package specified",
+            error.NoPackageSpecified => "Specify at least one package name. See the command help for usage.",
             error.PackageNotFound => try Zigalpm.user_errors.missingPackage(context.allocator, if (invocation.positionals.len > 0) invocation.positionals[0] else "the requested package"),
             else => try Zigalpm.user_errors.format(context.allocator, failure, .{ .operation = "the package search" }),
         };
@@ -755,7 +755,7 @@ fn renderPkgbuilds(
 
     for (builds) |build| {
         const pkgbuild = build.pkgbuild orelse {
-            try colors.printLine(context, .err, "Failed to get PKGBUILD for: {s}", .{build.name});
+            try colors.printLine(context, .err, "Could not retrieve the PKGBUILD for {0f} from the configured AUR service.", .{@import("diagnostics").safe(build.name)});
             continue;
         };
         try colors.printLine(context, .warning, "Package build for: {s}", .{build.name});
@@ -1452,7 +1452,7 @@ test "AUR pkgbuild search displays fetched content and structured output" {
     var rendered = tc.stdout.writer.buffered();
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Package build for: yay") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "pkgname=yay\npkgver=12") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "Failed to get PKGBUILD for: missing") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Could not retrieve the PKGBUILD for missing") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Total results") == null);
 
     tc.stdout.writer.end = 0;
@@ -1529,7 +1529,7 @@ test "search validates AUR query length and positive pagination before backend e
 
     const short_aur = try parser.parse(tc.arena.allocator(), &manifest, &.{ "search", "aur", "x" });
     try std.testing.expectEqual(@as(u8, 1), try executeWithRunner(&tc.context, &short_aur.dispatch, ShouldNotRun{}));
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "at least 2 characters") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "at least two characters") != null);
     tc.stdout.writer.end = 0;
     const conflicting_aur = try parser.parse(
         tc.arena.allocator(),

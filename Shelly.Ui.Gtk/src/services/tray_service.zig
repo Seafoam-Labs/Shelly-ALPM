@@ -14,14 +14,14 @@ const log = std.log.scoped(.tray_service);
 
 pub fn start(io: std.Io, alloc: std.mem.Allocator) void {
     std.Io.Dir.cwd().access(io, APP_PATH, .{}) catch {
-        log.warn("tray executable not found at {s}", .{APP_PATH});
+        log.warn("Could not start the tray because its executable is missing at {0f}. Check the Shelly installation.", .{@import("diagnostics").safe(APP_PATH)});
         return;
     };
 
     var pids: std.ArrayList(linux.pid_t) = .empty;
     defer pids.deinit(alloc);
     findPids(io, alloc, &pids) catch |err| {
-        log.warn("failed to find pids: {s}", .{@errorName(err)});
+        log.warn("Could not identify running Shelly tray processes. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
     };
     if (pids.items.len > 0) {
         log.info("tray already running (pid {d})", .{pids.items[0]});
@@ -53,10 +53,10 @@ pub fn start(io: std.Io, alloc: std.mem.Allocator) void {
     if (ok == 0) {
         if (err) |e| {
             const msg: []const u8 = if (e.f_message) |m| std.mem.sliceTo(m, 0) else "unknown error";
-            log.warn("failed to start tray: {s}", .{msg});
+            log.warn("Could not start the Shelly tray. {0f}", .{@import("diagnostics").safe(msg)});
             glib.Error.free(e);
         } else {
-            log.warn("failed to start tray", .{});
+            log.warn("Could not start the Shelly tray.", .{});
         }
         return;
     }
@@ -67,7 +67,7 @@ pub fn end(io: std.Io, alloc: std.mem.Allocator) bool {
     var pids: std.ArrayList(linux.pid_t) = .empty;
     defer pids.deinit(alloc);
     findPids(io, alloc, &pids) catch |err| {
-        log.warn("failed to find pids: {s}", .{@errorName(err)});
+        log.warn("Could not identify running Shelly tray processes. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
         return false;
     };
 
@@ -84,10 +84,10 @@ pub fn end(io: std.Io, alloc: std.mem.Allocator) bool {
     var survivors: std.ArrayList(linux.pid_t) = .empty;
     defer survivors.deinit(alloc);
     findPids(io, alloc, &survivors) catch |err| {
-        log.warn("failed to find survivors: {s}", .{@errorName(err)});
+        log.warn("Could not confirm whether the Shelly tray stopped. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
     };
     for (survivors.items) |pid| {
-        log.warn("pid {d} ignored SIGTERM; sending SIGKILL", .{pid});
+        log.warn("Tray process {0d} did not stop after SIGTERM; sending SIGKILL.", .{pid});
         signalPid(pid, .KILL);
     }
     log.info("tray ended", .{});
@@ -101,7 +101,7 @@ fn findPids(io: std.Io, alloc: std.mem.Allocator, out: *std.ArrayList(linux.pid_
         .stdout = .pipe,
     });
     defer _ = child.wait(io) catch |err| {
-        log.err("failed to wait for pidof: {s}", .{@errorName(err)});
+        log.err("Could not collect the result of the tray-process lookup. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
     };
 
     const cap = 6 << 7; // 768 bytes
@@ -121,8 +121,8 @@ fn findPids(io: std.Io, alloc: std.mem.Allocator, out: *std.ArrayList(linux.pid_
 fn signalPid(pid: linux.pid_t, sig: linux.SIG) void {
     switch (linux.errno(linux.kill(pid, sig))) {
         .SUCCESS, .SRCH => {},
-        .PERM => log.warn("no permission to signal pid {d}", .{pid}),
-        else => |e| log.warn("kill({d}) failed: {s}", .{ pid, @tagName(e) }),
+        .PERM => log.warn("Could not stop tray process {0d} because permission was denied. Run the action as the user who owns the tray process.", .{pid}),
+        else => |e| log.warn("Could not stop tray process {0d}. The operating system rejected the request. Review the technical details.\n\nTechnical details: {1f}", .{ pid, @import("diagnostics").safe(@tagName(e)) }),
     }
 }
 

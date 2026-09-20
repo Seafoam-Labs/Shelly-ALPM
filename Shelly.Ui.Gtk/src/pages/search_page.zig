@@ -224,7 +224,7 @@ pub const ShellySearchPage = extern struct {
             },
             .prompt => self.show_placeholder("system-search-symbolic", translations._("Search everywhere"), translations._("Search standard repositories, the AUR and Flatpak at once. Type a name to begin.")),
             .empty => self.show_placeholder("edit-find-symbolic", translations._("No packages found"), translations._("Try a shorter or more general keyword.")),
-            .err => self.show_placeholder("dialog-error-symbolic", translations._("Search failed"), translations._("Check your connection and try again.")),
+            .err => self.show_placeholder("dialog-error-symbolic", translations._("Could not search the selected sources."), translations._("Check your connection and try again.")),
         }
     }
 
@@ -611,7 +611,7 @@ pub const ShellySearchPage = extern struct {
     ) void {
         const svc = runtime.config orelse return;
         svc.updateField(field, value) catch |err| {
-            std.log.err("search page: failed to update config: {t}", .{err});
+            std.log.err("Could not update setting {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(@tagName(field)), @import("diagnostics").cause(err), @errorName(err) });
         };
     }
 
@@ -720,7 +720,7 @@ pub const ShellySearchPage = extern struct {
         switch (source) {
             .standard => {
                 const parsed = cli.search_standard(query) catch |err| {
-                    std.debug.print("search standard failed: {t}\n", .{err});
+                    std.debug.print("Could not search standard repositories. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                     return;
                 };
                 var seen = std.StringHashMap(void).init(alloc);
@@ -740,7 +740,7 @@ pub const ShellySearchPage = extern struct {
             },
             .aur => {
                 const parsed = cli.search_aur(query) catch |err| {
-                    std.debug.print("search aur failed: {t}\n", .{err});
+                    std.debug.print("Could not search the AUR. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                     return;
                 };
                 for (parsed.value) |pkg| {
@@ -758,7 +758,7 @@ pub const ShellySearchPage = extern struct {
             },
             .flatpak => {
                 const parsed = cli.search_flatpak(query) catch |err| {
-                    std.debug.print("search flatpak failed: {t}\n", .{err});
+                    std.debug.print("Could not search Flatpak remotes. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                     return;
                 };
                 for (parsed.value.hits) |hit| {

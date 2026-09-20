@@ -251,7 +251,7 @@ pub const AppImagePage = extern struct {
         {
             const cli = ShellyCli{ .allocator = apps_arena.allocator(), .io = threaded.io() };
             const apps = cli.get_appimages() catch |err| {
-                std.debug.print("get_appimages failed: {t}\n", .{err});
+                std.debug.print("Could not load the installed AppImage list. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                 apps_arena.deinit();
                 std.heap.c_allocator.destroy(apps_arena);
                 return;
@@ -631,17 +631,17 @@ pub const AppImagePage = extern struct {
                     trimmed[0] != '/' and trimmed[trimmed.len - 1] != '/' and
                     std.mem.count(u8, trimmed, "/") == 1;
                 if (!valid) {
-                    error_text = translations._("Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)");
+                    error_text = translations._("Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm.");
                 }
             },
             .StaticUrl => {
                 if (!isValidHttpUrl(trimmed)) {
-                    error_text = translations._("Invalid URL. Must start with http:// or https://");
+                    error_text = translations._("Enter a download URL beginning with http:// or https://.");
                 }
             },
             .Forgejo => {
                 if (!isValidForgejoRepositoryUrl(trimmed)) {
-                    error_text = translations._("Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/repo/releases");
+                    error_text = translations._("Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://host/owner/repo/releases.");
                 }
             },
         }
@@ -696,7 +696,7 @@ pub const AppImagePage = extern struct {
     fn installFromPath(self: *Self, path: []const u8) void {
         const p = self.priv();
         if (!std.ascii.endsWithIgnoreCase(path, ".appimage")) {
-            p.toast.show(.warning, translations._("Only .AppImage files can be installed"));
+            p.toast.show(.warning, translations._("Only.AppImage files can be installed"));
             return;
         }
 
@@ -959,7 +959,7 @@ pub const AppImagePage = extern struct {
             show_list(self);
             self.reload();
         } else {
-            p.toast.show(.@"error", translations._("Operation failed"));
+            p.toast.show(.@"error", translations._("Could not complete the requested operation."));
         }
     }
 

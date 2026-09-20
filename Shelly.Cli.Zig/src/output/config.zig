@@ -391,15 +391,14 @@ fn writeSelectionQuestionFrame(
 }
 
 fn questionKindName(question: Zigalpm.OperationQuestion) []const u8 {
-    
-    switch(question.purpose) {
+    switch (question.purpose) {
         .cache_clean_extra_entries => return "CacheCleanExtraEntries",
         .package_conflict => return "PackageConflict",
         .generic => {},
     }
-    
+
     if (question.kind == .import_pgp_key) return "ImportPgpKey";
-    
+
     return switch (question.envelope.kind) {
         .remove => "RemovePkgs",
         .update => "ConflictPkg",
@@ -617,6 +616,16 @@ test "AUR lifecycle progress uses stage semantics instead of package position" {
 }
 
 pub fn writeErrorFrame(context: *runtime.RuntimeContext, message: []const u8) !void {
+    return writeErrorFrameImpl(context, message, null);
+}
+
+pub fn writeOperationErrorFrame(context: *runtime.RuntimeContext, message: []const u8, failure: Zigalpm.operation.ErrorEvent) !void {
+    return writeErrorFrameImpl(context, message, failure);
+}
+
+fn writeErrorFrameImpl(context: *runtime.RuntimeContext, message: []const u8, failure: ?Zigalpm.operation.ErrorEvent) !void {
+    const sanitized = try Zigalpm.user_errors.sanitizeAlloc(context.allocator, message);
+    defer context.allocator.free(sanitized);
     var payload = std.Io.Writer.Allocating.init(context.allocator);
     defer payload.deinit();
     var json: std.json.Stringify = .{ .writer = &payload.writer };
@@ -624,7 +633,27 @@ pub fn writeErrorFrame(context: *runtime.RuntimeContext, message: []const u8) !v
     try json.objectField("$kind");
     try json.write("alpm.error");
     try json.objectField("ErrorMessage");
-    try json.write(message);
+    try json.write(sanitized);
+    if (failure) |event| {
+        try json.objectField("ErrorCode");
+        try json.write(@errorName(event.err));
+        try json.objectField("Domain");
+        try json.write(event.domain);
+        try json.objectField("NativeCode");
+        try json.write(event.native_code);
+        try json.objectField("OperationId");
+        try json.write(event.envelope.operation_id);
+        try json.objectField("ParentId");
+        try json.write(event.envelope.parent_id);
+        try json.objectField("Backend");
+        try json.write(@tagName(event.envelope.backend));
+        try json.objectField("Operation");
+        try json.write(@tagName(event.envelope.kind));
+        try json.objectField("Subject");
+        try json.write(event.envelope.subject);
+        try json.objectField("Recoverable");
+        try json.write(event.recoverable);
+    }
     try json.objectField("Source");
     try json.write("Alpm");
     try json.objectField("Level");
@@ -642,11 +671,11 @@ pub fn writeSuccess(context: *runtime.RuntimeContext, message: []const u8) !void
 }
 
 pub fn writeFailure(context: *runtime.RuntimeContext, message: []const u8) !void {
-    try colors.printLine(context, .err, "{s}", .{message});
+    try colors.printLine(context, .err, "{f}", .{Zigalpm.user_errors.safe(message)});
 }
 
 pub fn writeWarning(context: *runtime.RuntimeContext, message: []const u8) !void {
-    try context.stderr.print("warning: {s}\n", .{message});
+    try context.stderr.print("warning: {f}\n", .{Zigalpm.user_errors.safe(message)});
 }
 
 pub fn writeFrame(context: *runtime.RuntimeContext, payload: []const u8) !void {

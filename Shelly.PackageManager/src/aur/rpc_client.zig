@@ -9,6 +9,32 @@ pub const default_cgit_url = "https://aur.archlinux.org/cgit/aur.git/plain";
 const max_response_size = 32 * 1024 * 1024;
 const connect_timeout_seconds = 15;
 
+/// Only a complete, successful info response can establish package absence.
+pub fn validateInfoResponse(response: *const models.Response) !void {
+    if (response.version != 5 or response.error_message != null or
+        !(std.mem.eql(u8, response.response_type, "multiinfo") or std.mem.eql(u8, response.response_type, "info")) or
+        response.result_count != response.results.len) return error.AurRpcLookupFailed;
+}
+
+fn parseInfoResponse(allocator: std.mem.Allocator, payload: []const u8) !models.Response {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, payload, .{});
+    defer parsed.deinit();
+    if (parsed.value != .object) return error.InvalidAurResponse;
+    const object = parsed.value.object;
+    const kind = object.get("type") orelse return error.InvalidAurResponse;
+    if (kind == .string and std.mem.eql(u8, kind.string, "error"))
+        return models.Response.parse(allocator, payload);
+    const count = object.get("resultcount") orelse return error.InvalidAurResponse;
+    const results = object.get("results") orelse return error.InvalidAurResponse;
+    const version = object.get("version") orelse return error.InvalidAurResponse;
+    if (count != .integer or count.integer < 0 or results != .array or version != .integer)
+        return error.InvalidAurResponse;
+    var response = try models.Response.parse(allocator, payload);
+    errdefer response.deinit(allocator);
+    try validateInfoResponse(&response);
+    return response;
+}
+
 pub const Client = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -17,6 +43,13 @@ pub const Client = struct {
     cgit_url: []const u8 = default_cgit_url,
     operation_context: ?*operation_api.OperationContext = null,
     parent_operation: ?*const operation_api.Operation = null,
+    /// Deterministic transport for unit/integration fixtures; absent from release builds.
+    test_transport: if (@import("builtin").is_test) ?TestTransport else void = if (@import("builtin").is_test) null else {},
+
+    const TestTransport = struct {
+        context: ?*anyopaque = null,
+        request: *const fn (?*anyopaque, std.mem.Allocator, []const u8, ?[]const u8) anyerror![]u8,
+    };
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io, rpc_url: []const u8) !Client {
         return .{
@@ -91,11 +124,15 @@ pub const Client = struct {
             const end = @min(offset + 100, package_names.len);
             const body = try buildInfoFormBody(self.allocator, package_names[offset..end]);
             defer self.allocator.free(body);
-            const payload = self.postForm(self.rpc_url, body) catch |err|
-                return self.partialInfoError(&all_packages, response_type, err);
+            const payload = self.postForm(self.rpc_url, body) catch |err| switch (err) {
+                error.Cancelled, error.OutOfMemory => return err,
+                else => return self.partialInfoError(&all_packages, response_type, err),
+            };
             defer self.allocator.free(payload);
-            var response = models.Response.parse(self.allocator, payload) catch |err|
-                return self.partialInfoError(&all_packages, response_type, err);
+            var response = parseInfoResponse(self.allocator, payload) catch |err| switch (err) {
+                error.OutOfMemory => return err,
+                else => return self.partialInfoError(&all_packages, response_type, err),
+            };
 
             if (std.mem.eql(u8, response.response_type, "error")) {
                 for (all_packages.items) |*package| package.deinit(self.allocator);
@@ -130,7 +167,7 @@ pub const Client = struct {
     ) !models.Response {
         const error_type = try self.allocator.dupe(u8, "error");
         errdefer self.allocator.free(error_type);
-        const message = try self.allocator.dupe(u8, @errorName(err));
+        const message = try @import("diagnostics").format(self.allocator, err, .{ .operation = "the AUR package information query", .path = self.rpc_url });
         errdefer self.allocator.free(message);
         const results = try all_packages.toOwnedSlice(self.allocator);
         self.allocator.free(response_type);
@@ -144,37 +181,48 @@ pub const Client = struct {
     }
 
     pub fn getPackageBase(self: *Client, package_name: []const u8) ![]u8 {
-        if (std.mem.trim(u8, package_name, " \t\r\n").len == 0)
-            return self.allocator.dupe(u8, package_name);
-        var response = self.getInfo(&.{package_name}) catch
-            return self.allocator.dupe(u8, package_name);
+        var response = try self.getInfo(&.{package_name});
         defer response.deinit(self.allocator);
-        if (response.results.len > 0 and response.results[0].package_base.len != 0)
-            return self.allocator.dupe(u8, response.results[0].package_base);
-        return self.allocator.dupe(u8, package_name);
+        try validateInfoResponse(&response);
+        if (response.results.len == 0) return error.AurPackageNotFound;
+        if (response.results.len != 1 or !std.mem.eql(u8, response.results[0].name, package_name) or
+            !endpoints.isValidPackageBase(response.results[0].package_base)) return error.AurRpcLookupFailed;
+        return self.allocator.dupe(u8, response.results[0].package_base);
     }
 
     pub fn findProviders(self: *Client, dependency_name: []const u8) ![][]u8 {
         if (std.mem.trim(u8, dependency_name, " \t\r\n").len == 0)
             return self.allocator.alloc([]u8, 0);
 
-        if (self.getInfo(&.{dependency_name})) |direct_value| {
-            var direct = direct_value;
+        {
+            var direct = try self.getInfo(&.{dependency_name});
             defer direct.deinit(self.allocator);
-            if (direct.results.len > 0 and direct.results[0].name.len != 0) {
+            try validateInfoResponse(&direct);
+            if (direct.results.len > 0) {
+                if (direct.results.len != 1 or !std.mem.eql(u8, direct.results[0].name, dependency_name))
+                    return error.AurRpcLookupFailed;
                 const result = try self.allocator.alloc([]u8, 1);
                 errdefer self.allocator.free(result);
                 result[0] = try self.allocator.dupe(u8, direct.results[0].name);
                 return result;
             }
-        } else |_| {}
+        }
 
         const url = try buildSearchUrl(self.allocator, self.rpc_url, dependency_name, "provides");
         defer self.allocator.free(url);
-        const payload = self.get(url) catch return self.allocator.alloc([]u8, 0);
+        const payload = self.get(url) catch |err| switch (err) {
+            error.Cancelled, error.OutOfMemory => return err,
+            else => return error.AurRpcLookupFailed,
+        };
         defer self.allocator.free(payload);
-        var response = models.Response.parse(self.allocator, payload) catch return self.allocator.alloc([]u8, 0);
+        var response = models.Response.parse(self.allocator, payload) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            else => return error.AurRpcLookupFailed,
+        };
         defer response.deinit(self.allocator);
+        if (response.version != 5 or !std.mem.eql(u8, response.response_type, "search") or
+            response.error_message != null or response.result_count != response.results.len)
+            return error.AurRpcLookupFailed;
 
         var names: std.ArrayList([]u8) = .empty;
         errdefer deinitStrings(self.allocator, names.items);
@@ -214,6 +262,8 @@ pub const Client = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try operation_scope.checkCancelled();
+        if (@import("builtin").is_test) if (self.test_transport) |transport|
+            return transport.request(transport.context, self.allocator, url, null);
         const uri = try std.Uri.parse(url);
         var request = try self.http.request(.GET, uri, .{
             .headers = .{
@@ -240,6 +290,8 @@ pub const Client = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try operation_scope.checkCancelled();
+        if (@import("builtin").is_test) if (self.test_transport) |transport|
+            return transport.request(transport.context, self.allocator, url, body);
         const uri = try std.Uri.parse(url);
         const headers = [_]std.http.Header{.{
             .name = "content-type",
@@ -322,7 +374,7 @@ const HttpOperationScope = struct {
     fn fail(self: *HttpOperationScope) void {
         if (self.operation) |*operation| operation.reportError(
             if (operation.isCancelled()) error.Cancelled else error.AurHttpOperationFailed,
-            if (operation.isCancelled()) "AUR HTTP operation cancelled" else "AUR HTTP operation failed",
+            if (operation.isCancelled()) "Operation cancelled." else "Could not complete the AUR request to the configured server.",
             "aur-http",
             null,
             false,
@@ -396,9 +448,111 @@ fn emptyResponse(allocator: std.mem.Allocator, response_type: []const u8) !model
     const owned_type = try allocator.dupe(u8, response_type);
     errdefer allocator.free(owned_type);
     return .{
+        .version = 5,
         .response_type = owned_type,
         .results = try allocator.alloc(models.Package, 0),
     };
+}
+
+/// In-memory RPC service used by tests with real temporary Git repositories.
+pub const TestService = if (@import("builtin").is_test) struct {
+    pub const Package = struct {
+        Name: []const u8,
+        PackageBase: []const u8,
+        Version: []const u8 = "1-1",
+        Maintainer: ?[]const u8 = null,
+        OutOfDate: ?i64 = null,
+    };
+
+    packages: []const Package = &.{},
+    providers: []const Package = &.{},
+    payload: ?[]const u8 = null,
+    failure: ?anyerror = null,
+    calls: usize = 0,
+
+    pub fn install(self: *@This(), client: *Client) void {
+        client.test_transport = .{ .context = self, .request = request };
+    }
+
+    fn request(context: ?*anyopaque, allocator: std.mem.Allocator, _: []const u8, body: ?[]const u8) ![]u8 {
+        const self: *@This() = @ptrCast(@alignCast(context.?));
+        self.calls += 1;
+        if (self.failure) |err| return err;
+        if (self.payload) |payload| return allocator.dupe(u8, payload);
+        var matches: std.ArrayList(Package) = .empty;
+        defer matches.deinit(allocator);
+        if (body) |form| {
+            for (self.packages) |package| {
+                const encoded = try percentEncode(allocator, package.Name);
+                defer allocator.free(encoded);
+                const expected = try std.fmt.allocPrint(allocator, "arg%5B%5D={s}", .{encoded});
+                defer allocator.free(expected);
+                var fields = std.mem.splitScalar(u8, form, '&');
+                while (fields.next()) |field| {
+                    if (std.mem.eql(u8, field, expected)) {
+                        try matches.append(allocator, package);
+                        break;
+                    }
+                }
+            }
+        } else try matches.appendSlice(allocator, self.providers);
+        return std.json.Stringify.valueAlloc(allocator, .{
+            .version = 5,
+            .type = if (body != null) "multiinfo" else "search",
+            .resultcount = matches.items.len,
+            .results = matches.items,
+        }, .{});
+    }
+} else void;
+
+test "AUR availability RPC distinguishes publication from absence and failures" {
+    const allocator = std.testing.allocator;
+    var client = try Client.init(allocator, std.testing.io, default_rpc_url);
+    defer client.deinit();
+    var service = TestService{ .packages = &.{.{ .Name = "demo-cli", .PackageBase = "demo-suite", .OutOfDate = 1 }} };
+    service.install(&client);
+    const base = try client.getPackageBase("demo-cli");
+    defer allocator.free(base);
+    try std.testing.expectEqualStrings("demo-suite", base);
+    try std.testing.expectError(error.AurPackageNotFound, client.getPackageBase("removed"));
+
+    const invalid_responses = [_][]const u8{
+        "not json",
+        "{}",
+        "{\"version\":5,\"type\":\"multiinfo\",\"resultcount\":0}",
+        "{\"version\":5,\"type\":\"multiinfo\",\"resultcount\":-1,\"results\":[]}",
+        "{\"version\":5,\"type\":\"multiinfo\",\"resultcount\":1,\"results\":[]}",
+        "{\"version\":5,\"type\":\"search\",\"resultcount\":0,\"results\":[]}",
+        "{\"version\":5,\"type\":\"error\",\"error\":\"unavailable\",\"results\":[]}",
+        "{\"version\":5,\"type\":\"error\",\"error\":\"unavailable\",\"resultcount\":-1,\"results\":[]}",
+        "{\"version\":5,\"type\":\"multiinfo\",\"resultcount\":1,\"results\":[{\"Name\":\"wrong\",\"PackageBase\":\"demo\",\"Version\":\"1\"}]}",
+        "{\"version\":5,\"type\":\"multiinfo\",\"resultcount\":1,\"results\":[{\"Name\":\"demo-cli\",\"PackageBase\":\"../escape\",\"Version\":\"1\"}]}",
+    };
+    for (invalid_responses) |payload| {
+        service.payload = payload;
+        try std.testing.expectError(error.AurRpcLookupFailed, client.getPackageBase("demo-cli"));
+    }
+    service.payload = null;
+    service.failure = error.Timeout;
+    try std.testing.expectError(error.AurRpcLookupFailed, client.getPackageBase("demo-cli"));
+    service.failure = error.Cancelled;
+    try std.testing.expectError(error.Cancelled, client.getPackageBase("demo-cli"));
+    service.failure = error.OutOfMemory;
+    try std.testing.expectError(error.OutOfMemory, client.getPackageBase("demo-cli"));
+}
+
+test "AUR availability provider lookup propagates RPC failure and resolves virtual names" {
+    const allocator = std.testing.allocator;
+    var client = try Client.init(allocator, std.testing.io, default_rpc_url);
+    defer client.deinit();
+    var service = TestService{ .providers = &.{.{ .Name = "implementation", .PackageBase = "implementation" }} };
+    service.install(&client);
+    const providers = try client.findProviders("virtual");
+    defer deinitStrings(allocator, providers);
+    try std.testing.expectEqual(@as(usize, 1), providers.len);
+    try std.testing.expectEqualStrings("implementation", providers[0]);
+    service.failure = error.Timeout;
+    try std.testing.expectError(error.AurRpcLookupFailed, client.findProviders("virtual"));
 }
 
 test "AUR RPC URL and form encoding matches the C# requests" {
@@ -461,7 +615,8 @@ test "partial info failures preserve packages returned by earlier chunks" {
     var partial = try client.partialInfoError(&packages, response_type, error.Timeout);
     defer partial.deinit(allocator);
     try std.testing.expectEqualStrings("error", partial.response_type);
-    try std.testing.expectEqualStrings("Timeout", partial.error_message.?);
+    try std.testing.expect(std.mem.indexOf(u8, partial.error_message.?, "Technical details: Timeout") != null);
+    try std.testing.expect(std.mem.indexOf(u8, partial.error_message.?, "aur.archlinux.org") != null);
     try std.testing.expectEqual(@as(usize, 1), partial.results.len);
     try std.testing.expectEqualStrings("first", partial.results[0].name);
 }

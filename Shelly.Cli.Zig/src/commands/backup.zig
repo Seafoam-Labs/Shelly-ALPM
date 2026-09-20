@@ -433,8 +433,8 @@ fn writeFailure(
 ) !void {
     const message = try std.fmt.allocPrint(
         context.allocator,
-        "Unable to export backup: {t}",
-        .{err},
+        "Could not export the backup to {0f}. {1s}\n\nTechnical details: {2s}",
+        .{ @import("diagnostics").safe(optionValue(invocation, "--directory") orelse "the configured backup directory"), @import("diagnostics").cause(err), @errorName(err) },
     );
     if (invocation.globals.ui_mode)
         try output.writeErrorFrame(context, message)
@@ -449,8 +449,8 @@ fn writeImportFailure(
 ) !void {
     const message = try std.fmt.allocPrint(
         context.allocator,
-        "Unable to import backup: {t}",
-        .{err},
+        "Could not import the backup from the configured file. {0s}\n\nTechnical details: {1s}",
+        .{ @import("diagnostics").cause(err), @errorName(err) },
     );
     if (invocation.globals.ui_mode)
         try output.writeErrorFrame(context, message)

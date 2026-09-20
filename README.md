@@ -68,6 +68,19 @@ paru -Rns shelly
   Flatpak applications alongside native packages without making Flatpak a
   runtime dependency of the base Shelly package.
 
+## AUR package availability
+
+`shelly install aur` (`shelly -Ia`) requires the requested package and any AUR
+build dependencies to be listed by the configured AUR service. Cached checkouts
+and surviving Git repositories do not authorize building a removed package.
+This also applies to `--version` installs. If availability cannot be verified
+because the service is unreachable, retry once the connection is restored.
+
+When an unavailable AUR package has an exact match in a configured repository,
+Shelly suggests `shelly -Is <package>`. Explicit local builds with
+`shelly build /path/to/PKGBUILD` and removal of installed packages remain
+available without an AUR availability check.
+
 ## PKGBUILD review
 
 Terminal PKGBUILD reviews show changed lines with three unchanged lines of

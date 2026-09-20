@@ -42,7 +42,7 @@ pub fn dispatch(
     const user_receive = optionEnabled(invocation, "--user");
     if (!user_receive and !invocation.globals.ui_mode and !elevation.isRoot()) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-            try context.stderr.print("Unable to elevate keyring operation: {t}\n", .{err});
+            try context.stderr.print("Could not obtain administrator privileges for keyring operation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -70,8 +70,8 @@ fn executeWithRunner(
     const result = runAction(context, invocation, action, runner) catch |err| {
         const message = try std.fmt.allocPrint(
             context.allocator,
-            "Failed to run keyring command: {t}",
-            .{err},
+            "Could not start the keyring command for the requested operation. {0s}\n\nTechnical details: {1s}",
+            .{ @import("diagnostics").cause(err), @errorName(err) },
         );
         defer context.allocator.free(message);
         try writeFailure(context, invocation, message, failureMessage(action));
@@ -86,7 +86,7 @@ fn executeWithRunner(
     }
 
     if (result.failed_key) |key| {
-        const message = try std.fmt.allocPrint(context.allocator, "Failed to sign key: {s}", .{key});
+        const message = try std.fmt.allocPrint(context.allocator, "Could not sign {0f} in the selected keyring.", .{@import("diagnostics").safe(key)});
         defer context.allocator.free(message);
         if (!invocation.globals.ui_mode) try output.writeFailure(context, message);
     }
@@ -259,12 +259,12 @@ fn successMessage(action: Action) []const u8 {
 
 fn failureMessage(action: Action) []const u8 {
     return switch (action) {
-        .init => "Failed to initialize keyring.",
-        .list => "Failed to list keys.",
-        .refresh => "Failed to refresh keys.",
-        .lsign => "Failed to sign keys.",
-        .populate => "Failed to populate keyring.",
-        .recv => "Failed to receive keys.",
+        .init => "Could not initialize the keyring.",
+        .list => "Could not list keys in the keyring.",
+        .refresh => "Could not refresh keys in the keyring.",
+        .lsign => "Could not sign the selected keys in the selected keyring.",
+        .populate => "Could not populate the keyring from the selected source.",
+        .recv => "Could not receive the selected keys from the configured keyserver.",
     };
 }
 
@@ -415,7 +415,7 @@ test "keyring local signing stops at the first failed key" {
 
     try std.testing.expectEqual(@as(u8, 9), try executeWithRunner(&tc.context, &outcome.dispatch, &counter));
     try std.testing.expectEqual(@as(usize, 2), counter.calls);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Failed to sign key: BBBB") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Could not sign BBBB") != null);
 }
 
 test "keyring UI mode emits transaction lifecycle frames" {

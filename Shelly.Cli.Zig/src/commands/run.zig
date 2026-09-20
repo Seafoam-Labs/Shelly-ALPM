@@ -92,8 +92,8 @@ fn executeWithRunner(
     const succeeded = runner.call(context, backend, kill, target) catch |err| {
         const message = try std.fmt.allocPrint(
             context.allocator,
-            "Unable to {s} {s}: {t}",
-            .{ if (kill) "stop" else "launch", backendName(backend), err },
+            "Could not {0f} {1f}: {2s}\n\nTechnical details: {3s}",
+            .{ @import("diagnostics").safe(if (kill) "stop" else "launch"), @import("diagnostics").safe(backendName(backend)), @import("diagnostics").cause(err), @errorName(err) },
         );
         defer context.allocator.free(message);
         if (invocation.globals.ui_mode)
@@ -121,7 +121,7 @@ fn listRunningWith(
         return try reportRunValidationFailure(context, invocation, "--list does not accept a package.");
 
     var result = lister.list(context) catch |err| {
-        const message = try std.fmt.allocPrint(context.allocator, "Unable to list running Flatpaks: {t}", .{err});
+        const message = try std.fmt.allocPrint(context.allocator, "Could not list running Flatpaks: {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
         defer context.allocator.free(message);
         if (invocation.globals.ui_mode)
             try output.writeErrorFrame(context, message)
@@ -589,11 +589,11 @@ fn writeCompletion(
 fn completionMessage(backend: Backend, kill: bool, succeeded: bool) []const u8 {
     return switch (backend) {
         .flatpak => if (kill)
-            if (succeeded) "Flatpak application stopped." else "Failed to stop Flatpak application."
-        else if (succeeded) "Flatpak application launched." else "Failed to launch Flatpak application.",
+            if (succeeded) "Flatpak application stopped." else "Could not stop the selected Flatpak."
+        else if (succeeded) "Flatpak application launched." else "Could not launch the selected Flatpak.",
         .appimage => if (kill)
-            if (succeeded) "AppImage stopped." else "Failed to stop AppImage."
-        else if (succeeded) "AppImage launched." else "Failed to launch AppImage.",
+            if (succeeded) "AppImage stopped." else "Could not stop the selected AppImage."
+        else if (succeeded) "AppImage launched." else "Could not launch the selected AppImage from the configured file.",
     };
 }
 

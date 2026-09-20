@@ -19,13 +19,22 @@ pub const JsonPackFrame = struct {
     }
 
     /// Returns an owned explanation from a failed command, skipping progress,
-    /// warnings, and malformed frames. Prefer the first (most specific) failure.
+    /// warnings, and malformed frames. Retain distinct failures in emission order.
     pub fn failureMessage(alloc: std.mem.Allocator, output: []const u8) !?[]u8 {
         const Failure = struct {
             @"$kind": []const u8 = "",
             ErrorMessage: []const u8 = "",
             Level: []const u8 = "Error",
+            Recoverable: bool = false,
         };
+        var messages: std.StringHashMap(void) = .init(alloc);
+        defer {
+            var keys = messages.keyIterator();
+            while (keys.next()) |key| alloc.free(key.*);
+            messages.deinit();
+        }
+        var text: std.Io.Writer.Allocating = .init(alloc);
+        defer text.deinit();
         var iterator = frames(output);
         while (iterator.next()) |payload| {
             const json = decodeBase64(alloc, payload) catch continue;
@@ -33,10 +42,20 @@ pub const JsonPackFrame = struct {
             const parsed = std.json.parseFromSlice(Failure, alloc, json, .{ .ignore_unknown_fields = true }) catch continue;
             defer parsed.deinit();
             if (std.mem.eql(u8, parsed.value.@"$kind", "alpm.error") and
-                std.mem.eql(u8, parsed.value.Level, "Error") and parsed.value.ErrorMessage.len > 0)
-                return try alloc.dupe(u8, parsed.value.ErrorMessage);
+                std.mem.eql(u8, parsed.value.Level, "Error") and !parsed.value.Recoverable and parsed.value.ErrorMessage.len > 0)
+            {
+                const message = parsed.value.ErrorMessage;
+                if (messages.contains(message)) continue;
+                const key = try alloc.dupe(u8, message);
+                messages.put(key, {}) catch |err| {
+                    alloc.free(key);
+                    return err;
+                };
+                if (text.written().len > 0) try text.writer.writeAll("\n\n");
+                try text.writer.writeAll(message);
+            }
         }
-        return null;
+        return if (text.written().len > 0) try alloc.dupe(u8, text.written()) else null;
     }
 
     pub fn decodeBase64(alloc: std.mem.Allocator, base64: []const u8) ![]u8 {
@@ -236,4 +255,33 @@ test "failureMessage skips invalid and informational frames and owns the full ex
     defer alloc.free(message);
     try std.testing.expectEqualStrings(explanation, message);
     try std.testing.expect((try JsonPackFrame.failureMessage(alloc, "[JSON]bad[/JSON]")) == null);
+}
+
+test "failureMessage retains independent failures and excludes duplicate and recoverable errors" {
+    const allocator = std.testing.allocator;
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    defer output.deinit();
+    const messages = [_]struct { text: []const u8, level: []const u8 = "Error", recoverable: bool = false }{
+        .{ .text = "cleanup warning", .level = "Warning" },
+        .{ .text = "optional failure", .recoverable = true },
+        .{ .text = "Could not install foo.\n\nTechnical details: FooFailed" },
+        .{ .text = "Could not install bar.\n\nTechnical details: BarFailed" },
+        .{ .text = "Could not install foo.\n\nTechnical details: FooFailed" },
+    };
+    for (messages) |entry| {
+        const json = try std.json.Stringify.valueAlloc(allocator, .{
+            .@"$kind" = "alpm.error",
+            .ErrorMessage = entry.text,
+            .Level = entry.level,
+            .Recoverable = entry.recoverable,
+        }, .{});
+        defer allocator.free(json);
+        const encoded = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+        defer allocator.free(encoded);
+        _ = std.base64.standard.Encoder.encode(encoded, json);
+        try output.writer.print("[JSON]{s}[/JSON]", .{encoded});
+    }
+    const message = (try JsonPackFrame.failureMessage(allocator, output.written())).?;
+    defer allocator.free(message);
+    try std.testing.expectEqualStrings("Could not install foo.\n\nTechnical details: FooFailed\n\nCould not install bar.\n\nTechnical details: BarFailed", message);
 }

@@ -214,8 +214,8 @@ pub const TransactionLog = struct {
                 if (envelope.parent_id != null) return;
                 const message: []const u8 = switch (completed.status) {
                     .success => "Transaction completed",
-                    .failed => "Transaction failed",
-                    .cancelled => "Transaction cancelled",
+                    .failed => "Could not complete the requested operation.",
+                    .cancelled => "Operation cancelled.",
                 };
                 self.writeEntry(
                     self.allocator,

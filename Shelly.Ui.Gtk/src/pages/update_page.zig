@@ -335,8 +335,8 @@ pub const UpdatePage = extern struct {
                 self.update_summary();
             },
             .Fail => {
-                gtk.Label.setLabel(p.error_label, translations._("Could not run shelly check-updates. Check the CLI output and try again."));
-                gtk.Label.setLabel(p.selected_label, translations._("Could not check for updates"));
+                gtk.Label.setLabel(p.error_label, translations._("Could not check for updates."));
+                gtk.Label.setLabel(p.selected_label, translations._("Could not check for updates."));
                 gtk.Spinner.stop(p.loading_spinner);
                 gtk.Stack.setVisibleChild(p.updates_stack, p.error_page.as(gtk.Widget));
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);

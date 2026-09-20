@@ -32,7 +32,7 @@ fn run(init: std.process.Init) !void {
             stdout,
         ) catch |err| switch (err) {
             error.GpgFailed => {
-                stderrPrint(init.io, "error: failed to update trust database.", .{});
+                stderrPrint(init.io, "Could not update the trust database.", .{});
                 std.process.exit(1);
             },
             else => return err,
@@ -43,7 +43,7 @@ fn run(init: std.process.Init) !void {
             opts.key_ids,
         ) catch |err| switch (err) {
             error.GpgFailed => {
-                stderrPrint(init.io, "error: gpg command failed.", .{});
+                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), @import("diagnostics").safe(opts.gpgdir) });
                 std.process.exit(1);
             },
             else => return err,
@@ -54,7 +54,7 @@ fn run(init: std.process.Init) !void {
             opts.key_ids,
         ) catch |err| switch (err) {
             error.GpgFailed => {
-                stderrPrint(init.io, "error: gpg command failed.", .{});
+                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), @import("diagnostics").safe(opts.gpgdir) });
                 std.process.exit(1);
             },
             else => return err,
@@ -65,7 +65,7 @@ fn run(init: std.process.Init) !void {
             opts.key_ids,
         ) catch |err| switch (err) {
             error.GpgFailed => {
-                stderrPrint(init.io, "error: gpg command failed.", .{});
+                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), @import("diagnostics").safe(opts.gpgdir) });
                 std.process.exit(1);
             },
             else => return err,
@@ -77,7 +77,7 @@ fn run(init: std.process.Init) !void {
             opts.key_ids,
         ) catch |err| switch (err) {
             error.GpgFailed => {
-                stderrPrint(init.io, "error: gpg command failed.", .{});
+                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), @import("diagnostics").safe(opts.gpgdir) });
                 std.process.exit(1);
             },
             else => return err,
@@ -92,16 +92,16 @@ fn run(init: std.process.Init) !void {
             stdout,
         ) catch |err| switch (err) {
             error.NoTargetsSpecified => {
-                stderrPrint(init.io, "error: no targets specified.", .{});
+                stderrPrint(init.io, "Specify at least one key ID for this operation. See shelly-key --help for usage.", .{});
                 std.process.exit(1);
             },
             error.NoSecretKey => {
-                stderrPrint(init.io, "error: There is no secret key available to sign with.", .{});
-                stderrPrint(init.io, "Use 'shelly-key --init' to generate a default secret key.", .{});
+                stderrPrint(init.io, "Could not sign keys because keyring {f} has no secret signing key.", .{@import("diagnostics").safe(opts.gpgdir)});
+                stderrPrint(init.io, "Initialize the intended keyring before signing keys: shelly-key --init {f}{s}", .{ @import("diagnostics").shellQuote(opts.gpgdir), if (opts.user) " --user" else "" });
                 std.process.exit(1);
             },
             error.GpgFailed => {
-                stderrPrint(init.io, "error: gpg command failed.", .{});
+                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), @import("diagnostics").safe(opts.gpgdir) });
                 std.process.exit(1);
             },
             else => return err,
@@ -118,11 +118,11 @@ fn run(init: std.process.Init) !void {
             stdout,
         ) catch |err| switch (err) {
             error.NoTargetsSpecified => {
-                stderrPrint(init.io, "error: no targets specified.", .{});
+                stderrPrint(init.io, "Specify at least one key ID for this operation. See shelly-key --help for usage.", .{});
                 std.process.exit(1);
             },
             error.GpgFailed => {
-                stderrPrint(init.io, "error: remote key not fetched correctly from keyserver.", .{});
+                stderrPrint(init.io, "Could not receive the selected keys from the configured keyserver. Check the key ID and keyserver before retrying.", .{});
                 std.process.exit(1);
             },
             else => return err,
@@ -139,11 +139,11 @@ fn run(init: std.process.Init) !void {
             stdout,
         ) catch |err| switch (err) {
             error.KeyNotFoundLocally => {
-                stderrPrint(init.io, "error: a specified key could not be found locally.", .{});
+                stderrPrint(init.io, "Could not refresh the selected keys because they are not in keyring {f}. Check the key IDs or receive the keys first.", .{@import("diagnostics").safe(opts.gpgdir)});
                 std.process.exit(1);
             },
             error.GpgFailed => {
-                stderrPrint(init.io, "error: could not update the specified key(s).", .{});
+                stderrPrint(init.io, "Could not refresh the selected keys from the configured keyserver.", .{});
                 std.process.exit(1);
             },
             else => return err,
@@ -161,30 +161,30 @@ fn run(init: std.process.Init) !void {
             error.TrustdbMissing => {
                 stderrPrint(
                     init.io,
-                    "error: The package-signing keyring at '{s}' is not initialized.",
-                    .{opts.gpgdir},
+                    "The package-signing keyring at {0f} is not initialized. Initialize this keyring before populating it.",
+                    .{@import("diagnostics").safe(opts.gpgdir)},
                 );
                 stderrPrint(
                     init.io,
-                    "Run 'shelly-key --init {s}' first.",
-                    .{opts.gpgdir},
+                    "Initialize the keyring at {0f} first.",
+                    .{@import("diagnostics").safe(opts.gpgdir)},
                 );
                 std.process.exit(1);
             },
             error.NoSecretKey => {
-                stderrPrint(init.io, "error: There is no secret key available to sign with.", .{});
-                stderrPrint(init.io, "Use 'shelly-key --init' to generate a default secret key.", .{});
+                stderrPrint(init.io, "Could not sign keys because keyring {f} has no secret signing key.", .{@import("diagnostics").safe(opts.gpgdir)});
+                stderrPrint(init.io, "Initialize the intended keyring before signing keys: shelly-key --init {f}{s}", .{ @import("diagnostics").shellQuote(opts.gpgdir), if (opts.user) " --user" else "" });
                 std.process.exit(1);
             },
             error.NoKeyringsFound => {
-                stderrPrint(init.io, "error: No keyring files exist in {s}.", .{opts.populate_from});
+                stderrPrint(init.io, "No keyring files were found in {0f}. Check --populate-from or install the package that supplies the requested keyring files.", .{@import("diagnostics").safe(opts.populate_from)});
                 std.process.exit(1);
             },
             error.PopulateFromMissing => {
                 stderrPrint(
                     init.io,
-                    "error: The keyring source directory '{s}' does not exist.",
-                    .{opts.populate_from},
+                    "The keyring source directory {0f} does not exist. Check --populate-from or install the package that supplies the keyring files.",
+                    .{@import("diagnostics").safe(opts.populate_from)},
                 );
                 stderrPrint(
                     init.io,
@@ -205,8 +205,8 @@ fn run(init: std.process.Init) !void {
                     if (!exists) {
                         stderrPrint(
                             init.io,
-                            "error: The keyring file {s}/{s}.gpg does not exist.",
-                            .{ opts.populate_from, id },
+                            "Keyring file {0f}/{1f}.gpg does not exist. Check the requested keyring name and source directory.",
+                            .{ @import("diagnostics").safe(opts.populate_from), @import("diagnostics").safe(id) },
                         );
                     }
                 }
@@ -218,35 +218,39 @@ fn run(init: std.process.Init) !void {
 }
 
 fn stderrPrint(io: Io, comptime fmt: []const u8, args: anytype) void {
-    var buf: [512]u8 = undefined;
-    const msg = std.fmt.bufPrint(&buf, fmt ++ "\n", args) catch return;
+    var buf: [4096]u8 = undefined;
+    const msg = std.fmt.bufPrint(&buf, fmt ++ "\n", args) catch "Could not display the complete keyring error because its details exceed the output buffer.\n";
     Io.File.stderr().writeStreamingAll(io, msg) catch return;
 }
 
 pub fn main(init: std.process.Init) !void {
     run(init) catch |err| switch (err) {
         error.UnknownArgument => {
-            stderrPrint(init.io, "error: unknown or invalid argument(s). See --help for usage.", .{});
+            stderrPrint(init.io, "An unrecognized or invalid argument was supplied. See shelly-key --help for usage.", .{});
             std.process.exit(1);
         },
         error.MultipleOperations => {
-            stderrPrint(init.io, "error: multiple operations specified; run each operation separately.", .{});
+            stderrPrint(init.io, "Multiple keyring operations were specified. Run each operation separately.", .{});
             std.process.exit(1);
         },
         error.MissingArgumentValue => {
-            stderrPrint(init.io, "error: option requires an argument. See --help for usage.", .{});
+            stderrPrint(init.io, "An option requires a value. See shelly-key --help for usage.", .{});
             std.process.exit(1);
         },
         error.NoElevator => {
-            stderrPrint(init.io, "error: no privilege elevator found (install sudo, doas, or pkexec)", .{});
+            stderrPrint(init.io, "Could not request administrator privileges because no authorization helper is installed. Install or configure sudo, doas, or pkexec.", .{});
             std.process.exit(1);
         },
         error.ExecFailed => {
-            stderrPrint(init.io, "error: failed to re-exec with elevated privileges", .{});
+            stderrPrint(init.io, "Could not restart shelly-key with administrator privileges.", .{});
             std.process.exit(1);
         },
-        // Unexpected errors (e.g. OutOfMemory) get the default stack trace.
-        else => return err,
+        else => {
+            stderrPrint(init.io, "Could not complete the keyring operation. {s}\n\nTechnical details: {s}", .{
+                @import("diagnostics").cause(err), @errorName(err),
+            });
+            std.process.exit(1);
+        },
     };
     std.process.exit(0);
 }

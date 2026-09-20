@@ -86,7 +86,7 @@ pub const AppRunner = struct {
 
         const terminal = self.findTerminalNoAlloc() orelse {
             log.warn(
-                "no terminal emulator found (checked $TERMINAL and {d} candidates)",
+                "Could not start the update command because no supported terminal emulator was found. Set TERMINAL to an installed terminal or install a supported terminal emulator.\n\nTechnical details: {0d}",
                 .{terminal_candidates.len},
             );
             return error.NoTerminal;
@@ -107,12 +107,12 @@ pub const AppRunner = struct {
             .stdout = .ignore,
             .stderr = .ignore,
         }) catch |e| {
-            log.err("failed to spawn terminal '{s}': {any}", .{ terminal, e });
+            log.err("Could not open terminal {0f} to run updates. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(terminal), @import("diagnostics").cause(e), @errorName(e) });
             return e;
         };
 
         _ = child.wait(runtime.io) catch |e| {
-            log.warn("failed to wait for terminal process: {any}", .{e});
+            log.warn("Could not collect the result of the update terminal. {0s} The update status could not be confirmed.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
         };
         log.info("update finished, terminal closed", .{});
 
@@ -125,7 +125,7 @@ pub const AppRunner = struct {
             "/com/shellyorg/shelly",
             self.activation_token,
         ) catch |e| {
-            log.warn("activate failed ({any}); spawning shelly-ui directly", .{e});
+            log.warn("Could not activate the existing Shelly window. {0s} Attempting to start shelly-ui directly.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
             try self.spawnWithToken(&.{});
             return;
         };
@@ -135,7 +135,7 @@ pub const AppRunner = struct {
     fn spawnWithToken(self: *AppRunner, extra_args: []const []const u8) !void {
         const bin = self.shellyUiBin();
         if (!self.isCommandAvailable(bin)) {
-            log.err("'{s}' not found on PATH; cannot launch UI", .{bin});
+            log.err("Could not open Shelly because {0f} was not found on PATH. Check that shelly-ui is installed and accessible.", .{@import("diagnostics").safe(bin)});
             return error.ShellyUiNotFound;
         }
 
@@ -161,11 +161,11 @@ pub const AppRunner = struct {
             .stdout = .ignore,
             .stderr = .ignore,
         }) catch |e| {
-            log.err("failed to spawn '{s}': {any}", .{ bin, e });
+            log.err("Could not start {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(bin), @import("diagnostics").cause(e), @errorName(e) });
             return e;
         };
         _ = child.wait(runtime.io) catch |e| {
-            log.warn("failed to reap spawned process: {any}", .{e});
+            log.warn("Could not collect the result of the required executable. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
         };
         log.info("spawned '{s}' (token: {s}, args: {s})", .{
             bin,
@@ -176,12 +176,12 @@ pub const AppRunner = struct {
 
     pub fn quitUi(self: *AppRunner, service: *Service) !void {
         const pid = service.getProcessId("com.shellyorg.shelly") catch |e| {
-            log.warn("could not resolve shelly-ui pid: {any}", .{e});
+            log.warn("Could not find the running Shelly window process. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
             return;
         };
         _ = self;
         std.posix.kill(@intCast(pid), std.posix.SIG.TERM) catch |e| {
-            log.err("failed to signal pid {d}: {any}", .{ pid, e });
+            log.err("Could not stop Shelly window process {0d}. {1s}\n\nTechnical details: {2s}", .{ pid, @import("diagnostics").cause(e), @errorName(e) });
             return e;
         };
         log.info("sent SIGTERM to shelly-ui (pid {d})", .{pid});

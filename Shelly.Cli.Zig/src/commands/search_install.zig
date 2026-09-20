@@ -97,9 +97,9 @@ fn executeWith(
     };
     const partial_results = if (discovery.candidates.len > 0) " Results from the other package sources are still available." else "";
     if (discovery.standard_error) |err|
-        try context.stderr.print("warning: Could not refresh standard package information.{s}\n\nTechnical details: {t}\n", .{ partial_results, err });
+        try context.stderr.print("warning: Could not refresh standard-package search results. {0s} {1f}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").cause(err), @import("diagnostics").safe(partial_results), @errorName(err) });
     if (discovery.aur_error) |err|
-        try context.stderr.print("warning: Could not refresh AUR package information.{s}\n\nTechnical details: {t}\n", .{ partial_results, err });
+        try context.stderr.print("warning: Could not refresh AUR search results. {0s} {1f}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").cause(err), @import("diagnostics").safe(partial_results), @errorName(err) });
 
     const candidates = try prepareCandidates(context.allocator, discovery.candidates, query);
     if (candidates.len == 0) {
@@ -112,18 +112,18 @@ fn executeWith(
     else blk: {
         if (!context.stdin_is_tty or !context.stdout_is_tty or context.stdin == null) {
             try context.stderr.writeAll(
-                "Interactive package selection requires a terminal; use --no-confirm to select the closest match.\n",
+                "Interactive package selection requires a terminal. Run this command in a terminal or install an explicit package name with its source.\n",
             );
             return 1;
         }
         break :blk try promptSelection(context, query, candidates);
     };
     const index = selected_index orelse {
-        try context.stdout.writeAll("Installation cancelled.\n");
+        try context.stdout.writeAll("Operation cancelled.\n");
         return 0;
     };
     return installer.call(context, candidates[index], invocation.globals.no_confirm, aur_override) catch |err| {
-        try context.stderr.print("Unable to start installation: {t}\n", .{err});
+        try context.stderr.print("Could not start installation: {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
         return 1;
     };
 }
@@ -560,5 +560,5 @@ test "no-confirm installs the final closest candidate and preserves partial resu
     try std.testing.expectEqual(Source.standard, capture.source.?);
     try std.testing.expect(capture.no_confirm);
     try std.testing.expectEqualStrings(aur_url.default_base, capture.aur_override.?);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stderr.writer.buffered(), "warning: Could not refresh AUR package information") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stderr.writer.buffered(), "warning: Could not refresh AUR search results") != null);
 }

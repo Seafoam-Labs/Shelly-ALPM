@@ -102,7 +102,7 @@ pub fn dispatch(
 
     if (!invocation.globals.ui_mode) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-            try context.stderr.print("Unable to elevate downgrade: {t}\n", .{err});
+            try context.stderr.print("Could not obtain administrator privileges for the downgrade. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -152,8 +152,8 @@ fn runWithRunner(
     if (candidates.candidates.len == 0) {
         const message = try std.fmt.allocPrint(
             context.allocator,
-            "No downgrade options found for: {s}",
-            .{package_name},
+            "No older version of {0f} was found in the configured downgrade sources. Check the available versions before selecting a downgrade target.",
+            .{@import("diagnostics").safe(package_name)},
         );
         defer context.allocator.free(message);
         return try reportFailure(context, invocation, message);
@@ -196,12 +196,12 @@ fn runWithRunner(
     if (!invocation.globals.no_confirm and
         !try confirm(context, "Do you want to proceed with the installation?", true))
     {
-        try context.stdout.writeAll("Operation Cancelled.\n");
+        try context.stdout.writeAll("Operation cancelled.\n");
         return 0;
     }
 
     if (!try executeStandard(context, invocation, selected, runner)) {
-        try output.writeFailure(context, "Downgrade failed. See errors above.");
+        try output.writeFailure(context, "Could not downgrade the requested package.");
         return 1;
     }
 
@@ -226,12 +226,12 @@ fn runWithRunner(
 fn validationMessage(invocation: *const parser.Invocation) ?[]const u8 {
     if (invocation.positionals.len == 0 or
         std.mem.trim(u8, invocation.positionals[0], " \t\r\n").len == 0)
-        return "Error: No package specified.";
+        return "Specify at least one package name. See the command help for usage.";
     const has_target = targetValue(invocation) != null;
     if (has_target and optionEnabled(invocation, "--oldest"))
-        return "Error: Cannot combine --target with --oldest.";
+        return "Cannot combine --target with --oldest.";
     if (has_target and optionEnabled(invocation, "--list-options"))
-        return "Error: Cannot combine --target with --list-options.";
+        return "Cannot combine --target with --list-options.";
     return null;
 }
 
@@ -242,11 +242,11 @@ fn reportDiscoveryFailure(
     err: anyerror,
 ) !u8 {
     if (err == DowngradeError.PackageNotInstalled)
-        return reportFailure(context, invocation, "Error: Package must be installed to downgrade");
+        return reportFailure(context, invocation, "Could not downgrade the requested package because it is not installed. Check the package name and installed-package list.");
     const message = try std.fmt.allocPrint(
         context.allocator,
-        "Unable to find downgrade options for {s}: {t}",
-        .{ package_name, err },
+        "Could not find downgrade options for {0f}: {1s}\n\nTechnical details: {2s}",
+        .{ @import("diagnostics").safe(package_name), @import("diagnostics").cause(err), @errorName(err) },
     );
     defer context.allocator.free(message);
     return reportFailure(context, invocation, message);
@@ -414,10 +414,10 @@ fn executeUi(
     try ui_operation.flush(context);
 
     runner.install(context, &operation_context, candidate) catch |err| {
-        const message = try std.fmt.allocPrint(context.allocator, "Downgrade failed: {t}", .{err});
+        const message = try std.fmt.allocPrint(context.allocator, "Could not downgrade the requested package. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
         defer context.allocator.free(message);
         try output.writeErrorFrame(context, message);
-        try output.writeAlpmInfoFrame(context, "TransactionFailed", "Downgrade failed.");
+        try output.writeAlpmInfoFrame(context, "TransactionFailed", "Could not downgrade the requested package.");
         try ui_operation.flush(context);
         return 1;
     };
@@ -425,12 +425,12 @@ fn executeUi(
         runner.ignore(context, &operation_context, package_name) catch |err| {
             const message = try std.fmt.allocPrint(
                 context.allocator,
-                "Failed to add package to IgnorePkg: {t}",
-                .{err},
+                "The package was downgraded, but the requested package could not be added to IgnorePkg. {0s} It may be upgraded again until the ignore setting is saved.\n\nTechnical details: {1s}",
+                .{ @import("diagnostics").cause(err), @errorName(err) },
             );
             defer context.allocator.free(message);
             try output.writeErrorFrame(context, message);
-            try output.writeAlpmInfoFrame(context, "TransactionFailed", "Package downgraded, but IgnorePkg could not be updated.");
+            try output.writeAlpmInfoFrame(context, "TransactionFailed", "The package was downgraded, but the requested package could not be added to IgnorePkg. It may be upgraded again until the ignore setting is saved.");
             try ui_operation.flush(context);
             return 1;
         };
@@ -453,8 +453,8 @@ fn executeIgnore(
     runner.ignore(context, &operation_context, package_name) catch |err| {
         const message = try std.fmt.allocPrint(
             context.allocator,
-            "Error adding {s} to IgnorePkg: {t}",
-            .{ package_name, err },
+            "The package was downgraded, but {0f} could not be added to IgnorePkg. {1s} It may be upgraded again until the ignore setting is saved.\n\nTechnical details: {2s}",
+            .{ @import("diagnostics").safe(package_name), @import("diagnostics").cause(err), @errorName(err) },
         );
         defer context.allocator.free(message);
         _ = try reportFailure(context, invocation, message);
@@ -626,7 +626,7 @@ test "downgrade validation rejects missing packages and incompatible target mode
 
     var outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{"downgrade"});
     try std.testing.expectEqual(@as(?u8, 1), try dispatchWithRunner(&tc.context, &outcome.dispatch, Unused{}));
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "No package specified") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Specify at least one package name") != null);
 
     tc.stdout.writer.end = 0;
     outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{

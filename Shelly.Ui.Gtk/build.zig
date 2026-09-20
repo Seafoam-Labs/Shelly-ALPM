@@ -7,6 +7,7 @@ const version = std.SemanticVersion.parse(versionString) catch @panic("Bad versi
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const diagnostics = b.dependency("shelly_diagnostics", .{ .target = target, .optimize = optimize }).module("diagnostics");
 
     const gobject = b.dependency("gobject", .{
         .target = target,
@@ -22,6 +23,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    shelly_ui_gtk.addImport("diagnostics", diagnostics);
     shelly_ui_gtk.addImport("glib2", gobject.module("glib2"));
     shelly_ui_gtk.addImport("gobject2", gobject.module("gobject2"));
     shelly_ui_gtk.addImport("gio2", gobject.module("gio2"));
@@ -63,6 +65,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    exe.root_module.addImport("diagnostics", diagnostics);
 
     exe.root_module.addImport("ShellyHttp", shelly_http.module("ShellyHttp"));
     b.installArtifact(exe);

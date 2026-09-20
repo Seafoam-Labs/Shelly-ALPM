@@ -55,7 +55,7 @@ pub fn dispatch(
         (operation == .pacfiles and pacfiles.requiresElevation(invocation));
     if (needs_elevation and !elevation.isRoot()) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-            try context.stderr.print("Unable to elevate utility operation: {t}\n", .{err});
+            try context.stderr.print("Could not obtain administrator privileges for utility operation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -153,7 +153,7 @@ fn fixPermissions(
     runner: anytype,
 ) anyerror!u8 {
     const user = try invokingUser(context) orelse {
-        const message = "Could not determine the invoking user (SUDO_USER, DOAS_USER, or PKEXEC_UID).";
+        const message = "Could not identify the regular user whose Shelly directories need repair. Run this command from your regular user session and approve authorization when requested.";
         try writeResponseMessage(context, invocation, false, message);
         return 1;
     };
@@ -170,7 +170,7 @@ fn fixPermissions(
         found = true;
         const exit_code = runner.run(context, user, path) catch |err| {
             failed = true;
-            const message = try std.fmt.allocPrint(context.allocator, "Failed to fix ownership for {s}: {t}", .{ path, err });
+            const message = try std.fmt.allocPrint(context.allocator, "Could not restore ownership of {0f} to the invoking user. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(path), @import("diagnostics").cause(err), @errorName(err) });
             try writeResponseMessage(context, invocation, false, message);
             continue;
         };
@@ -181,8 +181,8 @@ fn fixPermissions(
             failed = true;
             const message = try std.fmt.allocPrint(
                 context.allocator,
-                "Failed to fix ownership for {s}: chown exited with code {d}",
-                .{ path, exit_code },
+                "Could not restore ownership of {0f} to the invoking user.\n\nTechnical details: {1d}",
+                .{ @import("diagnostics").safe(path), exit_code },
             );
             try writeResponseMessage(context, invocation, false, message);
         }
@@ -205,7 +205,7 @@ fn repairDb(
         return 0;
     };
     std.Io.Dir.deleteFileAbsolute(context.io, db_lock) catch |err| {
-        const message = try std.fmt.allocPrint(context.allocator, "Failed to remove the package database lock: {t}", .{err});
+        const message = try std.fmt.allocPrint(context.allocator, "Could not remove the package database lock at {0f}. {1s} Only remove a leftover lock after confirming that no package manager is running.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(db_lock), @import("diagnostics").cause(err), @errorName(err) });
         try writeResponseMessage(context, invocation, false, message);
         return 1;
     };

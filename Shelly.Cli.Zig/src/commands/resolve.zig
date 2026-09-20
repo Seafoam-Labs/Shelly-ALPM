@@ -71,7 +71,7 @@ pub fn dispatch(
             if (!databases_available and source == .standard) {
                 for (results) |*result| result.resolution_error = .{
                     .code = "StandardUnavailable",
-                    .message = "The configured standard package databases could not be read.",
+                    .message = "Could not read the configured standard-package databases.",
                 };
             }
             if (databases_available) for (invocation.positionals, results) |requested, *result| {
@@ -98,7 +98,7 @@ pub fn dispatch(
         } else if (source == .standard) {
             for (results) |*result| result.resolution_error = .{
                 .code = "StandardUnavailable",
-                .message = "The configured standard package databases could not be opened.",
+                .message = "Could not read the configured standard-package databases.",
             };
         }
     }
@@ -140,7 +140,7 @@ pub fn dispatch(
                 } else if (response.error_message) |message| {
                     result.resolution_error = try missingAurError(allocator, message);
                 } else {
-                    result.resolution_error = .{ .code = "NotFound", .message = "No exact package name was found." };
+                    result.resolution_error = .{ .code = "NotFound", .message = "Could not find an exact match for the requested package in the selected sources. Check the package name or select another source." };
                 }
             }
         }
@@ -148,7 +148,7 @@ pub fn dispatch(
 
     for (results) |*result| {
         if (result.source_kind == null and result.resolution_error == null) {
-            result.resolution_error = .{ .code = "NotFound", .message = "No exact package name was found." };
+            result.resolution_error = .{ .code = "NotFound", .message = "Could not find an exact match for the requested package in the selected sources. Check the package name or select another source." };
         }
     }
     try writeJson(context.stdout, results);
@@ -219,7 +219,7 @@ fn missingAurError(allocator: std.mem.Allocator, partial_failure: ?[]const u8) !
         .code = "AurPartialFailure",
         .message = try allocator.dupe(u8, message),
     };
-    return .{ .code = "NotFound", .message = "No exact package name was found." };
+    return .{ .code = "NotFound", .message = "Could not find an exact match for the requested package in the selected sources. Check the package name or select another source." };
 }
 
 fn optionValue(invocation: *const parser.Invocation, name: []const u8) ?[]const u8 {

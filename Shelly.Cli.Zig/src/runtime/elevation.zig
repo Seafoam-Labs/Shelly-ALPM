@@ -474,7 +474,7 @@ fn buildInvokingUserArguments(
     arguments: []const []const u8,
 ) ![]const []const u8 {
     if (isRun0(elevator)) {
-        const result = try allocator.alloc([]const u8, arguments.len + 18);
+        const result = try allocator.alloc([]const u8, arguments.len + 20);
         result[0] = elevator;
         result[1] = "--user";
         result[2] = user;
@@ -492,16 +492,18 @@ fn buildInvokingUserArguments(
         result[14] = runtime_environment;
         result[15] = "--setenv";
         result[16] = bus_environment;
-        result[17] = executable;
-        @memcpy(result[18..], arguments);
+        result[17] = "--setenv";
+        result[18] = "PATH=" ++ Zigalpm.process_runner.build_path.baseline;
+        result[19] = executable;
+        @memcpy(result[20..], arguments);
         return result;
     }
 
-    const result = try allocator.alloc([]const u8, arguments.len + 13);
+    const result = try allocator.alloc([]const u8, arguments.len + 14);
     result[0] = elevator;
     result[1] = "-u";
     result[2] = user;
-    result[3] = "env";
+    result[3] = "/usr/bin/env";
     result[4] = "-i";
     result[5] = home_environment;
     result[6] = config_environment;
@@ -510,8 +512,9 @@ fn buildInvokingUserArguments(
     result[9] = bin_environment;
     result[10] = runtime_environment;
     result[11] = bus_environment;
-    result[12] = executable;
-    @memcpy(result[13..], arguments);
+    result[12] = "PATH=" ++ Zigalpm.process_runner.build_path.baseline;
+    result[13] = executable;
+    @memcpy(result[14..], arguments);
     return result;
 }
 
@@ -763,7 +766,7 @@ test "calling-user arguments use a clean invoking-user environment" {
         "sudo",
         "-u",
         "tester",
-        "env",
+        "/usr/bin/env",
         "-i",
         "HOME=/home/tester",
         "XDG_CONFIG_HOME=/home/tester/.config",
@@ -772,6 +775,7 @@ test "calling-user arguments use a clean invoking-user environment" {
         "XDG_BIN_HOME=/home/tester/.local/bin",
         "XDG_RUNTIME_DIR=/run/user/1000",
         "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
+        "PATH=" ++ Zigalpm.process_runner.build_path.baseline,
         "/usr/bin/shelly",
         "upgrade",
         "flatpak",
@@ -817,6 +821,8 @@ test "run0 invoking-user arguments use native options" {
         "XDG_RUNTIME_DIR=/run/user/1000",
         "--setenv",
         "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
+        "--setenv",
+        "PATH=" ++ Zigalpm.process_runner.build_path.baseline,
         "/usr/bin/shelly",
         "upgrade",
         "flatpak",

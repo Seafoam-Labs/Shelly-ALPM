@@ -1,4 +1,6 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
+const translations = @import("../../helpers/translations.zig");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gio = bindings.gio;
@@ -59,6 +61,8 @@ pub const PkgbuildReviewDialog = extern struct {
         const p = self.priv();
         p.generation = 0;
         p.arena = null;
+        p.loaded = false;
+        p.responded = false;
 
         support.connectLifecycle(Self, self);
     }
@@ -94,7 +98,6 @@ pub const PkgbuildReviewDialog = extern struct {
 
     pub fn onUnmap(self: *Self) void {
         const p = self.priv();
-        if (!p.loaded) return;
         p.loaded = false;
 
         p.generation += 1;
@@ -106,62 +109,69 @@ pub const PkgbuildReviewDialog = extern struct {
         }
     }
 
+    // Allocate the result on the main thread so every worker failure can post
+    // completion without allocating again or touching GTK from a worker thread.
+    const Result = struct {
+        page: *Self,
+        name: []const u8,
+        arena: *std.heap.ArenaAllocator,
+        generation: u32,
+        pkgbuild: ?PkgBuild = null,
+        detail: ?[]u8 = null,
+        err: ?anyerror = null,
+    };
+
     fn start_load(self: *Self, package_name: []const u8) void {
         const p = self.priv();
         p.generation += 1;
         self.set_page_state(.Loading);
-
-        const thread = std.Thread.spawn(.{}, worker, .{ self, package_name, p.generation }) catch {
-            self.set_page_state(.Error);
+        const arena = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch {
+            self.show_failure(error.OutOfMemory, null);
+            return;
+        };
+        arena.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+        const allocator = arena.allocator();
+        const result = allocator.create(Result) catch {
+            arena.deinit();
+            std.heap.c_allocator.destroy(arena);
+            self.show_failure(error.OutOfMemory, null);
+            return;
+        };
+        const name = allocator.dupe(u8, package_name) catch {
+            arena.deinit();
+            std.heap.c_allocator.destroy(arena);
+            self.show_failure(error.OutOfMemory, null);
+            return;
+        };
+        result.* = .{ .page = self, .name = name, .arena = arena, .generation = p.generation };
+        _ = self.as(gobject.Object).ref();
+        const thread = std.Thread.spawn(.{}, worker, .{result}) catch |err| {
+            self.as(gobject.Object).unref();
+            arena.deinit();
+            std.heap.c_allocator.destroy(arena);
+            self.show_failure(err, null);
             return;
         };
         thread.detach();
     }
 
-    fn worker(page: *Self, name: []const u8, gen: u32) void {
-        const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
-        arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-        const alloc = arena_ptr.allocator();
-
-        std.debug.print("worker: \n", .{});
-
-        var threaded: std.Io.Threaded = .init(alloc, .{});
+    fn worker(result: *Result) void {
+        defer _ = glib.idleAdd(&on_complete, result);
+        const allocator = result.arena.allocator();
+        var threaded: std.Io.Threaded = .init(allocator, .{});
         defer threaded.deinit();
-        const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-
-        const parsed = cli.fetch_pkgbuild(name) catch |err| {
-            std.debug.print("worker: fetch_pkgbuild failed: {s} err={any}\n", .{ name, err });
-            arena_ptr.deinit();
-            page.set_page_state(.Error);
-            std.heap.c_allocator.destroy(arena_ptr);
+        const cli = ShellyCli{ .allocator = allocator, .io = threaded.io(), .failure_detail = &result.detail };
+        const parsed = cli.fetch_pkgbuild(result.name) catch |err| {
+            result.err = err;
             return;
         };
-
-        for (parsed.value) |v| {
-            const clean_v_name = std.mem.trimEnd(u8, v.Name, "\x00");
-            const clean_name = std.mem.trimEnd(u8, name, "\x00");
-
-            if (std.mem.eql(u8, clean_v_name, clean_name)) {
-                std.debug.print("worker: found match: v.Name={s}\n", .{v.Name});
-                post_result(page, parsed.value[0], arena_ptr, gen);
+        for (parsed.value) |package| {
+            if (std.mem.eql(u8, std.mem.trimEnd(u8, package.Name, "\x00"), std.mem.trimEnd(u8, result.name, "\x00"))) {
+                result.pkgbuild = package;
+                return;
             }
         }
-    }
-
-    const Result = struct { page: *Self, pkgbuild: PkgBuild, arena: *std.heap.ArenaAllocator, generation: u64 };
-
-    fn post_result(page: *Self, pkgbuild: PkgBuild, arena: *std.heap.ArenaAllocator, gen: u64) void {
-        const r = std.heap.c_allocator.create(Result) catch {
-            arena.deinit();
-            std.heap.c_allocator.destroy(arena);
-            std.debug.print("post_result failed: \n", .{});
-            page.set_page_state(.Error);
-            return;
-        };
-        std.debug.print("post_result: \n", .{});
-        r.* = .{ .page = page, .pkgbuild = pkgbuild, .arena = arena, .generation = gen };
-        _ = glib.idleAdd(&on_complete, r);
-        page.set_page_state(.Loaded);
+        result.err = error.PackageNotFound;
     }
 
     fn on_cancel(self: *Self) callconv(.c) void {
@@ -173,46 +183,75 @@ pub const PkgbuildReviewDialog = extern struct {
         return 0;
     }
 
+    fn show_failure(self: *Self, err: anyerror, detail: ?[]const u8) void {
+        const heading = translations._("Could not load the PKGBUILD preview.");
+        const message = std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}\n{s}", .{
+            heading, detail orelse diagnostics.cause(err),
+        }, 0) catch {
+            gtk.Label.setLabel(self.priv().error_label, heading);
+            self.set_page_state(.Error);
+            return;
+        };
+        defer std.heap.c_allocator.free(message);
+        gtk.Label.setLabel(self.priv().error_label, message);
+        self.set_page_state(.Error);
+    }
+
     fn set_page_state(self: *Self, state: PageState) void {
-        switch (state) {
-            .Loading => self.priv().loading_spinner.as(gtk.Spinner).start(),
-            .Loaded => self.priv().loading_spinner.as(gtk.Spinner).stop(),
-            .Error => gtk.Widget.setVisible(self.priv().error_label.as(gtk.Widget), 1),
-        }
+        const p = self.priv();
+        p.state = state;
+        gtk.Widget.setVisible(p.loading_spinner.as(gtk.Widget), @intFromBool(state == .Loading));
+        gtk.Widget.setVisible(p.error_label.as(gtk.Widget), @intFromBool(state == .Error));
+        if (state == .Loading) p.loading_spinner.start() else p.loading_spinner.stop();
     }
 
     fn on_complete(data: ?*anyopaque) callconv(.c) c_int {
-        const r: *Result = @ptrCast(@alignCast(data.?));
-        defer std.heap.c_allocator.destroy(r);
-        const p = r.page.priv();
-
-        if (r.generation != p.generation) {
-            r.arena.deinit();
-            std.heap.c_allocator.destroy(r.arena);
+        const result: *Result = @ptrCast(@alignCast(data.?));
+        const page = result.page;
+        const arena = result.arena;
+        var transferred = false;
+        defer {
+            if (!transferred) {
+                arena.deinit();
+                std.heap.c_allocator.destroy(arena);
+            }
+            page.as(gobject.Object).unref();
+        }
+        const p = page.priv();
+        if (result.generation != p.generation) return 0;
+        if (result.err) |err| {
+            const message = diagnostics.format(arena.allocator(), err, .{
+                .operation = "the PKGBUILD preview",
+                .subject = result.name,
+                .detail = result.detail,
+            }) catch null;
+            page.show_failure(err, message);
             return 0;
         }
-
-        if (p.arena) |old| {
-            old.deinit();
-            std.heap.c_allocator.destroy(old);
-        }
-        p.arena = r.arena;
-
-        std.debug.print("r.pkgbuild.PkgBuild: {d}", .{r.pkgbuild.PkgBuild.len});
-
+        const package = result.pkgbuild orelse {
+            page.show_failure(error.PackageNotFound, null);
+            return 0;
+        };
+        const text = arena.allocator().dupeZ(u8, package.PkgBuild) catch {
+            page.show_failure(error.OutOfMemory, null);
+            return 0;
+        };
         const view = gtk.TextView.new();
         gtk.TextView.setEditable(view, 0);
         gtk.TextView.setMonospace(view, 1);
         gtk.TextView.setWrapMode(view, .word_char);
         gtk.TextView.setCursorVisible(view, 0);
-        const buffer = gtk.TextView.getBuffer(view);
-        const text_z = std.heap.c_allocator.dupeZ(u8, r.pkgbuild.PkgBuild) catch return 0;
-        defer std.heap.c_allocator.free(text_z);
-        gtk.TextBuffer.setText(buffer, text_z, @intCast(text_z.len));
-
+        gtk.TextBuffer.setText(gtk.TextView.getBuffer(view), text, @intCast(text.len));
         clear_box(p.diff_box);
         gtk.Box.append(p.diff_box, view.as(gtk.Widget));
-
+        if (p.arena) |old| {
+            old.deinit();
+            std.heap.c_allocator.destroy(old);
+        }
+        p.arena = arena;
+        transferred = true;
+        p.loaded = true;
+        page.set_page_state(.Loaded);
         return 0;
     }
 

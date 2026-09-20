@@ -110,7 +110,7 @@ pub fn evaluate_arithmetic(self: PkgbuildParser, expr: []const u8, vars: *const 
         return std.fmt.allocPrint(self.allocator, "{d}", .{v});
     }
 
-    std.debug.print("[Shelly] Warning: Cannot evaluate arithmetic: $(({s}))\n", .{expr});
+    std.debug.print("Could not evaluate PKGBUILD arithmetic expression {0f} in the PKGBUILD.\n", .{@import("diagnostics").safe(expr)});
     return self.allocator.dupe(u8, "0");
 }
 
