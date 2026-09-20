@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
+"POT-Creation-Date: 2026-09-20 00:46-0300\n"
 "PO-Revision-Date: 2026-09-09 12:00+0400\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: Azerbaijani <az@li.org>\n"
@@ -60,9 +60,6 @@ msgstr "Tətbiqin məlumatları həmişəlik silinəcək."
 msgid "Confirm"
 msgstr "Təsdiqlə"
 
-msgid "Skip"
-msgstr "Ötür"
-
 msgid "No special permissions requested"
 msgstr "Xüsusi icazələr tələb olunmur"
 
@@ -107,6 +104,9 @@ msgstr ""
 
 msgid "Review PKGBUILD"
 msgstr "PKGBUILD faylını nəzərdən keçir"
+
+msgid "Skip"
+msgstr "Ötür"
 
 msgid "Search..."
 msgstr "Axtarış..."
@@ -159,7 +159,6 @@ msgstr ""
 msgid "e.g. owner/repo or https://..."
 msgstr "məsələn, owner/repo və ya https://..."
 
-#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
@@ -366,6 +365,9 @@ msgstr "Haqqında"
 
 msgid "Shelly"
 msgstr "Shelly"
+
+msgid "Install Optional Deps"
+msgstr ""
 
 msgid "Reinstall"
 msgstr "Yenidən quraşdır"
@@ -663,7 +665,6 @@ msgstr "Yeniləmələr yoxlanılır…"
 msgid "Your system is up to date"
 msgstr "Sisteminiz ən son vəziyyətdədir"
 
-#| msgid "Could not check for updates"
 msgid "Could not check for updates."
 msgstr ""
 
@@ -843,16 +844,18 @@ msgstr "istifadə olunduğu yer"
 msgid "Install Anyway"
 msgstr "Hər halda quraşdır"
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
 msgid "Unknown"
 msgstr "Naməlum"
 
 msgid "package(s)"
 msgstr "paket"
 
-msgid "removed size"
-msgstr ""
-
-#| msgid "remove"
 msgid "removed size"
 msgstr ""
 
@@ -946,13 +949,9 @@ msgstr "Yeniləmə mövcuddur"
 msgid "Version ?"
 msgstr "Versiya ?"
 
-#| msgid "Invalid URL. Must start with http:// or https://"
 msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
 
-#| msgid ""
-#| "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/"
-#| "owner/repo/releases"
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
@@ -964,7 +963,6 @@ msgstr "AppImage faylı seçin"
 msgid "AppImage files"
 msgstr "AppImage faylları"
 
-#| msgid "Only .AppImage files can be installed"
 msgid "Only.AppImage files can be installed"
 msgstr ""
 
@@ -1062,7 +1060,6 @@ msgstr "Paketlər tapılmadı"
 msgid "Try a shorter or more general keyword."
 msgstr "Daha qısa və ya daha ümumi açar sözlə cəhd edin."
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the configured AUR service."
 msgstr ""
 
@@ -1112,14 +1109,12 @@ msgstr "Flatpak faylı seçin"
 msgid "Flatpak files"
 msgstr "Flatpak faylları"
 
-#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
 msgid "Installing local flatpak"
 msgstr "Yerli Flatpak quraşdırılır"
 
-#| msgid "Install the selected packages?"
 msgid "Could not install the selected packages."
 msgstr ""
 
@@ -1186,11 +1181,9 @@ msgstr "Endir"
 msgid "No description available."
 msgstr "Təsvir yoxdur."
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load this application screenshot."
 msgstr ""
 
-#| msgid "Unable to download screenshot"
 msgid "Could not download this application screenshot."
 msgstr ""
 
@@ -1229,11 +1222,9 @@ msgid ""
 "other applications and try again."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not start loading Flatpak applications."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load Flatpak applications from the selected remote."
 msgstr ""
 
@@ -1354,6 +1345,12 @@ msgstr "Paket birbaşa quraşdırılmış kimi işarələnir"
 msgid "Making Package Dependency"
 msgstr "Paket asılılıq kimi işarələnir"
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "Paket artıq quraşdırılıb"
 
@@ -1397,7 +1394,6 @@ msgstr ""
 "Standart anbarlarda, AUR və Flatpak mənbələrində eyni anda axtarış aparın. "
 "Başlamaq üçün ad yazın."
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the selected sources."
 msgstr ""
 
@@ -1430,19 +1426,15 @@ msgstr "Flatpak dəstəyi quraşdırılır"
 msgid "Installing AppImage support"
 msgstr "AppImage dəstəyi quraşdırılır"
 
-#| msgid "Installing Flatpak support"
 msgid "Could not start installing Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not start installing AppImage support."
 msgstr ""
 
-#| msgid "Installing Flatpak support"
 msgid "Could not install Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not install AppImage support."
 msgstr ""
 
@@ -1458,7 +1450,6 @@ msgstr "Dəyişiklik jurnalında qeydlər tapılmadı"
 msgid "No details for this release"
 msgstr "Bu buraxılış üçün təfərrüatlar yoxdur"
 
-#| msgid "Could not check for updates"
 msgid "Could not load the release notes."
 msgstr ""
 
@@ -1494,7 +1485,6 @@ msgstr ""
 msgid "Systemd startup service added."
 msgstr "systemd başlatma xidməti əlavə olundu."
 
-#| msgid "Tray disabled, but autostart service remains"
 msgid "Could not disable the tray autostart service."
 msgstr ""
 
@@ -1564,19 +1554,15 @@ msgstr "Gözləyir"
 msgid "Working"
 msgstr "İşləyir"
 
-#| msgid "Upgrade"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Downgrading"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Reinstall"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 
@@ -1592,7 +1578,6 @@ msgstr ""
 msgid "Cancelled"
 msgstr "Ləğv edildi"
 
-#| msgid "Failed to start operation."
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1644,7 +1629,6 @@ msgstr "Əməliyyat tamamlandı"
 msgid "Operation failed"
 msgstr "Əməliyyat uğursuz oldu"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled"
 msgstr ""
 
@@ -1654,7 +1638,6 @@ msgstr "Bitdi"
 msgid "exit"
 msgstr "çıx"
 
-#| msgid "The operation was cancelled."
 msgid "Operation cancelled."
 msgstr ""
 

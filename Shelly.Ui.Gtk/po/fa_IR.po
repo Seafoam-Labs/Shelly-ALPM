@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
+"POT-Creation-Date: 2026-09-20 00:46-0300\n"
 "PO-Revision-Date: 2026-06-29 21:36+0330\n"
 "Last-Translator: Sohrab Behdani <behdanisohrab@proton.me>\n"
 "Language-Team: fa\n"
@@ -59,9 +59,6 @@ msgstr ""
 msgid "Confirm"
 msgstr "تایید"
 
-msgid "Skip"
-msgstr ""
-
 msgid "No special permissions requested"
 msgstr ""
 
@@ -98,6 +95,9 @@ msgid ""
 msgstr ""
 
 msgid "Review PKGBUILD"
+msgstr ""
+
+msgid "Skip"
 msgstr ""
 
 msgid "Search..."
@@ -150,7 +150,6 @@ msgstr "دریافت اطلاعات بیشتر دربارهٔ پیوند به‌
 msgid "e.g. owner/repo or https://..."
 msgstr "برای نمونه: مالک/مخزن یا https://..."
 
-#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
@@ -351,6 +350,9 @@ msgid "About"
 msgstr ""
 
 msgid "Shelly"
+msgstr ""
+
+msgid "Install Optional Deps"
 msgstr ""
 
 msgid "Reinstall"
@@ -821,13 +823,16 @@ msgstr ""
 msgid "Install Anyway"
 msgstr "درهرحال نصب شود"
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
 msgid "Unknown"
 msgstr "ناشناخته"
 
 msgid "package(s)"
-msgstr ""
-
-msgid "removed size"
 msgstr ""
 
 msgid "removed size"
@@ -921,7 +926,6 @@ msgstr ""
 msgid "Version ?"
 msgstr ""
 
-#| msgid "Invalid URL. Must start with http:// or https://"
 msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
 
@@ -1312,6 +1316,12 @@ msgstr ""
 msgid "Making Package Dependency"
 msgstr ""
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "بسته درحال حاضر نصب شده است"
 
@@ -1511,19 +1521,15 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
-#| msgid "Upgrade All"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Download"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Installed"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 
@@ -1608,14 +1614,6 @@ msgstr ""
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
-msgstr ""
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

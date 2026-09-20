@@ -5,11 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2026-09-14 16:25-0300\n"
-=======
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
->>>>>>> origin/development
+"POT-Creation-Date: 2026-09-20 00:46-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -61,9 +57,6 @@ msgstr ""
 msgid "Confirm"
 msgstr ""
 
-msgid "Skip"
-msgstr ""
-
 msgid "No special permissions requested"
 msgstr ""
 
@@ -98,6 +91,9 @@ msgid ""
 msgstr ""
 
 msgid "Review PKGBUILD"
+msgstr ""
+
+msgid "Skip"
 msgstr ""
 
 msgid "Search..."
@@ -348,6 +344,9 @@ msgid "About"
 msgstr ""
 
 msgid "Shelly"
+msgstr ""
+
+msgid "Install Optional Deps"
 msgstr ""
 
 msgid "Reinstall"
@@ -806,22 +805,16 @@ msgstr ""
 msgid "Install Anyway"
 msgstr ""
 
-<<<<<<< HEAD
 msgid "to remove"
 msgstr ""
 
 msgid "to install"
 msgstr ""
 
-=======
->>>>>>> origin/development
 msgid "Unknown"
 msgstr ""
 
 msgid "package(s)"
-msgstr ""
-
-msgid "removed size"
 msgstr ""
 
 msgid "removed size"
@@ -1305,6 +1298,12 @@ msgstr ""
 msgid "Making Package Dependency"
 msgstr ""
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr ""
 
@@ -1528,11 +1527,7 @@ msgstr ""
 msgid "Cancelled"
 msgstr ""
 
-<<<<<<< HEAD
-msgid "Failed to start operation."
-=======
 msgid "Could not start the requested operation."
->>>>>>> origin/development
 msgstr ""
 
 msgid "Synchronizing databases"
@@ -1603,17 +1598,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-<<<<<<< HEAD
-=======
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
-msgstr ""
-
->>>>>>> origin/development
 msgid "System package update"
 msgstr ""
 

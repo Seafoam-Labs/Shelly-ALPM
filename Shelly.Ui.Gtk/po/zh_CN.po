@@ -2,11 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2026-09-14 16:25-0300\n"
-=======
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
->>>>>>> origin/development
+"POT-Creation-Date: 2026-09-20 00:46-0300\n"
 "PO-Revision-Date: 2026-09-3 12:00+0800\n"
 "Last-Translator: DeepSeek AI\n"
 "Language-Team: China (Simplified)\n"
@@ -57,9 +53,6 @@ msgstr "应用数据将会永久删除。"
 msgid "Confirm"
 msgstr "确认"
 
-msgid "Skip"
-msgstr "跳过"
-
 msgid "No special permissions requested"
 msgstr ""
 
@@ -95,6 +88,9 @@ msgstr ""
 
 msgid "Review PKGBUILD"
 msgstr "审阅 PKGBUILD"
+
+msgid "Skip"
+msgstr "跳过"
 
 msgid "Search..."
 msgstr "搜索..."
@@ -144,7 +140,6 @@ msgstr ""
 msgid "e.g. owner/repo or https://..."
 msgstr ""
 
-#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
@@ -345,6 +340,9 @@ msgid "About"
 msgstr "关于"
 
 msgid "Shelly"
+msgstr ""
+
+msgid "Install Optional Deps"
 msgstr ""
 
 msgid "Reinstall"
@@ -634,7 +632,6 @@ msgstr "检查更新..."
 msgid "Your system is up to date"
 msgstr "你的系统已是最新"
 
-#| msgid "Could not check for updates"
 msgid "Could not check for updates."
 msgstr ""
 
@@ -807,25 +804,18 @@ msgstr "用于"
 msgid "Install Anyway"
 msgstr "仍然安装"
 
-<<<<<<< HEAD
 msgid "to remove"
 msgstr ""
 
 msgid "to install"
 msgstr ""
 
-=======
->>>>>>> origin/development
 msgid "Unknown"
 msgstr "未知"
 
 msgid "package(s)"
 msgstr ""
 
-msgid "removed size"
-msgstr ""
-
-#| msgid "remove"
 msgid "removed size"
 msgstr ""
 
@@ -917,7 +907,6 @@ msgstr "有可用更新"
 msgid "Version ?"
 msgstr "版本？"
 
-#| msgid "Invalid URL. Must start with http:// or https://"
 msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
 
@@ -932,7 +921,6 @@ msgstr "选择一个 AppImage 文件"
 msgid "AppImage files"
 msgstr "AppImage 文件"
 
-#| msgid "Only .AppImage files can be installed"
 msgid "Only.AppImage files can be installed"
 msgstr ""
 
@@ -1025,7 +1013,6 @@ msgstr "未找到软件包"
 msgid "Try a shorter or more general keyword."
 msgstr "请尝试更短或更通用的关键词。"
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the configured AUR service."
 msgstr ""
 
@@ -1074,14 +1061,12 @@ msgstr "选择一个 Flatpak 文件"
 msgid "Flatpak files"
 msgstr "Flatpak 文件"
 
-#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
 msgid "Installing local flatpak"
 msgstr "正在安装本地 Flatpak"
 
-#| msgid "Install the selected packages?"
 msgid "Could not install the selected packages."
 msgstr ""
 
@@ -1148,11 +1133,9 @@ msgstr "下载"
 msgid "No description available."
 msgstr "无可用描述。"
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load this application screenshot."
 msgstr ""
 
-#| msgid "Unable to download screenshot"
 msgid "Could not download this application screenshot."
 msgstr ""
 
@@ -1191,11 +1174,9 @@ msgid ""
 "other applications and try again."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not start loading Flatpak applications."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load Flatpak applications from the selected remote."
 msgstr ""
 
@@ -1316,6 +1297,12 @@ msgstr "将软件包设为显式安装"
 msgid "Making Package Dependency"
 msgstr "将软件包设为依赖安装"
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "软件包已安装"
 
@@ -1355,7 +1342,6 @@ msgid ""
 "begin."
 msgstr ""
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the selected sources."
 msgstr ""
 
@@ -1388,19 +1374,15 @@ msgstr "正在安装 Flatpak 支持"
 msgid "Installing AppImage support"
 msgstr "正在安装 AppImage 支持"
 
-#| msgid "Installing Flatpak support"
 msgid "Could not start installing Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not start installing AppImage support."
 msgstr ""
 
-#| msgid "Installing Flatpak support"
 msgid "Could not install Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not install AppImage support."
 msgstr ""
 
@@ -1416,7 +1398,6 @@ msgstr "未找到变更日志条目"
 msgid "No details for this release"
 msgstr "此版本无详细信息"
 
-#| msgid "Could not check for updates"
 msgid "Could not load the release notes."
 msgstr ""
 
@@ -1452,7 +1433,6 @@ msgstr ""
 msgid "Systemd startup service added."
 msgstr "已添加 systemd 启动服务"
 
-#| msgid "Tray disabled, but autostart service remains"
 msgid "Could not disable the tray autostart service."
 msgstr ""
 
@@ -1522,7 +1502,6 @@ msgstr "等待中"
 msgid "Working"
 msgstr "处理中"
 
-<<<<<<< HEAD
 msgid "Upgraded"
 msgstr ""
 
@@ -1532,21 +1511,6 @@ msgstr ""
 msgid "Reinstalled"
 msgstr ""
 
-=======
-#| msgid "Upgrade"
-msgid "Upgraded"
-msgstr ""
-
-#| msgid "Downgrading"
-msgid "Downgraded"
-msgstr ""
-
-#| msgid "Reinstall"
-msgid "Reinstalled"
-msgstr ""
-
-#| msgid "Remove"
->>>>>>> origin/development
 msgid "Removed"
 msgstr ""
 
@@ -1562,14 +1526,8 @@ msgstr ""
 msgid "Cancelled"
 msgstr "已取消"
 
-<<<<<<< HEAD
-msgid "Failed to start operation."
-msgstr "启动操作失败。"
-=======
-#| msgid "Failed to start operation."
 msgid "Could not start the requested operation."
 msgstr ""
->>>>>>> origin/development
 
 msgid "Synchronizing databases"
 msgstr "正在同步数据库"
@@ -1619,7 +1577,6 @@ msgstr ""
 msgid "Operation failed"
 msgstr "操作失败"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled"
 msgstr ""
 
@@ -1629,7 +1586,6 @@ msgstr "已完成"
 msgid "exit"
 msgstr "退出"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled."
 msgstr ""
 
@@ -1641,17 +1597,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-<<<<<<< HEAD
-=======
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
-msgstr ""
-
->>>>>>> origin/development
 msgid "System package update"
 msgstr "系统软件包更新"
 

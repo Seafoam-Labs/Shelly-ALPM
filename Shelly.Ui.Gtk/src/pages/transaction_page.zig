@@ -1028,6 +1028,7 @@ pub const TransactionPage = extern struct {
                 const dialog = MultiSelectDialog.new(
                     pending.arena.allocator(),
                     translation_title,
+                    translations._("Cancel"),
                     q.options,
                     &on_multiselect_response,
                     pending,

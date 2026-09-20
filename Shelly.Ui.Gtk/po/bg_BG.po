@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.3\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
+"POT-Creation-Date: 2026-09-20 00:46-0300\n"
 "PO-Revision-Date: 2026-05-16 11:00+EST\n"
 "Last-Translator: momchil.nikolov@outlook.com\n"
 "Language-Team: Bulgarian (Bulgaria) momchil.nikolov@outlook.com\n"
@@ -53,9 +53,6 @@ msgstr ""
 msgid "Confirm"
 msgstr "Потвърди"
 
-msgid "Skip"
-msgstr ""
-
 msgid "No special permissions requested"
 msgstr ""
 
@@ -90,6 +87,9 @@ msgid ""
 msgstr ""
 
 msgid "Review PKGBUILD"
+msgstr ""
+
+msgid "Skip"
 msgstr ""
 
 msgid "Search..."
@@ -342,6 +342,9 @@ msgid "About"
 msgstr ""
 
 msgid "Shelly"
+msgstr ""
+
+msgid "Install Optional Deps"
 msgstr ""
 
 msgid "Reinstall"
@@ -804,13 +807,16 @@ msgstr ""
 msgid "Install Anyway"
 msgstr ""
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
 msgid "Unknown"
 msgstr "Неизвестен"
 
 msgid "package(s)"
-msgstr ""
-
-msgid "removed size"
 msgstr ""
 
 msgid "removed size"
@@ -1294,6 +1300,12 @@ msgstr ""
 msgid "Making Package Dependency"
 msgstr ""
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "Пакетът вече е инсталиран"
 
@@ -1493,19 +1505,15 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
-#| msgid "Upgrade All"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Download"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Installed"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 
@@ -1590,14 +1598,6 @@ msgstr ""
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
-msgstr ""
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

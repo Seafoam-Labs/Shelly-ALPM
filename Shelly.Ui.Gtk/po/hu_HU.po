@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
+"POT-Creation-Date: 2026-09-20 00:46-0300\n"
 "PO-Revision-Date: 2026-08-13 11:51+0200\n"
 "Last-Translator: Impostor0729\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -56,9 +56,6 @@ msgstr "Az alkalmazás adatai véglegesen törlésre kerülnek."
 msgid "Confirm"
 msgstr "Megerősítés"
 
-msgid "Skip"
-msgstr "Kihagyás"
-
 msgid "No special permissions requested"
 msgstr "Nincs szükség különleges engedélyekre"
 
@@ -104,6 +101,9 @@ msgstr ""
 
 msgid "Review PKGBUILD"
 msgstr "PKGBUILD áttekintése"
+
+msgid "Skip"
+msgstr "Kihagyás"
 
 msgid "Search..."
 msgstr "Keresés..."
@@ -155,7 +155,6 @@ msgstr "További információ az URL frissítéséről / Tárhelyadatokról"
 msgid "e.g. owner/repo or https://..."
 msgstr "pl. tulajdonos/tároló vagy https://..."
 
-#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
@@ -360,6 +359,9 @@ msgstr "Névjegy"
 
 msgid "Shelly"
 msgstr "Shelly"
+
+msgid "Install Optional Deps"
+msgstr ""
 
 msgid "Reinstall"
 msgstr "Újratelepítés"
@@ -655,7 +657,6 @@ msgstr "Frissítések keresése…"
 msgid "Your system is up to date"
 msgstr "A rendszered naprakész"
 
-#| msgid "Could not check for updates"
 msgid "Could not check for updates."
 msgstr ""
 
@@ -836,16 +837,18 @@ msgstr "használt"
 msgid "Install Anyway"
 msgstr "Telepítés mindenképpen"
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
 msgid "Unknown"
 msgstr "Ismeretlen"
 
 msgid "package(s)"
 msgstr "csomag(ok)"
 
-msgid "removed size"
-msgstr ""
-
-#| msgid "remove"
 msgid "removed size"
 msgstr ""
 
@@ -937,13 +940,9 @@ msgstr "Frissítés érhető el"
 msgid "Version ?"
 msgstr "Verzió ?"
 
-#| msgid "Invalid URL. Must start with http:// or https://"
 msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
 
-#| msgid ""
-#| "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/"
-#| "owner/repo/releases"
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
@@ -955,7 +954,6 @@ msgstr "Válasszon ki egy AppImage fájlt"
 msgid "AppImage files"
 msgstr "AppImage fájlok"
 
-#| msgid "Only .AppImage files can be installed"
 msgid "Only.AppImage files can be installed"
 msgstr ""
 
@@ -1049,7 +1047,6 @@ msgstr "Nem találhatók csomagok"
 msgid "Try a shorter or more general keyword."
 msgstr "Próbálkozzon rövidebb vagy általánosabb kulcsszóval."
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the configured AUR service."
 msgstr ""
 
@@ -1099,14 +1096,12 @@ msgstr "Válasszon ki egy Flatpak fájlt"
 msgid "Flatpak files"
 msgstr "Flatpak fájlok"
 
-#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
 msgid "Installing local flatpak"
 msgstr "Flatpak helyi telepítése"
 
-#| msgid "Install the selected packages?"
 msgid "Could not install the selected packages."
 msgstr ""
 
@@ -1173,11 +1168,9 @@ msgstr "Letöltés"
 msgid "No description available."
 msgstr "Nincs elérhető leírás."
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load this application screenshot."
 msgstr ""
 
-#| msgid "Unable to download screenshot"
 msgid "Could not download this application screenshot."
 msgstr ""
 
@@ -1216,11 +1209,9 @@ msgid ""
 "other applications and try again."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not start loading Flatpak applications."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load Flatpak applications from the selected remote."
 msgstr ""
 
@@ -1341,6 +1332,12 @@ msgstr "Csomag kifejezetten telepítetté tétele"
 msgid "Making Package Dependency"
 msgstr "Csomagfüggőség készítése"
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "A csomag már telepítve van"
 
@@ -1384,7 +1381,6 @@ msgstr ""
 "Keresés a hivatalos tárolókban, az AUR-ban és a Flatpakben egyszerre. Írjon "
 "be egy nevet a kezdéshez."
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the selected sources."
 msgstr ""
 
@@ -1417,19 +1413,15 @@ msgstr "Flatpak támogatás telepítése"
 msgid "Installing AppImage support"
 msgstr "AppImage támogatás telepítése"
 
-#| msgid "Installing Flatpak support"
 msgid "Could not start installing Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not start installing AppImage support."
 msgstr ""
 
-#| msgid "Installing Flatpak support"
 msgid "Could not install Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not install AppImage support."
 msgstr ""
 
@@ -1445,7 +1437,6 @@ msgstr "Nem találhatók változásnapló bejegyzések"
 msgid "No details for this release"
 msgstr "Nincsenek részletek ehhez a kiadáshoz"
 
-#| msgid "Could not check for updates"
 msgid "Could not load the release notes."
 msgstr ""
 
@@ -1481,7 +1472,6 @@ msgstr ""
 msgid "Systemd startup service added."
 msgstr "Indítási szolgáltatás hozzáadva a Systemd-hez."
 
-#| msgid "Tray disabled, but autostart service remains"
 msgid "Could not disable the tray autostart service."
 msgstr ""
 
@@ -1551,19 +1541,15 @@ msgstr "Függőben"
 msgid "Working"
 msgstr "Dolgozom"
 
-#| msgid "Upgrade"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Downgrading"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Reinstall"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 
@@ -1579,7 +1565,6 @@ msgstr ""
 msgid "Cancelled"
 msgstr "Törölt<"
 
-#| msgid "Failed to start operation."
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1631,7 +1616,6 @@ msgstr ""
 msgid "Operation failed"
 msgstr "A művelet sikertelen"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled"
 msgstr ""
 
@@ -1641,7 +1625,6 @@ msgstr "Befejezett"
 msgid "exit"
 msgstr "kilépés"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled."
 msgstr ""
 
@@ -1651,14 +1634,6 @@ msgstr ""
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
-msgstr ""
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
 msgstr ""
 
 msgid "System package update"

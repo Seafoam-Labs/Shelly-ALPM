@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
+"POT-Creation-Date: 2026-09-20 00:46-0300\n"
 "PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -63,9 +63,6 @@ msgstr "アプリのデータは完全に削除されます。"
 msgid "Confirm"
 msgstr "確認"
 
-msgid "Skip"
-msgstr "スキップ"
-
 msgid "No special permissions requested"
 msgstr "特別な権限は要求されません"
 
@@ -110,6 +107,9 @@ msgstr ""
 
 msgid "Review PKGBUILD"
 msgstr "PKGBUILD を確認"
+
+msgid "Skip"
+msgstr "スキップ"
 
 msgid "Search..."
 msgstr "検索..."
@@ -161,7 +161,6 @@ msgstr "URL / リポジトリ情報の更新についてもっと知る"
 msgid "e.g. owner/repo or https://..."
 msgstr "例: owner/repo または https://..."
 
-#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
@@ -368,6 +367,9 @@ msgstr "About"
 
 msgid "Shelly"
 msgstr "Shelly"
+
+msgid "Install Optional Deps"
+msgstr ""
 
 msgid "Reinstall"
 msgstr "再インストール"
@@ -666,7 +668,6 @@ msgstr "アップデートを確認中…"
 msgid "Your system is up to date"
 msgstr "お使いのシステムは最新です"
 
-#| msgid "Could not check for updates"
 msgid "Could not check for updates."
 msgstr ""
 
@@ -951,13 +952,9 @@ msgstr "アップデートがあります"
 msgid "Version ?"
 msgstr "バージョン？"
 
-#| msgid "Invalid URL. Must start with http:// or https://"
 msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
 
-#| msgid ""
-#| "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/"
-#| "owner/repo/releases"
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
@@ -969,7 +966,6 @@ msgstr "AppImage ファイルを選択"
 msgid "AppImage files"
 msgstr "AppImage ファイル"
 
-#| msgid "Only .AppImage files can be installed"
 msgid "Only.AppImage files can be installed"
 msgstr ""
 
@@ -1066,7 +1062,6 @@ msgstr "パッケージが見つかりません"
 msgid "Try a shorter or more general keyword."
 msgstr "キーワードを短くするか一般的なものを試してください。"
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the configured AUR service."
 msgstr ""
 
@@ -1117,14 +1112,12 @@ msgstr "Flatpak ファイルを選択"
 msgid "Flatpak files"
 msgstr "Flatpak ファイル"
 
-#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
 msgid "Installing local flatpak"
 msgstr "ローカル Flatpak をインストール中"
 
-#| msgid "Install the selected packages?"
 msgid "Could not install the selected packages."
 msgstr ""
 
@@ -1191,11 +1184,9 @@ msgstr "ダウンロード"
 msgid "No description available."
 msgstr "説明がありません。"
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load this application screenshot."
 msgstr ""
 
-#| msgid "Unable to download screenshot"
 msgid "Could not download this application screenshot."
 msgstr ""
 
@@ -1234,11 +1225,9 @@ msgid ""
 "other applications and try again."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not start loading Flatpak applications."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load Flatpak applications from the selected remote."
 msgstr ""
 
@@ -1359,6 +1348,12 @@ msgstr "明示的なパッケージに変更中"
 msgid "Making Package Dependency"
 msgstr "依存によるパッケージに変更中"
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "パッケージは既にインストールされています"
 
@@ -1402,7 +1397,6 @@ msgstr ""
 "標準リポジトリ、AUR、Flatpak を一度に検索します。名前を入力して開始してくださ"
 "い。"
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the selected sources."
 msgstr ""
 
@@ -1435,19 +1429,15 @@ msgstr "Flatpak サポートをインストール中"
 msgid "Installing AppImage support"
 msgstr "AppImage サポートをインストール中"
 
-#| msgid "Installing Flatpak support"
 msgid "Could not start installing Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not start installing AppImage support."
 msgstr ""
 
-#| msgid "Installing Flatpak support"
 msgid "Could not install Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not install AppImage support."
 msgstr ""
 
@@ -1463,7 +1453,6 @@ msgstr "変更履歴のエントリーが見つかりませんでした"
 msgid "No details for this release"
 msgstr "このリリースの詳細情報はありません"
 
-#| msgid "Could not check for updates"
 msgid "Could not load the release notes."
 msgstr ""
 
@@ -1499,7 +1488,6 @@ msgstr ""
 msgid "Systemd startup service added."
 msgstr "systemd 起動サービスが追加されました。"
 
-#| msgid "Tray disabled, but autostart service remains"
 msgid "Could not disable the tray autostart service."
 msgstr ""
 
@@ -1593,7 +1581,6 @@ msgstr "中断されました"
 msgid "Cancelled"
 msgstr "キャンセル"
 
-#| msgid "Failed to start operation."
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1645,7 +1632,6 @@ msgstr "トランザクションが完了しました"
 msgid "Operation failed"
 msgstr "操作に失敗しました"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled"
 msgstr ""
 
@@ -1655,7 +1641,6 @@ msgstr "完了"
 msgid "exit"
 msgstr "終了"
 
-#| msgid "The operation was cancelled."
 msgid "Operation cancelled."
 msgstr ""
 

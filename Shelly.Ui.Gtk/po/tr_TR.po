@@ -2,11 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2026-09-14 16:25-0300\n"
-=======
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
->>>>>>> origin/development
+"POT-Creation-Date: 2026-09-20 00:46-0300\n"
 "PO-Revision-Date: 2026-06-17 11:40-0400\n"
 "Last-Translator: Ulaş Çakmak <celonfix@protonmail.com>\n"
 "Language-Team: Turkish (Turkiye)<>\n"
@@ -58,9 +54,6 @@ msgstr ""
 msgid "Confirm"
 msgstr "Onayla"
 
-msgid "Skip"
-msgstr ""
-
 msgid "No special permissions requested"
 msgstr ""
 
@@ -95,6 +88,9 @@ msgid ""
 msgstr ""
 
 msgid "Review PKGBUILD"
+msgstr ""
+
+msgid "Skip"
 msgstr ""
 
 msgid "Search..."
@@ -148,7 +144,6 @@ msgstr "Güncelleme URL'si / Depo Bilgisi hakkında daha fazla bilgi al"
 msgid "e.g. owner/repo or https://..."
 msgstr "örn. sahip/depo veya https://..."
 
-#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
@@ -349,6 +344,9 @@ msgid "About"
 msgstr ""
 
 msgid "Shelly"
+msgstr ""
+
+msgid "Install Optional Deps"
 msgstr ""
 
 msgid "Reinstall"
@@ -811,22 +809,16 @@ msgstr ""
 msgid "Install Anyway"
 msgstr "Yine de Kur"
 
-<<<<<<< HEAD
 msgid "to remove"
 msgstr ""
 
 msgid "to install"
 msgstr ""
 
-=======
->>>>>>> origin/development
 msgid "Unknown"
 msgstr "Bilinmeyen"
 
 msgid "package(s)"
-msgstr ""
-
-msgid "removed size"
 msgstr ""
 
 msgid "removed size"
@@ -1312,6 +1304,12 @@ msgstr ""
 msgid "Making Package Dependency"
 msgstr ""
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "Paket zaten kurulu"
 
@@ -1511,7 +1509,6 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
-<<<<<<< HEAD
 msgid "Upgraded"
 msgstr ""
 
@@ -1521,21 +1518,6 @@ msgstr ""
 msgid "Reinstalled"
 msgstr ""
 
-=======
-#| msgid "Upgrade All"
-msgid "Upgraded"
-msgstr ""
-
-#| msgid "Download"
-msgid "Downgraded"
-msgstr ""
-
-#| msgid "Installed"
-msgid "Reinstalled"
-msgstr ""
-
-#| msgid "Remove"
->>>>>>> origin/development
 msgid "Removed"
 msgstr ""
 
@@ -1551,11 +1533,7 @@ msgstr ""
 msgid "Cancelled"
 msgstr ""
 
-<<<<<<< HEAD
-msgid "Failed to start operation."
-=======
 msgid "Could not start the requested operation."
->>>>>>> origin/development
 msgstr ""
 
 msgid "Synchronizing databases"
@@ -1626,17 +1604,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-<<<<<<< HEAD
-=======
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
-msgstr ""
-
->>>>>>> origin/development
 msgid "System package update"
 msgstr ""
 

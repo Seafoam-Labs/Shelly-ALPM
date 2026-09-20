@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
+"POT-Creation-Date: 2026-09-20 00:46-0300\n"
 "PO-Revision-Date: 2026-08-29 16:14+0200\n"
 "Last-Translator: hotline1337 <denuvo at tuta dot io>\n"
 "Language-Team: Polish\n"
@@ -56,9 +56,6 @@ msgstr "Dane aplikacji zostaną trwale usunięte."
 msgid "Confirm"
 msgstr "Potwierdź"
 
-msgid "Skip"
-msgstr "Pomiń"
-
 msgid "No special permissions requested"
 msgstr "Nie zażądano specjalnych uprawnień"
 
@@ -104,6 +101,9 @@ msgstr ""
 
 msgid "Review PKGBUILD"
 msgstr "Przejrzyj PKGBUILD"
+
+msgid "Skip"
+msgstr "Pomiń"
 
 msgid "Search..."
 msgstr "Wyszukaj..."
@@ -157,7 +157,6 @@ msgstr ""
 msgid "e.g. owner/repo or https://..."
 msgstr "np. właściciel/repozytorium lub https://..."
 
-#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
@@ -361,6 +360,9 @@ msgstr "O programie"
 
 msgid "Shelly"
 msgstr "Shelly"
+
+msgid "Install Optional Deps"
+msgstr ""
 
 msgid "Reinstall"
 msgstr "Zainstaluj ponownie"
@@ -657,7 +659,6 @@ msgstr "Sprawdzanie dostępności aktualizacji…"
 msgid "Your system is up to date"
 msgstr "System jest aktualny"
 
-#| msgid "Could not check for updates"
 msgid "Could not check for updates."
 msgstr ""
 
@@ -840,16 +841,18 @@ msgstr "używane w"
 msgid "Install Anyway"
 msgstr "Zainstaluj mimo to"
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
 msgid "Unknown"
 msgstr "Nieznane"
 
 msgid "package(s)"
 msgstr "pakiet(y)"
 
-msgid "removed size"
-msgstr ""
-
-#| msgid "remove"
 msgid "removed size"
 msgstr ""
 
@@ -941,13 +944,9 @@ msgstr "Dostępna aktualizacja"
 msgid "Version ?"
 msgstr "Wersja: ?"
 
-#| msgid "Invalid URL. Must start with http:// or https://"
 msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
 
-#| msgid ""
-#| "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/"
-#| "owner/repo/releases"
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
@@ -959,7 +958,6 @@ msgstr "Wybierz plik AppImage"
 msgid "AppImage files"
 msgstr "Pliki AppImage"
 
-#| msgid "Only .AppImage files can be installed"
 msgid "Only.AppImage files can be installed"
 msgstr ""
 
@@ -1053,7 +1051,6 @@ msgstr "Nie znaleziono pakietów"
 msgid "Try a shorter or more general keyword."
 msgstr "Spróbuj użyć krótszego lub bardziej ogólnego słowa kluczowego."
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the configured AUR service."
 msgstr ""
 
@@ -1102,14 +1099,12 @@ msgstr "Wybierz plik Flatpak"
 msgid "Flatpak files"
 msgstr "Pliki Flatpak"
 
-#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
 msgid "Installing local flatpak"
 msgstr "Instalowanie lokalnego pakietu Flatpak"
 
-#| msgid "Install the selected packages?"
 msgid "Could not install the selected packages."
 msgstr ""
 
@@ -1176,11 +1171,9 @@ msgstr "Pobierz"
 msgid "No description available."
 msgstr "Brak dostępnego opisu."
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load this application screenshot."
 msgstr ""
 
-#| msgid "Unable to download screenshot"
 msgid "Could not download this application screenshot."
 msgstr ""
 
@@ -1219,11 +1212,9 @@ msgid ""
 "other applications and try again."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not start loading Flatpak applications."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load Flatpak applications from the selected remote."
 msgstr ""
 
@@ -1344,6 +1335,12 @@ msgstr "Oznaczanie pakietu jako zainstalowanego jawnie"
 msgid "Making Package Dependency"
 msgstr "Oznaczanie pakietu jako zależność"
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "Pakiet jest już zainstalowany"
 
@@ -1387,7 +1384,6 @@ msgstr ""
 "Przeszukuj jednocześnie standardowe repozytoria, AUR i Flatpak. Wpisz nazwę, "
 "aby rozpocząć."
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the selected sources."
 msgstr ""
 
@@ -1420,19 +1416,15 @@ msgstr "Instalowanie obsługi Flatpak"
 msgid "Installing AppImage support"
 msgstr "Instalowanie obsługi AppImage"
 
-#| msgid "Installing Flatpak support"
 msgid "Could not start installing Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not start installing AppImage support."
 msgstr ""
 
-#| msgid "Installing Flatpak support"
 msgid "Could not install Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not install AppImage support."
 msgstr ""
 
@@ -1448,7 +1440,6 @@ msgstr "Nie znaleziono wpisów w dzienniku zmian"
 msgid "No details for this release"
 msgstr "Brak szczegółów dla tego wydania"
 
-#| msgid "Could not check for updates"
 msgid "Could not load the release notes."
 msgstr ""
 
@@ -1484,7 +1475,6 @@ msgstr ""
 msgid "Systemd startup service added."
 msgstr "Dodano usługę autostartu systemd."
 
-#| msgid "Tray disabled, but autostart service remains"
 msgid "Could not disable the tray autostart service."
 msgstr ""
 
@@ -1554,19 +1544,15 @@ msgstr "Oczekuje"
 msgid "Working"
 msgstr "Przetwarzanie"
 
-#| msgid "Upgrade"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Downgrading"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Reinstall"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 
@@ -1582,7 +1568,6 @@ msgstr ""
 msgid "Cancelled"
 msgstr "Anulowano"
 
-#| msgid "Failed to start operation."
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1634,7 +1619,6 @@ msgstr ""
 msgid "Operation failed"
 msgstr "Operacja nie powiodła się"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled"
 msgstr ""
 
@@ -1644,7 +1628,6 @@ msgstr "Zakończono"
 msgid "exit"
 msgstr "wyjście"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled."
 msgstr ""
 
@@ -1655,14 +1638,6 @@ msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
 msgstr ""
-
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
-msgstr "Czy chcesz usunąć zbędne wpisy z pamięci podręcznej?"
 
 msgid "System package update"
 msgstr "Aktualizacja pakietu systemowego"

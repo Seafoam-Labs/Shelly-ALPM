@@ -2,11 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2026-09-14 16:25-0300\n"
-=======
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
->>>>>>> origin/development
+"POT-Creation-Date: 2026-09-20 00:46-0300\n"
 "PO-Revision-Date: 2026-09-14 21:25+0400\n"
 "Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\n"
 "Language-Team: Russian (Russia) <anton@azdanov.dev>\n"
@@ -67,9 +63,6 @@ msgstr "Данные приложения будут безвозвратно у
 msgid "Confirm"
 msgstr "Подтвердить"
 
-msgid "Skip"
-msgstr "Пропустить"
-
 msgid "No special permissions requested"
 msgstr "Специальные разрешения не запрашиваются"
 
@@ -114,6 +107,9 @@ msgstr ""
 
 msgid "Review PKGBUILD"
 msgstr "Просмотреть PKGBUILD"
+
+msgid "Skip"
+msgstr "Пропустить"
 
 msgid "Search..."
 msgstr "Поиск..."
@@ -165,14 +161,9 @@ msgstr "Подробнее об URL обновления / информации 
 msgid "e.g. owner/repo or https://..."
 msgstr "напр., владелец/репо или https://..."
 
-#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
-<<<<<<< HEAD
-"Неверный формат. Используйте владелец/репо (напр., seafoam-labs/shelly-alpm)"
-=======
->>>>>>> origin/development
 
 msgid "Allow Prerelease"
 msgstr "Разрешить предварительные версии"
@@ -375,6 +366,9 @@ msgstr "О программе"
 
 msgid "Shelly"
 msgstr "Shelly"
+
+msgid "Install Optional Deps"
+msgstr ""
 
 msgid "Reinstall"
 msgstr "Переустановить"
@@ -673,7 +667,6 @@ msgstr "Проверяются обновления…"
 msgid "Your system is up to date"
 msgstr "Ваша система обновлена"
 
-#| msgid "Could not check for updates"
 msgid "Could not check for updates."
 msgstr ""
 
@@ -853,25 +846,18 @@ msgstr "используется в"
 msgid "Install Anyway"
 msgstr "Всё равно установить"
 
-<<<<<<< HEAD
 msgid "to remove"
 msgstr ""
 
 msgid "to install"
 msgstr ""
 
-=======
->>>>>>> origin/development
 msgid "Unknown"
 msgstr "Неизвестно"
 
 msgid "package(s)"
 msgstr "пакет(ов)"
 
-msgid "removed size"
-msgstr ""
-
-#| msgid "remove"
 msgid "removed size"
 msgstr ""
 
@@ -965,20 +951,9 @@ msgstr "Доступно обновление"
 msgid "Version ?"
 msgstr "Версия ?"
 
-#| msgid "Invalid URL. Must start with http:// or https://"
 msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
-<<<<<<< HEAD
-"Неверный формат. Используйте владелец/репо (напр., seafoam-labs/shelly-alpm)"
 
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "Неверный URL. Должен начинаться с http:// или https://"
-=======
->>>>>>> origin/development
-
-#| msgid ""
-#| "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/"
-#| "owner/repo/releases"
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
@@ -990,7 +965,6 @@ msgstr "Выберите файл AppImage"
 msgid "AppImage files"
 msgstr "Файлы AppImage"
 
-#| msgid "Only .AppImage files can be installed"
 msgid "Only.AppImage files can be installed"
 msgstr ""
 
@@ -1085,7 +1059,6 @@ msgstr "Пакеты не найдены"
 msgid "Try a shorter or more general keyword."
 msgstr "Попробуйте более короткое или общее ключевое слово."
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the configured AUR service."
 msgstr ""
 
@@ -1135,14 +1108,12 @@ msgstr "Выберите файл Flatpak"
 msgid "Flatpak files"
 msgstr "Файлы Flatpak"
 
-#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
 msgid "Installing local flatpak"
 msgstr "Установка локального flatpak"
 
-#| msgid "Install the selected packages?"
 msgid "Could not install the selected packages."
 msgstr ""
 
@@ -1209,11 +1180,9 @@ msgstr "Скачивание"
 msgid "No description available."
 msgstr "Описание недоступно."
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load this application screenshot."
 msgstr ""
 
-#| msgid "Unable to download screenshot"
 msgid "Could not download this application screenshot."
 msgstr ""
 
@@ -1252,11 +1221,9 @@ msgid ""
 "other applications and try again."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not start loading Flatpak applications."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load Flatpak applications from the selected remote."
 msgstr ""
 
@@ -1377,6 +1344,12 @@ msgstr "Делает пакет явным"
 msgid "Making Package Dependency"
 msgstr "Делает пакет зависимостью"
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "Пакет уже установлен"
 
@@ -1420,7 +1393,6 @@ msgstr ""
 "Искать одновременно в стандартных репозиториях, AUR и Flatpak. Введите имя "
 "для начала."
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the selected sources."
 msgstr ""
 
@@ -1453,19 +1425,15 @@ msgstr "Установка поддержки Flatpak"
 msgid "Installing AppImage support"
 msgstr "Установка поддержки AppImage"
 
-#| msgid "Installing Flatpak support"
 msgid "Could not start installing Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not start installing AppImage support."
 msgstr ""
 
-#| msgid "Installing Flatpak support"
 msgid "Could not install Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not install AppImage support."
 msgstr ""
 
@@ -1481,7 +1449,6 @@ msgstr "Записи журнала изменений не найдены"
 msgid "No details for this release"
 msgstr "Нет подробностей для этого выпуска"
 
-#| msgid "Could not check for updates"
 msgid "Could not load the release notes."
 msgstr ""
 
@@ -1517,7 +1484,6 @@ msgstr ""
 msgid "Systemd startup service added."
 msgstr "Служба автозапуска systemd добавлена."
 
-#| msgid "Tray disabled, but autostart service remains"
 msgid "Could not disable the tray autostart service."
 msgstr ""
 
@@ -1587,7 +1553,6 @@ msgstr "Ожидание"
 msgid "Working"
 msgstr "Выполнение"
 
-<<<<<<< HEAD
 msgid "Upgraded"
 msgstr ""
 
@@ -1597,21 +1562,6 @@ msgstr ""
 msgid "Reinstalled"
 msgstr ""
 
-=======
-#| msgid "Upgrade"
-msgid "Upgraded"
-msgstr ""
-
-#| msgid "Downgrading"
-msgid "Downgraded"
-msgstr ""
-
-#| msgid "Reinstall"
-msgid "Reinstalled"
-msgstr ""
-
-#| msgid "Remove"
->>>>>>> origin/development
 msgid "Removed"
 msgstr ""
 
@@ -1627,14 +1577,8 @@ msgstr ""
 msgid "Cancelled"
 msgstr "Отменено"
 
-<<<<<<< HEAD
-msgid "Failed to start operation."
-msgstr "Не удалось начать операцию."
-=======
-#| msgid "Failed to start operation."
 msgid "Could not start the requested operation."
 msgstr ""
->>>>>>> origin/development
 
 msgid "Synchronizing databases"
 msgstr "Синхронизация баз данных"
@@ -1684,7 +1628,6 @@ msgstr "Транзакция завершена"
 msgid "Operation failed"
 msgstr "Операция не удалась"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled"
 msgstr ""
 
@@ -1694,7 +1637,6 @@ msgstr "Завершено"
 msgid "exit"
 msgstr "выход"
 
-#| msgid "The operation was cancelled."
 msgid "Operation cancelled."
 msgstr ""
 
@@ -1708,19 +1650,6 @@ msgstr ""
 "Разрешение на управление пакетами не было предоставлено. Попробуйте снова и "
 "подтвердите запрос авторизации, чтобы продолжить."
 
-<<<<<<< HEAD
-=======
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-"{package_one}-{version_one} конфликтует с {package_two}-{version_two}. "
-"Удалить {package_to_remove}?"
-
-msgid "Would you like to remove extra cache entries?"
-msgstr "Удалить лишние записи кэша?"
-
->>>>>>> origin/development
 msgid "System package update"
 msgstr "Обновление системного пакета"
 
