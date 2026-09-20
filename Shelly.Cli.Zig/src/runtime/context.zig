@@ -48,8 +48,8 @@ pub fn unimplemented(
     invocation: *const parser.Invocation,
 ) !u8 {
     try context.stderr.print(
-        "Command '{s}' has not been ported to Zig yet.\n",
-        .{invocation.command.path},
+        "Command '{0f}' is not implemented in this Shelly version. See 'shelly --help' for supported commands.\n",
+        .{@import("diagnostics").safe(invocation.command.path)},
     );
     return 1;
 }

@@ -91,8 +91,12 @@ pub const Manager = struct {
         scope.attach();
         defer scope.finish(.success);
         return self.installBinariesPackageImpl(archive_path) catch |err| {
-            self.reportError(err, @errorName(err));
-            self.emitFmt(.err, "Failed to install local package: {s}", .{@errorName(err)});
+            const message = @import("diagnostics").format(self.allocator, err, .{
+                .operation = "local package install",
+                .subject = archive_path,
+            }) catch null;
+            defer if (message) |owned| self.allocator.free(owned);
+            self.dispatcher.raise(.{ .level = .err, .err = err, .text = message orelse @import("diagnostics").allocation_failure });
             scope.finish(if (err == Error.Cancelled) .cancelled else .failed);
             return err;
         };
@@ -101,14 +105,14 @@ pub const Manager = struct {
     fn installBinariesPackageImpl(self: *Manager, archive_path: []const u8) !bool {
         try self.checkCancelled();
         if (!file_inspector.isSupportedArchive(archive_path)) {
-            self.emit(.warning, "Unsupported local package archive");
+            self.emit(.warning, "Could not install the selected local package file because its archive format is unsupported. Select a supported local package archive.");
             return false;
         }
 
         const inspector: file_inspector.Inspector = .{ .allocator = self.allocator, .io = self.io };
         self.progress("inspect", 0, 1, "Inspecting local package archive");
         if (!(try inspector.isBinariesPackage(archive_path))) {
-            self.emit(.warning, "Archive does not contain an ELF binary");
+            self.emit(.warning, "Could not install the selected local package file because it contains no ELF executable. Select an archive containing a supported Linux executable.");
             return false;
         }
         self.progress("inspect", 1, 1, "Local package archive inspected");
@@ -172,11 +176,11 @@ pub const Manager = struct {
             defer if (icon_name) |name| self.allocator.free(name);
             if (assets.icon_path) |icon_path| {
                 icon_name = integration.installIcon(icon_path, binary_name) catch |err| blk: {
-                    self.emitFmt(.warning, "Could not install icon for {s}: {s}", .{ binary_name, @errorName(err) });
+                    self.emitFmt(.warning, "Could not install icon for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(binary_name), @import("diagnostics").cause(err), @errorName(err) });
                     break :blk null;
                 };
             } else {
-                self.emitFmt(.warning, "No icon found for {s}", .{binary_name});
+                self.emitFmt(.warning, "No icon was found for local application {0f}. Its desktop entry may use a fallback icon.", .{@import("diagnostics").safe(binary_name)});
             }
             const desktop_file_name = try xdg_integration.cleanName(self.allocator, binary_name);
             defer self.allocator.free(desktop_file_name);
@@ -187,7 +191,7 @@ pub const Manager = struct {
                 .comment = "Installed by Shelly",
                 .icon = icon_name orelse "application-x-executable",
             }) catch |err| {
-                self.emitFmt(.warning, "Could not create desktop entry for {s}: {s}", .{ binary_name, @errorName(err) });
+                self.emitFmt(.warning, "Could not create desktop entry for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(binary_name), @import("diagnostics").cause(err), @errorName(err) });
             };
         }
         self.progress("integrate", assets.binaries.items.len, assets.binaries.items.len, "Local command integration complete");
@@ -202,7 +206,7 @@ pub const Manager = struct {
         scope.attach();
         defer scope.finish(.success);
         return self.getInstalledBinaryPackagesImpl() catch |err| {
-            self.reportError(err, "Failed to inspect installed local packages");
+            self.reportError(err, "Could not read the installed local-package list from the configured file.");
             scope.finish(if (err == Error.Cancelled) .cancelled else .failed);
             return err;
         };
@@ -245,8 +249,12 @@ pub const Manager = struct {
         scope.attach();
         defer scope.finish(.success);
         return self.removeBinaryPackagesImpl(package_names_or_paths) catch |err| {
-            self.reportError(err, @errorName(err));
-            self.emitFmt(.err, "Failed to remove local package: {s}", .{@errorName(err)});
+            const message = @import("diagnostics").format(self.allocator, err, .{
+                .operation = "local package remove",
+                .subject = if (package_names_or_paths.len > 0) package_names_or_paths[0] else "the selected package",
+            }) catch null;
+            defer if (message) |owned| self.allocator.free(owned);
+            self.dispatcher.raise(.{ .level = .err, .err = err, .text = message orelse @import("diagnostics").allocation_failure });
             scope.finish(if (err == Error.Cancelled) .cancelled else .failed);
             return err;
         };
@@ -258,7 +266,7 @@ pub const Manager = struct {
             try self.checkCancelled();
             self.progress("remove", package_index, package_names_or_paths.len, "Removing local packages");
             const package_path = self.resolvePackagePath(value) catch |err| {
-                self.emitFmt(.warning, "Ignoring invalid local package path {s}: {s}", .{ value, @errorName(err) });
+                self.emitFmt(.warning, "Skipped local package path {0f} because it is invalid. {1s} Check the stored package location before retrying.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(value), @import("diagnostics").cause(err), @errorName(err) });
                 continue;
             };
             defer self.allocator.free(package_path);
@@ -277,11 +285,11 @@ pub const Manager = struct {
                 try std.Io.Dir.cwd().deleteFile(self.io, link_path);
                 if (!containsIgnoreCase(std.fs.path.basename(package_path), binary_name)) continue;
                 _ = integration.removeDesktopEntry(binary_name) catch |err| {
-                    self.emitFmt(.warning, "Could not remove desktop entry for {s}: {s}", .{ binary_name, @errorName(err) });
+                    self.emitFmt(.warning, "Could not remove desktop entry for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(binary_name), @import("diagnostics").cause(err), @errorName(err) });
                     continue;
                 };
                 _ = integration.removeInstalledIcons(binary_name) catch |err| {
-                    self.emitFmt(.warning, "Could not remove icons for {s}: {s}", .{ binary_name, @errorName(err) });
+                    self.emitFmt(.warning, "Could not remove icons for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(binary_name), @import("diagnostics").cause(err), @errorName(err) });
                     continue;
                 };
             }
@@ -355,7 +363,7 @@ pub const Manager = struct {
             return err;
         };
         if (had_existing) std.Io.Dir.cwd().deleteTree(self.io, backup_path) catch |err| {
-            self.emitFmt(.warning, "Could not remove package backup: {s}", .{@errorName(err)});
+            self.emitFmt(.warning, "Could not remove the local-package backup. {0s} The backup remains on disk.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
         };
     }
 
@@ -447,15 +455,15 @@ pub const Manager = struct {
             const points_to_old = linkPointsTo(self.io, link_path, old_binary_path) catch false;
             if (!points_to_old) continue;
             std.Io.Dir.cwd().deleteFile(self.io, link_path) catch |err| {
-                self.emitFmt(.warning, "Could not remove obsolete command {s}: {s}", .{ binary_name, @errorName(err) });
+                self.emitFmt(.warning, "Could not remove obsolete command {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(binary_name), @import("diagnostics").cause(err), @errorName(err) });
                 continue;
             };
             if (!containsIgnoreCase(package_name, binary_name)) continue;
             _ = integration.removeDesktopEntry(binary_name) catch |err| {
-                self.emitFmt(.warning, "Could not remove obsolete desktop entry for {s}: {s}", .{ binary_name, @errorName(err) });
+                self.emitFmt(.warning, "Could not remove obsolete desktop entry for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(binary_name), @import("diagnostics").cause(err), @errorName(err) });
             };
             _ = integration.removeInstalledIcons(binary_name) catch |err| {
-                self.emitFmt(.warning, "Could not remove obsolete icons for {s}: {s}", .{ binary_name, @errorName(err) });
+                self.emitFmt(.warning, "Could not remove obsolete icons for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(binary_name), @import("diagnostics").cause(err), @errorName(err) });
             };
         }
     }

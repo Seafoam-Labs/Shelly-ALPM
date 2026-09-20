@@ -935,12 +935,12 @@ pub const FlatpakInstallView = extern struct {
 
     fn loadScreenshot(self: *Self, picture: *gtk.Picture, url: [:0]const u8, generation: u64) void {
         const load = std.heap.c_allocator.create(ScreenshotLoad) catch {
-            gtk.Widget.setTooltipText(picture.as(gtk.Widget), translations._("Unable to load screenshot"));
+            gtk.Widget.setTooltipText(picture.as(gtk.Widget), translations._("Could not load this application screenshot."));
             return;
         };
         const owned_url = std.heap.c_allocator.dupeZ(u8, url) catch {
             std.heap.c_allocator.destroy(load);
-            gtk.Widget.setTooltipText(picture.as(gtk.Widget), translations._("Unable to load screenshot"));
+            gtk.Widget.setTooltipText(picture.as(gtk.Widget), translations._("Could not load this application screenshot."));
             return;
         };
         load.* = .{
@@ -953,7 +953,7 @@ pub const FlatpakInstallView = extern struct {
         _ = picture.as(gobject.Object).ref();
         const thread = std.Thread.spawn(.{}, screenshotWorker, .{load}) catch {
             cleanupScreenshotLoad(load);
-            gtk.Widget.setTooltipText(picture.as(gtk.Widget), translations._("Unable to load screenshot"));
+            gtk.Widget.setTooltipText(picture.as(gtk.Widget), translations._("Could not load this application screenshot."));
             return;
         };
         thread.detach();
@@ -998,14 +998,14 @@ pub const FlatpakInstallView = extern struct {
         if (!p.disposed and p.selected_app != null and p.details_generation == load.generation) {
             if (load.failed or load.data == null) {
                 gtk.Picture.setPaintable(load.picture, null);
-                gtk.Widget.setTooltipText(load.picture.as(gtk.Widget), translations._("Unable to download screenshot"));
+                gtk.Widget.setTooltipText(load.picture.as(gtk.Widget), translations._("Could not download this application screenshot."));
             } else if (textureFromBytes(load.data.?)) |texture| {
                 gtk.Picture.setPaintable(load.picture, texture.as(gdk.Paintable));
                 texture.unref();
                 gtk.Widget.setTooltipText(load.picture.as(gtk.Widget), null);
             } else {
                 gtk.Picture.setPaintable(load.picture, null);
-                gtk.Widget.setTooltipText(load.picture.as(gtk.Widget), translations._("Unable to display screenshot"));
+                gtk.Widget.setTooltipText(load.picture.as(gtk.Widget), translations._("Could not display the downloaded application screenshot."));
             }
         }
         cleanupScreenshotLoad(load);
@@ -1218,7 +1218,7 @@ pub const FlatpakInstallView = extern struct {
         p.catalog_ready = false;
         const result = std.heap.c_allocator.create(LoadResult) catch {
             p.pending_app_id_len = 0;
-            self.showStatus(translations._("Unable to allocate memory while loading Flatpak data."), false);
+            self.showStatus(translations._("Could not load Flatpak applications because Shelly ran out of memory. Close other applications and try again."), false);
             return;
         };
         result.* = .{ .page = self, .generation = generation };
@@ -1229,7 +1229,7 @@ pub const FlatpakInstallView = extern struct {
             std.heap.c_allocator.destroy(result);
             p.catalog_ready = false;
             p.pending_app_id_len = 0;
-            self.showStatus(translations._("Unable to start the Flatpak data loader."), false);
+            self.showStatus(translations._("Could not start loading Flatpak applications."), false);
             return;
         };
         thread.detach();
@@ -1318,7 +1318,7 @@ pub const FlatpakInstallView = extern struct {
         if (result.failed or result.parsed == null) {
             p.catalog_ready = false;
             p.pending_app_id_len = 0;
-            page.showStatus(translations._("Unable to load Flatpak applications."), false);
+            page.showStatus(translations._("Could not load Flatpak applications from the selected remote."), false);
             cleanupResult(result);
             return 0;
         }

@@ -3,11 +3,13 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const diagnostics = b.dependency("shelly_diagnostics", .{ .target = target, .optimize = optimize }).module("diagnostics");
 
     const mod = b.addModule("Shelly_Key", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
     });
+    mod.addImport("diagnostics", diagnostics);
 
     const exe = b.addExecutable(.{
         .name = "shelly-key",
@@ -20,6 +22,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    exe.root_module.addImport("diagnostics", diagnostics);
 
     b.installArtifact(exe);
 

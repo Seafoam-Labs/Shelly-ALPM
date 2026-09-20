@@ -34,6 +34,7 @@ check = true
 ccache = false
 distcc = false
 distcc_hosts = []
+extra_path = []
 
 [package]
 packager = "Unknown Packager"
@@ -62,6 +63,49 @@ Flag and host arrays are joined with spaces only when a child process is launche
 Supported package options are `strip`, `docs`, `libtool`, `staticlibs`, `emptydirs`, `zipman`, `purge`, `debug`, `lto`, `autodeps`, `buildflags`, and `makeflags`. Content tidy operations currently implement stripping and standard purge cleanup.
 
 `purge` is enabled by default. Before writing package metadata and the archive, it removes `usr/info/dir` and `usr/share/info/dir` relative to `$pkgdir`, plus non-directory entries named `.packlist` or matching `*.pod` anywhere in that package tree. Directories are preserved, and cleanup does not follow symlinks. PKGBUILD `options=('!purge')` disables this cleanup, including when set inside a split-package function. Purge runs independently of `strip`, so `!strip` does not disable it. Custom `PURGE_TARGETS` and makepkg shell configuration are not read by the native builder. This behavior also applies to `shelly build --isolated`.
+
+## Build executable search path
+
+Every native build starts with a deterministic PATH rather than inheriting the
+terminal or elevated coordinator's PATH. This includes GUI AUR builds, standalone
+`shelly build`, `--sync-deps` children, metadata review, and `.SRCINFO` generation.
+The baseline is:
+
+```text
+/usr/bin/core_perl:/usr/bin/vendor_perl:/usr/bin/site_perl:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
+```
+
+Unavailable baseline directories are omitted as the non-root build user. Add
+custom toolchains explicitly in the system or user configuration:
+
+```toml
+[build]
+extra_path = ["/home/your-user/.cargo/bin", "/opt/toolchain/bin"]
+```
+
+Search order is ccache, distcc (when enabled), `extra_path` in the listed order,
+then the baseline. Duplicate components are removed, keeping the first entry.
+This lets configured tools override system tools while preserving compiler
+wrappers. The user array replaces the system array; `extra_path = []` clears
+inherited additions, and omitting the key retains them.
+
+Entries must be absolute directory paths without colons or NUL characters.
+There is no shell, `$HOME`, or `~` expansion. Each configured directory must
+exist and be searchable by the build user; an unusable entry fails before
+PKGBUILD execution and reports its path. Validation happens after dropping
+privileges. Configured directories never become the root coordinator's PATH.
+PKGBUILD functions can still change PATH themselves.
+
+**Migration:** tools previously found only through your terminal's PATH must
+now be listed in `build.extra_path`. External makepkg and clean-chroot commands
+retain their existing environment policy.
+
+For `shelly build --isolated`, additions are carried into the guest configuration
+and must also exist inside that root. Host directories are not mounted merely
+because they appear in `extra_path`. When Landlock sandboxing is enabled, PATH
+configuration does not grant filesystem access: custom toolchains outside the
+existing allow-list also need appropriate `sandbox.extra_read` / `extra_write`
+entries, including any toolchain libraries and caches they require.
 
 ## PKGBUILD and CLI overrides
 

@@ -23,7 +23,7 @@ pub fn main(init: std.process.Init) void {
     HttpClient.setDefaultProxyEnvironment(init.environ_map);
 
     if (!translations.init()) {
-        std.log.warn("translations: failed to initialize gettext", .{});
+        std.log.warn("Could not initialize translations. Shelly may display untranslated text.", .{});
     }
     if (!options.skip_background_services) {
         IconDownloadService(std.heap.c_allocator, runtime.io);
@@ -82,7 +82,7 @@ fn commandLine(
                 requested_page =
                     deep_link.parsePageTarget(std.mem.span(argv[i]));
             } else {
-                std.log.warn("--page requires a value", .{});
+                std.log.warn("Option '--page' requires a page name. See 'shelly-ui --help' for usage.", .{});
             }
             continue;
         }
@@ -112,7 +112,7 @@ fn dispatchPendingNavigation(window: *ShellyWindow) void {
     };
 
     if (!navigated) {
-        std.log.warn("requested page is disabled or unavailable", .{});
+        std.log.warn("Could not open the requested page because it is disabled or unavailable. Enable the corresponding support in settings or choose another page.", .{});
     }
 }
 
@@ -167,12 +167,12 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
     }
 
     _ = runtime.setupConfig(std.heap.c_allocator) catch |err| {
-        std.log.warn("settings: failed to load config service: {t}", .{err});
+        std.log.warn("Could not open the settings service. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
     };
 
     if (runtime.config) |svc| {
         const cfg = svc.get() catch |err| {
-            std.log.warn("settings: failed to get config: {t}", .{err});
+            std.log.warn("Could not load settings from the configured file. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return;
         };
 
@@ -222,7 +222,7 @@ fn setupGnomeThemePreference() void {
 
     if (prefer_dark) {
         const gtk_settings = gtk.Settings.getDefault() orelse {
-            std.debug.print("Failed to fetch GtkSettings layout.\n", .{});
+            std.debug.print("Could not read the desktop theme settings. Shelly will use the available theme defaults.\n", .{});
             return;
         };
         const base_object = @as(*gobject.Object, @ptrCast(@alignCast(gtk_settings)));

@@ -18,6 +18,7 @@ pub const BuildConfiguration = struct {
     ccache: bool,
     distcc: bool,
     distcc_hosts: []const []const u8,
+    extra_path: []const []const u8 = &.{},
 };
 
 pub const PackageConfiguration = struct {
@@ -60,6 +61,7 @@ const BuildLayer = struct {
     ccache: ?bool = null,
     distcc: ?bool = null,
     distcc_hosts: ?[]const []const u8 = null,
+    extra_path: ?[]const []const u8 = null,
 };
 
 const PackageLayer = struct {
@@ -208,6 +210,7 @@ pub const ShellyBuildConfiguration = struct {
             if (build.ccache) |value| self.build.ccache = value;
             if (build.distcc) |value| self.build.distcc = value;
             if (build.distcc_hosts) |value| self.build.distcc_hosts = try duplicateStrings(allocator, value);
+            if (build.extra_path) |value| self.build.extra_path = try duplicateStrings(allocator, value);
         }
         if (layer.package) |package| {
             if (package.packager) |value| self.package.packager = try allocator.dupe(u8, value);
@@ -235,6 +238,7 @@ pub const ShellyBuildConfiguration = struct {
     fn validate(self: *const Self) !void {
         if (self.build.carch.len == 0 or self.build.chost.len == 0)
             return error.InvalidConfiguration;
+        for (self.build.extra_path) |path| try process_runner.build_path.validateEntry(path);
         for (self.package.options) |option| {
             if (!isValidPackageOption(option)) return error.InvalidPackageOption;
         }
@@ -317,7 +321,7 @@ fn validateKnownKeys(allocator: std.mem.Allocator, content: []const u8) !void {
     }
 }
 
-const build_keys: []const []const u8 = &.{ "carch", "chost", "cppflags", "cflags", "cxxflags", "ldflags", "ltoflags", "makeflags", "check", "ccache", "distcc", "distcc_hosts" };
+const build_keys: []const []const u8 = &.{ "carch", "chost", "cppflags", "cflags", "cxxflags", "ldflags", "ltoflags", "makeflags", "check", "ccache", "distcc", "distcc_hosts", "extra_path" };
 const package_keys: []const []const u8 = &.{ "packager", "extension", "options", "strip_binaries", "strip_shared", "strip_static", "sign", "sign_key" };
 const destination_keys: []const []const u8 = &.{ "build", "packages", "sources", "logs" };
 const sandbox_keys: []const []const u8 = &.{ "enabled", "extra_read", "extra_write" };
@@ -565,4 +569,31 @@ test "shellybuild elevated path ignores the coordinator XDG directory" {
     const path = try resolveUserConfigurationPath(std.testing.allocator, std.testing.io, elevated_environ);
     defer std.testing.allocator.free(path);
     try std.testing.expectEqualStrings("/home/invoker/.config/shelly/shellybuild.conf", path);
+}
+
+test "shellybuild extra_path defaults and user replacement follow configuration precedence" {
+    const defaults = try ShellyBuildConfiguration.initFromBuffers(std.testing.allocator, null, null);
+    defer defaults.deinit();
+    try std.testing.expectEqual(@as(usize, 0), defaults.build.extra_path.len);
+    const system = "[build]\nextra_path = [\"/opt/system/bin\"]\ncflags = [\"-O3\"]\n";
+    const inherited = try ShellyBuildConfiguration.initFromBuffers(std.testing.allocator, system, "[build]\ncheck = false\n");
+    defer inherited.deinit();
+    try std.testing.expectEqualStrings("/opt/system/bin", inherited.build.extra_path[0]);
+    const replaced = try ShellyBuildConfiguration.initFromBuffers(std.testing.allocator, system, "[build]\nextra_path = [\"/opt/user/bin\", \"/opt/other/bin\"]\n");
+    defer replaced.deinit();
+    try std.testing.expectEqual(@as(usize, 2), replaced.build.extra_path.len);
+    try std.testing.expectEqualStrings("/opt/user/bin", replaced.build.extra_path[0]);
+    try std.testing.expectEqualStrings("-O3", replaced.build.cflags[0]);
+    const cleared = try ShellyBuildConfiguration.initFromBuffers(std.testing.allocator, system, "[build]\nextra_path = []\n");
+    defer cleared.deinit();
+    try std.testing.expectEqual(@as(usize, 0), cleared.build.extra_path.len);
+}
+
+test "shellybuild extra_path rejects relative empty colon and NUL entries" {
+    for ([_][]const u8{ "", "bin", "~/bin", "$HOME/bin", "/opt/bin:/usr/bin", "/opt/\\u0000bin" }) |entry| {
+        const content = try std.fmt.allocPrint(std.testing.allocator, "[build]\nextra_path = [\"{s}\"]\n", .{entry});
+        defer std.testing.allocator.free(content);
+        try std.testing.expectError(error.InvalidBuildPath, ShellyBuildConfiguration.initFromBuffers(std.testing.allocator, content, null));
+    }
+    try std.testing.expectError(error.InvalidConfiguration, ShellyBuildConfiguration.initFromBuffers(std.testing.allocator, "[build]\nextra_path = \"/opt/bin\"\n", null));
 }

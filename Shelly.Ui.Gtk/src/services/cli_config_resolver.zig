@@ -105,7 +105,7 @@ pub const CliConfigResolver = struct {
     /// the single source of truth. Never fatal. TODO: Remove after few releases.
     pub fn migrateLegacyInstallPath(self: CliConfigResolver) void {
         const legacy = self.readLegacyInstallPath() catch |err| {
-            std.log.warn("appimage: could not read legacy install path: {t}", .{err});
+            std.log.warn("Could not read the previous AppImage installation directory during settings migration. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return;
         };
         const legacy_path = legacy orelse return;
@@ -113,7 +113,7 @@ pub const CliConfigResolver = struct {
         if (legacy_path.len == 0) return;
 
         const existing = self.readAppImageInstallPath() catch |err| {
-            std.log.warn("appimage: could not read CLI config during migration: {t}", .{err});
+            std.log.warn("Could not read the CLI settings during AppImage settings migration. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return;
         };
         if (existing) |value| {
@@ -122,7 +122,7 @@ pub const CliConfigResolver = struct {
         }
 
         self.writeAppImageInstallPath(legacy_path) catch |err| {
-            std.log.warn("appimage: could not migrate legacy install path: {t}", .{err});
+            std.log.warn("Could not migrate the previous AppImage installation directory. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return;
         };
         std.log.info("appimage: migrated install path from settings.json to config.json", .{});

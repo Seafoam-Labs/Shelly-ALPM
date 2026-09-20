@@ -377,7 +377,7 @@
                                       <object class="GtkLabel" id="UpdateUrlErrorLabel">
                                         <property name="visible">false</property>
                                         <property name="xalign">0</property>
-                                        <property name="label" translatable="yes">Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)</property>
+                                        <property name="label" translatable="yes">Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm.</property>
                                         <style>
                                           <class name="error"/>
                                           <class name="caption"/>

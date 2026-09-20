@@ -79,7 +79,7 @@ pub fn dispatch(
                 elevated_arguments,
                 invocation.globals.json,
             ) catch |err| {
-                try context.stderr.print("Unable to elevate isolated build: {t}\n", .{err});
+                try context.stderr.print("Could not obtain administrator privileges for the isolated build. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                 if (invocation.globals.json) {
                     try writeBuildJson(context.stdout, null, err, true);
                     try context.stdout.writeByte('\n');
@@ -95,7 +95,7 @@ pub fn dispatch(
             }
         } else {
             const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
-                try context.stderr.print("Unable to elevate build dependency installation: {t}\n", .{err});
+                try context.stderr.print("Could not obtain administrator privileges for build dependency installation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                 return 1;
             };
             if (elevated_exit) |exit_code| return exit_code;
@@ -244,7 +244,7 @@ fn executeSourcePgpKeyPreparation(context: *runtime.RuntimeContext, invocation: 
         const message = try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = "source-signing key preparation" });
         defer context.allocator.free(message);
         if (!renderer.reported_failure.load(.acquire)) try renderer.reportError(message);
-        try renderer.finishWithMessage(false, "Source-signing key preparation failed.");
+        try renderer.finishWithMessage(false, "Could not prepare the source-signing keys for the requested package.");
         try std.json.Stringify.value(SourcePgpKeyResult{ .failure = @errorName(err) }, .{}, stdout);
         try stdout.writeByte('\n');
         try stdout.flush();
@@ -325,7 +325,7 @@ fn executeReviewOnly(
         const detail = try preparationErrorMessage(context, err);
         defer context.allocator.free(detail);
         try renderer.reportError(detail);
-        try renderer.finishWithMessage(false, "PKGBUILD review failed.");
+        try renderer.finishWithMessage(false, "Could not review the PKGBUILD for the requested package.");
         context.stdout = stdout;
         try writeBuildJsonWithDiagnostic(context.stdout, null, err, false, contextDiagnostic(context), contextLogPath(context));
         try context.stdout.writeByte('\n');
@@ -516,9 +516,9 @@ fn executeWithRunner(
             .{
                 .opening = "Preparing PKGBUILD...",
                 .success_message = "Build completed.",
-                .failure_message = "Build failed.",
-                .failure_label = "Build failed",
-                .cancelled_message = "Build cancelled.",
+                .failure_message = "Could not build the requested package. See the build details for the failed stage and command output.",
+                .failure_label = "Could not build the requested package. See the build details for the failed stage and command output.",
+                .cancelled_message = "Operation cancelled.",
             },
             runner,
         );
@@ -531,7 +531,7 @@ fn executeWithRunner(
         runner,
         invocation,
         "Build completed.",
-        "Build failed.",
+        "Could not build the requested package. See the build details for the failed stage and command output.",
     );
     return if (succeeded) 0 else 1;
 }
@@ -563,7 +563,7 @@ fn executeJson(
             const detail = try preparationErrorMessage(context, err);
             defer context.allocator.free(detail);
             if (!renderer.reported_failure.load(.acquire)) try renderer.reportError(detail);
-            try renderer.finishWithMessage(false, "Build failed.");
+            try renderer.finishWithMessage(false, "Could not build the requested package. See the build details for the failed stage and command output.");
         }
         context.stdout = stdout;
         if (runner.child_json) |document| {
@@ -621,7 +621,7 @@ fn executeMakeSrcinfo(
         &runner,
         invocation,
         "SRCINFO generated.",
-        "SRCINFO generation failed.",
+        "Could not generate .SRCINFO for the selected package base.",
     ) catch |err| {
         context.stdout = stdout;
         return err;
@@ -1064,7 +1064,7 @@ const Real = struct {
         const artifacts = builder.runWithOperation(&operation) catch |err| {
             operation.reportError(
                 err,
-                "Failed to build",
+                "Could not build the requested package. See the build details for the failed stage and command output.",
                 "build",
                 null,
                 false,
@@ -1610,6 +1610,7 @@ fn renderIsolatedConfiguration(
     try writeTomlArray(writer, "ldflags", configuration.build.ldflags);
     try writeTomlArray(writer, "ltoflags", configuration.build.ltoflags);
     try writeTomlArray(writer, "makeflags", configuration.build.makeflags);
+    try writeTomlArray(writer, "extra_path", configuration.build.extra_path);
     try writer.print("check = {}\nccache = false\ndistcc = false\n\n", .{configuration.build.check});
 
     try writer.writeAll("[package]\n");
@@ -1680,7 +1681,7 @@ fn runSyncDepsCoordinator(
     );
     if (!elevation.isRoot()) {
         try context.stderr.print(
-            "Cannot install build dependencies without elevated privileges.\n",
+            "Could not install build dependencies because administrator privileges are unavailable. Run the build from a regular user session and approve the authorization request.\n",
             .{},
         );
         return error.ElevationRequired;
@@ -1787,7 +1788,7 @@ fn runSyncDepsCoordinator(
     if (invocation.globals.json) {
         const captured = (try elevation.runAsInvokingUserCapture(context, child_arguments, operation_context)) orelse {
             try context.stderr.print(
-                "Cannot run the build as the invoking user; --sync-deps must start from a regular user session.\n",
+                "Could not identify a regular user to run the build. Start Shelly from your regular user session and allow Shelly to request administrator privileges when needed.\n",
                 .{},
             );
             return error.InvokingUserUnavailable;
@@ -1800,7 +1801,7 @@ fn runSyncDepsCoordinator(
     const child_exit = try elevation.runAsInvokingUser(context, child_arguments);
     const exit_code = child_exit orelse {
         try context.stderr.print(
-            "Cannot run the build as the invoking user; --sync-deps must start from a regular user session.\n",
+            "Could not identify a regular user to run the build. Start Shelly from your regular user session and allow Shelly to request administrator privileges when needed.\n",
             .{},
         );
         return error.InvokingUserUnavailable;
@@ -2117,7 +2118,7 @@ const BuildDependencyCleanup = struct {
             completion = .failed;
             operation.reportError(
                 err,
-                "Failed to refresh package state for build dependency cleanup",
+                "Could not refresh the installed-package state before cleaning up build dependencies. Dependency cleanup was not completed.",
                 "alpm.cleanup",
                 null,
                 true,
@@ -2129,7 +2130,7 @@ const BuildDependencyCleanup = struct {
             completion = .failed;
             operation.reportError(
                 err,
-                "Failed to inspect packages installed for the build",
+                "Could not identify the dependencies installed for this build. Dependency cleanup was not completed.",
                 "alpm.cleanup",
                 null,
                 true,
@@ -2155,7 +2156,7 @@ const BuildDependencyCleanup = struct {
                 completion = .failed;
                 operation.reportError(
                     err,
-                    "Failed to prepare build dependency cleanup",
+                    "Could not prepare build dependency cleanup. Dependency cleanup was not completed.",
                     "alpm.cleanup",
                     null,
                     true,
@@ -2182,7 +2183,7 @@ const BuildDependencyCleanup = struct {
                 completion = .failed;
                 operation.reportError(
                     err,
-                    "Failed to verify build dependency cleanup",
+                    "Could not verify whether build dependency cleanup completed. Check the installed dependency list before removing anything manually.",
                     "alpm.cleanup",
                     null,
                     true,
@@ -2239,15 +2240,15 @@ fn reportCleanupFailure(
     const message = if (joined) |value|
         std.fmt.allocPrint(
             allocator,
-            "Failed to remove build dependencies ({s}): {s}",
-            .{ value, @errorName(err) },
+            "Could not remove build dependencies: {0f}. {1s} Review the remaining dependencies before removing them manually.\n\nTechnical details: {2s}",
+            .{ @import("diagnostics").safe(value), @import("diagnostics").cause(err), @errorName(err) },
         ) catch null
     else
         null;
     defer if (message) |value| allocator.free(value);
     operation.reportError(
         err,
-        message orelse "Failed to remove build dependencies",
+        message orelse "Could not remove the build dependencies. Review the remaining dependencies before removing them manually.",
         "alpm.cleanup",
         null,
         true,
@@ -2338,13 +2339,13 @@ fn exitCodeForBuildError(err: anyerror) u8 {
 
 fn buildErrorMessage(err: anyerror) []const u8 {
     return switch (err) {
-        error.ReviewedPkgbuildChanged => "The reviewed PKGBUILD inputs changed.",
+        error.ReviewedPkgbuildChanged => "The reviewed PKGBUILD inputs changed before the build started. Review the current PKGBUILD and source files again, then restart the build.",
         error.InvalidReviewDigest => "The review digest must be 64 hexadecimal characters.",
-        error.MissingReviewDigest => "The coordinator build is missing its review digest.",
+        error.MissingReviewDigest => "Could not start the build because the coordinator did not provide a review digest. Review the PKGBUILD again and restart the build.",
         error.PackageDestinationMustBeAbsolute => "The package destination must be an absolute path.",
         error.MissingPackageDestination => "The package destination option requires a directory.",
-        error.Cancelled => "The build was cancelled.",
-        else => @errorName(err),
+        error.Cancelled => "Operation cancelled.",
+        else => @import("diagnostics").cause(err),
     };
 }
 
@@ -3094,6 +3095,7 @@ test "isolated configuration preserves build policy and forces guest-local desti
         null,
     );
     defer configuration.deinit();
+    configuration.build.extra_path = &.{"/opt/guest-toolchain/bin"};
     const rendered = try renderIsolatedConfiguration(std.testing.allocator, configuration);
     defer std.testing.allocator.free(rendered);
     const parsed = try ShellyBuildConfiguration.initFromBuffers(
@@ -3103,6 +3105,7 @@ test "isolated configuration preserves build policy and forces guest-local desti
     );
     defer parsed.deinit();
     try std.testing.expectEqualStrings(configuration.build.carch, parsed.build.carch);
+    try std.testing.expectEqualStrings("/opt/guest-toolchain/bin", parsed.build.extra_path[0]);
     try std.testing.expectEqualStrings(configuration.build.cflags[0], parsed.build.cflags[0]);
     try std.testing.expectEqualStrings("/build/work", parsed.destinations.build.?);
     try std.testing.expectEqualStrings(isolated_build.guest_artifacts, parsed.destinations.packages.?);

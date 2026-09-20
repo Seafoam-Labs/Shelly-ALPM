@@ -13,6 +13,7 @@ const mark = @import("catalog/mark.zig");
 const news = @import("catalog/news.zig");
 const purify = @import("catalog/purify.zig");
 const remove = @import("catalog/remove.zig");
+const repo_db = @import("catalog/repo_db.zig");
 const repository = @import("catalog/repository.zig");
 const run = @import("catalog/run.zig");
 const search = @import("catalog/search.zig");
@@ -111,7 +112,8 @@ pub const variants = search.variants ++
     keyring.variants ++
     run.variants ++
     builder.variants ++
-    resolve.variants;
+    resolve.variants ++
+    repo_db.variants;
 
 pub const shared_modifiers = [_]SharedModifier{
     .{

@@ -65,8 +65,8 @@ fn validateWritableDirectory(self: *PackageBuilder, root_path: []const u8) !void
 pub fn reportUnwritableBuildDirectory(self: *PackageBuilder, path: []const u8) void {
     const message = std.fmt.allocPrint(
         self.allocator,
-        "Build directory is not writable by the non-root builder: {s}. Remove it or restore ownership to the invoking user.",
-        .{path},
+        "The build user the invoking user cannot write to build directory {0f}. Check its ownership and permissions before retrying.",
+        .{@import("diagnostics").safe(path)},
     ) catch return;
     defer self.allocator.free(message);
     if (self.active_operation) |operation|
@@ -1024,7 +1024,7 @@ fn writeSandboxFailureHint(self: *const PackageBuilder) void {
     const log = self.active_log orelse return;
     log.writeRecord(
         "sandbox",
-        "step failed inside the Landlock sandbox; if it hit a permission error, grant additional paths through [sandbox] extra_read or extra_write",
+        "The build step failed inside the Landlock sandbox. If the build log identifies a required path that was denied, review the sandbox extra_read or extra_write setting.",
     ) catch {};
 }
 
@@ -1155,7 +1155,7 @@ const virtualMetadataShellPrelude =
     \\  return 97
     \\}
     \\mknod() {
-    \\  printf '%s\n' 'shelly: package steps cannot create device nodes' >&2
+    \\  printf '%s\n' 'Could not complete the package stage because the package attempted to create a device node. Device-node creation is not supported by the package builder.' >&2
     \\  return 1
     \\}
     \\__shelly_record_ownership() {

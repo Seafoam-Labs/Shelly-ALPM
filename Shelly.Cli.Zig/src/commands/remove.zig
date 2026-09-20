@@ -67,7 +67,7 @@ pub fn dispatch(
 ) !?u8 {
     if (!isRemovePath(invocation.command.path)) return null;
     if (invocation.positionals.len == 0)
-        return try reportValidationFailure(context, invocation, "No packages specified.");
+        return try reportValidationFailure(context, invocation, "Specify at least one package name. See the command help for usage.");
 
     if (!invocation.globals.ui_mode and needsElevation(invocation)) {
         const carries_aur = std.mem.eql(u8, invocation.command.path, aur_command_path);
@@ -77,7 +77,7 @@ pub fn dispatch(
             invocation.arguments;
         defer if (carries_aur) context.allocator.free(elevated_arguments);
         const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
-            try context.stderr.print("Unable to elevate remove: {t}\n", .{err});
+            try context.stderr.print("Could not obtain administrator privileges for package removal. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -127,7 +127,7 @@ fn executeUi(
         .opening = opening,
         .success_message = successMessage(invocation),
         .failure_message = failureMessage(invocation),
-        .failure_label = "Removal failed",
+        .failure_label = "Could not remove the selected packages.",
     }, runner);
 }
 
@@ -387,35 +387,35 @@ fn containsTextIgnoreCase(value: []const u8, query: []const u8) bool {
 
 fn cleanupStandardConfig(context: *runtime.RuntimeContext, package_names: []const []const u8) void {
     const config_home = xdg.configHome(context) catch |err| {
-        context.stderr.print("Unable to resolve configuration directory: {t}\n", .{err}) catch {};
+        context.stderr.print("Package removal completed, but the configuration directory could not be located. {0s} Configuration cleanup was not completed.\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) }) catch {};
         return;
     };
     for (package_names) |package_name| {
         const path = std.fs.path.join(context.allocator, &.{ config_home, package_name }) catch |err| {
-            context.stderr.print("Unable to build configuration path for {s}: {t}\n", .{ package_name, err }) catch {};
+            context.stderr.print("Package removal completed, but the configuration for {0f} could not be removed from the configured file. {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(package_name), @import("diagnostics").cause(err), @errorName(err) }) catch {};
             continue;
         };
         defer context.allocator.free(path);
         std.Io.Dir.cwd().deleteTree(context.io, path) catch |err| {
             if (err == error.FileNotFound) continue;
-            context.stderr.print("Unable to remove configuration for {s}: {t}\n", .{ package_name, err }) catch {};
+            context.stderr.print("Package removal completed, but the configuration for {0f} could not be removed from {1f}. {2s}\n\nTechnical details: {3s}\n", .{ @import("diagnostics").safe(package_name), @import("diagnostics").safe(path), @import("diagnostics").cause(err), @errorName(err) }) catch {};
         };
     }
 }
 
 fn cleanupFlatpakConfig(context: *runtime.RuntimeContext, canonical_id: []const u8) void {
     const home = xdg.getEnv(context, "HOME") orelse {
-        context.stderr.print("Unable to resolve the home directory for Flatpak configuration cleanup.\n", .{}) catch {};
+        context.stderr.print("Package removal completed, but the user home directory could not be located for Flatpak configuration cleanup. Configuration cleanup was not completed.\n", .{}) catch {};
         return;
     };
     const path = std.fs.path.join(context.allocator, &.{ home, ".var", "app", canonical_id }) catch |err| {
-        context.stderr.print("Unable to build Flatpak configuration path for {s}: {t}\n", .{ canonical_id, err }) catch {};
+        context.stderr.print("Flatpak removal completed, but the configuration for {0f} could not be removed from the configured file. {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(canonical_id), @import("diagnostics").cause(err), @errorName(err) }) catch {};
         return;
     };
     defer context.allocator.free(path);
     std.Io.Dir.cwd().deleteTree(context.io, path) catch |err| {
         if (err == error.FileNotFound) return;
-        context.stderr.print("Unable to remove Flatpak configuration for {s}: {t}\n", .{ canonical_id, err }) catch {};
+        context.stderr.print("Flatpak removal completed, but the configuration for {0f} could not be removed from {1f}. {2s}\n\nTechnical details: {3s}\n", .{ @import("diagnostics").safe(canonical_id), @import("diagnostics").safe(path), @import("diagnostics").cause(err), @errorName(err) }) catch {};
     };
 }
 
@@ -453,9 +453,9 @@ fn successMessage(invocation: *const parser.Invocation) []const u8 {
 }
 
 fn failureMessage(invocation: *const parser.Invocation) []const u8 {
-    if (std.mem.eql(u8, invocation.command.path, appimage_command_path)) return "AppImage removal failed.";
-    if (std.mem.eql(u8, invocation.command.path, flatpak_command_path)) return "Flatpak removal failed.";
-    return "Package removal failed.";
+    if (std.mem.eql(u8, invocation.command.path, appimage_command_path)) return "Could not remove the selected AppImage.";
+    if (std.mem.eql(u8, invocation.command.path, flatpak_command_path)) return "Could not remove the selected Flatpak from the selected installation.";
+    return "Could not remove the selected packages.";
 }
 
 fn sentinelStrings(allocator: std.mem.Allocator, values: []const []const u8) ![][:0]const u8 {

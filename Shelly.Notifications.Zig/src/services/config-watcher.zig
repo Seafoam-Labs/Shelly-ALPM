@@ -97,7 +97,7 @@ pub const ConfigWatcher = struct {
 
             if (self.changedSinceLast()) {
                 self.resolver.reload() catch |e| {
-                    log.warn("reload failed: {any}", .{e});
+                    log.warn("Could not reload the tray settings from the configured file. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
                     continue;
                 };
                 log.info("config reloaded from disk", .{});

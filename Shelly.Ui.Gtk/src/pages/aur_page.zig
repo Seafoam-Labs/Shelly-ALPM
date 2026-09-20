@@ -206,7 +206,7 @@ pub const AurPage = extern struct {
             },
             .prompt => self.show_placeholder("system-search-symbolic", translations._("Search the AUR"), translations._("The AUR has no browsable index — type a package name to begin.")),
             .empty => self.show_placeholder("edit-find-symbolic", translations._("No packages found"), translations._("Try a shorter or more general keyword.")),
-            .err => self.show_placeholder("dialog-error-symbolic", translations._("Could not reach the AUR"), translations._("Check your connection and try again.")),
+            .err => self.show_placeholder("dialog-error-symbolic", translations._("Could not search the configured AUR service."), translations._("Check your connection and try again.")),
         }
     }
 
@@ -541,7 +541,7 @@ pub const AurPage = extern struct {
     ) void {
         const svc = runtime.config orelse return;
         svc.updateField(field, value) catch |err| {
-            std.log.err("aur page: failed to update config: {t}", .{err});
+            std.log.err("Could not update setting {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(@tagName(field)), @import("diagnostics").cause(err), @errorName(err) });
         };
     }
 
@@ -596,13 +596,13 @@ pub const AurPage = extern struct {
                     return;
                 };
                 break :blk cli.search_aur(query) catch |err| {
-                    std.debug.print("aur_search failed: {t}\n", .{err});
+                    std.debug.print("Could not search the AUR. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                     post_failure(page, arena_ptr, generation);
                     return;
                 };
             },
             .installed => cli.list_aur_installed() catch |err| {
-                std.debug.print("aur_installed failed: {t}\n", .{err});
+                std.debug.print("Could not load the installed AUR-package list. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                 post_failure(page, arena_ptr, generation);
                 return;
             },
@@ -735,7 +735,7 @@ pub const AurPage = extern struct {
 
     fn restore_current_view(self: *Self) void {
         const p = self.priv();
-        
+
         if (p.installed_mode) {
             self.start_load(.installed);
         } else if (p.last_query_len > 0) {
@@ -746,7 +746,7 @@ pub const AurPage = extern struct {
             self.set_state(.prompt);
         }
     }
-    
+
     fn on_installed_toggled(self: *Self) callconv(.c) void {
         const p = self.priv();
         p.installed_mode = gtk.CheckButton.getActive(p.installed_toggle) != 0;

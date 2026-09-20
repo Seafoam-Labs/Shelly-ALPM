@@ -392,7 +392,7 @@ fn replace_command(self: PkgbuildParser, input: []const u8) ![]const u8 {
         }
 
         const whole_match = input[open .. close + 1];
-        std.debug.print("[Shelly] Warning: Cannot evaluate command substitution: {s}\n", .{whole_match});
+        std.debug.print("Could not evaluate PKGBUILD command substitution {0f} in the PKGBUILD.\n", .{@import("diagnostics").safe(whole_match)});
         pos = close + 1;
     }
 

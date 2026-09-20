@@ -131,7 +131,7 @@ pub fn runSandboxExec(
 ) u8 {
     const sandbox = Zigalpm.builder.sandbox;
     const parsed = sandbox.parseWrapperArguments(allocator, arguments) catch |err| {
-        stderr.print("shelly sandbox: invalid wrapper arguments: {t}\n", .{err}) catch {};
+        stderr.print("Could not start the build sandbox because its wrapper arguments are invalid. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) }) catch {};
         return 1;
     };
     defer {
@@ -140,17 +140,17 @@ pub fn runSandboxExec(
     }
 
     Zigalpm.builder.setNoNewPrivs() catch {
-        stderr.print("shelly sandbox: unable to lock process privileges\n", .{}) catch {};
+        stderr.print("Could not start the build sandbox because process privileges could not be locked.\n", .{}) catch {};
         return 1;
     };
 
     const read_write_paths = joinSandboxPaths(allocator, sandbox.base_read_write_paths, parsed.read_write_paths) catch {
-        stderr.print("shelly sandbox: out of memory\n", .{}) catch {};
+        stderr.print("Could not start the build sandbox because Shelly ran out of memory. Close other applications and try again.\n", .{}) catch {};
         return 1;
     };
     defer allocator.free(read_write_paths);
     const read_only_paths = joinSandboxPaths(allocator, sandbox.base_read_only_paths, parsed.read_only_paths) catch {
-        stderr.print("shelly sandbox: out of memory\n", .{}) catch {};
+        stderr.print("Could not start the build sandbox because Shelly ran out of memory. Close other applications and try again.\n", .{}) catch {};
         return 1;
     };
     defer allocator.free(read_only_paths);
@@ -159,7 +159,7 @@ pub fn runSandboxExec(
         .read_write_paths = read_write_paths,
         .read_only_paths = read_only_paths,
     }) catch |err| {
-        stderr.print("shelly sandbox: unable to confine step: {t}\n", .{err}) catch {};
+        stderr.print("Could not apply the sandbox restrictions for {0f}. {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe("the build step"), @import("diagnostics").cause(err), @errorName(err) }) catch {};
         return 1;
     };
 
@@ -186,18 +186,18 @@ fn execSandboxChild(
     switch (@import("builtin").os.tag) {
         .linux => {
             const argv = buildPosixArgv(allocator, child_argv) catch {
-                stderr.print("shelly sandbox: out of memory\n", .{}) catch {};
+                stderr.print("Could not start the build sandbox because Shelly ran out of memory. Close other applications and try again.\n", .{}) catch {};
                 return 1;
             };
             const rc = std.os.linux.execve(argv[0].?, argv.ptr, environ.block.slice.ptr);
             stderr.print(
-                "shelly sandbox: unable to execute {s}: {t}\n",
-                .{ child_argv[0], std.os.linux.errno(@intCast(rc)) },
+                "Could not start {0f} inside the build sandbox. The operating system rejected the request. Review the technical details.\n\nTechnical details: {1t}\n",
+                .{ @import("diagnostics").safe(child_argv[0]), std.os.linux.errno(@intCast(rc)) },
             ) catch {};
             return 127;
         },
         else => {
-            stderr.print("shelly sandbox: unsupported platform\n", .{}) catch {};
+            stderr.print("The build sandbox is not supported on this platform. Run this build on a supported Linux system.\n", .{}) catch {};
             return 1;
         },
     }
@@ -320,7 +320,7 @@ test "help and parser errors bypass dispatch" {
 
     stdout.writer.end = 0;
     try std.testing.expectEqual(@as(u8, 1), try run(&context, &.{ "config", "get" }));
-    try std.testing.expect(std.mem.indexOf(u8, stderr.writer.buffered(), "Required argument 'key' missing") != null);
+    try std.testing.expect(std.mem.indexOf(u8, stderr.writer.buffered(), "Command 'shelly config get' requires 'key'") != null);
 }
 
 test "combined search shortcodes dispatch each selected type and route modifiers" {

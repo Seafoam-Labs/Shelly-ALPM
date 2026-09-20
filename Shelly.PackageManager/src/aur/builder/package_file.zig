@@ -93,7 +93,7 @@ fn tidyPackage(self: *PackageBuilder, package_build: *const PackageBuild, pkgdir
         for (flags) |flag| try command.append(self.allocator, flag);
         try command.appendSlice(self.allocator, &.{ "-o", output_path, "--" });
         try command.append(self.allocator, path);
-        var result = try process_runner.runWithEnvironment(
+        var result = try process_runner.runWithBuildEnvironment(
             self.allocator,
             self.io,
             self.environ,
@@ -106,8 +106,8 @@ fn tidyPackage(self: *PackageBuilder, package_build: *const PackageBuild, pkgdir
         if (result.exit_code != 0) {
             const warning = try std.fmt.allocPrint(
                 self.allocator,
-                "Could not strip {s} (exit {d}); keeping original file.\n{s}",
-                .{ entry.path, result.exit_code, std.mem.trimEnd(u8, result.stderr, "\r\n") },
+                "Could not strip {0f}; keeping the original file. Review the strip output in the build details.\n\nTechnical details: {1d}; {2f}",
+                .{ @import("diagnostics").safe(entry.path), result.exit_code, @import("diagnostics").safe(std.mem.trimEnd(u8, result.stderr, "\r\n")) },
             );
             defer self.allocator.free(warning);
             if (self.active_operation) |operation| {

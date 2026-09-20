@@ -17,6 +17,7 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
+    const diagnostics = b.dependency("shelly_diagnostics", .{ .target = target, .optimize = optimize }).module("diagnostics");
     const shelly_http = b.dependency("shelly_http", .{
         .target = target,
         .optimize = optimize,
@@ -48,18 +49,21 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    operation_context_mod.addImport("diagnostics", diagnostics);
     const user_account_mod = b.createModule(.{
         .root_source_file = b.path("src/shared/user_account.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
+    user_account_mod.addImport("diagnostics", diagnostics);
     const archive_mod = b.createModule(.{
         .root_source_file = b.path("src/shared/archive.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
+    archive_mod.addImport("diagnostics", diagnostics);
     archive_mod.linkSystemLibrary("archive", .{});
 
     // This creates a module, which represents a collection of source files alongside
@@ -83,6 +87,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    mod.addImport("diagnostics", diagnostics);
     mod.addImport("alpm_c", alpm_c);
     mod.addImport("archive", archive_mod);
     mod.addImport("operation_context", operation_context_mod);
@@ -160,6 +165,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    exe.root_module.addImport("diagnostics", diagnostics);
 
     const zig_time_dep = b.dependency("zig-time", .{});
     exe.root_module.addImport("zig-time", zig_time_dep.module("zig-time"));
@@ -206,8 +212,10 @@ pub fn build(b: *std.Build) void {
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to
     // set the releative field.
+    const test_filters = b.option([]const []const u8, "test-filter", "Run root tests whose names contain this text") orelse &.{};
     const mod_tests = b.addTest(.{
         .root_module = mod,
+        .filters = test_filters,
     });
 
     // A run step that will run the test executable.
@@ -218,6 +226,7 @@ pub fn build(b: *std.Build) void {
     // hence why we have to create two separate ones.
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
+        .filters = test_filters,
     });
 
     // A run step that will run the second test executable.
@@ -258,6 +267,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    shellybuild_test_module.addImport("diagnostics", diagnostics);
     shellybuild_test_module.addImport("toml", toml.module("toml"));
     shellybuild_test_module.addImport("operation_context", operation_context_mod);
     shellybuild_test_module.addImport("user_account", user_account_mod);
@@ -281,6 +291,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    local_test_module.addImport("diagnostics", diagnostics);
     local_test_module.addImport("archive", archive_mod);
     local_test_module.addImport("operation_context", operation_context_mod);
     const local_tests = b.addTest(.{ .root_module = local_test_module });
@@ -375,6 +386,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    downloader_test_module.addImport("diagnostics", diagnostics);
     downloader_test_module.addImport("operation_context", operation_context_mod);
     downloader_test_module.addImport("ShellyHttp", shelly_http.module("ShellyHttp"));
     const downloader_tests = b.addTest(.{ .name = "downloader-test", .root_module = downloader_test_module });
@@ -401,6 +413,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    cache_test_module.addImport("diagnostics", diagnostics);
     cache_test_module.addImport("alpm_c", alpm_c);
     cache_test_module.addImport("operation_context", operation_context_mod);
     const cache_tests = b.addTest(.{ .name = "cache-test", .root_module = cache_test_module });
@@ -571,6 +584,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    fake_backend_module.addImport("diagnostics", diagnostics);
     fake_backend_module.addImport(
         "Shelly_Flatpak_Protocol",
         flatpak_backend_dep.module("Shelly_Flatpak_Protocol"),
@@ -580,6 +594,7 @@ pub fn build(b: *std.Build) void {
         .linkage = .dynamic,
         .root_module = fake_backend_module,
     });
+    fake_backend.root_module.addImport("diagnostics", diagnostics);
     const fake_backend_filename =
         "libshelly-flatpak-backend-package-manager-test.so";
     const install_fake_backend = b.addInstallArtifact(fake_backend, .{
@@ -605,6 +620,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    backend_integration_module.addImport("diagnostics", diagnostics);
     backend_integration_module.addImport(
         "Shelly_Flatpak_Protocol",
         flatpak_backend_dep.module("Shelly_Flatpak_Protocol"),
@@ -636,6 +652,7 @@ pub fn build(b: *std.Build) void {
             "AUR dispatcher returns provider selections",
             "AUR handlers can be removed through the manager-facing dispatcher",
             "AUR RPC URL and form encoding matches the C# requests",
+            "AUR availability",
             "AUR suggestions are returned as owned strings",
             "partial info failures preserve packages returned by earlier chunks",
             "PKGBUILD validation combines post-install and homograph findings",
@@ -786,6 +803,9 @@ pub fn build(b: *std.Build) void {
             "clean invoking-user build command drops the elevated environment",
             "build progress parser recognizes makepkg percentage lines",
             "build environment exports flags hosts and compiler wrapper paths",
+            "native build PATH",
+            "PackageBuilder uses configured PATH",
+            "PackageBuilder reports invalid configured PATH",
             "disabled build environment removes inherited flags and hosts",
             "streaming process execution forwards stdout stderr and a final unterminated line",
             "streaming process execution delivers output before the child exits",
@@ -861,6 +881,44 @@ pub fn build(b: *std.Build) void {
     const run_appimage_tests = b.addRunArtifact(appimage_tests);
     const appimage_test_step = b.step("appimage-test", "Run safe AppImage parity tests");
     appimage_test_step.dependOn(&run_appimage_tests.step);
+
+    const repo_db_tests = b.addTest(.{
+        .name = "repo-db-test",
+        .root_module = mod,
+        .filters = &.{
+            "pkginfo parses keys and repeated values",
+            "pkginfo reads the PKGINFO entry from a package archive",
+            "pkginfo rejects archives without PKGINFO",
+            "package file list excludes archive root dotfiles and keeps nested dotfiles",
+            "package file list is byte-sorted and deduplicated",
+            "desc writes repo-add section order and omits empty sections",
+            "desc includes stat size streamed sha256 and PKGINFO isize",
+            "pgpsig is embedded only when requested",
+            "pgpsig rejects armored and oversized signatures",
+            "add creates db and files archives with a matching entry",
+            "add replacement keeps both databases in lockstep",
+            "add with new skips an existing identical entry without rewriting",
+            "add with prevent_downgrade skips only strictly newer existing versions",
+            "failed add leaves the database files unchanged",
+            "remove deletes entries by package name from both databases",
+            "remove of an unknown name fails without publishing",
+            "removing the last entry produces valid empty databases",
+            "publication keeps one old generation and refreshes the extension-less symlink",
+            "remove old files deletes package and signature only after publication",
+            "remove with remove old files deletes each matched package after publication",
+            "lock contention fails without modifying the database",
+            "database derives the files path and rejects unsupported extensions",
+            "publication signs each database archive and rotates the signature into place",
+            "a failed signature still publishes the database unsigned",
+            "a staged signature from an aborted run is not published",
+            "verify checks the signature of both database archives",
+            "verify reports a missing signature as skipped",
+            "verify stops at an unusable signature",
+        },
+    });
+    const run_repo_db_tests = b.addRunArtifact(repo_db_tests);
+    const repo_db_test_step = b.step("repo-db-test", "Run repository database tests");
+    repo_db_test_step.dependOn(&run_repo_db_tests.step);
 
     // Just like flags, top level steps are also listed in the `--help` menu.
     //

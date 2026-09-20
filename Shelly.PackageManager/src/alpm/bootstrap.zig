@@ -33,11 +33,11 @@ pub fn runInternal(
     arguments: []const []const u8,
 ) u8 {
     const options = parseArguments(arguments) catch |err| {
-        stderr.print("shellystrap: invalid request: {t}\n", .{err}) catch {};
+        stderr.print("Could not provision the isolated build root because the bootstrap request is invalid. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) }) catch {};
         return 2;
     };
     _ = bootstrapReporting(allocator, io, environ, options, stderr) catch |err| {
-        stderr.print("shellystrap: provisioning failed: {t}\n", .{err}) catch {};
+        stderr.print("Could not provision the isolated build root. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) }) catch {};
         return 1;
     };
     return 0;
@@ -93,9 +93,7 @@ const DiagnosticOutput = struct {
 
     fn handleError(data: ?*anyopaque, args: events.ErrorArgs) void {
         const self: *DiagnosticOutput = @ptrCast(@alignCast(data.?));
-        self.stderr.print("shellystrap: libalpm: {s}\n", .{
-            std.mem.trimEnd(u8, args.message, "\r\n"),
-        }) catch {};
+        self.stderr.print("Could not provision the isolated build root: {0f}.\n", .{@import("diagnostics").safe(std.mem.trimEnd(u8, args.message, "\r\n"))}) catch {};
     }
 
     fn handleScriptlet(data: ?*anyopaque, args: events.ScriptletArgs) void {
@@ -177,8 +175,8 @@ fn finalizeRoot(
             null,
         ) catch |err| {
             var detail_buffer: [256]u8 = undefined;
-            const detail = std.fmt.bufPrint(&detail_buffer, "unable to start: {t}", .{err}) catch
-                "unable to start";
+            const detail = std.fmt.bufPrint(&detail_buffer, "Could not start the setup command while preparing the isolated build root. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) }) catch
+                "Could not start the setup command while preparing the isolated build root.";
             reportFinalizerFailure(diagnostic_writer, finalizer.name, detail);
             return error.BootstrapFinalizerFailed;
         };
@@ -490,7 +488,7 @@ test "internal bootstrap diagnostics write libalpm failures only to stderr" {
     });
 
     try std.testing.expectEqualStrings(
-        "shellystrap: libalpm: invalid or corrupted package (PGP signature)\n" ++
+        "Could not provision the isolated build root: invalid or corrupted package (PGP signature).\n" ++
             "shellystrap: scriptlet: a package scriptlet failed\n",
         output.written(),
     );

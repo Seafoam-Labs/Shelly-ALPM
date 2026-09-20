@@ -32,6 +32,7 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        .shelly_diagnostics = .{ .path = "../Shelly.Diagnostics" },
         .zsn = .{
             .url = "git+https://github.com/Seafoam-Labs/zsn.git#1d771e10e68021cb9e0a5c61fb3b8cd155aa8ce7",
             .hash = "zsn-0.0.0-_ggIZuSTAADQvhE6jytwhB3OVnASHKFlck31LHML3F2t",

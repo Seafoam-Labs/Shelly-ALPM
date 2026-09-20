@@ -3,6 +3,10 @@
   <menu id="package_actions_menu">
     <section>
       <item>
+        <attribute name="label" translatable="yes">Install Optional Deps</attribute>
+        <attribute name="action">detail.installoptdeps</attribute>
+      </item>
+      <item>
         <attribute name="label" translatable="yes">Reinstall</attribute>
         <attribute name="action">detail.reinstall</attribute>
       </item>

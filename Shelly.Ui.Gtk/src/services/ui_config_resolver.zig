@@ -199,8 +199,8 @@ fn parseTolerant(allocator: std.mem.Allocator, source: std.json.Value) ShellyCon
             } else {
                 // TODO: Change to warn after https://codeberg.org/ziglang/zig/issues/35189
                 std.log.info(
-                    "shelly config: ignoring invalid value for '{s}', using default",
-                    .{field.name},
+                    "Ignored invalid value for setting '{0f}' in the selected path; using the default. Expected the documented values.",
+                    .{@import("diagnostics").safe(field.name)},
                 );
             }
         }

@@ -11,6 +11,7 @@ const install_script = @import("../../pkgbuild/install_script.zig");
 const metadata = @import("metadata.zig");
 const security = @import("security.zig");
 const steps = @import("steps.zig");
+const build_path = @import("../build_path.zig");
 const sources = @import("sources.zig");
 const package_file = @import("package_file.zig");
 const virtual_ownership = @import("virtual_ownership.zig");
@@ -144,6 +145,7 @@ pub const PackageBuilder = struct {
     options: BuildOptions,
     environ: std.process.Environ,
     io: std.Io,
+    owned_environ: ?std.process.Environ = null,
     failure_location: FailureLocation = .{},
     active_operation: ?*op_context.Operation = null,
     active_log: ?*steps.BuildLog = null,
@@ -201,12 +203,35 @@ pub const PackageBuilder = struct {
             for (names) |name| self.allocator.free(name);
             self.allocator.free(names);
         }
+        if (self.owned_environ) |owned| owned.block.deinit(self.allocator);
         self.allocator.destroy(self);
     }
 
     pub fn clearVirtualOwnership(self: *PackageBuilder) void {
         if (self.virtual_ownership_tracker) |*tracker| tracker.deinit();
         self.virtual_ownership_tracker = null;
+    }
+
+    /// Every subprocess receives the same build-scoped PATH. Only prepare
+    /// this after the non-root guard; root cannot validate user access.
+    fn prepareBuildEnvironment(self: *PackageBuilder, operation: *op_context.Operation) !void {
+        if (self.owned_environ != null) return;
+        var bad_path: ?[]const u8 = null;
+        const path = build_path.resolve(self.allocator, self.io, self.shellybuild_config.build.extra_path, &bad_path) catch |err| {
+            if (bad_path) |invalid| {
+                const message = try std.fmt.allocPrint(self.allocator, "Cannot use build.extra_path directory '{0f}': {1s} Configure an absolute directory searchable by the build user.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(invalid), @import("diagnostics").cause(err), @errorName(err) });
+                defer self.allocator.free(message);
+                operation.reportError(err, message, "build configuration", null, false);
+            }
+            return err;
+        };
+        defer self.allocator.free(path);
+        var environment = try self.environ.createMap(self.allocator);
+        defer environment.deinit();
+        try environment.put("PATH", path);
+        const owned: std.process.Environ = .{ .block = try environment.createPosixBlock(self.allocator, .{}) };
+        self.owned_environ = owned;
+        self.environ = owned;
     }
 
     fn resolveSourceDateEpoch(self: *PackageBuilder) !void {
@@ -326,6 +351,7 @@ pub const PackageBuilder = struct {
         self.active_operation = operation;
         defer self.active_operation = null;
         try security.secureBuilderProcess();
+        try self.prepareBuildEnvironment(operation);
         try self.requireSandboxAvailability();
         try self.resolveSourceDateEpoch();
 
@@ -385,6 +411,7 @@ pub const PackageBuilder = struct {
         self.active_operation = operation;
         defer self.active_operation = null;
         try security.secureBuilderProcess();
+        try self.prepareBuildEnvironment(operation);
         try self.requireSandboxAvailability();
         try self.resolveSourceDateEpoch();
 
@@ -424,6 +451,7 @@ pub const PackageBuilder = struct {
 
     fn buildPackage(self: *PackageBuilder, operation: *op_context.Operation) ![]BuildArtifact {
         try security.secureBuilderProcess();
+        try self.prepareBuildEnvironment(operation);
         try self.requireSandboxAvailability();
         var resolved_review: ?PreparedPkgbuildReview = null;
         defer if (resolved_review) |*review| review.deinit();

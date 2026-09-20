@@ -36,7 +36,7 @@ pub fn translate(
             'h' => try result.append(allocator, "--help"),
             else => return .{ .failure = try std.fmt.allocPrint(
                 allocator,
-                "Unknown modifier '{c}' for AppImage update configuration. Valid modifiers: h, p",
+                "Unknown modifier '{c}' for AppImage update configuration. Valid modifiers: h, p.",
                 .{modifier},
             ) },
         };
@@ -287,10 +287,17 @@ fn translateCombinedSearch(
         for (commands.items) |command| {
             if (findLocalOption(command, alias) != null) break;
         } else {
+            var valid: std.ArrayList(u8) = .empty;
+            defer valid.deinit(allocator);
+            for (commands.items) |command| try appendModifierAliases(allocator, &valid, command.options);
+            for (manifest.root().options) |option| {
+                if (option.recursive and std.mem.eql(u8, option.name, "--help"))
+                    try appendModifierAliases(allocator, &valid, &.{option});
+            }
             return .{ .failure = try std.fmt.allocPrint(
                 allocator,
-                "Unknown modifier '{c}' for combined search.",
-                .{modifier},
+                "Unknown modifier '{c}' for combined search. Valid modifiers: {s}.",
+                .{ modifier, valid.items },
             ) };
         }
     }
@@ -346,6 +353,7 @@ fn appendModifierAliases(
     for (options) |option| {
         for (option.aliases) |alias| {
             if (alias.len != 2 or alias[0] != '-' or alias[1] == '-') continue;
+            if (std.mem.indexOfScalar(u8, result.items, alias[1]) != null) continue;
             if (result.items.len > 0) try result.appendSlice(allocator, ", ");
             try result.append(allocator, alias[1]);
         }
@@ -631,7 +639,7 @@ test "uses centralized effective modifiers and rejects invalid shortcode types" 
     );
     const invalid_combined_modifier = try translate(allocator, &manifest, &.{ "-Ssao", "query" });
     try std.testing.expectEqualStrings(
-        "Unknown modifier 'o' for combined search.",
+        "Unknown modifier 'o' for combined search. Valid modifiers: r, v, i, l, t, p, w, d, g, e, D, s, ?, h.",
         invalid_combined_modifier.failure,
     );
 }

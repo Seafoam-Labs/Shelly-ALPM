@@ -30,23 +30,30 @@ jobs:
           filters: |
             backend:
               - 'Shelly.Flatpak.Backend/**'
+              - 'Shelly.Diagnostics/**'
             http:
               - 'Shelly.Http/**'
             packagemanager:
               - 'Shelly.PackageManager/**'
+              - 'Shelly.Diagnostics/**'
             cli:
               - 'Shelly.Cli.Zig/**'
+              - 'Shelly.Diagnostics/**'
               - 'Shelly.PackageManager/**'
               - 'Shelly.Flatpak.Backend/**'
               - 'scripts/**'
             gtk:
               - 'Shelly.Ui.Gtk/**'
+              - 'Shelly.Diagnostics/**'
             tui:
               - 'Shelly.Tui/**'
+              - 'Shelly.Diagnostics/**'
             key:
               - 'Shelly.Key/**'
+              - 'Shelly.Diagnostics/**'
             notifications:
               - 'Shelly.Notifications.Zig/**'
+              - 'Shelly.Diagnostics/**'
             pkgbuild:
               - 'PKGBUILD*'
               - '*.desktop'
@@ -125,6 +132,8 @@ jobs:
           pacman -Syu --noconfirm
           pacman -S --needed --noconfirm zig flatpak base-devel glibc git libarchive ripgrep
       - uses: actions/checkout@v6
+      - name: Test shared diagnostics
+        run: cd Shelly.Diagnostics && zig build test
       - name: Build CLI and test
         run: |
           cd Shelly.Cli.Zig

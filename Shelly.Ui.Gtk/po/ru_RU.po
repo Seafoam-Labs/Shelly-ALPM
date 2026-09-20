@@ -2,7 +2,11 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
+<<<<<<< HEAD
 "POT-Creation-Date: 2026-09-14 16:25-0300\n"
+=======
+"POT-Creation-Date: 2026-09-19 13:14-0400\n"
+>>>>>>> origin/development
 "PO-Revision-Date: 2026-09-14 21:25+0400\n"
 "Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\n"
 "Language-Team: Russian (Russia) <anton@azdanov.dev>\n"
@@ -161,9 +165,14 @@ msgstr "Подробнее об URL обновления / информации 
 msgid "e.g. owner/repo or https://..."
 msgstr "напр., владелец/репо или https://..."
 
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgid ""
+"Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
+<<<<<<< HEAD
 "Неверный формат. Используйте владелец/репо (напр., seafoam-labs/shelly-alpm)"
+=======
+>>>>>>> origin/development
 
 msgid "Allow Prerelease"
 msgstr "Разрешить предварительные версии"
@@ -664,8 +673,9 @@ msgstr "Проверяются обновления…"
 msgid "Your system is up to date"
 msgstr "Ваша система обновлена"
 
-msgid "Could not check for updates"
-msgstr "Не удалось проверить обновления"
+#| msgid "Could not check for updates"
+msgid "Could not check for updates."
+msgstr ""
 
 msgid "Utilities"
 msgstr "Инструменты"
@@ -843,12 +853,15 @@ msgstr "используется в"
 msgid "Install Anyway"
 msgstr "Всё равно установить"
 
+<<<<<<< HEAD
 msgid "to remove"
 msgstr ""
 
 msgid "to install"
 msgstr ""
 
+=======
+>>>>>>> origin/development
 msgid "Unknown"
 msgstr "Неизвестно"
 
@@ -858,11 +871,18 @@ msgstr "пакет(ов)"
 msgid "removed size"
 msgstr ""
 
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
+
 msgid "download"
 msgstr "скачать"
 
 msgid "net"
 msgstr "всего"
+
+msgid "Could not load the PKGBUILD preview."
+msgstr ""
 
 msgid "Dismiss"
 msgstr "Отклонить"
@@ -945,19 +965,24 @@ msgstr "Доступно обновление"
 msgid "Version ?"
 msgstr "Версия ?"
 
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+#| msgid "Invalid URL. Must start with http:// or https://"
+msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
+<<<<<<< HEAD
 "Неверный формат. Используйте владелец/репо (напр., seafoam-labs/shelly-alpm)"
 
 msgid "Invalid URL. Must start with http:// or https://"
 msgstr "Неверный URL. Должен начинаться с http:// или https://"
+=======
+>>>>>>> origin/development
 
+#| msgid ""
+#| "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/"
+#| "owner/repo/releases"
 msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
+"Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
+"host/owner/repo/releases."
 msgstr ""
-"Неверный URL-адрес Forgejo. Используйте http(s)://хост/владелец/репо или "
-"http(s)://хост/владелец/репо/releases"
 
 msgid "Choose an AppImage file"
 msgstr "Выберите файл AppImage"
@@ -965,8 +990,9 @@ msgstr "Выберите файл AppImage"
 msgid "AppImage files"
 msgstr "Файлы AppImage"
 
-msgid "Only .AppImage files can be installed"
-msgstr "Можно установить только файлы .AppImage"
+#| msgid "Only .AppImage files can be installed"
+msgid "Only.AppImage files can be installed"
+msgstr ""
 
 msgid "Installing AppImage"
 msgstr "Установка AppImage"
@@ -1011,8 +1037,8 @@ msgstr "Удаление AppImage"
 msgid "Operation completed successfully"
 msgstr "Операция успешно завершена"
 
-msgid "Operation failed"
-msgstr "Операция не удалась"
+msgid "Could not complete the requested operation."
+msgstr ""
 
 msgid "Discard environment changes?"
 msgstr "Отменить изменения переменных среды?"
@@ -1059,8 +1085,9 @@ msgstr "Пакеты не найдены"
 msgid "Try a shorter or more general keyword."
 msgstr "Попробуйте более короткое или общее ключевое слово."
 
-msgid "Could not reach the AUR"
-msgstr "Не удалось подключиться к AUR"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the configured AUR service."
+msgstr ""
 
 msgid "Check your connection and try again."
 msgstr "Проверьте подключение и попробуйте снова."
@@ -1108,14 +1135,16 @@ msgstr "Выберите файл Flatpak"
 msgid "Flatpak files"
 msgstr "Файлы Flatpak"
 
-msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
-msgstr "Неподдерживаемый тип файла. Выберите файл .flatpak или .flatpakref."
+#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
+msgstr ""
 
 msgid "Installing local flatpak"
 msgstr "Установка локального flatpak"
 
-msgid "Installation failed."
-msgstr "Установка не удалась."
+#| msgid "Install the selected packages?"
+msgid "Could not install the selected packages."
+msgstr ""
 
 msgid "Installation complete."
 msgstr "Установка завершена."
@@ -1180,14 +1209,16 @@ msgstr "Скачивание"
 msgid "No description available."
 msgstr "Описание недоступно."
 
-msgid "Unable to load screenshot"
-msgstr "Не удалось загрузить снимок экрана"
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load this application screenshot."
+msgstr ""
 
-msgid "Unable to download screenshot"
-msgstr "Не удалось скачать снимок экрана"
+#| msgid "Unable to download screenshot"
+msgid "Could not download this application screenshot."
+msgstr ""
 
-msgid "Unable to display screenshot"
-msgstr "Не удалось отобразить снимок экрана"
+msgid "Could not display the downloaded application screenshot."
+msgstr ""
 
 msgid "Open link in browser"
 msgstr "Открыть ссылку в браузере"
@@ -1216,14 +1247,18 @@ msgstr "Контакты"
 msgid "Translate"
 msgstr "Перевод"
 
-msgid "Unable to allocate memory while loading Flatpak data."
-msgstr "Не удалось выделить память при загрузке данных Flatpak."
+msgid ""
+"Could not load Flatpak applications because Shelly ran out of memory. Close "
+"other applications and try again."
+msgstr ""
 
-msgid "Unable to start the Flatpak data loader."
-msgstr "Не удалось запустить загрузчик данных Flatpak."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not start loading Flatpak applications."
+msgstr ""
 
-msgid "Unable to load Flatpak applications."
-msgstr "Не удалось загрузить приложения Flatpak."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load Flatpak applications from the selected remote."
+msgstr ""
 
 msgid "No Flatpak applications are available."
 msgstr "Нет доступных приложений Flatpak."
@@ -1385,8 +1420,9 @@ msgstr ""
 "Искать одновременно в стандартных репозиториях, AUR и Flatpak. Введите имя "
 "для начала."
 
-msgid "Search failed"
-msgstr "Поиск не удался"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the selected sources."
+msgstr ""
 
 msgid "Installation in progress"
 msgstr "Установка в процессе"
@@ -1403,8 +1439,10 @@ msgstr "Установить пакеты"
 msgid "Install the selected packages?"
 msgstr "Установить выбранные пакеты?"
 
-msgid "Failed to save settings"
-msgstr "Не удалось сохранить настройки"
+msgid ""
+"Could not save settings to the configured file. Your latest changes were not "
+"saved."
+msgstr ""
 
 msgid "Settings saved"
 msgstr "Настройки сохранены"
@@ -1415,17 +1453,21 @@ msgstr "Установка поддержки Flatpak"
 msgid "Installing AppImage support"
 msgstr "Установка поддержки AppImage"
 
-msgid "Failed to start Flatpak support installation"
-msgstr "Не удалось запустить установку поддержки Flatpak"
+#| msgid "Installing Flatpak support"
+msgid "Could not start installing Flatpak support."
+msgstr ""
 
-msgid "Failed to start AppImage support installation"
-msgstr "Не удалось запустить установку поддержки AppImage"
+#| msgid "Installing AppImage support"
+msgid "Could not start installing AppImage support."
+msgstr ""
 
-msgid "Flatpak support installation failed"
-msgstr "Установка поддержки Flatpak не удалась"
+#| msgid "Installing Flatpak support"
+msgid "Could not install Flatpak support."
+msgstr ""
 
-msgid "AppImage support installation failed"
-msgstr "Установка поддержки AppImage не удалась"
+#| msgid "Installing AppImage support"
+msgid "Could not install AppImage support."
+msgstr ""
 
 msgid "Flatpak support enabled"
 msgstr "Поддержка Flatpak включена"
@@ -1439,8 +1481,9 @@ msgstr "Записи журнала изменений не найдены"
 msgid "No details for this release"
 msgstr "Нет подробностей для этого выпуска"
 
-msgid "Failed to load changelog"
-msgstr "Не удалось загрузить журнал изменений"
+#| msgid "Could not check for updates"
+msgid "Could not load the release notes."
+msgstr ""
 
 msgid "Changelog"
 msgstr "Журнал изменений"
@@ -1460,20 +1503,23 @@ msgstr "Выбрать каталог установки AppImage"
 msgid "Tray enabled"
 msgstr "Трей включён"
 
-msgid "Tray disabled, but autostart service remains"
-msgstr "Трей отключён, но служба автозапуска остаётся"
+msgid ""
+"The tray is disabled, but its autostart service could not be removed. It may "
+"start again at the next login."
+msgstr ""
 
 msgid "Tray disabled"
 msgstr "Трей отключён"
 
-msgid "Failed to add systemd startup service"
-msgstr "Не удалось добавить службу автозапуска systemd"
+msgid "Could not enable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service added."
 msgstr "Служба автозапуска systemd добавлена."
 
-msgid "Failed to remove systemd startup service"
-msgstr "Не удалось удалить службу автозапуска systemd"
+#| msgid "Tray disabled, but autostart service remains"
+msgid "Could not disable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service removed."
 msgstr "Служба автозапуска systemd удалена."
@@ -1541,6 +1587,7 @@ msgstr "Ожидание"
 msgid "Working"
 msgstr "Выполнение"
 
+<<<<<<< HEAD
 msgid "Upgraded"
 msgstr ""
 
@@ -1550,6 +1597,21 @@ msgstr ""
 msgid "Reinstalled"
 msgstr ""
 
+=======
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+>>>>>>> origin/development
 msgid "Removed"
 msgstr ""
 
@@ -1565,8 +1627,14 @@ msgstr ""
 msgid "Cancelled"
 msgstr "Отменено"
 
+<<<<<<< HEAD
 msgid "Failed to start operation."
 msgstr "Не удалось начать операцию."
+=======
+#| msgid "Failed to start operation."
+msgid "Could not start the requested operation."
+msgstr ""
+>>>>>>> origin/development
 
 msgid "Synchronizing databases"
 msgstr "Синхронизация баз данных"
@@ -1613,11 +1681,12 @@ msgstr "Проверка свободного места на диске"
 msgid "Transaction Completed"
 msgstr "Транзакция завершена"
 
-msgid "Transaction Failed"
-msgstr "Транзакция не удалась"
+msgid "Operation failed"
+msgstr "Операция не удалась"
 
-msgid "Transaction Cancelled"
-msgstr "Транзакция отменена"
+#| msgid "Operation failed"
+msgid "Operation cancelled"
+msgstr ""
 
 msgid "Finished"
 msgstr "Завершено"
@@ -1625,8 +1694,9 @@ msgstr "Завершено"
 msgid "exit"
 msgstr "выход"
 
-msgid "The operation was cancelled."
-msgstr "Операция была отменена."
+#| msgid "The operation was cancelled."
+msgid "Operation cancelled."
+msgstr ""
 
 msgid "All operations finished successfully."
 msgstr "Все операции успешно завершены."
@@ -1638,16 +1708,24 @@ msgstr ""
 "Разрешение на управление пакетами не было предоставлено. Попробуйте снова и "
 "подтвердите запрос авторизации, чтобы продолжить."
 
+<<<<<<< HEAD
+=======
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+"{package_one}-{version_one} конфликтует с {package_two}-{version_two}. "
+"Удалить {package_to_remove}?"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr "Удалить лишние записи кэша?"
+
+>>>>>>> origin/development
 msgid "System package update"
 msgstr "Обновление системного пакета"
 
 msgid "AUR package update"
 msgstr "Обновление пакета AUR"
-
-msgid "Could not run shelly check-updates. Check the CLI output and try again."
-msgstr ""
-"Не удалось выполнить shelly check-updates. Проверьте вывод CLI и попробуйте "
-"снова."
 
 msgid "Update this package"
 msgstr "Обновить этот пакет"

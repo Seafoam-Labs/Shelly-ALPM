@@ -98,24 +98,30 @@ pub const ShellyCli = struct {
             }
         }
 
-        const result = try std.process.run(self.allocator, self.io, .{
+        const result = std.process.run(self.allocator, self.io, .{
             .argv = argv,
             .environ_map = runtime.environ_map,
-        });
+        }) catch |err| {
+            const message = try @import("diagnostics").format(self.allocator, err, .{ .operation = "the Shelly command", .path = argv[0] });
+            defer self.allocator.free(message);
+            log.err("{s}", .{message});
+            if (self.failure_detail) |detail| detail.* = try self.allocator.dupe(u8, message);
+            return err;
+        };
 
         errdefer self.allocator.free(result.stdout);
         errdefer self.allocator.free(result.stderr);
 
         if (result.term != .exited or result.term.exited != 0) {
-            log.err("command failed: term={any} stderr='{s}' stdout='{s}'", .{
-                result.term,
-                result.stderr[0..@min(500, result.stderr.len)],
-                result.stdout[0..@min(500, result.stdout.len)],
+            const structured = try JsonPackFrame.failureMessage(self.allocator, result.stdout);
+            defer if (structured) |message| self.allocator.free(message);
+            const message = try @import("diagnostics").sanitizeAlloc(self.allocator, structured orelse
+                if (result.stderr.len > 0) result.stderr else "Shelly returned no error details. Review the command output before retrying.");
+            defer self.allocator.free(message);
+            log.err("Could not run {f}. {s}\nProcess result: {any}", .{
+                @import("diagnostics").safe(argv[0]), message, result.term,
             });
-            if (self.failure_detail) |detail| {
-                detail.* = try JsonPackFrame.failureMessage(self.allocator, result.stdout) orelse
-                    try self.allocator.dupe(u8, if (result.stderr.len > 0) result.stderr else "Could not complete the package operation. No error details were returned by Shelly.");
-            }
+            if (self.failure_detail) |detail| detail.* = try self.allocator.dupe(u8, message);
             return error.CommandFailed;
         }
 

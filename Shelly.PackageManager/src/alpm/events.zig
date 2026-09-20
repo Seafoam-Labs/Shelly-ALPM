@@ -29,6 +29,7 @@ pub const ProviderOption = struct {
 
 pub const ErrorArgs = struct {
     message: []const u8,
+    native_code: ?i64 = null,
 };
 
 pub const InformationalArgs = struct {
@@ -329,7 +330,7 @@ pub const Dispatcher = struct {
                     .dependency_name = args.dependency_name,
                 }) catch |err| {
                     if (err == error.Cancelled) return .{ .answer = 0 };
-                    operation.reportError(err, "Failed to obtain an ALPM question response", "alpm", args.question_type, false);
+                    operation.reportError(err, "Could not obtain an answer to the package confirmation. Run the operation with an interactive confirmation interface.", "alpm", args.question_type, false);
                     return .{};
                 };
 
@@ -402,11 +403,11 @@ pub const Dispatcher = struct {
                     error.AlpmOperationFailed,
                     message orelse context,
                     "alpm",
-                    null,
+                    args.native_code,
                     true,
                 );
             } else {
-                operation.reportError(error.AlpmOperationFailed, args.message, "alpm", null, false);
+                operation.reportError(error.AlpmOperationFailed, args.message, "alpm", args.native_code, false);
             }
         }
         self.dispatch(ErrorArgs, &self.errorEvents, args);

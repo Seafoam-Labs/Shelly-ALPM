@@ -71,7 +71,7 @@ pub fn dispatch(
         booleanOption(invocation, "--system", true);
     if ((is_standard or system_remote_mutation) and !invocation.globals.ui_mode) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-            try context.stderr.print("Unable to elevate sync: {t}\n", .{err});
+            try context.stderr.print("Could not obtain administrator privileges for package synchronization. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -121,8 +121,8 @@ fn executeUi(
     return ui_operation.runTransaction(context, invocation, .{
         .opening = openingMessage(invocation),
         .success_message = successMessage(invocation),
-        .failure_message = "Sync failed.",
-        .failure_label = "Sync failed",
+        .failure_message = "Could not synchronize packages.",
+        .failure_label = "Could not synchronize packages.",
         .question_mode = .accept_defaults,
         .report_flatpak_unavailable = true,
     }, runner);
@@ -428,7 +428,7 @@ fn appImageValidationFailure(invocation: *const parser.Invocation) ?[]const u8 {
         .forgejo => "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/repo/releases.",
         .github, .gitlab, .codeberg => "Invalid repository. Use owner/repo.",
         .static_url => "Invalid static update URL. Use an http:// or https:// URL.",
-        .none => "Invalid AppImage update configuration.",
+        .none => "Could not save the AppImage update configuration for the requested package. Check the selected provider and its required URL or repository format.",
     };
     return null;
 }
@@ -475,8 +475,8 @@ fn matchingAppImageName(
     }
     const message = try std.fmt.allocPrint(
         context.allocator,
-        "No AppImage matching \"{s}\" found in database.",
-        .{query},
+        "Could not find AppImage {0f} in the local database. Check the installed AppImage list and try again.",
+        .{@import("diagnostics").safe(query)},
     );
     defer context.allocator.free(message);
     emitAppImageInfo(operation_context, message);
@@ -1071,7 +1071,7 @@ test "sync reports backend failures and returns a failure exit code" {
 
     try std.testing.expectEqual(@as(u8, 1), try executeWithRunner(&tc.context, &outcome.dispatch, Failure{}));
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Technical details: TestSyncFailure") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), ":: Transaction failed.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Could not complete the requested operation.") != null);
     try std.testing.expectEqual(@as(usize, 0), tc.stderr.writer.buffered().len);
 }
 

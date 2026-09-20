@@ -14,6 +14,9 @@ pub const EventType = enum(u8) {
 pub const StatusArgs = struct {
     event_type: EventType,
     message: []const u8,
+    err: anyerror = error.FlatpakOperationFailed,
+    domain: []const u8 = "flatpak",
+    native_code: ?i64 = null,
 };
 
 /// Progress slices are borrowed and remain valid only for the callback.
@@ -100,7 +103,7 @@ pub const Dispatcher = struct {
             .information => operation.status(.information, args.message, "flatpak.status", null),
             .warning => operation.status(.warning, args.message, "flatpak.warning", null),
             .success => operation.status(.success, args.message, "flatpak.success", null),
-            .err => operation.reportError(error.FlatpakOperationFailed, args.message, "flatpak", null, false),
+            .err => operation.reportError(args.err, args.message, args.domain, args.native_code, false),
         };
         dispatch(self, StatusArgs, StatusHandler, self.statuses.items, args);
     }
@@ -187,7 +190,7 @@ pub const OperationScope = struct {
     pub fn fail(self: *OperationScope) void {
         if (self.operation) |*operation| operation.reportError(
             if (operation.isCancelled()) error.Cancelled else error.FlatpakOperationFailed,
-            if (operation.isCancelled()) "Flatpak operation cancelled" else "Flatpak operation failed",
+            if (operation.isCancelled()) "Operation cancelled." else "Could not complete the package operation.",
             "flatpak",
             null,
             false,

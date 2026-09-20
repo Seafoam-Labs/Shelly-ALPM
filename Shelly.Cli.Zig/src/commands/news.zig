@@ -558,8 +558,8 @@ fn writeFailure(
 ) !void {
     const message = try std.fmt.allocPrint(
         context.allocator,
-        "Error fetching Arch Linux news: {t}",
-        .{err},
+        "Could not fetch Arch Linux news. {0s}\n\nTechnical details: {1s}",
+        .{ @import("diagnostics").cause(err), @errorName(err) },
     );
     if (options.ui_mode)
         try output.writeErrorFrame(context, message)

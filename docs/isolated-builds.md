@@ -19,6 +19,12 @@ The container does not bind the host checkout, home directory, package
 database, configuration directories, or runtime sockets. Its merged
 `shellybuild.conf` uses root-local work, source, log, and artifact paths. The
 staged copy must reproduce the review digest before the builder executes it.
+Shelly explicitly sets guest traversal directories and the staged executable
+to `0755`, and the generated configuration to `0644`, independently of the
+coordinator's umask. Existing bootstrap-managed `/usr` and `/usr/local`
+permissions are preserved. Writable build directories belong to the guest
+UID/GID `1000:1000`; the enclosing host operation directory remains root-owned
+`0700`. Reviewed files retain their exact reviewed permissions.
 The resulting package's `.BUILDINFO` records the exact package set installed
 in the guest. Before export, libalpm loads every candidate archive and Shelly
 rejects malformed, duplicate, missing, or unexpected package identities.
@@ -96,8 +102,10 @@ Copying only `PKGBUILD` into the binary directory is not sufficient: every
 local entry in its `source=()` array must reside beside that copy.
 
 The reviewed-input staging and digest-integrity regressions run in separate
-processes under umasks `0022`, `0007`, and `0077`. They cover exact bytes and
-permissions, overwrites, and rejection of subsequent input changes. Run them
+processes under umasks `0022`, `0007`, `0027`, and `0077`. They cover guest
+directory traversal permissions, readable configuration creation and replacement,
+the private host boundary, exact reviewed bytes and permissions, and rejection
+of subsequent input changes. Run them
 without elevation with:
 
 ```sh
@@ -114,17 +122,27 @@ through the CLI's `test` target, or directly with:
 zig build --build-file Shelly.Cli.Zig/build.zig isolated-source-keys-test
 ```
 
-Run the root-required smoke test from a normal user session with `jq` installed:
+Run the root-required smoke test from a normal user session with `jq` and
+`sudo` installed:
 
 ```sh
 Shelly.Cli.Zig/scripts/test-isolated-build.sh
 ```
 
-The smoke fixture reviews a group-writable (`0660`) local source, passes the
+The smoke fixture runs all four umasks, applying each mask after sudo elevation
+and checking the coordinator's effective mask. Inside real nspawn it verifies
+UID/GID 1000, root-owned traversal-directory and executable permissions,
+configuration readability and destinations, and build-directory ownership.
+A host supervisor checks the operation's `0700` boundary before allowing the
+guest to finish, then verifies operation-root cleanup.
+
+Each case also reviews a group-writable (`0660`) local source, passes the
 returned digest through `--review-digest`, checks the staged input in the guest,
-and verifies that the package artifact is exported to the invoking user.
-It also checks that standard purge targets are absent from the archive when
-stripping is disabled.
+and verifies that the package artifact is exported with the invoking user's UID
+and GID. Standard purge targets must be absent when stripping is disabled.
+Set `SHELLY_BIN` to test an already-built CLI. The script authenticates sudo
+interactively when run from a terminal; unattended runs require an existing
+sudo credential and exit `77` (skipped) if authentication is unavailable.
 
 Cancellation across the elevation boundary has a rootless integration fixture
 that uses a deterministic fake elevator:
@@ -142,3 +160,9 @@ in the foreground before starting Shelly as the background process under test:
 ```sh
 Shelly.Cli.Zig/scripts/test-isolated-cancellation.sh
 ```
+
+Native build PATH additions from `[build] extra_path` in `shellybuild.conf` are
+preserved in the generated guest configuration. They refer to paths inside the
+guest and must exist there; they do not create host bind mounts. A host-only
+custom toolchain path must be removed from the effective configuration before
+an isolated build. See [build PATH configuration](shellybuild.conf.md#build-executable-search-path).

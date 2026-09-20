@@ -1886,6 +1886,114 @@ test "PackageBuilder emits makepkg-compatible BUILDINFO and MTREE metadata" {
     try testing.expect(std.mem.indexOf(u8, gzip.stdout, "sha256digest=") != null);
 }
 
+test "PackageBuilder uses configured PATH for metadata SRCINFO and lifecycle steps" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    const content =
+        \\pkgname=path-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\_metadata_path="$PATH"
+        \\pkgdesc="$(/usr/bin/env printf)"
+        \\build() {
+        \\  [[ "$PATH" = "$_metadata_path" ]]
+        \\  [[ "$(/usr/bin/env printf)" = 'configured tool' ]]
+        \\  status=0
+        \\  /usr/bin/env shelly-missing-command-1931 2>/dev/null || status=$?
+        \\  [[ "$status" = 127 ]]
+        \\}
+        \\package() {
+        \\  [[ "$PATH" = "$_metadata_path" ]]
+        \\  mkdir -p "$pkgdir/usr/share/path-demo"
+        \\  /usr/bin/env printf > "$pkgdir/usr/share/path-demo/tool"
+        \\}
+    ;
+    var fixture = try Fixture.create(allocator, content, null, null);
+    defer fixture.destroy();
+    try fixture.temporary.dir.createDirPath(io, "tools");
+    try fixture.temporary.dir.writeFile(io, .{
+        .sub_path = "tools/printf",
+        .flags = .{ .permissions = .fromMode(0o755) },
+        .data = "#!/bin/sh\nprintf '%s' 'configured tool'\n",
+    });
+    const tools_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "tools" });
+    defer allocator.free(tools_path);
+    fixture.builder.shellybuild_config.build.extra_path = &.{tools_path};
+
+    // A real inaccessible directory reproduces EACCES without assuming /root
+    // has any particular permissions on the host running the suite.
+    var blocked = std.testing.tmpDir(.{});
+    defer blocked.cleanup();
+    const blocked_path = try blocked.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(blocked_path);
+    var blocked_directory = try blocked.dir.openDir(io, ".", .{ .iterate = true });
+    defer blocked_directory.close(io);
+    try blocked_directory.setPermissions(io, .fromMode(0o000));
+    defer blocked_directory.setPermissions(io, .fromMode(0o700)) catch {};
+    var environment = try testing.environ.createMap(allocator);
+    defer environment.deinit();
+    const contaminated = try std.fmt.allocPrint(allocator, "/usr/bin:/bin:{s}/bin", .{blocked_path});
+    defer allocator.free(contaminated);
+    try environment.put("PATH", contaminated);
+    const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
+    defer environ.block.deinit(allocator);
+    fixture.builder.environ = environ;
+
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = content });
+    const pkgbuild_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "PKGBUILD" });
+    defer allocator.free(pkgbuild_path);
+    fixture.builder.options.pkgbuild_path = pkgbuild_path;
+    var operation = fixture.operation_context.begin(.{ .backend = .aur, .kind = .build });
+    defer operation.finish(.success);
+    var review = try fixture.builder.prepareFinalReviewWithOperation(&operation);
+    defer review.deinit();
+    fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+    fixture.builder.options.reviewed_files = review.reviewed_files;
+    fixture.builder.options.install_scripts = review.install_scripts;
+    var srcinfo: std.Io.Writer.Allocating = .init(allocator);
+    defer srcinfo.deinit();
+    try fixture.builder.writeSrcinfoWithOperation(&operation, &srcinfo.writer);
+    try testing.expect(std.mem.indexOf(u8, srcinfo.written(), "pkgdesc = configured tool") != null);
+    const artifacts = try fixture.builder.runWithOperation(&operation);
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const output = try readPackageEntry(allocator, artifacts[0].path, "usr/share/path-demo/tool");
+    defer allocator.free(output);
+    try testing.expectEqualStrings("configured tool", output);
+    try testing.expect(std.mem.indexOf(u8, fixture.builder.environ.getPosix("PATH").?, blocked_path) == null);
+}
+
+test "PackageBuilder reports invalid configured PATH before executing PKGBUILD" {
+    const Capture = struct {
+        seen: bool = false,
+        fn handle(data: ?*anyopaque, event: op_context.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (event == .failure) {
+                self.seen = std.mem.indexOf(u8, event.failure.message, "build.extra_path") != null and
+                    std.mem.indexOf(u8, event.failure.message, "missing-toolchain-1931") != null;
+            }
+        }
+    };
+    var capture: Capture = .{};
+    var fixture = try Fixture.create(testing.allocator,
+        \\pkgname=bad-path-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\build() { touch "$startdir/executed"; }
+        \\package() { :; }
+    , .{ .function = Capture.handle, .data = &capture }, null);
+    defer fixture.destroy();
+    const missing = try std.fs.path.join(testing.allocator, &.{ fixture.build_dir, "missing-toolchain-1931" });
+    defer testing.allocator.free(missing);
+    fixture.builder.shellybuild_config.build.extra_path = &.{missing};
+    var operation = fixture.operation_context.begin(.{ .backend = .aur, .kind = .build });
+    defer operation.finish(.failed);
+    try testing.expectError(error.FileNotFound, fixture.builder.runWithOperation(&operation));
+    try testing.expect(capture.seen);
+    try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(testing.io, "executed", .{}));
+}
+
 test "PackageBuilder exports configured build environment to lifecycle steps" {
     const allocator = testing.allocator;
     const pkgbuild_content =
@@ -2502,20 +2610,9 @@ test "PackageBuilder discards partial output from failed strip commands" {
         \\exit 1
         ,
     });
-    const path = try std.fmt.allocPrint(allocator, "{s}/tools:/usr/bin:/bin", .{fixture.build_dir});
-    defer allocator.free(path);
-    var environment = try testing.environ.createMap(allocator);
-    defer environment.deinit();
-    try environment.put("PATH", path);
-    const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
-    defer environ.block.deinit(allocator);
-    // Zig's process lookup uses the Io environment's PATH, independently of
-    // the environment passed to the child.
-    var threaded = std.Io.Threaded.init(allocator, .{ .environ = environ });
-    defer threaded.deinit();
-    fixture.builder.io = threaded.io();
-    defer fixture.builder.io = io;
-    fixture.builder.environ = environ;
+    const tool_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "tools" });
+    defer allocator.free(tool_path);
+    fixture.builder.shellybuild_config.build.extra_path = &.{tool_path};
     const artifacts = try fixture.builder.BuildPackage();
     defer builder_mod.deinitArtifacts(allocator, artifacts);
     const original = try fixture.temporary.dir.readFileAlloc(io, "original", allocator, .unlimited);
@@ -5422,7 +5519,7 @@ test "PackageBuilder records a sandbox hint when a confined step fails" {
 
     const build_log = try readOnlyBuildLog(allocator, io, fixture.build_dir);
     defer allocator.free(build_log);
-    try testing.expect(std.mem.indexOf(u8, build_log, "[sandbox] step failed inside the Landlock sandbox") != null);
+    try testing.expect(std.mem.indexOf(u8, build_log, "The build step failed inside the Landlock sandbox") != null);
 }
 
 test "PackageBuilder standalone files use aliases and are available before prepare" {

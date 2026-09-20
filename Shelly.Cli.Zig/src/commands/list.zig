@@ -295,8 +295,8 @@ fn writeConfiguredRemoteFailure(
     }
     const message = try std.fmt.allocPrint(
         context.allocator,
-        "Unable to list configured Flatpak remotes: {t}",
-        .{err},
+        "Could not list Flatpak remotes. {0s}\n\nTechnical details: {1s}",
+        .{ @import("diagnostics").cause(err), @errorName(err) },
     );
     defer context.allocator.free(message);
     if (invocation.globals.ui_mode)
@@ -360,8 +360,8 @@ fn writeRemoteQueryFailure(
     }
     const message = try std.fmt.allocPrint(
         context.allocator,
-        "Unable to read Flatpak AppStream catalog '{s}': {t}",
-        .{ query, err },
+        "Could not read the AppStream catalog for Flatpak remote '{0f}'. {1s}\n\nTechnical details: {2s}",
+        .{ @import("diagnostics").safe(query), @import("diagnostics").cause(err), @errorName(err) },
     );
     defer context.allocator.free(message);
     if (invocation.globals.ui_mode)
@@ -568,8 +568,8 @@ fn writeQueryFailure(
     }
     const message = try std.fmt.allocPrint(
         context.allocator,
-        "Unable to list installed {s} objects: {t}",
-        .{ @tagName(backend), err },
+        "Could not list installed {0f} objects: {1s}\n\nTechnical details: {2s}",
+        .{ @import("diagnostics").safe(@tagName(backend)), @import("diagnostics").cause(err), @errorName(err) },
     );
     defer context.allocator.free(message);
     if (invocation.globals.ui_mode)

@@ -141,7 +141,7 @@ pub const FlatpakInstallLocalView = extern struct {
         else if (std.ascii.endsWithIgnoreCase(path, ".flatpak"))
             .bundle
         else {
-            self.showStatus(translations._("Unsupported file type. Choose a .flatpak or .flatpakref file."));
+            self.showStatus(translations._("Unsupported file type. Choose a.flatpak or.flatpakref file."));
             return;
         };
 
@@ -176,7 +176,7 @@ pub const FlatpakInstallLocalView = extern struct {
         const p = self.priv();
         if (p.disposed) return;
         if (!success) {
-            self.showStatus(translations._("Installation failed."));
+            self.showStatus(translations._("Could not install the selected packages."));
             return;
         }
         self.showStatus(translations._("Installation complete."));

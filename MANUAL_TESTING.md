@@ -360,6 +360,18 @@ package first); for bash and zsh use a clean shell, and regenerate
 - [ ] Root/sudo operations work correctly
 - [ ] Permission errors are handled gracefully
 - [ ] User is prompted for elevation when needed
+- [ ] `zig build --build-file Shelly.Cli.Zig/build.zig isolated-build-test`
+  passes under umasks `0022`, `0007`, `0027`, and `0077`, preserving reviewed
+  file modes, guest traversal permissions, readable configuration, and the
+  private host operation boundary
+- [ ] From an authenticated normal-user sudo session,
+  `Shelly.Cli.Zig/scripts/test-isolated-build.sh` passes all four coordinator
+  umasks through real nspawn, checks UID/GID 1000 and guest configuration,
+  exports artifacts to the invoking user, and removes operation roots;
+  exit `77` means skipped, not passed
+- [ ] Build the pinned endcord PKGBUILD with `--isolated` using the rebuilt
+  CLI under coordinator umasks `0022` and `0077`; validate the exported
+  archives without installing them and record the recipe revision/source hash
 - [ ] `Shelly.Cli.Zig/scripts/test-elevation-cancellation.sh` passes without
   privileges for both SIGINT and SIGTERM
 - [ ] From a normal user session with a working elevator,
@@ -445,3 +457,26 @@ Document any known issues that are being tracked:
 1.
 2.
 3.
+
+## Native build PATH (issue #1931)
+
+- [ ] Run a minimal reviewed PKGBUILD that launches an intentionally missing
+  executable using Rust `Command::spawn`. With an inaccessible temporary
+  directory appended to the invoking shell's PATH, confirm the build sees only
+  the configured build PATH and the lookup returns `NotFound`, not
+  `PermissionDenied`. Restore the temporary directory's permissions afterward.
+- [ ] Repeat through a GUI AUR operation launched with pkexec and through CLI
+  dependency synchronization. Capture the non-root build PATH; it must not
+  contain the elevated coordinator's private directories.
+- [ ] Put a custom tool in an absolute directory named in `[build] extra_path`.
+  Confirm metadata review, `--makesrcinfo`, lifecycle functions, and native
+  packaging helpers can use it, with configured tools preceding system tools.
+- [ ] Check system/user overrides and `extra_path = []`. A configured missing,
+  non-directory, or inaccessible entry must report its path before PKGBUILD
+  execution. Confirm Perl tools and ccache/distcc precedence remain correct.
+- [ ] With Landlock enabled, confirm PATH additions alone do not grant access
+  outside the sandbox allow-list; add explicit sandbox grants and retry.
+- [ ] In an isolated build, confirm extra directories are interpreted inside
+  the guest; host-only directories must produce a clear error, without mounts.
+- [ ] Rebuild `scx-scheds-git` through the GUI on the affected system and verify
+  the intentionally missing formatter no longer causes errno 13.
