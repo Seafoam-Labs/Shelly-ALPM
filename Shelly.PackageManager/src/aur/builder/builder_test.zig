@@ -1470,7 +1470,7 @@ test "PackageBuilder rejects a legacy unwritable package tree" {
     try testing.expectError(error.BuildDirectoryNotWritable, fixture.builder.BuildPackage());
 }
 
-test "PackageBuilder cannot perform privileged package filesystem operations" {
+test "PackageBuilder rejects retained temporary device nodes" {
     const allocator = testing.allocator;
     var fixture = try Fixture.create(allocator,
         \\pkgname=demo
@@ -1484,9 +1484,173 @@ test "PackageBuilder cannot perform privileged package filesystem operations" {
     defer fixture.destroy();
 
     try testing.expectError(
-        error.BuildFailed,
+        error.PrivilegedPackageOperationUnsupported,
         fixture.builder.BuildPackage(),
     );
+}
+
+test "PackageBuilder external helpers preserve ownership and temporary devices" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\arch=('any')
+        \\package() {
+        \\  cat > "$srcdir/install-helper.sh" <<'HELPER'
+        \\#!/bin/sh
+        \\set -e
+        \\command -v chown > "$DESTDIR/../../wrapper-path"
+        \\install -Dm755 /usr/bin/true "$DESTDIR/usr/bin/fusermount3"
+        \\chown root:root "$DESTDIR/usr/bin/fusermount3"
+        \\chmod u+s "$DESTDIR/usr/bin/fusermount3"
+        \\install -dm700 -g209 "$DESTDIR/etc/cups/ssl"
+        \\install -Dm644 -o42 -g84 /dev/null "$DESTDIR/usr/share/demo/owned"
+        \\chgrp 50 "$DESTDIR/usr/share/demo/owned"
+        \\mkdir -p "$DESTDIR/dev"
+        \\mknod "$DESTDIR/dev/fuse" -m 0666 c 10 229
+        \\test -e "$DESTDIR/dev/fuse"
+        \\test ! -c "$DESTDIR/dev/fuse"
+        \\mv "$DESTDIR/dev/fuse" "$DESTDIR/dev/renamed"
+        \\ln "$DESTDIR/dev/renamed" "$DESTDIR/dev/linked"
+        \\mknod -m600 "$DESTDIR/dev/block" b 8 0
+        \\HELPER
+        \\  DESTDIR="$pkgdir" /bin/sh "$srcdir/install-helper.sh"
+        \\  rm -r "$pkgdir/dev"
+        \\  # Replacing a removed placeholder must not inherit its device type.
+        \\  mkdir -p "$pkgdir/dev"
+        \\  touch "$pkgdir/dev/fuse"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    var reader = try archive.Reader.init(allocator, artifacts[0].path);
+    defer reader.deinit();
+    var checked: usize = 0;
+    while (try reader.next()) |entry| {
+        const path = std.mem.trimEnd(u8, entry.path, "/");
+        if (std.mem.eql(u8, path, "usr/bin/fusermount3")) {
+            checked += 1;
+            try testing.expectEqual(@as(i64, 0), entry.uid);
+            try testing.expectEqual(@as(i64, 0), entry.gid);
+            try testing.expectEqual(@as(u32, 0o4755), entry.permissions);
+        } else if (std.mem.eql(u8, path, "usr/share/demo/owned")) {
+            checked += 1;
+            try testing.expectEqual(@as(i64, 42), entry.uid);
+            try testing.expectEqual(@as(i64, 50), entry.gid);
+        } else if (std.mem.eql(u8, path, "etc/cups/ssl")) {
+            checked += 1;
+            try testing.expectEqual(@as(i64, 209), entry.gid);
+            try testing.expectEqual(@as(u32, 0o700), entry.permissions);
+        } else if (std.mem.eql(u8, path, "dev/fuse")) {
+            checked += 1;
+            try testing.expectEqual(archive.EntryKind.regular_file, entry.kind);
+        }
+        try testing.expect(!std.mem.eql(u8, path, "dev/renamed"));
+        try testing.expect(!std.mem.eql(u8, path, "dev/linked"));
+        try testing.expect(!std.mem.eql(u8, path, "dev/block"));
+    }
+    try testing.expectEqual(@as(usize, 4), checked);
+    const mtree_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "pkg/demo/.MTREE" });
+    defer allocator.free(mtree_path);
+    var gzip = try process_runner.run(allocator, io, &.{ "gzip", "-dc", mtree_path }, null, null);
+    defer gzip.deinit(allocator);
+    try testing.expectEqual(@as(u8, 0), gzip.exit_code);
+    var lines = std.mem.splitScalar(u8, gzip.stdout, '\n');
+    var saw_fusermount = false;
+    while (lines.next()) |line| {
+        if (!std.mem.startsWith(u8, line, "./usr/bin/fusermount3 ")) continue;
+        saw_fusermount = true;
+        try testing.expect(std.mem.indexOf(u8, line, "uid=0") != null);
+        try testing.expect(std.mem.indexOf(u8, line, "gid=0") != null);
+        try testing.expect(std.mem.indexOf(u8, line, "mode=4755") != null);
+    }
+    try testing.expect(saw_fusermount);
+    const staged_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "pkg/demo/usr/bin/fusermount3" });
+    defer allocator.free(staged_path);
+    var stat = try process_runner.run(allocator, io, &.{ "stat", "-c", "%u:%g", staged_path }, null, null);
+    defer stat.deinit(allocator);
+    const expected_owner = try std.fmt.allocPrint(allocator, "{d}:{d}", .{ std.os.linux.geteuid(), std.os.linux.getegid() });
+    defer allocator.free(expected_owner);
+    try testing.expectEqual(@as(u8, 0), stat.exit_code);
+    try testing.expectEqualStrings(expected_owner, std.mem.trim(u8, stat.stdout, " \r\n"));
+    const wrapper = try fixture.temporary.dir.readFileAlloc(io, "wrapper-path", allocator, .limited(4096));
+    defer allocator.free(wrapper);
+    try testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, std.mem.trim(u8, wrapper, "\r\n"), .{}));
+}
+
+test "PackageBuilder parallel external helpers serialize metadata" {
+    const allocator = testing.allocator;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\arch=('any')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/parallel"
+        \\  for i in {1..32}; do
+        \\    touch "$pkgdir/usr/share/parallel/$i"
+        \\    /bin/sh -ec 'chown "$1:$2" "$3"; chgrp "$2" "$3"' sh "$((40+i))" "$((80+i))" "$pkgdir/usr/share/parallel/$i" &
+        \\  done
+        \\  wait
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    var reader = try archive.Reader.init(allocator, artifacts[0].path);
+    defer reader.deinit();
+    var checked: usize = 0;
+    while (try reader.next()) |entry| {
+        if (entry.kind != .regular_file or !std.mem.startsWith(u8, entry.path, "usr/share/parallel/")) continue;
+        const index = try std.fmt.parseInt(i64, std.fs.path.basename(entry.path), 10);
+        try testing.expectEqual(40 + index, entry.uid);
+        try testing.expectEqual(80 + index, entry.gid);
+        checked += 1;
+    }
+    try testing.expectEqual(@as(usize, 32), checked);
+}
+
+test "PackageBuilder rejects unsafe external device operations" {
+    const allocator = testing.allocator;
+    const commands = [_][]const u8{
+        "mknod \"$pkgdir/node\" c 10 229; mv \"$pkgdir/node\" \"$pkgdir/renamed\"",
+        "mknod \"$pkgdir/node\" c 10 229; ln \"$pkgdir/node\" \"$pkgdir/linked\"; rm \"$pkgdir/node\"",
+        "mknod \"$startdir/outside\" c 10 229",
+        "ln -s \"$startdir\" \"$pkgdir/escape\"; mknod \"$pkgdir/escape/outside\" c 10 229",
+        "touch \"$pkgdir/existing\"; mknod \"$pkgdir/existing\" c 10 229",
+        "mknod \"$pkgdir/node\" c nope 229",
+        "mknod \"$pkgdir/node\" --mode=invalid c 10 229",
+        // External build tools can replace a helper's exit status or ignore it.
+        "mknod \"$pkgdir/node\" c nope 229 || exit 1",
+        "mknod \"$pkgdir/node\" c nope 229 || true",
+        "touch \"$startdir/outside\"; chown 42:84 \"$startdir/outside\"",
+    };
+    for (commands) |command| {
+        const content = try std.fmt.allocPrint(allocator,
+            \\pkgname=demo
+            \\pkgver=1
+            \\arch=('any')
+            \\package() {{
+            \\  cat > "$srcdir/helper.sh" <<'HELPER'
+            \\#!/bin/sh
+            \\set -e
+            \\pkgdir=$1
+            \\startdir=$2
+            \\command -v mknod > "$startdir/wrapper-path"
+            \\{s}
+            \\HELPER
+            \\  /bin/sh "$srcdir/helper.sh" "$pkgdir" "$startdir"
+            \\}}
+        , .{command});
+        defer allocator.free(content);
+        var fixture = try Fixture.create(allocator, content, null, null);
+        defer fixture.destroy();
+        try testing.expectError(error.PrivilegedPackageOperationUnsupported, fixture.builder.BuildPackage());
+        const wrapper = try fixture.temporary.dir.readFileAlloc(testing.io, "wrapper-path", allocator, .limited(4096));
+        defer allocator.free(wrapper);
+        try testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(testing.io, std.mem.trim(u8, wrapper, "\r\n"), .{}));
+    }
 }
 
 test "PackageBuilder simulates root ownership without host chown" {
@@ -1601,6 +1765,150 @@ test "PackageBuilder preserves non-root virtual ownership and special modes" {
     try testing.expect(saw_installed_metadata);
 }
 
+test "PackageBuilder install option clusters preserve virtual ownership" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\arch=('any')
+        \\options=('!strip')
+        \\package() {
+        \\  install -dm700 -g 209 "$pkgdir/etc/cups/ssl"
+        \\  install -dm 700 -g209 "$pkgdir/etc/cups/spaced"
+        \\  install -d -m700 --group=209 "$pkgdir/etc/cups/separated"
+        \\  install -dg209 -m700 "$pkgdir/etc/cups/clustered" "$pkgdir/etc/cups/multiple"
+        \\  install -do42 -g209 -m700 "$pkgdir/etc/cups/owner"
+        \\  install -Dm644 -o42 -g209 /dev/null "$pkgdir/usr/share/demo/attached"
+        \\  install -Dpo 42 -g209 -m644 /dev/null "$pkgdir/usr/share/demo/next"
+        \\  install -Dpt"$pkgdir/usr/share/demo/target" -m644 -o42 -g209 /dev/null
+        \\  install -DTm644 -o42 -g209 /dev/null "$pkgdir/usr/share/demo/no-target"
+        \\  install -m644 -o42 -g209 /dev/null "$pkgdir/usr/share/demo/backup"
+        \\  install -bSog -m644 -o42 -g209 /dev/null "$pkgdir/usr/share/demo/backup"
+        \\  cd "$pkgdir"
+        \\  install -dm700 -g209 -- -ssl
+        \\  # Without ownership requests, preserve options delegated to coreutils.
+        \\  install --debug -dm700 -- -g209
+        \\}
+    , null, null);
+    defer fixture.destroy();
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const Expected = struct { path: []const u8, uid: i64 = 0, gid: i64 = 209, mode: u32 = 0o700 };
+    const expected = [_]Expected{
+        .{ .path = "etc/cups/ssl" },
+        .{ .path = "etc/cups/spaced" },
+        .{ .path = "etc/cups/separated" },
+        .{ .path = "etc/cups/clustered" },
+        .{ .path = "etc/cups/multiple" },
+        .{ .path = "etc/cups/owner", .uid = 42 },
+        .{ .path = "usr/share/demo/attached", .uid = 42, .mode = 0o644 },
+        .{ .path = "usr/share/demo/next", .uid = 42, .mode = 0o644 },
+        .{ .path = "usr/share/demo/target/null", .uid = 42, .mode = 0o644 },
+        .{ .path = "usr/share/demo/no-target", .uid = 42, .mode = 0o644 },
+        .{ .path = "usr/share/demo/backup", .uid = 42, .mode = 0o644 },
+        .{ .path = "usr/share/demo/backupog", .uid = 42, .mode = 0o644 },
+        .{ .path = "-ssl" },
+        .{ .path = "-g209", .gid = 0 },
+    };
+
+    var reader = try archive.Reader.init(allocator, artifacts[0].path);
+    defer reader.deinit();
+    var seen = [_]bool{false} ** expected.len;
+    while (try reader.next()) |entry| {
+        for (expected, 0..) |item, index| {
+            if (!std.mem.eql(u8, std.mem.trimEnd(u8, entry.path, "/"), item.path)) continue;
+            seen[index] = true;
+            try testing.expectEqual(item.uid, entry.uid);
+            try testing.expectEqual(item.gid, entry.gid);
+            try testing.expectEqual(item.mode, entry.permissions);
+        }
+    }
+    for (seen) |found| try testing.expect(found);
+
+    const mtree_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "pkg/demo/.MTREE" });
+    defer allocator.free(mtree_path);
+    var gzip = try process_runner.run(allocator, io, &.{ "gzip", "-dc", mtree_path }, null, null);
+    defer gzip.deinit(allocator);
+    try testing.expectEqual(@as(u8, 0), gzip.exit_code);
+    for (expected) |item| {
+        const prefix = try std.fmt.allocPrint(allocator, "./{s} ", .{item.path});
+        defer allocator.free(prefix);
+        const metadata = try std.fmt.allocPrint(allocator, "uid={d} gid={d} mode={o}", .{ item.uid, item.gid, item.mode });
+        defer allocator.free(metadata);
+        var lines = std.mem.splitScalar(u8, gzip.stdout, '\n');
+        var found = false;
+        while (lines.next()) |line| {
+            if (!std.mem.startsWith(u8, line, prefix)) continue;
+            found = true;
+            var fields = std.mem.tokenizeScalar(u8, metadata, ' ');
+            while (fields.next()) |field| {
+                var actual_fields = std.mem.tokenizeScalar(u8, line, ' ');
+                var matched = false;
+                while (actual_fields.next()) |actual| {
+                    if (std.mem.eql(u8, field, actual)) matched = true;
+                }
+                try testing.expect(matched);
+            }
+        }
+        try testing.expect(found);
+
+        const staged_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "pkg/demo", item.path });
+        defer allocator.free(staged_path);
+        var stat_result = try process_runner.run(allocator, io, &.{ "stat", "-c", "%u:%g", staged_path }, null, null);
+        defer stat_result.deinit(allocator);
+        try testing.expectEqual(@as(u8, 0), stat_result.exit_code);
+        const host_owner = try std.fmt.allocPrint(allocator, "{d}:{d}", .{ std.os.linux.geteuid(), std.os.linux.getegid() });
+        defer allocator.free(host_owner);
+        try testing.expectEqualStrings(host_owner, std.mem.trim(u8, stat_result.stdout, " \t\r\n"));
+    }
+}
+
+test "PackageBuilder install rejects unsupported and malformed ownership options" {
+    const allocator = testing.allocator;
+    const cases = [_]struct { command: []const u8, diagnostic: []const u8 }{
+        .{ .command = "install -dm700 -g", .diagnostic = "install requires an argument for: -g" },
+        .{ .command = "install -dm", .diagnostic = "install requires an argument for: -m" },
+        .{ .command = "install -do '' \"$pkgdir/rejected\"", .diagnostic = "install requires a nonempty argument for: -o" },
+        .{ .command = "install --group= -dm700 \"$pkgdir/rejected\"", .diagnostic = "install requires a nonempty argument for: --group=" },
+        .{ .command = "install -dQg209 \"$pkgdir/rejected\"", .diagnostic = "install cannot record ownership with unsupported option: -Q" },
+        .{ .command = "install --debug -dg209 \"$pkgdir/rejected\"", .diagnostic = "install cannot record ownership with unsupported option: --debug" },
+    };
+    for (cases) |case| {
+        const Capture = struct {
+            expected: []const u8,
+            seen: std.atomic.Value(bool) = .init(false),
+
+            fn handle(data: ?*anyopaque, event: op_context.Event) void {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                switch (event) {
+                    .status => |status| {
+                        if (std.mem.indexOf(u8, status.message, self.expected) != null)
+                            self.seen.store(true, .release);
+                    },
+                    else => {},
+                }
+            }
+        };
+        var capture: Capture = .{ .expected = case.diagnostic };
+        const content = try std.fmt.allocPrint(allocator,
+            \\pkgname=demo
+            \\pkgver=1
+            \\arch=('any')
+            \\package() {{
+            \\  {s}
+            \\}}
+        , .{case.command});
+        defer allocator.free(content);
+        var fixture = try Fixture.create(allocator, content, .{ .function = Capture.handle, .data = &capture }, null);
+        defer fixture.destroy();
+        try testing.expectError(error.PrivilegedPackageOperationUnsupported, fixture.builder.BuildPackage());
+        try testing.expect(capture.seen.load(.acquire));
+        try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(testing.io, "pkg/demo/rejected", .{}));
+    }
+}
+
 test "PackageBuilder virtual ownership follows identities and recursive snapshots" {
     const allocator = testing.allocator;
     var fixture = try Fixture.create(allocator,
@@ -1678,7 +1986,7 @@ test "PackageBuilder isolates virtual ownership between split members" {
         \\package_ownership-one() {
         \\  mkdir -p "$pkgdir/usr/share/ownership"
         \\  touch "$pkgdir/usr/share/ownership/data"
-        \\  chown 44:84 "$pkgdir/usr/share/ownership/data"
+        \\  /bin/sh -ec 'chown 44:84 "$1"; mknod "$2" c 10 229; rm "$2"' sh "$pkgdir/usr/share/ownership/data" "$pkgdir/temporary-node"
         \\}
         \\package_ownership-two() {
         \\  mkdir -p "$pkgdir/usr/share/ownership"
@@ -1904,7 +2212,9 @@ test "PackageBuilder uses configured PATH for metadata SRCINFO and lifecycle ste
         \\  [[ "$status" = 127 ]]
         \\}
         \\package() {
-        \\  [[ "$PATH" = "$_metadata_path" ]]
+        \\  # Packaging prepends private metadata wrappers; configured tools follow.
+        \\  [[ "${PATH#*:}" = "$_metadata_path" ]]
+        \\  [[ -x "${PATH%%:*}/chown" ]]
         \\  mkdir -p "$pkgdir/usr/share/path-demo"
         \\  /usr/bin/env printf > "$pkgdir/usr/share/path-demo/tool"
         \\}

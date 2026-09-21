@@ -116,6 +116,11 @@ pub fn runStep(
     const package_step = isPackageStep(step_name);
     const capture_pkgver = std.mem.eql(u8, step_name, "pkgver");
     const capture_metadata = package_step;
+    const wrappers_path = if (package_step) try createPackageWrappers(self) else null;
+    defer if (wrappers_path) |path| {
+        std.Io.Dir.cwd().deleteTree(self.io, path) catch {};
+        self.allocator.free(path);
+    };
     const executable_body = try std.fmt.allocPrint(
         self.allocator,
         "{s}\n{s}\n{s}\ndeclare -- startdir=\"$4\"\ndeclare -- srcdir=\"$5\"\n{s}\n{s}\n{s}\ndeclare -- pkgver=\"$1\"\n__shelly_step() {{\n{s}\n}}\n{s}",
@@ -123,7 +128,10 @@ pub fn runStep(
             if (package_step) virtualMetadataShellPrelude else "",
             if (package_step) package_metadata.shell_capture_prelude else "",
             execution_prelude,
-            if (package_step) "declare -- pkgdir=\"$6\"\ndeclare -r __shelly_virtual_ownership_log=\"$7\"" else "",
+            if (package_step)
+                "declare -- pkgdir=\"$6\"\ndeclare -rx __shelly_virtual_ownership_log=\"$7\"\nexport __shelly_package_root=\"$pkgdir\"\nexport PATH=\"$8:$PATH\""
+            else
+                "",
             messagingShellPrelude,
             helper_definitions,
             body,
@@ -135,7 +143,7 @@ pub fn runStep(
     const command_body = if (capture_metadata)
         try std.fmt.allocPrint(
             self.allocator,
-            "{s}\n__shelly_capture_metadata > \"$3\"\nprintf 'E\\0' >> \"$__shelly_virtual_ownership_log\"",
+            "{s}\n__shelly_capture_metadata > \"$3\"\n__shelly_append_metadata E",
             .{executable_body},
         )
     else
@@ -165,7 +173,7 @@ pub fn runStep(
     defer self.allocator.free(metadata_result_path);
     const ownership_result_path = try std.fs.path.join(
         self.allocator,
-        &.{ self.options.work_directory, ".shelly-virtual-ownership" },
+        &.{ wrappers_path orelse self.options.work_directory, ".shelly-virtual-ownership" },
     );
     defer self.allocator.free(ownership_result_path);
     if (capture_pkgver) {
@@ -213,7 +221,7 @@ pub fn runStep(
         self.package_builds[0].options orelse &.{},
     );
     defer metadata.freeOwnedStrings(self.allocator, effective_options);
-    const step_argv: []const []const u8 = &.{ "/bin/bash", "-e", "-c", command_body, "shelly-step", current_pkgver, pkgver_result_path, metadata_result_path, runtime_startdir, srcdir, runtime_pkgdir, ownership_result_path };
+    const step_argv: []const []const u8 = &.{ "/bin/bash", "-e", "-c", command_body, "shelly-step", current_pkgver, pkgver_result_path, metadata_result_path, runtime_startdir, srcdir, runtime_pkgdir, ownership_result_path, wrappers_path orelse "" };
     const sandbox_enabled = self.shellybuild_config.sandbox.enabled;
     const wrapped = if (sandbox_enabled) try wrapStepCommand(self, step_argv) else null;
     defer if (wrapped) |command| command.deinit(self.allocator);
@@ -229,6 +237,13 @@ pub fn runStep(
         operation,
     );
     if (self.active_log) |log| try log.ensureHealthy();
+    if (wrappers_path) |path| {
+        const rejected_path = try std.fs.path.join(self.allocator, &.{ path, ".shelly-virtual-ownership.failed" });
+        defer self.allocator.free(rejected_path);
+        if (std.Io.Dir.cwd().access(self.io, rejected_path, .{})) |_| {
+            return error.PrivilegedPackageOperationUnsupported;
+        } else |err| if (err != error.FileNotFound) return err;
+    }
     if (package_step and exit_code == virtual_metadata_rejected_exit_code)
         return error.PrivilegedPackageOperationUnsupported;
     if (exit_code != 0) {
@@ -271,6 +286,43 @@ pub fn runStep(
         };
     }
     operation.status(.information, step_name, "aur_build_output", @intFromEnum(events.EventType.aur_build_output));
+}
+
+/// Commands in this private directory are inherited by Meson, make, and /bin/sh.
+fn createPackageWrappers(self: *PackageBuilder) ![]u8 {
+    var random: [8]u8 = undefined;
+    self.io.random(&random);
+    const suffix = std.fmt.bytesToHex(random, .lower);
+    const path = try std.fmt.allocPrint(self.allocator, "{s}/.shelly-package-commands-{s}", .{ self.options.work_directory, suffix });
+    errdefer self.allocator.free(path);
+    try std.Io.Dir.cwd().createDir(self.io, path, .fromMode(0o700));
+    errdefer std.Io.Dir.cwd().deleteTree(self.io, path) catch {};
+    var directory = try std.Io.Dir.cwd().openDir(self.io, path, .{});
+    defer directory.close(self.io);
+    try directory.writeFile(self.io, .{ .sub_path = "metadata.sh", .data = virtualMetadataShellPrelude });
+    try directory.setFilePermissions(self.io, "metadata.sh", .fromMode(0o600), .{});
+    const launcher =
+        \\#!/bin/bash
+        \\set -e
+        \\: "${__shelly_package_root:?missing Shelly package root}"
+        \\: "${__shelly_virtual_ownership_log:?missing Shelly metadata journal}"
+        \\declare -r pkgdir="$__shelly_package_root"
+        \\source "${0%/*}/metadata.sh"
+        \\trap '__shelly_status=$?; if [ "$__shelly_status" -ne 0 ]; then printf "shelly: %s failed (exit %s); arguments:" "${0##*/}" "$__shelly_status" >&2; printf " %q" "$@" >&2; printf "\n" >&2; fi' EXIT
+        \\case "${0##*/}" in
+        \\  chown) chown "$@" ;;
+        \\  chgrp) chgrp "$@" ;;
+        \\  install) install "$@" ;;
+        \\  mknod) mknod "$@" ;;
+        \\  *) exit 97 ;;
+        \\esac
+        \\
+    ;
+    for ([_][]const u8{ "chown", "chgrp", "install", "mknod" }) |name| {
+        try directory.writeFile(self.io, .{ .sub_path = name, .data = launcher });
+        try directory.setFilePermissions(self.io, name, .fromMode(0o700), .{});
+    }
+    return path;
 }
 
 const WrappedStepCommand = struct {
@@ -1152,11 +1204,61 @@ const messagingShellPrelude =
 const virtualMetadataShellPrelude =
     \\__shelly_metadata_reject() {
     \\  printf '%s\n' 'shelly: unsupported privileged package metadata operation' >&2
+    \\  if [ "$#" -gt 0 ]; then printf 'shelly: %s: %q\n' "$1" "${2-}" >&2; fi
+    \\  if [ -n "${__shelly_virtual_ownership_log:-}" ]; then
+    \\    : > "${__shelly_virtual_ownership_log}.failed"
+    \\  fi
     \\  return 97
     \\}
+    \\__shelly_append_metadata() (
+    \\  local __shelly_fd
+    \\  exec {__shelly_fd}>> "$__shelly_virtual_ownership_log" || { __shelly_metadata_reject 'cannot open metadata journal' "$__shelly_virtual_ownership_log"; return $?; }
+    \\  /usr/bin/flock -x "$__shelly_fd" || { __shelly_metadata_reject 'cannot lock metadata journal' "$__shelly_virtual_ownership_log"; return $?; }
+    \\  printf '%s\0' "$@" >&"$__shelly_fd" || { __shelly_metadata_reject 'cannot write metadata journal' "$__shelly_virtual_ownership_log"; return $?; }
+    \\)
     \\mknod() {
-    \\  printf '%s\n' 'Could not complete the package stage because the package attempted to create a device node. Device-node creation is not supported by the package builder.' >&2
-    \\  return 1
+    \\  local -a __shelly_operands=()
+    \\  local __shelly_mode='' __shelly_root __shelly_parent __shelly_target __shelly_kind __shelly_number
+    \\  while [ "$#" -gt 0 ]; do
+    \\    case "$1" in
+    \\      --) shift; __shelly_operands+=("$@"); break ;;
+    \\      -m|--mode)
+    \\        [ "$#" -ge 2 ] || { __shelly_metadata_reject 'mknod requires a mode for' "$1"; return $?; }
+    \\        __shelly_mode=$2; shift 2
+    \\        [[ "$__shelly_mode" =~ ^[0-7]{1,4}$ ]] || { __shelly_metadata_reject 'mknod supports octal modes only' "$__shelly_mode"; return $?; } ;;
+    \\      --mode=*|-m?*)
+    \\        if [[ "$1" = --mode=* ]]; then __shelly_mode=${1#*=}; else __shelly_mode=${1:2}; fi
+    \\        shift
+    \\        [[ "$__shelly_mode" =~ ^[0-7]{1,4}$ ]] || { __shelly_metadata_reject 'mknod supports octal modes only' "$__shelly_mode"; return $?; } ;;
+    \\      -*) __shelly_metadata_reject 'mknod unsupported option' "$1"; return $? ;;
+    \\      *) __shelly_operands+=("$1"); shift ;;
+    \\    esac
+    \\  done
+    \\  [ "${#__shelly_operands[@]}" -eq 4 ] || { __shelly_metadata_reject 'mknod requires PATH TYPE MAJOR MINOR' "${__shelly_operands[*]}"; return $?; }
+    \\  __shelly_kind=${__shelly_operands[1]}
+    \\  case "$__shelly_kind" in
+    \\    c|b) ;;
+    \\    u) __shelly_kind=c ;;
+    \\    *) __shelly_metadata_reject 'mknod unsupported device type' "$__shelly_kind"; return $? ;;
+    \\  esac
+    \\  for __shelly_number in "${__shelly_operands[@]:2:2}"; do
+    \\    [[ "$__shelly_number" =~ ^[0-9]{1,10}$ ]] && [ "$((10#$__shelly_number))" -le 4294967295 ] || { __shelly_metadata_reject 'mknod invalid device number' "$__shelly_number"; return $?; }
+    \\  done
+    \\  __shelly_root=$(/usr/bin/realpath -e -- "$pkgdir") || { __shelly_metadata_reject 'mknod invalid package root' "$pkgdir"; return $?; }
+    \\  __shelly_parent=$(/usr/bin/realpath -e -- "$(/usr/bin/dirname -- "${__shelly_operands[0]}")") || { __shelly_metadata_reject 'mknod missing parent directory' "${__shelly_operands[0]}"; return $?; }
+    \\  __shelly_target="$__shelly_parent/$(/usr/bin/basename -- "${__shelly_operands[0]}")"
+    \\  case "$__shelly_target" in
+    \\    "$__shelly_root"/*) ;;
+    \\    *) __shelly_metadata_reject 'mknod target outside package' "$__shelly_target"; return $? ;;
+    \\  esac
+    \\  if [ -e "$__shelly_target" ] || [ -L "$__shelly_target" ]; then
+    \\    __shelly_metadata_reject 'mknod target already exists' "$__shelly_target"; return $?
+    \\  fi
+    \\  # A placeholder provides existence/removal semantics, never a real device.
+    \\  (set -o noclobber; : > "$__shelly_target") || { __shelly_metadata_reject 'mknod cannot create placeholder' "$__shelly_target"; return $?; }
+    \\  __shelly_record_ownership N "$__shelly_kind:${__shelly_operands[2]}:${__shelly_operands[3]}" "$__shelly_target" || return $?
+    \\  if [ -n "$__shelly_mode" ]; then /usr/bin/chmod "$__shelly_mode" -- "$__shelly_target" || return $?; fi
+    \\  return 0
     \\}
     \\__shelly_record_ownership() {
     \\  local __shelly_operation=$1 __shelly_specification=$2 __shelly_target=$3 __shelly_follow=${4:-1}
@@ -1171,7 +1273,7 @@ const virtualMetadataShellPrelude =
     \\  fi
     \\  case "$__shelly_canonical" in
     \\    "$__shelly_root"|"$__shelly_root"/*) ;;
-    \\    *) __shelly_metadata_reject; return $? ;;
+    \\    *) __shelly_metadata_reject 'ownership target outside package' "$__shelly_canonical"; return $? ;;
     \\  esac
     \\  if [ "$__shelly_follow" -eq 1 ]; then
     \\    __shelly_identity=$(/usr/bin/stat -Lc '%Hd:%Ld:%i:%.9W' -- "$__shelly_canonical") || { __shelly_metadata_reject; return $?; }
@@ -1180,7 +1282,7 @@ const virtualMetadataShellPrelude =
     \\  fi
     \\  __shelly_birth=${__shelly_identity##*:}
     \\  [ "$__shelly_birth" != '0.000000000' ] || { __shelly_metadata_reject; return $?; }
-    \\  printf '%s\0%s\0%s\0%s\0' "$__shelly_operation" "$__shelly_identity" "$__shelly_specification" "$__shelly_canonical" >> "$__shelly_virtual_ownership_log" || return 97
+    \\  __shelly_append_metadata "$__shelly_operation" "$__shelly_identity" "$__shelly_specification" "$__shelly_canonical"
     \\}
     \\__shelly_record_ownership_recursive() {
     \\  local __shelly_operation=$1 __shelly_specification=$2 __shelly_target=$3 __shelly_follow=${4:-1}
@@ -1254,63 +1356,96 @@ const virtualMetadataShellPrelude =
     \\  return 0
     \\}
     \\install() {
-    \\  local -a __shelly_install_args=() __shelly_operands=()
+    \\  local -a __shelly_original_args=("$@") __shelly_install_args=() __shelly_operands=()
     \\  local __shelly_owner='' __shelly_group='' __shelly_have_owner=0 __shelly_have_group=0
     \\  local __shelly_directory_mode=0 __shelly_no_target_directory=0 __shelly_target_directory=''
-    \\  local __shelly_ambiguous=0 __shelly_value __shelly_source __shelly_destination __shelly_target
+    \\  local __shelly_ambiguous='' __shelly_value __shelly_source __shelly_destination __shelly_target
+    \\  local __shelly_short_options __shelly_option
     \\  while [ "$#" -gt 0 ]; do
     \\    case "$1" in
     \\      --)
     \\        __shelly_install_args+=("$1"); shift
     \\        while [ "$#" -gt 0 ]; do __shelly_install_args+=("$1"); __shelly_operands+=("$1"); shift; done
     \\        break ;;
-    \\      -o|--owner)
-    \\        [ "$#" -ge 2 ] || { __shelly_metadata_reject; return $?; }
-    \\        [ -n "$2" ] || { __shelly_metadata_reject; return $?; }
+    \\      --owner)
+    \\        [ "$#" -ge 2 ] && [ -n "$2" ] || { __shelly_metadata_reject 'install requires a nonempty argument for' "$1"; return $?; }
     \\        __shelly_owner=$2; __shelly_have_owner=1
     \\        shift 2 ;;
-    \\      -g|--group)
-    \\        [ "$#" -ge 2 ] || { __shelly_metadata_reject; return $?; }
-    \\        [ -n "$2" ] || { __shelly_metadata_reject; return $?; }
+    \\      --group)
+    \\        [ "$#" -ge 2 ] && [ -n "$2" ] || { __shelly_metadata_reject 'install requires a nonempty argument for' "$1"; return $?; }
     \\        __shelly_group=$2; __shelly_have_group=1
     \\        shift 2 ;;
     \\      --owner=*)
-    \\        [ -n "${1#*=}" ] || { __shelly_metadata_reject; return $?; }
+    \\        [ -n "${1#*=}" ] || { __shelly_metadata_reject 'install requires a nonempty argument for' "$1"; return $?; }
     \\        __shelly_owner=${1#*=}; __shelly_have_owner=1
     \\        shift ;;
     \\      --group=*)
-    \\        [ -n "${1#*=}" ] || { __shelly_metadata_reject; return $?; }
+    \\        [ -n "${1#*=}" ] || { __shelly_metadata_reject 'install requires a nonempty argument for' "$1"; return $?; }
     \\        __shelly_group=${1#*=}; __shelly_have_group=1
     \\        shift ;;
-    \\      -o?*) __shelly_owner=${1:2}; __shelly_have_owner=1; shift ;;
-    \\      -g?*) __shelly_group=${1:2}; __shelly_have_group=1; shift ;;
-    \\      -m|--mode|-S|--suffix)
-    \\        [ "$#" -ge 2 ] || { __shelly_metadata_reject; return $?; }
+    \\      --mode|--suffix)
+    \\        [ "$#" -ge 2 ] || { __shelly_metadata_reject 'install requires an argument for' "$1"; return $?; }
     \\        __shelly_install_args+=("$1" "$2"); shift 2 ;;
-    \\      -t|--target-directory)
-    \\        [ "$#" -ge 2 ] || { __shelly_metadata_reject; return $?; }
+    \\      --target-directory)
+    \\        [ "$#" -ge 2 ] || { __shelly_metadata_reject 'install requires an argument for' "$1"; return $?; }
     \\        __shelly_target_directory=$2
     \\        __shelly_install_args+=("$1" "$2"); shift 2 ;;
     \\      --target-directory=*)
     \\        __shelly_target_directory=${1#*=}; __shelly_install_args+=("$1"); shift ;;
-    \\      -d|--directory)
+    \\      --directory)
     \\        __shelly_directory_mode=1; __shelly_install_args+=("$1"); shift ;;
-    \\      -T|--no-target-directory)
+    \\      --no-target-directory)
     \\        __shelly_no_target_directory=1; __shelly_install_args+=("$1"); shift ;;
-    \\      -D|-p|--preserve-timestamps|-s|--strip|-v|--verbose|-C|--compare|-b|-Z|--backup|--backup=*|--mode=*|-m?*|-Dm?*)
+    \\      --preserve-timestamps|--strip|--verbose|--compare|--backup|--backup=*|--mode=*|--suffix=*)
     \\        __shelly_install_args+=("$1"); shift ;;
-    \\      -*)
-    \\        __shelly_ambiguous=1; __shelly_install_args+=("$1"); shift ;;
+    \\      --*)
+    \\        __shelly_ambiguous=$1; shift ;;
+    \\      -?*)
+    \\        # Parse clusters like -dm700 and -Dpo42. An option taking a
+    \\        # value consumes the rest of the cluster or the next argument.
+    \\        __shelly_short_options=${1:1}; shift
+    \\        while [ -n "$__shelly_short_options" ]; do
+    \\          __shelly_option=${__shelly_short_options:0:1}
+    \\          __shelly_short_options=${__shelly_short_options:1}
+    \\          case "$__shelly_option" in
+    \\            o|g|m|S|t)
+    \\              if [ -n "$__shelly_short_options" ]; then
+    \\                __shelly_value=$__shelly_short_options; __shelly_short_options=''
+    \\              else
+    \\                [ "$#" -ge 1 ] || { __shelly_metadata_reject 'install requires an argument for' "-$__shelly_option"; return $?; }
+    \\                __shelly_value=$1; shift
+    \\              fi
+    \\              case "$__shelly_option" in
+    \\                o|g)
+    \\                  [ -n "$__shelly_value" ] || { __shelly_metadata_reject 'install requires a nonempty argument for' "-$__shelly_option"; return $?; }
+    \\                  if [ "$__shelly_option" = o ]; then
+    \\                    __shelly_owner=$__shelly_value; __shelly_have_owner=1
+    \\                  else
+    \\                    __shelly_group=$__shelly_value; __shelly_have_group=1
+    \\                  fi ;;
+    \\                *)
+    \\                  if [ "$__shelly_option" = t ]; then __shelly_target_directory=$__shelly_value; fi
+    \\                  __shelly_install_args+=("-$__shelly_option" "$__shelly_value") ;;
+    \\              esac ;;
+    \\            d|T|D|p|s|v|C|b|Z|c)
+    \\              if [ "$__shelly_option" = d ]; then __shelly_directory_mode=1; fi
+    \\              if [ "$__shelly_option" = T ]; then __shelly_no_target_directory=1; fi
+    \\              __shelly_install_args+=("-$__shelly_option") ;;
+    \\            *) __shelly_ambiguous="-$__shelly_option" ;;
+    \\          esac
+    \\        done ;;
     \\      *)
     \\        __shelly_install_args+=("$1"); __shelly_operands+=("$1")
     \\        shift ;;
     \\    esac
     \\  done
-    \\  if { [ "$__shelly_have_owner" -eq 1 ] || [ "$__shelly_have_group" -eq 1 ]; } && [ "$__shelly_ambiguous" -eq 1 ]; then
-    \\    __shelly_metadata_reject; return $?
+    \\  if [ "$__shelly_have_owner" -eq 0 ] && [ "$__shelly_have_group" -eq 0 ]; then
+    \\    /usr/bin/install "${__shelly_original_args[@]}"; return $?
+    \\  fi
+    \\  if [ -n "$__shelly_ambiguous" ]; then
+    \\    __shelly_metadata_reject 'install cannot record ownership with unsupported option' "$__shelly_ambiguous"; return $?
     \\  fi
     \\  /usr/bin/install "${__shelly_install_args[@]}" || return $?
-    \\  if [ "$__shelly_have_owner" -eq 0 ] && [ "$__shelly_have_group" -eq 0 ]; then return 0; fi
     \\  __shelly_record_install_target() {
     \\    __shelly_target=$1
     \\    if [ "$__shelly_have_owner" -eq 1 ]; then

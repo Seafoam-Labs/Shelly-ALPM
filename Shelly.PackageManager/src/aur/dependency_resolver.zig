@@ -56,6 +56,20 @@ pub fn resolve(
     return resolveWithProvided(allocator, info, no_check, backend, &.{});
 }
 
+/// Build preparation follows global PKGBUILD dependencies, not the runtime
+/// requirements of its outputs. Future outputs cannot satisfy build inputs.
+/// Installation planning continues to use resolve/resolveWithProvided.
+pub fn resolveBuild(
+    allocator: std.mem.Allocator,
+    info: *const pkgbuild.Pkgbuild,
+    no_check: bool,
+    backend: Backend,
+) !Resolution {
+    var build_info = info.*;
+    build_info.parsed_depends = info.parsed_global_depends;
+    return resolve(allocator, &build_info, no_check, backend);
+}
+
 pub fn resolveWithProvided(
     allocator: std.mem.Allocator,
     info: *const pkgbuild.Pkgbuild,

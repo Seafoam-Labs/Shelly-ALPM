@@ -15,6 +15,11 @@ const options = @import("options");
 const IconDownloadService = @import("services/icon_fetcher.zig").downloadIconsInBackground;
 
 var did_activate: bool = false;
+var requested_page: ?deep_link.PageTarget = null;
+var app_id_buffer: [deep_link.max_app_id_len + 1]u8 = undefined;
+var requested_app_id: ?[:0]const u8 = null;
+var app_path_buffer: [deep_link.max_file_path_len + 1]u8 = undefined;
+var requested_app_path: ?[:0]const u8 = null;
 
 pub fn main(init: std.process.Init) void {
     runtime.io = init.io;
@@ -62,10 +67,6 @@ fn commandLine(
     const argc_usize = @as(usize, @intCast(argc));
     defer glib.strfreev(@ptrCast(argv));
 
-    var requested_page: ?deep_link.PageTarget = null;
-    var app_id_buffer: [deep_link.max_app_id_len + 1]u8 = undefined;
-    var requested_app_id: ?[:0]const u8 = null;
-
     var i: usize = 1;
     while (i < argc_usize) : (i += 1) {
         const arg = std.mem.span(argv[i]);
@@ -89,9 +90,15 @@ fn commandLine(
         if (deep_link.extractFlatpakAppId(arg, &app_id_buffer)) |id| {
             requested_app_id = id;
         }
+
+        if (deep_link.extractLocalFlatpakFile(arg, &app_path_buffer)) |app_path| {
+            requested_app_path = app_path;
+        }
     }
 
-    if (requested_app_id) |id| {
+    if (requested_app_path) |app_path| {
+        runtime.queueLocalFlatpakPath(app_path);
+    } else if (requested_app_id) |id| {
         runtime.queueFlatpakApp(id);
     } else if (requested_page) |page| {
         runtime.queuePage(page);
@@ -108,6 +115,7 @@ fn dispatchPendingNavigation(window: *ShellyWindow) void {
     const navigated = switch (request) {
         .page => |target| window.navigateTo(target),
         .flatpak_app => |app| window.openFlatpakApp(app.id()),
+        .local_flatpak_file => |file| window.openFlatpakLocalFile(file.path()),
     };
 
     if (!navigated) {

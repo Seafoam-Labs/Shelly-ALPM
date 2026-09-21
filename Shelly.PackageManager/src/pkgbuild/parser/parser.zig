@@ -183,6 +183,13 @@ pub const PkgbuildParser = struct {
         const local_source_contents = try sources.resolve_local_source_contents(self, local_source_files, base_dir);
 
         const depends = try fields.resolve_package_array_field(self, content, &vars, "depends");
+        const global_depends = try fields.resolve_arch_array_field(self, content, &vars, "depends");
+        errdefer variables.freeStringSlice(self.allocator, global_depends);
+        const parsed_global_depends = try dependencies.parse_dependencies(self, global_depends);
+        errdefer {
+            for (parsed_global_depends) |dep| dep.deinit(self.allocator);
+            self.allocator.free(parsed_global_depends);
+        }
         const make_depends = try fields.resolve_arch_array_field(self, content, &vars, "makedepends");
         const check_depends = try fields.resolve_arch_array_field(self, content, &vars, "checkdepends");
         const xdata = try fields.resolve_array_field(self, content, &vars, "xdata");
@@ -204,6 +211,8 @@ pub const PkgbuildParser = struct {
             .groups = try fields.resolve_package_array_field(self, content, &vars, "groups"),
             .arch = try fields.resolve_effective_architecture_field(self, content, &vars),
             .depends = depends,
+            .global_depends = global_depends,
+            .parsed_global_depends = parsed_global_depends,
             .make_depends = make_depends,
             .check_depends = check_depends,
             .opt_depends = try fields.resolve_package_array_field(self, content, &vars, "optdepends"),
@@ -2612,4 +2621,34 @@ test "issue 1880 identical literal and deferred source bytes retain distinct pro
     try std.testing.expectEqual(@as(usize, 2), info.source.?.len);
     try std.testing.expectEqual(@as(usize, 1), info.local_source_files.?.len);
     try std.testing.expectEqualStrings("$(printf file).patch", info.local_source_files.?[0]);
+}
+
+test "parser_content: build dependencies preserve globals across package overrides" {
+    const allocator = std.testing.allocator;
+    const content =
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=(x86_64 aarch64)
+        \\depends=('base>=2')
+        \\depends_x86_64=('native-lib')
+        \\depends_aarch64=('other-lib')
+        \\makedepends=('compiler')
+        \\checkdepends=('tester')
+        \\package() {
+        \\  depends=()
+        \\  depends_x86_64=('output-only')
+        \\}
+    ;
+    var info = try (PkgbuildParser{ .allocator = allocator, .io = std.testing.io, .package_carch = "x86_64", .selected_package_name = "demo" }).parser_content(content, null);
+    defer info.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), info.global_depends.?.len);
+    try std.testing.expectEqualStrings("base>=2", info.global_depends.?[0]);
+    try std.testing.expectEqualStrings("native-lib", info.global_depends.?[1]);
+    try std.testing.expectEqualStrings("base", info.parsed_global_depends.?[0].name);
+    try std.testing.expectEqualStrings(">=", info.parsed_global_depends.?[0].operator);
+    try std.testing.expectEqualStrings("2", info.parsed_global_depends.?[0].version);
+    try std.testing.expectEqual(@as(usize, 0), info.depends.?.len);
+    try std.testing.expectEqualStrings("compiler", info.parsed_make_depends.?[0].name);
+    try std.testing.expectEqualStrings("tester", info.parsed_check_depends.?[0].name);
 }

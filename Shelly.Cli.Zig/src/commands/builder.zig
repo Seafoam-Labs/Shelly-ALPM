@@ -1992,9 +1992,9 @@ fn dependencyPlanFromReview(
     return .{ .repo_dependencies = repo, .aur_dependencies = aur };
 }
 
-/// Resolves dependencies for every requested split-package member and merges
-/// the results, keeping the strongest role per repository package and a
-/// distinct name list of AUR dependencies for diagnostics.
+/// Resolves global build inputs for requested packages. Package-function
+/// runtime overrides describe artifacts, not the environment used to build
+/// them. Merge shared inputs while retaining their strongest role.
 fn resolveSyncDependencies(
     allocator: std.mem.Allocator,
     package_builds: []const Zigalpm.pkgbuild.parser.Pkgbuild,
@@ -2013,25 +2013,8 @@ fn resolveSyncDependencies(
         aur.deinit(allocator);
     }
 
-    var provided: std.ArrayList(resolver.ProvidedPackage) = .empty;
-    defer {
-        for (provided.items) |package| allocator.free(package.version);
-        provided.deinit(allocator);
-    }
-    for (package_builds) |package_build| {
-        const name = package_build.pkg_name orelse continue;
-        const full_version = try package_build.get_full_version(allocator);
-        provided.append(allocator, .{
-            .name = name,
-            .version = full_version,
-        }) catch |err| {
-            allocator.free(full_version);
-            return err;
-        };
-    }
-
     for (package_builds) |*package_build| {
-        var resolution = try resolver.resolveWithProvided(allocator, package_build, no_check, backend, provided.items);
+        var resolution = try resolver.resolveBuild(allocator, package_build, no_check, backend);
         defer resolution.deinit(allocator);
         for (resolution.repo_packages) |dependency| {
             if (findRepoDependency(repo.items, dependency.name)) |index| {
@@ -3214,7 +3197,8 @@ test "invoking user build arguments drop sync deps flags and keep everything els
     const child = try buildChildArguments(allocator, &arguments);
     defer allocator.free(child);
     const expected = [_][]const u8{ "build", "--no-check", "--package", "demo", "/tmp/PKGBUILD" };
-    try std.testing.expectEqualStrings(&expected, child);
+    try std.testing.expectEqual(expected.len, child.len);
+    for (expected, child) |want, actual| try std.testing.expectEqualStrings(want, actual);
 }
 
 test "sync deps child preserves implicit all-members selection" {
@@ -3223,7 +3207,8 @@ test "sync deps child preserves implicit all-members selection" {
     const child = try buildChildArguments(allocator, &arguments);
     defer allocator.free(child);
     const expected = [_][]const u8{ "build", "/tmp/PKGBUILD" };
-    try std.testing.expectEqualStrings(&expected, child);
+    try std.testing.expectEqual(expected.len, child.len);
+    for (expected, child) |want, actual| try std.testing.expectEqualStrings(want, actual);
 }
 
 const fake_sync_deps_backend = struct {
@@ -3264,7 +3249,7 @@ const sync_deps_pkgbuild =
     \\}
 ;
 
-test "sync deps resolution merges split members and upgrades roles" {
+test "sync deps resolution uses global inputs instead of split runtime dependencies" {
     const allocator = std.testing.allocator;
     var cli_build = try (Zigalpm.pkgbuild.Parser{
         .allocator = allocator,
@@ -3285,16 +3270,16 @@ test "sync deps resolution merges split members and upgrades roles" {
     defer plan.deinit(allocator);
     try std.testing.expectEqual(@as(usize, 2), plan.repo_dependencies.len);
     try std.testing.expectEqualStrings("cmake", plan.repo_dependencies[0].name);
-    try std.testing.expectEqual(Zigalpm.aur.dependency_resolver.Role.runtime, plan.repo_dependencies[0].role);
+    try std.testing.expectEqual(Zigalpm.aur.dependency_resolver.Role.build, plan.repo_dependencies[0].role);
     try std.testing.expectEqualStrings("meson", plan.repo_dependencies[1].name);
     try std.testing.expectEqual(Zigalpm.aur.dependency_resolver.Role.check, plan.repo_dependencies[1].role);
-    try std.testing.expectEqualSlices([]const u8, &.{"aur-runtime"}, plan.aur_dependencies);
+    try std.testing.expectEqual(@as(usize, 0), plan.aur_dependencies.len);
 
     var unchecked = try resolveSyncDependencies(allocator, &builds, true, fake_sync_deps_backend.backend());
     defer unchecked.deinit(allocator);
     try std.testing.expectEqual(@as(usize, 1), unchecked.repo_dependencies.len);
     try std.testing.expectEqualStrings("cmake", unchecked.repo_dependencies[0].name);
-    try std.testing.expectEqual(@as(usize, 1), unchecked.aur_dependencies.len);
+    try std.testing.expectEqual(@as(usize, 0), unchecked.aur_dependencies.len);
 }
 
 test "sync deps cleanup selects every new dependency and preserves prior or explicit packages" {
@@ -3713,4 +3698,115 @@ test "issue 1880 preparation failure reaches JSON and persistent log before buil
     try std.testing.expect(std.mem.indexOf(u8, log_content, "mypkg.install") != null);
     try std.testing.expect(std.mem.indexOf(u8, log_content, "(preparation)") != null);
     try std.testing.expect(std.mem.indexOf(u8, test_context.stderr.writer.buffered(), session.path) != null);
+}
+
+test "sync deps PipeWire split outputs do not provision their runtime providers" {
+    const Backend = struct {
+        fn installed(_: ?*anyopaque, _: [:0]const u8) bool {
+            return false;
+        }
+        fn repo(_: ?*anyopaque, dependency: [:0]const u8) ?[]const u8 {
+            const known = [_][]const u8{ "jack2", "meson", "desktop-file-utils" };
+            for (known) |name| if (std.mem.eql(u8, name, dependency)) return name;
+            return null;
+        }
+    };
+    const allocator = std.testing.allocator;
+    const content =
+        \\pkgbase=pipewire
+        \\pkgname=(pipewire libpipewire pipewire-jack pipewire-jack-client pipewire-session-manager)
+        \\pkgver=1.6.9
+        \\pkgrel=1
+        \\epoch=1
+        \\arch=(x86_64)
+        \\makedepends=(jack2 meson)
+        \\checkdepends=(desktop-file-utils)
+        \\package_pipewire() {
+        \\  depends=("libpipewire=$epoch:$pkgver-$pkgrel" libpipewire-0.3.so)
+        \\}
+        \\package_libpipewire() {
+        \\  provides=(libpipewire-0.3.so)
+        \\}
+        \\package_pipewire-jack() {
+        \\  depends=(pipewire pipewire-session-manager)
+        \\  provides=(jack libjack.so)
+        \\  conflicts=(jack2 pipewire-jack-client)
+        \\}
+        \\package_pipewire-jack-client() {
+        \\  depends=(jack libjack.so)
+        \\  conflicts=(pipewire-jack)
+        \\}
+        \\package_pipewire-session-manager() {
+        \\  depends=(wireplumber)
+        \\}
+    ;
+    const names = [_][]const u8{ "pipewire", "libpipewire", "pipewire-jack", "pipewire-jack-client", "pipewire-session-manager" };
+    var builds: [names.len]Zigalpm.pkgbuild.parser.Pkgbuild = undefined;
+    var initialized: usize = 0;
+    defer for (builds[0..initialized]) |*info| info.deinit(allocator);
+    for (names, &builds) |name, *info| {
+        info.* = try (Zigalpm.pkgbuild.Parser{
+            .allocator = allocator,
+            .io = std.testing.io,
+            .selected_package_name = name,
+        }).parser_content(content, null);
+        initialized += 1;
+    }
+    const backend: Zigalpm.aur.dependency_resolver.Backend = .{ .context = null, .is_installed = Backend.installed, .find_repo_satisfier = Backend.repo };
+    var checked = try resolveSyncDependencies(allocator, &builds, false, backend);
+    defer checked.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 0), checked.aur_dependencies.len);
+    try std.testing.expectEqual(@as(usize, 3), checked.repo_dependencies.len);
+    try std.testing.expectEqualStrings("jack2", checked.repo_dependencies[0].name);
+    try std.testing.expectEqualStrings("meson", checked.repo_dependencies[1].name);
+    try std.testing.expectEqualStrings("desktop-file-utils", checked.repo_dependencies[2].name);
+    var unchecked = try resolveSyncDependencies(allocator, &builds, true, backend);
+    defer unchecked.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), unchecked.repo_dependencies.len);
+    try std.testing.expectEqual(@as(usize, 0), unchecked.aur_dependencies.len);
+    // The package metadata is still needed when writing the final archives.
+    try std.testing.expectEqualStrings("libpipewire=1:1.6.9-1", builds[0].depends.?[0]);
+    try std.testing.expectEqualStrings("libpipewire-0.3.so", builds[1].provides.?[0]);
+    try std.testing.expectEqualStrings("wireplumber", builds[4].depends.?[0]);
+    // Selecting only one output must not change the shared build environment.
+    var selected = try resolveSyncDependencies(allocator, builds[4..5], false, backend);
+    defer selected.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 3), selected.repo_dependencies.len);
+    try std.testing.expectEqual(@as(usize, 0), selected.aur_dependencies.len);
+}
+
+test "sync deps keeps versioned global inputs even when a sibling will provide them" {
+    const Backend = struct {
+        fn installed(_: ?*anyopaque, _: [:0]const u8) bool {
+            return false;
+        }
+        fn repo(_: ?*anyopaque, dependency: [:0]const u8) ?[]const u8 {
+            if (std.mem.eql(u8, dependency, "compiler>=2")) return "compiler";
+            if (std.mem.eql(u8, dependency, "native-lib")) return "native-lib";
+            return null;
+        }
+    };
+    const allocator = std.testing.allocator;
+    var info = try (Zigalpm.pkgbuild.Parser{ .allocator = allocator, .io = std.testing.io, .package_carch = "x86_64" }).parser_content(
+        \\pkgname=compiler
+        \\pkgver=3
+        \\pkgrel=1
+        \\arch=(x86_64)
+        \\depends=('compiler>=2')
+        \\depends_x86_64=(native-lib)
+        \\depends_aarch64=(other-lib)
+        \\makedepends=('compiler>=2')
+        \\package() {
+        \\  depends=()
+        \\  depends_x86_64=()
+        \\}
+    , null);
+    defer info.deinit(allocator);
+    var plan = try resolveSyncDependencies(allocator, &.{info}, false, .{ .context = null, .is_installed = Backend.installed, .find_repo_satisfier = Backend.repo });
+    defer plan.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), plan.repo_dependencies.len);
+    try std.testing.expectEqual(@as(usize, 0), plan.aur_dependencies.len);
+    try std.testing.expectEqualStrings("compiler", plan.repo_dependencies[0].name);
+    try std.testing.expectEqual(Zigalpm.aur.dependency_resolver.Role.runtime, plan.repo_dependencies[0].role);
+    try std.testing.expectEqualStrings("native-lib", plan.repo_dependencies[1].name);
 }

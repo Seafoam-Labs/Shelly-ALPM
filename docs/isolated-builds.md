@@ -72,6 +72,16 @@ repositories again using the configured signature policy. Local repository
 servers must be readable by the invoking user during review. A built archive
 must be published in a configured repository's database to be resolved here.
 
+Build dependency planning uses the PKGBUILD's global `depends`, `makedepends`,
+and (unless checks are disabled) `checkdepends`, including the active
+architecture's arrays. Dependencies assigned inside `package()` or
+`package_<name>()` describe the resulting package and do not add provisioning
+targets. This follows makepkg's dependency rules and lets conflicting split
+outputs such as PipeWire's JACK implementations be built together. Their
+runtime dependencies and `provides` remain in the package metadata. An output
+that is also explicitly required as a global build input must still be
+installed before the build; its future artifact does not satisfy that input.
+
 Current limitations are deliberately fail-closed:
 
 - `--sign` is rejected because private signing keys are never copied or mounted
@@ -89,6 +99,27 @@ Current limitations are deliberately fail-closed:
 
 The nspawn backend invokes Shelly's native builder. It does not invoke or
 construct a command for `makepkg`, `makechrootpkg`, or `arch-nspawn`.
+
+During each package function, Shelly prepends a private directory of `chown`,
+`chgrp`, `install`, and `mknod` wrappers to the build PATH. External helpers
+launched by Meson, make, or `/bin/sh` inherit these commands and share the
+package's inode-based ownership journal. Journal writes are locked across
+processes; wrapper files and journals are removed when the step ends, including
+failure and cancellation. Each split-package member has its own state.
+
+The `mknod` wrapper supports temporary character and block device requests
+inside `$pkgdir`, with decimal device numbers and optional octal permissions.
+It creates ordinary placeholders, never real devices. This supports helpers
+such as FUSE's installer when the recipe subsequently removes its staged
+`/dev` directory. Placeholders support existence checks and removal, but do
+not emulate device I/O or device-type queries such as `test -c`. A surviving
+placeholder, including a renamed or hard-linked one, is rejected before
+package assembly instead of being silently shipped as a regular file.
+
+This emulation covers commands resolved through PATH. Absolute command paths,
+helpers that replace PATH, and programs making ownership or device syscalls
+directly are outside its scope. Lifecycle functions continue to run without
+root privileges.
 
 The optional PKGBUILD path is resolved from the current directory. For a
 development binary run from `Shelly.Cli.Zig/zig-out/bin`, build this repository
