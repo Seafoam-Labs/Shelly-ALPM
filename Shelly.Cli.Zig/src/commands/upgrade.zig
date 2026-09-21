@@ -2096,6 +2096,74 @@ test "upgrade all honors every exclusion" {
     try std.testing.expectEqualSlices(Backend, &.{.aur}, calls.backends.items);
 }
 
+test "upgrade all keeps success after an AUR repository miss and preserves installation failures" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(root);
+    try temporary.dir.createDirPath(io, "db");
+    try temporary.dir.createDirPath(io, "root");
+    try temporary.dir.createDirPath(io, "packages");
+    const config = try std.fmt.allocPrint(allocator, "[options]\nArchitecture = auto\nSigLevel = Never\nRootDir = {s}/root\nDBPath = {s}/db\nCacheDir = {s}/packages\n", .{ root, root, root });
+    defer allocator.free(config);
+    try temporary.dir.writeFile(io, .{ .sub_path = "pacman.conf", .data = config });
+    const config_path = try std.fs.path.join(allocator, &.{ root, "pacman.conf" });
+    defer allocator.free(config_path);
+    const manager = try Zigalpm.AlpmManager.init(allocator, std.testing.environ, .{ .config_path = config_path });
+    defer manager.deinit();
+
+    const Runner = struct {
+        manager: *Zigalpm.AlpmManager,
+        fail_install: bool,
+        reached_install: bool = false,
+
+        fn run(
+            self: *@This(),
+            _: *runtime.RuntimeContext,
+            operation_context: *Zigalpm.OperationContext,
+            backend: Backend,
+            _: *const parser.Invocation,
+        ) !void {
+            if (backend != .aur) return;
+            self.manager.setOperationContext(operation_context);
+            defer self.manager.setOperationContext(null);
+            // Exercise the real ALPM query and the AUR caller's expected fallback.
+            const repository_match = self.manager.find_remote_satisfier_for_dependency("shelly-git=3.1.4-1") catch |err| switch (err) {
+                error.PkgNotFound => null,
+                else => return err,
+            };
+            try std.testing.expect(repository_match == null);
+
+            // Simulate the later installation outcome without installing packages.
+            self.reached_install = true;
+            var operation = operation_context.begin(.{ .backend = .aur, .kind = .install, .subject = "shelly-git" });
+            if (self.fail_install) {
+                operation.reportError(error.SyntheticInstallFailure, "AUR installation failed", "install", null, false);
+                operation.finish(.failed);
+            } else operation.finish(.success);
+        }
+    };
+
+    for ([_]bool{ false, true }) |fail_install| {
+        var tc: test_support.TestContext = .{};
+        tc.init();
+        defer tc.deinit();
+        const manifest = try spec.Manifest.load(tc.arena.allocator());
+        const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "upgrade", "all", "--no-confirm" });
+        try std.testing.expect(outcome == .dispatch);
+        var runner: Runner = .{ .manager = manager, .fail_install = fail_install };
+        try std.testing.expectEqual(@as(u8, if (fail_install) 1 else 0), try executeWithRunner(&tc.context, &outcome.dispatch, &runner));
+        try std.testing.expect(runner.reached_install);
+        const rendered = tc.stdout.writer.buffered();
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "Could not complete the package search") == null);
+        try std.testing.expectEqual(!fail_install, std.mem.indexOf(u8, rendered, ":: All upgrades complete.") != null);
+        try std.testing.expectEqual(fail_install, std.mem.indexOf(u8, rendered, "The upgrade did not complete successfully") != null);
+        try std.testing.expectEqual(fail_install, std.mem.indexOf(u8, rendered, "AUR installation failed") != null);
+    }
+}
+
 test "upgrade all continues after a failed backend and returns failure" {
     var tc: test_support.TestContext = .{};
     tc.init();
