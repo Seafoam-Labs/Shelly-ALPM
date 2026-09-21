@@ -480,6 +480,7 @@ pub fn build(b: *std.Build) void {
             "remove_repository is a no-op for unknown repositories",
             "Manager hold APIs mutate HoldPkg while retaining shelly",
             "dependency query APIs resolve exact, versioned, and virtual remote packages",
+            "dependency query misses do not emit failures but real errors and cancellation survive",
             "install_packages predownloads prepared repository packages before commit",
             "install_packages exposes its prepared plan and decline prevents downloads",
             "install_packages needed",

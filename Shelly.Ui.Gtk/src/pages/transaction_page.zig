@@ -1030,6 +1030,7 @@ pub const TransactionPage = extern struct {
                 const dialog = MultiSelectDialog.new(
                     pending.arena.allocator(),
                     q.prompt,
+                    translations._("Skip"),
                     q.options,
                     &on_multiselect_response,
                     pending,

@@ -67,6 +67,14 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_module_tests.step);
     test_step.dependOn(&run_executable_tests.step);
 
+    const upgrade_tests = b.addTest(.{
+        .root_module = cli,
+        .filters = &.{"upgrade"},
+    });
+    const run_upgrade_tests = b.addRunArtifact(upgrade_tests);
+    const upgrade_test_step = b.step("upgrade-test", "Test upgrade coordination and result reporting");
+    upgrade_test_step.dependOn(&run_upgrade_tests.step);
+
     const account_tests = b.addTest(.{
         .name = "user-account-test",
         .root_module = cli,

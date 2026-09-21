@@ -4023,6 +4023,54 @@ test "AUR availability excludes removed VCS updates and permits offline removal"
     try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, checkout, .{}));
 }
 
+test "AUR dependency lookup misses allow fallback and matching split outputs without failure events" {
+    const Capture = struct {
+        failures: usize = 0,
+
+        fn event(data: ?*anyopaque, value: operation_api.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (value == .failure) self.failures += 1;
+        }
+    };
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+    var context = operation_api.OperationContext.init(allocator, io);
+    defer context.deinit();
+    var capture: Capture = .{};
+    const subscription = try context.subscribe(.{ .function = Capture.event, .data = &capture });
+    defer _ = context.unsubscribe(subscription);
+    manager.setOperationContext(&context);
+    defer manager.setOperationContext(null);
+
+    var info = try (pkgbuild_parser.PkgbuildParser{ .allocator = allocator, .io = io }).parser_content(
+        \\pkgname=shelly-flatpak-backend-git
+        \\pkgver=3.1.4
+        \\pkgrel=1
+        \\arch=('any')
+        \\depends=('shelly-git=3.1.4-1')
+    , null);
+    defer info.deinit(allocator);
+    var fallback = try dependency_resolver.resolve(allocator, &info, false, manager.dependencyBackend());
+    defer fallback.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 0), fallback.repo_packages.len);
+    try std.testing.expectEqual(@as(usize, 1), fallback.aur_packages.len);
+    try std.testing.expectEqualStrings("shelly-git", fallback.aur_packages[0].dependency.name);
+    try std.testing.expectEqualStrings("3.1.4-1", fallback.aur_packages[0].dependency.version);
+
+    var split = try dependency_resolver.resolveWithProvided(allocator, &info, false, manager.dependencyBackend(), &.{.{
+        .name = "shelly-git",
+        .version = "3.1.4-1",
+    }});
+    defer split.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 0), split.repo_packages.len);
+    try std.testing.expectEqual(@as(usize, 0), split.aur_packages.len);
+    try std.testing.expectEqual(@as(usize, 0), capture.failures);
+}
+
 test "AUR dependency planning uses sandbox-evaluated conditional arrays" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;

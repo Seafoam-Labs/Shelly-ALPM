@@ -1679,26 +1679,29 @@ pub const Manager = struct {
     }
 
     pub fn find_remote_satisfier_for_dependency(self: *Manager, dependency: [:0]const u8) QueryError![:0]const u8 {
-        if (self.handle == null) return QueryError.NoHandle;
+        if (self.handle == null) return error.NoHandle;
         var operation_scope = OperationScope.init(self, .search, dependency);
         operation_scope.attach();
         defer operation_scope.finish(.success);
-        errdefer operation_scope.fail();
+        // A repository miss lets callers continue with AUR resolution. Preserve
+        // PkgNotFound for control flow without emitting a fatal operation event.
+        errdefer |err| if (err != error.PkgNotFound) operation_scope.fail();
         try self.checkOperationCancelled();
         return (try self.find_remote_satisfier_for_dependency_details(dependency)).real_name;
     }
 
     /// Finds a remote dependency satisfier and reports whether the match was
     /// made through a `provides` entry instead of the package's real name.
+    /// PkgNotFound is an expected lookup miss and does not emit a failure event.
     pub fn find_remote_satisfier_for_dependency_details(
         self: *Manager,
         dependency: [:0]const u8,
     ) QueryError!DependencySatisfier {
-        if (self.handle == null) return QueryError.NoHandle;
+        if (self.handle == null) return error.NoHandle;
         var operation_scope = OperationScope.init(self, .search, dependency);
         operation_scope.attach();
         defer operation_scope.finish(.success);
-        errdefer operation_scope.fail();
+        errdefer |err| if (err != error.PkgNotFound) operation_scope.fail();
         try self.checkOperationCancelled();
         const requested_name = dependencyName(dependency);
 
@@ -1708,10 +1711,10 @@ pub const Manager = struct {
         // or a later repository (for example, gcc-go's `provides=go` shadowing
         // the real `go` package).
         const parsed_dependency = rawLibalpm.alpm_dep_from_string(dependency.ptr) orelse
-            return QueryError.PkgNotFound;
+            return error.PkgNotFound;
         defer rawLibalpm.alpm_dep_free(parsed_dependency);
         const requested_name_z = self.allocator.dupeZ(u8, requested_name) catch
-            return QueryError.OutOfMemory;
+            return error.OutOfMemory;
         defer self.allocator.free(requested_name_z);
 
         var sync_dbs = rawLibalpm.alpm_get_syncdbs(self.handle);
@@ -1744,7 +1747,7 @@ pub const Manager = struct {
                 .via_provides = !std.mem.eql(u8, real_name, requested_name),
             };
         }
-        return QueryError.PkgNotFound;
+        return error.PkgNotFound;
     }
 
     pub fn install_dependencies_only(self: *Manager, package_name: [:0]const u8, include_make_deps: bool, flags: TransFlag) TransactionError!void {
