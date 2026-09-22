@@ -16,6 +16,7 @@ const SizeDisplay = fmt.SizeDisplay;
 const ProgressStyle = enum {
     blocks,
     pacman,
+    nerdfont,
 };
 
 const Settings = struct {
@@ -779,7 +780,7 @@ fn integerValue(config: *const config_model.Config, key: []const u8) ?usize {
 }
 
 fn parseProgressStyle(value: []const u8) ProgressStyle {
-    return if (std.ascii.eqlIgnoreCase(value, "Pacman")) .pacman else .blocks;
+    return if (std.ascii.eqlIgnoreCase(value, "Pacman")) .pacman else if (std.ascii.eqlIgnoreCase(value, "Nerdfont")) .nerdfont else .blocks;
 }
 
 fn convertSize(display: SizeDisplay, bytes: u64) f64 {
@@ -1075,6 +1076,22 @@ fn renderBar(
             }
             for (filled..width) |index| {
                 try writer.writeByte(if (percentage < 100 and (index - filled) % 2 == 0) 'o' else ' ');
+            }
+        },
+        .nerdfont => {
+            if (ascii_only) {
+                try writer.splatByteAll('#', filled);
+                try writer.splatByteAll('-', width - filled);
+            } else {
+                for (0..width) |index| {
+                    if (index == 0) {
+                        try writer.writeAll(if (filled > 0) "" else "");
+                    } else if (index == width-1) {
+                        try writer.writeAll(if (percentage < 100) "" else "");
+                    } else {
+                        try writer.writeAll(if (filled > index) "" else "");
+                    }
+                }
             }
         },
     }

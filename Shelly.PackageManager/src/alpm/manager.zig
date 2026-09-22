@@ -179,6 +179,9 @@ pub const InitOptions = struct {
     cache_directory: ?[]const u8 = null,
     log_file: ?[]const u8 = null,
     gpg_directory: ?[]const u8 = null,
+    /// Read only the target root's hooks, including hooks installed by the
+    /// current transaction. Host HookDir entries must not reach provisioning.
+    root_hooks_only: bool = false,
 };
 
 fn applyInitPathOverrides(
@@ -196,6 +199,13 @@ fn applyInitPathOverrides(
         config.log_file = try allocator.dupeSentinel(u8, value, 0);
     if (options.gpg_directory) |value|
         config.gpg_directory = try allocator.dupeSentinel(u8, value, 0);
+    if (options.root_hooks_only) {
+        config.hook_directory.clearRetainingCapacity();
+        for ([_][]const u8{ "usr/share/libalpm/hooks", "etc/pacman.d/hooks" }) |relative| {
+            const path = try std.fs.path.join(allocator, &.{ config.root_directory, relative });
+            try config.hook_directory.append(allocator, try allocator.dupeSentinel(u8, path, 0));
+        }
+    }
 }
 
 pub const Manager = struct {
@@ -203,6 +213,9 @@ pub const Manager = struct {
     is_initialized: bool = false,
     detected_cachyos: bool = false,
     hooks_disabled: bool = false,
+    root_hooks_only: bool = false,
+    package_setup_failed: bool = false,
+    active_hook: ?[]const u8 = null,
     allocator: std.mem.Allocator,
     environ: std.process.Environ,
     config_path: []const u8,
@@ -275,6 +288,7 @@ pub const Manager = struct {
             .download_address_family_policy = defaultDownloadAddressFamilyPolicy(),
             .parallel_download_count = defaultParallelDownloadCount(),
             .operation_context = options.operation_context,
+            .root_hooks_only = options.root_hooks_only,
         };
 
         if (init_operation) |*operation| {
@@ -365,7 +379,8 @@ pub const Manager = struct {
 
         self.is_initialized = true;
 
-        self.applyConfig(self.config);
+        errdefer _ = rawLibalpm.alpm_release(self.handle);
+        self.applyConfig(self.config) catch return InitError.InitFailed;
         self.setupCallbacks();
         completion = .success;
         return self;
@@ -2314,7 +2329,13 @@ pub const Manager = struct {
             return TransactionError.RefreshFailed;
         }
 
-        self.applyConfig(self.config);
+        self.applyConfig(self.config) catch {
+            // Do not leave a usable handle with default host hooks if the
+            // target-only configuration could not be restored.
+            _ = rawLibalpm.alpm_release(self.handle);
+            self.handle = null;
+            return TransactionError.RefreshFailed;
+        };
         self.setupCallbacks();
     }
 
@@ -2765,13 +2786,16 @@ pub const Manager = struct {
 
     fn setupCallbacks(self: *Manager) void {
         const h = self.handle;
+
+        if (self.root_hooks_only)
+            self.check("log_callback", rawLibalpm.alpm_option_set_logcb(h, provisioningLogCallback, self));
         _ = rawLibalpm.alpm_option_set_progresscb(h, progressCallback, self);
         _ = rawLibalpm.alpm_option_set_eventcb(h, eventCallback, self);
         _ = rawLibalpm.alpm_option_set_questioncb(h, questionCallback, self);
         _ = rawLibalpm.alpm_option_set_fetchcb(h, fetchCallback, self);
     }
 
-    fn applyConfig(self: *Manager, config: configuration.Configuration.Config) void {
+    fn applyConfig(self: *Manager, config: configuration.Configuration.Config) !void {
         const h = self.handle;
 
         for (config.ignore_package.items) |pkg_name| {
@@ -2784,6 +2808,17 @@ pub const Manager = struct {
 
         if (self.hooks_disabled) {
             self.replaceHookDirsWithSentinel(h);
+        } else if (self.root_hooks_only) {
+            // Replace libalpm's compiled-in default too; appending would still
+            // leave the host's /usr/share/libalpm/hooks in the search path.
+            var directories: ?*rawLibalpm.alpm_list_t = null;
+            defer rawLibalpm.alpm_list_free(directories);
+            for (config.hook_directory.items) |path| {
+                if (rawLibalpm.alpm_list_append(&directories, @ptrCast(@constCast(path.ptr))) == null)
+                    return error.OutOfMemory;
+            }
+            if (rawLibalpm.alpm_option_set_hookdirs(h, directories) != 0)
+                return error.HookConfigurationFailed;
         } else {
             for (config.hook_directory.items) |hook_dir| {
                 self.check("hook_directory", rawLibalpm.alpm_option_add_hookdir(h, hook_dir.ptr));
@@ -3083,6 +3118,44 @@ pub const Manager = struct {
         self.handleEvent(event) catch return;
     }
 
+    // Use the translated C callback's va_list type so this follows the target
+    // ABI on both x86_64 and aarch64.
+    const LogCallback = @typeInfo(@typeInfo(rawLibalpm.alpm_cb_log).optional.child).pointer.child;
+    const LogArguments = @typeInfo(LogCallback).@"fn".params[3].type.?;
+
+    fn provisioningLogCallback(
+        ctx: ?*anyopaque,
+        level: rawLibalpm.alpm_loglevel_t,
+        format: [*c]const u8,
+        args: LogArguments,
+    ) callconv(.c) void {
+        const self: *Manager = @ptrCast(@alignCast(ctx.?));
+        if (level & (rawLibalpm.ALPM_LOG_ERROR | rawLibalpm.ALPM_LOG_WARNING) == 0) return;
+        var buffer: [4096]u8 = undefined;
+        const length = rawLibalpm.vsnprintf(&buffer, buffer.len, format, args);
+        const message = if (length < 0)
+            "Could not format the package setup diagnostic."
+        else
+            buffer[0..@min(@as(usize, @intCast(length)), buffer.len - 1)];
+        self.handleProvisioningLog(level, message);
+    }
+
+    fn handleProvisioningLog(self: *Manager, level: rawLibalpm.alpm_loglevel_t, message: []const u8) void {
+        if (level & rawLibalpm.ALPM_LOG_ERROR != 0) {
+            // PostTransaction hook failures do not make alpm_trans_commit fail.
+            // A fresh build root must not be used after incomplete setup.
+            self.package_setup_failed = true;
+            var buffer: [4608]u8 = undefined;
+            const detail = if (self.active_hook) |hook|
+                std.fmt.bufPrint(&buffer, "{s}: {s}", .{ hook, message }) catch message
+            else
+                message;
+            self.dispatcher.raiseError(.{ .message = detail });
+        } else if (level & rawLibalpm.ALPM_LOG_WARNING != 0) {
+            self.dispatcher.raiseScriptlet(.{ .line = message });
+        }
+    }
+
     fn handleEvent(
         self: *Manager,
         event: [*c]rawLibalpm.alpm_event_t,
@@ -3202,6 +3275,7 @@ pub const Manager = struct {
             .hook_run_start => {
                 const hook = event.*.hook_run;
                 const name = spanC(hook.name);
+                self.active_hook = name;
                 const description = spanC(hook.desc);
                 var message_buffer: [512]u8 = undefined;
                 const message = if (description) |desc|
@@ -3212,6 +3286,7 @@ pub const Manager = struct {
                     std.fmt.bufPrint(&message_buffer, "({d}/{d}) Running hook...", .{ hook.position, hook.total }) catch "Running hook...";
 
                 self.dispatcher.raiseHook(.{
+                    .name = name,
                     .description = message,
                     .position = @intCast(hook.position),
                     .total = @intCast(hook.total),
@@ -3221,6 +3296,10 @@ pub const Manager = struct {
                     .event_type = event_type,
                     .message = message,
                 });
+            },
+            .hook_run_done => {
+                self.active_hook = null;
+                self.handleInformationMessage(event_type);
             },
             .pacnew_created => self.dispatcher.raisePacnew(.{
                 .file = spanC(event.*.pacnew_created.file),
@@ -5681,6 +5760,7 @@ test "ALPM init path overrides replace parsed host paths for target provisioning
         .cache_directory = "/target/var/cache/pacman/pkg",
         .log_file = "/target/var/log/pacman.log",
         .gpg_directory = "/target/etc/pacman.d/gnupg",
+        .root_hooks_only = true,
     });
 
     try testing.expectEqualStrings("/target", config.root_directory);
@@ -5688,6 +5768,23 @@ test "ALPM init path overrides replace parsed host paths for target provisioning
     try testing.expectEqualStrings("/target/var/cache/pacman/pkg", config.cache_directory);
     try testing.expectEqualStrings("/target/var/log/pacman.log", config.log_file);
     try testing.expectEqualStrings("/target/etc/pacman.d/gnupg", config.gpg_directory);
+    try testing.expectEqual(@as(usize, 2), config.hook_directory.items.len);
+    try testing.expectEqualStrings("/target/usr/share/libalpm/hooks", config.hook_directory.items[0]);
+    try testing.expectEqualStrings("/target/etc/pacman.d/hooks", config.hook_directory.items[1]);
+}
+
+test "provisioning log errors retain the hook name and mark setup incomplete" {
+    var mgr = newErrorManager();
+    defer mgr.dispatcher.deinit();
+    mgr.package_setup_failed = false;
+    mgr.active_hook = "72-texlive-fmtutil.hook";
+    var cap = ErrorCapture{};
+    _ = try mgr.dispatcher.addErrorHandler(.{ .function = captureError, .data = &cap });
+    mgr.handleProvisioningLog(rawLibalpm.ALPM_LOG_WARNING, "a harmless warning");
+    try testing.expect(!mgr.package_setup_failed);
+    mgr.handleProvisioningLog(rawLibalpm.ALPM_LOG_ERROR, "command failed to execute correctly");
+    try testing.expect(mgr.package_setup_failed);
+    try testing.expectEqualStrings("72-texlive-fmtutil.hook: command failed to execute correctly", cap.text());
 }
 
 test "database lock error uses the configured database directory" {

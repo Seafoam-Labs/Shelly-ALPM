@@ -12,6 +12,7 @@ const aur_url = @import("../config/aur_url.zig");
 const isolated_build = @import("isolated_build.zig");
 const source_pgp_transport = @import("source_pgp_transport.zig");
 const signals = @import("../runtime/signals.zig");
+const install_command = @import("install.zig");
 
 const command_path = "shelly build build";
 
@@ -64,6 +65,13 @@ pub fn dispatch(
         if (diagnostic) |*value| value.deinit();
     }
 
+    if (installRequested(invocation)) {
+        if (installOutputModeConflict(invocation)) |conflict| {
+            try context.stderr.print("Cannot combine --install with {s}.\n", .{conflict});
+            try context.stderr.flush();
+            return 2;
+        }
+    }
     if (optionEnabled(invocation, "--review-only"))
         return try executeReviewOnly(context, invocation);
     if (optionEnabled(invocation, "--makesrcinfo"))
@@ -95,7 +103,7 @@ pub fn dispatch(
             }
         } else {
             const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
-                try context.stderr.print("Could not obtain administrator privileges for build dependency installation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+                try context.stderr.print("Could not obtain administrator privileges for the build. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                 return 1;
             };
             if (elevated_exit) |exit_code| return exit_code;
@@ -103,9 +111,179 @@ pub fn dispatch(
     }
     var runner: Real = .{};
     defer runner.deinit(context.allocator);
+    defer runner.runDeferredDependencyCleanup(context, invocation);
     if (invocation.globals.json)
         return try executeJson(context, invocation, &runner);
-    return try executeWithRunner(context, invocation, &runner);
+    const exit_code = try executeWithRunner(context, invocation, &runner);
+    return try postBuildExitCode(context, invocation, &runner, exit_code);
+}
+
+/// Post-build hook. The artifact report wins over the install flag: a
+/// coordinator child records what it built for the root coordinator instead
+/// of installing, because the builder locked the child against elevation.
+fn postBuildExitCode(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+    runner: anytype,
+    exit_code: u8,
+) !u8 {
+    if (exit_code != 0) return exit_code;
+    if (optionValue(invocation, "--artifact-report")) |report_path| {
+        const result = runner.result orelse return exit_code;
+        return try writeArtifactReport(context, report_path, result.artifacts);
+    }
+    if (installRequested(invocation)) {
+        const result = runner.result orelse return exit_code;
+        if (result.artifacts.len > 0)
+            return try runner.installArtifacts(context, invocation, result.artifacts);
+    }
+    return exit_code;
+}
+
+/// Installs built artifacts from a process that never ran the builder. The
+/// build child is locked against elevation, so only a root coordinator
+/// installs: the host coordinator from the artifact report, the isolated
+/// coordinator from the exported archives.
+fn installBuiltArtifacts(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+    artifacts: []const BuildCommandArtifact,
+) !u8 {
+    const paths = try context.allocator.alloc([]const u8, artifacts.len);
+    defer context.allocator.free(paths);
+    for (artifacts, paths) |artifact, *path| path.* = artifact.path;
+    return install_command.call(context, .standard, paths, .{
+        .no_confirm = invocation.globals.no_confirm,
+    });
+}
+
+/// Build-child half of the artifact report: records built artifact names and
+/// absolute paths for the elevated coordinator to install.
+fn writeArtifactReport(
+    context: *runtime.RuntimeContext,
+    report_path: []const u8,
+    artifacts: []const BuildCommandArtifact,
+) !u8 {
+    var file = try std.Io.Dir.cwd().createFile(context.io, report_path, .{
+        .permissions = .fromMode(0o600),
+    });
+    defer file.close(context.io);
+    var buffer: [8192]u8 = undefined;
+    var writer = file.writerStreaming(context.io, &buffer);
+    for (artifacts) |artifact|
+        try writer.interface.print("{s}\t{s}\n", .{ artifact.package_name, artifact.path });
+    try writer.interface.flush();
+    return 0;
+}
+
+/// File channel carrying built artifact names and paths from the
+/// invoking-user build child to the root coordinator. Directory and file are
+/// owned by the invoking user so the child can write while other users cannot
+/// substitute what the coordinator reads. The contents stay untrusted: every
+/// reported path still passes the ordinary install validation.
+const ArtifactReportChannel = struct {
+    directory: []u8,
+    file_path: []u8,
+
+    fn create(context: *runtime.RuntimeContext) !ArtifactReportChannel {
+        const owner = (try elevation.invokingUserIds(context)) orelse {
+            try context.stderr.print(
+                "Could not identify a regular user to run the build. Start Shelly from your regular user session and allow Shelly to request administrator privileges when needed.\n",
+                .{},
+            );
+            return error.InvokingUserUnavailable;
+        };
+        var random: [16]u8 = undefined;
+        context.io.random(&random);
+        const suffix = std.fmt.bytesToHex(random, .lower);
+        const directory = try std.fmt.allocPrint(context.allocator, "/tmp/shelly-artifact-report-{s}", .{suffix});
+        errdefer context.allocator.free(directory);
+        try std.Io.Dir.cwd().createDir(context.io, directory, .fromMode(0o700));
+        errdefer std.Io.Dir.cwd().deleteTree(context.io, directory) catch {};
+        const file_path = try std.fs.path.join(context.allocator, &.{ directory, "artifacts" });
+        errdefer context.allocator.free(file_path);
+        var file = try std.Io.Dir.cwd().createFile(context.io, file_path, .{
+            .exclusive = true,
+            .permissions = .fromMode(0o600),
+        });
+        defer file.close(context.io);
+        try file.setOwner(context.io, owner.uid, owner.gid);
+        // fchown needs a real directory fd; without `iterate` std opens O_PATH.
+        var handle = try std.Io.Dir.cwd().openDir(context.io, directory, .{ .iterate = true });
+        defer handle.close(context.io);
+        try handle.setOwner(context.io, owner.uid, owner.gid);
+        return .{ .directory = directory, .file_path = file_path };
+    }
+
+    fn read(self: *const ArtifactReportChannel, context: *runtime.RuntimeContext) !ArtifactReportContents {
+        const contents = std.Io.Dir.cwd().readFileAlloc(
+            context.io,
+            self.file_path,
+            context.allocator,
+            .limited(4 * 1024 * 1024),
+        ) catch |err| {
+            reportArtifactProtocolFailure(context, err) catch {};
+            return error.ArtifactReportFailed;
+        };
+        errdefer context.allocator.free(contents);
+        const artifacts = parseArtifactReport(context.allocator, contents) catch |err| {
+            reportArtifactProtocolFailure(context, err) catch {};
+            return error.ArtifactReportFailed;
+        };
+        errdefer context.allocator.free(artifacts);
+        return .{ .contents = contents, .artifacts = artifacts };
+    }
+
+    fn deinit(self: *const ArtifactReportChannel, context: *runtime.RuntimeContext) void {
+        std.Io.Dir.cwd().deleteTree(context.io, self.directory) catch {};
+        context.allocator.free(self.file_path);
+        context.allocator.free(self.directory);
+    }
+};
+
+const ArtifactReportContents = struct {
+    contents: []u8,
+    /// Borrows its slices from `contents`.
+    artifacts: []BuildCommandArtifact,
+
+    fn deinit(self: *const ArtifactReportContents, allocator: std.mem.Allocator) void {
+        allocator.free(self.artifacts);
+        allocator.free(self.contents);
+    }
+};
+
+/// Parses `name \t path` lines. An empty report means the build produced no
+/// artifacts; anything malformed fails the run instead of installing less.
+/// The returned entries borrow mutable slices from `contents`.
+fn parseArtifactReport(
+    allocator: std.mem.Allocator,
+    contents: []u8,
+) ![]BuildCommandArtifact {
+    var artifacts: std.ArrayList(BuildCommandArtifact) = .empty;
+    errdefer artifacts.deinit(allocator);
+    var rest = contents;
+    while (rest.len > 0) {
+        const newline = std.mem.indexOfScalar(u8, rest, '\n');
+        const line = if (newline) |index| rest[0..index] else rest;
+        rest = if (newline) |index| rest[index + 1 ..] else rest[rest.len..];
+        if (line.len == 0) continue;
+        const separator = std.mem.indexOfScalar(u8, line, '\t') orelse
+            return error.InvalidArtifactReport;
+        const package_name = line[0..separator];
+        const path = line[separator + 1 ..];
+        if (package_name.len == 0 or !std.fs.path.isAbsolute(path))
+            return error.InvalidArtifactReport;
+        try artifacts.append(allocator, .{ .package_name = package_name, .path = path });
+    }
+    return artifacts.toOwnedSlice(allocator);
+}
+
+fn reportArtifactProtocolFailure(context: *runtime.RuntimeContext, err: anyerror) !void {
+    try context.stderr.print(
+        "The build completed but its artifact report could not be read, so the built packages were not installed. {0s}\n\nTechnical details: {1s}\n",
+        .{ @import("diagnostics").cause(err), @errorName(err) },
+    );
+    try context.stderr.flush();
 }
 
 fn finishElevatedJsonBuild(
@@ -494,14 +672,38 @@ fn shouldElevateSyncDeps(invocation: *const parser.Invocation, running_as_root: 
     return syncDepsRequested(invocation) and !running_as_root;
 }
 
+/// The root coordinator handles every host build that needs privileges
+/// around the build itself: dependency syncing before it, installation
+/// after it. The build child is locked against elevation and does neither.
+fn hostCoordinatorRequested(invocation: *const parser.Invocation) bool {
+    return syncDepsRequested(invocation) or installRequested(invocation);
+}
+
 fn isolatedRequested(invocation: *const parser.Invocation) bool {
     return optionEnabled(invocation, "--isolated") and
         !optionEnabled(invocation, "--coordinator-child");
 }
 
+fn installRequested(invocation: *const parser.Invocation) bool {
+    return optionEnabled(invocation, "--install");
+}
+
+/// `--install` runs a second transaction that the versioned build JSON
+/// envelope and the UI's framed output cannot represent. Review-only and
+/// SRCINFO runs exit before a build and produce no artifacts to install.
+fn installOutputModeConflict(invocation: *const parser.Invocation) ?[]const u8 {
+    if (invocation.globals.json) return "--json";
+    if (invocation.globals.ui_mode) return "--ui-mode";
+    if (optionEnabled(invocation, "--review-only")) return "--review-only";
+    if (optionEnabled(invocation, "--makesrcinfo")) return "--makesrcinfo";
+    return null;
+}
+
 fn shouldElevateBuildCoordinator(invocation: *const parser.Invocation, running_as_root: bool) bool {
     return !running_as_root and
-        (syncDepsRequested(invocation) or isolatedRequested(invocation));
+        (syncDepsRequested(invocation) or
+            isolatedRequested(invocation) or
+            installRequested(invocation));
 }
 
 fn executeWithRunner(
@@ -760,12 +962,47 @@ const Real = struct {
     result: ?BuildCommandResult = null,
     child_json: ?[]u8 = null,
     child_exit_code: u8 = 0,
+    /// Dependency cleanup handed over by the host coordinator so it runs
+    /// after the post-build install hook.
+    deferred_cleanup: ?BuildDependencyCleanup = null,
 
     fn deinit(self: *Real, allocator: std.mem.Allocator) void {
         if (self.result) |*result| result.deinit(allocator);
         if (self.child_json) |document| allocator.free(document);
+        if (self.deferred_cleanup) |*cleanup| cleanup.deinit();
         self.result = null;
         self.child_json = null;
+        self.deferred_cleanup = null;
+    }
+
+    fn installArtifacts(
+        self: *Real,
+        context: *runtime.RuntimeContext,
+        invocation: *const parser.Invocation,
+        artifacts: []const BuildCommandArtifact,
+    ) !u8 {
+        _ = self;
+        return installBuiltArtifacts(context, invocation, artifacts);
+    }
+
+    /// Runs cleanup handed over by the host coordinator after the install
+    /// hook, so removal candidates are checked against the freshly installed
+    /// packages. Best effort: failures never change the build exit code.
+    fn runDeferredDependencyCleanup(
+        self: *Real,
+        context: *runtime.RuntimeContext,
+        invocation: *const parser.Invocation,
+    ) void {
+        var cleanup = self.deferred_cleanup orelse return;
+        self.deferred_cleanup = null;
+        defer cleanup.deinit();
+        runDeferredCleanupOperation(context, invocation, &cleanup) catch |err| {
+            context.stderr.print(
+                "Could not clean up the build dependencies. {0s}\n\nTechnical details: {1s}\n",
+                .{ @import("diagnostics").cause(err), @errorName(err) },
+            ) catch {};
+            context.stderr.flush() catch {};
+        };
     }
 
     fn ownResult(
@@ -844,8 +1081,8 @@ const Real = struct {
             self.result = result;
             return;
         }
-        if (syncDepsRequested(invocation))
-            return runSyncDepsCoordinator(self, context, operation_context, invocation);
+        if (hostCoordinatorRequested(invocation))
+            return runHostBuildCoordinator(self, context, operation_context, invocation);
 
         try Zigalpm.builder.secureBuilderProcess();
         const requested_path = if (invocation.positionals.len == 0) "PKGBUILD" else invocation.positionals[0];
@@ -1570,6 +1807,8 @@ fn buildIsolatedChildArguments(
             std.mem.eql(u8, argument, "-i") or
             std.mem.eql(u8, argument, "--sync-deps") or
             std.mem.eql(u8, argument, "-s") or
+            std.mem.eql(u8, argument, "--install") or
+            std.mem.eql(u8, argument, "-l") or
             std.mem.eql(u8, argument, "--json") or
             std.mem.startsWith(u8, argument, "--json=") or
             std.mem.eql(u8, argument, "-j") or
@@ -1660,12 +1899,14 @@ fn writeTomlQuoted(writer: *std.Io.Writer, value: []const u8) !void {
     try writer.writeByte('"');
 }
 
-/// Elevated half of `--sync-deps`: resolves the PKGBUILD's dependencies
-/// against the host ALPM state, installs the missing repository packages and
-/// builds the missing AUR packages, re-executes the build as the invoking
-/// user, and removes build-only dependencies afterward. The coordinator never
-/// runs the builder itself.
-fn runSyncDepsCoordinator(
+/// Elevated half of the privileged host builds. `--sync-deps` resolves the
+/// PKGBUILD's dependencies against the host ALPM state, installs the missing
+/// repository packages and builds the missing AUR packages before the build;
+/// `--install` installs the built artifacts afterwards through the dispatch
+/// hook. Both need root, but the builder refuses root and locks its process
+/// against elevation, so the coordinator re-executes the build as the
+/// invoking user and never runs the builder itself.
+fn runHostBuildCoordinator(
     runner: *Real,
     context: *runtime.RuntimeContext,
     operation_context: *Zigalpm.OperationContext,
@@ -1687,103 +1928,127 @@ fn runSyncDepsCoordinator(
         return error.ElevationRequired;
     }
 
-    const supplied_digest = if (optionValue(invocation, "--review-digest")) |encoded|
-        try parseReviewDigest(encoded)
-    else
-        null;
-    var coordinator_review: ?CapturedReview = null;
-    defer if (coordinator_review) |*review| review.deinit(context.allocator);
-    if (supplied_digest) |digest| {
-        coordinator_review = try captureCoordinatorReview(
-            context,
-            operation_context,
-            invocation,
-            request.pkgbuild_path,
-            .host,
-        );
-        const review = &coordinator_review.?;
-        try acceptAutomationReview(
-            runner,
-            context.allocator,
-            review.package_base,
-            review.digest,
-            digest,
-            false,
-        );
-    }
+    const install_requested = installRequested(invocation);
+    var report: ?ArtifactReportChannel = null;
+    if (install_requested) report = try ArtifactReportChannel.create(context);
+    defer if (report) |*channel| channel.deinit(context);
 
-    const manager = try Zigalpm.AlpmManager.init(
-        context.allocator,
-        context.environ,
-        .{ .use_root = true, .operation_context = operation_context },
-    );
-    defer manager.deinit();
-    try manager.sync(false);
-
-    // Snapshot the local database before dependency installation. Cleanup is
-    // based on the resulting package delta rather than only the direct
-    // makedepends/checkdepends declarations, so repository and AUR dependency
-    // graphs are covered without touching packages that predated this build.
-    var dependency_cleanup = try BuildDependencyCleanup.init(context.allocator, manager);
+    var manager: ?*Zigalpm.AlpmManager = null;
+    var dependency_cleanup: ?BuildDependencyCleanup = null;
     defer {
-        dependency_cleanup.run(manager, context, operation_context);
-        dependency_cleanup.deinit();
-    }
-
-    var backend_context: AlpmResolverContext = .{ .manager = manager };
-    const backend = backend_context.backend();
-
-    var plan = if (coordinator_review) |*review|
-        try dependencyPlanFromReview(
-            context.allocator,
-            review.repository_dependencies,
-            review.aur_dependencies,
-        )
-    else
-        try resolveSyncDependencies(
-            context.allocator,
-            request.package_builds,
-            request.no_check,
-            backend,
-        );
-    defer plan.deinit(context.allocator);
-
-    if (plan.aur_dependencies.len > 0) {
-        const executable = try std.process.executablePathAlloc(context.io, context.allocator);
-        defer context.allocator.free(executable);
-        const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
-        const aur_base = try aur_url.resolveFor(context, invocation);
-        const aur_manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
-            .aur_git_base_url = aur_base,
-            .root = true,
-            .check = checkOverride(invocation),
-            .sign = signOverride(invocation),
-            .build_command = build_command,
-            .operation_context = operation_context,
-        });
-        defer aur_manager.deinit();
-        aur_manager.setOperationContext(operation_context);
-        defer aur_manager.setOperationContext(null);
-        try aur_manager.installAurBuildDependencies(plan.aur_dependencies, request.build_directory);
-    }
-
-    // The AUR manager owns a separate libalpm handle. Reload this coordinator's
-    // handle before another transaction so it observes packages installed by
-    // that handle rather than using a stale local-database cache.
-    if (plan.aur_dependencies.len > 0) try manager.refresh();
-
-    if (plan.repo_dependencies.len > 0) {
-        var targets: std.ArrayList([:0]const u8) = .empty;
-        defer {
-            for (targets.items) |target| context.allocator.free(target);
-            targets.deinit(context.allocator);
+        if (dependency_cleanup) |*cleanup| {
+            cleanup.run(manager.?, context, operation_context);
+            cleanup.deinit();
         }
-        for (plan.repo_dependencies) |dependency|
-            try targets.append(context.allocator, try context.allocator.dupeZ(u8, dependency.name));
-        try manager.install_packages(targets.items, .{ .alldeps = true });
+        if (manager) |value| value.deinit();
     }
 
-    const child_arguments = try buildChildArguments(context.allocator, invocation.arguments);
+    if (syncDepsRequested(invocation)) {
+        const supplied_digest = if (optionValue(invocation, "--review-digest")) |encoded|
+            try parseReviewDigest(encoded)
+        else
+            null;
+        var coordinator_review: ?CapturedReview = null;
+        defer if (coordinator_review) |*review| review.deinit(context.allocator);
+        if (supplied_digest) |digest| {
+            coordinator_review = try captureCoordinatorReview(
+                context,
+                operation_context,
+                invocation,
+                request.pkgbuild_path,
+                .host,
+            );
+            const review = &coordinator_review.?;
+            try acceptAutomationReview(
+                runner,
+                context.allocator,
+                review.package_base,
+                review.digest,
+                digest,
+                false,
+            );
+        }
+
+        manager = try Zigalpm.AlpmManager.init(
+            context.allocator,
+            context.environ,
+            .{ .use_root = true, .operation_context = operation_context },
+        );
+        const alpm = manager.?;
+        try alpm.sync(false);
+
+        // Snapshot the local database before dependency installation. Cleanup is
+        // based on the resulting package delta rather than only the direct
+        // makedepends/checkdepends declarations, so repository and AUR dependency
+        // graphs are covered without touching packages that predated this build.
+        dependency_cleanup = try BuildDependencyCleanup.init(context.allocator, alpm);
+
+        var backend_context: AlpmResolverContext = .{ .manager = alpm };
+        const backend = backend_context.backend();
+
+        var plan = if (coordinator_review) |*review|
+            try dependencyPlanFromReview(
+                context.allocator,
+                review.repository_dependencies,
+                review.aur_dependencies,
+            )
+        else
+            try resolveSyncDependencies(
+                context.allocator,
+                request.package_builds,
+                request.no_check,
+                backend,
+            );
+        defer plan.deinit(context.allocator);
+
+        if (plan.aur_dependencies.len > 0) {
+            const executable = try std.process.executablePathAlloc(context.io, context.allocator);
+            defer context.allocator.free(executable);
+            const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
+            const aur_base = try aur_url.resolveFor(context, invocation);
+            const aur_manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+                .aur_git_base_url = aur_base,
+                .root = true,
+                .check = checkOverride(invocation),
+                .sign = signOverride(invocation),
+                .build_command = build_command,
+                .operation_context = operation_context,
+            });
+            defer aur_manager.deinit();
+            aur_manager.setOperationContext(operation_context);
+            defer aur_manager.setOperationContext(null);
+            try aur_manager.installAurBuildDependencies(plan.aur_dependencies, request.build_directory);
+        }
+
+        // The AUR manager owns a separate libalpm handle. Reload this coordinator's
+        // handle before another transaction so it observes packages installed by
+        // that handle rather than using a stale local-database cache.
+        if (plan.aur_dependencies.len > 0) try alpm.refresh();
+
+        if (plan.repo_dependencies.len > 0) {
+            var targets: std.ArrayList([:0]const u8) = .empty;
+            defer {
+                for (targets.items) |target| context.allocator.free(target);
+                targets.deinit(context.allocator);
+            }
+            for (plan.repo_dependencies) |dependency|
+                try targets.append(context.allocator, try context.allocator.dupeZ(u8, dependency.name));
+            try alpm.install_packages(targets.items, .{ .alldeps = true });
+        }
+    }
+    if (dependency_cleanup != null and install_requested) {
+        // The dispatch hook installs after this function returns; hand the
+        // cleanup over so removal candidates are checked against the freshly
+        // installed packages.
+        runner.deferred_cleanup = dependency_cleanup;
+        dependency_cleanup = null;
+    }
+
+    const child_arguments = try buildChildArguments(
+        context.allocator,
+        invocation.arguments,
+        if (report) |*channel| channel.file_path else null,
+    );
     defer context.allocator.free(child_arguments);
     if (invocation.globals.json) {
         const captured = (try elevation.runAsInvokingUserCapture(context, child_arguments, operation_context)) orelse {
@@ -1808,6 +2073,21 @@ fn runSyncDepsCoordinator(
     };
 
     if (exit_code != 0) return error.BuildFailed;
+
+    if (report) |*channel| {
+        var contents = try channel.read(context);
+        defer contents.deinit(context.allocator);
+        const pending = runner.result.?;
+        const package_base = try context.allocator.dupe(u8, pending.package_base);
+        defer context.allocator.free(package_base);
+        try runner.ownResult(
+            context.allocator,
+            package_base,
+            pending.review_digest,
+            false,
+            contents.artifacts,
+        );
+    }
 }
 
 fn acceptAutomationReview(
@@ -2238,21 +2518,89 @@ fn reportCleanupFailure(
     );
 }
 
+/// Runs handed-over dependency cleanup in its own rendered operation after
+/// the post-build install hook has finished.
+fn runDeferredCleanupOperation(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+    cleanup: *const BuildDependencyCleanup,
+) !void {
+    var operation_context = Zigalpm.OperationContext.init(context.allocator, context.io);
+    defer operation_context.deinit();
+    context.attachTransactionLog(&operation_context);
+    var renderer = try standard_single_pane.Renderer.init(context, invocation.globals.no_confirm);
+    defer renderer.deinit();
+    try renderer.attach(&operation_context);
+    try renderer.begin("Cleaning up build dependencies...");
+    var manager = try Zigalpm.AlpmManager.init(context.allocator, context.environ, .{
+        .use_root = true,
+        .operation_context = &operation_context,
+    });
+    defer manager.deinit();
+    cleanup.run(manager, context, &operation_context);
+    try renderer.finishWithMessage(
+        !renderer.failed(),
+        if (renderer.failed()) "Could not remove every build dependency." else null,
+    );
+}
+
 /// Arguments for the invoking-user re-execution: the original invocation
-/// minus the sync-deps flag, so the child performs a normal build instead of
-/// re-entering the coordinator.
+/// minus the coordinator-owned flags, so the child performs a plain build
+/// instead of re-entering the coordinator or installing. With
+/// `artifact_report_path` the child records its built artifacts there for the
+/// coordinator to install.
 fn buildChildArguments(
     allocator: std.mem.Allocator,
     arguments: []const []const u8,
+    artifact_report_path: ?[]const u8,
 ) ![]const []const u8 {
     var result: std.ArrayList([]const u8) = .empty;
     defer result.deinit(allocator);
-    for (arguments) |argument| {
-        if (std.mem.eql(u8, argument, "--sync-deps") or
-            std.mem.eql(u8, argument, "-s")) continue;
-        try result.append(allocator, argument);
+    var index: usize = 0;
+    while (index < arguments.len) : (index += 1) {
+        switch (childArgumentDisposition(arguments[index])) {
+            .keep => try result.append(allocator, arguments[index]),
+            .drop => {},
+            .drop_boolean_next => {
+                // The parser consumes a following boolean literal as the
+                // flag's value; drop it too so it cannot leak as a positional.
+                if (index + 1 < arguments.len and isBooleanLiteral(arguments[index + 1]))
+                    index += 1;
+            },
+            .drop_value_next => index += 1,
+        }
     }
+    if (artifact_report_path) |report_path|
+        try result.appendSlice(allocator, &.{ "--artifact-report", report_path });
     return try result.toOwnedSlice(allocator);
+}
+
+const ChildArgumentDisposition = enum {
+    keep,
+    drop,
+    drop_boolean_next,
+    drop_value_next,
+};
+
+fn childArgumentDisposition(argument: []const u8) ChildArgumentDisposition {
+    const boolean_flags = [_][]const u8{ "--sync-deps", "-s", "--install", "-l" };
+    for (boolean_flags) |name| {
+        if (std.mem.eql(u8, argument, name)) return .drop_boolean_next;
+        if (isInlineValueOf(argument, name)) return .drop;
+    }
+    if (std.mem.eql(u8, argument, "--artifact-report")) return .drop_value_next;
+    if (isInlineValueOf(argument, "--artifact-report")) return .drop;
+    return .keep;
+}
+
+fn isInlineValueOf(argument: []const u8, name: []const u8) bool {
+    return argument.len > name.len and
+        argument[name.len] == '=' and
+        std.mem.startsWith(u8, argument, name);
+}
+
+fn isBooleanLiteral(value: []const u8) bool {
+    return std.ascii.eqlIgnoreCase(value, "true") or std.ascii.eqlIgnoreCase(value, "false");
 }
 
 fn optionEnabled(invocation: *const parser.Invocation, name: []const u8) bool {
@@ -2342,7 +2690,11 @@ fn contextLogPath(context: *runtime.RuntimeContext) ?[]const u8 {
 
 fn preparationErrorMessage(context: *runtime.RuntimeContext, err: anyerror) ![]u8 {
     const fallback = if (contextDiagnostic(context) == null)
-        try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = "the PKGBUILD preparation" })
+        try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = switch (err) {
+            error.IsolatedBuildFailed => "the isolated package build",
+            error.IsolatedBootstrapFailed, error.IsolatedCommandFailed => "the isolated build root setup",
+            else => "the PKGBUILD preparation",
+        } })
     else
         null;
     defer if (fallback) |message| context.allocator.free(message);
@@ -2941,6 +3293,244 @@ test "sync deps options parse under both spellings" {
     try std.testing.expect(!shouldElevateSyncDeps(&plain.dispatch, false));
 }
 
+test "build install options parse under the canonical name and the l alias" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+
+    for ([_][]const []const u8{
+        &.{ "build", "--install" },
+        &.{ "build", "-l" },
+    }) |arguments| {
+        const outcome = try parser.parse(arena.allocator(), &manifest, arguments);
+        try std.testing.expect(installRequested(&outcome.dispatch));
+        try std.testing.expectEqualStrings("true", optionValue(&outcome.dispatch, "--install").?);
+        try std.testing.expect(!optionEnabled(&outcome.dispatch, "--isolated"));
+        // `--install` elevates before any build step so the coordinator can
+        // install after the locked build child finishes.
+        try std.testing.expect(shouldElevateBuildCoordinator(&outcome.dispatch, false));
+        try std.testing.expect(!shouldElevateBuildCoordinator(&outcome.dispatch, true));
+    }
+    for ([_][]const []const u8{
+        &.{ "build", "--install=false" },
+        &.{ "build", "-l=false" },
+        &.{ "build", "--install", "false" },
+        &.{ "build", "-l", "false" },
+    }) |arguments| {
+        const outcome = try parser.parse(arena.allocator(), &manifest, arguments);
+        try std.testing.expect(!installRequested(&outcome.dispatch));
+    }
+
+    // `-i` keeps its isolated meaning and must never enable install.
+    const isolated = try parser.parse(arena.allocator(), &manifest, &.{ "build", "-i" });
+    try std.testing.expect(isolatedRequested(&isolated.dispatch));
+    try std.testing.expect(!installRequested(&isolated.dispatch));
+}
+
+test "build install rejects output modes that cannot carry a second transaction" {
+    var test_context: test_support.TestContext = .{};
+    test_context.init();
+    defer test_context.deinit();
+    const manifest = try @import("../cli/spec.zig").Manifest.load(test_context.arena.allocator());
+
+    for ([_]struct { mode: []const u8, arguments: []const []const u8 }{
+        .{ .mode = "--json", .arguments = &.{ "build", "--install", "--json", "PKGBUILD" } },
+        .{ .mode = "--ui-mode", .arguments = &.{ "build", "--install", "--ui-mode", "PKGBUILD" } },
+        .{ .mode = "--review-only", .arguments = &.{ "build", "--install", "--review-only", "PKGBUILD" } },
+        .{ .mode = "--makesrcinfo", .arguments = &.{ "build", "-l", "--makesrcinfo", "PKGBUILD" } },
+    }) |case| {
+        test_context.stderr.writer.end = 0;
+        const outcome = try parser.parse(test_context.arena.allocator(), &manifest, case.arguments);
+        try std.testing.expectEqual(@as(?u8, 2), try dispatch(&test_context.context, &outcome.dispatch));
+        const message = try std.fmt.allocPrint(
+            test_context.arena.allocator(),
+            "Cannot combine --install with {s}.",
+            .{case.mode},
+        );
+        try std.testing.expect(std.mem.indexOf(
+            u8,
+            test_context.stderr.writer.buffered(),
+            message,
+        ) != null);
+    }
+}
+
+test "build artifact report option parses with its value" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    const separate = try parser.parse(
+        arena.allocator(),
+        &manifest,
+        &.{ "build", "--artifact-report", "/tmp/report/artifacts", "PKGBUILD" },
+    );
+    try std.testing.expectEqualStrings(
+        "/tmp/report/artifacts",
+        optionValue(&separate.dispatch, "--artifact-report").?,
+    );
+    const joined = try parser.parse(
+        arena.allocator(),
+        &manifest,
+        &.{ "build", "--artifact-report=/tmp/report/artifacts", "PKGBUILD" },
+    );
+    try std.testing.expectEqualStrings(
+        "/tmp/report/artifacts",
+        optionValue(&joined.dispatch, "--artifact-report").?,
+    );
+}
+
+test "post build dispatch writes the artifact report instead of installing" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const allocator = tc.arena.allocator();
+    const manifest = try @import("../cli/spec.zig").Manifest.load(allocator);
+
+    const FakeRunner = struct {
+        result: ?BuildCommandResult = null,
+        install_calls: usize = 0,
+
+        fn installArtifacts(
+            self: *@This(),
+            _: *runtime.RuntimeContext,
+            _: *const parser.Invocation,
+            _: []const BuildCommandArtifact,
+        ) anyerror!u8 {
+            self.install_calls += 1;
+            return 0;
+        }
+    };
+
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(directory);
+    const report_path = try std.fs.path.join(std.testing.allocator, &.{ directory, "artifacts" });
+    defer std.testing.allocator.free(report_path);
+
+    var artifacts = [_]BuildCommandArtifact{
+        .{
+            .package_name = try allocator.dupe(u8, "demo"),
+            .path = try allocator.dupe(u8, "/tmp/out/demo-1-1-any.pkg.tar.zst"),
+        },
+        .{
+            .package_name = try allocator.dupe(u8, "demo-docs"),
+            .path = try allocator.dupe(u8, "/tmp/out/demo-docs-1-1-any.pkg.tar.zst"),
+        },
+    };
+    // The fake result borrows the arena-owned strings and is never deinitialized.
+    const result: BuildCommandResult = .{
+        .package_base = try allocator.dupe(u8, "demo"),
+        .review_digest = null,
+        .isolated = false,
+        .artifacts = &artifacts,
+    };
+
+    // With both flags the report wins: the child records and never installs.
+    const reported = try parser.parse(allocator, &manifest, &.{
+        "build", "--install", "--artifact-report", report_path, "PKGBUILD",
+    });
+    var report_runner: FakeRunner = .{ .result = result };
+    try std.testing.expectEqual(
+        @as(u8, 0),
+        try postBuildExitCode(&tc.context, &reported.dispatch, &report_runner, 0),
+    );
+    try std.testing.expectEqual(@as(usize, 0), report_runner.install_calls);
+    const written = try std.Io.Dir.cwd().readFileAlloc(
+        std.testing.io,
+        report_path,
+        std.testing.allocator,
+        .limited(64 * 1024),
+    );
+    defer std.testing.allocator.free(written);
+    try std.testing.expectEqualStrings(
+        "demo\t/tmp/out/demo-1-1-any.pkg.tar.zst\n" ++
+            "demo-docs\t/tmp/out/demo-docs-1-1-any.pkg.tar.zst\n",
+        written,
+    );
+    const parsed = try parseArtifactReport(std.testing.allocator, written);
+    defer std.testing.allocator.free(parsed);
+    try std.testing.expectEqual(@as(usize, 2), parsed.len);
+    try std.testing.expectEqualStrings("demo", parsed[0].package_name);
+    try std.testing.expectEqualStrings("/tmp/out/demo-1-1-any.pkg.tar.zst", parsed[0].path);
+    try std.testing.expectEqualStrings("demo-docs", parsed[1].package_name);
+    try std.testing.expectEqualStrings("/tmp/out/demo-docs-1-1-any.pkg.tar.zst", parsed[1].path);
+
+    // Without the report flag the coordinator installs the artifacts.
+    const installing = try parser.parse(allocator, &manifest, &.{ "build", "--install", "PKGBUILD" });
+    var install_runner: FakeRunner = .{ .result = result };
+    try std.testing.expectEqual(
+        @as(u8, 0),
+        try postBuildExitCode(&tc.context, &installing.dispatch, &install_runner, 0),
+    );
+    try std.testing.expectEqual(@as(usize, 1), install_runner.install_calls);
+
+    // A failed build neither reports nor installs.
+    var failed_runner: FakeRunner = .{ .result = result };
+    try std.testing.expectEqual(
+        @as(u8, 1),
+        try postBuildExitCode(&tc.context, &reported.dispatch, &failed_runner, 1),
+    );
+    try std.testing.expectEqual(@as(usize, 0), failed_runner.install_calls);
+}
+
+test "artifact report parsing treats empty as no artifacts and rejects malformed lines" {
+    const allocator = std.testing.allocator;
+    const empty_contents = try allocator.dupe(u8, "");
+    defer allocator.free(empty_contents);
+    const empty = try parseArtifactReport(allocator, empty_contents);
+    defer allocator.free(empty);
+    try std.testing.expectEqual(@as(usize, 0), empty.len);
+
+    for ([_][]const u8{
+        "demo /tmp/demo-1-1-any.pkg.tar.zst\n",
+        "\t/tmp/demo-1-1-any.pkg.tar.zst\n",
+        "demo\trelative/demo-1-1-any.pkg.tar.zst\n",
+    }) |line| {
+        const contents = try allocator.dupe(u8, line);
+        defer allocator.free(contents);
+        try std.testing.expectError(
+            error.InvalidArtifactReport,
+            parseArtifactReport(allocator, contents),
+        );
+    }
+}
+
+test "artifact report reading fails closed when the child wrote nothing" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const allocator = tc.arena.allocator();
+    // Arena-owned strings; the channel is never deinitialized.
+    const channel: ArtifactReportChannel = .{
+        .directory = try allocator.dupe(u8, "/nonexistent-shelly-report-dir"),
+        .file_path = try allocator.dupe(u8, "/nonexistent-shelly-report-dir/artifacts"),
+    };
+    try std.testing.expectError(error.ArtifactReportFailed, channel.read(&tc.context));
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        tc.stderr.written(),
+        "artifact report could not be read",
+    ) != null);
+}
+
+test "host coordinator routing covers sync deps and install invocations" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    const install_only = try parser.parse(arena.allocator(), &manifest, &.{ "build", "-l" });
+    const sync_and_install = try parser.parse(arena.allocator(), &manifest, &.{ "build", "-s", "-l" });
+    const plain = try parser.parse(arena.allocator(), &manifest, &.{"build"});
+    const child = try parser.parse(arena.allocator(), &manifest, &.{ "build", "--coordinator-child", "-s" });
+    try std.testing.expect(hostCoordinatorRequested(&install_only.dispatch));
+    try std.testing.expect(hostCoordinatorRequested(&sync_and_install.dispatch));
+    try std.testing.expect(!hostCoordinatorRequested(&plain.dispatch));
+    try std.testing.expect(!hostCoordinatorRequested(&child.dispatch));
+}
+
 test "isolated builds elevate only the outer coordinator" {
     const spec = @import("../cli/spec.zig");
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -2966,6 +3556,8 @@ test "isolated child arguments remove host coordinator flags and replace the pat
         "build",
         "--isolated",
         "--sync-deps",
+        "--install",
+        "-l",
         "--no-check",
         "/host/reviewed/PKGBUILD",
     };
@@ -3190,21 +3782,52 @@ test "invoking user build arguments drop sync deps flags and keep everything els
         "--sync-deps",
         "--no-check",
         "-s",
+        "--install",
         "--package",
         "demo",
         "/tmp/PKGBUILD",
     };
-    const child = try buildChildArguments(allocator, &arguments);
+    const child = try buildChildArguments(allocator, &arguments, null);
     defer allocator.free(child);
+    // The coordinator owns syncing and installing: the child only builds.
     const expected = [_][]const u8{ "build", "--no-check", "--package", "demo", "/tmp/PKGBUILD" };
     try std.testing.expectEqual(expected.len, child.len);
     for (expected, child) |want, actual| try std.testing.expectEqualStrings(want, actual);
 }
 
+test "invoking user build arguments drop boolean literals and user report spellings" {
+    const allocator = std.testing.allocator;
+    const arguments = [_][]const u8{
+        "build",
+        "-s",
+        "false",
+        "--install=false",
+        "-l",
+        "true",
+        "--artifact-report",
+        "/user/report",
+        "--artifact-report=/user/other",
+        "/tmp/PKGBUILD",
+    };
+    const child = try buildChildArguments(allocator, &arguments, null);
+    defer allocator.free(child);
+    const expected = [_][]const u8{ "build", "/tmp/PKGBUILD" };
+    try std.testing.expectEqualSlices([]const u8, &expected, child);
+}
+
+test "invoking user build arguments strip install flags and append the artifact report path" {
+    const allocator = std.testing.allocator;
+    const arguments = [_][]const u8{ "build", "-s", "-l", "/tmp/PKGBUILD" };
+    const child = try buildChildArguments(allocator, &arguments, "/tmp/report/artifacts");
+    defer allocator.free(child);
+    const expected = [_][]const u8{ "build", "/tmp/PKGBUILD", "--artifact-report", "/tmp/report/artifacts" };
+    try std.testing.expectEqualSlices([]const u8, &expected, child);
+}
+
 test "sync deps child preserves implicit all-members selection" {
     const allocator = std.testing.allocator;
     const arguments = [_][]const u8{ "build", "--sync-deps", "/tmp/PKGBUILD" };
-    const child = try buildChildArguments(allocator, &arguments);
+    const child = try buildChildArguments(allocator, &arguments, null);
     defer allocator.free(child);
     const expected = [_][]const u8{ "build", "/tmp/PKGBUILD" };
     try std.testing.expectEqual(expected.len, child.len);
@@ -3658,6 +4281,39 @@ test "configured work directories exist before final review and remain command-u
     // Returning from the helper does not remove the directory. Real builds
     // leave retention decisions to PackageBuilder.clean_after_success.
     try std.Io.Dir.cwd().access(io, configured, .{});
+}
+
+test "review-only accepts Heroic array trimming without running package code" {
+    const spec = @import("../cli/spec.zig");
+    var test_context: test_support.TestContext = .{};
+    test_context.init();
+    defer test_context.deinit();
+    const allocator = test_context.arena.allocator();
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    const path = try std.fs.path.join(allocator, &.{ directory, "PKGBUILD" });
+    try temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data =
+        \\pkgname=heroic-array-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=("https://example.invalid/Heroic-${pkgver}-linux-x64.pacman")
+        \\noextract=("${source[@]##*/}")
+        \\sha256sums=('SKIP')
+        \\package() { touch "$startdir/lifecycle-ran"; }
+        \\
+    });
+    const environ = try testEnvironWithHome(std.testing.allocator, directory);
+    defer environ.block.deinit(std.testing.allocator);
+    test_context.context.environ = environ;
+    const manifest = try spec.Manifest.load(allocator);
+    const invocation = try parser.parse(allocator, &manifest, &.{ "build", path, "--review-only", "--json" });
+    try std.testing.expectEqual(@as(u8, 0), try executeReviewOnly(&test_context.context, &invocation.dispatch));
+    const document = try std.json.parseFromSlice(std.json.Value, allocator, test_context.stdout.writer.buffered(), .{});
+    try std.testing.expect(document.value == .object);
+    try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, "lifecycle-ran", .{}));
 }
 
 test "issue 1880 preparation failure reaches JSON and persistent log before build" {

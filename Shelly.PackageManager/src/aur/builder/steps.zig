@@ -1305,6 +1305,8 @@ const virtualMetadataShellPrelude =
     \\}
     \\chown() {
     \\  local __shelly_recursive=0 __shelly_follow=1 __shelly_specification __shelly_target
+    \\  local -a __shelly_operands=()
+    \\  # GNU ownership commands accept options after the owner and paths.
     \\  while [ "$#" -gt 0 ]; do
     \\    case "$1" in
     \\      -R|--recursive) __shelly_recursive=1; shift ;;
@@ -1312,11 +1314,12 @@ const virtualMetadataShellPrelude =
     \\      -h|--no-dereference) __shelly_follow=0; shift ;;
     \\      --dereference) __shelly_follow=1; shift ;;
     \\      -H|-L|--from=*|--reference=*) __shelly_metadata_reject; return $? ;;
-    \\      --) shift; break ;;
+    \\      --) shift; __shelly_operands+=("$@"); break ;;
     \\      -*) __shelly_metadata_reject; return $? ;;
-    \\      *) break ;;
+    \\      *) __shelly_operands+=("$1"); shift ;;
     \\    esac
     \\  done
+    \\  set -- "${__shelly_operands[@]}"
     \\  [ "$#" -ge 2 ] || { __shelly_metadata_reject; return $?; }
     \\  [ -n "$1" ] && [ "$1" != ':' ] || { __shelly_metadata_reject; return $?; }
     \\  __shelly_specification=$1; shift
@@ -1331,6 +1334,7 @@ const virtualMetadataShellPrelude =
     \\}
     \\chgrp() {
     \\  local __shelly_recursive=0 __shelly_follow=1 __shelly_specification __shelly_target
+    \\  local -a __shelly_operands=()
     \\  while [ "$#" -gt 0 ]; do
     \\    case "$1" in
     \\      -R|--recursive) __shelly_recursive=1; shift ;;
@@ -1338,11 +1342,12 @@ const virtualMetadataShellPrelude =
     \\      -h|--no-dereference) __shelly_follow=0; shift ;;
     \\      --dereference) __shelly_follow=1; shift ;;
     \\      -H|-L|--from=*|--reference=*) __shelly_metadata_reject; return $? ;;
-    \\      --) shift; break ;;
+    \\      --) shift; __shelly_operands+=("$@"); break ;;
     \\      -*) __shelly_metadata_reject; return $? ;;
-    \\      *) break ;;
+    \\      *) __shelly_operands+=("$1"); shift ;;
     \\    esac
     \\  done
+    \\  set -- "${__shelly_operands[@]}"
     \\  [ "$#" -ge 2 ] || { __shelly_metadata_reject; return $?; }
     \\  [ -n "$1" ] || { __shelly_metadata_reject; return $?; }
     \\  __shelly_specification=$1; shift

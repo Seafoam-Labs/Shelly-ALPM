@@ -409,6 +409,29 @@ test "remove variants expose native help and modifier aliases" {
     try std.testing.expect(found_no_cascade);
 }
 
+test "build install modifier uses the free l alias and leaves isolated alone" {
+    const options = resolveOptions(comptime findVariant(.build, "build").?);
+    var found = false;
+    for (options) |option| {
+        if (!std.mem.eql(u8, option.name, "--install")) continue;
+        found = true;
+        try std.testing.expect(option.aliases.len == 1);
+        try std.testing.expect(option.matches("-l"));
+        try std.testing.expect(!option.matches("-i"));
+        try std.testing.expect(option.description.?.len > 0);
+    }
+    try std.testing.expect(found);
+
+    var isolated_found = false;
+    for (options) |option| {
+        if (!std.mem.eql(u8, option.name, "--isolated")) continue;
+        isolated_found = true;
+        try std.testing.expect(option.matches("-i"));
+        try std.testing.expect(!option.matches("-l"));
+    }
+    try std.testing.expect(isolated_found);
+}
+
 test "shared modifiers stay shared across their listed types" {
     inline for (.{ "standard", "aur" }) |type_name| {
         const options = resolveOptions(comptime findVariant(.install, type_name).?);

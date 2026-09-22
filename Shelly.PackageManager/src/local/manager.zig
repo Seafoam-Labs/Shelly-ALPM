@@ -341,7 +341,7 @@ pub const Manager = struct {
                         try writer.interface.writeAll(buffer[0..amount]);
                     }
                 },
-                .symbolic_link, .other => try reader.skip(),
+                .symbolic_link, .hard_link, .other => try reader.skip(),
             }
         }
     }

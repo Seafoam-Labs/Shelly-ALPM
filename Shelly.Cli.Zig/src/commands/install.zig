@@ -496,9 +496,30 @@ fn runStandard(
 
     if (repository_packages.items.len > 0)
         try installRepositoryPackages(context, operation_context, invocation, repository_packages.items);
-    for (local_packages.items) |path|
-        try installLocalPackage(context, operation_context, invocation, path);
+    try installLocalPackages(context, operation_context, invocation, local_packages.items, LocalArchiveInstaller{});
 }
+
+/// Arch package archives installed in one ALPM transaction, so a split
+/// package's members can satisfy each other's dependencies. Adding them one
+/// transaction at a time would fail preparation for a member that depends on
+/// a sibling that is not installed yet.
+const LocalArchiveInstaller = struct {
+    fn install(
+        _: LocalArchiveInstaller,
+        context: *runtime.RuntimeContext,
+        operation_context: *Zigalpm.OperationContext,
+        invocation: *const parser.Invocation,
+        paths: []const []const u8,
+    ) !void {
+        const manager = try Zigalpm.AlpmManager.init(context.allocator, context.environ, .{ .use_root = true, .operation_context = operation_context });
+        defer manager.deinit();
+        manager.setOperationContext(operation_context);
+        defer manager.setOperationContext(null);
+        try manager.install_local_packages(paths, .{
+            .needed = optionEnabled(invocation, "--needed"),
+        });
+    }
+};
 
 fn installRepositoryPackages(
     context: *runtime.RuntimeContext,
@@ -544,38 +565,48 @@ fn repositoryInstallFlags(invocation: *const parser.Invocation) Zigalpm.alpm.Tra
     };
 }
 
-fn installLocalPackage(
+/// Resolves every local target and installs it through `archives_installer`,
+/// which receives all Arch package archives in one batch. Binaries packages
+/// keep their own per-file installation.
+fn installLocalPackages(
     context: *runtime.RuntimeContext,
     operation_context: *Zigalpm.OperationContext,
     invocation: *const parser.Invocation,
-    location: []const u8,
+    locations: []const []const u8,
+    archives_installer: anytype,
 ) !void {
-    std.Io.Dir.cwd().access(context.io, location, .{}) catch return error.FileNotFound;
     const current_directory = try std.process.currentPathAlloc(context.io, context.allocator);
     defer context.allocator.free(current_directory);
-    const absolute_path = try std.fs.path.resolve(context.allocator, &.{ current_directory, location });
-    defer context.allocator.free(absolute_path);
     const inspector: Zigalpm.local.Inspector = .{ .allocator = context.allocator, .io = context.io };
+    var archive_paths: std.ArrayList([]u8) = .empty;
+    defer {
+        for (archive_paths.items) |path| context.allocator.free(path);
+        archive_paths.deinit(context.allocator);
+    }
 
-    if (try inspector.isArchPackage(absolute_path)) {
-        const manager = try Zigalpm.AlpmManager.init(context.allocator, context.environ, .{ .use_root = true, .operation_context = operation_context });
-        defer manager.deinit();
-        manager.setOperationContext(operation_context);
-        defer manager.setOperationContext(null);
-        try manager.install_local_packages(&.{absolute_path}, .{
-            .needed = optionEnabled(invocation, "--needed"),
-        });
-        return;
+    for (locations) |location| {
+        std.Io.Dir.cwd().access(context.io, location, .{}) catch return error.FileNotFound;
+        const absolute_path = try std.fs.path.resolve(context.allocator, &.{ current_directory, location });
+        if (try inspector.isArchPackage(absolute_path)) {
+            archive_paths.append(context.allocator, absolute_path) catch |err| {
+                context.allocator.free(absolute_path);
+                return err;
+            };
+            continue;
+        }
+        defer context.allocator.free(absolute_path);
+        if (try inspector.isBinariesPackage(absolute_path)) {
+            var manager = Zigalpm.LocalManager.init(context.allocator, context.io, .{});
+            defer manager.deinit();
+            manager.setOperationContext(operation_context);
+            defer manager.setOperationContext(null);
+            if (!try manager.installBinariesPackage(absolute_path)) return InstallError.BackendFailed;
+            continue;
+        }
+        return InstallError.UnsupportedLocalPackage;
     }
-    if (try inspector.isBinariesPackage(absolute_path)) {
-        var manager = Zigalpm.LocalManager.init(context.allocator, context.io, .{});
-        defer manager.deinit();
-        manager.setOperationContext(operation_context);
-        defer manager.setOperationContext(null);
-        if (!try manager.installBinariesPackage(absolute_path)) return InstallError.BackendFailed;
-        return;
-    }
-    return InstallError.UnsupportedLocalPackage;
+    if (archive_paths.items.len == 0) return;
+    try archives_installer.install(context, operation_context, invocation, archive_paths.items);
 }
 
 fn downloadPackage(
@@ -2068,6 +2099,105 @@ test "appimage install relaunch forwards positionals and install-path" {
         "install", "appimage", "--no-confirm", "--install-path", "/opt/appimages", "/tmp/demo.AppImage",
     };
     try std.testing.expectEqualSlices([]const u8, &expected_full, full_args);
+}
+
+test "standard install batches every local Arch archive into one transaction" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    const member = try std.fs.path.join(allocator, &.{ directory, "demo-1-1-any.pkg.tar.zst" });
+    defer allocator.free(member);
+    const docs = try std.fs.path.join(allocator, &.{ directory, "demo-docs-1-1-any.pkg.tar.zst" });
+    defer allocator.free(docs);
+    try Zigalpm.shared.archive.writeFixture(allocator, member, .zstd, &.{
+        .{ .path = ".PKGINFO", .contents = "pkgname = demo\n" },
+    });
+    try Zigalpm.shared.archive.writeFixture(allocator, docs, .zstd, &.{
+        .{ .path = ".PKGINFO", .contents = "pkgname = demo-docs\n" },
+    });
+
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "install", "standard", "--needed", member, docs,
+    });
+    var operations = Zigalpm.OperationContext.init(allocator, io);
+    defer operations.deinit();
+
+    var calls: usize = 0;
+    const Capture = struct {
+        calls: *usize,
+
+        pub fn install(
+            self: @This(),
+            _: *runtime.RuntimeContext,
+            _: *Zigalpm.OperationContext,
+            invocation: *const parser.Invocation,
+            paths: []const []const u8,
+        ) !void {
+            self.calls.* += 1;
+            try std.testing.expect(optionEnabled(invocation, "--needed"));
+            try std.testing.expectEqual(@as(usize, 2), paths.len);
+            try std.testing.expect(std.mem.endsWith(u8, paths[0], "demo-1-1-any.pkg.tar.zst"));
+            try std.testing.expect(std.mem.endsWith(u8, paths[1], "demo-docs-1-1-any.pkg.tar.zst"));
+            for (paths) |path| try std.testing.expect(std.fs.path.isAbsolute(path));
+        }
+    };
+    try installLocalPackages(
+        &tc.context,
+        &operations,
+        &outcome.dispatch,
+        &.{ member, docs },
+        Capture{ .calls = &calls },
+    );
+    try std.testing.expectEqual(@as(usize, 1), calls);
+}
+
+test "standard install rejects local targets that are not installable files" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    const notes = try std.fs.path.join(allocator, &.{ directory, "notes.txt" });
+    defer allocator.free(notes);
+    try temporary.dir.writeFile(io, .{ .sub_path = "notes.txt", .data = "not an installable file\n" });
+    const missing = try std.fs.path.join(allocator, &.{ directory, "missing.pkg.tar.zst" });
+    defer allocator.free(missing);
+
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "install", "standard", notes });
+    var operations = Zigalpm.OperationContext.init(allocator, io);
+    defer operations.deinit();
+
+    const Unexpected = struct {
+        pub fn install(
+            _: @This(),
+            _: *runtime.RuntimeContext,
+            _: *Zigalpm.OperationContext,
+            _: *const parser.Invocation,
+            _: []const []const u8,
+        ) !void {
+            return error.UnexpectedArchiveInstall;
+        }
+    };
+    try std.testing.expectError(
+        error.FileNotFound,
+        installLocalPackages(&tc.context, &operations, &outcome.dispatch, &.{missing}, Unexpected{}),
+    );
+    try std.testing.expectError(
+        error.UnsupportedLocalPackage,
+        installLocalPackages(&tc.context, &operations, &outcome.dispatch, &.{notes}, Unexpected{}),
+    );
 }
 
 test "install preserves actionable lock errors once in terminal and UI output" {

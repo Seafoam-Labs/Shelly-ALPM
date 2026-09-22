@@ -49,6 +49,8 @@ pub const PkgbuildParser = struct {
     io: std.Io,
     selected_package_name: ?[]const u8 = null,
     package_carch: []const u8 = "x86_64",
+    /// Bounds nested static array references, including assignment snapshots.
+    array_expansion_depth: usize = 0,
     /// Scalar values produced by sourcing the reviewed PKGBUILD in the build
     /// sandbox. These overlay the static parse so shell-only assignments such
     /// as `${name:=default}`, conditionals, and helper calls reach lifecycle
@@ -2608,6 +2610,142 @@ test "issue 1880 array assignments expand in declaration order" {
     try std.testing.expectEqual(@as(usize, 2), info.source.?.len);
     try std.testing.expectEqualStrings("first.patch", info.source.?[0]);
     try std.testing.expectEqualStrings("second.patch", info.source.?[1]);
+}
+
+test "parser_content: Heroic array trimming resolves metadata and execution prelude" {
+    const allocator = std.testing.allocator;
+    var info = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io },
+        \\pkgname=heroic-games-launcher-bin
+        \\pkgver=2.22.3
+        \\source=("https://example.org/Heroic-${pkgver}-linux-x64.pacman")
+        \\noextract=("${source[@]##*/}")
+        \\package() { :; }
+    , null);
+    defer info.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 1), info.no_extract.?.len);
+    try std.testing.expectEqualStrings("Heroic-2.22.3-linux-x64.pacman", info.no_extract.?[0]);
+    try std.testing.expect(std.mem.indexOf(u8, info.execution.?.shared_prelude, "declare -a noextract=('Heroic-2.22.3-linux-x64.pacman')") != null);
+}
+
+test "parser_content: array trimming agrees with trusted Bash and preserves literal data" {
+    const allocator = std.testing.allocator;
+    const cases = [_][]const u8{
+        "_files=('a/b c.tar.gz' '' 'plain' 'a/${pkgver}' 'a/$(printf EXPANDED)' 'a/literal>=')\nnoextract=(\"${_files[@]##*/}\")",
+        "_files=('a/b/c' '' plain)\nnoextract=(\"${_files[@]#*/}\")",
+        "_files=('file.tar.gz' '' plain)\nnoextract=(\"${_files[@]%.*}\")",
+        "_files=('file.tar.gz' '' plain)\nnoextract=(\"${_files[@]%%.*}\")",
+        "_files=('a/b' '')\nnoextract=(\"${_files[@]#}\")",
+        "_files=('a/b' '')\nnoextract=(\"${_files[@]%%}\")",
+        "_files=('abc' '')\nnoextract=(\"${_files[@]#?}\")",
+        "_files=('abc' '')\nnoextract=(\"${_files[@]%?}\")",
+        "_files=('abc' '')\nnoextract=(\"${_files[@]##nomatch}\")",
+        "_files=()\nnoextract=(\"${_files[@]##*/}\")",
+        "noextract=(\"${_missing[@]##*/}\")",
+        "_files=('a/b')\nnoextract=('${_files[@]##*/}' \"\\${_files[@]##*/}\")",
+        "_files=('path/\xc3\xa9.tar.gz')\nnoextract=(\"${_files[@]##*/}\")",
+        "_name=first\n_files=(\"$_name/a\")\n_name=second\n_files+=(\"$_name/b\")\nnoextract=(\"${_files[@]##*/}\")\n_files=(changed)",
+        "_files=(a/b)\n_files=(\"${_files[@]##*/}\" c/d)\nnoextract=(head)\nnoextract+=(\"${_files[@]##*/}\")",
+    };
+    const print_array = "\nif (( ${#noextract[@]} )); then printf '%s\\0' \"${noextract[@]}\"; fi\n";
+    for (cases) |case| {
+        const content = try std.mem.concat(allocator, u8, &.{ "pkgname=demo\npkgver=1\n", case, "\npackage() { :; }\n" });
+        defer allocator.free(content);
+        var info = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io }, content, null);
+        defer info.deinit(allocator);
+        const script = try std.mem.concat(allocator, u8, &.{ content, print_array });
+        defer allocator.free(script);
+        const bash = try std.process.run(allocator, std.testing.io, .{ .argv = &.{ "/bin/bash", "--noprofile", "--norc", "-c", script } });
+        defer allocator.free(bash.stdout);
+        defer allocator.free(bash.stderr);
+        try std.testing.expect(bash.term == .exited and bash.term.exited == 0);
+        var expected: std.Io.Writer.Allocating = .init(allocator);
+        defer expected.deinit();
+        for (info.no_extract.?) |value| {
+            try expected.writer.writeAll(value);
+            try expected.writer.writeByte(0);
+        }
+        try std.testing.expectEqualStrings(bash.stdout, expected.written());
+        const prelude_script = try std.mem.concat(allocator, u8, &.{ info.execution.?.shared_prelude, print_array });
+        defer allocator.free(prelude_script);
+        const prelude = try std.process.run(allocator, std.testing.io, .{ .argv = &.{ "/bin/bash", "--noprofile", "--norc", "-c", prelude_script } });
+        defer allocator.free(prelude.stdout);
+        defer allocator.free(prelude.stderr);
+        try std.testing.expect(prelude.term == .exited and prelude.term.exited == 0);
+        try std.testing.expectEqualStrings(bash.stdout, prelude.stdout);
+    }
+}
+
+test "parser_content: unsupported array trimming reports the field and original line" {
+    // Failed parser construction currently borrows an operation arena.
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const cases = [_][]const u8{
+        "\"${_files[@]##[ab]}\"",
+        "\"${_files[@]##${pattern}}\"",
+        "\"${_files[@]##'*/'}\"",
+        "\"prefix${_files[@]##*/}\"",
+        "${_files[@]##*/}",
+        "\"${_files[*]##*/}\"",
+        "\"${_files[@]/a/b}\"",
+        "\"${_files[@]#?}\"",
+    };
+    for (cases) |expression| {
+        const content = try std.fmt.allocPrint(allocator, "pkgname=demo\npkgver=1\n_files=('a/\xc3\xa9')\nnoextract=({s})\nnoextract=(later)\narch=(any)\npackage() {{ :; }}\n", .{expression});
+        var diagnostic: ?Diagnostic = null;
+        defer if (diagnostic) |*value| value.deinit();
+        const parser = PkgbuildParser{ .allocator = allocator, .io = std.testing.io, .diagnostic = &diagnostic };
+        try std.testing.expectError(error.UnsupportedArrayExpansion, parser.parser_content(content, null));
+        try std.testing.expectEqualStrings("noextract", diagnostic.?.field);
+        try std.testing.expectEqual(@as(?usize, 4), diagnostic.?.line);
+        try std.testing.expect(std.mem.indexOf(u8, diagnostic.?.expression, expression) != null);
+    }
+}
+
+test "parser_content: array trimming preserves evaluated arrays and explicit unsets" {
+    const allocator = std.testing.allocator;
+    var overrides = std.StringHashMap([]const []const u8).init(allocator);
+    defer overrides.deinit();
+    const captured = [_][]const u8{ "dir/already-resolved", "${pkgver}", "$(printf literal)", "" };
+    try overrides.put("noextract", &captured);
+    const content =
+        \\pkgname=demo
+        \\pkgver=1
+        \\source=(https://example.org/old)
+        \\noextract=("${source[@]##*/}")
+        \\package() { :; }
+    ;
+    var parser = PkgbuildParser{ .allocator = allocator, .io = std.testing.io, .dynamic_array_overrides = &overrides };
+    var info = try parse_test_pkgbuild(parser, content, null);
+    defer info.deinit(allocator);
+    try std.testing.expectEqual(captured.len, info.no_extract.?.len);
+    for (captured, info.no_extract.?) |expected, actual| try std.testing.expectEqualStrings(expected, actual);
+    try std.testing.expect(std.mem.indexOf(u8, info.execution.?.shared_prelude, "declare -a noextract=('dir/already-resolved' '${pkgver}' '$(printf literal)' '')") != null);
+
+    var unsets = std.StringHashMap(void).init(allocator);
+    defer unsets.deinit();
+    try unsets.put("noextract", {});
+    parser.dynamic_array_unsets = &unsets;
+    var unset = try parse_test_pkgbuild(parser, content, null);
+    defer unset.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 0), unset.no_extract.?.len);
+    try std.testing.expect(std.mem.indexOf(u8, unset.execution.?.shared_prelude, "unset -- noextract") != null);
+}
+
+test "parser_content: command dependent array trimming remains deferred during analysis" {
+    const allocator = std.testing.allocator;
+    var info = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io },
+        \\pkgname=demo
+        \\pkgver=1
+        \\_files=("$(printf should-not-execute).tar.gz")
+        \\source=("${_files[@]##*/}")
+        \\noextract=("${source[@]##*/}")
+        \\sha256sums=(SKIP)
+        \\package() { :; }
+    , null);
+    defer info.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 0), info.local_source_files.?.len);
+    try std.testing.expectEqualStrings("\"${_files[@]##*/}\"", info.source.?[0]);
 }
 
 test "issue 1880 identical literal and deferred source bytes retain distinct provenance" {

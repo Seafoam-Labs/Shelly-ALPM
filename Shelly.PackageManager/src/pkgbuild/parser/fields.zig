@@ -106,7 +106,7 @@ fn resolve_scoped_scalar(
     return .{ .value = try self.allocator.dupe(u8, scoped.get(field) orelse ""), .unresolved = unresolved.contains(field) };
 }
 
-pub fn resolve_array_field(self: PkgbuildParser, content: []const u8, vars: *std.StringHashMap([]const u8), var_name: []const u8) ![][]const u8 {
+pub fn resolve_array_field(self: PkgbuildParser, content: []const u8, vars: *std.StringHashMap([]const u8), var_name: []const u8) anyerror![][]const u8 {
     if (self.dynamic_array_unsets) |unsets| if (unsets.contains(var_name))
         return self.allocator.alloc([]const u8, 0);
     if (self.dynamic_array_overrides) |overrides| if (overrides.get(var_name)) |items| {
@@ -121,6 +121,35 @@ pub fn resolve_array_field(self: PkgbuildParser, content: []const u8, vars: *std
         return cloned;
     };
     return resolve_static_array(self, content, vars, var_name);
+}
+
+fn resolve_array_values(self: PkgbuildParser, content: []const u8, vars: *std.StringHashMap([]const u8), name: []const u8, items: [][]const u8) ![][]const u8 {
+    // Dependency cleanup must never reinterpret generic array values as
+    // version constraints (for example a literal filename ending in '=').
+    for ([_][]const u8{ "depends", "makedepends", "checkdepends", "optdepends", "provides", "conflicts", "replaces" }) |field| {
+        if (std.mem.eql(u8, name, field) or
+            (name.len > field.len and std.mem.startsWith(u8, name, field) and name[field.len] == '_'))
+            return dependencies.resolve_variable_references(self, content, vars, items);
+    }
+    return dependencies.resolve_array_values(self, content, vars, items);
+}
+
+test "static array references bound nesting and expanded element count" {
+    const allocator = std.testing.allocator;
+    const parser = PkgbuildParser{ .allocator = allocator, .io = std.testing.io };
+    var vars = std.StringHashMap([]const u8).init(allocator);
+    defer vars.deinit();
+    var deep: std.Io.Writer.Allocating = .init(allocator);
+    defer deep.deinit();
+    try deep.writer.writeAll("a0=(path/value)\n");
+    for (1..35) |index| try deep.writer.print("a{d}=(\"${{a{d}[@]##*/}}\")\n", .{ index, index - 1 });
+    try std.testing.expectError(error.ArrayExpansionTooDeep, resolve_array_field(parser, deep.written(), &vars, "a34"));
+
+    var large: std.Io.Writer.Allocating = .init(allocator);
+    defer large.deinit();
+    try large.writer.writeAll("a0=(value)\n");
+    for (1..14) |index| try large.writer.print("a{d}=(\"${{a{d}[@]}}\" \"${{a{d}[@]}}\")\n", .{ index, index - 1, index - 1 });
+    try std.testing.expectError(error.ArrayExpansionTooLarge, resolve_array_field(parser, large.written(), &vars, "a13"));
 }
 
 /// Expand each array assignment against the scalar state at that assignment,
@@ -142,7 +171,20 @@ fn resolve_static_array(self: PkgbuildParser, content: []const u8, _: *std.Strin
         defer variables.free_vars(self.allocator, &vars);
         const raw = try arrays.parse_array_body_syntax(self.allocator, assignment.raw[1 .. assignment.raw.len - 1]);
         defer variables.freeStringSlice(self.allocator, raw);
-        const expanded = try dependencies.resolve_variable_references(at_assignment, content[0..assignment.offset], &vars, raw);
+        const expanded = resolve_array_values(at_assignment, content[0..assignment.offset], &vars, name, raw) catch |err| {
+            if (self.diagnostic) |destination| if (destination.* == null) {
+                destination.* = @import("diagnostic.zig").Diagnostic.init(
+                    self.allocator,
+                    content[0 .. @intFromPtr(assignment.raw.ptr) - @intFromPtr(content.ptr) + assignment.raw.len],
+                    self.pkgbuild_path,
+                    self.selected_package_name orelse vars.get("pkgname") orelse "unknown",
+                    name,
+                    null,
+                    err,
+                ) catch null;
+            };
+            return err;
+        };
         defer self.allocator.free(expanded);
         if (!assignment.append) {
             // Deferred source keys borrow these result strings.
@@ -151,6 +193,10 @@ fn resolve_static_array(self: PkgbuildParser, content: []const u8, _: *std.Strin
                 self.allocator.free(item);
             }
             result.clearRetainingCapacity();
+        }
+        if (result.items.len + expanded.len > 4096) {
+            for (expanded) |item| self.allocator.free(item);
+            return error.ArrayExpansionTooLarge;
         }
         result.appendSlice(self.allocator, expanded) catch |err| {
             for (expanded) |item| self.allocator.free(item);
@@ -293,7 +339,7 @@ pub fn resolve_package_array_field(
 
         const raw_items = try arrays.parse_array_body_syntax(self.allocator, scanned.body);
         defer variables.freeStringSlice(self.allocator, raw_items);
-        const resolved = try dependencies.resolve_variable_references(self, content, &scoped_vars, raw_items);
+        const resolved = try resolve_array_values(self, content, &scoped_vars, var_name, raw_items);
         defer self.allocator.free(resolved);
         try values.appendSlice(self.allocator, resolved);
     }
