@@ -206,7 +206,7 @@ test "ParsedDescription converts local metadata into an arena-owned package" {
     const package = try parsed.intoPackage(allocator, "local");
 
     try std.testing.expectEqualStrings("demo", package.name);
-    try std.testing.expectEqual(@as(u64, 0), package.version.epoch);
+    try std.testing.expectEqualStrings("0", package.version.epoch);
     try std.testing.expectEqualStrings("1.2.3", package.version.pkgver);
     try std.testing.expectEqualStrings("4", package.version.pkgrel.?);
     try std.testing.expectEqualStrings("glibc", package.depends[0].name);
@@ -220,4 +220,36 @@ test "ParsedDescription converts local metadata into an arena-owned package" {
     try std.testing.expectEqual(@as(u64, 4096), package.installed_size.?);
     try std.testing.expect(package.validation.sha256);
     try std.testing.expect(package.validation.pgp);
+}
+
+test "ParsedDescription retains large package and provision epochs" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var parsed: ParsedDescription = .{
+        .name = "demo",
+        .version = "18446744073709551616:1.0-1",
+    };
+    defer parsed.deinit(allocator);
+    try parsed.provides.append(allocator, "virtual=00018446744073709551617:2.0");
+    try parsed.depends.append(allocator, "runtime>=18446744073709551616:1.0");
+    const package = try parsed.intoPackage(allocator, "local");
+    try std.testing.expectEqualStrings("18446744073709551616", package.version.epoch);
+    try std.testing.expectEqualStrings("00018446744073709551617", package.provides[0].constraint.equal.epoch);
+    try std.testing.expectEqual(.greaterThan, Version.compareVersions(package.provides[0].constraint.equal, package.version));
+    try std.testing.expectEqual(.equal, Version.compareVersions(package.depends[0].constraint.greater_equal, package.version));
+}
+
+test "ParsedDescription rejects signed and underscored metadata epochs" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    for ([_][]const u8{ "+1:1.0", "1_0:1.0" }) |invalid| {
+        var parsed: ParsedDescription = .{ .name = "demo", .version = invalid };
+        defer parsed.deinit(allocator);
+        try std.testing.expectError(error.InvalidCharacter, parsed.intoPackage(allocator, "local"));
+        parsed.version = "1.0";
+        try parsed.provides.append(allocator, try std.fmt.allocPrint(allocator, "virtual={s}", .{invalid}));
+        try std.testing.expectError(error.InvalidCharacter, parsed.intoPackage(allocator, "local"));
+    }
 }

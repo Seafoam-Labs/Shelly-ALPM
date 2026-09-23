@@ -649,7 +649,7 @@ test "parseDescription covers every supported local database field" {
 
     const package = try parsed.intoPackage(allocator, "local");
     try std.testing.expectEqualStrings("demo", package.name);
-    try std.testing.expectEqual(@as(u64, 2), package.version.epoch);
+    try std.testing.expectEqualStrings("2", package.version.epoch);
     try std.testing.expectEqualStrings("1.2.3", package.version.pkgver);
     try std.testing.expectEqualStrings("4", package.version.pkgrel.?);
     try std.testing.expectEqualStrings("extra", package.installed_database.?);
@@ -673,7 +673,7 @@ test "parseDescription covers every supported local database field" {
     try std.testing.expectEqualStrings("demo-old", package.conflicts[0].name);
     try std.testing.expectEqualStrings("virtual-demo", package.provides[0].name);
     switch (package.provides[0].constraint) {
-        .equal => |version| try std.testing.expectEqual(@as(u64, 2), version.epoch),
+        .equal => |version| try std.testing.expectEqualStrings("2", version.epoch),
         else => return error.TestUnexpectedResult,
     }
     try std.testing.expectEqualStrings("old-demo", package.replaces[0].name);
@@ -694,7 +694,7 @@ test "parseDescription accepts CRLF and ignores unknown sections" {
     const package = try parsed.intoPackage(allocator, "local");
 
     try std.testing.expectEqualStrings("demo", package.name);
-    try std.testing.expectEqual(@as(u64, 0), package.version.epoch);
+    try std.testing.expectEqualStrings("0", package.version.epoch);
     try std.testing.expectEqualStrings("1.0", package.version.pkgver);
     try std.testing.expectEqualStrings("1", package.version.pkgrel.?);
 }
