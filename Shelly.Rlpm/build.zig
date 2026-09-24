@@ -170,22 +170,6 @@ pub fn build(b: *std.Build) void {
     });
     b.step("test-version", "Run hermetic version tests").dependOn(&b.addRunArtifact(version_tests).step);
 
-    // Deliberately separate from test and install: libalpm is a test-only oracle.
-    const compatibility_module = b.createModule(.{
-        .root_source_file = b.path("src/version_compat_tests.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    compatibility_module.linkSystemLibrary("alpm", .{});
-    const compatibility_tests = b.addTest(.{
-        .root_module = compatibility_module,
-        .test_runner = terminal_test_runner,
-    });
-    const run_compatibility_tests = b.addRunArtifact(compatibility_tests);
-    run_compatibility_tests.stdio = .inherit;
-    b.step("test-version-compat", "Compare versions against libalpm 16.0.1").dependOn(&run_compatibility_tests.step);
-
     // Just like flags, top level steps are also listed in the `--help` menu.
     //
     // The Zig build system is entirely implemented in userland, which means

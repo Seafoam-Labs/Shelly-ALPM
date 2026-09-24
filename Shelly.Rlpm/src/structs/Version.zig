@@ -379,8 +379,67 @@ test "Version metadata validation remains separate from comparison" {
     }
 }
 
-test "Version matches frozen libalpm comparison fixtures" {
-    for (@import("fixtures/version_comparisons.zig").cases) |case| {
+test "Version comparison matches libalpm expected results" {
+    // Expected signs recorded from libalpm 16.0.1 (CachyOS pacman
+    // 7.1.0.r9.g54d9411-4). See version-compatibility.md for provenance.
+    // These are fixed expectations: this test does not call or link libalpm.
+    const cases = [_]struct { left: []const u8, right: []const u8, expected: i8 }{
+        .{ .left = "18446744073709551616:1.0", .right = "18446744073709551615:1.0", .expected = 1 },
+        .{ .left = "alpha:1.0", .right = "alpha.1.0", .expected = 0 },
+        .{ .left = "+1:1.0", .right = "1:1.0", .expected = -1 },
+        .{ .left = "1_0:1.0", .right = "10:1.0", .expected = -1 },
+        .{ .left = ":1.0", .right = "1.0", .expected = 0 },
+        .{ .left = "1.0-", .right = "1.0", .expected = 0 },
+        .{ .left = "", .right = "1.0", .expected = -1 },
+        .{ .left = "1.0:", .right = "1.0", .expected = 1 },
+        .{ .left = "", .right = "", .expected = 0 },
+        .{ .left = "", .right = "a", .expected = 1 },
+        .{ .left = "", .right = ".", .expected = -1 },
+        .{ .left = ":", .right = "", .expected = 0 },
+        .{ .left = "1:", .right = "1:0", .expected = -1 },
+        .{ .left = "1:-", .right = "1:", .expected = 0 },
+        .{ .left = "-", .right = "", .expected = 0 },
+        .{ .left = "--", .right = "-", .expected = 1 },
+        .{ .left = "1.0-", .right = "1.0-0", .expected = -1 },
+        .{ .left = "1.0-", .right = "1.0-a", .expected = 1 },
+        .{ .left = "1.0", .right = "1.0-1", .expected = 0 },
+        .{ .left = "1.0", .right = "1.0-2", .expected = 0 },
+        .{ .left = "1.0-1", .right = "1.0-2", .expected = -1 },
+        .{ .left = "000:1.0", .right = "1.0", .expected = 0 },
+        .{ .left = "000000000000000000000000000001:1.0", .right = "1:1.0", .expected = 0 },
+        .{ .left = "99999999999999999999999999999999999999999999999999:0", .right = "2:999", .expected = 1 },
+        .{ .left = "00018446744073709551616:1", .right = "18446744073709551616:1", .expected = 0 },
+        .{ .left = "1.0000000000000000000000000000000000000001", .right = "1.1", .expected = 0 },
+        .{ .left = "1.A", .right = "1.a", .expected = -1 },
+        .{ .left = "1.rc1", .right = "1", .expected = 1 },
+        .{ .left = "1~rc1", .right = "1", .expected = 1 },
+        .{ .left = "1+git", .right = "1.git", .expected = 0 },
+        .{ .left = "1..0", .right = "1.0", .expected = 1 },
+        .{ .left = "1...", .right = "1.", .expected = 0 },
+        .{ .left = "1.", .right = "1", .expected = 1 },
+        .{ .left = "1..a", .right = "1.a", .expected = 1 },
+        .{ .left = "1a", .right = "1", .expected = -1 },
+        .{ .left = "1", .right = "1a", .expected = 1 },
+        .{ .left = "1a", .right = "1.0", .expected = -1 },
+        .{ .left = "1a1", .right = "1a2", .expected = -1 },
+        .{ .left = "1aa", .right = "1a", .expected = 1 },
+        .{ .left = "1-2-3", .right = "1-2-4", .expected = -1 },
+        .{ .left = "1:2:3-4", .right = "1:2.3-4", .expected = 0 },
+        .{ .left = "a:2-3", .right = "a.2-3", .expected = 0 },
+        .{ .left = "1::", .right = "1:", .expected = 1 },
+        .{ .left = "01:", .right = "1:", .expected = 0 },
+        .{ .left = "001", .right = "1", .expected = 0 },
+        .{ .left = "0", .right = "00", .expected = 0 },
+        .{ .left = "1-00000000000000000000000000000000002", .right = "1-1", .expected = 1 },
+        .{ .left = " 1", .right = "1", .expected = 1 },
+        .{ .left = "1\t2", .right = "1.2", .expected = 0 },
+        .{ .left = "1\n2", .right = "1.2", .expected = 0 },
+        .{ .left = "1/2", .right = "1.2", .expected = 0 },
+        .{ .left = "1=2", .right = "1.2", .expected = 0 },
+        .{ .left = "1:2-3-", .right = "1:2-3", .expected = 1 },
+        .{ .left = "0:", .right = "", .expected = 0 },
+    };
+    for (cases) |case| {
         try std.testing.expectEqual(case.expected, @intFromEnum(compareStrings(case.left, case.right)));
         try std.testing.expectEqual(-case.expected, @intFromEnum(compareStrings(case.right, case.left)));
         try std.testing.expectEqual(.equal, compareStrings(case.left, case.left));

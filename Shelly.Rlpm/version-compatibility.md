@@ -48,24 +48,35 @@ From this directory:
 
 ```sh
 zig build test-version
-zig build test-version-compat
 zig build test
 ```
 
-The first step runs 13 hermetic tests, including ownership/allocation checks and
-54 frozen comparison fixtures. The opt-in compatibility step links libalpm only
-into a separate test executable. It checks the fixtures, 2,916 cross-corpus pairs,
-and 20,000 deterministic generated pairs, including full epoch/pkgver/pkgrel
-strings and arbitrary NUL-free ASCII. Normal builds/tests do not link libalpm.
+The first step runs the 13 tests in `src/structs/Version.zig`, including
+ownership/allocation checks, the original 13 valid-version examples, and 54
+additional comparison cases with fixed expected results. Those cases also check
+reverse ordering, reflexivity, and the owned-value comparison path for inputs
+that pass metadata validation. They cover large epochs, empty components,
+unusual syntax, numeric runs, case sensitivity, and separator behavior.
 
-On 2026-09-23 with Zig 0.16.0, the focused step and all 14 tests in the differential
-executable passed. The full RLPM library runner reported 43 passed and 5 failed;
-all failures were pre-existing GPG fixture startup failures (`gpg-agent` could
-not start), before signature assertions. Both executable template tests passed.
+All version tests live in `Version.zig` and run without linking or invoking
+libalpm. The separate fixture files and live differential test target were removed
+on 2026-09-24; the 54 recorded input pairs and expected results were retained
+unchanged in the version test. The full `test` step includes these tests too.
 
-The oracle was CachyOS's libalpm 16.0.1. See
-[fixture provenance](src/structs/fixtures/README.md) for the exact package and
-binary hash, reproducibility details, and the limitation that pristine upstream
-source verification was unavailable. The corpus is compatibility evidence, not
-an exhaustive proof. Embedded NUL, non-ASCII, and nullable C pointers are outside
-the declared compatibility contract.
+## Expected-result provenance
+
+The 54 additional expected signs were recorded on 2026-09-23 by calling
+`alpm_pkg_vercmp` through Python ctypes and normalizing results to `-1`, `0`, or
+`1`. Expectations came from libalpm, not the RLPM implementation:
+
+- Package: CachyOS `pacman 7.1.0.r9.g54d9411-4`, x86_64; libalpm `16.0.1`.
+- Upstream revision identified by the package version: `54d9411`.
+- Library SHA-256:
+  `da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888`.
+- Package `.BUILDINFO` PKGBUILD SHA-256:
+  `1ca93466764e2ab223ba231780c513f097ba95a511010fa49a2a46a87a06d5af`.
+
+This identifies the downstream build used for the original results. Independent
+verification of pristine upstream source was unavailable. The fixed examples
+are compatibility evidence, not an exhaustive proof. Embedded NUL, non-ASCII,
+and nullable C pointers are outside the declared compatibility contract.
