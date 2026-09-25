@@ -20,16 +20,37 @@ const FileIdentity = struct {
     birth_nanoseconds: u32,
 };
 
+const DeviceNode = struct {
+    kind: enum { character, block },
+    major: u32,
+    minor: u32,
+
+    fn parse(specification: []const u8) !DeviceNode {
+        var fields = std.mem.splitScalar(u8, specification, ':');
+        const kind = fields.next() orelse return error.InvalidVirtualOwnershipJournal;
+        const major = fields.next() orelse return error.InvalidVirtualOwnershipJournal;
+        const minor = fields.next() orelse return error.InvalidVirtualOwnershipJournal;
+        if (fields.next() != null) return error.InvalidVirtualOwnershipJournal;
+        return .{
+            .kind = if (std.mem.eql(u8, kind, "c")) .character else if (std.mem.eql(u8, kind, "b")) .block else return error.InvalidVirtualOwnershipJournal,
+            .major = std.fmt.parseUnsigned(u32, major, 10) catch return error.InvalidVirtualOwnershipJournal,
+            .minor = std.fmt.parseUnsigned(u32, minor, 10) catch return error.InvalidVirtualOwnershipJournal,
+        };
+    }
+};
+
 pub const Tracker = struct {
     allocator: std.mem.Allocator,
     by_identity: std.AutoHashMap(FileIdentity, archive.VirtualOwnership),
+    devices: std.AutoHashMap(FileIdentity, DeviceNode),
 
     pub fn init(allocator: std.mem.Allocator) Tracker {
-        return .{ .allocator = allocator, .by_identity = .init(allocator) };
+        return .{ .allocator = allocator, .by_identity = .init(allocator), .devices = .init(allocator) };
     }
 
     pub fn deinit(self: *Tracker) void {
         self.by_identity.deinit();
+        self.devices.deinit();
         self.* = undefined;
     }
 
@@ -80,6 +101,10 @@ pub const Tracker = struct {
             const specification = try nextField(contents, &offset);
             const target_path = try nextField(contents, &offset);
             try validateTargetPath(canonical_package_root, target_path);
+            if (std.mem.eql(u8, operation, "N")) {
+                try tracker.devices.put(identity, try DeviceNode.parse(specification));
+                continue;
+            }
             const current = tracker.by_identity.get(identity) orelse archive.VirtualOwnership{};
             const updated = if (std.mem.eql(u8, operation, "C"))
                 try applyChownSpecification(current, specification, passwd, group)
@@ -94,6 +119,22 @@ pub const Tracker = struct {
         }
         if (!terminated) return error.InvalidVirtualOwnershipJournal;
         return tracker;
+    }
+
+    /// A surviving placeholder inode, including a renamed or hard-linked one,
+    /// must never be archived as a regular file.
+    pub fn retainedDevicePath(self: *const Tracker, io: std.Io, package_root: []const u8) !?[]u8 {
+        if (self.devices.count() == 0) return null;
+        var directory = try std.Io.Dir.cwd().openDir(io, package_root, .{ .iterate = true });
+        defer directory.close(io);
+        var walker = try directory.walk(self.allocator);
+        defer walker.deinit();
+        while (try walker.next(io)) |entry| {
+            const identity = try fileIdentityAt(self.allocator, entry.dir, entry.basename);
+            if (self.devices.contains(identity))
+                return try std.fs.path.join(self.allocator, &.{ package_root, entry.path });
+        }
+        return null;
     }
 
     pub fn buildMetadata(

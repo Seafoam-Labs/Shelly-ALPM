@@ -4,7 +4,7 @@
 fresh, operation-scoped Arch root through `systemd-nspawn`.
 
 The stable JSON schemas, capability probe, and exit behavior for unattended
-callers are defined by the [Remora automation contract](remora-automation.md).
+callers are available via `shelly --version --json` before scheduling a build.
 
 The elevated process is a coordinator only. It reviews the host PKGBUILD and
 local inputs, materializes only those byte-exact reviewed inputs in the guest,
@@ -14,6 +14,16 @@ copies the host pacman trust database into the operation root, and keeps its
 database, cache, and log under that root. PKGBUILD lifecycle functions run as
 the fixed unprivileged `shelly-build` guest account. Private UID mapping is
 required, and the command fails closed when systemd cannot provide it.
+
+Provisioning reads hooks only from the guest's `/usr/share/libalpm/hooks` and
+`/etc/pacman.d/hooks`, replacing host defaults and configured `HookDir` entries.
+libalpm discovers newly installed hooks after the initial transaction and runs
+their matching post-transaction actions inside the root. This initializes tools
+such as TeX Live, including its filename databases, formats, and font maps.
+Package setup errors stop provisioning even when libalpm considers the package
+transaction committed. Hook names and output are streamed into the operation
+log before root cleanup. The baseline finalizers remain as idempotent checks
+for required linker, account, directory, and certificate setup.
 
 The container does not bind the host checkout, home directory, package
 database, configuration directories, or runtime sockets. Its merged
@@ -72,6 +82,16 @@ repositories again using the configured signature policy. Local repository
 servers must be readable by the invoking user during review. A built archive
 must be published in a configured repository's database to be resolved here.
 
+Build dependency planning uses the PKGBUILD's global `depends`, `makedepends`,
+and (unless checks are disabled) `checkdepends`, including the active
+architecture's arrays. Dependencies assigned inside `package()` or
+`package_<name>()` describe the resulting package and do not add provisioning
+targets. This follows makepkg's dependency rules and lets conflicting split
+outputs such as PipeWire's JACK implementations be built together. Their
+runtime dependencies and `provides` remain in the package metadata. An output
+that is also explicitly required as a global build input must still be
+installed before the build; its future artifact does not satisfy that input.
+
 Current limitations are deliberately fail-closed:
 
 - `--sign` is rejected because private signing keys are never copied or mounted
@@ -87,8 +107,34 @@ Current limitations are deliberately fail-closed:
   before publication, and atomically renamed; the root coordinator will not
   create an arbitrary host destination from elevated configuration.
 
+`--install` installs the exported archives after export, in the root
+coordinator, through the ordinary host install flow: same transaction rules and
+confirmation behavior as `shelly install standard <package>`. The guest never
+installs into the host and the flag is stripped from the guest arguments.
+
 The nspawn backend invokes Shelly's native builder. It does not invoke or
 construct a command for `makepkg`, `makechrootpkg`, or `arch-nspawn`.
+
+During each package function, Shelly prepends a private directory of `chown`,
+`chgrp`, `install`, and `mknod` wrappers to the build PATH. External helpers
+launched by Meson, make, or `/bin/sh` inherit these commands and share the
+package's inode-based ownership journal. Journal writes are locked across
+processes; wrapper files and journals are removed when the step ends, including
+failure and cancellation. Each split-package member has its own state.
+
+The `mknod` wrapper supports temporary character and block device requests
+inside `$pkgdir`, with decimal device numbers and optional octal permissions.
+It creates ordinary placeholders, never real devices. This supports helpers
+such as FUSE's installer when the recipe subsequently removes its staged
+`/dev` directory. Placeholders support existence checks and removal, but do
+not emulate device I/O or device-type queries such as `test -c`. A surviving
+placeholder, including a renamed or hard-linked one, is rejected before
+package assembly instead of being silently shipped as a regular file.
+
+This emulation covers commands resolved through PATH. Absolute command paths,
+helpers that replace PATH, and programs making ownership or device syscalls
+directly are outside its scope. Lifecycle functions continue to run without
+root privileges.
 
 The optional PKGBUILD path is resolved from the current directory. For a
 development binary run from `Shelly.Cli.Zig/zig-out/bin`, build this repository
@@ -135,6 +181,30 @@ UID/GID 1000, root-owned traversal-directory and executable permissions,
 configuration readability and destinations, and build-directory ownership.
 A host supervisor checks the operation's `0700` boundary before allowing the
 guest to finish, then verifies operation-root cleanup.
+
+Bootstrap configuration and diagnostic tests run without elevation:
+
+```sh
+(cd Shelly.PackageManager && zig build bootstrap-test bootstrap-hook-test)
+```
+
+The hook test uses an unprivileged user/mount/PID namespace and a temporary
+package root. It installs hooks in the same transaction as their executable,
+checks their execution order, excludes host hooks, and detects post-transaction
+failures even when libalpm reports a successful commit. User namespaces must be
+enabled on the test system.
+
+To test the documentation toolchain in a real nspawn build, run from a normal
+user session with sudo authentication available:
+
+```sh
+Shelly.Cli.Zig/scripts/test-isolated-docs.sh
+```
+
+This installs `asciidoc` and `dblatex` only in the disposable root, checks TeX's
+generated format and font map, and packages a PDF built by the unprivileged
+guest. Set `SHELLY_BIN` to test an existing CLI. On failure, the fixture and
+verbose build output remain in the printed temporary directory for diagnosis.
 
 Each case also reviews a group-writable (`0660`) local source, passes the
 returned digest through `--review-digest`, checks the staged input in the guest,

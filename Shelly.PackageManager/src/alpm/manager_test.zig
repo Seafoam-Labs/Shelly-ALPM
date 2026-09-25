@@ -2987,6 +2987,66 @@ test "dependency query APIs resolve exact, versioned, and virtual remote package
     try testing.expectError(error.PkgNotFound, mgr.find_remote_satisfier_for_dependency_details("missing-feature"));
 }
 
+test "dependency query misses do not emit failures but real errors and cancellation survive" {
+    const Capture = struct {
+        failures: usize = 0,
+        failed: usize = 0,
+        cancelled: usize = 0,
+
+        fn event(data: ?*anyopaque, value: operations.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (value) {
+                .failure => self.failures += 1,
+                .completed => |completed| switch (completed.status) {
+                    .failed => self.failed += 1,
+                    .cancelled => self.cancelled += 1,
+                    else => {},
+                },
+                else => {},
+            }
+        }
+    };
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.createSyncDatabase(allocator);
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+
+    var context = operations.OperationContext.init(allocator, io);
+    defer context.deinit();
+    var capture: Capture = .{};
+    const subscription = try context.subscribe(.{ .function = Capture.event, .data = &capture });
+    defer _ = context.unsubscribe(subscription);
+    mgr.setOperationContext(&context);
+    defer mgr.setOperationContext(null);
+
+    for ([_][:0]const u8{ "shelly-git=3.1.4-1", "remote-provider>=999" }) |dependency| {
+        try testing.expectError(error.PkgNotFound, mgr.find_remote_satisfier_for_dependency(dependency));
+        try testing.expectError(error.PkgNotFound, mgr.find_remote_satisfier_for_dependency_details(dependency));
+    }
+    try testing.expectEqual(@as(usize, 0), capture.failures);
+    try testing.expectEqual(@as(usize, 0), capture.failed);
+
+    // The manager allocator is used for the query's temporary package name;
+    // event delivery retains its own allocator so the failure stays observable.
+    {
+        var failing = testing.FailingAllocator.init(allocator, .{ .fail_index = 0 });
+        mgr.allocator = failing.allocator();
+        defer mgr.allocator = allocator;
+        try testing.expectError(error.OutOfMemory, mgr.find_remote_satisfier_for_dependency("remote-provider"));
+    }
+    try testing.expectEqual(@as(usize, 1), capture.failures);
+    try testing.expectEqual(@as(usize, 2), capture.failed);
+
+    context.cancel();
+    try testing.expectError(error.Cancelled, mgr.find_remote_satisfier_for_dependency("remote-provider"));
+    try testing.expectError(error.Cancelled, mgr.find_remote_satisfier_for_dependency_details("remote-provider"));
+    try testing.expectEqual(@as(usize, 2), capture.cancelled);
+    try testing.expectEqual(@as(usize, 1), capture.failures);
+}
+
 test "installed dependency query distinguishes satisfied and missing dependencies" {
     const allocator = testing.allocator;
 

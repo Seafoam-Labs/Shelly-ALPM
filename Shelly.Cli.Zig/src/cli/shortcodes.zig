@@ -718,6 +718,23 @@ test "bare action codes and alias type codes resolve from catalog data" {
     try expectTranslation(allocator, &manifest, &.{ "-LF", "flathub" }, &.{ "list", "flatpak", "flathub" });
 }
 
+test "standalone build shortcodes compose sync deps with the install alias" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const manifest = try spec.Manifest.load(allocator);
+
+    try expectTranslation(allocator, &manifest, &.{ "-Al", "PKGBUILD" }, &.{ "build", "-l", "PKGBUILD" });
+    try expectTranslation(
+        allocator,
+        &manifest,
+        &.{ "-Asl", "PKGBUILD" },
+        &.{ "build", "-s", "-l", "PKGBUILD" },
+    );
+    // `i` stays isolated: the build action code must not alias install.
+    try expectTranslation(allocator, &manifest, &.{ "-Ai", "PKGBUILD" }, &.{ "build", "-i", "PKGBUILD" });
+}
+
 test "passes ordinary long form and unrelated options through unchanged" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

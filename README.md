@@ -38,7 +38,7 @@ paru -S shelly
 
 ## Uninstall
 
-#### For standard package removal
+### For standard package removal
 
 ```bash
 sudo pacman -Rns shelly
@@ -173,7 +173,7 @@ Upcoming features and development targets:
 - **vala** (for building)
 - **libalpm** (provided by `pacman`)
 
-#### Optional Prerequisites
+### Optional Prerequisites
 
 - **Flatpak support**: Install both `flatpak` and
   `shelly-flatpak-backend`. The backend is loaded only for a Flatpak operation.
@@ -256,9 +256,22 @@ This also applies to local Arch package archives. URL archives are downloaded
 before their package metadata can be checked. Without `--needed`, reinstall
 behavior is unchanged; AUR builds and Shelly binary archives are unaffected.
 
-The versioned JSON contracts used by unattended package-building services are
-documented in [Remora automation contract](docs/remora-automation.md). Probe an
-installed binary with `shelly --version --json` before scheduling a build.
+Build a PKGBUILD and install the resulting packages in one command, including
+any missing build dependencies:
+
+```bash
+shelly build -s -l
+```
+
+This mirrors `makepkg -si`. Administrator credentials are requested once, up
+front: the build itself runs as your regular user, and the elevated
+coordinator installs the built archives after the build completes. Like
+`makepkg -i`, the install transaction adds only the built archives, so
+combine it with `--sync-deps` when the package's dependencies may be missing.
+
+Versioned JSON contracts for unattended package-building services are
+available. Probe an installed binary with `shelly --version --json` before
+scheduling a build.
 
 Generate makepkg-compatible SRCINFO from a reviewed PKGBUILD without running
 its build lifecycle:

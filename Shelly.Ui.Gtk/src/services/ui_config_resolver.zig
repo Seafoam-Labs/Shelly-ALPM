@@ -8,6 +8,10 @@ const xdg_paths = @import("xdg_paths.zig").xdg_paths;
 
 pub const settings_path = "shelly/settings.json";
 
+const corrupt_settings_path = settings_path ++ ".corrupt";
+
+const kept_corrupt_note: []const u8 = " A copy was kept as " ++ corrupt_settings_path ++ ".";
+
 const max_settings_size: Io.Limit = .limited(1 << 20);
 
 pub const ConfigError = error{
@@ -79,7 +83,50 @@ pub const ConfigResolver = struct {
         };
         defer self.allocator.free(data);
 
-        self.parsed = try self.parseJsonIntoConfig(data);
+        self.parsed = self.parseJsonIntoConfig(data) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            else => {
+                self.recoverFromUnreadableSettings(err);
+                self.parsed = try self.parseJsonIntoConfig("{}");
+                return;
+            },
+        };
+    }
+
+    /// An unreadable file is replaced by the defaults, and kept aside first when
+    /// possible, so a truncated or hand-edited file cannot leave the UI without
+    /// a config on every start. A repair that cannot be written is only reported,
+    /// because the defaults already in memory are enough to serve the session.
+    fn recoverFromUnreadableSettings(self: *ConfigResolver, json_error: anyerror) void {
+        var kept_copy = true;
+        self.config_dir.rename(
+            settings_path,
+            self.config_dir,
+            corrupt_settings_path,
+            self.io,
+        ) catch |err| {
+            kept_copy = false;
+            std.log.warn("Could not keep a copy of the unreadable settings file. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+        };
+
+        var repaired = true;
+        self.saveDefault(settings_path) catch |err| {
+            repaired = false;
+            std.log.warn("Could not write the default settings file. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+        };
+
+        const outcome: []const u8 = if (repaired)
+            "the settings were reset to their defaults"
+        else
+            "the defaults apply to this session only";
+        std.log.warn(
+            "The settings file was not readable as JSON, so {0s}.{1s}\n\nTechnical details: {2s}",
+            .{
+                outcome,
+                if (kept_copy) kept_corrupt_note else "",
+                @errorName(json_error),
+            },
+        );
     }
 
     fn parseJsonIntoConfig(self: *ConfigResolver, json: []const u8) !std.json.Parsed(ShellyConfig) {
@@ -109,20 +156,28 @@ pub const ConfigResolver = struct {
 
     pub fn save(self: *ConfigResolver) !void {
         if (self.parsed == null) return ConfigError.NotLoaded;
+        try self.writeJson(settings_path, self.parsed.?.value);
+    }
 
-        const dir_name = std.fs.path.dirname(settings_path).?;
-        var sub_dir = try self.config_dir.createDirPathOpen(self.io, dir_name, .{});
-        defer sub_dir.close(self.io);
-
-        const file = try sub_dir.createFile(self.io, std.fs.path.basename(settings_path), .{});
-        defer file.close(self.io);
+    /// Stages the payload in a sibling file and renames it into place, so an
+    /// interrupted write can never leave the settings file empty or half
+    /// written. The sync is what keeps a power loss from committing an empty
+    /// rename over the previous contents.
+    fn writeJson(self: *ConfigResolver, path: []const u8, value: anytype) !void {
+        var staged = try self.config_dir.createFileAtomic(self.io, path, .{
+            .make_path = true,
+            .replace = true,
+        });
+        defer staged.deinit(self.io);
 
         var buf: [4096]u8 = undefined;
-        var fw = file.writer(self.io, &buf);
+        var fw = staged.file.writer(self.io, &buf);
         try fw.interface.print("{f}", .{
-            std.json.fmt(self.parsed.?.value, .{ .whitespace = .indent_2 }),
+            std.json.fmt(value, .{ .whitespace = .indent_2 }),
         });
         try fw.flush();
+        try staged.file.sync(self.io);
+        try staged.replace(self.io);
     }
 
     pub fn get(self: *ConfigResolver) !*ShellyConfig {
@@ -159,21 +214,7 @@ pub const ConfigResolver = struct {
     }
 
     fn saveDefault(self: *ConfigResolver, path: []const u8) !void {
-        const dir_name = std.fs.path.dirname(path).?;
-        var sub_dir = try self.config_dir.createDirPathOpen(self.io, dir_name, .{});
-        defer sub_dir.close(self.io);
-
-        const file = try sub_dir.createFile(self.io, std.fs.path.basename(path), .{});
-        defer file.close(self.io);
-
-        var buf: [4096]u8 = undefined;
-        var fw = file.writer(self.io, &buf);
-        try std.json.Stringify.value(
-            ShellyConfig{},
-            .{ .whitespace = .indent_2 },
-            &fw.interface,
-        );
-        try fw.flush();
+        try self.writeJson(path, ShellyConfig{});
     }
 };
 
@@ -276,6 +317,26 @@ const testing = std.testing;
 
 fn makeService(tmp: *std.testing.TmpDir) ConfigResolver {
     return ConfigResolver.initDir(testing.allocator, testing.io, tmp.dir);
+}
+
+fn seedSettings(tmp: *std.testing.TmpDir, contents: []const u8) !void {
+    var sub_dir = tmp.dir.createDirPathOpen(testing.io, "shelly", .{}) catch |err| switch (err) {
+        error.PathAlreadyExists => try tmp.dir.openDir(testing.io, "shelly", .{}),
+        else => return err,
+    };
+    defer sub_dir.close(testing.io);
+
+    const file = try sub_dir.createFile(testing.io, "settings.json", .{ .truncate = true });
+    defer file.close(testing.io);
+
+    var buf: [256]u8 = undefined;
+    var fw = file.writer(testing.io, &buf);
+    try fw.interface.writeAll(contents);
+    try fw.flush();
+}
+
+fn readSeedFile(tmp: *std.testing.TmpDir, path: []const u8) ![]u8 {
+    return tmp.dir.readFileAlloc(testing.io, path, testing.allocator, max_settings_size);
 }
 
 test "get before load returns NotLoaded" {
@@ -465,25 +526,111 @@ test "ignores unknown fields when loading" {
     try testing.expectEqual(false, cfg.NewInstall);
 }
 
-test "load propagates errors for malformed JSON" {
+test "load falls back to defaults for malformed JSON" {
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    {
-        var sub_dir = try tmp.dir.createDirPathOpen(testing.io, "shelly", .{});
-        defer sub_dir.close(testing.io);
-        const file = try sub_dir.createFile(testing.io, "settings.json", .{});
-        defer file.close(testing.io);
-        var buf: [128]u8 = undefined;
-        var fw = file.writer(testing.io, &buf);
-        try fw.interface.writeAll("{not valid json}");
-        try fw.flush();
-    }
+    try seedSettings(&tmp, "{not valid json}");
 
     var svc = makeService(&tmp);
     defer svc.deinit();
+    try svc.load();
 
-    try testing.expectError(error.SyntaxError, svc.load());
+    const defaults: ShellyConfig = .{};
+    const cfg = try svc.get();
+    try testing.expectEqual(defaults.AurEnabled, cfg.AurEnabled);
+    try testing.expectEqual(defaults.TrayCheckIntervalHours, cfg.TrayCheckIntervalHours);
+
+    // The unreadable copy is kept so the user can recover their settings.
+    const kept = try readSeedFile(&tmp, corrupt_settings_path);
+    defer testing.allocator.free(kept);
+    try testing.expectEqualStrings("{not valid json}", kept);
+}
+
+test "load falls back to defaults for an empty settings file" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedSettings(&tmp, "");
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const defaults: ShellyConfig = .{};
+    const cfg = try svc.get();
+    try testing.expectEqual(defaults.AurEnabled, cfg.AurEnabled);
+    try testing.expectEqual(defaults.NewInstall, cfg.NewInstall);
+    try testing.expectEqual(defaults.TrayCheckIntervalHours, cfg.TrayCheckIntervalHours);
+
+    // The empty file is replaced by a readable one, so the next start works.
+    const rewritten = try readSeedFile(&tmp, settings_path);
+    defer testing.allocator.free(rewritten);
+    try testing.expect(std.mem.indexOf(u8, rewritten, "\"NewInstall\"") != null);
+}
+
+test "load falls back to defaults for a truncated settings file" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedSettings(&tmp, "{\"AurEnabled\":true,\"TrayCheck");
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const defaults: ShellyConfig = .{};
+    const cfg = try svc.get();
+    try testing.expectEqual(defaults.TrayCheckIntervalHours, cfg.TrayCheckIntervalHours);
+
+    const kept = try readSeedFile(&tmp, corrupt_settings_path);
+    defer testing.allocator.free(kept);
+    try testing.expectEqualStrings("{\"AurEnabled\":true,\"TrayCheck", kept);
+}
+
+test "save leaves no staging files beside the settings file" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const cfg = try svc.get();
+    cfg.AurEnabled = true;
+    try svc.save();
+
+    var sub_dir = try tmp.dir.openDir(testing.io, "shelly", .{ .iterate = true });
+    defer sub_dir.close(testing.io);
+
+    var saw_settings = false;
+    var others: usize = 0;
+    var it = sub_dir.iterate();
+    while (try it.next(testing.io)) |entry| {
+        if (std.mem.eql(u8, entry.name, "settings.json")) {
+            saw_settings = true;
+        } else {
+            others += 1;
+        }
+    }
+    try testing.expect(saw_settings);
+    try testing.expectEqual(@as(usize, 0), others);
+}
+
+test "save recreates the settings directory when it is missing" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+    try tmp.dir.deleteTree(testing.io, "shelly");
+
+    try svc.save();
+
+    const written = try readSeedFile(&tmp, settings_path);
+    defer testing.allocator.free(written);
+    try testing.expect(std.mem.indexOf(u8, written, "\"NewInstall\"") != null);
 }
 
 test "load uses defaults for fields with wrong types" {

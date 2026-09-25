@@ -44,6 +44,7 @@ pub const ScriptletArgs = struct {
 };
 
 pub const HookArgs = struct {
+    name: ?[]const u8 = null,
     description: ?[]const u8,
     position: c_ulong,
     total: c_ulong,

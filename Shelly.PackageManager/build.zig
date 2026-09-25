@@ -239,6 +239,37 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
 
+    const bootstrap_tests = b.addTest(.{
+        .root_module = mod,
+        .filters = &.{ "bootstrap", "provisioning", "root finalizer" },
+    });
+    const bootstrap_step = b.step("bootstrap-test", "Test isolated root configuration and diagnostics");
+    bootstrap_step.dependOn(&b.addRunArtifact(bootstrap_tests).step);
+
+    const hook_helper = b.addExecutable(.{
+        .name = "bootstrap-hook-helper",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/alpm/bootstrap_hook_helper.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    const hook_fixture = b.addOptions();
+    hook_fixture.addOptionPath("helper", hook_helper.getEmittedBin());
+    const hook_test_module = b.createModule(.{
+        .root_source_file = b.path("src/alpm/bootstrap_hook_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    hook_test_module.addImport("Zigalpm", mod);
+    hook_test_module.addOptions("hook_fixture", hook_fixture);
+    const hook_tests = b.addTest(.{ .root_module = hook_test_module });
+    const run_hook_tests = b.addSystemCommand(&.{ "unshare", "--user", "--map-root-user", "--mount", "--pid", "--fork" });
+    run_hook_tests.addArtifactArg(hook_tests);
+    run_hook_tests.has_side_effects = true;
+    const hook_step = b.step("bootstrap-hook-test", "Test real guest hooks in a disposable user namespace (no host root)");
+    hook_step.dependOn(&run_hook_tests.step);
+
     const account_tests = b.addTest(.{
         .name = "user-account-test",
         .root_module = mod,
@@ -480,6 +511,7 @@ pub fn build(b: *std.Build) void {
             "remove_repository is a no-op for unknown repositories",
             "Manager hold APIs mutate HoldPkg while retaining shelly",
             "dependency query APIs resolve exact, versioned, and virtual remote packages",
+            "dependency query misses do not emit failures but real errors and cancellation survive",
             "install_packages predownloads prepared repository packages before commit",
             "install_packages exposes its prepared plan and decline prevents downloads",
             "install_packages needed",
@@ -719,9 +751,14 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder rejects an explicitly selected disabled dynamic member",
             "PackageBuilder requires supplemental review for a dynamically discovered local source",
             "PackageBuilder rejects a legacy unwritable package tree",
-            "PackageBuilder cannot perform privileged package filesystem operations",
+            "PackageBuilder rejects retained temporary device nodes",
+            "PackageBuilder external helpers preserve ownership and temporary devices",
+            "PackageBuilder parallel external helpers serialize metadata",
+            "PackageBuilder rejects unsafe external device operations",
             "PackageBuilder simulates root ownership without host chown",
             "PackageBuilder preserves non-root virtual ownership and special modes",
+            "PackageBuilder install option clusters preserve virtual ownership",
+            "PackageBuilder install rejects unsupported and malformed ownership options",
             "PackageBuilder virtual ownership follows identities and recursive snapshots",
             "virtual ownership identities distinguish reused inode numbers",
             "PackageBuilder isolates virtual ownership between split members",
@@ -757,6 +794,8 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder extracts source archives into srcdir",
             "PackageBuilder standalone",
             "PackageBuilder detects source archives by content including zip and tar zstd",
+            "PackageBuilder preserves literal backslashes in GStreamer source archive filenames",
+            "PackageBuilder rejects source archive traversal even alongside literal backslashes",
             "PackageBuilder extracts an extensionless source over its matching archive root",
             "PackageBuilder rejects an archive root colliding with another staged source",
             "PackageBuilder preserves source archive modification timestamps",
@@ -824,6 +863,15 @@ pub fn build(b: *std.Build) void {
     const run_source_compression_tests = b.addRunArtifact(source_compression_tests);
     aur_test_step.dependOn(&run_source_compression_tests.step);
     test_step.dependOn(&run_source_compression_tests.step);
+    const source_archive_tests = b.addTest(.{
+        .name = "source-archive-test",
+        .root_module = archive_mod,
+        .filters = &.{"archive reader"},
+    });
+    const run_source_archive_tests = b.addRunArtifact(source_archive_tests);
+    b.step("source-archive-test", "Run source archive reader regressions").dependOn(&run_source_archive_tests.step);
+    builder_test_step.dependOn(&run_source_archive_tests.step);
+    test_step.dependOn(&run_source_archive_tests.step);
 
     const appimage_tests = b.addTest(.{
         .name = "appimage-test",
@@ -834,8 +882,10 @@ pub fn build(b: *std.Build) void {
             "configureEnvironment",
             "AppImage dispatcher forwards typed status and download progress",
             "AppImage classification is case insensitive and extension based",
+            "AppImage desktop discovery skips files that only borrow the desktop extension",
+            "AppImage desktop entry detection requires a leading Desktop Entry group",
+            "AppImage icon discovery matches the Icon name and prefers the best shipped source",
             "AppImage metadata discovery rejects symlinks outside the extraction root",
-            "test isAppImage",
             "get_update returns optional owned results for configured providers",
             "providerUpdateOrWarn",
             "get_updates returns an owned update list",

@@ -58,11 +58,11 @@ sourcing the reviewed PKGBUILD in the build sandbox.
 ```
 parser.zig ──> variables, validation, fields, sources, dependencies,
                execution, function_body, types
-execution ──> function_body, expansion, arrays, variables, dependencies,
+execution ──> function_body, expansion, arrays, variables, fields,
               shell_scan, types
 fields    ──> function_body, variables, expansion, arrays, dependencies
 validation──> types, shell_scan, function_body, fields, package_metadata
-dependencies ──> shell_scan, expansion, arrays
+dependencies ──> shell_scan, expansion, fields, variables, word
 variables ──> shell_scan, expansion, arrays
 sources   ──> types, file_inspector
 expansion ──> shell_scan, arithmetic
@@ -125,3 +125,22 @@ evaluation or make every Bash construct statically supported. Existing sandbox
 snapshots and supplemental review remain authoritative for dynamic metadata.
 Malformed words produce `UnsupportedShellWord`; original command substitutions
 are retained intact for reviewed evaluation, including their inner quoting.
+
+## Indexed-array trimming
+
+Standalone double-quoted indexed-array references support elementwise prefix
+and suffix removal: `"${items[@]#pattern}"`, `"${items[@]##pattern}"`,
+`"${items[@]%pattern}"`, and `"${items[@]%%pattern}"`. This includes Heroic's
+`noextract=("${source[@]##*/}")`. Patterns use the scalar engine's ASCII literal,
+`*`, and `?` subset; `?` requires ASCII input elements because the matcher is
+byte-oriented. Bracket expressions, nested expansions, quoted or escaped
+patterns, `[*]`, and compound or unquoted trimming expressions fail explicitly
+with `UnsupportedArrayExpansion` and an assignment diagnostic.
+
+Metadata and execution preludes share array resolution in assignment order,
+including appends and self-references to earlier values. Resolved elements are
+data: literal dollar signs are never expanded again, and empty elements are
+preserved. Reviewed sandbox snapshots and explicit unsets remain authoritative;
+command-dependent source values remain deferred until that evaluation. Static
+array references are limited to 32 nested references and 4,096 output elements
+per array. Resolving these expressions does not execute PKGBUILD code.

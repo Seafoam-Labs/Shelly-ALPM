@@ -61,10 +61,6 @@ pub const AppImageManager = struct {
         return std.ascii.eqlIgnoreCase(std.fs.path.extension(file_path), ".AppImage");
     }
 
-    pub fn is_app_image(file_path: []const u8) bool {
-        return isAppImage(file_path);
-    }
-
     pub fn installAppImage(self: AppImageManager, location: []const u8) !bool {
         try ensureNonRootMutation();
         var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .install, location);
@@ -404,24 +400,47 @@ pub const AppImageManager = struct {
 
         var it = d.iterate();
         while (try it.next(self.io)) |entry| {
-            if (!std.ascii.eqlIgnoreCase(std.fs.path.extension(entry.name), ".desktop")) continue;
-            const path = try std.fs.path.join(self.allocator, &.{ dir, entry.name });
-            if (entry.kind == .file) return path;
-            if (entry.kind == .sym_link) {
-                const resolved = try self.resolveConfinedFile(dir, path);
-                self.allocator.free(path);
-                if (resolved) |resolved_path| return resolved_path;
-            } else self.allocator.free(path);
+            if (try self.desktopCandidate(dir, entry.name, entry.kind)) |path| return path;
         }
 
         var walker = try d.walk(self.allocator);
         defer walker.deinit();
         while (try walker.next(self.io)) |entry| {
-            if (entry.kind != .file or
-                !std.ascii.eqlIgnoreCase(std.fs.path.extension(entry.basename), ".desktop")) continue;
-            return try std.fs.path.join(self.allocator, &.{ dir, entry.path });
+            if (try self.desktopCandidate(dir, entry.path, entry.kind)) |path| return path;
         }
         return null;
+    }
+
+    /// Resolves `relative_path` against `dir` and accepts it only after content validation.
+    /// `.unknown` is confined-resolved like a symlink so a link is never followed out of `dir`.
+    fn desktopCandidate(
+        self: AppImageManager,
+        dir: []const u8,
+        relative_path: []const u8,
+        kind: std.Io.File.Kind,
+    ) !?[]const u8 {
+        if (!std.ascii.eqlIgnoreCase(std.fs.path.extension(std.fs.path.basename(relative_path)), ".desktop")) return null;
+        const joined = try std.fs.path.join(self.allocator, &.{ dir, relative_path });
+        const candidate: []u8 = switch (kind) {
+            .file => joined,
+            .sym_link, .unknown => confined: {
+                const resolved = self.resolveConfinedFile(dir, joined) catch |err| {
+                    self.allocator.free(joined);
+                    return err;
+                };
+                self.allocator.free(joined);
+                break :confined resolved orelse return null;
+            },
+            else => {
+                self.allocator.free(joined);
+                return null;
+            },
+        };
+        if (!isDesktopEntryFile(self.io, candidate)) {
+            self.allocator.free(candidate);
+            return null;
+        }
+        return candidate;
     }
 
     fn resolveConfinedFile(
@@ -499,19 +518,19 @@ pub const AppImageManager = struct {
         var d = std.Io.Dir.cwd().openDir(self.io, squashfs_root, .{ .iterate = true }) catch return null;
         defer d.close(self.io);
 
-        const requested_stem = std.fs.path.stem(std.fs.path.basename(icon_value));
+        const requested_name = requestedIconName(icon_value);
         var best_path: ?[]u8 = null;
         errdefer if (best_path) |path| self.allocator.free(path);
-        var best_score: u8 = 0;
+        var best_score: u32 = 0;
 
-        if (requested_stem.len > 0) {
+        if (requested_name.len > 0) {
             var walker = try d.walk(self.allocator);
             defer walker.deinit();
             while (try walker.next(self.io)) |entry| {
                 if (entry.kind != .file) continue;
                 const ext = std.fs.path.extension(entry.basename);
                 if (!isSupportedIconExtension(ext) or
-                    !std.ascii.eqlIgnoreCase(std.fs.path.stem(entry.basename), requested_stem)) continue;
+                    !std.ascii.eqlIgnoreCase(std.fs.path.stem(entry.basename), requested_name)) continue;
                 const score = iconSourceScore(entry.path, ext);
                 if (best_path != null and score <= best_score) continue;
                 const candidate = try std.fs.path.join(self.allocator, &.{ squashfs_root, entry.path });
@@ -1553,6 +1572,46 @@ fn pathIsInside(root: []const u8, candidate: []const u8) bool {
         std.fs.path.isSep(candidate[root.len]);
 }
 
+const desktop_probe_bytes = 4 * 1024;
+
+/// An extracted AppImage can ship an executable named after its own desktop id
+/// beside the real entry, so the `.desktop` suffix alone never identifies one.
+fn isDesktopEntryFile(io: std.Io, path: []const u8) bool {
+    var file = std.Io.Dir.cwd().openFile(io, path, .{}) catch return false;
+    defer file.close(io);
+    var buffer: [desktop_probe_bytes]u8 = undefined;
+    var reader = file.reader(io, &.{});
+    var filled: usize = 0;
+    while (filled < buffer.len) {
+        const read = reader.interface.readSliceShort(buffer[filled..]) catch {
+            if (filled == 0) return false;
+            break;
+        };
+        if (read == 0) break;
+        filled += read;
+    }
+    return startsWithDesktopEntryGroup(buffer[0..filled]);
+}
+
+/// A desktop entry must open with its group header, before any key, and carry at least one key.
+fn startsWithDesktopEntryGroup(prefix: []const u8) bool {
+    var lines = std.mem.splitScalar(u8, prefix, '\n');
+    var in_entry_group = false;
+    while (lines.next()) |raw_line| {
+        const line = std.mem.trim(u8, raw_line, " \t\r");
+        if (line.len == 0 or line[0] == '#') continue;
+        if (line[0] == '[') {
+            if (in_entry_group) break;
+            if (!std.ascii.eqlIgnoreCase(line, "[Desktop Entry]")) return false;
+            in_entry_group = true;
+            continue;
+        }
+        if (!in_entry_group) return false;
+        if (std.mem.indexOfScalar(u8, line, '=') != null) return true;
+    }
+    return false;
+}
+
 fn freeAppImageStatic(allocator: std.mem.Allocator, value: appimage.AppImage) void {
     allocator.free(value.name);
     allocator.free(value.version);
@@ -1584,12 +1643,35 @@ fn isSupportedIconExtension(extension: []const u8) bool {
         std.ascii.eqlIgnoreCase(extension, ".svg");
 }
 
-fn iconSourceScore(path: []const u8, extension: []const u8) u8 {
-    if (std.mem.indexOf(u8, path, "icons/hicolor/scalable/apps/") != null) return 7;
-    if (std.mem.indexOf(u8, path, "icons/hicolor/256x256/apps/") != null) return 6;
-    if (std.mem.indexOf(u8, path, "icons/hicolor/512x512/apps/") != null) return 5;
-    if (std.ascii.eqlIgnoreCase(extension, ".svg")) return 4;
-    return 1;
+/// `Icon=` carries an icon name, not a filename, and that name may itself end in the desktop id
+/// suffix, so only a supported image suffix may be stripped before matching.
+fn requestedIconName(icon_value: []const u8) []const u8 {
+    const name = std.fs.path.basename(icon_value);
+    if (isSupportedIconExtension(std.fs.path.extension(name))) return std.fs.path.stem(name);
+    return name;
+}
+
+/// A vector serves any size a theme asks for, so it outranks every raster. Among rasters the
+/// largest one wins: downscaling is lossless and upscaling is not, and pixel counts are nominal
+/// per the icon theme layout, so they can never reach the vector tier.
+fn iconSourceScore(path: []const u8, extension: []const u8) u32 {
+    if (std.mem.indexOf(u8, path, "icons/hicolor/scalable/apps/") != null) return std.math.maxInt(u32);
+    if (std.ascii.eqlIgnoreCase(extension, ".svg")) return 1 << 24;
+    return nominalRasterSize(path);
+}
+
+/// Icon theme directories carry the nominal pixel size in their name, e.g. `128x128/apps`.
+/// Anything else, a scaled `48x48@2` included, leaves the raster unranked but still usable.
+fn nominalRasterSize(path: []const u8) u32 {
+    var largest: u32 = 0;
+    var components = std.mem.splitScalar(u8, path, '/');
+    while (components.next()) |component| {
+        const separator = std.mem.indexOfScalar(u8, component, 'x') orelse continue;
+        const width = std.fmt.parseInt(u32, component[0..separator], 10) catch continue;
+        const height = std.fmt.parseInt(u32, component[separator + 1 ..], 10) catch continue;
+        largest = @max(largest, @min(width, height));
+    }
+    return largest;
 }
 
 fn writeTestAppImageDb(path: []const u8, contents: []const u8) !void {
@@ -1599,6 +1681,17 @@ fn writeTestAppImageDb(path: []const u8, contents: []const u8) !void {
     var writer = file.writer(std.testing.io, &write_buf);
     try writer.interface.writeAll(contents);
     try writer.interface.flush();
+}
+
+fn writeTestAppImageFile(root: []const u8, relative_path: []const u8, contents: []const u8) !void {
+    if (std.fs.path.dirname(relative_path)) |parent_relative| {
+        const parent = try std.fs.path.join(std.testing.allocator, &.{ root, parent_relative });
+        defer std.testing.allocator.free(parent);
+        try std.Io.Dir.cwd().createDirPath(std.testing.io, parent);
+    }
+    const path = try std.fs.path.join(std.testing.allocator, &.{ root, relative_path });
+    defer std.testing.allocator.free(path);
+    try writeTestAppImageDb(path, contents);
 }
 
 fn readTestAppImageDb(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
@@ -2386,7 +2479,7 @@ test "writeDesktopEntry emits unquoted TryExec for existing and omitted source k
 
 test "AppImage classification is case insensitive and extension based" {
     try std.testing.expect(AppImageManager.isAppImage("Example.AppImage"));
-    try std.testing.expect(AppImageManager.is_app_image("/tmp/Example.appimage"));
+    try std.testing.expect(AppImageManager.isAppImage("/tmp/Example.appimage"));
     try std.testing.expect(!AppImageManager.isAppImage("Example.AppImage.zsync"));
     try std.testing.expect(!AppImageManager.isAppImage("AppImage"));
 }
@@ -2429,6 +2522,171 @@ test "AppImage metadata discovery rejects symlinks outside the extraction root" 
 
     try std.testing.expect((try manager.findDesktopFile(extraction_root)) == null);
     try std.testing.expect((try manager.findIconSource(extraction_root, "")) == null);
+}
+
+test "AppImage desktop discovery skips files that only borrow the desktop extension" {
+    const cases = [_]struct { entry_relative_path: []const u8 }{
+        .{ .entry_relative_path = "ai.opencode.desktop.desktop" },
+        .{ .entry_relative_path = "usr/share/applications/ai.opencode.desktop" },
+    };
+    for (cases) |case| {
+        var tmp = std.testing.tmpDir(.{});
+        defer tmp.cleanup();
+
+        var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+        const root = path_buf[0..len];
+        const extraction_root = try std.fs.path.join(std.testing.allocator, &.{ root, "squashfs-root" });
+        defer std.testing.allocator.free(extraction_root);
+        try std.Io.Dir.cwd().createDirPath(std.testing.io, extraction_root);
+
+        try writeTestAppImageFile(extraction_root, "ai.opencode.desktop", "\x7fELF\x02\x01\x01\x00\n[Desktop Entry]\nName=Decoy\n");
+
+        const entry = try std.fs.path.join(std.testing.allocator, &.{ extraction_root, case.entry_relative_path });
+        defer std.testing.allocator.free(entry);
+        try writeTestAppImageFile(extraction_root, case.entry_relative_path, "[Desktop Entry]\nType=Application\nName=Open Code\nExec=opencode %u\n");
+
+        var environ = try createTestAppImageEnviron(std.testing.allocator, root);
+        defer environ.block.deinit(std.testing.allocator);
+        const manager = AppImageManager{
+            .allocator = std.testing.allocator,
+            .io = std.testing.io,
+            .environ = environ,
+            .install_directory = extraction_root,
+            .local_db_path = extraction_root,
+        };
+
+        const found = try manager.findDesktopFile(extraction_root);
+        defer if (found) |path| std.testing.allocator.free(path);
+        try std.testing.expectEqualStrings(entry, found orelse return error.TestUnexpectedResult);
+    }
+}
+
+test "AppImage desktop entry detection requires a leading Desktop Entry group" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const root = path_buf[0..len];
+
+    const cases = [_]struct { contents: []const u8, accepted: bool }{
+        .{ .contents = "[Desktop Entry]\nType=Application\nName=Editor\n", .accepted = true },
+        .{ .contents = "\n# written by pkgforge\r\n[Desktop Entry]\r\nName=Editor\r\n", .accepted = true },
+        .{ .contents = "[Desktop entry]\nName=Editor\n", .accepted = true },
+        .{ .contents = "[Desktop Action New]\nName=New\n[Desktop Entry]\nName=Editor\n", .accepted = false },
+        .{ .contents = "[Desktop Entry]\n", .accepted = false },
+        .{ .contents = "Name=Editor\n[Desktop Entry]\n", .accepted = false },
+        .{ .contents = "#!/bin/sh\nexec editor \"$@\"\n", .accepted = false },
+        .{ .contents = "Configure a [Desktop Entry] group like:\nName=Editor\n", .accepted = false },
+        .{ .contents = "", .accepted = false },
+    };
+
+    for (cases, 0..) |case, index| {
+        const path = try std.fmt.allocPrint(std.testing.allocator, "{s}/{d}.candidate", .{ root, index });
+        defer std.testing.allocator.free(path);
+        try writeTestAppImageDb(path, case.contents);
+        try std.testing.expectEqual(case.accepted, isDesktopEntryFile(std.testing.io, path));
+    }
+}
+
+test "AppImage icon discovery matches the Icon name and prefers the best shipped source" {
+    const cases = [_]struct {
+        icon_value: []const u8,
+        shipped: []const []const u8,
+        expected: ?[]const u8,
+    }{
+        .{
+            .icon_value = "ai.opencode.desktop",
+            .shipped = &.{
+                "usr/share/icons/hicolor/128x128/apps/ai.opencode.desktop.png",
+                "usr/share/icons/hicolor/256x256/apps/ai.opencode.desktop.png",
+            },
+            .expected = "usr/share/icons/hicolor/256x256/apps/ai.opencode.desktop.png",
+        },
+        .{
+            .icon_value = "editor.png",
+            .shipped = &.{"editor.png"},
+            .expected = "editor.png",
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{"usr/share/icons/hicolor/256x256/apps/editor.svg"},
+            .expected = "usr/share/icons/hicolor/256x256/apps/editor.svg",
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{"usr/share/icons/hicolor/64x64/apps/other.png"},
+            .expected = null,
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{
+                "usr/share/icons/hicolor/32x32/apps/editor.png",
+                "usr/share/icons/hicolor/64x64/apps/editor.png",
+                "usr/share/icons/hicolor/128x128/apps/editor.png",
+            },
+            .expected = "usr/share/icons/hicolor/128x128/apps/editor.png",
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{
+                "usr/share/icons/hicolor/128x128/apps/editor.png",
+                "usr/share/icons/hicolor/64x64/apps/editor.png",
+                "usr/share/icons/hicolor/32x32/apps/editor.png",
+            },
+            .expected = "usr/share/icons/hicolor/128x128/apps/editor.png",
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{
+                "usr/share/icons/hicolor/256x256/apps/editor.png",
+                "usr/share/icons/hicolor/512x512/apps/editor.png",
+            },
+            .expected = "usr/share/icons/hicolor/512x512/apps/editor.png",
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{
+                "usr/share/icons/hicolor/1024x1024/apps/editor.png",
+                "usr/share/icons/hicolor/scalable/apps/editor.svg",
+            },
+            .expected = "usr/share/icons/hicolor/scalable/apps/editor.svg",
+        },
+    };
+    for (cases) |case| {
+        var tmp = std.testing.tmpDir(.{});
+        defer tmp.cleanup();
+
+        var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+        const root = path_buf[0..len];
+        const extraction_root = try std.fs.path.join(std.testing.allocator, &.{ root, "squashfs-root" });
+        defer std.testing.allocator.free(extraction_root);
+        try std.Io.Dir.cwd().createDirPath(std.testing.io, extraction_root);
+        for (case.shipped) |shipped| try writeTestAppImageFile(extraction_root, shipped, "icon-data\n");
+
+        var environ = try createTestAppImageEnviron(std.testing.allocator, root);
+        defer environ.block.deinit(std.testing.allocator);
+        const manager = AppImageManager{
+            .allocator = std.testing.allocator,
+            .io = std.testing.io,
+            .environ = environ,
+            .install_directory = extraction_root,
+            .local_db_path = extraction_root,
+        };
+
+        const source = try manager.findIconSource(extraction_root, case.icon_value);
+        if (case.expected == null) {
+            try std.testing.expect(source == null);
+            continue;
+        }
+        const expected = try std.fs.path.join(std.testing.allocator, &.{ extraction_root, case.expected.? });
+        defer std.testing.allocator.free(expected);
+        const found = source orelse return error.TestUnexpectedResult;
+        defer std.testing.allocator.free(found.path);
+        try std.testing.expectEqualStrings(expected, found.path);
+    }
 }
 
 test "cleanInvalidNames lowercases and replaces separators" {

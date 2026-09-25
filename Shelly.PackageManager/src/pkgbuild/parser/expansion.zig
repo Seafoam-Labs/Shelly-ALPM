@@ -662,7 +662,7 @@ fn glob_matches(pattern: []const u8, text: []const u8) bool {
     }
 }
 
-fn apply_parameter_expansion(value: []const u8, op: []const u8, glob: []const u8) []const u8 {
+pub fn apply_parameter_expansion(value: []const u8, op: []const u8, glob: []const u8) []const u8 {
     if (glob.len == 0) return value;
 
     if (std.mem.eql(u8, op, "#")) {

@@ -989,7 +989,7 @@ fn extractTo(
             },
             // A symlink member plus a later write through it would escape
             // staging; real databases contain neither it nor other kinds.
-            .symbolic_link, .other => {},
+            .symbolic_link, .hard_link, .other => {},
         }
     }
     return extracted;

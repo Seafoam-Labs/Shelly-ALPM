@@ -82,21 +82,19 @@ pub const CliConfigResolver = struct {
 
         try root.object.put(allocator, install_path_key, .{ .string = path });
 
-        const serialized = try std.json.Stringify.valueAlloc(
-            allocator,
-            root,
-            .{ .whitespace = .indent_2, .escape_unicode = true },
-        );
-
-        const dir_name = std.fs.path.dirname(cli_config_path).?;
-        var sub_dir = try self.config_dir.createDirPathOpen(self.io, dir_name, .{});
-        defer sub_dir.close(self.io);
-        const file = try sub_dir.createFile(self.io, std.fs.path.basename(cli_config_path), .{});
-        defer file.close(self.io);
+        var staged = try self.config_dir.createFileAtomic(self.io, cli_config_path, .{
+            .make_path = true,
+            .replace = true,
+        });
+        defer staged.deinit(self.io);
         var buf: [4096]u8 = undefined;
-        var fw = file.writer(self.io, &buf);
-        try fw.interface.writeAll(serialized);
+        var fw = staged.file.writer(self.io, &buf);
+        try fw.interface.print("{f}", .{
+            std.json.fmt(root, .{ .whitespace = .indent_2, .escape_unicode = true }),
+        });
         try fw.flush();
+        try staged.file.sync(self.io);
+        try staged.replace(self.io);
     }
 
     /// One-time migration from the legacy UI setting: earlier releases stored
@@ -148,6 +146,12 @@ pub const CliConfigResolver = struct {
     }
 
     fn parseObject(allocator: std.mem.Allocator, data: []const u8) !std.json.Value {
+        // A blank file is what an interrupted write leaves behind and parses as
+        // nothing at all. Reading it as an empty object keeps the setting
+        // readable and, because the write path reads first, still writable.
+        // Nothing else may be substituted: an unreadable but present document
+        // must not lose its other keys to the next write.
+        if (std.mem.trim(u8, data, " \t\r\n").len == 0) return .{ .object = .empty };
         const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, data, .{});
         if (parsed != .object) return error.InvalidCliConfig;
         return parsed;
@@ -234,6 +238,58 @@ test "read rejects a config that is not a JSON object" {
     defer svc.deinit();
 
     try testing.expectError(error.InvalidCliConfig, svc.readAppImageInstallPath());
+}
+
+test "read treats a blank CLI config as unset and leaves it alone" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedFile(&tmp, "config.json", "");
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+
+    try testing.expect((try svc.readAppImageInstallPath()) == null);
+
+    // Reading the UI settings must not rewrite a file the CLI owns.
+    const blank = try readTmpFile(&tmp, "config.json");
+    defer testing.allocator.free(blank);
+    try testing.expectEqual(@as(usize, 0), blank.len);
+
+    try seedFile(&tmp, "config.json", " \r\n\t");
+    try testing.expect((try svc.readAppImageInstallPath()) == null);
+}
+
+test "write recovers a blank CLI config" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedFile(&tmp, "config.json", "");
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.writeAppImageInstallPath("/opt/appimages");
+
+    const path = (try svc.readAppImageInstallPath()).?;
+    defer testing.allocator.free(path);
+    try testing.expectEqualStrings("/opt/appimages", path);
+
+    const data = try readTmpFile(&tmp, "config.json");
+    defer testing.allocator.free(data);
+    try testing.expect(std.mem.indexOf(u8, data, "\"AppImageInstallPath\": \"/opt/appimages\"") != null);
+}
+
+test "migration tolerates a blank settings file" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedFile(&tmp, "settings.json", "");
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    svc.migrateLegacyInstallPath();
+
+    try testing.expect((try svc.readAppImageInstallPath()) == null);
 }
 
 test "migration copies a legacy settings value into the CLI config" {

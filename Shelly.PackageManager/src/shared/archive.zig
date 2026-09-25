@@ -29,6 +29,7 @@ pub const EntryKind = enum {
     regular_file,
     directory,
     symbolic_link,
+    hard_link,
     other,
 };
 
@@ -599,10 +600,13 @@ pub const Reader = struct {
         const pathname = c.archive_entry_pathname_utf8(entry) orelse
             c.archive_entry_pathname(entry) orelse return Error.InvalidEntryPath;
         const raw_size = c.archive_entry_size(entry);
+        // Tar hard links may have no file type at all. Their target takes
+        // precedence over filetype, including formats reporting AE_IFREG.
+        const hard_target = c.archive_entry_hardlink_utf8(entry) orelse c.archive_entry_hardlink(entry);
 
         return .{
             .path = std.mem.span(pathname),
-            .kind = switch (c.archive_entry_filetype(entry)) {
+            .kind = if (hard_target != null) .hard_link else switch (c.archive_entry_filetype(entry)) {
                 ae_ifreg => .regular_file,
                 ae_ifdir => .directory,
                 ae_iflnk => .symbolic_link,
@@ -613,7 +617,9 @@ pub const Reader = struct {
             .uid = @intCast(c.archive_entry_uid(entry)),
             .gid = @intCast(c.archive_entry_gid(entry)),
             .mtime = try entryMtime(entry),
-            .link_target = if (c.archive_entry_symlink_utf8(entry)) |target|
+            .link_target = if (hard_target) |target|
+                std.mem.span(target)
+            else if (c.archive_entry_symlink_utf8(entry)) |target|
                 std.mem.span(target)
             else if (c.archive_entry_symlink(entry)) |target|
                 std.mem.span(target)
@@ -666,7 +672,16 @@ fn requireWriteStatus(status: c_int) !void {
 /// Normalizes an archive entry into a path relative to an extraction root.
 /// Absolute paths, backslashes, and parent traversal are rejected.
 pub fn normalizeEntryPath(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
-    if (path.len == 0 or std.fs.path.isAbsolute(path) or std.mem.indexOfScalar(u8, path, '\\') != null)
+    if (std.fs.path.isAbsolute(path) or std.mem.indexOfScalar(u8, path, '\\') != null)
+        return Error.InvalidEntryPath;
+    return normalizePosixEntryPath(allocator, path);
+}
+
+/// Normalizes entries extracted with POSIX filesystem operations. Backslashes
+/// are literal filename bytes, as in GStreamer's generated documentation.
+/// Never use this for consumers that interpret backslashes as separators.
+pub fn normalizePosixEntryPath(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
+    if (path.len == 0 or std.fs.path.isAbsolutePosix(path))
         return Error.InvalidEntryPath;
 
     var normalized: std.ArrayList(u8) = .empty;
@@ -763,10 +778,10 @@ fn writeFixtureWithFormat(
     for (entries) |fixture| {
         const entry = c.archive_entry_new() orelse return Error.ArchiveCreateFailed;
         defer c.archive_entry_free(entry);
-        const kind: EntryKind = if (fixture.link_target != null) .symbolic_link else fixture.kind;
+        const kind: EntryKind = if (fixture.kind == .hard_link) .hard_link else if (fixture.link_target != null) .symbolic_link else fixture.kind;
         c.archive_entry_set_pathname(entry, fixture.path.ptr);
         c.archive_entry_set_filetype(entry, switch (kind) {
-            .regular_file => ae_ifreg,
+            .regular_file, .hard_link => ae_ifreg,
             .directory => ae_ifdir,
             .symbolic_link => ae_iflnk,
             .other => return Error.UnsupportedFileType,
@@ -777,6 +792,10 @@ fn writeFixtureWithFormat(
             const target = fixture.link_target orelse return Error.ArchiveWriteFailed;
             c.archive_entry_set_symlink(entry, target.ptr);
         }
+        if (kind == .hard_link) {
+            const target = fixture.link_target orelse return Error.ArchiveWriteFailed;
+            c.archive_entry_set_hardlink(entry, target.ptr);
+        }
         if (fixture.mtime) |mtime| setEntryMtime(entry, mtime.nanoseconds);
         if (c.archive_write_header(handle, entry) < c.ARCHIVE_WARN)
             return Error.ArchiveWriteFailed;
@@ -785,6 +804,32 @@ fn writeFixtureWithFormat(
             if (amount < 0 or amount != fixture.contents.len) return Error.ArchiveWriteFailed;
         }
     }
+}
+
+test "archive reader identifies hard links in probe and next" {
+    const testing = std.testing;
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const path = try std.fmt.allocPrint(testing.allocator, ".zig-cache/tmp/{s}/hardlinks.tar.gz", .{tmp.sub_path});
+    defer testing.allocator.free(path);
+    try writeFixture(testing.allocator, path, .gzip, &.{
+        .{ .path = "forward", .kind = .hard_link, .link_target = "original" },
+        .{ .path = "original", .contents = "payload" },
+        .{ .path = "backward", .kind = .hard_link, .link_target = "original" },
+    });
+    var reader = try Reader.initAll(testing.allocator, path);
+    defer reader.deinit();
+    const first = (try reader.probe()).archive.?;
+    try testing.expectEqual(EntryKind.hard_link, first.kind);
+    try testing.expectEqualStrings("original", first.link_target.?);
+    try testing.expectEqual(@as(u64, 0), first.size);
+    const original = (try reader.next()).?;
+    try testing.expectEqual(EntryKind.regular_file, original.kind);
+    try testing.expectEqual(@as(?[]const u8, null), original.link_target);
+    const last = (try reader.next()).?;
+    try testing.expectEqual(EntryKind.hard_link, last.kind);
+    try testing.expectEqualStrings("original", last.link_target.?);
+    try testing.expectEqual(@as(?Entry, null), try reader.next());
 }
 
 test "archive reader exposes exact entry modification timestamps" {
@@ -951,6 +996,18 @@ test "archive paths cannot escape the extraction root" {
     const normalized = try normalizeEntryPath(testing.allocator, "./usr//bin/demo");
     defer testing.allocator.free(normalized);
     try testing.expectEqualStrings("usr/bin/demo", normalized);
+}
+
+test "POSIX archive paths preserve backslashes without allowing parent traversal" {
+    const testing = std.testing;
+    const normalized = try normalizePosixEntryPath(testing.allocator, "./html//GES_TEXT_HALIGN_TYPE\\.fragment");
+    defer testing.allocator.free(normalized);
+    try testing.expectEqualStrings("html/GES_TEXT_HALIGN_TYPE\\.fragment", normalized);
+
+    for ([_][]const u8{ "", ".", "./", "/etc/passwd", "../etc/passwd", "docs\\/../../etc/passwd" }) |path|
+        try testing.expectError(Error.InvalidEntryPath, normalizePosixEntryPath(testing.allocator, path));
+    // Package/database consumers retain their stricter path policy.
+    try testing.expectError(Error.InvalidEntryPath, normalizeEntryPath(testing.allocator, "html/GES_TEXT_HALIGN_TYPE\\.fragment"));
 }
 
 const CompressionTestContext = struct {

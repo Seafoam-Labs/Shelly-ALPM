@@ -165,7 +165,11 @@ pub const Assignments = struct {
             if (c == '<' or c == '>') {
                 // A top-level heredoc cannot be treated as assignments. Leave
                 // its command and body to Bash rather than scanning body text.
-                if (std.mem.startsWith(u8, self.input[start..], "<<") and !std.mem.startsWith(u8, self.input[start..], "<<<")) {
+                // Do not reinterpret the second '<' of a here-string as '<<'.
+                if (std.mem.startsWith(u8, self.input[start..], "<<") and
+                    !std.mem.startsWith(u8, self.input[start..], "<<<") and
+                    (start == 0 or self.input[start - 1] != '<'))
+                {
                     self.pos = try skipHeredocCommand(allocator, self.input, start);
                     self.command_start = true;
                     self.conditional_command = false;
@@ -278,7 +282,10 @@ fn skipHeredocCommand(allocator: std.mem.Allocator, input: []const u8, start: us
     }
     var i = start;
     while (i < input.len and input[i] != '\n') {
-        if (std.mem.startsWith(u8, input[i..], "<<") and !std.mem.startsWith(u8, input[i..], "<<<")) {
+        if (std.mem.startsWith(u8, input[i..], "<<") and
+            !std.mem.startsWith(u8, input[i..], "<<<") and
+            (i == 0 or input[i - 1] != '<'))
+        {
             const declaration = try scan.parse_heredoc(allocator, input, i + 2) orelse return error.UnsupportedShellWord;
             declarations.append(allocator, declaration) catch |err| {
                 allocator.free(declaration.delimiter);

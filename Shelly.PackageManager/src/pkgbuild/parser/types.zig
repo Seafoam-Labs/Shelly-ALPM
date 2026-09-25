@@ -12,6 +12,9 @@ pub const Pkgbuild = struct {
     groups: ?[][]const u8 = null,
     arch: ?[][]const u8 = null,
     depends: ?[][]const u8 = null,
+    /// Build-environment dependencies before package() overrides, including
+    /// the active architecture. Output runtime metadata stays in `depends`.
+    global_depends: ?[][]const u8 = null,
     make_depends: ?[][]const u8 = null,
     opt_depends: ?[][]const u8 = null,
     provides: ?[][]const u8 = null,
@@ -42,6 +45,7 @@ pub const Pkgbuild = struct {
     local_source_files: ?[][]const u8 = null,
     local_source_contents: std.StringHashMap([]const u8),
     parsed_depends: ?[]parsed_dep = null,
+    parsed_global_depends: ?[]parsed_dep = null,
     parsed_make_depends: ?[]parsed_dep = null,
     parsed_check_depends: ?[]parsed_dep = null,
     check_depends: ?[][]const u8 = null,
@@ -78,6 +82,10 @@ pub const Pkgbuild = struct {
             allocator.free(a);
         }
         if (self.depends) |a| {
+            for (a) |item| allocator.free(item);
+            allocator.free(a);
+        }
+        if (self.global_depends) |a| {
             for (a) |item| allocator.free(item);
             allocator.free(a);
         }
@@ -180,6 +188,10 @@ pub const Pkgbuild = struct {
         self.local_source_contents.deinit();
 
         if (self.parsed_depends) |deps| {
+            for (deps) |d| d.deinit(allocator);
+            allocator.free(deps);
+        }
+        if (self.parsed_global_depends) |deps| {
             for (deps) |d| d.deinit(allocator);
             allocator.free(deps);
         }

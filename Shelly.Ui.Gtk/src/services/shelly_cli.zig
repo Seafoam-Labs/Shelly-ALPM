@@ -297,6 +297,12 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stderr);
     }
 
+    pub fn set_aur_url(self: ShellyCli, url: []const u8) !void {
+        const result = try self.run(&.{ "config", "set", "AurUrl", url });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+    }
+
     pub fn check_updates(self: ShellyCli) !std.json.Parsed(CheckUpdates) {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
         defer argv.deinit(self.allocator);

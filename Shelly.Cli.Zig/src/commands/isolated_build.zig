@@ -52,13 +52,14 @@ const operation_parent = "/var/lib/shelly/build-roots/v1/operations";
 
 const BootstrapOutputContext = struct {
     operation: *const Zigalpm.Operation,
+    stage: []const u8 = "build.isolation.bootstrap",
 
     fn handle(data: ?*anyopaque, stream: Zigalpm.process_runner.StreamKind, line: []const u8) void {
         const self: *BootstrapOutputContext = @ptrCast(@alignCast(data.?));
         self.operation.status(
             if (stream == .stderr) .warning else .information,
             line,
-            "build.isolation.bootstrap",
+            self.stage,
             null,
         );
     }
@@ -156,7 +157,7 @@ pub const Root = struct {
             .{ .function = BootstrapOutputContext.handle, .data = &output_context },
             operation,
         );
-        if (exit_code != 0) return error.IsolatedBootstrapFailed;
+        try checkIsolatedExit(operation, .bootstrap, exit_code);
 
         const marker_path = try self.rootJoin(Zigalpm.alpm.bootstrap.marker_name);
         defer self.allocator.free(marker_path);
@@ -171,7 +172,7 @@ pub const Root = struct {
             "g shelly-build 1000",
             "--inline",
             "u shelly-build 1000:1000 \"Shelly build user\" /home/shelly-build /usr/bin/bash",
-        }, operation);
+        }, operation, .setup);
 
         const home_path = try self.rootJoin("home/shelly-build");
         defer self.allocator.free(home_path);
@@ -197,7 +198,7 @@ pub const Root = struct {
             sources_path,
             logs_path,
             home_path,
-        }, operation);
+        }, operation, .setup);
     }
 
     /// Materializes only byte-exact inputs accepted by the host review. This
@@ -219,7 +220,7 @@ pub const Root = struct {
             "--",
             "1000:1000",
             self.source_path,
-        }, operation);
+        }, operation, .setup);
     }
 
     fn writeReviewedInput(
@@ -285,7 +286,7 @@ pub const Root = struct {
     ) !void {
         const argv = try nspawnArguments(self.allocator, self.root_path, child_arguments);
         defer self.allocator.free(argv);
-        try self.runCancellable(environ, argv, operation);
+        try self.runCancellable(environ, argv, operation, .build);
     }
 
     pub fn exportArtifacts(
@@ -400,8 +401,9 @@ pub const Root = struct {
         environ: std.process.Environ,
         argv: []const []const u8,
         operation: *const Zigalpm.Operation,
+        stage: IsolatedStage,
     ) !void {
-        var output_context: BootstrapOutputContext = .{ .operation = operation };
+        var output_context: BootstrapOutputContext = .{ .operation = operation, .stage = stage.name() };
         const exit_code = try Zigalpm.process_runner.runStreamingWithEnvironmentOperation(
             self.allocator,
             self.io,
@@ -412,9 +414,71 @@ pub const Root = struct {
             .{ .function = BootstrapOutputContext.handle, .data = &output_context },
             operation,
         );
-        if (exit_code != 0) return error.IsolatedCommandFailed;
+        try checkIsolatedExit(operation, stage, exit_code);
     }
 };
+
+const IsolatedStage = enum {
+    bootstrap,
+    setup,
+    build,
+
+    fn name(self: IsolatedStage) []const u8 {
+        return switch (self) {
+            .bootstrap => "build.isolation.bootstrap",
+            .setup => "build.isolation.setup",
+            .build => "build.isolation.execute",
+        };
+    }
+};
+
+fn checkIsolatedExit(operation: *const Zigalpm.Operation, stage: IsolatedStage, exit_code: u8) !void {
+    if (exit_code == 0) return;
+    const failure = switch (stage) {
+        .bootstrap => error.IsolatedBootstrapFailed,
+        .setup => error.IsolatedCommandFailed,
+        .build => error.IsolatedBuildFailed,
+    };
+    operation.reportError(failure, @import("diagnostics").cause(failure), stage.name(), exit_code, false);
+    return failure;
+}
+
+test "isolated command failures preserve the stage and native exit code" {
+    const Capture = struct {
+        count: usize = 0,
+        failure: ?anyerror = null,
+        domain: ?[]const u8 = null,
+        code: ?i64 = null,
+
+        fn handle(data: ?*anyopaque, event: Zigalpm.OperationEvent) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (event == .failure) {
+                self.count += 1;
+                self.failure = event.failure.err;
+                self.domain = event.failure.domain;
+                self.code = event.failure.native_code;
+            }
+        }
+    };
+    var context = Zigalpm.OperationContext.init(std.testing.allocator, std.testing.io);
+    defer context.deinit();
+    var capture: Capture = .{};
+    _ = try context.subscribe(.{ .function = Capture.handle, .data = &capture });
+    var operation = context.begin(.{ .backend = .aur, .kind = .build, .subject = "fixture" });
+    defer operation.finish(.failed);
+    try checkIsolatedExit(&operation, .build, 0);
+    try std.testing.expectEqual(@as(usize, 0), capture.count);
+    try std.testing.expectError(error.IsolatedBuildFailed, checkIsolatedExit(&operation, .build, 23));
+    try std.testing.expectEqual(error.IsolatedBuildFailed, capture.failure.?);
+    try std.testing.expectEqualStrings("build.isolation.execute", capture.domain.?);
+    try std.testing.expectEqual(@as(i64, 23), capture.code.?);
+    try std.testing.expectError(error.IsolatedBootstrapFailed, checkIsolatedExit(&operation, .bootstrap, 7));
+    try std.testing.expectEqualStrings("build.isolation.bootstrap", capture.domain.?);
+    try std.testing.expectEqual(@as(i64, 7), capture.code.?);
+    try std.testing.expectError(error.IsolatedCommandFailed, checkIsolatedExit(&operation, .setup, 2));
+    try std.testing.expectEqualStrings("build.isolation.setup", capture.domain.?);
+    try std.testing.expectEqual(@as(i64, 2), capture.code.?);
+}
 
 fn createPrivateDirectory(io: std.Io, path: []const u8) !void {
     try std.Io.Dir.cwd().createDirPath(io, path);

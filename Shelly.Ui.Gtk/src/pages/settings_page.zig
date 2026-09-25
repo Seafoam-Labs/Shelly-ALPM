@@ -9,6 +9,7 @@ const ShellyTabs = @import("../models/shelly_config.zig").ShellyTabs;
 const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
 const NavMode = @import("../models/shelly_config.zig").NavMode;
 const ConfigResolver = @import("../services/ui_config_resolver.zig").ConfigResolver;
+const ConfigError = @import("../services/ui_config_resolver.zig").ConfigError;
 const CliConfigResolver = @import("../services/cli_config_resolver.zig").CliConfigResolver;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const support_packages = @import("../services/support_packages.zig");
@@ -93,6 +94,7 @@ pub const ShellySettingsPage = extern struct {
         remove_cache_switch: *gtk.Switch,
         no_confirm_switch: *gtk.Switch,
         shelly_search_switch: *gtk.Switch,
+        atoll_aur_switch: *gtk.Switch,
         appimage_install_path_box: *gtk.Box,
         appimage_install_path_button: *gtk.Button,
 
@@ -222,6 +224,7 @@ pub const ShellySettingsPage = extern struct {
             p.tray_cron_switch,
             p.no_confirm_switch,
             p.shelly_search_switch,
+            p.atoll_aur_switch,
             p.remove_cache_switch,
         };
         inline for (autosave_switches) |s| {
@@ -1108,6 +1111,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "remove_cache_switch", @offsetOf(Private, "remove_cache_switch") },
         .{ "no_confirm_switch", @offsetOf(Private, "no_confirm_switch") },
         .{ "shelly_search_switch", @offsetOf(Private, "shelly_search_switch") },
+        .{ "atoll_aur_switch", @offsetOf(Private, "atoll_aur_switch") },
         .{ "appimage_install_path_box", @offsetOf(Private, "appimage_install_path_box") },
         .{ "appimage_install_path_button", @offsetOf(Private, "appimage_install_path_button") },
 
@@ -1276,7 +1280,7 @@ fn populatePageDropdown(p: *ShellySettingsPage.Private, cfg: *const ShellyConfig
 }
 
 fn obtainConfigService() !*ConfigResolver {
-    return runtime.config.?;
+    return runtime.config orelse ConfigError.NotLoaded;
 }
 
 fn updateConfigField(
@@ -1346,6 +1350,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     // Advanced
     setSwitch(p.no_confirm_switch, cfg.NoConfirm);
     setSwitch(p.shelly_search_switch, cfg.ShellySearchEnabled);
+    setSwitch(p.atoll_aur_switch, cfg.AtollAurEnabled);
     setSwitch(p.remove_cache_switch, cfg.PackageManagementRemoveConfigs);
 
     applyAppImageInstallPath(p);
@@ -1425,6 +1430,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     // Advanced
     cfg.NoConfirm = getSwitch(p.no_confirm_switch);
     cfg.ShellySearchEnabled = getSwitch(p.shelly_search_switch);
+    cfg.AtollAurEnabled = getSwitch(p.atoll_aur_switch);
     cfg.PackageManagementRemoveConfigs = getSwitch(p.remove_cache_switch);
 }
 
@@ -1578,4 +1584,12 @@ fn navModeIndex(mode: NavMode) c_uint {
         if (entry.value == mode) return @intCast(i);
     }
     return 0;
+}
+
+test "a missing config service is reported instead of crashing the page" {
+    const previous = runtime.config;
+    defer runtime.config = previous;
+
+    runtime.config = null;
+    try std.testing.expectError(ConfigError.NotLoaded, obtainConfigService());
 }
