@@ -3919,6 +3919,109 @@ test "PackageBuilder rejects source hard link targets from another archive" {
     try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(testing.io, ".src.shelly-staging", .{}));
 }
 
+test "PackageBuilder replaces duplicate regular files across source archives" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('tzcode.tar.gz' 'tzdata.tar.gz')
+        \\sha256sums=('SKIP' 'SKIP')
+        \\package() { mkdir -p "$pkgdir"; }
+    , null, null);
+    defer fixture.destroy();
+    const first = try std.fs.path.join(allocator, &.{ fixture.build_dir, "tzcode.tar.gz" });
+    defer allocator.free(first);
+    const second = try std.fs.path.join(allocator, &.{ fixture.build_dir, "tzdata.tar.gz" });
+    defer allocator.free(second);
+    try archive.writeFixture(allocator, first, .gzip, &.{
+        .{ .path = "calendars", .contents = "from tzcode\n" },
+        .{ .path = "calendars-alias", .kind = .hard_link, .link_target = "calendars" },
+    });
+    try archive.writeFixture(allocator, second, .gzip, &.{
+        .{ .path = "calendars", .contents = "from tzdata\n" },
+    });
+    fixture.builder.options.sources_prepared = false;
+    try fixture.temporary.dir.deleteTree(io, "src");
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const calendars = try fixture.temporary.dir.readFileAlloc(io, "src/calendars", allocator, .unlimited);
+    defer allocator.free(calendars);
+    try testing.expectEqualStrings("from tzdata\n", calendars);
+    const alias = try fixture.temporary.dir.readFileAlloc(io, "src/calendars-alias", allocator, .unlimited);
+    defer allocator.free(alias);
+    try testing.expectEqualStrings("from tzcode\n", alias);
+    const calendars_stat = try fixture.temporary.dir.statFile(io, "src/calendars", .{ .follow_symlinks = false });
+    const alias_stat = try fixture.temporary.dir.statFile(io, "src/calendars-alias", .{ .follow_symlinks = false });
+    try testing.expect(calendars_stat.inode != alias_stat.inode);
+}
+
+test "PackageBuilder still rejects cross-archive non-regular collisions" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('first.tar.gz' 'second.tar.gz')
+        \\sha256sums=('SKIP' 'SKIP')
+        \\package() { mkdir -p "$pkgdir"; }
+    , null, null);
+    defer fixture.destroy();
+    const first = try std.fs.path.join(allocator, &.{ fixture.build_dir, "first.tar.gz" });
+    defer allocator.free(first);
+    const second = try std.fs.path.join(allocator, &.{ fixture.build_dir, "second.tar.gz" });
+    defer allocator.free(second);
+    try archive.writeFixture(allocator, first, .gzip, &.{
+        .{ .path = "calendars", .contents = "regular\n" },
+    });
+    try archive.writeFixture(allocator, second, .gzip, &.{
+        .{ .path = "calendars", .link_target = "elsewhere" },
+    });
+    fixture.builder.options.sources_prepared = false;
+    try fixture.temporary.dir.deleteTree(io, "src");
+
+    try testing.expectError(error.BuildFailed, fixture.builder.BuildPackage());
+    try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, "src", .{}));
+    try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, ".src.shelly-staging", .{}));
+}
+
+test "PackageBuilder does not replace cross-archive hard-link destinations with regular files" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('first.tar.gz' 'second.tar.gz')
+        \\sha256sums=('SKIP' 'SKIP')
+        \\package() { mkdir -p "$pkgdir"; }
+    , null, null);
+    defer fixture.destroy();
+    const first = try std.fs.path.join(allocator, &.{ fixture.build_dir, "first.tar.gz" });
+    defer allocator.free(first);
+    const second = try std.fs.path.join(allocator, &.{ fixture.build_dir, "second.tar.gz" });
+    defer allocator.free(second);
+    try archive.writeFixture(allocator, first, .gzip, &.{
+        .{ .path = "calendars", .kind = .hard_link, .link_target = "original" },
+        .{ .path = "original", .contents = "regular\n" },
+    });
+    try archive.writeFixture(allocator, second, .gzip, &.{
+        .{ .path = "calendars", .contents = "replacement\n" },
+    });
+    fixture.builder.options.sources_prepared = false;
+    try fixture.temporary.dir.deleteTree(io, "src");
+
+    try testing.expectError(error.BuildFailed, fixture.builder.BuildPackage());
+    try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, "src", .{}));
+    try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, ".src.shelly-staging", .{}));
+}
+
 test "PackageBuilder rejects unsafe source hard links and preserves srcdir" {
     const cases = [_][]const archive.FixtureEntry{
         &.{.{ .path = "link", .kind = .hard_link, .link_target = "../outside" }},

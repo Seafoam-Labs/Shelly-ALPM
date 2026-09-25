@@ -143,6 +143,8 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
         steps.reportUnwritableBuildDirectory(self, extraction_staging);
         return error.BuildDirectoryNotWritable;
     };
+    var extracted_regular_paths: ExtractedRegularPaths = .{};
+    defer extracted_regular_paths.deinit(self.allocator);
     for (prepared) |*source| {
         try operation.checkCancelled();
         const materialized = try std.fs.path.join(
@@ -173,6 +175,7 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
                         operation,
                         source.destination,
                         extraction_staging,
+                        &extracted_regular_paths,
                     );
                     if (!extracted) try decompressStandaloneSource(self, operation, source, prepared, extraction_staging);
                     if (!extracted or !pathExistsNoFollow(self.io, materialized))
@@ -749,11 +752,36 @@ fn decompressStandalonePayload(
     try reader.copyTo(&writer.interface, 4 * 1024 * 1024 * 1024, operation);
 }
 
+// makepkg extracts all source archives into one tree and permits a later
+// regular member to replace an earlier one. Keep this set separate from the
+// per-archive member map so hard-link resolution remains archive-local and
+// non-regular destination collisions remain strict.
+const ExtractedRegularPaths = struct {
+    entries: std.StringArrayHashMapUnmanaged(void) = .empty,
+
+    fn deinit(self: *ExtractedRegularPaths, allocator: std.mem.Allocator) void {
+        for (self.entries.keys()) |path| allocator.free(path);
+        self.entries.deinit(allocator);
+    }
+
+    fn contains(self: *const ExtractedRegularPaths, path: []const u8) bool {
+        return self.entries.contains(path);
+    }
+
+    fn remember(self: *ExtractedRegularPaths, allocator: std.mem.Allocator, path: []const u8) !void {
+        if (self.contains(path)) return;
+        const owned_path = try allocator.dupe(u8, path);
+        errdefer allocator.free(owned_path);
+        try self.entries.put(allocator, owned_path, {});
+    }
+};
+
 fn extractSourceArchiveIfRecognized(
     self: *PackageBuilder,
     operation: *op_context.Operation,
     archive_path: []const u8,
     destination_root: []const u8,
+    extracted_regular_paths: *ExtractedRegularPaths,
 ) !bool {
     const DirectoryTimestamp = struct {
         path: []u8,
@@ -808,9 +836,13 @@ fn extractSourceArchiveIfRecognized(
                 },
                 .regular_file => {
                     try ensureSafeArchivePath(self, destination_root, relative, false);
-                    try rejectExistingDestination(self.io, destination);
+                    if (extracted_regular_paths.contains(relative)) {
+                        try replaceExistingRegularFile(self.io, destination);
+                    } else {
+                        try rejectExistingDestination(self.io, destination);
+                    }
                     var output = try std.Io.Dir.cwd().createFile(self.io, destination, .{
-                        .truncate = true,
+                        .exclusive = true,
                         .permissions = std.Io.File.Permissions.fromMode(entry.permissions & 0o777),
                     });
                     defer output.close(self.io);
@@ -829,6 +861,7 @@ fn extractSourceArchiveIfRecognized(
                     if (entry.mtime) |mtime| try output.setTimestamps(self.io, .{
                         .modify_timestamp = .{ .new = mtime },
                     });
+                    try extracted_regular_paths.remember(self.allocator, relative);
                 },
                 .symbolic_link => {
                     const target = entry.link_target orelse return error.UnsafeSourceArchiveLink;
@@ -1053,6 +1086,17 @@ fn raiseSourceMessage(self: *PackageBuilder, package_build: *const PackageBuild,
         .stage = "sources",
         .message = package_build.pkg_name orelse message,
     });
+}
+
+// Unlink instead of truncating: an earlier regular entry may have a hard-link
+// alias whose inode must remain unchanged.
+fn replaceExistingRegularFile(io: std.Io, path: []const u8) !void {
+    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
+        error.FileNotFound => return error.UnsafeSourceArchivePath,
+        else => return err,
+    };
+    if (stat.kind != .file) return error.UnsafeSourceArchivePath;
+    try std.Io.Dir.cwd().deleteFile(io, path);
 }
 
 fn rejectExistingDestination(io: std.Io, path: []const u8) !void {
