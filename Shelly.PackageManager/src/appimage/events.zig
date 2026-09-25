@@ -160,7 +160,7 @@ pub const OperationScope = struct {
     pub fn fail(self: *OperationScope) void {
         if (self.operation) |*operation| operation.reportError(
             if (operation.isCancelled()) error.Cancelled else error.AppImageOperationFailed,
-            if (operation.isCancelled()) "AppImage operation cancelled" else "AppImage operation failed",
+            if (operation.isCancelled()) "Operation cancelled." else "Could not complete the package operation.",
             "appimage",
             null,
             false,

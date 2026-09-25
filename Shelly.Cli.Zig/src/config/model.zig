@@ -68,6 +68,22 @@ pub const Config = struct {
     }
 };
 
+pub fn valueHint(allocator: std.mem.Allocator, requested: []const u8) ![]const u8 {
+    const config = try Config.defaults(allocator);
+    const key = config.findCanonicalKey(requested) orelse return "The setting name is not recognized.";
+    if (std.mem.eql(u8, key, "ParallelDownloadCount")) return "Expected an integer from 1 to 255.";
+    if (std.mem.eql(u8, key, "DaysOfWeek")) return "Expected a comma-separated list of weekday names.";
+    if (std.mem.eql(u8, key, "AurUrl")) return "Expected a valid HTTP or HTTPS AUR base URL.";
+    if (std.mem.eql(u8, key, "Time")) return "Expected a time in HH:MM format or null.";
+    if (enumChoices(key)) |choices| return std.fmt.allocPrint(allocator, "Expected one of: {s}.", .{try std.mem.join(allocator, ", ", choices)});
+    return switch (config.values.get(key).?) {
+        .bool => "Expected true or false.",
+        .integer => if (floatProperty(key)) "Expected a number." else "Expected a whole number.",
+        .float => "Expected a number.",
+        else => "Expected a text value.",
+    };
+}
+
 pub fn parallelDownloadCount(value: std.json.Value) ?u8 {
     if (value != .integer or value.integer < 1 or value.integer > std.math.maxInt(u8)) return null;
     return @intCast(value.integer);

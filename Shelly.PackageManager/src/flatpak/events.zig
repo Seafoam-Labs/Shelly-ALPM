@@ -242,9 +242,9 @@ pub const OperationScope = struct {
                 else
                     error.FlatpakOperationFailed,
                 if (operation.isCancelled())
-                    "Flatpak operation cancelled"
+                    "Operation cancelled."
                 else
-                    "Flatpak operation failed",
+                    "Could not complete the package operation.",
                 "flatpak",
                 null,
                 false,

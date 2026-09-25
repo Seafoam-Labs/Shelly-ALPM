@@ -7,7 +7,7 @@ const function_body = @import("function_body.zig");
 const expansion = @import("expansion.zig");
 const arrays = @import("arrays.zig");
 const variables = @import("variables.zig");
-const dependencies = @import("dependencies.zig");
+const fields = @import("fields.zig");
 const PkgbuildParser = @import("parser.zig").PkgbuildParser;
 
 const execution_step = types.execution_step;
@@ -163,7 +163,7 @@ fn build_execution_prelude(
                 (self.dynamic_array_unsets == null or !self.dynamic_array_unsets.?.contains(name)))
                 return error.UnsupportedDynamicAssignment;
         }
-        const resolved = try resolve_execution_array(self, content, vars, name, 0);
+        const resolved = try fields.resolve_array_field(self, content, vars, name);
         defer variables.freeStringSlice(self.allocator, resolved);
         try write_execution_declaration(writer, name, .{ .indexed_array = resolved });
     }
@@ -211,58 +211,6 @@ fn build_execution_prelude(
     }
 
     return output.toOwnedSlice();
-}
-
-fn resolve_execution_array(
-    self: PkgbuildParser,
-    content: []const u8,
-    vars: *std.StringHashMap([]const u8),
-    name: []const u8,
-    depth: usize,
-) ![][]const u8 {
-    if (depth >= 32) return error.ArrayExpansionTooDeep;
-    if (self.dynamic_array_overrides) |overrides| if (overrides.get(name)) |items| {
-        const cloned = try self.allocator.alloc([]const u8, items.len);
-        errdefer self.allocator.free(cloned);
-        var count: usize = 0;
-        errdefer for (cloned[0..count]) |item| self.allocator.free(item);
-        for (items, cloned) |item, *destination| {
-            destination.* = try self.allocator.dupe(u8, item);
-            count += 1;
-        }
-        return cloned;
-    };
-    const raw_items = try arrays.parse_array(self, content, name);
-    defer variables.freeStringSlice(self.allocator, raw_items);
-
-    var resolved: std.ArrayList([]const u8) = .empty;
-    errdefer {
-        for (resolved.items) |item| self.allocator.free(item);
-        resolved.deinit(self.allocator);
-    }
-    for (raw_items) |item| {
-        if (dependencies.match_array_ref(item)) |referenced_name| {
-            const referenced = try resolve_execution_array(
-                self,
-                content,
-                vars,
-                referenced_name,
-                depth + 1,
-            );
-            defer variables.freeStringSlice(self.allocator, referenced);
-            for (referenced) |value|
-                try resolved.append(self.allocator, try self.allocator.dupe(u8, value));
-            continue;
-        }
-        if (std.mem.indexOf(u8, item, "[@]") != null)
-            return error.UnsupportedArrayExpansion;
-        const value = if (shell_scan.contains_command_substitution(item))
-            try self.allocator.dupe(u8, item)
-        else
-            try expansion.resolve_string(self, item, vars);
-        try resolved.append(self.allocator, value);
-    }
-    return resolved.toOwnedSlice(self.allocator);
 }
 
 /// Names whose static array declarations must be replaced by evaluated shell

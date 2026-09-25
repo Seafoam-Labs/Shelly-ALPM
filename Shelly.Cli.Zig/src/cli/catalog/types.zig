@@ -20,10 +20,12 @@ pub const Action = enum {
     keyring,
     build,
     resolve,
+    repo_db,
 
     pub fn name(self: Action) []const u8 {
         return switch (self) {
             .list_updates => "list-updates",
+            .repo_db => "repo-db",
             else => |action| @tagName(action),
         };
     }
@@ -49,6 +51,7 @@ pub const Action = enum {
             .keyring => 'K',
             .build => 'A',
             .resolve => 'Q',
+            .repo_db => 'G',
         };
     }
 
@@ -73,6 +76,7 @@ pub const Action = enum {
             .run => "Launch or stop a Flatpak or AppImage application.",
             .build => "Builds a PKGBUILD into an installable package",
             .resolve => "Resolve exact package names to source package bases without changing package state.",
+            .repo_db => "Add, remove, list, or verify entries in a pacman repository database (repo-add / repo-remove).",
         };
     }
 

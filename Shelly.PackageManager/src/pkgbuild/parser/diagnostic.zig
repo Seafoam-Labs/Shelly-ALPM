@@ -50,22 +50,15 @@ pub const Diagnostic = struct {
         const owned_field = try allocator.dupe(u8, field);
         const owned_expression = try allocator.dupe(u8, expression);
         const owned_filename = if (filename) |name| try allocator.dupe(u8, name) else null;
-        // JSON string escaping makes control characters safe in terminals and
-        // one-line logs while retaining exact bytes in the structured fields.
-        const message = try std.fmt.allocPrint(allocator, "{s}: {s}:{d}: {s}={s}; selected file {s}: {s} [{s}] (preparation)", .{
-            try std.json.Stringify.valueAlloc(allocator, package, .{}),
-            try std.json.Stringify.valueAlloc(allocator, path, .{}),
-            line orelse 0,
-            field,
-            try std.json.Stringify.valueAlloc(allocator, expression, .{}),
-            try std.json.Stringify.valueAlloc(allocator, filename, .{}),
-            switch (err) {
-                error.MissingPkgbuildSourceFile => "the selected local file was not found",
-                error.UnsafePkgbuildSourcePath => "the selected path is not a regular file inside the package directory",
-                error.UnresolvedPkgbuildVariable => "the selection requires unresolved shell evaluation",
-                else => "the selected local file could not be reviewed",
-            },
-            @errorName(err),
+        const location = if (line) |number|
+            try std.fmt.allocPrint(allocator, "{f}:{d}", .{ @import("diagnostics").safe(path), number })
+        else
+            try @import("diagnostics").sanitizeAlloc(allocator, path);
+        const message = try std.fmt.allocPrint(allocator, "Could not prepare {f}. {s} Check {f} in {s}.\n\nTechnical details: {s}\nExpression: {f}\nSelected file: {f}", .{
+            @import("diagnostics").safe(package),                          @import("diagnostics").cause(err),
+            @import("diagnostics").safe(field),                            location,
+            @errorName(err),                                               @import("diagnostics").safe(expression),
+            @import("diagnostics").safe(filename orelse "(not resolved)"),
         });
         return .{ .arena = arena, .code = @errorName(err), .package_name = owned_package, .pkgbuild_path = owned_path, .field = owned_field, .expression = owned_expression, .resolved_filename = owned_filename, .line = line, .message = message };
     }

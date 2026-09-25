@@ -125,6 +125,11 @@ pub const Response = struct {
         const error_message = try dupeOptional(allocator, object, "error");
         errdefer freeOptional(allocator, error_message);
 
+        const result_count: ?usize = if (object.get("resultcount")) |count| blk: {
+            if (count != .integer) return error.InvalidAurResponse;
+            break :blk std.math.cast(usize, count.integer) orelse return error.InvalidAurResponse;
+        } else null;
+
         var packages: std.ArrayList(Package) = .empty;
         errdefer {
             for (packages.items) |*package| package.deinit(allocator);
@@ -144,7 +149,7 @@ pub const Response = struct {
         return .{
             .version = getInt(object, "version") orelse 0,
             .response_type = response_type,
-            .result_count = @intCast(getInt(object, "resultcount") orelse @as(i64, @intCast(packages.items.len))),
+            .result_count = result_count orelse packages.items.len,
             .results = try packages.toOwnedSlice(allocator),
             .error_message = error_message,
         };

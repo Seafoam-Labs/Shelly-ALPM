@@ -16,6 +16,7 @@ const SizeDisplay = fmt.SizeDisplay;
 const ProgressStyle = enum {
     blocks,
     pacman,
+    nerdfont,
 };
 
 const Settings = struct {
@@ -84,6 +85,7 @@ pub fn output(
             return false;
         }
         const message = try Zigalpm.user_errors.format(context.allocator, err, .{
+            .operation = invocation.command.path,
             .subject = if (invocation.positionals.len == 1) invocation.positionals[0] else null,
         });
         defer context.allocator.free(message);
@@ -92,7 +94,7 @@ pub fn output(
         return false;
     };
 
-    try renderer.finishWithMessage(true, success_message);
+    try renderer.finishWithMessage(!renderer.failed(), if (renderer.failed()) failure_message else success_message);
     return !renderer.failed();
 }
 
@@ -187,7 +189,7 @@ pub const Renderer = struct {
             if (message) |value|
                 try self.writeColoredLine(.red, ":: {s}", .{value})
             else
-                try self.writeColoredLine(.red, ":: Transaction failed.", .{});
+                try self.writeColoredLine(.red, "Could not complete the requested operation.", .{});
         }
         try self.flush();
     }
@@ -195,14 +197,15 @@ pub const Renderer = struct {
     pub fn reportError(self: *Renderer, message: []const u8) !void {
         self.mutex.lockUncancelable(self.context.io);
         defer self.mutex.unlock(self.context.io);
-        try self.writeColoredLine(.red, "error: {s}", .{message});
+        self.reported_failure.store(true, .release);
+        try self.writeColoredLine(.red, "error: {f}", .{Zigalpm.user_errors.safe(message)});
         try self.flush();
     }
 
     pub fn reportTechnicalDetails(self: *Renderer, err: anyerror) !void {
         self.mutex.lockUncancelable(self.context.io);
         defer self.mutex.unlock(self.context.io);
-        try self.writeColoredLine(.white, "Technical details: {t}", .{err});
+        try self.writeColoredLine(.white, "Operation result: {t}", .{err});
         try self.flush();
     }
 
@@ -211,12 +214,12 @@ pub const Renderer = struct {
         defer self.mutex.unlock(self.context.io);
         try self.clearBars();
         self.bars.clearRetainingCapacity();
-        try self.writeColoredLine(.yellow, ":: Operation cancelled.", .{});
+        try self.writeColoredLine(.yellow, "Operation cancelled.", .{});
         try self.flush();
     }
 
     pub fn failed(self: *const Renderer) bool {
-        return self.write_failed.load(.acquire);
+        return self.write_failed.load(.acquire) or self.reported_failure.load(.acquire);
     }
 
     fn handleEvent(data: ?*anyopaque, event: Zigalpm.OperationEvent) void {
@@ -231,10 +234,7 @@ pub const Renderer = struct {
             .progress => |progress| try self.writeProgress(progress),
             .status => |status| try self.writeStatus(status),
             .failure => |failure| {
-                const message = try Zigalpm.user_errors.format(self.context.allocator, failure.err, .{
-                    .subject = failure.envelope.subject,
-                    .detail = failure.message,
-                });
+                const message = try Zigalpm.user_errors.formatEvent(self.context.allocator, failure);
                 defer self.context.allocator.free(message);
                 if (failure.recoverable) {
                     try self.writeColoredLine(.yellow, "warning: {s}", .{message});
@@ -780,7 +780,7 @@ fn integerValue(config: *const config_model.Config, key: []const u8) ?usize {
 }
 
 fn parseProgressStyle(value: []const u8) ProgressStyle {
-    return if (std.ascii.eqlIgnoreCase(value, "Pacman")) .pacman else .blocks;
+    return if (std.ascii.eqlIgnoreCase(value, "Pacman")) .pacman else if (std.ascii.eqlIgnoreCase(value, "Nerdfont")) .nerdfont else .blocks;
 }
 
 fn convertSize(display: SizeDisplay, bytes: u64) f64 {
@@ -1076,6 +1076,22 @@ fn renderBar(
             }
             for (filled..width) |index| {
                 try writer.writeByte(if (percentage < 100 and (index - filled) % 2 == 0) 'o' else ' ');
+            }
+        },
+        .nerdfont => {
+            if (ascii_only) {
+                try writer.splatByteAll('#', filled);
+                try writer.splatByteAll('-', width - filled);
+            } else {
+                for (0..width) |index| {
+                    if (index == 0) {
+                        try writer.writeAll(if (filled > 0) "" else "");
+                    } else if (index == width-1) {
+                        try writer.writeAll(if (percentage < 100) "" else "");
+                    } else {
+                        try writer.writeAll(if (filled > index) "" else "");
+                    }
+                }
             }
         },
     }

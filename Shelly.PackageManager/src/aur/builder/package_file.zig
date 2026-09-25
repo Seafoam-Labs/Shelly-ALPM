@@ -10,6 +10,7 @@ const package_signer = @import("../../shared/package_signer.zig");
 const package_options = @import("package_options");
 const metadata = @import("metadata.zig");
 const virtual_ownership = @import("virtual_ownership.zig");
+const package_permissions = @import("package_permissions.zig");
 const steps = @import("steps.zig");
 const alpm_bindings = @import("../../alpm/bindings.zig").libalpm;
 const raw_alpm = alpm_bindings.alpm;
@@ -19,19 +20,50 @@ const PackageBuild = @import("../../pkgbuild/pkgbuild_parser.zig").Pkgbuild;
 
 pub fn preparePackageDirectory(self: *PackageBuilder, package_build: *const PackageBuild) !void {
     const package_name = package_build.pkg_name orelse return error.MissingPackageName;
+    self.failure_location = .{ .package_name = package_name, .step_name = "package-cleanup" };
     const pkgdir = try std.fs.path.join(
         self.allocator,
         &.{ self.options.work_directory, "pkg", package_name },
     );
     defer self.allocator.free(pkgdir);
-    std.Io.Dir.cwd().deleteTree(self.io, pkgdir) catch {
+    var parent = try openPackageParent(self);
+    defer parent.close(self.io);
+    package_permissions.removeTree(self.allocator, self.io, parent, package_name) catch |err| {
+        if (err == error.Cancelled) return err;
+        reportPackageAccessError(self, "cleaning package directory", pkgdir, err);
         steps.reportUnwritableBuildDirectory(self, pkgdir);
         return error.BuildDirectoryNotWritable;
     };
-    std.Io.Dir.cwd().createDirPath(self.io, pkgdir) catch {
+    parent.createDir(self.io, package_name, .default_dir) catch {
         steps.reportUnwritableBuildDirectory(self, pkgdir);
         return error.BuildDirectoryNotWritable;
     };
+}
+
+pub fn cleanPackageTree(self: *PackageBuilder) !void {
+    var work = try std.Io.Dir.cwd().openDir(self.io, self.options.work_directory, .{ .follow_symlinks = false });
+    defer work.close(self.io);
+    try package_permissions.removeTree(self.allocator, self.io, work, "pkg");
+}
+
+fn openPackageParent(self: *PackageBuilder) !std.Io.Dir {
+    var work = try std.Io.Dir.cwd().openDir(self.io, self.options.work_directory, .{ .follow_symlinks = false });
+    defer work.close(self.io);
+    work.createDir(self.io, "pkg", .default_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => return err,
+    };
+    return work.openDir(self.io, "pkg", .{ .follow_symlinks = false });
+}
+
+fn reportPackageAccessError(self: *PackageBuilder, phase: []const u8, path: []const u8, err: anyerror) void {
+    const message = std.fmt.allocPrint(self.allocator, "Error {s} at {f}: {s}", .{
+        phase, @import("diagnostics").safe(path), @errorName(err),
+    }) catch return;
+    defer self.allocator.free(message);
+    if (self.active_log) |log| log.writeRecord("error", message) catch {};
+    if (self.active_operation) |operation|
+        operation.reportError(err, message, "build", null, false);
 }
 
 /// Applies the small, content-affecting subset of makepkg's tidy phase
@@ -93,7 +125,7 @@ fn tidyPackage(self: *PackageBuilder, package_build: *const PackageBuild, pkgdir
         for (flags) |flag| try command.append(self.allocator, flag);
         try command.appendSlice(self.allocator, &.{ "-o", output_path, "--" });
         try command.append(self.allocator, path);
-        var result = try process_runner.runWithEnvironment(
+        var result = try process_runner.runWithBuildEnvironment(
             self.allocator,
             self.io,
             self.environ,
@@ -106,8 +138,8 @@ fn tidyPackage(self: *PackageBuilder, package_build: *const PackageBuild, pkgdir
         if (result.exit_code != 0) {
             const warning = try std.fmt.allocPrint(
                 self.allocator,
-                "Could not strip {s} (exit {d}); keeping original file.\n{s}",
-                .{ entry.path, result.exit_code, std.mem.trimEnd(u8, result.stderr, "\r\n") },
+                "Could not strip {0f}; keeping the original file. Review the strip output in the build details.\n\nTechnical details: {1d}; {2f}",
+                .{ @import("diagnostics").safe(entry.path), result.exit_code, @import("diagnostics").safe(std.mem.trimEnd(u8, result.stderr, "\r\n")) },
             );
             defer self.allocator.free(warning);
             if (self.active_operation) |operation| {
@@ -172,6 +204,8 @@ fn purgePackageDirectory(self: *PackageBuilder, directory: std.Io.Dir, relative_
 
 pub fn assemblePackage(self: *PackageBuilder, package_build: *const PackageBuild) !BuildArtifact {
     const package_name = package_build.pkg_name orelse return error.MissingPackageName;
+    self.failure_location = .{ .package_name = package_name, .step_name = "package-assembly" };
+    try steps.logPhase(self, "package-assembly");
     const full_version = try package_build.get_full_version(self.allocator);
     defer self.allocator.free(full_version);
     if (full_version.len == 0) return error.MissingPackageVersion;
@@ -183,6 +217,33 @@ pub fn assemblePackage(self: *PackageBuilder, package_build: *const PackageBuild
     );
     defer self.allocator.free(pkgdir);
 
+    var parent = try openPackageParent(self);
+    defer parent.close(self.io);
+    var access: package_permissions.Access = .{ .allocator = self.allocator, .io = self.io, .operation = self.active_operation };
+    defer {
+        access.restore() catch |err| reportPackageAccessError(self, "restoring package permissions", pkgdir, err);
+        access.deinit();
+    }
+    access.prepare(parent, package_name) catch |err| {
+        const failed_path = std.fs.path.join(self.allocator, &.{ pkgdir, access.failure_path orelse "" }) catch null;
+        defer if (failed_path) |path| self.allocator.free(path);
+        reportPackageAccessError(self, "preparing package permissions", failed_path orelse pkgdir, err);
+        return err;
+    };
+    if (self.active_operation) |operation| try operation.checkCancelled();
+
+    if (self.virtual_ownership_tracker) |*tracker| {
+        if (try tracker.retainedDevicePath(self.io, pkgdir)) |path| {
+            defer self.allocator.free(path);
+            const message = try std.fmt.allocPrint(self.allocator, "Cannot package {f}: a temporary mknod placeholder remains. Device nodes in finished packages are unsupported; remove the temporary node in package().", .{@import("diagnostics").safe(path)});
+            defer self.allocator.free(message);
+            if (self.active_log) |log| try log.writeRecord("error", message);
+            if (self.active_operation) |operation|
+                operation.reportError(error.PrivilegedPackageOperationUnsupported, message, "build", null, false);
+            return error.PrivilegedPackageOperationUnsupported;
+        }
+    }
+
     // Resolve inode-attached ownership before tidy tools such as `strip` can
     // replace a file behind the same final package path.
     var owned_virtual_metadata: ?virtual_ownership.OwnedMetadata = if (self.virtual_ownership_tracker) |*tracker|
@@ -193,7 +254,8 @@ pub fn assemblePackage(self: *PackageBuilder, package_build: *const PackageBuild
     else
         null;
     defer if (owned_virtual_metadata) |*owned| owned.deinit();
-    const virtual_metadata: archive.VirtualMetadata = if (owned_virtual_metadata) |*owned| owned.view() else .{};
+    var virtual_metadata: archive.VirtualMetadata = if (owned_virtual_metadata) |*owned| owned.view() else .{};
+    virtual_metadata.mode_overrides = access.modes.items;
 
     try tidyPackage(self, package_build, pkgdir);
 
@@ -261,6 +323,9 @@ pub fn assemblePackage(self: *PackageBuilder, package_build: *const PackageBuild
         try writer.addDirectory(pkgdir);
         try writer.finish();
     }
+
+    // Restore before publishing any artifact, and also on every early return.
+    try access.restore();
 
     var temporary_signature_path: ?[]u8 = null;
     defer if (temporary_signature_path) |path| self.allocator.free(path);

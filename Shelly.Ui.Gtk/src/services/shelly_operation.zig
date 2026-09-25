@@ -84,6 +84,8 @@ const AlpmInfo = struct {
 const AlpmError = struct {
     @"$kind": []const u8 = "",
     ErrorMessage: []const u8 = "",
+    Level: []const u8 = "Error",
+    Recoverable: bool = false,
 };
 
 const AlpmProgress = struct {
@@ -570,7 +572,7 @@ pub const ShellyOperation = struct {
         }
 
         const term = self.child.wait(self.io) catch |err| {
-            log.debug("reader_loop: wait error: {t}", .{err});
+            log.debug("Could not collect the result of the requested operation. {0s} Its final status could not be confirmed.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             post_done(self, 255);
             return;
         };
@@ -814,7 +816,6 @@ fn parseYesNo(op: *ShellyOperation, json: []const u8) !?*PendingQuestion {
     return pending;
 }
 
-
 fn parseTransaction(op: *ShellyOperation, json: []const u8) !?*PendingQuestion {
     const e = try std.json.parseFromSlice(TransactionRequest, op.allocator, json, .{ .ignore_unknown_fields = true });
     defer e.deinit();
@@ -905,7 +906,11 @@ fn dispatchEvent(op: *ShellyOperation, alloc: std.mem.Allocator, json: []const u
     } else if (std.mem.eql(u8, kind, "alpm.error")) {
         const e = std.json.parseFromSlice(AlpmError, alloc, json, .{ .ignore_unknown_fields = true }) catch return;
         defer e.deinit();
-        op.on_event(op.ctx, .{ .err = .{ .message = e.value.ErrorMessage } });
+        if (e.value.Recoverable or !std.mem.eql(u8, e.value.Level, "Error")) {
+            op.on_event(op.ctx, .{ .info = .{ .event_type = "Warning", .message = e.value.ErrorMessage, .package_name = null, .current = null, .total = null } });
+        } else {
+            op.on_event(op.ctx, .{ .err = .{ .message = e.value.ErrorMessage } });
+        }
     } else if (std.mem.eql(u8, kind, "alpm.progress")) {
         const e = std.json.parseFromSlice(AlpmProgress, alloc, json, .{ .ignore_unknown_fields = true }) catch return;
         defer e.deinit();

@@ -33,11 +33,11 @@ pub fn runInternal(
     arguments: []const []const u8,
 ) u8 {
     const options = parseArguments(arguments) catch |err| {
-        stderr.print("shellystrap: invalid request: {t}\n", .{err}) catch {};
+        stderr.print("Could not provision the isolated build root because the bootstrap request is invalid. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) }) catch {};
         return 2;
     };
     _ = bootstrapReporting(allocator, io, environ, options, stderr) catch |err| {
-        stderr.print("shellystrap: provisioning failed: {t}\n", .{err}) catch {};
+        stderr.print("Could not provision the isolated build root. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) }) catch {};
         return 1;
     };
     return 0;
@@ -93,15 +93,21 @@ const DiagnosticOutput = struct {
 
     fn handleError(data: ?*anyopaque, args: events.ErrorArgs) void {
         const self: *DiagnosticOutput = @ptrCast(@alignCast(data.?));
-        self.stderr.print("shellystrap: libalpm: {s}\n", .{
-            std.mem.trimEnd(u8, args.message, "\r\n"),
-        }) catch {};
+        self.stderr.print("Could not provision the isolated build root: {0f}.\n", .{@import("diagnostics").safe(std.mem.trimEnd(u8, args.message, "\r\n"))}) catch {};
     }
 
     fn handleScriptlet(data: ?*anyopaque, args: events.ScriptletArgs) void {
         const self: *DiagnosticOutput = @ptrCast(@alignCast(data.?));
         self.stderr.print("shellystrap: scriptlet: {s}\n", .{
             std.mem.trimEnd(u8, args.line, "\r\n"),
+        }) catch {};
+    }
+
+    fn handleHook(data: ?*anyopaque, args: events.HookArgs) void {
+        const self: *DiagnosticOutput = @ptrCast(@alignCast(data.?));
+        self.stderr.print("shellystrap: hook: {s}: {s}\n", .{
+            args.name orelse "unknown",
+            args.description orelse "Running package initialization",
         }) catch {};
     }
 };
@@ -177,8 +183,8 @@ fn finalizeRoot(
             null,
         ) catch |err| {
             var detail_buffer: [256]u8 = undefined;
-            const detail = std.fmt.bufPrint(&detail_buffer, "unable to start: {t}", .{err}) catch
-                "unable to start";
+            const detail = std.fmt.bufPrint(&detail_buffer, "Could not start the setup command while preparing the isolated build root. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) }) catch
+                "Could not start the setup command while preparing the isolated build root.";
             reportFinalizerFailure(diagnostic_writer, finalizer.name, detail);
             return error.BootstrapFinalizerFailed;
         };
@@ -228,17 +234,12 @@ fn bootstrapReporting(
         .cache_directory = cache_path,
         .log_file = log_path,
         .gpg_directory = target_gpg_path,
+        .root_hooks_only = true,
     });
     defer manager.deinit();
 
-    // The configured hook directories belong to the host. Loading them while
-    // creating an empty root can run host-specific pre-transaction hooks (for
-    // example snap-pac or boot-loader hooks) inside a root where their
-    // executables do not exist yet. A freshly provisioned root has no prior
-    // transaction hooks of its own, so suppress hooks for this initial install.
-    // Hooks shipped by the installed packages remain available to subsequent
-    // package operations in the completed root.
-    manager.disable_transaction_hooks();
+    // libalpm rescans the target hook directories after installation. This
+    // initializes newly installed tools (including TeX) without host hooks.
 
     var diagnostic_output: DiagnosticOutput = undefined;
     if (diagnostic_writer) |writer| {
@@ -249,6 +250,10 @@ fn bootstrapReporting(
         });
         _ = try manager.dispatcher.addScriptletHandler(.{
             .function = DiagnosticOutput.handleScriptlet,
+            .data = &diagnostic_output,
+        });
+        _ = try manager.dispatcher.addHookHandler(.{
+            .function = DiagnosticOutput.handleHook,
             .data = &diagnostic_output,
         });
     }
@@ -264,6 +269,7 @@ fn bootstrapReporting(
         initialized += 1;
     }
     try manager.install_packages(package_names, .{ .needed = true });
+    if (manager.package_setup_failed) return error.BootstrapPackageSetupFailed;
 
     const installed = try manager.get_installed_packages();
     defer {
@@ -488,10 +494,17 @@ test "internal bootstrap diagnostics write libalpm failures only to stderr" {
     DiagnosticOutput.handleScriptlet(&diagnostics, .{
         .line = "a package scriptlet failed\n",
     });
+    DiagnosticOutput.handleHook(&diagnostics, .{
+        .name = "72-texlive-fmtutil.hook",
+        .description = "Updating TeXLive format files...",
+        .position = 1,
+        .total = 1,
+    });
 
     try std.testing.expectEqualStrings(
-        "shellystrap: libalpm: invalid or corrupted package (PGP signature)\n" ++
-            "shellystrap: scriptlet: a package scriptlet failed\n",
+        "Could not provision the isolated build root: invalid or corrupted package (PGP signature).\n" ++
+            "shellystrap: scriptlet: a package scriptlet failed\n" ++
+            "shellystrap: hook: 72-texlive-fmtutil.hook: Updating TeXLive format files...\n",
         output.written(),
     );
 }

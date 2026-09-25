@@ -38,7 +38,7 @@ paru -S shelly
 
 ## Uninstall
 
-#### For standard package removal
+### For standard package removal
 
 ```bash
 sudo pacman -Rns shelly
@@ -67,6 +67,19 @@ paru -Rns shelly
 - **Optional Flatpak Support**: Install `shelly-flatpak-backend` to manage
   Flatpak applications alongside native packages without making Flatpak a
   runtime dependency of the base Shelly package.
+
+## AUR package availability
+
+`shelly install aur` (`shelly -Ia`) requires the requested package and any AUR
+build dependencies to be listed by the configured AUR service. Cached checkouts
+and surviving Git repositories do not authorize building a removed package.
+This also applies to `--version` installs. If availability cannot be verified
+because the service is unreachable, retry once the connection is restored.
+
+When an unavailable AUR package has an exact match in a configured repository,
+Shelly suggests `shelly -Is <package>`. Explicit local builds with
+`shelly build /path/to/PKGBUILD` and removal of installed packages remain
+available without an AUR availability check.
 
 ## PKGBUILD review
 
@@ -160,7 +173,7 @@ Upcoming features and development targets:
 - **vala** (for building)
 - **libalpm** (provided by `pacman`)
 
-#### Optional Prerequisites
+### Optional Prerequisites
 
 - **Flatpak support**: Install both `flatpak` and
   `shelly-flatpak-backend`. The backend is loaded only for a Flatpak operation.
@@ -230,6 +243,22 @@ CLI provides the same core functionality as the UI but in a scriptable, terminal
 
 Full documentation can be viewed on the [Shelly CLI Reference](https://www.seafoam-labs.org/shelly-alpm/docs/cli-reference/) page.
 
+Standard searches show available repository packages by default, with ranked
+matches for a query or a paginated listing when no query is supplied:
+
+```bash
+shelly search standard firefox
+shelly -Ss firefox
+shelly search standard
+shelly -Ss
+```
+
+Use `--detail`, `--info`, or `-d` to show metadata for one exact package name
+(for example, `shelly -Ss --detail firefox`). Use `--installed` to search
+installed ALPM packages or `--local` for Shelly-managed binary packages.
+`--explicit` and `--depends` select installed packages when no source is given.
+`--available` remains supported as an explicit repository source selector.
+
 Use `--needed` with standard installs to skip same-version reinstalls while still
 installing missing packages and allowing upgrades. The flag works before or after
 package names, and `-n` remains the separate no-confirm option:
@@ -241,11 +270,38 @@ shelly -Is --needed zed git -n
 
 This also applies to local Arch package archives. URL archives are downloaded
 before their package metadata can be checked. Without `--needed`, reinstall
-behavior is unchanged; AUR builds and Shelly binary archives are unaffected.
+behavior is unchanged; Shelly binary archives are unaffected.
 
-The versioned JSON contracts used by unattended package-building services are
-documented in [Remora automation contract](docs/remora-automation.md). Probe an
-installed binary with `shelly --version --json` before scheduling a build.
+For AUR installs, `--needed` skips building and reinstalling packages with the
+same installed version, including individual members of split packages:
+
+```bash
+shelly -Ia --needed yay
+shelly install aur yay --needed -n
+```
+
+Shelly fetches and reviews the PKGBUILD before checking its generated package
+metadata. Dynamic versions and VCS packages may still require a build; the
+resulting archives also use `--needed` when installed. With `--version`, the
+comparison uses the selected Git commit. Dependency-only installs still check
+the requested dependencies even when the parent package is already installed.
+
+Build a PKGBUILD and install the resulting packages in one command, including
+any missing build dependencies:
+
+```bash
+shelly build -s -l
+```
+
+This mirrors `makepkg -si`. Administrator credentials are requested once, up
+front: the build itself runs as your regular user, and the elevated
+coordinator installs the built archives after the build completes. Like
+`makepkg -i`, the install transaction adds only the built archives, so
+combine it with `--sync-deps` when the package's dependencies may be missing.
+
+Versioned JSON contracts for unattended package-building services are
+available. Probe an installed binary with `shelly --version --json` before
+scheduling a build.
 
 Generate makepkg-compatible SRCINFO from a reviewed PKGBUILD without running
 its build lifecycle:

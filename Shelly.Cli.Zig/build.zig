@@ -4,6 +4,7 @@ const package_manifest = @import("build.zig.zon");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const diagnostics = b.dependency("shelly_diagnostics", .{ .target = target, .optimize = optimize }).module("diagnostics");
     const flatpak_backend_path = b.option(
         []const u8,
         "flatpak-backend-path",
@@ -25,6 +26,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    cli.addImport("diagnostics", diagnostics);
     cli.addImport("Zigalpm", zigalpm);
     cli.addOptions("build_options", build_options);
 
@@ -33,6 +35,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    executable_module.addImport("diagnostics", diagnostics);
     executable_module.addImport("Shelly_Cli_Zig", cli);
     executable_module.addImport("Zigalpm", zigalpm);
 
@@ -40,6 +43,7 @@ pub fn build(b: *std.Build) void {
         .name = "shelly",
         .root_module = executable_module,
     });
+    executable.root_module.addImport("diagnostics", diagnostics);
     b.installArtifact(executable);
 
     const run_command = b.addRunArtifact(executable);
@@ -63,6 +67,21 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_module_tests.step);
     test_step.dependOn(&run_executable_tests.step);
 
+    const appimage_removal_tests = b.addTest(.{
+        .root_module = cli,
+        .filters = &.{ "AppImage removal", "resolves one AppImage", "remove AppImage" },
+    });
+    const run_appimage_removal_tests = b.addRunArtifact(appimage_removal_tests);
+    b.step("appimage-removal-test", "Test AppImage removal identity and stale metadata cleanup").dependOn(&run_appimage_removal_tests.step);
+
+    const upgrade_tests = b.addTest(.{
+        .root_module = cli,
+        .filters = &.{"upgrade"},
+    });
+    const run_upgrade_tests = b.addRunArtifact(upgrade_tests);
+    const upgrade_test_step = b.step("upgrade-test", "Test upgrade coordination and result reporting");
+    upgrade_test_step.dependOn(&run_upgrade_tests.step);
+
     const account_tests = b.addTest(.{
         .name = "user-account-test",
         .root_module = cli,
@@ -77,6 +96,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    builder_test_module.addImport("diagnostics", diagnostics);
     builder_test_module.addImport("Zigalpm", zigalpm);
     builder_test_module.addOptions("build_options", build_options);
     const builder_tests = b.addTest(.{
@@ -84,10 +104,19 @@ pub fn build(b: *std.Build) void {
         .root_module = builder_test_module,
         .filters = &.{
             "makesrcinfo emits clean stdout and never runs lifecycle functions",
+            "review-only accepts Heroic array trimming",
+            "review-only accepts filesystem here-strings",
+            "sync deps",
             "isolated source key",
             "isolated source public keys",
             "isolated child arguments",
             "isolated dependency review",
+            "isolated configuration preserves build policy",
+            "invoking user build arguments",
+            "build install options parse",
+            "build install rejects output modes",
+            "artifact report",
+            "host coordinator",
         },
     });
     const run_builder_tests = b.addRunArtifact(builder_tests);
@@ -100,19 +129,23 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    isolated_test_module.addImport("diagnostics", diagnostics);
     isolated_test_module.addImport("Zigalpm", zigalpm);
     const isolated_tests = b.addTest(.{
         .name = "isolated-build-test",
         .root_module = isolated_test_module,
         .filters = &.{
             "reviewed input paths cannot escape the staged source root",
+            "isolated command failures preserve the stage and native exit code",
             "reviewed inputs are materialized with exact bytes and permissions",
             "staged reviewed inputs preserve the host digest and reject real changes",
             "isolated public source key bundle is readable under restrictive umasks",
+            "isolated guest traversal permissions",
+            "isolated configuration permissions",
         },
     });
     const isolated_test_step = b.step("isolated-build-test", "Test reviewed staging and integrity under restrictive umasks");
-    for ([_][]const u8{ "0022", "0007", "0077" }) |mask| {
+    for ([_][]const u8{ "0022", "0007", "0027", "0077" }) |mask| {
         // Each runner inherits its own umask; never mutate it in concurrent Zig tests.
         const run_isolated_tests = b.addSystemCommand(&.{
             "bash", "-c", "umask \"$1\"; exec \"$2\"", "isolated-build-test", mask,

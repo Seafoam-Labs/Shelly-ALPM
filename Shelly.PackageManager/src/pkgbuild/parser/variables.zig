@@ -572,6 +572,18 @@ test "issue 1880 trusted Bash differential word matrix" {
     };
 }
 
+test "assignment scanner distinguishes here-strings from heredocs" {
+    const allocator = std.testing.allocator;
+    for ([_][]const u8{
+        "cat <<< 'install=wrong.install'\ninstall=good.install\n",
+        "cat <<'END' <<< 'install=wrong.install'\ninstall=also-wrong.install\nEND\ninstall=good.install\n",
+    }) |content| {
+        var vars = try build_var_hashmap(.{ .allocator = allocator, .io = std.testing.io }, content);
+        defer free_vars(allocator, &vars);
+        try std.testing.expectEqualStrings("good.install", vars.get("install").?);
+    }
+}
+
 test "issue 1880 heredoc contents and skipped function bodies are never assignments" {
     const allocator = std.testing.allocator;
     const content =

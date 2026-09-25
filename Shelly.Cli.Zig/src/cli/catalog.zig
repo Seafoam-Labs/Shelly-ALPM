@@ -13,6 +13,7 @@ const mark = @import("catalog/mark.zig");
 const news = @import("catalog/news.zig");
 const purify = @import("catalog/purify.zig");
 const remove = @import("catalog/remove.zig");
+const repo_db = @import("catalog/repo_db.zig");
 const repository = @import("catalog/repository.zig");
 const run = @import("catalog/run.zig");
 const search = @import("catalog/search.zig");
@@ -111,7 +112,8 @@ pub const variants = search.variants ++
     keyring.variants ++
     run.variants ++
     builder.variants ++
-    resolve.variants;
+    resolve.variants ++
+    repo_db.variants;
 
 pub const shared_modifiers = [_]SharedModifier{
     .{
@@ -405,6 +407,29 @@ test "remove variants expose native help and modifier aliases" {
         }
     }
     try std.testing.expect(found_no_cascade);
+}
+
+test "build install modifier uses the free l alias and leaves isolated alone" {
+    const options = resolveOptions(comptime findVariant(.build, "build").?);
+    var found = false;
+    for (options) |option| {
+        if (!std.mem.eql(u8, option.name, "--install")) continue;
+        found = true;
+        try std.testing.expect(option.aliases.len == 1);
+        try std.testing.expect(option.matches("-l"));
+        try std.testing.expect(!option.matches("-i"));
+        try std.testing.expect(option.description.?.len > 0);
+    }
+    try std.testing.expect(found);
+
+    var isolated_found = false;
+    for (options) |option| {
+        if (!std.mem.eql(u8, option.name, "--isolated")) continue;
+        isolated_found = true;
+        try std.testing.expect(option.matches("-i"));
+        try std.testing.expect(!option.matches("-l"));
+    }
+    try std.testing.expect(isolated_found);
 }
 
 test "shared modifiers stay shared across their listed types" {

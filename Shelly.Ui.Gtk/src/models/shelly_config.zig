@@ -37,12 +37,12 @@ pub const ShellyConfig = struct {
     // Feature Toggles
     AurEnabled: bool = false,
     AurWarningConfirmed: bool = false,
+    AtollAurEnabled: bool = false,
     AppImageEnabled: bool = false,
     FlatPackEnabled: bool = false,
     RecommendedEnabled: bool = true,
     ShellyIconsEnabled: bool = true,
     ShellySearchEnabled: bool = false,
-    WebviewEnabled: bool = false,
 
     // Window & View
     DefaultPageDropDown: ShellyTabs = .packages,

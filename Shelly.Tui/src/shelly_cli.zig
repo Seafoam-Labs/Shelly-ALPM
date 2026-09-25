@@ -48,9 +48,7 @@ pub const ShellyCli = struct {
         errdefer self.allocator.free(result.stderr);
         if (result.term != .exited or result.term.exited != 0) {
             if (!silent) {
-                std.debug.print("failed: term={any} stderr='{s}' stdout='{s}'\n", .{
-                    result.term, result.stderr, result.stdout[0..@min(500, result.stdout.len)],
-                });
+                std.debug.print("The Shelly command did not complete successfully.\n\nTechnical details: {0any}; {1f}; {2f}\n", .{ result.term, @import("diagnostics").safe(result.stderr), @import("diagnostics").safe(result.stdout[0..@min(500, result.stdout.len)]) });
             }
             return error.CommandFailed;
         }

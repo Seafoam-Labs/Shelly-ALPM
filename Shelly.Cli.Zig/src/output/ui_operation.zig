@@ -69,12 +69,13 @@ pub fn runTransaction(
         }
         if (!reporter.reported_failure.load(.acquire)) {
             const message = try Zigalpm.user_errors.format(context.allocator, failure, .{
+                .operation = invocation.command.path,
                 .subject = if (invocation.positionals.len == 1) invocation.positionals[0] else null,
             });
             defer context.allocator.free(message);
             try output.writeErrorFrame(context, message);
         } else {
-            const detail = try std.fmt.allocPrint(context.allocator, "Technical details: {t}", .{failure});
+            const detail = try std.fmt.allocPrint(context.allocator, "Operation result: {t}", .{failure});
             defer context.allocator.free(detail);
             try output.writeInfoFrame(context, detail);
         }
@@ -83,7 +84,7 @@ pub fn runTransaction(
         return 1;
     };
 
-    try output.writeAlpmInfoFrame(context, "TransactionDone", config.success_message);
+    try output.writeAlpmInfoFrame(context, if (reporter.failed()) "TransactionFailed" else "TransactionDone", if (reporter.failed()) config.failure_message else config.success_message);
     try flush(context);
     return if (reporter.failed()) 1 else 0;
 }
@@ -102,7 +103,7 @@ pub const Reporter = struct {
     }
 
     pub fn failed(self: *const Reporter) bool {
-        return self.write_failed.load(.acquire);
+        return self.write_failed.load(.acquire) or self.reported_failure.load(.acquire);
     }
 
     fn write(self: *Reporter, event: Zigalpm.OperationEvent) !void {
@@ -115,15 +116,12 @@ pub const Reporter = struct {
             ),
             .progress => |progress| try output.writeOperationProgressFrame(self.context, progress),
             .failure => |failure| {
-                const message = try Zigalpm.user_errors.format(self.context.allocator, failure.err, .{
-                    .subject = failure.envelope.subject,
-                    .detail = failure.message,
-                });
+                const message = try Zigalpm.user_errors.formatEvent(self.context.allocator, failure);
                 defer self.context.allocator.free(message);
                 if (failure.recoverable) {
                     try output.writeWarningFrame(self.context, message);
                 } else {
-                    try output.writeErrorFrame(self.context, message);
+                    try output.writeOperationErrorFrame(self.context, message, failure);
                     self.reported_failure.store(true, .release);
                 }
             },
@@ -622,7 +620,9 @@ test "UI operation reporter preserves percentages for every progress frame shape
         &.{
             "\"$kind\":\"alpm.info\"",
             "\"EventType\":\"WarningOutput\"",
-            "\"Message\":\"optional cleanup failed\\n\\nTechnical details: TestRecoverableFailure\"",
+            "\"Message\":\"optional cleanup failed",
+            "Technical details: TestRecoverableFailure",
+            "Backend: test",
             "\"Level\":\"Warning\"",
         },
     };

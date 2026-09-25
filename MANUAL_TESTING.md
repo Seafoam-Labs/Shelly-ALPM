@@ -280,6 +280,35 @@ Requires a kernel with Landlock enabled (check `cat /sys/kernel/security/lsm`).
   `[sandbox] extra_read` / `extra_write`
 - [ ] A failing sandboxed step leaves a `[sandbox]` hint line in its build log
 
+### Build Installation (`shelly build --install`)
+
+These install into the system package database; use a disposable package or
+machine.
+
+- [ ] `shelly build -s -l PKGBUILD` (or `shelly -Asl PKGBUILD`) synchronizes
+  build dependencies, builds, and then installs the packages, mirroring
+  `makepkg -si`
+- [ ] A split PKGBUILD whose members depend on each other installs every member
+  in one transaction, both through `shelly build --install` and through
+  `shelly install standard <archive>...`
+- [ ] `shelly build --install PKGBUILD` requests administrator credentials
+  before the build, builds unprivileged as the invoking user, and installs
+  from the elevated coordinator after the build
+- [ ] `shelly build -i --install PKGBUILD` installs the exported artifacts from
+  the root coordinator; the guest never attempts a host install
+- [ ] `shelly build -si PKGBUILD` is rejected as an unrecognized argument
+  (short options do not cluster); `-s -i` means sync plus isolated and `-s -l`
+  means sync plus install
+- [ ] `--install` with `--json`, `--ui-mode`, `--review-only`, or `--makesrcinfo`
+  exits `2` with "Cannot combine --install with ..." before building
+- [ ] In `shelly build -s --install`, a runtime dependency of the built package
+  that dependency synchronization installed survives the post-build cleanup;
+  the cleanup reports "Could not remove build dependencies" instead of
+  removing it
+- [ ] A forced install failure (for example a deliberate conflict) shows the
+  build output plus the install failure, exits non-zero, and does not report
+  "Could not build the requested package"
+
 ### Keyring Management
 
 - [ ] `shelly keyring init` initializes keyring
@@ -360,6 +389,18 @@ package first); for bash and zsh use a clean shell, and regenerate
 - [ ] Root/sudo operations work correctly
 - [ ] Permission errors are handled gracefully
 - [ ] User is prompted for elevation when needed
+- [ ] `zig build --build-file Shelly.Cli.Zig/build.zig isolated-build-test`
+  passes under umasks `0022`, `0007`, `0027`, and `0077`, preserving reviewed
+  file modes, guest traversal permissions, readable configuration, and the
+  private host operation boundary
+- [ ] From an authenticated normal-user sudo session,
+  `Shelly.Cli.Zig/scripts/test-isolated-build.sh` passes all four coordinator
+  umasks through real nspawn, checks UID/GID 1000 and guest configuration,
+  exports artifacts to the invoking user, and removes operation roots;
+  exit `77` means skipped, not passed
+- [ ] Build the pinned endcord PKGBUILD with `--isolated` using the rebuilt
+  CLI under coordinator umasks `0022` and `0077`; validate the exported
+  archives without installing them and record the recipe revision/source hash
 - [ ] `Shelly.Cli.Zig/scripts/test-elevation-cancellation.sh` passes without
   privileges for both SIGINT and SIGTERM
 - [ ] From a normal user session with a working elevator,
@@ -445,3 +486,45 @@ Document any known issues that are being tracked:
 1.
 2.
 3.
+
+## Native build PATH (issue #1931)
+
+- [ ] Run a minimal reviewed PKGBUILD that launches an intentionally missing
+  executable using Rust `Command::spawn`. With an inaccessible temporary
+  directory appended to the invoking shell's PATH, confirm the build sees only
+  the configured build PATH and the lookup returns `NotFound`, not
+  `PermissionDenied`. Restore the temporary directory's permissions afterward.
+- [ ] Repeat through a GUI AUR operation launched with pkexec and through CLI
+  dependency synchronization. Capture the non-root build PATH; it must not
+  contain the elevated coordinator's private directories.
+- [ ] Put a custom tool in an absolute directory named in `[build] extra_path`.
+  Confirm metadata review, `--makesrcinfo`, lifecycle functions, and native
+  packaging helpers can use it, with configured tools preceding system tools.
+- [ ] Check system/user overrides and `extra_path = []`. A configured missing,
+  non-directory, or inaccessible entry must report its path before PKGBUILD
+  execution. Confirm Perl tools and ccache/distcc precedence remain correct.
+- [ ] With Landlock enabled, confirm PATH additions alone do not grant access
+  outside the sandbox allow-list; add explicit sandbox grants and retry.
+- [ ] In an isolated build, confirm extra directories are interpreted inside
+  the guest; host-only directories must produce a clear error, without mounts.
+- [ ] Rebuild `scx-scheds-git` through the GUI on the affected system and verify
+  the intentionally missing formatter no longer causes errno 13.
+
+## Explicit build environment
+
+- [ ] Configure `[build] env = { JAVA_HOME = "/opt/test-java" }` and use a
+  reviewed PKGBUILD that reads it in metadata, prepare/build/check/package.
+  Confirm consistent values through direct builds, `--makesrcinfo`, CLI AUR
+  installs, and a GUI AUR operation. Confirm the elevated coordinator's
+  environment and command line contain no configured assignments.
+- [ ] Check `[build.env]` syntax, user replacement of the system table, omitted
+  user configuration, and `env = {}`. Empty strings must remain set and empty.
+  Values containing spaces, Unicode, `$HOME`, `~`, and `$(...)` must stay literal.
+- [ ] Override `LANG` / `LC_ALL` explicitly, then remove those assignments and
+  verify inherited locale settings and the elevated UTF-8 fallback still work.
+- [ ] Configure a reserved variable such as `PATH`, `CFLAGS`, or `BASH_ENV`, an
+  invalid name, or a non-string value. Confirm failure before PKGBUILD execution,
+  with the variable name in the diagnostic and its value absent.
+- [ ] Repeat with Landlock enabled and with `shelly build --isolated`. Confirm
+  configured values reach build steps, paths refer to the guest in isolated
+  mode, and assignments grant no filesystem access or host mounts.

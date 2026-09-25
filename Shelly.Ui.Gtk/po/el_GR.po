@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-19 13:14-0400\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -150,10 +150,10 @@ msgstr ""
 msgid "e.g. owner/repo or https://..."
 msgstr "π.χ. κάτοχος/αποθετήριο ή https://..."
 
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgid ""
+"Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
-"Μη έγκυρη μορφή. Χρησιμοποιήστε κάτοχος/αποθετήριο (π.χ. seafoam-labs/shelly-"
-"alpm)"
 
 msgid "Allow Prerelease"
 msgstr "Να επιτρέπονται οι δοκιμαστικές εκδόσεις"
@@ -599,9 +599,6 @@ msgstr "Χωρίς επιβεβαίωση"
 msgid "Enable Shelly Search"
 msgstr "Ενεργοποίηση αναζήτησης Shelly"
 
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Ενεργοποίηση οπτικοποίησης Webview (πειραματικό)"
-
 msgid "AppImage Install Path"
 msgstr "Διαδρομή εγκατάστασης AppImage"
 
@@ -653,8 +650,9 @@ msgstr "Γίνεται έλεγχος για ενημερώσεις…"
 msgid "Your system is up to date"
 msgstr "Το σύστημα είναι ενημερωμένο"
 
-msgid "Could not check for updates"
-msgstr "Δεν ήταν δυνατός ο έλεγχος για ενημερώσεις"
+#| msgid "Could not check for updates"
+msgid "Could not check for updates."
+msgstr ""
 
 msgid "Utilities"
 msgstr "Βοηθήματα"
@@ -832,17 +830,27 @@ msgstr "χρησιμοποιείται σε"
 msgid "Install Anyway"
 msgstr "Εγκατάσταση οπωσδήποτε"
 
+msgid "Unknown"
+msgstr "Άγνωστο"
+
 msgid "package(s)"
 msgstr "πακέτο(α)"
 
 msgid "to"
 msgstr "σε"
 
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
+
 msgid "download"
 msgstr "λήψη"
 
 msgid "net"
 msgstr "καθαρό"
+
+msgid "Could not load the PKGBUILD preview."
+msgstr ""
 
 msgid "Dismiss"
 msgstr "Παράβλεψη"
@@ -868,17 +876,13 @@ msgstr "Διαθέσιμη Eνημέρωση"
 msgid "Version ?"
 msgstr "Έκδοση ;"
 
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+#| msgid "Invalid URL. Must start with http:// or https://"
+msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
-"Μη έγκυρη μορφή. Χρησιμοποιήστε κάτοχος/αποθετήριο (π.χ. seafoam-labs/shelly-"
-"alpm)"
-
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "Μη έγκυρο URL. Πρέπει να ξεκινά με http:// ή https://"
 
 msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
+"Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
+"host/owner/repo/releases."
 msgstr ""
 
 msgid "Choose an AppImage file"
@@ -887,8 +891,9 @@ msgstr "Επιλέξτε ένα αρχείο AppImage"
 msgid "AppImage files"
 msgstr "Αρχεία AppImage"
 
-msgid "Only .AppImage files can be installed"
-msgstr "Υποστηρίζονται μόνο αρχεία .AppImage"
+#| msgid "Only .AppImage files can be installed"
+msgid "Only.AppImage files can be installed"
+msgstr ""
 
 msgid "Installing AppImage"
 msgstr "Εγκατάσταση AppImage"
@@ -931,8 +936,8 @@ msgstr "Κατάργηση AppImage"
 msgid "Operation completed successfully"
 msgstr "Η λειτουργία ολοκληρώθηκε με επιτυχία"
 
-msgid "Operation failed"
-msgstr "Η λειτουργία απέτυχε"
+msgid "Could not complete the requested operation."
+msgstr ""
 
 msgid "Discard environment changes?"
 msgstr ""
@@ -981,8 +986,9 @@ msgstr "Δεν βρέθηκαν πακέτα"
 msgid "Try a shorter or more general keyword."
 msgstr "Δοκιμάστε μια μικρότερη ή πιο γενική λέξη-κλειδί."
 
-msgid "Could not reach the AUR"
-msgstr "Αδυναμία σύνδεσης στο AUR"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the configured AUR service."
+msgstr ""
 
 msgid "Check your connection and try again."
 msgstr "Ελέγξτε τη σύνδεσή σας και δοκιμάστε ξανά."
@@ -1031,15 +1037,16 @@ msgstr "Επιλέξτε ένα αρχείο Flatpak"
 msgid "Flatpak files"
 msgstr "Αρχεία flatpak"
 
-msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
-"Μη υποστηριζόμενος τύπος αρχείου. Επιλέξτε αρχείο .flatpak ή .flatpakref."
 
 msgid "Installing local flatpak"
 msgstr "Εγκατάσταση τοπικού flatpak"
 
-msgid "Installation failed."
-msgstr "Η εγκατάσταση απέτυχε."
+#| msgid "Build and install the selected packages? This may take a while."
+msgid "Could not install the selected packages."
+msgstr ""
 
 msgid "Installation complete."
 msgstr "Η εγκατάσταση ολοκληρώθηκε."
@@ -1077,9 +1084,6 @@ msgstr ""
 msgid "Unknown developer"
 msgstr "Άγνωστος δημιουργός"
 
-msgid "Unknown"
-msgstr "Άγνωστο"
-
 msgid "Version: Unknown"
 msgstr "Έκδοση: Άγνωστη"
 
@@ -1107,14 +1111,16 @@ msgstr "Λήψη"
 msgid "No description available."
 msgstr "Δεν υπάρχει διαθέσιμη περιγραφή."
 
-msgid "Unable to load screenshot"
-msgstr "Αδυναμία φόρτωσης στιγμιότυπου"
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load this application screenshot."
+msgstr ""
 
-msgid "Unable to download screenshot"
-msgstr "Αδυναμία λήψης στιγμιότυπου"
+#| msgid "Unable to download screenshot"
+msgid "Could not download this application screenshot."
+msgstr ""
 
-msgid "Unable to display screenshot"
-msgstr "Αδυναμία απεικόνισης στιγμιότυπου"
+msgid "Could not display the downloaded application screenshot."
+msgstr ""
 
 msgid "Open link in browser"
 msgstr "Άνοιγμα συνδέσμου στο πρόγραμμα περιήγησης"
@@ -1143,14 +1149,18 @@ msgstr "Επικοινωνία"
 msgid "Translate"
 msgstr "Μετάφραση"
 
-msgid "Unable to allocate memory while loading Flatpak data."
-msgstr "Αδυναμία κατανομής μνήμης κατά τη φόρτωση δεδομένων Flatpak."
+msgid ""
+"Could not load Flatpak applications because Shelly ran out of memory. Close "
+"other applications and try again."
+msgstr ""
 
-msgid "Unable to start the Flatpak data loader."
-msgstr "Αδυναμία εκκίνησης του φορτωτή δεδομένων Flatpak."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not start loading Flatpak applications."
+msgstr ""
 
-msgid "Unable to load Flatpak applications."
-msgstr "Αδυναμία φόρτωσης εφαρμογών Flatpak."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load Flatpak applications from the selected remote."
+msgstr ""
 
 msgid "No Flatpak applications are available."
 msgstr "Δεν υπάρχουν διαθέσιμες εφαρμογές Flatpak."
@@ -1310,7 +1320,8 @@ msgid ""
 "begin."
 msgstr ""
 
-msgid "Search failed"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the selected sources."
 msgstr ""
 
 msgid "Installation in progress"
@@ -1328,8 +1339,10 @@ msgstr ""
 msgid "Install the selected packages?"
 msgstr ""
 
-msgid "Failed to save settings"
-msgstr "Αποτυχία αποθήκευσης ρυθμίσεων"
+msgid ""
+"Could not save settings to the configured file. Your latest changes were not "
+"saved."
+msgstr ""
 
 msgid "Settings saved"
 msgstr "Οι ρυθμίσεις αποθηκεύτηκαν"
@@ -1340,16 +1353,16 @@ msgstr ""
 msgid "Installing AppImage support"
 msgstr ""
 
-msgid "Failed to start Flatpak support installation"
+msgid "Could not start installing Flatpak support."
 msgstr ""
 
-msgid "Failed to start AppImage support installation"
+msgid "Could not start installing AppImage support."
 msgstr ""
 
-msgid "Flatpak support installation failed"
+msgid "Could not install Flatpak support."
 msgstr ""
 
-msgid "AppImage support installation failed"
+msgid "Could not install AppImage support."
 msgstr ""
 
 msgid "Flatpak support enabled"
@@ -1364,8 +1377,9 @@ msgstr "Δεν βρέθηκαν καταχωρήσεις στο αρχείο α�
 msgid "No details for this release"
 msgstr "Δεν υπάρχουν λεπτομέρειες για αυτήν την έκδοση"
 
-msgid "Failed to load changelog"
-msgstr "Αποτυχία φόρτωσης του αρχείου αλλαγών"
+#| msgid "Could not check for updates"
+msgid "Could not load the release notes."
+msgstr ""
 
 msgid "Changelog"
 msgstr "Αρχείο αλλαγών"
@@ -1385,22 +1399,23 @@ msgstr "Επιλογή φακέλου εγκατάστασης AppImage"
 msgid "Tray enabled"
 msgstr "Περιοχή ειδοποιήσεων ενεργή"
 
-msgid "Tray disabled, but autostart service remains"
+msgid ""
+"The tray is disabled, but its autostart service could not be removed. It may "
+"start again at the next login."
 msgstr ""
-"Η περιοχή ειδοποιήσεων απενεργοποιήθηκε, αλλά η υπηρεσία αυτόματης εκκίνησης "
-"παραμένει"
 
 msgid "Tray disabled"
 msgstr "Περιοχή ειδοποιήσεων ανενεργή"
 
-msgid "Failed to add systemd startup service"
-msgstr "Αποτυχία προσθήκης της υπηρεσίας εκκίνησης στο systemd"
+msgid "Could not enable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service added."
 msgstr "Η υπηρεσία εκκίνησης Systemd προστέθηκε."
 
-msgid "Failed to remove systemd startup service"
-msgstr "Αποτυχία αφαίρεσης της υπηρεσίας εκκίνησης στο systemd"
+#| msgid "Tray disabled, but autostart service remains"
+msgid "Could not disable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service removed."
 msgstr "Η υπηρεσία εκκίνησης Systemd καταργήθηκε."
@@ -1462,11 +1477,43 @@ msgstr "Αναζήτηση Shelly"
 msgid "Update"
 msgstr "Ενημέρωση"
 
-msgid "Failed to start operation."
-msgstr "Αποτυχία εκκίνησης της διεργασίας."
-
 msgid "Pending"
 msgstr "Σε εκκρεμότητα"
+
+msgid "Working"
+msgstr "Σε εξέλιξη"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Απέτυχε"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Ακυρώθηκε"
+
+#| msgid "Failed to start operation."
+msgid "Could not start the requested operation."
+msgstr ""
 
 msgid "Synchronizing databases"
 msgstr "Συγχρονισμός βάσεων δεδομένων"
@@ -1510,19 +1557,14 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
-msgid "Working"
-msgstr "Σε εξέλιξη"
-
-msgid "Failed"
-msgstr "Απέτυχε"
-
 msgid "Transaction Completed"
 msgstr ""
 
-msgid "Transaction Failed"
-msgstr ""
+msgid "Operation failed"
+msgstr "Η λειτουργία απέτυχε"
 
-msgid "Transaction Cancelled"
+#| msgid "Operation failed"
+msgid "Operation cancelled"
 msgstr ""
 
 msgid "Finished"
@@ -1531,7 +1573,8 @@ msgstr "Τελείωσε"
 msgid "exit"
 msgstr "έξοδος"
 
-msgid "The operation was cancelled."
+#| msgid "Operation failed"
+msgid "Operation cancelled."
 msgstr ""
 
 msgid "All operations finished successfully."
@@ -1541,9 +1584,6 @@ msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
 msgstr ""
-
-msgid "Cancelled"
-msgstr "Ακυρώθηκε"
 
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
@@ -1558,11 +1598,6 @@ msgstr "Ενημέρωση πακέτου συστήματος"
 
 msgid "AUR package update"
 msgstr "Ενημέρωση πακέτου AUR"
-
-msgid "Could not run shelly check-updates. Check the CLI output and try again."
-msgstr ""
-"Αδυναμία εκτέλεσης της εντολής shelly check-updates. Ελέγξτε την γραμμή "
-"εντολών και δοκιμάστε ξανά."
 
 msgid "Update this package"
 msgstr ""

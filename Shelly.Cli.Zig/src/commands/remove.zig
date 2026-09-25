@@ -67,7 +67,7 @@ pub fn dispatch(
 ) !?u8 {
     if (!isRemovePath(invocation.command.path)) return null;
     if (invocation.positionals.len == 0)
-        return try reportValidationFailure(context, invocation, "No packages specified.");
+        return try reportValidationFailure(context, invocation, "Specify at least one package name. See the command help for usage.");
 
     if (!invocation.globals.ui_mode and needsElevation(invocation)) {
         const carries_aur = std.mem.eql(u8, invocation.command.path, aur_command_path);
@@ -77,7 +77,7 @@ pub fn dispatch(
             invocation.arguments;
         defer if (carries_aur) context.allocator.free(elevated_arguments);
         const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
-            try context.stderr.print("Unable to elevate remove: {t}\n", .{err});
+            try context.stderr.print("Could not obtain administrator privileges for package removal. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -127,7 +127,7 @@ fn executeUi(
         .opening = opening,
         .success_message = successMessage(invocation),
         .failure_message = failureMessage(invocation),
-        .failure_label = "Removal failed",
+        .failure_label = "Could not remove the selected packages.",
     }, runner);
 }
 
@@ -242,24 +242,18 @@ fn runAppImage(
     try manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null) catch {};
 
-    const target = resolveAppImage(
+    const app_images = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(app_images);
+    const target = try resolveAppImage(
         context.allocator,
         context.io,
         invocation.positionals[0],
         search_paths,
-    ) catch |err| switch (err) {
-        RemoveError.AppImageNotFound => {
-            const app_images = try manager.getAppImagesFromLocalDb();
-            defer manager.freeAppImages(app_images);
-            const app_name = try resolveAppImageDbName(app_images, invocation.positionals[0]);
-            try manager.removeAppImageFromLocalDb(app_name);
-            return;
-        },
-        else => return err,
-    };
-    defer context.allocator.free(target);
+        app_images,
+    );
+    defer target.deinit(context.allocator);
 
-    if (!try manager.removeAppImage(target, optionEnabled(invocation, "--remove-config")))
+    if (!try manager.removeAppImageByName(target.name, target.path, optionEnabled(invocation, "--remove-config")))
         return RemoveError.BackendFailed;
 }
 
@@ -339,40 +333,129 @@ fn dependencyRemoval(
     };
 }
 
+const AppImageRemovalTarget = struct {
+    name: []const u8,
+    path: []const u8,
+    from_metadata: bool,
+
+    fn deinit(self: AppImageRemovalTarget, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+        allocator.free(self.path);
+    }
+};
+
+// Resolve parent-directory aliases without following the AppImage itself: removing
+// an installed symlink must unlink that entry, not delete its target.
+fn appImageRemovalPath(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]const u8 {
+    const parent = std.Io.Dir.cwd().realPathFileAlloc(io, std.fs.path.dirname(path) orelse ".", allocator) catch |err| switch (err) {
+        error.FileNotFound => return std.fs.path.resolve(allocator, &.{path}),
+        else => return err,
+    };
+    defer allocator.free(parent);
+    return std.fs.path.join(allocator, &.{ parent, std.fs.path.basename(path) });
+}
+
 fn resolveAppImage(
     allocator: std.mem.Allocator,
     io: std.Io,
     query: []const u8,
     search_paths: []const []const u8,
-) ![]const u8 {
-    var match: ?[]const u8 = null;
-    errdefer if (match) |path| allocator.free(path);
+    app_images: []const Zigalpm.appimage.AppImage,
+) !AppImageRemovalTarget {
+    var candidates: std.ArrayList(AppImageRemovalTarget) = .empty;
+    defer {
+        for (candidates.items) |candidate| candidate.deinit(allocator);
+        candidates.deinit(allocator);
+    }
+
+    // Keep metadata identities, including stale entries, before looking at files.
+    // Old databases may contain repeated copies of the same installation.
+    for (app_images) |app| {
+        const fallback = try std.fmt.allocPrint(allocator, "{s}.AppImage", .{app.name});
+        defer allocator.free(fallback);
+        const raw_path = if (app.path.len > 0)
+            try allocator.dupe(u8, app.path)
+        else
+            try std.fs.path.join(allocator, &.{ search_paths[0], fallback });
+        defer allocator.free(raw_path);
+        const path = try appImageRemovalPath(allocator, io, raw_path);
+        errdefer allocator.free(path);
+        const duplicate = for (candidates.items) |candidate| {
+            if (std.ascii.eqlIgnoreCase(candidate.name, app.name) and std.mem.eql(u8, candidate.path, path)) break true;
+        } else false;
+        if (duplicate) {
+            allocator.free(path);
+            continue;
+        }
+        const name = try allocator.dupe(u8, app.name);
+        errdefer allocator.free(name);
+        try candidates.append(allocator, .{ .name = name, .path = path, .from_metadata = true });
+    }
+
     for (search_paths) |directory| {
-        var dir = std.Io.Dir.cwd().openDir(io, directory, .{ .iterate = true }) catch continue;
+        var dir = std.Io.Dir.cwd().openDir(io, directory, .{ .iterate = true }) catch |err| switch (err) {
+            error.FileNotFound => continue,
+            else => return err,
+        };
         defer dir.close(io);
+        const parent = try dir.realPathFileAlloc(io, ".", allocator);
+        defer allocator.free(parent);
         var iterator = dir.iterate();
         while (try iterator.next(io)) |entry| {
             if (entry.kind != .file and entry.kind != .sym_link) continue;
             if (!std.ascii.eqlIgnoreCase(std.fs.path.extension(entry.name), ".AppImage")) continue;
-            if (!containsTextIgnoreCase(entry.name, query)) continue;
-            if (match != null) return RemoveError.AmbiguousAppImage;
-            match = try std.fs.path.join(allocator, &.{ directory, entry.name });
+            const path = try std.fs.path.join(allocator, &.{ parent, entry.name });
+            errdefer allocator.free(path);
+            // This also deduplicates configured/fallback paths with trailing
+            // slashes or symlinked directory aliases.
+            const known = for (candidates.items) |candidate| {
+                if (std.mem.eql(u8, candidate.path, path)) break true;
+            } else false;
+            if (known) {
+                allocator.free(path);
+                continue;
+            }
+            const name = try allocator.dupe(u8, std.fs.path.stem(entry.name));
+            errdefer allocator.free(name);
+            try candidates.append(allocator, .{ .name = name, .path = path, .from_metadata = false });
         }
     }
-    return match orelse RemoveError.AppImageNotFound;
-}
 
-fn resolveAppImageDbName(
-    app_images: []const Zigalpm.appimage.AppImage,
-    query: []const u8,
-) ![]const u8 {
-    var match: ?[]const u8 = null;
-    for (app_images) |app_image| {
-        if (!containsTextIgnoreCase(app_image.name, query)) continue;
-        if (match != null) return RemoveError.AmbiguousAppImage;
-        match = app_image.name;
+    var best: ?AppImageRemovalTarget = null;
+    var best_rank: u8 = 0;
+    var ambiguous = false;
+    for (candidates.items) |candidate| {
+        const name_exact = std.ascii.eqlIgnoreCase(candidate.name, query);
+        const filename = std.fs.path.basename(candidate.path);
+        const file_exact = std.ascii.eqlIgnoreCase(filename, query) or
+            std.ascii.eqlIgnoreCase(std.fs.path.stem(filename), query);
+        const rank: u8 = if (candidate.from_metadata and name_exact) 3 else if (name_exact or file_exact) 2 else if (containsTextIgnoreCase(candidate.name, query) or containsTextIgnoreCase(filename, query)) 1 else 0;
+        if (rank == 0 or rank < best_rank) continue;
+        if (rank == best_rank) {
+            ambiguous = true;
+        } else {
+            best = candidate;
+            best_rank = rank;
+            ambiguous = false;
+        }
     }
-    return match orelse RemoveError.AppImageNotFound;
+    if (ambiguous) return RemoveError.AmbiguousAppImage;
+    const selected = best orelse return RemoveError.AppImageNotFound;
+    // The backend removes metadata by name. Never drop another installation's
+    // record when a legacy database reuses that name for different paths.
+    if (selected.from_metadata) {
+        for (candidates.items) |candidate| {
+            if (candidate.from_metadata and std.ascii.eqlIgnoreCase(candidate.name, selected.name) and
+                !std.mem.eql(u8, candidate.path, selected.path)) return RemoveError.AmbiguousAppImage;
+        }
+    }
+    const name = try allocator.dupe(u8, selected.name);
+    errdefer allocator.free(name);
+    return .{
+        .name = name,
+        .path = try allocator.dupe(u8, selected.path),
+        .from_metadata = selected.from_metadata,
+    };
 }
 
 fn containsTextIgnoreCase(value: []const u8, query: []const u8) bool {
@@ -387,35 +470,35 @@ fn containsTextIgnoreCase(value: []const u8, query: []const u8) bool {
 
 fn cleanupStandardConfig(context: *runtime.RuntimeContext, package_names: []const []const u8) void {
     const config_home = xdg.configHome(context) catch |err| {
-        context.stderr.print("Unable to resolve configuration directory: {t}\n", .{err}) catch {};
+        context.stderr.print("Package removal completed, but the configuration directory could not be located. {0s} Configuration cleanup was not completed.\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) }) catch {};
         return;
     };
     for (package_names) |package_name| {
         const path = std.fs.path.join(context.allocator, &.{ config_home, package_name }) catch |err| {
-            context.stderr.print("Unable to build configuration path for {s}: {t}\n", .{ package_name, err }) catch {};
+            context.stderr.print("Package removal completed, but the configuration for {0f} could not be removed from the configured file. {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(package_name), @import("diagnostics").cause(err), @errorName(err) }) catch {};
             continue;
         };
         defer context.allocator.free(path);
         std.Io.Dir.cwd().deleteTree(context.io, path) catch |err| {
             if (err == error.FileNotFound) continue;
-            context.stderr.print("Unable to remove configuration for {s}: {t}\n", .{ package_name, err }) catch {};
+            context.stderr.print("Package removal completed, but the configuration for {0f} could not be removed from {1f}. {2s}\n\nTechnical details: {3s}\n", .{ @import("diagnostics").safe(package_name), @import("diagnostics").safe(path), @import("diagnostics").cause(err), @errorName(err) }) catch {};
         };
     }
 }
 
 fn cleanupFlatpakConfig(context: *runtime.RuntimeContext, canonical_id: []const u8) void {
     const home = xdg.getEnv(context, "HOME") orelse {
-        context.stderr.print("Unable to resolve the home directory for Flatpak configuration cleanup.\n", .{}) catch {};
+        context.stderr.print("Package removal completed, but the user home directory could not be located for Flatpak configuration cleanup. Configuration cleanup was not completed.\n", .{}) catch {};
         return;
     };
     const path = std.fs.path.join(context.allocator, &.{ home, ".var", "app", canonical_id }) catch |err| {
-        context.stderr.print("Unable to build Flatpak configuration path for {s}: {t}\n", .{ canonical_id, err }) catch {};
+        context.stderr.print("Flatpak removal completed, but the configuration for {0f} could not be removed from the configured file. {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(canonical_id), @import("diagnostics").cause(err), @errorName(err) }) catch {};
         return;
     };
     defer context.allocator.free(path);
     std.Io.Dir.cwd().deleteTree(context.io, path) catch |err| {
         if (err == error.FileNotFound) return;
-        context.stderr.print("Unable to remove Flatpak configuration for {s}: {t}\n", .{ canonical_id, err }) catch {};
+        context.stderr.print("Flatpak removal completed, but the configuration for {0f} could not be removed from {1f}. {2s}\n\nTechnical details: {3s}\n", .{ @import("diagnostics").safe(canonical_id), @import("diagnostics").safe(path), @import("diagnostics").cause(err), @errorName(err) }) catch {};
     };
 }
 
@@ -453,9 +536,9 @@ fn successMessage(invocation: *const parser.Invocation) []const u8 {
 }
 
 fn failureMessage(invocation: *const parser.Invocation) []const u8 {
-    if (std.mem.eql(u8, invocation.command.path, appimage_command_path)) return "AppImage removal failed.";
-    if (std.mem.eql(u8, invocation.command.path, flatpak_command_path)) return "Flatpak removal failed.";
-    return "Package removal failed.";
+    if (std.mem.eql(u8, invocation.command.path, appimage_command_path)) return "Could not remove the selected AppImage.";
+    if (std.mem.eql(u8, invocation.command.path, flatpak_command_path)) return "Could not remove the selected Flatpak from the selected installation.";
+    return "Could not remove the selected packages.";
 }
 
 fn sentinelStrings(allocator: std.mem.Allocator, values: []const []const u8) ![][:0]const u8 {
@@ -857,12 +940,12 @@ test "resolves one AppImage across configured and fallback locations" {
     var file = try std.Io.Dir.cwd().createFile(std.testing.io, appimage, .{});
     file.close(std.testing.io);
 
-    const resolved = try resolveAppImage(allocator, std.testing.io, "example", &.{ configured, fallback });
-    defer allocator.free(resolved);
-    try std.testing.expectEqualStrings(appimage, resolved);
+    const resolved = try resolveAppImage(allocator, std.testing.io, "example", &.{ configured, fallback }, &.{});
+    defer resolved.deinit(allocator);
+    try std.testing.expectEqualStrings(appimage, resolved.path);
     try std.testing.expectError(
         RemoveError.AppImageNotFound,
-        resolveAppImage(allocator, std.testing.io, "missing", &.{ configured, fallback }),
+        resolveAppImage(allocator, std.testing.io, "missing", &.{ configured, fallback }, &.{}),
     );
 
     const second = try std.fs.path.join(allocator, &.{ configured, "Another-Example.AppImage" });
@@ -870,67 +953,174 @@ test "resolves one AppImage across configured and fallback locations" {
     file.close(std.testing.io);
     try std.testing.expectError(
         RemoveError.AmbiguousAppImage,
-        resolveAppImage(allocator, std.testing.io, "example", &.{ configured, fallback }),
+        resolveAppImage(allocator, std.testing.io, "example", &.{ configured, fallback }, &.{}),
     );
 }
 
-test "remove AppImage falls back to orphaned local database metadata" {
+test "AppImage removal preserves unrelated installations and cleans stale identities" {
+    const Case = struct {
+        query: []const u8 = "Editor",
+        installed: bool = false,
+        duplicate: bool = false,
+        filename: []const u8 = "Editor.AppImage",
+        other_name: []const u8 = "Editor-old",
+        omit_path: bool = false,
+        remove_config: bool = false,
+        failure: ?anyerror = null,
+    };
+    for ([_]Case{
+        .{}, // A missing exact selection must not remove Editor-old.
+        .{ .duplicate = true },
+        .{ .installed = true },
+        .{ .installed = true, .filename = "renamed.AppImage" },
+        .{ .filename = "renamed.AppImage" },
+        .{ .installed = true, .omit_path = true },
+        .{ .omit_path = true },
+        .{ .query = "eDiToR" },
+        .{ .query = "Editor.AppImage" },
+        .{ .query = "Edit", .failure = RemoveError.AmbiguousAppImage },
+        .{ .query = "missing", .failure = RemoveError.AppImageNotFound },
+        .{ .other_name = "Editor", .failure = RemoveError.AmbiguousAppImage },
+        .{ .other_name = "Editor", .query = "Editor.AppImage", .failure = RemoveError.AmbiguousAppImage },
+        .{ .query = "Edit", .other_name = "Unrelated" }, // Unique partial queries remain supported.
+        .{ .remove_config = true },
+    }) |case| {
+        var temporary = std.testing.tmpDir(.{});
+        defer temporary.cleanup();
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+        const io = std.testing.io;
+        const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+        var environment = std.process.Environ.Map.init(allocator);
+        inline for (.{ "CONFIG", "DATA", "CACHE", "STATE", "BIN" }) |kind| {
+            const directory = try std.fs.path.join(allocator, &.{ root, kind });
+            try std.Io.Dir.cwd().createDirPath(io, directory);
+            try environment.put("XDG_" ++ kind ++ "_HOME", directory);
+        }
+        const config_home = environment.get("XDG_CONFIG_HOME").?;
+        const bin_home = environment.get("XDG_BIN_HOME").?;
+        const data_home = environment.get("XDG_DATA_HOME").?;
+        const config_directory = try std.fs.path.join(allocator, &.{ config_home, "shelly" });
+        try std.Io.Dir.cwd().createDirPath(io, config_directory);
+        const local_db_path = try std.fs.path.join(allocator, &.{ config_directory, "appimage-metadata-v2.db" });
+        const target_path = try std.fs.path.join(allocator, &.{ bin_home, case.filename });
+        const other_filename = try std.fmt.allocPrint(allocator, "{s}.AppImage", .{if (std.mem.eql(u8, case.other_name, "Editor")) "Editor-old" else case.other_name});
+        const other_path = try std.fs.path.join(allocator, &.{ bin_home, other_filename });
+        const records = [_]Zigalpm.appimage.AppImage{
+            .{ .name = "Editor", .path = if (case.omit_path) "" else target_path },
+            .{ .name = case.other_name, .path = other_path },
+            .{ .name = "Editor", .path = if (case.omit_path) "" else target_path },
+        };
+        const original_db = try std.json.Stringify.valueAlloc(allocator, records[0..if (case.duplicate) @as(usize, 3) else 2], .{});
+        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = local_db_path, .data = original_db });
+        if (case.installed) try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = target_path, .data = "selected binary" });
+        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = other_path, .data = "unrelated binary" });
+
+        const desktop_dir = try std.fs.path.join(allocator, &.{ data_home, "applications" });
+        const icon_dir = try std.fs.path.join(allocator, &.{ data_home, "icons/hicolor/256x256/apps" });
+        try std.Io.Dir.cwd().createDirPath(io, desktop_dir);
+        try std.Io.Dir.cwd().createDirPath(io, icon_dir);
+        const desktop = try std.fs.path.join(allocator, &.{ desktop_dir, "editor.desktop" });
+        const other_desktop = try std.fs.path.join(allocator, &.{ desktop_dir, "editor-old.desktop" });
+        const icon = try std.fs.path.join(allocator, &.{ icon_dir, "editor.png" });
+        const other_icon = try std.fs.path.join(allocator, &.{ icon_dir, "editor-old.png" });
+        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = desktop, .data = try std.fmt.allocPrint(allocator, "[Desktop Entry]\nName=Editor\nExec=\"{s}\"\n", .{target_path}) });
+        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = other_desktop, .data = "[Desktop Entry]\nName=Other\nExec=other\n" });
+        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = icon, .data = "selected icon" });
+        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = other_icon, .data = "unrelated icon" });
+        const app_config = try std.fs.path.join(allocator, &.{ config_home, "Editor" });
+        try std.Io.Dir.cwd().createDirPath(io, app_config);
+
+        const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
+        var stdout = std.Io.Writer.Allocating.init(allocator);
+        var stderr = std.Io.Writer.Allocating.init(allocator);
+        var context: runtime.RuntimeContext = .{
+            .allocator = allocator,
+            .io = io,
+            .stdout = &stdout.writer,
+            .stderr = &stderr.writer,
+            .environment = &environment,
+            .environ = environ,
+        };
+        const manifest = try @import("../cli/spec.zig").Manifest.load(allocator);
+        const arguments: []const []const u8 = if (case.remove_config)
+            &.{ "remove", "appimage", "--no-confirm", "--remove-config", case.query }
+        else
+            &.{ "remove", "appimage", "--no-confirm", case.query };
+        const outcome = try parser.parse(allocator, &manifest, arguments);
+        var operation_context = Zigalpm.OperationContext.init(allocator, io);
+        defer operation_context.deinit();
+        if (case.failure) |err| {
+            try std.testing.expectError(err, runAppImage(&context, &operation_context, &outcome.dispatch));
+            try std.testing.expectEqualStrings(original_db, try std.Io.Dir.cwd().readFileAlloc(io, local_db_path, allocator, .unlimited));
+            try std.Io.Dir.cwd().access(io, desktop, .{});
+            try std.Io.Dir.cwd().access(io, icon, .{});
+            if (case.installed) try std.Io.Dir.cwd().access(io, target_path, .{});
+        } else {
+            try runAppImage(&context, &operation_context, &outcome.dispatch);
+            const db_manager = Zigalpm.AppImageManager{
+                .allocator = allocator,
+                .io = io,
+                .environ = environ,
+                .install_directory = bin_home,
+                .local_db_path = local_db_path,
+            };
+            const remaining = try db_manager.getAppImagesFromLocalDb();
+            defer db_manager.freeAppImages(remaining);
+            try std.testing.expectEqual(@as(usize, 1), remaining.len);
+            try std.testing.expectEqualStrings(case.other_name, remaining[0].name);
+            for ([_][]const u8{ target_path, desktop, icon }) |path| {
+                try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, path, .{}));
+            }
+        }
+        try std.testing.expectEqualStrings("unrelated binary", try std.Io.Dir.cwd().readFileAlloc(io, other_path, allocator, .unlimited));
+        try std.Io.Dir.cwd().access(io, other_desktop, .{});
+        try std.Io.Dir.cwd().access(io, other_icon, .{});
+        if (case.remove_config) {
+            try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, app_config, .{}));
+        } else {
+            try std.Io.Dir.cwd().access(io, app_config, .{});
+        }
+    }
+}
+
+test "AppImage removal prefers exact files and deduplicates directory aliases" {
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(root);
+    try temporary.dir.createDirPath(io, "bin");
+    try temporary.dir.symLink(io, "bin", "alias", .{ .is_directory = true });
+    try temporary.dir.writeFile(io, .{ .sub_path = "bin/Editor.AppImage", .data = "selected" });
+    try temporary.dir.writeFile(io, .{ .sub_path = "bin/Editor-old.AppImage", .data = "other" });
+    const bin = try std.fs.path.join(allocator, &.{ root, "bin" });
+    defer allocator.free(bin);
+    const slash = try std.fmt.allocPrint(allocator, "{s}/", .{bin});
+    defer allocator.free(slash);
+    const alias = try std.fs.path.join(allocator, &.{ root, "alias" });
+    defer allocator.free(alias);
+    const expected = try std.fs.path.join(allocator, &.{ bin, "Editor.AppImage" });
+    defer allocator.free(expected);
+    for ([_][]const u8{ "Editor", "Editor.AppImage", "eDiToR" }) |query| {
+        const target = try resolveAppImage(allocator, io, query, &.{ slash, alias, bin }, &.{});
+        defer target.deinit(allocator);
+        try std.testing.expectEqualStrings(expected, target.path);
+    }
+    try std.testing.expectError(RemoveError.AmbiguousAppImage, resolveAppImage(allocator, io, "Edit", &.{ bin, alias }, &.{}));
+    try temporary.dir.createDirPath(io, "distinct");
+    try temporary.dir.writeFile(io, .{ .sub_path = "distinct/Editor.AppImage", .data = "distinct" });
+    const distinct = try std.fs.path.join(allocator, &.{ root, "distinct" });
+    defer allocator.free(distinct);
+    try std.testing.expectError(RemoveError.AmbiguousAppImage, resolveAppImage(allocator, io, "Editor", &.{ bin, distinct }, &.{}));
 
-    var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const absolute_length = try temporary.dir.realPath(std.testing.io, &absolute_buffer);
-
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const root = absolute_buffer[0..absolute_length];
-    const config_home = try std.fs.path.join(allocator, &.{ root, "config" });
-    const bin_home = try std.fs.path.join(allocator, &.{ root, "bin" });
-    const local_db_path = try std.fs.path.join(allocator, &.{ config_home, "shelly", "appimage-metadata-v2.db" });
-
-    var environment = std.process.Environ.Map.init(allocator);
-    try environment.put("HOME", root);
-    try environment.put("XDG_CONFIG_HOME", config_home);
-    try environment.put("XDG_BIN_HOME", bin_home);
-    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
-    defer stdout.deinit();
-    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
-    defer stderr.deinit();
-    var context: runtime.RuntimeContext = .{
-        .allocator = allocator,
-        .io = std.testing.io,
-        .stdout = &stdout.writer,
-        .stderr = &stderr.writer,
-        .environment = &environment,
-    };
-
-    const db_manager = Zigalpm.AppImageManager{
-        .allocator = allocator,
-        .io = std.testing.io,
-        .environ = std.testing.environ,
-        .install_directory = bin_home,
-        .local_db_path = local_db_path,
-    };
-    try db_manager.addAppImageToLocalDb(.{
-        .name = "OrphanedEditor",
-        .desktop_name = "Orphaned Editor",
-        .path = "/missing/OrphanedEditor.AppImage",
-    });
-
-    const command_spec = @import("../cli/spec.zig");
-    const manifest = try command_spec.Manifest.load(allocator);
-    const outcome = try parser.parse(allocator, &manifest, &.{
-        "remove", "appimage", "--no-confirm", "orphaned",
-    });
-    var operation_context = Zigalpm.OperationContext.init(allocator, std.testing.io);
-    defer operation_context.deinit();
-
-    try runAppImage(&context, &operation_context, &outcome.dispatch);
-
-    const remaining = try db_manager.getAppImagesFromLocalDb();
-    defer db_manager.freeAppImages(remaining);
-    try std.testing.expectEqual(@as(usize, 0), remaining.len);
+    // A binary symlink is the removal target, not the file it points to.
+    try temporary.dir.symLink(io, "../distinct/Editor.AppImage", "bin/Linked.AppImage", .{});
+    const linked = try resolveAppImage(allocator, io, "Linked", &.{bin}, &.{});
+    defer linked.deinit(allocator);
+    try std.testing.expect(std.mem.endsWith(u8, linked.path, "/bin/Linked.AppImage"));
 }
 
 test "flatpak config cleanup uses the canonical application id" {

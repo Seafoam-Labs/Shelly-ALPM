@@ -42,7 +42,7 @@ pub const DBus = struct {
         var err: ?*glib.Error = null;
         const conn = gio.busGetSync(bus, null, &err);
         if (err) |e| {
-            std.log.warn("bus_get_sync failed: {s}", .{e.f_message orelse "unknown"});
+            std.log.warn("Could not connect to the selected D-Bus session. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
             return null;
         }
@@ -71,7 +71,7 @@ pub const DBus = struct {
             &err,
         );
         if (err) |e| {
-            std.log.warn("emit_signal failed: {s}", .{e.f_message orelse "unknown"});
+            std.log.warn("Could not send the tray settings signal over D-Bus. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
         }
     }
@@ -114,7 +114,7 @@ pub const DBus = struct {
             &call_err,
         );
         if (call_err) |e| {
-            std.log.info("NameHasOwner(PolicyKit1) failed: {s}", .{e.f_message orelse "unknown"});
+            std.log.info("Could not check whether the authorization service is running. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
             return .unknown;
         }
@@ -133,7 +133,7 @@ pub const DBus = struct {
 
         var sid_buf: [64]u8 = undefined;
         const sid = self.currentSessionId(&sid_buf) orelse {
-            std.log.info("could not resolve session id; skipping polkit agent probe", .{});
+            std.log.info("Could not identify the login session; the authorization-agent check was skipped.", .{});
             return .unknown;
         };
 
@@ -191,7 +191,7 @@ pub const DBus = struct {
             &err,
         );
         if (err) |e| {
-            std.log.warn("UnregisterAuthenticationAgent probe failed: {s}", .{e.f_message orelse "unknown"});
+            std.log.warn("Could not unregister the temporary authorization-agent probe. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
         }
         if (r) |res| res.unref();
@@ -242,7 +242,7 @@ pub const DBus = struct {
             &err,
         );
         if (err) |e| {
-            std.log.info("logind GetSessionByPID failed: {s}", .{e.f_message orelse "unknown"});
+            std.log.info("Could not identify the login session through logind. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
             return null;
         }
@@ -289,7 +289,7 @@ pub const DBus = struct {
             &err,
         );
         if (err) |e| {
-            std.log.warn("logind Session.Id get failed: {s}", .{e.f_message orelse "unknown"});
+            std.log.warn("Could not identify the login session through logind. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
             return null;
         }

@@ -70,7 +70,7 @@ fn runWithManager(
     options: WorkflowOptions,
 ) !u8 {
     const files = manager.discover(options.search_mode) catch |err| {
-        try context.stderr.print("Unable to discover pacfiles: {t}\n", .{err});
+        try context.stderr.print("Could not discover pacfiles: {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
         return 1;
     };
     defer Pacfile.deinitSlice(context.allocator, files);
@@ -87,7 +87,7 @@ fn runWithManager(
     }
     for (files) |file| {
         if (file.kind == .numbered_pacsave)
-            try context.stderr.print("warning: Ignoring {s}\n", .{file.path});
+            try context.stderr.print("warning: Skipped numbered.pacsave file {0f}. Review it manually if you need to recover an older configuration.\n", .{@import("diagnostics").safe(file.path)});
     }
     return 0;
 }
@@ -102,17 +102,17 @@ fn maintainOne(
     const label = kindLabel(file.kind);
     try context.stdout.print("{s} file found for {s}\n", .{ label, file.original_path });
     const current_state = manager.state(file) catch |err| {
-        try context.stderr.print("Unable to compare {s}: {t}\n", .{ file.path, err });
+        try context.stderr.print("Could not compare {0f}: {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(file.path), @import("diagnostics").cause(err), @errorName(err) });
         return false;
     };
     switch (current_state) {
         .original_missing => {
-            try context.stderr.print("warning: {s} does not exist\n", .{file.original_path});
+            try context.stderr.print("warning: The original configuration file '{0f}' does not exist. Review the remaining pacfile before choosing whether to remove it.\n", .{@import("diagnostics").safe(file.original_path)});
             if (!invocation.globals.no_confirm and
                 try confirm(context, "Remove the pacfile?", false))
             {
                 manager.remove(file) catch |err| {
-                    try context.stderr.print("Unable to remove {s}: {t}\n", .{ file.path, err });
+                    try context.stderr.print("Could not remove {0f}: {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(file.path), @import("diagnostics").cause(err), @errorName(err) });
                     return false;
                 };
                 try context.stdout.print("removed {s}\n", .{file.path});
@@ -122,7 +122,7 @@ fn maintainOne(
         .identical => {
             try context.stdout.writeAll("  Files are identical, removing...\n");
             manager.remove(file) catch |err| {
-                try context.stderr.print("Unable to remove {s}: {t}\n", .{ file.path, err });
+                try context.stderr.print("Could not remove {0f}: {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(file.path), @import("diagnostics").cause(err), @errorName(err) });
                 return false;
             };
             try context.stdout.print("removed {s}\n", .{file.path});
@@ -138,7 +138,7 @@ fn maintainOne(
             .skip => return false,
             .remove => {
                 manager.remove(file) catch |err| {
-                    try context.stderr.print("Unable to remove {s}: {t}\n", .{ file.path, err });
+                    try context.stderr.print("Could not remove {0f}: {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(file.path), @import("diagnostics").cause(err), @errorName(err) });
                     continue;
                 };
                 try context.stdout.print("removed {s}\n", .{file.path});
@@ -146,7 +146,7 @@ fn maintainOne(
             },
             .overwrite => {
                 manager.overwrite(file, options.backup) catch |err| {
-                    try context.stderr.print("Unable to overwrite {s}: {t}\n", .{ file.original_path, err });
+                    try context.stderr.print("Could not overwrite {0f}: {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(file.original_path), @import("diagnostics").cause(err), @errorName(err) });
                     continue;
                 };
                 if (options.backup)
@@ -160,11 +160,11 @@ fn maintainOne(
                     file,
                     if (options.three_way) .three_way else .two_way,
                 ) catch |err| {
-                    try context.stderr.print("Unable to view {s}: {t}\n", .{ file.path, err });
+                    try context.stderr.print("Could not view {0f}: {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(file.path), @import("diagnostics").cause(err), @errorName(err) });
                     continue;
                 };
                 if (result.fell_back_to_two_way)
-                    try context.stderr.writeAll("warning: No older cached package was available; used a two-way diff.\n");
+                    try context.stderr.writeAll("No older cached package was available for the requested package; showing a two-way comparison of the selected files.\n");
                 if (result.removed_identical_pacfile) {
                     try context.stdout.writeAll("  Files are identical, removing the pacfile...\n");
                     return false;
@@ -172,28 +172,28 @@ fn maintainOne(
             },
             .merge => {
                 var prepared = manager.prepareMerge(file) catch |err| {
-                    try context.stderr.print("Unable to merge {s}: {t}\n", .{ file.path, err });
+                    try context.stderr.print("Could not merge {0f}: {1s}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").safe(file.path), @import("diagnostics").cause(err), @errorName(err) });
                     continue;
                 };
                 defer prepared.deinit();
                 if (prepared.has_conflicts)
-                    try context.stderr.writeAll("warning: The automatic merge contains conflicts.\n")
+                    try context.stderr.writeAll("The automatic merge for the selected path contains conflicts. Resolve the conflicts and review the merged file before applying it.\n")
                 else
                     try context.stdout.writeAll("  Merged without conflicts.\n");
                 try flushForExternalTool(context);
                 const preview = manager.viewPreparedMerge(&prepared) catch |err| {
-                    try context.stderr.print("Unable to preview the merge: {t}\n", .{err});
+                    try context.stderr.print("Could not preview the merge: {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
                     continue;
                 };
                 if (!preview.successful())
-                    try context.stderr.writeAll("warning: The diff program exited unsuccessfully.\n");
+                    try context.stderr.writeAll("Could not compare the selected files: the diff program failed. Review its output before choosing a configuration-file action.\n");
                 if (!try confirm(context, "Would you like to use the results of the merge?", false))
                     continue;
                 manager.applyPreparedMerge(&prepared, options.backup) catch |err| {
                     prepared.preserveWorkspace();
                     try context.stderr.print(
-                        "Unable to apply the merge: {t}. The merged file is preserved at {s}\n",
-                        .{ err, prepared.merged_path },
+                        "Could not apply the merged configuration to the destination. {0s} The merged file is preserved at {1f}.\n\nTechnical details: {2s}\n",
+                        .{ @import("diagnostics").cause(err), @import("diagnostics").safe(prepared.merged_path), @errorName(err) },
                     );
                     continue;
                 };
@@ -274,11 +274,11 @@ fn promptChoice(context: *runtime.RuntimeContext, label: []const u8) !Choice {
             'o' => .overwrite,
             'q' => .quit,
             else => {
-                try context.stdout.writeAll("  Invalid answer.\n");
+                try context.stdout.writeAll("Choose one of the displayed pacfile actions.\n");
                 continue;
             },
         };
-        try context.stdout.writeAll("  Invalid answer.\n");
+        try context.stdout.writeAll("Choose one of the displayed pacfile actions.\n");
     }
 }
 
@@ -292,7 +292,7 @@ fn confirm(context: *runtime.RuntimeContext, prompt: []const u8, default_value: 
         if (answer.len == 0) return default_value;
         if (std.ascii.eqlIgnoreCase(answer, "y") or std.ascii.eqlIgnoreCase(answer, "yes")) return true;
         if (std.ascii.eqlIgnoreCase(answer, "n") or std.ascii.eqlIgnoreCase(answer, "no")) return false;
-        try context.stdout.writeAll("  Invalid answer.\n");
+        try context.stdout.writeAll("Enter yes or no to confirm this action.\n");
     }
 }
 
@@ -444,7 +444,7 @@ test "pacdiff choice prompt retries invalid input" {
         .stderr = &stderr.writer,
     };
     try std.testing.expectEqual(Choice.overwrite, try promptChoice(&context, "pacnew"));
-    try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "Invalid answer") != null);
+    try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "Choose one of the displayed pacfile actions") != null);
 }
 
 test "pacfile utility output and safe automatic cleanup use the ALPM backend" {

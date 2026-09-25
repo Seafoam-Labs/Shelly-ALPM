@@ -1,6 +1,31 @@
 const std = @import("std");
 const package_manifest = @import("build.zig.zon");
 
+// The pinned zig-toml parser requires a key even in {}. Patch its generated
+// source copy until the dependency supports empty inline tables (build.env = {}).
+// Never modify the dependency cache shared by other projects.
+fn patchedTomlModule(b: *std.Build, dependency: *std.Build.Dependency, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
+    const source_path = dependency.path("src/table.zig").getPath3(b, null);
+    const source = source_path.root_dir.handle.readFileAlloc(b.graph.io, source_path.subPathOrDot(), b.allocator, .limited(1024 * 1024)) catch @panic("cannot read zig-toml table parser");
+    const before = "    while (true) {\n        spaces.skipSpacesAndLineBreaks(ctx);\n        var pair = try kv.parse(ctx);";
+    const after =
+        \\    spaces.skipSpacesAndLineBreaks(ctx);
+        \\    if (ctx.current() == '}') {
+        \\        _ = ctx.next();
+        \\        return table;
+        \\    }
+        \\    while (true) {
+        \\        spaces.skipSpacesAndLineBreaks(ctx);
+        \\        var pair = try kv.parse(ctx);
+    ;
+    if (std.mem.count(u8, source, before) != 1) @panic("zig-toml changed: review the empty inline table patch");
+    const patched = std.mem.replaceOwned(u8, b.allocator, source, before, after) catch @panic("OOM");
+    const files = b.addWriteFiles();
+    const directory = files.addCopyDirectory(dependency.path("src"), "src", .{ .exclude_extensions = &.{"table.zig"} });
+    _ = files.add("src/table.zig", patched);
+    return b.createModule(.{ .root_source_file = directory.path(b, "root.zig"), .target = target, .optimize = optimize });
+}
+
 // Although this function looks imperative, it does not perform the build
 // directly and instead it mutates the build graph (`b`) that will be then
 // executed by an external runner. The functions in `std.Build` implement a DSL
@@ -17,6 +42,7 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
+    const diagnostics = b.dependency("shelly_diagnostics", .{ .target = target, .optimize = optimize }).module("diagnostics");
     const shelly_http = b.dependency("shelly_http", .{
         .target = target,
         .optimize = optimize,
@@ -25,6 +51,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    const toml_module = patchedTomlModule(b, toml, target, optimize);
     // It's also possible to define more custom flags to toggle optional features
     // of this build script using `b.option()`. All defined flags (including
     // target and optimize options) will be listed when running `zig build --help`
@@ -48,18 +75,21 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    operation_context_mod.addImport("diagnostics", diagnostics);
     const user_account_mod = b.createModule(.{
         .root_source_file = b.path("src/shared/user_account.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
+    user_account_mod.addImport("diagnostics", diagnostics);
     const archive_mod = b.createModule(.{
         .root_source_file = b.path("src/shared/archive.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
+    archive_mod.addImport("diagnostics", diagnostics);
     archive_mod.linkSystemLibrary("archive", .{});
 
     // This creates a module, which represents a collection of source files alongside
@@ -83,12 +113,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    mod.addImport("diagnostics", diagnostics);
     mod.addImport("alpm_c", alpm_c);
     mod.addImport("archive", archive_mod);
     mod.addImport("operation_context", operation_context_mod);
     mod.addImport("user_account", user_account_mod);
     mod.addImport("ShellyHttp", shelly_http.module("ShellyHttp"));
-    mod.addImport("toml", toml.module("toml"));
+    mod.addImport("toml", toml_module);
     const package_options = b.addOptions();
     package_options.addOption([]const u8, "version", package_manifest.version);
     // Keep this generated module distinct from consumers that independently
@@ -160,6 +191,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    exe.root_module.addImport("diagnostics", diagnostics);
 
     const zig_time_dep = b.dependency("zig-time", .{});
     exe.root_module.addImport("zig-time", zig_time_dep.module("zig-time"));
@@ -206,8 +238,10 @@ pub fn build(b: *std.Build) void {
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to
     // set the releative field.
+    const test_filters = b.option([]const []const u8, "test-filter", "Run root tests whose names contain this text") orelse &.{};
     const mod_tests = b.addTest(.{
         .root_module = mod,
+        .filters = test_filters,
     });
 
     // A run step that will run the test executable.
@@ -218,6 +252,7 @@ pub fn build(b: *std.Build) void {
     // hence why we have to create two separate ones.
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
+        .filters = test_filters,
     });
 
     // A run step that will run the second test executable.
@@ -229,6 +264,37 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+
+    const bootstrap_tests = b.addTest(.{
+        .root_module = mod,
+        .filters = &.{ "bootstrap", "provisioning", "root finalizer" },
+    });
+    const bootstrap_step = b.step("bootstrap-test", "Test isolated root configuration and diagnostics");
+    bootstrap_step.dependOn(&b.addRunArtifact(bootstrap_tests).step);
+
+    const hook_helper = b.addExecutable(.{
+        .name = "bootstrap-hook-helper",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/alpm/bootstrap_hook_helper.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    const hook_fixture = b.addOptions();
+    hook_fixture.addOptionPath("helper", hook_helper.getEmittedBin());
+    const hook_test_module = b.createModule(.{
+        .root_source_file = b.path("src/alpm/bootstrap_hook_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    hook_test_module.addImport("Zigalpm", mod);
+    hook_test_module.addOptions("hook_fixture", hook_fixture);
+    const hook_tests = b.addTest(.{ .root_module = hook_test_module });
+    const run_hook_tests = b.addSystemCommand(&.{ "unshare", "--user", "--map-root-user", "--mount", "--pid", "--fork" });
+    run_hook_tests.addArtifactArg(hook_tests);
+    run_hook_tests.has_side_effects = true;
+    const hook_step = b.step("bootstrap-hook-test", "Test real guest hooks in a disposable user namespace (no host root)");
+    hook_step.dependOn(&run_hook_tests.step);
 
     const account_tests = b.addTest(.{
         .name = "user-account-test",
@@ -258,7 +324,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    shellybuild_test_module.addImport("toml", toml.module("toml"));
+    shellybuild_test_module.addImport("diagnostics", diagnostics);
+    shellybuild_test_module.addImport("toml", toml_module);
     shellybuild_test_module.addImport("operation_context", operation_context_mod);
     shellybuild_test_module.addImport("user_account", user_account_mod);
     const shellybuild_tests = b.addTest(.{
@@ -281,6 +348,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    local_test_module.addImport("diagnostics", diagnostics);
     local_test_module.addImport("archive", archive_mod);
     local_test_module.addImport("operation_context", operation_context_mod);
     const local_tests = b.addTest(.{ .root_module = local_test_module });
@@ -375,6 +443,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    downloader_test_module.addImport("diagnostics", diagnostics);
     downloader_test_module.addImport("operation_context", operation_context_mod);
     downloader_test_module.addImport("ShellyHttp", shelly_http.module("ShellyHttp"));
     const downloader_tests = b.addTest(.{ .name = "downloader-test", .root_module = downloader_test_module });
@@ -401,6 +470,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    cache_test_module.addImport("diagnostics", diagnostics);
     cache_test_module.addImport("alpm_c", alpm_c);
     cache_test_module.addImport("operation_context", operation_context_mod);
     const cache_tests = b.addTest(.{ .name = "cache-test", .root_module = cache_test_module });
@@ -459,6 +529,7 @@ pub fn build(b: *std.Build) void {
             "get_foreign_packages excludes packages provided by a sync database",
             "fetchCallback accepts prepared cache entries and rejects missing artifacts",
             "parses repositories, servers, siglevel and usage",
+            "configuration includes",
             "hold package mutations rewrite HoldPkg and preserve shelly",
             "add_repository appends a repository section to the config file",
             "add_repository rejects duplicate and invalid repository names",
@@ -467,6 +538,7 @@ pub fn build(b: *std.Build) void {
             "remove_repository is a no-op for unknown repositories",
             "Manager hold APIs mutate HoldPkg while retaining shelly",
             "dependency query APIs resolve exact, versioned, and virtual remote packages",
+            "dependency query misses do not emit failures but real errors and cancellation survive",
             "install_packages predownloads prepared repository packages before commit",
             "install_packages exposes its prepared plan and decline prevents downloads",
             "install_packages needed",
@@ -518,6 +590,7 @@ pub fn build(b: *std.Build) void {
             "required missing database signature fails without leaving a database",
             "invalid optional database signature is fatal and cleaned up",
             "Manager.sync downloads the configured database into DBPath/sync",
+            "Manager.sync keeps included repository mirrors separate during fallback",
             "Manager.sync exposes cancellable logical database downloads during mirror failover",
             "refresh reloads an externally replaced sync database cache",
             "refresh reports a detailed reinitialization failure",
@@ -571,6 +644,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    fake_backend_module.addImport("diagnostics", diagnostics);
     fake_backend_module.addImport(
         "Shelly_Flatpak_Protocol",
         flatpak_backend_dep.module("Shelly_Flatpak_Protocol"),
@@ -580,6 +654,7 @@ pub fn build(b: *std.Build) void {
         .linkage = .dynamic,
         .root_module = fake_backend_module,
     });
+    fake_backend.root_module.addImport("diagnostics", diagnostics);
     const fake_backend_filename =
         "libshelly-flatpak-backend-package-manager-test.so";
     const install_fake_backend = b.addInstallArtifact(fake_backend, .{
@@ -605,6 +680,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    backend_integration_module.addImport("diagnostics", diagnostics);
     backend_integration_module.addImport(
         "Shelly_Flatpak_Protocol",
         flatpak_backend_dep.module("Shelly_Flatpak_Protocol"),
@@ -633,9 +709,11 @@ pub fn build(b: *std.Build) void {
         .root_module = mod,
         .filters = &.{
             "AUR dispatcher forwards package stages and build progress",
+            "AUR needed",
             "AUR dispatcher returns provider selections",
             "AUR handlers can be removed through the manager-facing dispatcher",
             "AUR RPC URL and form encoding matches the C# requests",
+            "AUR availability",
             "AUR suggestions are returned as owned strings",
             "partial info failures preserve packages returned by earlier chunks",
             "PKGBUILD validation combines post-install and homograph findings",
@@ -687,9 +765,13 @@ pub fn build(b: *std.Build) void {
             "all requested PKGBUILDs are reviewed before the first build",
             "AUR upgrades skip declined reviews",
             "AUR package failures are emitted after all builds and fail the operation",
+            "AUR metadata",
             "AUR package preparation failure does not stop valid packages",
             "build-only dependencies are removed after a failed build",
             "PackageBuilder init keeps the provided collaborators",
+            "PackageBuilder functionless metapackages",
+            "PackageBuilder permits optional lifecycle steps",
+            "PackageBuilder SRCINFO failures",
             "non-root builder guard rejects root effective uid",
             "PackageBuilder rejects a PKGBUILD changed after review",
             "PackageBuilder resolves issue 1750 source command substitution after review",
@@ -702,9 +784,14 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder rejects an explicitly selected disabled dynamic member",
             "PackageBuilder requires supplemental review for a dynamically discovered local source",
             "PackageBuilder rejects a legacy unwritable package tree",
-            "PackageBuilder cannot perform privileged package filesystem operations",
+            "PackageBuilder rejects retained temporary device nodes",
+            "PackageBuilder external helpers preserve ownership and temporary devices",
+            "PackageBuilder parallel external helpers serialize metadata",
+            "PackageBuilder rejects unsafe external device operations",
             "PackageBuilder simulates root ownership without host chown",
             "PackageBuilder preserves non-root virtual ownership and special modes",
+            "PackageBuilder install option clusters preserve virtual ownership",
+            "PackageBuilder install rejects unsupported and malformed ownership options",
             "PackageBuilder virtual ownership follows identities and recursive snapshots",
             "virtual ownership identities distinguish reused inode numbers",
             "PackageBuilder isolates virtual ownership between split members",
@@ -740,6 +827,8 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder extracts source archives into srcdir",
             "PackageBuilder standalone",
             "PackageBuilder detects source archives by content including zip and tar zstd",
+            "PackageBuilder preserves literal backslashes in GStreamer source archive filenames",
+            "PackageBuilder rejects source archive traversal even alongside literal backslashes",
             "PackageBuilder extracts an extensionless source over its matching archive root",
             "PackageBuilder rejects an archive root colliding with another staged source",
             "PackageBuilder preserves source archive modification timestamps",
@@ -761,7 +850,7 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder retains failed and cancelled build logs",
             "PackageBuilder fails before PKGBUILD execution when log destination is unusable",
             "PackageBuilder reports failure when a step exits non-zero",
-            "PackageBuilder reports failure instead of crashing without execution steps",
+            "PackageBuilder builds a metapackage without execution steps",
             "PackageBuilder builds all requested split members after shared steps run once",
             "PackageBuilder keeps shared split builds under the global pkgname",
             "PackageBuilder preserves selected split metadata in PKGINFO",
@@ -783,9 +872,13 @@ pub fn build(b: *std.Build) void {
             "archive virtual ownership is shared by package and mtree writers",
             "AUR operation-hooked public APIs compile",
             "coordinator child build arguments bind review package set and policies",
-            "clean invoking-user build command drops the elevated environment",
+            "clean invoking-user build command",
             "build progress parser recognizes makepkg percentage lines",
             "build environment exports flags hosts and compiler wrapper paths",
+            "native build PATH",
+            "PackageBuilder uses configured PATH",
+            "PackageBuilder build.env",
+            "PackageBuilder reports invalid configured PATH",
             "disabled build environment removes inherited flags and hosts",
             "streaming process execution forwards stdout stderr and a final unterminated line",
             "streaming process execution delivers output before the child exits",
@@ -804,6 +897,15 @@ pub fn build(b: *std.Build) void {
     const run_source_compression_tests = b.addRunArtifact(source_compression_tests);
     aur_test_step.dependOn(&run_source_compression_tests.step);
     test_step.dependOn(&run_source_compression_tests.step);
+    const source_archive_tests = b.addTest(.{
+        .name = "source-archive-test",
+        .root_module = archive_mod,
+        .filters = &.{"archive reader"},
+    });
+    const run_source_archive_tests = b.addRunArtifact(source_archive_tests);
+    b.step("source-archive-test", "Run source archive reader regressions").dependOn(&run_source_archive_tests.step);
+    builder_test_step.dependOn(&run_source_archive_tests.step);
+    test_step.dependOn(&run_source_archive_tests.step);
 
     const appimage_tests = b.addTest(.{
         .name = "appimage-test",
@@ -814,8 +916,10 @@ pub fn build(b: *std.Build) void {
             "configureEnvironment",
             "AppImage dispatcher forwards typed status and download progress",
             "AppImage classification is case insensitive and extension based",
+            "AppImage desktop discovery skips files that only borrow the desktop extension",
+            "AppImage desktop entry detection requires a leading Desktop Entry group",
+            "AppImage icon discovery matches the Icon name and prefers the best shipped source",
             "AppImage metadata discovery rejects symlinks outside the extraction root",
-            "test isAppImage",
             "get_update returns optional owned results for configured providers",
             "providerUpdateOrWarn",
             "get_updates returns an owned update list",
@@ -861,6 +965,44 @@ pub fn build(b: *std.Build) void {
     const run_appimage_tests = b.addRunArtifact(appimage_tests);
     const appimage_test_step = b.step("appimage-test", "Run safe AppImage parity tests");
     appimage_test_step.dependOn(&run_appimage_tests.step);
+
+    const repo_db_tests = b.addTest(.{
+        .name = "repo-db-test",
+        .root_module = mod,
+        .filters = &.{
+            "pkginfo parses keys and repeated values",
+            "pkginfo reads the PKGINFO entry from a package archive",
+            "pkginfo rejects archives without PKGINFO",
+            "package file list excludes archive root dotfiles and keeps nested dotfiles",
+            "package file list is byte-sorted and deduplicated",
+            "desc writes repo-add section order and omits empty sections",
+            "desc includes stat size streamed sha256 and PKGINFO isize",
+            "pgpsig is embedded only when requested",
+            "pgpsig rejects armored and oversized signatures",
+            "add creates db and files archives with a matching entry",
+            "add replacement keeps both databases in lockstep",
+            "add with new skips an existing identical entry without rewriting",
+            "add with prevent_downgrade skips only strictly newer existing versions",
+            "failed add leaves the database files unchanged",
+            "remove deletes entries by package name from both databases",
+            "remove of an unknown name fails without publishing",
+            "removing the last entry produces valid empty databases",
+            "publication keeps one old generation and refreshes the extension-less symlink",
+            "remove old files deletes package and signature only after publication",
+            "remove with remove old files deletes each matched package after publication",
+            "lock contention fails without modifying the database",
+            "database derives the files path and rejects unsupported extensions",
+            "publication signs each database archive and rotates the signature into place",
+            "a failed signature still publishes the database unsigned",
+            "a staged signature from an aborted run is not published",
+            "verify checks the signature of both database archives",
+            "verify reports a missing signature as skipped",
+            "verify stops at an unusable signature",
+        },
+    });
+    const run_repo_db_tests = b.addRunArtifact(repo_db_tests);
+    const repo_db_test_step = b.step("repo-db-test", "Run repository database tests");
+    repo_db_test_step.dependOn(&run_repo_db_tests.step);
 
     // Just like flags, top level steps are also listed in the `--help` menu.
     //

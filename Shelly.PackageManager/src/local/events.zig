@@ -13,6 +13,7 @@ pub const Level = enum {
 pub const Message = struct {
     level: Level,
     text: []const u8,
+    err: anyerror = error.LocalPackageOperationFailed,
 };
 
 pub const Handler = struct {
@@ -70,7 +71,7 @@ pub const Dispatcher = struct {
             .information => operation.status(.information, message.text, "local.status", null),
             .warning => operation.status(.warning, message.text, "local.warning", null),
             .success => operation.status(.success, message.text, "local.success", null),
-            .err => operation.reportError(error.LocalPackageOperationFailed, message.text, "local-package", null, false),
+            .err => operation.reportError(message.err, message.text, "local-package", null, false),
         };
         const snapshot = self.allocator.dupe(Handler, self.handlers.items) catch {
             for (self.handlers.items) |handler| handler.call(message);

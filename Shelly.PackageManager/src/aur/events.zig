@@ -205,7 +205,7 @@ pub const Dispatcher = struct {
                     .options = options,
                     .dependency_name = args.dependency_name,
                 }) catch |err| {
-                    if (err != error.Cancelled) operation.reportError(err, "Failed to obtain an AUR question response", "aur", null, false);
+                    if (err != error.Cancelled) operation.reportError(err, "Could not obtain an answer to the package confirmation. Run the operation with an interactive confirmation interface.", "aur", null, false);
                     return .{};
                 };
                 switch (answer.response) {

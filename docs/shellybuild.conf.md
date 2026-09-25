@@ -34,6 +34,8 @@ check = true
 ccache = false
 distcc = false
 distcc_hosts = []
+extra_path = []
+env = {}
 
 [package]
 packager = "Unknown Packager"
@@ -62,6 +64,109 @@ Flag and host arrays are joined with spaces only when a child process is launche
 Supported package options are `strip`, `docs`, `libtool`, `staticlibs`, `emptydirs`, `zipman`, `purge`, `debug`, `lto`, `autodeps`, `buildflags`, and `makeflags`. Content tidy operations currently implement stripping and standard purge cleanup.
 
 `purge` is enabled by default. Before writing package metadata and the archive, it removes `usr/info/dir` and `usr/share/info/dir` relative to `$pkgdir`, plus non-directory entries named `.packlist` or matching `*.pod` anywhere in that package tree. Directories are preserved, and cleanup does not follow symlinks. PKGBUILD `options=('!purge')` disables this cleanup, including when set inside a split-package function. Purge runs independently of `strip`, so `!strip` does not disable it. Custom `PURGE_TARGETS` and makepkg shell configuration are not read by the native builder. This behavior also applies to `shelly build --isolated`.
+
+## Build executable search path
+
+Every native build starts with a deterministic PATH rather than inheriting the
+terminal or elevated coordinator's PATH. This includes GUI AUR builds, standalone
+`shelly build`, `--sync-deps` children, metadata review, and `.SRCINFO` generation.
+The baseline is:
+
+```text
+/usr/bin/core_perl:/usr/bin/vendor_perl:/usr/bin/site_perl:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
+```
+
+Unavailable baseline directories are omitted as the non-root build user. Add
+custom toolchains explicitly in the system or user configuration:
+
+```toml
+[build]
+extra_path = ["/home/your-user/.cargo/bin", "/opt/toolchain/bin"]
+```
+
+Search order is ccache, distcc (when enabled), `extra_path` in the listed order,
+then the baseline. Duplicate components are removed, keeping the first entry.
+This lets configured tools override system tools while preserving compiler
+wrappers. The user array replaces the system array; `extra_path = []` clears
+inherited additions, and omitting the key retains them.
+
+Entries must be absolute directory paths without colons or NUL characters.
+There is no shell, `$HOME`, or `~` expansion. Each configured directory must
+exist and be searchable by the build user; an unusable entry fails before
+PKGBUILD execution and reports its path. Validation happens after dropping
+privileges. Configured directories never become the root coordinator's PATH.
+PKGBUILD functions can still change PATH themselves.
+
+**Migration:** tools previously found only through your terminal's PATH must
+now be listed in `build.extra_path`. External makepkg and clean-chroot commands
+retain their existing environment policy.
+
+For `shelly build --isolated`, additions are carried into the guest configuration
+and must also exist inside that root. Host directories are not mounted merely
+because they appear in `extra_path`. When Landlock sandboxing is enabled, PATH
+configuration does not grant filesystem access: custom toolchains outside the
+existing allow-list also need appropriate `sandbox.extra_read` / `extra_write`
+entries, including any toolchain libraries and caches they require.
+
+## Build environment variables
+
+Set literal environment variables for the unprivileged native builder:
+
+```toml
+[build]
+env = { JAVA_HOME = "/usr/lib/jvm/default", CARGO_HOME = "/home/your-user/.cargo" }
+```
+
+The equivalent table syntax is useful for several assignments:
+
+```toml
+[build.env]
+JAVA_HOME = "/usr/lib/jvm/default"
+CARGO_HOME = "/home/your-user/.cargo"
+LANG = "C.UTF-8"
+```
+
+The default is an empty table. Omitting `env` in the user configuration keeps
+the system table; specifying it replaces the entire system table. Set
+`env = {}` under `[build]` to clear configured assignments. Clearing this table
+does not remove variables already present in the build user's environment.
+An empty string explicitly sets an empty value; it does not unset the variable.
+
+Names must match `[A-Za-z_][A-Za-z0-9_]*`. Values must be strings without NUL
+characters. Spaces, quotes, Unicode, dollar signs, and shell expressions remain
+literal: there is no `$HOME`, `~`, variable, or command expansion.
+
+Assignments override the build user's inherited values, including `LANG`,
+`LANGUAGE`, and `LC_*`. Without an explicit locale assignment, elevated native
+builds preserve the caller's recognized locale variables and default missing
+or empty `LANG` to `C.UTF-8`. An explicit `LC_ALL=C` remains effective.
+
+Shelly applies these assignments after dropping privileges, before metadata
+review, `.SRCINFO` generation, and PKGBUILD lifecycle execution. They also reach
+the native builder's subprocess helpers. They never become the elevated
+coordinator's environment or command-line arguments. Shelly's own HTTP proxy
+configuration is separately defined. External makepkg and clean-chroot commands
+retain their existing environment policy.
+
+The following names are reserved and cause a configuration error:
+
+- `PATH`: use `build.extra_path`.
+- `CPPFLAGS`, `CFLAGS`, `CXXFLAGS`, `LDFLAGS`, `LTOFLAGS`, `MAKEFLAGS`, `CHOST`,
+  `CARCH`, and `DISTCC_HOSTS`: use the dedicated `[build]` fields. Package options
+  such as `!buildflags` and `!makeflags` remain authoritative.
+- `SOURCE_DATE_EPOCH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `PWD`, and `OLDPWD`.
+- Names beginning with `SHELLY_`, `SUDO_`, `DOAS_`, `PKEXEC_`, `XDG_`, or `DBUS_`.
+- Process-startup controls: `ENV`, `BASHOPTS`, `SHELLOPTS`, `IFS`, `CDPATH`,
+  `GCONV_PATH`, `LOCPATH`, and names beginning with `BASH_`, `LD_`, or `DYLD_`.
+
+Validation diagnostics identify the variable without printing its value.
+PKGBUILD code can read these values and may print them in its own output.
+
+For `shelly build --isolated`, the effective table is serialized into the guest
+configuration and applied to the unprivileged guest builder. Paths refer to the
+guest filesystem; assigning a path does not mount a host directory. With
+Landlock enabled, assignments grant no additional filesystem access; configure
+`sandbox.extra_read` / `extra_write` when a toolchain needs access.
 
 ## PKGBUILD and CLI overrides
 

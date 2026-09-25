@@ -15,6 +15,11 @@ const options = @import("options");
 const IconDownloadService = @import("services/icon_fetcher.zig").downloadIconsInBackground;
 
 var did_activate: bool = false;
+var requested_page: ?deep_link.PageTarget = null;
+var app_id_buffer: [deep_link.max_app_id_len + 1]u8 = undefined;
+var requested_app_id: ?[:0]const u8 = null;
+var app_path_buffer: [deep_link.max_file_path_len + 1]u8 = undefined;
+var requested_app_path: ?[:0]const u8 = null;
 
 pub fn main(init: std.process.Init) void {
     runtime.io = init.io;
@@ -22,7 +27,7 @@ pub fn main(init: std.process.Init) void {
     HttpClient.setDefaultProxyEnvironment(init.environ_map);
 
     if (!translations.init()) {
-        std.log.warn("translations: failed to initialize gettext", .{});
+        std.log.warn("Could not initialize translations. Shelly may display untranslated text.", .{});
     }
     if (!options.skip_background_services) {
         IconDownloadService(std.heap.c_allocator, runtime.io);
@@ -62,10 +67,6 @@ fn commandLine(
     const argc_usize = @as(usize, @intCast(argc));
     defer glib.strfreev(@ptrCast(argv));
 
-    var requested_page: ?deep_link.PageTarget = null;
-    var app_id_buffer: [deep_link.max_app_id_len + 1]u8 = undefined;
-    var requested_app_id: ?[:0]const u8 = null;
-
     var i: usize = 1;
     while (i < argc_usize) : (i += 1) {
         const arg = std.mem.span(argv[i]);
@@ -81,7 +82,7 @@ fn commandLine(
                 requested_page =
                     deep_link.parsePageTarget(std.mem.span(argv[i]));
             } else {
-                std.log.warn("--page requires a value", .{});
+                std.log.warn("Option '--page' requires a page name. See 'shelly-ui --help' for usage.", .{});
             }
             continue;
         }
@@ -89,9 +90,15 @@ fn commandLine(
         if (deep_link.extractFlatpakAppId(arg, &app_id_buffer)) |id| {
             requested_app_id = id;
         }
+
+        if (deep_link.extractLocalFlatpakFile(arg, &app_path_buffer)) |app_path| {
+            requested_app_path = app_path;
+        }
     }
 
-    if (requested_app_id) |id| {
+    if (requested_app_path) |app_path| {
+        runtime.queueLocalFlatpakPath(app_path);
+    } else if (requested_app_id) |id| {
         runtime.queueFlatpakApp(id);
     } else if (requested_page) |page| {
         runtime.queuePage(page);
@@ -108,10 +115,11 @@ fn dispatchPendingNavigation(window: *ShellyWindow) void {
     const navigated = switch (request) {
         .page => |target| window.navigateTo(target),
         .flatpak_app => |app| window.openFlatpakApp(app.id()),
+        .local_flatpak_file => |file| window.openFlatpakLocalFile(file.path()),
     };
 
     if (!navigated) {
-        std.log.warn("requested page is disabled or unavailable", .{});
+        std.log.warn("Could not open the requested page because it is disabled or unavailable. Enable the corresponding support in settings or choose another page.", .{});
     }
 }
 
@@ -166,12 +174,12 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
     }
 
     _ = runtime.setupConfig(std.heap.c_allocator) catch |err| {
-        std.log.warn("settings: failed to load config service: {t}", .{err});
+        std.log.warn("Could not open the settings service. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
     };
 
     if (runtime.config) |svc| {
         const cfg = svc.get() catch |err| {
-            std.log.warn("settings: failed to get config: {t}", .{err});
+            std.log.warn("Could not load settings from the configured file. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return;
         };
 
@@ -221,7 +229,7 @@ fn setupGnomeThemePreference() void {
 
     if (prefer_dark) {
         const gtk_settings = gtk.Settings.getDefault() orelse {
-            std.debug.print("Failed to fetch GtkSettings layout.\n", .{});
+            std.debug.print("Could not read the desktop theme settings. Shelly will use the available theme defaults.\n", .{});
             return;
         };
         const base_object = @as(*gobject.Object, @ptrCast(@alignCast(gtk_settings)));
@@ -252,6 +260,7 @@ test {
     _ = @import("helpers/datetime.zig");
     _ = @import("helpers/deep_link.zig");
     _ = @import("services/flathub_api.zig");
+    _ = @import("services/atoll_api.zig");
     _ = @import("models/aur_package.zig");
     _ = @import("g_objects/aur_package_object.zig");
     _ = @import("models/search_result.zig");

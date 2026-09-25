@@ -1472,7 +1472,7 @@ test "refresh reports a detailed reinitialization failure" {
     try testing.expect(std.mem.indexOf(
         u8,
         capture.text(),
-        "Failed to reinitialize ALPM while reloading package databases",
+        "Could not reopen the package database while refreshing package state",
     ) != null);
     try testing.expect(std.mem.indexOf(u8, capture.text(), "ALPM operation failed") == null);
 }
@@ -1904,6 +1904,8 @@ test "ALPM managers inherit the configured parallel download count" {
 const CountingDownloadServer = struct {
     io: std.Io,
     server: std.Io.net.Server,
+    expected_paths: ?[2][]const u8 = null,
+    seen_paths: std.atomic.Value(u8) = .init(0),
     active: std.atomic.Value(usize) = .init(0),
     peak: std.atomic.Value(usize) = .init(0),
     requests: std.atomic.Value(usize) = .init(0),
@@ -1931,6 +1933,19 @@ const CountingDownloadServer = struct {
     fn respondInner(self: *@This(), stream: std.Io.net.Stream) !void {
         var read_buffer: [2048]u8 = undefined;
         var reader = stream.reader(self.io, &read_buffer);
+        const request_line = try reader.interface.takeDelimiter('\n') orelse return error.EndOfStream;
+        if (self.expected_paths) |paths| {
+            var parts = std.mem.tokenizeScalar(u8, request_line, ' ');
+            _ = parts.next();
+            const path = parts.next() orelse return error.InvalidRequest;
+            if (std.mem.eql(u8, path, paths[0])) {
+                _ = self.seen_paths.fetchOr(1, .monotonic);
+            } else if (std.mem.eql(u8, path, paths[1])) {
+                _ = self.seen_paths.fetchOr(2, .monotonic);
+            } else {
+                self.failed.store(true, .release);
+            }
+        }
         while (try reader.interface.takeDelimiter('\n')) |line| {
             if (std.mem.eql(u8, line, "\r")) break;
         } else return error.EndOfStream;
@@ -1950,6 +1965,61 @@ const CountingDownloadServer = struct {
         try writer.interface.flush();
     }
 };
+
+test "Manager.sync keeps included repository mirrors separate during fallback (issue 1960)" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    const address = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
+    var arch: CountingDownloadServer = .{
+        .io = io,
+        .server = try address.listen(io, .{ .reuse_address = true }),
+        .expected_paths = .{ "/first/multilib.db", "/second/multilib.db" },
+    };
+    defer arch.server.deinit(io);
+    var arch_future = try io.concurrent(CountingDownloadServer.serve, .{&arch});
+    defer _ = arch_future.cancel(io) catch {};
+    var openai: CountingDownloadServer = .{
+        .io = io,
+        .server = try address.listen(io, .{ .reuse_address = true }),
+        .expected_paths = .{ "/first/openai-chatgpt.db", "/second/openai-chatgpt.db" },
+    };
+    defer openai.server.deinit(io);
+    var openai_future = try io.concurrent(CountingDownloadServer.serve, .{&openai});
+    defer _ = openai_future.cancel(io) catch {};
+
+    const include_path = try std.fs.path.join(allocator, &.{ workspace.root, "openai.conf" });
+    defer allocator.free(include_path);
+    const openai_port = openai.server.socket.address.getPort();
+    const included = try std.fmt.allocPrint(
+        allocator,
+        "[openai-chatgpt]\nServer = http://127.0.0.1:{d}/first\nServer = http://127.0.0.1:{d}/second\n",
+        .{ openai_port, openai_port },
+    );
+    defer allocator.free(included);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = include_path, .data = included });
+    const arch_port = arch.server.socket.address.getPort();
+    const config = try std.fmt.allocPrint(
+        allocator,
+        "[options]\nArchitecture = x86_64\nSigLevel = Never\nDBPath = {s}\n" ++
+            "[multilib]\nServer = http://127.0.0.1:{d}/first\nServer = http://127.0.0.1:{d}/second\n" ++
+            "Include = {s}\n",
+        .{ workspace.db_path, arch_port, arch_port, include_path },
+    );
+    defer allocator.free(config);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = workspace.config_path, .data = config });
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+
+    // Every mirror returns 404 so both repositories exhaust their own lists.
+    try testing.expectError(error.UpdateFetchFailed, mgr.sync(true));
+    for ([_]*CountingDownloadServer{ &arch, &openai }) |server| {
+        try testing.expectEqual(@as(usize, 2), server.requests.load(.acquire));
+        try testing.expectEqual(@as(u8, 3), server.seen_paths.load(.acquire));
+        try testing.expect(!server.failed.load(.acquire));
+    }
+}
 
 test "ALPM package and database downloads honor limits across mirror retries" {
     const allocator = testing.allocator;
@@ -2529,7 +2599,7 @@ test "install_local_packages installs multiple archives in a DB-only transaction
 
     // libalpm rejects package commit transactions for unprivileged processes,
     // even when DBONLY confines the mutation to a temporary database.
-    if (builtin.os.tag != .linux or std.os.linux.geteuid() != 0) return;
+    if (builtin.os.tag != .linux or std.os.linux.geteuid() != 0) return error.SkipZigTest;
 
     var threaded: std.Io.Threaded = .init(allocator, .{});
     defer threaded.deinit();
@@ -2559,7 +2629,7 @@ test "install_local_packages installs multiple archives in a DB-only transaction
 test "install_local_packages skips a duplicate target and emits information" {
     const allocator = testing.allocator;
 
-    if (builtin.os.tag != .linux or std.os.linux.geteuid() != 0) return;
+    if (builtin.os.tag != .linux or std.os.linux.geteuid() != 0) return error.SkipZigTest;
 
     var threaded: std.Io.Threaded = .init(allocator, .{});
     defer threaded.deinit();
@@ -2583,7 +2653,7 @@ test "install_local_packages skips a duplicate target and emits information" {
 
     const args = capture.args orelse return error.TestFailed;
     try testing.expectEqual(libalpm.EventType.failed_add_local_package, args.event_type);
-    try testing.expectEqualStrings("Failed to add local package.", args.message);
+    try testing.expectEqualStrings("Could not add the selected local package archive to the transaction.", args.message);
     try testing.expect((try mgr.get_single_installed_package("shelly-local-duplicate")) != null);
 }
 
@@ -2670,7 +2740,7 @@ test "remove_packages cancels removal of a held package without confirmation" {
         error.PrepareFailed,
         mgr.remove_packages(&package_names, .{}, true),
     );
-    try testing.expectEqualStrings("Held package removal cancelled.", capture.text());
+    try testing.expectEqualStrings("Removal cancelled because permission to remove held packages was declined.", capture.text());
 }
 
 test "remove_packages previews resolved recursive and optional dependencies before cancellation" {
@@ -2817,7 +2887,7 @@ test "remove_packages removes an installed package in a DB-only transaction when
 
     // libalpm rejects removal transactions for unprivileged processes even
     // when DBONLY confines the mutation to this temporary database.
-    if (builtin.os.tag != .linux or std.os.linux.geteuid() != 0) return;
+    if (builtin.os.tag != .linux or std.os.linux.geteuid() != 0) return error.SkipZigTest;
 
     // DBPath already points at the isolated workspace. Passing it again as the
     // non-root temp path would replace its local database with a symlink.
@@ -2985,6 +3055,66 @@ test "dependency query APIs resolve exact, versioned, and virtual remote package
     try testing.expectError(error.PkgNotFound, mgr.get_package_from_provides("missing-feature"));
     try testing.expectError(error.PkgNotFound, mgr.find_remote_satisfier_for_dependency("missing-feature"));
     try testing.expectError(error.PkgNotFound, mgr.find_remote_satisfier_for_dependency_details("missing-feature"));
+}
+
+test "dependency query misses do not emit failures but real errors and cancellation survive" {
+    const Capture = struct {
+        failures: usize = 0,
+        failed: usize = 0,
+        cancelled: usize = 0,
+
+        fn event(data: ?*anyopaque, value: operations.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (value) {
+                .failure => self.failures += 1,
+                .completed => |completed| switch (completed.status) {
+                    .failed => self.failed += 1,
+                    .cancelled => self.cancelled += 1,
+                    else => {},
+                },
+                else => {},
+            }
+        }
+    };
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    try workspace.createSyncDatabase(allocator);
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+
+    var context = operations.OperationContext.init(allocator, io);
+    defer context.deinit();
+    var capture: Capture = .{};
+    const subscription = try context.subscribe(.{ .function = Capture.event, .data = &capture });
+    defer _ = context.unsubscribe(subscription);
+    mgr.setOperationContext(&context);
+    defer mgr.setOperationContext(null);
+
+    for ([_][:0]const u8{ "shelly-git=3.1.4-1", "remote-provider>=999" }) |dependency| {
+        try testing.expectError(error.PkgNotFound, mgr.find_remote_satisfier_for_dependency(dependency));
+        try testing.expectError(error.PkgNotFound, mgr.find_remote_satisfier_for_dependency_details(dependency));
+    }
+    try testing.expectEqual(@as(usize, 0), capture.failures);
+    try testing.expectEqual(@as(usize, 0), capture.failed);
+
+    // The manager allocator is used for the query's temporary package name;
+    // event delivery retains its own allocator so the failure stays observable.
+    {
+        var failing = testing.FailingAllocator.init(allocator, .{ .fail_index = 0 });
+        mgr.allocator = failing.allocator();
+        defer mgr.allocator = allocator;
+        try testing.expectError(error.OutOfMemory, mgr.find_remote_satisfier_for_dependency("remote-provider"));
+    }
+    try testing.expectEqual(@as(usize, 1), capture.failures);
+    try testing.expectEqual(@as(usize, 2), capture.failed);
+
+    context.cancel();
+    try testing.expectError(error.Cancelled, mgr.find_remote_satisfier_for_dependency("remote-provider"));
+    try testing.expectError(error.Cancelled, mgr.find_remote_satisfier_for_dependency_details("remote-provider"));
+    try testing.expectEqual(@as(usize, 2), capture.cancelled);
+    try testing.expectEqual(@as(usize, 1), capture.failures);
 }
 
 test "installed dependency query distinguishes satisfied and missing dependencies" {

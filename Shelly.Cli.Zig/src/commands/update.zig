@@ -42,7 +42,7 @@ pub fn dispatch(
 ) !?u8 {
     if (!isUpdatePath(invocation.command.path)) return null;
     if (invocation.positionals.len == 0)
-        return try reportValidationFailure(context, invocation, "No packages specified.");
+        return try reportValidationFailure(context, invocation, "Specify at least one package name. See the command help for usage.");
 
     const is_standard = std.mem.eql(u8, invocation.command.path, standard_command_path);
     var confirmed_standard = false;
@@ -69,7 +69,7 @@ pub fn dispatch(
             context.allocator.free(elevated_arguments);
 
         const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
-            try context.stderr.print("Unable to elevate update: {t}\n", .{err});
+            try context.stderr.print("Could not obtain administrator privileges for package updates. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -86,12 +86,11 @@ fn confirmStandardUpdate(
     defer context.allocator.free(names);
     try context.stdout.print("Packages to update: {s}\n", .{names});
     try context.stdout.writeAll(
-        "WARNING: Updating individual standard packages is a partial upgrade and is unsupported on Arch Linux.\n" ++
-            "Partial upgrades can break your system; a full `shelly upgrade standard` is the supported update path.\n",
+        "Updating individual standard packages is a partial upgrade and is unsupported on Arch Linux.\nPartial upgrades can break your system; a full `shelly upgrade standard` is the supported update path.\n",
     );
 
     const reader = context.stdin orelse {
-        try context.stdout.writeAll("Operation cancelled: confirmation input is unavailable.\n");
+        try context.stdout.writeAll("Operation cancelled because confirmation input is unavailable. Run the command in an interactive terminal to review and confirm the operation.\n");
         try context.stdout.flush();
         return false;
     };
@@ -129,8 +128,7 @@ fn confirmStandardUpdateUi(
     try output.writeInfoFrame(context, package_message);
     try output.writeInfoFrame(
         context,
-        "WARNING: Updating individual standard packages is an unsupported partial upgrade and can break your system. " ++
-            "Use `shelly upgrade standard` for a full update.",
+        "Updating individual standard packages is an unsupported partial upgrade and can break your system. Use `shelly upgrade standard` for a full update.",
     );
 
     var operation_context = Zigalpm.OperationContext.init(context.allocator, context.io);
@@ -217,7 +215,7 @@ fn executeUi(
         .opening = opening,
         .success_message = successMessage(invocation),
         .failure_message = failureMessage(invocation),
-        .failure_label = "Update failed",
+        .failure_label = "Could not update the selected packages.",
     }, runner);
 }
 
@@ -370,10 +368,10 @@ fn successMessage(invocation: *const parser.Invocation) []const u8 {
 
 fn failureMessage(invocation: *const parser.Invocation) []const u8 {
     if (std.mem.eql(u8, invocation.command.path, standard_command_path))
-        return "Standard package update failed.";
+        return "Could not update the selected standard packages.";
     if (std.mem.eql(u8, invocation.command.path, aur_command_path))
-        return "AUR package update failed.";
-    return "Flatpak update failed.";
+        return "Could not update the selected AUR packages.";
+    return "Could not update the selected Flatpaks.";
 }
 
 fn sentinelStrings(allocator: std.mem.Allocator, values: []const []const u8) ![][:0]const u8 {

@@ -61,10 +61,6 @@ pub const AppImageManager = struct {
         return std.ascii.eqlIgnoreCase(std.fs.path.extension(file_path), ".AppImage");
     }
 
-    pub fn is_app_image(file_path: []const u8) bool {
-        return isAppImage(file_path);
-    }
-
     pub fn installAppImage(self: AppImageManager, location: []const u8) !bool {
         try ensureNonRootMutation();
         var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .install, location);
@@ -95,8 +91,8 @@ pub const AppImageManager = struct {
         try self.setExecutable(staging_path);
 
         var content = (try self.extractMetadataPure(staging_path, app_name, dest_path)) orelse {
-            std.log.warn("Failed to extract metadata during installation.", .{});
-            self.emitStatus(.err, "Failed to extract metadata during installation.");
+            std.log.warn("Could not extract metadata from the selected AppImage file.", .{});
+            self.emitStatus(.err, "Could not extract metadata from the selected AppImage file.");
             operation_scope.finish(.failed);
             return false;
         };
@@ -129,7 +125,7 @@ pub const AppImageManager = struct {
         std.Io.Dir.rename(.cwd(), staging_path, .cwd(), dest_path, self.io) catch |err| return err;
 
         var integration = self.beginDesktopIntegration(metadata, dest_path, content.source_desktop_path, content.icon_source) catch |err| {
-            self.emitStatusFmt(.err, "Could not write desktop integration for {s}: {s}.", .{ app_name, @errorName(err) });
+            self.emitStatusFmt(.err, "Could not write desktop integration for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(app_name), @import("diagnostics").cause(err), @errorName(err) });
             self.rollbackInstalledBinary(dest_path, backup_path, had_existing);
             operation_scope.finish(.failed);
             return false;
@@ -137,8 +133,8 @@ pub const AppImageManager = struct {
         defer integration.deinit();
 
         self.addAppImageToLocalDb(metadata) catch |err| {
-            self.emitStatusFmt(.err, "Could not install {s}: {s}.", .{ app_name, @errorName(err) });
-            integration.rollback() catch |rollback_err| self.emitStatusFmt(.err, "Could not restore desktop integration: {s}.", .{@errorName(rollback_err)});
+            self.emitStatusFmt(.err, "Could not install {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(app_name), @import("diagnostics").cause(err), @errorName(err) });
+            integration.rollback() catch |rollback_err| self.emitStatusFmt(.err, "Could not restore desktop integration for the requested package after the operation failed. {0s} Desktop entries or icons may need repair.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(rollback_err), @errorName(rollback_err) });
             self.rollbackInstalledBinary(dest_path, backup_path, had_existing);
             operation_scope.finish(.failed);
             return false;
@@ -155,7 +151,7 @@ pub const AppImageManager = struct {
                 std.Io.Dir.cwd().deleteFile(self.io, existing.path) catch {};
         }
         if (had_existing) std.Io.Dir.cwd().deleteFile(self.io, backup_path) catch |err| {
-            self.emitStatusFmt(.warning, "Could not remove the AppImage backup: {s}.", .{@errorName(err)});
+            self.emitStatusFmt(.warning, "Could not remove the backup for the requested package at the backup path. {0s} The backup remains on disk.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
         };
         self.refreshDesktopCachesBestEffort(content.icon_source != null);
 
@@ -167,7 +163,7 @@ pub const AppImageManager = struct {
     fn rollbackInstalledBinary(self: AppImageManager, dest_path: []const u8, backup_path: []const u8, had_existing: bool) void {
         if (had_existing) {
             std.Io.Dir.rename(.cwd(), backup_path, .cwd(), dest_path, self.io) catch |err| {
-                self.emitStatusFmt(.err, "Could not restore the previous AppImage: {s}.", .{@errorName(err)});
+                self.emitStatusFmt(.err, "Could not restore the previous AppImage for the requested package from the backup path. {0s} Check the installed file and backup before launching or retrying the update.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             };
         } else {
             std.Io.Dir.cwd().deleteFile(self.io, dest_path) catch {};
@@ -267,7 +263,7 @@ pub const AppImageManager = struct {
 
         const term = try extract_proc.wait(self.io);
         if (term != .exited or term.exited != 0) {
-            std.log.warn("Could not extract AppImage {s}", .{path});
+            std.log.warn("Could not extract metadata from AppImage {0f}.", .{@import("diagnostics").safe(path)});
             operation_scope.finish(.failed);
             freeWorkingDir(self.allocator, self.io, &working_dir);
             return null;
@@ -404,24 +400,47 @@ pub const AppImageManager = struct {
 
         var it = d.iterate();
         while (try it.next(self.io)) |entry| {
-            if (!std.ascii.eqlIgnoreCase(std.fs.path.extension(entry.name), ".desktop")) continue;
-            const path = try std.fs.path.join(self.allocator, &.{ dir, entry.name });
-            if (entry.kind == .file) return path;
-            if (entry.kind == .sym_link) {
-                const resolved = try self.resolveConfinedFile(dir, path);
-                self.allocator.free(path);
-                if (resolved) |resolved_path| return resolved_path;
-            } else self.allocator.free(path);
+            if (try self.desktopCandidate(dir, entry.name, entry.kind)) |path| return path;
         }
 
         var walker = try d.walk(self.allocator);
         defer walker.deinit();
         while (try walker.next(self.io)) |entry| {
-            if (entry.kind != .file or
-                !std.ascii.eqlIgnoreCase(std.fs.path.extension(entry.basename), ".desktop")) continue;
-            return try std.fs.path.join(self.allocator, &.{ dir, entry.path });
+            if (try self.desktopCandidate(dir, entry.path, entry.kind)) |path| return path;
         }
         return null;
+    }
+
+    /// Resolves `relative_path` against `dir` and accepts it only after content validation.
+    /// `.unknown` is confined-resolved like a symlink so a link is never followed out of `dir`.
+    fn desktopCandidate(
+        self: AppImageManager,
+        dir: []const u8,
+        relative_path: []const u8,
+        kind: std.Io.File.Kind,
+    ) !?[]const u8 {
+        if (!std.ascii.eqlIgnoreCase(std.fs.path.extension(std.fs.path.basename(relative_path)), ".desktop")) return null;
+        const joined = try std.fs.path.join(self.allocator, &.{ dir, relative_path });
+        const candidate: []u8 = switch (kind) {
+            .file => joined,
+            .sym_link, .unknown => confined: {
+                const resolved = self.resolveConfinedFile(dir, joined) catch |err| {
+                    self.allocator.free(joined);
+                    return err;
+                };
+                self.allocator.free(joined);
+                break :confined resolved orelse return null;
+            },
+            else => {
+                self.allocator.free(joined);
+                return null;
+            },
+        };
+        if (!isDesktopEntryFile(self.io, candidate)) {
+            self.allocator.free(candidate);
+            return null;
+        }
+        return candidate;
     }
 
     fn resolveConfinedFile(
@@ -499,19 +518,19 @@ pub const AppImageManager = struct {
         var d = std.Io.Dir.cwd().openDir(self.io, squashfs_root, .{ .iterate = true }) catch return null;
         defer d.close(self.io);
 
-        const requested_stem = std.fs.path.stem(std.fs.path.basename(icon_value));
+        const requested_name = requestedIconName(icon_value);
         var best_path: ?[]u8 = null;
         errdefer if (best_path) |path| self.allocator.free(path);
-        var best_score: u8 = 0;
+        var best_score: u32 = 0;
 
-        if (requested_stem.len > 0) {
+        if (requested_name.len > 0) {
             var walker = try d.walk(self.allocator);
             defer walker.deinit();
             while (try walker.next(self.io)) |entry| {
                 if (entry.kind != .file) continue;
                 const ext = std.fs.path.extension(entry.basename);
                 if (!isSupportedIconExtension(ext) or
-                    !std.ascii.eqlIgnoreCase(std.fs.path.stem(entry.basename), requested_stem)) continue;
+                    !std.ascii.eqlIgnoreCase(std.fs.path.stem(entry.basename), requested_name)) continue;
                 const score = iconSourceScore(entry.path, ext);
                 if (best_path != null and score <= best_score) continue;
                 const candidate = try std.fs.path.join(self.allocator, &.{ squashfs_root, entry.path });
@@ -555,8 +574,8 @@ pub const AppImageManager = struct {
     fn updateIconCache(self: AppImageManager, data_home: []const u8) void {
         const theme_dir = std.fs.path.join(self.allocator, &.{ data_home, "icons/hicolor" }) catch |err| {
             self.emitCacheWarningFmt(
-                "Could not prepare the icon cache refresh: {s}. Installed icons may not appear in menus until the icon cache is rebuilt.",
-                .{@errorName(err)},
+                "Could not prepare the icon cache refresh. {0s} Installed icons may not appear in menus until the icon cache is rebuilt.\n\nTechnical details: {1s}",
+                .{ @import("diagnostics").cause(err), @errorName(err) },
             );
             return;
         };
@@ -571,15 +590,15 @@ pub const AppImageManager = struct {
 
     pub fn refreshDesktopCachesBestEffort(self: AppImageManager, refresh_icons: bool) void {
         const data_home = xdg_paths.xdgDataHome(self.allocator, self.environ) catch |err| {
-            self.emitCacheWarningFmt("Could not resolve the user data directory for cache refreshes: {s}.", .{@errorName(err)});
+            self.emitCacheWarningFmt("Could not resolve the user data directory for cache refreshes. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return;
         };
         defer self.allocator.free(data_home);
 
         const desktop_dir = std.fs.path.join(self.allocator, &.{ data_home, "applications" }) catch |err| {
             self.emitCacheWarningFmt(
-                "Could not prepare the desktop database refresh: {s}. Application menu entries may not update until the desktop database is rebuilt.",
-                .{@errorName(err)},
+                "Could not prepare the desktop database refresh. {0s} Application menu entries may not update until the desktop database is rebuilt.\n\nTechnical details: {1s}",
+                .{ @import("diagnostics").cause(err), @errorName(err) },
             );
             if (refresh_icons) self.updateIconCache(data_home);
             return;
@@ -599,18 +618,18 @@ pub const AppImageManager = struct {
         const result = self.cache_command_run(self.allocator, self.io, self.environ, argv) catch |err| {
             if (err == error.StreamTooLong) {
                 self.emitCacheWarningFmt(
-                    "{s} produced more than {d} bytes of output while refreshing {s}. {s}",
-                    .{ tool_name, max_cache_command_output, target_path, consequence },
+                    "Could not refresh {0f} because {1f} produced more than {2d} bytes of output. {3f}",
+                    .{ @import("diagnostics").safe(target_path), @import("diagnostics").safe(tool_name), max_cache_command_output, @import("diagnostics").safe(consequence) },
                 );
             } else if (err == error.FileNotFound) {
                 self.emitCacheWarningFmt(
-                    "Cache utility {s} is unavailable; {s} was not refreshed. {s}",
-                    .{ tool_name, target_path, consequence },
+                    "Could not refresh {0f} because cache utility {1f} is unavailable. {2f}",
+                    .{ @import("diagnostics").safe(target_path), @import("diagnostics").safe(tool_name), @import("diagnostics").safe(consequence) },
                 );
             } else {
                 self.emitCacheWarningFmt(
-                    "Could not run {s} for {s}: {s}. {s}",
-                    .{ tool_name, target_path, @errorName(err), consequence },
+                    "Could not run {0f} to refresh {1f}. {2s} {3f}\n\nTechnical details: {4s}",
+                    .{ @import("diagnostics").safe(tool_name), @import("diagnostics").safe(target_path), @import("diagnostics").cause(err), @import("diagnostics").safe(consequence), @errorName(err) },
                 );
             }
             return;
@@ -637,13 +656,13 @@ pub const AppImageManager = struct {
 
         if (diagnostic.len > 0) {
             self.emitCacheWarningFmt(
-                "{s} {s} while refreshing {s}: {s}. {s}",
-                .{ tool_name, term_description, target_path, diagnostic, consequence },
+                "Could not refresh {0f}: {1f} {2f}. {3f}\n\nTechnical details: {4f}",
+                .{ @import("diagnostics").safe(target_path), @import("diagnostics").safe(tool_name), @import("diagnostics").safe(term_description), @import("diagnostics").safe(consequence), @import("diagnostics").safe(diagnostic) },
             );
         } else {
             self.emitCacheWarningFmt(
-                "{s} {s} while refreshing {s}. {s}",
-                .{ tool_name, term_description, target_path, consequence },
+                "Could not refresh {0f}: {1f} {2f}. {3f}",
+                .{ @import("diagnostics").safe(target_path), @import("diagnostics").safe(tool_name), @import("diagnostics").safe(term_description), @import("diagnostics").safe(consequence) },
             );
         }
     }
@@ -708,10 +727,10 @@ pub const AppImageManager = struct {
         pub fn finish(self: *DesktopIntegration) !void {
             if (!self.active) return;
             if (self.desktop_backup) |backup| std.Io.Dir.cwd().deleteFile(self.manager.io, backup) catch |err| {
-                std.log.warn("Could not remove desktop backup {s}: {s}", .{ backup, @errorName(err) });
+                std.log.warn("Could not remove the desktop integration backup at {0f}. {1s} The backup remains on disk.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(backup), @import("diagnostics").cause(err), @errorName(err) });
             };
             if (self.icon_backup) |backup| std.Io.Dir.cwd().deleteFile(self.manager.io, backup) catch |err| {
-                std.log.warn("Could not remove icon backup {s}: {s}", .{ backup, @errorName(err) });
+                std.log.warn("Could not remove the desktop integration backup at {0f}. {1s} The backup remains on disk.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(backup), @import("diagnostics").cause(err), @errorName(err) });
             };
             self.active = false;
         }
@@ -946,7 +965,7 @@ pub const AppImageManager = struct {
         const parsed = std.json.parseFromSlice([]appimage.AppImage, self.allocator, contents, .{
             .ignore_unknown_fields = true,
         }) catch |err| {
-            std.log.warn("Error reading AppImage local DB: {s}", .{@errorName(err)});
+            std.log.warn("Could not read the local AppImage database. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
             return &.{};
         };
         defer parsed.deinit();
@@ -1151,13 +1170,18 @@ pub const AppImageManager = struct {
     }
 
     pub fn removeAppImage(self: AppImageManager, appimage_path: []const u8, remove_config_files: bool) !bool {
+        return self.removeAppImageByName(std.fs.path.stem(appimage_path), appimage_path, remove_config_files);
+    }
+
+    /// Keep the database identity when the recorded filename differs from the name.
+    /// A missing binary is also removable: its metadata and integration are stale.
+    pub fn removeAppImageByName(self: AppImageManager, app_name: []const u8, appimage_path: []const u8, remove_config_files: bool) !bool {
         try ensureNonRootMutation();
         var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .remove, appimage_path);
         operation_scope.attach();
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try self.checkCancelled();
-        const app_name = std.fs.path.stem(appimage_path);
         self.emitStatusFmt(.information, "Removing AppImage {s}...", .{app_name});
         const clean_name = try self.cleanInvalidNames(app_name);
         defer self.allocator.free(clean_name);
@@ -1203,7 +1227,7 @@ pub const AppImageManager = struct {
 
     fn removeStaleAppImageEntry(self: AppImageManager, app_name: []const u8, appimage_path: []const u8) void {
         self.removeAppImageFromLocalDb(app_name) catch |err| {
-            std.log.warn("Could not remove stale AppImage metadata for {s}: {s}", .{ app_name, @errorName(err) });
+            std.log.warn("Could not remove stale AppImage metadata for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(app_name), @import("diagnostics").cause(err), @errorName(err) });
             return;
         };
         self.emitStatusFmt(.warning, "AppImage file for {s} not found; removed stale metadata entry.", .{app_name});
@@ -1271,7 +1295,7 @@ pub const AppImageManager = struct {
                             dir_handle.close(self.io);
                         } else |_| {}
                         self.copyFile(ex.path, appimage_path) catch |err| {
-                            std.log.err("Failed to move AppImage: {s}", .{@errorName(err)});
+                            std.log.err("Could not move the selected AppImage from the source path to the destination path. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
                             break :blk false;
                         };
                         std.Io.Dir.cwd().deleteFile(self.io, ex.path) catch {};
@@ -1284,14 +1308,14 @@ pub const AppImageManager = struct {
                         self.removeStaleAppImageEntry(app_name, appimage_path);
                         continue;
                     }
-                    std.log.warn("AppImage not found at {s}", .{appimage_path});
+                    std.log.warn("Could not find the selected AppImage at {0f}. Check its location and synchronize the AppImage list again.", .{@import("diagnostics").safe(appimage_path)});
                     success = false;
                     continue;
                 }
             }
 
             var content = (try self.extractMetadataPure(appimage_path, null, null)) orelse {
-                std.log.err("Failed to extract metadata for {s}", .{app_name});
+                std.log.err("Could not extract metadata for AppImage {0f}.", .{@import("diagnostics").safe(app_name)});
                 success = false;
                 continue;
             };
@@ -1305,20 +1329,20 @@ pub const AppImageManager = struct {
             }
 
             var integration = self.beginDesktopIntegration(updated, appimage_path, content.source_desktop_path, content.icon_source) catch |err| {
-                std.log.warn("Could not apply desktop integration for {s}: {s}", .{ app_name, @errorName(err) });
+                std.log.warn("Could not apply desktop integration for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(app_name), @import("diagnostics").cause(err), @errorName(err) });
                 success = false;
                 continue;
             };
             defer integration.deinit();
 
             self.addAppImageToLocalDb(updated) catch |err| {
-                std.log.warn("Could not persist metadata for {s}: {s}", .{ app_name, @errorName(err) });
-                integration.rollback() catch |rollback_err| std.log.err("Could not restore desktop integration: {s}", .{@errorName(rollback_err)});
+                std.log.warn("Could not persist metadata for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(app_name), @import("diagnostics").cause(err), @errorName(err) });
+                integration.rollback() catch |rollback_err| std.log.err("Could not restore desktop integration for the requested package after the operation failed. {0s} Desktop entries or icons may need repair.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(rollback_err), @errorName(rollback_err) });
                 success = false;
                 continue;
             };
             integration.finish() catch |err| {
-                std.log.warn("Could not finalize desktop integration for {s}: {s}", .{ app_name, @errorName(err) });
+                std.log.warn("Could not finalize desktop integration for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(app_name), @import("diagnostics").cause(err), @errorName(err) });
                 success = false;
                 continue;
             };
@@ -1327,7 +1351,7 @@ pub const AppImageManager = struct {
 
         self.emitStatus(
             if (success) .success else .warning,
-            if (success) "AppImage metadata synchronized." else "Some AppImage metadata could not be synchronized.",
+            if (success) "AppImage metadata synchronized." else "Some AppImage metadata could not be synchronized. Review the application errors for the affected names.",
         );
         operation_scope.finish(if (success) .success else .failed);
         return success;
@@ -1399,7 +1423,7 @@ pub const AppImageManager = struct {
             }
 
             std.Io.Dir.cwd().deleteFile(self.io, df_path) catch |err| {
-                std.log.warn("Failed to remove desktop entry {s}: {s}", .{ df_path, @errorName(err) });
+                std.log.warn("Could not remove desktop entry {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(df_path), @import("diagnostics").cause(err), @errorName(err) });
             };
         }
 
@@ -1434,7 +1458,7 @@ pub const AppImageManager = struct {
                 const dir_path = std.fs.path.join(self.allocator, &.{ root, entry.name }) catch continue;
                 defer self.allocator.free(dir_path);
                 std.Io.Dir.cwd().deleteTree(self.io, dir_path) catch |err| {
-                    std.log.warn("Could not remove config directory {s}: {s}", .{ dir_path, @errorName(err) });
+                    std.log.warn("Could not remove config directory {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(dir_path), @import("diagnostics").cause(err), @errorName(err) });
                 };
             }
         }
@@ -1477,7 +1501,7 @@ pub const AppImageManager = struct {
 
     fn emitStatusFmt(self: AppImageManager, kind: events.StatusKind, comptime format: []const u8, args: anytype) void {
         const message = std.fmt.allocPrint(self.allocator, format, args) catch {
-            self.emitStatus(kind, "AppImage operation status unavailable.");
+            self.emitStatus(kind, "Shelly could not allocate memory for the AppImage status message. Check the operation result to confirm whether it completed.");
             return;
         };
         defer self.allocator.free(message);
@@ -1553,6 +1577,46 @@ fn pathIsInside(root: []const u8, candidate: []const u8) bool {
         std.fs.path.isSep(candidate[root.len]);
 }
 
+const desktop_probe_bytes = 4 * 1024;
+
+/// An extracted AppImage can ship an executable named after its own desktop id
+/// beside the real entry, so the `.desktop` suffix alone never identifies one.
+fn isDesktopEntryFile(io: std.Io, path: []const u8) bool {
+    var file = std.Io.Dir.cwd().openFile(io, path, .{}) catch return false;
+    defer file.close(io);
+    var buffer: [desktop_probe_bytes]u8 = undefined;
+    var reader = file.reader(io, &.{});
+    var filled: usize = 0;
+    while (filled < buffer.len) {
+        const read = reader.interface.readSliceShort(buffer[filled..]) catch {
+            if (filled == 0) return false;
+            break;
+        };
+        if (read == 0) break;
+        filled += read;
+    }
+    return startsWithDesktopEntryGroup(buffer[0..filled]);
+}
+
+/// A desktop entry must open with its group header, before any key, and carry at least one key.
+fn startsWithDesktopEntryGroup(prefix: []const u8) bool {
+    var lines = std.mem.splitScalar(u8, prefix, '\n');
+    var in_entry_group = false;
+    while (lines.next()) |raw_line| {
+        const line = std.mem.trim(u8, raw_line, " \t\r");
+        if (line.len == 0 or line[0] == '#') continue;
+        if (line[0] == '[') {
+            if (in_entry_group) break;
+            if (!std.ascii.eqlIgnoreCase(line, "[Desktop Entry]")) return false;
+            in_entry_group = true;
+            continue;
+        }
+        if (!in_entry_group) return false;
+        if (std.mem.indexOfScalar(u8, line, '=') != null) return true;
+    }
+    return false;
+}
+
 fn freeAppImageStatic(allocator: std.mem.Allocator, value: appimage.AppImage) void {
     allocator.free(value.name);
     allocator.free(value.version);
@@ -1572,7 +1636,7 @@ fn freeAppImageStatic(allocator: std.mem.Allocator, value: appimage.AppImage) vo
 fn freeWorkingDir(allocator: std.mem.Allocator, io: std.Io, dir: *?[]u8) void {
     if (dir.*) |w| {
         std.Io.Dir.cwd().deleteTree(io, w) catch |err| {
-            std.log.warn("Could not remove AppImage extraction directory {s}: {s}", .{ w, @errorName(err) });
+            std.log.warn("Could not remove AppImage extraction directory {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(w), @import("diagnostics").cause(err), @errorName(err) });
         };
         allocator.free(w);
         dir.* = null;
@@ -1584,12 +1648,35 @@ fn isSupportedIconExtension(extension: []const u8) bool {
         std.ascii.eqlIgnoreCase(extension, ".svg");
 }
 
-fn iconSourceScore(path: []const u8, extension: []const u8) u8 {
-    if (std.mem.indexOf(u8, path, "icons/hicolor/scalable/apps/") != null) return 7;
-    if (std.mem.indexOf(u8, path, "icons/hicolor/256x256/apps/") != null) return 6;
-    if (std.mem.indexOf(u8, path, "icons/hicolor/512x512/apps/") != null) return 5;
-    if (std.ascii.eqlIgnoreCase(extension, ".svg")) return 4;
-    return 1;
+/// `Icon=` carries an icon name, not a filename, and that name may itself end in the desktop id
+/// suffix, so only a supported image suffix may be stripped before matching.
+fn requestedIconName(icon_value: []const u8) []const u8 {
+    const name = std.fs.path.basename(icon_value);
+    if (isSupportedIconExtension(std.fs.path.extension(name))) return std.fs.path.stem(name);
+    return name;
+}
+
+/// A vector serves any size a theme asks for, so it outranks every raster. Among rasters the
+/// largest one wins: downscaling is lossless and upscaling is not, and pixel counts are nominal
+/// per the icon theme layout, so they can never reach the vector tier.
+fn iconSourceScore(path: []const u8, extension: []const u8) u32 {
+    if (std.mem.indexOf(u8, path, "icons/hicolor/scalable/apps/") != null) return std.math.maxInt(u32);
+    if (std.ascii.eqlIgnoreCase(extension, ".svg")) return 1 << 24;
+    return nominalRasterSize(path);
+}
+
+/// Icon theme directories carry the nominal pixel size in their name, e.g. `128x128/apps`.
+/// Anything else, a scaled `48x48@2` included, leaves the raster unranked but still usable.
+fn nominalRasterSize(path: []const u8) u32 {
+    var largest: u32 = 0;
+    var components = std.mem.splitScalar(u8, path, '/');
+    while (components.next()) |component| {
+        const separator = std.mem.indexOfScalar(u8, component, 'x') orelse continue;
+        const width = std.fmt.parseInt(u32, component[0..separator], 10) catch continue;
+        const height = std.fmt.parseInt(u32, component[separator + 1 ..], 10) catch continue;
+        largest = @max(largest, @min(width, height));
+    }
+    return largest;
 }
 
 fn writeTestAppImageDb(path: []const u8, contents: []const u8) !void {
@@ -1599,6 +1686,17 @@ fn writeTestAppImageDb(path: []const u8, contents: []const u8) !void {
     var writer = file.writer(std.testing.io, &write_buf);
     try writer.interface.writeAll(contents);
     try writer.interface.flush();
+}
+
+fn writeTestAppImageFile(root: []const u8, relative_path: []const u8, contents: []const u8) !void {
+    if (std.fs.path.dirname(relative_path)) |parent_relative| {
+        const parent = try std.fs.path.join(std.testing.allocator, &.{ root, parent_relative });
+        defer std.testing.allocator.free(parent);
+        try std.Io.Dir.cwd().createDirPath(std.testing.io, parent);
+    }
+    const path = try std.fs.path.join(std.testing.allocator, &.{ root, relative_path });
+    defer std.testing.allocator.free(path);
+    try writeTestAppImageDb(path, contents);
 }
 
 fn readTestAppImageDb(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
@@ -2386,7 +2484,7 @@ test "writeDesktopEntry emits unquoted TryExec for existing and omitted source k
 
 test "AppImage classification is case insensitive and extension based" {
     try std.testing.expect(AppImageManager.isAppImage("Example.AppImage"));
-    try std.testing.expect(AppImageManager.is_app_image("/tmp/Example.appimage"));
+    try std.testing.expect(AppImageManager.isAppImage("/tmp/Example.appimage"));
     try std.testing.expect(!AppImageManager.isAppImage("Example.AppImage.zsync"));
     try std.testing.expect(!AppImageManager.isAppImage("AppImage"));
 }
@@ -2429,6 +2527,171 @@ test "AppImage metadata discovery rejects symlinks outside the extraction root" 
 
     try std.testing.expect((try manager.findDesktopFile(extraction_root)) == null);
     try std.testing.expect((try manager.findIconSource(extraction_root, "")) == null);
+}
+
+test "AppImage desktop discovery skips files that only borrow the desktop extension" {
+    const cases = [_]struct { entry_relative_path: []const u8 }{
+        .{ .entry_relative_path = "ai.opencode.desktop.desktop" },
+        .{ .entry_relative_path = "usr/share/applications/ai.opencode.desktop" },
+    };
+    for (cases) |case| {
+        var tmp = std.testing.tmpDir(.{});
+        defer tmp.cleanup();
+
+        var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+        const root = path_buf[0..len];
+        const extraction_root = try std.fs.path.join(std.testing.allocator, &.{ root, "squashfs-root" });
+        defer std.testing.allocator.free(extraction_root);
+        try std.Io.Dir.cwd().createDirPath(std.testing.io, extraction_root);
+
+        try writeTestAppImageFile(extraction_root, "ai.opencode.desktop", "\x7fELF\x02\x01\x01\x00\n[Desktop Entry]\nName=Decoy\n");
+
+        const entry = try std.fs.path.join(std.testing.allocator, &.{ extraction_root, case.entry_relative_path });
+        defer std.testing.allocator.free(entry);
+        try writeTestAppImageFile(extraction_root, case.entry_relative_path, "[Desktop Entry]\nType=Application\nName=Open Code\nExec=opencode %u\n");
+
+        var environ = try createTestAppImageEnviron(std.testing.allocator, root);
+        defer environ.block.deinit(std.testing.allocator);
+        const manager = AppImageManager{
+            .allocator = std.testing.allocator,
+            .io = std.testing.io,
+            .environ = environ,
+            .install_directory = extraction_root,
+            .local_db_path = extraction_root,
+        };
+
+        const found = try manager.findDesktopFile(extraction_root);
+        defer if (found) |path| std.testing.allocator.free(path);
+        try std.testing.expectEqualStrings(entry, found orelse return error.TestUnexpectedResult);
+    }
+}
+
+test "AppImage desktop entry detection requires a leading Desktop Entry group" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const root = path_buf[0..len];
+
+    const cases = [_]struct { contents: []const u8, accepted: bool }{
+        .{ .contents = "[Desktop Entry]\nType=Application\nName=Editor\n", .accepted = true },
+        .{ .contents = "\n# written by pkgforge\r\n[Desktop Entry]\r\nName=Editor\r\n", .accepted = true },
+        .{ .contents = "[Desktop entry]\nName=Editor\n", .accepted = true },
+        .{ .contents = "[Desktop Action New]\nName=New\n[Desktop Entry]\nName=Editor\n", .accepted = false },
+        .{ .contents = "[Desktop Entry]\n", .accepted = false },
+        .{ .contents = "Name=Editor\n[Desktop Entry]\n", .accepted = false },
+        .{ .contents = "#!/bin/sh\nexec editor \"$@\"\n", .accepted = false },
+        .{ .contents = "Configure a [Desktop Entry] group like:\nName=Editor\n", .accepted = false },
+        .{ .contents = "", .accepted = false },
+    };
+
+    for (cases, 0..) |case, index| {
+        const path = try std.fmt.allocPrint(std.testing.allocator, "{s}/{d}.candidate", .{ root, index });
+        defer std.testing.allocator.free(path);
+        try writeTestAppImageDb(path, case.contents);
+        try std.testing.expectEqual(case.accepted, isDesktopEntryFile(std.testing.io, path));
+    }
+}
+
+test "AppImage icon discovery matches the Icon name and prefers the best shipped source" {
+    const cases = [_]struct {
+        icon_value: []const u8,
+        shipped: []const []const u8,
+        expected: ?[]const u8,
+    }{
+        .{
+            .icon_value = "ai.opencode.desktop",
+            .shipped = &.{
+                "usr/share/icons/hicolor/128x128/apps/ai.opencode.desktop.png",
+                "usr/share/icons/hicolor/256x256/apps/ai.opencode.desktop.png",
+            },
+            .expected = "usr/share/icons/hicolor/256x256/apps/ai.opencode.desktop.png",
+        },
+        .{
+            .icon_value = "editor.png",
+            .shipped = &.{"editor.png"},
+            .expected = "editor.png",
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{"usr/share/icons/hicolor/256x256/apps/editor.svg"},
+            .expected = "usr/share/icons/hicolor/256x256/apps/editor.svg",
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{"usr/share/icons/hicolor/64x64/apps/other.png"},
+            .expected = null,
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{
+                "usr/share/icons/hicolor/32x32/apps/editor.png",
+                "usr/share/icons/hicolor/64x64/apps/editor.png",
+                "usr/share/icons/hicolor/128x128/apps/editor.png",
+            },
+            .expected = "usr/share/icons/hicolor/128x128/apps/editor.png",
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{
+                "usr/share/icons/hicolor/128x128/apps/editor.png",
+                "usr/share/icons/hicolor/64x64/apps/editor.png",
+                "usr/share/icons/hicolor/32x32/apps/editor.png",
+            },
+            .expected = "usr/share/icons/hicolor/128x128/apps/editor.png",
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{
+                "usr/share/icons/hicolor/256x256/apps/editor.png",
+                "usr/share/icons/hicolor/512x512/apps/editor.png",
+            },
+            .expected = "usr/share/icons/hicolor/512x512/apps/editor.png",
+        },
+        .{
+            .icon_value = "editor",
+            .shipped = &.{
+                "usr/share/icons/hicolor/1024x1024/apps/editor.png",
+                "usr/share/icons/hicolor/scalable/apps/editor.svg",
+            },
+            .expected = "usr/share/icons/hicolor/scalable/apps/editor.svg",
+        },
+    };
+    for (cases) |case| {
+        var tmp = std.testing.tmpDir(.{});
+        defer tmp.cleanup();
+
+        var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+        const root = path_buf[0..len];
+        const extraction_root = try std.fs.path.join(std.testing.allocator, &.{ root, "squashfs-root" });
+        defer std.testing.allocator.free(extraction_root);
+        try std.Io.Dir.cwd().createDirPath(std.testing.io, extraction_root);
+        for (case.shipped) |shipped| try writeTestAppImageFile(extraction_root, shipped, "icon-data\n");
+
+        var environ = try createTestAppImageEnviron(std.testing.allocator, root);
+        defer environ.block.deinit(std.testing.allocator);
+        const manager = AppImageManager{
+            .allocator = std.testing.allocator,
+            .io = std.testing.io,
+            .environ = environ,
+            .install_directory = extraction_root,
+            .local_db_path = extraction_root,
+        };
+
+        const source = try manager.findIconSource(extraction_root, case.icon_value);
+        if (case.expected == null) {
+            try std.testing.expect(source == null);
+            continue;
+        }
+        const expected = try std.fs.path.join(std.testing.allocator, &.{ extraction_root, case.expected.? });
+        defer std.testing.allocator.free(expected);
+        const found = source orelse return error.TestUnexpectedResult;
+        defer std.testing.allocator.free(found.path);
+        try std.testing.expectEqualStrings(expected, found.path);
+    }
 }
 
 test "cleanInvalidNames lowercases and replaces separators" {

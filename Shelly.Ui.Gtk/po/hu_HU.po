@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-06 16:45-0400\n"
+"POT-Creation-Date: 2026-09-19 13:14-0400\n"
 "PO-Revision-Date: 2026-08-13 11:51+0200\n"
 "Last-Translator: Impostor0729\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -155,10 +155,10 @@ msgstr "További információ az URL frissítéséről / Tárhelyadatokról"
 msgid "e.g. owner/repo or https://..."
 msgstr "pl. tulajdonos/tároló vagy https://..."
 
-msgid "Invalid format. Use owner/repo (e.g., seafoam-labs/shelly-alpm)"
+#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+msgid ""
+"Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
-"Érvénytelen formátum. Használja a tulajdonos/tároló formátumot (pl. seafoam-"
-"labs/shelly-alpm)"
 
 msgid "Allow Prerelease"
 msgstr "Előzetes kiadás engedélyezése"
@@ -604,9 +604,6 @@ msgstr "Megerősítés kihagyása"
 msgid "Enable Shelly Search"
 msgstr "Shelly keresés engedélyezése"
 
-msgid "Enable Webview Visualization (experimental)"
-msgstr "Webview vizualizáció engedélyezése (kísérleti)"
-
 msgid "AppImage Install Path"
 msgstr "AppImage telepítési útvonala"
 
@@ -658,8 +655,9 @@ msgstr "Frissítések keresése…"
 msgid "Your system is up to date"
 msgstr "A rendszered naprakész"
 
-msgid "Could not check for updates"
-msgstr "Nem sikerült ellenőrizni a frissítéseket"
+#| msgid "Could not check for updates"
+msgid "Could not check for updates."
+msgstr ""
 
 msgid "Utilities"
 msgstr "Segédprogramok"
@@ -838,17 +836,27 @@ msgstr "használt"
 msgid "Install Anyway"
 msgstr "Telepítés mindenképpen"
 
+msgid "Unknown"
+msgstr "Ismeretlen"
+
 msgid "package(s)"
 msgstr "csomag(ok)"
 
 msgid "to"
 msgstr "hogy"
 
+#| msgid "remove"
+msgid "removed size"
+msgstr ""
+
 msgid "download"
 msgstr "letöltés"
 
 msgid "net"
 msgstr "net"
+
+msgid "Could not load the PKGBUILD preview."
+msgstr ""
 
 msgid "Dismiss"
 msgstr "Elvetés"
@@ -874,20 +882,17 @@ msgstr "Frissítés érhető el"
 msgid "Version ?"
 msgstr "Verzió ?"
 
-msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
+#| msgid "Invalid URL. Must start with http:// or https://"
+msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
-"Érvénytelen formátum. Használja a tulajdonos/tároló formátumot (pl. seafoam-"
-"labs/shelly-alpm)"
 
-msgid "Invalid URL. Must start with http:// or https://"
-msgstr "Érvénytelen URL. http:// vagy https:// karakterekkel kell kezdődnie"
-
+#| msgid ""
+#| "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/"
+#| "owner/repo/releases"
 msgid ""
-"Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/"
-"repo/releases"
+"Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
+"host/owner/repo/releases."
 msgstr ""
-"Érvénytelen Forgejo URL. Használja a http(s)://host/owner/repo or http(s)://"
-"host/owner/repo/releases címet"
 
 msgid "Choose an AppImage file"
 msgstr "Válasszon ki egy AppImage fájlt"
@@ -895,8 +900,9 @@ msgstr "Válasszon ki egy AppImage fájlt"
 msgid "AppImage files"
 msgstr "AppImage fájlok"
 
-msgid "Only .AppImage files can be installed"
-msgstr "Csak .AppImage fájlok telepíthetők"
+#| msgid "Only .AppImage files can be installed"
+msgid "Only.AppImage files can be installed"
+msgstr ""
 
 msgid "Installing AppImage"
 msgstr "AppImage telepítése"
@@ -939,8 +945,8 @@ msgstr "AppImage eltávolítása"
 msgid "Operation completed successfully"
 msgstr "A művelet sikeresen befejeződött"
 
-msgid "Operation failed"
-msgstr "A művelet sikertelen"
+msgid "Could not complete the requested operation."
+msgstr ""
 
 msgid "Discard environment changes?"
 msgstr ""
@@ -988,8 +994,9 @@ msgstr "Nem találhatók csomagok"
 msgid "Try a shorter or more general keyword."
 msgstr "Próbálkozzon rövidebb vagy általánosabb kulcsszóval."
 
-msgid "Could not reach the AUR"
-msgstr "Nem sikerült elérni az AUR-t"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the configured AUR service."
+msgstr ""
 
 msgid "Check your connection and try again."
 msgstr "Ellenőrizze a kapcsolatot, és próbálja meg újra."
@@ -1037,15 +1044,16 @@ msgstr "Válasszon ki egy Flatpak fájlt"
 msgid "Flatpak files"
 msgstr "Flatpak fájlok"
 
-msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
+msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
-"Nem támogatott fájltípus. Válasszon ki egy .flatpak vagy .flatpakref fájlt."
 
 msgid "Installing local flatpak"
 msgstr "Flatpak helyi telepítése"
 
-msgid "Installation failed."
-msgstr "A telepítés sikertelen volt."
+#| msgid "Install the selected packages?"
+msgid "Could not install the selected packages."
+msgstr ""
 
 msgid "Installation complete."
 msgstr "A telepítés sikeres."
@@ -1083,9 +1091,6 @@ msgstr "Flatpak-bővítmény telepítése"
 msgid "Unknown developer"
 msgstr "Ismeretlen fejlesztő"
 
-msgid "Unknown"
-msgstr "Ismeretlen"
-
 msgid "Version: Unknown"
 msgstr "Verzió: Ismeretlen"
 
@@ -1113,14 +1118,16 @@ msgstr "Letöltés"
 msgid "No description available."
 msgstr "Nincs elérhető leírás."
 
-msgid "Unable to load screenshot"
-msgstr "A képernyőkép betöltése nem sikerült"
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load this application screenshot."
+msgstr ""
 
-msgid "Unable to download screenshot"
-msgstr "A képernyőkép letöltése nem sikerült"
+#| msgid "Unable to download screenshot"
+msgid "Could not download this application screenshot."
+msgstr ""
 
-msgid "Unable to display screenshot"
-msgstr "Képernyőkép nem jeleníthető meg"
+msgid "Could not display the downloaded application screenshot."
+msgstr ""
 
 msgid "Open link in browser"
 msgstr "Hivatkozást megnyitása böngészőben"
@@ -1149,14 +1156,18 @@ msgstr "Kapcsolat"
 msgid "Translate"
 msgstr "Fordítás"
 
-msgid "Unable to allocate memory while loading Flatpak data."
-msgstr "A Flatpak adatok betöltése közben nem sikerült memóriát lefoglalni."
+msgid ""
+"Could not load Flatpak applications because Shelly ran out of memory. Close "
+"other applications and try again."
+msgstr ""
 
-msgid "Unable to start the Flatpak data loader."
-msgstr "Nem sikerült elindítani a Flatpak adatbetöltőt."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not start loading Flatpak applications."
+msgstr ""
 
-msgid "Unable to load Flatpak applications."
-msgstr "Nem sikerült betölteni a Flatpak alkalmazásokat."
+#| msgid "Unable to load Flatpak applications."
+msgid "Could not load Flatpak applications from the selected remote."
+msgstr ""
 
 msgid "No Flatpak applications are available."
 msgstr "Nem érhetők el Flatpak alkalmazások."
@@ -1318,8 +1329,9 @@ msgstr ""
 "Keresés a hivatalos tárolókban, az AUR-ban és a Flatpakben egyszerre. Írjon "
 "be egy nevet a kezdéshez."
 
-msgid "Search failed"
-msgstr "A keresés sikertelen"
+#| msgid "Could not reach the AUR"
+msgid "Could not search the selected sources."
+msgstr ""
 
 msgid "Installation in progress"
 msgstr "Telepítés folyamatban"
@@ -1336,8 +1348,10 @@ msgstr "Csomagok telepítése"
 msgid "Install the selected packages?"
 msgstr "Telepíti a kiválasztott csomagokat?"
 
-msgid "Failed to save settings"
-msgstr "Nem sikerült menteni a beállításokat"
+msgid ""
+"Could not save settings to the configured file. Your latest changes were not "
+"saved."
+msgstr ""
 
 msgid "Settings saved"
 msgstr "A beállítások mentve"
@@ -1348,17 +1362,21 @@ msgstr "Flatpak támogatás telepítése"
 msgid "Installing AppImage support"
 msgstr "AppImage támogatás telepítése"
 
-msgid "Failed to start Flatpak support installation"
-msgstr "Nem sikerült elindítani a Flatpak támogatás telepítését"
+#| msgid "Installing Flatpak support"
+msgid "Could not start installing Flatpak support."
+msgstr ""
 
-msgid "Failed to start AppImage support installation"
-msgstr "Nem sikerült elindítani az AppImage támogatás telepítését"
+#| msgid "Installing AppImage support"
+msgid "Could not start installing AppImage support."
+msgstr ""
 
-msgid "Flatpak support installation failed"
-msgstr "A Flatpak támogatás telepítése sikertelen"
+#| msgid "Installing Flatpak support"
+msgid "Could not install Flatpak support."
+msgstr ""
 
-msgid "AppImage support installation failed"
-msgstr "Az AppImage támogatás telepítése sikertelen"
+#| msgid "Installing AppImage support"
+msgid "Could not install AppImage support."
+msgstr ""
 
 msgid "Flatpak support enabled"
 msgstr "Flatpak támogatás engedélyezve"
@@ -1372,8 +1390,9 @@ msgstr "Nem találhatók változásnapló bejegyzések"
 msgid "No details for this release"
 msgstr "Nincsenek részletek ehhez a kiadáshoz"
 
-msgid "Failed to load changelog"
-msgstr "Nem sikerült betölteni a változásnaplót"
+#| msgid "Could not check for updates"
+msgid "Could not load the release notes."
+msgstr ""
 
 msgid "Changelog"
 msgstr "Változásnapló"
@@ -1393,21 +1412,23 @@ msgstr "AppImage telepítési könyvtár kiválasztása"
 msgid "Tray enabled"
 msgstr "Tálca engedélyezve"
 
-msgid "Tray disabled, but autostart service remains"
+msgid ""
+"The tray is disabled, but its autostart service could not be removed. It may "
+"start again at the next login."
 msgstr ""
-"A tálcaikon le van tiltva, de az automatikus indítási szolgáltatás megmarad"
 
 msgid "Tray disabled"
 msgstr "Tálca letiltva"
 
-msgid "Failed to add systemd startup service"
-msgstr "Nem sikerült hozzáadni a rendszerindítási szolgáltatást"
+msgid "Could not enable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service added."
 msgstr "Indítási szolgáltatás hozzáadva a Systemd-hez."
 
-msgid "Failed to remove systemd startup service"
-msgstr "Nem sikerült eltávolítani a rendszerindítási szolgáltatást"
+#| msgid "Tray disabled, but autostart service remains"
+msgid "Could not disable the tray autostart service."
+msgstr ""
 
 msgid "Systemd startup service removed."
 msgstr "Indítási szolgáltatás eltávolítva a Systemd-ből."
@@ -1469,11 +1490,43 @@ msgstr "Shelly-keresés"
 msgid "Update"
 msgstr "Frissítés"
 
-msgid "Failed to start operation."
-msgstr "Nem sikerült elindítani a műveletet."
-
 msgid "Pending"
 msgstr "Függőben"
+
+msgid "Working"
+msgstr "Dolgozom"
+
+#| msgid "Upgrade"
+msgid "Upgraded"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgraded"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstalled"
+msgstr ""
+
+#| msgid "Remove"
+msgid "Removed"
+msgstr ""
+
+msgid "Failed"
+msgstr "Sikertelen"
+
+msgid "Not processed"
+msgstr ""
+
+msgid "Interrupted"
+msgstr ""
+
+msgid "Cancelled"
+msgstr "Törölt<"
+
+#| msgid "Failed to start operation."
+msgid "Could not start the requested operation."
+msgstr ""
 
 msgid "Synchronizing databases"
 msgstr "Adatbázisok szinkronizálása"
@@ -1517,19 +1570,14 @@ msgstr "Konfliktusok ellenőrzése"
 msgid "Checking disk space"
 msgstr "Lemezterület ellenőrzése"
 
-msgid "Working"
-msgstr "Dolgozom"
-
-msgid "Failed"
-msgstr "Sikertelen"
-
 msgid "Transaction Completed"
 msgstr ""
 
-msgid "Transaction Failed"
-msgstr ""
+msgid "Operation failed"
+msgstr "A művelet sikertelen"
 
-msgid "Transaction Cancelled"
+#| msgid "Operation failed"
+msgid "Operation cancelled"
 msgstr ""
 
 msgid "Finished"
@@ -1538,7 +1586,8 @@ msgstr "Befejezett"
 msgid "exit"
 msgstr "kilépés"
 
-msgid "The operation was cancelled."
+#| msgid "Operation failed"
+msgid "Operation cancelled."
 msgstr ""
 
 msgid "All operations finished successfully."
@@ -1548,9 +1597,6 @@ msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
 msgstr ""
-
-msgid "Cancelled"
-msgstr "Törölt<"
 
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
@@ -1565,11 +1611,6 @@ msgstr "Rendszercsomag frissítése"
 
 msgid "AUR package update"
 msgstr "AUR csomag frissítése"
-
-msgid "Could not run shelly check-updates. Check the CLI output and try again."
-msgstr ""
-"Nem sikerült futtatni a shelly check-updates parancsot. Ellenőrizze a CLI "
-"kimenetet, és próbálja újra."
 
 msgid "Update this package"
 msgstr "Frissítse ezt a csomagot"

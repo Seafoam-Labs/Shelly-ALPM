@@ -267,6 +267,52 @@ pub const Info = struct {
     }
 };
 
+/// Returns the full version of an actual package member from freshly generated
+/// SRCINFO. Missing metadata must not cause --needed to skip a target.
+pub fn packageVersion(allocator: std.mem.Allocator, content: []const u8, name: []const u8) !?[:0]u8 {
+    var pkgver: ?[]const u8 = null;
+    var pkgrel: ?[]const u8 = null;
+    var epoch: ?[]const u8 = null;
+    var in_package = false;
+    var found = false;
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |raw| {
+        const line = std.mem.trim(u8, raw, " \t\r");
+        const equal = std.mem.indexOfScalar(u8, line, '=') orelse continue;
+        const key = std.mem.trim(u8, line[0..equal], " \t");
+        const value = std.mem.trim(u8, line[equal + 1 ..], " \t");
+        if (std.mem.eql(u8, key, "pkgname")) {
+            in_package = true;
+            found = found or std.mem.eql(u8, name, value);
+        }
+        if (in_package or value.len == 0) continue;
+        if (std.mem.eql(u8, key, "pkgver")) pkgver = value;
+        if (std.mem.eql(u8, key, "pkgrel")) pkgrel = value;
+        if (std.mem.eql(u8, key, "epoch")) epoch = value;
+    }
+    if (!found) return null;
+    const version_value = pkgver orelse return null;
+    const release = pkgrel orelse return null;
+    if (epoch) |value| return try std.fmt.allocPrintSentinel(allocator, "{s}:{s}-{s}", .{ value, version_value, release }, 0);
+    return try std.fmt.allocPrintSentinel(allocator, "{s}-{s}", .{ version_value, release }, 0);
+}
+
+test "AUR needed reads full versions only for actual package members" {
+    const allocator = std.testing.allocator;
+    const content = "pkgbase = suite\n\tpkgver = 2.3\n\tpkgrel = 4\n\tepoch = 1\npkgname = suite-cli\npkgname = suite-docs\n";
+    for ([_][]const u8{ "suite-cli", "suite-docs" }) |name| {
+        const value = (try packageVersion(allocator, content, name)).?;
+        defer allocator.free(value);
+        try std.testing.expectEqualStrings("1:2.3-4", value);
+    }
+    try std.testing.expectEqual(null, try packageVersion(allocator, content, "suite"));
+    try std.testing.expectEqual(null, try packageVersion(allocator, content, "missing"));
+    try std.testing.expectEqual(null, try packageVersion(allocator, "pkgver = 1\npkgname = demo\n", "demo"));
+    const value = (try packageVersion(allocator, "pkgver = 1\npkgrel = 2\npkgname = demo\n", "demo")).?;
+    defer allocator.free(value);
+    try std.testing.expectEqualStrings("1-2", value);
+}
+
 /// Dependency fields selected from evaluated SRCINFO. This is deliberately
 /// separate from the statically parsed PKGBUILD so dependency planning does
 /// not mutate the content and review state later used by the builder.

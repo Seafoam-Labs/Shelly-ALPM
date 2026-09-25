@@ -656,7 +656,7 @@ pub const Model = struct {
             .stdout = .pipe,
             .stderr = .pipe,
         }) catch {
-            job.error_detail = alloc.dupe(u8, "Failed to start sudo.") catch "";
+            job.error_detail = alloc.dupe(u8, "Could not start sudo to authorize installation of the requested package.") catch "";
             job.failed = true;
             return;
         };
@@ -690,13 +690,13 @@ pub const Model = struct {
             };
         }
         if (read_failed) {
-            job.error_detail = alloc.dupe(u8, "Failed to read the command output.") catch "";
+            job.error_detail = alloc.dupe(u8, "Could not read the installation command output for the requested package.") catch "";
             job.failed = true;
             return;
         }
 
         const term = child.wait(io) catch {
-            job.error_detail = alloc.dupe(u8, "Failed to wait for the command.") catch "";
+            job.error_detail = alloc.dupe(u8, "Could not collect the installation result for the requested package. Its final status could not be confirmed.") catch "";
             job.failed = true;
             return;
         };
@@ -707,7 +707,7 @@ pub const Model = struct {
             defer if (stderr.len > 0) alloc.free(stderr);
             defer if (stdout.len > 0) alloc.free(stdout);
             job.error_detail = (@import("ui_decode.zig").JsonPackFrame.failureMessage(alloc, stdout) catch null) orelse
-                (alloc.dupe(u8, if (stderr.len > 0) std.mem.trim(u8, stderr, " \t\r\n") else "Could not complete the installation. No error details were returned by Shelly.") catch "");
+                (@import("diagnostics").sanitizeAlloc(alloc, if (stderr.len > 0) std.mem.trim(u8, stderr, " \t\r\n") else "Could not install the requested package. Shelly returned no error details. Review the command output before retrying.") catch "");
             job.failed = true;
         }
     }
@@ -764,7 +764,7 @@ pub const Model = struct {
         }
 
         const message = if (failed)
-            try std.fmt.allocPrint(self.gpa, "Installation failed: {s}", .{job.name})
+            try std.fmt.allocPrint(self.gpa, "Could not install {0f}.", .{@import("diagnostics").safe(job.name)})
         else
             try std.fmt.allocPrint(self.gpa, "Installed {s}", .{job.name});
         try self.setNotice(message);
@@ -895,7 +895,7 @@ pub const Model = struct {
                     var message: vxfw.Text = if (self.loading)
                         .{ .text = "Loading packages…", .style = .{ .fg = .{ .index = 245 } } }
                     else
-                        .{ .text = "Failed to load packages. Is the shelly CLI available?", .style = .{ .fg = .{ .index = 1 } } };
+                        .{ .text = "Could not load the package list.", .style = .{ .fg = .{ .index = 1 } } };
                     try children.append(arena, .{
                         .origin = .{ .row = 3, .col = 2 },
                         .surface = try message.draw(ctx.withConstraints(
@@ -991,7 +991,7 @@ pub const Model = struct {
             };
         }
         if (self.aur_failed) {
-            return .{ .text = "AUR search failed. Check your connection and try again.", .red = true };
+            return .{ .text = "Could not search the configured AUR service.", .red = true };
         }
         if (self.aur_query.len == 0) {
             return .{ .text = "Type a search term and press Enter to query the AUR.", .red = false };
@@ -1029,7 +1029,7 @@ pub const Model = struct {
         switch (self.active) {
             .packages => {
                 if (self.loading) return "Loading packages…";
-                if (self.load_failed) return "Failed to load packages";
+                if (self.load_failed) return "Could not load the package list.";
                 if (self.query.len > 0) {
                     return try std.fmt.allocPrint(arena, "{d} of {d} packages match", .{
                         self.filtered.items.len, self.packages.len,
@@ -1041,7 +1041,7 @@ pub const Model = struct {
                 if (self.aur_job != null) {
                     return try std.fmt.allocPrint(arena, "Searching AUR for '{s}'…", .{self.aur_query});
                 }
-                if (self.aur_failed) return "AUR search failed";
+                if (self.aur_failed) return "Could not search the configured AUR service.";
                 if (self.aur_query.len == 0) return "AUR — type a query and press Enter";
                 return try std.fmt.allocPrint(arena, "{d} AUR results for '{s}'", .{
                     self.aur_packages.len, self.aur_query,
@@ -1115,7 +1115,7 @@ pub const Model = struct {
                 body = try std.fmt.allocPrint(arena, "✔ '{s}' was installed successfully.\n\nEsc: close", .{prompt.name});
             },
             .failed => {
-                body = try std.fmt.allocPrint(arena, "✘ Installing '{s}' failed.\n\n{s}\n\nEsc: close", .{ prompt.name, if (prompt.detail.len > 0) prompt.detail else "No error details were captured." });
+                body = try std.fmt.allocPrint(arena, "Could not install {0f}.\n\n{1f}\n\nEsc: close", .{ @import("diagnostics").safe(prompt.name), @import("diagnostics").safe(if (prompt.detail.len > 0) prompt.detail else "Shelly returned no error details.") });
             },
         }
 
@@ -1179,7 +1179,7 @@ pub const Model = struct {
             try spans.append(arena, .{ .text = "  " });
         }
         try spans.append(arena, .{ .text = pkg.Name, .style = .{ .bold = true } });
-        try spans.append(arena, .{ .text = " " });
+        try spans.append(arena, .{ .text = "  " });
         try spans.append(arena, .{ .text = pkg.Version, .style = .{ .fg = .{ .index = 245 } } });
         if (pkg.Description.len > 0) {
             try spans.append(arena, .{ .text = " — " });
@@ -1231,7 +1231,7 @@ pub const Model = struct {
         var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
         try spans.append(arena, .{ .text = "  " });
         try spans.append(arena, .{ .text = pkg.Name, .style = .{ .bold = true } });
-        try spans.append(arena, .{ .text = " " });
+        try spans.append(arena, .{ .text = "  " });
         try spans.append(arena, .{
             .text = pkg.Version,
             .style = .{ .fg = .{ .index = if (pkg.OutOfDate != null) @as(u8, 1) else 245 } },
@@ -1304,7 +1304,7 @@ pub const Model = struct {
         if (pkg.Url) |url| {
             try lines.append(arena, try std.fmt.allocPrint(arena, "URL:             {s}", .{url}));
         }
-        if (pkg.License) |licenses| try appendDetailList(arena, &lines, "Licenses:      ", licenses);
+        if (pkg.License) |licenses| try appendDetailList(arena, &lines, "Licenses:     ", licenses);
         if (pkg.Depends) |depends| try appendDetailList(arena, &lines, "Depends:       ", depends);
         if (pkg.MakeDepends) |make_depends| try appendDetailList(arena, &lines, "Make deps:     ", make_depends);
         try lines.append(arena, try std.fmt.allocPrint(arena, "First submitted: {s}", .{try formatEpoch(arena, pkg.FirstSubmitted)}));

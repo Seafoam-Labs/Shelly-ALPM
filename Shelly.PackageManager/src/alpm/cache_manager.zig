@@ -499,7 +499,7 @@ const CacheOperationScope = struct {
     fn fail(self: *CacheOperationScope) void {
         if (self.operation) |*operation| operation.reportError(
             if (operation.isCancelled()) error.Cancelled else error.CacheOperationFailed,
-            if (operation.isCancelled()) "Package-cache operation cancelled" else "Package-cache operation failed",
+            if (operation.isCancelled()) "Operation cancelled." else "Could not complete the requested operation in the package cache.",
             "alpm-cache",
             null,
             false,

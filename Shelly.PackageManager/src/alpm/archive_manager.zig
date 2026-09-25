@@ -434,7 +434,7 @@ pub const ArchiveManager = struct {
         defer if (has_operation) {
             if (!successful) operation_storage.reportError(
                 if (operation_storage.isCancelled()) error.Cancelled else error.ArchiveListingDownloadFailed,
-                if (operation_storage.isCancelled()) "Archive listing download cancelled" else "Archive listing download failed",
+                if (operation_storage.isCancelled()) "Operation cancelled." else "Could not retrieve the archived-version list for the requested package.",
                 "download",
                 null,
                 false,

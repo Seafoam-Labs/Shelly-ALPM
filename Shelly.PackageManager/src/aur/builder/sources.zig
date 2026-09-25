@@ -110,8 +110,7 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
     // existing direct local sources and the default HTTP cache are already
     // visible in $startdir.
     if (self.options.run_verify and !self.options.skip_source_pgp_verification) {
-        const execution = package_build.execution orelse return error.MissingExecutionSteps;
-        if (execution.verify_step) |step| {
+        if (package_build.execution) |execution| if (execution.verify_step) |step| {
             var view = try exposeSourcesForVerify(self, prepared);
             defer view.deinit(self);
             try steps.runStep(
@@ -136,7 +135,7 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
                 const source = &prepared[index];
                 try copyLocalSource(self, source.source.name, source.destination);
             }
-        }
+        };
     }
 
     std.Io.Dir.cwd().createDirPath(self.io, extraction_staging) catch {
@@ -663,9 +662,11 @@ fn decompressSignedPayload(
         .lzo => &.{ "/usr/bin/lzop", "-d", "-q", "-c", "--", source_path },
         .lrz => &.{ "/usr/bin/lrzip", "-q", "-d", "-o", "-", source_path },
     };
+    var environment = try self.environ.createMap(self.allocator);
+    defer environment.deinit();
     var child = try std.process.spawn(self.io, .{
         .argv = argv,
-        .environ_map = null,
+        .environ_map = &environment,
         .stdin = .ignore,
         .stdout = .pipe,
         .stderr = .ignore,
@@ -719,7 +720,7 @@ fn decompressStandaloneSource(
     decompressStandalonePayload(self, operation, source.destination, destination, compression) catch |err| {
         if (err == error.SourceDecompressionFailed or err == error.SourcePayloadTooLarge) {
             const reason: []const u8 = if (err == error.SourcePayloadTooLarge)
-                "The decompressed file exceeds the 4 GiB source size limit."
+                "Could not extract the source because its decompressed size exceeds the 4 GiB limit. Check that the selected source archive is correct."
             else
                 "The compressed file is damaged or incomplete. Download it again and retry the build.";
             const message = try std.fmt.allocPrint(self.allocator, "Could not decompress source \"{s}\". {s}", .{ source.source.name, reason });
@@ -766,6 +767,8 @@ fn extractSourceArchiveIfRecognized(
     };
     if (reader.isPlainSourceFile()) return false;
     var directory_timestamps: std.ArrayList(DirectoryTimestamp) = .empty;
+    var members: SourceArchiveMembers = .{};
+    defer members.deinit(self.allocator);
     defer {
         for (directory_timestamps.items) |timestamp| self.allocator.free(timestamp.path);
         directory_timestamps.deinit(self.allocator);
@@ -776,74 +779,85 @@ fn extractSourceArchiveIfRecognized(
     var next_entry = first_entry;
     while (next_entry) |entry| {
         try operation.checkCancelled();
-        entry_count += 1;
-        if (entry_count > 1_000_000 or entry.size > 4 * 1024 * 1024 * 1024)
-            return error.SourceArchiveTooLarge;
-        if (isArchiveRootDirectoryEntry(entry.kind, entry.path)) {
-            try reader.skip();
-            next_entry = try reader.next();
-            continue;
-        }
-        const relative = try archive.normalizeEntryPath(self.allocator, entry.path);
-        defer self.allocator.free(relative);
-        const destination = try std.fs.path.join(self.allocator, &.{ destination_root, relative });
-        defer self.allocator.free(destination);
-        switch (entry.kind) {
-            .directory => {
-                try ensureSafeArchivePath(self, destination_root, relative, true);
-                if (entry.mtime) |mtime| {
-                    const owned_path = try self.allocator.dupe(u8, destination);
-                    errdefer self.allocator.free(owned_path);
-                    try directory_timestamps.append(self.allocator, .{
-                        .path = owned_path,
-                        .mtime = mtime,
+        entry_block: {
+            errdefer |err| reportArchiveEntryFailure(self, operation, archive_path, entry.path, entry.link_target, err);
+            entry_count += 1;
+            if (entry_count > 1_000_000 or entry.size > 4 * 1024 * 1024 * 1024)
+                return error.SourceArchiveTooLarge;
+            if (isArchiveRootDirectoryEntry(entry.kind, entry.path)) {
+                try reader.skip();
+                break :entry_block;
+            }
+            const relative = try archive.normalizePosixEntryPath(self.allocator, entry.path);
+            defer self.allocator.free(relative);
+            const destination = try std.fs.path.join(self.allocator, &.{ destination_root, relative });
+            defer self.allocator.free(destination);
+            try members.add(self.allocator, relative, entry.kind, entry.link_target);
+            switch (entry.kind) {
+                .directory => {
+                    try ensureSafeArchivePath(self, destination_root, relative, true);
+                    if (entry.mtime) |mtime| {
+                        const owned_path = try self.allocator.dupe(u8, destination);
+                        errdefer self.allocator.free(owned_path);
+                        try directory_timestamps.append(self.allocator, .{
+                            .path = owned_path,
+                            .mtime = mtime,
+                        });
+                    }
+                },
+                .regular_file => {
+                    try ensureSafeArchivePath(self, destination_root, relative, false);
+                    try rejectExistingDestination(self.io, destination);
+                    var output = try std.Io.Dir.cwd().createFile(self.io, destination, .{
+                        .truncate = true,
+                        .permissions = std.Io.File.Permissions.fromMode(entry.permissions & 0o777),
                     });
-                }
-            },
-            .regular_file => {
-                try ensureSafeArchivePath(self, destination_root, relative, false);
-                try rejectExistingDestination(self.io, destination);
-                var output = try std.Io.Dir.cwd().createFile(self.io, destination, .{
-                    .truncate = true,
-                    .permissions = std.Io.File.Permissions.fromMode(entry.permissions & 0o777),
-                });
-                defer output.close(self.io);
-                var writer = output.writer(self.io, &.{});
-                var entry_size: u64 = 0;
-                while (true) {
-                    const amount = try reader.read(&buffer);
-                    if (amount == 0) break;
-                    entry_size += amount;
-                    total_size += amount;
-                    if (entry_size > 4 * 1024 * 1024 * 1024 or total_size > 16 * 1024 * 1024 * 1024)
-                        return error.SourceArchiveTooLarge;
-                    try writer.interface.writeAll(buffer[0..amount]);
-                }
-                try writer.interface.flush();
-                if (entry.mtime) |mtime| try output.setTimestamps(self.io, .{
-                    .modify_timestamp = .{ .new = mtime },
-                });
-            },
-            .symbolic_link => {
-                const target = entry.link_target orelse return error.UnsafeSourceArchiveLink;
-                const safe_target = try source_spec.archiveLinkTarget(self.allocator, relative, target);
-                defer self.allocator.free(safe_target);
-                try ensureSafeArchivePath(self, destination_root, relative, false);
-                try rejectExistingDestination(self.io, destination);
-                try std.Io.Dir.cwd().symLink(self.io, safe_target, destination, .{});
-                if (entry.mtime) |mtime| try std.Io.Dir.cwd().setTimestamps(
-                    self.io,
-                    destination,
-                    .{
-                        .follow_symlinks = false,
+                    defer output.close(self.io);
+                    var writer = output.writer(self.io, &.{});
+                    var entry_size: u64 = 0;
+                    while (true) {
+                        const amount = try reader.read(&buffer);
+                        if (amount == 0) break;
+                        entry_size += amount;
+                        total_size += amount;
+                        if (entry_size > 4 * 1024 * 1024 * 1024 or total_size > 16 * 1024 * 1024 * 1024)
+                            return error.SourceArchiveTooLarge;
+                        try writer.interface.writeAll(buffer[0..amount]);
+                    }
+                    try writer.interface.flush();
+                    if (entry.mtime) |mtime| try output.setTimestamps(self.io, .{
                         .modify_timestamp = .{ .new = mtime },
-                    },
-                );
-            },
-            .other => return error.UnsupportedSourceArchiveEntry,
+                    });
+                },
+                .symbolic_link => {
+                    const target = entry.link_target orelse return error.UnsafeSourceArchiveLink;
+                    const safe_target = try source_spec.archiveLinkTarget(self.allocator, relative, target);
+                    defer self.allocator.free(safe_target);
+                    try ensureSafeArchivePath(self, destination_root, relative, false);
+                    try rejectExistingDestination(self.io, destination);
+                    try std.Io.Dir.cwd().symLink(self.io, safe_target, destination, .{});
+                    if (entry.mtime) |mtime| try std.Io.Dir.cwd().setTimestamps(
+                        self.io,
+                        destination,
+                        .{
+                            .follow_symlinks = false,
+                            .modify_timestamp = .{ .new = mtime },
+                        },
+                    );
+                },
+                .hard_link => {
+                    // Reserve the destination now; resolve targets only after all
+                    // archive members have been recorded (including forward links).
+                    try ensureSafeArchivePath(self, destination_root, relative, false);
+                    try rejectExistingDestination(self.io, destination);
+                    try reader.skip();
+                },
+                .other => return error.UnsupportedSourceArchiveEntry,
+            }
         }
         next_entry = try reader.next();
     }
+    try members.resolve(self, operation, archive_path, destination_root);
 
     // Creating children changes directory mtimes. Restore recorded directory
     // timestamps only after the complete tree exists. Archive order is retained
@@ -855,6 +869,104 @@ fn extractSourceArchiveIfRecognized(
         });
     }
     return true;
+}
+
+const SourceArchiveMembers = struct {
+    const Member = struct {
+        kind: archive.EntryKind,
+        target: ?[]u8,
+        state: enum { pending, visiting, resolved } = .pending,
+    };
+
+    entries: std.StringArrayHashMapUnmanaged(Member) = .empty,
+
+    fn deinit(self: *SourceArchiveMembers, allocator: std.mem.Allocator) void {
+        for (self.entries.keys(), self.entries.values()) |path, member| {
+            allocator.free(path);
+            if (member.target) |target| allocator.free(target);
+        }
+        self.entries.deinit(allocator);
+    }
+
+    fn add(self: *SourceArchiveMembers, allocator: std.mem.Allocator, path: []const u8, kind: archive.EntryKind, link_target: ?[]const u8) !void {
+        if (self.entries.getIndex(path)) |index| {
+            if (kind == .directory and self.entries.values()[index].kind == .directory) return;
+            return error.UnsafeSourceArchivePath;
+        }
+        var parent = std.fs.path.dirname(path);
+        while (parent) |directory| : (parent = std.fs.path.dirname(directory)) {
+            if (self.entries.getIndex(directory)) |index| {
+                if (self.entries.values()[index].kind != .directory) return error.UnsafeSourceArchivePath;
+            }
+        }
+        const owned_path = try allocator.dupe(u8, path);
+        errdefer allocator.free(owned_path);
+        // Unlike symlink targets, hard-link targets are archive-root-relative.
+        const target = if (kind == .hard_link)
+            try archive.normalizePosixEntryPath(allocator, link_target orelse return error.UnsafeSourceArchiveLink)
+        else
+            null;
+        errdefer if (target) |value| allocator.free(value);
+        try self.entries.putNoClobber(allocator, owned_path, .{ .kind = kind, .target = target });
+    }
+
+    fn resolve(self: *SourceArchiveMembers, builder: *PackageBuilder, operation: *op_context.Operation, archive_path: []const u8, root: []const u8) !void {
+        // Iterative DFS visits each link once. No recursive stack growth or
+        // repeated full scans for long chains supplied by an untrusted archive.
+        var chain: std.ArrayList(usize) = .empty;
+        defer chain.deinit(builder.allocator);
+        const paths = self.entries.keys();
+        const members = self.entries.values();
+        for (members, 0..) |member, start| {
+            try operation.checkCancelled();
+            if (member.kind != .hard_link or member.state == .resolved) continue;
+            var index = start;
+            errdefer |err| reportArchiveEntryFailure(builder, operation, archive_path, paths[index], members[index].target, err);
+            while (members[index].kind == .hard_link and members[index].state != .resolved) {
+                try operation.checkCancelled();
+                if (members[index].state == .visiting) return error.CyclicSourceArchiveHardLink;
+                members[index].state = .visiting;
+                try chain.append(builder.allocator, index);
+                const target_index = self.entries.getIndex(members[index].target.?) orelse
+                    return error.MissingSourceArchiveHardLinkTarget;
+                switch (members[target_index].kind) {
+                    .regular_file, .hard_link => index = target_index,
+                    else => return error.UnsafeSourceArchiveLink,
+                }
+            }
+            while (chain.pop()) |link_index| {
+                index = link_index;
+                try operation.checkCancelled();
+                const target = members[index].target.?;
+                // Inspect every component without following symlinks, even
+                // though the target is also required to belong to this archive.
+                try ensureSafeArchivePath(builder, root, target, false);
+                try ensureSafeArchivePath(builder, root, paths[index], false);
+                const source = try std.fs.path.join(builder.allocator, &.{ root, target });
+                defer builder.allocator.free(source);
+                const destination = try std.fs.path.join(builder.allocator, &.{ root, paths[index] });
+                defer builder.allocator.free(destination);
+                const stat = try std.Io.Dir.cwd().statFile(builder.io, source, .{ .follow_symlinks = false });
+                if (stat.kind != .file) return error.UnsafeSourceArchiveLink;
+                try rejectExistingDestination(builder.io, destination);
+                try std.Io.Dir.hardLink(.cwd(), source, .cwd(), destination, builder.io, .{ .follow_symlinks = false });
+                // Mode and timestamps belong to the shared inode. Applying
+                // the link header's metadata would change the original file.
+                members[index].state = .resolved;
+            }
+        }
+    }
+};
+
+fn reportArchiveEntryFailure(self: *PackageBuilder, operation: *op_context.Operation, archive_path: []const u8, path: []const u8, target: ?[]const u8, err: anyerror) void {
+    if (err == error.Cancelled) return;
+    const safe = @import("diagnostics").safe;
+    const message = if (target) |value|
+        std.fmt.allocPrint(self.allocator, "Could not extract source archive {f}, entry {f}, link target {f}. Technical details: {s}", .{ safe(std.fs.path.basename(archive_path)), safe(path), safe(value), @errorName(err) }) catch return
+    else
+        std.fmt.allocPrint(self.allocator, "Could not extract source archive {f}, entry {f}. Technical details: {s}", .{ safe(std.fs.path.basename(archive_path)), safe(path), @errorName(err) }) catch return;
+    defer self.allocator.free(message);
+    operation.reportError(err, message, "sources", null, false);
 }
 
 fn pathExistsNoFollow(io: std.Io, path: []const u8) bool {
@@ -888,6 +1000,7 @@ test "PackageBuilder skips only source archive root directory markers" {
         try std.testing.expect(isArchiveRootDirectoryEntry(.directory, path));
         try std.testing.expect(!isArchiveRootDirectoryEntry(.regular_file, path));
         try std.testing.expect(!isArchiveRootDirectoryEntry(.symbolic_link, path));
+        try std.testing.expect(!isArchiveRootDirectoryEntry(.hard_link, path));
         try std.testing.expect(!isArchiveRootDirectoryEntry(.other, path));
     }
 

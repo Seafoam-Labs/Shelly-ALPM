@@ -3,12 +3,14 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const diagnostics = b.dependency("shelly_diagnostics", .{ .target = target, .optimize = optimize }).module("diagnostics");
 
     const protocol = b.addModule("Shelly_Flatpak_Protocol", .{
         .root_source_file = b.path("src/protocol.zig"),
         .target = target,
         .optimize = optimize,
     });
+    protocol.addImport("diagnostics", diagnostics);
 
     const generated_flatpak = b.createModule(.{
         .root_source_file = b.path("src/flatpak/flatpak.zig"),
@@ -16,17 +18,20 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    generated_flatpak.addImport("diagnostics", diagnostics);
     const operation_context = b.createModule(.{
         .root_source_file = b.path("src/operation_context.zig"),
         .target = target,
         .optimize = optimize,
     });
+    operation_context.addImport("diagnostics", diagnostics);
     const backend_module = b.createModule(.{
         .root_source_file = b.path("src/exports.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
+    backend_module.addImport("diagnostics", diagnostics);
     backend_module.addImport("flatpak", generated_flatpak);
     backend_module.addImport("operation_context", operation_context);
     backend_module.addImport("Shelly_Flatpak_Protocol", protocol);
@@ -40,6 +45,7 @@ pub fn build(b: *std.Build) void {
         .root_module = backend_module,
         .version = .{ .major = 1, .minor = 0, .patch = 0 },
     });
+    backend.root_module.addImport("diagnostics", diagnostics);
     b.installArtifact(backend);
 
     const protocol_tests = b.addTest(.{
@@ -56,12 +62,14 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    fake_backend_module.addImport("diagnostics", diagnostics);
     fake_backend_module.addImport("Shelly_Flatpak_Protocol", protocol);
     const fake_backend = b.addLibrary(.{
         .name = "shelly-flatpak-backend-fake",
         .linkage = .dynamic,
         .root_module = fake_backend_module,
     });
+    fake_backend.root_module.addImport("diagnostics", diagnostics);
 
     const missing_backend = b.addLibrary(.{
         .name = "shelly-flatpak-backend-missing-entry",
@@ -72,42 +80,49 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    missing_backend.root_module.addImport("diagnostics", diagnostics);
 
     const incompatible_backend_module = b.createModule(.{
         .root_source_file = b.path("src/testing/incompatible_backend.zig"),
         .target = target,
         .optimize = optimize,
     });
+    incompatible_backend_module.addImport("diagnostics", diagnostics);
     incompatible_backend_module.addImport("Shelly_Flatpak_Protocol", protocol);
     const incompatible_backend = b.addLibrary(.{
         .name = "shelly-flatpak-backend-incompatible",
         .linkage = .dynamic,
         .root_module = incompatible_backend_module,
     });
+    incompatible_backend.root_module.addImport("diagnostics", diagnostics);
 
     const short_backend_module = b.createModule(.{
         .root_source_file = b.path("src/testing/short_backend.zig"),
         .target = target,
         .optimize = optimize,
     });
+    short_backend_module.addImport("diagnostics", diagnostics);
     short_backend_module.addImport("Shelly_Flatpak_Protocol", protocol);
     const short_backend = b.addLibrary(.{
         .name = "shelly-flatpak-backend-short",
         .linkage = .dynamic,
         .root_module = short_backend_module,
     });
+    short_backend.root_module.addImport("diagnostics", diagnostics);
 
     const null_backend_module = b.createModule(.{
         .root_source_file = b.path("src/testing/null_backend.zig"),
         .target = target,
         .optimize = optimize,
     });
+    null_backend_module.addImport("diagnostics", diagnostics);
     null_backend_module.addImport("Shelly_Flatpak_Protocol", protocol);
     const null_backend = b.addLibrary(.{
         .name = "shelly-flatpak-backend-null",
         .linkage = .dynamic,
         .root_module = null_backend_module,
     });
+    null_backend.root_module.addImport("diagnostics", diagnostics);
 
     const abi_test_options = b.addOptions();
     abi_test_options.addOptionPath("real_backend_path", backend.getEmittedBin());
@@ -126,6 +141,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    abi_test_module.addImport("diagnostics", diagnostics);
     abi_test_module.addImport("Shelly_Flatpak_Protocol", protocol);
     abi_test_module.addOptions("abi_test_options", abi_test_options);
     const abi_tests = b.addTest(.{
