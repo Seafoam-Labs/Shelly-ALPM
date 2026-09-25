@@ -196,7 +196,7 @@ pub const ShellyCli = struct {
     }
 
     pub fn get_package_details(self: ShellyCli, name: []const u8) !std.json.Parsed(Package) {
-        const result = try self.run(&.{ "search", "standard", name });
+        const result = try self.run(&.{ "search", "standard", "--detail", name });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
