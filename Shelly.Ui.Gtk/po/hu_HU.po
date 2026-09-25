@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-20 00:46-0300\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-08-13 11:51+0200\n"
 "Last-Translator: Impostor0729\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -187,20 +187,28 @@ msgstr "Szinkronizálás"
 msgid "Remove"
 msgstr "Eltávolítás"
 
-msgid "Information"
-msgstr "Információ"
-
-msgid "Preview Pkgbuild"
-msgstr "PKGBUILD előnézete"
-
 msgid "Search the AUR by name or keyword"
 msgstr "Keresés az AUR-ban név vagy kulcsszó alapján"
+
+#| msgid "Search..."
+msgid "Search By"
+msgstr ""
 
 msgid "Installed Only"
 msgstr "Csak telepített"
 
 msgid "Show only installed packages"
 msgstr "Csak a telepített csomagok megjelenítése"
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
+msgstr ""
 
 msgid "Additional Options"
 msgstr "További lehetőségek"
@@ -217,12 +225,11 @@ msgstr "Szavazatok"
 msgid "Popularity"
 msgstr "Népszerűség"
 
-msgid "Search the AUR"
-msgstr "Keresés az AUR-ban"
-
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "Loading the AUR index"
 msgstr ""
-"Az AUR-nak nincs böngészhető indexe. A kezdéshez írja be a csomag nevét."
+
+msgid "Powered by Atoll."
+msgstr ""
 
 msgid "Run checks"
 msgstr "Ellenőrzések futtatása"
@@ -235,6 +242,19 @@ msgstr "Részletek ablak elrejtése"
 
 msgid "Hide the detail pane on the right"
 msgstr "A jobb oldali részletek panel elrejtése"
+
+msgid "Information"
+msgstr "Információ"
+
+msgid "Preview Pkgbuild"
+msgstr "PKGBUILD előnézete"
+
+msgid "Search the AUR"
+msgstr "Keresés az AUR-ban"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr ""
+"Az AUR-nak nincs böngészhető indexe. A kezdéshez írja be a csomag nevét."
 
 msgid "Install a local Flatpak"
 msgstr "Helyi Flatpak telepítése"
@@ -605,6 +625,9 @@ msgstr "Megerősítés kihagyása"
 
 msgid "Enable Shelly Search"
 msgstr "Shelly keresés engedélyezése"
+
+msgid "Enable Atoll Powered AUR"
+msgstr ""
 
 msgid "AppImage Install Path"
 msgstr "AppImage telepítési útvonala"
@@ -1010,6 +1033,61 @@ msgstr ""
 msgid "Discard"
 msgstr ""
 
+msgid "No packages found"
+msgstr "Nem találhatók csomagok"
+
+msgid "Try a shorter or more general keyword."
+msgstr "Próbálkozzon rövidebb vagy általánosabb kulcsszóval."
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr "Ellenőrizze a kapcsolatot, és próbálja meg újra."
+
+msgid "Flagged out of date"
+msgstr "Elavultként megjelölve"
+
+msgid "Installed"
+msgstr "Telepítve"
+
+msgid "Remove Selected"
+msgstr "Kijelöltek eltávolítása"
+
+msgid "Select one or more packages"
+msgstr "Válasszon ki egy vagy több csomagot"
+
+msgid "Package(s)"
+msgstr "Csomag(ok)"
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr "közülük"
+
+msgid "Remove Packages"
+msgstr "Csomagok eltávolítása"
+
+msgid "Remove the selected AUR packages?"
+msgstr "Eltávolítja a kiválasztott AUR-csomagokat?"
+
+msgid "Build from AUR"
+msgstr "Építés AUR-ból"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+"Összeállítja és telepíti a kiválasztott csomagokat? Ez eltarthat egy ideig."
+
+msgid "Build"
+msgstr "Építés"
+
+msgid "Installing AUR packages"
+msgstr "AUR csomagok telepítése"
+
+msgid "Removing AUR packages"
+msgstr "AUR csomagok eltávolítása"
+
 msgid "Maintainer"
 msgstr "Karbantartó"
 
@@ -1041,54 +1119,8 @@ msgid "The AUR has no browsable index — type a package name to begin."
 msgstr ""
 "Az AUR-nak nincs böngészhető indexe — írjon be egy csomagnevet a kezdéshez."
 
-msgid "No packages found"
-msgstr "Nem találhatók csomagok"
-
-msgid "Try a shorter or more general keyword."
-msgstr "Próbálkozzon rövidebb vagy általánosabb kulcsszóval."
-
 msgid "Could not search the configured AUR service."
 msgstr ""
-
-msgid "Check your connection and try again."
-msgstr "Ellenőrizze a kapcsolatot, és próbálja meg újra."
-
-msgid "Flagged out of date"
-msgstr "Elavultként megjelölve"
-
-msgid "Installed"
-msgstr "Telepítve"
-
-msgid "Remove Selected"
-msgstr "Kijelöltek eltávolítása"
-
-msgid "Select one or more packages"
-msgstr "Válasszon ki egy vagy több csomagot"
-
-msgid "Package(s)"
-msgstr "Csomag(ok)"
-
-msgid "Remove Packages"
-msgstr "Csomagok eltávolítása"
-
-msgid "Remove the selected AUR packages?"
-msgstr "Eltávolítja a kiválasztott AUR-csomagokat?"
-
-msgid "Build from AUR"
-msgstr "Építés AUR-ból"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-"Összeállítja és telepíti a kiválasztott csomagokat? Ez eltarthat egy ideig."
-
-msgid "Build"
-msgstr "Építés"
-
-msgid "Installing AUR packages"
-msgstr "AUR csomagok telepítése"
-
-msgid "Removing AUR packages"
-msgstr "AUR csomagok eltávolítása"
 
 msgid "Choose a Flatpak file"
 msgstr "Válasszon ki egy Flatpak fájlt"
@@ -1644,9 +1676,6 @@ msgstr "AUR csomag frissítése"
 
 msgid "Update this package"
 msgstr "Frissítse ezt a csomagot"
-
-msgid "of"
-msgstr "közülük"
 
 msgid "updates included"
 msgstr "frissítéseket tartalmaz"

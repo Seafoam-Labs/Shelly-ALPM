@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-20 00:46-0300\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-06-29 21:36+0330\n"
 "Last-Translator: Sohrab Behdani <behdanisohrab@proton.me>\n"
 "Language-Team: fa\n"
@@ -182,19 +182,27 @@ msgstr "همگام‌سازی"
 msgid "Remove"
 msgstr "حذف"
 
-msgid "Information"
-msgstr ""
-
-msgid "Preview Pkgbuild"
-msgstr ""
-
 msgid "Search the AUR by name or keyword"
+msgstr ""
+
+#| msgid "Search..."
+msgid "Search By"
 msgstr ""
 
 msgid "Installed Only"
 msgstr ""
 
 msgid "Show only installed packages"
+msgstr ""
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
 msgstr ""
 
 msgid "Additional Options"
@@ -212,10 +220,10 @@ msgstr "آراء"
 msgid "Popularity"
 msgstr "محبوبیت"
 
-msgid "Search the AUR"
+msgid "Loading the AUR index"
 msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "Powered by Atoll."
 msgstr ""
 
 msgid "Run checks"
@@ -228,6 +236,18 @@ msgid "Hide Detail Pane"
 msgstr ""
 
 msgid "Hide the detail pane on the right"
+msgstr ""
+
+msgid "Information"
+msgstr ""
+
+msgid "Preview Pkgbuild"
+msgstr ""
+
+msgid "Search the AUR"
+msgstr ""
+
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
 msgid "Install a local Flatpak"
@@ -598,6 +618,9 @@ msgstr "بدون تأیید"
 
 msgid "Enable Shelly Search"
 msgstr "فعال‌سازی جست‌جوی Shelly"
+
+msgid "Enable Atoll Powered AUR"
+msgstr ""
 
 msgid "AppImage Install Path"
 msgstr "مسیر نصب AppImage"
@@ -996,6 +1019,60 @@ msgstr ""
 msgid "Discard"
 msgstr ""
 
+msgid "No packages found"
+msgstr ""
+
+msgid "Try a shorter or more general keyword."
+msgstr ""
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr ""
+
+msgid "Flagged out of date"
+msgstr ""
+
+msgid "Installed"
+msgstr "نصب شده‌ها"
+
+msgid "Remove Selected"
+msgstr "حذف انتخاب شده"
+
+msgid "Select one or more packages"
+msgstr ""
+
+msgid "Package(s)"
+msgstr ""
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr ""
+
+msgid "Remove Packages"
+msgstr ""
+
+msgid "Remove the selected AUR packages?"
+msgstr ""
+
+msgid "Build from AUR"
+msgstr ""
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+
+msgid "Build"
+msgstr ""
+
+msgid "Installing AUR packages"
+msgstr ""
+
+msgid "Removing AUR packages"
+msgstr ""
+
 msgid "Maintainer"
 msgstr "نگهدارنده"
 
@@ -1026,52 +1103,7 @@ msgstr ""
 msgid "The AUR has no browsable index — type a package name to begin."
 msgstr ""
 
-msgid "No packages found"
-msgstr ""
-
-msgid "Try a shorter or more general keyword."
-msgstr ""
-
 msgid "Could not search the configured AUR service."
-msgstr ""
-
-msgid "Check your connection and try again."
-msgstr ""
-
-msgid "Flagged out of date"
-msgstr ""
-
-msgid "Installed"
-msgstr "نصب شده‌ها"
-
-msgid "Remove Selected"
-msgstr "حذف انتخاب شده"
-
-msgid "Select one or more packages"
-msgstr ""
-
-msgid "Package(s)"
-msgstr ""
-
-msgid "Remove Packages"
-msgstr ""
-
-msgid "Remove the selected AUR packages?"
-msgstr ""
-
-msgid "Build from AUR"
-msgstr ""
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-
-msgid "Build"
-msgstr ""
-
-msgid "Installing AUR packages"
-msgstr ""
-
-msgid "Removing AUR packages"
 msgstr ""
 
 msgid "Choose a Flatpak file"
@@ -1623,9 +1655,6 @@ msgid "AUR package update"
 msgstr ""
 
 msgid "Update this package"
-msgstr ""
-
-msgid "of"
 msgstr ""
 
 msgid "updates included"

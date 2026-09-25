@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-20 00:46-0300\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-09-14 21:25+0400\n"
 "Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\n"
 "Language-Team: Russian (Russia) <anton@azdanov.dev>\n"
@@ -195,20 +195,28 @@ msgstr "Синхронизировать"
 msgid "Remove"
 msgstr "Удалить"
 
-msgid "Information"
-msgstr "Информация"
-
-msgid "Preview Pkgbuild"
-msgstr "Предпросмотр PKGBUILD"
-
 msgid "Search the AUR by name or keyword"
 msgstr "Поиск в AUR по имени или ключевому слову"
+
+#| msgid "Search..."
+msgid "Search By"
+msgstr ""
 
 msgid "Installed Only"
 msgstr "Только установленные"
 
 msgid "Show only installed packages"
 msgstr "Показывать только установленные пакеты"
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
+msgstr ""
 
 msgid "Additional Options"
 msgstr "Дополнительные параметры"
@@ -225,11 +233,11 @@ msgstr "Голоса"
 msgid "Popularity"
 msgstr "Популярность"
 
-msgid "Search the AUR"
-msgstr "Поиск в AUR"
+msgid "Loading the AUR index"
+msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
-msgstr "В AUR нет индекса для просмотра. Введите имя пакета, чтобы начать."
+msgid "Powered by Atoll."
+msgstr ""
 
 msgid "Run checks"
 msgstr "Выполнить проверки"
@@ -242,6 +250,18 @@ msgstr "Скрыть панель подробностей"
 
 msgid "Hide the detail pane on the right"
 msgstr "Скрыть панель подробностей справа"
+
+msgid "Information"
+msgstr "Информация"
+
+msgid "Preview Pkgbuild"
+msgstr "Предпросмотр PKGBUILD"
+
+msgid "Search the AUR"
+msgstr "Поиск в AUR"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr "В AUR нет индекса для просмотра. Введите имя пакета, чтобы начать."
 
 msgid "Install a local Flatpak"
 msgstr "Установить локальный Flatpak"
@@ -615,6 +635,9 @@ msgstr "Без подтверждения"
 
 msgid "Enable Shelly Search"
 msgstr "Включить поиск Shelly"
+
+msgid "Enable Atoll Powered AUR"
+msgstr ""
 
 msgid "AppImage Install Path"
 msgstr "Путь установки AppImage"
@@ -1023,6 +1046,61 @@ msgstr "Ваши изменения переменных среды не был�
 msgid "Discard"
 msgstr "Отменить"
 
+msgid "No packages found"
+msgstr "Пакеты не найдены"
+
+msgid "Try a shorter or more general keyword."
+msgstr "Попробуйте более короткое или общее ключевое слово."
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr "Проверьте подключение и попробуйте снова."
+
+msgid "Flagged out of date"
+msgstr "Отмечен как устаревший"
+
+msgid "Installed"
+msgstr "Установлено"
+
+msgid "Remove Selected"
+msgstr "Удалить выбранное"
+
+msgid "Select one or more packages"
+msgstr "Выберите один или несколько пакетов"
+
+msgid "Package(s)"
+msgstr "Пакет(ы)"
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr "из"
+
+msgid "Remove Packages"
+msgstr "Удалить пакеты"
+
+msgid "Remove the selected AUR packages?"
+msgstr "Удалить выбранные пакеты AUR?"
+
+msgid "Build from AUR"
+msgstr "Собрать из AUR"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+"Собрать и установить выбранные пакеты? Это может занять некоторое время."
+
+msgid "Build"
+msgstr "Собрать"
+
+msgid "Installing AUR packages"
+msgstr "Установка пакетов AUR"
+
+msgid "Removing AUR packages"
+msgstr "Удаление пакетов AUR"
+
 msgid "Maintainer"
 msgstr "Сопровождающий"
 
@@ -1053,54 +1131,8 @@ msgstr "Раздел"
 msgid "The AUR has no browsable index — type a package name to begin."
 msgstr "В AUR нет индекса для просмотра — введите имя пакета, чтобы начать."
 
-msgid "No packages found"
-msgstr "Пакеты не найдены"
-
-msgid "Try a shorter or more general keyword."
-msgstr "Попробуйте более короткое или общее ключевое слово."
-
 msgid "Could not search the configured AUR service."
 msgstr ""
-
-msgid "Check your connection and try again."
-msgstr "Проверьте подключение и попробуйте снова."
-
-msgid "Flagged out of date"
-msgstr "Отмечен как устаревший"
-
-msgid "Installed"
-msgstr "Установлено"
-
-msgid "Remove Selected"
-msgstr "Удалить выбранное"
-
-msgid "Select one or more packages"
-msgstr "Выберите один или несколько пакетов"
-
-msgid "Package(s)"
-msgstr "Пакет(ы)"
-
-msgid "Remove Packages"
-msgstr "Удалить пакеты"
-
-msgid "Remove the selected AUR packages?"
-msgstr "Удалить выбранные пакеты AUR?"
-
-msgid "Build from AUR"
-msgstr "Собрать из AUR"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-"Собрать и установить выбранные пакеты? Это может занять некоторое время."
-
-msgid "Build"
-msgstr "Собрать"
-
-msgid "Installing AUR packages"
-msgstr "Установка пакетов AUR"
-
-msgid "Removing AUR packages"
-msgstr "Удаление пакетов AUR"
 
 msgid "Choose a Flatpak file"
 msgstr "Выберите файл Flatpak"
@@ -1658,9 +1690,6 @@ msgstr "Обновление пакета AUR"
 
 msgid "Update this package"
 msgstr "Обновить этот пакет"
-
-msgid "of"
-msgstr "из"
 
 msgid "updates included"
 msgstr "обновлений включено"

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-20 00:46-0300\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-07-29 17:32+0000\n"
 "Last-Translator: Tiago Centurion <tiagodecgo2@gmail.com>\n"
 "Language-Team: Spanish <https://hosted.weblate.org/projects/shelly-alpm/"
@@ -181,20 +181,28 @@ msgstr "Sincronizar"
 msgid "Remove"
 msgstr "Eliminar"
 
-msgid "Information"
-msgstr "Información"
-
-msgid "Preview Pkgbuild"
-msgstr "Vista previa Pkgbuild"
-
 msgid "Search the AUR by name or keyword"
 msgstr "Buscar el AUR por nombre o palabra clave"
+
+#| msgid "Search..."
+msgid "Search By"
+msgstr ""
 
 msgid "Installed Only"
 msgstr "Solo instalados"
 
 msgid "Show only installed packages"
 msgstr "Mostrar sólo paquetes instalados"
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
+msgstr ""
 
 msgid "Additional Options"
 msgstr "Opciones adicionales"
@@ -211,10 +219,10 @@ msgstr "Votos"
 msgid "Popularity"
 msgstr "Popularidad"
 
-msgid "Search the AUR"
-msgstr "Buscar en el AUR"
+msgid "Loading the AUR index"
+msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "Powered by Atoll."
 msgstr ""
 
 msgid "Run checks"
@@ -228,6 +236,18 @@ msgstr "Ocultar panel de detalles"
 
 msgid "Hide the detail pane on the right"
 msgstr "Ocultar el panel de detalles a la derecha"
+
+msgid "Information"
+msgstr "Información"
+
+msgid "Preview Pkgbuild"
+msgstr "Vista previa Pkgbuild"
+
+msgid "Search the AUR"
+msgstr "Buscar en el AUR"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr ""
 
 msgid "Install a local Flatpak"
 msgstr "Instalar un Flatpak local"
@@ -599,6 +619,9 @@ msgstr "No pedir confirmacion"
 
 msgid "Enable Shelly Search"
 msgstr "Habilitar búsqueda de Shelly"
+
+msgid "Enable Atoll Powered AUR"
+msgstr ""
 
 msgid "AppImage Install Path"
 msgstr "Ruta de instalación de AppImage"
@@ -1003,6 +1026,62 @@ msgstr ""
 msgid "Discard"
 msgstr ""
 
+msgid "No packages found"
+msgstr "No hay paquetes encontrados"
+
+msgid "Try a shorter or more general keyword."
+msgstr ""
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr "Revise su conexión e intente de nuevo."
+
+msgid "Flagged out of date"
+msgstr "Marcado como desactualizado"
+
+msgid "Installed"
+msgstr "Instalado"
+
+msgid "Remove Selected"
+msgstr "Eliminar seleccionado"
+
+msgid "Select one or more packages"
+msgstr "Seleccione uno o más paquetes"
+
+msgid "Package(s)"
+msgstr "Paquete(s)"
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr "de"
+
+msgid "Remove Packages"
+msgstr "Eliminar paquetes"
+
+msgid "Remove the selected AUR packages?"
+msgstr "¿Eliminar los paquetes del AUR seleccionados?"
+
+msgid "Build from AUR"
+msgstr "Compilar desde el AUR"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+"¿Quieres compilar e instalar los paquetes seleccionados? Esto puede llevar "
+"un tiempo."
+
+msgid "Build"
+msgstr "Compilar"
+
+msgid "Installing AUR packages"
+msgstr "Instalando paquetes del AUR"
+
+msgid "Removing AUR packages"
+msgstr "Eliminando paquete de AUR"
+
 msgid "Maintainer"
 msgstr "Mantenedor"
 
@@ -1035,55 +1114,8 @@ msgstr ""
 "El AUR no tiene un índice explorable; escriba el nombre de un paquete para "
 "comenzar."
 
-msgid "No packages found"
-msgstr "No hay paquetes encontrados"
-
-msgid "Try a shorter or more general keyword."
-msgstr ""
-
 msgid "Could not search the configured AUR service."
 msgstr ""
-
-msgid "Check your connection and try again."
-msgstr "Revise su conexión e intente de nuevo."
-
-msgid "Flagged out of date"
-msgstr "Marcado como desactualizado"
-
-msgid "Installed"
-msgstr "Instalado"
-
-msgid "Remove Selected"
-msgstr "Eliminar seleccionado"
-
-msgid "Select one or more packages"
-msgstr "Seleccione uno o más paquetes"
-
-msgid "Package(s)"
-msgstr "Paquete(s)"
-
-msgid "Remove Packages"
-msgstr "Eliminar paquetes"
-
-msgid "Remove the selected AUR packages?"
-msgstr "¿Eliminar los paquetes del AUR seleccionados?"
-
-msgid "Build from AUR"
-msgstr "Compilar desde el AUR"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-"¿Quieres compilar e instalar los paquetes seleccionados? Esto puede llevar "
-"un tiempo."
-
-msgid "Build"
-msgstr "Compilar"
-
-msgid "Installing AUR packages"
-msgstr "Instalando paquetes del AUR"
-
-msgid "Removing AUR packages"
-msgstr "Eliminando paquete de AUR"
 
 msgid "Choose a Flatpak file"
 msgstr "Elija un archivo Flatpak"
@@ -1637,9 +1669,6 @@ msgstr "Actualización del paquete AUR"
 
 msgid "Update this package"
 msgstr "Actualizar este paquete"
-
-msgid "of"
-msgstr "de"
 
 msgid "updates included"
 msgstr "actualizaciones incluidas"

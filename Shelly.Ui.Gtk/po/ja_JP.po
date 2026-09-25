@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-20 00:46-0300\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -194,20 +194,28 @@ msgstr "同期"
 msgid "Remove"
 msgstr "削除"
 
-msgid "Information"
-msgstr "情報"
-
-msgid "Preview Pkgbuild"
-msgstr "PKGBUILD をプレビュー"
-
 msgid "Search the AUR by name or keyword"
 msgstr "名前やキーワードで AUR を検索する"
+
+#| msgid "Search..."
+msgid "Search By"
+msgstr ""
 
 msgid "Installed Only"
 msgstr "インストール済みのみ"
 
 msgid "Show only installed packages"
 msgstr "インストール済みパッケージのみを表示"
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
+msgstr ""
 
 msgid "Additional Options"
 msgstr "その他のオプション"
@@ -224,13 +232,11 @@ msgstr "投票数"
 msgid "Popularity"
 msgstr "人気度"
 
-msgid "Search the AUR"
-msgstr "AUR を検索"
-
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "Loading the AUR index"
 msgstr ""
-"AUR には閲覧可能なインデックスがありません。始めるにはパッケージ名を入力して"
-"ください。"
+
+msgid "Powered by Atoll."
+msgstr ""
 
 msgid "Run checks"
 msgstr "チェックを実行"
@@ -243,6 +249,20 @@ msgstr "詳細ペインを隠す"
 
 msgid "Hide the detail pane on the right"
 msgstr "右側の詳細ペインを隠す"
+
+msgid "Information"
+msgstr "情報"
+
+msgid "Preview Pkgbuild"
+msgstr "PKGBUILD をプレビュー"
+
+msgid "Search the AUR"
+msgstr "AUR を検索"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr ""
+"AUR には閲覧可能なインデックスがありません。始めるにはパッケージ名を入力して"
+"ください。"
 
 msgid "Install a local Flatpak"
 msgstr "ローカル Flatpak をインストール"
@@ -616,6 +636,9 @@ msgstr "確認なしで実行する"
 
 msgid "Enable Shelly Search"
 msgstr "Shelly 検索を有効にする"
+
+msgid "Enable Atoll Powered AUR"
+msgstr ""
 
 msgid "AppImage Install Path"
 msgstr "AppImage のインストールパス"
@@ -1024,6 +1047,62 @@ msgstr "環境の変更は保存されていません。"
 msgid "Discard"
 msgstr "破棄"
 
+msgid "No packages found"
+msgstr "パッケージが見つかりません"
+
+msgid "Try a shorter or more general keyword."
+msgstr "キーワードを短くするか一般的なものを試してください。"
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr "接続を確認して、もう一度試してください。"
+
+msgid "Flagged out of date"
+msgstr "古いと報告されている"
+
+msgid "Installed"
+msgstr "インストール時"
+
+msgid "Remove Selected"
+msgstr "選択したものを削除"
+
+msgid "Select one or more packages"
+msgstr "1個以上のパッケージを選択してください"
+
+msgid "Package(s)"
+msgstr "個のパッケージ"
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr "of"
+
+msgid "Remove Packages"
+msgstr "パッケージを削除"
+
+msgid "Remove the selected AUR packages?"
+msgstr "選択した AUR パッケージを削除しますか？"
+
+msgid "Build from AUR"
+msgstr "AUR からビルド"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+"選択したパッケージをビルドしてインストールしますか？これには時間がかかる場合"
+"があります。"
+
+msgid "Build"
+msgstr "ビルド"
+
+msgid "Installing AUR packages"
+msgstr "AUR パッケージをインストール中"
+
+msgid "Removing AUR packages"
+msgstr "AUR パッケージを削除中"
+
 msgid "Maintainer"
 msgstr "メンテナー"
 
@@ -1056,55 +1135,8 @@ msgstr ""
 "AURには閲覧可能なインデックスがありません — パッケージ名を入力して開始してく"
 "ださい。"
 
-msgid "No packages found"
-msgstr "パッケージが見つかりません"
-
-msgid "Try a shorter or more general keyword."
-msgstr "キーワードを短くするか一般的なものを試してください。"
-
 msgid "Could not search the configured AUR service."
 msgstr ""
-
-msgid "Check your connection and try again."
-msgstr "接続を確認して、もう一度試してください。"
-
-msgid "Flagged out of date"
-msgstr "古いと報告されている"
-
-msgid "Installed"
-msgstr "インストール時"
-
-msgid "Remove Selected"
-msgstr "選択したものを削除"
-
-msgid "Select one or more packages"
-msgstr "1個以上のパッケージを選択してください"
-
-msgid "Package(s)"
-msgstr "個のパッケージ"
-
-msgid "Remove Packages"
-msgstr "パッケージを削除"
-
-msgid "Remove the selected AUR packages?"
-msgstr "選択した AUR パッケージを削除しますか？"
-
-msgid "Build from AUR"
-msgstr "AUR からビルド"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-"選択したパッケージをビルドしてインストールしますか？これには時間がかかる場合"
-"があります。"
-
-msgid "Build"
-msgstr "ビルド"
-
-msgid "Installing AUR packages"
-msgstr "AUR パッケージをインストール中"
-
-msgid "Removing AUR packages"
-msgstr "AUR パッケージを削除中"
 
 msgid "Choose a Flatpak file"
 msgstr "Flatpak ファイルを選択"
@@ -1662,9 +1694,6 @@ msgstr "AUR パッケージのアップデート"
 
 msgid "Update this package"
 msgstr "このパッケージをアップデート"
-
-msgid "of"
-msgstr "of"
 
 msgid "updates included"
 msgstr "アップデートがあります"

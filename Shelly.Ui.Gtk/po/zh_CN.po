@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-20 00:46-0300\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-09-3 12:00+0800\n"
 "Last-Translator: DeepSeek AI\n"
 "Language-Team: China (Simplified)\n"
@@ -172,20 +172,28 @@ msgstr "同步"
 msgid "Remove"
 msgstr "移除"
 
-msgid "Information"
-msgstr "信息"
-
-msgid "Preview Pkgbuild"
-msgstr "预览 PKGBUILD"
-
 msgid "Search the AUR by name or keyword"
 msgstr "通过包名或关键词搜索AUR"
+
+#| msgid "Search..."
+msgid "Search By"
+msgstr ""
 
 msgid "Installed Only"
 msgstr "仅显示已安装"
 
 msgid "Show only installed packages"
 msgstr "仅显示已安装的软件包"
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
+msgstr ""
 
 msgid "Additional Options"
 msgstr "额外选项"
@@ -202,10 +210,10 @@ msgstr "推荐票"
 msgid "Popularity"
 msgstr "流行度"
 
-msgid "Search the AUR"
-msgstr "搜索AUR"
+msgid "Loading the AUR index"
+msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "Powered by Atoll."
 msgstr ""
 
 msgid "Run checks"
@@ -219,6 +227,18 @@ msgstr "隐藏详情面板"
 
 msgid "Hide the detail pane on the right"
 msgstr "隐藏右侧详情面板"
+
+msgid "Information"
+msgstr "信息"
+
+msgid "Preview Pkgbuild"
+msgstr "预览 PKGBUILD"
+
+msgid "Search the AUR"
+msgstr "搜索AUR"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr ""
 
 msgid "Install a local Flatpak"
 msgstr "安装本地FLatpak包"
@@ -580,6 +600,9 @@ msgstr "无需确认"
 
 msgid "Enable Shelly Search"
 msgstr "启用 Shelly 搜索"
+
+msgid "Enable Atoll Powered AUR"
+msgstr ""
 
 msgid "AppImage Install Path"
 msgstr "AppImage 安装路径"
@@ -977,6 +1000,60 @@ msgstr ""
 msgid "Discard"
 msgstr ""
 
+msgid "No packages found"
+msgstr "未找到软件包"
+
+msgid "Try a shorter or more general keyword."
+msgstr "请尝试更短或更通用的关键词。"
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr "请检查网络连接后重试。"
+
+msgid "Flagged out of date"
+msgstr "标记为过期"
+
+msgid "Installed"
+msgstr "已安装"
+
+msgid "Remove Selected"
+msgstr "移除所选"
+
+msgid "Select one or more packages"
+msgstr "请选择一个或多个软件包"
+
+msgid "Package(s)"
+msgstr "软件包"
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr ""
+
+msgid "Remove Packages"
+msgstr "移除软件包"
+
+msgid "Remove the selected AUR packages?"
+msgstr "移除所选 AUR 软件包？"
+
+msgid "Build from AUR"
+msgstr "从 AUR 构建"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr "构建并安装所选软件包？这可能需要一段时间。"
+
+msgid "Build"
+msgstr "构建"
+
+msgid "Installing AUR packages"
+msgstr "正在安装 AUR 软件包"
+
+msgid "Removing AUR packages"
+msgstr "正在移除 AUR 软件包"
+
 msgid "Maintainer"
 msgstr "维护者"
 
@@ -1007,53 +1084,8 @@ msgstr "分类"
 msgid "The AUR has no browsable index — type a package name to begin."
 msgstr "AUR 没有可浏览的索引 — 请输入软件包名称开始搜索。"
 
-msgid "No packages found"
-msgstr "未找到软件包"
-
-msgid "Try a shorter or more general keyword."
-msgstr "请尝试更短或更通用的关键词。"
-
 msgid "Could not search the configured AUR service."
 msgstr ""
-
-msgid "Check your connection and try again."
-msgstr "请检查网络连接后重试。"
-
-msgid "Flagged out of date"
-msgstr "标记为过期"
-
-msgid "Installed"
-msgstr "已安装"
-
-msgid "Remove Selected"
-msgstr "移除所选"
-
-msgid "Select one or more packages"
-msgstr "请选择一个或多个软件包"
-
-msgid "Package(s)"
-msgstr "软件包"
-
-msgid "Remove Packages"
-msgstr "移除软件包"
-
-msgid "Remove the selected AUR packages?"
-msgstr "移除所选 AUR 软件包？"
-
-msgid "Build from AUR"
-msgstr "从 AUR 构建"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr "构建并安装所选软件包？这可能需要一段时间。"
-
-msgid "Build"
-msgstr "构建"
-
-msgid "Installing AUR packages"
-msgstr "正在安装 AUR 软件包"
-
-msgid "Removing AUR packages"
-msgstr "正在移除 AUR 软件包"
 
 msgid "Choose a Flatpak file"
 msgstr "选择一个 Flatpak 文件"
@@ -1605,9 +1637,6 @@ msgstr "AUR 软件包更新"
 
 msgid "Update this package"
 msgstr "更新此软件包"
-
-msgid "of"
-msgstr ""
 
 msgid "updates included"
 msgstr ""

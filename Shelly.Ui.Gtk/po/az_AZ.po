@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-20 00:46-0300\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-09-09 12:00+0400\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: Azerbaijani <az@li.org>\n"
@@ -192,20 +192,28 @@ msgstr "Sinxronlaşdır"
 msgid "Remove"
 msgstr "Sil"
 
-msgid "Information"
-msgstr "Məlumat"
-
-msgid "Preview Pkgbuild"
-msgstr "PKGBUILD önbaxışını göstər"
-
 msgid "Search the AUR by name or keyword"
 msgstr "AUR anbarında ada və ya açar sözə görə axtarış aparın"
+
+#| msgid "Search..."
+msgid "Search By"
+msgstr ""
 
 msgid "Installed Only"
 msgstr "Yalnız quraşdırılanlar"
 
 msgid "Show only installed packages"
 msgstr "Yalnız quraşdırılmış paketləri göstər"
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
+msgstr ""
 
 msgid "Additional Options"
 msgstr "Əlavə seçimlər"
@@ -222,13 +230,11 @@ msgstr "Səslər"
 msgid "Popularity"
 msgstr "Populyarlıq"
 
-msgid "Search the AUR"
-msgstr "AUR anbarında axtarış apar"
-
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "Loading the AUR index"
 msgstr ""
-"AUR anbarında nəzərdən keçirilə bilən indeks yoxdur. Başlamaq üçün paket adı "
-"yazın."
+
+msgid "Powered by Atoll."
+msgstr ""
 
 msgid "Run checks"
 msgstr "Yoxlamaları işə sal"
@@ -241,6 +247,20 @@ msgstr "Təfərrüat panelini gizlət"
 
 msgid "Hide the detail pane on the right"
 msgstr "Sağdakı təfərrüat panelini gizlət"
+
+msgid "Information"
+msgstr "Məlumat"
+
+msgid "Preview Pkgbuild"
+msgstr "PKGBUILD önbaxışını göstər"
+
+msgid "Search the AUR"
+msgstr "AUR anbarında axtarış apar"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr ""
+"AUR anbarında nəzərdən keçirilə bilən indeks yoxdur. Başlamaq üçün paket adı "
+"yazın."
 
 msgid "Install a local Flatpak"
 msgstr "Yerli Flatpak quraşdır"
@@ -613,6 +633,9 @@ msgstr "Təsdiqsiz"
 
 msgid "Enable Shelly Search"
 msgstr "Shelly axtarışını aktivləşdir"
+
+msgid "Enable Atoll Powered AUR"
+msgstr ""
 
 msgid "AppImage Install Path"
 msgstr "AppImage quraşdırma yolu"
@@ -1022,6 +1045,61 @@ msgstr "Mühit dəyişiklikləriniz yadda saxlanılmayıb."
 msgid "Discard"
 msgstr "İmtina et"
 
+msgid "No packages found"
+msgstr "Paketlər tapılmadı"
+
+msgid "Try a shorter or more general keyword."
+msgstr "Daha qısa və ya daha ümumi açar sözlə cəhd edin."
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr "Şəbəkəyə qoşulmanızı yoxlayıb yenidən cəhd edin."
+
+msgid "Flagged out of date"
+msgstr "Köhnəlmiş kimi işarələnib"
+
+msgid "Installed"
+msgstr "Quraşdırılıb"
+
+msgid "Remove Selected"
+msgstr "Seçilənləri sil"
+
+msgid "Select one or more packages"
+msgstr "Bir və ya bir neçə paket seçin"
+
+msgid "Package(s)"
+msgstr "Paketlər"
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr "/"
+
+msgid "Remove Packages"
+msgstr "Paketləri sil"
+
+msgid "Remove the selected AUR packages?"
+msgstr "Seçilmiş AUR paketləri silinsin?"
+
+msgid "Build from AUR"
+msgstr "AUR mənbəyindən qur"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+"Seçilmiş paketlər qurulsun və quraşdırılsın? Bu, bir qədər vaxt apara bilər."
+
+msgid "Build"
+msgstr "Qur"
+
+msgid "Installing AUR packages"
+msgstr "AUR paketləri quraşdırılır"
+
+msgid "Removing AUR packages"
+msgstr "AUR paketləri silinir"
+
 msgid "Maintainer"
 msgstr "Baxıcı"
 
@@ -1054,54 +1132,8 @@ msgstr ""
 "AUR anbarında nəzərdən keçirilə bilən indeks yoxdur. Başlamaq üçün paket adı "
 "yazın."
 
-msgid "No packages found"
-msgstr "Paketlər tapılmadı"
-
-msgid "Try a shorter or more general keyword."
-msgstr "Daha qısa və ya daha ümumi açar sözlə cəhd edin."
-
 msgid "Could not search the configured AUR service."
 msgstr ""
-
-msgid "Check your connection and try again."
-msgstr "Şəbəkəyə qoşulmanızı yoxlayıb yenidən cəhd edin."
-
-msgid "Flagged out of date"
-msgstr "Köhnəlmiş kimi işarələnib"
-
-msgid "Installed"
-msgstr "Quraşdırılıb"
-
-msgid "Remove Selected"
-msgstr "Seçilənləri sil"
-
-msgid "Select one or more packages"
-msgstr "Bir və ya bir neçə paket seçin"
-
-msgid "Package(s)"
-msgstr "Paketlər"
-
-msgid "Remove Packages"
-msgstr "Paketləri sil"
-
-msgid "Remove the selected AUR packages?"
-msgstr "Seçilmiş AUR paketləri silinsin?"
-
-msgid "Build from AUR"
-msgstr "AUR mənbəyindən qur"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-"Seçilmiş paketlər qurulsun və quraşdırılsın? Bu, bir qədər vaxt apara bilər."
-
-msgid "Build"
-msgstr "Qur"
-
-msgid "Installing AUR packages"
-msgstr "AUR paketləri quraşdırılır"
-
-msgid "Removing AUR packages"
-msgstr "AUR paketləri silinir"
 
 msgid "Choose a Flatpak file"
 msgstr "Flatpak faylı seçin"
@@ -1659,9 +1691,6 @@ msgstr "AUR paketlərinin yenilənməsi"
 
 msgid "Update this package"
 msgstr "Bu paketi yenilə"
-
-msgid "of"
-msgstr "/"
 
 msgid "updates included"
 msgstr "yeniləmə daxildir"

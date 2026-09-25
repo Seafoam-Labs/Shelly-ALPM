@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-20 00:46-0300\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -182,20 +182,28 @@ msgstr "Συγχρονισμός"
 msgid "Remove"
 msgstr "Κατάργηση"
 
-msgid "Information"
-msgstr "Πληροφορίες"
-
-msgid "Preview Pkgbuild"
-msgstr "Προεπισκόπηση Pkgbuild"
-
 msgid "Search the AUR by name or keyword"
 msgstr "Αναζήτηση στο AUR κατά όνομα ή λέξη-κλειδί"
+
+#| msgid "Search..."
+msgid "Search By"
+msgstr ""
 
 msgid "Installed Only"
 msgstr "Μόνο εγκατεστημένα"
 
 msgid "Show only installed packages"
 msgstr "Εμφάνιση μόνο εγκατεστημένων πακέτων"
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
+msgstr ""
 
 msgid "Additional Options"
 msgstr "Πρόσθετες επιλογές"
@@ -212,10 +220,10 @@ msgstr "Ψήφοι"
 msgid "Popularity"
 msgstr "Δημοτικότητα"
 
-msgid "Search the AUR"
-msgstr "Αναζήτηση στο AUR"
+msgid "Loading the AUR index"
+msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "Powered by Atoll."
 msgstr ""
 
 msgid "Run checks"
@@ -229,6 +237,18 @@ msgstr "Απόκρυψη πίνακα λεπτομερειών"
 
 msgid "Hide the detail pane on the right"
 msgstr "Απόκρυψη πίνακα λεπτομερειών στα δεξιά"
+
+msgid "Information"
+msgstr "Πληροφορίες"
+
+msgid "Preview Pkgbuild"
+msgstr "Προεπισκόπηση Pkgbuild"
+
+msgid "Search the AUR"
+msgstr "Αναζήτηση στο AUR"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr ""
 
 msgid "Install a local Flatpak"
 msgstr "Εγκατάσταση τοπικού flatpak"
@@ -600,6 +620,9 @@ msgstr "Χωρίς επιβεβαίωση"
 
 msgid "Enable Shelly Search"
 msgstr "Ενεργοποίηση αναζήτησης Shelly"
+
+msgid "Enable Atoll Powered AUR"
+msgstr ""
 
 msgid "AppImage Install Path"
 msgstr "Διαδρομή εγκατάστασης AppImage"
@@ -1004,6 +1027,62 @@ msgstr ""
 msgid "Discard"
 msgstr ""
 
+msgid "No packages found"
+msgstr "Δεν βρέθηκαν πακέτα"
+
+msgid "Try a shorter or more general keyword."
+msgstr "Δοκιμάστε μια μικρότερη ή πιο γενική λέξη-κλειδί."
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr "Ελέγξτε τη σύνδεσή σας και δοκιμάστε ξανά."
+
+msgid "Flagged out of date"
+msgstr "Επισημάνθηκε ως παρωχημένο"
+
+msgid "Installed"
+msgstr "Εγκατεστημένο"
+
+msgid "Remove Selected"
+msgstr "Κατάργηση επιλεγμένων"
+
+msgid "Select one or more packages"
+msgstr "Επιλέξτε ένα ή περισσότερα πακέτα"
+
+msgid "Package(s)"
+msgstr "Πακέτο(α)"
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr "του"
+
+msgid "Remove Packages"
+msgstr "Κατάργηση Πακέτων"
+
+msgid "Remove the selected AUR packages?"
+msgstr "Αφαίρεση των επιλεγμένων πακέτων AUR;"
+
+msgid "Build from AUR"
+msgstr "Κατασκευή από το AUR"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+"Κατασκευή και εγκατάσταση των επιλεγμένων πακέτων; Αυτό μπορεί να διαρκέσει "
+"λίγο."
+
+msgid "Build"
+msgstr "Κατασκευή"
+
+msgid "Installing AUR packages"
+msgstr "Εγκατάσταση πακέτων AUR"
+
+msgid "Removing AUR packages"
+msgstr "Αφαίρεση πακέτων AUR"
+
 msgid "Maintainer"
 msgstr "Συντηρητής"
 
@@ -1036,55 +1115,8 @@ msgstr ""
 "Το AUR δεν διαθέτει ευρετήριο για περιήγηση — πληκτρολογήστε το όνομα ενός "
 "πακέτου για να ξεκινήσετε."
 
-msgid "No packages found"
-msgstr "Δεν βρέθηκαν πακέτα"
-
-msgid "Try a shorter or more general keyword."
-msgstr "Δοκιμάστε μια μικρότερη ή πιο γενική λέξη-κλειδί."
-
 msgid "Could not search the configured AUR service."
 msgstr ""
-
-msgid "Check your connection and try again."
-msgstr "Ελέγξτε τη σύνδεσή σας και δοκιμάστε ξανά."
-
-msgid "Flagged out of date"
-msgstr "Επισημάνθηκε ως παρωχημένο"
-
-msgid "Installed"
-msgstr "Εγκατεστημένο"
-
-msgid "Remove Selected"
-msgstr "Κατάργηση επιλεγμένων"
-
-msgid "Select one or more packages"
-msgstr "Επιλέξτε ένα ή περισσότερα πακέτα"
-
-msgid "Package(s)"
-msgstr "Πακέτο(α)"
-
-msgid "Remove Packages"
-msgstr "Κατάργηση Πακέτων"
-
-msgid "Remove the selected AUR packages?"
-msgstr "Αφαίρεση των επιλεγμένων πακέτων AUR;"
-
-msgid "Build from AUR"
-msgstr "Κατασκευή από το AUR"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-"Κατασκευή και εγκατάσταση των επιλεγμένων πακέτων; Αυτό μπορεί να διαρκέσει "
-"λίγο."
-
-msgid "Build"
-msgstr "Κατασκευή"
-
-msgid "Installing AUR packages"
-msgstr "Εγκατάσταση πακέτων AUR"
-
-msgid "Removing AUR packages"
-msgstr "Αφαίρεση πακέτων AUR"
 
 msgid "Choose a Flatpak file"
 msgstr "Επιλέξτε ένα αρχείο Flatpak"
@@ -1638,9 +1670,6 @@ msgstr "Ενημέρωση πακέτου AUR"
 
 msgid "Update this package"
 msgstr ""
-
-msgid "of"
-msgstr "του"
 
 msgid "updates included"
 msgstr "περιλαμβάνονται ενημερώσεις"

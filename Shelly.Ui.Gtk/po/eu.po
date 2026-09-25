@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-20 00:46-0300\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -188,20 +188,28 @@ msgstr "Sinkronizatu"
 msgid "Remove"
 msgstr "Kendu"
 
-msgid "Information"
-msgstr "Informazioa"
-
-msgid "Preview Pkgbuild"
-msgstr "Aurreikusi Pkgbuild"
-
 msgid "Search the AUR by name or keyword"
 msgstr "Bilatu AURen izenez edo gako-hitzez"
+
+#| msgid "Search..."
+msgid "Search By"
+msgstr ""
 
 msgid "Installed Only"
 msgstr "Instalatutakoak bakarrik"
 
 msgid "Show only installed packages"
 msgstr "Erakutsi instalatutako paketeak bakarrik"
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
+msgstr ""
 
 msgid "Additional Options"
 msgstr "Aukera gehigarriak"
@@ -218,10 +226,10 @@ msgstr "Botoak"
 msgid "Popularity"
 msgstr "Ospea"
 
-msgid "Search the AUR"
-msgstr "Bilatu AURen"
+msgid "Loading the AUR index"
+msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "Powered by Atoll."
 msgstr ""
 
 msgid "Run checks"
@@ -235,6 +243,18 @@ msgstr "Ezkutatu xehetasunen panela"
 
 msgid "Hide the detail pane on the right"
 msgstr "Ezkutatu eskuineko xehetasun-panela"
+
+msgid "Information"
+msgstr "Informazioa"
+
+msgid "Preview Pkgbuild"
+msgstr "Aurreikusi Pkgbuild"
+
+msgid "Search the AUR"
+msgstr "Bilatu AURen"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr ""
 
 msgid "Install a local Flatpak"
 msgstr "Instalatu tokiko Flatpak bat"
@@ -606,6 +626,9 @@ msgstr "Berrespenik gabe"
 
 msgid "Enable Shelly Search"
 msgstr "Gaitu Shelly bilaketa"
+
+msgid "Enable Atoll Powered AUR"
+msgstr ""
 
 msgid "AppImage Install Path"
 msgstr "AppImage-ren instalazio-bidea"
@@ -1010,6 +1033,62 @@ msgstr ""
 msgid "Discard"
 msgstr ""
 
+msgid "No packages found"
+msgstr "Ez da paketerik aurkitu"
+
+msgid "Try a shorter or more general keyword."
+msgstr "Saiatu gako-hitz laburrago edo orokorrago batekin."
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr "Egiaztatu zure konexioa eta saiatu berriro."
+
+msgid "Flagged out of date"
+msgstr "Eguneratu gabe gisa markatuta"
+
+msgid "Installed"
+msgstr "Instalatuta"
+
+msgid "Remove Selected"
+msgstr "Kendu hautatutakoak"
+
+msgid "Select one or more packages"
+msgstr "Hautatu pakete bat edo gehiago"
+
+msgid "Package(s)"
+msgstr "Paketea(k)"
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr "itzat"
+
+msgid "Remove Packages"
+msgstr "Kendu paketeak"
+
+msgid "Remove the selected AUR packages?"
+msgstr "Kendu hautatutako AUR paketeak?"
+
+msgid "Build from AUR"
+msgstr "Eraiki AURtik"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+"Eraiki eta instalatu hautatutako paketeak? Honek denbora pixka bat har "
+"dezake."
+
+msgid "Build"
+msgstr "Eraiki"
+
+msgid "Installing AUR packages"
+msgstr "AUR paketeak instalatzen"
+
+msgid "Removing AUR packages"
+msgstr "AUR paketeak kentzen"
+
 msgid "Maintainer"
 msgstr "Mantenitzailea"
 
@@ -1042,55 +1121,8 @@ msgstr ""
 "AURek ez du arakatu daitekeen indexaziorik — idatzi pakete baten izena "
 "hasteko."
 
-msgid "No packages found"
-msgstr "Ez da paketerik aurkitu"
-
-msgid "Try a shorter or more general keyword."
-msgstr "Saiatu gako-hitz laburrago edo orokorrago batekin."
-
 msgid "Could not search the configured AUR service."
 msgstr ""
-
-msgid "Check your connection and try again."
-msgstr "Egiaztatu zure konexioa eta saiatu berriro."
-
-msgid "Flagged out of date"
-msgstr "Eguneratu gabe gisa markatuta"
-
-msgid "Installed"
-msgstr "Instalatuta"
-
-msgid "Remove Selected"
-msgstr "Kendu hautatutakoak"
-
-msgid "Select one or more packages"
-msgstr "Hautatu pakete bat edo gehiago"
-
-msgid "Package(s)"
-msgstr "Paketea(k)"
-
-msgid "Remove Packages"
-msgstr "Kendu paketeak"
-
-msgid "Remove the selected AUR packages?"
-msgstr "Kendu hautatutako AUR paketeak?"
-
-msgid "Build from AUR"
-msgstr "Eraiki AURtik"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-"Eraiki eta instalatu hautatutako paketeak? Honek denbora pixka bat har "
-"dezake."
-
-msgid "Build"
-msgstr "Eraiki"
-
-msgid "Installing AUR packages"
-msgstr "AUR paketeak instalatzen"
-
-msgid "Removing AUR packages"
-msgstr "AUR paketeak kentzen"
 
 msgid "Choose a Flatpak file"
 msgstr "Hautatu Flatpak fitxategi bat"
@@ -1644,9 +1676,6 @@ msgstr "AUR paketeen eguneraketa"
 
 msgid "Update this package"
 msgstr "Eguneratu pakete hau"
-
-msgid "of"
-msgstr "itzat"
 
 msgid "updates included"
 msgstr "eguneraketa barne"
