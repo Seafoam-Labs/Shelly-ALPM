@@ -2,6 +2,8 @@
 
 Re-evaluated on 2026-09-23 against repository commit `d880f9e1`, including the
 completed [version compatibility work](../Shelly.Rlpm/version-compatibility.md).
+Version-test layout updated on 2026-09-24: fixed expected-result tests now live
+directly in `Version.zig`, without a libalpm-linked test target.
 
 RLPM currently provides package metadata types, version comparison, a local
 database reader, package/group indexes, and detached database signature checking.
@@ -14,7 +16,7 @@ This review covers the code in `Shelly.Rlpm`, using the installed `alpm.h` and t
 surface. The referenced Arch manuals describe pacman 7.1. This is a source-level
 gap analysis, not a claim that all existing behavior has been proven compatible.
 Targeted relation comparisons use the installed CachyOS libalpm 16.0.1, with
-[recorded provenance](../Shelly.Rlpm/src/structs/fixtures/README.md).
+[recorded provenance](../Shelly.Rlpm/version-compatibility.md#expected-result-provenance).
 
 The assessment is functional parity for a Zig backend. Matching every C symbol,
 ABI, or private data structure is a separate goal. A working version comparator
@@ -23,8 +25,8 @@ does not imply parity in dependency parsing, metadata ingestion, or transactions
 ## What changed in this re-evaluation
 
 - **Version comparison is implemented within its declared scope.** String epochs,
-  permissive raw comparison, separate structural validation, and differential tests
-  are present. Do not keep the old `u64` epoch limit or missing raw comparator on
+  permissive raw comparison, separate structural validation, and fixed expected-result
+  tests are present. Do not keep the old `u64` epoch limit or missing raw comparator on
   the implementation backlog.
 - **The handle is still a compile blocker.** A compile-only probe invoking
   `Owner.init` fails at its three-argument `Database.init` call.
@@ -45,7 +47,7 @@ unchanged to RLPM: RLPM now has implementations of those building blocks.
 
 | Area | RLPM status | Evidence |
 | --- | --- | --- |
-| Version parsing and comparison | Implemented with string epochs, separate validation/raw comparison, and frozen/differential coverage | [Version.zig](../Shelly.Rlpm/src/structs/Version.zig): `init`, `validate`, `compareVersions`, `compareStrings` |
+| Version parsing and comparison | Implemented with string epochs, separate validation/raw comparison, and inline expected-result tests | [Version.zig](../Shelly.Rlpm/src/structs/Version.zig): `init`, `validate`, `compareVersions`, `compareStrings` |
 | Package metadata and relations | Substantial model; incomplete for archive and transaction use | [Package.zig](../Shelly.Rlpm/src/structs/Package.zig), [PackageRelation.zig](../Shelly.Rlpm/src/structs/PackageRelation.zig) |
 | Local database descriptions | Implemented, including relation conversion and group indexing | [Database.zig](../Shelly.Rlpm/src/structs/Database.zig): `loadDatabase`, `parseDescription`; [ParsedDescription.zig](../Shelly.Rlpm/src/structs/ParsedDescription.zig): `intoPackage` |
 | Sync database archives | Test-only parsing path; no production loader | `Database.zig`: sync integration test and `parseSyncTarDescriptions` |
@@ -248,10 +250,13 @@ not automatically against the provider package's version.
 ### Remaining version-specific scope
 
 There is no newly demonstrated raw comparison mismatch within the declared
-ASCII, NUL-free domain. The completed tests cover 54 frozen cases, 2,916
-cross-corpus pairs, and 20,000 generated pairs. Remaining work is broader evidence
-against a verified pristine upstream oracle and any deliberately expanded input
-or C API contract. Non-ASCII, embedded NUL, and nullable C pointers are explicitly
+ASCII, NUL-free domain. Tests in `Version.zig` cover 54 fixed expected-result
+cases plus the original 13 valid-version examples, without linking libalpm.
+Before the live differential runner was removed, it also passed 2,916 cross-corpus
+pairs and 20,000 generated pairs. Those generated comparisons are historical
+evidence, not part of the current test suite. Remaining work is broader verified
+upstream expected-result coverage and any deliberately expanded input or C API
+contract. Non-ASCII, embedded NUL, and nullable C pointers are explicitly
 outside the current contract. Those limitations do not justify rewriting the
 working comparator. See [version compatibility](../Shelly.Rlpm/version-compatibility.md).
 
@@ -318,8 +323,8 @@ builds, and `.SRCINFO` resolution are Shelly features outside libalpm itself.
 
 The remaining verification work is:
 
-- Extend the existing version differential coverage to a verified pristine
-  upstream oracle, and add relation/satisfier comparisons including malformed inputs.
+- Extend the inline version tests with verified upstream expected results, and
+  add relation/satisfier cases including malformed inputs, without linking libalpm.
 - Add hermetic local/sync/archive fixtures covering metadata preservation,
   compression, corrupt data, trust policies, and retry/cleanup paths.
 - Exercise `Owner.init` and the exported API so unused unfinished code cannot
