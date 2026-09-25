@@ -45,6 +45,11 @@ groups: []const []const u8 = &.{},
 licenses: []const []const u8 = &.{},
 xdata: []const XData = &.{},
 
+pub fn initializePackage(path: []const u8) !Package {
+    _ = path;
+    return .{};
+}
+
 test "Package stores version, database, and package relations" {
     var version = try Version.init("0:1.27.0-2", std.testing.allocator);
     defer version.deinit(std.testing.allocator);
