@@ -849,16 +849,16 @@ pub const Configuration = struct {
                 const key = std.mem.trim(u8, if (eq) |i| line[0..i] else line, " \t\r\n");
                 const value = std.mem.trim(u8, if (eq) |i| line[i + 1 ..] else "", " \t\r\n");
 
-                if (std.mem.eql(u8, self.section, "options")) {
-                    if (equalIgnoreCase(key, "include")) {
-                        try self.parse_file(value);
-                    } else {
-                        try self.parse_option(key, value);
-                    }
+                // Includes inherit the current section, and any section header
+                // they contain remains active when parsing the parent resumes.
+                if (equalIgnoreCase(key, "include")) {
+                    try self.parse_file(value);
+                } else if (std.mem.eql(u8, self.section, "options")) {
+                    try self.parse_option(key, value);
                 } else if (self.current_repository != null) {
                     try self.parse_repository_option(key, value);
                 }
-                // A key before any section header is ignored.
+                // Other keys before any section header are ignored.
             }
         }
 
@@ -930,31 +930,6 @@ pub const Configuration = struct {
                 repo.sig_level = parse_signature_level(value);
             } else if (equalIgnoreCase(key, "usage")) {
                 repo.usage = parse_usage(value);
-            } else if (equalIgnoreCase(key, "include")) {
-                try self.parse_repository_include(value, repo);
-            }
-        }
-
-        fn parse_repository_include(self: *Parser, path: []const u8, repo: *Repository) Allocator.Error!void {
-            const bytes = read_whole_file(self.io, self.scratch_allocator, path) catch return;
-            defer self.scratch_allocator.free(bytes);
-
-            var lines = std.mem.splitScalar(u8, bytes, '\n');
-            while (lines.next()) |raw| {
-                const line = std.mem.trim(u8, raw, " \t\r\n");
-                if (line.len == 0 or line[0] == '#') continue;
-
-                const eq = std.mem.indexOfScalar(u8, line, '=') orelse continue;
-                const k = std.mem.trim(u8, line[0..eq], " \t\r\n");
-                const v = std.mem.trim(u8, line[eq + 1 ..], " \t\r\n");
-
-                if (equalIgnoreCase(k, "server")) {
-                    try repo.servers.append(self.arena_allocater, try self.dupe(v));
-                } else if (equalIgnoreCase(k, "siglevel")) {
-                    repo.sig_level = parse_signature_level(v);
-                } else if (equalIgnoreCase(k, "usage")) {
-                    repo.usage = parse_usage(v);
-                }
             }
         }
 
@@ -1051,6 +1026,122 @@ test "parses repositories, servers, siglevel and usage" {
     try testing.expectEqualStrings("extra", found.name);
     try testing.expectEqual(@as(usize, 2), found.servers.items.len);
     try testing.expect(Configuration.find_repository(&conf, "missing") == null);
+}
+
+test "configuration includes keep repository servers and policies separate (issue 1960)" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const root = try tmp.dir.realPathFileAlloc(testing.io, ".", testing.allocator);
+    defer testing.allocator.free(root);
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "mirrorlist", .data = "Server = https://arch.example/$repo/os/$arch\n" });
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "openai.conf", .data = "[openai-chatgpt]\n" ++
+        "SigLevel = Required DatabaseRequired TrustedOnly\n" ++
+        "Usage = Sync Search\n" ++
+        "Server = https://persistent.oaistatic.com/codex-app-prod/linux/arch/$arch\n" });
+    const text = try std.fmt.allocPrint(
+        testing.allocator,
+        "[options]\nSigLevel = Required DatabaseOptional\n" ++
+            "[multilib]\nSigLevel = Optional\nUsage = All\n" ++
+            "Include = {s}/mirrorlist\nInclude = {s}/openai.conf\n" ++
+            "Server = https://backup.example/$repo/$arch\n",
+        .{ root, root },
+    );
+    defer testing.allocator.free(text);
+    var config = try Configuration.parse_string(testing.allocator, testing.io, text);
+    defer config.deinitialize();
+
+    try testing.expectEqual(@as(usize, 2), config.repositories.items.len);
+    const multilib = config.repositories.items[0];
+    try testing.expectEqualStrings("multilib", multilib.name);
+    try testing.expectEqual(@as(usize, 1), multilib.servers.items.len);
+    try testing.expectEqualStrings("https://arch.example/$repo/os/$arch", multilib.servers.items[0]);
+    try testing.expectEqual(Configuration.parse_signature_level("Optional"), multilib.sig_level);
+    try testing.expectEqual(usageBit(.all), multilib.usage);
+    const openai = config.repositories.items[1];
+    try testing.expectEqualStrings("openai-chatgpt", openai.name);
+    try testing.expectEqual(@as(usize, 2), openai.servers.items.len);
+    try testing.expectEqualStrings("https://persistent.oaistatic.com/codex-app-prod/linux/arch/$arch", openai.servers.items[0]);
+    try testing.expectEqualStrings("https://backup.example/$repo/$arch", openai.servers.items[1]);
+    try testing.expectEqual(Configuration.parse_signature_level("Required DatabaseRequired TrustedOnly"), openai.sig_level);
+    try testing.expectEqual(usageBit(.sync) | usageBit(.search), openai.usage);
+    try testing.expectEqual(Configuration.parse_signature_level("Required DatabaseOptional"), config.signature_level);
+}
+
+test "configuration includes support nested mirror lists and section changes" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const root = try tmp.dir.realPathFileAlloc(testing.io, ".", testing.allocator);
+    defer testing.allocator.free(root);
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "mirrors", .data = "Server = https://first.example/$repo\nServer = https://second.example/$repo\n" });
+    const included = try std.fmt.allocPrint(
+        testing.allocator,
+        "Include = {s}/mirrors\n[extra]\nServer = https://extra.example\n" ++
+            "[options]\nCheckSpace\n",
+        .{root},
+    );
+    defer testing.allocator.free(included);
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "nested.conf", .data = included });
+    const text = try std.fmt.allocPrint(
+        testing.allocator,
+        "[core]\nInclude = {s}/nested.conf\nArchitecture = x86_64\n" ++
+            "[multilib]\nInclude = {s}/mirrors\nServer = https://third.example/$repo\n",
+        .{ root, root },
+    );
+    defer testing.allocator.free(text);
+    var config = try Configuration.parse_string(testing.allocator, testing.io, text);
+    defer config.deinitialize();
+
+    try testing.expect(config.check_space);
+    try testing.expectEqualStrings("x86_64", config.architecture);
+    try testing.expectEqual(@as(usize, 3), config.repositories.items.len);
+    const core = config.repositories.items[0];
+    try testing.expectEqualStrings("core", core.name);
+    try testing.expectEqual(@as(usize, 2), core.servers.items.len);
+    try testing.expectEqualStrings("https://first.example/$repo", core.servers.items[0]);
+    try testing.expectEqualStrings("https://second.example/$repo", core.servers.items[1]);
+    const extra = config.repositories.items[1];
+    try testing.expectEqualStrings("extra", extra.name);
+    try testing.expectEqual(@as(usize, 1), extra.servers.items.len);
+    try testing.expectEqualStrings("https://extra.example", extra.servers.items[0]);
+    const multilib = config.repositories.items[2];
+    try testing.expectEqualStrings("multilib", multilib.name);
+    try testing.expectEqual(@as(usize, 3), multilib.servers.items.len);
+    try testing.expectEqualStrings(core.servers.items[0], multilib.servers.items[0]);
+    try testing.expectEqualStrings(core.servers.items[1], multilib.servers.items[1]);
+    try testing.expectEqualStrings("https://third.example/$repo", multilib.servers.items[2]);
+}
+
+test "configuration includes work before sections and within options" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const root = try tmp.dir.realPathFileAlloc(testing.io, ".", testing.allocator);
+    defer testing.allocator.free(root);
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "repo.conf", .data = "[core]\nServer = https://core.example\n" });
+    for ([_][]const u8{ "", "[options]\n" }) |prefix| {
+        const text = try std.fmt.allocPrint(testing.allocator, "{s}Include = {s}/repo.conf\n", .{ prefix, root });
+        defer testing.allocator.free(text);
+        var config = try Configuration.parse_string(testing.allocator, testing.io, text);
+        defer config.deinitialize();
+        try testing.expectEqual(@as(usize, 1), config.repositories.items.len);
+        try testing.expectEqualStrings("core", config.repositories.items[0].name);
+        try testing.expectEqualStrings("https://core.example", config.repositories.items[0].servers.items[0]);
+    }
+}
+
+test "configuration includes bound repository include cycles" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const root = try tmp.dir.realPathFileAlloc(testing.io, ".", testing.allocator);
+    defer testing.allocator.free(root);
+    const included = try std.fmt.allocPrint(testing.allocator, "Server = https://mirror.example\nInclude = {s}/cycle.conf\n", .{root});
+    defer testing.allocator.free(included);
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "cycle.conf", .data = included });
+    const text = try std.fmt.allocPrint(testing.allocator, "[core]\nInclude = {s}/cycle.conf\n", .{root});
+    defer testing.allocator.free(text);
+    var config = try Configuration.parse_string(testing.allocator, testing.io, text);
+    defer config.deinitialize();
+    try testing.expectEqual(@as(usize, 1), config.repositories.items.len);
+    try testing.expectEqual(@as(usize, max_include_depth), config.repositories.items[0].servers.items.len);
 }
 
 test "HoldPkg is replaced and shelly is injected" {

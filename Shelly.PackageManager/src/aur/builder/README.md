@@ -23,7 +23,7 @@ PackageBuilder.runWithOperation (builder.zig)
      b. validate package-function shape      (builder.zig)
      c. acquire + verify + extract sources   (sources.zig)
      d. run prepare/pkgver/build/check steps (steps.zig)
-     e. per package: run package() step,
+     e. per package: run package() if present,
         assemble + sign the archive          (package_file.zig)
 ```
 
@@ -34,6 +34,12 @@ stages are delegated to sibling modules and passed the builder as
 operation/log. `writeSrcinfoWithOperation` shares the reviewed sandboxed
 metadata-evaluation stage, then serializes SRCINFO through `aur/srcinfo.zig`
 without acquiring sources or invoking lifecycle functions.
+
+Single-package PKGBUILDs without lifecycle functions are valid metapackages.
+They still undergo reviewed, sandboxed metadata evaluation and produce an
+archive containing package metadata and dependencies with an empty payload.
+As with makepkg, a `build()` function requires a package function, and split
+packages require a package function for every member.
 
 Each metadata evaluation sources the base PKGBUILD in a fresh Bash environment
 with the configured build flags and makepkg directory/architecture context.
@@ -50,6 +56,7 @@ final review and the subsequent build consistent across repeated evaluations.
 | `source_spec.zig` | **Pure source-entry parsing.** `ParsedSource.parse` classifies `source=()` entries (local/http/git), handles `name::url` renames, `#branch=/tag=/commit=` fragments and `?signed` queries; detached-signature pairing (`findDetachedPayload`); archive-name and symlink-target safety checks. No IO, no builder state — fully unit-tested in-file. |
 | `checksums.zig` | **Checksum tables.** Maps the seven PKGBUILD sum arrays (`sha512sums` … `b2sums`) into `checksumSets`, enforces count/SKIP rules, and verifies file hashes (`verifyFileHash`). Pinned Git tags and commits are verified against deterministic archives, matching makepkg. |
 | `virtual_ownership.zig` | **Virtual package ownership.** Parses the bounded package-step ownership journal, resolves numeric and named UID/GID specifications, tracks ownership by inode across renames and hard links, and converts surviving objects into the shared archive/MTREE metadata view without changing host ownership. |
+| `package_permissions.zig` | **Restricted staging directories.** Temporarily grants owner access before package assembly, records original modes for archive/MTREE generation, and restores modes through pinned descriptors on success, failure, or cancellation. Recovers restricted package trees during retry and cleanup without following symlinks or changing directories owned by another user. |
 | `metadata.zig` | **Metadata + option helpers.** makepkg option merging (`effectivePackageOptions`, `!option` semantics), `pkgver` validation, ownership-safe replacement of optional strings/arrays, and application of runtime-captured package metadata onto the parsed PKGBUILD (`applyPackageMetadata`). |
 | `security.zig` | **Privilege guards.** Non-root effective-UID policy, `prctl(NO_NEW_PRIVS)` process lockdown (`setNoNewPrivs` is shared with the sandbox wrapper), randomized unique work directories, and `narrowBuilderError` (anyerror → `BuilderErrors`). |
 | `sandbox.zig` | **Landlock step confinement.** Raw Landlock syscalls (ruleset create/add-rule/restrict-self), the ABI probe, the base and per-build allow-list, the `__sandbox-exec` wrapper protocol (`parseWrapperArguments`/`buildWrappedCommand`), and their unit tests. Steps re-execute through the CLI wrapper so only the untrusted bash children are confined. |

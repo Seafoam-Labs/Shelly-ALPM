@@ -38,6 +38,8 @@ const pathIsInside = review_integrity.pathIsInside;
 const reviewDigest = review_integrity.reviewDigest;
 
 pub const InitOptions = struct {
+    /// Skip equal-version target builds and archive reinstalls during installation.
+    needed: bool = false,
     config_path: ?[]const u8 = null,
     root: bool = false,
     use_temp_path: bool = false,
@@ -195,7 +197,13 @@ pub fn collectVersionUpdates(
     for (aur_packages) |package| {
         for (installed) |local| {
             if (!std.mem.eql(u8, package.name, local.name)) continue;
-            if (!(try version.isNewer(allocator, package.version, local.version))) break;
+            const remote_version = try allocator.dupeZ(u8, package.version);
+            defer allocator.free(remote_version);
+            const local_version = try allocator.dupeZ(u8, local.version);
+            defer allocator.free(local_version);
+            // Match pacman, including versions with an empty epoch emitted by
+            // older native builders, so equal versions do not trigger rebuilds.
+            if (AlpmManager.compare_package_versions(remote_version, local_version) <= 0) break;
             try updates.append(allocator, try models.Update.init(
                 allocator,
                 package.name,
@@ -232,6 +240,7 @@ pub const Manager = struct {
     vcs_store_path: []u8,
     chroot_path: []u8,
     use_chroot: bool,
+    needed: bool = false,
     no_check: bool,
     sign: bool,
     sign_key: ?[]const u8,
@@ -315,6 +324,7 @@ pub const Manager = struct {
             .vcs_store_path = vcs_store_path,
             .chroot_path = chroot_path,
             .use_chroot = options.use_chroot,
+            .needed = options.needed,
             .no_check = !(options.check orelse if (options.use_chroot or options.makepkg_command != null)
                 false
             else
@@ -1042,7 +1052,7 @@ pub const Manager = struct {
         // Approve every requested PKGBUILD before sourcing any of them. Their
         // evaluated dependency trees are then fully reviewed before package
         // installation or build execution begins.
-        try self.reviewInstallPlans(&plans);
+        try self.reviewInstallPlans(&plans, &failures);
         if (plans.items.len > 0) try self.confirmInstallPlans(plans.items);
 
         for (plans.items, 0..) |*plan, index| {
@@ -1112,7 +1122,7 @@ pub const Manager = struct {
             self.raisePackageProgress(.aur_install_start, package_name, current, plans.items.len, "");
             const install_paths = try artifactPaths(self.allocator, artifacts);
             defer self.allocator.free(install_paths);
-            try self.alpm.install_local_packages(install_paths, .{});
+            try self.alpm.install_local_packages(install_paths, .{ .needed = self.needed });
             self.raisePackageProgress(.aur_install_done, package_name, current, plans.items.len, "");
             for (requested_names) |requested_name|
                 self.updateVcsStoreForPackage(requested_name, prepared.pkgbuild_path) catch |err|
@@ -1131,7 +1141,7 @@ pub const Manager = struct {
         return .{ .failures = try failures.toOwnedSlice(self.allocator) };
     }
 
-    fn reviewInstallPlans(self: *Self, plans: *std.ArrayList(PreparedInstall)) !void {
+    fn reviewInstallPlans(self: *Self, plans: *std.ArrayList(PreparedInstall), failures: *std.ArrayList(PackageFailure)) !void {
         var index: usize = 0;
         while (index < plans.items.len) {
             const plan = &plans.items[index];
@@ -1146,14 +1156,30 @@ pub const Manager = struct {
         index = 0;
         while (index < plans.items.len) {
             const plan = &plans.items[index];
-            self.preparePlanDependencies(plan) catch |err| {
-                try self.skipDeclinedPlan(plan, err);
+            self.prepareReviewedPlan(plan) catch |err| {
+                try self.checkCancelled();
+                if (err == error.PkgbuildReviewDeclined) {
+                    try self.skipDeclinedPlan(plan, err);
+                } else {
+                    for (plan.requested_names.items) |name|
+                        try self.recordPreparationFailure(failures, name, err);
+                }
                 var removed = plans.orderedRemove(index);
                 removed.deinit(self.allocator);
                 continue;
             };
+            if (plan.requested_names.items.len == 0) {
+                var removed = plans.orderedRemove(index);
+                removed.deinit(self.allocator);
+                continue;
+            }
             index += 1;
         }
+    }
+
+    fn prepareReviewedPlan(self: *Self, plan: *PreparedInstall) !void {
+        try self.filterNeededTargets(plan);
+        if (plan.requested_names.items.len > 0) try self.preparePlanDependencies(plan);
     }
 
     fn preparePlanDependencies(self: *Self, plan: *PreparedInstall) !void {
@@ -1178,6 +1204,44 @@ pub const Manager = struct {
             dependencyOptionalValues(&plan.prepared),
         );
         try self.checkCancelled();
+    }
+
+    fn filterNeededTargets(self: *Self, plan: *PreparedInstall) !void {
+        if (!self.needed or !canSkipNeededBuild(&plan.prepared)) return;
+        const generated = try self.generateReviewedSrcinfo(&plan.prepared);
+        defer self.allocator.free(generated);
+        var index: usize = 0;
+        while (index < plan.requested_names.items.len) {
+            const name = plan.requested_names.items[index];
+            if (!isVcsPackage(name) and try self.skipCurrentTarget(name, generated)) {
+                self.allocator.free(plan.requested_names.orderedRemove(index));
+            } else index += 1;
+        }
+        // Reuse the evaluated metadata, selecting only members still requested.
+        if (plan.requested_names.items.len > 0) {
+            plan.prepared.dependency_metadata = try srcinfo.parseDependencyMetadata(
+                self.allocator,
+                self.io(),
+                generated,
+                plan.requested_names.items,
+                self.shellybuild_config.build.carch,
+            );
+        }
+    }
+
+    fn skipCurrentTarget(self: *Self, name: []const u8, generated: []const u8) !bool {
+        try self.checkCancelled();
+        const candidate = try srcinfo.packageVersion(self.allocator, generated, name) orelse return false;
+        defer self.allocator.free(candidate);
+        const terminated_name = try self.allocator.dupeZ(u8, name);
+        defer self.allocator.free(terminated_name);
+        const installed = try self.alpm.get_single_installed_package(terminated_name) orelse return false;
+        const installed_version = installed.version() orelse return false;
+        if (AlpmManager.compare_package_versions(installed_version, candidate) != 0) return false;
+        const message = try std.fmt.allocPrint(self.allocator, "Skipped {s}: {s} is already installed (--needed).", .{ name, candidate });
+        defer self.allocator.free(message);
+        self.raiseInfo(.informational_output, name, message, null, null);
+        return true;
     }
 
     fn skipDeclinedPlan(self: *Self, plan: *const PreparedInstall, err: anyerror) !void {
@@ -1391,8 +1455,14 @@ pub const Manager = struct {
         var prepared = try self.prepareRequiredPackageForBuild(package_name, commit);
         defer prepared.deinit(self.allocator);
         self.raisePackageProgress(.aur_download_done, package_name, 1, 1, "");
-        try self.alpm.sync(false);
+        if (!self.needed) try self.alpm.sync(false);
         try self.requirePkgbuildApproval(&prepared);
+        if (self.needed and canSkipNeededBuild(&prepared)) {
+            const generated = try self.generateReviewedSrcinfo(&prepared);
+            defer self.allocator.free(generated);
+            if (try self.skipCurrentTarget(package_name, generated)) return;
+        }
+        if (self.needed) try self.alpm.sync(false);
         try self.resolvePreparedDependencies(&prepared, &.{package_name});
         var dependency_info = dependencyPlanningInfo(&prepared);
         const build_only = try dependency_resolver.collectBuildOnlyDependencies(self.allocator, &dependency_info, self.no_check, self.dependencyBackend());
@@ -1426,7 +1496,7 @@ pub const Manager = struct {
         self.raisePackageProgress(.aur_install_start, package_name, 1, 1, "");
         const install_paths = try artifactPaths(self.allocator, artifacts);
         defer self.allocator.free(install_paths);
-        try self.alpm.install_local_packages(install_paths, .{});
+        try self.alpm.install_local_packages(install_paths, .{ .needed = self.needed });
         self.raisePackageProgress(.aur_install_done, package_name, 1, 1, "");
         self.removeBuildOnlyDependencies(package_name, @ptrCast(build_only), 1, 1);
         self.raisePackageProgress(.aur_package_completed, package_name, 1, 1, "");
@@ -1545,7 +1615,7 @@ pub const Manager = struct {
         self.raisePackageProgress(.aur_install_start, dependency.package_name, 1, 1, "Installing AUR dependency");
         const install_paths = try artifactPaths(self.allocator, artifacts);
         defer self.allocator.free(install_paths);
-        try self.alpm.install_local_packages(install_paths, .{ .alldeps = true });
+        try self.alpm.install_local_packages(install_paths, .{ .alldeps = true, .needed = self.needed });
         self.raisePackageProgress(.aur_install_done, dependency.package_name, 1, 1, "");
         self.raisePackageProgress(.aur_package_completed, dependency.package_name, 1, 1, "");
     }
@@ -2288,7 +2358,29 @@ pub const Manager = struct {
             120,
         );
         defer result.deinit(self.allocator);
-        if (result.exit_code != 0) return error.BuildFailed;
+        return self.readSrcinfoCommandResult(prepared.package_name, &result);
+    }
+
+    fn readSrcinfoCommandResult(self: *Self, package_name: []const u8, result: *const builder.ProcessResult) ![]u8 {
+        if (result.exit_code != 0) {
+            const message = try std.fmt.allocPrint(
+                self.allocator,
+                "Could not generate .SRCINFO for {f} (exit code {d}).\n{s}{f}",
+                .{
+                    @import("diagnostics").safe(package_name),
+                    result.exit_code,
+                    if (result.stderr.len > 16 * 1024) "[earlier output omitted]\n" else "",
+                    @import("diagnostics").safe(result.stderr[result.stderr.len - @min(result.stderr.len, 16 * 1024) ..]),
+                },
+            );
+            defer self.allocator.free(message);
+            if (self.dispatcher.operation) |operation| {
+                operation.reportError(error.BuildFailed, message, "metadata", result.exit_code, false);
+            } else {
+                self.dispatcher.raiseError(.{ .message = message });
+            }
+            return error.BuildFailed;
+        }
         return self.allocator.dupe(u8, result.stdout);
     }
 
@@ -3504,6 +3596,24 @@ fn parseAurGitRemote(allocator: std.mem.Allocator, base: []const u8, remote: []c
     return @as(?[]u8, try allocator.dupe(u8, remainder));
 }
 
+fn canSkipNeededBuild(prepared: *const PreparedPackage) bool {
+    // pkgver() runs after source preparation. Neither RPC nor generated
+    // SRCINFO can establish its eventual version before that work occurs.
+    if (isVcsPackage(prepared.package_name) or prepared.info.dynamic_assignments.len > 0 or
+        prepared.info.dynamic_source_assignments.len > 0) return false;
+    if (prepared.info.execution) |execution| {
+        for (execution.steps) |step| if (std.mem.eql(u8, step.name, "pkgver")) return false;
+    }
+    for (prepared.info.source orelse &.{}) |raw_source| {
+        const source = if (std.mem.indexOf(u8, raw_source, "::")) |separator| raw_source[separator + 2 ..] else raw_source;
+        for ([_][]const u8{ "git", "svn", "hg", "bzr", "darcs", "cvs" }) |protocol| {
+            if (std.mem.startsWith(u8, source, protocol) and source.len > protocol.len and
+                (source[protocol.len] == '+' or source[protocol.len] == ':')) return false;
+        }
+    }
+    return true;
+}
+
 fn isVcsPackage(package_name: []const u8) bool {
     for ([_][]const u8{ "-git", "-svn", "-hg", "-bzr", "-darcs", "-cvs" }) |suffix|
         if (endsWithIgnoreCase(package_name, suffix)) return true;
@@ -4353,6 +4463,35 @@ test "AUR update projection compares remote and installed versions" {
     try std.testing.expectEqualStrings("2.0-1", updates[0].new_version);
 }
 
+test "AUR update projection compares remote and installed versions using libalpm epoch semantics" {
+    const allocator = std.testing.allocator;
+    const payload =
+        \\{"version":5,"type":"info","resultcount":1,"results":[
+        \\{"Name":"epoch-fixture","PackageBase":"epoch-fixture","Version":"4.1.13.9-1"}
+        \\]}
+    ;
+    var response = try models.Response.parse(allocator, payload);
+    defer response.deinit(allocator);
+    const cases = [_]struct { installed: []const u8, needs_update: bool }{
+        .{ .installed = ":4.1.13.9-1", .needs_update = false },
+        .{ .installed = "0:4.1.13.9-1", .needs_update = false },
+        .{ .installed = ":4.1.13.9-2", .needs_update = false },
+        .{ .installed = ":4.1.13.8-1", .needs_update = true },
+        .{ .installed = "1:4.1.13.8-1", .needs_update = false },
+    };
+    for (cases) |case| {
+        const updates = try collectVersionUpdates(allocator, &.{
+            .{ .name = "epoch-fixture", .version = case.installed, .explicit = true },
+        }, response.results);
+        defer models.Update.deinitSlice(allocator, updates);
+        try std.testing.expectEqual(@as(usize, if (case.needs_update) 1 else 0), updates.len);
+        if (case.needs_update) {
+            try std.testing.expectEqualStrings(case.installed, updates[0].version);
+            try std.testing.expectEqualStrings("4.1.13.9-1", updates[0].new_version);
+        }
+    }
+}
+
 test "AUR git remote and VCS suffix parsing mirror the C# manager" {
     const official = "https://aur.archlinux.org";
     const package_base = (try parseAurGitRemote(std.testing.allocator, official, "https://aur.archlinux.org/split-base.git\n")).?;
@@ -5051,6 +5190,346 @@ test "all requested PKGBUILDs are reviewed before the first build" {
         manager.updatePackages(&.{"missing-review-fixture"}),
     );
     try std.testing.expectEqual(@as(usize, 1), failure_capture.count);
+}
+
+fn seedNeededInstalledPackage(allocator: std.mem.Allocator, io: std.Io, root: []const u8, name: []const u8, installed_version: []const u8) !void {
+    const directory = try std.fmt.allocPrint(allocator, "{s}/db/local/{s}-{s}", .{ root, name, installed_version });
+    defer allocator.free(directory);
+    try std.Io.Dir.cwd().createDirPath(io, directory);
+    const db_version_path = try std.fs.path.join(allocator, &.{ root, "db", "local", "ALPM_DB_VERSION" });
+    defer allocator.free(db_version_path);
+    try writeFixtureFile(io, db_version_path, "9\n", false);
+    const path = try std.fs.path.join(allocator, &.{ directory, "desc" });
+    defer allocator.free(path);
+    const desc = try std.fmt.allocPrint(allocator, "%NAME%\n{s}\n\n%VERSION%\n{s}\n\n%ARCH%\nany\n\n%REASON%\n0\n\n%VALIDATION%\nnone\n\n", .{ name, installed_version });
+    defer allocator.free(desc);
+    try writeFixtureFile(io, path, desc, false);
+}
+
+test "AUR needed skips equal versions before builds and preserves other installation modes" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    const cases = [_]struct {
+        label: []const u8,
+        installed: ?[]const u8 = "1-1",
+        extra: []const u8 = "",
+        name: []const u8 = "needed-demo",
+        needed: bool = true,
+        skip: bool = false,
+        exact: bool = false,
+        dependencies_only: bool = false,
+        archive: bool = false,
+    }{
+        .{ .label = "equal", .skip = true },
+        .{ .label = "missing", .installed = null },
+        .{ .label = "upgrade", .installed = "0-1" },
+        .{ .label = "downgrade", .installed = "2-1" },
+        .{ .label = "release", .installed = "1-2" },
+        .{ .label = "epoch", .installed = "1:1-1" },
+        .{ .label = "equivalent", .installed = "0:1-1", .skip = true },
+        .{ .label = "default", .needed = false },
+        .{ .label = "vcs", .name = "needed-demo-git" },
+        .{ .label = "pkgver", .extra = "pkgver() { echo 1; }\n" },
+        .{ .label = "dynamic", .extra = "pkgver=$(printf 1)\n" },
+        .{ .label = "dynamic-archive", .extra = "pkgver() { echo 1; }\n", .archive = true },
+        .{ .label = "exact-dynamic-archive", .extra = "pkgver() { echo 1; }\n", .archive = true, .exact = true },
+        .{ .label = "exact-equal", .exact = true, .skip = true },
+        .{ .label = "exact-different", .exact = true, .installed = "2-1" },
+        .{ .label = "skip-dependencies", .extra = "depends=('needed-dep')\n", .skip = true },
+        .{ .label = "dependencies-only", .extra = "depends=('needed-dep')\n", .dependencies_only = true },
+    };
+    for (cases) |case| {
+        errdefer std.debug.print("AUR needed case: {s}\n", .{case.label});
+        var fixture = try createAurManagerFixturePaths(allocator, io);
+        defer fixture.deinit(allocator);
+        if (case.installed) |installed| try seedNeededInstalledPackage(allocator, io, fixture.root, case.name, installed);
+        try createAurFixtureRepository(allocator, io, fixture.remote_root, case.name, null);
+        try createAurFixtureRepository(allocator, io, fixture.remote_root, "needed-dep", null);
+        const remote = try std.fmt.allocPrint(allocator, "{s}/{s}.git", .{ fixture.remote_root, case.name });
+        defer allocator.free(remote);
+        const pkgbuild_path = try std.fs.path.join(allocator, &.{ remote, "PKGBUILD" });
+        defer allocator.free(pkgbuild_path);
+        const content = try std.fmt.allocPrint(allocator, "pkgname={s}\npkgver=1\npkgrel=1\narch=('any')\n{s}package() {{ :; }}\n", .{ case.name, case.extra });
+        defer allocator.free(content);
+        try writeFixtureFile(io, pkgbuild_path, content, false);
+        try runFixtureCommand(allocator, io, &.{ "git", "add", "PKGBUILD" }, remote);
+        try runFixtureCommand(allocator, io, &.{ "git", "commit", "--allow-empty", "-m", "needed fixture" }, remote);
+        // The newest commit deliberately differs from the selected historical
+        // commit, so checking HEAD/RPC instead would fail the exact-equal case.
+        if (case.exact) {
+            const latest = try std.fmt.allocPrint(allocator, "pkgname={s}\npkgver=2\npkgrel=1\narch=('any')\npackage() {{ :; }}\n", .{case.name});
+            defer allocator.free(latest);
+            try writeFixtureFile(io, pkgbuild_path, latest, false);
+            try runFixtureCommand(allocator, io, &.{ "git", "add", "PKGBUILD" }, remote);
+            try runFixtureCommand(allocator, io, &.{ "git", "commit", "-m", "new version" }, remote);
+        }
+        const marker = try std.fs.path.join(allocator, &.{ fixture.root, "built" });
+        defer allocator.free(marker);
+        const makepkg = try std.fs.path.join(allocator, &.{ fixture.root, "makepkg" });
+        defer allocator.free(makepkg);
+        const script = if (case.archive)
+            try std.fmt.allocPrint(allocator,
+                \\#!/bin/sh
+                \\set -eu
+                \\printf x >> '{s}'
+                \\printf 'pkgname = {s}\npkgver = 1-1\npkgdesc = needed fixture\nbuilddate = 1700000000\npackager = Shelly Tests\nsize = 0\narch = any\n' > .PKGINFO
+                \\tar -czf '{s}-1-1-any.pkg.tar.gz' .PKGINFO
+                \\rm .PKGINFO
+                \\
+            , .{ marker, case.name, case.name })
+        else
+            try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf x >> '{s}'\nexit 1\n", .{marker});
+        defer allocator.free(script);
+        try writeFixtureFile(io, makepkg, script, true);
+        var manager = try Manager.init(allocator, fixture.environ, .{
+            .config_path = fixture.config_path,
+            .cache_root = fixture.cache_root,
+            .aur_git_base_url = fixture.remote_root,
+            .makepkg_command = makepkg,
+            .needed = case.needed,
+        });
+        defer manager.deinit();
+        manager.alpm.disable_transaction_hooks();
+        if (case.exact or case.dependencies_only) {
+            // These installation modes sync repositories. Register an inert local
+            // entry so this fixture never needs a network repository.
+            const raw = alpm_bindings.libalpm.alpm;
+            const database = raw.alpm_register_syncdb(manager.alpm.handle, "needed-fixture", 0) orelse return error.InitFailed;
+            try std.testing.expectEqual(@as(c_int, 0), raw.alpm_db_set_usage(database, 0));
+        }
+        var service = rpc.TestService{ .packages = &.{ .{ .Name = case.name, .PackageBase = case.name }, .{ .Name = "needed-dep", .PackageBase = "needed-dep" } } };
+        service.install(&manager.aur_client);
+        var context = operation_api.OperationContext.init(allocator, io);
+        defer context.deinit();
+        const Capture = struct {
+            skips: usize = 0,
+            alpm_confirmations: usize = 0,
+            fn answer(data: ?*anyopaque, question: operation_api.Question) operation_api.QuestionResponse {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (question.kind == .confirm_transaction and question.envelope.backend == .alpm) {
+                    self.alpm_confirmations += 1;
+                    return .declined;
+                }
+                return .accepted;
+            }
+            fn info(data: ?*anyopaque, args: events.InformationalArgs) void {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (std.mem.indexOf(u8, args.message, "already installed (--needed)") != null) self.skips += 1;
+            }
+        };
+        var capture: Capture = .{};
+        context.setQuestionHandler(.{ .function = Capture.answer, .data = &capture });
+        manager.setOperationContext(&context);
+        defer manager.setOperationContext(null);
+        _ = try manager.dispatcher.addInformationalHandler(.{ .function = Capture.info, .data = &capture });
+        const result = if (case.dependencies_only)
+            manager.installDependenciesOnly(case.name, true)
+        else if (case.exact)
+            manager.installPackageVersion(case.name, "HEAD~1")
+        else
+            manager.installPackages(&.{case.name});
+        if (case.skip) {
+            try result;
+            try std.testing.expectEqual(@as(usize, 1), capture.skips);
+            try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, marker, .{}));
+        } else if (case.archive) {
+            try result;
+            try std.testing.expectEqual(@as(usize, 0), capture.skips);
+            try std.testing.expectEqual(@as(usize, 0), capture.alpm_confirmations);
+            try std.Io.Dir.cwd().access(io, marker, .{});
+        } else {
+            try std.testing.expectError(error.BuildFailed, result);
+            try std.testing.expectEqual(@as(usize, 0), capture.skips);
+            try std.Io.Dir.cwd().access(io, marker, .{});
+        }
+    }
+}
+
+test "AUR needed filters split members and mixed targets independently" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var fixture = try createAurManagerFixturePaths(allocator, io);
+    defer fixture.deinit(allocator);
+    try seedNeededInstalledPackage(allocator, io, fixture.root, "needed-suite", "1-1");
+    try createSplitAurFixtureRepository(allocator, io, fixture.remote_root, "needed-suite", &.{ "needed-suite", "needed-docs" });
+    try createAurFixtureRepository(allocator, io, fixture.remote_root, "needed-other", null);
+    const makepkg = try std.fs.path.join(allocator, &.{ fixture.root, "makepkg" });
+    defer allocator.free(makepkg);
+    try writeFixtureFile(io, makepkg, "#!/bin/sh\nexit 1\n", true);
+    var manager = try Manager.init(allocator, fixture.environ, .{
+        .config_path = fixture.config_path,
+        .cache_root = fixture.cache_root,
+        .aur_git_base_url = fixture.remote_root,
+        .makepkg_command = makepkg,
+        .needed = true,
+    });
+    defer manager.deinit();
+    var service = rpc.TestService{ .packages = &.{
+        .{ .Name = "needed-suite", .PackageBase = "needed-suite" },
+        .{ .Name = "needed-docs", .PackageBase = "needed-suite" },
+        .{ .Name = "needed-other", .PackageBase = "needed-other" },
+    } };
+    service.install(&manager.aur_client);
+    const Approval = struct {
+        fn answer(_: ?*anyopaque, _: PkgbuildDiffRequest) bool {
+            return true;
+        }
+    };
+    manager.setPkgbuildApprovalHandler(.{ .function = Approval.answer, .data = null });
+    var failures: std.ArrayList(Manager.PackageFailure) = .empty;
+    defer {
+        for (failures.items) |failure| failure.deinit(allocator);
+        failures.deinit(allocator);
+    }
+    var plans = try manager.prepareInstallPlans(&.{ "needed-suite", "needed-docs", "needed-suite", "needed-other" }, &failures);
+    defer {
+        for (plans.items) |*plan| plan.deinit(allocator);
+        plans.deinit(allocator);
+    }
+    try manager.reviewInstallPlans(&plans, &failures);
+    try std.testing.expectEqual(@as(usize, 0), failures.items.len);
+    try std.testing.expectEqual(@as(usize, 2), plans.items.len);
+    try std.testing.expectEqual(@as(usize, 1), plans.items[0].requested_names.items.len);
+    try std.testing.expectEqualStrings("needed-docs", plans.items[0].requested_names.items[0]);
+    try std.testing.expectEqualStrings("needed-other", plans.items[1].requested_names.items[0]);
+}
+
+test "AUR metadata child failures retain stderr and exit status" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var fixture = try createAurManagerFixturePaths(allocator, io);
+    defer fixture.deinit(allocator);
+    var manager = try initFixtureAurManager(allocator, &fixture, fixture.remote_root);
+    defer manager.deinit();
+    var context = operation_api.OperationContext.init(allocator, io);
+    defer context.deinit();
+    manager.setOperationContext(&context);
+    defer manager.setOperationContext(null);
+    var scope = OperationScope.init(manager, .update, "unrelated-last-package");
+    scope.attach();
+    defer scope.finish(.failed);
+    const Capture = struct {
+        reported: bool = false,
+        fn handle(data: ?*anyopaque, event: operation_api.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (event) {
+                .failure => |failure| {
+                    self.reported = failure.err == error.BuildFailed and failure.native_code == 37 and
+                        std.mem.indexOf(u8, failure.message, "broken-meta") != null and
+                        std.mem.indexOf(u8, failure.message, "MissingPackageFunction") != null and
+                        std.mem.indexOf(u8, failure.message, "unrelated-last-package") == null;
+                },
+                else => {},
+            }
+        }
+    };
+    var capture: Capture = .{};
+    _ = try context.subscribe(.{ .function = Capture.handle, .data = &capture });
+    var result = try builder.run(allocator, io, &.{ "/bin/sh", "-c", "printf 'Technical details: MissingPackageFunction\\n' >&2; exit 37" }, fixture.root, 10);
+    defer result.deinit(allocator);
+    try std.testing.expectError(error.BuildFailed, manager.readSrcinfoCommandResult("broken-meta", &result));
+    try std.testing.expect(capture.reported);
+}
+
+test "AUR metadata failures name the package and continue independent metapackage upgrades" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    for ([_]bool{ false, true }) |needed| {
+        var fixture = try createAurManagerFixturePaths(allocator, io);
+        defer fixture.deinit(allocator);
+        for ([_][]const u8{ "broken-meta", "needs-broken-meta", "good-meta" }) |name| {
+            try createAurFixtureRepository(allocator, io, fixture.remote_root, name, if (std.mem.eql(u8, name, "needs-broken-meta")) "broken-meta" else null);
+            if (std.mem.eql(u8, name, "needs-broken-meta")) continue;
+            const remote = try std.fmt.allocPrint(allocator, "{s}/{s}.git", .{ fixture.remote_root, name });
+            defer allocator.free(remote);
+            const path = try std.fs.path.join(allocator, &.{ remote, "PKGBUILD" });
+            defer allocator.free(path);
+            const content = try std.fmt.allocPrint(
+                allocator,
+                "pkgname={s}\npkgver=1\npkgrel=1\narch=('any')\n{s}",
+                .{ name, if (std.mem.eql(u8, name, "broken-meta")) "build() { :; }\n" else "" },
+            );
+            defer allocator.free(content);
+            try writeFixtureFile(io, path, content, false);
+            try runFixtureCommand(allocator, io, &.{ "git", "add", "PKGBUILD" }, remote);
+            try runFixtureCommand(allocator, io, &.{ "git", "commit", "-m", "metadata fixture" }, remote);
+        }
+        const makepkg = try std.fs.path.join(allocator, &.{ fixture.root, "makepkg" });
+        defer allocator.free(makepkg);
+        try writeFixtureFile(io, makepkg,
+            \\#!/bin/sh
+            \\set -eu
+            \\test "${PWD##*/}" = good-meta
+            \\printf 'pkgname = good-meta\npkgver = 1-1\npkgdesc = metapackage\nbuilddate = 1700000000\npackager = Shelly Tests\nsize = 0\narch = any\n' > .PKGINFO
+            \\tar -czf good-meta-1-1-any.pkg.tar.gz .PKGINFO
+            \\rm .PKGINFO
+            \\
+        , true);
+        var manager = try Manager.init(allocator, fixture.environ, .{
+            .config_path = fixture.config_path,
+            .cache_root = fixture.cache_root,
+            .aur_git_base_url = fixture.remote_root,
+            .makepkg_command = makepkg,
+            .needed = needed,
+        });
+        defer manager.deinit();
+        manager.alpm.disable_transaction_hooks();
+        var service = rpc.TestService{ .packages = &.{
+            .{ .Name = "broken-meta", .PackageBase = "broken-meta" },
+            .{ .Name = "needs-broken-meta", .PackageBase = "needs-broken-meta" },
+            .{ .Name = "good-meta", .PackageBase = "good-meta" },
+        } };
+        service.install(&manager.aur_client);
+        var context = operation_api.OperationContext.init(allocator, io);
+        defer context.deinit();
+        const Capture = struct {
+            metadata_failure: bool = false,
+            failed: usize = 0,
+            built: usize = 0,
+            completed: usize = 0,
+            completion: ?operation_api.CompletionStatus = null,
+            fn answer(_: ?*anyopaque, _: operation_api.Question) operation_api.QuestionResponse {
+                return .accepted;
+            }
+            fn handle(data: ?*anyopaque, event: operation_api.Event) void {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                switch (event) {
+                    .failure => |failure| {
+                        if (std.mem.indexOf(u8, failure.message, "broken-meta") != null and
+                            std.mem.indexOf(u8, failure.message, "MissingPackageFunction") != null)
+                            self.metadata_failure = true;
+                    },
+                    .progress => |progress| {
+                        const stage = progress.update.stage orelse return;
+                        const name = progress.update.message orelse return;
+                        if (std.mem.eql(u8, stage, "aur_package_failed") and
+                            (std.mem.eql(u8, name, "broken-meta") or std.mem.eql(u8, name, "needs-broken-meta")))
+                            self.failed += 1;
+                        if (std.mem.eql(u8, stage, "aur_build_start")) self.built += 1;
+                        if (std.mem.eql(u8, stage, "aur_package_completed") and std.mem.eql(u8, name, "good-meta")) self.completed += 1;
+                    },
+                    .completed => |completion| {
+                        if (completion.envelope.parent_id == null and completion.envelope.backend == .aur)
+                            self.completion = completion.status;
+                    },
+                    else => {},
+                }
+            }
+        };
+        var capture: Capture = .{};
+        context.setQuestionHandler(.{ .function = Capture.answer });
+        _ = try context.subscribe(.{ .function = Capture.handle, .data = &capture });
+        manager.setOperationContext(&context);
+        defer manager.setOperationContext(null);
+        try std.testing.expectError(error.BuildFailed, manager.updatePackages(&.{ "broken-meta", "needs-broken-meta", "good-meta" }));
+        try std.testing.expect(capture.metadata_failure);
+        try std.testing.expectEqual(@as(usize, 2), capture.failed);
+        try std.testing.expectEqual(@as(usize, 1), capture.built);
+        try std.testing.expectEqual(@as(usize, 1), capture.completed);
+        try std.testing.expectEqual(operation_api.CompletionStatus.failed, capture.completion.?);
+        try std.testing.expect((try manager.alpm.get_single_installed_package("good-meta")) != null);
+        try std.testing.expect((try manager.alpm.get_single_installed_package("broken-meta")) == null);
+    }
 }
 
 test "AUR upgrades skip declined reviews and continue independent packages" {

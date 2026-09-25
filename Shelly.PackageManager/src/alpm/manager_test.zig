@@ -1904,6 +1904,8 @@ test "ALPM managers inherit the configured parallel download count" {
 const CountingDownloadServer = struct {
     io: std.Io,
     server: std.Io.net.Server,
+    expected_paths: ?[2][]const u8 = null,
+    seen_paths: std.atomic.Value(u8) = .init(0),
     active: std.atomic.Value(usize) = .init(0),
     peak: std.atomic.Value(usize) = .init(0),
     requests: std.atomic.Value(usize) = .init(0),
@@ -1931,6 +1933,19 @@ const CountingDownloadServer = struct {
     fn respondInner(self: *@This(), stream: std.Io.net.Stream) !void {
         var read_buffer: [2048]u8 = undefined;
         var reader = stream.reader(self.io, &read_buffer);
+        const request_line = try reader.interface.takeDelimiter('\n') orelse return error.EndOfStream;
+        if (self.expected_paths) |paths| {
+            var parts = std.mem.tokenizeScalar(u8, request_line, ' ');
+            _ = parts.next();
+            const path = parts.next() orelse return error.InvalidRequest;
+            if (std.mem.eql(u8, path, paths[0])) {
+                _ = self.seen_paths.fetchOr(1, .monotonic);
+            } else if (std.mem.eql(u8, path, paths[1])) {
+                _ = self.seen_paths.fetchOr(2, .monotonic);
+            } else {
+                self.failed.store(true, .release);
+            }
+        }
         while (try reader.interface.takeDelimiter('\n')) |line| {
             if (std.mem.eql(u8, line, "\r")) break;
         } else return error.EndOfStream;
@@ -1950,6 +1965,61 @@ const CountingDownloadServer = struct {
         try writer.interface.flush();
     }
 };
+
+test "Manager.sync keeps included repository mirrors separate during fallback (issue 1960)" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var workspace = try SyncTestWorkspace.create(allocator, io);
+    defer workspace.cleanup(allocator);
+    const address = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
+    var arch: CountingDownloadServer = .{
+        .io = io,
+        .server = try address.listen(io, .{ .reuse_address = true }),
+        .expected_paths = .{ "/first/multilib.db", "/second/multilib.db" },
+    };
+    defer arch.server.deinit(io);
+    var arch_future = try io.concurrent(CountingDownloadServer.serve, .{&arch});
+    defer _ = arch_future.cancel(io) catch {};
+    var openai: CountingDownloadServer = .{
+        .io = io,
+        .server = try address.listen(io, .{ .reuse_address = true }),
+        .expected_paths = .{ "/first/openai-chatgpt.db", "/second/openai-chatgpt.db" },
+    };
+    defer openai.server.deinit(io);
+    var openai_future = try io.concurrent(CountingDownloadServer.serve, .{&openai});
+    defer _ = openai_future.cancel(io) catch {};
+
+    const include_path = try std.fs.path.join(allocator, &.{ workspace.root, "openai.conf" });
+    defer allocator.free(include_path);
+    const openai_port = openai.server.socket.address.getPort();
+    const included = try std.fmt.allocPrint(
+        allocator,
+        "[openai-chatgpt]\nServer = http://127.0.0.1:{d}/first\nServer = http://127.0.0.1:{d}/second\n",
+        .{ openai_port, openai_port },
+    );
+    defer allocator.free(included);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = include_path, .data = included });
+    const arch_port = arch.server.socket.address.getPort();
+    const config = try std.fmt.allocPrint(
+        allocator,
+        "[options]\nArchitecture = x86_64\nSigLevel = Never\nDBPath = {s}\n" ++
+            "[multilib]\nServer = http://127.0.0.1:{d}/first\nServer = http://127.0.0.1:{d}/second\n" ++
+            "Include = {s}\n",
+        .{ workspace.db_path, arch_port, arch_port, include_path },
+    );
+    defer allocator.free(config);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = workspace.config_path, .data = config });
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+
+    // Every mirror returns 404 so both repositories exhaust their own lists.
+    try testing.expectError(error.UpdateFetchFailed, mgr.sync(true));
+    for ([_]*CountingDownloadServer{ &arch, &openai }) |server| {
+        try testing.expectEqual(@as(usize, 2), server.requests.load(.acquire));
+        try testing.expectEqual(@as(u8, 3), server.seen_paths.load(.acquire));
+        try testing.expect(!server.failed.load(.acquire));
+    }
+}
 
 test "ALPM package and database downloads honor limits across mirror retries" {
     const allocator = testing.allocator;

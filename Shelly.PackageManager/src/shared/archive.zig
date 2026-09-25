@@ -58,6 +58,11 @@ pub const OwnershipOverride = struct {
     ownership: VirtualOwnership,
 };
 
+pub const ModeOverride = struct {
+    path: []const u8,
+    mode: u32,
+};
+
 /// Metadata view used by both package and mtree generation. Package staging
 /// always remains owned by the unprivileged build user; only this view is
 /// written to the resulting archive.
@@ -65,6 +70,22 @@ pub const VirtualMetadata = struct {
     default_ownership: VirtualOwnership = .{},
     ownership_overrides: []const OwnershipOverride = &.{},
     ownership_overrides_sorted: bool = false,
+    /// Sorted by path. These are package modes before temporary staging access.
+    mode_overrides: []const ModeOverride = &.{},
+
+    pub fn modeForPath(self: VirtualMetadata, path: []const u8, filesystem_mode: u32) u32 {
+        var low: usize = 0;
+        var high = self.mode_overrides.len;
+        while (low < high) {
+            const middle = low + (high - low) / 2;
+            switch (std.mem.order(u8, path, self.mode_overrides[middle].path)) {
+                .lt => high = middle,
+                .gt => low = middle + 1,
+                .eq => return self.mode_overrides[middle].mode,
+            }
+        }
+        return filesystem_mode;
+    }
 
     pub fn ownershipForPath(self: VirtualMetadata, path: []const u8) VirtualOwnership {
         if (self.ownership_overrides_sorted) {
@@ -233,7 +254,7 @@ fn writeDirectory(
             archive_entry,
             archive_path_z.ptr,
             file_type,
-            @intCast(stat.permissions.toMode() & 0o7777),
+            virtual_metadata.modeForPath(file_entry.path, @intCast(stat.permissions.toMode() & 0o7777)),
             virtual_metadata.ownershipForPath(file_entry.path),
         );
         setEntryMtime(archive_entry, stat.mtime.nanoseconds);

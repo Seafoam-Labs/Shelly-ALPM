@@ -509,3 +509,22 @@ Document any known issues that are being tracked:
   the guest; host-only directories must produce a clear error, without mounts.
 - [ ] Rebuild `scx-scheds-git` through the GUI on the affected system and verify
   the intentionally missing formatter no longer causes errno 13.
+
+## Explicit build environment
+
+- [ ] Configure `[build] env = { JAVA_HOME = "/opt/test-java" }` and use a
+  reviewed PKGBUILD that reads it in metadata, prepare/build/check/package.
+  Confirm consistent values through direct builds, `--makesrcinfo`, CLI AUR
+  installs, and a GUI AUR operation. Confirm the elevated coordinator's
+  environment and command line contain no configured assignments.
+- [ ] Check `[build.env]` syntax, user replacement of the system table, omitted
+  user configuration, and `env = {}`. Empty strings must remain set and empty.
+  Values containing spaces, Unicode, `$HOME`, `~`, and `$(...)` must stay literal.
+- [ ] Override `LANG` / `LC_ALL` explicitly, then remove those assignments and
+  verify inherited locale settings and the elevated UTF-8 fallback still work.
+- [ ] Configure a reserved variable such as `PATH`, `CFLAGS`, or `BASH_ENV`, an
+  invalid name, or a non-string value. Confirm failure before PKGBUILD execution,
+  with the variable name in the diagnostic and its value absent.
+- [ ] Repeat with Landlock enabled and with `shelly build --isolated`. Confirm
+  configured values reach build steps, paths refer to the guest in isolated
+  mode, and assignments grant no filesystem access or host mounts.

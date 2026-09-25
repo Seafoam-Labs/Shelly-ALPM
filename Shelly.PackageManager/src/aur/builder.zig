@@ -456,7 +456,7 @@ pub fn invokingUserCleanCommand(
         account.home,
         uid,
         build_path.baseline,
-        environ.getPosix("SOURCE_DATE_EPOCH"),
+        environ,
         command,
         arguments,
     );
@@ -468,7 +468,7 @@ fn cleanUserCommand(
     home: []const u8,
     uid: []const u8,
     path: []const u8,
-    source_date_epoch: ?[]const u8,
+    environ: std.process.Environ,
     command: []const u8,
     arguments: []const []const u8,
 ) !OwnedCommand {
@@ -492,7 +492,7 @@ fn cleanUserCommand(
     defer allocator.free(bus_environment);
     const path_environment = try std.fmt.allocPrint(allocator, "PATH={s}", .{path});
     defer allocator.free(path_environment);
-    const source_date_epoch_environment = if (source_date_epoch) |epoch|
+    const source_date_epoch_environment = if (environ.getPosix("SOURCE_DATE_EPOCH")) |epoch|
         try std.fmt.allocPrint(allocator, "SOURCE_DATE_EPOCH={s}", .{epoch})
     else
         null;
@@ -521,9 +521,45 @@ fn cleanUserCommand(
     });
     if (source_date_epoch_environment) |value|
         try appendOwned(allocator, &argv, &.{value});
+    // Keep locale selection across env -i without inheriting unrelated state
+    // such as LOCPATH or loader/shell variables from the elevated process.
+    const lang = environ.getPosix("LANG") orelse "";
+    try appendEnvironmentAssignment(allocator, &argv, "LANG", if (lang.len == 0) "C.UTF-8" else lang);
+    for (build_locale_overrides) |name| {
+        if (environ.getPosix(name)) |value|
+            try appendEnvironmentAssignment(allocator, &argv, name, value);
+    }
     try appendOwned(allocator, &argv, &.{command});
     try appendOwned(allocator, &argv, arguments);
     return .{ .argv = try argv.toOwnedSlice(allocator) };
+}
+
+const build_locale_overrides = [_][]const u8{
+    "LANGUAGE",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LC_NUMERIC",
+    "LC_TIME",
+    "LC_COLLATE",
+    "LC_MONETARY",
+    "LC_MESSAGES",
+    "LC_PAPER",
+    "LC_NAME",
+    "LC_ADDRESS",
+    "LC_TELEPHONE",
+    "LC_MEASUREMENT",
+    "LC_IDENTIFICATION",
+};
+
+fn appendEnvironmentAssignment(
+    allocator: std.mem.Allocator,
+    argv: *std.ArrayList([]u8),
+    name: []const u8,
+    value: []const u8,
+) !void {
+    const assignment = try std.fmt.allocPrint(allocator, "{s}={s}", .{ name, value });
+    errdefer allocator.free(assignment);
+    try argv.append(allocator, assignment);
 }
 
 pub fn invokingUsername(
@@ -808,13 +844,21 @@ test "NSS invoking-user validation rejects root and unresolved accounts" {
 }
 
 test "clean invoking-user build command drops the elevated environment" {
+    const allocator = std.testing.allocator;
+    var environment = std.process.Environ.Map.init(allocator);
+    defer environment.deinit();
+    try environment.put("SOURCE_DATE_EPOCH", "1700000000");
+    for ([_][]const u8{ "LD_PRELOAD", "BASH_ENV", "LOCPATH", "LC_UNRECOGNIZED", "UNRELATED" }) |name|
+        try environment.put(name, "/untrusted");
+    const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
+    defer environ.block.deinit(allocator);
     var command = try cleanUserCommand(
         std.testing.allocator,
         "zoey",
         "/home/zoey",
         "1000",
         "/usr/bin:/bin",
-        "1700000000",
+        environ,
         "/usr/bin/shelly",
         &.{ "build", "--coordinator-child", "/tmp/PKGBUILD" },
     );
@@ -835,6 +879,7 @@ test "clean invoking-user build command drops the elevated environment" {
         "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
         "PATH=/usr/bin:/bin",
         "SOURCE_DATE_EPOCH=1700000000",
+        "LANG=C.UTF-8",
         "/usr/bin/shelly",
         "build",
         "--coordinator-child",
@@ -843,6 +888,82 @@ test "clean invoking-user build command drops the elevated environment" {
     try std.testing.expectEqual(expected.len, command.argv.len);
     for (expected, command.argv) |wanted, actual|
         try std.testing.expectEqualStrings(wanted, actual);
+}
+
+test "clean invoking-user build command preserves explicit locale settings" {
+    const allocator = std.testing.allocator;
+    var environment = std.process.Environ.Map.init(allocator);
+    defer environment.deinit();
+    try environment.put("LANG", "en_US.UTF-8");
+    const overrides = .{
+        .{ "LANGUAGE", "en:de with spaces; $(false)" },
+        .{ "LC_ALL", "" },
+        .{ "LC_CTYPE", "C.UTF-8" },
+        .{ "LC_NUMERIC", "C" },
+        .{ "LC_TIME", "C" },
+        .{ "LC_COLLATE", "C" },
+        .{ "LC_MONETARY", "C" },
+        .{ "LC_MESSAGES", "C" },
+        .{ "LC_PAPER", "C" },
+        .{ "LC_NAME", "C" },
+        .{ "LC_ADDRESS", "C" },
+        .{ "LC_TELEPHONE", "C" },
+        .{ "LC_MEASUREMENT", "C" },
+        .{ "LC_IDENTIFICATION", "C" },
+    };
+    inline for (overrides) |entry| try environment.put(entry[0], entry[1]);
+    const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
+    defer environ.block.deinit(allocator);
+    var command = try cleanUserCommand(allocator, "nobody", "/tmp", "65534", "/usr/bin:/bin", environ, "/usr/bin/env", &.{});
+    defer command.deinit(allocator);
+    // Execute the generated env command directly so the test needs no root or
+    // runuser/PAM setup while exercising the exact child environment.
+    var result = try run(allocator, std.testing.io, command.asConst()[4..], null, 10);
+    defer result.deinit(allocator);
+    try std.testing.expectEqual(@as(u8, 0), result.exit_code);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "\nLANG=en_US.UTF-8\n") != null);
+    inline for (overrides) |entry|
+        try std.testing.expect(std.mem.indexOf(u8, result.stdout, "\n" ++ entry[0] ++ "=" ++ entry[1] ++ "\n") != null);
+}
+
+test "clean invoking-user build command supports Unicode filenames and locale precedence" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var fixture = std.testing.tmpDir(.{});
+    defer fixture.cleanup();
+    try fixture.dir.writeFile(io, .{ .sub_path = "∂-unicode.txt", .data = "unicode resource\n" });
+    const directory = try fixture.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    const Case = struct { lang: ?[]const u8 = null, ctype: ?[]const u8 = null, all: ?[]const u8 = null, characters: u8 = 1 };
+    for ([_]Case{
+        .{},
+        .{ .lang = "" },
+        .{ .lang = "C.UTF-8" },
+        .{ .lang = "C", .characters = 3 },
+        .{ .lang = "C", .ctype = "C.UTF-8" },
+        .{ .lang = "C", .ctype = "C", .all = "C.UTF-8" },
+        .{ .lang = "C.UTF-8", .ctype = "C.UTF-8", .all = "C", .characters = 3 },
+        .{ .all = "C", .characters = 3 },
+        .{ .ctype = "", .all = "" },
+    }) |case| {
+        var environment = std.process.Environ.Map.init(allocator);
+        defer environment.deinit();
+        if (case.lang) |value| try environment.put("LANG", value);
+        if (case.ctype) |value| try environment.put("LC_CTYPE", value);
+        if (case.all) |value| try environment.put("LC_ALL", value);
+        const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
+        defer environ.block.deinit(allocator);
+        var command = try cleanUserCommand(allocator, "nobody", "/tmp", "65534", "/usr/bin:/bin", environ, "/bin/bash", &.{
+            "--noprofile", "--norc", "-c",
+            "set -eu; character='∂'; printf '%s\\n' \"${#character}\"; cat -- \"${character}-unicode.txt\"",
+        });
+        defer command.deinit(allocator);
+        var result = try run(allocator, io, command.asConst()[4..], directory, 10);
+        defer result.deinit(allocator);
+        try std.testing.expectEqual(@as(u8, 0), result.exit_code);
+        try std.testing.expectEqualStrings("", result.stderr);
+        try std.testing.expectEqualStrings(if (case.characters == 1) "1\nunicode resource\n" else "3\nunicode resource\n", result.stdout);
+    }
 }
 
 test "built package selection mirrors split-package and stale-output safeguards" {

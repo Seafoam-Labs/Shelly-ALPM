@@ -236,3 +236,10 @@ preserved in the generated guest configuration. They refer to paths inside the
 guest and must exist there; they do not create host bind mounts. A host-only
 custom toolchain path must be removed from the effective configuration before
 an isolated build. See [build PATH configuration](shellybuild.conf.md#build-executable-search-path).
+
+Explicit `[build.env]` assignments are also preserved in the guest configuration
+and applied after dropping to the guest build user. Values remain literal and
+override the guest builder's inherited environment. Paths in those values refer
+to the guest filesystem and do not create host mounts. See
+[build environment variables](shellybuild.conf.md#build-environment-variables)
+for configuration precedence and reserved names.

@@ -243,6 +243,22 @@ CLI provides the same core functionality as the UI but in a scriptable, terminal
 
 Full documentation can be viewed on the [Shelly CLI Reference](https://www.seafoam-labs.org/shelly-alpm/docs/cli-reference/) page.
 
+Standard searches show available repository packages by default, with ranked
+matches for a query or a paginated listing when no query is supplied:
+
+```bash
+shelly search standard firefox
+shelly -Ss firefox
+shelly search standard
+shelly -Ss
+```
+
+Use `--detail`, `--info`, or `-d` to show metadata for one exact package name
+(for example, `shelly -Ss --detail firefox`). Use `--installed` to search
+installed ALPM packages or `--local` for Shelly-managed binary packages.
+`--explicit` and `--depends` select installed packages when no source is given.
+`--available` remains supported as an explicit repository source selector.
+
 Use `--needed` with standard installs to skip same-version reinstalls while still
 installing missing packages and allowing upgrades. The flag works before or after
 package names, and `-n` remains the separate no-confirm option:
@@ -254,7 +270,21 @@ shelly -Is --needed zed git -n
 
 This also applies to local Arch package archives. URL archives are downloaded
 before their package metadata can be checked. Without `--needed`, reinstall
-behavior is unchanged; AUR builds and Shelly binary archives are unaffected.
+behavior is unchanged; Shelly binary archives are unaffected.
+
+For AUR installs, `--needed` skips building and reinstalling packages with the
+same installed version, including individual members of split packages:
+
+```bash
+shelly -Ia --needed yay
+shelly install aur yay --needed -n
+```
+
+Shelly fetches and reviews the PKGBUILD before checking its generated package
+metadata. Dynamic versions and VCS packages may still require a build; the
+resulting archives also use `--needed` when installed. With `--version`, the
+comparison uses the selected Git commit. Dependency-only installs still check
+the requested dependencies even when the parent package is already installed.
 
 Build a PKGBUILD and install the resulting packages in one command, including
 any missing build dependencies:

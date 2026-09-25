@@ -217,8 +217,10 @@ pub const Pkgbuild = struct {
     pub fn get_full_version(self: Pkgbuild, allocator: std.mem.Allocator) ![]const u8 {
         const version = self.pkg_version;
         const version_part: []const u8 = version orelse "";
-        const epoch_part: []const u8 = if (self.epoch) |e| e else "";
-        const epoch_sep: []const u8 = if (self.epoch != null) ":" else "";
+        const epoch = self.epoch orelse "";
+        // makepkg omits absent, empty and zero epochs from the full version.
+        const epoch_part: []const u8 = if (std.mem.trim(u8, epoch, "0").len > 0) epoch else "";
+        const epoch_sep: []const u8 = if (epoch_part.len > 0) ":" else "";
         const rel_sep: []const u8 = if (self.pkg_rel != null) "-" else "";
         const rel_part: []const u8 = if (self.pkg_rel) |r| r else "";
 

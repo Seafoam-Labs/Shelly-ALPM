@@ -110,8 +110,7 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
     // existing direct local sources and the default HTTP cache are already
     // visible in $startdir.
     if (self.options.run_verify and !self.options.skip_source_pgp_verification) {
-        const execution = package_build.execution orelse return error.MissingExecutionSteps;
-        if (execution.verify_step) |step| {
+        if (package_build.execution) |execution| if (execution.verify_step) |step| {
             var view = try exposeSourcesForVerify(self, prepared);
             defer view.deinit(self);
             try steps.runStep(
@@ -136,7 +135,7 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
                 const source = &prepared[index];
                 try copyLocalSource(self, source.source.name, source.destination);
             }
-        }
+        };
     }
 
     std.Io.Dir.cwd().createDirPath(self.io, extraction_staging) catch {

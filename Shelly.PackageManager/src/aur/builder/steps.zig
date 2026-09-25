@@ -763,7 +763,6 @@ pub fn evaluateDynamicMetadata(
     operation: *op_context.Operation,
 ) !DynamicMetadataOverrides {
     const package_build = &self.package_builds[0];
-    if (package_build.execution == null) return error.MissingExecutionSteps;
     const pkgbuild_path = self.options.pkgbuild_path orelse
         return error.UnreviewedBuilderRequest;
     const canonical_pkgbuild_path = try std.Io.Dir.cwd().realPathFileAlloc(self.io, pkgbuild_path, self.allocator);

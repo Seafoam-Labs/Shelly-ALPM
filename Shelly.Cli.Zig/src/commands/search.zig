@@ -126,6 +126,7 @@ const AurResult = struct {
     standard_packages: []const StandardPackage = &.{},
     pkgbuilds: ?[]const PackageBuild = null,
     detail: ?AurPackage = null,
+    aur_base: []const u8 = "",
 };
 
 const FlatpakResult = struct {
@@ -248,28 +249,41 @@ fn runRealSearch(
     return error.UnsupportedSearchType;
 }
 
+const StandardSources = struct {
+    available: bool,
+    installed: bool,
+    detail: bool,
+};
+
+fn standardSources(invocation: *const parser.Invocation) StandardSources {
+    var available = optionEnabled(invocation, "--available");
+    var installed = optionEnabled(invocation, "--installed");
+    const detail = optionEnabled(invocation, "--detail");
+    if (!optionEnabled(invocation, "--repos") and !available and !installed and
+        !optionEnabled(invocation, "--local") and !detail)
+    {
+        installed = optionEnabled(invocation, "--explicit") or optionEnabled(invocation, "--depends");
+        available = !installed;
+    }
+    if (detail or optionEnabled(invocation, "--group")) available = true;
+    return .{ .available = available, .installed = installed, .detail = detail };
+}
+
 fn runStandard(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
 ) !StandardResult {
     const repositories = optionEnabled(invocation, "--repos");
-    var available = optionEnabled(invocation, "--available");
-    var installed = optionEnabled(invocation, "--installed");
+    const sources = standardSources(invocation);
+    const available = sources.available;
+    const installed = sources.installed;
     const local = optionEnabled(invocation, "--local");
-    var detail = optionEnabled(invocation, "--detail");
+    const detail = sources.detail;
     const group = optionEnabled(invocation, "--group");
     const show_hidden = optionEnabled(invocation, "--show-hidden");
     const query: ?[]const u8 = if (invocation.positionals.len == 0) null else invocation.positionals[0];
     const depends = optionEnabled(invocation, "--depends");
     const explicit = optionEnabled(invocation, "--explicit");
-
-    if (!repositories and !available and !installed and !local and !detail) {
-        installed = true;
-        available = true;
-        detail = query != null and std.mem.trim(u8, query.?, " \t\r\n").len != 0;
-    }
-    if (detail) available = true;
-    if (group) available = true;
 
     const manager = try Zigalpm.AlpmManager.init(
         context.allocator,
@@ -492,6 +506,7 @@ fn runAur(
     return .{
         .packages = packages,
         .standard_packages = try standard_packages.toOwnedSlice(context.allocator),
+        .aur_base = try context.allocator.dupe(u8, aur_base),
     };
 }
 
@@ -707,8 +722,18 @@ fn renderAur(
     var index: usize = 0;
     while (index < result.packages.len and rows.items.len < display_count) : (index += 1) {
         const package = result.packages[index];
+        var name_cell: []const u8 = package.name;
+        if (std.mem.indexOf(u8, result.aur_base, "atoll") != null) {
+            const hyper_path = std.mem.concat(context.allocator, u8, &.{ "/package/", package.name, "/" }) catch continue;
+            defer context.allocator.free(hyper_path);
+            name_cell = hyperlink(context.allocator, result.aur_base, hyper_path, package.name, context);
+        } else if (std.mem.indexOf(u8, result.aur_base, "aur.archlinux") != null) {
+            const hyper_path = std.mem.concat(context.allocator, u8, &.{ "/packages/", package.name, "/" }) catch continue;
+            defer context.allocator.free(hyper_path);
+            name_cell = hyperlink(context.allocator, result.aur_base, hyper_path, package.name, context);
+        }
         try rows.append(context.allocator, try row(context.allocator, &.{
-            package.name,
+            name_cell,
             package.version,
             package.maintainer orelse "Unknown Maintainer",
             try formatDateTime(context.allocator, package.last_modified),
@@ -1256,6 +1281,69 @@ fn row(allocator: std.mem.Allocator, values: []const []const u8) ![]const []cons
     return allocator.dupe([]const u8, values);
 }
 
+fn hyperlink(
+    allocator: std.mem.Allocator,
+    aur_base: []const u8,
+    url_path: []const u8,
+    text: []const u8,
+    context: *runtime.RuntimeContext,
+) []const u8 {
+    if (!output.supportsAnsi(context)) return text;
+
+    const url = std.mem.concat(allocator, u8, &.{ aur_base, url_path }) catch return text;
+    defer allocator.free(url);
+
+    const parts = [_][]const u8{ "\x1b]8;;", url, "\x1b\\", text, "\x1b]8;;\x1b\\" };
+    return std.mem.concat(allocator, u8, &parts) catch text;
+}
+
+test "standard search defaults to available packages and preserves explicit modes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const manifest = try spec.Manifest.load(allocator);
+    const shortcodes = @import("../cli/shortcodes.zig");
+    const available: StandardSources = .{ .available = true, .installed = false, .detail = false };
+    const installed: StandardSources = .{ .available = false, .installed = true, .detail = false };
+    const detail: StandardSources = .{ .available = true, .installed = false, .detail = true };
+    const neither: StandardSources = .{ .available = false, .installed = false, .detail = false };
+    const cases = [_]struct { args: []const []const u8, expected: StandardSources }{
+        .{ .args = &.{ "search", "standard" }, .expected = available },
+        .{ .args = &.{"-Ss"}, .expected = available },
+        .{ .args = &.{ "search", "standard", "firefox" }, .expected = available },
+        .{ .args = &.{ "-Ss", "firefox" }, .expected = available },
+        .{ .args = &.{ "search", "standard", "fire" }, .expected = available },
+        .{ .args = &.{ "-Ss", "fire" }, .expected = available },
+        .{ .args = &.{ "search", "standard", "--available", "firefox" }, .expected = available },
+        .{ .args = &.{ "-Ssv", "firefox" }, .expected = available },
+        .{ .args = &.{ "-Ss", "fire", "--json", "--page", "2", "--limit", "5", "--show-hidden" }, .expected = available },
+        .{ .args = &.{ "-Ss", "fire", "--ui-mode" }, .expected = available },
+        .{ .args = &.{ "search", "standard", "--installed", "fire" }, .expected = installed },
+        .{ .args = &.{ "-Ssi", "fire" }, .expected = installed },
+        .{ .args = &.{ "-Ssiv", "fire" }, .expected = .{ .available = true, .installed = true, .detail = false } },
+        .{ .args = &.{ "search", "standard", "--local", "fire" }, .expected = neither },
+        .{ .args = &.{ "-Ssl", "fire" }, .expected = neither },
+        .{ .args = &.{"-Ssr"}, .expected = neither },
+        .{ .args = &.{"-Ssg"}, .expected = available },
+        .{ .args = &.{ "-Ssg", "base-devel" }, .expected = available },
+        .{ .args = &.{ "search", "standard", "--detail", "firefox" }, .expected = detail },
+        .{ .args = &.{ "search", "standard", "--info", "firefox" }, .expected = detail },
+        .{ .args = &.{ "-Ssd", "firefox" }, .expected = detail },
+        .{ .args = &.{ "-Ssid", "firefox" }, .expected = .{ .available = true, .installed = true, .detail = true } },
+        .{ .args = &.{ "search", "standard", "--explicit" }, .expected = installed },
+        .{ .args = &.{ "-Sse", "fire" }, .expected = installed },
+        .{ .args = &.{ "search", "standard", "--depends" }, .expected = installed },
+        .{ .args = &.{ "-SsD", "fire" }, .expected = installed },
+    };
+    for (cases) |case| {
+        const translation = try shortcodes.translate(allocator, &manifest, case.args);
+        const outcome = try parser.parse(allocator, &manifest, translation.arguments().?);
+        try std.testing.expect(outcome == .dispatch);
+        try std.testing.expectEqualStrings(standard_command_path, outcome.dispatch.command.path);
+        try std.testing.expectEqualDeep(case.expected, standardSources(&outcome.dispatch));
+    }
+}
+
 test "search routes all action-first types through one handler" {
     var tc: test_support.TestContext = .{};
     tc.init();
@@ -1294,15 +1382,17 @@ test "search routes all action-first types through one handler" {
     try std.testing.expectEqual(@as(usize, 3), capture.calls);
 }
 
-test "standard output preserves C# table columns and ranked result order" {
+test "default standard search renders package tables and JSON for both command forms" {
     var tc: test_support.TestContext = .{};
     tc.init();
     defer tc.deinit();
     const manifest = try spec.Manifest.load(tc.arena.allocator());
-    const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "search", "standard", "--available", "discord" });
-
     const StandardFixture = struct {
-        fn search(_: @This(), _: *runtime.RuntimeContext, _: *const parser.Invocation) !Result {
+        fn search(_: @This(), _: *runtime.RuntimeContext, invocation: *const parser.Invocation) !Result {
+            const sources = standardSources(invocation);
+            try std.testing.expect(sources.available);
+            try std.testing.expect(!sources.installed);
+            try std.testing.expect(!sources.detail);
             return .{ .standard = .{
                 .packages = &.{
                     .{ .name = "discord", .repository = "extra", .version = "1", .description = "Chat" },
@@ -1312,12 +1402,32 @@ test "standard output preserves C# table columns and ranked result order" {
             } };
         }
     };
-    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &outcome.dispatch, StandardFixture{}));
-    const rendered = tc.stdout.writer.buffered();
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "│ Name") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "Repository") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "discord").? < std.mem.indexOf(u8, rendered, "webcord").?);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "Total: 2 packages") != null);
+    const shortcodes = @import("../cli/shortcodes.zig");
+    for ([_][]const []const u8{
+        &.{ "search", "standard", "discord" },
+        &.{ "-Ss", "discord" },
+        &.{ "search", "standard", "--available", "discord" },
+        &.{ "search", "standard", "discord", "--json" },
+        &.{ "-Ss", "discord", "--json" },
+    }) |args| {
+        tc.stdout.writer.end = 0;
+        const translation = try shortcodes.translate(tc.arena.allocator(), &manifest, args);
+        const outcome = try parser.parse(tc.arena.allocator(), &manifest, translation.arguments().?);
+        try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &outcome.dispatch, StandardFixture{}));
+        const rendered = tc.stdout.writer.buffered();
+        if (outcome.dispatch.globals.json) {
+            const parsed = try std.json.parseFromSlice(std.json.Value, tc.arena.allocator(), rendered, .{});
+            defer parsed.deinit();
+            try std.testing.expectEqual(@as(usize, 2), parsed.value.array.items.len);
+            try std.testing.expectEqualStrings("discord", parsed.value.array.items[0].object.get("Name").?.string);
+            try std.testing.expectEqualStrings("webcord", parsed.value.array.items[1].object.get("Name").?.string);
+        } else {
+            try std.testing.expect(std.mem.indexOf(u8, rendered, "│ Name") != null);
+            try std.testing.expect(std.mem.indexOf(u8, rendered, "Repository") != null);
+            try std.testing.expect(std.mem.indexOf(u8, rendered, "discord").? < std.mem.indexOf(u8, rendered, "webcord").?);
+            try std.testing.expect(std.mem.indexOf(u8, rendered, "Total: 2 packages") != null);
+        }
+    }
 }
 
 test "standard package detail serializes optional dependency installation state" {
@@ -1568,4 +1678,31 @@ test "package scoring matches the C# ranking tiers" {
     try std.testing.expectEqual(@as(u16, 200), packageScore("vesktop", "Discord client", "discord"));
     try std.testing.expectEqual(@as(u16, 150), packageScore("vesktop", "A custom discord client", "discord"));
     try std.testing.expectEqual(@as(u16, 100), packageScore("webcord", "A discordlike app", "discord"));
+}
+
+test "hyperlink builds correct OSC 8 links for atoll and aur" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var environment = std.process.Environ.Map.init(allocator);
+    var stdout = std.Io.Writer.Discarding.init(&.{});
+    var stderr = std.Io.Writer.Discarding.init(&.{});
+    var context: runtime.RuntimeContext = .{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+        .stdin_is_tty = true,
+        .stdout_is_tty = true,
+        .environment = &environment,
+    };
+
+    const atoll = hyperlink(allocator, "https://atoll.seafoam-labs.org", "/package/vim/", "vim", &context);
+    try std.testing.expect(std.mem.indexOf(u8, atoll, "\x1b]8;;https://atoll.seafoam-labs.org/package/vim/") != null);
+    try std.testing.expect(std.mem.indexOf(u8, atoll, "\x1b\\vim\x1b]8;;\x1b\\") != null);
+
+    const aur = hyperlink(allocator, "https://aur.archlinux.org", "/packages/vim/", "vim", &context);
+    try std.testing.expect(std.mem.indexOf(u8, aur, "\x1b]8;;https://aur.archlinux.org/packages/vim/") != null);
+    try std.testing.expect(std.mem.indexOf(u8, aur, "\x1b\\vim\x1b]8;;\x1b\\") != null);
 }

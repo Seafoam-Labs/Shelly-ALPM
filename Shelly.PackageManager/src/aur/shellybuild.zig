@@ -5,6 +5,11 @@ const process_runner = @import("builder.zig");
 pub const system_path = "/etc/shellybuild.conf";
 pub const file_name = "shellybuild.conf";
 
+pub const EnvironmentAssignment = struct {
+    name: []const u8,
+    value: []const u8,
+};
+
 pub const BuildConfiguration = struct {
     carch: []const u8,
     chost: []const u8,
@@ -19,6 +24,7 @@ pub const BuildConfiguration = struct {
     distcc: bool,
     distcc_hosts: []const []const u8,
     extra_path: []const []const u8 = &.{},
+    env: []const EnvironmentAssignment = &.{},
 };
 
 pub const PackageConfiguration = struct {
@@ -62,6 +68,7 @@ const BuildLayer = struct {
     distcc: ?bool = null,
     distcc_hosts: ?[]const []const u8 = null,
     extra_path: ?[]const []const u8 = null,
+    env: ?toml.Table = null,
 };
 
 const PackageLayer = struct {
@@ -125,13 +132,27 @@ pub const ShellyBuildConfiguration = struct {
         defer if (system_content) |content| allocator.free(content);
         const user_content = try readOptionalFile(io, allocator, configured_user_path);
         defer if (user_content) |content| allocator.free(content);
-        return initFromBuffers(allocator, system_content, user_content);
+        var diagnostic: std.Io.Writer.Allocating = .init(allocator);
+        defer diagnostic.deinit();
+        return initFromBuffersWithDiagnostic(allocator, system_content, user_content, &diagnostic.writer) catch |err| {
+            if (diagnostic.written().len != 0) std.log.err("{s}", .{diagnostic.written()});
+            return err;
+        };
     }
 
     pub fn initFromBuffers(
         allocator: std.mem.Allocator,
         system_content: ?[]const u8,
         user_content: ?[]const u8,
+    ) !*Self {
+        return initFromBuffersWithDiagnostic(allocator, system_content, user_content, null);
+    }
+
+    fn initFromBuffersWithDiagnostic(
+        allocator: std.mem.Allocator,
+        system_content: ?[]const u8,
+        user_content: ?[]const u8,
+        diagnostic: ?*std.Io.Writer,
     ) !*Self {
         const self = try allocator.create(Self);
         errdefer allocator.destroy(self);
@@ -176,8 +197,8 @@ pub const ShellyBuildConfiguration = struct {
         };
         errdefer self.arena.deinit();
 
-        if (system_content) |content| try self.applyBuffer(content);
-        if (user_content) |content| try self.applyBuffer(content);
+        if (system_content) |content| try self.applyBuffer(content, diagnostic);
+        if (user_content) |content| try self.applyBuffer(content, diagnostic);
         try self.validate();
         return self;
     }
@@ -188,8 +209,8 @@ pub const ShellyBuildConfiguration = struct {
         allocator.destroy(self);
     }
 
-    fn applyBuffer(self: *Self, content: []const u8) !void {
-        try validateKnownKeys(self.backing_allocator, content);
+    fn applyBuffer(self: *Self, content: []const u8, diagnostic: ?*std.Io.Writer) !void {
+        try validateKnownKeys(self.backing_allocator, content, diagnostic);
         var parser = toml.Parser(ConfigurationLayer).init(self.backing_allocator);
         defer parser.deinit();
         var parsed = parser.parseString(content) catch return error.InvalidConfiguration;
@@ -211,6 +232,18 @@ pub const ShellyBuildConfiguration = struct {
             if (build.distcc) |value| self.build.distcc = value;
             if (build.distcc_hosts) |value| self.build.distcc_hosts = try duplicateStrings(allocator, value);
             if (build.extra_path) |value| self.build.extra_path = try duplicateStrings(allocator, value);
+            if (build.env) |table| {
+                const assignments = try allocator.alloc(EnvironmentAssignment, table.count());
+                var entries = table.iterator();
+                var index: usize = 0;
+                while (entries.next()) |entry| : (index += 1) {
+                    assignments[index] = .{
+                        .name = try allocator.dupe(u8, entry.key_ptr.*),
+                        .value = try allocator.dupe(u8, entry.value_ptr.string),
+                    };
+                }
+                self.build.env = assignments;
+            }
         }
         if (layer.package) |package| {
             if (package.packager) |value| self.package.packager = try allocator.dupe(u8, value);
@@ -293,7 +326,7 @@ fn duplicateStrings(allocator: std.mem.Allocator, values: []const []const u8) ![
     return duplicated;
 }
 
-fn validateKnownKeys(allocator: std.mem.Allocator, content: []const u8) !void {
+fn validateKnownKeys(allocator: std.mem.Allocator, content: []const u8, diagnostic: ?*std.Io.Writer) !void {
     var parser = toml.Parser(toml.Table).init(allocator);
     defer parser.deinit();
     var parsed = parser.parseString(content) catch return error.InvalidConfiguration;
@@ -317,14 +350,68 @@ fn validateKnownKeys(allocator: std.mem.Allocator, content: []const u8) !void {
         var fields = table.iterator();
         while (fields.next()) |field| {
             if (!containsString(allowed, field.key_ptr.*)) return error.UnknownConfigurationKey;
+            if (std.mem.eql(u8, entry.key_ptr.*, "build") and std.mem.eql(u8, field.key_ptr.*, "env")) {
+                const environment = switch (field.value_ptr.*) {
+                    .table => |value| value,
+                    else => {
+                        if (diagnostic) |writer| try writer.writeAll("build.env must be a table of string values.");
+                        return error.InvalidBuildEnvironment;
+                    },
+                };
+                var variables = environment.iterator();
+                while (variables.next()) |variable| {
+                    const name = variable.key_ptr.*;
+                    const value = switch (variable.value_ptr.*) {
+                        .string => |value| value,
+                        else => {
+                            try writeEnvironmentDiagnostic(diagnostic, name, "expected a string value");
+                            return error.InvalidBuildEnvironment;
+                        },
+                    };
+                    validateEnvironmentAssignment(.{ .name = name, .value = value }) catch |err| {
+                        try writeEnvironmentDiagnostic(diagnostic, name, environmentErrorReason(err));
+                        return err;
+                    };
+                }
+            }
         }
     }
 }
 
-const build_keys: []const []const u8 = &.{ "carch", "chost", "cppflags", "cflags", "cxxflags", "ldflags", "ltoflags", "makeflags", "check", "ccache", "distcc", "distcc_hosts", "extra_path" };
+const build_keys: []const []const u8 = &.{ "carch", "chost", "cppflags", "cflags", "cxxflags", "ldflags", "ltoflags", "makeflags", "check", "ccache", "distcc", "distcc_hosts", "extra_path", "env" };
 const package_keys: []const []const u8 = &.{ "packager", "extension", "options", "strip_binaries", "strip_shared", "strip_static", "sign", "sign_key" };
 const destination_keys: []const []const u8 = &.{ "build", "packages", "sources", "logs" };
 const sandbox_keys: []const []const u8 = &.{ "enabled", "extra_read", "extra_write" };
+
+pub fn validateEnvironmentAssignment(assignment: EnvironmentAssignment) !void {
+    const name = assignment.name;
+    if (name.len == 0 or (!std.ascii.isAlphabetic(name[0]) and name[0] != '_'))
+        return error.InvalidBuildEnvironment;
+    for (name) |byte| {
+        if (!std.ascii.isAlphanumeric(byte) and byte != '_') return error.InvalidBuildEnvironment;
+    }
+    if (std.mem.indexOfScalar(u8, assignment.value, 0) != null) return error.InvalidBuildEnvironment;
+    if (containsString(&.{
+        "PATH",     "HOME",         "USER",              "LOGNAME", "SHELL",    "PWD",       "OLDPWD",
+        "CPPFLAGS", "CFLAGS",       "CXXFLAGS",          "LDFLAGS", "LTOFLAGS", "MAKEFLAGS", "CHOST",
+        "CARCH",    "DISTCC_HOSTS", "SOURCE_DATE_EPOCH", "ENV",     "BASHOPTS", "SHELLOPTS", "IFS",
+        "CDPATH",   "GCONV_PATH",   "LOCPATH",
+    }, name)) return error.ReservedBuildEnvironmentVariable;
+    for ([_][]const u8{ "SHELLY_", "SUDO_", "DOAS_", "PKEXEC_", "XDG_", "DBUS_", "BASH_", "LD_", "DYLD_" }) |prefix| {
+        if (std.mem.startsWith(u8, name, prefix)) return error.ReservedBuildEnvironmentVariable;
+    }
+}
+
+pub fn environmentErrorReason(err: anyerror) []const u8 {
+    return switch (err) {
+        error.ReservedBuildEnvironmentVariable => "reserved for Shelly or process startup; use build.extra_path for PATH and the dedicated build settings for compiler flags",
+        else => "names must match [A-Za-z_][A-Za-z0-9_]* and values must not contain NUL",
+    };
+}
+
+fn writeEnvironmentDiagnostic(writer: ?*std.Io.Writer, name: []const u8, reason: []const u8) !void {
+    if (writer) |output| try output.print("Invalid build.env variable '{f}': {s}.", .{ @import("diagnostics").safe(name), reason });
+}
 
 fn containsString(values: []const []const u8, expected: []const u8) bool {
     for (values) |value| if (std.mem.eql(u8, value, expected)) return true;
@@ -596,4 +683,73 @@ test "shellybuild extra_path rejects relative empty colon and NUL entries" {
         try std.testing.expectError(error.InvalidBuildPath, ShellyBuildConfiguration.initFromBuffers(std.testing.allocator, content, null));
     }
     try std.testing.expectError(error.InvalidConfiguration, ShellyBuildConfiguration.initFromBuffers(std.testing.allocator, "[build]\nextra_path = \"/opt/bin\"\n", null));
+}
+
+test "shellybuild env accepts literal strings and replaces the system table" {
+    const allocator = std.testing.allocator;
+    const defaults = try ShellyBuildConfiguration.initFromBuffers(allocator, null, null);
+    defer defaults.deinit();
+    try std.testing.expectEqual(@as(usize, 0), defaults.build.env.len);
+    const system = "[build]\nenv = { JAVA_HOME = '/opt/java', REMOVE_ME = 'system' }\ncflags = ['-O3']\n";
+    const inherited = try ShellyBuildConfiguration.initFromBuffers(allocator, system, "[build]\ncheck = false\n");
+    defer inherited.deinit();
+    try std.testing.expectEqual(@as(usize, 2), inherited.build.env.len);
+    const replaced = try ShellyBuildConfiguration.initFromBuffers(allocator, system,
+        \\[build.env]
+        \\JAVA_HOME = '/opt/user java'
+        \\LITERAL = '$HOME/~/$(touch should-not-run); "quoted"'
+        \\EMPTY = ''
+        \\LANG = 'C.UTF-8'
+        \\_custom2 = '∂'
+    );
+    defer replaced.deinit();
+    try std.testing.expectEqual(@as(usize, 5), replaced.build.env.len);
+    try std.testing.expectEqualStrings("-O3", replaced.build.cflags[0]);
+    var values = std.process.Environ.Map.init(allocator);
+    defer values.deinit();
+    for (replaced.build.env) |assignment| try values.put(assignment.name, assignment.value);
+    try std.testing.expect(values.get("REMOVE_ME") == null);
+    try std.testing.expectEqualStrings("/opt/user java", values.get("JAVA_HOME").?);
+    try std.testing.expectEqualStrings("$HOME/~/$(touch should-not-run); \"quoted\"", values.get("LITERAL").?);
+    try std.testing.expectEqualStrings("", values.get("EMPTY").?);
+    try std.testing.expectEqualStrings("C.UTF-8", values.get("LANG").?);
+    try std.testing.expectEqualStrings("∂", values.get("_custom2").?);
+    const cleared = try ShellyBuildConfiguration.initFromBuffers(allocator, system, "[build]\nenv = {}\n");
+    defer cleared.deinit();
+    try std.testing.expectEqual(@as(usize, 0), cleared.build.env.len);
+}
+
+test "shellybuild env rejects invalid tables names values and reserved variables" {
+    const allocator = std.testing.allocator;
+    for ([_][]const u8{
+        "[build]\nenv = 'invalid'\n",
+        "[build]\nenv = []\n",
+        "[build.env]\nBAD = 42\n",
+        "[build.env]\nBAD = true\n",
+        "[build.env]\nBAD = {}\n",
+        "[build.env]\nBAD = []\n",
+        "[build.env]\n'' = 'bad'\n",
+        "[build.env]\n'1BAD' = 'bad'\n",
+        "[build.env]\n'BAD-NAME' = 'bad'\n",
+        "[build.env]\n'BAD=NAME' = 'bad'\n",
+        "[build.env]\n'∂' = 'bad'\n",
+        "[build.env]\nBAD = \"nul\\u0000value\"\n",
+    }) |content|
+        try std.testing.expectError(error.InvalidBuildEnvironment, ShellyBuildConfiguration.initFromBuffers(allocator, content, null));
+    for ([_][]const u8{
+        "PATH",                  "HOME",         "USER",              "LOGNAME",    "SHELL",           "PWD",                      "OLDPWD",
+        "CPPFLAGS",              "CFLAGS",       "CXXFLAGS",          "LDFLAGS",    "LTOFLAGS",        "MAKEFLAGS",                "CHOST",
+        "CARCH",                 "DISTCC_HOSTS", "SOURCE_DATE_EPOCH", "ENV",        "BASH_ENV",        "BASHOPTS",                 "SHELLOPTS",
+        "IFS",                   "CDPATH",       "GCONV_PATH",        "LOCPATH",    "LD_PRELOAD",      "LD_LIBRARY_PATH",          "LD_AUDIT",
+        "DYLD_INSERT_LIBRARIES", "SUDO_USER",    "DOAS_USER",         "PKEXEC_UID", "XDG_CONFIG_HOME", "DBUS_SESSION_BUS_ADDRESS", "SHELLY_ELEVATOR",
+    }) |name| {
+        const content = try std.fmt.allocPrint(allocator, "[build.env]\n{s} = 'private-value'\n", .{name});
+        defer allocator.free(content);
+        var diagnostic: std.Io.Writer.Allocating = .init(allocator);
+        defer diagnostic.deinit();
+        try std.testing.expectError(error.ReservedBuildEnvironmentVariable, ShellyBuildConfiguration.initFromBuffersWithDiagnostic(allocator, content, null, &diagnostic.writer));
+        try std.testing.expect(std.mem.indexOf(u8, diagnostic.written(), name) != null);
+        try std.testing.expect(std.mem.indexOf(u8, diagnostic.written(), "private-value") == null);
+    }
+    try std.testing.expectError(error.UnknownConfigurationKey, ShellyBuildConfiguration.initFromBuffers(allocator, "[build]\nenvv = {}\n", null));
 }

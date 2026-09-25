@@ -1,6 +1,31 @@
 const std = @import("std");
 const package_manifest = @import("build.zig.zon");
 
+// The pinned zig-toml parser requires a key even in {}. Patch its generated
+// source copy until the dependency supports empty inline tables (build.env = {}).
+// Never modify the dependency cache shared by other projects.
+fn patchedTomlModule(b: *std.Build, dependency: *std.Build.Dependency, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
+    const source_path = dependency.path("src/table.zig").getPath3(b, null);
+    const source = source_path.root_dir.handle.readFileAlloc(b.graph.io, source_path.subPathOrDot(), b.allocator, .limited(1024 * 1024)) catch @panic("cannot read zig-toml table parser");
+    const before = "    while (true) {\n        spaces.skipSpacesAndLineBreaks(ctx);\n        var pair = try kv.parse(ctx);";
+    const after =
+        \\    spaces.skipSpacesAndLineBreaks(ctx);
+        \\    if (ctx.current() == '}') {
+        \\        _ = ctx.next();
+        \\        return table;
+        \\    }
+        \\    while (true) {
+        \\        spaces.skipSpacesAndLineBreaks(ctx);
+        \\        var pair = try kv.parse(ctx);
+    ;
+    if (std.mem.count(u8, source, before) != 1) @panic("zig-toml changed: review the empty inline table patch");
+    const patched = std.mem.replaceOwned(u8, b.allocator, source, before, after) catch @panic("OOM");
+    const files = b.addWriteFiles();
+    const directory = files.addCopyDirectory(dependency.path("src"), "src", .{ .exclude_extensions = &.{"table.zig"} });
+    _ = files.add("src/table.zig", patched);
+    return b.createModule(.{ .root_source_file = directory.path(b, "root.zig"), .target = target, .optimize = optimize });
+}
+
 // Although this function looks imperative, it does not perform the build
 // directly and instead it mutates the build graph (`b`) that will be then
 // executed by an external runner. The functions in `std.Build` implement a DSL
@@ -26,6 +51,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    const toml_module = patchedTomlModule(b, toml, target, optimize);
     // It's also possible to define more custom flags to toggle optional features
     // of this build script using `b.option()`. All defined flags (including
     // target and optimize options) will be listed when running `zig build --help`
@@ -93,7 +119,7 @@ pub fn build(b: *std.Build) void {
     mod.addImport("operation_context", operation_context_mod);
     mod.addImport("user_account", user_account_mod);
     mod.addImport("ShellyHttp", shelly_http.module("ShellyHttp"));
-    mod.addImport("toml", toml.module("toml"));
+    mod.addImport("toml", toml_module);
     const package_options = b.addOptions();
     package_options.addOption([]const u8, "version", package_manifest.version);
     // Keep this generated module distinct from consumers that independently
@@ -299,7 +325,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     shellybuild_test_module.addImport("diagnostics", diagnostics);
-    shellybuild_test_module.addImport("toml", toml.module("toml"));
+    shellybuild_test_module.addImport("toml", toml_module);
     shellybuild_test_module.addImport("operation_context", operation_context_mod);
     shellybuild_test_module.addImport("user_account", user_account_mod);
     const shellybuild_tests = b.addTest(.{
@@ -503,6 +529,7 @@ pub fn build(b: *std.Build) void {
             "get_foreign_packages excludes packages provided by a sync database",
             "fetchCallback accepts prepared cache entries and rejects missing artifacts",
             "parses repositories, servers, siglevel and usage",
+            "configuration includes",
             "hold package mutations rewrite HoldPkg and preserve shelly",
             "add_repository appends a repository section to the config file",
             "add_repository rejects duplicate and invalid repository names",
@@ -563,6 +590,7 @@ pub fn build(b: *std.Build) void {
             "required missing database signature fails without leaving a database",
             "invalid optional database signature is fatal and cleaned up",
             "Manager.sync downloads the configured database into DBPath/sync",
+            "Manager.sync keeps included repository mirrors separate during fallback",
             "Manager.sync exposes cancellable logical database downloads during mirror failover",
             "refresh reloads an externally replaced sync database cache",
             "refresh reports a detailed reinitialization failure",
@@ -681,6 +709,7 @@ pub fn build(b: *std.Build) void {
         .root_module = mod,
         .filters = &.{
             "AUR dispatcher forwards package stages and build progress",
+            "AUR needed",
             "AUR dispatcher returns provider selections",
             "AUR handlers can be removed through the manager-facing dispatcher",
             "AUR RPC URL and form encoding matches the C# requests",
@@ -736,9 +765,13 @@ pub fn build(b: *std.Build) void {
             "all requested PKGBUILDs are reviewed before the first build",
             "AUR upgrades skip declined reviews",
             "AUR package failures are emitted after all builds and fail the operation",
+            "AUR metadata",
             "AUR package preparation failure does not stop valid packages",
             "build-only dependencies are removed after a failed build",
             "PackageBuilder init keeps the provided collaborators",
+            "PackageBuilder functionless metapackages",
+            "PackageBuilder permits optional lifecycle steps",
+            "PackageBuilder SRCINFO failures",
             "non-root builder guard rejects root effective uid",
             "PackageBuilder rejects a PKGBUILD changed after review",
             "PackageBuilder resolves issue 1750 source command substitution after review",
@@ -817,7 +850,7 @@ pub fn build(b: *std.Build) void {
             "PackageBuilder retains failed and cancelled build logs",
             "PackageBuilder fails before PKGBUILD execution when log destination is unusable",
             "PackageBuilder reports failure when a step exits non-zero",
-            "PackageBuilder reports failure instead of crashing without execution steps",
+            "PackageBuilder builds a metapackage without execution steps",
             "PackageBuilder builds all requested split members after shared steps run once",
             "PackageBuilder keeps shared split builds under the global pkgname",
             "PackageBuilder preserves selected split metadata in PKGINFO",
@@ -839,11 +872,12 @@ pub fn build(b: *std.Build) void {
             "archive virtual ownership is shared by package and mtree writers",
             "AUR operation-hooked public APIs compile",
             "coordinator child build arguments bind review package set and policies",
-            "clean invoking-user build command drops the elevated environment",
+            "clean invoking-user build command",
             "build progress parser recognizes makepkg percentage lines",
             "build environment exports flags hosts and compiler wrapper paths",
             "native build PATH",
             "PackageBuilder uses configured PATH",
+            "PackageBuilder build.env",
             "PackageBuilder reports invalid configured PATH",
             "disabled build environment removes inherited flags and hosts",
             "streaming process execution forwards stdout stderr and a final unterminated line",

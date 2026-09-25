@@ -1851,6 +1851,10 @@ fn renderIsolatedConfiguration(
     try writeTomlArray(writer, "makeflags", configuration.build.makeflags);
     try writeTomlArray(writer, "extra_path", configuration.build.extra_path);
     try writer.print("check = {}\nccache = false\ndistcc = false\n\n", .{configuration.build.check});
+    try writer.writeAll("[build.env]\n");
+    for (configuration.build.env) |assignment|
+        try writeTomlString(writer, assignment.name, assignment.value);
+    try writer.writeByte('\n');
 
     try writer.writeAll("[package]\n");
     try writeTomlString(writer, "packager", configuration.package.packager);
@@ -3208,7 +3212,7 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
     const marker_path = try std.fs.path.join(test_context.arena.allocator(), &.{ directory_path, "lifecycle-ran" });
     const pkgbuild_content = try std.fmt.allocPrint(
         test_context.arena.allocator(),
-        "pkgname=demo\npkgver=1\npkgrel=1\npkgdesc=$(printf 'Dynamic description')\narch=(any)\n" ++
+        "pkgname=demo\npkgver=1\npkgrel=1\npkgdesc=$(printf '%s' \"$BUILD_ENV_DESCRIPTION\")\narch=(any)\n" ++
             "install=''\nchangelog=\"\"\n" ++
             "_enable_plasmoid=${{SYNCTHING_TRAY_ENABLE_PLASMOID:-1}}\n" ++
             "makedepends=('cmake')\n" ++
@@ -3222,6 +3226,11 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
     try pkgbuild.writeStreamingAll(std.testing.io, pkgbuild_content);
     pkgbuild.close(std.testing.io);
 
+    try temporary.dir.createDirPath(std.testing.io, ".config/shelly");
+    try temporary.dir.writeFile(std.testing.io, .{
+        .sub_path = ".config/shelly/shellybuild.conf",
+        .data = "[build.env]\nBUILD_ENV_DESCRIPTION = 'Dynamic description'\n",
+    });
     const environ = try testEnvironWithHome(std.testing.allocator, directory_path);
     defer environ.block.deinit(std.testing.allocator);
     test_context.context.environ = environ;
@@ -3671,6 +3680,12 @@ test "isolated configuration preserves build policy and forces guest-local desti
     );
     defer configuration.deinit();
     configuration.build.extra_path = &.{"/opt/guest-toolchain/bin"};
+    configuration.build.env = &.{
+        .{ .name = "JAVA_HOME", .value = "/opt/guest-java" },
+        .{ .name = "BUILD_ENV_LITERAL", .value = "$HOME/~/\"quoted\"\\path\n\t∂" },
+        .{ .name = "BUILD_ENV_EMPTY", .value = "" },
+        .{ .name = "LANG", .value = "C.UTF-8" },
+    };
     const rendered = try renderIsolatedConfiguration(std.testing.allocator, configuration);
     defer std.testing.allocator.free(rendered);
     const parsed = try ShellyBuildConfiguration.initFromBuffers(
@@ -3682,6 +3697,16 @@ test "isolated configuration preserves build policy and forces guest-local desti
     try std.testing.expectEqualStrings(configuration.build.carch, parsed.build.carch);
     try std.testing.expectEqualStrings("/opt/guest-toolchain/bin", parsed.build.extra_path[0]);
     try std.testing.expectEqualStrings(configuration.build.cflags[0], parsed.build.cflags[0]);
+    try std.testing.expectEqual(configuration.build.env.len, parsed.build.env.len);
+    for (configuration.build.env) |expected| {
+        var found = false;
+        for (parsed.build.env) |actual| {
+            if (!std.mem.eql(u8, expected.name, actual.name)) continue;
+            try std.testing.expectEqualStrings(expected.value, actual.value);
+            found = true;
+        }
+        try std.testing.expect(found);
+    }
     try std.testing.expectEqualStrings("/build/work", parsed.destinations.build.?);
     try std.testing.expectEqualStrings(isolated_build.guest_artifacts, parsed.destinations.packages.?);
     try std.testing.expect(!parsed.package.sign);

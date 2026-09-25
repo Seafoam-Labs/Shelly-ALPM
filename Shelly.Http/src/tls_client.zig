@@ -510,6 +510,9 @@ pub fn init(input: *Reader, output: *Writer, options: Options) InitError!Client 
                             .ECDHE_RSA_WITH_AES_128_GCM_SHA256,
                             .ECDHE_RSA_WITH_AES_256_GCM_SHA384,
                             .ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+                            .ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                            .ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+                            .ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
                             => |tag| {
                                 handshake_cipher = @unionInit(tls.HandshakeCipher, @tagName(tag.with()), .{
                                     .transcript_hash = .init(.{}),
@@ -569,6 +572,9 @@ pub fn init(input: *Reader, output: *Writer, options: Options) InitError!Client 
                                 .ECDHE_RSA_WITH_AES_128_GCM_SHA256,
                                 .ECDHE_RSA_WITH_AES_256_GCM_SHA384,
                                 .ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+                                .ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                                .ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+                                .ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
                                 => handshake_state = .certificate,
                                 else => return error.TlsIllegalParameter,
                             },
@@ -1651,19 +1657,25 @@ const cipher_suites = if (crypto.core.aes.has_hardware_support)
         .AEGIS_256_SHA512,
         .AES_128_GCM_SHA256,
         .ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+        .ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
         .AES_256_GCM_SHA384,
         .ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+        .ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
         .CHACHA20_POLY1305_SHA256,
         .ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+        .ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
     })
 else
     array(u16, tls.CipherSuite, .{
         .CHACHA20_POLY1305_SHA256,
         .ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+        .ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
         .AEGIS_128L_SHA256,
         .AEGIS_256_SHA512,
         .AES_128_GCM_SHA256,
         .ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+        .ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
         .AES_256_GCM_SHA384,
         .ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+        .ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
     });

@@ -1170,13 +1170,18 @@ pub const AppImageManager = struct {
     }
 
     pub fn removeAppImage(self: AppImageManager, appimage_path: []const u8, remove_config_files: bool) !bool {
+        return self.removeAppImageByName(std.fs.path.stem(appimage_path), appimage_path, remove_config_files);
+    }
+
+    /// Keep the database identity when the recorded filename differs from the name.
+    /// A missing binary is also removable: its metadata and integration are stale.
+    pub fn removeAppImageByName(self: AppImageManager, app_name: []const u8, appimage_path: []const u8, remove_config_files: bool) !bool {
         try ensureNonRootMutation();
         var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .remove, appimage_path);
         operation_scope.attach();
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try self.checkCancelled();
-        const app_name = std.fs.path.stem(appimage_path);
         self.emitStatusFmt(.information, "Removing AppImage {s}...", .{app_name});
         const clean_name = try self.cleanInvalidNames(app_name);
         defer self.allocator.free(clean_name);

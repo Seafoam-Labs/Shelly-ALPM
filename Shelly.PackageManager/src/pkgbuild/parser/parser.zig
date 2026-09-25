@@ -266,6 +266,36 @@ fn parse_test_pkgbuild(
     return parser.parser_content(complete, base_dir);
 }
 
+test "parser_content: full versions omit empty and zero epochs" {
+    const allocator = std.testing.allocator;
+    const parser = PkgbuildParser{ .allocator = allocator, .io = std.testing.io };
+    const cases = [_]struct { assignment: []const u8, expected: []const u8 }{
+        .{ .assignment = "", .expected = "4.1.13.9-1" },
+        .{ .assignment = "epoch=", .expected = "4.1.13.9-1" },
+        .{ .assignment = "epoch=''", .expected = "4.1.13.9-1" },
+        .{ .assignment = "epoch=\"\"", .expected = "4.1.13.9-1" },
+        .{ .assignment = "epoch=0", .expected = "4.1.13.9-1" },
+        .{ .assignment = "epoch=00", .expected = "4.1.13.9-1" },
+        .{ .assignment = "epoch=2", .expected = "2:4.1.13.9-1" },
+    };
+    for (cases) |case| {
+        const content = try std.fmt.allocPrint(allocator,
+            \\pkgname=epoch-fixture
+            \\pkgver=4.1.13.9
+            \\pkgrel=1
+            \\{s}
+            \\package() {{ :; }}
+            \\
+        , .{case.assignment});
+        defer allocator.free(content);
+        var info = try parse_test_pkgbuild(parser, content, null);
+        defer info.deinit(allocator);
+        const full_version = try info.get_full_version(allocator);
+        defer allocator.free(full_version);
+        try std.testing.expectEqualStrings(case.expected, full_version);
+    }
+}
+
 test "parser_content resolves python-sabctools source as remote" {
     const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
     var info = try parse_test_pkgbuild(parser,

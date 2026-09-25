@@ -67,6 +67,13 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_module_tests.step);
     test_step.dependOn(&run_executable_tests.step);
 
+    const appimage_removal_tests = b.addTest(.{
+        .root_module = cli,
+        .filters = &.{ "AppImage removal", "resolves one AppImage", "remove AppImage" },
+    });
+    const run_appimage_removal_tests = b.addRunArtifact(appimage_removal_tests);
+    b.step("appimage-removal-test", "Test AppImage removal identity and stale metadata cleanup").dependOn(&run_appimage_removal_tests.step);
+
     const upgrade_tests = b.addTest(.{
         .root_module = cli,
         .filters = &.{"upgrade"},
