@@ -289,6 +289,19 @@ pub const Root = struct {
         try self.runCancellable(environ, argv, operation, .build);
     }
 
+    pub fn readPkgverChange(self: *Root, original: []const u8) !?[]u8 {
+        var directory = try std.Io.Dir.cwd().openDir(self.io, self.source_path, .{ .follow_symlinks = false });
+        defer directory.close(self.io);
+        const file = try directory.openFile(self.io, "PKGBUILD", .{ .follow_symlinks = false });
+        defer file.close(self.io);
+        if ((try file.stat(self.io)).kind != .file) return error.InvalidPkgbuildPath;
+        var buffer: [4096]u8 = undefined;
+        var reader = file.reader(self.io, &buffer);
+        const updated = try reader.interface.allocRemaining(self.allocator, .limited(32 * 1024 * 1024));
+        defer self.allocator.free(updated);
+        return Zigalpm.builder.pkgver_update.extractChange(self.allocator, original, updated);
+    }
+
     pub fn exportArtifacts(
         self: *Root,
         destination: []const u8,
@@ -650,6 +663,35 @@ test "operation paths are restricted to random children of the managed parent" {
     try validateOperationPath("/var/lib/shelly/build-roots/v1/operations/0123456789abcdef0123456789abcdef");
     try std.testing.expectError(error.InvalidIsolationPath, validateOperationPath("/"));
     try std.testing.expectError(error.InvalidIsolationPath, validateOperationPath("/var/lib/shelly/build-roots/v1/operations/../host"));
+}
+
+test "isolated pkgver guest transport rejects unrelated edits and symlinks" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const source_path = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(source_path);
+    var root: Root = .{
+        .allocator = allocator,
+        .io = io,
+        .operation_path = source_path,
+        .root_path = source_path,
+        .source_path = source_path,
+        .artifact_path = source_path,
+    };
+    const original = "pkgname=demo\npkgver=1\npkgrel=7\narch=('any')\npackage() { :; }\n";
+    const updated = try Zigalpm.builder.pkgver_update.render(allocator, original, "r2.gabc");
+    defer allocator.free(updated);
+    try temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = updated });
+    const version = (try root.readPkgverChange(original)).?;
+    defer allocator.free(version);
+    try std.testing.expectEqualStrings("r2.gabc", version);
+    try temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = original ++ "# unrelated edit\n" });
+    try std.testing.expectError(error.ReviewedPkgbuildChanged, root.readPkgverChange(original));
+    try temporary.dir.deleteFile(io, "PKGBUILD");
+    try temporary.dir.symLink(io, "/etc/passwd", "PKGBUILD", .{});
+    try std.testing.expectError(error.SymLinkLoop, root.readPkgverChange(original));
 }
 
 test "reviewed input paths cannot escape the staged source root" {
