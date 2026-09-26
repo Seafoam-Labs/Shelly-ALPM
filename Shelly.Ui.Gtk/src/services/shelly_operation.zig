@@ -114,12 +114,16 @@ pub const Question = union(enum) {
     },
     select_many: struct {
         question_id: []const u8,
+        question_kind: []const u8,
         prompt: []const u8,
+        arguments: []const []const u8,
         options: []Option,
     },
     select_one: struct {
         question_id: []const u8,
+        question_kind: []const u8,
         prompt: []const u8,
+        arguments: []const []const u8,
         options: []Option,
     },
     pkgbuild: struct {
@@ -136,6 +140,7 @@ pub const Question = union(enum) {
 
 pub const TransactionQuestion = struct {
     question_id: []const u8,
+    question_kind: []const u8,
     question_text: []const u8,
     action: []const u8,
     packages: []TransactionPackage,
@@ -167,8 +172,10 @@ pub const Option = struct {
 const SelectionRequest = struct {
     @"$kind": []const u8 = "",
     QuestionId: []const u8 = "",
+    QuestionKind: []const u8 = "",
     DependencyName: []const u8 = "",
     QuestionText: []const u8 = "",
+    Arguments: []const []const u8 = &.{},
     Options: []OptionWire = &.{},
 };
 
@@ -215,6 +222,7 @@ const YesNoRequest = struct {
 pub const TransactionRequest = struct {
     @"$kind": []const u8 = "",
     QuestionId: []const u8 = "",
+    QuestionKind: []const u8 = "",
     QuestionText: []const u8 = "",
     Action: []const u8 = "",
     Packages: []TransactionPackageWire = &.{},
@@ -839,6 +847,7 @@ fn parseTransaction(op: *ShellyOperation, json: []const u8) !?*PendingQuestion {
 
     pending.request = .{ .transaction = .{
         .question_id = try qa.dupe(u8, e.value.QuestionId),
+        .question_kind = qa.dupe(u8, e.value.QuestionKind) catch "",
         .question_text = qa.dupe(u8, e.value.QuestionText) catch "",
         .action = qa.dupe(u8, e.value.Action) catch "",
         .packages = packages,
@@ -869,23 +878,35 @@ fn parseSelection(op: *ShellyOperation, json: []const u8, kind: []const u8) !?*P
     }
 
     const qid = try qa.dupe(u8, e.value.QuestionId);
+    const question_kind = try qa.dupe(u8, e.value.QuestionKind);
+
+    const arguments = try qa.alloc([]const u8, e.value.Arguments.len);
+    for (e.value.Arguments, arguments) |argument, *owned| {
+        owned.* = try qa.dupe(u8, argument);
+    }
 
     if (std.mem.eql(u8, kind, "q.optdeps")) {
         pending.request = .{ .select_many = .{
             .question_id = qid,
+            .question_kind = question_kind,
             .prompt = qa.dupe(u8, e.value.QuestionText) catch "",
+            .arguments = arguments,
             .options = opts,
         } };
     } else if (std.mem.eql(u8, kind, "q.provider")) {
         pending.request = .{ .select_one = .{
             .question_id = qid,
+            .question_kind = question_kind,
             .prompt = qa.dupe(u8, e.value.QuestionText) catch "",
+            .arguments = arguments,
             .options = opts,
         } };
     } else {
         pending.request = .{ .select_one = .{
             .question_id = qid,
+            .question_kind = question_kind,
             .prompt = qa.dupe(u8, e.value.DependencyName) catch "",
+            .arguments = arguments,
             .options = opts,
         } };
     }

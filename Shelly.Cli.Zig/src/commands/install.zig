@@ -391,6 +391,7 @@ fn confirmStandardUpgradeUiWithUpdates(
     var answer = try operation.ask(.{
         .kind = .confirmation,
         .prompt = "Proceed with the standard system upgrade?",
+        .purpose = .standard_upgrade,
         .default_response = .accepted,
     });
     defer answer.deinit(context.allocator);

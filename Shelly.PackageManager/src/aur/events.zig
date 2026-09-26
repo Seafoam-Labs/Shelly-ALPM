@@ -62,6 +62,7 @@ pub const QuestionArgs = struct {
     question: []const u8,
     options: []const ProviderOption,
     dependency_name: ?[]const u8 = null,
+    arguments: []const []const u8 = &.{},
 };
 
 /// The returned indices borrow storage from the question handler and are
@@ -201,8 +202,13 @@ pub const Dispatcher = struct {
                         .select_optional_dependencies => .select_optional_dependencies,
                         .select_provider => .select_provider,
                     },
+                    .purpose = switch (args.question_type) {
+                        .select_optional_dependencies => .select_optional_dependencies, // plural AUR wording
+                        .select_provider => .select_provider,
+                    },
                     .prompt = args.question,
                     .options = options,
+                    .arguments = args.arguments,
                     .dependency_name = args.dependency_name,
                 }) catch |err| {
                     if (err != error.Cancelled) operation.reportError(err, "Could not obtain an answer to the package confirmation. Run the operation with an interactive confirmation interface.", "aur", null, false);

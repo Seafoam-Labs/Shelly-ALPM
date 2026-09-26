@@ -18,6 +18,7 @@ const PkgbuildReviewDialog = @import("../dialog/page/pkg_build.zig").PkgbuildRev
 const PlanDialog = @import("../dialog/page/plan.zig").PlanDialog;
 const ProviderDialog = @import("../dialog/page/provider.zig").ProviderDialog;
 const translations = @import("../helpers/translations.zig");
+const question_translations = @import("../helpers/question_translation.zig");
 
 const log = std.log.scoped(.transaction_page);
 
@@ -999,12 +1000,7 @@ pub const TransactionPage = extern struct {
             .yes_no => |q| {
                 const qa = pending.arena.allocator();
 
-                const text_z = getQuestionText(
-                    qa,
-                    q.question_kind,
-                    q.arguments,
-                    q.question_text,
-                ) catch {
+                const text_z = question_translations.translateFromWire(qa, q.question_kind, q.arguments, q.question_text) catch {
                     pending.operation.answerYesNo(q.question_id, false) catch {};
                     pending.destroy();
                     return;
@@ -1027,10 +1023,12 @@ pub const TransactionPage = extern struct {
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
 
+                const qa = pending.arena.allocator();
+                const translation_title = question_translations.translateFromWire(qa, q.question_kind, q.arguments, q.prompt) catch q.prompt;
                 const dialog = MultiSelectDialog.new(
                     pending.arena.allocator(),
-                    q.prompt,
-                    translations._("Skip"),
+                    translation_title,
+                    translations._("Cancel"),
                     q.options,
                     &on_multiselect_response,
                     pending,
@@ -1043,10 +1041,11 @@ pub const TransactionPage = extern struct {
                 log.debug("select_one: {s}", .{q.prompt});
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
-
+                const qa = pending.arena.allocator();
+                const translation_title = question_translations.translateFromWire(qa, q.question_kind, q.arguments, "Select Provider") catch "Select Provider";
                 const dialog = ProviderDialog.new(
                     pending.arena.allocator(),
-                    "Select Provider",
+                    translation_title,
                     q.options,
                     &on_single_select_response,
                     pending,
@@ -1109,7 +1108,12 @@ pub const TransactionPage = extern struct {
             .transaction => |q| {
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
-                const dialog = PlanDialog.new(q, &on_plan_response, pending);
+
+                const qa = pending.arena.allocator();
+                var question = q;
+                question.question_text = question_translations.translateFromWire(qa, q.question_kind, &.{}, q.question_text) catch q.question_text;
+                const dialog = PlanDialog.new(question, &on_plan_response, pending);
+
                 gtk.Box.append(p.question_layer, dialog.as(gtk.Widget));
                 gtk.Widget.setVisible(p.question_layer.as(gtk.Widget), 1);
             },

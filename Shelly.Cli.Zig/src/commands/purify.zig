@@ -275,6 +275,7 @@ fn confirmPurifyUi(context: *runtime.RuntimeContext, backend: Backend) !bool {
     var answer = try operation.ask(.{
         .kind = .confirmation,
         .prompt = "Proceed with purify?",
+        .purpose = .purify,
         .default_response = .declined,
     });
     defer answer.deinit(context.allocator);
@@ -1120,7 +1121,7 @@ test "purify UI presents the plan before a compatible confirmation frame" {
             plan_index = frame_index;
         if (std.mem.indexOf(u8, decoded, "\"$kind\":\"q.yesno\"") != null) {
             question_index = frame_index;
-            try std.testing.expect(std.mem.indexOf(u8, decoded, "\"QuestionKind\":\"RemovePkgs\"") != null);
+            try std.testing.expect(std.mem.indexOf(u8, decoded, "\"QuestionKind\":\"PurifyConfirm\"") != null);
         }
     }
     try std.testing.expect(plan_index != null);

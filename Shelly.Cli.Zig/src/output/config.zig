@@ -292,6 +292,8 @@ pub fn writeTransactionQuestionFrame(
     try json.write(question_id);
     try json.objectField("QuestionText");
     try json.write(question.prompt);
+    try json.objectField("QuestionKind");
+    try json.write(questionKindName(question));
     try json.objectField("Action");
     try json.write(@tagName(plan.action));
     try json.objectField("Packages");
@@ -360,6 +362,12 @@ fn writeSelectionQuestionFrame(
     try json.write(wire_kind);
     try json.objectField("QuestionId");
     try json.write(question_id);
+    try json.objectField("QuestionKind");
+    try json.write(questionKindName(question));
+    try json.objectField("Arguments");
+    try json.beginArray();
+    for (question.arguments) |argument| try json.write(argument);
+    try json.endArray();
     try json.objectField("DependencyName");
     try json.write(question.dependency_name orelse switch (question.kind) {
         .select_one, .select_many => question.prompt,
@@ -391,14 +399,29 @@ fn writeSelectionQuestionFrame(
 }
 
 fn questionKindName(question: Zigalpm.OperationQuestion) []const u8 {
-    switch (question.purpose) {
-        .cache_clean_extra_entries => return "CacheCleanExtraEntries",
-        .package_conflict => return "PackageConflict",
-        .generic => {},
-    }
+    return switch (question.purpose) {
+        .generic => genericQuestionKindName(question),
+        .cache_clean_extra_entries => "CacheCleanExtraEntries",
+        .package_conflict => "PackageConflict",
+        .install_ignored => "InstallIgnored",
+        .replace_package => "ReplacePackage",
+        .corrupted_package => "CorruptedPackage",
+        .remove_packages_skip => "RemovePackagesSkip",
+        .partial_upgrade => "PartialUpgrade",
+        .standard_upgrade => "StandardUpgrade",
+        .transaction_install => "TransactionInstall",
+        .transaction_remove => "TransactionRemove",
+        .transaction_aur_install => "TransactionAurInstall",
+        .select_provider => "SelectProvider",
+        .select_optional_dependency => "SelectOptionalDependency",
+        .select_optional_dependencies => "SelectOptionalDependencies",
+        .purify => "PurifyConfirm",
+        .import_source_signing_key => "ImportSourceSigningKey",
+    };
+}
 
+fn genericQuestionKindName(question: Zigalpm.OperationQuestion) []const u8 {
     if (question.kind == .import_pgp_key) return "ImportPgpKey";
-
     return switch (question.envelope.kind) {
         .remove => "RemovePkgs",
         .update => "ConflictPkg",
@@ -433,6 +456,48 @@ test "cache clean question uses cache clean wire kind" {
         "CacheCleanExtraEntries",
         questionKindName(question),
     );
+}
+
+test "every question purpose maps to its wire kind" {
+    const cases = [_]struct {
+        purpose: Zigalpm.OperationPurpose,
+        expected: []const u8,
+    }{
+        .{ .purpose = .cache_clean_extra_entries, .expected = "CacheCleanExtraEntries" },
+        .{ .purpose = .package_conflict, .expected = "PackageConflict" },
+        .{ .purpose = .install_ignored, .expected = "InstallIgnored" },
+        .{ .purpose = .replace_package, .expected = "ReplacePackage" },
+        .{ .purpose = .corrupted_package, .expected = "CorruptedPackage" },
+        .{ .purpose = .remove_packages_skip, .expected = "RemovePackagesSkip" },
+        .{ .purpose = .partial_upgrade, .expected = "PartialUpgrade" },
+        .{ .purpose = .standard_upgrade, .expected = "StandardUpgrade" },
+        .{ .purpose = .transaction_install, .expected = "TransactionInstall" },
+        .{ .purpose = .transaction_remove, .expected = "TransactionRemove" },
+        .{ .purpose = .transaction_aur_install, .expected = "TransactionAurInstall" },
+        .{ .purpose = .select_provider, .expected = "SelectProvider" },
+        .{ .purpose = .select_optional_dependency, .expected = "SelectOptionalDependency" },
+        .{ .purpose = .select_optional_dependencies, .expected = "SelectOptionalDependencies" },
+        .{ .purpose = .purify, .expected = "PurifyConfirm" },
+        .{ .purpose = .import_source_signing_key, .expected = "ImportSourceSigningKey" },
+    };
+    for (cases) |case| {
+        const question: Zigalpm.OperationQuestion = .{
+            .question_id = 1,
+            .envelope = .{ .operation_id = 1, .parent_id = null, .backend = .alpm, .kind = .install, .subject = null },
+            .kind = .confirmation,
+            .purpose = case.purpose,
+            .prompt = "test",
+            .options = &.{},
+            .attachments = &.{},
+            .review = null,
+            .arguments = &.{},
+            .transaction_plan = null,
+            .dependency_name = null,
+            .pgp_key_import = null,
+            .default_response = .default,
+        };
+        try std.testing.expectEqualStrings(case.expected, questionKindName(question));
+    }
 }
 
 fn writeAlpmProgressFrame(

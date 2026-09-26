@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-09-3 12:00+0800\n"
 "Last-Translator: DeepSeek AI\n"
 "Language-Team: China (Simplified)\n"
@@ -53,9 +53,6 @@ msgstr "应用数据将会永久删除。"
 msgid "Confirm"
 msgstr "确认"
 
-msgid "Skip"
-msgstr "跳过"
-
 msgid "No special permissions requested"
 msgstr ""
 
@@ -91,6 +88,9 @@ msgstr ""
 
 msgid "Review PKGBUILD"
 msgstr "审阅 PKGBUILD"
+
+msgid "Skip"
+msgstr "跳过"
 
 msgid "Search..."
 msgstr "搜索..."
@@ -140,7 +140,6 @@ msgstr ""
 msgid "e.g. owner/repo or https://..."
 msgstr ""
 
-#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
@@ -173,20 +172,28 @@ msgstr "同步"
 msgid "Remove"
 msgstr "移除"
 
-msgid "Information"
-msgstr "信息"
-
-msgid "Preview Pkgbuild"
-msgstr "预览 PKGBUILD"
-
 msgid "Search the AUR by name or keyword"
 msgstr "通过包名或关键词搜索AUR"
+
+#| msgid "Search..."
+msgid "Search By"
+msgstr ""
 
 msgid "Installed Only"
 msgstr "仅显示已安装"
 
 msgid "Show only installed packages"
 msgstr "仅显示已安装的软件包"
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
+msgstr ""
 
 msgid "Additional Options"
 msgstr "额外选项"
@@ -203,10 +210,10 @@ msgstr "推荐票"
 msgid "Popularity"
 msgstr "流行度"
 
-msgid "Search the AUR"
-msgstr "搜索AUR"
+msgid "Loading the AUR index"
+msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "Powered by Atoll."
 msgstr ""
 
 msgid "Run checks"
@@ -220,6 +227,18 @@ msgstr "隐藏详情面板"
 
 msgid "Hide the detail pane on the right"
 msgstr "隐藏右侧详情面板"
+
+msgid "Information"
+msgstr "信息"
+
+msgid "Preview Pkgbuild"
+msgstr "预览 PKGBUILD"
+
+msgid "Search the AUR"
+msgstr "搜索AUR"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr ""
 
 msgid "Install a local Flatpak"
 msgstr "安装本地FLatpak包"
@@ -341,6 +360,9 @@ msgid "About"
 msgstr "关于"
 
 msgid "Shelly"
+msgstr ""
+
+msgid "Install Optional Deps"
 msgstr ""
 
 msgid "Reinstall"
@@ -579,6 +601,9 @@ msgstr "无需确认"
 msgid "Enable Shelly Search"
 msgstr "启用 Shelly 搜索"
 
+msgid "Enable Atoll Powered AUR"
+msgstr ""
+
 msgid "AppImage Install Path"
 msgstr "AppImage 安装路径"
 
@@ -630,7 +655,6 @@ msgstr "检查更新..."
 msgid "Your system is up to date"
 msgstr "你的系统已是最新"
 
-#| msgid "Could not check for updates"
 msgid "Could not check for updates."
 msgstr ""
 
@@ -803,16 +827,18 @@ msgstr "用于"
 msgid "Install Anyway"
 msgstr "仍然安装"
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
 msgid "Unknown"
 msgstr "未知"
 
 msgid "package(s)"
 msgstr ""
 
-msgid "to"
-msgstr ""
-
-#| msgid "remove"
 msgid "removed size"
 msgstr ""
 
@@ -827,6 +853,61 @@ msgstr ""
 
 msgid "Dismiss"
 msgstr "忽略"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Install ignored package: {package}?"
+msgstr ""
+
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+
+msgid "Corrupted package {file}. Delete?"
+msgstr ""
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+
+msgid "Import PGP key {key_id}?"
+msgstr ""
+
+msgid "Proceed with this partial upgrade?"
+msgstr ""
+
+msgid "Proceed with the standard system upgrade?"
+msgstr ""
+
+msgid "Proceed with package installation?"
+msgstr ""
+
+msgid "Proceed with package removal?"
+msgstr ""
+
+msgid "Proceed with AUR package installation?"
+msgstr ""
+
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select an optional dependency for {pkg}"
+msgstr ""
+
+msgid "Select optional dependencies for {pkg}"
+msgstr ""
+
+msgid "Proceed with purify?"
+msgstr ""
+
+msgid ""
+"PKGBUILD {package} requires source-signing key {fingerprint}. Import it "
+"using `shelly keyring recv --user`?"
+msgstr ""
 
 msgid "None"
 msgstr "无"
@@ -849,7 +930,6 @@ msgstr "有可用更新"
 msgid "Version ?"
 msgstr "版本？"
 
-#| msgid "Invalid URL. Must start with http:// or https://"
 msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
 
@@ -864,7 +944,6 @@ msgstr "选择一个 AppImage 文件"
 msgid "AppImage files"
 msgstr "AppImage 文件"
 
-#| msgid "Only .AppImage files can be installed"
 msgid "Only.AppImage files can be installed"
 msgstr ""
 
@@ -921,6 +1000,60 @@ msgstr ""
 msgid "Discard"
 msgstr ""
 
+msgid "No packages found"
+msgstr "未找到软件包"
+
+msgid "Try a shorter or more general keyword."
+msgstr "请尝试更短或更通用的关键词。"
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr "请检查网络连接后重试。"
+
+msgid "Flagged out of date"
+msgstr "标记为过期"
+
+msgid "Installed"
+msgstr "已安装"
+
+msgid "Remove Selected"
+msgstr "移除所选"
+
+msgid "Select one or more packages"
+msgstr "请选择一个或多个软件包"
+
+msgid "Package(s)"
+msgstr "软件包"
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr ""
+
+msgid "Remove Packages"
+msgstr "移除软件包"
+
+msgid "Remove the selected AUR packages?"
+msgstr "移除所选 AUR 软件包？"
+
+msgid "Build from AUR"
+msgstr "从 AUR 构建"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr "构建并安装所选软件包？这可能需要一段时间。"
+
+msgid "Build"
+msgstr "构建"
+
+msgid "Installing AUR packages"
+msgstr "正在安装 AUR 软件包"
+
+msgid "Removing AUR packages"
+msgstr "正在移除 AUR 软件包"
+
 msgid "Maintainer"
 msgstr "维护者"
 
@@ -951,54 +1084,8 @@ msgstr "分类"
 msgid "The AUR has no browsable index — type a package name to begin."
 msgstr "AUR 没有可浏览的索引 — 请输入软件包名称开始搜索。"
 
-msgid "No packages found"
-msgstr "未找到软件包"
-
-msgid "Try a shorter or more general keyword."
-msgstr "请尝试更短或更通用的关键词。"
-
-#| msgid "Could not reach the AUR"
 msgid "Could not search the configured AUR service."
 msgstr ""
-
-msgid "Check your connection and try again."
-msgstr "请检查网络连接后重试。"
-
-msgid "Flagged out of date"
-msgstr "标记为过期"
-
-msgid "Installed"
-msgstr "已安装"
-
-msgid "Remove Selected"
-msgstr "移除所选"
-
-msgid "Select one or more packages"
-msgstr "请选择一个或多个软件包"
-
-msgid "Package(s)"
-msgstr "软件包"
-
-msgid "Remove Packages"
-msgstr "移除软件包"
-
-msgid "Remove the selected AUR packages?"
-msgstr "移除所选 AUR 软件包？"
-
-msgid "Build from AUR"
-msgstr "从 AUR 构建"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr "构建并安装所选软件包？这可能需要一段时间。"
-
-msgid "Build"
-msgstr "构建"
-
-msgid "Installing AUR packages"
-msgstr "正在安装 AUR 软件包"
-
-msgid "Removing AUR packages"
-msgstr "正在移除 AUR 软件包"
 
 msgid "Choose a Flatpak file"
 msgstr "选择一个 Flatpak 文件"
@@ -1006,14 +1093,12 @@ msgstr "选择一个 Flatpak 文件"
 msgid "Flatpak files"
 msgstr "Flatpak 文件"
 
-#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
 msgid "Installing local flatpak"
 msgstr "正在安装本地 Flatpak"
 
-#| msgid "Install the selected packages?"
 msgid "Could not install the selected packages."
 msgstr ""
 
@@ -1080,11 +1165,9 @@ msgstr "下载"
 msgid "No description available."
 msgstr "无可用描述。"
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load this application screenshot."
 msgstr ""
 
-#| msgid "Unable to download screenshot"
 msgid "Could not download this application screenshot."
 msgstr ""
 
@@ -1123,11 +1206,9 @@ msgid ""
 "other applications and try again."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not start loading Flatpak applications."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load Flatpak applications from the selected remote."
 msgstr ""
 
@@ -1248,6 +1329,12 @@ msgstr "将软件包设为显式安装"
 msgid "Making Package Dependency"
 msgstr "将软件包设为依赖安装"
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "软件包已安装"
 
@@ -1287,7 +1374,6 @@ msgid ""
 "begin."
 msgstr ""
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the selected sources."
 msgstr ""
 
@@ -1320,19 +1406,15 @@ msgstr "正在安装 Flatpak 支持"
 msgid "Installing AppImage support"
 msgstr "正在安装 AppImage 支持"
 
-#| msgid "Installing Flatpak support"
 msgid "Could not start installing Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not start installing AppImage support."
 msgstr ""
 
-#| msgid "Installing Flatpak support"
 msgid "Could not install Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not install AppImage support."
 msgstr ""
 
@@ -1348,7 +1430,6 @@ msgstr "未找到变更日志条目"
 msgid "No details for this release"
 msgstr "此版本无详细信息"
 
-#| msgid "Could not check for updates"
 msgid "Could not load the release notes."
 msgstr ""
 
@@ -1384,7 +1465,6 @@ msgstr ""
 msgid "Systemd startup service added."
 msgstr "已添加 systemd 启动服务"
 
-#| msgid "Tray disabled, but autostart service remains"
 msgid "Could not disable the tray autostart service."
 msgstr ""
 
@@ -1454,19 +1534,15 @@ msgstr "等待中"
 msgid "Working"
 msgstr "处理中"
 
-#| msgid "Upgrade"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Downgrading"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Reinstall"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 
@@ -1482,7 +1558,6 @@ msgstr ""
 msgid "Cancelled"
 msgstr "已取消"
 
-#| msgid "Failed to start operation."
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1534,7 +1609,6 @@ msgstr ""
 msgid "Operation failed"
 msgstr "操作失败"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled"
 msgstr ""
 
@@ -1544,7 +1618,6 @@ msgstr "已完成"
 msgid "exit"
 msgstr "退出"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled."
 msgstr ""
 
@@ -1556,14 +1629,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
-msgstr ""
-
 msgid "System package update"
 msgstr "系统软件包更新"
 
@@ -1572,9 +1637,6 @@ msgstr "AUR 软件包更新"
 
 msgid "Update this package"
 msgstr "更新此软件包"
-
-msgid "of"
-msgstr ""
 
 msgid "updates included"
 msgstr ""
