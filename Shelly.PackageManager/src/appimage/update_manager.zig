@@ -1052,14 +1052,6 @@ pub const UpdateManager = struct {
         return std.ascii.eqlIgnoreCase(tail, needle);
     }
 
-    pub fn isAppImage(file_path: []const u8) bool {
-        return appimage_manager.AppImageManager.isAppImage(file_path);
-    }
-
-    pub fn is_appimage(file_path: []const u8) bool {
-        return isAppImage(file_path);
-    }
-
     fn normalizeVersionToken(raw: []const u8) []const u8 {
         var token = std.mem.trim(u8, raw, &std.ascii.whitespace);
         token = std.mem.trim(u8, token, "\"");
@@ -1220,16 +1212,6 @@ pub const UpdateManager = struct {
         }
     }
 };
-
-test "test isAppImage" {
-    const result = UpdateManager.is_appimage("xxx.appImage");
-    const result2 = UpdateManager.is_appimage("xxx.appimage");
-    const result3 = UpdateManager.is_appimage("xxx.ApPiMagE");
-    try std.testing.expect(result);
-    try std.testing.expect(result2);
-    try std.testing.expect(result3);
-    try std.testing.expect(!UpdateManager.isAppImage("xxx.AppImage.txt"));
-}
 
 test "updateIsAvailable: formats and normalize v prefixes and quotes" {
     // v-prefixed provider tag vs plain embedded version — the reported bug.

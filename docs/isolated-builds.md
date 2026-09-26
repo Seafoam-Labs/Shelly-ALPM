@@ -39,6 +39,14 @@ The resulting package's `.BUILDINFO` records the exact package set installed
 in the guest. Before export, libalpm loads every candidate archive and Shelly
 rejects malformed, duplicate, missing, or unexpected package identities.
 
+When `pkgver()` changes the version, the guest updates its staged PKGBUILD and
+resets `pkgrel` to `1` before building. After a successful guest build, Shelly
+accepts only the expected version/release edit and applies it to the original
+host PKGBUILD through an unprivileged invoking-user process. The original
+PKGBUILD checksum and reviewed related files must still match; concurrent host
+edits stop writeback. An unwritable host PKGBUILD produces a warning. Other
+guest PKGBUILD edits are never copied back.
+
 Source-signing keys listed in the evaluated `validpgpkeys` are prepared as the
 invoking host user before provisioning. Shelly checks the approved digest again,
 requests approval for missing keys, and exports only the required public keys.
@@ -236,3 +244,10 @@ preserved in the generated guest configuration. They refer to paths inside the
 guest and must exist there; they do not create host bind mounts. A host-only
 custom toolchain path must be removed from the effective configuration before
 an isolated build. See [build PATH configuration](shellybuild.conf.md#build-executable-search-path).
+
+Explicit `[build.env]` assignments are also preserved in the guest configuration
+and applied after dropping to the guest build user. Values remain literal and
+override the guest builder's inherited environment. Paths in those values refer
+to the guest filesystem and do not create host mounts. See
+[build environment variables](shellybuild.conf.md#build-environment-variables)
+for configuration precedence and reserved names.

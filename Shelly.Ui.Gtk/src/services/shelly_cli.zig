@@ -196,7 +196,7 @@ pub const ShellyCli = struct {
     }
 
     pub fn get_package_details(self: ShellyCli, name: []const u8) !std.json.Parsed(Package) {
-        const result = try self.run(&.{ "search", "standard", name });
+        const result = try self.run(&.{ "search", "standard", "--detail", name });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
@@ -293,6 +293,12 @@ pub const ShellyCli = struct {
             "sync",
             "flatpak",
         });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+    }
+
+    pub fn set_aur_url(self: ShellyCli, url: []const u8) !void {
+        const result = try self.run(&.{ "config", "set", "AurUrl", url });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
     }

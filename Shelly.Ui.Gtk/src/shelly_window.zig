@@ -8,6 +8,7 @@ const FlatpakPage = @import("pages/flatpak/flatpak_page.zig").FlatpakPage;
 const AppImagePage = @import("pages/appimage_page.zig").AppImagePage;
 const PackagePage = @import("pages/package_page.zig").PackagePage;
 const AurPage = @import("pages/aur_page.zig").AurPage;
+const AtollAurPage = @import("pages/atoll_aur_page.zig").AtollAurPage;
 const ShellySearchPage = @import("pages/search_page.zig").ShellySearchPage;
 const UpdatePage = @import("pages/update_page.zig").UpdatePage;
 const RecommendPage = @import("pages/recommend_page.zig").RecommendPage;
@@ -18,6 +19,8 @@ const UtilitiesPage = @import("pages/utilities_page.zig").UtilitiesPage;
 const TransactionPage = @import("pages/transaction_page.zig").TransactionPage;
 const TransactionRequest = @import("pages/transaction_page.zig").TransactionRequest;
 const runtime = @import("services/runtime.zig");
+const ShellyCli = @import("services/shelly_cli.zig").ShellyCli;
+const AtollApiService = @import("services/atoll_api.zig").AtollApiService;
 const NavMode = @import("models/shelly_config.zig").NavMode;
 const ShellyTabs = @import("models/shelly_config.zig").ShellyTabs;
 const translations = @import("helpers/translations.zig");
@@ -42,6 +45,7 @@ pub const ShellyWindow = extern struct {
 
     const ICON_SLOT: c_int = 24;
     const LABEL_GAP: c_int = 8;
+    const default_aur_base = "https://aur.archlinux.org";
 
     const Private = struct {
         shell_box: *gtk.Box,
@@ -56,6 +60,7 @@ pub const ShellyWindow = extern struct {
         nav_mode: NavMode,
         pending_nav: NavMode,
         flatpak_page: *FlatpakPage,
+        aur_slot_atoll: bool,
         var offset: c_int = 0;
     };
 
@@ -89,6 +94,7 @@ pub const ShellyWindow = extern struct {
         p.collapsed = true;
         p.nav_mode = .sidebar;
         p.pending_nav = .sidebar;
+        p.aur_slot_atoll = false;
         build_shell(self);
         populate_stack(self);
         applyConfig(self);
@@ -101,6 +107,11 @@ pub const ShellyWindow = extern struct {
     pub fn applyConfig(self: *ShellyWindow) void {
         const svc = runtime.config orelse return;
         const cfg = svc.get() catch return;
+
+        if (cfg.AtollAurEnabled != self.private().aur_slot_atoll) {
+            swapAurSlot(self, cfg.AtollAurEnabled);
+            syncAurUrl(cfg.AtollAurEnabled);
+        }
 
         setNavEnabled(self, "recommend", cfg.RecommendedEnabled);
         setNavEnabled(self, "aur", cfg.AurEnabled);
@@ -534,8 +545,7 @@ pub const ShellyWindow = extern struct {
         const ai_page = gtk.Stack.addTitled(stack, ai.as(gtk.Widget), "appimage", translations._("AppImage"));
         gtk.StackPage.setIconName(ai_page, AppImagePage.icon_name);
 
-        const au = AurPage.new();
-        const au_page = gtk.Stack.addTitled(stack, au.as(gtk.Widget), "aur", translations._("AUR"));
+        const au_page = gtk.Stack.addTitled(stack, aurSlotWidget(self), "aur", translations._("AUR"));
         gtk.StackPage.setIconName(au_page, AurPage.icon_name);
 
         const ss = ShellySearchPage.new();
@@ -553,6 +563,59 @@ pub const ShellyWindow = extern struct {
         const up_utils = UtilitiesPage.new();
         const up_utils_page = gtk.Stack.addTitled(stack, up_utils.as(gtk.Widget), "utilities", translations._("Utilities"));
         gtk.StackPage.setIconName(up_utils_page, UtilitiesPage.icon_name);
+    }
+
+    fn aurSlotWidget(self: *ShellyWindow) *gtk.Widget {
+        const use_atoll = atollAurEnabled();
+        self.private().aur_slot_atoll = use_atoll;
+        if (use_atoll) return AtollAurPage.new().as(gtk.Widget);
+        return AurPage.new().as(gtk.Widget);
+    }
+
+    fn atollAurEnabled() bool {
+        const svc = runtime.config orelse return false;
+        const cfg = svc.get() catch return false;
+        return cfg.AtollAurEnabled;
+    }
+
+    fn syncAurUrl(use_atoll: bool) void {
+        const url = if (use_atoll) AtollApiService.base_url else default_aur_base;
+
+        var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+        defer arena.deinit();
+
+        const cli = ShellyCli{ .allocator = arena.allocator(), .io = runtime.io };
+        cli.set_aur_url(url) catch |err| {
+            std.log.warn("Could not set the AUR base URL to {0s}. {1s}\n\nTechnical details: {2s}", .{ url, @import("diagnostics").cause(err), @errorName(err) });
+        };
+    }
+
+    fn swapAurSlot(self: *ShellyWindow, use_atoll: bool) void {
+        const p = self.private();
+        const stack = p.content_stack;
+
+        const was_visible = if (gtk.Stack.getVisibleChildName(stack)) |cn|
+            std.mem.eql(u8, std.mem.span(cn), "aur")
+        else
+            false;
+
+        if (gtk.Stack.getChildByName(stack, "aur")) |child| {
+            gtk.Stack.remove(stack, child);
+        }
+
+        const widget: *gtk.Widget = if (use_atoll)
+            AtollAurPage.new().as(gtk.Widget)
+        else
+            AurPage.new().as(gtk.Widget);
+
+        const page = gtk.Stack.addTitled(stack, widget, "aur", translations._("AUR"));
+        gtk.StackPage.setIconName(page, AurPage.icon_name);
+        p.aur_slot_atoll = use_atoll;
+
+        if (was_visible) {
+            gtk.Stack.setVisibleChildName(stack, "aur");
+            sync_active_nav(self);
+        }
     }
 
     pub fn showLockout(self: *ShellyWindow, content: *gtk.Widget) void {

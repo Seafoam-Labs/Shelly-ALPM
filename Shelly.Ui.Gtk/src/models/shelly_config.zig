@@ -37,6 +37,7 @@ pub const ShellyConfig = struct {
     // Feature Toggles
     AurEnabled: bool = false,
     AurWarningConfirmed: bool = false,
+    AtollAurEnabled: bool = false,
     AppImageEnabled: bool = false,
     FlatPackEnabled: bool = false,
     RecommendedEnabled: bool = true,

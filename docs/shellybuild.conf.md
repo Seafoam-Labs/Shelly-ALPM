@@ -35,6 +35,7 @@ ccache = false
 distcc = false
 distcc_hosts = []
 extra_path = []
+env = {}
 
 [package]
 packager = "Unknown Packager"
@@ -106,6 +107,66 @@ because they appear in `extra_path`. When Landlock sandboxing is enabled, PATH
 configuration does not grant filesystem access: custom toolchains outside the
 existing allow-list also need appropriate `sandbox.extra_read` / `extra_write`
 entries, including any toolchain libraries and caches they require.
+
+## Build environment variables
+
+Set literal environment variables for the unprivileged native builder:
+
+```toml
+[build]
+env = { JAVA_HOME = "/usr/lib/jvm/default", CARGO_HOME = "/home/your-user/.cargo" }
+```
+
+The equivalent table syntax is useful for several assignments:
+
+```toml
+[build.env]
+JAVA_HOME = "/usr/lib/jvm/default"
+CARGO_HOME = "/home/your-user/.cargo"
+LANG = "C.UTF-8"
+```
+
+The default is an empty table. Omitting `env` in the user configuration keeps
+the system table; specifying it replaces the entire system table. Set
+`env = {}` under `[build]` to clear configured assignments. Clearing this table
+does not remove variables already present in the build user's environment.
+An empty string explicitly sets an empty value; it does not unset the variable.
+
+Names must match `[A-Za-z_][A-Za-z0-9_]*`. Values must be strings without NUL
+characters. Spaces, quotes, Unicode, dollar signs, and shell expressions remain
+literal: there is no `$HOME`, `~`, variable, or command expansion.
+
+Assignments override the build user's inherited values, including `LANG`,
+`LANGUAGE`, and `LC_*`. Without an explicit locale assignment, elevated native
+builds preserve the caller's recognized locale variables and default missing
+or empty `LANG` to `C.UTF-8`. An explicit `LC_ALL=C` remains effective.
+
+Shelly applies these assignments after dropping privileges, before metadata
+review, `.SRCINFO` generation, and PKGBUILD lifecycle execution. They also reach
+the native builder's subprocess helpers. They never become the elevated
+coordinator's environment or command-line arguments. Shelly's own HTTP proxy
+configuration is separately defined. External makepkg and clean-chroot commands
+retain their existing environment policy.
+
+The following names are reserved and cause a configuration error:
+
+- `PATH`: use `build.extra_path`.
+- `CPPFLAGS`, `CFLAGS`, `CXXFLAGS`, `LDFLAGS`, `LTOFLAGS`, `MAKEFLAGS`, `CHOST`,
+  `CARCH`, and `DISTCC_HOSTS`: use the dedicated `[build]` fields. Package options
+  such as `!buildflags` and `!makeflags` remain authoritative.
+- `SOURCE_DATE_EPOCH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `PWD`, and `OLDPWD`.
+- Names beginning with `SHELLY_`, `SUDO_`, `DOAS_`, `PKEXEC_`, `XDG_`, or `DBUS_`.
+- Process-startup controls: `ENV`, `BASHOPTS`, `SHELLOPTS`, `IFS`, `CDPATH`,
+  `GCONV_PATH`, `LOCPATH`, and names beginning with `BASH_`, `LD_`, or `DYLD_`.
+
+Validation diagnostics identify the variable without printing its value.
+PKGBUILD code can read these values and may print them in its own output.
+
+For `shelly build --isolated`, the effective table is serialized into the guest
+configuration and applied to the unprivileged guest builder. Paths refer to the
+guest filesystem; assigning a path does not mount a host directory. With
+Landlock enabled, assignments grant no additional filesystem access; configure
+`sandbox.extra_read` / `extra_write` when a toolchain needs access.
 
 ## PKGBUILD and CLI overrides
 

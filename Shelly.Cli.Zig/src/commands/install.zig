@@ -656,6 +656,7 @@ fn runAur(
     const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
         .aur_git_base_url = aur_base,
         .root = true,
+        .needed = optionEnabled(invocation, "--needed"),
         .use_chroot = optionEnabled(invocation, "--chroot"),
         .check = checkOverride(invocation),
         .sign = signOverride(invocation),
@@ -1450,6 +1451,42 @@ test "standard install needed flag works before and after targets and preserves 
         try std.testing.expectEqual(case.needed, flags.needed);
         try std.testing.expectEqual(case.nodeps, flags.nodeps);
         try std.testing.expectEqual(case.no_confirm, invocation.globals.no_confirm);
+    }
+}
+
+test "AUR needed flag survives shortcode parsing and elevation arguments" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const shortcodes = @import("../cli/shortcodes.zig");
+    const cases = [_][]const []const u8{
+        &.{ "-Ia", "--needed", "demo" },
+        &.{ "-Ia", "demo", "--needed" },
+        &.{ "-Ia", "demo", "--needed", "other", "-n" },
+        &.{ "install", "aur", "demo", "--needed", "--chroot", "--check", "--nosign" },
+        &.{ "-Iav", "demo", "deadbeef", "--needed" },
+        &.{ "-Iab", "demo", "--needed", "--make-deps" },
+        &.{ "-Ia", "demo" },
+    };
+    for (cases, 0..) |args, index| {
+        const translation = try shortcodes.translate(tc.arena.allocator(), &manifest, args);
+        const parsed = try parser.parse(tc.arena.allocator(), &manifest, translation.arguments().?);
+        try std.testing.expect(parsed == .dispatch);
+        const invocation = &parsed.dispatch;
+        try std.testing.expectEqual(index != cases.len - 1, optionEnabled(invocation, "--needed"));
+        const arguments = try aur_url.argumentsWithEffectiveBase(&tc.context, invocation);
+        defer tc.context.allocator.free(arguments);
+        const elevated = try parser.parse(tc.arena.allocator(), &manifest, arguments);
+        try std.testing.expect(elevated == .dispatch);
+        try std.testing.expectEqualStrings(aur_command_path, elevated.dispatch.command.path);
+        try std.testing.expectEqual(optionEnabled(invocation, "--needed"), optionEnabled(&elevated.dispatch, "--needed"));
+        try std.testing.expectEqual(invocation.globals.no_confirm, elevated.dispatch.globals.no_confirm);
+        try std.testing.expectEqual(invocation.positionals.len, elevated.dispatch.positionals.len);
+        for (invocation.positionals, elevated.dispatch.positionals) |expected, actual|
+            try std.testing.expectEqualStrings(expected, actual);
+        for ([_][]const u8{ "--chroot", "--check", "--nosign", "--version", "--build-deps", "--make-deps" }) |flag|
+            try std.testing.expectEqual(optionEnabled(invocation, flag), optionEnabled(&elevated.dispatch, flag));
     }
 }
 

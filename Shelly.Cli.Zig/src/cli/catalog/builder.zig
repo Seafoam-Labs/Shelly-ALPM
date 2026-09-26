@@ -37,6 +37,8 @@ pub const variants = [_]types.Variant{.{
         flag("--install", &.{"-l"}, "Installs the built packages after a successful build (with --sync-deps this mirrors makepkg -si; -i is --isolated, not install)"),
         hiddenFlag("--coordinator-child", "Runs as a non-root child of an elevated package operation"),
         hiddenFlag("--prepare-isolated-source-keys", "Prepares approved public source keys as the invoking user"),
+        hiddenStringOption("--apply-pkgver", "Applies a validated isolated version change as the invoking user"),
+        hiddenStringOption("--pkgver-original-sha256", "Requires the original PKGBUILD checksum before version writeback"),
         hiddenFlag("--isolated-source-keys", "Imports the coordinator's public source keys in the guest"),
         hiddenFlag("--review-dependencies", "Includes evaluated dependency resolution in coordinator review transport"),
         hiddenFlag("--review-host-dependencies", "Resolves coordinator review dependencies against the host package state"),

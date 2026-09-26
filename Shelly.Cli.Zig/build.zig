@@ -67,6 +67,13 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_module_tests.step);
     test_step.dependOn(&run_executable_tests.step);
 
+    const appimage_removal_tests = b.addTest(.{
+        .root_module = cli,
+        .filters = &.{ "AppImage removal", "resolves one AppImage", "remove AppImage" },
+    });
+    const run_appimage_removal_tests = b.addRunArtifact(appimage_removal_tests);
+    b.step("appimage-removal-test", "Test AppImage removal identity and stale metadata cleanup").dependOn(&run_appimage_removal_tests.step);
+
     const upgrade_tests = b.addTest(.{
         .root_module = cli,
         .filters = &.{"upgrade"},
@@ -98,10 +105,12 @@ pub fn build(b: *std.Build) void {
         .filters = &.{
             "makesrcinfo emits clean stdout and never runs lifecycle functions",
             "review-only accepts Heroic array trimming",
+            "review-only accepts filesystem here-strings",
             "sync deps",
             "isolated source key",
             "isolated source public keys",
             "isolated child arguments",
+            "isolated pkgver",
             "isolated dependency review",
             "isolated configuration preserves build policy",
             "invoking user build arguments",
@@ -127,6 +136,7 @@ pub fn build(b: *std.Build) void {
         .name = "isolated-build-test",
         .root_module = isolated_test_module,
         .filters = &.{
+            "isolated pkgver",
             "reviewed input paths cannot escape the staged source root",
             "isolated command failures preserve the stage and native exit code",
             "reviewed inputs are materialized with exact bytes and permissions",

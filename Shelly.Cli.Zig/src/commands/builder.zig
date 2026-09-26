@@ -78,6 +78,12 @@ pub fn dispatch(
         return try executeMakeSrcinfo(context, invocation);
     if (optionEnabled(invocation, "--prepare-isolated-source-keys"))
         return try executeSourcePgpKeyPreparation(context, invocation);
+    if (optionValue(invocation, "--apply-pkgver") != null) {
+        var operations = Zigalpm.OperationContext.init(context.allocator, context.io);
+        defer operations.deinit();
+        try applyIsolatedPkgver(context, &operations, invocation);
+        return 0;
+    }
     if (shouldElevateBuildCoordinator(invocation, elevation.isRoot())) {
         const elevated_arguments = try aur_url.argumentsWithEffectiveBase(context, invocation);
         defer context.allocator.free(elevated_arguments);
@@ -456,6 +462,44 @@ fn prepareSourcePgpKeyExport(context: *runtime.RuntimeContext, invocation: *cons
     const keys = try source_pgp_transport.exportKeys(context.allocator, context.io, context.environ, result.source_pgp_fingerprints);
     completion = .success;
     return keys;
+}
+
+/// Runs in an unprivileged host child. The original PKGBUILD hash authorizes
+/// evaluation; the full review digest also protects related inputs at commit.
+fn applyIsolatedPkgver(context: *runtime.RuntimeContext, operations: *Zigalpm.OperationContext, invocation: *const parser.Invocation) !void {
+    try Zigalpm.builder.secureBuilderProcess();
+    const version = optionValue(invocation, "--apply-pkgver") orelse return error.InvalidPackageVersion;
+    const expected_hash = try parseReviewDigest(optionValue(invocation, "--pkgver-original-sha256") orelse return error.MissingReviewDigest);
+    const expected_review = try parseReviewDigest(optionValue(invocation, "--review-digest") orelse return error.MissingReviewDigest);
+    const path = try std.Io.Dir.cwd().realPathFileAlloc(context.io, if (invocation.positionals.len == 0) "PKGBUILD" else invocation.positionals[0], context.allocator);
+    defer context.allocator.free(path);
+    const original = try std.Io.Dir.cwd().readFileAlloc(context.io, path, context.allocator, .limited(32 * 1024 * 1024));
+    defer context.allocator.free(original);
+    var current_hash: Zigalpm.builder.pkgbuild_review.Digest = undefined;
+    std.crypto.hash.sha2.Sha256.hash(original, &current_hash, .{});
+    if (!std.mem.eql(u8, &expected_hash, &current_hash)) return error.ReviewedPkgbuildChanged;
+    const updated = try Zigalpm.builder.pkgver_update.render(context.allocator, original, version);
+    defer context.allocator.free(updated);
+    var result = try prepareReviewOnly(context, operations, invocation);
+    defer result.deinit(context.allocator);
+    if (!std.mem.eql(u8, &expected_review, &result.review.digest)) return error.ReviewedPkgbuildChanged;
+    try result.review.verifyCurrent(context.allocator, context.io, path, std.fs.path.dirname(path).?);
+    if (!try Zigalpm.builder.pkgver_update.write(context.allocator, context.io, path, original, updated)) {
+        try context.stderr.writeAll("PKGBUILD is not writable; the isolated package was built, but its version could not be saved to the host PKGBUILD.\n");
+        try context.stderr.flush();
+    }
+}
+
+fn isolatedPkgverArguments(allocator: std.mem.Allocator, invocation: *const parser.Invocation, path: []const u8, version: []const u8, original_hash: []const u8, review_digest: []const u8) ![]const []const u8 {
+    var arguments: std.ArrayList([]const u8) = .empty;
+    defer arguments.deinit(allocator);
+    try arguments.appendSlice(allocator, &.{ "build", "--coordinator-child", "--no-confirm", "--apply-pkgver", version, "--pkgver-original-sha256", original_hash, "--review-digest", review_digest });
+    for (invocation.options) |option| {
+        if (!std.mem.eql(u8, option.name, "--package")) continue;
+        try arguments.appendSlice(allocator, &.{ "--package", option.value orelse return error.MissingPackageName });
+    }
+    try arguments.append(allocator, path);
+    return arguments.toOwnedSlice(allocator);
 }
 
 fn executeReviewOnly(
@@ -1248,7 +1292,8 @@ const Real = struct {
         defer builder.deinit();
         var final_review = try builder.prepareFinalReviewWithOperation(&operation);
         defer final_review.deinit();
-        const package_base = try packageBaseFromBuilds(builder.package_builds);
+        const package_base = try context.allocator.dupe(u8, try packageBaseFromBuilds(builder.package_builds));
+        defer context.allocator.free(package_base);
         try self.setPendingResult(context.allocator, package_base, null, false);
         const expected_digest = if (supplied_digest) |digest| digest: {
             if (!std.mem.eql(u8, &digest, &final_review.digest))
@@ -1691,6 +1736,18 @@ fn runIsolatedCoordinator(
     const validated_artifacts = try validateIsolatedArtifacts(context, root.artifact_path, expected_names);
     defer isolated_build.deinitValidatedArtifacts(context.allocator, validated_artifacts);
 
+    const version_change = try root.readPkgverChange(pkgbuild_content);
+    defer if (version_change) |version| context.allocator.free(version);
+    if (version_change) |version| {
+        var original_hash: Zigalpm.builder.pkgbuild_review.Digest = undefined;
+        std.crypto.hash.sha2.Sha256.hash(pkgbuild_content, &original_hash, .{});
+        const original_hex = std.fmt.bytesToHex(original_hash, .lower);
+        const arguments = try isolatedPkgverArguments(context.allocator, invocation, request.pkgbuild_path, version, &original_hex, &digest_hex);
+        defer context.allocator.free(arguments);
+        const exit_code = (try elevation.runAsInvokingUser(context, arguments)) orelse return error.InvokingUserUnavailable;
+        if (exit_code != 0) return error.PkgverWritebackFailed;
+    }
+
     const destination = request.package_destination;
     const exported_artifacts = try root.exportArtifacts(
         destination,
@@ -1851,6 +1908,10 @@ fn renderIsolatedConfiguration(
     try writeTomlArray(writer, "makeflags", configuration.build.makeflags);
     try writeTomlArray(writer, "extra_path", configuration.build.extra_path);
     try writer.print("check = {}\nccache = false\ndistcc = false\n\n", .{configuration.build.check});
+    try writer.writeAll("[build.env]\n");
+    for (configuration.build.env) |assignment|
+        try writeTomlString(writer, assignment.name, assignment.value);
+    try writer.writeByte('\n');
 
     try writer.writeAll("[package]\n");
     try writeTomlString(writer, "packager", configuration.package.packager);
@@ -3208,7 +3269,7 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
     const marker_path = try std.fs.path.join(test_context.arena.allocator(), &.{ directory_path, "lifecycle-ran" });
     const pkgbuild_content = try std.fmt.allocPrint(
         test_context.arena.allocator(),
-        "pkgname=demo\npkgver=1\npkgrel=1\npkgdesc=$(printf 'Dynamic description')\narch=(any)\n" ++
+        "pkgname=demo\npkgver=1\npkgrel=1\npkgdesc=$(printf '%s' \"$BUILD_ENV_DESCRIPTION\")\narch=(any)\n" ++
             "install=''\nchangelog=\"\"\n" ++
             "_enable_plasmoid=${{SYNCTHING_TRAY_ENABLE_PLASMOID:-1}}\n" ++
             "makedepends=('cmake')\n" ++
@@ -3222,6 +3283,11 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
     try pkgbuild.writeStreamingAll(std.testing.io, pkgbuild_content);
     pkgbuild.close(std.testing.io);
 
+    try temporary.dir.createDirPath(std.testing.io, ".config/shelly");
+    try temporary.dir.writeFile(std.testing.io, .{
+        .sub_path = ".config/shelly/shellybuild.conf",
+        .data = "[build.env]\nBUILD_ENV_DESCRIPTION = 'Dynamic description'\n",
+    });
     const environ = try testEnvironWithHome(std.testing.allocator, directory_path);
     defer environ.block.deinit(std.testing.allocator);
     test_context.context.environ = environ;
@@ -3551,6 +3617,60 @@ test "isolated builds elevate only the outer coordinator" {
     try std.testing.expect(!shouldElevateBuildCoordinator(&child.dispatch, false));
 }
 
+test "isolated pkgver writeback validates host review without running lifecycle functions" {
+    const io = std.testing.io;
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    const allocator = context.arena.allocator();
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    const environ = try testEnvironWithHome(allocator, directory);
+    defer environ.block.deinit(allocator);
+    context.context.environ = environ;
+    const path = try std.fs.path.join(allocator, &.{ directory, "Custom.PKGBUILD" });
+    const content =
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=7
+        \\arch=('any')
+        \\install=demo.install
+        \\pkgver() { touch lifecycle-ran; printf 99; }
+        \\package() { touch lifecycle-ran; }
+    ;
+    try temporary.dir.writeFile(io, .{ .sub_path = "Custom.PKGBUILD", .data = content });
+    try temporary.dir.writeFile(io, .{ .sub_path = "demo.install", .data = "post_install() { :; }\n" });
+    var operations = Zigalpm.OperationContext.init(allocator, io);
+    defer operations.deinit();
+    const manifest = try @import("../cli/spec.zig").Manifest.load(allocator);
+    const outer = try parser.parse(allocator, &manifest, &.{ "build", "--isolated", "--install", "--package", "demo", path });
+    const review_request = try parser.parse(allocator, &manifest, &.{ "build", path });
+    var reviewed = try prepareReviewOnly(&context.context, &operations, &review_request.dispatch);
+    defer reviewed.deinit(allocator);
+    const original_hash = std.fmt.bytesToHex(reviewed.review.pkgbuild_digest, .lower);
+    const review_hash = std.fmt.bytesToHex(reviewed.review.digest, .lower);
+    const arguments = try isolatedPkgverArguments(allocator, &outer.dispatch, path, "r2.gabc", &original_hash, &review_hash);
+    const child = try parser.parse(allocator, &manifest, arguments);
+    try std.testing.expect(!isolatedRequested(&child.dispatch));
+    try std.testing.expect(!hostCoordinatorRequested(&child.dispatch));
+    try std.testing.expectEqualStrings("demo", optionValue(&child.dispatch, "--package").?);
+    try applyIsolatedPkgver(&context.context, &operations, &child.dispatch);
+    const expected = try Zigalpm.builder.pkgver_update.render(allocator, content, "r2.gabc");
+    const updated = try temporary.dir.readFileAlloc(io, "Custom.PKGBUILD", allocator, .unlimited);
+    try std.testing.expectEqualStrings(expected, updated);
+    try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, "lifecycle-ran", .{}));
+
+    try temporary.dir.writeFile(io, .{ .sub_path = "Custom.PKGBUILD", .data = content });
+    try temporary.dir.writeFile(io, .{ .sub_path = "demo.install", .data = "post_install() { echo changed; }\n" });
+    try std.testing.expectError(error.ReviewedPkgbuildChanged, applyIsolatedPkgver(&context.context, &operations, &child.dispatch));
+    const unchanged = try temporary.dir.readFileAlloc(io, "Custom.PKGBUILD", allocator, .unlimited);
+    try std.testing.expectEqualStrings(content, unchanged);
+    try temporary.dir.writeFile(io, .{ .sub_path = "Custom.PKGBUILD", .data = content ++ "\ntouch unreviewed-top-level-ran\n" });
+    try std.testing.expectError(error.ReviewedPkgbuildChanged, applyIsolatedPkgver(&context.context, &operations, &child.dispatch));
+    try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, "unreviewed-top-level-ran", .{}));
+}
+
 test "isolated child arguments remove host coordinator flags and replace the path" {
     const arguments = [_][]const u8{
         "build",
@@ -3671,6 +3791,12 @@ test "isolated configuration preserves build policy and forces guest-local desti
     );
     defer configuration.deinit();
     configuration.build.extra_path = &.{"/opt/guest-toolchain/bin"};
+    configuration.build.env = &.{
+        .{ .name = "JAVA_HOME", .value = "/opt/guest-java" },
+        .{ .name = "BUILD_ENV_LITERAL", .value = "$HOME/~/\"quoted\"\\path\n\t∂" },
+        .{ .name = "BUILD_ENV_EMPTY", .value = "" },
+        .{ .name = "LANG", .value = "C.UTF-8" },
+    };
     const rendered = try renderIsolatedConfiguration(std.testing.allocator, configuration);
     defer std.testing.allocator.free(rendered);
     const parsed = try ShellyBuildConfiguration.initFromBuffers(
@@ -3682,6 +3808,16 @@ test "isolated configuration preserves build policy and forces guest-local desti
     try std.testing.expectEqualStrings(configuration.build.carch, parsed.build.carch);
     try std.testing.expectEqualStrings("/opt/guest-toolchain/bin", parsed.build.extra_path[0]);
     try std.testing.expectEqualStrings(configuration.build.cflags[0], parsed.build.cflags[0]);
+    try std.testing.expectEqual(configuration.build.env.len, parsed.build.env.len);
+    for (configuration.build.env) |expected| {
+        var found = false;
+        for (parsed.build.env) |actual| {
+            if (!std.mem.eql(u8, expected.name, actual.name)) continue;
+            try std.testing.expectEqualStrings(expected.value, actual.value);
+            found = true;
+        }
+        try std.testing.expect(found);
+    }
     try std.testing.expectEqualStrings("/build/work", parsed.destinations.build.?);
     try std.testing.expectEqualStrings(isolated_build.guest_artifacts, parsed.destinations.packages.?);
     try std.testing.expect(!parsed.package.sign);
@@ -4313,6 +4449,39 @@ test "review-only accepts Heroic array trimming without running package code" {
     try std.testing.expectEqual(@as(u8, 0), try executeReviewOnly(&test_context.context, &invocation.dispatch));
     const document = try std.json.parseFromSlice(std.json.Value, allocator, test_context.stdout.writer.buffered(), .{});
     try std.testing.expect(document.value == .object);
+    try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, "lifecycle-ran", .{}));
+}
+
+test "review-only accepts filesystem here-strings without running package code" {
+    const spec = @import("../cli/spec.zig");
+    var test_context: test_support.TestContext = .{};
+    test_context.init();
+    defer test_context.deinit();
+    const allocator = test_context.arena.allocator();
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    const path = try std.fs.path.join(allocator, &.{ directory, "PKGBUILD" });
+    try temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data =
+        \\pkgname=filesystem
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\package() {
+        \\  cat <<< 'filesystem' > "$startdir/lifecycle-ran"
+        \\}
+        \\
+    });
+    const environ = try testEnvironWithHome(std.testing.allocator, directory);
+    defer environ.block.deinit(std.testing.allocator);
+    test_context.context.environ = environ;
+    const manifest = try spec.Manifest.load(allocator);
+    const invocation = try parser.parse(allocator, &manifest, &.{ "build", "--review-only", "--json", path });
+    try std.testing.expectEqual(@as(u8, 0), try executeReviewOnly(&test_context.context, &invocation.dispatch));
+    const document = try std.json.parseFromSlice(std.json.Value, allocator, test_context.stdout.writer.buffered(), .{});
+    try std.testing.expect(document.value == .object);
+    try std.testing.expect(document.value.object.get("error") == null);
     try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, "lifecycle-ran", .{}));
 }
 

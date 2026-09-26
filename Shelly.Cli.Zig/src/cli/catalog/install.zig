@@ -62,6 +62,7 @@ pub const variants = [_]types.Variant{
             flag("--sign", &.{}, "Sign built packages with GPG"),
             flag("--nosign", &.{}, "Skip signing built packages"),
             flag("--version", &.{"-v"}, "Install exactly one AUR package from the following Git commit operand"),
+            flag("--needed", &.{}, "Skip building and reinstalling AUR packages whose installed version is current; dynamic versions may still require a build"),
         },
     },
     .{

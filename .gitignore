@@ -15,3 +15,4 @@ Shelly.Notifications.Zig/build/
 .codex-zig-global-cache/
 .qwen/settings.json
 .zed/
+/.aur-release/

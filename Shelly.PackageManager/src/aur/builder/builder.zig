@@ -20,6 +20,7 @@ const srcinfo = @import("../srcinfo.zig");
 pub const pkgbuild_validation = @import("pkgbuild_validation.zig");
 pub const PkgbuildValidation = pkgbuild_validation.PkgbuildValidation;
 pub const pkgbuild_review = @import("pkgbuild_review.zig");
+pub const pkgver_update = @import("pkgver_update.zig");
 pub const PreparedPkgbuildReview = pkgbuild_review.PreparedPkgbuildReview;
 pub const preparePkgbuildReview = pkgbuild_review.preparePkgbuildReview;
 pub const sandbox = @import("sandbox.zig");
@@ -33,11 +34,13 @@ test {
     _ = @import("source_spec.zig");
     _ = @import("checksums.zig");
     _ = @import("metadata.zig");
+    _ = @import("pkgver_update.zig");
     _ = @import("security.zig");
     _ = @import("sandbox.zig");
     _ = @import("steps.zig");
     _ = @import("sources.zig");
     _ = @import("package_file.zig");
+    _ = @import("package_permissions.zig");
     _ = @import("virtual_ownership.zig");
 }
 
@@ -159,6 +162,8 @@ pub const PackageBuilder = struct {
     /// number of selected split-package members. The inputs passed to init are
     /// borrowed, so only this replacement slice is released by deinit.
     evaluated_package_builds: ?[]PackageBuild = null,
+    /// Captured by the pkgver step; consumed after its borrowed plan returns.
+    pending_pkgver: ?[]u8 = null,
     /// Ownership requested by the currently executing package step. This is
     /// converted to archive metadata and cleared before the next split member.
     virtual_ownership_tracker: ?virtual_ownership.Tracker = null,
@@ -195,6 +200,7 @@ pub const PackageBuilder = struct {
 
     pub fn deinit(self: *PackageBuilder) void {
         self.clearVirtualOwnership();
+        if (self.pending_pkgver) |version| self.allocator.free(version);
         if (self.evaluated_package_builds) |builds| {
             for (builds) |*package_build| package_build.deinit(self.allocator);
             self.allocator.free(builds);
@@ -228,6 +234,18 @@ pub const PackageBuilder = struct {
         defer self.allocator.free(path);
         var environment = try self.environ.createMap(self.allocator);
         defer environment.deinit();
+        for (self.shellybuild_config.build.env) |assignment| {
+            const config = @import("../shellybuild.zig");
+            config.validateEnvironmentAssignment(assignment) catch |err| {
+                const message = try std.fmt.allocPrint(self.allocator, "Invalid build.env variable '{f}': {s}.", .{
+                    @import("diagnostics").safe(assignment.name), config.environmentErrorReason(err),
+                });
+                defer self.allocator.free(message);
+                operation.reportError(err, message, "build configuration", null, false);
+                return err;
+            };
+            try environment.put(assignment.name, assignment.value);
+        }
         try environment.put("PATH", path);
         const owned: std.process.Environ = .{ .block = try environment.createPosixBlock(self.allocator, .{}) };
         self.owned_environ = owned;
@@ -319,6 +337,7 @@ pub const PackageBuilder = struct {
         if (self.active_operation != null) return error.BuildAlreadyRunning;
         self.active_operation = operation;
         defer self.active_operation = null;
+        self.failure_location = .{};
         try self.resolveSourceDateEpoch();
         try steps.validateBuildDirectories(self);
         var log = try steps.openBuildLog(self);
@@ -327,6 +346,16 @@ pub const PackageBuilder = struct {
         defer self.active_log = null;
         try log.writeRecord("build", "started");
         const artifacts = self.buildPackage(operation) catch |err| {
+            const location = self.failure_location;
+            const detail = std.fmt.allocPrint(self.allocator, "{s}: {s}: {s}", .{
+                location.package_name orelse self.requested_names[0],
+                location.step_name orelse "build",
+                @errorName(err),
+            }) catch null;
+            if (detail) |message| {
+                defer self.allocator.free(message);
+                log.writeRecord("error", message) catch {};
+            }
             log.writeRecord("status", if (err == error.Cancelled) "cancelled" else "failed") catch {};
             return err;
         };
@@ -381,6 +410,20 @@ pub const PackageBuilder = struct {
         operation: *op_context.Operation,
         writer: *std.Io.Writer,
     ) !void {
+        errdefer |err| {
+            // Step failures already publish their command and exit status.
+            // Publish early metadata errors too, so session logs retain them.
+            if (err != error.Cancelled and err != error.StepFailed) {
+                const message = @import("../../shared/user_errors.zig").format(self.allocator, err, .{
+                    .operation = ".SRCINFO generation",
+                    .subject = if (self.requested_names.len > 0) self.requested_names[0] else null,
+                }) catch null;
+                if (message) |detail| {
+                    defer self.allocator.free(detail);
+                    operation.reportError(err, detail, "metadata", null, false);
+                }
+            }
+        }
         const reviewed_digest = self.options.reviewed_pkgbuild_digest orelse
             return error.UnreviewedBuilderRequest;
         const pkgbuild_path = self.options.pkgbuild_path orelse
@@ -455,7 +498,7 @@ pub const PackageBuilder = struct {
         try self.requireSandboxAvailability();
         var resolved_review: ?PreparedPkgbuildReview = null;
         defer if (resolved_review) |*review| review.deinit();
-        const original_review_digest = self.options.reviewed_pkgbuild_digest;
+        var original_review_digest = self.options.reviewed_pkgbuild_digest;
         const original_install_scripts = self.options.install_scripts;
         const original_reviewed_files = self.options.reviewed_files;
         defer {
@@ -468,7 +511,7 @@ pub const PackageBuilder = struct {
         // just statically recognizable assignments) is reflected in the
         // execution plan. Path-less unit fixtures retain their lightweight
         // static-only behavior.
-        if (self.options.pkgbuild_path != null and self.package_builds[0].execution != null) {
+        if (self.options.pkgbuild_path != null) {
             var evaluated = try self.resolveEvaluatedBuilds(operation);
             defer evaluated.deinit(self.allocator);
             const pkgbuild_path = self.options.pkgbuild_path orelse
@@ -521,11 +564,14 @@ pub const PackageBuilder = struct {
         }
         try self.validatePackageFunctions();
         if (!self.options.sources_prepared) try sources.prepareSources(self, operation);
-        const shared_execution = self.package_builds[0].execution orelse
-            return error.MissingExecutionSteps;
-        for (shared_execution.steps) |step| {
-            if (steps.isPackageStep(step.name)) continue;
-            if (std.mem.eql(u8, step.name, "check") and !self.options.run_check) continue;
+        // pkgver can replace the entire execution plan. Look up each phase
+        // anew, and never retain a step pointer across the metadata refresh.
+        for ([_][]const u8{ "prepare", "pkgver", "build", "check" }) |phase| {
+            if (std.mem.eql(u8, phase, "check") and !self.options.run_check) continue;
+            const shared_execution = self.package_builds[0].execution orelse continue;
+            const step = for (shared_execution.steps) |candidate| {
+                if (std.mem.eql(u8, candidate.name, phase)) break candidate;
+            } else continue;
             try steps.runStep(
                 self,
                 operation,
@@ -536,6 +582,10 @@ pub const PackageBuilder = struct {
                 step.body,
                 null,
             );
+            if (self.pending_pkgver != null) {
+                try self.finishPkgver(operation, &resolved_review.?);
+                original_review_digest = self.options.reviewed_pkgbuild_digest;
+            }
         }
 
         var artifacts: std.ArrayList(BuildArtifact) = .empty;
@@ -560,23 +610,31 @@ pub const PackageBuilder = struct {
             else
                 null;
             defer if (approved_changelog) |value| self.allocator.free(value);
-            const package_execution = package_build.execution orelse
-                return error.MissingExecutionSteps;
-            const package_step = steps.findPackageStep(package_execution.steps) orelse
+            const package_step = if (package_build.execution) |execution|
+                steps.findPackageStep(execution.steps)
+            else
+                null;
+            if (package_step == null and
+                (package_build.has_generic_package_function or package_build.has_selected_package_function))
                 return error.MissingPackageStep;
             const artifact = artifact: {
                 self.clearVirtualOwnership();
                 defer self.clearVirtualOwnership();
-                try steps.runStep(
-                    self,
-                    operation,
-                    requested_name,
-                    package_step.name,
-                    package_execution.package_prelude,
-                    package_execution.package_helpers,
-                    package_step.body,
-                    null,
-                );
+                // Valid single-package PKGBUILDs may have no package function.
+                // They still produce an archive containing package metadata.
+                if (package_step) |step| {
+                    const execution = package_build.execution.?;
+                    try steps.runStep(
+                        self,
+                        operation,
+                        requested_name,
+                        step.name,
+                        execution.package_prelude,
+                        execution.package_helpers,
+                        step.body,
+                        null,
+                    );
+                }
                 if (!metadata.reviewedAuxiliarySelectionMatches(approved_install, package_build.install_file) or
                     !metadata.reviewedAuxiliarySelectionMatches(approved_changelog, package_build.changelog_file))
                     return error.ReviewedPkgbuildChanged;
@@ -593,7 +651,11 @@ pub const PackageBuilder = struct {
             for ([_][]const u8{ "src", "pkg" }) |name| {
                 const path = try std.fs.path.join(self.allocator, &.{ self.options.work_directory, name });
                 defer self.allocator.free(path);
-                std.Io.Dir.cwd().deleteTree(self.io, path) catch |err| {
+                const cleanup = if (std.mem.eql(u8, name, "pkg"))
+                    package_file.cleanPackageTree(self)
+                else
+                    std.Io.Dir.cwd().deleteTree(self.io, path);
+                cleanup catch |err| {
                     const message = try std.fmt.allocPrint(self.allocator, "The build completed, but Shelly could not remove the temporary files in \"{s}\". You can remove them when they are no longer needed.", .{path});
                     defer self.allocator.free(message);
                     operation.reportError(err, message, "build", null, true);
@@ -602,6 +664,49 @@ pub const PackageBuilder = struct {
         }
 
         return artifacts.toOwnedSlice(self.allocator);
+    }
+
+    fn finishPkgver(self: *PackageBuilder, operation: *op_context.Operation, review: *PreparedPkgbuildReview) !void {
+        const version = self.pending_pkgver.?;
+        self.pending_pkgver = null;
+        defer self.allocator.free(version);
+        if (std.mem.eql(u8, version, self.package_builds[0].pkg_version orelse "")) return;
+        const path = self.options.pkgbuild_path.?;
+        try review.verifyCurrent(self.allocator, self.io, path, self.options.start_directory);
+        const original = try std.Io.Dir.cwd().readFileAlloc(self.io, path, self.allocator, .limited(32 * 1024 * 1024));
+        defer self.allocator.free(original);
+        var original_digest: pkgbuild_review.Digest = undefined;
+        std.crypto.hash.sha2.Sha256.hash(original, &original_digest, .{});
+        if (!std.mem.eql(u8, &original_digest, &review.pkgbuild_digest)) return error.ReviewedPkgbuildChanged;
+        const updated = try pkgver_update.render(self.allocator, original, version);
+        defer self.allocator.free(updated);
+        if (!try pkgver_update.write(self.allocator, self.io, path, original, updated)) {
+            operation.status(.warning, "PKGBUILD is not writable; keeping the original package version and release", "build.pkgver", null);
+            return;
+        }
+        const updated_digest = pkgbuild_review.digestPreparedReview(updated, review.reviewed_files);
+        // Only the controlled edit is approved. Newly discovered inputs or
+        // any other modification must still pass the normal review boundary.
+        self.options.reviewed_pkgbuild_digest = updated_digest;
+        var updated_pkgbuild_digest: pkgbuild_review.Digest = undefined;
+        std.crypto.hash.sha2.Sha256.hash(updated, &updated_pkgbuild_digest, .{});
+        self.options.pkgbuild_sha256sum = updated_pkgbuild_digest;
+        self.failure_location = .{};
+        var evaluated = try self.resolveEvaluatedBuilds(operation);
+        defer evaluated.deinit(self.allocator);
+        self.failure_location = .{};
+        var refreshed = try preparePkgbuildReview(self.allocator, self.io, self.options.start_directory, updated, self.package_builds);
+        errdefer refreshed.deinit();
+        if (!std.mem.eql(u8, &updated_digest, &refreshed.digest)) return error.ReviewedPkgbuildChanged;
+        try refreshed.verifyCurrent(self.allocator, self.io, path, self.options.start_directory);
+        try self.validatePackageFunctions();
+        const message = try std.fmt.allocPrint(self.allocator, "Updated version: {s}-{s}", .{ self.package_builds[0].pkg_version orelse "", self.package_builds[0].pkg_rel orelse "" });
+        defer self.allocator.free(message);
+        review.deinit();
+        review.* = refreshed;
+        self.options.install_scripts = review.install_scripts;
+        self.options.reviewed_files = review.reviewed_files;
+        operation.status(.information, message, "build.pkgver", null);
     }
 
     /// Sources the reviewed PKGBUILD in the sandbox and reparses it with the
