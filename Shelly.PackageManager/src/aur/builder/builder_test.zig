@@ -5185,7 +5185,7 @@ test "PackageBuilder applies generic patch arrays and propagates dynamic pkgver"
     try testing.expect(std.mem.endsWith(
         u8,
         artifacts[0].path,
-        "scx-scheds-git-1.2.3.r45.gabcdef-2-any.pkg.tar.zst",
+        "scx-scheds-git-1.2.3.r45.gabcdef-1-any.pkg.tar.zst",
     ));
 
     const applied = try fixture.temporary.dir.readFileAlloc(
@@ -5213,10 +5213,146 @@ test "PackageBuilder applies generic patch arrays and propagates dynamic pkgver"
         .unlimited,
     );
     defer allocator.free(pkginfo);
-    try testing.expect(std.mem.indexOf(u8, pkginfo, "pkgver = 1.2.3.r45.gabcdef-2\n") != null);
+    try testing.expect(std.mem.indexOf(u8, pkginfo, "pkgver = 1.2.3.r45.gabcdef-1\n") != null);
     try testing.expect(std.mem.indexOf(u8, pkginfo, "pkgdesc = dynamic scx package\n") != null);
     try testing.expect(std.mem.indexOf(u8, pkginfo, "depend = runtime=1.2.3.r45.gabcdef\n") != null);
     try testing.expect(std.mem.indexOf(u8, pkginfo, "provides = scx-scheds=1.2.3.r45.gabcdef\n") != null);
+}
+
+test "PackageBuilder writes dynamic pkgver and refreshes all split metadata" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    const content =
+        \\# Retain this comment and the selected PKGBUILD filename.
+        \\pkgbase=demo
+        \\pkgname=('demo' 'demo-docs')
+        \\pkgver=0 # previous version
+        \\pkgrel=7
+        \\arch=('any')
+        \\provides=("demo-api=$pkgver")
+        \\_stamp="$pkgver-$pkgrel"
+        \\prepare() { printf 'prepare\n' >> phases; }
+        \\pkgver() { printf 'pkgver\n' >> phases; printf 'r2.gabc\n'; }
+        \\build() {
+        \\  test "$_stamp" = r2.gabc-1
+        \\  printf 'build\n' >> phases
+        \\}
+        \\check() { printf 'check\n' >> phases; }
+        \\package_demo() { mkdir -p "$pkgdir/usr/share/demo"; }
+        \\package_demo-docs() { mkdir -p "$pkgdir/usr/share/doc/demo"; }
+    ;
+    var fixture = try Fixture.createMany(allocator, content, &.{ "demo", "demo-docs" }, null);
+    defer fixture.destroy();
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "Custom.PKGBUILD", .data = content });
+    const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "Custom.PKGBUILD" });
+    defer allocator.free(path);
+    var review = try builder_mod.preparePkgbuildReview(allocator, io, fixture.build_dir, content, fixture.package_builds);
+    defer review.deinit();
+    fixture.builder.options.pkgbuild_path = path;
+    fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+    fixture.builder.options.review_digest_is_automation = true;
+    const artifacts = try fixture.builder.run();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const updated = try fixture.temporary.dir.readFileAlloc(io, "Custom.PKGBUILD", allocator, .unlimited);
+    defer allocator.free(updated);
+    const expected = try builder_mod.pkgver_update.render(allocator, content, "r2.gabc");
+    defer allocator.free(expected);
+    try testing.expectEqualStrings(expected, updated);
+    const phases = try fixture.temporary.dir.readFileAlloc(io, "src/phases", allocator, .unlimited);
+    defer allocator.free(phases);
+    try testing.expectEqualStrings("prepare\npkgver\nbuild\ncheck\n", phases);
+    var digest: builder_mod.pkgbuild_review.Digest = undefined;
+    std.crypto.hash.sha2.Sha256.hash(updated, &digest, .{});
+    const expected_hash = try std.fmt.allocPrint(allocator, "pkgbuild_sha256sum = {s}\n", .{std.fmt.bytesToHex(digest, .lower)});
+    defer allocator.free(expected_hash);
+    try testing.expectEqual(@as(usize, 2), artifacts.len);
+    for (artifacts) |artifact| {
+        try testing.expect(std.mem.endsWith(u8, artifact.path, "-r2.gabc-1-any.pkg.tar.zst"));
+        const info = try readPkgInfo(allocator, artifact.path);
+        defer allocator.free(info);
+        try testing.expect(std.mem.indexOf(u8, info, "provides = demo-api=r2.gabc\n") != null);
+        const buildinfo_path = try std.fmt.allocPrint(allocator, "pkg/{s}/.BUILDINFO", .{artifact.package_name});
+        defer allocator.free(buildinfo_path);
+        const buildinfo = try fixture.temporary.dir.readFileAlloc(io, buildinfo_path, allocator, .unlimited);
+        defer allocator.free(buildinfo);
+        try testing.expect(std.mem.indexOf(u8, buildinfo, expected_hash) != null);
+    }
+}
+
+test "PackageBuilder dynamic pkgver leaves unchanged invalid and unwritable inputs intact" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    for ([_]struct { output: []const u8, mode: u32 = 0o644, failure: bool = false }{
+        .{ .output = "1" },
+        .{ .output = "2", .mode = 0o444 },
+        .{ .output = "invalid-version", .failure = true },
+        .{ .output = "", .failure = true },
+        .{ .output = "1\n2", .failure = true },
+        .{ .output = "2\r", .failure = true },
+    }) |case| {
+        const content = try std.fmt.allocPrint(
+            allocator,
+            "pkgname=demo\npkgver=1\npkgrel=7\narch=('any')\nprovides=(\"demo-api=$pkgver\")\npkgver() {{ printf '%s' '{s}'; }}\npackage() {{ :; }}\n",
+            .{case.output},
+        );
+        defer allocator.free(content);
+        var fixture = try Fixture.create(allocator, content, null, null);
+        defer fixture.destroy();
+        try fixture.temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = content });
+        try fixture.temporary.dir.setFilePermissions(io, "PKGBUILD", .fromMode(case.mode), .{});
+        const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "PKGBUILD" });
+        defer allocator.free(path);
+        var review = try builder_mod.preparePkgbuildReview(allocator, io, fixture.build_dir, content, fixture.package_builds);
+        defer review.deinit();
+        fixture.builder.options.pkgbuild_path = path;
+        fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+        if (case.failure) {
+            try testing.expectError(error.InvalidPackageVersion, fixture.builder.run());
+        } else {
+            const artifacts = try fixture.builder.run();
+            defer builder_mod.deinitArtifacts(allocator, artifacts);
+            try testing.expect(std.mem.endsWith(u8, artifacts[0].path, "demo-1-7-any.pkg.tar.zst"));
+        }
+        const after = try fixture.temporary.dir.readFileAlloc(io, "PKGBUILD", allocator, .unlimited);
+        defer allocator.free(after);
+        try testing.expectEqualStrings(content, after);
+    }
+}
+
+test "PackageBuilder dynamic pkgver preserves review integrity and survives later build failure" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    for ([_]bool{ true, false }) |change_before_version| {
+        const content = try std.fmt.allocPrint(
+            allocator,
+            "pkgname=demo\npkgver=1\npkgrel=7\narch=('any')\n{s}\npkgver() {{ printf 2; }}\npackage() {{ :; }}\n",
+            .{if (change_before_version)
+                "prepare() { printf '\\n# unreviewed edit\\n' >> \"$startdir/PKGBUILD\"; }"
+            else
+                "build() { exit 42; }"},
+        );
+        defer allocator.free(content);
+        var fixture = try Fixture.create(allocator, content, null, null);
+        defer fixture.destroy();
+        try fixture.temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = content });
+        const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "PKGBUILD" });
+        defer allocator.free(path);
+        var review = try builder_mod.preparePkgbuildReview(allocator, io, fixture.build_dir, content, fixture.package_builds);
+        defer review.deinit();
+        fixture.builder.options.pkgbuild_path = path;
+        fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+        try testing.expectError(if (change_before_version) error.ReviewedPkgbuildChanged else error.StepFailed, fixture.builder.run());
+        const after = try fixture.temporary.dir.readFileAlloc(io, "PKGBUILD", allocator, .unlimited);
+        defer allocator.free(after);
+        if (change_before_version) {
+            try testing.expect(std.mem.indexOf(u8, after, "pkgver=1\npkgrel=7\n") != null);
+            try testing.expect(std.mem.endsWith(u8, after, "# unreviewed edit\n"));
+        } else {
+            const expected = try builder_mod.pkgver_update.render(allocator, content, "2");
+            defer allocator.free(expected);
+            try testing.expectEqualStrings(expected, after);
+        }
+    }
 }
 
 test "PackageBuilder rejects invalid dynamic pkgver output" {
@@ -5547,7 +5683,7 @@ test "PackageBuilder preserves selected split metadata in PKGINFO" {
     const backend_info = try readPkgInfo(allocator, artifacts[1].path);
     defer allocator.free(backend_info);
     try testing.expect(std.mem.indexOf(u8, backend_info, "pkgdesc = Shelly Flatpak backend\n") != null);
-    try testing.expect(std.mem.indexOf(u8, backend_info, "depend = shelly-git=1.1.r4.gsplit-2\n") != null);
+    try testing.expect(std.mem.indexOf(u8, backend_info, "depend = shelly-git=1.1.r4.gsplit-1\n") != null);
     try testing.expect(std.mem.indexOf(u8, backend_info, "depend = flatpak\n") != null);
     try testing.expect(std.mem.indexOf(u8, backend_info, "depend = glibc\n") != null);
     try testing.expect(std.mem.indexOf(u8, backend_info, "group = shared-suite\n") != null);

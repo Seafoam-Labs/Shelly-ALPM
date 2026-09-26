@@ -110,6 +110,7 @@ pub fn build(b: *std.Build) void {
             "isolated source key",
             "isolated source public keys",
             "isolated child arguments",
+            "isolated pkgver",
             "isolated dependency review",
             "isolated configuration preserves build policy",
             "invoking user build arguments",
@@ -135,6 +136,7 @@ pub fn build(b: *std.Build) void {
         .name = "isolated-build-test",
         .root_module = isolated_test_module,
         .filters = &.{
+            "isolated pkgver",
             "reviewed input paths cannot escape the staged source root",
             "isolated command failures preserve the stage and native exit code",
             "reviewed inputs are materialized with exact bytes and permissions",

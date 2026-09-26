@@ -123,7 +123,7 @@ pub fn runStep(
     };
     const executable_body = try std.fmt.allocPrint(
         self.allocator,
-        "{s}\n{s}\n{s}\ndeclare -- startdir=\"$4\"\ndeclare -- srcdir=\"$5\"\n{s}\n{s}\n{s}\ndeclare -- pkgver=\"$1\"\n__shelly_step() {{\n{s}\n}}\n{s}",
+        "{s}\n{s}\n{s}\ndeclare -- startdir=\"$4\"\ndeclare -- srcdir=\"$5\"\n{s}\n{s}\n{s}\ndeclare -- pkgver=\"$1\" pkgrel=\"$9\"\n__shelly_step() {{\n{s}\n}}\n{s}",
         .{
             if (package_step) virtualMetadataShellPrelude else "",
             if (package_step) package_metadata.shell_capture_prelude else "",
@@ -221,7 +221,7 @@ pub fn runStep(
         self.package_builds[0].options orelse &.{},
     );
     defer metadata.freeOwnedStrings(self.allocator, effective_options);
-    const step_argv: []const []const u8 = &.{ "/bin/bash", "-e", "-c", command_body, "shelly-step", current_pkgver, pkgver_result_path, metadata_result_path, runtime_startdir, srcdir, runtime_pkgdir, ownership_result_path, wrappers_path orelse "" };
+    const step_argv: []const []const u8 = &.{ "/bin/bash", "-e", "-c", command_body, "shelly-step", current_pkgver, pkgver_result_path, metadata_result_path, runtime_startdir, srcdir, runtime_pkgdir, ownership_result_path, wrappers_path orelse "", self.package_builds[0].pkg_rel orelse "" };
     const sandbox_enabled = self.shellybuild_config.sandbox.enabled;
     const wrapped = if (sandbox_enabled) try wrapStepCommand(self, step_argv) else null;
     defer if (wrapped) |command| command.deinit(self.allocator);
@@ -1105,13 +1105,27 @@ pub fn buildEnvironment(
 }
 
 fn applyDynamicPkgver(self: *PackageBuilder, output: []const u8) !void {
-    const version = std.mem.trimEnd(u8, output, "\r\n");
+    const version = std.mem.trimEnd(u8, output, "\n");
     try metadata.validatePkgver(version);
+
+    if (self.options.pkgbuild_path != null) {
+        const owned = try self.allocator.dupe(u8, version);
+        if (self.pending_pkgver) |old| self.allocator.free(old);
+        self.pending_pkgver = owned;
+        return;
+    }
+    // Path-less unit fixtures have no PKGBUILD to rewrite or re-evaluate.
+    const changed = !std.mem.eql(u8, version, self.package_builds[0].pkg_version orelse "");
 
     for (self.package_builds) |*package_build| {
         const owned_version = try self.allocator.dupe(u8, version);
         if (package_build.pkg_version) |old| self.allocator.free(old);
         package_build.pkg_version = owned_version;
+        if (changed) {
+            const release = try self.allocator.dupe(u8, "1");
+            if (package_build.pkg_rel) |old| self.allocator.free(old);
+            package_build.pkg_rel = release;
+        }
 
         const map_value = try self.allocator.dupe(u8, version);
         if (package_build.variables.fetchRemove("pkgver")) |old| {
