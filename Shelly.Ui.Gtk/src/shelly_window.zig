@@ -6,7 +6,10 @@ const gio = bindings.gio;
 const gobject = bindings.gobject;
 const FlatpakPage = @import("pages/flatpak/flatpak_page.zig").FlatpakPage;
 const AppImagePage = @import("pages/appimage_page.zig").AppImagePage;
-const PackagePage = @import("pages/package_page.zig").PackagePage;
+const PackagePage = if (@import("options").devario)
+    @import("devario/package_page.zig").PackagePage
+else
+    @import("pages/package_page.zig").PackagePage;
 const AurPage = @import("pages/aur_page.zig").AurPage;
 const AtollAurPage = @import("pages/atoll_aur_page.zig").AtollAurPage;
 const ShellySearchPage = @import("pages/search_page.zig").ShellySearchPage;

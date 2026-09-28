@@ -45,6 +45,15 @@ pub fn build(b: *std.Build) void {
     );
     options.addOption(
         bool,
+        "devario",
+        b.option(
+            bool,
+            "devario",
+            "Build the Devario variant (bare-bones package page under src/devario)",
+        ) orelse false,
+    );
+    options.addOption(
+        bool,
         "skip_background_services",
         b.option(
             bool,
@@ -121,6 +130,7 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/dialog/ui/polkit_warning.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/aur_warning.ui"));
     gresource.addFileInput(b.path("src/ui/welcome.ui"));
+    gresource.addFileInput(b.path("src/devario/package_page.ui"));
     // Link the generated resource C into the exe.
     exe.root_module.addCSourceFile(.{ .file = resources_c });
     exe.root_module.link_libc = true;

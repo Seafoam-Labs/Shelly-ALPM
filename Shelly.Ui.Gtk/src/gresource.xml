@@ -44,6 +44,7 @@
     <file>ui/flatpak_package_detail.ui</file>
     <file>ui/update_page.ui</file>
     <file>ui/recommend_page.ui</file>
+    <file>devario/package_page.ui</file>
     <file>style.css</file>
   </gresource>
 </gresources>
