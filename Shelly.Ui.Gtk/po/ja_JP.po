@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -63,9 +63,6 @@ msgstr "アプリのデータは完全に削除されます。"
 msgid "Confirm"
 msgstr "確認"
 
-msgid "Skip"
-msgstr "スキップ"
-
 msgid "No special permissions requested"
 msgstr "特別な権限は要求されません"
 
@@ -110,6 +107,9 @@ msgstr ""
 
 msgid "Review PKGBUILD"
 msgstr "PKGBUILD を確認"
+
+msgid "Skip"
+msgstr "スキップ"
 
 msgid "Search..."
 msgstr "検索..."
@@ -161,7 +161,6 @@ msgstr "URL / リポジトリ情報の更新についてもっと知る"
 msgid "e.g. owner/repo or https://..."
 msgstr "例: owner/repo または https://..."
 
-#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
@@ -195,20 +194,28 @@ msgstr "同期"
 msgid "Remove"
 msgstr "削除"
 
-msgid "Information"
-msgstr "情報"
-
-msgid "Preview Pkgbuild"
-msgstr "PKGBUILD をプレビュー"
-
 msgid "Search the AUR by name or keyword"
 msgstr "名前やキーワードで AUR を検索する"
+
+#| msgid "Search..."
+msgid "Search By"
+msgstr ""
 
 msgid "Installed Only"
 msgstr "インストール済みのみ"
 
 msgid "Show only installed packages"
 msgstr "インストール済みパッケージのみを表示"
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
+msgstr ""
 
 msgid "Additional Options"
 msgstr "その他のオプション"
@@ -225,13 +232,11 @@ msgstr "投票数"
 msgid "Popularity"
 msgstr "人気度"
 
-msgid "Search the AUR"
-msgstr "AUR を検索"
-
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "Loading the AUR index"
 msgstr ""
-"AUR には閲覧可能なインデックスがありません。始めるにはパッケージ名を入力して"
-"ください。"
+
+msgid "Powered by Atoll."
+msgstr ""
 
 msgid "Run checks"
 msgstr "チェックを実行"
@@ -244,6 +249,20 @@ msgstr "詳細ペインを隠す"
 
 msgid "Hide the detail pane on the right"
 msgstr "右側の詳細ペインを隠す"
+
+msgid "Information"
+msgstr "情報"
+
+msgid "Preview Pkgbuild"
+msgstr "PKGBUILD をプレビュー"
+
+msgid "Search the AUR"
+msgstr "AUR を検索"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr ""
+"AUR には閲覧可能なインデックスがありません。始めるにはパッケージ名を入力して"
+"ください。"
 
 msgid "Install a local Flatpak"
 msgstr "ローカル Flatpak をインストール"
@@ -368,6 +387,9 @@ msgstr "About"
 
 msgid "Shelly"
 msgstr "Shelly"
+
+msgid "Install Optional Deps"
+msgstr ""
 
 msgid "Reinstall"
 msgstr "再インストール"
@@ -615,6 +637,9 @@ msgstr "確認なしで実行する"
 msgid "Enable Shelly Search"
 msgstr "Shelly 検索を有効にする"
 
+msgid "Enable Atoll Powered AUR"
+msgstr ""
+
 msgid "AppImage Install Path"
 msgstr "AppImage のインストールパス"
 
@@ -666,7 +691,6 @@ msgstr "アップデートを確認中…"
 msgid "Your system is up to date"
 msgstr "お使いのシステムは最新です"
 
-#| msgid "Could not check for updates"
 msgid "Could not check for updates."
 msgstr ""
 
@@ -846,14 +870,17 @@ msgstr "次で使用"
 msgid "Install Anyway"
 msgstr "このままインストール"
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
 msgid "Unknown"
 msgstr "不明"
 
 msgid "package(s)"
 msgstr "個のパッケージ"
-
-msgid "to"
-msgstr "to"
 
 msgid "removed size"
 msgstr "削除されるサイズ"
@@ -869,6 +896,63 @@ msgstr ""
 
 msgid "Dismiss"
 msgstr "却下"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr "余分なキャッシュエントリーを削除しますか？"
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+"{package_one}-{version_one} は {package_two}-{version_two} と競合します。"
+"{package_to_remove} を削除しますか？"
+
+msgid "Install ignored package: {package}?"
+msgstr ""
+
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+
+msgid "Corrupted package {file}. Delete?"
+msgstr ""
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+
+msgid "Import PGP key {key_id}?"
+msgstr ""
+
+msgid "Proceed with this partial upgrade?"
+msgstr ""
+
+msgid "Proceed with the standard system upgrade?"
+msgstr ""
+
+msgid "Proceed with package installation?"
+msgstr ""
+
+msgid "Proceed with package removal?"
+msgstr ""
+
+msgid "Proceed with AUR package installation?"
+msgstr ""
+
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select an optional dependency for {pkg}"
+msgstr ""
+
+msgid "Select optional dependencies for {pkg}"
+msgstr ""
+
+msgid "Proceed with purify?"
+msgstr ""
+
+msgid ""
+"PKGBUILD {package} requires source-signing key {fingerprint}. Import it "
+"using `shelly keyring recv --user`?"
+msgstr ""
 
 msgid "None"
 msgstr "なし"
@@ -891,13 +975,9 @@ msgstr "アップデートがあります"
 msgid "Version ?"
 msgstr "バージョン？"
 
-#| msgid "Invalid URL. Must start with http:// or https://"
 msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
 
-#| msgid ""
-#| "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/"
-#| "owner/repo/releases"
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
@@ -909,7 +989,6 @@ msgstr "AppImage ファイルを選択"
 msgid "AppImage files"
 msgstr "AppImage ファイル"
 
-#| msgid "Only .AppImage files can be installed"
 msgid "Only.AppImage files can be installed"
 msgstr ""
 
@@ -968,6 +1047,62 @@ msgstr "環境の変更は保存されていません。"
 msgid "Discard"
 msgstr "破棄"
 
+msgid "No packages found"
+msgstr "パッケージが見つかりません"
+
+msgid "Try a shorter or more general keyword."
+msgstr "キーワードを短くするか一般的なものを試してください。"
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr "接続を確認して、もう一度試してください。"
+
+msgid "Flagged out of date"
+msgstr "古いと報告されている"
+
+msgid "Installed"
+msgstr "インストール時"
+
+msgid "Remove Selected"
+msgstr "選択したものを削除"
+
+msgid "Select one or more packages"
+msgstr "1個以上のパッケージを選択してください"
+
+msgid "Package(s)"
+msgstr "個のパッケージ"
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr "of"
+
+msgid "Remove Packages"
+msgstr "パッケージを削除"
+
+msgid "Remove the selected AUR packages?"
+msgstr "選択した AUR パッケージを削除しますか？"
+
+msgid "Build from AUR"
+msgstr "AUR からビルド"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+"選択したパッケージをビルドしてインストールしますか？これには時間がかかる場合"
+"があります。"
+
+msgid "Build"
+msgstr "ビルド"
+
+msgid "Installing AUR packages"
+msgstr "AUR パッケージをインストール中"
+
+msgid "Removing AUR packages"
+msgstr "AUR パッケージを削除中"
+
 msgid "Maintainer"
 msgstr "メンテナー"
 
@@ -1000,56 +1135,8 @@ msgstr ""
 "AURには閲覧可能なインデックスがありません — パッケージ名を入力して開始してく"
 "ださい。"
 
-msgid "No packages found"
-msgstr "パッケージが見つかりません"
-
-msgid "Try a shorter or more general keyword."
-msgstr "キーワードを短くするか一般的なものを試してください。"
-
-#| msgid "Could not reach the AUR"
 msgid "Could not search the configured AUR service."
 msgstr ""
-
-msgid "Check your connection and try again."
-msgstr "接続を確認して、もう一度試してください。"
-
-msgid "Flagged out of date"
-msgstr "古いと報告されている"
-
-msgid "Installed"
-msgstr "インストール時"
-
-msgid "Remove Selected"
-msgstr "選択したものを削除"
-
-msgid "Select one or more packages"
-msgstr "1個以上のパッケージを選択してください"
-
-msgid "Package(s)"
-msgstr "個のパッケージ"
-
-msgid "Remove Packages"
-msgstr "パッケージを削除"
-
-msgid "Remove the selected AUR packages?"
-msgstr "選択した AUR パッケージを削除しますか？"
-
-msgid "Build from AUR"
-msgstr "AUR からビルド"
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-"選択したパッケージをビルドしてインストールしますか？これには時間がかかる場合"
-"があります。"
-
-msgid "Build"
-msgstr "ビルド"
-
-msgid "Installing AUR packages"
-msgstr "AUR パッケージをインストール中"
-
-msgid "Removing AUR packages"
-msgstr "AUR パッケージを削除中"
 
 msgid "Choose a Flatpak file"
 msgstr "Flatpak ファイルを選択"
@@ -1057,14 +1144,12 @@ msgstr "Flatpak ファイルを選択"
 msgid "Flatpak files"
 msgstr "Flatpak ファイル"
 
-#| msgid "Unsupported file type. Choose a .flatpak or .flatpakref file."
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
 msgid "Installing local flatpak"
 msgstr "ローカル Flatpak をインストール中"
 
-#| msgid "Install the selected packages?"
 msgid "Could not install the selected packages."
 msgstr ""
 
@@ -1131,11 +1216,9 @@ msgstr "ダウンロード"
 msgid "No description available."
 msgstr "説明がありません。"
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load this application screenshot."
 msgstr ""
 
-#| msgid "Unable to download screenshot"
 msgid "Could not download this application screenshot."
 msgstr ""
 
@@ -1174,11 +1257,9 @@ msgid ""
 "other applications and try again."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not start loading Flatpak applications."
 msgstr ""
 
-#| msgid "Unable to load Flatpak applications."
 msgid "Could not load Flatpak applications from the selected remote."
 msgstr ""
 
@@ -1299,6 +1380,12 @@ msgstr "明示的なパッケージに変更中"
 msgid "Making Package Dependency"
 msgstr "依存によるパッケージに変更中"
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "パッケージは既にインストールされています"
 
@@ -1342,7 +1429,6 @@ msgstr ""
 "標準リポジトリ、AUR、Flatpak を一度に検索します。名前を入力して開始してくださ"
 "い。"
 
-#| msgid "Could not reach the AUR"
 msgid "Could not search the selected sources."
 msgstr ""
 
@@ -1375,19 +1461,15 @@ msgstr "Flatpak サポートをインストール中"
 msgid "Installing AppImage support"
 msgstr "AppImage サポートをインストール中"
 
-#| msgid "Installing Flatpak support"
 msgid "Could not start installing Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not start installing AppImage support."
 msgstr ""
 
-#| msgid "Installing Flatpak support"
 msgid "Could not install Flatpak support."
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Could not install AppImage support."
 msgstr ""
 
@@ -1403,7 +1485,6 @@ msgstr "変更履歴のエントリーが見つかりませんでした"
 msgid "No details for this release"
 msgstr "このリリースの詳細情報はありません"
 
-#| msgid "Could not check for updates"
 msgid "Could not load the release notes."
 msgstr ""
 
@@ -1439,7 +1520,6 @@ msgstr ""
 msgid "Systemd startup service added."
 msgstr "systemd 起動サービスが追加されました。"
 
-#| msgid "Tray disabled, but autostart service remains"
 msgid "Could not disable the tray autostart service."
 msgstr ""
 
@@ -1533,7 +1613,6 @@ msgstr "中断されました"
 msgid "Cancelled"
 msgstr "キャンセル"
 
-#| msgid "Failed to start operation."
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1585,7 +1664,6 @@ msgstr "トランザクションが完了しました"
 msgid "Operation failed"
 msgstr "操作に失敗しました"
 
-#| msgid "Operation failed"
 msgid "Operation cancelled"
 msgstr ""
 
@@ -1595,7 +1673,6 @@ msgstr "完了"
 msgid "exit"
 msgstr "終了"
 
-#| msgid "The operation was cancelled."
 msgid "Operation cancelled."
 msgstr ""
 
@@ -1609,16 +1686,6 @@ msgstr ""
 "パッケージを管理する権限が許可されませんでした。続行するには再度試行し、承認"
 "リクエストを許可してください。"
 
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-"{package_one}-{version_one} は {package_two}-{version_two} と競合します。"
-"{package_to_remove} を削除しますか？"
-
-msgid "Would you like to remove extra cache entries?"
-msgstr "余分なキャッシュエントリーを削除しますか？"
-
 msgid "System package update"
 msgstr "システムパッケージのアップデート"
 
@@ -1627,9 +1694,6 @@ msgstr "AUR パッケージのアップデート"
 
 msgid "Update this package"
 msgstr "このパッケージをアップデート"
-
-msgid "of"
-msgstr "of"
 
 msgid "updates included"
 msgstr "アップデートがあります"

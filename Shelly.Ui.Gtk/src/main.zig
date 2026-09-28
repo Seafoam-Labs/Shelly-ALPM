@@ -10,6 +10,7 @@ const ShellyWindow = @import("shelly_window.zig").ShellyWindow;
 const runtime = @import("services/runtime.zig");
 const translations = @import("helpers/translations.zig");
 const deep_link = @import("helpers/deep_link.zig");
+const question_translations = @import("helpers/question_translation.zig");
 const tray_service = @import("services/tray_service.zig");
 const options = @import("options");
 const IconDownloadService = @import("services/icon_fetcher.zig").downloadIconsInBackground;

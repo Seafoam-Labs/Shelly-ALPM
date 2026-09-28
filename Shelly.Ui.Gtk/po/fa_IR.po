@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-09-19 13:14-0400\n"
+"POT-Creation-Date: 2026-09-25 06:55-0300\n"
 "PO-Revision-Date: 2026-06-29 21:36+0330\n"
 "Last-Translator: Sohrab Behdani <behdanisohrab@proton.me>\n"
 "Language-Team: fa\n"
@@ -59,9 +59,6 @@ msgstr ""
 msgid "Confirm"
 msgstr "تایید"
 
-msgid "Skip"
-msgstr ""
-
 msgid "No special permissions requested"
 msgstr ""
 
@@ -98,6 +95,9 @@ msgid ""
 msgstr ""
 
 msgid "Review PKGBUILD"
+msgstr ""
+
+msgid "Skip"
 msgstr ""
 
 msgid "Search..."
@@ -150,7 +150,6 @@ msgstr "دریافت اطلاعات بیشتر دربارهٔ پیوند به‌
 msgid "e.g. owner/repo or https://..."
 msgstr "برای نمونه: مالک/مخزن یا https://..."
 
-#| msgid "Invalid format. Use owner/repo (e.g. seafoam-labs/shelly-alpm)"
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
@@ -183,19 +182,27 @@ msgstr "همگام‌سازی"
 msgid "Remove"
 msgstr "حذف"
 
-msgid "Information"
-msgstr ""
-
-msgid "Preview Pkgbuild"
-msgstr ""
-
 msgid "Search the AUR by name or keyword"
+msgstr ""
+
+#| msgid "Search..."
+msgid "Search By"
 msgstr ""
 
 msgid "Installed Only"
 msgstr ""
 
 msgid "Show only installed packages"
+msgstr ""
+
+msgid "Previous page"
+msgstr ""
+
+msgid "Page 1 of 1"
+msgstr ""
+
+#| msgid "Default page"
+msgid "Next page"
 msgstr ""
 
 msgid "Additional Options"
@@ -213,10 +220,10 @@ msgstr "آراء"
 msgid "Popularity"
 msgstr "محبوبیت"
 
-msgid "Search the AUR"
+msgid "Loading the AUR index"
 msgstr ""
 
-msgid "The AUR has no browsable index. Type a package name to begin."
+msgid "Powered by Atoll."
 msgstr ""
 
 msgid "Run checks"
@@ -229,6 +236,18 @@ msgid "Hide Detail Pane"
 msgstr ""
 
 msgid "Hide the detail pane on the right"
+msgstr ""
+
+msgid "Information"
+msgstr ""
+
+msgid "Preview Pkgbuild"
+msgstr ""
+
+msgid "Search the AUR"
+msgstr ""
+
+msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
 msgid "Install a local Flatpak"
@@ -351,6 +370,9 @@ msgid "About"
 msgstr ""
 
 msgid "Shelly"
+msgstr ""
+
+msgid "Install Optional Deps"
 msgstr ""
 
 msgid "Reinstall"
@@ -597,6 +619,9 @@ msgstr "بدون تأیید"
 msgid "Enable Shelly Search"
 msgstr "فعال‌سازی جست‌جوی Shelly"
 
+msgid "Enable Atoll Powered AUR"
+msgstr ""
+
 msgid "AppImage Install Path"
 msgstr "مسیر نصب AppImage"
 
@@ -821,13 +846,16 @@ msgstr ""
 msgid "Install Anyway"
 msgstr "درهرحال نصب شود"
 
+msgid "to remove"
+msgstr ""
+
+msgid "to install"
+msgstr ""
+
 msgid "Unknown"
 msgstr "ناشناخته"
 
 msgid "package(s)"
-msgstr ""
-
-msgid "to"
 msgstr ""
 
 msgid "removed size"
@@ -843,6 +871,61 @@ msgid "Could not load the PKGBUILD preview."
 msgstr ""
 
 msgid "Dismiss"
+msgstr ""
+
+msgid "Would you like to remove extra cache entries?"
+msgstr ""
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+
+msgid "Install ignored package: {package}?"
+msgstr ""
+
+msgid "Replace {package_one}-{version_one} with {package_two}-{version_two}?"
+msgstr ""
+
+msgid "Corrupted package {file}. Delete?"
+msgstr ""
+
+msgid "Some packages must be removed to proceed. Skip them instead?"
+msgstr ""
+
+msgid "Import PGP key {key_id}?"
+msgstr ""
+
+msgid "Proceed with this partial upgrade?"
+msgstr ""
+
+msgid "Proceed with the standard system upgrade?"
+msgstr ""
+
+msgid "Proceed with package installation?"
+msgstr ""
+
+msgid "Proceed with package removal?"
+msgstr ""
+
+msgid "Proceed with AUR package installation?"
+msgstr ""
+
+msgid "Select Provider"
+msgstr ""
+
+msgid "Select an optional dependency for {pkg}"
+msgstr ""
+
+msgid "Select optional dependencies for {pkg}"
+msgstr ""
+
+msgid "Proceed with purify?"
+msgstr ""
+
+msgid ""
+"PKGBUILD {package} requires source-signing key {fingerprint}. Import it "
+"using `shelly keyring recv --user`?"
 msgstr ""
 
 msgid "None"
@@ -866,7 +949,6 @@ msgstr ""
 msgid "Version ?"
 msgstr ""
 
-#| msgid "Invalid URL. Must start with http:// or https://"
 msgid "Enter a download URL beginning with http:// or https://."
 msgstr ""
 
@@ -937,6 +1019,60 @@ msgstr ""
 msgid "Discard"
 msgstr ""
 
+msgid "No packages found"
+msgstr ""
+
+msgid "Try a shorter or more general keyword."
+msgstr ""
+
+msgid "Could not reach Atoll"
+msgstr ""
+
+msgid "Check your connection and try again."
+msgstr ""
+
+msgid "Flagged out of date"
+msgstr ""
+
+msgid "Installed"
+msgstr "نصب شده‌ها"
+
+msgid "Remove Selected"
+msgstr "حذف انتخاب شده"
+
+msgid "Select one or more packages"
+msgstr ""
+
+msgid "Package(s)"
+msgstr ""
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
+msgstr ""
+
+msgid "Remove Packages"
+msgstr ""
+
+msgid "Remove the selected AUR packages?"
+msgstr ""
+
+msgid "Build from AUR"
+msgstr ""
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr ""
+
+msgid "Build"
+msgstr ""
+
+msgid "Installing AUR packages"
+msgstr ""
+
+msgid "Removing AUR packages"
+msgstr ""
+
 msgid "Maintainer"
 msgstr "نگهدارنده"
 
@@ -967,52 +1103,7 @@ msgstr ""
 msgid "The AUR has no browsable index — type a package name to begin."
 msgstr ""
 
-msgid "No packages found"
-msgstr ""
-
-msgid "Try a shorter or more general keyword."
-msgstr ""
-
 msgid "Could not search the configured AUR service."
-msgstr ""
-
-msgid "Check your connection and try again."
-msgstr ""
-
-msgid "Flagged out of date"
-msgstr ""
-
-msgid "Installed"
-msgstr "نصب شده‌ها"
-
-msgid "Remove Selected"
-msgstr "حذف انتخاب شده"
-
-msgid "Select one or more packages"
-msgstr ""
-
-msgid "Package(s)"
-msgstr ""
-
-msgid "Remove Packages"
-msgstr ""
-
-msgid "Remove the selected AUR packages?"
-msgstr ""
-
-msgid "Build from AUR"
-msgstr ""
-
-msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-
-msgid "Build"
-msgstr ""
-
-msgid "Installing AUR packages"
-msgstr ""
-
-msgid "Removing AUR packages"
 msgstr ""
 
 msgid "Choose a Flatpak file"
@@ -1257,6 +1348,12 @@ msgstr ""
 msgid "Making Package Dependency"
 msgstr ""
 
+msgid "Select Optional Dependencies to Install"
+msgstr ""
+
+msgid "Installing optional dependencies"
+msgstr ""
+
 msgid "Package is already installed"
 msgstr "بسته درحال حاضر نصب شده است"
 
@@ -1456,19 +1553,15 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
-#| msgid "Upgrade All"
 msgid "Upgraded"
 msgstr ""
 
-#| msgid "Download"
 msgid "Downgraded"
 msgstr ""
 
-#| msgid "Installed"
 msgid "Reinstalled"
 msgstr ""
 
-#| msgid "Remove"
 msgid "Removed"
 msgstr ""
 
@@ -1555,14 +1648,6 @@ msgid ""
 "authorization request to continue."
 msgstr ""
 
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-
-msgid "Would you like to remove extra cache entries?"
-msgstr ""
-
 msgid "System package update"
 msgstr ""
 
@@ -1570,9 +1655,6 @@ msgid "AUR package update"
 msgstr ""
 
 msgid "Update this package"
-msgstr ""
-
-msgid "of"
 msgstr ""
 
 msgid "updates included"
