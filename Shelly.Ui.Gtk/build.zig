@@ -43,13 +43,15 @@ pub fn build(b: *std.Build) void {
             "Package containing the Flatpak backend for this Shelly build",
         ) orelse "shelly-flatpak-backend",
     );
+    // Optionally Allows for a Devario Based build
+    // This will contain long term items to support further enrichment to pkg's
     options.addOption(
         bool,
         "devario",
         b.option(
             bool,
             "devario",
-            "Build the Devario variant (bare-bones package page under src/devario)",
+            "Build the Devario variant",
         ) orelse false,
     );
     options.addOption(
