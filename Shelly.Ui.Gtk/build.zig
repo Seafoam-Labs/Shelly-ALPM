@@ -56,6 +56,51 @@ pub fn build(b: *std.Build) void {
     );
     options.addOption(
         bool,
+        "exclude_flatpak",
+        b.option(
+            bool,
+            "exclude-flatpak",
+            "Compile out the Flatpak page and its settings row",
+        ) orelse false,
+    );
+    options.addOption(
+        bool,
+        "exclude_aur",
+        b.option(
+            bool,
+            "exclude-aur",
+            "Compile out the AUR pages (including Atoll) and their settings rows",
+        ) orelse false,
+    );
+    options.addOption(
+        bool,
+        "exclude_recommend",
+        b.option(
+            bool,
+            "exclude-recommend",
+            "Compile out the Recommended page and its settings row",
+        ) orelse false,
+    );
+    options.addOption(
+        bool,
+        "exclude_appimage",
+        b.option(
+            bool,
+            "exclude-appimage",
+            "Compile out the AppImage page and its settings rows",
+        ) orelse false,
+    );
+    options.addOption(
+        bool,
+        "exclude_shelly_search",
+        b.option(
+            bool,
+            "exclude-shelly-search",
+            "Compile out the Shelly Search page and its settings row",
+        ) orelse false,
+    );
+    options.addOption(
+        bool,
         "skip_background_services",
         b.option(
             bool,

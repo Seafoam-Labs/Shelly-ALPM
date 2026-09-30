@@ -188,6 +188,8 @@ pub const ShellySettingsPage = extern struct {
             self,
             .{ .detail = "active" },
         );
+        hideExcludedRows(p);
+
         _ = gobject.Object.signals.notify.connect(
             p.aur_switch.as(gobject.Object),
             *Self,
@@ -1239,14 +1241,34 @@ fn populateDropdowns(p: *ShellySettingsPage.Private) void {
     gtk.DropDown.setModel(p.language_drop, lang_strings.as(gio.ListModel));
 }
 
+fn hideSettingsRow(widget: anytype) void {
+    if (gtk.Widget.getParent(widget.as(gtk.Widget))) |row| {
+        gtk.Widget.setVisible(row, @intFromBool(false));
+    }
+}
+
+fn hideExcludedRows(p: *ShellySettingsPage.Private) void {
+    if (options.exclude_aur) {
+        hideSettingsRow(p.aur_switch);
+        hideSettingsRow(p.atoll_aur_switch);
+    }
+    if (options.exclude_flatpak) hideSettingsRow(p.flatpak_switch);
+    if (options.exclude_recommend) hideSettingsRow(p.recommended_switch);
+    if (options.exclude_appimage) {
+        hideSettingsRow(p.appimage_switch);
+        gtk.Widget.setVisible(p.appimage_install_path_box.as(gtk.Widget), @intFromBool(false));
+    }
+    if (options.exclude_shelly_search) hideSettingsRow(p.shelly_search_switch);
+}
+
 fn isPageEntryEnabled(entry: DefaultPageEntry, filter: PageFilter) bool {
     return switch (entry.value) {
-        .recommend => filter.recommended,
+        .recommend => filter.recommended and !options.exclude_recommend,
         .packages => true,
-        .aur => filter.aur,
-        .flatpak => filter.flatpak,
-        .app_image => filter.app_image,
-        .shelly_search => filter.shelly_search,
+        .aur => filter.aur and !options.exclude_aur,
+        .flatpak => filter.flatpak and !options.exclude_flatpak,
+        .app_image => filter.app_image and !options.exclude_appimage,
+        .shelly_search => filter.shelly_search and !options.exclude_shelly_search,
         .update => true,
     };
 }
