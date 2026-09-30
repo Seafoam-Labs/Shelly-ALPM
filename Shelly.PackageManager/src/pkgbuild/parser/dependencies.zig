@@ -1,5 +1,7 @@
 //! Dependency string parsing and variable-reference resolution.
 const std = @import("std");
+const shell_word = @import("word.zig");
+const diagnostics = @import("diagnostics");
 const types = @import("types.zig");
 const shell_scan = @import("shell_scan.zig");
 const expansion = @import("expansion.zig");
@@ -114,7 +116,7 @@ fn resolve_variable_references_mode(self: PkgbuildParser, content: []const u8, v
     }
 
     for (items) |item| {
-        const word = try @import("word.zig").read(self.allocator, item, 0);
+        const word = try shell_word.read(self.allocator, item, 0);
         defer word.deinit(self.allocator);
         var reference: ?ArrayExpansion = null;
         if (!shell_scan.contains_command_substitution(item)) for (word.parts) |part| {
@@ -170,7 +172,7 @@ fn resolve_variable_references_mode(self: PkgbuildParser, content: []const u8, v
             cleaned = strip_dangling_operator(dep);
         }
         if (!std.mem.eql(u8, cleaned, dep)) {
-            std.debug.print("Could not resolve dependency version constraint {0f}; using {1f}. Review the dependency requirements before building.\n", .{ @import("diagnostics").safe(dep), @import("diagnostics").safe(cleaned) });
+            std.debug.print("Could not resolve dependency version constraint {0f}; using {1f}. Review the dependency requirements before building.\n", .{ diagnostics.safe(dep), diagnostics.safe(cleaned) });
             const cleaned_owned = try self.allocator.dupe(u8, cleaned);
             self.allocator.free(dep);
             resolved.items[idx] = cleaned_owned;

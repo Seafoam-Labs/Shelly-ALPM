@@ -5607,6 +5607,7 @@ test "PackageBuilder keeps shared split builds under the global pkgname" {
 }
 
 test "PackageBuilder preserves selected split metadata in PKGINFO" {
+    if (!@import("../../alpm/backend.zig").libalpm_enabled) return error.SkipZigTest;
     const allocator = testing.allocator;
     const io = testing.io;
     const content =
@@ -6387,6 +6388,7 @@ const shelly_bin_pkgbuild =
 ;
 
 test "PackageBuilder builds a real package from the repository PKGBUILD-bin" {
+    if (!@import("../../alpm/backend.zig").libalpm_enabled) return error.SkipZigTest;
     const allocator = testing.allocator;
     const io = testing.io;
 

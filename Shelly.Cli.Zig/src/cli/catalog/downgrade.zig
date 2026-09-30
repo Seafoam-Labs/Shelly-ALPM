@@ -10,7 +10,7 @@ pub const variants = [_]types.Variant{
         .name = "standard",
         .default_for_action = true,
         .description = "Discover cached and archived versions of an installed ALPM package, select one, and install it as a downgrade.",
-        .implementation = "Zigalpm.AlpmManager.get_single_installed_package / Zigalpm.alpm.ArchiveManager.find_candidates / install_candidate / AlpmManager.ignore_package",
+        .implementation = "PackageManager.Manager.get_single_installed_package / PackageManager.Manager.ArchiveManager.find_candidates / install_candidate / PackageManager.Manager.ignore_package",
         .arguments = &.{optionalArgument(
             "package",
             "Installed ALPM package to downgrade",

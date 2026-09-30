@@ -1,0 +1,1799 @@
+{
+  "library_sha256": "da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888",
+  "cases": [
+    {
+      "name": "backup-unmodified",
+      "old": "old",
+      "local": "old",
+      "new": "new",
+      "backup": true,
+      "error": null,
+      "contents": {
+        "conf": "new",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n%BACKUP%\nconf\t22af645d1859cb5ca6da0c484f1f37ea\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          2
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "backup-local-edited",
+      "old": "old",
+      "local": "edited",
+      "new": "old",
+      "backup": true,
+      "error": null,
+      "contents": {
+        "conf": "edited",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n%BACKUP%\nconf\t149603e6c03516362a8da23f624db945\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          2
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "backup-all-differ",
+      "old": "old",
+      "local": "edited",
+      "new": "new",
+      "backup": true,
+      "error": null,
+      "contents": {
+        "conf": "edited",
+        "conf.pacnew": "new",
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n%BACKUP%\nconf\t22af645d1859cb5ca6da0c484f1f37ea\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          2
+        ],
+        [
+          32,
+          0
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "backup-local-equals-new",
+      "old": "old",
+      "local": "new",
+      "new": "new",
+      "backup": true,
+      "error": null,
+      "contents": {
+        "conf": "new",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n%BACKUP%\nconf\t22af645d1859cb5ca6da0c484f1f37ea\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          2
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "noupgrade-identical",
+      "old": "old",
+      "local": "old",
+      "new": "old",
+      "backup": true,
+      "noupgrade": [
+        "conf"
+      ],
+      "error": null,
+      "contents": {
+        "conf": "old",
+        "conf.pacnew": "old",
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n%BACKUP%\nconf\t149603e6c03516362a8da23f624db945\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          2
+        ],
+        [
+          32,
+          0
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "noupgrade-missing",
+      "old": "old",
+      "new": "new",
+      "backup": true,
+      "noupgrade": [
+        "conf"
+      ],
+      "error": null,
+      "contents": {
+        "conf": "new",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n%BACKUP%\nconf\t22af645d1859cb5ca6da0c484f1f37ea\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          2
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "backup-removed-from-list",
+      "old": "old",
+      "local": "edited",
+      "new": "new",
+      "oldbackup": true,
+      "error": null,
+      "contents": {
+        "conf": "new",
+        "conf.pacnew": null,
+        "conf.pacsave": "edited",
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          2
+        ],
+        [
+          33,
+          0
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "unowned",
+      "local": "local",
+      "new": "new",
+      "error": "conflicting files",
+      "contents": {
+        "conf": "local",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": null,
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ]
+      ],
+      "records": []
+    },
+    {
+      "name": "unowned-backup",
+      "local": "local",
+      "new": "new",
+      "backup": true,
+      "error": null,
+      "contents": {
+        "conf": "local",
+        "conf.pacnew": "new",
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n%BACKUP%\nconf\t22af645d1859cb5ca6da0c484f1f37ea\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          1
+        ],
+        [
+          32,
+          0
+        ],
+        [
+          12,
+          1
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "overwrite",
+      "local": "local",
+      "new": "new",
+      "overwrite": [
+        "conf"
+      ],
+      "error": null,
+      "contents": {
+        "conf": "new",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          1
+        ],
+        [
+          12,
+          1
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "overwrite-negated",
+      "local": "local",
+      "new": "new",
+      "overwrite": [
+        "*",
+        "!conf"
+      ],
+      "error": null,
+      "contents": {
+        "conf": "new",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          1
+        ],
+        [
+          12,
+          1
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "noextract-conflict",
+      "local": "local",
+      "new": "new",
+      "noextract": [
+        "conf"
+      ],
+      "noconflicts": true,
+      "error": "conflicting files",
+      "contents": {
+        "conf": "local",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": null,
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ]
+      ],
+      "records": []
+    },
+    {
+      "name": "noextract",
+      "new": "new",
+      "noextract": [
+        "conf"
+      ],
+      "error": null,
+      "contents": {
+        "conf": null,
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          1
+        ],
+        [
+          12,
+          1
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "noextract-negated",
+      "new": "new",
+      "noextract": [
+        "*",
+        "!conf"
+      ],
+      "error": null,
+      "contents": {
+        "conf": "new",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          1
+        ],
+        [
+          12,
+          1
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "preserve-existing-pacnew",
+      "old": "old",
+      "local": "edited",
+      "new": "old",
+      "backup": true,
+      "pacnew": "prior",
+      "error": null,
+      "contents": {
+        "conf": "edited",
+        "conf.pacnew": "old",
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n%BACKUP%\nconf\t149603e6c03516362a8da23f624db945\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          2
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "replace-existing-pacnew",
+      "old": "old",
+      "local": "old",
+      "new": "new",
+      "backup": true,
+      "pacnew": "prior",
+      "error": null,
+      "contents": {
+        "conf": "new",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n%BACKUP%\nconf\t22af645d1859cb5ca6da0c484f1f37ea\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          2
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "dbonly-backup",
+      "old": "old",
+      "local": "edited",
+      "new": "new",
+      "backup": true,
+      "dbonly": true,
+      "error": null,
+      "contents": {
+        "conf": "edited",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": "%FILES%\nconf\n\n%BACKUP%\nconf\t(null)\n\n",
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          15,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          2
+        ],
+        [
+          12,
+          2
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": [
+        "demo-2-1"
+      ]
+    },
+    {
+      "name": "downloadonly-backup",
+      "old": "old",
+      "local": "old",
+      "new": "new",
+      "backup": true,
+      "downloadonly": true,
+      "error": null,
+      "contents": {
+        "conf": "old",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": null,
+      "events": [
+        [
+          5,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          29,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          14,
+          0
+        ]
+      ],
+      "records": [
+        "demo-1-1"
+      ]
+    },
+    {
+      "name": "remove-edited",
+      "old": "old",
+      "local": "edited",
+      "new": "",
+      "backup": true,
+      "remove": true,
+      "error": null,
+      "contents": {
+        "conf": null,
+        "conf.pacnew": null,
+        "conf.pacsave": "edited",
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": null,
+      "events": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          5
+        ],
+        [
+          33,
+          0
+        ],
+        [
+          12,
+          5
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": []
+    },
+    {
+      "name": "remove-unmodified",
+      "old": "old",
+      "local": "old",
+      "new": "",
+      "backup": true,
+      "remove": true,
+      "error": null,
+      "contents": {
+        "conf": null,
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": null,
+      "events": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          5
+        ],
+        [
+          12,
+          5
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": []
+    },
+    {
+      "name": "remove-nosave",
+      "old": "old",
+      "local": "edited",
+      "new": "",
+      "backup": true,
+      "remove": true,
+      "nosave": true,
+      "error": null,
+      "contents": {
+        "conf": null,
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": null,
+      "events": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          5
+        ],
+        [
+          12,
+          5
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": []
+    },
+    {
+      "name": "remove-rotations",
+      "old": "old",
+      "local": "edited",
+      "new": "",
+      "backup": true,
+      "remove": true,
+      "pacsave": "prior",
+      "pacsave1": "older",
+      "error": null,
+      "contents": {
+        "conf": null,
+        "conf.pacnew": null,
+        "conf.pacsave": "edited",
+        "conf.pacsave.1": "prior",
+        "conf.pacsave.2": "older"
+      },
+      "inventory": null,
+      "events": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          5
+        ],
+        [
+          33,
+          0
+        ],
+        [
+          12,
+          5
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": []
+    },
+    {
+      "name": "remove-dbonly",
+      "old": "old",
+      "local": "edited",
+      "new": "",
+      "backup": true,
+      "remove": true,
+      "dbonly": true,
+      "error": null,
+      "contents": {
+        "conf": "edited",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": null,
+      "events": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          5
+        ],
+        [
+          12,
+          5
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": []
+    },
+    {
+      "name": "remove-downloadonly",
+      "old": "old",
+      "local": "edited",
+      "new": "",
+      "backup": true,
+      "remove": true,
+      "downloadonly": true,
+      "error": null,
+      "contents": {
+        "conf": null,
+        "conf.pacnew": null,
+        "conf.pacsave": "edited",
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": null,
+      "events": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          5
+        ],
+        [
+          33,
+          0
+        ],
+        [
+          12,
+          5
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": []
+    },
+    {
+      "name": "remove-noupgrade",
+      "old": "old",
+      "local": "edited",
+      "new": "",
+      "backup": true,
+      "remove": true,
+      "noupgrade": [
+        "conf"
+      ],
+      "error": null,
+      "contents": {
+        "conf": "edited",
+        "conf.pacnew": null,
+        "conf.pacsave": null,
+        "conf.pacsave.1": null,
+        "conf.pacsave.2": null
+      },
+      "inventory": null,
+      "events": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          9,
+          0
+        ],
+        [
+          11,
+          5
+        ],
+        [
+          12,
+          5
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "records": []
+    }
+  ]
+}

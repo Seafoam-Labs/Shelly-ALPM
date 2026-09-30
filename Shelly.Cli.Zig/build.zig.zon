@@ -33,7 +33,7 @@
     // internet connectivity.
     .dependencies = .{
         .shelly_diagnostics = .{ .path = "../Shelly.Diagnostics" },
-        .zigalpm = .{
+        .package_manager = .{
             .path = "../Shelly.PackageManager",
         },
         // See `zig fetch --save <url>` for a command-line interface for adding dependencies.

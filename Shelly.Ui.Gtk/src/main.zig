@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const HttpClient = @import("ShellyHttp");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
@@ -174,12 +175,12 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
     }
 
     _ = runtime.setupConfig(std.heap.c_allocator) catch |err| {
-        std.log.warn("Could not open the settings service. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+        std.log.warn("Could not open the settings service. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
     };
 
     if (runtime.config) |svc| {
         const cfg = svc.get() catch |err| {
-            std.log.warn("Could not load settings from the configured file. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            std.log.warn("Could not load settings from the configured file. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
             return;
         };
 

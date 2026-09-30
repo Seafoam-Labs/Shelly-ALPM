@@ -13,7 +13,7 @@ pub const variants = [_]types.Variant{
         .type_code = 's',
         .default_for_action = true,
         .description = "Synchronize the configured ALPM package databases; use --force to refresh databases even when they appear current.",
-        .implementation = "Zigalpm.AlpmManager.sync",
+        .implementation = "PackageManager.Manager.sync",
         .options = &.{flag(
             "--force",
             &.{"-f"},
@@ -25,7 +25,7 @@ pub const variants = [_]types.Variant{
         .name = "appimage",
         .type_code = 'i',
         .description = "Synchronize extracted AppImage metadata, or configure an installed AppImage's update source with the appimage/url/type overload.",
-        .implementation = "Zigalpm.AppImageManager.syncAppImageMeta / Zigalpm.appimage.UpdateManager.configure_updates",
+        .implementation = "PackageManager.AppImageManager.syncAppImageMeta / PackageManager.appimage.UpdateManager.configure_updates",
         .arguments = &.{
             optionalArgument(
                 "appimage",
@@ -55,7 +55,7 @@ pub const variants = [_]types.Variant{
         .name = "flatpak",
         .type_code = 'f',
         .description = "Update cached AppStream metadata, or add and remove configured system or user Flatpak remotes.",
-        .implementation = "Zigalpm.flatpak.AppstreamManager.updateAllAppstreams; Zigalpm.flatpak.RemoteManager.addRemote / removeRemote",
+        .implementation = "PackageManager.flatpak.AppstreamManager.updateAllAppstreams; PackageManager.flatpak.RemoteManager.addRemote / removeRemote",
         .arguments = &.{
             optionalArgumentWithChoices(
                 "mode",

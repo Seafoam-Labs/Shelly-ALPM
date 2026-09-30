@@ -1,5 +1,5 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const PackageManager = @import("PackageManager");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const aur_url = @import("../config/aur_url.zig");
@@ -55,7 +55,7 @@ pub fn dispatch(
             try allowed_repositories.append(allocator, option.value orelse continue);
 
     if (source != .aur) {
-        const manager_optional = Zigalpm.AlpmManager.init(
+        const manager_optional = PackageManager.Manager.init(
             context.allocator,
             context.environ,
             .{},
@@ -65,9 +65,9 @@ pub fn dispatch(
             var databases_available = true;
             const packages = manager.get_available_packages() catch blk: {
                 databases_available = false;
-                break :blk try context.allocator.alloc(Zigalpm.alpm.OwnedPackage, 0);
+                break :blk try context.allocator.alloc(PackageManager.Manager.OwnedPackage, 0);
             };
-            defer Zigalpm.alpm.OwnedPackage.deinitSlice(context.allocator, packages);
+            defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, packages);
             if (!databases_available and source == .standard) {
                 for (results) |*result| result.resolution_error = .{
                     .code = "StandardUnavailable",
@@ -111,9 +111,9 @@ pub fn dispatch(
                 try unresolved.append(allocator, result.requested_name);
         if (unresolved.items.len > 0) {
             const configured_base = try aur_url.resolveFor(context, invocation);
-            const base_url = try Zigalpm.aur.endpoints.normalizeBase(allocator, configured_base);
-            const rpc_url = try Zigalpm.aur.endpoints.rpcUrl(allocator, base_url);
-            var client = try Zigalpm.aur.rpc.Client.init(
+            const base_url = try PackageManager.aur.endpoints.normalizeBase(allocator, configured_base);
+            const rpc_url = try PackageManager.aur.endpoints.rpcUrl(allocator, base_url);
+            var client = try PackageManager.aur.rpc.Client.init(
                 context.allocator,
                 context.io,
                 rpc_url,
@@ -132,7 +132,7 @@ pub fn dispatch(
                     result.name = try allocator.dupe(u8, package.name);
                     result.package_base = try allocator.dupe(u8, package.package_base);
                     result.version = try allocator.dupe(u8, package.version);
-                    result.source_url = try Zigalpm.aur.endpoints.gitRemoteUrl(
+                    result.source_url = try PackageManager.aur.endpoints.gitRemoteUrl(
                         allocator,
                         base_url,
                         package.package_base,

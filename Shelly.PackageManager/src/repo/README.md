@@ -1,4 +1,4 @@
-# `Zigalpm.repo`: repository database maintenance
+# `PackageManager.repo`: repository database maintenance
 
 Native Zig replacement for `repo-add` / `repo-remove`: maintains a repository
 database pair (`<name>.db.tar.<ext>` plus its `<name>.files.tar.<ext>` companion) without
@@ -14,7 +14,7 @@ shelling out to external tooling. Output follows the upstream formats
 | `pkginfo.zig` | Package-side primitives: `parse` (`.PKGINFO` text), `readFromPackage` (`.PKGINFO` from an archive), `listFilePaths` (member list behind `%FILES%`). Everything returned is owned by the caller. |
 | `database.zig` | The database side: `Database` with `open`, `addPackages`, `removePackages`, `listEntries`, `verifySignatures`, plus the option and summary types. |
 
-Both are exported from `Zigalpm.repo`.
+Both are exported from `PackageManager.repo`.
 
 ## Behavior
 

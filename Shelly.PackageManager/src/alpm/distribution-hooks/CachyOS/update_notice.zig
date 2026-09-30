@@ -1,5 +1,5 @@
 const std = @import("std");
-const bindings = @import("../../bindings.zig");
+const types = @import("../../types.zig");
 const events = @import("../../events.zig");
 const xdg_paths = @import("../../../shared/xdg_paths.zig").xdg_paths;
 const HttpClient = @import("ShellyHttp");
@@ -109,7 +109,7 @@ pub const UpdateNotice = struct {
         const yes_no = [_][]const u8{ "yes", "no" };
         const response = dispatcher.raiseQuestion(self.io, .{
             .question = notice.body,
-            .question_type = @intFromEnum(bindings.libalpm.QuestionType.update_notice),
+            .question_type = @intFromEnum(types.QuestionType.update_notice),
             .options = &yes_no,
         });
         if (response.answer != 1) return false;
@@ -177,7 +177,7 @@ test "handlePayload accepts a notice and remembers its id" {
     const hook = UpdateNotice.init(testing.allocator, testing.io);
     try testing.expect(hook.handlePayloadAtCacheHome(cache_home, &dispatcher, "{\"id\":\"notice-1\",\"body\":\"Important update\"}"));
     try testing.expectEqual(@as(usize, 1), capture.calls);
-    try testing.expectEqual(@as(c_int, @intFromEnum(bindings.libalpm.QuestionType.update_notice)), capture.question_type);
+    try testing.expectEqual(@as(c_int, @intFromEnum(types.QuestionType.update_notice)), capture.question_type);
     try testing.expectEqualStrings("Important update", capture.question());
 
     const state_path = try std.fs.path.join(testing.allocator, &.{ cache_home, cache_directory_name, notice_file_name });

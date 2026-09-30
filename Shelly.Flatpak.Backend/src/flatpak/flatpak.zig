@@ -9,6 +9,7 @@
 //   2. g_set_object: discarded `@ptrCast` with no inferable result type.
 // Re-apply these if you regenerate.
 
+const std = @import("std");
 const __root = @This();
 pub const __builtin = @import("std").zig.c_translation.builtins;
 pub const __helpers = @import("std").zig.c_translation.helpers;
@@ -67,7 +68,7 @@ pub const __off_t = c_long;
 pub const __off64_t = c_long;
 pub const __pid_t = c_int;
 pub const __fsid_t = extern struct {
-    __val: [2]c_int = @import("std").mem.zeroes([2]c_int),
+    __val: [2]c_int = std.mem.zeroes([2]c_int),
 };
 pub const __clock_t = c_long;
 pub const __rlim_t = c_ulong;
@@ -128,8 +129,8 @@ pub const struct_timespec = extern struct {
 pub const clockid_t = __clockid_t;
 pub const timer_t = __timer_t;
 pub const struct_itimerspec = extern struct {
-    it_interval: struct_timespec = @import("std").mem.zeroes(struct_timespec),
-    it_value: struct_timespec = @import("std").mem.zeroes(struct_timespec),
+    it_interval: struct_timespec = std.mem.zeroes(struct_timespec),
+    it_value: struct_timespec = std.mem.zeroes(struct_timespec),
 };
 pub const union_sigval = extern union {
     sival_int: c_int,
@@ -191,19 +192,19 @@ const union_unnamed_1 = extern union {
     _sigev_thread: struct_unnamed_2,
 };
 pub const struct_sigevent = extern struct {
-    sigev_value: __sigval_t = @import("std").mem.zeroes(__sigval_t),
+    sigev_value: __sigval_t = std.mem.zeroes(__sigval_t),
     sigev_signo: c_int = 0,
     sigev_notify: c_int = 0,
-    _sigev_un: union_unnamed_1 = @import("std").mem.zeroes(union_unnamed_1),
+    _sigev_un: union_unnamed_1 = std.mem.zeroes(union_unnamed_1),
 };
 pub const pid_t = __pid_t;
 pub const struct___locale_data_3 = opaque {};
 pub const struct___locale_struct = extern struct {
-    __locales: [13]?*struct___locale_data_3 = @import("std").mem.zeroes([13]?*struct___locale_data_3),
+    __locales: [13]?*struct___locale_data_3 = std.mem.zeroes([13]?*struct___locale_data_3),
     __ctype_b: [*c]const c_ushort = null,
     __ctype_tolower: [*c]const c_int = null,
     __ctype_toupper: [*c]const c_int = null,
-    __names: [13][*c]const u8 = @import("std").mem.zeroes([13][*c]const u8),
+    __names: [13][*c]const u8 = std.mem.zeroes([13][*c]const u8),
 };
 pub const __locale_t = [*c]struct___locale_struct;
 pub const locale_t = __locale_t;
@@ -812,7 +813,7 @@ pub fn __uint64_identity(arg___x: __uint64_t) callconv(.c) __uint64_t {
     return __x;
 }
 pub const __sigset_t = extern struct {
-    __val: [16]c_ulong = @import("std").mem.zeroes([16]c_ulong),
+    __val: [16]c_ulong = std.mem.zeroes([16]c_ulong),
     pub const sigemptyset = __root.sigemptyset;
     pub const sigfillset = __root.sigfillset;
     pub const sigaddset = __root.sigaddset;
@@ -832,7 +833,7 @@ pub const struct_timeval = extern struct {
 pub const suseconds_t = __suseconds_t;
 pub const __fd_mask = c_long;
 pub const fd_set = extern struct {
-    __fds_bits: [16]__fd_mask = @import("std").mem.zeroes([16]__fd_mask),
+    __fds_bits: [16]__fd_mask = std.mem.zeroes([16]__fd_mask),
 };
 pub const fd_mask = __fd_mask;
 pub extern fn select(__nfds: c_int, noalias __readfds: [*c]fd_set, noalias __writefds: [*c]fd_set, noalias __exceptfds: [*c]fd_set, noalias __timeout: [*c]struct_timeval) c_int;
@@ -866,7 +867,7 @@ pub const struct___pthread_mutex_s = extern struct {
     __kind: c_int = 0,
     __spins: c_short = 0,
     __glibc_reserved: c_short = 0,
-    __list: __pthread_list_t = @import("std").mem.zeroes(__pthread_list_t),
+    __list: __pthread_list_t = std.mem.zeroes(__pthread_list_t),
 };
 pub const struct___pthread_rwlock_arch_t = extern struct {
     __readers: c_uint = 0,
@@ -882,12 +883,12 @@ pub const struct___pthread_rwlock_arch_t = extern struct {
     __flags: c_uint = 0,
 };
 pub const struct___pthread_cond_s = extern struct {
-    __wseq: __atomic_wide_counter = @import("std").mem.zeroes(__atomic_wide_counter),
-    __g1_start: __atomic_wide_counter = @import("std").mem.zeroes(__atomic_wide_counter),
-    __g_size: [2]c_uint = @import("std").mem.zeroes([2]c_uint),
+    __wseq: __atomic_wide_counter = std.mem.zeroes(__atomic_wide_counter),
+    __g1_start: __atomic_wide_counter = std.mem.zeroes(__atomic_wide_counter),
+    __g_size: [2]c_uint = std.mem.zeroes([2]c_uint),
     __g1_orig_size: c_uint = 0,
     __wrefs: c_uint = 0,
-    __g_signals: [2]c_uint = @import("std").mem.zeroes([2]c_uint),
+    __g_signals: [2]c_uint = std.mem.zeroes([2]c_uint),
     __unused_initialized_1: c_uint = 0,
     __unused_initialized_2: c_uint = 0,
 };
@@ -1075,8 +1076,8 @@ pub extern fn srand48(__seedval: c_long) void;
 pub extern fn seed48(__seed16v: [*c]c_ushort) [*c]c_ushort;
 pub extern fn lcong48(__param: [*c]c_ushort) void;
 pub const struct_drand48_data = extern struct {
-    __x: [3]c_ushort = @import("std").mem.zeroes([3]c_ushort),
-    __old_x: [3]c_ushort = @import("std").mem.zeroes([3]c_ushort),
+    __x: [3]c_ushort = std.mem.zeroes([3]c_ushort),
+    __old_x: [3]c_ushort = std.mem.zeroes([3]c_ushort),
     __c: c_ushort = 0,
     __init: c_ushort = 0,
     __a: c_ulonglong = 0,
@@ -1159,7 +1160,7 @@ pub const struct__GThread = extern struct {
     func: GThreadFunc = null,
     data: gpointer = null,
     joinable: gboolean = 0,
-    priority: GThreadPriority = @import("std").mem.zeroes(GThreadPriority),
+    priority: GThreadPriority = std.mem.zeroes(GThreadPriority),
     pub const g_thread_ref = __root.g_thread_ref;
     pub const g_thread_unref = __root.g_thread_unref;
     pub const g_thread_join = __root.g_thread_join;
@@ -1193,7 +1194,7 @@ pub const union__GMutex = extern union {
 pub const GMutex = union__GMutex;
 pub const struct__GRecMutex = extern struct {
     p: gpointer = null,
-    i: [2]guint = @import("std").mem.zeroes([2]guint),
+    i: [2]guint = std.mem.zeroes([2]guint),
     pub const g_rec_mutex_init = __root.g_rec_mutex_init;
     pub const g_rec_mutex_clear = __root.g_rec_mutex_clear;
     pub const g_rec_mutex_lock = __root.g_rec_mutex_lock;
@@ -1210,7 +1211,7 @@ pub const struct__GRecMutex = extern struct {
 pub const GRecMutex = struct__GRecMutex;
 pub const struct__GRWLock = extern struct {
     p: gpointer = null,
-    i: [2]guint = @import("std").mem.zeroes([2]guint),
+    i: [2]guint = std.mem.zeroes([2]guint),
     pub const g_rw_lock_init = __root.g_rw_lock_init;
     pub const g_rw_lock_clear = __root.g_rw_lock_clear;
     pub const g_rw_lock_writer_lock = __root.g_rw_lock_writer_lock;
@@ -1231,7 +1232,7 @@ pub const struct__GRWLock = extern struct {
 pub const GRWLock = struct__GRWLock;
 pub const struct__GCond = extern struct {
     p: gpointer = null,
-    i: [2]guint = @import("std").mem.zeroes([2]guint),
+    i: [2]guint = std.mem.zeroes([2]guint),
     pub const g_cond_init = __root.g_cond_init;
     pub const g_cond_clear = __root.g_cond_clear;
     pub const g_cond_wait = __root.g_cond_wait;
@@ -1251,7 +1252,7 @@ pub const GCond = struct__GCond;
 pub const struct__GPrivate = extern struct {
     p: gpointer = null,
     notify: GDestroyNotify = null,
-    future: [2]gpointer = @import("std").mem.zeroes([2]gpointer),
+    future: [2]gpointer = std.mem.zeroes([2]gpointer),
     pub const g_private_get = __root.g_private_get;
     pub const g_private_set = __root.g_private_set;
     pub const g_private_replace = __root.g_private_replace;
@@ -1261,7 +1262,7 @@ pub const struct__GPrivate = extern struct {
 };
 pub const GPrivate = struct__GPrivate;
 pub const struct__GOnce = extern struct {
-    status: GOnceStatus = @import("std").mem.zeroes(GOnceStatus),
+    status: GOnceStatus = std.mem.zeroes(GOnceStatus),
     retval: gpointer = null,
     pub const g_once_impl = __root.g_once_impl;
     pub const impl = __root.g_once_impl;
@@ -1439,12 +1440,12 @@ const struct_unnamed_9 = extern struct {
 const struct_unnamed_10 = extern struct {
     si_tid: c_int = 0,
     si_overrun: c_int = 0,
-    si_sigval: __sigval_t = @import("std").mem.zeroes(__sigval_t),
+    si_sigval: __sigval_t = std.mem.zeroes(__sigval_t),
 };
 const struct_unnamed_11 = extern struct {
     si_pid: __pid_t = 0,
     si_uid: __uid_t = 0,
-    si_sigval: __sigval_t = @import("std").mem.zeroes(__sigval_t),
+    si_sigval: __sigval_t = std.mem.zeroes(__sigval_t),
 };
 const struct_unnamed_12 = extern struct {
     si_pid: __pid_t = 0,
@@ -1464,7 +1465,7 @@ const union_unnamed_14 = extern union {
 const struct_unnamed_13 = extern struct {
     si_addr: ?*anyopaque = null,
     si_addr_lsb: c_short = 0,
-    _bounds: union_unnamed_14 = @import("std").mem.zeroes(union_unnamed_14),
+    _bounds: union_unnamed_14 = std.mem.zeroes(union_unnamed_14),
 };
 const struct_unnamed_16 = extern struct {
     si_band: c_long = 0,
@@ -1490,7 +1491,7 @@ pub const siginfo_t = extern struct {
     si_errno: c_int = 0,
     si_code: c_int = 0,
     __pad0: c_int = 0,
-    _sifields: union_unnamed_8 = @import("std").mem.zeroes(union_unnamed_8),
+    _sifields: union_unnamed_8 = std.mem.zeroes(union_unnamed_8),
     pub const psiginfo = __root.psiginfo;
 };
 pub const SI_ASYNCNL: c_int = -60;
@@ -1587,8 +1588,8 @@ const union_unnamed_26 = extern union {
     sa_sigaction: ?*const fn (c_int, [*c]siginfo_t, ?*anyopaque) callconv(.c) void,
 };
 pub const struct_sigaction = extern struct {
-    __sigaction_handler: union_unnamed_26 = @import("std").mem.zeroes(union_unnamed_26),
-    sa_mask: __sigset_t = @import("std").mem.zeroes(__sigset_t),
+    __sigaction_handler: union_unnamed_26 = std.mem.zeroes(union_unnamed_26),
+    sa_mask: __sigset_t = std.mem.zeroes(__sigset_t),
     sa_flags: c_int = 0,
     sa_restorer: ?*const fn () callconv(.c) void = null,
 };
@@ -1605,19 +1606,19 @@ pub const struct__fpx_sw_bytes = extern struct {
     extended_size: __uint32_t = 0,
     xstate_bv: __uint64_t = 0,
     xstate_size: __uint32_t = 0,
-    __glibc_reserved1: [7]__uint32_t = @import("std").mem.zeroes([7]__uint32_t),
+    __glibc_reserved1: [7]__uint32_t = std.mem.zeroes([7]__uint32_t),
 };
 pub const struct__fpreg = extern struct {
-    significand: [4]c_ushort = @import("std").mem.zeroes([4]c_ushort),
+    significand: [4]c_ushort = std.mem.zeroes([4]c_ushort),
     exponent: c_ushort = 0,
 };
 pub const struct__fpxreg = extern struct {
-    significand: [4]c_ushort = @import("std").mem.zeroes([4]c_ushort),
+    significand: [4]c_ushort = std.mem.zeroes([4]c_ushort),
     exponent: c_ushort = 0,
-    __glibc_reserved1: [3]c_ushort = @import("std").mem.zeroes([3]c_ushort),
+    __glibc_reserved1: [3]c_ushort = std.mem.zeroes([3]c_ushort),
 };
 pub const struct__xmmreg = extern struct {
-    element: [4]__uint32_t = @import("std").mem.zeroes([4]__uint32_t),
+    element: [4]__uint32_t = std.mem.zeroes([4]__uint32_t),
 };
 pub const struct__fpstate = extern struct {
     cwd: __uint16_t = 0,
@@ -1628,9 +1629,9 @@ pub const struct__fpstate = extern struct {
     rdp: __uint64_t = 0,
     mxcsr: __uint32_t = 0,
     mxcr_mask: __uint32_t = 0,
-    _st: [8]struct__fpxreg = @import("std").mem.zeroes([8]struct__fpxreg),
-    _xmm: [16]struct__xmmreg = @import("std").mem.zeroes([16]struct__xmmreg),
-    __glibc_reserved1: [24]__uint32_t = @import("std").mem.zeroes([24]__uint32_t),
+    _st: [8]struct__fpxreg = std.mem.zeroes([8]struct__fpxreg),
+    _xmm: [16]struct__xmmreg = std.mem.zeroes([16]struct__xmmreg),
+    __glibc_reserved1: [24]__uint32_t = std.mem.zeroes([24]__uint32_t),
 };
 const union_unnamed_27 = extern union {
     fpstate: [*c]struct__fpstate,
@@ -1663,22 +1664,22 @@ pub const struct_sigcontext = extern struct {
     trapno: __uint64_t = 0,
     oldmask: __uint64_t = 0,
     cr2: __uint64_t = 0,
-    unnamed_0: union_unnamed_27 = @import("std").mem.zeroes(union_unnamed_27),
-    __reserved1: [8]__uint64_t = @import("std").mem.zeroes([8]__uint64_t),
+    unnamed_0: union_unnamed_27 = std.mem.zeroes(union_unnamed_27),
+    __reserved1: [8]__uint64_t = std.mem.zeroes([8]__uint64_t),
     pub const sigreturn = __root.sigreturn;
 };
 pub const struct__xsave_hdr = extern struct {
     xstate_bv: __uint64_t = 0,
-    __glibc_reserved1: [2]__uint64_t = @import("std").mem.zeroes([2]__uint64_t),
-    __glibc_reserved2: [5]__uint64_t = @import("std").mem.zeroes([5]__uint64_t),
+    __glibc_reserved1: [2]__uint64_t = std.mem.zeroes([2]__uint64_t),
+    __glibc_reserved2: [5]__uint64_t = std.mem.zeroes([5]__uint64_t),
 };
 pub const struct__ymmh_state = extern struct {
-    ymmh_space: [64]__uint32_t = @import("std").mem.zeroes([64]__uint32_t),
+    ymmh_space: [64]__uint32_t = std.mem.zeroes([64]__uint32_t),
 };
 pub const struct__xstate = extern struct {
-    fpstate: struct__fpstate = @import("std").mem.zeroes(struct__fpstate),
-    xstate_hdr: struct__xsave_hdr = @import("std").mem.zeroes(struct__xsave_hdr),
-    ymmh: struct__ymmh_state = @import("std").mem.zeroes(struct__ymmh_state),
+    fpstate: struct__fpstate = std.mem.zeroes(struct__fpstate),
+    xstate_hdr: struct__xsave_hdr = std.mem.zeroes(struct__xsave_hdr),
+    ymmh: struct__ymmh_state = std.mem.zeroes(struct__ymmh_state),
 };
 pub extern fn sigreturn(__scp: [*c]struct_sigcontext) c_int;
 pub const stack_t = extern struct {
@@ -1690,12 +1691,12 @@ pub const stack_t = extern struct {
 pub const greg_t = c_longlong;
 pub const gregset_t = [23]greg_t;
 pub const struct__libc_fpxreg = extern struct {
-    significand: [4]c_ushort = @import("std").mem.zeroes([4]c_ushort),
+    significand: [4]c_ushort = std.mem.zeroes([4]c_ushort),
     exponent: c_ushort = 0,
-    __glibc_reserved1: [3]c_ushort = @import("std").mem.zeroes([3]c_ushort),
+    __glibc_reserved1: [3]c_ushort = std.mem.zeroes([3]c_ushort),
 };
 pub const struct__libc_xmmreg = extern struct {
-    element: [4]__uint32_t = @import("std").mem.zeroes([4]__uint32_t),
+    element: [4]__uint32_t = std.mem.zeroes([4]__uint32_t),
 };
 pub const struct__libc_fpstate = extern struct {
     cwd: __uint16_t = 0,
@@ -1706,24 +1707,24 @@ pub const struct__libc_fpstate = extern struct {
     rdp: __uint64_t = 0,
     mxcsr: __uint32_t = 0,
     mxcr_mask: __uint32_t = 0,
-    _st: [8]struct__libc_fpxreg = @import("std").mem.zeroes([8]struct__libc_fpxreg),
-    _xmm: [16]struct__libc_xmmreg = @import("std").mem.zeroes([16]struct__libc_xmmreg),
-    __glibc_reserved1: [24]__uint32_t = @import("std").mem.zeroes([24]__uint32_t),
+    _st: [8]struct__libc_fpxreg = std.mem.zeroes([8]struct__libc_fpxreg),
+    _xmm: [16]struct__libc_xmmreg = std.mem.zeroes([16]struct__libc_xmmreg),
+    __glibc_reserved1: [24]__uint32_t = std.mem.zeroes([24]__uint32_t),
 };
 pub const fpregset_t = [*c]struct__libc_fpstate;
 pub const mcontext_t = extern struct {
-    gregs: gregset_t = @import("std").mem.zeroes(gregset_t),
+    gregs: gregset_t = std.mem.zeroes(gregset_t),
     fpregs: fpregset_t = null,
-    __reserved1: [8]c_ulonglong = @import("std").mem.zeroes([8]c_ulonglong),
+    __reserved1: [8]c_ulonglong = std.mem.zeroes([8]c_ulonglong),
 };
 pub const struct_ucontext_t = extern struct {
     uc_flags: c_ulong = 0,
     uc_link: [*c]struct_ucontext_t = null,
-    uc_stack: stack_t = @import("std").mem.zeroes(stack_t),
-    uc_mcontext: mcontext_t = @import("std").mem.zeroes(mcontext_t),
-    uc_sigmask: sigset_t = @import("std").mem.zeroes(sigset_t),
-    __fpregs_mem: struct__libc_fpstate = @import("std").mem.zeroes(struct__libc_fpstate),
-    __ssp: [4]c_ulonglong = @import("std").mem.zeroes([4]c_ulonglong),
+    uc_stack: stack_t = std.mem.zeroes(stack_t),
+    uc_mcontext: mcontext_t = std.mem.zeroes(mcontext_t),
+    uc_sigmask: sigset_t = std.mem.zeroes(sigset_t),
+    __fpregs_mem: struct__libc_fpstate = std.mem.zeroes(struct__libc_fpstate),
+    __ssp: [4]c_ulonglong = std.mem.zeroes([4]c_ulonglong),
 };
 pub const ucontext_t = struct_ucontext_t;
 pub extern fn siginterrupt(__sig: c_int, __interrupt: c_int) c_int;
@@ -2304,7 +2305,7 @@ pub const struct_dirent = extern struct {
     d_off: __off_t = 0,
     d_reclen: c_ushort = 0,
     d_type: u8 = 0,
-    d_name: [256]u8 = @import("std").mem.zeroes([256]u8),
+    d_name: [256]u8 = std.mem.zeroes([256]u8),
 };
 pub const DT_UNKNOWN: c_int = 0;
 pub const DT_FIFO: c_int = 1;
@@ -4593,7 +4594,7 @@ pub extern fn g_variant_byteswap(value: ?*GVariant) ?*GVariant;
 pub extern fn g_variant_new_from_bytes(@"type": ?*const GVariantType, bytes: ?*GBytes, trusted: gboolean) ?*GVariant;
 pub extern fn g_variant_new_from_data(@"type": ?*const GVariantType, data: gconstpointer, size: gsize, trusted: gboolean, notify: GDestroyNotify, user_data: gpointer) ?*GVariant;
 pub const struct__GVariantIter = extern struct {
-    x: [16]guintptr = @import("std").mem.zeroes([16]guintptr),
+    x: [16]guintptr = std.mem.zeroes([16]guintptr),
     pub const g_variant_iter_init = __root.g_variant_iter_init;
     pub const g_variant_iter_copy = __root.g_variant_iter_copy;
     pub const g_variant_iter_n_children = __root.g_variant_iter_n_children;
@@ -4621,14 +4622,14 @@ pub extern fn g_variant_iter_loop(iter: [*c]GVariantIter, format_string: [*c]con
 const struct_unnamed_31 = extern struct {
     partial_magic: gsize = 0,
     type: ?*const GVariantType = null,
-    y: [14]guintptr = @import("std").mem.zeroes([14]guintptr),
+    y: [14]guintptr = std.mem.zeroes([14]guintptr),
 };
 const union_unnamed_30 = extern union {
     s: struct_unnamed_31,
     x: [16]guintptr,
 };
 pub const struct__GVariantBuilder = extern struct {
-    u: union_unnamed_30 = @import("std").mem.zeroes(union_unnamed_30),
+    u: union_unnamed_30 = std.mem.zeroes(union_unnamed_30),
     pub const g_variant_builder_unref = __root.g_variant_builder_unref;
     pub const g_variant_builder_ref = __root.g_variant_builder_ref;
     pub const g_variant_builder_init = __root.g_variant_builder_init;
@@ -4701,14 +4702,14 @@ pub extern fn g_variant_compare(one: gconstpointer, two: gconstpointer) gint;
 const struct_unnamed_33 = extern struct {
     asv: ?*GVariant = null,
     partial_magic: gsize = 0,
-    y: [14]guintptr = @import("std").mem.zeroes([14]guintptr),
+    y: [14]guintptr = std.mem.zeroes([14]guintptr),
 };
 const union_unnamed_32 = extern union {
     s: struct_unnamed_33,
     x: [16]guintptr,
 };
 pub const struct__GVariantDict = extern struct {
-    u: union_unnamed_32 = @import("std").mem.zeroes(union_unnamed_32),
+    u: union_unnamed_32 = std.mem.zeroes(union_unnamed_32),
     pub const g_variant_dict_init = __root.g_variant_dict_init;
     pub const g_variant_dict_lookup = __root.g_variant_dict_lookup;
     pub const g_variant_dict_lookup_value = __root.g_variant_dict_lookup_value;
@@ -4863,7 +4864,7 @@ pub const struct__GOptionEntry = extern struct {
     long_name: [*c]const gchar = null,
     short_name: gchar = 0,
     flags: gint = 0,
-    arg: GOptionArg = @import("std").mem.zeroes(GOptionArg),
+    arg: GOptionArg = std.mem.zeroes(GOptionArg),
     arg_data: gpointer = null,
     description: [*c]const gchar = null,
     arg_description: [*c]const gchar = null,
@@ -4928,7 +4929,7 @@ pub extern fn g_option_group_add_entries(group: ?*GOptionGroup, entries: [*c]con
 pub extern fn g_option_group_set_translate_func(group: ?*GOptionGroup, func: GTranslateFunc, data: gpointer, destroy_notify: GDestroyNotify) void;
 pub extern fn g_option_group_set_translation_domain(group: ?*GOptionGroup, domain: [*c]const gchar) void;
 pub const struct__GPathBuf = extern struct {
-    dummy: [8]gpointer = @import("std").mem.zeroes([8]gpointer),
+    dummy: [8]gpointer = std.mem.zeroes([8]gpointer),
     pub const g_path_buf_init = __root.g_path_buf_init;
     pub const g_path_buf_init_from_path = __root.g_path_buf_init_from_path;
     pub const g_path_buf_clear = __root.g_path_buf_clear;
@@ -5406,12 +5407,12 @@ pub const struct__GScanner = extern struct {
     input_name: [*c]const gchar = null,
     qdata: ?*GData = null,
     config: ?*GScannerConfig = null,
-    token: GTokenType = @import("std").mem.zeroes(GTokenType),
-    value: GTokenValue = @import("std").mem.zeroes(GTokenValue),
+    token: GTokenType = std.mem.zeroes(GTokenType),
+    value: GTokenValue = std.mem.zeroes(GTokenValue),
     line: guint = 0,
     position: guint = 0,
-    next_token: GTokenType = @import("std").mem.zeroes(GTokenType),
-    next_value: GTokenValue = @import("std").mem.zeroes(GTokenValue),
+    next_token: GTokenType = std.mem.zeroes(GTokenType),
+    next_value: GTokenValue = std.mem.zeroes(GTokenValue),
     next_line: guint = 0,
     next_position: guint = 0,
     symbol_table: ?*GHashTable = null,
@@ -5848,7 +5849,7 @@ pub const G_TEST_LOG_START_SUITE: c_int = 10;
 pub const G_TEST_LOG_STOP_SUITE: c_int = 11;
 pub const GTestLogType = c_uint;
 pub const GTestLogMsg = extern struct {
-    log_type: GTestLogType = @import("std").mem.zeroes(GTestLogType),
+    log_type: GTestLogType = std.mem.zeroes(GTestLogType),
     n_strings: guint = 0,
     strings: [*c][*c]gchar = null,
     n_nums: guint = 0,
@@ -6134,7 +6135,7 @@ pub const struct__GUriParamsIter = extern struct {
     dummy0: gint = 0,
     dummy1: gpointer = null,
     dummy2: gpointer = null,
-    dummy3: [256]guint8 = @import("std").mem.zeroes([256]guint8),
+    dummy3: [256]guint8 = std.mem.zeroes([256]guint8),
     pub const g_uri_params_iter_init = __root.g_uri_params_iter_init;
     pub const g_uri_params_iter_next = __root.g_uri_params_iter_next;
     pub const init = __root.g_uri_params_iter_init;
@@ -6337,7 +6338,7 @@ pub const struct_sched_param = extern struct {
 };
 pub const __cpu_mask = c_ulong;
 pub const cpu_set_t = extern struct {
-    __bits: [16]__cpu_mask = @import("std").mem.zeroes([16]__cpu_mask),
+    __bits: [16]__cpu_mask = std.mem.zeroes([16]__cpu_mask),
     pub const __sched_cpufree = __root.__sched_cpufree;
     pub const cpufree = __root.__sched_cpufree;
 };
@@ -6354,9 +6355,9 @@ pub extern fn sched_get_priority_min(__algorithm: c_int) c_int;
 pub extern fn sched_rr_get_interval(__pid: __pid_t, __t: [*c]struct_timespec) c_int;
 pub const __jmp_buf = [8]c_long;
 pub const struct___jmp_buf_tag = extern struct {
-    __jmpbuf: __jmp_buf = @import("std").mem.zeroes(__jmp_buf),
+    __jmpbuf: __jmp_buf = std.mem.zeroes(__jmp_buf),
     __mask_was_saved: c_int = 0,
-    __saved_mask: __sigset_t = @import("std").mem.zeroes(__sigset_t),
+    __saved_mask: __sigset_t = std.mem.zeroes(__sigset_t),
     pub const __sigsetjmp = __root.__sigsetjmp;
     pub const sigsetjmp = __root.__sigsetjmp;
 };
@@ -6442,12 +6443,12 @@ pub extern fn pthread_setcanceltype(__type: c_int, __oldtype: [*c]c_int) c_int;
 pub extern fn pthread_cancel(__th: pthread_t) c_int;
 pub extern fn pthread_testcancel() void;
 pub const struct___cancel_jmp_buf_tag = extern struct {
-    __cancel_jmp_buf: __jmp_buf = @import("std").mem.zeroes(__jmp_buf),
+    __cancel_jmp_buf: __jmp_buf = std.mem.zeroes(__jmp_buf),
     __mask_was_saved: c_int = 0,
 };
 pub const __pthread_unwind_buf_t = extern struct {
-    __cancel_jmp_buf: [1]struct___cancel_jmp_buf_tag = @import("std").mem.zeroes([1]struct___cancel_jmp_buf_tag),
-    __pad: [4]?*anyopaque = @import("std").mem.zeroes([4]?*anyopaque),
+    __cancel_jmp_buf: [1]struct___cancel_jmp_buf_tag = std.mem.zeroes([1]struct___cancel_jmp_buf_tag),
+    __pad: [4]?*anyopaque = std.mem.zeroes([4]?*anyopaque),
     pub const __pthread_register_cancel = __root.__pthread_register_cancel;
     pub const __pthread_unregister_cancel = __root.__pthread_unregister_cancel;
     pub const __pthread_unwind_next = __root.__pthread_unwind_next;
@@ -6532,7 +6533,7 @@ pub extern fn pthread_getcpuclockid(__thread_id: pthread_t, __clock_id: [*c]__cl
 pub extern fn pthread_atfork(__prepare: ?*const fn () callconv(.c) void, __parent: ?*const fn () callconv(.c) void, __child: ?*const fn () callconv(.c) void) c_int;
 pub const GStaticMutex = extern struct {
     mutex: [*c]GMutex = null,
-    unused: pthread_mutex_t = @import("std").mem.zeroes(pthread_mutex_t),
+    unused: pthread_mutex_t = std.mem.zeroes(pthread_mutex_t),
     pub const g_static_mutex_init = __root.g_static_mutex_init;
     pub const g_static_mutex_free = __root.g_static_mutex_free;
     pub const g_static_mutex_get_mutex_impl = __root.g_static_mutex_get_mutex_impl;
@@ -6547,9 +6548,9 @@ const union_unnamed_44 = extern union {
     dummy: gdouble,
 };
 pub const struct__GStaticRecMutex = extern struct {
-    mutex: GStaticMutex = @import("std").mem.zeroes(GStaticMutex),
+    mutex: GStaticMutex = std.mem.zeroes(GStaticMutex),
     depth: guint = 0,
-    unused: union_unnamed_44 = @import("std").mem.zeroes(union_unnamed_44),
+    unused: union_unnamed_44 = std.mem.zeroes(union_unnamed_44),
     pub const g_static_rec_mutex_init = __root.g_static_rec_mutex_init;
     pub const g_static_rec_mutex_lock = __root.g_static_rec_mutex_lock;
     pub const g_static_rec_mutex_trylock = __root.g_static_rec_mutex_trylock;
@@ -6572,7 +6573,7 @@ pub extern fn g_static_rec_mutex_lock_full(mutex: [*c]GStaticRecMutex, depth: gu
 pub extern fn g_static_rec_mutex_unlock_full(mutex: [*c]GStaticRecMutex) guint;
 pub extern fn g_static_rec_mutex_free(mutex: [*c]GStaticRecMutex) void;
 pub const struct__GStaticRWLock = extern struct {
-    mutex: GStaticMutex = @import("std").mem.zeroes(GStaticMutex),
+    mutex: GStaticMutex = std.mem.zeroes(GStaticMutex),
     read_cond: [*c]GCond = null,
     write_cond: [*c]GCond = null,
     read_counter: guint = 0,
@@ -8679,7 +8680,7 @@ const union_unnamed_45 = extern union {
 };
 pub const struct__GValue = extern struct {
     g_type: GType = 0,
-    data: [2]union_unnamed_45 = @import("std").mem.zeroes([2]union_unnamed_45),
+    data: [2]union_unnamed_45 = std.mem.zeroes([2]union_unnamed_45),
     pub const g_type_check_value = __root.g_type_check_value;
     pub const g_type_check_value_holds = __root.g_type_check_value_holds;
     pub const g_value_init = __root.g_value_init;
@@ -8871,7 +8872,7 @@ pub const struct__GTypeInfo = extern struct {
 };
 pub const GTypeInfo = struct__GTypeInfo;
 pub const struct__GTypeFundamentalInfo = extern struct {
-    type_flags: GTypeFundamentalFlags = @import("std").mem.zeroes(GTypeFundamentalFlags),
+    type_flags: GTypeFundamentalFlags = std.mem.zeroes(GTypeFundamentalFlags),
 };
 pub const GTypeFundamentalInfo = struct__GTypeFundamentalInfo;
 pub const GInterfaceInitFunc = ?*const fn (g_iface: gpointer, iface_data: gpointer) callconv(.c) void;
@@ -9004,9 +9005,9 @@ pub const G_PARAM_EXPLICIT_NOTIFY: c_int = 1073741824;
 pub const G_PARAM_DEPRECATED: gint = -2147483648;
 pub const GParamFlags = c_int;
 pub const struct__GParamSpec = extern struct {
-    g_type_instance: GTypeInstance = @import("std").mem.zeroes(GTypeInstance),
+    g_type_instance: GTypeInstance = std.mem.zeroes(GTypeInstance),
     name: [*c]const gchar = null,
-    flags: GParamFlags = @import("std").mem.zeroes(GParamFlags),
+    flags: GParamFlags = std.mem.zeroes(GParamFlags),
     value_type: GType = 0,
     owner_type: GType = 0,
     _nick: [*c]gchar = null,
@@ -9053,19 +9054,19 @@ pub const struct__GParamSpec = extern struct {
 };
 pub const GParamSpec = struct__GParamSpec;
 pub const struct__GParamSpecClass = extern struct {
-    g_type_class: GTypeClass = @import("std").mem.zeroes(GTypeClass),
+    g_type_class: GTypeClass = std.mem.zeroes(GTypeClass),
     value_type: GType = 0,
     finalize: ?*const fn (pspec: [*c]GParamSpec) callconv(.c) void = null,
     value_set_default: ?*const fn (pspec: [*c]GParamSpec, value: [*c]GValue) callconv(.c) void = null,
     value_validate: ?*const fn (pspec: [*c]GParamSpec, value: [*c]GValue) callconv(.c) gboolean = null,
     values_cmp: ?*const fn (pspec: [*c]GParamSpec, value1: [*c]const GValue, value2: [*c]const GValue) callconv(.c) gint = null,
     value_is_valid: ?*const fn (pspec: [*c]GParamSpec, value: [*c]const GValue) callconv(.c) gboolean = null,
-    dummy: [3]gpointer = @import("std").mem.zeroes([3]gpointer),
+    dummy: [3]gpointer = std.mem.zeroes([3]gpointer),
 };
 pub const GParamSpecClass = struct__GParamSpecClass;
 pub const struct__GParameter = extern struct {
     name: [*c]const gchar = null,
-    value: GValue = @import("std").mem.zeroes(GValue),
+    value: GValue = std.mem.zeroes(GValue),
 };
 pub const GParameter = struct__GParameter;
 pub const struct__GParamSpecPool = opaque {
@@ -9314,7 +9315,7 @@ pub const struct__GSignalQuery = extern struct {
     signal_id: guint = 0,
     signal_name: [*c]const gchar = null,
     itype: GType = 0,
-    signal_flags: GSignalFlags = @import("std").mem.zeroes(GSignalFlags),
+    signal_flags: GSignalFlags = std.mem.zeroes(GSignalFlags),
     return_type: GType = 0,
     n_params: guint = 0,
     param_types: [*c]const GType = null,
@@ -9323,7 +9324,7 @@ pub const GSignalQuery = struct__GSignalQuery;
 pub const struct__GSignalInvocationHint = extern struct {
     signal_id: guint = 0,
     detail: GQuark = 0,
-    run_type: GSignalFlags = @import("std").mem.zeroes(GSignalFlags),
+    run_type: GSignalFlags = std.mem.zeroes(GSignalFlags),
     pub const g_signal_accumulator_true_handled = __root.g_signal_accumulator_true_handled;
     pub const g_signal_accumulator_first_wins = __root.g_signal_accumulator_first_wins;
     pub const handled = __root.g_signal_accumulator_true_handled;
@@ -9448,7 +9449,7 @@ pub extern fn g_boxed_type_register_static(name: [*c]const gchar, boxed_copy: GB
 pub extern fn g_closure_get_type() GType;
 pub extern fn g_value_get_type() GType;
 pub const struct__GObject = extern struct {
-    g_type_instance: GTypeInstance = @import("std").mem.zeroes(GTypeInstance),
+    g_type_instance: GTypeInstance = std.mem.zeroes(GTypeInstance),
     ref_count: guint = 0,
     qdata: ?*GData = null,
     pub const g_object_setv = __root.g_object_setv;
@@ -9519,7 +9520,7 @@ pub const struct__GObjectConstructParam = extern struct {
 };
 pub const GObjectConstructParam = struct__GObjectConstructParam;
 pub const struct__GObjectClass = extern struct {
-    g_type_class: GTypeClass = @import("std").mem.zeroes(GTypeClass),
+    g_type_class: GTypeClass = std.mem.zeroes(GTypeClass),
     construct_properties: [*c]GSList = null,
     constructor: ?*const fn (@"type": GType, n_construct_properties: guint, construct_properties: [*c]GObjectConstructParam) callconv(.c) [*c]GObject = null,
     set_property: ?*const fn (object: [*c]GObject, property_id: guint, value: [*c]const GValue, pspec: [*c]GParamSpec) callconv(.c) void = null,
@@ -9533,7 +9534,7 @@ pub const struct__GObjectClass = extern struct {
     n_construct_properties: gsize = 0,
     pspecs: gpointer = null,
     n_pspecs: gsize = 0,
-    pdummy: [3]gpointer = @import("std").mem.zeroes([3]gpointer),
+    pdummy: [3]gpointer = std.mem.zeroes([3]gpointer),
     pub const g_object_class_install_property = __root.g_object_class_install_property;
     pub const g_object_class_find_property = __root.g_object_class_find_property;
     pub const g_object_class_list_properties = __root.g_object_class_list_properties;
@@ -9690,7 +9691,7 @@ const union_unnamed_46 = extern union {
     p: gpointer,
 };
 pub const GWeakRef = extern struct {
-    priv: union_unnamed_46 = @import("std").mem.zeroes(union_unnamed_46),
+    priv: union_unnamed_46 = std.mem.zeroes(union_unnamed_46),
     pub const g_weak_ref_init = __root.g_weak_ref_init;
     pub const g_weak_ref_clear = __root.g_weak_ref_clear;
     pub const g_weak_ref_get = __root.g_weak_ref_get;
@@ -9765,7 +9766,7 @@ pub const struct__GEnumValue = extern struct {
 };
 pub const GEnumValue = struct__GEnumValue;
 pub const struct__GEnumClass = extern struct {
-    g_type_class: GTypeClass = @import("std").mem.zeroes(GTypeClass),
+    g_type_class: GTypeClass = std.mem.zeroes(GTypeClass),
     minimum: gint = 0,
     maximum: gint = 0,
     n_values: guint = 0,
@@ -9786,7 +9787,7 @@ pub const struct__GFlagsValue = extern struct {
 };
 pub const GFlagsValue = struct__GFlagsValue;
 pub const struct__GFlagsClass = extern struct {
-    g_type_class: GTypeClass = @import("std").mem.zeroes(GTypeClass),
+    g_type_class: GTypeClass = std.mem.zeroes(GTypeClass),
     mask: guint = 0,
     n_values: guint = 0,
     values: [*c]GFlagsValue = null,
@@ -9820,85 +9821,85 @@ pub extern fn g_unicode_break_type_get_type() GType;
 pub extern fn g_unicode_script_get_type() GType;
 pub extern fn g_normalize_mode_get_type() GType;
 pub const struct__GParamSpecChar = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     minimum: gint8 = 0,
     maximum: gint8 = 0,
     default_value: gint8 = 0,
 };
 pub const GParamSpecChar = struct__GParamSpecChar;
 pub const struct__GParamSpecUChar = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     minimum: guint8 = 0,
     maximum: guint8 = 0,
     default_value: guint8 = 0,
 };
 pub const GParamSpecUChar = struct__GParamSpecUChar;
 pub const struct__GParamSpecBoolean = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     default_value: gboolean = 0,
 };
 pub const GParamSpecBoolean = struct__GParamSpecBoolean;
 pub const struct__GParamSpecInt = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     minimum: gint = 0,
     maximum: gint = 0,
     default_value: gint = 0,
 };
 pub const GParamSpecInt = struct__GParamSpecInt;
 pub const struct__GParamSpecUInt = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     minimum: guint = 0,
     maximum: guint = 0,
     default_value: guint = 0,
 };
 pub const GParamSpecUInt = struct__GParamSpecUInt;
 pub const struct__GParamSpecLong = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     minimum: glong = 0,
     maximum: glong = 0,
     default_value: glong = 0,
 };
 pub const GParamSpecLong = struct__GParamSpecLong;
 pub const struct__GParamSpecULong = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     minimum: gulong = 0,
     maximum: gulong = 0,
     default_value: gulong = 0,
 };
 pub const GParamSpecULong = struct__GParamSpecULong;
 pub const struct__GParamSpecInt64 = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     minimum: gint64 = 0,
     maximum: gint64 = 0,
     default_value: gint64 = 0,
 };
 pub const GParamSpecInt64 = struct__GParamSpecInt64;
 pub const struct__GParamSpecUInt64 = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     minimum: guint64 = 0,
     maximum: guint64 = 0,
     default_value: guint64 = 0,
 };
 pub const GParamSpecUInt64 = struct__GParamSpecUInt64;
 pub const struct__GParamSpecUnichar = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     default_value: gunichar = 0,
 };
 pub const GParamSpecUnichar = struct__GParamSpecUnichar;
 pub const struct__GParamSpecEnum = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     enum_class: [*c]GEnumClass = null,
     default_value: gint = 0,
 };
 pub const GParamSpecEnum = struct__GParamSpecEnum;
 pub const struct__GParamSpecFlags = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     flags_class: [*c]GFlagsClass = null,
     default_value: guint = 0,
 };
 pub const GParamSpecFlags = struct__GParamSpecFlags;
 pub const struct__GParamSpecFloat = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     minimum: gfloat = 0,
     maximum: gfloat = 0,
     default_value: gfloat = 0,
@@ -9906,7 +9907,7 @@ pub const struct__GParamSpecFloat = extern struct {
 };
 pub const GParamSpecFloat = struct__GParamSpecFloat;
 pub const struct__GParamSpecDouble = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     minimum: gdouble = 0,
     maximum: gdouble = 0,
     default_value: gdouble = 0,
@@ -9916,42 +9917,42 @@ pub const GParamSpecDouble = struct__GParamSpecDouble; // /usr/include/glib-2.0/
 pub const struct__GParamSpecString = opaque {};
 pub const GParamSpecString = struct__GParamSpecString;
 pub const struct__GParamSpecParam = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
 };
 pub const GParamSpecParam = struct__GParamSpecParam;
 pub const struct__GParamSpecBoxed = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
 };
 pub const GParamSpecBoxed = struct__GParamSpecBoxed;
 pub const struct__GParamSpecPointer = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
 };
 pub const GParamSpecPointer = struct__GParamSpecPointer;
 pub const struct__GParamSpecValueArray = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     element_spec: [*c]GParamSpec = null,
     fixed_n_elements: guint = 0,
 };
 pub const GParamSpecValueArray = struct__GParamSpecValueArray;
 pub const struct__GParamSpecObject = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
 };
 pub const GParamSpecObject = struct__GParamSpecObject;
 pub const struct__GParamSpecOverride = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     overridden: [*c]GParamSpec = null,
 };
 pub const GParamSpecOverride = struct__GParamSpecOverride;
 pub const struct__GParamSpecGType = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     is_a_type: GType = 0,
 };
 pub const GParamSpecGType = struct__GParamSpecGType;
 pub const struct__GParamSpecVariant = extern struct {
-    parent_instance: GParamSpec = @import("std").mem.zeroes(GParamSpec),
+    parent_instance: GParamSpec = std.mem.zeroes(GParamSpec),
     type: ?*GVariantType = null,
     default_value: ?*GVariant = null,
-    padding: [4]gpointer = @import("std").mem.zeroes([4]gpointer),
+    padding: [4]gpointer = std.mem.zeroes([4]gpointer),
 };
 pub const GParamSpecVariant = struct__GParamSpecVariant;
 pub extern fn g_param_spec_char(name: [*c]const gchar, nick: [*c]const gchar, blurb: [*c]const gchar, minimum: gint8, maximum: gint8, default_value: gint8, flags: GParamFlags) [*c]GParamSpec;
@@ -10015,7 +10016,7 @@ pub extern fn g_signal_group_connect_swapped(self: ?*GSignalGroup, detailed_sign
 pub extern fn g_source_set_closure(source: [*c]GSource, closure: ?*GClosure) void;
 pub extern fn g_source_set_dummy_callback(source: [*c]GSource) void;
 pub const struct__GTypeModule = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     use_count: guint = 0,
     type_infos: [*c]GSList = null,
     interface_infos: [*c]GSList = null,
@@ -10037,7 +10038,7 @@ pub const struct__GTypeModule = extern struct {
 };
 pub const GTypeModule = struct__GTypeModule;
 pub const struct__GTypeModuleClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     load: ?*const fn (module: [*c]GTypeModule) callconv(.c) gboolean = null,
     unload: ?*const fn (module: [*c]GTypeModule) callconv(.c) void = null,
     reserved1: ?*const fn () callconv(.c) void = null,
@@ -10097,7 +10098,7 @@ pub const GTypePluginUnuse = ?*const fn (plugin: ?*GTypePlugin) callconv(.c) voi
 pub const GTypePluginCompleteTypeInfo = ?*const fn (plugin: ?*GTypePlugin, g_type: GType, info: [*c]GTypeInfo, value_table: [*c]GTypeValueTable) callconv(.c) void;
 pub const GTypePluginCompleteInterfaceInfo = ?*const fn (plugin: ?*GTypePlugin, instance_type: GType, interface_type: GType, info: [*c]GInterfaceInfo) callconv(.c) void;
 pub const struct__GTypePluginClass = extern struct {
-    base_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    base_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     use_plugin: GTypePluginUse = null,
     unuse_plugin: GTypePluginUnuse = null,
     complete_type_info: GTypePluginCompleteTypeInfo = null,
@@ -10972,7 +10973,7 @@ pub const GEcnCodePoint = c_uint;
 pub const struct__GAppLaunchContextPrivate = opaque {};
 pub const GAppLaunchContextPrivate = struct__GAppLaunchContextPrivate;
 pub const struct__GAppLaunchContext = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GAppLaunchContextPrivate = null,
     pub const g_app_launch_context_setenv = __root.g_app_launch_context_setenv;
     pub const g_app_launch_context_unsetenv = __root.g_app_launch_context_unsetenv;
@@ -11074,7 +11075,7 @@ pub const GAsyncInitable = struct__GAsyncInitable;
 pub const struct__GInputStreamPrivate = opaque {};
 pub const GInputStreamPrivate = struct__GInputStreamPrivate;
 pub const struct__GInputStream = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GInputStreamPrivate = null,
     pub const g_input_stream_read = __root.g_input_stream_read;
     pub const g_input_stream_read_all = __root.g_input_stream_read_all;
@@ -11114,7 +11115,7 @@ pub const struct__GInputStream = extern struct {
 };
 pub const GInputStream = struct__GInputStream;
 pub const struct__GFilterInputStream = extern struct {
-    parent_instance: GInputStream = @import("std").mem.zeroes(GInputStream),
+    parent_instance: GInputStream = std.mem.zeroes(GInputStream),
     base_stream: [*c]GInputStream = null,
     pub const g_filter_input_stream_get_base_stream = __root.g_filter_input_stream_get_base_stream;
     pub const g_filter_input_stream_get_close_base_stream = __root.g_filter_input_stream_get_close_base_stream;
@@ -11126,7 +11127,7 @@ pub const GFilterInputStream = struct__GFilterInputStream;
 pub const struct__GBufferedInputStreamPrivate = opaque {};
 pub const GBufferedInputStreamPrivate = struct__GBufferedInputStreamPrivate;
 pub const struct__GBufferedInputStream = extern struct {
-    parent_instance: GFilterInputStream = @import("std").mem.zeroes(GFilterInputStream),
+    parent_instance: GFilterInputStream = std.mem.zeroes(GFilterInputStream),
     priv: ?*GBufferedInputStreamPrivate = null,
     pub const g_buffered_input_stream_get_buffer_size = __root.g_buffered_input_stream_get_buffer_size;
     pub const g_buffered_input_stream_set_buffer_size = __root.g_buffered_input_stream_set_buffer_size;
@@ -11151,7 +11152,7 @@ pub const GBufferedInputStream = struct__GBufferedInputStream;
 pub const struct__GOutputStreamPrivate = opaque {};
 pub const GOutputStreamPrivate = struct__GOutputStreamPrivate;
 pub const struct__GOutputStream = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GOutputStreamPrivate = null,
     pub const g_output_stream_write = __root.g_output_stream_write;
     pub const g_output_stream_write_all = __root.g_output_stream_write_all;
@@ -11208,7 +11209,7 @@ pub const struct__GOutputStream = extern struct {
 };
 pub const GOutputStream = struct__GOutputStream;
 pub const struct__GFilterOutputStream = extern struct {
-    parent_instance: GOutputStream = @import("std").mem.zeroes(GOutputStream),
+    parent_instance: GOutputStream = std.mem.zeroes(GOutputStream),
     base_stream: [*c]GOutputStream = null,
     pub const g_filter_output_stream_get_base_stream = __root.g_filter_output_stream_get_base_stream;
     pub const g_filter_output_stream_get_close_base_stream = __root.g_filter_output_stream_get_close_base_stream;
@@ -11220,7 +11221,7 @@ pub const GFilterOutputStream = struct__GFilterOutputStream;
 pub const struct__GBufferedOutputStreamPrivate = opaque {};
 pub const GBufferedOutputStreamPrivate = struct__GBufferedOutputStreamPrivate;
 pub const struct__GBufferedOutputStream = extern struct {
-    parent_instance: GFilterOutputStream = @import("std").mem.zeroes(GFilterOutputStream),
+    parent_instance: GFilterOutputStream = std.mem.zeroes(GFilterOutputStream),
     priv: ?*GBufferedOutputStreamPrivate = null,
     pub const g_buffered_output_stream_get_buffer_size = __root.g_buffered_output_stream_get_buffer_size;
     pub const g_buffered_output_stream_set_buffer_size = __root.g_buffered_output_stream_set_buffer_size;
@@ -11234,7 +11235,7 @@ pub const GBufferedOutputStream = struct__GBufferedOutputStream;
 pub const struct__GCancellablePrivate = opaque {};
 pub const GCancellablePrivate = struct__GCancellablePrivate;
 pub const struct__GCancellable = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GCancellablePrivate = null,
     pub const g_cancellable_is_cancelled = __root.g_cancellable_is_cancelled;
     pub const g_cancellable_set_error_if_cancelled = __root.g_cancellable_set_error_if_cancelled;
@@ -11287,7 +11288,7 @@ pub const GConverter = struct__GConverter;
 pub const struct__GConverterInputStreamPrivate = opaque {};
 pub const GConverterInputStreamPrivate = struct__GConverterInputStreamPrivate;
 pub const struct__GConverterInputStream = extern struct {
-    parent_instance: GFilterInputStream = @import("std").mem.zeroes(GFilterInputStream),
+    parent_instance: GFilterInputStream = std.mem.zeroes(GFilterInputStream),
     priv: ?*GConverterInputStreamPrivate = null,
     pub const g_converter_input_stream_get_converter = __root.g_converter_input_stream_get_converter;
     pub const glib_autoptr_clear_GConverterInputStream = __root.glib_autoptr_clear_GConverterInputStream;
@@ -11297,7 +11298,7 @@ pub const GConverterInputStream = struct__GConverterInputStream;
 pub const struct__GConverterOutputStreamPrivate = opaque {};
 pub const GConverterOutputStreamPrivate = struct__GConverterOutputStreamPrivate;
 pub const struct__GConverterOutputStream = extern struct {
-    parent_instance: GFilterOutputStream = @import("std").mem.zeroes(GFilterOutputStream),
+    parent_instance: GFilterOutputStream = std.mem.zeroes(GFilterOutputStream),
     priv: ?*GConverterOutputStreamPrivate = null,
     pub const g_converter_output_stream_get_converter = __root.g_converter_output_stream_get_converter;
     pub const glib_autoptr_clear_GConverterOutputStream = __root.glib_autoptr_clear_GConverterOutputStream;
@@ -11323,7 +11324,7 @@ pub const GDatagramBased = struct__GDatagramBased;
 pub const struct__GDataInputStreamPrivate = opaque {};
 pub const GDataInputStreamPrivate = struct__GDataInputStreamPrivate;
 pub const struct__GDataInputStream = extern struct {
-    parent_instance: GBufferedInputStream = @import("std").mem.zeroes(GBufferedInputStream),
+    parent_instance: GBufferedInputStream = std.mem.zeroes(GBufferedInputStream),
     priv: ?*GDataInputStreamPrivate = null,
     pub const g_data_input_stream_set_byte_order = __root.g_data_input_stream_set_byte_order;
     pub const g_data_input_stream_get_byte_order = __root.g_data_input_stream_get_byte_order;
@@ -11388,7 +11389,7 @@ pub const GZlibDecompressor = struct__GZlibDecompressor;
 pub const struct__GSimpleActionGroupPrivate = opaque {};
 pub const GSimpleActionGroupPrivate = struct__GSimpleActionGroupPrivate;
 pub const struct__GSimpleActionGroup = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GSimpleActionGroupPrivate = null,
     pub const g_simple_action_group_lookup = __root.g_simple_action_group_lookup;
     pub const g_simple_action_group_insert = __root.g_simple_action_group_insert;
@@ -11484,7 +11485,7 @@ pub const GAction = struct__GAction;
 pub const struct__GApplicationPrivate = opaque {};
 pub const GApplicationPrivate = struct__GApplicationPrivate;
 pub const struct__GApplication = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GApplicationPrivate = null,
     pub const g_application_get_application_id = __root.g_application_get_application_id;
     pub const g_application_set_application_id = __root.g_application_set_application_id;
@@ -11553,7 +11554,7 @@ pub const GApplication = struct__GApplication;
 pub const struct__GApplicationCommandLinePrivate = opaque {};
 pub const GApplicationCommandLinePrivate = struct__GApplicationCommandLinePrivate;
 pub const struct__GApplicationCommandLine = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GApplicationCommandLinePrivate = null,
     pub const g_application_command_line_get_arguments = __root.g_application_command_line_get_arguments;
     pub const g_application_command_line_get_options_dict = __root.g_application_command_line_get_options_dict;
@@ -11594,7 +11595,7 @@ pub const GSettingsBackend = struct__GSettingsBackend;
 pub const struct__GSettingsPrivate = opaque {};
 pub const GSettingsPrivate = struct__GSettingsPrivate;
 pub const struct__GSettings = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GSettingsPrivate = null,
     pub const g_settings_list_children = __root.g_settings_list_children;
     pub const g_settings_list_keys = __root.g_settings_list_keys;
@@ -11673,7 +11674,7 @@ pub const GSettings = struct__GSettings;
 pub const struct__GPermissionPrivate = opaque {};
 pub const GPermissionPrivate = struct__GPermissionPrivate;
 pub const struct__GPermission = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GPermissionPrivate = null,
     pub const g_permission_acquire = __root.g_permission_acquire;
     pub const g_permission_acquire_async = __root.g_permission_acquire_async;
@@ -11697,7 +11698,7 @@ pub const GPermission = struct__GPermission;
 pub const struct__GMenuModelPrivate = opaque {};
 pub const GMenuModelPrivate = struct__GMenuModelPrivate;
 pub const struct__GMenuModel = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GMenuModelPrivate = null,
     pub const g_menu_model_is_mutable = __root.g_menu_model_is_mutable;
     pub const g_menu_model_get_n_items = __root.g_menu_model_get_n_items;
@@ -11796,7 +11797,7 @@ pub const GDrive = struct__GDrive;
 pub const struct__GFileEnumeratorPrivate = opaque {};
 pub const GFileEnumeratorPrivate = struct__GFileEnumeratorPrivate;
 pub const struct__GFileEnumerator = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GFileEnumeratorPrivate = null,
     pub const g_file_enumerator_next_file = __root.g_file_enumerator_next_file;
     pub const g_file_enumerator_close = __root.g_file_enumerator_close;
@@ -11824,7 +11825,7 @@ pub const GFileEnumerator = struct__GFileEnumerator;
 pub const struct__GFileMonitorPrivate = opaque {};
 pub const GFileMonitorPrivate = struct__GFileMonitorPrivate;
 pub const struct__GFileMonitor = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GFileMonitorPrivate = null,
     pub const g_file_monitor_cancel = __root.g_file_monitor_cancel;
     pub const g_file_monitor_is_cancelled = __root.g_file_monitor_is_cancelled;
@@ -12144,8 +12145,8 @@ pub const struct__GFileAttributeMatcher = opaque {
 pub const GFileAttributeMatcher = struct__GFileAttributeMatcher;
 pub const struct__GFileAttributeInfo = extern struct {
     name: [*c]u8 = null,
-    type: GFileAttributeType = @import("std").mem.zeroes(GFileAttributeType),
-    flags: GFileAttributeInfoFlags = @import("std").mem.zeroes(GFileAttributeInfoFlags),
+    type: GFileAttributeType = std.mem.zeroes(GFileAttributeType),
+    flags: GFileAttributeInfoFlags = std.mem.zeroes(GFileAttributeInfoFlags),
 };
 pub const GFileAttributeInfo = struct__GFileAttributeInfo;
 pub const struct__GFileAttributeInfoList = extern struct {
@@ -12166,7 +12167,7 @@ pub const GFileAttributeInfoList = struct__GFileAttributeInfoList;
 pub const struct__GFileInputStreamPrivate = opaque {};
 pub const GFileInputStreamPrivate = struct__GFileInputStreamPrivate;
 pub const struct__GFileInputStream = extern struct {
-    parent_instance: GInputStream = @import("std").mem.zeroes(GInputStream),
+    parent_instance: GInputStream = std.mem.zeroes(GInputStream),
     priv: ?*GFileInputStreamPrivate = null,
     pub const g_file_input_stream_query_info = __root.g_file_input_stream_query_info;
     pub const g_file_input_stream_query_info_async = __root.g_file_input_stream_query_info_async;
@@ -12180,7 +12181,7 @@ pub const GFileInputStream = struct__GFileInputStream;
 pub const struct__GFileOutputStreamPrivate = opaque {};
 pub const GFileOutputStreamPrivate = struct__GFileOutputStreamPrivate;
 pub const struct__GFileOutputStream = extern struct {
-    parent_instance: GOutputStream = @import("std").mem.zeroes(GOutputStream),
+    parent_instance: GOutputStream = std.mem.zeroes(GOutputStream),
     priv: ?*GFileOutputStreamPrivate = null,
     pub const g_file_output_stream_query_info = __root.g_file_output_stream_query_info;
     pub const g_file_output_stream_query_info_async = __root.g_file_output_stream_query_info_async;
@@ -12196,7 +12197,7 @@ pub const GFileOutputStream = struct__GFileOutputStream;
 pub const struct__GIOStreamPrivate = opaque {};
 pub const GIOStreamPrivate = struct__GIOStreamPrivate;
 pub const struct__GIOStream = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GIOStreamPrivate = null,
     pub const g_dbus_connection_new = __root.g_dbus_connection_new;
     pub const g_dbus_connection_new_sync = __root.g_dbus_connection_new_sync;
@@ -12225,7 +12226,7 @@ pub const GIOStream = struct__GIOStream;
 pub const struct__GFileIOStreamPrivate = opaque {};
 pub const GFileIOStreamPrivate = struct__GFileIOStreamPrivate;
 pub const struct__GFileIOStream = extern struct {
-    parent_instance: GIOStream = @import("std").mem.zeroes(GIOStream),
+    parent_instance: GIOStream = std.mem.zeroes(GIOStream),
     priv: ?*GFileIOStreamPrivate = null,
     pub const g_file_io_stream_query_info = __root.g_file_io_stream_query_info;
     pub const g_file_io_stream_query_info_async = __root.g_file_io_stream_query_info_async;
@@ -12272,7 +12273,7 @@ pub const GIcon = struct__GIcon;
 pub const struct__GInetAddressPrivate = opaque {};
 pub const GInetAddressPrivate = struct__GInetAddressPrivate;
 pub const struct__GInetAddress = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GInetAddressPrivate = null,
     pub const g_inet_address_equal = __root.g_inet_address_equal;
     pub const g_inet_address_to_string = __root.g_inet_address_to_string;
@@ -12313,7 +12314,7 @@ pub const GInetAddress = struct__GInetAddress;
 pub const struct__GInetAddressMaskPrivate = opaque {};
 pub const GInetAddressMaskPrivate = struct__GInetAddressMaskPrivate;
 pub const struct__GInetAddressMask = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GInetAddressMaskPrivate = null,
     pub const g_inet_address_mask_to_string = __root.g_inet_address_mask_to_string;
     pub const g_inet_address_mask_get_family = __root.g_inet_address_mask_get_family;
@@ -12331,7 +12332,7 @@ pub const struct__GInetAddressMask = extern struct {
 };
 pub const GInetAddressMask = struct__GInetAddressMask;
 pub const struct__GSocketAddress = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     pub const g_socket_address_get_family = __root.g_socket_address_get_family;
     pub const g_socket_address_to_native = __root.g_socket_address_to_native;
     pub const g_socket_address_get_native_size = __root.g_socket_address_get_native_size;
@@ -12344,7 +12345,7 @@ pub const GSocketAddress = struct__GSocketAddress;
 pub const struct__GInetSocketAddressPrivate = opaque {};
 pub const GInetSocketAddressPrivate = struct__GInetSocketAddressPrivate;
 pub const struct__GInetSocketAddress = extern struct {
-    parent_instance: GSocketAddress = @import("std").mem.zeroes(GSocketAddress),
+    parent_instance: GSocketAddress = std.mem.zeroes(GSocketAddress),
     priv: ?*GInetSocketAddressPrivate = null,
     pub const g_inet_socket_address_get_address = __root.g_inet_socket_address_get_address;
     pub const g_inet_socket_address_get_port = __root.g_inet_socket_address_get_port;
@@ -12360,7 +12361,7 @@ pub const GInetSocketAddress = struct__GInetSocketAddress;
 pub const struct__GNativeSocketAddressPrivate = opaque {};
 pub const GNativeSocketAddressPrivate = struct__GNativeSocketAddressPrivate;
 pub const struct__GNativeSocketAddress = extern struct {
-    parent_instance: GSocketAddress = @import("std").mem.zeroes(GSocketAddress),
+    parent_instance: GSocketAddress = std.mem.zeroes(GSocketAddress),
     priv: ?*GNativeSocketAddressPrivate = null,
 };
 pub const GNativeSocketAddress = struct__GNativeSocketAddress;
@@ -12427,7 +12428,7 @@ pub const GBytesIcon = struct__GBytesIcon;
 pub const struct__GMemoryInputStreamPrivate = opaque {};
 pub const GMemoryInputStreamPrivate = struct__GMemoryInputStreamPrivate;
 pub const struct__GMemoryInputStream = extern struct {
-    parent_instance: GInputStream = @import("std").mem.zeroes(GInputStream),
+    parent_instance: GInputStream = std.mem.zeroes(GInputStream),
     priv: ?*GMemoryInputStreamPrivate = null,
     pub const g_memory_input_stream_add_data = __root.g_memory_input_stream_add_data;
     pub const g_memory_input_stream_add_bytes = __root.g_memory_input_stream_add_bytes;
@@ -12439,7 +12440,7 @@ pub const GMemoryInputStream = struct__GMemoryInputStream;
 pub const struct__GMemoryOutputStreamPrivate = opaque {};
 pub const GMemoryOutputStreamPrivate = struct__GMemoryOutputStreamPrivate;
 pub const struct__GMemoryOutputStream = extern struct {
-    parent_instance: GOutputStream = @import("std").mem.zeroes(GOutputStream),
+    parent_instance: GOutputStream = std.mem.zeroes(GOutputStream),
     priv: ?*GMemoryOutputStreamPrivate = null,
     pub const g_memory_output_stream_get_data = __root.g_memory_output_stream_get_data;
     pub const g_memory_output_stream_get_size = __root.g_memory_output_stream_get_size;
@@ -12505,7 +12506,7 @@ pub const GMount = struct__GMount;
 pub const struct__GMountOperationPrivate = opaque {};
 pub const GMountOperationPrivate = struct__GMountOperationPrivate;
 pub const struct__GMountOperation = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GMountOperationPrivate = null,
     pub const g_mount_operation_get_username = __root.g_mount_operation_get_username;
     pub const g_mount_operation_set_username = __root.g_mount_operation_set_username;
@@ -12541,7 +12542,7 @@ pub const GMountOperation = struct__GMountOperation;
 pub const struct__GNetworkAddressPrivate = opaque {};
 pub const GNetworkAddressPrivate = struct__GNetworkAddressPrivate;
 pub const struct__GNetworkAddress = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GNetworkAddressPrivate = null,
     pub const g_network_address_get_hostname = __root.g_network_address_get_hostname;
     pub const g_network_address_get_port = __root.g_network_address_get_port;
@@ -12571,7 +12572,7 @@ pub const GNetworkMonitor = struct__GNetworkMonitor;
 pub const struct__GNetworkServicePrivate = opaque {};
 pub const GNetworkServicePrivate = struct__GNetworkServicePrivate;
 pub const struct__GNetworkService = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GNetworkServicePrivate = null,
     pub const g_network_service_get_service = __root.g_network_service_get_service;
     pub const g_network_service_get_protocol = __root.g_network_service_get_protocol;
@@ -12615,7 +12616,7 @@ pub const GPollableOutputStream = struct__GPollableOutputStream;
 pub const struct__GResolverPrivate = opaque {};
 pub const GResolverPrivate = struct__GResolverPrivate;
 pub const struct__GResolver = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GResolverPrivate = null,
     pub const g_resolver_set_default = __root.g_resolver_set_default;
     pub const g_resolver_lookup_by_name = __root.g_resolver_lookup_by_name;
@@ -12711,7 +12712,7 @@ pub const GSimpleAsyncResult = struct__GSimpleAsyncResult;
 pub const struct__GSocketPrivate = opaque {};
 pub const GSocketPrivate = struct__GSocketPrivate;
 pub const struct__GSocket = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GSocketPrivate = null,
     pub const g_socket_get_fd = __root.g_socket_get_fd;
     pub const g_socket_get_family = __root.g_socket_get_family;
@@ -12813,7 +12814,7 @@ pub const GSocket = struct__GSocket;
 pub const struct__GSocketControlMessagePrivate = opaque {};
 pub const GSocketControlMessagePrivate = struct__GSocketControlMessagePrivate;
 pub const struct__GSocketControlMessage = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GSocketControlMessagePrivate = null,
     pub const glib_autoptr_clear_GSocketControlMessage = __root.glib_autoptr_clear_GSocketControlMessage;
     pub const g_socket_control_message_get_size = __root.g_socket_control_message_get_size;
@@ -12829,7 +12830,7 @@ pub const GSocketControlMessage = struct__GSocketControlMessage;
 pub const struct__GSocketClientPrivate = opaque {};
 pub const GSocketClientPrivate = struct__GSocketClientPrivate;
 pub const struct__GSocketClient = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GSocketClientPrivate = null,
     pub const g_socket_client_get_family = __root.g_socket_client_get_family;
     pub const g_socket_client_set_family = __root.g_socket_client_set_family;
@@ -12883,7 +12884,7 @@ pub const GSocketClient = struct__GSocketClient;
 pub const struct__GSocketConnectionPrivate = opaque {};
 pub const GSocketConnectionPrivate = struct__GSocketConnectionPrivate;
 pub const struct__GSocketConnection = extern struct {
-    parent_instance: GIOStream = @import("std").mem.zeroes(GIOStream),
+    parent_instance: GIOStream = std.mem.zeroes(GIOStream),
     priv: ?*GSocketConnectionPrivate = null,
     pub const g_socket_connection_is_connected = __root.g_socket_connection_is_connected;
     pub const g_socket_connection_connect = __root.g_socket_connection_connect;
@@ -12904,7 +12905,7 @@ pub const GSocketConnection = struct__GSocketConnection;
 pub const struct__GSocketListenerPrivate = opaque {};
 pub const GSocketListenerPrivate = struct__GSocketListenerPrivate;
 pub const struct__GSocketListener = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GSocketListenerPrivate = null,
     pub const g_socket_listener_set_backlog = __root.g_socket_listener_set_backlog;
     pub const g_socket_listener_add_socket = __root.g_socket_listener_add_socket;
@@ -12931,7 +12932,7 @@ pub const GSocketListener = struct__GSocketListener;
 pub const struct__GSocketServicePrivate = opaque {};
 pub const GSocketServicePrivate = struct__GSocketServicePrivate;
 pub const struct__GSocketService = extern struct {
-    parent_instance: GSocketListener = @import("std").mem.zeroes(GSocketListener),
+    parent_instance: GSocketListener = std.mem.zeroes(GSocketListener),
     priv: ?*GSocketServicePrivate = null,
     pub const g_socket_service_start = __root.g_socket_service_start;
     pub const g_socket_service_stop = __root.g_socket_service_stop;
@@ -12943,7 +12944,7 @@ pub const struct__GSocketService = extern struct {
 };
 pub const GSocketService = struct__GSocketService;
 pub const struct__GSocketAddressEnumerator = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     pub const g_socket_address_enumerator_next = __root.g_socket_address_enumerator_next;
     pub const g_socket_address_enumerator_next_async = __root.g_socket_address_enumerator_next_async;
     pub const g_socket_address_enumerator_next_finish = __root.g_socket_address_enumerator_next_finish;
@@ -13035,7 +13036,7 @@ pub const GTask = struct__GTask;
 pub const struct__GTcpConnectionPrivate = opaque {};
 pub const GTcpConnectionPrivate = struct__GTcpConnectionPrivate;
 pub const struct__GTcpConnection = extern struct {
-    parent_instance: GSocketConnection = @import("std").mem.zeroes(GSocketConnection),
+    parent_instance: GSocketConnection = std.mem.zeroes(GSocketConnection),
     priv: ?*GTcpConnectionPrivate = null,
     pub const g_tcp_connection_set_graceful_disconnect = __root.g_tcp_connection_set_graceful_disconnect;
     pub const g_tcp_connection_get_graceful_disconnect = __root.g_tcp_connection_get_graceful_disconnect;
@@ -13046,7 +13047,7 @@ pub const GTcpConnection = struct__GTcpConnection;
 pub const struct__GTcpWrapperConnectionPrivate = opaque {};
 pub const GTcpWrapperConnectionPrivate = struct__GTcpWrapperConnectionPrivate;
 pub const struct__GTcpWrapperConnection = extern struct {
-    parent_instance: GTcpConnection = @import("std").mem.zeroes(GTcpConnection),
+    parent_instance: GTcpConnection = std.mem.zeroes(GTcpConnection),
     priv: ?*GTcpWrapperConnectionPrivate = null,
     pub const g_tcp_wrapper_connection_get_base_io_stream = __root.g_tcp_wrapper_connection_get_base_io_stream;
     pub const glib_autoptr_clear_GTcpWrapperConnection = __root.glib_autoptr_clear_GTcpWrapperConnection;
@@ -13056,7 +13057,7 @@ pub const GTcpWrapperConnection = struct__GTcpWrapperConnection;
 pub const struct__GThreadedSocketServicePrivate = opaque {};
 pub const GThreadedSocketServicePrivate = struct__GThreadedSocketServicePrivate;
 pub const struct__GThreadedSocketService = extern struct {
-    parent_instance: GSocketService = @import("std").mem.zeroes(GSocketService),
+    parent_instance: GSocketService = std.mem.zeroes(GSocketService),
     priv: ?*GThreadedSocketServicePrivate = null,
     pub const glib_autoptr_clear_GThreadedSocketService = __root.glib_autoptr_clear_GThreadedSocketService;
 };
@@ -13131,7 +13132,7 @@ pub const GThemedIcon = struct__GThemedIcon;
 pub const struct__GTlsCertificatePrivate = opaque {};
 pub const GTlsCertificatePrivate = struct__GTlsCertificatePrivate;
 pub const struct__GTlsCertificate = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GTlsCertificatePrivate = null,
     pub const g_tls_certificate_get_issuer = __root.g_tls_certificate_get_issuer;
     pub const g_tls_certificate_verify = __root.g_tls_certificate_verify;
@@ -13173,7 +13174,7 @@ pub const GTlsClientConnection = struct__GTlsClientConnection;
 pub const struct__GTlsConnectionPrivate = opaque {};
 pub const GTlsConnectionPrivate = struct__GTlsConnectionPrivate;
 pub const struct__GTlsConnection = extern struct {
-    parent_instance: GIOStream = @import("std").mem.zeroes(GIOStream),
+    parent_instance: GIOStream = std.mem.zeroes(GIOStream),
     priv: ?*GTlsConnectionPrivate = null,
     pub const g_tls_connection_set_use_system_certdb = __root.g_tls_connection_set_use_system_certdb;
     pub const g_tls_connection_get_use_system_certdb = __root.g_tls_connection_get_use_system_certdb;
@@ -13219,7 +13220,7 @@ pub const GTlsConnection = struct__GTlsConnection;
 pub const struct__GTlsDatabasePrivate = opaque {};
 pub const GTlsDatabasePrivate = struct__GTlsDatabasePrivate;
 pub const struct__GTlsDatabase = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GTlsDatabasePrivate = null,
     pub const g_tls_database_verify_chain = __root.g_tls_database_verify_chain;
     pub const g_tls_database_verify_chain_async = __root.g_tls_database_verify_chain_async;
@@ -13250,7 +13251,7 @@ pub const GTlsFileDatabase = struct__GTlsFileDatabase;
 pub const struct__GTlsInteractionPrivate = opaque {};
 pub const GTlsInteractionPrivate = struct__GTlsInteractionPrivate;
 pub const struct__GTlsInteraction = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GTlsInteractionPrivate = null,
     pub const g_tls_interaction_invoke_ask_password = __root.g_tls_interaction_invoke_ask_password;
     pub const g_tls_interaction_ask_password = __root.g_tls_interaction_ask_password;
@@ -13270,7 +13271,7 @@ pub const GTlsInteraction = struct__GTlsInteraction;
 pub const struct__GTlsPasswordPrivate = opaque {};
 pub const GTlsPasswordPrivate = struct__GTlsPasswordPrivate;
 pub const struct__GTlsPassword = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GTlsPasswordPrivate = null,
     pub const g_tls_password_get_value = __root.g_tls_password_get_value;
     pub const g_tls_password_set_value = __root.g_tls_password_set_value;
@@ -13294,7 +13295,7 @@ pub const struct__GTlsServerConnection = opaque {
 };
 pub const GTlsServerConnection = struct__GTlsServerConnection;
 pub const struct__GVfs = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     pub const g_vfs_is_active = __root.g_vfs_is_active;
     pub const g_vfs_get_file_for_path = __root.g_vfs_get_file_for_path;
     pub const g_vfs_get_file_for_uri = __root.g_vfs_get_file_for_uri;
@@ -13338,7 +13339,7 @@ pub const GProxy = struct__GProxy;
 pub const struct__GProxyAddressPrivate = opaque {};
 pub const GProxyAddressPrivate = struct__GProxyAddressPrivate;
 pub const struct__GProxyAddress = extern struct {
-    parent_instance: GInetSocketAddress = @import("std").mem.zeroes(GInetSocketAddress),
+    parent_instance: GInetSocketAddress = std.mem.zeroes(GInetSocketAddress),
     priv: ?*GProxyAddressPrivate = null,
     pub const g_proxy_address_get_protocol = __root.g_proxy_address_get_protocol;
     pub const g_proxy_address_get_destination_protocol = __root.g_proxy_address_get_destination_protocol;
@@ -13359,7 +13360,7 @@ pub const GProxyAddress = struct__GProxyAddress;
 pub const struct__GProxyAddressEnumeratorPrivate = opaque {};
 pub const GProxyAddressEnumeratorPrivate = struct__GProxyAddressEnumeratorPrivate;
 pub const struct__GProxyAddressEnumerator = extern struct {
-    parent_instance: GSocketAddressEnumerator = @import("std").mem.zeroes(GSocketAddressEnumerator),
+    parent_instance: GSocketAddressEnumerator = std.mem.zeroes(GSocketAddressEnumerator),
     priv: ?*GProxyAddressEnumeratorPrivate = null,
     pub const glib_autoptr_clear_GProxyAddressEnumerator = __root.glib_autoptr_clear_GProxyAddressEnumerator;
 };
@@ -13401,7 +13402,7 @@ pub const struct__GVolume = opaque {
 };
 pub const GVolume = struct__GVolume;
 pub const struct__GVolumeMonitor = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: gpointer = null,
     pub const g_volume_monitor_get_connected_drives = __root.g_volume_monitor_get_connected_drives;
     pub const g_volume_monitor_get_volumes = __root.g_volume_monitor_get_volumes;
@@ -13472,7 +13473,7 @@ pub const GCredentials = struct__GCredentials;
 pub const struct__GUnixCredentialsMessagePrivate = opaque {};
 pub const GUnixCredentialsMessagePrivate = struct__GUnixCredentialsMessagePrivate;
 pub const struct__GUnixCredentialsMessage = extern struct {
-    parent_instance: GSocketControlMessage = @import("std").mem.zeroes(GSocketControlMessage),
+    parent_instance: GSocketControlMessage = std.mem.zeroes(GSocketControlMessage),
     priv: ?*GUnixCredentialsMessagePrivate = null,
     pub const glib_autoptr_clear_GUnixCredentialsMessage = __root.glib_autoptr_clear_GUnixCredentialsMessage;
     pub const g_unix_credentials_message_get_credentials = __root.g_unix_credentials_message_get_credentials;
@@ -13482,7 +13483,7 @@ pub const GUnixCredentialsMessage = struct__GUnixCredentialsMessage;
 pub const struct__GUnixFDListPrivate = opaque {};
 pub const GUnixFDListPrivate = struct__GUnixFDListPrivate;
 pub const struct__GUnixFDList = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GUnixFDListPrivate = null,
     pub const glib_autoptr_clear_GUnixFDList = __root.glib_autoptr_clear_GUnixFDList;
     pub const g_unix_fd_list_append = __root.g_unix_fd_list_append;
@@ -13660,7 +13661,7 @@ pub const GDBusConnection = struct__GDBusConnection;
 pub const struct__GDBusProxyPrivate = opaque {};
 pub const GDBusProxyPrivate = struct__GDBusProxyPrivate;
 pub const struct__GDBusProxy = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GDBusProxyPrivate = null,
     pub const g_dbus_proxy_get_connection = __root.g_dbus_proxy_get_connection;
     pub const g_dbus_proxy_get_flags = __root.g_dbus_proxy_get_flags;
@@ -13768,7 +13769,7 @@ pub const struct__GDBusInterfaceVTable = extern struct {
     method_call: GDBusInterfaceMethodCallFunc = null,
     get_property: GDBusInterfaceGetPropertyFunc = null,
     set_property: GDBusInterfaceSetPropertyFunc = null,
-    padding: [8]gpointer = @import("std").mem.zeroes([8]gpointer),
+    padding: [8]gpointer = std.mem.zeroes([8]gpointer),
 };
 pub const GDBusInterfaceVTable = struct__GDBusInterfaceVTable;
 pub const GDBusSubtreeEnumerateFunc = ?*const fn (connection: ?*GDBusConnection, sender: [*c]const gchar, object_path: [*c]const gchar, user_data: gpointer) callconv(.c) [*c][*c]gchar;
@@ -13821,7 +13822,7 @@ pub const struct__GDBusPropertyInfo = extern struct {
     ref_count: gint = 0,
     name: [*c]gchar = null,
     signature: [*c]gchar = null,
-    flags: GDBusPropertyInfoFlags = @import("std").mem.zeroes(GDBusPropertyInfoFlags),
+    flags: GDBusPropertyInfoFlags = std.mem.zeroes(GDBusPropertyInfoFlags),
     annotations: [*c][*c]GDBusAnnotationInfo = null,
     pub const g_dbus_property_info_ref = __root.g_dbus_property_info_ref;
     pub const g_dbus_property_info_unref = __root.g_dbus_property_info_unref;
@@ -13859,7 +13860,7 @@ pub const struct__GDBusSubtreeVTable = extern struct {
     enumerate: GDBusSubtreeEnumerateFunc = null,
     introspect: GDBusSubtreeIntrospectFunc = null,
     dispatch: GDBusSubtreeDispatchFunc = null,
-    padding: [8]gpointer = @import("std").mem.zeroes([8]gpointer),
+    padding: [8]gpointer = std.mem.zeroes([8]gpointer),
 };
 pub const GDBusSubtreeVTable = struct__GDBusSubtreeVTable;
 pub const GDBusNodeInfo = struct__GDBusNodeInfo;
@@ -13894,7 +13895,7 @@ pub const GDBusInterface = struct__GDBusInterface;
 pub const struct__GDBusInterfaceSkeletonPrivate = opaque {};
 pub const GDBusInterfaceSkeletonPrivate = struct__GDBusInterfaceSkeletonPrivate;
 pub const struct__GDBusInterfaceSkeleton = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GDBusInterfaceSkeletonPrivate = null,
     pub const g_dbus_interface_skeleton_get_flags = __root.g_dbus_interface_skeleton_get_flags;
     pub const g_dbus_interface_skeleton_set_flags = __root.g_dbus_interface_skeleton_set_flags;
@@ -13935,7 +13936,7 @@ pub const GDBusObject = struct__GDBusObject;
 pub const struct__GDBusObjectSkeletonPrivate = opaque {};
 pub const GDBusObjectSkeletonPrivate = struct__GDBusObjectSkeletonPrivate;
 pub const struct__GDBusObjectSkeleton = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GDBusObjectSkeletonPrivate = null,
     pub const g_dbus_object_skeleton_flush = __root.g_dbus_object_skeleton_flush;
     pub const g_dbus_object_skeleton_add_interface = __root.g_dbus_object_skeleton_add_interface;
@@ -13952,7 +13953,7 @@ pub const GDBusObjectSkeleton = struct__GDBusObjectSkeleton;
 pub const struct__GDBusObjectProxyPrivate = opaque {};
 pub const GDBusObjectProxyPrivate = struct__GDBusObjectProxyPrivate;
 pub const struct__GDBusObjectProxy = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GDBusObjectProxyPrivate = null,
     pub const g_dbus_object_proxy_get_connection = __root.g_dbus_object_proxy_get_connection;
     pub const glib_autoptr_clear_GDBusObjectProxy = __root.glib_autoptr_clear_GDBusObjectProxy;
@@ -13974,7 +13975,7 @@ pub const GDBusObjectManager = struct__GDBusObjectManager;
 pub const struct__GDBusObjectManagerClientPrivate = opaque {};
 pub const GDBusObjectManagerClientPrivate = struct__GDBusObjectManagerClientPrivate;
 pub const struct__GDBusObjectManagerClient = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GDBusObjectManagerClientPrivate = null,
     pub const g_dbus_object_manager_client_get_connection = __root.g_dbus_object_manager_client_get_connection;
     pub const g_dbus_object_manager_client_get_flags = __root.g_dbus_object_manager_client_get_flags;
@@ -13990,7 +13991,7 @@ pub const GDBusObjectManagerClient = struct__GDBusObjectManagerClient;
 pub const struct__GDBusObjectManagerServerPrivate = opaque {};
 pub const GDBusObjectManagerServerPrivate = struct__GDBusObjectManagerServerPrivate;
 pub const struct__GDBusObjectManagerServer = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GDBusObjectManagerServerPrivate = null,
     pub const g_dbus_object_manager_server_get_connection = __root.g_dbus_object_manager_server_get_connection;
     pub const g_dbus_object_manager_server_set_connection = __root.g_dbus_object_manager_server_set_connection;
@@ -14093,7 +14094,7 @@ pub const struct__GSubprocessLauncher = opaque {
 };
 pub const GSubprocessLauncher = struct__GSubprocessLauncher;
 pub const struct__GActionInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     get_name: ?*const fn (action: ?*GAction) callconv(.c) [*c]const gchar = null,
     get_parameter_type: ?*const fn (action: ?*GAction) callconv(.c) ?*const GVariantType = null,
     get_state_type: ?*const fn (action: ?*GAction) callconv(.c) ?*const GVariantType = null,
@@ -14117,7 +14118,7 @@ pub extern fn g_action_name_is_valid(action_name: [*c]const gchar) gboolean;
 pub extern fn g_action_parse_detailed_name(detailed_name: [*c]const gchar, action_name: [*c][*c]gchar, target_value: [*c]?*GVariant, @"error": [*c][*c]GError) gboolean;
 pub extern fn g_action_print_detailed_name(action_name: [*c]const gchar, target_value: ?*GVariant) [*c]gchar;
 pub const struct__GActionGroupInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     has_action: ?*const fn (action_group: ?*GActionGroup, action_name: [*c]const gchar) callconv(.c) gboolean = null,
     list_actions: ?*const fn (action_group: ?*GActionGroup) callconv(.c) [*c][*c]gchar = null,
     get_action_enabled: ?*const fn (action_group: ?*GActionGroup, action_name: [*c]const gchar) callconv(.c) gboolean = null,
@@ -14152,7 +14153,7 @@ pub extern fn g_action_group_query_action(action_group: ?*GActionGroup, action_n
 pub extern fn g_dbus_connection_export_action_group(connection: ?*GDBusConnection, object_path: [*c]const gchar, action_group: ?*GActionGroup, @"error": [*c][*c]GError) guint;
 pub extern fn g_dbus_connection_unexport_action_group(connection: ?*GDBusConnection, export_id: guint) void;
 pub const struct__GActionMapInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     lookup_action: ?*const fn (action_map: ?*GActionMap, action_name: [*c]const gchar) callconv(.c) ?*GAction = null,
     add_action: ?*const fn (action_map: ?*GActionMap, action: ?*GAction) callconv(.c) void = null,
     remove_action: ?*const fn (action_map: ?*GActionMap, action_name: [*c]const gchar) callconv(.c) void = null,
@@ -14164,7 +14165,7 @@ pub const struct__GActionEntry = extern struct {
     parameter_type: [*c]const gchar = null,
     state: [*c]const gchar = null,
     change_state: ?*const fn (action: ?*GSimpleAction, value: ?*GVariant, user_data: gpointer) callconv(.c) void = null,
-    padding: [3]gsize = @import("std").mem.zeroes([3]gsize),
+    padding: [3]gsize = std.mem.zeroes([3]gsize),
 };
 pub const GActionEntry = struct__GActionEntry;
 pub extern fn g_action_map_get_type() GType;
@@ -14174,7 +14175,7 @@ pub extern fn g_action_map_remove_action(action_map: ?*GActionMap, action_name: 
 pub extern fn g_action_map_add_action_entries(action_map: ?*GActionMap, entries: [*c]const GActionEntry, n_entries: gint, user_data: gpointer) void;
 pub extern fn g_action_map_remove_action_entries(action_map: ?*GActionMap, entries: [*c]const GActionEntry, n_entries: gint) void;
 pub const struct__GAppLaunchContextClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     get_display: ?*const fn (context: [*c]GAppLaunchContext, info: ?*GAppInfo, files: [*c]GList) callconv(.c) [*c]u8 = null,
     get_startup_notify_id: ?*const fn (context: [*c]GAppLaunchContext, info: ?*GAppInfo, files: [*c]GList) callconv(.c) [*c]u8 = null,
     launch_failed: ?*const fn (context: [*c]GAppLaunchContext, startup_notify_id: [*c]const u8) callconv(.c) void = null,
@@ -14186,7 +14187,7 @@ pub const struct__GAppLaunchContextClass = extern struct {
 };
 pub const GAppLaunchContextClass = struct__GAppLaunchContextClass;
 pub const struct__GAppInfoIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     dup: ?*const fn (appinfo: ?*GAppInfo) callconv(.c) ?*GAppInfo = null,
     equal: ?*const fn (appinfo1: ?*GAppInfo, appinfo2: ?*GAppInfo) callconv(.c) gboolean = null,
     get_id: ?*const fn (appinfo: ?*GAppInfo) callconv(.c) [*c]const u8 = null,
@@ -14270,7 +14271,7 @@ pub const GAppInfoMonitor = struct__GAppInfoMonitor;
 pub extern fn g_app_info_monitor_get_type() GType;
 pub extern fn g_app_info_monitor_get() ?*GAppInfoMonitor;
 pub const struct__GApplicationClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     startup: ?*const fn (application: [*c]GApplication) callconv(.c) void = null,
     activate: ?*const fn (application: [*c]GApplication) callconv(.c) void = null,
     open: ?*const fn (application: [*c]GApplication, files: [*c]?*GFile, n_files: gint, hint: [*c]const gchar) callconv(.c) void = null,
@@ -14286,7 +14287,7 @@ pub const struct__GApplicationClass = extern struct {
     dbus_unregister: ?*const fn (application: [*c]GApplication, connection: ?*GDBusConnection, object_path: [*c]const gchar) callconv(.c) void = null,
     handle_local_options: ?*const fn (application: [*c]GApplication, options: [*c]GVariantDict) callconv(.c) gint = null,
     name_lost: ?*const fn (application: [*c]GApplication) callconv(.c) gboolean = null,
-    padding: [7]gpointer = @import("std").mem.zeroes([7]gpointer),
+    padding: [7]gpointer = std.mem.zeroes([7]gpointer),
 };
 pub const GApplicationClass = struct__GApplicationClass;
 pub extern fn g_application_get_type() GType;
@@ -14330,12 +14331,12 @@ pub extern fn g_application_withdraw_notification(application: [*c]GApplication,
 pub extern fn g_application_bind_busy_property(application: [*c]GApplication, object: gpointer, property: [*c]const gchar) void;
 pub extern fn g_application_unbind_busy_property(application: [*c]GApplication, object: gpointer, property: [*c]const gchar) void;
 pub const struct__GApplicationCommandLineClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     print_literal: ?*const fn (cmdline: [*c]GApplicationCommandLine, message: [*c]const gchar) callconv(.c) void = null,
     printerr_literal: ?*const fn (cmdline: [*c]GApplicationCommandLine, message: [*c]const gchar) callconv(.c) void = null,
     get_stdin: ?*const fn (cmdline: [*c]GApplicationCommandLine) callconv(.c) [*c]GInputStream = null,
     done: ?*const fn (cmdline: [*c]GApplicationCommandLine) callconv(.c) void = null,
-    padding: [10]gpointer = @import("std").mem.zeroes([10]gpointer),
+    padding: [10]gpointer = std.mem.zeroes([10]gpointer),
 };
 pub const GApplicationCommandLineClass = struct__GApplicationCommandLineClass;
 pub extern fn g_application_command_line_get_type() GType;
@@ -14356,7 +14357,7 @@ pub extern fn g_application_command_line_get_platform_data(cmdline: [*c]GApplica
 pub extern fn g_application_command_line_create_file_for_arg(cmdline: [*c]GApplicationCommandLine, arg: [*c]const gchar) ?*GFile;
 pub extern fn g_application_command_line_done(cmdline: [*c]GApplicationCommandLine) void;
 pub const struct__GInitableIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     init: ?*const fn (initable: ?*GInitable, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
 };
 pub const GInitableIface = struct__GInitableIface;
@@ -14366,7 +14367,7 @@ pub extern fn g_initable_new(object_type: GType, cancellable: [*c]GCancellable, 
 pub extern fn g_initable_newv(object_type: GType, n_parameters: guint, parameters: [*c]GParameter, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) gpointer;
 pub extern fn g_initable_new_valist(object_type: GType, first_property_name: [*c]const gchar, var_args: [*c]struct___va_list_tag_6, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) [*c]GObject;
 pub const struct__GAsyncInitableIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     init_async: ?*const fn (initable: ?*GAsyncInitable, io_priority: c_int, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     init_finish: ?*const fn (initable: ?*GAsyncInitable, res: ?*GAsyncResult, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
 };
@@ -14379,7 +14380,7 @@ pub extern fn g_async_initable_newv_async(object_type: GType, n_parameters: guin
 pub extern fn g_async_initable_new_valist_async(object_type: GType, first_property_name: [*c]const gchar, var_args: [*c]struct___va_list_tag_6, io_priority: c_int, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) void;
 pub extern fn g_async_initable_new_finish(initable: ?*GAsyncInitable, res: ?*GAsyncResult, @"error": [*c][*c]GError) [*c]GObject;
 pub const struct__GAsyncResultIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     get_user_data: ?*const fn (res: ?*GAsyncResult) callconv(.c) gpointer = null,
     get_source_object: ?*const fn (res: ?*GAsyncResult) callconv(.c) [*c]GObject = null,
     is_tagged: ?*const fn (res: ?*GAsyncResult, source_tag: gpointer) callconv(.c) gboolean = null,
@@ -14391,7 +14392,7 @@ pub extern fn g_async_result_get_source_object(res: ?*GAsyncResult) [*c]GObject;
 pub extern fn g_async_result_legacy_propagate_error(res: ?*GAsyncResult, @"error": [*c][*c]GError) gboolean;
 pub extern fn g_async_result_is_tagged(res: ?*GAsyncResult, source_tag: gpointer) gboolean;
 pub const struct__GInputStreamClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     read_fn: ?*const fn (stream: [*c]GInputStream, buffer: ?*anyopaque, count: gsize, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gssize = null,
     skip: ?*const fn (stream: [*c]GInputStream, count: gsize, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gssize = null,
     close_fn: ?*const fn (stream: [*c]GInputStream, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
@@ -14429,7 +14430,7 @@ pub extern fn g_input_stream_has_pending(stream: [*c]GInputStream) gboolean;
 pub extern fn g_input_stream_set_pending(stream: [*c]GInputStream, @"error": [*c][*c]GError) gboolean;
 pub extern fn g_input_stream_clear_pending(stream: [*c]GInputStream) void;
 pub const struct__GFilterInputStreamClass = extern struct {
-    parent_class: GInputStreamClass = @import("std").mem.zeroes(GInputStreamClass),
+    parent_class: GInputStreamClass = std.mem.zeroes(GInputStreamClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -14440,7 +14441,7 @@ pub extern fn g_filter_input_stream_get_base_stream(stream: [*c]GFilterInputStre
 pub extern fn g_filter_input_stream_get_close_base_stream(stream: [*c]GFilterInputStream) gboolean;
 pub extern fn g_filter_input_stream_set_close_base_stream(stream: [*c]GFilterInputStream, close_base: gboolean) void;
 pub const struct__GBufferedInputStreamClass = extern struct {
-    parent_class: GFilterInputStreamClass = @import("std").mem.zeroes(GFilterInputStreamClass),
+    parent_class: GFilterInputStreamClass = std.mem.zeroes(GFilterInputStreamClass),
     fill: ?*const fn (stream: [*c]GBufferedInputStream, count: gssize, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gssize = null,
     fill_async: ?*const fn (stream: [*c]GBufferedInputStream, count: gssize, io_priority: c_int, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     fill_finish: ?*const fn (stream: [*c]GBufferedInputStream, result: ?*GAsyncResult, @"error": [*c][*c]GError) callconv(.c) gssize = null,
@@ -14464,7 +14465,7 @@ pub extern fn g_buffered_input_stream_fill_async(stream: [*c]GBufferedInputStrea
 pub extern fn g_buffered_input_stream_fill_finish(stream: [*c]GBufferedInputStream, result: ?*GAsyncResult, @"error": [*c][*c]GError) gssize;
 pub extern fn g_buffered_input_stream_read_byte(stream: [*c]GBufferedInputStream, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) c_int;
 pub const struct__GOutputStreamClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     write_fn: ?*const fn (stream: [*c]GOutputStream, buffer: ?*const anyopaque, count: gsize, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gssize = null,
     splice: ?*const fn (stream: [*c]GOutputStream, source: [*c]GInputStream, flags: GOutputStreamSpliceFlags, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gssize = null,
     flush: ?*const fn (stream: [*c]GOutputStream, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
@@ -14520,7 +14521,7 @@ pub extern fn g_output_stream_has_pending(stream: [*c]GOutputStream) gboolean;
 pub extern fn g_output_stream_set_pending(stream: [*c]GOutputStream, @"error": [*c][*c]GError) gboolean;
 pub extern fn g_output_stream_clear_pending(stream: [*c]GOutputStream) void;
 pub const struct__GFilterOutputStreamClass = extern struct {
-    parent_class: GOutputStreamClass = @import("std").mem.zeroes(GOutputStreamClass),
+    parent_class: GOutputStreamClass = std.mem.zeroes(GOutputStreamClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -14531,7 +14532,7 @@ pub extern fn g_filter_output_stream_get_base_stream(stream: [*c]GFilterOutputSt
 pub extern fn g_filter_output_stream_get_close_base_stream(stream: [*c]GFilterOutputStream) gboolean;
 pub extern fn g_filter_output_stream_set_close_base_stream(stream: [*c]GFilterOutputStream, close_base: gboolean) void;
 pub const struct__GBufferedOutputStreamClass = extern struct {
-    parent_class: GFilterOutputStreamClass = @import("std").mem.zeroes(GFilterOutputStreamClass),
+    parent_class: GFilterOutputStreamClass = std.mem.zeroes(GFilterOutputStreamClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
 };
@@ -14547,7 +14548,7 @@ pub extern fn g_bytes_icon_get_type() GType;
 pub extern fn g_bytes_icon_new(bytes: ?*GBytes) ?*GIcon;
 pub extern fn g_bytes_icon_get_bytes(icon: ?*GBytesIcon) ?*GBytes;
 pub const struct__GCancellableClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     cancelled: ?*const fn (cancellable: [*c]GCancellable) callconv(.c) void = null,
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
@@ -14572,7 +14573,7 @@ pub extern fn g_cancellable_connect(cancellable: [*c]GCancellable, callback: GCa
 pub extern fn g_cancellable_disconnect(cancellable: [*c]GCancellable, handler_id: gulong) void;
 pub extern fn g_cancellable_cancel(cancellable: [*c]GCancellable) void;
 pub const struct__GConverterIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     convert: ?*const fn (converter: ?*GConverter, inbuf: ?*const anyopaque, inbuf_size: gsize, outbuf: ?*anyopaque, outbuf_size: gsize, flags: GConverterFlags, bytes_read: [*c]gsize, bytes_written: [*c]gsize, @"error": [*c][*c]GError) callconv(.c) GConverterResult = null,
     reset: ?*const fn (converter: ?*GConverter) callconv(.c) void = null,
 };
@@ -14582,7 +14583,7 @@ pub extern fn g_converter_convert(converter: ?*GConverter, inbuf: ?*const anyopa
 pub extern fn g_converter_reset(converter: ?*GConverter) void;
 pub extern fn g_converter_convert_bytes(converter: ?*GConverter, bytes: ?*GBytes, @"error": [*c][*c]GError) ?*GBytes;
 pub const struct__GCharsetConverterClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
 };
 pub const GCharsetConverterClass = struct__GCharsetConverterClass;
 pub extern fn g_charset_converter_get_type() GType;
@@ -14607,7 +14608,7 @@ pub extern fn g_content_types_get_registered() [*c]GList;
 pub extern fn g_content_type_get_mime_dirs() [*c]const [*c]const gchar;
 pub extern fn g_content_type_set_mime_dirs(dirs: [*c]const [*c]const gchar) void;
 pub const struct__GConverterInputStreamClass = extern struct {
-    parent_class: GFilterInputStreamClass = @import("std").mem.zeroes(GFilterInputStreamClass),
+    parent_class: GFilterInputStreamClass = std.mem.zeroes(GFilterInputStreamClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -14619,7 +14620,7 @@ pub extern fn g_converter_input_stream_get_type() GType;
 pub extern fn g_converter_input_stream_new(base_stream: [*c]GInputStream, converter: ?*GConverter) [*c]GInputStream;
 pub extern fn g_converter_input_stream_get_converter(converter_stream: [*c]GConverterInputStream) ?*GConverter;
 pub const struct__GConverterOutputStreamClass = extern struct {
-    parent_class: GFilterOutputStreamClass = @import("std").mem.zeroes(GFilterOutputStreamClass),
+    parent_class: GFilterOutputStreamClass = std.mem.zeroes(GFilterOutputStreamClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -15062,7 +15063,7 @@ pub extern fn g_credentials_get_unix_pid(credentials: ?*GCredentials, @"error": 
 pub extern fn g_credentials_get_unix_user(credentials: ?*GCredentials, @"error": [*c][*c]GError) uid_t;
 pub extern fn g_credentials_set_unix_user(credentials: ?*GCredentials, uid: uid_t, @"error": [*c][*c]GError) gboolean;
 pub const struct__GDatagramBasedInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     receive_messages: ?*const fn (datagram_based: ?*GDatagramBased, messages: [*c]GInputMessage, num_messages: guint, flags: gint, timeout: gint64, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gint = null,
     send_messages: ?*const fn (datagram_based: ?*GDatagramBased, messages: [*c]GOutputMessage, num_messages: guint, flags: gint, timeout: gint64, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gint = null,
     create_source: ?*const fn (datagram_based: ?*GDatagramBased, condition: GIOCondition, cancellable: [*c]GCancellable) callconv(.c) [*c]GSource = null,
@@ -15077,7 +15078,7 @@ pub extern fn g_datagram_based_create_source(datagram_based: ?*GDatagramBased, c
 pub extern fn g_datagram_based_condition_check(datagram_based: ?*GDatagramBased, condition: GIOCondition) GIOCondition;
 pub extern fn g_datagram_based_condition_wait(datagram_based: ?*GDatagramBased, condition: GIOCondition, timeout: gint64, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) gboolean;
 pub const struct__GDataInputStreamClass = extern struct {
-    parent_class: GBufferedInputStreamClass = @import("std").mem.zeroes(GBufferedInputStreamClass),
+    parent_class: GBufferedInputStreamClass = std.mem.zeroes(GBufferedInputStreamClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -15112,7 +15113,7 @@ pub extern fn g_data_input_stream_read_upto_finish(stream: [*c]GDataInputStream,
 pub const struct__GDataOutputStreamPrivate = opaque {};
 pub const GDataOutputStreamPrivate = struct__GDataOutputStreamPrivate;
 pub const struct__GDataOutputStream = extern struct {
-    parent_instance: GFilterOutputStream = @import("std").mem.zeroes(GFilterOutputStream),
+    parent_instance: GFilterOutputStream = std.mem.zeroes(GFilterOutputStream),
     priv: ?*GDataOutputStreamPrivate = null,
     pub const g_data_output_stream_set_byte_order = __root.g_data_output_stream_set_byte_order;
     pub const g_data_output_stream_get_byte_order = __root.g_data_output_stream_get_byte_order;
@@ -15137,7 +15138,7 @@ pub const struct__GDataOutputStream = extern struct {
 };
 pub const GDataOutputStream = struct__GDataOutputStream;
 pub const struct__GDataOutputStreamClass = extern struct {
-    parent_class: GFilterOutputStreamClass = @import("std").mem.zeroes(GFilterOutputStreamClass),
+    parent_class: GFilterOutputStreamClass = std.mem.zeroes(GFilterOutputStreamClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -15244,7 +15245,7 @@ pub extern fn g_dbus_error_set_dbus_error(@"error": [*c][*c]GError, dbus_error_n
 pub extern fn g_dbus_error_set_dbus_error_valist(@"error": [*c][*c]GError, dbus_error_name: [*c]const gchar, dbus_error_message: [*c]const gchar, format: [*c]const gchar, var_args: [*c]struct___va_list_tag_6) void;
 pub extern fn g_dbus_error_encode_gerror(@"error": [*c]const GError) [*c]gchar;
 pub const struct__GDBusInterfaceIface = extern struct {
-    parent_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    parent_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     get_info: ?*const fn (interface_: ?*GDBusInterface) callconv(.c) [*c]GDBusInterfaceInfo = null,
     get_object: ?*const fn (interface_: ?*GDBusInterface) callconv(.c) ?*GDBusObject = null,
     set_object: ?*const fn (interface_: ?*GDBusInterface, object: ?*GDBusObject) callconv(.c) void = null,
@@ -15257,15 +15258,15 @@ pub extern fn g_dbus_interface_get_object(interface_: ?*GDBusInterface) ?*GDBusO
 pub extern fn g_dbus_interface_set_object(interface_: ?*GDBusInterface, object: ?*GDBusObject) void;
 pub extern fn g_dbus_interface_dup_object(interface_: ?*GDBusInterface) ?*GDBusObject;
 pub const struct__GDBusInterfaceSkeletonClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     get_info: ?*const fn (interface_: [*c]GDBusInterfaceSkeleton) callconv(.c) [*c]GDBusInterfaceInfo = null,
     get_vtable: ?*const fn (interface_: [*c]GDBusInterfaceSkeleton) callconv(.c) [*c]GDBusInterfaceVTable = null,
     get_properties: ?*const fn (interface_: [*c]GDBusInterfaceSkeleton) callconv(.c) ?*GVariant = null,
     flush: ?*const fn (interface_: [*c]GDBusInterfaceSkeleton) callconv(.c) void = null,
     method_dispatch: ?*const fn (interface_: [*c]GDBusInterfaceSkeleton, method_call_func: GDBusInterfaceMethodCallFunc, invocation: ?*GDBusMethodInvocation, flags: GDBusInterfaceSkeletonFlags, object: ?*GDBusObject) callconv(.c) void = null,
-    vfunc_padding: [7]gpointer = @import("std").mem.zeroes([7]gpointer),
+    vfunc_padding: [7]gpointer = std.mem.zeroes([7]gpointer),
     g_authorize_method: ?*const fn (interface_: [*c]GDBusInterfaceSkeleton, invocation: ?*GDBusMethodInvocation) callconv(.c) gboolean = null,
-    signal_padding: [8]gpointer = @import("std").mem.zeroes([8]gpointer),
+    signal_padding: [8]gpointer = std.mem.zeroes([8]gpointer),
 };
 pub const GDBusInterfaceSkeletonClass = struct__GDBusInterfaceSkeletonClass;
 pub extern fn g_dbus_interface_skeleton_get_type() GType;
@@ -15405,7 +15406,7 @@ pub extern fn g_bus_watch_name_with_closures(bus_type: GBusType, name: [*c]const
 pub extern fn g_bus_watch_name_on_connection_with_closures(connection: ?*GDBusConnection, name: [*c]const gchar, flags: GBusNameWatcherFlags, name_appeared_closure: ?*GClosure, name_vanished_closure: ?*GClosure) guint;
 pub extern fn g_bus_unwatch_name(watcher_id: guint) void;
 pub const struct__GDBusObjectIface = extern struct {
-    parent_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    parent_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     get_object_path: ?*const fn (object: ?*GDBusObject) callconv(.c) [*c]const gchar = null,
     get_interfaces: ?*const fn (object: ?*GDBusObject) callconv(.c) [*c]GList = null,
     get_interface: ?*const fn (object: ?*GDBusObject, interface_name: [*c]const gchar) callconv(.c) ?*GDBusInterface = null,
@@ -15418,7 +15419,7 @@ pub extern fn g_dbus_object_get_object_path(object: ?*GDBusObject) [*c]const gch
 pub extern fn g_dbus_object_get_interfaces(object: ?*GDBusObject) [*c]GList;
 pub extern fn g_dbus_object_get_interface(object: ?*GDBusObject, interface_name: [*c]const gchar) ?*GDBusInterface;
 pub const struct__GDBusObjectManagerIface = extern struct {
-    parent_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    parent_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     get_object_path: ?*const fn (manager: ?*GDBusObjectManager) callconv(.c) [*c]const gchar = null,
     get_objects: ?*const fn (manager: ?*GDBusObjectManager) callconv(.c) [*c]GList = null,
     get_object: ?*const fn (manager: ?*GDBusObjectManager, object_path: [*c]const gchar) callconv(.c) ?*GDBusObject = null,
@@ -15435,10 +15436,10 @@ pub extern fn g_dbus_object_manager_get_objects(manager: ?*GDBusObjectManager) [
 pub extern fn g_dbus_object_manager_get_object(manager: ?*GDBusObjectManager, object_path: [*c]const gchar) ?*GDBusObject;
 pub extern fn g_dbus_object_manager_get_interface(manager: ?*GDBusObjectManager, object_path: [*c]const gchar, interface_name: [*c]const gchar) ?*GDBusInterface;
 pub const struct__GDBusObjectManagerClientClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     interface_proxy_signal: ?*const fn (manager: [*c]GDBusObjectManagerClient, object_proxy: [*c]GDBusObjectProxy, interface_proxy: [*c]GDBusProxy, sender_name: [*c]const gchar, signal_name: [*c]const gchar, parameters: ?*GVariant) callconv(.c) void = null,
     interface_proxy_properties_changed: ?*const fn (manager: [*c]GDBusObjectManagerClient, object_proxy: [*c]GDBusObjectProxy, interface_proxy: [*c]GDBusProxy, changed_properties: ?*GVariant, invalidated_properties: [*c]const [*c]const gchar) callconv(.c) void = null,
-    padding: [8]gpointer = @import("std").mem.zeroes([8]gpointer),
+    padding: [8]gpointer = std.mem.zeroes([8]gpointer),
 };
 pub const GDBusObjectManagerClientClass = struct__GDBusObjectManagerClientClass;
 pub extern fn g_dbus_object_manager_client_get_type() GType;
@@ -15453,8 +15454,8 @@ pub extern fn g_dbus_object_manager_client_get_flags(manager: [*c]GDBusObjectMan
 pub extern fn g_dbus_object_manager_client_get_name(manager: [*c]GDBusObjectManagerClient) [*c]const gchar;
 pub extern fn g_dbus_object_manager_client_get_name_owner(manager: [*c]GDBusObjectManagerClient) [*c]gchar;
 pub const struct__GDBusObjectManagerServerClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
-    padding: [8]gpointer = @import("std").mem.zeroes([8]gpointer),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
+    padding: [8]gpointer = std.mem.zeroes([8]gpointer),
 };
 pub const GDBusObjectManagerServerClass = struct__GDBusObjectManagerServerClass;
 pub extern fn g_dbus_object_manager_server_get_type() GType;
@@ -15466,17 +15467,17 @@ pub extern fn g_dbus_object_manager_server_export_uniquely(manager: [*c]GDBusObj
 pub extern fn g_dbus_object_manager_server_is_exported(manager: [*c]GDBusObjectManagerServer, object: [*c]GDBusObjectSkeleton) gboolean;
 pub extern fn g_dbus_object_manager_server_unexport(manager: [*c]GDBusObjectManagerServer, object_path: [*c]const gchar) gboolean;
 pub const struct__GDBusObjectProxyClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
-    padding: [8]gpointer = @import("std").mem.zeroes([8]gpointer),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
+    padding: [8]gpointer = std.mem.zeroes([8]gpointer),
 };
 pub const GDBusObjectProxyClass = struct__GDBusObjectProxyClass;
 pub extern fn g_dbus_object_proxy_get_type() GType;
 pub extern fn g_dbus_object_proxy_new(connection: ?*GDBusConnection, object_path: [*c]const gchar) [*c]GDBusObjectProxy;
 pub extern fn g_dbus_object_proxy_get_connection(proxy: [*c]GDBusObjectProxy) ?*GDBusConnection;
 pub const struct__GDBusObjectSkeletonClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     authorize_method: ?*const fn (object: [*c]GDBusObjectSkeleton, interface_: [*c]GDBusInterfaceSkeleton, invocation: ?*GDBusMethodInvocation) callconv(.c) gboolean = null,
-    padding: [8]gpointer = @import("std").mem.zeroes([8]gpointer),
+    padding: [8]gpointer = std.mem.zeroes([8]gpointer),
 };
 pub const GDBusObjectSkeletonClass = struct__GDBusObjectSkeletonClass;
 pub extern fn g_dbus_object_skeleton_get_type() GType;
@@ -15487,10 +15488,10 @@ pub extern fn g_dbus_object_skeleton_remove_interface(object: [*c]GDBusObjectSke
 pub extern fn g_dbus_object_skeleton_remove_interface_by_name(object: [*c]GDBusObjectSkeleton, interface_name: [*c]const gchar) void;
 pub extern fn g_dbus_object_skeleton_set_object_path(object: [*c]GDBusObjectSkeleton, object_path: [*c]const gchar) void;
 pub const struct__GDBusProxyClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     g_properties_changed: ?*const fn (proxy: [*c]GDBusProxy, changed_properties: ?*GVariant, invalidated_properties: [*c]const [*c]const gchar) callconv(.c) void = null,
     g_signal: ?*const fn (proxy: [*c]GDBusProxy, sender_name: [*c]const gchar, signal_name: [*c]const gchar, parameters: ?*GVariant) callconv(.c) void = null,
-    padding: [32]gpointer = @import("std").mem.zeroes([32]gpointer),
+    padding: [32]gpointer = std.mem.zeroes([32]gpointer),
 };
 pub const GDBusProxyClass = struct__GDBusProxyClass;
 pub extern fn g_dbus_proxy_get_type() GType;
@@ -15548,7 +15549,7 @@ pub const struct__GDebugController = opaque {
 };
 pub const GDebugController = struct__GDebugController;
 pub const struct__GDebugControllerInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
 };
 pub const GDebugControllerInterface = struct__GDebugControllerInterface;
 pub const GDebugController_autoptr = ?*GDebugController;
@@ -15623,16 +15624,16 @@ pub extern fn g_debug_controller_get_debug_enabled(self: ?*GDebugController) gbo
 pub extern fn g_debug_controller_set_debug_enabled(self: ?*GDebugController, debug_enabled: gboolean) void;
 pub extern fn g_debug_controller_dbus_get_type() GType;
 pub const struct__GDebugControllerDBus = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     pub const glib_autoptr_clear_GDebugControllerDBus = __root.glib_autoptr_clear_GDebugControllerDBus;
     pub const g_debug_controller_dbus_stop = __root.g_debug_controller_dbus_stop;
     pub const stop = __root.g_debug_controller_dbus_stop;
 };
 pub const GDebugControllerDBus = struct__GDebugControllerDBus;
 pub const struct__GDebugControllerDBusClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     authorize: ?*const fn (controller: [*c]GDebugControllerDBus, invocation: ?*GDBusMethodInvocation) callconv(.c) gboolean = null,
-    padding: [12]gpointer = @import("std").mem.zeroes([12]gpointer),
+    padding: [12]gpointer = std.mem.zeroes([12]gpointer),
     pub const glib_autoptr_clear_GDebugControllerDBusClass = __root.glib_autoptr_clear_GDebugControllerDBusClass;
 };
 pub const GDebugControllerDBusClass = struct__GDebugControllerDBusClass;
@@ -15770,7 +15771,7 @@ pub fn G_DEBUG_CONTROLLER_DBUS_GET_CLASS(arg_ptr: gpointer) callconv(.c) [*c]GDe
 pub extern fn g_debug_controller_dbus_new(connection: ?*GDBusConnection, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) [*c]GDebugControllerDBus;
 pub extern fn g_debug_controller_dbus_stop(self: [*c]GDebugControllerDBus) void;
 pub const struct__GDriveIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     changed: ?*const fn (drive: ?*GDrive) callconv(.c) void = null,
     disconnected: ?*const fn (drive: ?*GDrive) callconv(.c) void = null,
     eject_button: ?*const fn (drive: ?*GDrive) callconv(.c) void = null,
@@ -15835,7 +15836,7 @@ pub extern fn g_drive_eject_with_operation(drive: ?*GDrive, flags: GMountUnmount
 pub extern fn g_drive_eject_with_operation_finish(drive: ?*GDrive, result: ?*GAsyncResult, @"error": [*c][*c]GError) gboolean;
 pub extern fn g_drive_get_sort_key(drive: ?*GDrive) [*c]const gchar;
 pub const struct__GDtlsConnectionInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     accept_certificate: ?*const fn (connection: ?*GDtlsConnection, peer_cert: [*c]GTlsCertificate, errors: GTlsCertificateFlags) callconv(.c) gboolean = null,
     handshake: ?*const fn (conn: ?*GDtlsConnection, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
     handshake_async: ?*const fn (conn: ?*GDtlsConnection, io_priority: c_int, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
@@ -15877,7 +15878,7 @@ pub extern fn g_dtls_connection_get_channel_binding_data(conn: ?*GDtlsConnection
 pub extern fn g_dtls_connection_get_protocol_version(conn: ?*GDtlsConnection) GTlsProtocolVersion;
 pub extern fn g_dtls_connection_get_ciphersuite_name(conn: ?*GDtlsConnection) [*c]gchar;
 pub const struct__GDtlsClientConnectionInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
 };
 pub const GDtlsClientConnectionInterface = struct__GDtlsClientConnectionInterface;
 pub extern fn g_dtls_client_connection_get_type() GType;
@@ -15888,13 +15889,13 @@ pub extern fn g_dtls_client_connection_get_server_identity(conn: ?*GDtlsClientCo
 pub extern fn g_dtls_client_connection_set_server_identity(conn: ?*GDtlsClientConnection, identity: ?*GSocketConnectable) void;
 pub extern fn g_dtls_client_connection_get_accepted_cas(conn: ?*GDtlsClientConnection) [*c]GList;
 pub const struct__GDtlsServerConnectionInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
 };
 pub const GDtlsServerConnectionInterface = struct__GDtlsServerConnectionInterface;
 pub extern fn g_dtls_server_connection_get_type() GType;
 pub extern fn g_dtls_server_connection_new(base_socket: ?*GDatagramBased, certificate: [*c]GTlsCertificate, @"error": [*c][*c]GError) ?*GDatagramBased;
 pub const struct__GIconIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     hash: ?*const fn (icon: ?*GIcon) callconv(.c) guint = null,
     equal: ?*const fn (icon1: ?*GIcon, icon2: ?*GIcon) callconv(.c) gboolean = null,
     to_tokens: ?*const fn (icon: ?*GIcon, tokens: [*c]GPtrArray, out_version: [*c]gint) callconv(.c) gboolean = null,
@@ -15927,7 +15928,7 @@ pub extern fn g_emblem_get_origin(emblem: ?*GEmblem) GEmblemOrigin;
 pub const struct__GEmblemedIconPrivate = opaque {};
 pub const GEmblemedIconPrivate = struct__GEmblemedIconPrivate;
 pub const struct__GEmblemedIcon = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GEmblemedIconPrivate = null,
     pub const g_emblemed_icon_get_icon = __root.g_emblemed_icon_get_icon;
     pub const g_emblemed_icon_get_emblems = __root.g_emblemed_icon_get_emblems;
@@ -15940,7 +15941,7 @@ pub const struct__GEmblemedIcon = extern struct {
 };
 pub const GEmblemedIcon = struct__GEmblemedIcon;
 pub const struct__GEmblemedIconClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
 };
 pub const GEmblemedIconClass = struct__GEmblemedIconClass;
 pub extern fn g_emblemed_icon_get_type() GType;
@@ -15950,7 +15951,7 @@ pub extern fn g_emblemed_icon_get_emblems(emblemed: [*c]GEmblemedIcon) [*c]GList
 pub extern fn g_emblemed_icon_add_emblem(emblemed: [*c]GEmblemedIcon, emblem: ?*GEmblem) void;
 pub extern fn g_emblemed_icon_clear_emblems(emblemed: [*c]GEmblemedIcon) void;
 pub const struct__GFileIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     dup: ?*const fn (file: ?*GFile) callconv(.c) ?*GFile = null,
     hash: ?*const fn (file: ?*GFile) callconv(.c) guint = null,
     equal: ?*const fn (file1: ?*GFile, file2: ?*GFile) callconv(.c) gboolean = null,
@@ -16209,7 +16210,7 @@ pub extern fn g_file_attribute_info_list_dup(list: [*c]GFileAttributeInfoList) [
 pub extern fn g_file_attribute_info_list_lookup(list: [*c]GFileAttributeInfoList, name: [*c]const u8) [*c]const GFileAttributeInfo;
 pub extern fn g_file_attribute_info_list_add(list: [*c]GFileAttributeInfoList, name: [*c]const u8, @"type": GFileAttributeType, flags: GFileAttributeInfoFlags) void;
 pub const struct__GFileEnumeratorClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     next_file: ?*const fn (enumerator: [*c]GFileEnumerator, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) ?*GFileInfo = null,
     close_fn: ?*const fn (enumerator: [*c]GFileEnumerator, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
     next_files_async: ?*const fn (enumerator: [*c]GFileEnumerator, num_files: c_int, io_priority: c_int, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
@@ -16328,7 +16329,7 @@ pub extern fn g_file_attribute_matcher_enumerate_namespace(matcher: ?*GFileAttri
 pub extern fn g_file_attribute_matcher_enumerate_next(matcher: ?*GFileAttributeMatcher) [*c]const u8;
 pub extern fn g_file_attribute_matcher_to_string(matcher: ?*GFileAttributeMatcher) [*c]u8;
 pub const struct__GFileInputStreamClass = extern struct {
-    parent_class: GInputStreamClass = @import("std").mem.zeroes(GInputStreamClass),
+    parent_class: GInputStreamClass = std.mem.zeroes(GInputStreamClass),
     tell: ?*const fn (stream: [*c]GFileInputStream) callconv(.c) goffset = null,
     can_seek: ?*const fn (stream: [*c]GFileInputStream) callconv(.c) gboolean = null,
     seek: ?*const fn (stream: [*c]GFileInputStream, offset: goffset, @"type": GSeekType, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
@@ -16350,7 +16351,7 @@ pub extern fn g_io_error_quark() GQuark;
 pub extern fn g_io_error_from_errno(err_no: gint) GIOErrorEnum;
 pub extern fn g_io_error_from_file_error(file_error: GFileError) GIOErrorEnum;
 pub const struct__GIOStreamClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     get_input_stream: ?*const fn (stream: [*c]GIOStream) callconv(.c) [*c]GInputStream = null,
     get_output_stream: ?*const fn (stream: [*c]GIOStream) callconv(.c) [*c]GOutputStream = null,
     close_fn: ?*const fn (stream: [*c]GIOStream, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
@@ -16381,7 +16382,7 @@ pub extern fn g_io_stream_has_pending(stream: [*c]GIOStream) gboolean;
 pub extern fn g_io_stream_set_pending(stream: [*c]GIOStream, @"error": [*c][*c]GError) gboolean;
 pub extern fn g_io_stream_clear_pending(stream: [*c]GIOStream) void;
 pub const struct__GFileIOStreamClass = extern struct {
-    parent_class: GIOStreamClass = @import("std").mem.zeroes(GIOStreamClass),
+    parent_class: GIOStreamClass = std.mem.zeroes(GIOStreamClass),
     tell: ?*const fn (stream: [*c]GFileIOStream) callconv(.c) goffset = null,
     can_seek: ?*const fn (stream: [*c]GFileIOStream) callconv(.c) gboolean = null,
     seek: ?*const fn (stream: [*c]GFileIOStream, offset: goffset, @"type": GSeekType, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
@@ -16404,7 +16405,7 @@ pub extern fn g_file_io_stream_query_info_async(stream: [*c]GFileIOStream, attri
 pub extern fn g_file_io_stream_query_info_finish(stream: [*c]GFileIOStream, result: ?*GAsyncResult, @"error": [*c][*c]GError) ?*GFileInfo;
 pub extern fn g_file_io_stream_get_etag(stream: [*c]GFileIOStream) [*c]u8;
 pub const struct__GFileMonitorClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     changed: ?*const fn (monitor: [*c]GFileMonitor, file: ?*GFile, other_file: ?*GFile, event_type: GFileMonitorEvent) callconv(.c) void = null,
     cancel: ?*const fn (monitor: [*c]GFileMonitor) callconv(.c) gboolean = null,
     _g_reserved1: ?*const fn () callconv(.c) void = null,
@@ -16420,7 +16421,7 @@ pub extern fn g_file_monitor_is_cancelled(monitor: [*c]GFileMonitor) gboolean;
 pub extern fn g_file_monitor_set_rate_limit(monitor: [*c]GFileMonitor, limit_msecs: gint) void;
 pub extern fn g_file_monitor_emit_event(monitor: [*c]GFileMonitor, child: ?*GFile, other_file: ?*GFile, event_type: GFileMonitorEvent) void;
 pub const struct__GFilenameCompleterClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     got_completion_data: ?*const fn (filename_completer: ?*GFilenameCompleter) callconv(.c) void = null,
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
@@ -16433,7 +16434,7 @@ pub extern fn g_filename_completer_get_completion_suffix(completer: ?*GFilenameC
 pub extern fn g_filename_completer_get_completions(completer: ?*GFilenameCompleter, initial_text: [*c]const u8) [*c][*c]u8;
 pub extern fn g_filename_completer_set_dirs_only(completer: ?*GFilenameCompleter, dirs_only: gboolean) void;
 pub const struct__GFileOutputStreamClass = extern struct {
-    parent_class: GOutputStreamClass = @import("std").mem.zeroes(GOutputStreamClass),
+    parent_class: GOutputStreamClass = std.mem.zeroes(GOutputStreamClass),
     tell: ?*const fn (stream: [*c]GFileOutputStream) callconv(.c) goffset = null,
     can_seek: ?*const fn (stream: [*c]GFileOutputStream) callconv(.c) gboolean = null,
     seek: ?*const fn (stream: [*c]GFileOutputStream, offset: goffset, @"type": GSeekType, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
@@ -16456,7 +16457,7 @@ pub extern fn g_file_output_stream_query_info_async(stream: [*c]GFileOutputStrea
 pub extern fn g_file_output_stream_query_info_finish(stream: [*c]GFileOutputStream, result: ?*GAsyncResult, @"error": [*c][*c]GError) ?*GFileInfo;
 pub extern fn g_file_output_stream_get_etag(stream: [*c]GFileOutputStream) [*c]u8;
 pub const struct__GInetAddressClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     to_string: ?*const fn (address: [*c]GInetAddress) callconv(.c) [*c]gchar = null,
     to_bytes: ?*const fn (address: [*c]GInetAddress) callconv(.c) [*c]const guint8 = null,
 };
@@ -16485,7 +16486,7 @@ pub extern fn g_inet_address_get_is_mc_site_local(address: [*c]GInetAddress) gbo
 pub extern fn g_inet_address_get_scope_id(address: [*c]GInetAddress) guint32;
 pub extern fn g_inet_address_get_flowinfo(address: [*c]GInetAddress) guint32;
 pub const struct__GInetAddressMaskClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
 };
 pub const GInetAddressMaskClass = struct__GInetAddressMaskClass;
 pub extern fn g_inet_address_mask_get_type() GType;
@@ -16498,7 +16499,7 @@ pub extern fn g_inet_address_mask_get_length(mask: [*c]GInetAddressMask) guint;
 pub extern fn g_inet_address_mask_matches(mask: [*c]GInetAddressMask, address: [*c]GInetAddress) gboolean;
 pub extern fn g_inet_address_mask_equal(mask: [*c]GInetAddressMask, mask2: [*c]GInetAddressMask) gboolean;
 pub const struct__GSocketAddressClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     get_family: ?*const fn (address: [*c]GSocketAddress) callconv(.c) GSocketFamily = null,
     get_native_size: ?*const fn (address: [*c]GSocketAddress) callconv(.c) gssize = null,
     to_native: ?*const fn (address: [*c]GSocketAddress, dest: gpointer, destlen: gsize, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
@@ -16510,7 +16511,7 @@ pub extern fn g_socket_address_new_from_native(native: gpointer, len: gsize) [*c
 pub extern fn g_socket_address_to_native(address: [*c]GSocketAddress, dest: gpointer, destlen: gsize, @"error": [*c][*c]GError) gboolean;
 pub extern fn g_socket_address_get_native_size(address: [*c]GSocketAddress) gssize;
 pub const struct__GInetSocketAddressClass = extern struct {
-    parent_class: GSocketAddressClass = @import("std").mem.zeroes(GSocketAddressClass),
+    parent_class: GSocketAddressClass = std.mem.zeroes(GSocketAddressClass),
 };
 pub const GInetSocketAddressClass = struct__GInetSocketAddressClass;
 pub extern fn g_inet_socket_address_get_type() GType;
@@ -16668,7 +16669,7 @@ pub extern fn g_io_scheduler_cancel_all_jobs() void;
 pub extern fn g_io_scheduler_job_send_to_mainloop(job: ?*GIOSchedulerJob, func: GSourceFunc, user_data: gpointer, notify: GDestroyNotify) gboolean;
 pub extern fn g_io_scheduler_job_send_to_mainloop_async(job: ?*GIOSchedulerJob, func: GSourceFunc, user_data: gpointer, notify: GDestroyNotify) void;
 pub const struct__GSocketControlMessageClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     get_size: ?*const fn (message: [*c]GSocketControlMessage) callconv(.c) gsize = null,
     get_level: ?*const fn (message: [*c]GSocketControlMessage) callconv(.c) c_int = null,
     get_type: ?*const fn (message: [*c]GSocketControlMessage) callconv(.c) c_int = null,
@@ -16735,7 +16736,7 @@ pub const struct__GIPTosMessage = opaque {
 };
 pub const GIPTosMessage = struct__GIPTosMessage;
 pub const GIPTosMessageClass = extern struct {
-    parent_class: GSocketControlMessageClass = @import("std").mem.zeroes(GSocketControlMessageClass),
+    parent_class: GSocketControlMessageClass = std.mem.zeroes(GSocketControlMessageClass),
     pub const glib_autoptr_clear_GIPTosMessageClass = __root.glib_autoptr_clear_GIPTosMessageClass;
 };
 pub const GIPTosMessage_autoptr = ?*GIPTosMessage;
@@ -16852,7 +16853,7 @@ pub const struct__GIPv6TclassMessage = opaque {
 };
 pub const GIPv6TclassMessage = struct__GIPv6TclassMessage;
 pub const GIPv6TclassMessageClass = extern struct {
-    parent_class: GSocketControlMessageClass = @import("std").mem.zeroes(GSocketControlMessageClass),
+    parent_class: GSocketControlMessageClass = std.mem.zeroes(GSocketControlMessageClass),
     pub const glib_autoptr_clear_GIPv6TclassMessageClass = __root.glib_autoptr_clear_GIPv6TclassMessageClass;
 };
 pub const GIPv6TclassMessage_autoptr = ?*GIPv6TclassMessage;
@@ -16975,7 +16976,7 @@ pub const struct__GListModel = opaque {
 };
 pub const GListModel = struct__GListModel;
 pub const struct__GListModelInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     get_item_type: ?*const fn (list: ?*GListModel) callconv(.c) GType = null,
     get_n_items: ?*const fn (list: ?*GListModel) callconv(.c) guint = null,
     get_item: ?*const fn (list: ?*GListModel, position: guint) callconv(.c) gpointer = null,
@@ -17080,7 +17081,7 @@ pub const struct__GListStore = opaque {
 };
 pub const GListStore = struct__GListStore;
 pub const GListStoreClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     pub const glib_autoptr_clear_GListStoreClass = __root.glib_autoptr_clear_GListStoreClass;
 };
 pub const GListStore_autoptr = ?*GListStore;
@@ -17196,7 +17197,7 @@ pub extern fn g_list_store_find(store: ?*GListStore, item: gpointer, position: [
 pub extern fn g_list_store_find_with_equal_func(store: ?*GListStore, item: gpointer, equal_func: GEqualFunc, position: [*c]guint) gboolean;
 pub extern fn g_list_store_find_with_equal_func_full(store: ?*GListStore, item: gpointer, equal_func: GEqualFuncFull, user_data: gpointer, position: [*c]guint) gboolean;
 pub const struct__GLoadableIconIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     load: ?*const fn (icon: ?*GLoadableIcon, size: c_int, @"type": [*c][*c]u8, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) [*c]GInputStream = null,
     load_async: ?*const fn (icon: ?*GLoadableIcon, size: c_int, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     load_finish: ?*const fn (icon: ?*GLoadableIcon, res: ?*GAsyncResult, @"type": [*c][*c]u8, @"error": [*c][*c]GError) callconv(.c) [*c]GInputStream = null,
@@ -17207,7 +17208,7 @@ pub extern fn g_loadable_icon_load(icon: ?*GLoadableIcon, size: c_int, @"type": 
 pub extern fn g_loadable_icon_load_async(icon: ?*GLoadableIcon, size: c_int, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) void;
 pub extern fn g_loadable_icon_load_finish(icon: ?*GLoadableIcon, res: ?*GAsyncResult, @"type": [*c][*c]u8, @"error": [*c][*c]GError) [*c]GInputStream;
 pub const struct__GMemoryInputStreamClass = extern struct {
-    parent_class: GInputStreamClass = @import("std").mem.zeroes(GInputStreamClass),
+    parent_class: GInputStreamClass = std.mem.zeroes(GInputStreamClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -17227,7 +17228,7 @@ pub const struct__GMemoryMonitor = opaque {
 };
 pub const GMemoryMonitor = struct__GMemoryMonitor;
 pub const struct__GMemoryMonitorInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     low_memory_warning: ?*const fn (monitor: ?*GMemoryMonitor, level: GMemoryMonitorWarningLevel) callconv(.c) void = null,
 };
 pub const GMemoryMonitorInterface = struct__GMemoryMonitorInterface;
@@ -17301,7 +17302,7 @@ pub fn g_memory_monitor_GET_IFACE(arg_ptr: gpointer) callconv(.c) [*c]GMemoryMon
 }
 pub extern fn g_memory_monitor_dup_default() ?*GMemoryMonitor;
 pub const struct__GMemoryOutputStreamClass = extern struct {
-    parent_class: GOutputStreamClass = @import("std").mem.zeroes(GOutputStreamClass),
+    parent_class: GOutputStreamClass = std.mem.zeroes(GOutputStreamClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -17321,7 +17322,7 @@ pub extern fn g_memory_output_stream_steal_as_bytes(ostream: [*c]GMemoryOutputSt
 pub const struct__GMenuAttributeIterPrivate = opaque {};
 pub const GMenuAttributeIterPrivate = struct__GMenuAttributeIterPrivate;
 pub const struct__GMenuAttributeIter = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GMenuAttributeIterPrivate = null,
     pub const g_menu_attribute_iter_get_next = __root.g_menu_attribute_iter_get_next;
     pub const g_menu_attribute_iter_next = __root.g_menu_attribute_iter_next;
@@ -17336,7 +17337,7 @@ pub const GMenuAttributeIter = struct__GMenuAttributeIter;
 pub const struct__GMenuLinkIterPrivate = opaque {};
 pub const GMenuLinkIterPrivate = struct__GMenuLinkIterPrivate;
 pub const struct__GMenuLinkIter = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GMenuLinkIterPrivate = null,
     pub const g_menu_link_iter_get_next = __root.g_menu_link_iter_get_next;
     pub const g_menu_link_iter_next = __root.g_menu_link_iter_next;
@@ -17349,7 +17350,7 @@ pub const struct__GMenuLinkIter = extern struct {
 };
 pub const GMenuLinkIter = struct__GMenuLinkIter;
 pub const struct__GMenuModelClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     is_mutable: ?*const fn (model: [*c]GMenuModel) callconv(.c) gboolean = null,
     get_n_items: ?*const fn (model: [*c]GMenuModel) callconv(.c) gint = null,
     get_item_attributes: ?*const fn (model: [*c]GMenuModel, item_index: gint, attributes: [*c]?*GHashTable) callconv(.c) void = null,
@@ -17361,12 +17362,12 @@ pub const struct__GMenuModelClass = extern struct {
 };
 pub const GMenuModelClass = struct__GMenuModelClass;
 pub const struct__GMenuAttributeIterClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     get_next: ?*const fn (iter: [*c]GMenuAttributeIter, out_name: [*c][*c]const gchar, value: [*c]?*GVariant) callconv(.c) gboolean = null,
 };
 pub const GMenuAttributeIterClass = struct__GMenuAttributeIterClass;
 pub const struct__GMenuLinkIterClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     get_next: ?*const fn (iter: [*c]GMenuLinkIter, out_link: [*c][*c]const gchar, value: [*c][*c]GMenuModel) callconv(.c) gboolean = null,
 };
 pub const GMenuLinkIterClass = struct__GMenuLinkIterClass;
@@ -17480,7 +17481,7 @@ pub extern fn g_menu_item_set_icon(menu_item: ?*GMenuItem, icon: ?*GIcon) void;
 pub extern fn g_dbus_connection_export_menu_model(connection: ?*GDBusConnection, object_path: [*c]const gchar, menu: [*c]GMenuModel, @"error": [*c][*c]GError) guint;
 pub extern fn g_dbus_connection_unexport_menu_model(connection: ?*GDBusConnection, export_id: guint) void;
 pub const struct__GMountIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     changed: ?*const fn (mount: ?*GMount) callconv(.c) void = null,
     unmounted: ?*const fn (mount: ?*GMount) callconv(.c) void = null,
     get_root: ?*const fn (mount: ?*GMount) callconv(.c) ?*GFile = null,
@@ -17539,7 +17540,7 @@ pub extern fn g_mount_eject_with_operation(mount: ?*GMount, flags: GMountUnmount
 pub extern fn g_mount_eject_with_operation_finish(mount: ?*GMount, result: ?*GAsyncResult, @"error": [*c][*c]GError) gboolean;
 pub extern fn g_mount_get_sort_key(mount: ?*GMount) [*c]const gchar;
 pub const struct__GMountOperationClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     ask_password: ?*const fn (op: [*c]GMountOperation, message: [*c]const u8, default_user: [*c]const u8, default_domain: [*c]const u8, flags: GAskPasswordFlags) callconv(.c) void = null,
     ask_question: ?*const fn (op: [*c]GMountOperation, message: [*c]const u8, choices: [*c][*c]const u8) callconv(.c) void = null,
     reply: ?*const fn (op: [*c]GMountOperation, result: GMountOperationResult) callconv(.c) void = null,
@@ -17579,13 +17580,13 @@ pub extern fn g_mount_operation_set_is_tcrypt_system_volume(op: [*c]GMountOperat
 pub extern fn g_mount_operation_get_pim(op: [*c]GMountOperation) guint;
 pub extern fn g_mount_operation_set_pim(op: [*c]GMountOperation, pim: guint) void;
 pub const struct__GNativeSocketAddressClass = extern struct {
-    parent_class: GSocketAddressClass = @import("std").mem.zeroes(GSocketAddressClass),
+    parent_class: GSocketAddressClass = std.mem.zeroes(GSocketAddressClass),
 };
 pub const GNativeSocketAddressClass = struct__GNativeSocketAddressClass;
 pub extern fn g_native_socket_address_get_type() GType;
 pub extern fn g_native_socket_address_new(native: gpointer, len: gsize) [*c]GSocketAddress;
 pub const struct__GVolumeMonitorClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     volume_added: ?*const fn (volume_monitor: [*c]GVolumeMonitor, volume: ?*GVolume) callconv(.c) void = null,
     volume_removed: ?*const fn (volume_monitor: [*c]GVolumeMonitor, volume: ?*GVolume) callconv(.c) void = null,
     volume_changed: ?*const fn (volume_monitor: [*c]GVolumeMonitor, volume: ?*GVolume) callconv(.c) void = null,
@@ -17622,18 +17623,18 @@ pub extern fn g_volume_monitor_get_volume_for_uuid(volume_monitor: [*c]GVolumeMo
 pub extern fn g_volume_monitor_get_mount_for_uuid(volume_monitor: [*c]GVolumeMonitor, uuid: [*c]const u8) ?*GMount;
 pub extern fn g_volume_monitor_adopt_orphan_mount(mount: ?*GMount) ?*GVolume;
 pub const struct__GNativeVolumeMonitor = extern struct {
-    parent_instance: GVolumeMonitor = @import("std").mem.zeroes(GVolumeMonitor),
+    parent_instance: GVolumeMonitor = std.mem.zeroes(GVolumeMonitor),
     pub const glib_autoptr_clear_GNativeVolumeMonitor = __root.glib_autoptr_clear_GNativeVolumeMonitor;
 };
 pub const GNativeVolumeMonitor = struct__GNativeVolumeMonitor;
 pub const struct__GNativeVolumeMonitorClass = extern struct {
-    parent_class: GVolumeMonitorClass = @import("std").mem.zeroes(GVolumeMonitorClass),
+    parent_class: GVolumeMonitorClass = std.mem.zeroes(GVolumeMonitorClass),
     get_mount_for_mount_path: ?*const fn (mount_path: [*c]const u8, cancellable: [*c]GCancellable) callconv(.c) ?*GMount = null,
 };
 pub const GNativeVolumeMonitorClass = struct__GNativeVolumeMonitorClass;
 pub extern fn g_native_volume_monitor_get_type() GType;
 pub const struct__GNetworkAddressClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
 };
 pub const GNetworkAddressClass = struct__GNetworkAddressClass;
 pub extern fn g_network_address_get_type() GType;
@@ -17645,7 +17646,7 @@ pub extern fn g_network_address_get_hostname(addr: [*c]GNetworkAddress) [*c]cons
 pub extern fn g_network_address_get_port(addr: [*c]GNetworkAddress) guint16;
 pub extern fn g_network_address_get_scheme(addr: [*c]GNetworkAddress) [*c]const gchar;
 pub const struct__GNetworkMonitorInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     network_changed: ?*const fn (monitor: ?*GNetworkMonitor, network_available: gboolean) callconv(.c) void = null,
     can_reach: ?*const fn (monitor: ?*GNetworkMonitor, connectable: ?*GSocketConnectable, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
     can_reach_async: ?*const fn (monitor: ?*GNetworkMonitor, connectable: ?*GSocketConnectable, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
@@ -17661,7 +17662,7 @@ pub extern fn g_network_monitor_can_reach(monitor: ?*GNetworkMonitor, connectabl
 pub extern fn g_network_monitor_can_reach_async(monitor: ?*GNetworkMonitor, connectable: ?*GSocketConnectable, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) void;
 pub extern fn g_network_monitor_can_reach_finish(monitor: ?*GNetworkMonitor, result: ?*GAsyncResult, @"error": [*c][*c]GError) gboolean;
 pub const struct__GNetworkServiceClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
 };
 pub const GNetworkServiceClass = struct__GNetworkServiceClass;
 pub extern fn g_network_service_get_type() GType;
@@ -17686,14 +17687,14 @@ pub extern fn g_notification_set_default_action(notification: ?*GNotification, d
 pub extern fn g_notification_set_default_action_and_target(notification: ?*GNotification, action: [*c]const gchar, target_format: [*c]const gchar, ...) void;
 pub extern fn g_notification_set_default_action_and_target_value(notification: ?*GNotification, action: [*c]const gchar, target: ?*GVariant) void;
 pub const struct__GPermissionClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     acquire: ?*const fn (permission: [*c]GPermission, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
     acquire_async: ?*const fn (permission: [*c]GPermission, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     acquire_finish: ?*const fn (permission: [*c]GPermission, result: ?*GAsyncResult, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
     release: ?*const fn (permission: [*c]GPermission, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
     release_async: ?*const fn (permission: [*c]GPermission, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     release_finish: ?*const fn (permission: [*c]GPermission, result: ?*GAsyncResult, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
-    reserved: [16]gpointer = @import("std").mem.zeroes([16]gpointer),
+    reserved: [16]gpointer = std.mem.zeroes([16]gpointer),
 };
 pub const GPermissionClass = struct__GPermissionClass;
 pub extern fn g_permission_get_type() GType;
@@ -17708,7 +17709,7 @@ pub extern fn g_permission_get_can_acquire(permission: [*c]GPermission) gboolean
 pub extern fn g_permission_get_can_release(permission: [*c]GPermission) gboolean;
 pub extern fn g_permission_impl_update(permission: [*c]GPermission, allowed: gboolean, can_acquire: gboolean, can_release: gboolean) void;
 pub const struct__GPollableInputStreamInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     can_poll: ?*const fn (stream: ?*GPollableInputStream) callconv(.c) gboolean = null,
     is_readable: ?*const fn (stream: ?*GPollableInputStream) callconv(.c) gboolean = null,
     create_source: ?*const fn (stream: ?*GPollableInputStream, cancellable: [*c]GCancellable) callconv(.c) [*c]GSource = null,
@@ -17721,7 +17722,7 @@ pub extern fn g_pollable_input_stream_is_readable(stream: ?*GPollableInputStream
 pub extern fn g_pollable_input_stream_create_source(stream: ?*GPollableInputStream, cancellable: [*c]GCancellable) [*c]GSource;
 pub extern fn g_pollable_input_stream_read_nonblocking(stream: ?*GPollableInputStream, buffer: ?*anyopaque, count: gsize, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) gssize;
 pub const struct__GPollableOutputStreamInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     can_poll: ?*const fn (stream: ?*GPollableOutputStream) callconv(.c) gboolean = null,
     is_writable: ?*const fn (stream: ?*GPollableOutputStream) callconv(.c) gboolean = null,
     create_source: ?*const fn (stream: ?*GPollableOutputStream, cancellable: [*c]GCancellable) callconv(.c) [*c]GSource = null,
@@ -17748,7 +17749,7 @@ pub const struct__GPowerProfileMonitor = opaque {
 };
 pub const GPowerProfileMonitor = struct__GPowerProfileMonitor;
 pub const struct__GPowerProfileMonitorInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
 };
 pub const GPowerProfileMonitorInterface = struct__GPowerProfileMonitorInterface;
 pub const GPowerProfileMonitor_autoptr = ?*GPowerProfileMonitor;
@@ -17824,7 +17825,7 @@ pub extern fn g_power_profile_monitor_get_power_saver_enabled(monitor: ?*GPowerP
 pub extern fn g_property_action_get_type() GType;
 pub extern fn g_property_action_new(name: [*c]const gchar, object: gpointer, property_name: [*c]const gchar) ?*GPropertyAction;
 pub const struct__GProxyInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     connect: ?*const fn (proxy: ?*GProxy, connection: [*c]GIOStream, proxy_address: [*c]GProxyAddress, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) [*c]GIOStream = null,
     connect_async: ?*const fn (proxy: ?*GProxy, connection: [*c]GIOStream, proxy_address: [*c]GProxyAddress, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     connect_finish: ?*const fn (proxy: ?*GProxy, result: ?*GAsyncResult, @"error": [*c][*c]GError) callconv(.c) [*c]GIOStream = null,
@@ -17838,7 +17839,7 @@ pub extern fn g_proxy_connect_async(proxy: ?*GProxy, connection: [*c]GIOStream, 
 pub extern fn g_proxy_connect_finish(proxy: ?*GProxy, result: ?*GAsyncResult, @"error": [*c][*c]GError) [*c]GIOStream;
 pub extern fn g_proxy_supports_hostname(proxy: ?*GProxy) gboolean;
 pub const struct__GProxyAddressClass = extern struct {
-    parent_class: GInetSocketAddressClass = @import("std").mem.zeroes(GInetSocketAddressClass),
+    parent_class: GInetSocketAddressClass = std.mem.zeroes(GInetSocketAddressClass),
 };
 pub const GProxyAddressClass = struct__GProxyAddressClass;
 pub extern fn g_proxy_address_get_type() GType;
@@ -17851,7 +17852,7 @@ pub extern fn g_proxy_address_get_username(proxy: [*c]GProxyAddress) [*c]const g
 pub extern fn g_proxy_address_get_password(proxy: [*c]GProxyAddress) [*c]const gchar;
 pub extern fn g_proxy_address_get_uri(proxy: [*c]GProxyAddress) [*c]const gchar;
 pub const struct__GSocketAddressEnumeratorClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     next: ?*const fn (enumerator: [*c]GSocketAddressEnumerator, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) [*c]GSocketAddress = null,
     next_async: ?*const fn (enumerator: [*c]GSocketAddressEnumerator, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     next_finish: ?*const fn (enumerator: [*c]GSocketAddressEnumerator, result: ?*GAsyncResult, @"error": [*c][*c]GError) callconv(.c) [*c]GSocketAddress = null,
@@ -17862,7 +17863,7 @@ pub extern fn g_socket_address_enumerator_next(enumerator: [*c]GSocketAddressEnu
 pub extern fn g_socket_address_enumerator_next_async(enumerator: [*c]GSocketAddressEnumerator, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) void;
 pub extern fn g_socket_address_enumerator_next_finish(enumerator: [*c]GSocketAddressEnumerator, result: ?*GAsyncResult, @"error": [*c][*c]GError) [*c]GSocketAddress;
 pub const struct__GProxyAddressEnumeratorClass = extern struct {
-    parent_class: GSocketAddressEnumeratorClass = @import("std").mem.zeroes(GSocketAddressEnumeratorClass),
+    parent_class: GSocketAddressEnumeratorClass = std.mem.zeroes(GSocketAddressEnumeratorClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -17874,7 +17875,7 @@ pub const struct__GProxyAddressEnumeratorClass = extern struct {
 pub const GProxyAddressEnumeratorClass = struct__GProxyAddressEnumeratorClass;
 pub extern fn g_proxy_address_enumerator_get_type() GType;
 pub const struct__GProxyResolverInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     is_supported: ?*const fn (resolver: ?*GProxyResolver) callconv(.c) gboolean = null,
     lookup: ?*const fn (resolver: ?*GProxyResolver, uri: [*c]const gchar, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) [*c][*c]gchar = null,
     lookup_async: ?*const fn (resolver: ?*GProxyResolver, uri: [*c]const gchar, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
@@ -17888,7 +17889,7 @@ pub extern fn g_proxy_resolver_lookup(resolver: ?*GProxyResolver, uri: [*c]const
 pub extern fn g_proxy_resolver_lookup_async(resolver: ?*GProxyResolver, uri: [*c]const gchar, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) void;
 pub extern fn g_proxy_resolver_lookup_finish(resolver: ?*GProxyResolver, result: ?*GAsyncResult, @"error": [*c][*c]GError) [*c][*c]gchar;
 pub const struct__GRemoteActionGroupInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     activate_action_full: ?*const fn (remote: ?*GRemoteActionGroup, action_name: [*c]const gchar, parameter: ?*GVariant, platform_data: ?*GVariant) callconv(.c) void = null,
     change_action_state_full: ?*const fn (remote: ?*GRemoteActionGroup, action_name: [*c]const gchar, value: ?*GVariant, platform_data: ?*GVariant) callconv(.c) void = null,
 };
@@ -17897,7 +17898,7 @@ pub extern fn g_remote_action_group_get_type() GType;
 pub extern fn g_remote_action_group_activate_action_full(remote: ?*GRemoteActionGroup, action_name: [*c]const gchar, parameter: ?*GVariant, platform_data: ?*GVariant) void;
 pub extern fn g_remote_action_group_change_action_state_full(remote: ?*GRemoteActionGroup, action_name: [*c]const gchar, value: ?*GVariant, platform_data: ?*GVariant) void;
 pub const struct__GResolverClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     reload: ?*const fn (resolver: [*c]GResolver) callconv(.c) void = null,
     lookup_by_name: ?*const fn (resolver: [*c]GResolver, hostname: [*c]const gchar, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) [*c]GList = null,
     lookup_by_name_async: ?*const fn (resolver: [*c]GResolver, hostname: [*c]const gchar, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
@@ -17978,7 +17979,7 @@ pub extern fn g_static_resource_init(static_resource: [*c]GStaticResource) void;
 pub extern fn g_static_resource_fini(static_resource: [*c]GStaticResource) void;
 pub extern fn g_static_resource_get_resource(static_resource: [*c]GStaticResource) ?*GResource;
 pub const struct__GSeekableIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     tell: ?*const fn (seekable: ?*GSeekable) callconv(.c) goffset = null,
     can_seek: ?*const fn (seekable: ?*GSeekable) callconv(.c) gboolean = null,
     seek: ?*const fn (seekable: ?*GSeekable, offset: goffset, @"type": GSeekType, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
@@ -18074,12 +18075,12 @@ pub extern fn g_settings_schema_key_get_name(key: ?*GSettingsSchemaKey) [*c]cons
 pub extern fn g_settings_schema_key_get_summary(key: ?*GSettingsSchemaKey) [*c]const gchar;
 pub extern fn g_settings_schema_key_get_description(key: ?*GSettingsSchemaKey) [*c]const gchar;
 pub const struct__GSettingsClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     writable_changed: ?*const fn (settings: [*c]GSettings, key: [*c]const gchar) callconv(.c) void = null,
     changed: ?*const fn (settings: [*c]GSettings, key: [*c]const gchar) callconv(.c) void = null,
     writable_change_event: ?*const fn (settings: [*c]GSettings, key: GQuark) callconv(.c) gboolean = null,
     change_event: ?*const fn (settings: [*c]GSettings, keys: [*c]const GQuark, n_keys: gint) callconv(.c) gboolean = null,
-    padding: [20]gpointer = @import("std").mem.zeroes([20]gpointer),
+    padding: [20]gpointer = std.mem.zeroes([20]gpointer),
 };
 pub const GSettingsClass = struct__GSettingsClass;
 pub extern fn g_settings_get_type() GType;
@@ -18152,8 +18153,8 @@ pub extern fn g_simple_action_set_enabled(simple: ?*GSimpleAction, enabled: gboo
 pub extern fn g_simple_action_set_state(simple: ?*GSimpleAction, value: ?*GVariant) void;
 pub extern fn g_simple_action_set_state_hint(simple: ?*GSimpleAction, state_hint: ?*GVariant) void;
 pub const struct__GSimpleActionGroupClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
-    padding: [12]gpointer = @import("std").mem.zeroes([12]gpointer),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
+    padding: [12]gpointer = std.mem.zeroes([12]gpointer),
 };
 pub const GSimpleActionGroupClass = struct__GSimpleActionGroupClass;
 pub extern fn g_simple_action_group_get_type() GType;
@@ -18197,7 +18198,7 @@ pub extern fn g_simple_permission_new(allowed: gboolean) [*c]GPermission;
 pub const struct__GSimpleProxyResolverPrivate = opaque {};
 pub const GSimpleProxyResolverPrivate = struct__GSimpleProxyResolverPrivate;
 pub const struct__GSimpleProxyResolver = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     priv: ?*GSimpleProxyResolverPrivate = null,
     pub const g_simple_proxy_resolver_set_default_proxy = __root.g_simple_proxy_resolver_set_default_proxy;
     pub const g_simple_proxy_resolver_set_ignore_hosts = __root.g_simple_proxy_resolver_set_ignore_hosts;
@@ -18208,7 +18209,7 @@ pub const struct__GSimpleProxyResolver = extern struct {
 };
 pub const GSimpleProxyResolver = struct__GSimpleProxyResolver;
 pub const struct__GSimpleProxyResolverClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -18222,7 +18223,7 @@ pub extern fn g_simple_proxy_resolver_set_default_proxy(resolver: [*c]GSimplePro
 pub extern fn g_simple_proxy_resolver_set_ignore_hosts(resolver: [*c]GSimpleProxyResolver, ignore_hosts: [*c][*c]gchar) void;
 pub extern fn g_simple_proxy_resolver_set_uri_proxy(resolver: [*c]GSimpleProxyResolver, uri_scheme: [*c]const gchar, proxy: [*c]const gchar) void;
 pub const struct__GSocketClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -18296,7 +18297,7 @@ pub extern fn g_socket_send_message_with_timeout(socket: [*c]GSocket, address: [
 pub extern fn g_socket_get_option(socket: [*c]GSocket, level: gint, optname: gint, value: [*c]gint, @"error": [*c][*c]GError) gboolean;
 pub extern fn g_socket_set_option(socket: [*c]GSocket, level: gint, optname: gint, value: gint, @"error": [*c][*c]GError) gboolean;
 pub const struct__GSocketClientClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     event: ?*const fn (client: [*c]GSocketClient, event: GSocketClientEvent, connectable: ?*GSocketConnectable, connection: [*c]GIOStream) callconv(.c) void = null,
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
@@ -18338,7 +18339,7 @@ pub extern fn g_socket_client_connect_to_uri_async(client: [*c]GSocketClient, ur
 pub extern fn g_socket_client_connect_to_uri_finish(client: [*c]GSocketClient, result: ?*GAsyncResult, @"error": [*c][*c]GError) [*c]GSocketConnection;
 pub extern fn g_socket_client_add_application_proxy(client: [*c]GSocketClient, protocol: [*c]const gchar) void;
 pub const struct__GSocketConnectableIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     enumerate: ?*const fn (connectable: ?*GSocketConnectable) callconv(.c) [*c]GSocketAddressEnumerator = null,
     proxy_enumerate: ?*const fn (connectable: ?*GSocketConnectable) callconv(.c) [*c]GSocketAddressEnumerator = null,
     to_string: ?*const fn (connectable: ?*GSocketConnectable) callconv(.c) [*c]gchar = null,
@@ -18349,7 +18350,7 @@ pub extern fn g_socket_connectable_enumerate(connectable: ?*GSocketConnectable) 
 pub extern fn g_socket_connectable_proxy_enumerate(connectable: ?*GSocketConnectable) [*c]GSocketAddressEnumerator;
 pub extern fn g_socket_connectable_to_string(connectable: ?*GSocketConnectable) [*c]gchar;
 pub const struct__GSocketConnectionClass = extern struct {
-    parent_class: GIOStreamClass = @import("std").mem.zeroes(GIOStreamClass),
+    parent_class: GIOStreamClass = std.mem.zeroes(GIOStreamClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -18370,7 +18371,7 @@ pub extern fn g_socket_connection_factory_register_type(g_type: GType, family: G
 pub extern fn g_socket_connection_factory_lookup_type(family: GSocketFamily, @"type": GSocketType, protocol_id: gint) GType;
 pub extern fn g_socket_connection_factory_create_connection(socket: [*c]GSocket) [*c]GSocketConnection;
 pub const struct__GSocketListenerClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     changed: ?*const fn (listener: [*c]GSocketListener) callconv(.c) void = null,
     event: ?*const fn (listener: [*c]GSocketListener, event: GSocketListenerEvent, socket: [*c]GSocket) callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
@@ -18395,7 +18396,7 @@ pub extern fn g_socket_listener_accept_async(listener: [*c]GSocketListener, canc
 pub extern fn g_socket_listener_accept_finish(listener: [*c]GSocketListener, result: ?*GAsyncResult, source_object: [*c][*c]GObject, @"error": [*c][*c]GError) [*c]GSocketConnection;
 pub extern fn g_socket_listener_close(listener: [*c]GSocketListener) void;
 pub const struct__GSocketServiceClass = extern struct {
-    parent_class: GSocketListenerClass = @import("std").mem.zeroes(GSocketListenerClass),
+    parent_class: GSocketListenerClass = std.mem.zeroes(GSocketListenerClass),
     incoming: ?*const fn (service: [*c]GSocketService, connection: [*c]GSocketConnection, source_object: [*c]GObject) callconv(.c) gboolean = null,
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
@@ -18509,14 +18510,14 @@ pub extern fn g_task_had_error(task: ?*GTask) gboolean;
 pub extern fn g_task_get_completed(task: ?*GTask) gboolean;
 pub extern fn g_task_print_alive_tasks() void;
 pub const struct__GTcpConnectionClass = extern struct {
-    parent_class: GSocketConnectionClass = @import("std").mem.zeroes(GSocketConnectionClass),
+    parent_class: GSocketConnectionClass = std.mem.zeroes(GSocketConnectionClass),
 };
 pub const GTcpConnectionClass = struct__GTcpConnectionClass;
 pub extern fn g_tcp_connection_get_type() GType;
 pub extern fn g_tcp_connection_set_graceful_disconnect(connection: [*c]GTcpConnection, graceful_disconnect: gboolean) void;
 pub extern fn g_tcp_connection_get_graceful_disconnect(connection: [*c]GTcpConnection) gboolean;
 pub const struct__GTcpWrapperConnectionClass = extern struct {
-    parent_class: GTcpConnectionClass = @import("std").mem.zeroes(GTcpConnectionClass),
+    parent_class: GTcpConnectionClass = std.mem.zeroes(GTcpConnectionClass),
 };
 pub const GTcpWrapperConnectionClass = struct__GTcpWrapperConnectionClass;
 pub extern fn g_tcp_wrapper_connection_get_type() GType;
@@ -18541,7 +18542,7 @@ pub extern fn g_themed_icon_prepend_name(icon: ?*GThemedIcon, iconname: [*c]cons
 pub extern fn g_themed_icon_append_name(icon: ?*GThemedIcon, iconname: [*c]const u8) void;
 pub extern fn g_themed_icon_get_names(icon: ?*GThemedIcon) [*c]const [*c]const gchar;
 pub const struct__GThreadedSocketServiceClass = extern struct {
-    parent_class: GSocketServiceClass = @import("std").mem.zeroes(GSocketServiceClass),
+    parent_class: GSocketServiceClass = std.mem.zeroes(GSocketServiceClass),
     run: ?*const fn (service: [*c]GThreadedSocketService, connection: [*c]GSocketConnection, source_object: [*c]GObject) callconv(.c) gboolean = null,
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
@@ -18571,7 +18572,7 @@ pub const struct__GTlsBackend = opaque {
 };
 pub const GTlsBackend = struct__GTlsBackend;
 pub const struct__GTlsBackendInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     supports_tls: ?*const fn (backend: ?*GTlsBackend) callconv(.c) gboolean = null,
     get_certificate_type: ?*const fn () callconv(.c) GType = null,
     get_client_connection_type: ?*const fn () callconv(.c) GType = null,
@@ -18596,9 +18597,9 @@ pub extern fn g_tls_backend_get_file_database_type(backend: ?*GTlsBackend) GType
 pub extern fn g_tls_backend_get_dtls_client_connection_type(backend: ?*GTlsBackend) GType;
 pub extern fn g_tls_backend_get_dtls_server_connection_type(backend: ?*GTlsBackend) GType;
 pub const struct__GTlsCertificateClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     verify: ?*const fn (cert: [*c]GTlsCertificate, identity: ?*GSocketConnectable, trusted_ca: [*c]GTlsCertificate) callconv(.c) GTlsCertificateFlags = null,
-    padding: [8]gpointer = @import("std").mem.zeroes([8]gpointer),
+    padding: [8]gpointer = std.mem.zeroes([8]gpointer),
 };
 pub const GTlsCertificateClass = struct__GTlsCertificateClass;
 pub extern fn g_tls_certificate_get_type() GType;
@@ -18619,14 +18620,14 @@ pub extern fn g_tls_certificate_get_issuer_name(cert: [*c]GTlsCertificate) [*c]g
 pub extern fn g_tls_certificate_get_dns_names(cert: [*c]GTlsCertificate) [*c]GPtrArray;
 pub extern fn g_tls_certificate_get_ip_addresses(cert: [*c]GTlsCertificate) [*c]GPtrArray;
 pub const struct__GTlsConnectionClass = extern struct {
-    parent_class: GIOStreamClass = @import("std").mem.zeroes(GIOStreamClass),
+    parent_class: GIOStreamClass = std.mem.zeroes(GIOStreamClass),
     accept_certificate: ?*const fn (connection: [*c]GTlsConnection, peer_cert: [*c]GTlsCertificate, errors: GTlsCertificateFlags) callconv(.c) gboolean = null,
     handshake: ?*const fn (conn: [*c]GTlsConnection, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
     handshake_async: ?*const fn (conn: [*c]GTlsConnection, io_priority: c_int, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     handshake_finish: ?*const fn (conn: [*c]GTlsConnection, result: ?*GAsyncResult, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
     get_binding_data: ?*const fn (conn: [*c]GTlsConnection, @"type": GTlsChannelBindingType, data: [*c]GByteArray, @"error": [*c][*c]GError) callconv(.c) gboolean = null,
     get_negotiated_protocol: ?*const fn (conn: [*c]GTlsConnection) callconv(.c) [*c]const gchar = null,
-    padding: [6]gpointer = @import("std").mem.zeroes([6]gpointer),
+    padding: [6]gpointer = std.mem.zeroes([6]gpointer),
 };
 pub const GTlsConnectionClass = struct__GTlsConnectionClass;
 pub extern fn g_tls_connection_get_type() GType;
@@ -18656,7 +18657,7 @@ pub extern fn g_tls_error_quark() GQuark;
 pub extern fn g_tls_channel_binding_error_quark() GQuark;
 pub extern fn g_tls_connection_emit_accept_certificate(conn: [*c]GTlsConnection, peer_cert: [*c]GTlsCertificate, errors: GTlsCertificateFlags) gboolean;
 pub const struct__GTlsClientConnectionInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     copy_session_state: ?*const fn (conn: ?*GTlsClientConnection, source: ?*GTlsClientConnection) callconv(.c) void = null,
 };
 pub const GTlsClientConnectionInterface = struct__GTlsClientConnectionInterface;
@@ -18671,7 +18672,7 @@ pub extern fn g_tls_client_connection_set_use_ssl3(conn: ?*GTlsClientConnection,
 pub extern fn g_tls_client_connection_get_accepted_cas(conn: ?*GTlsClientConnection) [*c]GList;
 pub extern fn g_tls_client_connection_copy_session_state(conn: ?*GTlsClientConnection, source: ?*GTlsClientConnection) void;
 pub const struct__GTlsDatabaseClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     verify_chain: ?*const fn (self: [*c]GTlsDatabase, chain: [*c]GTlsCertificate, purpose: [*c]const gchar, identity: ?*GSocketConnectable, interaction: [*c]GTlsInteraction, flags: GTlsDatabaseVerifyFlags, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) GTlsCertificateFlags = null,
     verify_chain_async: ?*const fn (self: [*c]GTlsDatabase, chain: [*c]GTlsCertificate, purpose: [*c]const gchar, identity: ?*GSocketConnectable, interaction: [*c]GTlsInteraction, flags: GTlsDatabaseVerifyFlags, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     verify_chain_finish: ?*const fn (self: [*c]GTlsDatabase, result: ?*GAsyncResult, @"error": [*c][*c]GError) callconv(.c) GTlsCertificateFlags = null,
@@ -18685,7 +18686,7 @@ pub const struct__GTlsDatabaseClass = extern struct {
     lookup_certificates_issued_by: ?*const fn (self: [*c]GTlsDatabase, issuer_raw_dn: [*c]GByteArray, interaction: [*c]GTlsInteraction, flags: GTlsDatabaseLookupFlags, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) [*c]GList = null,
     lookup_certificates_issued_by_async: ?*const fn (self: [*c]GTlsDatabase, issuer_raw_dn: [*c]GByteArray, interaction: [*c]GTlsInteraction, flags: GTlsDatabaseLookupFlags, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     lookup_certificates_issued_by_finish: ?*const fn (self: [*c]GTlsDatabase, result: ?*GAsyncResult, @"error": [*c][*c]GError) callconv(.c) [*c]GList = null,
-    padding: [16]gpointer = @import("std").mem.zeroes([16]gpointer),
+    padding: [16]gpointer = std.mem.zeroes([16]gpointer),
 };
 pub const GTlsDatabaseClass = struct__GTlsDatabaseClass;
 pub extern fn g_tls_database_get_type() GType;
@@ -18703,21 +18704,21 @@ pub extern fn g_tls_database_lookup_certificates_issued_by(self: [*c]GTlsDatabas
 pub extern fn g_tls_database_lookup_certificates_issued_by_async(self: [*c]GTlsDatabase, issuer_raw_dn: [*c]GByteArray, interaction: [*c]GTlsInteraction, flags: GTlsDatabaseLookupFlags, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) void;
 pub extern fn g_tls_database_lookup_certificates_issued_by_finish(self: [*c]GTlsDatabase, result: ?*GAsyncResult, @"error": [*c][*c]GError) [*c]GList;
 pub const struct__GTlsFileDatabaseInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
-    padding: [8]gpointer = @import("std").mem.zeroes([8]gpointer),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
+    padding: [8]gpointer = std.mem.zeroes([8]gpointer),
 };
 pub const GTlsFileDatabaseInterface = struct__GTlsFileDatabaseInterface;
 pub extern fn g_tls_file_database_get_type() GType;
 pub extern fn g_tls_file_database_new(anchors: [*c]const gchar, @"error": [*c][*c]GError) [*c]GTlsDatabase;
 pub const struct__GTlsInteractionClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     ask_password: ?*const fn (interaction: [*c]GTlsInteraction, password: [*c]GTlsPassword, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) GTlsInteractionResult = null,
     ask_password_async: ?*const fn (interaction: [*c]GTlsInteraction, password: [*c]GTlsPassword, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     ask_password_finish: ?*const fn (interaction: [*c]GTlsInteraction, result: ?*GAsyncResult, @"error": [*c][*c]GError) callconv(.c) GTlsInteractionResult = null,
     request_certificate: ?*const fn (interaction: [*c]GTlsInteraction, connection: [*c]GTlsConnection, flags: GTlsCertificateRequestFlags, cancellable: [*c]GCancellable, @"error": [*c][*c]GError) callconv(.c) GTlsInteractionResult = null,
     request_certificate_async: ?*const fn (interaction: [*c]GTlsInteraction, connection: [*c]GTlsConnection, flags: GTlsCertificateRequestFlags, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) callconv(.c) void = null,
     request_certificate_finish: ?*const fn (interaction: [*c]GTlsInteraction, result: ?*GAsyncResult, @"error": [*c][*c]GError) callconv(.c) GTlsInteractionResult = null,
-    padding: [21]gpointer = @import("std").mem.zeroes([21]gpointer),
+    padding: [21]gpointer = std.mem.zeroes([21]gpointer),
 };
 pub const GTlsInteractionClass = struct__GTlsInteractionClass;
 pub extern fn g_tls_interaction_get_type() GType;
@@ -18730,11 +18731,11 @@ pub extern fn g_tls_interaction_request_certificate(interaction: [*c]GTlsInterac
 pub extern fn g_tls_interaction_request_certificate_async(interaction: [*c]GTlsInteraction, connection: [*c]GTlsConnection, flags: GTlsCertificateRequestFlags, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) void;
 pub extern fn g_tls_interaction_request_certificate_finish(interaction: [*c]GTlsInteraction, result: ?*GAsyncResult, @"error": [*c][*c]GError) GTlsInteractionResult;
 pub const struct__GTlsPasswordClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     get_value: ?*const fn (password: [*c]GTlsPassword, length: [*c]gsize) callconv(.c) [*c]const guchar = null,
     set_value: ?*const fn (password: [*c]GTlsPassword, value: [*c]guchar, length: gssize, destroy: GDestroyNotify) callconv(.c) void = null,
     get_default_warning: ?*const fn (password: [*c]GTlsPassword) callconv(.c) [*c]const gchar = null,
-    padding: [4]gpointer = @import("std").mem.zeroes([4]gpointer),
+    padding: [4]gpointer = std.mem.zeroes([4]gpointer),
 };
 pub const GTlsPasswordClass = struct__GTlsPasswordClass;
 pub extern fn g_tls_password_get_type() GType;
@@ -18749,7 +18750,7 @@ pub extern fn g_tls_password_set_description(password: [*c]GTlsPassword, descrip
 pub extern fn g_tls_password_get_warning(password: [*c]GTlsPassword) [*c]const gchar;
 pub extern fn g_tls_password_set_warning(password: [*c]GTlsPassword, warning: [*c]const gchar) void;
 pub const struct__GTlsServerConnectionInterface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
 };
 pub const GTlsServerConnectionInterface = struct__GTlsServerConnectionInterface;
 pub extern fn g_tls_server_connection_get_type() GType;
@@ -18757,7 +18758,7 @@ pub extern fn g_tls_server_connection_new(base_io_stream: [*c]GIOStream, certifi
 pub const struct__GUnixConnectionPrivate = opaque {};
 pub const GUnixConnectionPrivate = struct__GUnixConnectionPrivate;
 pub const struct__GUnixConnection = extern struct {
-    parent_instance: GSocketConnection = @import("std").mem.zeroes(GSocketConnection),
+    parent_instance: GSocketConnection = std.mem.zeroes(GSocketConnection),
     priv: ?*GUnixConnectionPrivate = null,
     pub const glib_autoptr_clear_GUnixConnection = __root.glib_autoptr_clear_GUnixConnection;
     pub const g_unix_connection_send_fd = __root.g_unix_connection_send_fd;
@@ -18775,7 +18776,7 @@ pub const struct__GUnixConnection = extern struct {
 };
 pub const GUnixConnection = struct__GUnixConnection;
 pub const struct__GUnixConnectionClass = extern struct {
-    parent_class: GSocketConnectionClass = @import("std").mem.zeroes(GSocketConnectionClass),
+    parent_class: GSocketConnectionClass = std.mem.zeroes(GSocketConnectionClass),
 };
 pub const GUnixConnectionClass = struct__GUnixConnectionClass;
 pub const GUnixConnection_autoptr = [*c]GUnixConnection;
@@ -18826,7 +18827,7 @@ pub extern fn g_unix_connection_receive_credentials(connection: [*c]GUnixConnect
 pub extern fn g_unix_connection_receive_credentials_async(connection: [*c]GUnixConnection, cancellable: [*c]GCancellable, callback: GAsyncReadyCallback, user_data: gpointer) void;
 pub extern fn g_unix_connection_receive_credentials_finish(connection: [*c]GUnixConnection, result: ?*GAsyncResult, @"error": [*c][*c]GError) ?*GCredentials;
 pub const struct__GUnixCredentialsMessageClass = extern struct {
-    parent_class: GSocketControlMessageClass = @import("std").mem.zeroes(GSocketControlMessageClass),
+    parent_class: GSocketControlMessageClass = std.mem.zeroes(GSocketControlMessageClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
 };
@@ -18913,7 +18914,7 @@ pub fn glib_queueautoptr_cleanup_GUnixFDList(arg__q: [*c][*c]GQueue) callconv(.c
     }
 }
 pub const struct__GUnixFDListClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     _g_reserved1: ?*const fn () callconv(.c) void = null,
     _g_reserved2: ?*const fn () callconv(.c) void = null,
     _g_reserved3: ?*const fn () callconv(.c) void = null,
@@ -18932,7 +18933,7 @@ pub extern fn g_unix_fd_list_steal_fds(list: [*c]GUnixFDList, length: [*c]gint) 
 pub const struct__GUnixSocketAddressPrivate = opaque {};
 pub const GUnixSocketAddressPrivate = struct__GUnixSocketAddressPrivate;
 pub const struct__GUnixSocketAddress = extern struct {
-    parent_instance: GSocketAddress = @import("std").mem.zeroes(GSocketAddress),
+    parent_instance: GSocketAddress = std.mem.zeroes(GSocketAddress),
     priv: ?*GUnixSocketAddressPrivate = null,
     pub const glib_autoptr_clear_GUnixSocketAddress = __root.glib_autoptr_clear_GUnixSocketAddress;
     pub const g_unix_socket_address_get_path = __root.g_unix_socket_address_get_path;
@@ -18946,7 +18947,7 @@ pub const struct__GUnixSocketAddress = extern struct {
 };
 pub const GUnixSocketAddress = struct__GUnixSocketAddress;
 pub const struct__GUnixSocketAddressClass = extern struct {
-    parent_class: GSocketAddressClass = @import("std").mem.zeroes(GSocketAddressClass),
+    parent_class: GSocketAddressClass = std.mem.zeroes(GSocketAddressClass),
 };
 pub const GUnixSocketAddressClass = struct__GUnixSocketAddressClass;
 pub const GUnixSocketAddress_autoptr = [*c]GUnixSocketAddress;
@@ -18998,7 +18999,7 @@ pub extern fn g_unix_socket_address_get_is_abstract(address: [*c]GUnixSocketAddr
 pub extern fn g_unix_socket_address_abstract_names_supported() gboolean;
 pub const GVfsFileLookupFunc = ?*const fn (vfs: [*c]GVfs, identifier: [*c]const u8, user_data: gpointer) callconv(.c) ?*GFile;
 pub const struct__GVfsClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     is_active: ?*const fn (vfs: [*c]GVfs) callconv(.c) gboolean = null,
     get_file_for_path: ?*const fn (vfs: [*c]GVfs, path: [*c]const u8) callconv(.c) ?*GFile = null,
     get_file_for_uri: ?*const fn (vfs: [*c]GVfs, uri: [*c]const u8) callconv(.c) ?*GFile = null,
@@ -19029,7 +19030,7 @@ pub extern fn g_vfs_get_local() [*c]GVfs;
 pub extern fn g_vfs_register_uri_scheme(vfs: [*c]GVfs, scheme: [*c]const u8, uri_func: GVfsFileLookupFunc, uri_data: gpointer, uri_destroy: GDestroyNotify, parse_name_func: GVfsFileLookupFunc, parse_name_data: gpointer, parse_name_destroy: GDestroyNotify) gboolean;
 pub extern fn g_vfs_unregister_uri_scheme(vfs: [*c]GVfs, scheme: [*c]const u8) gboolean;
 pub const struct__GVolumeIface = extern struct {
-    g_iface: GTypeInterface = @import("std").mem.zeroes(GTypeInterface),
+    g_iface: GTypeInterface = std.mem.zeroes(GTypeInterface),
     changed: ?*const fn (volume: ?*GVolume) callconv(.c) void = null,
     removed: ?*const fn (volume: ?*GVolume) callconv(.c) void = null,
     get_name: ?*const fn (volume: ?*GVolume) callconv(.c) [*c]u8 = null,
@@ -19074,7 +19075,7 @@ pub extern fn g_volume_eject_with_operation(volume: ?*GVolume, flags: GMountUnmo
 pub extern fn g_volume_eject_with_operation_finish(volume: ?*GVolume, result: ?*GAsyncResult, @"error": [*c][*c]GError) gboolean;
 pub extern fn g_volume_get_sort_key(volume: ?*GVolume) [*c]const gchar;
 pub const struct__GZlibCompressorClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
 };
 pub const GZlibCompressorClass = struct__GZlibCompressorClass;
 pub extern fn g_zlib_compressor_get_type() GType;
@@ -19084,7 +19085,7 @@ pub extern fn g_zlib_compressor_set_file_info(compressor: ?*GZlibCompressor, fil
 pub extern fn g_zlib_compressor_get_os(compressor: ?*GZlibCompressor) c_int;
 pub extern fn g_zlib_compressor_set_os(compressor: ?*GZlibCompressor, os: c_int) void;
 pub const struct__GZlibDecompressorClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
 };
 pub const GZlibDecompressorClass = struct__GZlibDecompressorClass;
 pub extern fn g_zlib_decompressor_get_type() GType;
@@ -24043,7 +24044,7 @@ pub const FLATPAK_PORTAL_ERROR_WINDOW_DESTROYED: c_int = 6;
 pub const FlatpakPortalError = c_uint;
 pub extern fn flatpak_portal_error_quark() GQuark;
 pub const struct__FlatpakRef = extern struct {
-    parent: GObject = @import("std").mem.zeroes(GObject),
+    parent: GObject = std.mem.zeroes(GObject),
     pub const glib_autoptr_clear_FlatpakRef = __root.glib_autoptr_clear_FlatpakRef;
     pub const flatpak_ref_get_name = __root.flatpak_ref_get_name;
     pub const flatpak_ref_get_arch = __root.flatpak_ref_get_arch;
@@ -24065,7 +24066,7 @@ pub const struct__FlatpakRef = extern struct {
 pub const FlatpakRef = struct__FlatpakRef;
 pub extern fn flatpak_ref_get_type() GType;
 pub const FlatpakRefClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
 };
 pub const FlatpakRef_autoptr = [*c]FlatpakRef;
 pub const FlatpakRef_listautoptr = [*c]GList;
@@ -24118,7 +24119,7 @@ pub extern fn flatpak_ref_format_ref_cached(self: [*c]FlatpakRef) [*c]const u8;
 pub extern fn flatpak_ref_parse(ref: [*c]const u8, @"error": [*c][*c]GError) [*c]FlatpakRef;
 pub extern fn flatpak_ref_get_collection_id(self: [*c]FlatpakRef) [*c]const u8;
 pub const struct__FlatpakInstalledRef = extern struct {
-    parent: FlatpakRef = @import("std").mem.zeroes(FlatpakRef),
+    parent: FlatpakRef = std.mem.zeroes(FlatpakRef),
     pub const glib_autoptr_clear_FlatpakInstalledRef = __root.glib_autoptr_clear_FlatpakInstalledRef;
     pub const flatpak_installed_ref_get_origin = __root.flatpak_installed_ref_get_origin;
     pub const flatpak_installed_ref_get_subpaths = __root.flatpak_installed_ref_get_subpaths;
@@ -24156,7 +24157,7 @@ pub const struct__FlatpakInstalledRef = extern struct {
 pub const FlatpakInstalledRef = struct__FlatpakInstalledRef;
 pub extern fn flatpak_installed_ref_get_type() GType;
 pub const FlatpakInstalledRefClass = extern struct {
-    parent_class: FlatpakRefClass = @import("std").mem.zeroes(FlatpakRefClass),
+    parent_class: FlatpakRefClass = std.mem.zeroes(FlatpakRefClass),
 };
 pub const FlatpakInstalledRef_autoptr = [*c]FlatpakInstalledRef;
 pub const FlatpakInstalledRef_listautoptr = [*c]GList;
@@ -24213,7 +24214,7 @@ pub extern fn flatpak_installed_ref_load_appdata(self: [*c]FlatpakInstalledRef, 
 pub extern fn flatpak_installed_ref_get_eol(self: [*c]FlatpakInstalledRef) [*c]const u8;
 pub extern fn flatpak_installed_ref_get_eol_rebase(self: [*c]FlatpakInstalledRef) [*c]const u8;
 pub const struct__FlatpakRemoteRef = extern struct {
-    parent: FlatpakRef = @import("std").mem.zeroes(FlatpakRef),
+    parent: FlatpakRef = std.mem.zeroes(FlatpakRef),
     pub const flatpak_remote_ref_get_remote_name = __root.flatpak_remote_ref_get_remote_name;
     pub const flatpak_remote_ref_get_installed_size = __root.flatpak_remote_ref_get_installed_size;
     pub const flatpak_remote_ref_get_download_size = __root.flatpak_remote_ref_get_download_size;
@@ -24230,7 +24231,7 @@ pub const struct__FlatpakRemoteRef = extern struct {
 pub const FlatpakRemoteRef = struct__FlatpakRemoteRef;
 pub extern fn flatpak_remote_ref_get_type() GType;
 pub const FlatpakRemoteRefClass = extern struct {
-    parent_class: FlatpakRefClass = @import("std").mem.zeroes(FlatpakRefClass),
+    parent_class: FlatpakRefClass = std.mem.zeroes(FlatpakRefClass),
 };
 pub extern fn flatpak_remote_ref_get_remote_name(self: [*c]FlatpakRemoteRef) [*c]const u8;
 pub extern fn flatpak_remote_ref_get_installed_size(self: [*c]FlatpakRemoteRef) guint64;
@@ -24277,7 +24278,7 @@ pub fn glib_queueautoptr_cleanup_FlatpakRemoteRef(arg__q: [*c][*c]GQueue) callco
     }
 }
 pub const struct__FlatpakRelatedRef = extern struct {
-    parent: FlatpakRef = @import("std").mem.zeroes(FlatpakRef),
+    parent: FlatpakRef = std.mem.zeroes(FlatpakRef),
     pub const glib_autoptr_clear_FlatpakRelatedRef = __root.glib_autoptr_clear_FlatpakRelatedRef;
     pub const flatpak_related_ref_get_subpaths = __root.flatpak_related_ref_get_subpaths;
     pub const flatpak_related_ref_should_download = __root.flatpak_related_ref_should_download;
@@ -24291,7 +24292,7 @@ pub const struct__FlatpakRelatedRef = extern struct {
 pub const FlatpakRelatedRef = struct__FlatpakRelatedRef;
 pub extern fn flatpak_related_ref_get_type() GType;
 pub const FlatpakRelatedRefClass = extern struct {
-    parent_class: FlatpakRefClass = @import("std").mem.zeroes(FlatpakRefClass),
+    parent_class: FlatpakRefClass = std.mem.zeroes(FlatpakRefClass),
 };
 pub const FlatpakRelatedRef_autoptr = [*c]FlatpakRelatedRef;
 pub const FlatpakRelatedRef_listautoptr = [*c]GList;
@@ -24336,7 +24337,7 @@ pub extern fn flatpak_related_ref_should_download(self: [*c]FlatpakRelatedRef) g
 pub extern fn flatpak_related_ref_should_delete(self: [*c]FlatpakRelatedRef) gboolean;
 pub extern fn flatpak_related_ref_should_autoprune(self: [*c]FlatpakRelatedRef) gboolean;
 pub const struct__FlatpakBundleRef = extern struct {
-    parent: FlatpakRef = @import("std").mem.zeroes(FlatpakRef),
+    parent: FlatpakRef = std.mem.zeroes(FlatpakRef),
     pub const flatpak_bundle_ref_get_file = __root.flatpak_bundle_ref_get_file;
     pub const flatpak_bundle_ref_get_metadata = __root.flatpak_bundle_ref_get_metadata;
     pub const flatpak_bundle_ref_get_appstream = __root.flatpak_bundle_ref_get_appstream;
@@ -24356,7 +24357,7 @@ pub const struct__FlatpakBundleRef = extern struct {
 pub const FlatpakBundleRef = struct__FlatpakBundleRef;
 pub extern fn flatpak_bundle_ref_get_type() GType;
 pub const FlatpakBundleRefClass = extern struct {
-    parent_class: FlatpakRefClass = @import("std").mem.zeroes(FlatpakRefClass),
+    parent_class: FlatpakRefClass = std.mem.zeroes(FlatpakRefClass),
 };
 pub extern fn flatpak_bundle_ref_new(file: ?*GFile, @"error": [*c][*c]GError) [*c]FlatpakBundleRef;
 pub extern fn flatpak_bundle_ref_get_file(self: [*c]FlatpakBundleRef) ?*GFile;
@@ -24409,7 +24410,7 @@ pub const FLATPAK_REMOTE_TYPE_USB: c_int = 1;
 pub const FLATPAK_REMOTE_TYPE_LAN: c_int = 2;
 pub const FlatpakRemoteType = c_uint;
 pub const struct__FlatpakRemote = extern struct {
-    parent: GObject = @import("std").mem.zeroes(GObject),
+    parent: GObject = std.mem.zeroes(GObject),
     pub const glib_autoptr_clear_FlatpakRemote = __root.glib_autoptr_clear_FlatpakRemote;
     pub const flatpak_remote_get_name = __root.flatpak_remote_get_name;
     pub const flatpak_remote_get_appstream_dir = __root.flatpak_remote_get_appstream_dir;
@@ -24470,7 +24471,7 @@ pub const struct__FlatpakRemote = extern struct {
 pub const FlatpakRemote = struct__FlatpakRemote;
 pub extern fn flatpak_remote_get_type() GType;
 pub const FlatpakRemoteClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
 };
 pub const FlatpakRemote_autoptr = [*c]FlatpakRemote;
 pub const FlatpakRemote_listautoptr = [*c]GList;
@@ -24548,7 +24549,7 @@ pub extern fn flatpak_remote_get_filter(self: [*c]FlatpakRemote) [*c]u8;
 pub extern fn flatpak_remote_set_filter(self: [*c]FlatpakRemote, filter_path: [*c]const u8) void;
 pub extern fn flatpak_remote_get_remote_type(self: [*c]FlatpakRemote) FlatpakRemoteType;
 pub const struct__FlatpakInstallation = extern struct {
-    parent: GObject = @import("std").mem.zeroes(GObject),
+    parent: GObject = std.mem.zeroes(GObject),
     pub const glib_autoptr_clear_FlatpakInstallation = __root.glib_autoptr_clear_FlatpakInstallation;
     pub const flatpak_installation_set_no_interaction = __root.flatpak_installation_set_no_interaction;
     pub const flatpak_installation_get_no_interaction = __root.flatpak_installation_get_no_interaction;
@@ -24643,7 +24644,7 @@ pub const struct__FlatpakInstallation = extern struct {
 };
 pub const FlatpakInstallation = struct__FlatpakInstallation;
 pub const struct__FlatpakInstance = extern struct {
-    parent: GObject = @import("std").mem.zeroes(GObject),
+    parent: GObject = std.mem.zeroes(GObject),
     pub const glib_autoptr_clear_FlatpakInstance = __root.glib_autoptr_clear_FlatpakInstance;
     pub const flatpak_instance_get_id = __root.flatpak_instance_get_id;
     pub const flatpak_instance_get_app = __root.flatpak_instance_get_app;
@@ -24669,7 +24670,7 @@ pub const struct__FlatpakInstance = extern struct {
 pub const FlatpakInstance = struct__FlatpakInstance;
 pub extern fn flatpak_instance_get_type() GType;
 pub const FlatpakInstanceClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
 };
 pub const FlatpakInstance_autoptr = [*c]FlatpakInstance;
 pub const FlatpakInstance_listautoptr = [*c]GList;
@@ -24723,7 +24724,7 @@ pub extern fn flatpak_instance_get_info(self: [*c]FlatpakInstance) ?*GKeyFile;
 pub extern fn flatpak_instance_is_running(self: [*c]FlatpakInstance) gboolean;
 pub extern fn flatpak_installation_get_type() GType;
 pub const FlatpakInstallationClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
 };
 pub const FLATPAK_UPDATE_FLAGS_NONE: c_int = 0;
 pub const FLATPAK_UPDATE_FLAGS_NO_DEPLOY: c_int = 1;
@@ -24889,7 +24890,7 @@ pub const struct__FlatpakTransactionProgress = opaque {
 };
 pub const FlatpakTransactionProgress = struct__FlatpakTransactionProgress;
 pub const FlatpakTransactionProgressClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     pub const glib_autoptr_clear_FlatpakTransactionProgressClass = __root.glib_autoptr_clear_FlatpakTransactionProgressClass;
 };
 pub const FlatpakTransactionProgress_autoptr = ?*FlatpakTransactionProgress;
@@ -25023,7 +25024,7 @@ pub const struct__FlatpakTransactionOperation = opaque {
 };
 pub const FlatpakTransactionOperation = struct__FlatpakTransactionOperation;
 pub const FlatpakTransactionOperationClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     pub const glib_autoptr_clear_FlatpakTransactionOperationClass = __root.glib_autoptr_clear_FlatpakTransactionOperationClass;
 };
 pub const FlatpakTransactionOperation_autoptr = ?*FlatpakTransactionOperation;
@@ -25129,7 +25130,7 @@ pub fn FLATPAK_IS_TRANSACTION_OPERATION(arg_ptr: gpointer) callconv(.c) gboolean
 }
 pub extern fn flatpak_transaction_get_type() GType;
 pub const struct__FlatpakTransaction = extern struct {
-    parent_instance: GObject = @import("std").mem.zeroes(GObject),
+    parent_instance: GObject = std.mem.zeroes(GObject),
     pub const glib_autoptr_clear_FlatpakTransaction = __root.glib_autoptr_clear_FlatpakTransaction;
     pub const flatpak_transaction_set_no_pull = __root.flatpak_transaction_set_no_pull;
     pub const flatpak_transaction_get_no_pull = __root.flatpak_transaction_get_no_pull;
@@ -25211,7 +25212,7 @@ pub const struct__FlatpakTransaction = extern struct {
 };
 pub const FlatpakTransaction = struct__FlatpakTransaction;
 pub const struct__FlatpakTransactionClass = extern struct {
-    parent_class: GObjectClass = @import("std").mem.zeroes(GObjectClass),
+    parent_class: GObjectClass = std.mem.zeroes(GObjectClass),
     new_operation: ?*const fn (transaction: [*c]FlatpakTransaction, operation: ?*FlatpakTransactionOperation, progress: ?*FlatpakTransactionProgress) callconv(.c) void = null,
     operation_done: ?*const fn (transaction: [*c]FlatpakTransaction, operation: ?*FlatpakTransactionOperation, commit: [*c]const u8, details: FlatpakTransactionResult) callconv(.c) void = null,
     operation_error: ?*const fn (transaction: [*c]FlatpakTransaction, operation: ?*FlatpakTransactionOperation, @"error": [*c]const GError, detail: FlatpakTransactionErrorDetails) callconv(.c) gboolean = null,
@@ -25226,7 +25227,7 @@ pub const struct__FlatpakTransactionClass = extern struct {
     basic_auth_start: ?*const fn (transaction: [*c]FlatpakTransaction, remote: [*c]const u8, realm: [*c]const u8, options: ?*GVariant, id: guint) callconv(.c) gboolean = null,
     install_authenticator: ?*const fn (transaction: [*c]FlatpakTransaction, remote: [*c]const u8, authenticator_ref: [*c]const u8) callconv(.c) void = null,
     ready_pre_auth: ?*const fn (transaction: [*c]FlatpakTransaction) callconv(.c) gboolean = null,
-    padding: [3]gpointer = @import("std").mem.zeroes([3]gpointer),
+    padding: [3]gpointer = std.mem.zeroes([3]gpointer),
     pub const glib_autoptr_clear_FlatpakTransactionClass = __root.glib_autoptr_clear_FlatpakTransactionClass;
 };
 pub const FlatpakTransactionClass = struct__FlatpakTransactionClass;

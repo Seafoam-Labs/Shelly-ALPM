@@ -1,0 +1,255 @@
+# Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
+# Maintainer: Caroline Snyder <hirpeng@gmail.com>
+# Maintainer: Piotr Górski <lucjan.lucjanov@gmail.com>
+
+pkgbase=shelly
+pkgname=(
+  'shelly'
+  'shelly-cli'
+  'shelly-flatpak-backend'
+  'shelly-notify'
+  'shelly-notify-none'
+)
+pkgver=3.1.6
+pkgrel=4
+arch=('x86_64' 'aarch64')
+url='https://github.com/Seafoam-Labs/Shelly-ALPM'
+license=('GPL-3.0-only')
+makedepends=(
+  'flatpak'
+  'gettext'
+  'go-md2man'
+  'gtk4'
+  'pkgconf'
+  'zig>=0.16.0'
+)
+checkdepends=('ripgrep')
+source=("${pkgbase}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
+sha256sums=('fa1e587a69b9d6e63e6835696e2d696f880d6120a023f5c922e260fc023e70af')
+
+# GitHub replaces "+" with "-" in archive top-level directory names.
+_srcdir="Shelly-ALPM-${pkgver//+/-}"
+
+# Components with their own build.zig, in build order.
+_components=(
+  Shelly.Flatpak.Backend
+  Shelly.PackageManager
+  Shelly.Cli.Zig
+  Shelly.Key
+  Shelly.Notifications.Zig
+  Shelly.Ui.Gtk
+)
+
+_zig_build() {
+  zig build \
+    --cache-dir "${srcdir}/zig-cache" \
+    --global-cache-dir "${srcdir}/zig-global-cache" \
+    -Dcpu=baseline \
+    "$@"
+}
+
+prepare() {
+  cd "${_srcdir}"
+
+  # Fetch Zig dependencies up front so build() and check() work offline.
+  local dir
+  for dir in "${_components[@]}"; do
+    (cd "${dir}" && _zig_build --fetch)
+  done
+}
+
+build() {
+  cd "${_srcdir}"
+
+  (cd Shelly.Flatpak.Backend && _zig_build \
+    --prefix "${srcdir}/out-flatpak-backend" \
+    -Doptimize=ReleaseSafe)
+
+  (cd Shelly.Cli.Zig && _zig_build \
+    --prefix "${srcdir}/out-cli" \
+    -Doptimize=ReleaseSmall)
+
+  (cd Shelly.Key && _zig_build \
+    --prefix "${srcdir}/out-key" \
+    -Doptimize=ReleaseSmall)
+
+  (cd Shelly.Notifications.Zig && _zig_build \
+    --prefix "${srcdir}/out-notify" \
+    -Doptimize=ReleaseSmall)
+
+  (cd Shelly.Ui.Gtk && _zig_build \
+    --prefix "${srcdir}/out-ui" \
+    -Dflatpak-backend-package=shelly-flatpak-backend \
+    -Doptimize=ReleaseSafe)
+
+  local shelly="${srcdir}/out-cli/bin/shelly"
+
+  for shell in bash fish zsh; do
+    "${shelly}" utility --completions "${shell}" > "${srcdir}/shelly.${shell}"
+  done
+
+  "${shelly}" utility --docs | go-md2man > "${srcdir}/shelly.1"
+  sed -i "s|^\\.TH .*|.TH \"SHELLY\" \"1\" \"\" \"Shelly ${pkgver}\" \"Shelly CLI Manual\"|" \
+    "${srcdir}/shelly.1"
+  printf '\n.SH AUTHORS\nSeafoam Labs.\n' >> "${srcdir}/shelly.1"
+
+  local domain component po
+  for domain in shelly-ui:Shelly.Ui.Gtk shelly-notifications:Shelly.Notifications.Zig; do
+    component="${domain#*:}"
+    domain="${domain%%:*}"
+    for po in "${component}"/po/*.po; do
+      [[ -f ${po} ]] || continue
+      install -d "${srcdir}/locale/$(basename "${po}" .po)/LC_MESSAGES"
+      msgfmt "${po}" -o "${srcdir}/locale/$(basename "${po}" .po)/LC_MESSAGES/${domain}.mo"
+    done
+  done
+}
+
+check() {
+  cd "${_srcdir}"
+
+  (cd Shelly.Flatpak.Backend && _zig_build test abi-test integration-test)
+  (cd Shelly.PackageManager && _zig_build flatpak-test)
+  (cd Shelly.Cli.Zig && _zig_build test)
+
+  scripts/check-flatpak-separation.sh \
+    "${srcdir}/out-cli/bin/shelly" \
+    "${srcdir}/out-flatpak-backend/lib/libshelly-flatpak-backend.so.1"
+}
+
+package_shelly() {
+  pkgdesc='Shelly: A Modern Arch Package Manager'
+  depends=(
+    "shelly-cli=${pkgver}-${pkgrel}"
+    "shelly-flatpak-backend=${pkgver}-${pkgrel}"
+    # Unversioned on purpose: satisfied by shelly-notify or by the
+    # shelly-notify-none placeholder, which lets users drop the tray.
+    'shelly-notify'
+    'glib2'
+    'glibc'
+    'gtk4'
+    'hicolor-icon-theme'
+  )
+  optdepends=(
+    'fuse2: run AppImages that require FUSE 2'
+    'libstarfish: dependency viewer for arch packages'
+  )
+  conflicts=('shelly-git' 'shelly-bin')
+
+  cd "${_srcdir}"
+
+  install -Dm755 "${srcdir}/out-ui/bin/Shelly_Ui_Gtk" "${pkgdir}/usr/bin/shelly-ui"
+  install -Dm755 shelly-flatpak-integrate -t "${pkgdir}/usr/bin"
+  install -Dm644 com.shellyorg.shelly.desktop -t "${pkgdir}/usr/share/applications"
+  install -Dm644 assets/shellylogo.png "${pkgdir}/usr/share/icons/hicolor/256x256/apps/shelly.png"
+
+  local mo
+  for mo in "${srcdir}"/locale/*/LC_MESSAGES/shelly-ui.mo; do
+    [[ -f ${mo} ]] || continue
+    install -Dm644 "${mo}" "${pkgdir}/usr/share/locale/${mo#"${srcdir}"/locale/}"
+  done
+}
+
+package_shelly-cli() {
+  pkgdesc='Native Shelly package-manager CLI'
+  depends=(
+    'diffutils'
+    'git'
+    'glibc'
+    'gnupg'
+    'libarchive'
+    'pacman>=7'
+    'sudo'
+    'tar'
+  )
+  optdepends=(
+    'base-devel: build and install AUR packages'
+    'desktop-file-utils: update AppImage desktop entries'
+    'devtools: build AUR packages in a clean chroot'
+    'fuse2: run AppImages that require FUSE 2'
+    'gtk-update-icon-cache: update AppImage icons'
+    'opendoas: alternative privilege elevator to sudo'
+    'plocate: locate-based pacfile discovery'
+    'shelly-flatpak-backend: Flatpak package management support'
+    'util-linux: isolate fresh-root provisioning for --isolated builds'
+    'vim: default visual pacfile diff viewer'
+  )
+  # The CLI used to ship inside the monolithic shelly packages: shelly up to
+  # 3.1.6-1 and shelly-git before the split (3.1.6rNNNN.gHASH versions).
+  conflicts=('shelly<3.1.6-2' 'shelly-git<3.1.6.r0' 'shelly-bin' 'shelly-cli-git')
+  backup=('etc/shellybuild.conf')
+
+  cd "${_srcdir}"
+
+  install -Dm755 "${srcdir}/out-cli/bin/shelly" -t "${pkgdir}/usr/bin"
+  install -Dm755 "${srcdir}/out-key/bin/shelly-key" -t "${pkgdir}/usr/bin"
+  install -Dm644 shellybuild.conf -t "${pkgdir}/etc"
+
+  install -Dm644 "${srcdir}/shelly.bash" "${pkgdir}/usr/share/bash-completion/completions/shelly"
+  install -Dm644 "${srcdir}/shelly.fish" "${pkgdir}/usr/share/fish/vendor_completions.d/shelly.fish"
+  install -Dm644 "${srcdir}/shelly.zsh" "${pkgdir}/usr/share/zsh/site-functions/_shelly"
+  install -Dm644 "${srcdir}/shelly.1" -t "${pkgdir}/usr/share/man/man1"
+
+  # Polkit policy for privileged Shelly CLI execution via pkexec
+  install -Dm644 /dev/stdin "${pkgdir}/usr/share/polkit-1/actions/com.shellyorg.shelly.policy" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <vendor>Shelly</vendor>
+  <vendor_url>https://github.com/Seafoam-Labs/Shelly-ALPM</vendor_url>
+  <action id="com.shellyorg.shelly.pkexec.cli">
+    <description>Run Shelly CLI as administrator</description>
+    <message>Run Shelly CLI with administrator privileges.</message>
+    <icon_name>shelly</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/shelly</annotate>
+  </action>
+</policyconfig>
+EOF
+}
+
+package_shelly-flatpak-backend() {
+  pkgdesc='Optional native Flatpak backend for Shelly'
+  depends=("shelly-cli=${pkgver}-${pkgrel}" 'flatpak' 'glib2' 'glibc')
+  conflicts=('shelly-flatpak-backend-git' 'shelly-flatpak-backend-bin')
+
+  install -Dm755 "${srcdir}/out-flatpak-backend/lib/libshelly-flatpak-backend.so.1.0.0" \
+    -t "${pkgdir}/usr/lib/shelly"
+  ln -s libshelly-flatpak-backend.so.1.0.0 \
+    "${pkgdir}/usr/lib/shelly/libshelly-flatpak-backend.so.1"
+}
+
+package_shelly-notify() {
+  pkgdesc='Notification tray for Shelly'
+  depends=("shelly=${pkgver}-${pkgrel}" 'glibc')
+  conflicts=('shelly-notify-git')
+
+  cd "${_srcdir}"
+
+  install -Dm755 "${srcdir}/out-notify/bin/shelly-notifications" -t "${pkgdir}/usr/bin"
+  install -Dm644 com.shellyorg.shelly-notifications.desktop -t "${pkgdir}/usr/share/applications"
+
+  local icons="${pkgdir}/usr/share/icons/hicolor"
+  install -Dm644 assets/shellylogo-tray.png "${icons}/256x256/apps/shelly-tray.png"
+  install -Dm644 assets/shellylogo-update.png "${icons}/256x256/apps/shelly-update.png"
+  install -Dm644 assets/shelly-updates-symbolic.svg -t "${icons}/symbolic/apps"
+  install -Dm644 assets/shelly-shell-symbolic.svg -t "${icons}/symbolic/apps"
+
+  local mo
+  for mo in "${srcdir}"/locale/*/LC_MESSAGES/shelly-notifications.mo; do
+    [[ -f ${mo} ]] || continue
+    install -Dm644 "${mo}" "${pkgdir}/usr/share/locale/${mo#"${srcdir}"/locale/}"
+  done
+}
+
+package_shelly-notify-none() {
+  pkgdesc='Placeholder that satisfies Shelly without the notification tray'
+  arch=('any')
+  provides=('shelly-notify')
+  conflicts=('shelly-notify')
+}

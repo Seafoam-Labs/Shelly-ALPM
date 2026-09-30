@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const glib = bindings.glib;
@@ -610,7 +611,7 @@ pub const ShellyWindow = extern struct {
 
         const cli = ShellyCli{ .allocator = arena.allocator(), .io = runtime.io };
         cli.set_aur_url(url) catch |err| {
-            std.log.warn("Could not set the AUR base URL to {0s}. {1s}\n\nTechnical details: {2s}", .{ url, @import("diagnostics").cause(err), @errorName(err) });
+            std.log.warn("Could not set the AUR base URL to {0s}. {1s}\n\nTechnical details: {2s}", .{ url, diagnostics.cause(err), @errorName(err) });
         };
     }
 

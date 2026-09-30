@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const diagnostics = @import("diagnostics");
 const models = @import("models.zig");
 const endpoints = @import("endpoints.zig");
 const operation_api = @import("operation_context");
@@ -44,7 +46,7 @@ pub const Client = struct {
     operation_context: ?*operation_api.OperationContext = null,
     parent_operation: ?*const operation_api.Operation = null,
     /// Deterministic transport for unit/integration fixtures; absent from release builds.
-    test_transport: if (@import("builtin").is_test) ?TestTransport else void = if (@import("builtin").is_test) null else {},
+    test_transport: if (builtin.is_test) ?TestTransport else void = if (builtin.is_test) null else {},
 
     const TestTransport = struct {
         context: ?*anyopaque = null,
@@ -167,7 +169,7 @@ pub const Client = struct {
     ) !models.Response {
         const error_type = try self.allocator.dupe(u8, "error");
         errdefer self.allocator.free(error_type);
-        const message = try @import("diagnostics").format(self.allocator, err, .{ .operation = "the AUR package information query", .path = self.rpc_url });
+        const message = try diagnostics.format(self.allocator, err, .{ .operation = "the AUR package information query", .path = self.rpc_url });
         errdefer self.allocator.free(message);
         const results = try all_packages.toOwnedSlice(self.allocator);
         self.allocator.free(response_type);
@@ -262,7 +264,7 @@ pub const Client = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try operation_scope.checkCancelled();
-        if (@import("builtin").is_test) if (self.test_transport) |transport|
+        if (builtin.is_test) if (self.test_transport) |transport|
             return transport.request(transport.context, self.allocator, url, null);
         const uri = try std.Uri.parse(url);
         var request = try self.http.request(.GET, uri, .{
@@ -290,7 +292,7 @@ pub const Client = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try operation_scope.checkCancelled();
-        if (@import("builtin").is_test) if (self.test_transport) |transport|
+        if (builtin.is_test) if (self.test_transport) |transport|
             return transport.request(transport.context, self.allocator, url, body);
         const uri = try std.Uri.parse(url);
         const headers = [_]std.http.Header{.{
@@ -455,7 +457,7 @@ fn emptyResponse(allocator: std.mem.Allocator, response_type: []const u8) !model
 }
 
 /// In-memory RPC service used by tests with real temporary Git repositories.
-pub const TestService = if (@import("builtin").is_test) struct {
+pub const TestService = if (builtin.is_test) struct {
     pub const Package = struct {
         Name: []const u8,
         PackageBase: []const u8,

@@ -1,0 +1,1277 @@
+{
+  "schema": 1,
+  "library_sha256": "da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888",
+  "locale": "C",
+  "relations": [
+    {
+      "input": "",
+      "name": "",
+      "version": null,
+      "description": null,
+      "mod": 1,
+      "formatted": ""
+    },
+    {
+      "input": "foo",
+      "name": "foo",
+      "version": null,
+      "description": null,
+      "mod": 1,
+      "formatted": "foo"
+    },
+    {
+      "input": "foo=1",
+      "name": "foo",
+      "version": "1",
+      "description": null,
+      "mod": 2,
+      "formatted": "foo=1"
+    },
+    {
+      "input": "foo>=1",
+      "name": "foo",
+      "version": "1",
+      "description": null,
+      "mod": 3,
+      "formatted": "foo>=1"
+    },
+    {
+      "input": "foo<=1",
+      "name": "foo",
+      "version": "1",
+      "description": null,
+      "mod": 4,
+      "formatted": "foo<=1"
+    },
+    {
+      "input": "foo>1",
+      "name": "foo",
+      "version": "1",
+      "description": null,
+      "mod": 5,
+      "formatted": "foo>1"
+    },
+    {
+      "input": "foo<1",
+      "name": "foo",
+      "version": "1",
+      "description": null,
+      "mod": 6,
+      "formatted": "foo<1"
+    },
+    {
+      "input": "foo>1<2",
+      "name": "foo>1",
+      "version": "2",
+      "description": null,
+      "mod": 6,
+      "formatted": "foo>1<2"
+    },
+    {
+      "input": "foo=",
+      "name": "foo",
+      "version": "",
+      "description": null,
+      "mod": 2,
+      "formatted": "foo="
+    },
+    {
+      "input": "foo>=alpha:1.0",
+      "name": "foo",
+      "version": "alpha:1.0",
+      "description": null,
+      "mod": 3,
+      "formatted": "foo>=alpha:1.0"
+    },
+    {
+      "input": "foo=1.0-",
+      "name": "foo",
+      "version": "1.0-",
+      "description": null,
+      "mod": 2,
+      "formatted": "foo=1.0-"
+    },
+    {
+      "input": "foo==1",
+      "name": "foo",
+      "version": "=1",
+      "description": null,
+      "mod": 2,
+      "formatted": "foo==1"
+    },
+    {
+      "input": "=1",
+      "name": "",
+      "version": "1",
+      "description": null,
+      "mod": 2,
+      "formatted": "=1"
+    },
+    {
+      "input": "foo: ordinary description",
+      "name": "foo",
+      "version": null,
+      "description": "ordinary description",
+      "mod": 1,
+      "formatted": "foo: ordinary description"
+    },
+    {
+      "input": "foo>=1:2: optional description",
+      "name": "foo",
+      "version": "1:2",
+      "description": "optional description",
+      "mod": 3,
+      "formatted": "foo>=1:2: optional description"
+    },
+    {
+      "input": "foo: ",
+      "name": "foo",
+      "version": null,
+      "description": "",
+      "mod": 1,
+      "formatted": "foo: "
+    },
+    {
+      "input": "libfoo.so=3-64",
+      "name": "libfoo.so",
+      "version": "3-64",
+      "description": null,
+      "mod": 2,
+      "formatted": "libfoo.so=3-64"
+    },
+    {
+      "input": "foo<1>=2",
+      "name": "foo",
+      "version": "1>=2",
+      "description": null,
+      "mod": 6,
+      "formatted": "foo<1>=2"
+    },
+    {
+      "input": "foo>=1<=2",
+      "name": "foo>=1",
+      "version": "2",
+      "description": null,
+      "mod": 4,
+      "formatted": "foo>=1<=2"
+    },
+    {
+      "input": "foo = 1",
+      "name": "foo ",
+      "version": " 1",
+      "description": null,
+      "mod": 2,
+      "formatted": "foo = 1"
+    },
+    {
+      "input": "foo=+1:1.0",
+      "name": "foo",
+      "version": "+1:1.0",
+      "description": null,
+      "mod": 2,
+      "formatted": "foo=+1:1.0"
+    },
+    {
+      "input": "foo=1_0:1.0",
+      "name": "foo",
+      "version": "1_0:1.0",
+      "description": null,
+      "mod": 2,
+      "formatted": "foo=1_0:1.0"
+    },
+    {
+      "input": ": description",
+      "name": "",
+      "version": null,
+      "description": "description",
+      "mod": 1,
+      "formatted": ": description"
+    },
+    {
+      "input": "foo=>1",
+      "name": "foo=",
+      "version": "1",
+      "description": null,
+      "mod": 5,
+      "formatted": "foo=>1"
+    },
+    {
+      "input": "foo=18446744073709551616:1.0",
+      "name": "foo",
+      "version": "18446744073709551616:1.0",
+      "description": null,
+      "mod": 2,
+      "formatted": "foo=18446744073709551616:1.0"
+    }
+  ],
+  "byte_versions": [
+    {
+      "a": "31ff61",
+      "b": "312e61",
+      "sign": 0
+    },
+    {
+      "a": "31c3a9",
+      "b": "312e2e",
+      "sign": 0
+    },
+    {
+      "a": "ff",
+      "b": "",
+      "sign": 1
+    },
+    {
+      "a": "80",
+      "b": "ff",
+      "sign": 0
+    },
+    {
+      "a": "3180",
+      "b": "31",
+      "sign": 1
+    },
+    {
+      "a": "310932",
+      "b": "312e32",
+      "sign": 0
+    },
+    {
+      "a": "310a32",
+      "b": "312e2e32",
+      "sign": -1
+    },
+    {
+      "a": "c3a93a31",
+      "b": "31",
+      "sign": 1
+    },
+    {
+      "a": "312eff32",
+      "b": "312e2e32",
+      "sign": 0
+    }
+  ],
+  "signatures": [
+    {
+      "encoded": "AAECA/8=",
+      "success": true,
+      "decoded": "00010203ff"
+    },
+    {
+      "encoded": "AA EC A/8=\n",
+      "success": false,
+      "decoded": null
+    },
+    {
+      "encoded": "AAECA/8",
+      "success": false,
+      "decoded": null
+    },
+    {
+      "encoded": "not!base64",
+      "success": false,
+      "decoded": null
+    },
+    {
+      "encoded": "",
+      "success": true,
+      "decoded": ""
+    },
+    {
+      "encoded": "=",
+      "success": false,
+      "decoded": null
+    }
+  ],
+  "archives": [
+    {
+      "name": "plain",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\n",
+          "kind": "file"
+        },
+        {
+          "path": ".INSTALL",
+          "contents": "shell",
+          "kind": "file"
+        },
+        {
+          "path": ".CHANGELOG",
+          "contents": "history\n",
+          "kind": "file"
+        },
+        {
+          "path": "usr",
+          "contents": "",
+          "kind": "directory"
+        },
+        {
+          "path": "usr/bin/demo",
+          "contents": "binary",
+          "kind": "file"
+        },
+        {
+          "path": "usr/bin/link",
+          "contents": "",
+          "kind": "symlink",
+          "target": "demo"
+        },
+        {
+          "path": "usr/bin/hard",
+          "contents": "",
+          "kind": "hardlink",
+          "target": "usr/bin/demo"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": true,
+          "files": [],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        },
+        {
+          "full": true,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": true,
+          "files": [
+            {
+              "name": "usr/",
+              "size": 0,
+              "mode": 16877
+            },
+            {
+              "name": "usr/bin/demo",
+              "size": 6,
+              "mode": 33188
+            },
+            {
+              "name": "usr/bin/hard",
+              "size": 0,
+              "mode": 420
+            },
+            {
+              "name": "usr/bin/link",
+              "size": 0,
+              "mode": 41380
+            }
+          ],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "mtree",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\n",
+          "kind": "file"
+        },
+        {
+          "path": ".MTREE",
+          "contents": "#mtree\n./.INSTALL type=file mode=644 size=5\n./usr type=dir mode=755\n./usr/bin type=dir mode=755\n./usr/bin/from-mtree type=file mode=755 size=42\n",
+          "kind": "file"
+        },
+        {
+          "path": "usr/bin/actual",
+          "contents": "payload",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        },
+        {
+          "full": true,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": true,
+          "files": [
+            {
+              "name": "usr/",
+              "size": 0,
+              "mode": 16877
+            },
+            {
+              "name": "usr/bin/",
+              "size": 0,
+              "mode": 16877
+            },
+            {
+              "name": "usr/bin/from-mtree",
+              "size": 42,
+              "mode": 33261
+            }
+          ],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "duplicate_pkginfo",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\n",
+          "kind": "file"
+        },
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = replacement\npkgver = 3-1\n",
+          "kind": "file"
+        },
+        {
+          "path": "payload",
+          "contents": "end",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "replacement",
+          "version": "3-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        },
+        {
+          "full": true,
+          "success": true,
+          "name": "replacement",
+          "version": "3-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [
+            {
+              "name": "payload",
+              "size": 3,
+              "mode": 33188
+            }
+          ],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "duplicate_scalars",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\npkgdesc = second\n",
+          "kind": "file"
+        },
+        {
+          "path": "payload",
+          "contents": "",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "second",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        },
+        {
+          "full": true,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "second",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [
+            {
+              "name": "payload",
+              "size": 0,
+              "mode": 33188
+            }
+          ],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "unusual_version",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = alpha:1.0-\n",
+          "kind": "file"
+        },
+        {
+          "path": "payload",
+          "contents": "",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "demo",
+          "version": "alpha:1.0-",
+          "desc": null,
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [],
+          "backups": []
+        },
+        {
+          "full": true,
+          "success": true,
+          "name": "demo",
+          "version": "alpha:1.0-",
+          "desc": null,
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [
+            {
+              "name": "payload",
+              "size": 0,
+              "mode": 33188
+            }
+          ],
+          "backups": []
+        }
+      ]
+    },
+    {
+      "name": "missing_release",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 1.0\n",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": false
+        },
+        {
+          "full": true,
+          "success": false
+        }
+      ]
+    },
+    {
+      "name": "malformed_line",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\nnot a key/value line\n",
+          "kind": "file"
+        },
+        {
+          "path": "payload",
+          "contents": "",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        },
+        {
+          "full": true,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [
+            {
+              "name": "payload",
+              "size": 0,
+              "mode": 33188
+            }
+          ],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "empty_relation",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\ndepend = broken>=\n",
+          "kind": "file"
+        },
+        {
+          "path": "payload",
+          "contents": "",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        },
+        {
+          "full": true,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [
+            {
+              "name": "payload",
+              "size": 0,
+              "mode": 33188
+            }
+          ],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "invalid_name",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = .invalid\npkgver = 1-1\n",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": false
+        },
+        {
+          "full": true,
+          "success": false
+        }
+      ]
+    },
+    {
+      "name": "multiple_hyphens",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 1-beta-1\n",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": false
+        },
+        {
+          "full": true,
+          "success": false
+        }
+      ]
+    },
+    {
+      "name": "invalid_mtree",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\n",
+          "kind": "file"
+        },
+        {
+          "path": ".MTREE",
+          "contents": "invalid mtree bytes",
+          "kind": "file"
+        },
+        {
+          "path": "actual",
+          "contents": "payload",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        },
+        {
+          "full": true,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [
+            {
+              "name": "actual",
+              "size": 7,
+              "mode": 33188
+            }
+          ],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "duplicate_mtree",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\n",
+          "kind": "file"
+        },
+        {
+          "path": ".MTREE",
+          "contents": "#mtree\n./.INSTALL type=file mode=644 size=5\n./usr type=dir mode=755\n./usr/bin type=dir mode=755\n./usr/bin/from-mtree type=file mode=755 size=42\n",
+          "kind": "file"
+        },
+        {
+          "path": ".MTREE",
+          "contents": "invalid mtree bytes",
+          "kind": "file"
+        },
+        {
+          "path": "actual",
+          "contents": "payload",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        },
+        {
+          "full": true,
+          "success": false,
+          "reference_signal": 11
+        }
+      ]
+    },
+    {
+      "name": "whitespace",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\npkgdesc =  spaced description  \n",
+          "kind": "file"
+        },
+        {
+          "path": "payload",
+          "contents": "",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": " spaced description  ",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        },
+        {
+          "full": true,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": " spaced description  ",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [
+            {
+              "name": "payload",
+              "size": 0,
+              "mode": 33188
+            }
+          ],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "pkginfo_symlink",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "",
+          "kind": "symlink",
+          "target": "unread"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": false
+        },
+        {
+          "full": true,
+          "success": false
+        }
+      ]
+    },
+    {
+      "name": "pkginfo_hardlink",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "",
+          "kind": "hardlink",
+          "target": "unread"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": false
+        },
+        {
+          "full": true,
+          "success": false
+        }
+      ]
+    },
+    {
+      "name": "truncated_payload",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\n",
+          "kind": "file"
+        },
+        {
+          "path": "first",
+          "contents": "ok",
+          "kind": "file"
+        },
+        {
+          "path": "second",
+          "contents": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "kind": "file"
+        }
+      ],
+      "truncate": 2562,
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        },
+        {
+          "full": true,
+          "success": false
+        }
+      ]
+    },
+    {
+      "name": "truncated",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\n",
+          "kind": "file"
+        }
+      ],
+      "truncate": 520,
+      "results": [
+        {
+          "full": false,
+          "success": false
+        },
+        {
+          "full": true,
+          "success": false
+        }
+      ]
+    },
+    {
+      "name": "duplicate_changelog",
+      "entries": [
+        {
+          "path": ".PKGINFO",
+          "contents": "pkgname = demo\npkgver = 2:1.0-1\npkgdesc = demo package\nsize = 4096\nbackup = etc/demo.conf\nprovides = virtual=3\nprovides = plain\nprovides = ranged>=10\nprovides = libdemo.so=3-64\ndepend = unusual>=alpha:1.0: explanation\nxdata = pkgtype=pkg\n",
+          "kind": "file"
+        },
+        {
+          "path": ".CHANGELOG",
+          "contents": "first",
+          "kind": "file"
+        },
+        {
+          "path": ".CHANGELOG",
+          "contents": "second",
+          "kind": "file"
+        },
+        {
+          "path": "payload",
+          "contents": "",
+          "kind": "file"
+        }
+      ],
+      "results": [
+        {
+          "full": false,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        },
+        {
+          "full": true,
+          "success": true,
+          "name": "demo",
+          "version": "2:1.0-1",
+          "desc": "demo package",
+          "installed_db": null,
+          "origin": 1,
+          "validation": 1,
+          "reason": 0,
+          "scriptlet": false,
+          "files": [
+            {
+              "name": "payload",
+              "size": 0,
+              "mode": 33188
+            }
+          ],
+          "backups": [
+            {
+              "name": "etc/demo.conf",
+              "hash": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "satisfaction": [
+    {
+      "requirement": "demo",
+      "matched": true
+    },
+    {
+      "requirement": "demo=2:1.0",
+      "matched": true
+    },
+    {
+      "requirement": "demo>2:1.0-1",
+      "matched": false
+    },
+    {
+      "requirement": "virtual>=3",
+      "matched": true
+    },
+    {
+      "requirement": "virtual>3",
+      "matched": false
+    },
+    {
+      "requirement": "plain",
+      "matched": true
+    },
+    {
+      "requirement": "plain=2:1.0-1",
+      "matched": false
+    },
+    {
+      "requirement": "ranged",
+      "matched": true
+    },
+    {
+      "requirement": "ranged>=1",
+      "matched": false
+    },
+    {
+      "requirement": "libdemo.so=3-64",
+      "matched": true
+    },
+    {
+      "requirement": "libdemo.so=3-32",
+      "matched": false
+    },
+    {
+      "requirement": "absent",
+      "matched": false
+    },
+    {
+      "requirement": "virtual=: description",
+      "matched": false
+    }
+  ],
+  "reasons": [
+    {
+      "input": "0",
+      "reason": 0
+    },
+    {
+      "input": "1",
+      "reason": 1
+    },
+    {
+      "input": "2",
+      "reason": 2
+    },
+    {
+      "input": "9",
+      "reason": 2
+    },
+    {
+      "input": "bogus",
+      "reason": 2
+    }
+  ],
+  "local_metadata": {
+    "desc": "%NAME%\nlocal-demo\n\n%VERSION%\n2:1.0-1\n\n%INSTALLED_DB%\nremoved-cachyos-repo\n\n%SIZE%\n4096\n\n%VALIDATION%\nmd5\nsha256\npgp\n\n%DEPENDS%\nfoo>1<2: explanation\n\n",
+    "files_input": "%FILES%\nzeta\netc/\netc/demo.conf\n\n%BACKUP%\netc/demo.conf\t0123456789abcdef0123456789abcdef\n\n",
+    "installed_db": "removed-cachyos-repo",
+    "validation": 14,
+    "installed_size": 4096,
+    "files": [
+      "etc/",
+      "etc/demo.conf",
+      "zeta"
+    ],
+    "backup": {
+      "name": "etc/demo.conf",
+      "hash": "0123456789abcdef0123456789abcdef"
+    }
+  }
+}

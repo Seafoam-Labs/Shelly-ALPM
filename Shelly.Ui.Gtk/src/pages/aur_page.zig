@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gio = bindings.gio;
@@ -541,7 +542,7 @@ pub const AurPage = extern struct {
     ) void {
         const svc = runtime.config orelse return;
         svc.updateField(field, value) catch |err| {
-            std.log.err("Could not update setting {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(@tagName(field)), @import("diagnostics").cause(err), @errorName(err) });
+            std.log.err("Could not update setting {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(@tagName(field)), diagnostics.cause(err), @errorName(err) });
         };
     }
 
@@ -596,13 +597,13 @@ pub const AurPage = extern struct {
                     return;
                 };
                 break :blk cli.search_aur(query) catch |err| {
-                    std.debug.print("Could not search the AUR. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+                    std.debug.print("Could not search the AUR. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                     post_failure(page, arena_ptr, generation);
                     return;
                 };
             },
             .installed => cli.list_aur_installed() catch |err| {
-                std.debug.print("Could not load the installed AUR-package list. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+                std.debug.print("Could not load the installed AUR-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                 post_failure(page, arena_ptr, generation);
                 return;
             },

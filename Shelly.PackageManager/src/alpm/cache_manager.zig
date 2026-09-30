@@ -1,9 +1,6 @@
 const std = @import("std");
-const bindings = @import("bindings.zig");
+const PackageManager = @import("manager.zig").Manager;
 const operation_api = @import("operation_context");
-
-const libalpm = bindings.libalpm;
-const raw_libalpm = bindings.libalpm.alpm;
 
 pub const Error = error{
     NoHandle,
@@ -22,7 +19,7 @@ pub const InstalledFilter = enum {
 
 pub const Options = struct {
     cache_directory: []const u8 = "/var/cache/pacman/pkg",
-    handle: libalpm.Handle = null,
+    manager: ?*PackageManager = null,
 };
 
 pub const CleanOptions = struct {
@@ -121,7 +118,7 @@ pub const CacheManager = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
     cache_directory: []const u8,
-    handle: libalpm.Handle,
+    manager: ?*PackageManager,
     operation_context: ?*operation_api.OperationContext = null,
     parent_operation: ?*const operation_api.Operation = null,
 
@@ -130,12 +127,12 @@ pub const CacheManager = struct {
             .allocator = allocator,
             .io = io,
             .cache_directory = options.cache_directory,
-            .handle = options.handle,
+            .manager = options.manager,
         };
     }
 
-    pub fn setHandle(self: *CacheManager, handle: libalpm.Handle) void {
-        self.handle = handle;
+    pub fn setManager(self: *CacheManager, manager: ?*PackageManager) void {
+        self.manager = manager;
     }
 
     /// Borrows a context for cache planning and deletion.
@@ -151,7 +148,7 @@ pub const CacheManager = struct {
     /// Scans the package cache and returns an owned removal plan. No files are
     /// deleted by this operation.
     pub fn plan_cache_cleanup(self: *CacheManager, options: CleanOptions) Error!RemovalPlan {
-        if (options.installed_filter != .all and self.handle == null) return Error.NoHandle;
+        if (options.installed_filter != .all and self.manager == null) return Error.NoHandle;
         var scope = CacheOperationScope.init(self.operation_context, self.parent_operation, .cleanup, options.cache_directory orelse self.cache_directory);
         defer scope.finish(.success);
         errdefer scope.fail();
@@ -179,9 +176,8 @@ pub const CacheManager = struct {
     }
 
     fn isPackageInstalled(self: *CacheManager, package_name: [:0]const u8) bool {
-        if (self.handle == null) return false;
-        const local_db = raw_libalpm.alpm_get_localdb(self.handle);
-        return raw_libalpm.alpm_db_get_pkg(local_db, package_name.ptr) != null;
+        if (self.manager == null) return false;
+        return self.manager.?.is_package_installed(package_name);
     }
 };
 
@@ -364,7 +360,7 @@ fn buildRemovalPlan(
 fn entryLessThan(_: void, a: Entry, b: Entry) bool {
     const name_order = std.mem.order(u8, a.name, b.name);
     if (name_order != .eq) return name_order == .lt;
-    const version_order = raw_libalpm.alpm_pkg_vercmp(a.version_release.ptr, b.version_release.ptr);
+    const version_order = PackageManager.compare_package_versions(a.version_release, b.version_release);
     if (version_order != 0) return version_order < 0;
     const arch_order = std.mem.order(u8, a.arch, b.arch);
     if (arch_order != .eq) return arch_order == .lt;

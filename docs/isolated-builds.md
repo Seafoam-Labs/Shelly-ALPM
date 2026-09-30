@@ -8,7 +8,7 @@ callers are available via `shelly --version --json` before scheduling a build.
 
 The elevated process is a coordinator only. It reviews the host PKGBUILD and
 local inputs, materializes only those byte-exact reviewed inputs in the guest,
-provisions the guest with Shelly's libalpm-based `shellystrap` helper, and
+provisions the guest with Shelly's selected native backend through the `shellystrap` helper, and
 starts nspawn. The helper runs in a short-lived private mount/PID namespace,
 copies the host pacman trust database into the operation root, and keeps its
 database, cache, and log under that root. PKGBUILD lifecycle functions run as
@@ -17,13 +17,43 @@ required, and the command fails closed when systemd cannot provide it.
 
 Provisioning reads hooks only from the guest's `/usr/share/libalpm/hooks` and
 `/etc/pacman.d/hooks`, replacing host defaults and configured `HookDir` entries.
-libalpm discovers newly installed hooks after the initial transaction and runs
+Both native backends discover newly installed hooks after the initial transaction and run
 their matching post-transaction actions inside the root. This initializes tools
 such as TeX Live, including its filename databases, formats, and font maps.
-Package setup errors stop provisioning even when libalpm considers the package
+Package setup errors stop provisioning even when the backend considers the package
 transaction committed. Hook names and output are streamed into the operation
 log before root cleanup. The baseline finalizers remain as idempotent checks
 for required linker, account, directory, and certificate setup.
+
+Bootstrap flushes each hook, scriptlet, diagnostic, and finalizer message as it
+arrives. RLPM also forwards preparation, package, and download events to the
+coordinator. Database fingerprint checks and archive preflight report their
+work before installation begins, with periodic file and byte counters during
+long checks. Intermediate progress is limited to four updates per second;
+stage changes, completion, and diagnostics are delivered immediately. These
+messages do not change dependency selection, signature checks, or cancellation.
+
+Binaries compiled with `-Dlibalpm=false` provision an explicit userspace and
+build-tool set instead of `base` and `base-devel`. They copy the host trust
+database without requiring `archlinux-keyring` or its pacman dependency for
+Shelly's own operation. RLPM resolves and installs the recipe's normal repository
+dependencies, including pacman, libalpm, and packages providing the libalpm shared
+library. The compiled backend controls Shelly's implementation and baseline
+tools; it does not restrict the software that can be built. Dependency validation
+stays enabled.
+
+Both profiles stage one CLI at `/usr/local/libexec/shelly/shelly`; its private
+worker modes re-execute that binary inside the guest. The RLPM-only profile checks
+its runtime libraries before provisioning and inside the guest, and rejects
+missing libraries or libalpm linkage. No sibling worker files are required.
+These checks apply to the staged Shelly executable, not the recipe's tools or
+outputs, which may link to libalpm.
+The guest receives a local-database-only package configuration after provisioning;
+the host's repository configuration and signature policy govern provisioning.
+Configuration and local database permissions allow the unprivileged guest to
+query installed packages even under a restrictive provisioning umask.
+With libalpm compiled in, both runtime backend selections retain the existing
+bootstrap targets and executable staging.
 
 The container does not bind the host checkout, home directory, package
 database, configuration directories, or runtime sockets. Its merged
@@ -36,7 +66,7 @@ permissions are preserved. Writable build directories belong to the guest
 UID/GID `1000:1000`; the enclosing host operation directory remains root-owned
 `0700`. Reviewed files retain their exact reviewed permissions.
 The resulting package's `.BUILDINFO` records the exact package set installed
-in the guest. Before export, libalpm loads every candidate archive and Shelly
+in the guest. Before export, the selected native backend loads every candidate archive and Shelly
 rejects malformed, duplicate, missing, or unexpected package identities.
 
 When `pkgver()` changes the version, the guest updates its staged PKGBUILD and
@@ -89,6 +119,13 @@ database is removed after review; provisioning refreshes and verifies the
 repositories again using the configured signature policy. Local repository
 servers must be readable by the invoking user during review. A built archive
 must be published in a configured repository's database to be resolved here.
+
+For a recipe that compiles against libalpm, declare the package supplying
+`alpm.h` and `libalpm.pc` in the global `makedepends` array (`pacman` on Arch,
+or the distribution's development package). A declaration only inside a
+`package_<name>()` function does not provision those build inputs. Keep the
+recipe's intended backend and build flags; an RLPM-only coordinator can build
+a libalpm-enabled application.
 
 Build dependency planning uses the PKGBUILD's global `depends`, `makedepends`,
 and (unless checks are disabled) `checkdepends`, including the active
@@ -199,8 +236,11 @@ Bootstrap configuration and diagnostic tests run without elevation:
 The hook test uses an unprivileged user/mount/PID namespace and a temporary
 package root. It installs hooks in the same transaction as their executable,
 checks their execution order, excludes host hooks, and detects post-transaction
-failures even when libalpm reports a successful commit. User namespaces must be
+failures even when the backend reports a successful commit. User namespaces must be
 enabled on the test system.
+
+The hook fixture runs against every compiled backend and checks the failing hook
+name in the shared error events. Add `-Dlibalpm=false` to test the RLPM-only build.
 
 To test the documentation toolchain in a real nspawn build, run from a normal
 user session with sudo authentication available:
@@ -221,6 +261,23 @@ and GID. Standard purge targets must be absent when stripping is disabled.
 Set `SHELLY_BIN` to test an already-built CLI. The script authenticates sudo
 interactively when run from a terminal; unattended runs require an existing
 sudo credential and exit `77` (skipped) if authentication is unavailable.
+Set `SHELLY_LIBALPM=false` when the smoke or documentation script builds its own
+CLI to exercise the RLPM-only variant. The smoke fixture detects the staged
+binary's variant and additionally checks the single-executable layout,
+permissions, library resolution, the absence of baseline pacman/libalpm
+dependencies, and repository dependencies in `.BUILDINFO`.
+
+Run the same fixture with a declared libalpm build dependency to verify that
+the guest can compile and run a program using `alpm.h` and `libalpm.pc` while
+the staged Shelly executable remains independent of libalpm:
+
+```sh
+SHELLY_LIBALPM=false SHELLY_TEST_LIBALPM_PACKAGE=pacman \
+  Shelly.Cli.Zig/scripts/test-isolated-build.sh
+```
+
+Use the distribution's package name instead of `pacman` if it packages the
+libalpm development files separately.
 
 Cancellation across the elevation boundary has a rootless integration fixture
 that uses a deterministic fake elevator:

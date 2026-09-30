@@ -1,0 +1,153 @@
+Some unicode fonts are now implementing special glyph to render pretty
+progress bars.
+
+Here are some examples:
+* FiraCode [1] [2]
+* Iosevka [3] [4] [5]
+* JuliaMono [3]
+
+This change introduces a new parameter, `PrettyProgressBar` that
+triggers the use of those characters to render progress bars.
+
+Here is an example of how it renders with this new option and the
+FiraCode font: [6]
+
+[1] https://github.com/tonsky/FiraCode/releases/tag/6
+[2] https://github.com/tonsky/FiraCode/issues/1182
+[3] https://github.com/tonsky/FiraCode/issues/1182#issuecomment-1525953517
+[4] https://github.com/be5invis/Iosevka/releases/tag/v11.2.0
+[5] https://github.com/be5invis/Iosevka/issues/1327
+[6] https://i2.paste.pics/OK03I.png
+
+Signed-off-by: Lénaïc Huard <lenaic@lhuard.fr>
+ doc/pacman.conf.5.asciidoc           |   3 +
+ etc/pacman.conf.in                   |   1 +
+ scripts/completion/zsh_completion.in |   1 +
+ src/pacman/callback.c                | 108 ++++++++++++++++-----------
+ src/pacman/conf.c                    |   3 +
+ src/pacman/conf.h                    |   2 +
+ src/pacman/pacman-conf.c             |   3 +
+ 7 files changed, 76 insertions(+), 45 deletions(-)
+
+diff --git a/doc/pacman.conf.5.asciidoc b/doc/pacman.conf.5.asciidoc
+index 7c92715a..5c1fd18a 100644
+--- a/doc/pacman.conf.5.asciidoc
++++ b/doc/pacman.conf.5.asciidoc
+@@ -186,6 +186,9 @@ Options
+ *Color*::
+ 	Automatically enable colors only when pacman's output is on a tty.
+ 
++*PrettyProgressBar*::
++	Use specific U+EE00..U+EE05 unicode characters to render pretty progress bars.
++
+ *NoProgressBar*::
+ 	Disables progress bars. This is useful for terminals which do
+ 	not support escape characters.
+diff --git a/etc/pacman.conf.in b/etc/pacman.conf.in
+index d1ab736e..ffd43c46 100644
+--- a/etc/pacman.conf.in
++++ b/etc/pacman.conf.in
+@@ -31,6 +31,7 @@ Architecture = auto
+ # Misc options
+ #UseSyslog
+ #Color
++#PrettyProgressBar
+ #NoProgressBar
+ CheckSpace
+ #VerbosePkgLists
+diff --git a/scripts/completion/zsh_completion.in b/scripts/completion/zsh_completion.in
+index 399e0c4b..41aee156 100644
+--- a/scripts/completion/zsh_completion.in
++++ b/scripts/completion/zsh_completion.in
+@@ -514,6 +514,7 @@ _pacman_conf_general_directives=(
+ 	'CheckSpace'
+ 	'VerbosePkgLists'
+ 	'DisableDownloadTimeout'
++	'PrettyProgressBar'
+ 	'NoProgressBar'
+ 	'ParallelDownloads'
+ 	'CleanMethod'
+diff --git a/src/pacman/callback.c b/src/pacman/callback.c
+index 76527e40..7354f7d9 100644
+--- a/src/pacman/callback.c
++++ b/src/pacman/callback.c
+@@ -152,6 +152,21 @@ static int64_t get_update_timediff(int first_call)
+ /* refactored from cb_trans_progress */
+ static void fill_progress(const int percent, const int proglen)
+ {
++	/* if pretty progress bar enabled */
++	if(config->pretty) {
++		/* 8 = 1 space + 1  + 1  + 5 for percent */
++		const int hashlen = proglen > 8 ? proglen - 6 : 0;
++		const int hash = percent * hashlen / 100;
++
++		if(hashlen > 2) {
++			fputs(hash > 0 ? " " : " ", stdout);
++			for(int i = hashlen - 1; i > 1; --i) {
++				fputs(i > hashlen - hash ? "" : "", stdout);
++			}
++			fputs(hash == hashlen ? "" : "", stdout);
++		}
++
++	} else {
+ 	/* 8 = 1 space + 1 [ + 1 ] + 5 for percent */
+ 	const int hashlen = proglen > 8 ? proglen - 8 : 0;
+ 	const int hash = percent * hashlen / 100;
+@@ -184,6 +199,7 @@ static void fill_progress(const int percent, const int proglen)
+ 		}
+ 		putchar(']');
+ 	}
++	}
+ 	/* print display percent after progress bar */
+ 	/* 5 = 1 space + 3 digits + 1 % */
+ 	if(proglen >= 5) {
+diff --git a/src/pacman/conf.c b/src/pacman/conf.c
+index 207ebf7a..86baa346 100644
+--- a/src/pacman/conf.c
++++ b/src/pacman/conf.c
+@@ -606,6 +606,9 @@ static int _parse_options(const char *key, char *value,
+ 		} else if(strcmp(key, "ILoveCandy") == 0) {
+ 			config->chomp = 1;
+ 			pm_printf(ALPM_LOG_DEBUG, "config: chomp\n");
++		} else if(strcmp(key, "PrettyProgressBar") == 0 ) {
++			config->pretty = 1;
++			pm_printf(ALPM_LOG_DEBUG, "config: pretty\n");
+ 		} else if(strcmp(key, "VerbosePkgLists") == 0) {
+ 			config->verbosepkglists = 1;
+ 			pm_printf(ALPM_LOG_DEBUG, "config: verbosepkglists\n");
+diff --git a/src/pacman/conf.h b/src/pacman/conf.h
+index 3fb07425..92995ce6 100644
+--- a/src/pacman/conf.h
++++ b/src/pacman/conf.h
+@@ -112,6 +112,8 @@ typedef struct __config_t {
+ 	/* conf file options */
+ 	/* I Love Candy! */
+ 	unsigned short chomp;
++	/* Pretty progress bar */
++	unsigned short pretty;
+ 	/* format target pkg lists as table */
+ 	unsigned short verbosepkglists;
+ 	/* number of parallel download streams */
+diff --git a/src/pacman/pacman-conf.c b/src/pacman/pacman-conf.c
+index 27b93a29..00f370b6 100644
+--- a/src/pacman/pacman-conf.c
++++ b/src/pacman/pacman-conf.c
+@@ -278,6 +278,7 @@ static void dump_config(void)
+ 	show_bool("VerbosePkgLists", config->verbosepkglists);
+ 	show_bool("DisableDownloadTimeout", config->disable_dl_timeout);
+ 	show_bool("ILoveCandy", config->chomp);
++	show_bool("PrettyProgressBar", config->pretty);
+ 	show_bool("NoProgressBar", config->noprogressbar);
+ 
+ 	show_int("ParallelDownloads", config->parallel_downloads);
+@@ -392,6 +393,8 @@ static int list_directives(void)
+ 			show_bool("DisableDownloadTimeout", config->disable_dl_timeout);
+ 		} else if(strcasecmp(i->data, "ILoveCandy") == 0) {
+ 			show_bool("ILoveCandy", config->chomp);
++		} else if(strcasecmp(i->data, "PrettyProgressBar") == 0) {
++			show_bool("PrettyProgressBar", config->pretty);
+ 		} else if(strcasecmp(i->data, "NoProgressBar") == 0) {
+ 			show_bool("NoProgressBar", config->noprogressbar);
+ 
+-- 
+2.40.1

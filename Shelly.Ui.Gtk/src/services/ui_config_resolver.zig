@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const Io = std.Io;
 const shelly_config = @import("../models/shelly_config.zig");
 const ShellyConfig = shelly_config.ShellyConfig;
@@ -106,13 +107,13 @@ pub const ConfigResolver = struct {
             self.io,
         ) catch |err| {
             kept_copy = false;
-            std.log.warn("Could not keep a copy of the unreadable settings file. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            std.log.warn("Could not keep a copy of the unreadable settings file. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
         };
 
         var repaired = true;
         self.saveDefault(settings_path) catch |err| {
             repaired = false;
-            std.log.warn("Could not write the default settings file. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            std.log.warn("Could not write the default settings file. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
         };
 
         const outcome: []const u8 = if (repaired)
@@ -241,7 +242,7 @@ fn parseTolerant(allocator: std.mem.Allocator, source: std.json.Value) ShellyCon
                 // TODO: Change to warn after https://codeberg.org/ziglang/zig/issues/35189
                 std.log.info(
                     "Ignored invalid value for setting '{0f}' in the selected path; using the default. Expected the documented values.",
-                    .{@import("diagnostics").safe(field.name)},
+                    .{diagnostics.safe(field.name)},
                 );
             }
         }

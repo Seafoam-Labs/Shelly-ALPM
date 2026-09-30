@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const Zigalpm = @import("Zigalpm");
+const PackageManager = @import("PackageManager");
 
 var received_signal = std.atomic.Value(u8).init(0);
 var received_signal_count = std.atomic.Value(u8).init(0);
@@ -125,14 +125,14 @@ fn isBooleanValue(argument: []const u8) bool {
 /// allowed to allocate, lock, and invoke cancellation subscribers.
 pub const CancellationWatcher = struct {
     io: std.Io = undefined,
-    operation_context: *Zigalpm.OperationContext = undefined,
+    operation_context: *PackageManager.OperationContext = undefined,
     stopped: std.atomic.Value(bool) = .init(false),
     future: ?std.Io.Future(void) = null,
 
     pub fn start(
         self: *CancellationWatcher,
         io: std.Io,
-        operation_context: *Zigalpm.OperationContext,
+        operation_context: *PackageManager.OperationContext,
     ) !void {
         self.io = io;
         self.operation_context = operation_context;
@@ -182,7 +182,7 @@ test "cancellation watcher translates a signal into OperationContext cancellatio
     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var operation_context = Zigalpm.OperationContext.init(std.testing.allocator, io);
+    var operation_context = PackageManager.OperationContext.init(std.testing.allocator, io);
     defer operation_context.deinit();
     var watcher: CancellationWatcher = .{};
     try watcher.start(io, &operation_context);

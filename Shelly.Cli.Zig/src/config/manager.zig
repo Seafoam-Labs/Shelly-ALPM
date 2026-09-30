@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const model = @import("model.zig");
 const runtime = @import("../runtime/context.zig");
 const xdg = @import("../runtime/xdg.zig");
@@ -67,7 +68,7 @@ pub const Manager = struct {
         var kept: ?[]u8 = std.fmt.allocPrint(allocator, "{s}.corrupt", .{config_path}) catch null;
         if (kept) |copy| {
             std.Io.Dir.renameAbsolute(config_path, copy, self.context.io) catch |err| {
-                warn(self.context, "Could not keep a copy of the unreadable configuration file. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+                warn(self.context, "Could not keep a copy of the unreadable configuration file. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
                 allocator.free(copy);
                 kept = null;
             };
@@ -77,7 +78,7 @@ pub const Manager = struct {
         var repaired = true;
         self.save(config) catch |err| {
             repaired = false;
-            warn(self.context, "Could not write the default configuration file. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            warn(self.context, "Could not write the default configuration file. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
         };
 
         const outcome: []const u8 = if (repaired)
@@ -85,7 +86,7 @@ pub const Manager = struct {
         else
             "the built-in defaults apply to this run";
         if (kept) |copy| {
-            warn(self.context, "The configuration file was not readable as Shelly settings, so {0s}. A copy was kept as {1f}.\n\nTechnical details: {2s}", .{ outcome, @import("diagnostics").safe(copy), @errorName(json_error) });
+            warn(self.context, "The configuration file was not readable as Shelly settings, so {0s}. A copy was kept as {1f}.\n\nTechnical details: {2s}", .{ outcome, diagnostics.safe(copy), @errorName(json_error) });
         } else {
             warn(self.context, "The configuration file was not readable as Shelly settings, so {0s}.\n\nTechnical details: {1s}", .{ outcome, @errorName(json_error) });
         }

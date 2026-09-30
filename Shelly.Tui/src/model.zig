@@ -1,4 +1,6 @@
 const std = @import("std");
+const ui_decode = @import("ui_decode.zig");
+const diagnostics = @import("diagnostics");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const builtin = @import("builtin");
@@ -706,8 +708,8 @@ pub const Model = struct {
             const stdout = multi_reader.toOwnedSlice(0) catch &.{};
             defer if (stderr.len > 0) alloc.free(stderr);
             defer if (stdout.len > 0) alloc.free(stdout);
-            job.error_detail = (@import("ui_decode.zig").JsonPackFrame.failureMessage(alloc, stdout) catch null) orelse
-                (@import("diagnostics").sanitizeAlloc(alloc, if (stderr.len > 0) std.mem.trim(u8, stderr, " \t\r\n") else "Could not install the requested package. Shelly returned no error details. Review the command output before retrying.") catch "");
+            job.error_detail = (ui_decode.JsonPackFrame.failureMessage(alloc, stdout) catch null) orelse
+                (diagnostics.sanitizeAlloc(alloc, if (stderr.len > 0) std.mem.trim(u8, stderr, " \t\r\n") else "Could not install the requested package. Shelly returned no error details. Review the command output before retrying.") catch "");
             job.failed = true;
         }
     }
@@ -764,7 +766,7 @@ pub const Model = struct {
         }
 
         const message = if (failed)
-            try std.fmt.allocPrint(self.gpa, "Could not install {0f}.", .{@import("diagnostics").safe(job.name)})
+            try std.fmt.allocPrint(self.gpa, "Could not install {0f}.", .{diagnostics.safe(job.name)})
         else
             try std.fmt.allocPrint(self.gpa, "Installed {s}", .{job.name});
         try self.setNotice(message);
@@ -1115,7 +1117,7 @@ pub const Model = struct {
                 body = try std.fmt.allocPrint(arena, "✔ '{s}' was installed successfully.\n\nEsc: close", .{prompt.name});
             },
             .failed => {
-                body = try std.fmt.allocPrint(arena, "Could not install {0f}.\n\n{1f}\n\nEsc: close", .{ @import("diagnostics").safe(prompt.name), @import("diagnostics").safe(if (prompt.detail.len > 0) prompt.detail else "Shelly returned no error details.") });
+                body = try std.fmt.allocPrint(arena, "Could not install {0f}.\n\n{1f}\n\nEsc: close", .{ diagnostics.safe(prompt.name), diagnostics.safe(if (prompt.detail.len > 0) prompt.detail else "Shelly returned no error details.") });
             },
         }
 

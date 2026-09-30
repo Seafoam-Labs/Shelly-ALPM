@@ -10,7 +10,7 @@ pub const variants = [_]types.Variant{
         .name = "standard",
         .type_code = 's',
         .description = "List packages installed in the local ALPM database, including ignored packages, with optional install-reason filters.",
-        .implementation = "Zigalpm.AlpmManager.get_installed_packages",
+        .implementation = "PackageManager.Manager.get_installed_packages",
         .options = &.{
             flag("--show-hidden", &.{"-w"}, "Accepted for compatibility; ignored packages are always included"),
             flag("--explicitOnly", &.{"-e"}, "List explicitly installed packages only"),
@@ -25,7 +25,7 @@ pub const variants = [_]types.Variant{
         .type_code = 'i',
         .alias_type_codes = &.{'I'},
         .description = "List installed AppImages.",
-        .implementation = "Zigalpm.AppImageManager.getAppImagesFromLocalDb",
+        .implementation = "PackageManager.AppImageManager.getAppImagesFromLocalDb",
     },
     .{
         .action = .list,
@@ -33,7 +33,7 @@ pub const variants = [_]types.Variant{
         .type_code = 'a',
         .alias_type_codes = &.{'A'},
         .description = "List installed foreign packages tracked as AUR packages.",
-        .implementation = "Zigalpm.AurManager.getInstalledPackages",
+        .implementation = "PackageManager.AurManager.getInstalledPackages",
         .options = &.{
             flag("--show-hidden", &.{}, "Include hidden packages"),
             flag("--explicitOnly", &.{"-e"}, "List explicitly installed packages only"),
@@ -48,7 +48,7 @@ pub const variants = [_]types.Variant{
         .type_code = 'f',
         .alias_type_codes = &.{'F'},
         .description = "List installed Flatpaks, configured system and user remotes, or cached AppStream JSON for one or every remote.",
-        .implementation = "Zigalpm.FlatpakManager.list_installed_applications / get_remote_appstream / get_all_remote_appstreams",
+        .implementation = "PackageManager.FlatpakManager.list_installed_applications / get_remote_appstream / get_all_remote_appstreams",
         .arguments = &.{
             optionalArgumentWithChoices(
                 "source",

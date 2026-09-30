@@ -1,5 +1,6 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const diagnostics = @import("diagnostics");
+const PackageManager = @import("PackageManager");
 const test_support = @import("test_support.zig");
 const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
@@ -20,7 +21,7 @@ const Standard = struct {
     pub fn run(
         _: Standard,
         context: *runtime.RuntimeContext,
-        operation_context: *Zigalpm.OperationContext,
+        operation_context: *PackageManager.OperationContext,
         invocation: *const parser.Invocation,
     ) !void {
         return runRealStandardSync(context, operation_context, invocation);
@@ -31,7 +32,7 @@ const AppImage = struct {
     pub fn run(
         _: AppImage,
         context: *runtime.RuntimeContext,
-        operation_context: *Zigalpm.OperationContext,
+        operation_context: *PackageManager.OperationContext,
         invocation: *const parser.Invocation,
     ) !void {
         return runRealAppImageSync(context, operation_context, invocation);
@@ -42,7 +43,7 @@ const Flatpak = struct {
     pub fn run(
         _: Flatpak,
         context: *runtime.RuntimeContext,
-        operation_context: *Zigalpm.OperationContext,
+        operation_context: *PackageManager.OperationContext,
         invocation: *const parser.Invocation,
     ) !void {
         return runRealFlatpakSync(context, operation_context, invocation);
@@ -71,7 +72,7 @@ pub fn dispatch(
         booleanOption(invocation, "--system", true);
     if ((is_standard or system_remote_mutation) and !invocation.globals.ui_mode) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-            try context.stderr.print("Could not obtain administrator privileges for package synchronization. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+            try context.stderr.print("Could not obtain administrator privileges for package synchronization. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -130,10 +131,10 @@ fn executeUi(
 
 fn runRealStandardSync(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
-    const manager = try Zigalpm.AlpmManager.init(context.allocator, context.environ, .{ .use_root = true, .operation_context = operation_context });
+    const manager = try PackageManager.Manager.init(context.allocator, context.environ, .{ .use_root = true, .operation_context = operation_context });
     defer manager.deinit();
     manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null);
@@ -143,7 +144,7 @@ fn runRealStandardSync(
 
 fn runRealAppImageSync(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
     if (elevation.isRoot()) {
@@ -187,7 +188,7 @@ fn runRealAppImageSync(
         if (update_url.len == 0 and update_type != .none)
             return error.AppImageUpdateUrlRequired;
 
-        var update_manager = Zigalpm.appimage.UpdateManager{
+        var update_manager = PackageManager.appimage.UpdateManager{
             .allocator = context.allocator,
             .io = context.io,
             .environ = context.environ,
@@ -228,7 +229,7 @@ fn runRealAppImageSync(
         else => return err,
     };
 
-    var manager = Zigalpm.AppImageManager{
+    var manager = PackageManager.AppImageManager{
         .allocator = context.allocator,
         .io = context.io,
         .environ = context.environ,
@@ -253,13 +254,13 @@ fn runRealAppImageSync(
 
 fn runRealFlatpakSync(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
     if (isFlatpakRemoteMutation(invocation))
         return runRealFlatpakRemoteMutation(context, operation_context, invocation);
 
-    var manager = Zigalpm.flatpak.AppstreamManager.init(context.allocator, context.io);
+    var manager = PackageManager.flatpak.AppstreamManager.init(context.allocator, context.io);
     manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null);
 
@@ -268,15 +269,15 @@ fn runRealFlatpakSync(
 
 fn runRealFlatpakRemoteMutation(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
     const operation = invocation.positionals[1];
     const name = try context.allocator.dupeZ(u8, invocation.positionals[2]);
     defer context.allocator.free(name);
-    const scope: Zigalpm.flatpak.Scope =
+    const scope: PackageManager.flatpak.Scope =
         if (booleanOption(invocation, "--system", true)) .system else .user;
-    var manager = Zigalpm.flatpak.RemoteManager{
+    var manager = PackageManager.flatpak.RemoteManager{
         .allocator = context.allocator,
         .io = context.io,
     };
@@ -421,7 +422,7 @@ fn appImageValidationFailure(invocation: *const parser.Invocation) ?[]const u8 {
     if (!configure_updates or invocation.positionals.len != 3) return null;
 
     const update_type = parseAppImageUpdateType(invocation.positionals[2]) orelse return null;
-    Zigalpm.appimage.UpdateManager.validate_update_configuration(
+    PackageManager.appimage.UpdateManager.validate_update_configuration(
         invocation.positionals[1],
         update_type,
     ) catch return switch (update_type) {
@@ -454,7 +455,7 @@ fn stringValue(configuration: *const config_model.Config, key: []const u8) ?[]co
 
 fn allAppImageNames(
     allocator: std.mem.Allocator,
-    app_images: []const Zigalpm.appimage.AppImage,
+    app_images: []const PackageManager.appimage.AppImage,
 ) ![]const []const u8 {
     const names = try allocator.alloc([]const u8, app_images.len);
     for (app_images, names) |app_image, *name| name.* = app_image.name;
@@ -463,8 +464,8 @@ fn allAppImageNames(
 
 fn matchingAppImageName(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
-    app_images: []const Zigalpm.appimage.AppImage,
+    operation_context: *PackageManager.OperationContext,
+    app_images: []const PackageManager.appimage.AppImage,
     query: []const u8,
 ) ![]const []const u8 {
     for (app_images) |app_image| {
@@ -476,7 +477,7 @@ fn matchingAppImageName(
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Could not find AppImage {0f} in the local database. Check the installed AppImage list and try again.",
-        .{@import("diagnostics").safe(query)},
+        .{diagnostics.safe(query)},
     );
     defer context.allocator.free(message);
     emitAppImageInfo(operation_context, message);
@@ -493,7 +494,7 @@ fn containsTextIgnoreCase(value: []const u8, query: []const u8) bool {
     return false;
 }
 
-fn parseAppImageUpdateType(value: []const u8) ?Zigalpm.appimage.UpdateType {
+fn parseAppImageUpdateType(value: []const u8) ?PackageManager.appimage.UpdateType {
     if (std.ascii.eqlIgnoreCase(value, "None")) return .none;
     if (std.ascii.eqlIgnoreCase(value, "StaticUrl")) return .static_url;
     if (std.ascii.eqlIgnoreCase(value, "GitHub")) return .github;
@@ -503,7 +504,7 @@ fn parseAppImageUpdateType(value: []const u8) ?Zigalpm.appimage.UpdateType {
     return null;
 }
 
-fn emitAppImageInfo(operation_context: *Zigalpm.OperationContext, message: []const u8) void {
+fn emitAppImageInfo(operation_context: *PackageManager.OperationContext, message: []const u8) void {
     var operation = operation_context.begin(.{
         .backend = .appimage,
         .kind = .sync,
@@ -531,7 +532,7 @@ test "sync forwards force and applies no-confirm through the shared operation co
         pub fn run(
             self: *@This(),
             runtime_context: *runtime.RuntimeContext,
-            operation_context: *Zigalpm.OperationContext,
+            operation_context: *PackageManager.OperationContext,
             invocation: *const parser.Invocation,
         ) !void {
             self.force = optionEnabled(invocation, "--force");
@@ -567,7 +568,7 @@ test "Flatpak sync uses the AppStream path and standard non-UI lifecycle" {
         pub fn run(
             self: *@This(),
             _: *runtime.RuntimeContext,
-            operation_context: *Zigalpm.OperationContext,
+            operation_context: *PackageManager.OperationContext,
             invocation: *const parser.Invocation,
         ) !void {
             self.called = true;
@@ -677,7 +678,7 @@ test "Flatpak remote sync uses the shared transaction lifecycle" {
         pub fn run(
             self: *@This(),
             _: *runtime.RuntimeContext,
-            operation_context: *Zigalpm.OperationContext,
+            operation_context: *PackageManager.OperationContext,
             invocation: *const parser.Invocation,
         ) !void {
             self.called = true;
@@ -725,7 +726,7 @@ test "AppImage sync routes long and shortcode forms with an optional package" {
         pub fn run(
             self: *@This(),
             _: *runtime.RuntimeContext,
-            operation_context: *Zigalpm.OperationContext,
+            operation_context: *PackageManager.OperationContext,
             invocation: *const parser.Invocation,
         ) !void {
             self.package = invocation.positionals[0];
@@ -751,7 +752,7 @@ test "AppImage sync accepts the update URL overload and compatibility shortcode"
     try std.testing.expect(outcome == .dispatch);
     try std.testing.expectEqual(@as(usize, 3), outcome.dispatch.positionals.len);
     try std.testing.expect(optionEnabled(&outcome.dispatch, "--prerelease"));
-    try std.testing.expectEqual(Zigalpm.appimage.UpdateType.github, parseAppImageUpdateType(outcome.dispatch.positionals[2]).?);
+    try std.testing.expectEqual(PackageManager.appimage.UpdateType.github, parseAppImageUpdateType(outcome.dispatch.positionals[2]).?);
 
     const compatibility = try @import("../cli/shortcodes.zig").translate(
         arena.allocator(),
@@ -832,7 +833,7 @@ test "real AppImage runner persists and normalizes Forgejo release-page URLs" {
         .stderr = &stderr.writer,
         .environment = &environment,
     };
-    var appimage_manager = Zigalpm.AppImageManager{
+    var appimage_manager = PackageManager.AppImageManager{
         .allocator = allocator,
         .io = std.testing.io,
         .environ = context.environ,
@@ -859,7 +860,7 @@ test "real AppImage runner persists and normalizes Forgejo release-page URLs" {
     const app_images = try appimage_manager.getAppImagesFromLocalDb();
     defer appimage_manager.freeAppImages(app_images);
     try std.testing.expectEqual(@as(usize, 1), app_images.len);
-    try std.testing.expectEqual(Zigalpm.appimage.UpdateType.forgejo, app_images[0].update_type);
+    try std.testing.expectEqual(PackageManager.appimage.UpdateType.forgejo, app_images[0].update_type);
     try std.testing.expectEqualStrings(
         "https://git.eden-emu.dev/eden-ci/nightly",
         app_images[0].update_url,
@@ -899,7 +900,7 @@ test "real AppImage runner rejects invalid Forgejo paths without reporting succe
         .stderr = &stderr.writer,
         .environment = &environment,
     };
-    var appimage_manager = Zigalpm.AppImageManager{
+    var appimage_manager = PackageManager.AppImageManager{
         .allocator = allocator,
         .io = std.testing.io,
         .environ = context.environ,
@@ -935,7 +936,7 @@ test "real AppImage runner rejects invalid Forgejo paths without reporting succe
     const app_images = try appimage_manager.getAppImagesFromLocalDb();
     defer appimage_manager.freeAppImages(app_images);
     try std.testing.expectEqual(@as(usize, 1), app_images.len);
-    try std.testing.expectEqual(Zigalpm.appimage.UpdateType.forgejo, app_images[0].update_type);
+    try std.testing.expectEqual(PackageManager.appimage.UpdateType.forgejo, app_images[0].update_type);
     try std.testing.expectEqualStrings(
         "https://old.example/owner/repository",
         app_images[0].update_url,
@@ -979,7 +980,7 @@ test "real AppImage runner reports a missing install directory without failing" 
 }
 
 test "AppImage sync name matching is case insensitive and selects the first match" {
-    const app_images = [_]Zigalpm.appimage.AppImage{
+    const app_images = [_]PackageManager.appimage.AppImage{
         .{ .name = "Editor-Nightly" },
         .{ .name = "Editor-Stable" },
     };
@@ -993,7 +994,7 @@ test "AppImage sync name matching is case insensitive and selects the first matc
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operation_context.deinit();
 
     const selected = try matchingAppImageName(&context, &operation_context, &app_images, "EDITOR");
@@ -1045,7 +1046,7 @@ test "sync flushes its initial status before starting the backend" {
         writer: *TrackingWriter,
         initial_status_was_flushed: bool = false,
 
-        pub fn run(self: *@This(), _: *runtime.RuntimeContext, _: *Zigalpm.OperationContext, _: *const parser.Invocation) !void {
+        pub fn run(self: *@This(), _: *runtime.RuntimeContext, _: *PackageManager.OperationContext, _: *const parser.Invocation) !void {
             self.initial_status_was_flushed = self.writer.flush_count > 0;
         }
     };
@@ -1064,7 +1065,7 @@ test "sync reports backend failures and returns a failure exit code" {
     try std.testing.expect(outcome == .dispatch);
 
     const Failure = struct {
-        pub fn run(_: @This(), _: *runtime.RuntimeContext, _: *Zigalpm.OperationContext, _: *const parser.Invocation) !void {
+        pub fn run(_: @This(), _: *runtime.RuntimeContext, _: *PackageManager.OperationContext, _: *const parser.Invocation) !void {
             return error.TestSyncFailure;
         }
     };
@@ -1084,7 +1085,7 @@ test "sync UI mode emits transaction frames" {
     try std.testing.expect(outcome == .dispatch);
 
     const Download = struct {
-        pub fn run(_: @This(), _: *runtime.RuntimeContext, operation_context: *Zigalpm.OperationContext, _: *const parser.Invocation) !void {
+        pub fn run(_: @This(), _: *runtime.RuntimeContext, operation_context: *PackageManager.OperationContext, _: *const parser.Invocation) !void {
             var operation = operation_context.begin(.{
                 .backend = .download,
                 .kind = .download,

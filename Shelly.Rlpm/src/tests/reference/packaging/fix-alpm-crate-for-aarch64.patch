@@ -1,0 +1,13 @@
+diff --git a/scripts/repo-add/Cargo.toml b/scripts/repo-add/Cargo.toml
+index 15fa41fe..eba2ba15 100644
+--- a/scripts/repo-add/Cargo.toml
++++ b/scripts/repo-add/Cargo.toml
+@@ -20,7 +20,7 @@ fs_extra = { version = "1.3", default-features = false }
+ signal-hook = { version = "0.3", features = ["iterator"], default-features = false }
+ rusqlite = { version = "0.36", features = ["bundled"], default-features = false }
+ anyhow = { version = "1.0", features = ["std"], default-features = false }
+-alpm = { version = "4", features = ["checkver"], default-features = false }
++alpm = { version = "4", features = ["checkver", "generate"], default-features = false }
+
+ [profile.release]
+ strip = "symbols"

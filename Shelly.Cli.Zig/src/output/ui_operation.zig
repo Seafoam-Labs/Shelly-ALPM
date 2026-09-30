@@ -1,5 +1,5 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const PackageManager = @import("PackageManager");
 const output = @import("config.zig");
 const runtime = @import("../runtime/context.zig");
 const parser = @import("../cli/parser.zig");
@@ -23,14 +23,14 @@ pub const Transaction = struct {
 /// operation context setup, question handling, event reporting, and the
 /// TransactionStart/TransactionDone/TransactionFailed frame sequence.
 /// The runner must expose
-/// `run(context: *runtime.RuntimeContext, operation_context: *Zigalpm.OperationContext, invocation: *const parser.Invocation) anyerror!void`.
+/// `run(context: *runtime.RuntimeContext, operation_context: *PackageManager.OperationContext, invocation: *const parser.Invocation) anyerror!void`.
 pub fn runTransaction(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
     config: Transaction,
     runner: anytype,
 ) anyerror!u8 {
-    var operation_context = Zigalpm.OperationContext.init(context.allocator, context.io);
+    var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
     context.attachTransactionLog(&operation_context);
     defer operation_context.deinit();
 
@@ -68,7 +68,7 @@ pub fn runTransaction(
             }
         }
         if (!reporter.reported_failure.load(.acquire)) {
-            const message = try Zigalpm.user_errors.format(context.allocator, failure, .{
+            const message = try PackageManager.user_errors.format(context.allocator, failure, .{
                 .operation = invocation.command.path,
                 .subject = if (invocation.positionals.len == 1) invocation.positionals[0] else null,
             });
@@ -95,7 +95,7 @@ pub const Reporter = struct {
     write_failed: std.atomic.Value(bool) = .init(false),
     reported_failure: std.atomic.Value(bool) = .init(false),
 
-    pub fn handle(data: ?*anyopaque, event: Zigalpm.OperationEvent) void {
+    pub fn handle(data: ?*anyopaque, event: PackageManager.OperationEvent) void {
         const self: *Reporter = @ptrCast(@alignCast(data.?));
         self.mutex.lockUncancelable(self.context.io);
         defer self.mutex.unlock(self.context.io);
@@ -106,7 +106,7 @@ pub const Reporter = struct {
         return self.write_failed.load(.acquire) or self.reported_failure.load(.acquire);
     }
 
-    fn write(self: *Reporter, event: Zigalpm.OperationEvent) !void {
+    fn write(self: *Reporter, event: PackageManager.OperationEvent) !void {
         switch (event) {
             .status => |status| try output.writeAlpmPackageInfoFrame(
                 self.context,
@@ -116,7 +116,7 @@ pub const Reporter = struct {
             ),
             .progress => |progress| try output.writeOperationProgressFrame(self.context, progress),
             .failure => |failure| {
-                const message = try Zigalpm.user_errors.formatEvent(self.context.allocator, failure);
+                const message = try PackageManager.user_errors.formatEvent(self.context.allocator, failure);
                 defer self.context.allocator.free(message);
                 if (failure.recoverable) {
                     try output.writeWarningFrame(self.context, message);
@@ -148,7 +148,7 @@ fn packageEventType(code: ?[]const u8) ?[]const u8 {
 
 pub const QuestionResponder = struct {
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     no_confirm: bool,
     future: ?std.Io.Future(void) = null,
 
@@ -164,7 +164,7 @@ pub const QuestionResponder = struct {
         }
     }
 
-    fn allOptionalDependenciesInstalled(question: Zigalpm.OperationQuestion) bool {
+    fn allOptionalDependenciesInstalled(question: PackageManager.OperationQuestion) bool {
         for (question.options) |opt| {
             if (!opt.is_installed) return false;
         }
@@ -173,8 +173,8 @@ pub const QuestionResponder = struct {
 
     fn handle(
         data: ?*anyopaque,
-        question: Zigalpm.OperationQuestion,
-    ) Zigalpm.OperationQuestionResponse {
+        question: PackageManager.OperationQuestion,
+    ) PackageManager.OperationQuestionResponse {
         const self: *QuestionResponder = @ptrCast(@alignCast(data.?));
         if (question.kind == .select_optional_dependencies and allOptionalDependenciesInstalled(question))
             return .{ .choices = &.{} };
@@ -192,8 +192,8 @@ pub const QuestionResponder = struct {
 
     fn handleInteractive(
         self: *QuestionResponder,
-        question: Zigalpm.OperationQuestion,
-    ) Zigalpm.OperationQuestionResponse {
+        question: PackageManager.OperationQuestion,
+    ) PackageManager.OperationQuestionResponse {
         switch (question.kind) {
             .confirmation => output.writeYesNoQuestionFrame(self.context, question) catch return .declined,
             .import_pgp_key => output.writeYesNoQuestionFrame(self.context, question) catch return .declined,
@@ -213,7 +213,7 @@ pub const QuestionResponder = struct {
 
     fn writeAutomaticReview(
         self: *QuestionResponder,
-        question: Zigalpm.OperationQuestion,
+        question: PackageManager.OperationQuestion,
     ) !void {
         const review = question.review orelse return error.MissingReviewPayload;
         for (review.findings) |finding| {
@@ -242,7 +242,7 @@ pub const QuestionResponder = struct {
     fn readAndRespond(
         self: *QuestionResponder,
         question_id: u64,
-        kind: Zigalpm.OperationQuestionKind,
+        kind: PackageManager.OperationQuestionKind,
     ) void {
         if (kind == .select_many or kind == .select_optional_dependencies) {
             const choices = self.readChoicesAnswer(question_id, "a.optdeps", "SelectedIndices") catch {
@@ -402,25 +402,25 @@ pub const QuestionResponder = struct {
 
 pub fn acceptQuestionDefaults(
     _: ?*anyopaque,
-    question: Zigalpm.OperationQuestion,
-) Zigalpm.OperationQuestionResponse {
+    question: PackageManager.OperationQuestion,
+) PackageManager.OperationQuestionResponse {
     if (question.kind == .review_changes) return safeReviewDefault(question);
     return automaticResponse(question.kind);
 }
 
-fn safeReviewDefault(question: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
+fn safeReviewDefault(question: PackageManager.OperationQuestion) PackageManager.OperationQuestionResponse {
     return switch (question.default_response) {
         .accepted => .accepted,
         else => .declined,
     };
 }
 
-fn hasSecurityFindings(question: Zigalpm.OperationQuestion) bool {
+fn hasSecurityFindings(question: PackageManager.OperationQuestion) bool {
     const review = question.review orelse return false;
     return review.findings.len != 0;
 }
 
-fn automaticResponse(kind: Zigalpm.OperationQuestionKind) Zigalpm.OperationQuestionResponse {
+fn automaticResponse(kind: PackageManager.OperationQuestionKind) PackageManager.OperationQuestionResponse {
     return switch (kind) {
         .confirmation, .confirm_transaction => .accepted,
         .import_pgp_key, .review_changes => .declined,
@@ -437,7 +437,7 @@ test "UI source key import reads yes/no answers and declines on EOF" {
     const fingerprint = "562E5DB9A14497782C008834BBDA885ADD3E0AD0";
     const cases = [_]struct {
         accept: ?bool,
-        expected: Zigalpm.OperationQuestionResponse,
+        expected: PackageManager.OperationQuestionResponse,
     }{
         .{ .accept = true, .expected = .accepted },
         .{ .accept = false, .expected = .declined },
@@ -471,7 +471,7 @@ test "UI source key import reads yes/no answers and declines on EOF" {
             .stdout = &stdout.writer,
             .stderr = &stderr.writer,
         };
-        var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+        var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
         defer operation_context.deinit();
         var responder: QuestionResponder = .{
             .context = &context,
@@ -530,7 +530,7 @@ test "UI operation reporter forwards package completion identity and action" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operation_context = Zigalpm.OperationContext.init(allocator, std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(allocator, std.testing.io);
     defer operation_context.deinit();
     var reporter: Reporter = .{ .context = &context };
     _ = try operation_context.subscribe(.{ .function = Reporter.handle, .data = &reporter });
@@ -575,7 +575,7 @@ test "UI operation reporter preserves percentages for every progress frame shape
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operation_context.deinit();
     var reporter: Reporter = .{ .context = &context };
     const subscription = try operation_context.subscribe(.{
@@ -586,6 +586,8 @@ test "UI operation reporter preserves percentages for every progress frame shape
 
     var alpm = operation_context.begin(.{ .backend = .alpm, .kind = .install, .subject = "demo" });
     alpm.progress(.{ .stage = "transaction", .completed = 37, .total = 100, .percentage = 37, .native_code = 100 });
+    alpm.progress(.{ .stage = "Verifying downloads", .message = "demo.pkg", .completed = 1, .total = 2 });
+    alpm.progress(.{ .stage = "Publishing downloads", .message = "demo.pkg", .completed = 1, .total = 2 });
     alpm.finish(.success);
     var flatpak = operation_context.begin(.{ .backend = .flatpak, .kind = .install, .subject = "org.demo.App" });
     flatpak.progress(.{ .stage = "Downloading", .percentage = 64 });
@@ -606,6 +608,18 @@ test "UI operation reporter preserves percentages for every progress frame shape
             "\"ProgressType\":\"PackageDownload\"",
             "\"Percent\":37",
             "\"Stage\":\"transaction\"",
+        },
+        &.{
+            "\"ProgressType\":\"IntegrityStart\"",
+            "\"PackageName\":\"demo.pkg\"",
+            "\"Stage\":\"Verifying downloads\"",
+            "\"Percent\":50",
+        },
+        &.{
+            "\"ProgressType\":\"LoadStart\"",
+            "\"PackageName\":\"demo.pkg\"",
+            "\"Stage\":\"Publishing downloads\"",
+            "\"Percent\":50",
         },
         &.{
             "\"$kind\":\"flatpak.progress\"",
@@ -667,7 +681,7 @@ test "UI risky PKGBUILD review bypasses no-confirm and waits for matching answer
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operation_context.deinit();
     var responder: QuestionResponder = .{
         .context = &context,
@@ -677,14 +691,14 @@ test "UI risky PKGBUILD review bypasses no-confirm and waits for matching answer
     responder.attach();
     defer responder.detach();
 
-    const findings = [_]Zigalpm.OperationReviewFinding{.{
+    const findings = [_]PackageManager.OperationReviewFinding{.{
         .tool = "curl",
         .severity = .warning,
         .hook = "source: install.sh",
         .matched_line = "curl example.invalid",
         .message = "external download",
     }};
-    const files = [_]Zigalpm.OperationQuestionAttachment{.{
+    const files = [_]PackageManager.OperationQuestionAttachment{.{
         .name = "install.sh",
         .content = "curl example.invalid",
     }};
@@ -745,7 +759,7 @@ test "UI transaction plan preserves package roles sizes and unknown AUR sizes" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operation_context.deinit();
     var responder: QuestionResponder = .{
         .context = &context,
@@ -755,7 +769,7 @@ test "UI transaction plan preserves package roles sizes and unknown AUR sizes" {
     responder.attach();
     defer responder.detach();
 
-    const packages = [_]Zigalpm.OperationTransactionPackage{
+    const packages = [_]PackageManager.OperationTransactionPackage{
         .{
             .name = "demo",
             .version = "1.0-1",
@@ -825,7 +839,7 @@ test "UI removal plan honors accept decline and EOF" {
             .stdout = &stdout.writer,
             .stderr = &stderr.writer,
         };
-        var operation_context = Zigalpm.OperationContext.init(allocator, std.testing.io);
+        var operation_context = PackageManager.OperationContext.init(allocator, std.testing.io);
         defer operation_context.deinit();
         var responder: QuestionResponder = .{
             .context = &context,
@@ -835,7 +849,7 @@ test "UI removal plan honors accept decline and EOF" {
         responder.attach();
         defer responder.detach();
         var operation = operation_context.begin(.{ .backend = .alpm, .kind = .remove });
-        const packages = [_]Zigalpm.OperationTransactionPackage{
+        const packages = [_]PackageManager.OperationTransactionPackage{
             .{ .name = "demo", .version = "1.0-1", .source = .local, .role = .requested, .installed_size = 1024 },
         };
         var answer = try operation.ask(.{
@@ -883,7 +897,7 @@ test "UI optional dependencies emit C# compatible choices and accept selected in
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operation_context.deinit();
     var responder: QuestionResponder = .{
         .context = &context,
@@ -893,7 +907,7 @@ test "UI optional dependencies emit C# compatible choices and accept selected in
     responder.attach();
     defer responder.detach();
 
-    const options = [_]Zigalpm.OperationQuestionOption{
+    const options = [_]PackageManager.OperationQuestionOption{
         .{ .id = "spellcheck", .label = "spellcheck", .description = "Spell checking" },
         .{ .id = "templates", .label = "templates", .description = "Templates", .is_installed = true },
         .{ .id = "plugins", .label = "plugins", .description = "Plugin support", .is_selected = true },
@@ -953,7 +967,7 @@ test "UI handles provider and generic selection questions" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operation_context.deinit();
     var responder: QuestionResponder = .{
         .context = &context,
@@ -963,7 +977,7 @@ test "UI handles provider and generic selection questions" {
     responder.attach();
     defer responder.detach();
 
-    const options = [_]Zigalpm.OperationQuestionOption{
+    const options = [_]PackageManager.OperationQuestionOption{
         .{ .id = "first", .label = "First", .description = "First choice" },
         .{ .id = "second", .label = "Second", .description = "Second choice" },
     };
@@ -1031,7 +1045,7 @@ test "UI skips optional dependency question when every option is already install
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operation_context = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operation_context.deinit();
     var responder: QuestionResponder = .{
         .context = &context,
@@ -1041,7 +1055,7 @@ test "UI skips optional dependency question when every option is already install
     responder.attach();
     defer responder.detach();
 
-    const options = [_]Zigalpm.OperationQuestionOption{
+    const options = [_]PackageManager.OperationQuestionOption{
         .{ .id = "foot-terminfo", .label = "foot-terminfo", .description = "Terminal info", .is_installed = true },
         .{ .id = "libnotify", .label = "libnotify", .description = "Desktop notifications", .is_installed = true },
     };

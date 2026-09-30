@@ -1,5 +1,6 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const diagnostics = @import("diagnostics");
+const PackageManager = @import("PackageManager");
 const test_support = @import("test_support.zig");
 const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
@@ -64,7 +65,7 @@ pub const AppImageItem = struct {
     repo_name: ?[]const u8 = null,
     update_type: i32 = 0,
     allow_prerelease: bool = false,
-    environment_variables: []const Zigalpm.appimage.environment.Variable = &.{},
+    environment_variables: []const PackageManager.appimage.environment.Variable = &.{},
     command_line_args: ?[]const u8 = null,
     path: ?[]const u8 = null,
 };
@@ -217,7 +218,7 @@ fn dispatchFlatpakRemote(
 
     const query = invocation.positionals[1];
     const get_all = std.ascii.eqlIgnoreCase(query, "all");
-    var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
+    var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
 
     if (get_all) {
@@ -225,7 +226,7 @@ fn dispatchFlatpakRemote(
             try writeRemoteQueryFailure(context, invocation, query, err);
             return 1;
         };
-        defer Zigalpm.flatpak.AppstreamCatalog.deinitSlice(context.allocator, catalogs);
+        defer PackageManager.flatpak.AppstreamCatalog.deinitSlice(context.allocator, catalogs);
         return writeRemoteResult(context, invocation, catalogs, true);
     }
 
@@ -239,7 +240,7 @@ fn dispatchFlatpakRemote(
 
 const ConfiguredRemote = struct {
     name: []const u8,
-    scope: Zigalpm.flatpak.Scope,
+    scope: PackageManager.flatpak.Scope,
     url: []const u8,
 };
 
@@ -247,7 +248,7 @@ fn dispatchConfiguredFlatpakRemotes(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
 ) !u8 {
-    const manager = Zigalpm.flatpak.RemoteManager{
+    const manager = PackageManager.flatpak.RemoteManager{
         .allocator = context.allocator,
         .io = context.io,
     };
@@ -255,7 +256,7 @@ fn dispatchConfiguredFlatpakRemotes(
         try writeConfiguredRemoteFailure(context, invocation, err);
         return 1;
     };
-    defer Zigalpm.flatpak.Remote.deinitSlice(
+    defer PackageManager.flatpak.Remote.deinitSlice(
         context.allocator,
         native_remotes,
     );
@@ -286,7 +287,7 @@ fn writeConfiguredRemoteFailure(
     invocation: *const parser.Invocation,
     err: anyerror,
 ) !void {
-    if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+    if (PackageManager.flatpak.errors.unavailableMessage(err)) |message| {
         if (invocation.globals.ui_mode)
             try output.writeErrorFrame(context, message)
         else
@@ -296,7 +297,7 @@ fn writeConfiguredRemoteFailure(
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Could not list Flatpak remotes. {0s}\n\nTechnical details: {1s}",
-        .{ @import("diagnostics").cause(err), @errorName(err) },
+        .{ diagnostics.cause(err), @errorName(err) },
     );
     defer context.allocator.free(message);
     if (invocation.globals.ui_mode)
@@ -351,7 +352,7 @@ fn writeRemoteQueryFailure(
     query: []const u8,
     err: anyerror,
 ) !void {
-    if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+    if (PackageManager.flatpak.errors.unavailableMessage(err)) |message| {
         if (invocation.globals.ui_mode)
             try output.writeErrorFrame(context, message)
         else
@@ -361,7 +362,7 @@ fn writeRemoteQueryFailure(
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Could not read the AppStream catalog for Flatpak remote '{0f}'. {1s}\n\nTechnical details: {2s}",
-        .{ @import("diagnostics").safe(query), @import("diagnostics").cause(err), @errorName(err) },
+        .{ diagnostics.safe(query), diagnostics.cause(err), @errorName(err) },
     );
     defer context.allocator.free(message);
     if (invocation.globals.ui_mode)
@@ -373,7 +374,7 @@ fn writeRemoteQueryFailure(
 fn writeRemoteResult(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
-    catalogs: []const Zigalpm.flatpak.AppstreamCatalog,
+    catalogs: []const PackageManager.flatpak.AppstreamCatalog,
     merge_remotes: bool,
 ) !u8 {
     if (invocation.globals.ui_mode) {
@@ -390,18 +391,18 @@ fn writeRemoteResult(
 
 const AppstreamRemote = struct {
     name: []const u8,
-    scope: Zigalpm.flatpak.Scope,
+    scope: PackageManager.flatpak.Scope,
 };
 
 const MergedAppstreamApp = struct {
-    app: *const Zigalpm.flatpak.AppstreamApp,
+    app: *const PackageManager.flatpak.AppstreamApp,
     remotes: std.ArrayList(AppstreamRemote) = .empty,
 };
 
 fn writeRemoteJson(
     allocator: std.mem.Allocator,
     writer: *std.Io.Writer,
-    catalogs: []const Zigalpm.flatpak.AppstreamCatalog,
+    catalogs: []const PackageManager.flatpak.AppstreamCatalog,
     merge_remotes: bool,
 ) !void {
     var json: std.json.Stringify = .{ .writer = writer };
@@ -443,7 +444,7 @@ fn writeRemoteJson(
 
 fn writeAppstreamAppJson(
     json: *std.json.Stringify,
-    app: *const Zigalpm.flatpak.AppstreamApp,
+    app: *const PackageManager.flatpak.AppstreamApp,
     remotes: []const AppstreamRemote,
 ) !void {
     try json.beginObject();
@@ -556,7 +557,7 @@ fn writeQueryFailure(
     err: anyerror,
 ) !void {
     if (backend == .flatpak) {
-        if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+        if (PackageManager.flatpak.errors.unavailableMessage(err)) |message| {
             if (invocation.globals.ui_mode)
                 try output.writeErrorFrame(context, message)
             else if (invocation.globals.json)
@@ -569,7 +570,7 @@ fn writeQueryFailure(
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Could not list installed {0f} objects: {1s}\n\nTechnical details: {2s}",
-        .{ @import("diagnostics").safe(@tagName(backend)), @import("diagnostics").cause(err), @errorName(err) },
+        .{ diagnostics.safe(@tagName(backend)), diagnostics.cause(err), @errorName(err) },
     );
     defer context.allocator.free(message);
     if (invocation.globals.ui_mode)
@@ -973,7 +974,7 @@ fn runReal(
 }
 
 fn runStandard(context: *runtime.RuntimeContext, options: ListOptions) !Result {
-    const manager = try Zigalpm.AlpmManager.init(
+    const manager = try PackageManager.Manager.init(
         context.allocator,
         context.environ,
         .{ .use_root = false },
@@ -982,12 +983,12 @@ fn runStandard(context: *runtime.RuntimeContext, options: ListOptions) !Result {
     return collectStandard(context, manager, options);
 }
 
-fn collectStandard(context: *runtime.RuntimeContext, manager: *Zigalpm.AlpmManager, options: ListOptions) !Result {
+fn collectStandard(context: *runtime.RuntimeContext, manager: *PackageManager.Manager, options: ListOptions) !Result {
     const native_items = try manager.get_installed_packages_with_reverse_dependencies(.{
         .required_by = options.required_by,
         .optional_for = options.optional_for,
     });
-    defer Zigalpm.alpm.OwnedPackage.deinitSlice(context.allocator, native_items);
+    defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, native_items);
 
     const arena = try createArena(context.allocator);
     errdefer destroyArena(context.allocator, arena);
@@ -1031,7 +1032,7 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
         &.{ try xdg.configHome(context), "shelly", "appimage-metadata-v2.db" },
     );
     defer context.allocator.free(local_db_path);
-    var manager = Zigalpm.AppImageManager{
+    var manager = PackageManager.AppImageManager{
         .allocator = context.allocator,
         .io = context.io,
         .environ = context.environ,
@@ -1059,7 +1060,7 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
         .repo_name = try copyOptionalString(allocator, native.repo_name),
         .update_type = @intCast(@intFromEnum(native.update_type)),
         .allow_prerelease = native.allow_prerelease,
-        .environment_variables = try Zigalpm.appimage.environment.clone(allocator, native.environment_variables),
+        .environment_variables = try PackageManager.appimage.environment.clone(allocator, native.environment_variables),
         .command_line_args = try allocator.dupe(u8, native.command_line_args),
         .path = try allocator.dupe(u8, native.path),
     };
@@ -1071,7 +1072,7 @@ fn runAur(context: *runtime.RuntimeContext, options: ListOptions) !Result {
     defer context.allocator.free(database_path);
     try std.Io.Dir.cwd().createDirPath(context.io, database_path);
     const aur_base = try aur_url.resolve(context, options.aur_url);
-    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+    const manager = try PackageManager.AurManager.init(context.allocator, context.environ, .{
         .aur_git_base_url = aur_base,
         .use_temp_path = true,
         .temp_path = database_path,
@@ -1082,7 +1083,7 @@ fn runAur(context: *runtime.RuntimeContext, options: ListOptions) !Result {
         .required_by = options.required_by,
         .optional_for = options.optional_for,
     });
-    defer Zigalpm.aur.models.Package.deinitSlice(context.allocator, native_items);
+    defer PackageManager.aur.models.Package.deinitSlice(context.allocator, native_items);
 
     const arena = try createArena(context.allocator);
     errdefer destroyArena(context.allocator, arena);
@@ -1121,10 +1122,10 @@ fn runAur(context: *runtime.RuntimeContext, options: ListOptions) !Result {
 }
 
 fn runFlatpak(context: *runtime.RuntimeContext) !Result {
-    var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
+    var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     const native_items = try manager.list_installed_applications();
-    defer Zigalpm.flatpak.manager.InstalledApplication.deinitSlice(context.allocator, native_items);
+    defer PackageManager.flatpak.manager.InstalledApplication.deinitSlice(context.allocator, native_items);
 
     const arena = try createArena(context.allocator);
     errdefer destroyArena(context.allocator, arena);
@@ -1392,7 +1393,7 @@ test "standard listing includes ignored installed packages with install-reason f
             .{root},
         ),
     });
-    const manager = try Zigalpm.AlpmManager.init(allocator, std.testing.environ, .{
+    const manager = try PackageManager.Manager.init(allocator, std.testing.environ, .{
         .config_path = try std.fs.path.join(allocator, &.{ root, "pacman.conf" }),
     });
     defer manager.deinit();
@@ -1401,7 +1402,7 @@ test "standard listing includes ignored installed packages with install-reason f
     // Inject only the manager: collection, reason filtering, and rendering all
     // use the production path rather than preassembled result fixtures.
     const Fixture = struct {
-        manager: *Zigalpm.AlpmManager,
+        manager: *PackageManager.Manager,
 
         fn list(self: @This(), context: *runtime.RuntimeContext, backend: Backend, options: ListOptions) !Result {
             try std.testing.expectEqual(Backend.standard, backend);
@@ -1682,7 +1683,7 @@ test "configured Flatpak remotes use compatibility JSON fields and scopes" {
 }
 
 test "Flatpak all-remote AppStream JSON merges IDs and records scopes" {
-    var first_apps = [_]Zigalpm.flatpak.AppstreamApp{.{
+    var first_apps = [_]PackageManager.flatpak.AppstreamApp{.{
         .type = "desktop-application",
         .id = "org.example.App",
         .name = "Example",
@@ -1701,9 +1702,9 @@ test "Flatpak all-remote AppStream JSON merges IDs and records scopes" {
         .verification_method = null,
         .addons = &.{},
     }};
-    var second_apps = [_]Zigalpm.flatpak.AppstreamApp{first_apps[0]};
+    var second_apps = [_]PackageManager.flatpak.AppstreamApp{first_apps[0]};
     second_apps[0].summary = "Second catalog";
-    const catalogs = [_]Zigalpm.flatpak.AppstreamCatalog{
+    const catalogs = [_]PackageManager.flatpak.AppstreamCatalog{
         .{
             .owner_allocator = std.testing.allocator,
             .arena_state = undefined,
@@ -1736,7 +1737,7 @@ test "Flatpak all-remote AppStream JSON merges IDs and records scopes" {
 }
 
 test "Flatpak named-remote AppStream JSON uses UI framing" {
-    var apps = [_]Zigalpm.flatpak.AppstreamApp{.{
+    var apps = [_]PackageManager.flatpak.AppstreamApp{.{
         .type = "desktop-application",
         .id = "org.example.App",
         .name = "Example",
@@ -1755,7 +1756,7 @@ test "Flatpak named-remote AppStream JSON uses UI framing" {
         .verification_method = null,
         .addons = &.{},
     }};
-    const catalogs = [_]Zigalpm.flatpak.AppstreamCatalog{.{
+    const catalogs = [_]PackageManager.flatpak.AppstreamCatalog{.{
         .owner_allocator = std.testing.allocator,
         .arena_state = undefined,
         .remote_name = "flathub",

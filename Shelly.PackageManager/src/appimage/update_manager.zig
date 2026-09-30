@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const HttpClient = @import("ShellyHttp");
 const appimage = @import("bindings.zig").appimage;
 const builtin = @import("builtin");
@@ -259,7 +260,7 @@ pub const UpdateManager = struct {
             .none => return null,
             .static_url => {
                 if (app.update_url.len == 0) {
-                    self.emitStatusFmt(.warning, "AppImage {0f} has no static update URL. Set a download URL in its update settings before checking for updates.", .{@import("diagnostics").safe(app.name)});
+                    self.emitStatusFmt(.warning, "AppImage {0f} has no static update URL. Set a download URL in its update settings before checking for updates.", .{diagnostics.safe(app.name)});
                     return null;
                 }
                 return self.guardInstalledRelease(app, try self.check_static_url_update(app.update_url, app.name, app.version));
@@ -308,7 +309,7 @@ pub const UpdateManager = struct {
             },
             .forgejo => {
                 if (app.update_url.len == 0) {
-                    self.emitStatusFmt(.warning, "AppImage {0f} has no Forgejo update URL. Set its Forgejo repository URL in the update settings before checking for updates.", .{@import("diagnostics").safe(app.name)});
+                    self.emitStatusFmt(.warning, "AppImage {0f} has no Forgejo update URL. Set its Forgejo repository URL in the update settings before checking for updates.", .{diagnostics.safe(app.name)});
                     return null;
                 }
                 return self.providerUpdateOrWarn(
@@ -372,8 +373,8 @@ pub const UpdateManager = struct {
         }
 
         const app_to_update = if (found_index) |i| apps[i] else {
-            std.log.debug("Could not update AppImage {0f} because it is not in the local database. Check the installed AppImage list and synchronize it if necessary.", .{@import("diagnostics").safe(appimage_ptr.name)});
-            self.emitStatusFmt(.err, "Could not update AppImage {0f} because it is not in the local database. Check the installed AppImage list and synchronize it if necessary.", .{@import("diagnostics").safe(appimage_ptr.name)});
+            std.log.debug("Could not update AppImage {0f} because it is not in the local database. Check the installed AppImage list and synchronize it if necessary.", .{diagnostics.safe(appimage_ptr.name)});
+            self.emitStatusFmt(.err, "Could not update AppImage {0f} because it is not in the local database. Check the installed AppImage list and synchronize it if necessary.", .{diagnostics.safe(appimage_ptr.name)});
             return false;
         };
 
@@ -381,8 +382,8 @@ pub const UpdateManager = struct {
         self.emitStatusFmt(.information, "Updating AppImage {s}...", .{app_to_update.name});
 
         if (appimage_ptr.download_url.len == 0) {
-            std.log.debug("Could not find a download URL for AppImage {0f}. Check its update provider settings and available release assets.", .{@import("diagnostics").safe(appimage_ptr.name)});
-            self.emitStatusFmt(.err, "Could not find a download URL for AppImage {0f}. Check its update provider settings and available release assets.", .{@import("diagnostics").safe(appimage_ptr.name)});
+            std.log.debug("Could not find a download URL for AppImage {0f}. Check its update provider settings and available release assets.", .{diagnostics.safe(appimage_ptr.name)});
+            self.emitStatusFmt(.err, "Could not find a download URL for AppImage {0f}. Check its update provider settings and available release assets.", .{diagnostics.safe(appimage_ptr.name)});
             return false;
         }
 
@@ -393,8 +394,8 @@ pub const UpdateManager = struct {
 
         const current_exists = std.Io.Dir.cwd().statFile(self.io, current_path, .{}) catch null;
         if (current_exists == null) {
-            std.log.debug("Could not update AppImage {0f} because the installed file is missing at {1f}. Check its location and synchronize the AppImage list.", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").safe(current_path) });
-            self.emitStatusFmt(.err, "Could not update AppImage {0f} because the installed file is missing at {1f}. Check its location and synchronize the AppImage list.", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").safe(current_path) });
+            std.log.debug("Could not update AppImage {0f} because the installed file is missing at {1f}. Check its location and synchronize the AppImage list.", .{ diagnostics.safe(appimage_ptr.name), diagnostics.safe(current_path) });
+            self.emitStatusFmt(.err, "Could not update AppImage {0f} because the installed file is missing at {1f}. Check its location and synchronize the AppImage list.", .{ diagnostics.safe(appimage_ptr.name), diagnostics.safe(current_path) });
             return false;
         }
 
@@ -404,8 +405,8 @@ pub const UpdateManager = struct {
 
         if (self.staged_download_path) |staged| {
             manager.copyFile(staged, download_path) catch |err| {
-                std.log.err("Could not stage update for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(err), @errorName(err) });
-                self.emitStatusFmt(.err, "Could not stage update for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(err), @errorName(err) });
+                std.log.err("Could not stage update for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
+                self.emitStatusFmt(.err, "Could not stage update for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
                 return false;
             };
         } else {
@@ -423,8 +424,8 @@ pub const UpdateManager = struct {
             const dl_result = dl.downloadToFile(appimage_ptr.download_url, download_path, false);
             switch (dl_result) {
                 .failure => |err| {
-                    std.log.err("Could not download update for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(err), @errorName(err) });
-                    self.emitStatusFmt(.err, "Could not download update for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(err), @errorName(err) });
+                    std.log.err("Could not download update for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
+                    self.emitStatusFmt(.err, "Could not download update for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
                     return false;
                 },
                 else => {},
@@ -482,13 +483,13 @@ pub const UpdateManager = struct {
         std.Io.Dir.hardLink(.cwd(), current_path, .cwd(), backup_path, self.io, .{}) catch try manager.copyFile(current_path, backup_path);
 
         manager.writeFileAtomically(download_path, current_path, "replacement") catch |err| {
-            std.log.warn("Could not install the AppImage update for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(err), @errorName(err) });
-            self.emitStatusFmt(.err, "Could not install the AppImage update for {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(err), @errorName(err) });
+            std.log.warn("Could not install the AppImage update for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
+            self.emitStatusFmt(.err, "Could not install the AppImage update for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
             return false;
         };
         manager.setExecutable(current_path) catch |err| {
-            std.log.warn("Could not make the updated AppImage executable. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
-            self.emitStatusFmt(.err, "Could not make the updated AppImage executable. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            std.log.warn("Could not make the updated AppImage executable. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
+            self.emitStatusFmt(.err, "Could not make the updated AppImage executable. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
             manager.writeFileAtomically(backup_path, current_path, "restore") catch {};
             return false;
         };
@@ -497,24 +498,24 @@ pub const UpdateManager = struct {
         var updated_app = appimage_manager.AppImageManager.mergeMetadata(app_to_update, new_metadata, appimage_ptr.version);
         updated_app.path = current_path;
         var integration = manager.beginDesktopIntegration(updated_app, current_path, content.source_desktop_path, content.icon_source) catch |err| {
-            std.log.warn("Could not refresh desktop integration for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(err), @errorName(err) });
-            self.emitStatusFmt(.err, "Could not refresh desktop integration for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(err), @errorName(err) });
+            std.log.warn("Could not refresh desktop integration for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
+            self.emitStatusFmt(.err, "Could not refresh desktop integration for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
             manager.writeFileAtomically(backup_path, current_path, "restore") catch {};
             return false;
         };
         defer integration.deinit();
         manager.addAppImageToLocalDb(updated_app) catch |err| {
-            std.log.warn("Could not save updated AppImage metadata for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(err), @errorName(err) });
-            self.emitStatusFmt(.err, "Could not save updated AppImage metadata for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(err), @errorName(err) });
-            integration.rollback() catch |rollback_err| self.emitStatusFmt(.err, "Could not restore desktop integration for {0f} after the operation failed. {1s} Desktop entries or icons may need repair.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(rollback_err), @errorName(rollback_err) });
-            manager.writeFileAtomically(backup_path, current_path, "restore") catch |restore_err| self.emitStatusFmt(.err, "Could not restore the previous AppImage for {0f} from the backup path. {1s} Check the installed file and backup before launching or retrying the update.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(restore_err), @errorName(restore_err) });
+            std.log.warn("Could not save updated AppImage metadata for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
+            self.emitStatusFmt(.err, "Could not save updated AppImage metadata for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
+            integration.rollback() catch |rollback_err| self.emitStatusFmt(.err, "Could not restore desktop integration for {0f} after the operation failed. {1s} Desktop entries or icons may need repair.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(rollback_err), @errorName(rollback_err) });
+            manager.writeFileAtomically(backup_path, current_path, "restore") catch |restore_err| self.emitStatusFmt(.err, "Could not restore the previous AppImage for {0f} from the backup path. {1s} Check the installed file and backup before launching or retrying the update.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(restore_err), @errorName(restore_err) });
             return false;
         };
         try integration.finish();
         manager.refreshDesktopCachesBestEffort(content.icon_source != null);
         self.emitStatus(.information, "Refreshed desktop integration.");
         std.Io.Dir.cwd().deleteFile(self.io, backup_path) catch |err| {
-            self.emitStatusFmt(.warning, "Could not remove the backup for {0f} at the backup path. {1s} The backup remains on disk.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(appimage_ptr.name), @import("diagnostics").cause(err), @errorName(err) });
+            self.emitStatusFmt(.warning, "Could not remove the backup for {0f} at the backup path. {1s} The backup remains on disk.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
         };
 
         self.emitStatusFmt(.success, "Updated AppImage {s} to {s}.", .{ app_to_update.name, updated_app.version });
@@ -547,8 +548,8 @@ pub const UpdateManager = struct {
 
         if (response.head.content_type) |content_type| {
             if (contentTypeIsNotAppImage(content_type)) {
-                std.log.warn("The update URL for AppImage {0f} returned '{1f}' instead of an AppImage download. Set a direct download URL in its update settings.", .{ @import("diagnostics").safe(app_name), @import("diagnostics").safe(content_type) });
-                self.emitStatusFmt(.warning, "The update URL for AppImage {0f} returned '{1f}' instead of an AppImage download. Set a direct download URL in its update settings.", .{ @import("diagnostics").safe(app_name), @import("diagnostics").safe(content_type) });
+                std.log.warn("The update URL for AppImage {0f} returned '{1f}' instead of an AppImage download. Set a direct download URL in its update settings.", .{ diagnostics.safe(app_name), diagnostics.safe(content_type) });
+                self.emitStatusFmt(.warning, "The update URL for AppImage {0f} returned '{1f}' instead of an AppImage download. Set a direct download URL in its update settings.", .{ diagnostics.safe(app_name), diagnostics.safe(content_type) });
                 return null;
             }
         }
@@ -1138,7 +1139,7 @@ pub const UpdateManager = struct {
             self.emitStatusFmt(
                 .warning,
                 "No compatible AppImage download was found for {0f} on this system’s architecture. Check the provider settings and available release assets.",
-                .{@import("diagnostics").safe(app_name)},
+                .{diagnostics.safe(app_name)},
             );
         }
         return result;
@@ -1206,7 +1207,7 @@ pub const UpdateManager = struct {
                 context.manager.emitDownloadProgress(context.app_name, progress);
             },
             .Error => if (event.download_error) |download_error| {
-                context.manager.emitStatusFmt(.err, "Could not download the selected AppImage. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(download_error), @errorName(download_error) });
+                context.manager.emitStatusFmt(.err, "Could not download the selected AppImage. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(download_error), @errorName(download_error) });
             },
             .Skipped => context.manager.emitStatus(.information, "AppImage download was skipped."),
         }

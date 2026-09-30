@@ -1,7 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 
-const Zigalpm = @import("Zigalpm");
+const PackageManager = @import("PackageManager");
 
 pub fn main(init: std.process.Init) !void {
     // Prints to stderr, unbuffered, ignoring potential errors.
@@ -26,7 +26,7 @@ pub fn main(init: std.process.Init) !void {
     var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
     const stdout_writer = &stdout_file_writer.interface;
 
-    try Zigalpm.printAnotherMessage(stdout_writer);
+    try PackageManager.printAnotherMessage(stdout_writer);
 
     try stdout_writer.flush(); // Don't forget to flush!
 }
@@ -39,17 +39,17 @@ test "simple test" {
     try std.testing.expectEqual(@as(i32, 42), list.pop());
 }
 
-test "consumer can access the public Zigalpm API" {
-    _ = Zigalpm.AlpmManager;
-    _ = Zigalpm.AurManager;
-    _ = Zigalpm.FlatpakManager;
-    _ = Zigalpm.AppImageManager;
-    _ = Zigalpm.alpm.TransFlag;
-    _ = Zigalpm.aur.models.Package;
-    _ = Zigalpm.flatpak.RemoteManager;
-    _ = Zigalpm.appimage.UpdateManager;
-    _ = Zigalpm.pkgbuild.Parser;
-    _ = Zigalpm.shared.Downloader;
+test "consumer can access the public PackageManager API" {
+    _ = PackageManager.Manager;
+    _ = PackageManager.AurManager;
+    _ = PackageManager.FlatpakManager;
+    _ = PackageManager.AppImageManager;
+    _ = PackageManager.Manager.TransFlag;
+    _ = PackageManager.aur.models.Package;
+    _ = PackageManager.flatpak.RemoteManager;
+    _ = PackageManager.appimage.UpdateManager;
+    _ = PackageManager.pkgbuild.Parser;
+    _ = PackageManager.shared.Downloader;
 }
 
 test "fuzz example" {

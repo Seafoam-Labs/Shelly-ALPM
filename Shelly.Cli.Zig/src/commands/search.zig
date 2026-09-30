@@ -1,5 +1,6 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const diagnostics = @import("diagnostics");
+const PackageManager = @import("PackageManager");
 const test_support = @import("test_support.zig");
 const output = @import("../output/config.zig");
 const colors = @import("../output/colors.zig");
@@ -100,7 +101,7 @@ const FlatpakPackage = struct {
     download_size: u64 = 0,
     installed_size: u64 = 0,
     permissions: []const []const u8 = &.{},
-    scope: Zigalpm.flatpak.Scope = .unknown,
+    scope: PackageManager.flatpak.Scope = .unknown,
 };
 
 const StandardMode = enum { packages, repositories, groups, detail };
@@ -207,12 +208,12 @@ fn executeWithRunner(
 
     const result = runner.search(context, invocation) catch |err| {
         const failure: anyerror = err;
-        if (Zigalpm.flatpak.errors.unavailableMessage(failure)) |message|
+        if (PackageManager.flatpak.errors.unavailableMessage(failure)) |message|
             return writeFailure(context, invocation, message);
         const message = switch (failure) {
             error.NoPackageSpecified => "Specify at least one package name. See the command help for usage.",
-            error.PackageNotFound => try Zigalpm.user_errors.missingPackage(context.allocator, if (invocation.positionals.len > 0) invocation.positionals[0] else "the requested package"),
-            else => try Zigalpm.user_errors.format(context.allocator, failure, .{ .operation = "the package search" }),
+            error.PackageNotFound => try PackageManager.user_errors.missingPackage(context.allocator, if (invocation.positionals.len > 0) invocation.positionals[0] else "the requested package"),
+            else => try PackageManager.user_errors.format(context.allocator, failure, .{ .operation = "the package search" }),
         };
         return writeFailure(context, invocation, message);
     };
@@ -285,7 +286,7 @@ fn runStandard(
     const depends = optionEnabled(invocation, "--depends");
     const explicit = optionEnabled(invocation, "--explicit");
 
-    const manager = try Zigalpm.AlpmManager.init(
+    const manager = try PackageManager.Manager.init(
         context.allocator,
         context.environ,
         .{ .use_root = false },
@@ -303,7 +304,7 @@ fn runStandard(
     var packages: std.ArrayList(StandardPackage) = .empty;
     if (installed) {
         const values = try manager.get_installed_packages();
-        defer Zigalpm.alpm.OwnedPackage.deinitSlice(context.allocator, values);
+        defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, values);
         for (values) |value| {
             const name = value.name() orelse continue;
             if (!show_hidden and ignoredPackage(manager, name)) continue;
@@ -320,7 +321,7 @@ fn runStandard(
     }
     if (available) {
         const values = try manager.get_available_packages();
-        defer Zigalpm.alpm.OwnedPackage.deinitSlice(context.allocator, values);
+        defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, values);
         var seen = std.StringHashMap(void).init(context.allocator);
         defer seen.deinit();
         for (values) |value| {
@@ -383,10 +384,10 @@ fn runStandard(
 
     var local_packages: std.ArrayList(LocalPackage) = .empty;
     if (local) {
-        var local_manager = Zigalpm.LocalManager.init(context.allocator, context.io, .{});
+        var local_manager = PackageManager.LocalManager.init(context.allocator, context.io, .{});
         defer local_manager.deinit();
         const values = try local_manager.getInstalledBinaryPackages();
-        defer Zigalpm.local.Package.deinitSlice(context.allocator, values);
+        defer PackageManager.local.Package.deinitSlice(context.allocator, values);
         if (query) |wanted| {
             var scored: std.ArrayList(ScoredLocal) = .empty;
             defer scored.deinit(context.allocator);
@@ -447,7 +448,7 @@ fn runAur(
     invocation: *const parser.Invocation,
 ) !AurResult {
     const aur_base = try aur_url.resolveFor(context, invocation);
-    var manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+    var manager = try PackageManager.AurManager.init(context.allocator, context.environ, .{
         .aur_git_base_url = aur_base,
     });
     defer manager.deinit();
@@ -480,7 +481,7 @@ fn runAur(
     var standard_packages: std.ArrayList(StandardPackage) = .empty;
     if (optionEnabled(invocation, "--standard") and !detail) {
         const values = try manager.alpm.get_available_packages();
-        defer Zigalpm.alpm.OwnedPackage.deinitSlice(context.allocator, values);
+        defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, values);
         for (values) |value| {
             const name = value.name() orelse continue;
             if (try partialRatio(context.allocator, query, name) < 90) continue;
@@ -490,7 +491,7 @@ fn runAur(
     }
 
     const values = try manager.searchPackages(query);
-    defer Zigalpm.aur.models.Package.deinitSlice(context.allocator, values);
+    defer PackageManager.aur.models.Package.deinitSlice(context.allocator, values);
     const packages = try context.allocator.alloc(AurPackage, values.len);
     for (values, packages) |value, *destination|
         destination.* = try copyAurPackage(context.allocator, value);
@@ -517,9 +518,9 @@ fn runFlatpak(
     const query = invocation.positionals[0];
     const limit: usize = @intCast(optionInteger(invocation, "--limit", 21));
     const page: usize = @intCast(optionInteger(invocation, "--page", 1));
-    var manager = Zigalpm.flatpak.AppstreamManager.init(context.allocator, context.io);
+    var manager = PackageManager.flatpak.AppstreamManager.init(context.allocator, context.io);
     const catalogs = try manager.getAllRemoteCatalogs(null);
-    defer Zigalpm.flatpak.AppstreamCatalog.deinitSlice(context.allocator, catalogs);
+    defer PackageManager.flatpak.AppstreamCatalog.deinitSlice(context.allocator, catalogs);
 
     var matches: std.ArrayList(FlatpakPackage) = .empty;
     for (catalogs) |catalog| {
@@ -562,7 +563,7 @@ fn enrichFlatpakRemoteInfo(
     context: *runtime.RuntimeContext,
     packages: []FlatpakPackage,
 ) !void {
-    var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
+    var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     for (packages) |*package| {
         if (package.scope == .unknown or package.remote.len == 0 or package.id.len == 0) continue;
@@ -780,7 +781,7 @@ fn renderPkgbuilds(
 
     for (builds) |build| {
         const pkgbuild = build.pkgbuild orelse {
-            try colors.printLine(context, .err, "Could not retrieve the PKGBUILD for {0f} from the configured AUR service.", .{@import("diagnostics").safe(build.name)});
+            try colors.printLine(context, .err, "Could not retrieve the PKGBUILD for {0f} from the configured AUR service.", .{diagnostics.safe(build.name)});
             continue;
         };
         try colors.printLine(context, .warning, "Package build for: {s}", .{build.name});
@@ -1027,7 +1028,7 @@ fn field(json: *std.json.Stringify, name: []const u8, value: anytype) !void {
 
 fn copyStandardPackage(
     allocator: std.mem.Allocator,
-    package: Zigalpm.alpm.OwnedPackage,
+    package: PackageManager.Manager.OwnedPackage,
 ) !StandardPackage {
     const repository = package.repository() orelse "";
     return .{
@@ -1057,7 +1058,7 @@ fn copyStandardPackage(
 
 fn optionalDependencyInstalledStates(
     allocator: std.mem.Allocator,
-    manager: *Zigalpm.AlpmManager,
+    manager: *PackageManager.Manager,
     optional_dependencies: []const []const u8,
 ) ![]bool {
     const states = try allocator.alloc(bool, optional_dependencies.len);
@@ -1080,7 +1081,7 @@ fn optionalDependencyExpression(raw: []const u8) []const u8 {
     return std.mem.trim(u8, raw[0..description], " \t\r\n");
 }
 
-fn copyAurPackage(allocator: std.mem.Allocator, package: Zigalpm.aur.models.Package) !AurPackage {
+fn copyAurPackage(allocator: std.mem.Allocator, package: PackageManager.aur.models.Package) !AurPackage {
     return .{
         .id = package.id,
         .name = try allocator.dupe(u8, package.name),
@@ -1132,7 +1133,7 @@ fn copyStrings(allocator: std.mem.Allocator, values: anytype) ![]const []const u
     return result;
 }
 
-fn ignoredPackage(manager: *Zigalpm.AlpmManager, name: []const u8) bool {
+fn ignoredPackage(manager: *PackageManager.Manager, name: []const u8) bool {
     for (manager.config.ignore_package.items) |ignored| {
         if (std.mem.eql(u8, ignored, name)) return true;
     }

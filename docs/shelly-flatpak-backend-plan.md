@@ -66,7 +66,7 @@ The migration is complete when all of the following are true:
 ## Current State
 
 `Shelly.PackageManager/build.zig` currently creates a module from the generated
-Flatpak binding and attaches libflatpak to the exported `Zigalpm` module:
+Flatpak binding and attaches libflatpak to the exported `PackageManager` module:
 
 ```zig
 const flatpak_mod = b.createModule(.{
@@ -80,7 +80,7 @@ mod.addImport("flatpak", flatpak_mod);
 mod.linkSystemLibrary("flatpak", .{});
 ```
 
-Because `Shelly.Cli.Zig` imports `Zigalpm`, the native dependency propagates
+Because `Shelly.Cli.Zig` imports `PackageManager`, the native dependency propagates
 into the final `shelly` executable.
 
 The current Flatpak implementation is under:
@@ -323,13 +323,13 @@ into equivalent wire values before returning.
 Replace consumer references to:
 
 ```zig
-Zigalpm.flatpak.bindings.libflatpak.Scope
+PackageManager.flatpak.bindings.libflatpak.Scope
 ```
 
 with:
 
 ```zig
-Zigalpm.flatpak.Scope
+PackageManager.flatpak.Scope
 ```
 
 Replace the native object access in
@@ -480,9 +480,9 @@ for fake-backend tests. That option must not be enabled in release packages.
 Keep the existing consumer-facing entry points where practical:
 
 ```zig
-Zigalpm.FlatpakManager
-Zigalpm.flatpak.RemoteManager
-Zigalpm.flatpak.AppstreamManager
+PackageManager.FlatpakManager
+PackageManager.flatpak.RemoteManager
+PackageManager.flatpak.AppstreamManager
 ```
 
 Change their internals to use `flatpak.client`. The CLI, GTK UI, TUI, and

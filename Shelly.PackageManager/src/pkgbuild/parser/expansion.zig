@@ -1,6 +1,8 @@
 //! Bash parameter expansion engine: variables, case conversion, trimming,
 //! replacement, substring, arithmetic, and command-substitution handling.
 const std = @import("std");
+const shell_word = @import("word.zig");
+const diagnostics = @import("diagnostics");
 const shell_scan = @import("shell_scan.zig");
 const arithmetic = @import("arithmetic.zig");
 const PkgbuildParser = @import("parser.zig").PkgbuildParser;
@@ -17,7 +19,7 @@ pub const WordValue = struct {
 /// Expand each original expression once. Substituted bytes are data, never a
 /// new input to another expansion pass (even if they contain dollars/quotes).
 pub fn resolve_word(self: PkgbuildParser, input: []const u8, vars: *std.StringHashMap([]const u8)) !WordValue {
-    const word = try @import("word.zig").read(self.allocator, input, 0);
+    const word = try shell_word.read(self.allocator, input, 0);
     defer word.deinit(self.allocator);
     if (word.end != input.len) return error.UnsupportedShellWord;
     var out: std.ArrayList(u8) = .empty;
@@ -392,7 +394,7 @@ fn replace_command(self: PkgbuildParser, input: []const u8) ![]const u8 {
         }
 
         const whole_match = input[open .. close + 1];
-        std.debug.print("Could not evaluate PKGBUILD command substitution {0f} in the PKGBUILD.\n", .{@import("diagnostics").safe(whole_match)});
+        std.debug.print("Could not evaluate PKGBUILD command substitution {0f} in the PKGBUILD.\n", .{diagnostics.safe(whole_match)});
         pos = close + 1;
     }
 

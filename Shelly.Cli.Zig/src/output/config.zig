@@ -1,5 +1,5 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const PackageManager = @import("PackageManager");
 const model = @import("../config/model.zig");
 const runtime = @import("../runtime/context.zig");
 const xdg = @import("../runtime/xdg.zig");
@@ -138,7 +138,7 @@ pub fn writeAlpmPackageInfoFrame(
 
 pub fn writeOperationProgressFrame(
     context: *runtime.RuntimeContext,
-    progress: Zigalpm.operation.ProgressEvent,
+    progress: PackageManager.operation.ProgressEvent,
 ) !void {
     switch (progress.envelope.backend) {
         .flatpak => try writeSimpleProgressFrame(
@@ -161,7 +161,7 @@ pub fn writeOperationProgressFrame(
 
 pub fn writePkgbuildQuestionFrame(
     context: *runtime.RuntimeContext,
-    question: Zigalpm.OperationQuestion,
+    question: PackageManager.OperationQuestion,
 ) !void {
     const review = question.review orelse return error.MissingReviewPayload;
     const diff = try review_output.buildDiff(context.allocator, review.old_content, review.new_content);
@@ -241,7 +241,7 @@ pub fn writePkgbuildQuestionFrame(
 
 pub fn writeYesNoQuestionFrame(
     context: *runtime.RuntimeContext,
-    question: Zigalpm.OperationQuestion,
+    question: PackageManager.OperationQuestion,
 ) !void {
     const question_id = try std.fmt.allocPrint(context.allocator, "{d}", .{question.question_id});
     defer context.allocator.free(question_id);
@@ -276,7 +276,7 @@ pub fn writeYesNoQuestionFrame(
 
 pub fn writeTransactionQuestionFrame(
     context: *runtime.RuntimeContext,
-    question: Zigalpm.OperationQuestion,
+    question: PackageManager.OperationQuestion,
 ) !void {
     const plan = question.transaction_plan orelse return error.MissingTransactionPlan;
     const question_id = try std.fmt.allocPrint(context.allocator, "{d}", .{question.question_id});
@@ -331,21 +331,21 @@ pub fn writeTransactionQuestionFrame(
 
 pub fn writeOptionalDependenciesQuestionFrame(
     context: *runtime.RuntimeContext,
-    question: Zigalpm.OperationQuestion,
+    question: PackageManager.OperationQuestion,
 ) !void {
     try writeSelectionQuestionFrame(context, question, "q.optdeps", true);
 }
 
 pub fn writeProviderQuestionFrame(
     context: *runtime.RuntimeContext,
-    question: Zigalpm.OperationQuestion,
+    question: PackageManager.OperationQuestion,
 ) !void {
     try writeSelectionQuestionFrame(context, question, "q.provider", false);
 }
 
 fn writeSelectionQuestionFrame(
     context: *runtime.RuntimeContext,
-    question: Zigalpm.OperationQuestion,
+    question: PackageManager.OperationQuestion,
     wire_kind: []const u8,
     include_question_text: bool,
 ) !void {
@@ -390,7 +390,7 @@ fn writeSelectionQuestionFrame(
     try writeFrame(context, payload.writer.buffered());
 }
 
-fn questionKindName(question: Zigalpm.OperationQuestion) []const u8 {
+fn questionKindName(question: PackageManager.OperationQuestion) []const u8 {
     switch (question.purpose) {
         .cache_clean_extra_entries => return "CacheCleanExtraEntries",
         .package_conflict => return "PackageConflict",
@@ -407,7 +407,7 @@ fn questionKindName(question: Zigalpm.OperationQuestion) []const u8 {
 }
 
 test "cache clean question uses cache clean wire kind" {
-    const question: Zigalpm.OperationQuestion = .{
+    const question: PackageManager.OperationQuestion = .{
         .question_id = 1,
         .envelope = .{
             .operation_id = 1,
@@ -437,7 +437,7 @@ test "cache clean question uses cache clean wire kind" {
 
 fn writeAlpmProgressFrame(
     context: *runtime.RuntimeContext,
-    progress: Zigalpm.operation.ProgressEvent,
+    progress: PackageManager.operation.ProgressEvent,
 ) !void {
     const percent = progressPercentage(progress.update);
     const current = progress.update.bytes_completed orelse
@@ -512,7 +512,7 @@ fn writeSimpleProgressFrame(
     try writeFrame(context, payload.writer.buffered());
 }
 
-fn progressPercentage(update: Zigalpm.operation.ProgressUpdate) u8 {
+fn progressPercentage(update: PackageManager.operation.ProgressUpdate) u8 {
     if (update.native_code) |native_code| switch (native_code) {
         512, 514, 516, 518 => return 0,
         513, 515, 517, 519, 520, 521 => return 100,
@@ -529,7 +529,13 @@ fn progressPercentage(update: Zigalpm.operation.ProgressUpdate) u8 {
     return @intCast(@min(@as(u128, 100), (@as(u128, current) * 100) / total));
 }
 
-fn progressType(progress: Zigalpm.operation.ProgressEvent) []const u8 {
+fn progressType(progress: PackageManager.operation.ProgressEvent) []const u8 {
+    // Acquisition stages retain the established UI phase identifiers. They
+    // must not fall back to Installing/Upgrading merely because of the parent.
+    if (progress.update.stage) |stage| {
+        if (std.mem.eql(u8, stage, "Verifying downloads")) return "IntegrityStart";
+        if (std.mem.eql(u8, stage, "Publishing downloads")) return "LoadStart";
+    }
     if (progress.envelope.backend == .download) {
         const subject = progress.envelope.subject orelse "";
         return if (std.mem.endsWith(u8, subject, ".db") or
@@ -563,7 +569,7 @@ fn progressType(progress: Zigalpm.operation.ProgressEvent) []const u8 {
     return fallbackProgressType(progress.envelope.kind);
 }
 
-fn fallbackProgressType(kind: Zigalpm.operation.OperationKind) []const u8 {
+fn fallbackProgressType(kind: PackageManager.operation.OperationKind) []const u8 {
     return switch (kind) {
         .install => "AddStart",
         .remove, .cleanup => "RemoveStart",
@@ -584,7 +590,7 @@ fn progressMessage(stage: ?[]const u8) ?[]const u8 {
 }
 
 test "AUR lifecycle progress uses stage semantics instead of package position" {
-    const build_start: Zigalpm.operation.ProgressEvent = .{
+    const build_start: PackageManager.operation.ProgressEvent = .{
         .envelope = .{
             .operation_id = 1,
             .parent_id = null,
@@ -619,12 +625,12 @@ pub fn writeErrorFrame(context: *runtime.RuntimeContext, message: []const u8) !v
     return writeErrorFrameImpl(context, message, null);
 }
 
-pub fn writeOperationErrorFrame(context: *runtime.RuntimeContext, message: []const u8, failure: Zigalpm.operation.ErrorEvent) !void {
+pub fn writeOperationErrorFrame(context: *runtime.RuntimeContext, message: []const u8, failure: PackageManager.operation.ErrorEvent) !void {
     return writeErrorFrameImpl(context, message, failure);
 }
 
-fn writeErrorFrameImpl(context: *runtime.RuntimeContext, message: []const u8, failure: ?Zigalpm.operation.ErrorEvent) !void {
-    const sanitized = try Zigalpm.user_errors.sanitizeAlloc(context.allocator, message);
+fn writeErrorFrameImpl(context: *runtime.RuntimeContext, message: []const u8, failure: ?PackageManager.operation.ErrorEvent) !void {
+    const sanitized = try PackageManager.user_errors.sanitizeAlloc(context.allocator, message);
     defer context.allocator.free(sanitized);
     var payload = std.Io.Writer.Allocating.init(context.allocator);
     defer payload.deinit();
@@ -671,11 +677,11 @@ pub fn writeSuccess(context: *runtime.RuntimeContext, message: []const u8) !void
 }
 
 pub fn writeFailure(context: *runtime.RuntimeContext, message: []const u8) !void {
-    try colors.printLine(context, .err, "{f}", .{Zigalpm.user_errors.safe(message)});
+    try colors.printLine(context, .err, "{f}", .{PackageManager.user_errors.safe(message)});
 }
 
 pub fn writeWarning(context: *runtime.RuntimeContext, message: []const u8) !void {
-    try context.stderr.print("warning: {f}\n", .{Zigalpm.user_errors.safe(message)});
+    try context.stderr.print("warning: {f}\n", .{PackageManager.user_errors.safe(message)});
 }
 
 pub fn writeFrame(context: *runtime.RuntimeContext, payload: []const u8) !void {

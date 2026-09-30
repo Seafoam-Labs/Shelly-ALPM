@@ -1,0 +1,13 @@
+diff --git a/scripts/repo-add/src/meson.build b/scripts/repo-add/src/meson.build
+index d008b812..19c19159 100644
+--- a/scripts/repo-add/src/meson.build
++++ b/scripts/repo-add/src/meson.build
+@@ -34,7 +34,7 @@ cargo_env = [ 'CARGO_HOME=' + cargo_home ]
+ repo_add = custom_target(
+   'cargo-build',
+   build_by_default: true,
+-  build_always_stale: true,
++  build_always_stale: false,
+   output: 'repo-add',
+   console: true,
+   install: true,

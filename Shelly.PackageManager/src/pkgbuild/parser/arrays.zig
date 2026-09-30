@@ -1,6 +1,7 @@
 //! PKGBUILD array parsing, including brace expansion and scoped
 //! (package_-local) arrays.
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const shell_scan = @import("shell_scan.zig");
 const PkgbuildParser = @import("parser.zig").PkgbuildParser;
 
@@ -24,7 +25,7 @@ fn parse_array_mode(self: PkgbuildParser, content: []const u8, variable_name: []
         search_from = m.after_paren;
 
         if (try shell_scan.is_inside_conditional_block(self, content, m.start)) {
-            std.debug.print("Skipped conditional PKGBUILD function {0f} at offset {1d}.\n\nTechnical details: {2f}\n", .{ @import("diagnostics").safe(variable_name), m.start, @import("diagnostics").safe(if (m.append) "+=" else "=") });
+            std.debug.print("Skipped conditional PKGBUILD function {0f} at offset {1d}.\n\nTechnical details: {2f}\n", .{ diagnostics.safe(variable_name), m.start, diagnostics.safe(if (m.append) "+=" else "=") });
             continue;
         }
 

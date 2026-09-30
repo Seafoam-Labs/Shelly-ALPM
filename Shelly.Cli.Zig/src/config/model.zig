@@ -1,4 +1,5 @@
 const std = @import("std");
+const PackageManager = @import("PackageManager");
 const native_defaults = @import("defaults.zig");
 const aur_url = @import("aur_url.zig");
 
@@ -28,6 +29,11 @@ pub const Config = struct {
             // for an invalid saved limit without discarding other settings.
             if (std.mem.eql(u8, entry.key_ptr.*, "ParallelDownloadCount") and
                 parallelDownloadCount(incoming) == null) continue;
+            // Preserve invalid backend values so config get/set/reset can repair them.
+            if (std.mem.eql(u8, entry.key_ptr.*, "NativePackageBackend")) {
+                entry.value_ptr.* = incoming;
+                continue;
+            }
             if (!compatible(entry.key_ptr.*, entry.value_ptr.*, incoming))
                 return error.InvalidConfig;
             entry.value_ptr.* = incoming;
@@ -147,6 +153,11 @@ fn convertValue(
         if (text.len == 0 or std.ascii.eqlIgnoreCase(text, "null")) return .null;
         return .{ .string = try parseTime(allocator, text) };
     }
+    if (std.mem.eql(u8, key, "NativePackageBackend")) {
+        const backend = try PackageManager.Manager.Backend.parse(text);
+        try backend.validate();
+        return .{ .string = @tagName(backend) };
+    }
     if (enumChoices(key)) |choices| {
         const canonical = canonicalChoice(choices, text) orelse return error.InvalidValue;
         return .{ .string = canonical };
@@ -259,6 +270,7 @@ fn canonicalChoice(choices: []const []const u8, text: []const u8) ?[]const u8 {
 }
 
 fn enumChoices(key: []const u8) ?[]const []const u8 {
+    if (std.mem.eql(u8, key, "NativePackageBackend")) return if (PackageManager.Manager.libalpm_enabled) &.{ "libalpm", "rlpm" } else &.{"rlpm"};
     if (std.mem.eql(u8, key, "FileSizeDisplay")) return &.{ "Bytes", "Megabytes", "Gigabytes" };
     if (std.mem.eql(u8, key, "DefaultExecution")) return &.{
         "UpgradeStandard",
@@ -305,8 +317,8 @@ test "defaults preserve reflection order and display conventions" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const config = try Config.defaults(arena.allocator());
-    try std.testing.expectEqual(@as(usize, 13), config.values.count());
-    try std.testing.expectEqualStrings("FileSizeDisplay", config.values.keys()[0]);
+    try std.testing.expectEqual(@as(usize, 14), config.values.count());
+    try std.testing.expectEqualStrings("NativePackageBackend", config.values.keys()[0]);
     try std.testing.expectEqualStrings(
         "False",
         (try config.getDisplay(arena.allocator(), "AutoConfirmCacheClean")).?,

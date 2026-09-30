@@ -1,6 +1,8 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
-const environment = Zigalpm.appimage.environment;
+const diagnostics = @import("diagnostics");
+const config_model = @import("../config/model.zig");
+const PackageManager = @import("PackageManager");
+const environment = PackageManager.appimage.environment;
 const xdg = @import("../runtime/xdg.zig");
 const config_manager = @import("../config/manager.zig");
 const output = @import("../output/config.zig");
@@ -10,7 +12,7 @@ const runtime = @import("../runtime/context.zig");
 pub fn dispatch(context: *runtime.RuntimeContext, invocation: *const parser.Invocation) !?u8 {
     return dispatchImpl(context, invocation) catch |err| {
         const manager = config_manager.Manager.init(context);
-        const message = try @import("diagnostics").format(context.allocator, err, .{
+        const message = try diagnostics.format(context.allocator, err, .{
             .operation = invocation.command.path,
             .path = manager.path() catch null,
             .subject = if (invocation.positionals.len > 0) invocation.positionals[0] else null,
@@ -28,7 +30,7 @@ fn dispatchImpl(
     if (!std.mem.startsWith(u8, invocation.command.path, "shelly config ")) return null;
     if (std.mem.eql(u8, invocation.command.path, "shelly config appimage")) {
         configureAppImage(context, invocation) catch |err| {
-            const message = try std.fmt.allocPrint(context.allocator, "Could not save environment variables for AppImage {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(if (invocation.positionals.len > 0) invocation.positionals[0] else "the selected application"), @import("diagnostics").cause(err), @errorName(err) });
+            const message = try std.fmt.allocPrint(context.allocator, "Could not save environment variables for AppImage {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(if (invocation.positionals.len > 0) invocation.positionals[0] else "the selected application"), diagnostics.cause(err), @errorName(err) });
             defer context.allocator.free(message);
             if (invocation.globals.ui_mode) try output.writeErrorFrame(context, message) else try output.writeFailure(context, message);
             return 1;
@@ -60,7 +62,7 @@ fn dispatchImpl(
             } else {
                 try output.writeErrorFrame(
                     context,
-                    try std.fmt.allocPrint(context.allocator, "Unknown configuration setting '{0f}'. Check the available settings before trying again.", .{@import("diagnostics").safe(key)}),
+                    try std.fmt.allocPrint(context.allocator, "Unknown configuration setting '{0f}'. Check the available settings before trying again.", .{diagnostics.safe(key)}),
                 );
             }
         } else if (value) |actual| {
@@ -68,7 +70,7 @@ fn dispatchImpl(
         } else {
             try output.writeFailure(
                 context,
-                try std.fmt.allocPrint(context.allocator, "Unknown configuration setting '{0f}'. Check the available settings before trying again.", .{@import("diagnostics").safe(key)}),
+                try std.fmt.allocPrint(context.allocator, "Unknown configuration setting '{0f}'. Check the available settings before trying again.", .{diagnostics.safe(key)}),
             );
         }
         return 0;
@@ -81,7 +83,7 @@ fn dispatchImpl(
         const message = if (updated)
             try std.fmt.allocPrint(context.allocator, "Set {s} to {s}", .{ key, value })
         else
-            try std.fmt.allocPrint(context.allocator, "Invalid configuration setting or value for '{f}'. {s} See 'shelly config list' for available settings. Your change was not saved.", .{ @import("diagnostics").safe(key), try @import("../config/model.zig").valueHint(context.allocator, key) });
+            try std.fmt.allocPrint(context.allocator, "Invalid configuration setting or value for '{f}'. {s} See 'shelly config list' for available settings. Your change was not saved.", .{ diagnostics.safe(key), try config_model.valueHint(context.allocator, key) });
         if (invocation.globals.ui_mode) {
             if (updated) try output.writeInfoFrame(context, message) else try output.writeErrorFrame(context, message);
         } else if (updated) {
@@ -176,7 +178,7 @@ fn configureAppImage(context: *runtime.RuntimeContext, invocation: *const parser
     defer context.allocator.free(config_home);
     const database = try std.fs.path.join(context.allocator, &.{ config_home, "shelly", "appimage-metadata-v2.db" });
     defer context.allocator.free(database);
-    var manager = Zigalpm.AppImageManager{
+    var manager = PackageManager.AppImageManager{
         .allocator = context.allocator,
         .io = context.io,
         .environ = context.environ,

@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 
 const zeit = @import("zeit");
 const zsn = @import("zsn");
@@ -209,7 +210,7 @@ const Worker = struct {
                 log_worker.info("cron mode: skipping initial check", .{});
             } else {
                 self.pollOnce() catch |e| {
-                    log_worker.err("Could not check for package updates. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+                    log_worker.err("Could not check for package updates. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
                 };
             }
             initial_check_done = true;
@@ -218,11 +219,11 @@ const Worker = struct {
                 self.config.mutex.lockUncancelable(self.io);
                 defer self.config.mutex.unlock(self.io);
                 const cfg = self.config.get() catch |e| {
-                    log_worker.warn("Could not read the update-check interval. {0s} Using a 10-hour interval.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+                    log_worker.warn("Could not read the update-check interval. {0s} Using a 10-hour interval.\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
                     break :blk 36000;
                 };
                 break :blk next_notification.getNextSeconds(self.gpa, self.io, cfg) catch |e| {
-                    log_worker.warn("Could not calculate the next update-check time. {0s} Using a 10-hour interval.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+                    log_worker.warn("Could not calculate the next update-check time. {0s} Using a 10-hour interval.\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
                     break :blk 36000;
                 };
             };
@@ -348,7 +349,7 @@ pub fn main(init: std.process.Init) !void {
 
     while (true) {
         runSession(init) catch |err| {
-            log_main.err("The tray session ended unexpectedly. Reconnecting in 5 seconds. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            log_main.err("The tray session ended unexpectedly. Reconnecting in 5 seconds. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
             init.io.sleep(.fromMilliseconds(5_000), .awake) catch {};
             continue;
         };
@@ -446,14 +447,14 @@ fn runSession(init: std.process.Init) !void {
                 .clock = .awake,
             },
         }) catch |e| {
-            log_loop.err("The tray lost its D-Bus connection. Reconnecting. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+            log_loop.err("The tray lost its D-Bus connection. Reconnecting. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
             return e;
         };
 
         if (updates.takeRefresh()) {
-            menu_ctrl.invalidate() catch |e| log_loop.err("Could not refresh the tray menu. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+            menu_ctrl.invalidate() catch |e| log_loop.err("Could not refresh the tray menu. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
             const target_icon = if (updates.count() > 0) attention_icon_name else icon_name;
-            t.emitNewIcon(target_icon) catch |e| log_loop.err("Could not update the tray icon over D-Bus. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+            t.emitNewIcon(target_icon) catch |e| log_loop.err("Could not update the tray icon over D-Bus. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
         }
 
         if (updates.takeNotif()) |n| {
@@ -467,21 +468,21 @@ fn runSession(init: std.process.Init) !void {
                 .body = n.body,
                 .on_activate = &openShelly,
                 .ctx = &runner,
-            }) catch |e| log_loop.err("Could not display the update notification. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+            }) catch |e| log_loop.err("Could not display the update notification. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
         }
 
         if (updates.takeConfigChange()) {
             const target_icon = if (updates.count() > 0) attention_icon_name else icon_name;
-            t.emitNewIcon(target_icon) catch |e| log_loop.err("Could not update the tray icon over D-Bus. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+            t.emitNewIcon(target_icon) catch |e| log_loop.err("Could not update the tray icon over D-Bus. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
         }
 
         if (launch_requested.swap(false, .seq_cst)) {
             runner.activateOrLaunch(&service) catch |e|
-                log_loop.err("Could not open Shelly from the tray. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+                log_loop.err("Could not open Shelly from the tray. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
         }
 
         if (quit_requested.swap(false, .seq_cst)) {
-            runner.quitUi(&service) catch |e| log_loop.err("Could not close the Shelly window from the tray. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+            runner.quitUi(&service) catch |e| log_loop.err("Could not close the Shelly window from the tray. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
             std.process.exit(0);
         }
     }
@@ -642,10 +643,10 @@ fn onEvent(ctx: ?*anyopaque, id: i32) void {
 
     if (id == run_update_index) {
         updates.runner.spawnFixedUpdate(updates.config.get() catch |e| {
-            log_menu.err("Could not start the update command from the tray. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+            log_menu.err("Could not start the update command from the tray. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
             return;
         }) catch |e|
-            log_menu.err("Could not start the update command from the tray. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(e), @errorName(e) });
+            log_menu.err("Could not start the update command from the tray. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
     }
 
     log_menu.debug("check_update_index: {}", .{check_update_index});

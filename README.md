@@ -12,7 +12,16 @@
 
 ## About
 
-Shelly is a modern package manager for Arch Linux designed to be a more user-friendly alternative. Offering a visual interface with a focus on user experience and ease of use. Shelly interfaces directly with `libalpm`. It is a complete reimagination of how a user interacts with their Arch Linux system, providing a more intuitive experience.
+Shelly is a modern package manager for Arch Linux designed to be a more user-friendly alternative. Offering a visual interface with a focus on user experience and ease of use. Shelly supports native package operations through `libalpm` or `Shelly.Rlpm`, with libalpm selected by default. It is a complete reimagination of how a user interacts with their Arch Linux system, providing a more intuitive experience.
+
+## Native backend selection
+
+Default builds include both engines. Select RLPM with
+`shelly config set NativePackageBackend rlpm`, or restore libalpm with
+`shelly config set NativePackageBackend libalpm`. Build the CLI with
+`zig build -Dlibalpm=false` for an RLPM-only binary. See the
+[backend guide](docs/native-package-backends.md) for defaults, packaging,
+verification and the remaining release acceptance gates.
 
 ## Quick Install
 
@@ -59,7 +68,7 @@ paru -Rns shelly
 ## Features
 
 - **Modern-CLI**: Provides a command-line interface for advanced users and automation, with a focus on ease of use.
-- **Native Arch Integration**: Directly interacts with `libalpm` for accurate and fast package management.
+- **Native Arch Integration**: Configurable libalpm or RLPM backend, retaining CachyOS extensions.
 - **Native Wayland Support**: Front end built using GTK4.
 - **Package Management**: Supports searching and filtering for, installing, updating, and removing packages.
 - **Repository Management**: Synchronizes with official repositories to keep package lists up to date.
@@ -171,7 +180,7 @@ Upcoming features and development targets:
 - **Arch Linux** (or an Arch-based distribution)
 - **zig 0.16.0** (for building)
 - **vala** (for building)
-- **libalpm** (provided by `pacman`)
+- **libalpm** (provided by `pacman`; omitted from the CLI build with `-Dlibalpm=false`)
 
 ### Optional Prerequisites
 
@@ -340,7 +349,7 @@ Shelly is structured into several components:
   libflatpak/GLib-native implementation details.
 - **Shelly.Http**: Standalone HTTP client with a compatibility TLS implementation.
 - **Shelly-Notifications**: Tray service to manage notifactions the Shelly-UI.
-- **Shelly.PackageManager**: Core libalpm/AUR/AppImage logic plus the
+- **Shelly.PackageManager**: Configurable libalpm/RLPM plus AUR/AppImage logic plus the
   backend-neutral Flatpak facade and secure loader.
 
 ### Building for Development

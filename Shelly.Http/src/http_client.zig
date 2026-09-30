@@ -110,6 +110,7 @@ https_proxy: ?*Proxy = null,
 /// Storage for proxies discovered from the process-default environment.
 /// Explicitly supplied proxy pointers remain externally owned.
 default_proxy_arena: ?std.heap.ArenaAllocator = null,
+no_proxy: []const u8 = "",
 default_proxy_lock: Io.Mutex = .init,
 default_proxies_initialized: std.atomic.Value(bool) = .init(false),
 
@@ -1424,9 +1425,15 @@ fn ensureDefaultProxies(client: *Client) error{ OutOfMemory, InvalidProxyConfigu
     defer client.default_proxy_lock.unlock(io);
 
     if (client.default_proxies_initialized.load(.monotonic)) return;
-    const environ_map = defaultProxyEnvironment() orelse {
-        client.default_proxies_initialized.store(true, .release);
-        return;
+    var inherited = std.process.Environ.Map.init(client.allocator);
+    defer inherited.deinit();
+    const environ_map = defaultProxyEnvironment() orelse blk: {
+        if (builtin.link_libc) {
+            inline for (.{ "http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY", "no_proxy", "NO_PROXY" }) |name| {
+                if (std.c.getenv(name)) |value| try inherited.put(name, std.mem.span(value));
+            }
+        }
+        break :blk &inherited;
     };
 
     var arena = std.heap.ArenaAllocator.init(client.allocator);
@@ -1452,6 +1459,7 @@ pub fn initDefaultProxies(client: *Client, arena: Allocator, environ_map: *const
 
     assert(client.connection_pool.used.first == null); // There are active requests.
 
+    client.no_proxy = try arena.dupe(u8, environ_map.get("no_proxy") orelse environ_map.get("NO_PROXY") orelse "");
     if (client.http_proxy == null) {
         client.http_proxy = try createProxyFromEnvVar(arena, environ_map, &.{
             "http_proxy", "HTTP_PROXY", "all_proxy", "ALL_PROXY",
@@ -2854,6 +2862,7 @@ pub fn connect(
     protocol: Protocol,
 ) ConnectError!*Connection {
     try client.ensureDefaultProxies();
+    if (proxyBypassed(client.no_proxy, host.bytes)) return client.connectTcp(host, port, protocol);
 
     const proxy = switch (protocol) {
         .plain => client.http_proxy,
@@ -3724,4 +3733,45 @@ test "HEAD enforces redirect limit without reading a nonexistent body" {
 
 test "HEAD returns 304 without treating it as a redirect" {
     try testHeadRedirects(.init(1), &.{"HTTP/1.1 304 Not Modified\r\nContent-Length: 12345\r\nConnection: close\r\n\r\n"}, .not_modified);
+}
+
+fn proxyBypassed(list: []const u8, host: []const u8) bool {
+    var entries = std.mem.tokenizeAny(u8, list, ", \t");
+    while (entries.next()) |entry| {
+        if (std.mem.eql(u8, entry, "*")) return true;
+        if (std.mem.indexOfScalar(u8, entry, '/')) |slash| {
+            const network = Io.net.IpAddress.parse(entry[0..slash], 0) catch continue;
+            const address = Io.net.IpAddress.parse(host, 0) catch continue;
+            if (std.meta.activeTag(network) != std.meta.activeTag(address)) continue;
+            const bits = std.fmt.parseInt(u8, entry[slash + 1 ..], 10) catch continue;
+            const matches = switch (network) {
+                .ip4 => |ip| prefixMatches(&ip.bytes, &address.ip4.bytes, bits),
+                .ip6 => |ip| prefixMatches(&ip.bytes, &address.ip6.bytes, bits),
+            };
+            if (matches) return true;
+        } else {
+            const domain = std.mem.trimStart(u8, entry, ".");
+            if (std.ascii.eqlIgnoreCase(host, domain)) return true;
+            if (host.len > domain.len and host[host.len - domain.len - 1] == '.' and std.ascii.endsWithIgnoreCase(host, domain)) return true;
+        }
+    }
+    return false;
+}
+fn prefixMatches(first: []const u8, second: []const u8, bits: u8) bool {
+    if (bits > first.len * 8) return false;
+    for (first, second, 0..) |a, b, i| {
+        const remaining = @as(usize, bits) -| i * 8;
+        if (remaining == 0) return true;
+        const mask: u8 = if (remaining >= 8) 255 else @as(u8, 255) << @as(u3, @intCast(8 - remaining));
+        if (a & mask != b & mask) return false;
+    }
+    return true;
+}
+test "NO_PROXY honors domain boundaries, wildcards and IP networks" {
+    try std.testing.expect(proxyBypassed("localhost,.example.org,10.0.0.0/8,::1", "api.example.org"));
+    try std.testing.expect(!proxyBypassed("example.org", "otherexample.org"));
+    try std.testing.expect(proxyBypassed("10.0.0.0/8", "10.2.3.4"));
+    try std.testing.expect(!proxyBypassed("10.0.0.0/8", "11.2.3.4"));
+    try std.testing.expect(proxyBypassed("::1/128", "::1"));
+    try std.testing.expect(proxyBypassed("*", "anything"));
 }

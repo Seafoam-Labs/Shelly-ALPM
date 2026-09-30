@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 
 /// Reusable OpenPGP signer that creates detached binary signatures for built
 /// package archives. It never evaluates a shell command and only interprets
@@ -46,7 +47,7 @@ pub const Signer = struct {
         if (exit_code != 0) {
             std.log.warn(
                 "Could not sign package archive {0f}. {1f} Review the GPG output and selected signing key.\n\nTechnical details: {2d}",
-                .{ @import("diagnostics").safe(payload_path), @import("diagnostics").safe(result.stderr), exit_code },
+                .{ diagnostics.safe(payload_path), diagnostics.safe(result.stderr), exit_code },
             );
             return error.PackageSigningFailed;
         }

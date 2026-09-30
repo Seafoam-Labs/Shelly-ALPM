@@ -1,5 +1,6 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const diagnostics = @import("diagnostics");
+const PackageManager = @import("PackageManager");
 const test_support = @import("test_support.zig");
 const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
@@ -93,7 +94,7 @@ fn executeWithRunner(
         const message = try std.fmt.allocPrint(
             context.allocator,
             "Could not {0f} {1f}: {2s}\n\nTechnical details: {3s}",
-            .{ @import("diagnostics").safe(if (kill) "stop" else "launch"), @import("diagnostics").safe(backendName(backend)), @import("diagnostics").cause(err), @errorName(err) },
+            .{ diagnostics.safe(if (kill) "stop" else "launch"), diagnostics.safe(backendName(backend)), diagnostics.cause(err), @errorName(err) },
         );
         defer context.allocator.free(message);
         if (invocation.globals.ui_mode)
@@ -121,7 +122,7 @@ fn listRunningWith(
         return try reportRunValidationFailure(context, invocation, "--list does not accept a package.");
 
     var result = lister.list(context) catch |err| {
-        const message = try std.fmt.allocPrint(context.allocator, "Could not list running Flatpaks: {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+        const message = try std.fmt.allocPrint(context.allocator, "Could not list running Flatpaks: {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
         defer context.allocator.free(message);
         if (invocation.globals.ui_mode)
             try output.writeErrorFrame(context, message)
@@ -148,10 +149,10 @@ fn listRunningWith(
 }
 
 fn listRunningReal(context: *runtime.RuntimeContext) !RunningResult {
-    var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
+    var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     const native_items = try manager.get_running_instances_flatpak();
-    defer Zigalpm.flatpak.RunningInstance.deinitSlice(context.allocator, native_items);
+    defer PackageManager.flatpak.RunningInstance.deinitSlice(context.allocator, native_items);
 
     const arena = try context.allocator.create(std.heap.ArenaAllocator);
     errdefer context.allocator.destroy(arena);
@@ -244,7 +245,7 @@ fn runReal(
 }
 
 fn runFlatpak(context: *runtime.RuntimeContext, target: []const u8, kill: bool) !bool {
-    var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
+    var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     if (!kill) {
         const target_z = try context.allocator.dupeZ(u8, target);
@@ -280,7 +281,7 @@ fn launchAppImage(context: *runtime.RuntimeContext, target: []const u8) !bool {
     defer context.allocator.free(config_home);
     const database = try std.fs.path.join(context.allocator, &.{ config_home, "shelly", "appimage-metadata-v2.db" });
     defer context.allocator.free(database);
-    var manager = Zigalpm.AppImageManager{
+    var manager = PackageManager.AppImageManager{
         .allocator = context.allocator,
         .io = context.io,
         .environ = context.environ,
@@ -298,7 +299,7 @@ fn launchAppImage(context: *runtime.RuntimeContext, target: []const u8) !bool {
         const resolved_app = std.Io.Dir.cwd().realPathFileAlloc(context.io, app.path, context.allocator) catch continue;
         defer context.allocator.free(resolved_app);
         if (std.mem.eql(u8, resolved_target, resolved_app)) {
-            try Zigalpm.appimage.environment.overlay(&environment, app.environment_variables);
+            try PackageManager.appimage.environment.overlay(&environment, app.environment_variables);
             break;
         }
     }

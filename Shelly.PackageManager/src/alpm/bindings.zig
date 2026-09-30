@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const time = @import("zig-time");
 
 pub const libalpm = struct {
@@ -17,88 +18,13 @@ pub const libalpm = struct {
 
     pub const Error = enum(i32) { Ok = 0, Memory, System, BadPerms, NotAFile, NotADir, WrongArgs, DiskSpace, HandleNull, HandleNotNull, HandleLock, DbOpen, DbCreate, DbNull, DbNotNull, DbNotFound, DbInvalid, DbInvalidSig, DbVersion, DbWrite, DbRemove, ServerBadUrl, ServerNone, TransNotNull, TransNull, TransDupTarget, TransDupFilename, TransNotInitialized, TransNotPrepared, TransAbort, TransType, TransNotLocked, TransHookFailed, PkgNotFound, PkgIgnored, PkgInvalid, PkgInvalidChecksum, PkgInvalidSig, PkgMissingSig, PkgOpen, PkgCantRemove, PkgInvalidName, PkgInvalidArch, SigMissing, SigInvalid, UnsatisfiedDeps, ConflictingDeps, FileConflicts, DownloadFailed, Gpgme, ExternalDownload, SandboxFailed };
 
-    pub const PackageReason = enum(i32) { Explicit = 0, Dependency = 1, Unknown = 2 };
-    pub const ReverseDependencyOptions = struct {
-        required_by: bool = false,
-        optional_for: bool = false,
-    };
-    pub const SigLevel = packed struct(u32) {
-        package: bool = false,
-        package_optional: bool = false,
-        package_marginal_ok: bool = false,
-        package_unknown_ok: bool = false,
-        _reserved_4_9: u6 = 0,
-        database: bool = false,
-        database_optional: bool = false,
-        database_marginal_ok: bool = false,
-        database_unknown_ok: bool = false,
-        _reserved_14_29: u16 = 0,
-        use_default: bool = false,
-        _reserved_31: u1 = 0,
+    pub const PackageReason = @import("types.zig").PackageReason;
+    pub const ReverseDependencyOptions = @import("types.zig").ReverseDependencyOptions;
+    pub const SigLevel = @import("types.zig").SigLevel;
 
-        pub fn from_sig_level(sig_level: alpm.alpm_siglevel_t) SigLevel {
-            return @bitCast(sig_level);
-        }
+    pub const DatabaseUsage = @import("types.zig").DatabaseUsage;
 
-        pub fn to_sig_level(sig_level: SigLevel) c_int {
-            const bits: u32 = @bitCast(sig_level);
-            return @bitCast(bits);
-        }
-
-        pub fn contains(combined: SigLevel, level: SigLevel) bool {
-            const combined_bits: u32 = @bitCast(combined);
-            const level_bits: u32 = @bitCast(level);
-            return level_bits != 0 and (combined_bits & level_bits) == level_bits;
-        }
-    };
-
-    pub const DatabaseUsage = enum(u32) {
-        sync = 1 << 0,
-        search = 1 << 1,
-        install = 1 << 2,
-        upgrade = 1 << 3,
-        all = (1 << 4) - 1,
-
-        pub fn from_db_usage(usage_level: alpm.alpm_db_usage_t) DatabaseUsage {
-            return switch (usage_level) {};
-        }
-    };
-
-    pub const TransFlag = packed struct(u32) {
-        nodeps: bool = false,
-        _reserved_1: u1 = 0,
-        nosave: bool = false,
-        nodepversion: bool = false,
-        cascade: bool = false,
-        recurse: bool = false,
-        dbonly: bool = false,
-        nohooks: bool = false,
-        alldeps: bool = false,
-        downloadonly: bool = false,
-        noscriptlet: bool = false,
-        noconflicts: bool = false,
-        _reserved_12: u1 = 0,
-        needed: bool = false,
-        allexplicit: bool = false,
-        unneeded: bool = false,
-        recurseall: bool = false,
-        nolock: bool = false,
-        _reserved_high: u14 = 0,
-
-        pub fn from_trans_flag(trans_flag: alpm.alpm_transflag_t) TransFlag {
-            return @bitCast(trans_flag);
-        }
-
-        pub fn to_trans_flag(trans_flag: TransFlag) alpm.alpm_transflag_t {
-            return @bitCast(trans_flag);
-        }
-
-        pub fn contains(combined: TransFlag, flag: TransFlag) bool {
-            const combined_bits: u32 = @bitCast(combined);
-            const flag_bits: u32 = @bitCast(flag);
-            return flag_bits != 0 and (combined_bits & flag_bits) == flag_bits;
-        }
-    };
+    pub const TransFlag = @import("types.zig").TransFlag;
 
     pub const DatabaseOperation = enum {
         all,
@@ -152,6 +78,9 @@ pub const libalpm = struct {
 
         pub fn servers(self: Database) ListIterator([:0]const u8, asStr) {
             return .{ .node = alpm.alpm_db_get_servers(self.ptr) };
+        }
+        pub fn cacheServers(self: Database) ListIterator([:0]const u8, asStr) {
+            return .{ .node = alpm.alpm_db_get_cache_servers(self.ptr) };
         }
 
         pub fn addServer(self: Database, url: [:0]const u8) bool {
@@ -228,7 +157,7 @@ pub const libalpm = struct {
             while (i < siglist.count) : (i += 1) {
                 const r = siglist.results[i];
                 if (r.status != alpm.ALPM_SIGSTATUS_VALID) {
-                    std.log.warn("Could not verify the signature for repository database {0f}. Review signature status {1d} and validity {2d}.", .{ @import("diagnostics").safe(self.name() orelse "?"), @intFromEnum(r.status), @intFromEnum(r.validity) });
+                    std.log.warn("Could not verify the signature for repository database {0f}. Review signature status {1d} and validity {2d}.", .{ diagnostics.safe(self.name() orelse "?"), @intFromEnum(r.status), @intFromEnum(r.validity) });
                 }
             }
             return false;
@@ -236,6 +165,10 @@ pub const libalpm = struct {
     };
 
     pub const Package = struct {
+        pub fn toOwned(self: Package, allocator: std.mem.Allocator, options: ReverseDependencyOptions) std.mem.Allocator.Error!OwnedPackage {
+            return OwnedPackageFactory.initWithReverseDependencies(allocator, self, options);
+        }
+
         ptr: *alpm.alpm_pkg_t,
 
         pub fn from(data: *anyopaque) ?Package {
@@ -367,29 +300,8 @@ pub const libalpm = struct {
     ///
     /// Unlike `Package`, none of these fields borrow memory from libalpm, so an
     /// `OwnedPackage` remains valid after the originating handle is released.
-    pub const OwnedPackage = struct {
-        name_value: [:0]u8,
-        base_value: [:0]u8,
-        version_value: [:0]u8,
-        description_value: ?[:0]u8,
-        url_value: ?[:0]u8,
-        repository_value: ?[:0]u8,
-        file_name_value: [:0]u8,
-        download_size_value: i64,
-        install_size_value: i64,
-        reason_value: PackageReason,
-        replaces_value: [][:0]u8,
-        licenses_value: [][:0]u8,
-        groups_value: [][:0]u8,
-        provides_value: [][:0]u8,
-        depends_value: [][:0]u8,
-        optional_depends_value: [][:0]u8,
-        conflicts_value: [][:0]u8,
-        required_by_value: [][:0]u8,
-        optional_for_value: [][:0]u8,
-        build_date_value: i64,
-        install_date_value: ?i64,
-
+    pub const OwnedPackage = @import("types.zig").OwnedPackage;
+    const OwnedPackageFactory = struct {
         pub fn init(allocator: std.mem.Allocator, package: Package) std.mem.Allocator.Error!OwnedPackage {
             return initWithReverseDependencies(allocator, package, .{});
         }
@@ -453,7 +365,9 @@ pub const libalpm = struct {
                 try allocator.alloc([:0]u8, 0);
             errdefer freeStrings(allocator, optional_for_value);
 
+            const architecture_value = try dupeOptional(allocator, str(alpm.alpm_pkg_get_arch(package.ptr)));
             return .{
+                .architecture_value = architecture_value,
                 .name_value = name_value,
                 .base_value = base_value,
                 .version_value = version_value,
@@ -547,119 +461,6 @@ pub const libalpm = struct {
             for (values) |value| allocator.free(value);
             allocator.free(values);
         }
-
-        pub fn deinit(self: *OwnedPackage, allocator: std.mem.Allocator) void {
-            allocator.free(self.name_value);
-            allocator.free(self.base_value);
-            allocator.free(self.version_value);
-            if (self.description_value) |value| allocator.free(value);
-            if (self.url_value) |value| allocator.free(value);
-            if (self.repository_value) |value| allocator.free(value);
-            allocator.free(self.file_name_value);
-            freeStrings(allocator, self.replaces_value);
-            freeStrings(allocator, self.licenses_value);
-            freeStrings(allocator, self.groups_value);
-            freeStrings(allocator, self.provides_value);
-            freeStrings(allocator, self.depends_value);
-            freeStrings(allocator, self.optional_depends_value);
-            freeStrings(allocator, self.conflicts_value);
-            freeStrings(allocator, self.required_by_value);
-            freeStrings(allocator, self.optional_for_value);
-            self.* = undefined;
-        }
-
-        pub fn deinitItems(allocator: std.mem.Allocator, packages: []OwnedPackage) void {
-            for (packages) |*package| package.deinit(allocator);
-        }
-
-        pub fn deinitSlice(allocator: std.mem.Allocator, packages: []OwnedPackage) void {
-            deinitItems(allocator, packages);
-            allocator.free(packages);
-        }
-
-        pub fn name(self: OwnedPackage) ?[:0]const u8 {
-            return self.name_value;
-        }
-
-        pub fn base(self: OwnedPackage) [:0]const u8 {
-            return self.base_value;
-        }
-
-        pub fn version(self: OwnedPackage) ?[:0]const u8 {
-            return self.version_value;
-        }
-
-        pub fn description(self: OwnedPackage) ?[:0]const u8 {
-            return self.description_value;
-        }
-
-        pub fn url(self: OwnedPackage) ?[:0]const u8 {
-            return self.url_value;
-        }
-
-        pub fn repository(self: OwnedPackage) ?[:0]const u8 {
-            return self.repository_value;
-        }
-
-        pub fn file_name(self: OwnedPackage) [:0]const u8 {
-            return self.file_name_value;
-        }
-
-        pub fn download_size(self: OwnedPackage) i64 {
-            return self.download_size_value;
-        }
-
-        pub fn install_size(self: OwnedPackage) i64 {
-            return self.install_size_value;
-        }
-
-        pub fn install_reason(self: OwnedPackage) PackageReason {
-            return self.reason_value;
-        }
-
-        pub fn replaces(self: OwnedPackage) []const [:0]u8 {
-            return self.replaces_value;
-        }
-
-        pub fn licenses(self: OwnedPackage) []const [:0]u8 {
-            return self.licenses_value;
-        }
-
-        pub fn groups(self: OwnedPackage) []const [:0]u8 {
-            return self.groups_value;
-        }
-
-        pub fn provides(self: OwnedPackage) []const [:0]u8 {
-            return self.provides_value;
-        }
-
-        pub fn depends(self: OwnedPackage) []const [:0]u8 {
-            return self.depends_value;
-        }
-
-        pub fn optional_depends(self: OwnedPackage) []const [:0]u8 {
-            return self.optional_depends_value;
-        }
-
-        pub fn conflicts(self: OwnedPackage) []const [:0]u8 {
-            return self.conflicts_value;
-        }
-
-        pub fn required_by(self: OwnedPackage) []const [:0]u8 {
-            return self.required_by_value;
-        }
-
-        pub fn optional_for(self: OwnedPackage) []const [:0]u8 {
-            return self.optional_for_value;
-        }
-
-        pub fn build_date(self: OwnedPackage) i64 {
-            return self.build_date_value;
-        }
-
-        pub fn install_date(self: OwnedPackage) ?i64 {
-            return self.install_date_value;
-        }
     };
 
     pub const PackageWithUpdate = struct {
@@ -667,36 +468,7 @@ pub const libalpm = struct {
         new_package: Package,
     };
 
-    pub const OwnedPackageWithUpdate = struct {
-        old_package: OwnedPackage,
-        new_package: OwnedPackage,
-
-        pub fn init(
-            allocator: std.mem.Allocator,
-            old_package: Package,
-            new_package: Package,
-        ) std.mem.Allocator.Error!OwnedPackageWithUpdate {
-            var owned_old = try OwnedPackage.init(allocator, old_package);
-            errdefer owned_old.deinit(allocator);
-
-            const owned_new = try OwnedPackage.init(allocator, new_package);
-            return .{
-                .old_package = owned_old,
-                .new_package = owned_new,
-            };
-        }
-
-        pub fn deinit(self: *OwnedPackageWithUpdate, allocator: std.mem.Allocator) void {
-            self.old_package.deinit(allocator);
-            self.new_package.deinit(allocator);
-            self.* = undefined;
-        }
-
-        pub fn deinitSlice(allocator: std.mem.Allocator, updates: []OwnedPackageWithUpdate) void {
-            for (updates) |*update| update.deinit(allocator);
-            allocator.free(updates);
-        }
-    };
+    pub const OwnedPackageWithUpdate = @import("types.zig").OwnedPackageWithUpdate;
 
     pub const Dependency = struct {
         ptr: *alpm.alpm_depend_t,
@@ -985,33 +757,7 @@ pub const libalpm = struct {
         }
     };
 
-    pub const QuestionType = enum(u32) {
-        install_ignore = 1,
-        replace_package = 2,
-        conflict_package = 4,
-        corrupted_package = 8,
-        remove_packages = 16,
-        select_provider = 32,
-        import_key = 64,
-        select_optional_dependencies = 256,
-        update_notice = 512,
-        unknown = 0,
-
-        pub fn fromQuestionType(questionType: alpm.alpm_question_type_t) QuestionType {
-            return switch (questionType) {
-                alpm.ALPM_QUESTION_INSTALL_IGNOREPKG => .install_ignore,
-                alpm.ALPM_QUESTION_REPLACE_PKG => .replace_package,
-                alpm.ALPM_QUESTION_CONFLICT_PKG => .conflict_package,
-                alpm.ALPM_QUESTION_CORRUPTED_PKG => .corrupted_package,
-                alpm.ALPM_QUESTION_REMOVE_PKGS => .remove_packages,
-                alpm.ALPM_QUESTION_SELECT_PROVIDER => .select_provider,
-                alpm.ALPM_QUESTION_IMPORT_KEY => .import_key,
-                256 => .select_optional_dependencies,
-                512 => .update_notice,
-                else => .unknown,
-            };
-        }
-    };
+    pub const QuestionType = @import("types.zig").QuestionType;
 
     pub const FileType = enum {
         regular,
@@ -1037,84 +783,7 @@ pub const libalpm = struct {
         }
     };
 
-    pub const EventType = enum(u32) {
-        // libalpm events (1–37)
-        checkdeps_start = 1,
-        checkdeps_done = 2,
-        fileconflicts_start = 3,
-        fileconflicts_done = 4,
-        resolvedeps_start = 5,
-        resolvedeps_done = 6,
-        interconflicts_start = 7,
-        interconflicts_done = 8,
-        transaction_start = 9,
-        transaction_done = 10,
-        package_operation_start = 11,
-        package_operation_done = 12,
-        integrity_start = 13,
-        integrity_done = 14,
-        load_start = 15,
-        load_done = 16,
-        scriptlet_info = 17,
-        db_retrieve_start = 18,
-        db_retrieve_done = 19,
-        db_retrieve_failed = 20,
-        pkg_retrieve_start = 21,
-        pkg_retrieve_done = 22,
-        pkg_retrieve_failed = 23,
-        diskspace_start = 24,
-        diskspace_done = 25,
-        optdep_removal = 26,
-        database_missing = 27,
-        keyring_start = 28,
-        keyring_done = 29,
-        key_download_start = 30,
-        key_download_done = 31,
-        pacnew_created = 32,
-        pacsave_created = 33,
-        hook_start = 34,
-        hook_done = 35,
-        hook_run_start = 36,
-        hook_run_done = 37,
-
-        // Application-defined events (100+)
-        download_start = 100,
-        download_complete = 101,
-        download_failed = 102,
-        extraction_start = 103,
-        extraction_complete = 104,
-        extraction_failed = 105,
-        validation_start = 106,
-        validation_complete = 107,
-        validation_failed = 108,
-        transaction_preparing = 109,
-        transaction_committing = 110,
-        rollback_start = 111,
-        rollback_complete = 112,
-
-        // Custom events
-        failed_optional_dependency_operation = 200,
-        package_explicit = 201,
-        failed_add_local_package = 202,
-        nothing_to_do = 203,
-
-        pub fn from_libalpm(c_type: c_int) EventType {
-            return @enumFromInt(@as(u32, @intCast(c_type)));
-        }
-
-        pub fn to_libalpm(self: EventType) c_int {
-            return @intCast(@intFromEnum(self));
-        }
-
-        pub fn is_libalpm(self: EventType) bool {
-            const val = @intFromEnum(self);
-            return val >= 1 and val <= 37;
-        }
-
-        pub fn is_custom(self: EventType) bool {
-            return @intFromEnum(self) >= 100;
-        }
-    };
+    pub const EventType = @import("types.zig").EventType;
 
     fn ListIterator(comptime T: type, comptime convert: fn (*anyopaque) ?T) type {
         return struct {

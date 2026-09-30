@@ -1,5 +1,6 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const diagnostics = @import("diagnostics");
+const PackageManager = @import("PackageManager");
 const test_support = @import("test_support.zig");
 const install = @import("install.zig");
 const parser = @import("../cli/parser.zig");
@@ -90,16 +91,16 @@ fn executeWith(
     const aur_override: ?[]const u8 = aur_base;
 
     const discovery = discoverer.call(context, query, aur_base) catch |err| {
-        const message = try Zigalpm.user_errors.format(context.allocator, err, .{ .operation = "the package search" });
+        const message = try PackageManager.user_errors.format(context.allocator, err, .{ .operation = "the package search" });
         defer context.allocator.free(message);
         try context.stderr.print("{s}\n", .{message});
         return 1;
     };
     const partial_results = if (discovery.candidates.len > 0) " Results from the other package sources are still available." else "";
     if (discovery.standard_error) |err|
-        try context.stderr.print("warning: Could not refresh standard-package search results. {0s} {1f}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").cause(err), @import("diagnostics").safe(partial_results), @errorName(err) });
+        try context.stderr.print("warning: Could not refresh standard-package search results. {0s} {1f}\n\nTechnical details: {2s}\n", .{ diagnostics.cause(err), diagnostics.safe(partial_results), @errorName(err) });
     if (discovery.aur_error) |err|
-        try context.stderr.print("warning: Could not refresh AUR search results. {0s} {1f}\n\nTechnical details: {2s}\n", .{ @import("diagnostics").cause(err), @import("diagnostics").safe(partial_results), @errorName(err) });
+        try context.stderr.print("warning: Could not refresh AUR search results. {0s} {1f}\n\nTechnical details: {2s}\n", .{ diagnostics.cause(err), diagnostics.safe(partial_results), @errorName(err) });
 
     const candidates = try prepareCandidates(context.allocator, discovery.candidates, query);
     if (candidates.len == 0) {
@@ -123,7 +124,7 @@ fn executeWith(
         return 0;
     };
     return installer.call(context, candidates[index], invocation.globals.no_confirm, aur_override) catch |err| {
-        try context.stderr.print("Could not start installation: {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+        try context.stderr.print("Could not start installation: {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
         return 1;
     };
 }
@@ -154,14 +155,14 @@ fn discoverStandard(
     query: []const u8,
     candidates: *std.ArrayList(Candidate),
 ) !void {
-    const manager = try Zigalpm.AlpmManager.init(
+    const manager = try PackageManager.Manager.init(
         context.allocator,
         context.environ,
         .{ .use_root = false },
     );
     defer manager.deinit();
     const packages = try manager.get_available_packages();
-    defer Zigalpm.alpm.OwnedPackage.deinitSlice(context.allocator, packages);
+    defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, packages);
     for (packages) |package| {
         const name = package.name() orelse continue;
         if (ignoredStandardPackage(manager, name)) continue;
@@ -185,18 +186,18 @@ fn discoverAur(
     aur_base: []const u8,
 ) !void {
     if (query.len < 2) return;
-    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+    const manager = try PackageManager.AurManager.init(context.allocator, context.environ, .{
         .aur_git_base_url = aur_base,
     });
     defer manager.deinit();
 
     const packages = try manager.searchPackages(query);
-    defer Zigalpm.aur.models.Package.deinitSlice(context.allocator, packages);
+    defer PackageManager.aur.models.Package.deinitSlice(context.allocator, packages);
     try appendAurPackages(context.allocator, candidates, packages, query, manager.alpm);
     if (packages.len != 0) return;
 
     const suggestions = manager.aur_client.suggest(query) catch return;
-    defer Zigalpm.aur.rpc.deinitStrings(context.allocator, suggestions);
+    defer PackageManager.aur.rpc.deinitStrings(context.allocator, suggestions);
     if (suggestions.len == 0) return;
     var names: std.ArrayList([]const u8) = .empty;
     defer names.deinit(context.allocator);
@@ -209,9 +210,9 @@ fn discoverAur(
 fn appendAurPackages(
     allocator: std.mem.Allocator,
     candidates: *std.ArrayList(Candidate),
-    packages: []const Zigalpm.aur.models.Package,
+    packages: []const PackageManager.aur.models.Package,
     query: []const u8,
-    manager: *Zigalpm.AlpmManager,
+    manager: *PackageManager.Manager,
 ) !void {
     for (packages) |package| {
         const description = package.description orelse "";
@@ -241,7 +242,7 @@ fn appendUnique(
     try candidates.append(allocator, candidate);
 }
 
-fn ignoredStandardPackage(manager: *Zigalpm.AlpmManager, name: []const u8) bool {
+fn ignoredStandardPackage(manager: *PackageManager.Manager, name: []const u8) bool {
     for (manager.config.ignore_package.items) |ignored| {
         if (std.mem.eql(u8, ignored, name)) return true;
     }

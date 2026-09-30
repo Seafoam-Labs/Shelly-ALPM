@@ -1,0 +1,1589 @@
+{
+  "schema": 1,
+  "library_sha256": "da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888",
+  "locale": "C",
+  "local": [
+    {
+      "name": "create",
+      "marker": null,
+      "entries": [],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": []
+      }
+    },
+    {
+      "name": "empty_marker",
+      "marker": "",
+      "entries": [],
+      "result": {
+        "success": false,
+        "error": 18
+      }
+    },
+    {
+      "name": "old_version",
+      "marker": "8\n",
+      "entries": [],
+      "result": {
+        "success": false,
+        "error": 18
+      }
+    },
+    {
+      "name": "trailing_version",
+      "marker": " 9junk\n",
+      "entries": [],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": []
+      }
+    },
+    {
+      "name": "missing_marker",
+      "marker": null,
+      "entries": [
+        {
+          "path": "demo-1-1",
+          "desc": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n"
+        }
+      ],
+      "result": {
+        "success": false,
+        "error": 18
+      }
+    },
+    {
+      "name": "missing_desc",
+      "marker": "9\n",
+      "entries": [
+        {
+          "path": "demo-1-1"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": null,
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "mismatched_identity",
+      "marker": "9\n",
+      "entries": [
+        {
+          "path": "demo-1-1",
+          "desc": "%NAME%\nwrong\n\n%VERSION%\n2-2\n\n%DESC%\ntext\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": "text",
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "missing_identity",
+      "marker": "9\n",
+      "entries": [
+        {
+          "path": "demo-1-1",
+          "desc": "%DESC%\ntext\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": "text",
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "duplicate",
+      "marker": "9\n",
+      "entries": [
+        {
+          "path": "demo-1-1",
+          "desc": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n"
+        },
+        {
+          "path": "demo-2-1",
+          "desc": "%NAME%\ndemo\n\n%VERSION%\n2-1\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "2-1",
+            "desc": null,
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "invalid_directory",
+      "marker": "9\n",
+      "entries": [
+        {
+          "path": "bad",
+          "desc": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": []
+      }
+    },
+    {
+      "name": "malformed_scalars",
+      "marker": "9\n",
+      "entries": [
+        {
+          "path": "demo-1-1",
+          "desc": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%SIZE%\nwrong\n\n%BUILDDATE%\nwrong\n\n%REASON%\nwrong\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": null,
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": -1,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "repeated_scalar",
+      "marker": "9\n",
+      "entries": [
+        {
+          "path": "demo-1-1",
+          "desc": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%DESC%\nfirst\n\n%DESC%\nlast\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": "last",
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ]
+      }
+    }
+  ],
+  "sync": [
+    {
+      "name": "tar",
+      "entries": [
+        {
+          "path": "zeta-1-1/desc",
+          "contents": "%NAME%\nzeta\n\n%VERSION%\n1-1\n\n%DESC%\ntext editor\n\n%GROUPS%\neditors\ncommon\n\n%DEPENDS%\nvirtual>=3\n\n%OPTDEPENDS%\ndemo: docs\n\n"
+        },
+        {
+          "path": "demo-1-1/desc",
+          "contents": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%DESC%\nText utility\n\n%GROUPS%\nz-tools\ncommon\n\n%PROVIDES%\nvirtual=3\n\n%FILENAME%\ndemo.pkg.tar.zst\n\n"
+        },
+        {
+          "path": "demo-1-1/files",
+          "contents": "%FILES%\nz\netc/\netc/demo\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": "Text utility",
+            "installed_db": null,
+            "arch": null,
+            "filename": "demo.pkg.tar.zst",
+            "isize": 0,
+            "builddate": 0,
+            "groups": [
+              "z-tools",
+              "common"
+            ],
+            "files": [
+              "etc/",
+              "etc/demo",
+              "z"
+            ],
+            "requiredby": [
+              "zeta"
+            ],
+            "optionalfor": [
+              "zeta"
+            ]
+          },
+          {
+            "name": "zeta",
+            "version": "1-1",
+            "desc": "text editor",
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [
+              "editors",
+              "common"
+            ],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ],
+        "groups": [
+          {
+            "name": "z-tools",
+            "packages": [
+              "demo"
+            ]
+          },
+          {
+            "name": "common",
+            "packages": [
+              "demo",
+              "zeta"
+            ]
+          },
+          {
+            "name": "editors",
+            "packages": [
+              "zeta"
+            ]
+          }
+        ],
+        "searches": [
+          {
+            "patterns": [
+              "TEXT"
+            ],
+            "success": true,
+            "names": [
+              "demo",
+              "zeta"
+            ]
+          },
+          {
+            "patterns": [
+              "utility",
+              "common"
+            ],
+            "success": true,
+            "names": [
+              "demo"
+            ]
+          },
+          {
+            "patterns": [
+              "^virtual$"
+            ],
+            "success": true,
+            "names": [
+              "demo"
+            ]
+          },
+          {
+            "patterns": [
+              "^virtual=3$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^edit"
+            ],
+            "success": true,
+            "names": [
+              "zeta"
+            ]
+          },
+          {
+            "patterns": [
+              "^z-tools$"
+            ],
+            "success": true,
+            "names": [
+              "demo"
+            ]
+          },
+          {
+            "patterns": [
+              "["
+            ],
+            "success": false,
+            "names": []
+          },
+          {
+            "patterns": [],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "absent",
+              "["
+            ],
+            "success": false,
+            "names": []
+          }
+        ],
+        "disabled_search_success": true,
+        "disabled_exact_visible": true
+      }
+    },
+    {
+      "name": "mismatched_identity",
+      "entries": [
+        {
+          "path": "demo-1-1/desc",
+          "contents": "%NAME%\nwrong\n\n%VERSION%\n2-2\n\n%DESC%\ntext\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": "text",
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ],
+        "groups": [],
+        "searches": [
+          {
+            "patterns": [
+              "TEXT"
+            ],
+            "success": true,
+            "names": [
+              "demo"
+            ]
+          },
+          {
+            "patterns": [
+              "utility",
+              "common"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual=3$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^edit"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^z-tools$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "["
+            ],
+            "success": false,
+            "names": []
+          },
+          {
+            "patterns": [],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "absent",
+              "["
+            ],
+            "success": false,
+            "names": []
+          }
+        ],
+        "disabled_search_success": true,
+        "disabled_exact_visible": true
+      }
+    },
+    {
+      "name": "duplicate",
+      "entries": [
+        {
+          "path": "demo-1-1/desc",
+          "contents": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%DESC%\nfirst\n\n"
+        },
+        {
+          "path": "demo-2-1/desc",
+          "contents": "%NAME%\ndemo\n\n%VERSION%\n2-1\n\n%DESC%\nlast\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": "last",
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ],
+        "groups": [],
+        "searches": [
+          {
+            "patterns": [
+              "TEXT"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "utility",
+              "common"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual=3$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^edit"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^z-tools$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "["
+            ],
+            "success": false,
+            "names": []
+          },
+          {
+            "patterns": [],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "absent",
+              "["
+            ],
+            "success": false,
+            "names": []
+          }
+        ],
+        "disabled_search_success": true,
+        "disabled_exact_visible": true
+      }
+    },
+    {
+      "name": "duplicate_groups",
+      "entries": [
+        {
+          "path": "demo-1-1/desc",
+          "contents": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%GROUPS%\ncommon\ncommon\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": null,
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [
+              "common",
+              "common"
+            ],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ],
+        "groups": [
+          {
+            "name": "common",
+            "packages": [
+              "demo"
+            ]
+          },
+          {
+            "name": "common",
+            "packages": [
+              "demo"
+            ]
+          }
+        ],
+        "searches": [
+          {
+            "patterns": [
+              "TEXT"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "utility",
+              "common"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual=3$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^edit"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^z-tools$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "["
+            ],
+            "success": false,
+            "names": []
+          },
+          {
+            "patterns": [],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "absent",
+              "["
+            ],
+            "success": false,
+            "names": []
+          }
+        ],
+        "disabled_search_success": true,
+        "disabled_exact_visible": true
+      }
+    },
+    {
+      "name": "files_without_desc",
+      "entries": [
+        {
+          "path": "demo-1-1/files",
+          "contents": "%FILES%\nz\netc/\netc/demo\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": null,
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [],
+            "files": [
+              "etc/",
+              "etc/demo",
+              "z"
+            ],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ],
+        "groups": [],
+        "searches": [
+          {
+            "patterns": [
+              "TEXT"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "utility",
+              "common"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual=3$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^edit"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^z-tools$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "["
+            ],
+            "success": false,
+            "names": []
+          },
+          {
+            "patterns": [],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "absent",
+              "["
+            ],
+            "success": false,
+            "names": []
+          }
+        ],
+        "disabled_search_success": true,
+        "disabled_exact_visible": true
+      }
+    },
+    {
+      "name": "unknown_member",
+      "entries": [
+        {
+          "path": "demo-1-1/future",
+          "contents": "data"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": null,
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ],
+        "groups": [],
+        "searches": [
+          {
+            "patterns": [
+              "TEXT"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "utility",
+              "common"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual=3$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^edit"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^z-tools$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "["
+            ],
+            "success": false,
+            "names": []
+          },
+          {
+            "patterns": [],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "absent",
+              "["
+            ],
+            "success": false,
+            "names": []
+          }
+        ],
+        "disabled_search_success": true,
+        "disabled_exact_visible": true
+      }
+    },
+    {
+      "name": "invalid_entry",
+      "entries": [
+        {
+          "path": "invalid/desc",
+          "contents": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n"
+        }
+      ],
+      "result": {
+        "success": false,
+        "error": 16,
+        "packages": []
+      }
+    },
+    {
+      "name": "bad_filename",
+      "entries": [
+        {
+          "path": "demo-1-1/desc",
+          "contents": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%FILENAME%\n../bad\n\n"
+        }
+      ],
+      "result": {
+        "success": false,
+        "error": 16,
+        "packages": []
+      }
+    },
+    {
+      "name": "malformed_scalars",
+      "entries": [
+        {
+          "path": "demo-1-1/desc",
+          "contents": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%ISIZE%\nbad\n\n%BUILDDATE%\nbad\n\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": null,
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": -1,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ],
+        "groups": [],
+        "searches": [
+          {
+            "patterns": [
+              "TEXT"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "utility",
+              "common"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual=3$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^edit"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^z-tools$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "["
+            ],
+            "success": false,
+            "names": []
+          },
+          {
+            "patterns": [],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "absent",
+              "["
+            ],
+            "success": false,
+            "names": []
+          }
+        ],
+        "disabled_search_success": true,
+        "disabled_exact_visible": true
+      }
+    },
+    {
+      "name": "unterminated_list",
+      "entries": [
+        {
+          "path": "demo-1-1/desc",
+          "contents": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%GROUPS%\ncommon"
+        }
+      ],
+      "result": {
+        "success": false,
+        "error": 16,
+        "packages": []
+      }
+    },
+    {
+      "name": "unterminated_list_newline",
+      "entries": [
+        {
+          "path": "demo-1-1/desc",
+          "contents": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%GROUPS%\ncommon\n"
+        }
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": null,
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [
+              "common"
+            ],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ],
+        "groups": [
+          {
+            "name": "common",
+            "packages": [
+              "demo"
+            ]
+          }
+        ],
+        "searches": [
+          {
+            "patterns": [
+              "TEXT"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "utility",
+              "common"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual=3$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^edit"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^z-tools$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "["
+            ],
+            "success": false,
+            "names": []
+          },
+          {
+            "patterns": [],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "absent",
+              "["
+            ],
+            "success": false,
+            "names": []
+          }
+        ],
+        "disabled_search_success": true,
+        "disabled_exact_visible": true
+      }
+    },
+    {
+      "name": "truncated",
+      "entries": [
+        {
+          "path": "zeta-1-1/desc",
+          "contents": "%NAME%\nzeta\n\n%VERSION%\n1-1\n\n%DESC%\ntext editor\n\n%GROUPS%\neditors\ncommon\n\n%DEPENDS%\nvirtual>=3\n\n%OPTDEPENDS%\ndemo: docs\n\n"
+        },
+        {
+          "path": "demo-1-1/desc",
+          "contents": "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%DESC%\nText utility\n\n%GROUPS%\nz-tools\ncommon\n\n%PROVIDES%\nvirtual=3\n\n%FILENAME%\ndemo.pkg.tar.zst\n\n"
+        },
+        {
+          "path": "demo-1-1/files",
+          "contents": "%FILES%\nz\netc/\netc/demo\n\n"
+        }
+      ],
+      "truncate": 520,
+      "result": {
+        "success": false,
+        "error": 16,
+        "packages": []
+      }
+    },
+    {
+      "name": "sqlite",
+      "entries": [],
+      "columns": [
+        "name",
+        "version",
+        "filename",
+        "base",
+        "desc",
+        "groups",
+        "url",
+        "license",
+        "arch",
+        "builddate",
+        "packager",
+        "csize",
+        "isize",
+        "sha256sum",
+        "pgpsig",
+        "replaces",
+        "depends",
+        "optdepends",
+        "makedepends",
+        "checkdepends",
+        "conflicts",
+        "provides",
+        "files"
+      ],
+      "rows": [
+        [
+          "demo",
+          "1-1",
+          "demo.pkg.tar.zst",
+          "demo-base",
+          "Text utility",
+          "z-tools,,common",
+          "https://example.invalid",
+          "MIT,BSD",
+          "x86_64_v3",
+          "123",
+          "Builder",
+          "42",
+          "4096",
+          "digest",
+          "AAEC",
+          "old<2",
+          "glibc>=2,libdemo.so=3-64",
+          "docs: manual",
+          "compiler",
+          "tester",
+          "old",
+          "virtual=3,plain",
+          "z,etc/,etc/demo"
+        ]
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": "demo",
+            "version": "1-1",
+            "desc": "Text utility",
+            "installed_db": null,
+            "arch": "x86_64_v3",
+            "filename": "demo.pkg.tar.zst",
+            "isize": 4096,
+            "builddate": 123,
+            "groups": [
+              "z-tools",
+              "common"
+            ],
+            "files": [
+              "etc/",
+              "etc/demo",
+              "z"
+            ],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ],
+        "groups": [
+          {
+            "name": "z-tools",
+            "packages": [
+              "demo"
+            ]
+          },
+          {
+            "name": "common",
+            "packages": [
+              "demo"
+            ]
+          }
+        ],
+        "searches": [
+          {
+            "patterns": [
+              "TEXT"
+            ],
+            "success": true,
+            "names": [
+              "demo"
+            ]
+          },
+          {
+            "patterns": [
+              "utility",
+              "common"
+            ],
+            "success": true,
+            "names": [
+              "demo"
+            ]
+          },
+          {
+            "patterns": [
+              "^virtual$"
+            ],
+            "success": true,
+            "names": [
+              "demo"
+            ]
+          },
+          {
+            "patterns": [
+              "^virtual=3$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^edit"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^z-tools$"
+            ],
+            "success": true,
+            "names": [
+              "demo"
+            ]
+          },
+          {
+            "patterns": [
+              "["
+            ],
+            "success": false,
+            "names": []
+          },
+          {
+            "patterns": [],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "absent",
+              "["
+            ],
+            "success": false,
+            "names": []
+          }
+        ],
+        "disabled_search_success": true,
+        "disabled_exact_visible": true
+      }
+    },
+    {
+      "name": "sqlite_missing_table",
+      "entries": [],
+      "columns": [],
+      "rows": [],
+      "result": {
+        "success": false,
+        "error": 16,
+        "packages": []
+      }
+    },
+    {
+      "name": "sqlite_missing_identity",
+      "entries": [],
+      "columns": [
+        "desc"
+      ],
+      "rows": [
+        [
+          "text"
+        ]
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": null,
+            "version": null,
+            "desc": "text",
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ],
+        "groups": [],
+        "searches": [
+          {
+            "patterns": [
+              "TEXT"
+            ],
+            "success": true,
+            "names": [
+              null
+            ]
+          },
+          {
+            "patterns": [
+              "utility",
+              "common"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual=3$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^edit"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^z-tools$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "["
+            ],
+            "success": false,
+            "names": []
+          },
+          {
+            "patterns": [],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "absent",
+              "["
+            ],
+            "success": false,
+            "names": []
+          }
+        ],
+        "disabled_search_success": true,
+        "disabled_exact_visible": false
+      }
+    },
+    {
+      "name": "sqlite_null_identity",
+      "entries": [],
+      "columns": [
+        "name",
+        "version"
+      ],
+      "rows": [
+        [
+          null,
+          "1-1"
+        ]
+      ],
+      "result": {
+        "success": true,
+        "error": 0,
+        "packages": [
+          {
+            "name": null,
+            "version": "1-1",
+            "desc": null,
+            "installed_db": null,
+            "arch": null,
+            "filename": null,
+            "isize": 0,
+            "builddate": 0,
+            "groups": [],
+            "files": [],
+            "requiredby": [],
+            "optionalfor": []
+          }
+        ],
+        "groups": [],
+        "searches": [
+          {
+            "patterns": [
+              "TEXT"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "utility",
+              "common"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^virtual=3$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^edit"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "^z-tools$"
+            ],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "["
+            ],
+            "success": false,
+            "names": []
+          },
+          {
+            "patterns": [],
+            "success": true,
+            "names": []
+          },
+          {
+            "patterns": [
+              "absent",
+              "["
+            ],
+            "success": false,
+            "names": []
+          }
+        ],
+        "disabled_search_success": true,
+        "disabled_exact_visible": false
+      }
+    }
+  ]
+}

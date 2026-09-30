@@ -152,7 +152,7 @@ pub const QuestionPurpose = enum {
     generic,
     cache_clean_extra_entries,
     package_conflict,
-}; 
+};
 
 pub const QuestionAttachment = struct {
     name: []const u8,
@@ -252,6 +252,10 @@ pub const QuestionRequest = struct {
     dependency_name: ?[]const u8 = null,
     pgp_key_import: ?PgpKeyImportPayload = null,
     default_response: QuestionResponse = .default,
+    /// Optional nonblocking atomic cancellation probe, borrowed until ask returns.
+    /// It must not reenter this context; it can run while its mutex is held.
+    /// Deferred waits poll this every 10ms without holding the context mutex.
+    cancellation: ?struct { data: ?*anyopaque, check: *const fn (?*anyopaque) bool } = null,
 };
 
 pub const Question = struct {
@@ -515,6 +519,7 @@ pub const OperationContext = struct {
 
     fn ask(self: *OperationContext, envelope: Envelope, request: QuestionRequest) !OwnedQuestionResponse {
         if (self.isCancelled()) return error.Cancelled;
+        if (request.cancellation) |probe| if (probe.check(probe.data)) return error.Cancelled;
         const id = self.next_question_id.fetchAdd(1, .monotonic);
 
         self.mutex.lockUncancelable(self.io);
@@ -555,6 +560,8 @@ pub const OperationContext = struct {
             request.default_response;
 
         if (immediate != .deferred) {
+            if (self.isCancelled()) return error.Cancelled;
+            if (request.cancellation) |probe| if (probe.check(probe.data)) return error.Cancelled;
             var result = try OwnedQuestionResponse.init(self.allocator, immediate);
             errdefer result.deinit(self.allocator);
             self.mutex.lockUncancelable(self.io);
@@ -570,16 +577,18 @@ pub const OperationContext = struct {
         defer self.mutex.unlock(self.io);
         while (true) {
             const pending = self.pending_questions.getPtr(id) orelse return error.UnknownQuestion;
+            if (self.isCancelled() or (if (request.cancellation) |probe| probe.check(probe.data) else false)) return error.Cancelled;
             if (pending.response) |response| {
                 pending.response = null;
                 _ = self.pending_questions.remove(id);
                 return response;
             }
-            if (self.isCancelled()) {
-                _ = self.pending_questions.remove(id);
-                return error.Cancelled;
-            }
-            self.question_condition.waitUncancelable(self.io, &self.mutex);
+            if (request.cancellation != null) {
+                self.mutex.unlock(self.io);
+                const slept = std.Io.sleep(self.io, .fromMilliseconds(10), .awake);
+                self.mutex.lockUncancelable(self.io);
+                slept catch return error.Cancelled;
+            } else self.question_condition.waitUncancelable(self.io, &self.mutex);
         }
     }
 

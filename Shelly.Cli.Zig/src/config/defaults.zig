@@ -1,7 +1,8 @@
 // Authoritative defaults for the native Zig CLI. Keep this schema stable so
 // existing configuration files can be overlaid without migration tooling.
+const PackageManager = @import("PackageManager");
 pub const json =
-    \\{
+    "{\n  \"NativePackageBackend\": \"" ++ @tagName(PackageManager.Manager.default_backend) ++ "\",\n" ++
     \\  "FileSizeDisplay": "Megabytes",
     \\  "ParallelDownloadCount": 100,
     \\  "DownloadAddressFamilyPolicy": "PreferIPv4",
@@ -16,7 +17,7 @@ pub const json =
     \\  "CollapsePkgbuildDiff": true,
     \\  "AurUrl": "https://aur.archlinux.org"
     \\}
-;
+    ;
 
 test "native defaults remain valid JSON" {
     const std = @import("std");

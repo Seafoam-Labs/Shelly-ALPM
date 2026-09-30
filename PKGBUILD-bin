@@ -7,7 +7,15 @@ pkgrel=1
 arch=('x86_64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
 license=('GPL-3.0-only')
-makedepends=('go-md2man')
+makedepends=('go-md2man' 'binutils')
+# Declare the expected release variant and verify it against the shipped CLI.
+_shelly_libalpm=${SHELLY_LIBALPM:-true}
+case $_shelly_libalpm in
+  true) _shelly_native_depends=('pacman'); _shelly_native_optdepends=() ;;
+  false) _shelly_native_depends=(); _shelly_native_optdepends=('pacman: package-owner lookup for pacfile merging') ;;
+  *) printf 'SHELLY_LIBALPM must be true or false\n' >&2; return 1 ;;
+esac
+
 source=(
     "Shelly-ALPM-linux-x64-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/releases/download/v${pkgver}/Shelly-ALPM-linux-x64.tar.gz"
     "Shelly-Flatpak-Backend-linux-x64-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/releases/download/v${pkgver}/Shelly-Flatpak-Backend-linux-x64.tar.gz"
@@ -30,7 +38,7 @@ package_shelly-bin() {
   conflicts=('shelly' 'shelly-git')
   backup=('etc/shellybuild.conf')
   depends=(
-      'pacman'
+      "${_shelly_native_depends[@]}"
       'gtk4'
       'glib2'
       'sudo'
@@ -41,12 +49,15 @@ package_shelly-bin() {
       'dbus'
       'glibc'
       'libarchive'
+      'curl'
+      'sqlite'
       'dconf'
       'gnupg'
       'zstd'
       'json-glib'
   )
   optdepends=(
+      "${_shelly_native_optdepends[@]}"
       'fish: Fish shell completions'
       'zsh: Zsh shell completions'
       'libstarfish: dependency viewer for arch packages'
@@ -54,6 +65,14 @@ package_shelly-bin() {
       'util-linux: isolate fresh-root provisioning for --isolated builds'
       'fuse2: run AppImages that require FUSE 2'
   )
+
+  local shelly_dynamic
+  shelly_dynamic=$(LC_ALL=C readelf -d "$srcdir/shelly") || return 1
+  if [[ $_shelly_libalpm == true && $shelly_dynamic != *libalpm.so* ]] ||
+     [[ $_shelly_libalpm == false && $shelly_dynamic == *libalpm.so* ]]; then
+    printf 'Shelly binary does not match SHELLY_LIBALPM package metadata\n' >&2
+    return 1
+  fi
 
   # Install Shelly.Gtk binary
   install -Dm755 "$srcdir/shelly-ui" "$pkgdir/usr/bin/shelly-ui"

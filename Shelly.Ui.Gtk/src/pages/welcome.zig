@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const glib = bindings.glib;
@@ -281,10 +282,10 @@ pub const WelcomePage = extern struct {
         }
 
         svc.set(updated) catch |err| {
-            std.log.err("Could not apply the setup settings. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            std.log.err("Could not apply the setup settings. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
         };
         svc.save() catch |err| {
-            std.log.err("Could not save the setup settings to the configured file. {0s} Setup preferences were not saved.\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            std.log.err("Could not save the setup settings to the configured file. {0s} Setup preferences were not saved.\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
         };
 
         if (win) |w| {
@@ -416,11 +417,11 @@ pub const WelcomePage = extern struct {
         if (ctx.flatpak) updated.FlatPackEnabled = true;
         if (ctx.appimage) updated.AppImageEnabled = true;
         svc.set(updated) catch |err| {
-            std.log.err("Support packages were installed, but the installed support could not be enabled. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            std.log.err("Support packages were installed, but the installed support could not be enabled. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
             return;
         };
         svc.save() catch |err| {
-            std.log.err("Support packages were installed, but the setting to enable the installed support could not be saved. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            std.log.err("Support packages were installed, but the setting to enable the installed support could not be saved. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
             return;
         };
         ctx.window.applyConfig();

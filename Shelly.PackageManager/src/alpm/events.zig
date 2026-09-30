@@ -1,5 +1,7 @@
 const std = @import("std");
-const bindings = @import("bindings.zig");
+const bindings = struct {
+    pub const libalpm = @import("types.zig");
+};
 const c = bindings.libalpm;
 const operation_api = @import("operation_context");
 
@@ -9,6 +11,16 @@ pub const ProgressArgs = struct {
     percent: c_int,
     howmany: c_ulong,
     current: c_ulong,
+};
+
+/// Observation only; does not attach an operation or change confirmation policy.
+pub const DownloadUpdate = struct {
+    name: []const u8,
+    operation_id: ?operation_api.OperationId = null,
+    state: enum { batch_start, started, progress, retry, completed, unchanged, failed },
+    bytes: u64 = 0,
+    total: ?u64 = null,
+    resuming: bool = false,
 };
 
 pub const QuestionArgs = struct {
@@ -90,6 +102,8 @@ pub const QuestionResponse = struct {
 };
 
 pub const Dispatcher = struct {
+    operationEvents: std.ArrayList(Handler(operation_api.Event).T),
+    downloads: std.ArrayList(Handler(DownloadUpdate).T),
     progress: std.ArrayList(Handler(ProgressArgs).T),
     question: std.ArrayList(Handler(QuestionArgs).T),
     errorEvents: std.ArrayList(Handler(ErrorArgs).T),
@@ -112,6 +126,8 @@ pub const Dispatcher = struct {
 
     pub fn init(allocator: std.mem.Allocator) Dispatcher {
         return .{
+            .operationEvents = .empty,
+            .downloads = .empty,
             .allocator = allocator,
             .progress = .empty,
             .question = .empty,
@@ -133,6 +149,8 @@ pub const Dispatcher = struct {
     }
 
     pub fn deinit(self: *Dispatcher) void {
+        self.operationEvents.deinit(self.allocator);
+        self.downloads.deinit(self.allocator);
         if (self.common_question_response) |*response| response.deinit(self.allocator);
         self.progress.deinit(self.allocator);
         self.question.deinit(self.allocator);
@@ -147,6 +165,31 @@ pub const Dispatcher = struct {
 
     pub fn setOperation(self: *Dispatcher, operation: ?*operation_api.Operation) void {
         self.operation = operation;
+    }
+
+    /// Observe native operation output without supplying a question handler or
+    /// changing transaction confirmation and optional-dependency selection.
+    pub fn addOperationHandler(self: *Dispatcher, handler: Handler(operation_api.Event).T) !usize {
+        try self.operationEvents.append(self.allocator, handler);
+        return self.operationEvents.items.len - 1;
+    }
+
+    pub fn removeOperationHandler(self: *Dispatcher, index: usize) void {
+        if (index < self.operationEvents.items.len) _ = self.operationEvents.swapRemove(index);
+    }
+
+    pub fn forwardOperationEvent(data: ?*anyopaque, event: operation_api.Event) void {
+        const self: *Dispatcher = @ptrCast(@alignCast(data.?));
+        self.dispatch(operation_api.Event, &self.operationEvents, event);
+    }
+
+    pub fn addDownloadHandler(self: *Dispatcher, handler: Handler(DownloadUpdate).T) !usize {
+        try self.downloads.append(self.allocator, handler);
+        return self.downloads.items.len - 1;
+    }
+
+    pub fn notifyDownload(self: *Dispatcher, update: DownloadUpdate) void {
+        self.dispatch(DownloadUpdate, &self.downloads, update);
     }
 
     pub fn addProgressHandler(self: *Dispatcher, handler: Handler(ProgressArgs).T) !usize {
@@ -414,6 +457,13 @@ pub const Dispatcher = struct {
         self.dispatch(ErrorArgs, &self.errorEvents, args);
     }
 
+    /// Deliver an error already published by the native operation adapter
+    /// without publishing a second operation failure with a generic code.
+    pub fn notifyErrorHandlers(self: *Dispatcher, args: ErrorArgs) void {
+        _ = self.error_generation.fetchAdd(1, .monotonic);
+        self.dispatch(ErrorArgs, &self.errorEvents, args);
+    }
+
     pub fn raiseInformational(self: *Dispatcher, args: InformationalArgs) void {
         if (self.operation) |operation| operation.packageStatus(.information, args.message, args.code orelse "alpm.information", @intFromEnum(args.event_type), args.package_name);
         self.dispatch(InformationalArgs, &self.informational, args);
@@ -421,6 +471,11 @@ pub const Dispatcher = struct {
 
     pub fn raiseScriptlet(self: *Dispatcher, args: ScriptletArgs) void {
         if (self.operation) |operation| operation.status(.information, args.line, "alpm.scriptlet", null);
+        self.notifyScriptletHandlers(args);
+    }
+
+    /// The RLPM adapter already publishes the shared operation event.
+    pub fn notifyScriptletHandlers(self: *Dispatcher, args: ScriptletArgs) void {
         self.dispatch(ScriptletArgs, &self.scriptlet, args);
     }
 
@@ -432,6 +487,10 @@ pub const Dispatcher = struct {
             .percentage = if (args.total == 0) 100 else @as(f64, @floatFromInt(args.position)) * 100.0 / @as(f64, @floatFromInt(args.total)),
             .message = args.description,
         });
+        self.notifyHookHandlers(args);
+    }
+
+    pub fn notifyHookHandlers(self: *Dispatcher, args: HookArgs) void {
         self.dispatch(HookArgs, &self.hook, args);
     }
 

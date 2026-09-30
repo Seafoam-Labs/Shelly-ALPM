@@ -1,6 +1,8 @@
 //! Resolution of PKGBUILD metadata fields, including architecture
 //! suffixes and package_-scoped overrides.
 const std = @import("std");
+const shell_word = @import("word.zig");
+const parser_diagnostic = @import("diagnostic.zig");
 const function_body = @import("function_body.zig");
 const variables = @import("variables.zig");
 const expansion = @import("expansion.zig");
@@ -160,7 +162,7 @@ fn resolve_static_array(self: PkgbuildParser, content: []const u8, _: *std.Strin
         for (result.items) |item| self.allocator.free(item);
         result.deinit(self.allocator);
     }
-    var assignments = @import("word.zig").Assignments{ .input = content };
+    var assignments = shell_word.Assignments{ .input = content };
     while (try assignments.next(self.allocator)) |assignment| {
         if (!std.mem.eql(u8, assignment.name, name) or assignment.deferred or !std.mem.startsWith(u8, assignment.raw, "(")) continue;
         var unresolved = std.StringHashMap(void).init(self.allocator);
@@ -173,7 +175,7 @@ fn resolve_static_array(self: PkgbuildParser, content: []const u8, _: *std.Strin
         defer variables.freeStringSlice(self.allocator, raw);
         const expanded = resolve_array_values(at_assignment, content[0..assignment.offset], &vars, name, raw) catch |err| {
             if (self.diagnostic) |destination| if (destination.* == null) {
-                destination.* = @import("diagnostic.zig").Diagnostic.init(
+                destination.* = parser_diagnostic.Diagnostic.init(
                     self.allocator,
                     content[0 .. @intFromPtr(assignment.raw.ptr) - @intFromPtr(content.ptr) + assignment.raw.len],
                     self.pkgbuild_path,

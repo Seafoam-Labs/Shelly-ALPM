@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const test_support = @import("test_support.zig");
 const output = @import("../output/config.zig");
 const colors = @import("../output/colors.zig");
@@ -42,7 +43,7 @@ pub fn dispatch(
     const user_receive = optionEnabled(invocation, "--user");
     if (!user_receive and !invocation.globals.ui_mode and !elevation.isRoot()) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-            try context.stderr.print("Could not obtain administrator privileges for keyring operation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+            try context.stderr.print("Could not obtain administrator privileges for keyring operation. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -71,7 +72,7 @@ fn executeWithRunner(
         const message = try std.fmt.allocPrint(
             context.allocator,
             "Could not start the keyring command for the requested operation. {0s}\n\nTechnical details: {1s}",
-            .{ @import("diagnostics").cause(err), @errorName(err) },
+            .{ diagnostics.cause(err), @errorName(err) },
         );
         defer context.allocator.free(message);
         try writeFailure(context, invocation, message, failureMessage(action));
@@ -86,7 +87,7 @@ fn executeWithRunner(
     }
 
     if (result.failed_key) |key| {
-        const message = try std.fmt.allocPrint(context.allocator, "Could not sign {0f} in the selected keyring.", .{@import("diagnostics").safe(key)});
+        const message = try std.fmt.allocPrint(context.allocator, "Could not sign {0f} in the selected keyring.", .{diagnostics.safe(key)});
         defer context.allocator.free(message);
         if (!invocation.globals.ui_mode) try output.writeFailure(context, message);
     }

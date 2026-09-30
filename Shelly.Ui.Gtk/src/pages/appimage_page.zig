@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gio = bindings.gio;
@@ -251,7 +252,7 @@ pub const AppImagePage = extern struct {
         {
             const cli = ShellyCli{ .allocator = apps_arena.allocator(), .io = threaded.io() };
             const apps = cli.get_appimages() catch |err| {
-                std.debug.print("Could not load the installed AppImage list. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+                std.debug.print("Could not load the installed AppImage list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                 apps_arena.deinit();
                 std.heap.c_allocator.destroy(apps_arena);
                 return;

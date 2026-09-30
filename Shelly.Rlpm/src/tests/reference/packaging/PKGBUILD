@@ -1,0 +1,237 @@
+# vim: set ts=2 sw=2 et:
+### Arch Linux PKGBUILD maintainer:
+# Maintainer: Morten Linderud <foxboron@archlinux.org>
+### CachyOS PKGBUILD maintainers:
+# Maintainer: Vladislav Nepogodin (vnepogodin) <nepogodin.vlad@gmail.com>
+# Maintainer: Piotr Gorski <piotrgorski@cachyos.org>
+# Maintainer: Peter Jung ptr1337 <admin@ptr1337.dev>
+# Maintainer: SoulHarsh007 <admin@soulharsh007.dev>
+
+_staging=false
+pkgname=pacman
+pkgver=7.1.0.r9.g54d9411
+_sqlitever=$(curl -s 'https://archlinux.org/packages/search/json/?name=sqlite' | grep -oP '"pkgver":\s*"\K[^"]+' | head -n 1 | awk -F. '{
+    printf "%d%02d%02d", $1, $2, $3;
+    if (NF == 4) { printf "%02d", $4 }
+    else { printf "00" }
+}')
+pkgrel=4
+pkgdesc="A library-based package manager with dependency support. CachyOS fork."
+arch=('x86_64' 'aarch64')
+url="https://www.archlinux.org/pacman/"
+license=('GPL-2.0-or-later')
+depends=(
+  bash
+  coreutils
+  curl libcurl.so
+  gawk
+  gettext
+  glibc
+  gnupg
+  gpgme libgpgme.so
+  grep
+  libarchive libarchive.so
+  openssl libcrypto.so
+  pacman-mirrorlist
+  systemd
+  libmakepkg-dropins
+)
+makedepends=(
+  asciidoc
+  doxygen
+  git
+  meson
+
+  # our specific depends, due to building with llvm stack and static sqlite
+  tcl
+  cmake
+  cargo
+  clang
+  llvm
+)
+checkdepends=(
+  fakechroot
+  python
+)
+optdepends=(
+  'base-devel: required to use makepkg'
+  'perl-locale-gettext: translation support in makepkg-template'
+  'ttf-firacode-nerd: for a pretty progress bar in makepkg'
+  'ttf-iosevka-nerd: for a pretty progress bar in makepkg'
+  'ttf-juliamono-nerd-font: for a pretty progress bar in makepkg'
+)
+provides=('libalpm.so')
+backup=(etc/pacman.conf
+        etc/makepkg.conf
+        etc/makepkg.conf.d/rust.conf)
+#options=('!lto') -- should we put no lto here??
+#validpgpkeys=('6645B0A8C7005E78DB1D7864F99FFE0FEAE999BD'  # Allan McRae <allan@archlinux.org>
+#              'B8151B117037781095514CA7BBDFFC92306B1121') # Andrew Gregory (pacman) <andrew@archlinux.org>
+_commit="4056cd687f6379e61e7decb9b66e9b57cb3949a9"
+source=("git+https://github.com/CachyOS/pacman.git#commit=${_commit}?signed"
+        pacman.conf
+        makepkg.conf
+        alpm.sysusers
+        rust.conf
+        static_sqlite.patch
+        "https://www.sqlite.org/2026/sqlite-src-${_sqlitever}.zip"
+        disable-always-stale.patch
+        78cd453.patch # PrettyProgressBar
+        https://gitlab.archlinux.org/pacman/pacman/-/commit/21b8d8a21a03e0d44294626f7222adda6b48dfac.patch
+        )
+source_aarch64=(fix-alpm-crate-for-aarch64.patch)
+sha256sums=('37bcdca914a74c3ce72647ad3ef19baaa648694cfa09d99a628f8b1d2ae11c3a'
+            '8d7c13c377a38567f48a3c81dcb5f95695288c314ee423ba03416ca232dd2fe0'
+            '96c43d32fff6401fa1c843b2690e5d094ed71c0b89d1e0a5dcaf56178b9d3abd'
+            'c8760d7ebb6c9817d508c691c67084be251cd9c8811ee1ccf92c1278bad74c1c'
+            'b31dc7a2789d7fb99a56cc5a9d915c3d57e01233bf258731392afe44b1bf8e40'
+            'bdd8fb13c1cd8606f41347bc1897e261031ac80b33c772d310f417064332f646'
+            'cafff764c03f6d720968f746e2f47a986bbf12bf4c18904f1eb131c0b0b592d3'
+            '11e0078c5ac7cdafa625957a9da982989efe19719e4973cd77f28dc5780dccd9'
+            '843ad07d4a996ad165f20544c5df5b6deec4496ec30daa38b874bf3fa28afa54'
+            '5865513b59a2b7937f581f66de3163a78b55d6d631489b7bfe6e3ad2953486c6')
+sha256sums_aarch64=('58a6d7b93519d96a995399c85da5ad6b554f6f218908e2fbb2497956725d5e94')
+validpgpkeys=(
+  'B1B70BB1CD56047DEF31DE2EB62C3D10C54D5DA9'  # Vladislav Nepogodin <nepogodin.vlad@gmail.com>
+)
+
+#if $_staging; then
+    #source+=(https://raw.githubusercontent.com/vnepogodin/my-patches/develop/pacman/0001-libalpm-parallel-signature-check.patch)
+#fi
+
+#pkgver() {
+#  cd "$pkgname"
+#  git describe --abbrev=7 --tags --match 'v*' | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+#}
+
+prepare() {
+  cd "${pkgname}"
+  # we backport way too often in pacman
+  # lets at least make it more convenient
+  local src
+  for src in "${source[@]}"; do
+    src="${src%%::*}"
+    src="${src##*/}"
+    [[ $src = *.patch ]] || continue
+    msg2 "Applying patch $src..."
+    patch -Np1 < "../$src"
+  done
+
+  # switch temp to git version (which is latest released 7.1.0)
+  sed -e 's/checkver/git/' -i scripts/repo-add/Cargo.toml
+}
+
+build() {
+  export AR=llvm-ar
+  export CC=clang
+  export CXX=clang++
+  export NM=llvm-nm
+  export RANLIB=llvm-ranlib
+
+  local _saved_cflags="${CFLAGS}"
+  local _saved_cppflags="${CPPFLAGS}"
+  local _saved_cxxflags="${CXXFLAGS}"
+
+  # this uses malloc_usable_size, which is incompatible with fortification level 3
+  export CFLAGS="${CFLAGS/_FORTIFY_SOURCE=3/_FORTIFY_SOURCE=2}"
+  export CXXFLAGS="${CXXFLAGS/_FORTIFY_SOURCE=3/_FORTIFY_SOURCE=2}"
+
+  export CPPFLAGS="$CPPFLAGS \
+        -DSQLITE_ENABLE_COLUMN_METADATA=1 \
+        -DSQLITE_ENABLE_UNLOCK_NOTIFY \
+        -DSQLITE_ENABLE_DBSTAT_VTAB=1 \
+        -DSQLITE_ENABLE_FTS3_TOKENIZER=1 \
+        -DSQLITE_ENABLE_FTS3_PARENTHESIS \
+        -DSQLITE_SECURE_DELETE \
+        -DSQLITE_ENABLE_STMTVTAB \
+        -DSQLITE_ENABLE_STAT4 \
+        -DSQLITE_MAX_VARIABLE_NUMBER=250000 \
+        -DSQLITE_MAX_EXPR_DEPTH=10000 \
+        -DSQLITE_ENABLE_MATH_FUNCTIONS"
+
+  cd "sqlite-src-${_sqlitever}"
+  ./configure --prefix="${srcdir}/${pkgname}"/tmp_sqlite  \
+        --disable-shared \
+        --fts4 \
+        --fts5 \
+        --rtree \
+        --disable-tcl \
+        --disable-readline
+
+  sed -i -e 's/$(LDFLAGS.libsqlite3)/ -Wl,-O1,--as-needed \0/g' main.mk
+  make
+  make install
+
+  export CFLAGS="${_saved_cflags}"
+  export CPPFLAGS="${_saved_cppflags}"
+  export CXXFLAGS="${_saved_cxxflags}"
+
+  export CFLAGS+=" -fno-semantic-interposition -flto=thin"
+  export CXXFLAGS+=" -fno-semantic-interposition -flto=thin"
+  export RUSTFLAGS+=" -Cembed-bitcode -Clinker-plugin-lto -Clinker=clang -C link-arg=-flto=thin"
+  export LDFLAGS+=" -lm"
+
+  cd ..
+
+  cd "${pkgname}"
+
+  meson --prefix=/usr \
+        --buildtype=plain \
+        -Ddoc=enabled \
+        -Ddoxygen=enabled \
+        -Dscriptlet-shell=/usr/bin/bash \
+        -Dldconfig=/usr/bin/ldconfig \
+        build
+
+  meson compile -C build
+}
+
+check() {
+  cd "${pkgname}"
+
+  export AR=llvm-ar
+  export CC=clang
+  export CXX=clang++
+  export NM=llvm-nm
+  export RANLIB=llvm-ranlib
+
+  export CFLAGS+=" -fno-semantic-interposition -flto=thin"
+  export CXXFLAGS+=" -fno-semantic-interposition -flto=thin"
+  export RUSTFLAGS+=" -Cembed-bitcode -Clinker-plugin-lto -Clinker=clang -C link-arg=-flto=thin"
+
+  meson test -C build
+
+  cd build
+  ninja scripts/repo-add/src/repo-add-test
+}
+
+package() {
+  cd "${pkgname}"
+
+  export AR=llvm-ar
+  export CC=clang
+  export CXX=clang++
+  export NM=llvm-nm
+  export RANLIB=llvm-ranlib
+
+  export CFLAGS+=" -fno-semantic-interposition -flto=thin"
+  export CXXFLAGS+=" -fno-semantic-interposition -flto=thin"
+  export RUSTFLAGS+=" -Cembed-bitcode -Clinker-plugin-lto -Clinker=clang -C link-arg=-flto=thin"
+
+  DESTDIR="$pkgdir" meson install -C build
+
+  # install Arch specific stuff
+  install -dm755 "$pkgdir/etc"
+  install -m644 "$srcdir/pacman.conf" "$pkgdir/etc"
+  install -m644 "$srcdir/makepkg.conf" "$pkgdir/etc"
+  install -D -m644 "$srcdir/alpm.sysusers" "${pkgdir}"/usr/lib/sysusers.d/alpm.conf
+  install -m644 "$srcdir/rust.conf" "$pkgdir/etc/makepkg.conf.d"
+
+  local wantsdir="$pkgdir/usr/lib/systemd/system/sockets.target.wants"
+  install -dm755 "$wantsdir"
+
+  local unit
+  for unit in dirmngr gpg-agent gpg-agent-{browser,extra,ssh} keyboxd; do
+    ln -s "../${unit}@.socket" "$wantsdir/${unit}@etc-pacman.d-gnupg.socket"
+  done
+}

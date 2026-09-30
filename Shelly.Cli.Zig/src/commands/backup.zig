@@ -1,5 +1,6 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const diagnostics = @import("diagnostics");
+const PackageManager = @import("PackageManager");
 const test_support = @import("test_support.zig");
 const output = @import("../output/config.zig");
 const colors = @import("../output/colors.zig");
@@ -203,14 +204,14 @@ fn collectState(context: *runtime.RuntimeContext, aur_base: []const u8) !State {
     defer flatpaks.deinit(context.allocator);
 
     {
-        const manager = try Zigalpm.AlpmManager.init(context.allocator, context.environ, .{ .use_root = false });
+        const manager = try PackageManager.Manager.init(context.allocator, context.environ, .{ .use_root = false });
         defer manager.deinit();
         if (!manager.show_hidden_packages) _ = manager.toggle_hidden_packages();
 
         const installed = try manager.get_installed_packages();
-        defer Zigalpm.alpm.OwnedPackage.deinitSlice(context.allocator, installed);
+        defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, installed);
         const foreign = try manager.get_foreign_packages();
-        defer Zigalpm.alpm.OwnedPackage.deinitSlice(context.allocator, foreign);
+        defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, foreign);
 
         for (installed) |package| {
             const name = package.name() orelse continue;
@@ -223,13 +224,13 @@ fn collectState(context: *runtime.RuntimeContext, aur_base: []const u8) !State {
     }
 
     {
-        const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+        const manager = try PackageManager.AurManager.init(context.allocator, context.environ, .{
             .aur_git_base_url = aur_base,
             .show_hidden_packages = true,
         });
         defer manager.deinit();
         const installed = try manager.getInstalledPackages();
-        defer Zigalpm.aur.models.Package.deinitSlice(context.allocator, installed);
+        defer PackageManager.aur.models.Package.deinitSlice(context.allocator, installed);
         for (installed) |package| {
             try aur.append(context.allocator, .{
                 .name = try context.allocator.dupe(u8, package.name),
@@ -239,19 +240,19 @@ fn collectState(context: *runtime.RuntimeContext, aur_base: []const u8) !State {
     }
 
     flatpak_collection: {
-        var manager = Zigalpm.FlatpakManager{
+        var manager = PackageManager.FlatpakManager{
             .allocator = context.allocator,
             .io = context.io,
         };
         defer manager.deinit();
         const installed = manager.list_installed_applications() catch |err| {
-            if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+            if (PackageManager.flatpak.errors.unavailableMessage(err)) |message| {
                 try output.writeWarning(context, message);
                 break :flatpak_collection;
             }
             return err;
         };
-        defer Zigalpm.flatpak.InstalledApplication.deinitSlice(context.allocator, installed);
+        defer PackageManager.flatpak.InstalledApplication.deinitSlice(context.allocator, installed);
         for (installed) |application| {
             try flatpaks.append(context.allocator, .{
                 .id = try context.allocator.dupe(u8, application.id),
@@ -267,7 +268,7 @@ fn collectState(context: *runtime.RuntimeContext, aur_base: []const u8) !State {
     };
 }
 
-fn containsOwnedPackage(packages: []const Zigalpm.alpm.OwnedPackage, name: []const u8) bool {
+fn containsOwnedPackage(packages: []const PackageManager.Manager.OwnedPackage, name: []const u8) bool {
     for (packages) |package| {
         if (std.mem.eql(u8, package.name() orelse continue, name)) return true;
     }
@@ -434,7 +435,7 @@ fn writeFailure(
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Could not export the backup to {0f}. {1s}\n\nTechnical details: {2s}",
-        .{ @import("diagnostics").safe(optionValue(invocation, "--directory") orelse "the configured backup directory"), @import("diagnostics").cause(err), @errorName(err) },
+        .{ diagnostics.safe(optionValue(invocation, "--directory") orelse "the configured backup directory"), diagnostics.cause(err), @errorName(err) },
     );
     if (invocation.globals.ui_mode)
         try output.writeErrorFrame(context, message)
@@ -450,7 +451,7 @@ fn writeImportFailure(
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Could not import the backup from the configured file. {0s}\n\nTechnical details: {1s}",
-        .{ @import("diagnostics").cause(err), @errorName(err) },
+        .{ diagnostics.cause(err), @errorName(err) },
     );
     if (invocation.globals.ui_mode)
         try output.writeErrorFrame(context, message)

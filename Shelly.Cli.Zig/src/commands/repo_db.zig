@@ -1,18 +1,19 @@
 //! `shelly repo-db add|remove|list|verify`: the CLI surface of
-//! `Zigalpm.repo.Database`. Lines are bare text with a fixed shape: stdout
+//! `PackageManager.repo.Database`. Lines are bare text with a fixed shape: stdout
 //! carries progress and results, stderr carries warnings and errors.
 
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const diagnostics = @import("diagnostics");
+const PackageManager = @import("PackageManager");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const spec = @import("../cli/spec.zig");
 const test_support = @import("test_support.zig");
 
-const Database = Zigalpm.repo.Database;
-const Failure = Zigalpm.repo.database.Failure;
-const Warning = Zigalpm.source_pgp_verifier.Warning;
-const archive = Zigalpm.shared.archive;
+const Database = PackageManager.repo.Database;
+const Failure = PackageManager.repo.database.Failure;
+const Warning = PackageManager.source_pgp_verifier.Warning;
+const archive = PackageManager.shared.archive;
 
 const command_prefix = "shelly repo-db ";
 
@@ -66,7 +67,7 @@ fn executeAdd(
     invocation: *const parser.Invocation,
     db: *Database,
 ) !u8 {
-    const options: Zigalpm.repo.AddOptions = .{
+    const options: PackageManager.repo.AddOptions = .{
         .new_only = optionEnabled(invocation, "--new"),
         .prevent_downgrade = optionEnabled(invocation, "--prevent-downgrade"),
         .remove_old_files = optionEnabled(invocation, "--remove-old-files"),
@@ -112,7 +113,7 @@ fn executeRemove(
     invocation: *const parser.Invocation,
     db: *Database,
 ) !u8 {
-    const options: Zigalpm.repo.RemoveOptions = .{
+    const options: PackageManager.repo.RemoveOptions = .{
         .remove_old_files = optionEnabled(invocation, "--remove-old-files"),
         .wait_for_lock = optionEnabled(invocation, "--wait"),
         .signer = signerFor(context, invocation),
@@ -128,7 +129,7 @@ fn executeRemove(
         try context.stdout.print("removing '{s}' from repository '{s}'.\n", .{ entry_dir, db.db_filename });
     }
     for (summary.not_found) |name| {
-        try context.stderr.print("Could not remove '{0f}' because it is not present in repository database '{1f}'. Check the package name and database path.\n", .{ @import("diagnostics").safe(name), @import("diagnostics").safe(db.db_filename) });
+        try context.stderr.print("Could not remove '{0f}' because it is not present in repository database '{1f}'. Check the package name and database path.\n", .{ diagnostics.safe(name), diagnostics.safe(db.db_filename) });
     }
     if (summary.not_found.len > 0) {
         try context.stderr.print("The repository database was not modified because the package checks failed. Resolve the reported package errors before trying again.\n", .{});
@@ -146,7 +147,7 @@ fn executeList(
 ) !u8 {
     const entries = db.listEntries() catch |err|
         return try reportError(context, err, Targets.fromDatabase(db), "read");
-    defer Zigalpm.repo.database.freeEntries(context.allocator, entries);
+    defer PackageManager.repo.database.freeEntries(context.allocator, entries);
 
     if (invocation.globals.json) {
         try writeEntriesJson(context.stdout, entries);
@@ -162,7 +163,7 @@ fn executeVerify(
     db: *Database,
 ) !u8 {
     // No key ids are pinned, so only an ultimately trusted key verifies.
-    const verifier: Zigalpm.source_pgp_verifier.Verifier = .{
+    const verifier: PackageManager.source_pgp_verifier.Verifier = .{
         .allocator = context.allocator,
         .io = context.io,
         .environ = context.environ,
@@ -200,7 +201,7 @@ fn operationForPath(path: []const u8) ?Operation {
 fn signerFor(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
-) ?Zigalpm.package_signer.Signer {
+) ?PackageManager.package_signer.Signer {
     if (!optionEnabled(invocation, "--sign")) return null;
     return .{
         .allocator = context.allocator,
@@ -212,11 +213,11 @@ fn signerFor(
 fn printFailure(context: *runtime.RuntimeContext, failure: Failure) !void {
     const path = failure.package_path;
     switch (failure.kind) {
-        .missing_file => try context.stderr.print("Could not find package archive '{0f}'. Check the path and try again.\n", .{@import("diagnostics").safe(path)}),
-        .not_a_package => try context.stderr.print("Could not add '{0f}' to the repository because it is not a supported package archive. Select a built package archive.\n", .{@import("diagnostics").safe(path)}),
-        .invalid_package => try context.stderr.print("Could not add '{0f}' to the repository because the archive has no .PKGINFO metadata. Rebuild or obtain a complete package archive.\n", .{@import("diagnostics").safe(path)}),
-        .armored_signature => try context.stderr.print("Could not add the signature for '{0f}' because it is ASCII-armored. Supply a binary detached signature.\n", .{@import("diagnostics").safe(path)}),
-        .oversized_signature => try context.stderr.print("Could not add the signature for '{0f}' because it exceeds the 16,384-byte limit. Supply a supported detached signature.\n", .{@import("diagnostics").safe(path)}),
+        .missing_file => try context.stderr.print("Could not find package archive '{0f}'. Check the path and try again.\n", .{diagnostics.safe(path)}),
+        .not_a_package => try context.stderr.print("Could not add '{0f}' to the repository because it is not a supported package archive. Select a built package archive.\n", .{diagnostics.safe(path)}),
+        .invalid_package => try context.stderr.print("Could not add '{0f}' to the repository because the archive has no .PKGINFO metadata. Rebuild or obtain a complete package archive.\n", .{diagnostics.safe(path)}),
+        .armored_signature => try context.stderr.print("Could not add the signature for '{0f}' because it is ASCII-armored. Supply a binary detached signature.\n", .{diagnostics.safe(path)}),
+        .oversized_signature => try context.stderr.print("Could not add the signature for '{0f}' because it exceeds the 16,384-byte limit. Supply a supported detached signature.\n", .{diagnostics.safe(path)}),
     }
 }
 
@@ -234,7 +235,7 @@ fn printWarning(context: *runtime.RuntimeContext, warning: Warning) !void {
     }
 }
 
-fn writeEntriesJson(writer: *std.Io.Writer, entries: []Zigalpm.repo.EntryInfo) !void {
+fn writeEntriesJson(writer: *std.Io.Writer, entries: []PackageManager.repo.EntryInfo) !void {
     var json: std.json.Stringify = .{ .writer = writer };
     try json.beginArray();
     for (entries) |entry| {
@@ -263,28 +264,28 @@ fn reportError(
 ) !u8 {
     switch (err) {
         error.LockHeld => {
-            try context.stderr.print("Could not lock repository database '{0f}' using '{1f}'. If another repository update is running, wait for it to finish.\n", .{ @import("diagnostics").safe(targets.db_path), @import("diagnostics").safe(targets.lock_path) });
+            try context.stderr.print("Could not lock repository database '{0f}' using '{1f}'. If another repository update is running, wait for it to finish.\n", .{ diagnostics.safe(targets.db_path), diagnostics.safe(targets.lock_path) });
             return 2;
         },
         error.DatabaseNotFound => try context.stderr.print(
             "Could not find repository database '{0f}'. Check the path and try again.\n",
-            .{@import("diagnostics").safe(targets.db_path)},
+            .{diagnostics.safe(targets.db_path)},
         ),
         error.UnsupportedExtension => try context.stderr.print(
             "Unsupported repository database filename '{0f}'. Use a filename ending in.db.tar.<compression> with a supported compression format.\n",
-            .{@import("diagnostics").safe(targets.db_path)},
+            .{diagnostics.safe(targets.db_path)},
         ),
         error.DirectoryMissing => try context.stderr.print(
             "Directory '{0f}' does not exist. Create it or select an existing directory.\n",
-            .{@import("diagnostics").safe(targets.db_dir)},
+            .{diagnostics.safe(targets.db_dir)},
         ),
         error.InvalidDatabase => try context.stderr.print(
             "Could not read repository database '{0f}' because it is corrupted. Restore it from a known-good copy or rebuild it from the package archives.\n",
-            .{@import("diagnostics").safe(targets.db_path)},
+            .{diagnostics.safe(targets.db_path)},
         ),
         else => try context.stderr.print(
             "Could not {0f} the package database: {1s}\n\nTechnical details: {2s}\n",
-            .{ @import("diagnostics").safe(verb), @import("diagnostics").cause(err), @errorName(err) },
+            .{ diagnostics.safe(verb), diagnostics.cause(err), @errorName(err) },
         ),
     }
     return 1;

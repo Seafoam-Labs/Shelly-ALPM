@@ -1,0 +1,199 @@
+{
+  "schema": 1,
+  "recorded_on": "2026-09-27",
+  "required_target": "CachyOS libalpm including downstream extensions",
+  "package": {
+    "name": "pacman",
+    "version": "7.1.0.r9.g54d9411-4",
+    "architecture": "x86_64",
+    "archive_sha256": "a90544a46975a3cfd483d71ae4f94da0ac8d97faa6083eafc5babd6ac5d56edb",
+    "pkgbuild_sha256": "1ca93466764e2ab223ba231780c513f097ba95a511010fa49a2a46a87a06d5af"
+  },
+  "library": {
+    "version": "16.0.1",
+    "file": "libalpm.so.16.0.1",
+    "sha256": "da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888",
+    "capability_mask": 7,
+    "capabilities": [
+      "NLS",
+      "DOWNLOADER",
+      "SIGNATURES"
+    ],
+    "capability_source": "alpm_capabilities() queried on the pinned installed library; not inferred from headers"
+  },
+  "upstream": {
+    "revision": "54d94116164b0b2202c6061c4a59c6f3e70820d8",
+    "source_url": "https://gitlab.archlinux.org/pacman/pacman/-/archive/54d94116164b0b2202c6061c4a59c6f3e70820d8/pacman-54d94116164b0b2202c6061c4a59c6f3e70820d8.tar.gz",
+    "download_sha256": "871a9616e5c82e265e4b2ff9eb4d1b4ae4e37bcc1387a48d04992a7b10af7336",
+    "bundle": {
+      "files": 471,
+      "test_files": 404,
+      "pactest_cases": 341
+    }
+  },
+  "downstream": {
+    "revision": "4056cd687f6379e61e7decb9b66e9b57cb3949a9",
+    "source_url": "https://codeload.github.com/CachyOS/pacman/tar.gz/4056cd687f6379e61e7decb9b66e9b57cb3949a9",
+    "download_sha256": "7060881b9f361ef2399dea7beef035a453869bb67793c8db1932b97dfc3e04c1",
+    "bundle": {
+      "files": 475,
+      "test_files": 407,
+      "pactest_cases": 344
+    },
+    "changed_libalpm_files": [
+      "lib/libalpm/add.c",
+      "lib/libalpm/alpm.h",
+      "lib/libalpm/be_local.c",
+      "lib/libalpm/be_sync.c",
+      "lib/libalpm/cpu_capabilities.c",
+      "lib/libalpm/handle.c",
+      "lib/libalpm/handle.h",
+      "lib/libalpm/hook.c",
+      "lib/libalpm/meson.build",
+      "lib/libalpm/package.c",
+      "lib/libalpm/package.h",
+      "lib/libalpm/sandbox.c",
+      "lib/libalpm/sandbox.h",
+      "lib/libalpm/sync.c",
+      "lib/libalpm/trans.c",
+      "lib/libalpm/util.c",
+      "lib/libalpm/util.h"
+    ],
+    "header_matches_installed": true
+  },
+  "packaging": {
+    "revision": "d90418d0be6eb4dbf8aac57a8c71ff64630aaf9e",
+    "source_url": "https://codeload.github.com/CachyOS/CachyOS-PKGBUILDS/tar.gz/d90418d0be6eb4dbf8aac57a8c71ff64630aaf9e",
+    "download_sha256": "fa35cde6e838553f26735e4babb59b7fca7d87ce871e21ac8093cbf71128193f",
+    "applied_patches": [
+      "static_sqlite.patch",
+      "disable-always-stale.patch",
+      "78cd453.patch",
+      "21b8d8a21a03e0d44294626f7222adda6b48dfac.patch"
+    ],
+    "architecture_only_patch": {
+      "path": "fix-alpm-crate-for-aarch64.patch",
+      "applied_to_reference": false
+    },
+    "sqlite_source_url": "https://www.sqlite.org/2026/sqlite-src-3530200.zip",
+    "sqlite_source_sha256": "cafff764c03f6d720968f746e2f47a986bbf12bf4c18904f1eb131c0b0b592d3",
+    "sqlite_source_provenance": ".SRCINFO and PKGBUILD checksum; source not vendored or rebuilt"
+  },
+  "build": {
+    "evidence": [
+      "packaging/.BUILDINFO",
+      "packaging/PKGBUILD",
+      "meson_options.txt",
+      "meson.build"
+    ],
+    "meson_arguments": [
+      "--prefix=/usr",
+      "--buildtype=plain",
+      "-Ddoc=enabled",
+      "-Ddoxygen=enabled",
+      "-Dscriptlet-shell=/usr/bin/bash",
+      "-Dldconfig=/usr/bin/ldconfig"
+    ],
+    "crypto": "openssl (default)",
+    "sqlite": "static; static_sqlite.patch requires >= 3.42.0",
+    "archive_runtime": "bsdtar 3.8.9 - libarchive 3.8.9 zlib/1.3.1.zlib-ng liblzma/5.8.3 bz2lib/1.0.8 liblz4/1.10.0 libzstd/1.5.7 openssl/3.6.3 libb2/bundled libacl/2.4.0",
+    "runtime_packages": [
+      "libarchive 3.8.9-1.1",
+      "gnupg 2.4.9-3.1",
+      "gpgme 2.2.0-1.1",
+      "curl 8.22.0-1",
+      "openssl 3.6.4-1.1"
+    ],
+    "reproduced_build": false
+  },
+  "assets": [
+    {
+      "path": "COPYING",
+      "sha256": "ab15fd526bd8dd18a9e77ebc139656bf4d33e97fc7238cd11bf60e2b9b8666c6"
+    },
+    {
+      "path": "alpm_list.h",
+      "sha256": "3d72b0f7cc518ee972ff55704c1b731d07d726084b35fe9830f5057928fb854b"
+    },
+    {
+      "path": "downstream-alpm.h",
+      "sha256": "9f156160db179f811178c3f4edebb18fac436a271b58ca3839b63b966aa27c55"
+    },
+    {
+      "path": "downstream-libalpm.diff",
+      "sha256": "349f8e0b6ecf9e11c05673aafb1f81380a1c9b1c773eca0cc3aa278c806f7a32"
+    },
+    {
+      "path": "downstream-source-tests.tar.gz",
+      "sha256": "c4b5b91578aca4702db6ee16e10f8611853004fd5719c04b868fd1b73d91effc"
+    },
+    {
+      "path": "meson.build",
+      "sha256": "fb9faf37b2c26da9c51d349193bcffe67f54a5db6b71e5124240a0da4debbc09"
+    },
+    {
+      "path": "meson_options.txt",
+      "sha256": "89e5b350af2831f591334a580bfd08360f65aaff40336d6e677f5e956b55a65b"
+    },
+    {
+      "path": "packaging/.BUILDINFO",
+      "sha256": "0de394c41d8c249b1e185e0b58969d4bef2c2c6ee867bb1ab20411e539016e9a"
+    },
+    {
+      "path": "packaging/.PKGINFO",
+      "sha256": "92238ea9ec51c27f121d9dba9748d9ec36bf592fb708f4144fe4d8fee463b0b2"
+    },
+    {
+      "path": "packaging/.SRCINFO",
+      "sha256": "2682573a7966adced8dcd5e6f237af30af7b9f2d3a0eb790e73fb210ad63a7c7"
+    },
+    {
+      "path": "packaging/21b8d8a21a03e0d44294626f7222adda6b48dfac.patch",
+      "sha256": "5865513b59a2b7937f581f66de3163a78b55d6d631489b7bfe6e3ad2953486c6"
+    },
+    {
+      "path": "packaging/78cd453.patch",
+      "sha256": "843ad07d4a996ad165f20544c5df5b6deec4496ec30daa38b874bf3fa28afa54"
+    },
+    {
+      "path": "packaging/PKGBUILD",
+      "sha256": "1ca93466764e2ab223ba231780c513f097ba95a511010fa49a2a46a87a06d5af"
+    },
+    {
+      "path": "packaging/alpm.sysusers",
+      "sha256": "c8760d7ebb6c9817d508c691c67084be251cd9c8811ee1ccf92c1278bad74c1c"
+    },
+    {
+      "path": "packaging/disable-always-stale.patch",
+      "sha256": "11e0078c5ac7cdafa625957a9da982989efe19719e4973cd77f28dc5780dccd9"
+    },
+    {
+      "path": "packaging/fix-alpm-crate-for-aarch64.patch",
+      "sha256": "58a6d7b93519d96a995399c85da5ad6b554f6f218908e2fbb2497956725d5e94"
+    },
+    {
+      "path": "packaging/makepkg.conf",
+      "sha256": "96c43d32fff6401fa1c843b2690e5d094ed71c0b89d1e0a5dcaf56178b9d3abd"
+    },
+    {
+      "path": "packaging/pacman.conf",
+      "sha256": "8d7c13c377a38567f48a3c81dcb5f95695288c314ee423ba03416ca232dd2fe0"
+    },
+    {
+      "path": "packaging/rust.conf",
+      "sha256": "b31dc7a2789d7fb99a56cc5a9d915c3d57e01233bf258731392afe44b1bf8e40"
+    },
+    {
+      "path": "packaging/static_sqlite.patch",
+      "sha256": "bdd8fb13c1cd8606f41347bc1897e261031ac80b33c772d310f417064332f646"
+    },
+    {
+      "path": "upstream-alpm.h",
+      "sha256": "c959bb93bc24bf96c1432d0b12cc0453a796259076a28f91ba9a4cbcb3102d44"
+    },
+    {
+      "path": "upstream-source-tests.tar.gz",
+      "sha256": "11685c5015ab95ee06524b4df9b20da5dd938f738acf8c34d2489b48aca4c7ff"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const diagnostics = @import("diagnostics");
+const PackageManager = @import("PackageManager");
 const test_support = @import("test_support.zig");
 const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
@@ -31,7 +32,7 @@ const Real = struct {
     pub fn run(
         _: Real,
         context: *runtime.RuntimeContext,
-        operation_context: *Zigalpm.OperationContext,
+        operation_context: *PackageManager.OperationContext,
         invocation: *const parser.Invocation,
     ) !void {
         if (std.mem.eql(u8, invocation.command.path, standard_command_path))
@@ -221,16 +222,16 @@ pub fn dispatch(
 
     if (isFlatpakRepair(invocation) and !invocation.globals.ui_mode and !elevation.isRoot()) {
         const elevate = repairTargetRequiresElevation(context, invocation.positionals[0]) catch |err| {
-            if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+            if (PackageManager.flatpak.errors.unavailableMessage(err)) |message| {
                 try context.stderr.print("{s}\n", .{message});
                 return 1;
             }
-            try context.stderr.print("Could not inspect the Flatpak installation before repair. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+            try context.stderr.print("Could not inspect the Flatpak installation before repair. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
             return 1;
         };
         if (elevate) {
             const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-                try context.stderr.print("Could not obtain administrator privileges for Flatpak repair. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+                try context.stderr.print("Could not obtain administrator privileges for Flatpak repair. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                 return 1;
             };
             if (elevated_exit) |exit_code| return exit_code;
@@ -243,7 +244,7 @@ pub fn dispatch(
             invocation.arguments;
         defer if (carries_aur) context.allocator.free(elevated_arguments);
         const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
-            try context.stderr.print("Could not obtain administrator privileges for package installation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+            try context.stderr.print("Could not obtain administrator privileges for package installation. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -281,7 +282,7 @@ fn requestsStandardUpgrade(invocation: *const parser.Invocation) bool {
 
 fn confirmStandardUpgrade(context: *runtime.RuntimeContext) !bool {
     var result = list_updates.collectUpdates(context, .standard, .{}) catch |err| {
-        try context.stderr.print("Could not prepare the full standard-package upgrade before installation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+        try context.stderr.print("Could not prepare the full standard-package upgrade before installation. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
         try context.stderr.flush();
         return err;
     };
@@ -340,7 +341,7 @@ fn confirmStandardUpgradeUi(context: *runtime.RuntimeContext) !bool {
         const message = try std.fmt.allocPrint(
             context.allocator,
             "Could not prepare the full standard-package upgrade before installation. {0s}\n\nTechnical details: {1s}",
-            .{ @import("diagnostics").cause(err), @errorName(err) },
+            .{ diagnostics.cause(err), @errorName(err) },
         );
         defer context.allocator.free(message);
         output.writeErrorFrame(context, message) catch {};
@@ -374,7 +375,7 @@ fn confirmStandardUpgradeUiWithUpdates(
     try writeStandardUpgradePreview(&preview.writer, updates);
     try output.writeInfoFrame(context, preview.writer.buffered());
 
-    var operation_context = Zigalpm.OperationContext.init(context.allocator, context.io);
+    var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
     defer operation_context.deinit();
     var question_responder: ui_operation.QuestionResponder = .{
         .context = context,
@@ -465,7 +466,7 @@ const PackageSource = union(enum) {
 
 fn runStandard(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
     var repository_packages: std.ArrayList([]const u8) = .empty;
@@ -507,11 +508,11 @@ const LocalArchiveInstaller = struct {
     fn install(
         _: LocalArchiveInstaller,
         context: *runtime.RuntimeContext,
-        operation_context: *Zigalpm.OperationContext,
+        operation_context: *PackageManager.OperationContext,
         invocation: *const parser.Invocation,
         paths: []const []const u8,
     ) !void {
-        const manager = try Zigalpm.AlpmManager.init(context.allocator, context.environ, .{ .use_root = true, .operation_context = operation_context });
+        const manager = try PackageManager.Manager.init(context.allocator, context.environ, .{ .use_root = true, .operation_context = operation_context });
         defer manager.deinit();
         manager.setOperationContext(operation_context);
         defer manager.setOperationContext(null);
@@ -523,11 +524,11 @@ const LocalArchiveInstaller = struct {
 
 fn installRepositoryPackages(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
     package_names: []const []const u8,
 ) !void {
-    const manager = try Zigalpm.AlpmManager.init(context.allocator, context.environ, .{ .use_root = true, .operation_context = operation_context });
+    const manager = try PackageManager.Manager.init(context.allocator, context.environ, .{ .use_root = true, .operation_context = operation_context });
     defer manager.deinit();
     manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null);
@@ -535,7 +536,7 @@ fn installRepositoryPackages(
     if (optionEnabled(invocation, "--upgrade")) {
         try manager.sync(false);
         const updates = try manager.get_updates_available();
-        defer Zigalpm.alpm.OwnedPackageWithUpdate.deinitSlice(context.allocator, updates);
+        defer PackageManager.Manager.OwnedPackageWithUpdate.deinitSlice(context.allocator, updates);
         if (updates.len > 0) {
             var restart_report = try manager.sync_system_update(.{});
             restart_report.deinit();
@@ -558,7 +559,7 @@ fn installRepositoryPackages(
     );
 }
 
-fn repositoryInstallFlags(invocation: *const parser.Invocation) Zigalpm.alpm.TransFlag {
+fn repositoryInstallFlags(invocation: *const parser.Invocation) PackageManager.Manager.TransFlag {
     return .{
         .needed = optionEnabled(invocation, "--needed"),
         .nodeps = optionEnabled(invocation, "--no-deps"),
@@ -570,14 +571,14 @@ fn repositoryInstallFlags(invocation: *const parser.Invocation) Zigalpm.alpm.Tra
 /// keep their own per-file installation.
 fn installLocalPackages(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
     locations: []const []const u8,
     archives_installer: anytype,
 ) !void {
     const current_directory = try std.process.currentPathAlloc(context.io, context.allocator);
     defer context.allocator.free(current_directory);
-    const inspector: Zigalpm.local.Inspector = .{ .allocator = context.allocator, .io = context.io };
+    const inspector: PackageManager.local.Inspector = .{ .allocator = context.allocator, .io = context.io };
     var archive_paths: std.ArrayList([]u8) = .empty;
     defer {
         for (archive_paths.items) |path| context.allocator.free(path);
@@ -596,7 +597,7 @@ fn installLocalPackages(
         }
         defer context.allocator.free(absolute_path);
         if (try inspector.isBinariesPackage(absolute_path)) {
-            var manager = Zigalpm.LocalManager.init(context.allocator, context.io, .{});
+            var manager = PackageManager.LocalManager.init(context.allocator, context.io, .{});
             defer manager.deinit();
             manager.setOperationContext(operation_context);
             defer manager.setOperationContext(null);
@@ -611,7 +612,7 @@ fn installLocalPackages(
 
 fn downloadPackage(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     url: []const u8,
 ) ![]const u8 {
     var random: [8]u8 = undefined;
@@ -628,10 +629,10 @@ fn downloadPackage(
         context.allocator.free(destination);
     }
 
-    var downloader = Zigalpm.shared.Downloader.init(
+    var downloader = PackageManager.shared.Downloader.init(
         context.allocator,
         context.io,
-        Zigalpm.shared.downloader.DownloadConfiguration.default(),
+        PackageManager.shared.downloader.DownloadConfiguration.default(),
     );
     defer downloader.deinit();
     downloader.setOperationContext(operation_context);
@@ -643,7 +644,7 @@ fn downloadPackage(
 
 fn runAur(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
     if (!isAurVersionInstall(invocation) and
@@ -653,7 +654,7 @@ fn runAur(
     defer context.allocator.free(executable);
     const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
     const aur_base = try aur_url.resolveFor(context, invocation);
-    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+    const manager = try PackageManager.AurManager.init(context.allocator, context.environ, .{
         .aur_git_base_url = aur_base,
         .root = true,
         .needed = optionEnabled(invocation, "--needed"),
@@ -693,7 +694,7 @@ fn signOverride(invocation: *const parser.Invocation) ?bool {
 
 fn runAppImage(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
     if (elevation.isRoot()) {
@@ -709,7 +710,7 @@ fn runAppImage(
 
     const location = invocation.positionals[0];
     std.Io.Dir.cwd().access(context.io, location, .{}) catch return error.FileNotFound;
-    if (!Zigalpm.AppImageManager.isAppImage(location)) return error.NotAnAppImage;
+    if (!PackageManager.AppImageManager.isAppImage(location)) return error.NotAnAppImage;
 
     const configuration = config_manager.Manager.init(context).read() catch
         try config_model.Config.defaults(context.allocator);
@@ -720,7 +721,7 @@ fn runAppImage(
         context.allocator,
         &.{ try xdg.configHome(context), "shelly", "appimage-metadata-v2.db" },
     );
-    var manager = Zigalpm.AppImageManager{
+    var manager = PackageManager.AppImageManager{
         .allocator = context.allocator,
         .io = context.io,
         .environ = context.environ,
@@ -771,12 +772,12 @@ const EolInstallReplacement = struct {
 
 fn resolveFlatpakEolInstallTarget(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     manager: anytype,
     selected_id: []const u8,
     selected_remote: []const u8,
     requested_branch: []const u8,
-    requested_scope: Zigalpm.flatpak.Scope,
+    requested_scope: PackageManager.flatpak.Scope,
 ) !?EolInstallReplacement {
     var remote_ref = manager.get_remote_ref_info_flatpak(
         selected_remote,
@@ -788,27 +789,27 @@ fn resolveFlatpakEolInstallTarget(
 
     const marker = remote_ref.eol_rebase orelse {
         if (remote_ref.eol) |reason| {
-            const warning = try Zigalpm.flatpak.eol.eolOnlyWarning(
+            const warning = try PackageManager.flatpak.eol.eolOnlyWarning(
                 context.allocator,
                 selected_id,
                 requested_branch,
                 reason,
             );
             defer context.allocator.free(warning);
-            Zigalpm.flatpak.eol.emitStatus(operation_context, .install, .warning, selected_id, warning);
+            PackageManager.flatpak.eol.emitStatus(operation_context, .install, .warning, selected_id, warning);
         }
         return null;
     };
 
-    const target = Zigalpm.flatpak.eol.parseRebaseTarget(marker, requested_branch) orelse {
-        const warning = try Zigalpm.flatpak.eol.eolOnlyWarning(
+    const target = PackageManager.flatpak.eol.parseRebaseTarget(marker, requested_branch) orelse {
+        const warning = try PackageManager.flatpak.eol.eolOnlyWarning(
             context.allocator,
             selected_id,
             requested_branch,
             remote_ref.eol,
         );
         defer context.allocator.free(warning);
-        Zigalpm.flatpak.eol.emitStatus(operation_context, .install, .warning, selected_id, warning);
+        PackageManager.flatpak.eol.emitStatus(operation_context, .install, .warning, selected_id, warning);
         return null;
     };
 
@@ -823,17 +824,17 @@ fn resolveFlatpakEolInstallTarget(
         .{ selected_id, target.id },
     );
     defer context.allocator.free(notice);
-    Zigalpm.flatpak.eol.emitStatus(operation_context, .install, .information, selected_id, notice);
+    PackageManager.flatpak.eol.emitStatus(operation_context, .install, .information, selected_id, notice);
 
     return .{ .id = owned_id, .branch = owned_branch };
 }
 
 fn runFlatpak(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
-    const requested_scope: Zigalpm.flatpak.Scope =
+    const requested_scope: PackageManager.flatpak.Scope =
         if (optionEnabled(invocation, "--user")) .user else .system;
     const requested_id = invocation.positionals[0];
     var selected_id: []const u8 = requested_id;
@@ -841,11 +842,11 @@ fn runFlatpak(
     var owned_remote: ?[]const u8 = null;
     defer if (owned_remote) |remote| context.allocator.free(remote);
 
-    var catalogs: ?[]Zigalpm.flatpak.AppstreamCatalog = null;
+    var catalogs: ?[]PackageManager.flatpak.AppstreamCatalog = null;
     defer if (catalogs) |values|
-        Zigalpm.flatpak.AppstreamCatalog.deinitSlice(context.allocator, values);
+        PackageManager.flatpak.AppstreamCatalog.deinitSlice(context.allocator, values);
     if (selected_remote.len == 0 and std.mem.indexOfScalar(u8, requested_id, '.') == null) {
-        var appstreams = Zigalpm.flatpak.AppstreamManager.init(context.allocator, context.io);
+        var appstreams = PackageManager.flatpak.AppstreamManager.init(context.allocator, context.io);
         appstreams.setOperationContext(operation_context);
         catalogs = appstreams.getAllRemoteCatalogs(null) catch null;
         var candidates: std.ArrayList(FlatpakCandidate) = .empty;
@@ -877,7 +878,7 @@ fn runFlatpak(
 
     const requested_branch = optionValue(invocation, "--branch") orelse "";
 
-    var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
+    var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     try manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null) catch {};
@@ -916,10 +917,10 @@ fn runFlatpak(
 
 fn runFlatpakRepair(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
-    var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
+    var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     try manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null) catch {};
@@ -928,7 +929,7 @@ fn runFlatpakRepair(
 }
 
 fn repairTargetRequiresElevation(context: *runtime.RuntimeContext, target: []const u8) !bool {
-    var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
+    var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     var application = (try manager.find_installed_flatpak(target)) orelse return false;
     defer application.deinit(context.allocator);
@@ -936,7 +937,7 @@ fn repairTargetRequiresElevation(context: *runtime.RuntimeContext, target: []con
 }
 
 fn repairScopeRequiresElevation(
-    scope: Zigalpm.flatpak.Scope,
+    scope: PackageManager.flatpak.Scope,
     running_as_root: bool,
 ) bool {
     return !running_as_root and scope == .system;
@@ -949,7 +950,7 @@ const FlatpakFileKind = enum {
 
 fn runFlatpakFile(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
     kind: FlatpakFileKind,
 ) !void {
@@ -962,7 +963,7 @@ fn runFlatpakFile(
     const path_z = try context.allocator.dupeZ(u8, absolute_path);
     defer context.allocator.free(path_z);
 
-    var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
+    var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     try manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null) catch {};
@@ -973,7 +974,7 @@ fn runFlatpakFile(
     if (!installed) return InstallError.BackendFailed;
 }
 
-fn flatpakFileScope(invocation: *const parser.Invocation) Zigalpm.flatpak.Scope {
+fn flatpakFileScope(invocation: *const parser.Invocation) PackageManager.flatpak.Scope {
     return if (optionEnabled(invocation, "--user")) .user else .system;
 }
 
@@ -986,13 +987,13 @@ fn flatpakFileKind(invocation: *const parser.Invocation) ?FlatpakFileKind {
 
 fn firstFlatpakRemote(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
-    requested_scope: Zigalpm.flatpak.Scope,
+    operation_context: *PackageManager.OperationContext,
+    requested_scope: PackageManager.flatpak.Scope,
 ) !?[]const u8 {
-    var manager = Zigalpm.flatpak.RemoteManager{ .allocator = context.allocator, .io = context.io };
+    var manager = PackageManager.flatpak.RemoteManager{ .allocator = context.allocator, .io = context.io };
     manager.setOperationContext(operation_context);
     const remotes = try manager.listRemotesWithDetails();
-    defer Zigalpm.flatpak.Remote.deinitSlice(
+    defer PackageManager.flatpak.Remote.deinitSlice(
         context.allocator,
         remotes,
     );
@@ -1006,11 +1007,11 @@ fn firstFlatpakRemote(
 
 fn selectFlatpakCandidate(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     candidates: []const FlatpakCandidate,
 ) !FlatpakCandidate {
     if (candidates.len == 1) return candidates[0];
-    const options = try context.allocator.alloc(Zigalpm.OperationQuestionOption, candidates.len);
+    const options = try context.allocator.alloc(PackageManager.OperationQuestionOption, candidates.len);
     defer context.allocator.free(options);
     const labels = try context.allocator.alloc([]const u8, candidates.len);
     var initialized_labels: usize = 0;
@@ -1124,7 +1125,7 @@ fn classifyPackageSource(value: []const u8) PackageSource {
         std.mem.indexOfScalar(u8, value, '\\') != null or
         std.mem.startsWith(u8, value, "~") or
         std.fs.path.isAbsolute(value) or
-        Zigalpm.local.file_inspector.isSupportedArchive(value)) return .{ .file = value };
+        PackageManager.local.file_inspector.isSupportedArchive(value)) return .{ .file = value };
     return .{ .repository = value };
 }
 
@@ -1316,7 +1317,7 @@ test "Flatpak repair lifecycle and elevation follow the installed scope" {
         pub fn run(
             self: *@This(),
             _: *runtime.RuntimeContext,
-            _: *Zigalpm.OperationContext,
+            _: *PackageManager.OperationContext,
             invocation: *const parser.Invocation,
         ) !void {
             self.called = true;
@@ -1502,7 +1503,7 @@ test "install routes every action-first backend and forwards type-specific optio
         pub fn run(
             self: *@This(),
             _: *runtime.RuntimeContext,
-            _: *Zigalpm.OperationContext,
+            _: *PackageManager.OperationContext,
             invocation: *const parser.Invocation,
         ) !void {
             self.paths[self.calls] = invocation.command.path;
@@ -1567,7 +1568,7 @@ test "AUR version install uses exact package and commit through the shared lifec
         pub fn run(
             _: @This(),
             _: *runtime.RuntimeContext,
-            _: *Zigalpm.OperationContext,
+            _: *PackageManager.OperationContext,
             invocation: *const parser.Invocation,
         ) !void {
             try std.testing.expect(isAurVersionInstall(invocation));
@@ -1626,7 +1627,7 @@ test "install uses the shared non-UI and UI transaction lifecycles" {
     defer tc.deinit();
     const manifest = try spec.Manifest.load(tc.arena.allocator());
     const Success = struct {
-        pub fn run(_: @This(), _: *runtime.RuntimeContext, operation_context: *Zigalpm.OperationContext, invocation: *const parser.Invocation) !void {
+        pub fn run(_: @This(), _: *runtime.RuntimeContext, operation_context: *PackageManager.OperationContext, invocation: *const parser.Invocation) !void {
             if (!invocation.globals.ui_mode) return;
             var operation = operation_context.begin(.{
                 .backend = .aur,
@@ -1662,7 +1663,7 @@ test "standard install upgrade requires confirmation unless disabled" {
         pub fn run(
             self: *@This(),
             _: *runtime.RuntimeContext,
-            _: *Zigalpm.OperationContext,
+            _: *PackageManager.OperationContext,
             _: *const parser.Invocation,
         ) !void {
             self.called = true;
@@ -1892,7 +1893,7 @@ test "install backend failures return a failing exit code and transaction result
     const manifest = try spec.Manifest.load(tc.arena.allocator());
     const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "install", "standard", "demo" });
     const Failure = struct {
-        pub fn run(_: @This(), _: *runtime.RuntimeContext, _: *Zigalpm.OperationContext, _: *const parser.Invocation) !void {
+        pub fn run(_: @This(), _: *runtime.RuntimeContext, _: *PackageManager.OperationContext, _: *const parser.Invocation) !void {
             return error.TestInstallFailure;
         }
     };
@@ -1925,10 +1926,10 @@ test "Flatpak candidate selection uses the shared question response" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operations = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
     operations.setQuestionHandler(.{ .function = struct {
-        fn answer(_: ?*anyopaque, _: Zigalpm.OperationQuestion) Zigalpm.OperationQuestionResponse {
+        fn answer(_: ?*anyopaque, _: PackageManager.OperationQuestion) PackageManager.OperationQuestionResponse {
             return .{ .choice = 1 };
         }
     }.answer });
@@ -1942,7 +1943,7 @@ test "Flatpak candidate selection uses the shared question response" {
 
 const EolInstallTestManager = struct {
     allocator: std.mem.Allocator,
-    remote_ref: ?Zigalpm.flatpak.types.RemoteRef = null,
+    remote_ref: ?PackageManager.flatpak.types.RemoteRef = null,
     fetch_error: bool = false,
 
     pub fn get_remote_ref_info_flatpak(
@@ -1950,23 +1951,23 @@ const EolInstallTestManager = struct {
         _: []const u8,
         _: []const u8,
         _: []const u8,
-        _: Zigalpm.flatpak.Scope,
-    ) !Zigalpm.flatpak.types.RemoteRef {
+        _: PackageManager.flatpak.Scope,
+    ) !PackageManager.flatpak.types.RemoteRef {
         if (self.fetch_error) return error.TestFetchFailure;
         const source = self.remote_ref orelse return error.TestFetchFailure;
-        return Zigalpm.flatpak.types.RemoteRef.fromWire(self.allocator, .{
+        return PackageManager.flatpak.types.RemoteRef.fromWire(self.allocator, .{
             .remote_name = source.remote_name,
             .installed_size = source.installed_size,
             .download_size = source.download_size,
             .eol = source.eol,
             .eol_rebase = source.eol_rebase,
-            .scope = Zigalpm.flatpak.types.Scope.toWire(source.scope),
+            .scope = PackageManager.flatpak.types.Scope.toWire(source.scope),
             .permissions = &.{},
         });
     }
 };
 
-fn makeEolRemoteRef(eol: ?[]const u8, eol_rebase: ?[]const u8) Zigalpm.flatpak.types.RemoteRef {
+fn makeEolRemoteRef(eol: ?[]const u8, eol_rebase: ?[]const u8) PackageManager.flatpak.types.RemoteRef {
     return .{
         .remote_name = @constCast("flathub"),
         .installed_size = 0,
@@ -1989,7 +1990,7 @@ test "Flatpak install EOL detection redirects to the replacement" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operations = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
 
     var manager: EolInstallTestManager = .{
@@ -2024,7 +2025,7 @@ test "Flatpak install EOL detection warns and proceeds for eol-only refs" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operations = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
 
     var manager: EolInstallTestManager = .{
@@ -2056,7 +2057,7 @@ test "Flatpak install EOL detection treats remote fetch errors as advisory" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operations = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
 
     var manager: EolInstallTestManager = .{
@@ -2088,7 +2089,7 @@ test "Flatpak install EOL detection accepts full-ref replacement markers" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operations = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
 
     var manager: EolInstallTestManager = .{
@@ -2149,10 +2150,10 @@ test "standard install batches every local Arch archive into one transaction" {
     defer allocator.free(member);
     const docs = try std.fs.path.join(allocator, &.{ directory, "demo-docs-1-1-any.pkg.tar.zst" });
     defer allocator.free(docs);
-    try Zigalpm.shared.archive.writeFixture(allocator, member, .zstd, &.{
+    try PackageManager.shared.archive.writeFixture(allocator, member, .zstd, &.{
         .{ .path = ".PKGINFO", .contents = "pkgname = demo\n" },
     });
-    try Zigalpm.shared.archive.writeFixture(allocator, docs, .zstd, &.{
+    try PackageManager.shared.archive.writeFixture(allocator, docs, .zstd, &.{
         .{ .path = ".PKGINFO", .contents = "pkgname = demo-docs\n" },
     });
 
@@ -2163,7 +2164,7 @@ test "standard install batches every local Arch archive into one transaction" {
     const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
         "install", "standard", "--needed", member, docs,
     });
-    var operations = Zigalpm.OperationContext.init(allocator, io);
+    var operations = PackageManager.OperationContext.init(allocator, io);
     defer operations.deinit();
 
     var calls: usize = 0;
@@ -2173,7 +2174,7 @@ test "standard install batches every local Arch archive into one transaction" {
         pub fn install(
             self: @This(),
             _: *runtime.RuntimeContext,
-            _: *Zigalpm.OperationContext,
+            _: *PackageManager.OperationContext,
             invocation: *const parser.Invocation,
             paths: []const []const u8,
         ) !void {
@@ -2213,14 +2214,14 @@ test "standard install rejects local targets that are not installable files" {
     defer tc.deinit();
     const manifest = try spec.Manifest.load(tc.arena.allocator());
     const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "install", "standard", notes });
-    var operations = Zigalpm.OperationContext.init(allocator, io);
+    var operations = PackageManager.OperationContext.init(allocator, io);
     defer operations.deinit();
 
     const Unexpected = struct {
         pub fn install(
             _: @This(),
             _: *runtime.RuntimeContext,
-            _: *Zigalpm.OperationContext,
+            _: *PackageManager.OperationContext,
             _: *const parser.Invocation,
             _: []const []const u8,
         ) !void {
@@ -2239,10 +2240,10 @@ test "standard install rejects local targets that are not installable files" {
 
 test "install preserves actionable lock errors once in terminal and UI output" {
     const Failure = struct {
-        pub fn run(_: @This(), context: *runtime.RuntimeContext, operations: *Zigalpm.OperationContext, _: *const parser.Invocation) !void {
+        pub fn run(_: @This(), context: *runtime.RuntimeContext, operations: *PackageManager.OperationContext, _: *const parser.Invocation) !void {
             var operation = operations.begin(.{ .backend = .alpm, .kind = .install, .subject = "demo" });
             defer operation.finish(.failed);
-            const message = try Zigalpm.user_errors.databaseLocked(context.allocator, "/custom/package database/");
+            const message = try PackageManager.user_errors.databaseLocked(context.allocator, "/custom/package database/");
             defer context.allocator.free(message);
             operation.reportError(error.AlpmOperationFailed, message, "alpm", null, false);
             return error.TransInitFailed;

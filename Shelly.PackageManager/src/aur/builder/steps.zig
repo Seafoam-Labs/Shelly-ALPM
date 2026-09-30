@@ -3,6 +3,8 @@
 //! environment, pkgver, and package metadata.
 
 const std = @import("std");
+const diagnostics = @import("diagnostics");
+const user_errors = @import("../../shared/user_errors.zig");
 const package_metadata = @import("../../pkgbuild/package_metadata.zig");
 const events = @import("../events.zig");
 const op_context = @import("operation_context");
@@ -66,7 +68,7 @@ pub fn reportUnwritableBuildDirectory(self: *PackageBuilder, path: []const u8) v
     const message = std.fmt.allocPrint(
         self.allocator,
         "The build user the invoking user cannot write to build directory {0f}. Check its ownership and permissions before retrying.",
-        .{@import("diagnostics").safe(path)},
+        .{diagnostics.safe(path)},
     ) catch return;
     defer self.allocator.free(message);
     if (self.active_operation) |operation|
@@ -248,7 +250,7 @@ pub fn runStep(
         return error.PrivilegedPackageOperationUnsupported;
     if (exit_code != 0) {
         if (sandbox_enabled) writeSandboxFailureHint(self);
-        const message = try @import("../../shared/user_errors.zig").buildFailed(self.allocator, package_name, step_name, exit_code);
+        const message = try user_errors.buildFailed(self.allocator, package_name, step_name, exit_code);
         defer self.allocator.free(message);
         operation.reportError(error.StepFailed, message, "build", exit_code, false);
         return error.StepFailed;
@@ -915,7 +917,7 @@ pub fn evaluateDynamicMetadata(
     if (self.active_log) |log| try log.ensureHealthy();
     if (exit_code != 0) {
         if (sandbox_enabled) writeSandboxFailureHint(self);
-        const message = try @import("../../shared/user_errors.zig").buildFailed(self.allocator, self.requested_names[0], "dynamic metadata evaluation", exit_code);
+        const message = try user_errors.buildFailed(self.allocator, self.requested_names[0], "dynamic metadata evaluation", exit_code);
         defer self.allocator.free(message);
         operation.reportError(error.StepFailed, message, "build", exit_code, false);
         return error.StepFailed;

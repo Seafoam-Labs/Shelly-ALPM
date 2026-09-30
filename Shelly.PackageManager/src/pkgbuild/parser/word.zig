@@ -1,5 +1,6 @@
 //! Shell words retain quote provenance until expansion. No shell is executed.
 const std = @import("std");
+const function_body = @import("function_body.zig");
 const scan = @import("shell_scan.zig");
 
 pub const Kind = enum { literal, unquoted, parameter };
@@ -246,7 +247,7 @@ pub const Assignments = struct {
                 }
                 const after = scan.skip_ws(self.input, token.end);
                 if (std.mem.eql(u8, raw, "function") or std.mem.startsWith(u8, self.input[after..], "()")) {
-                    if (try @import("function_body.zig").function_end(self.input[start..], function_name)) |end| {
+                    if (try function_body.function_end(self.input[start..], function_name)) |end| {
                         self.pos = start + end;
                         self.command_start = false;
                         continue;

@@ -1,18 +1,24 @@
 //! Native Arch root provisioning used by Shelly's isolated build coordinator.
 //!
 //! The public coordinator re-executes Shelly in a private mount/PID namespace.
-//! This module then gives libalpm explicit target-owned paths and performs the
+//! This module gives the selected backend explicit target-owned paths and performs the
 //! repository transaction without depending on the `pacstrap` shell script.
 
 const std = @import("std");
+const backend_selection = @import("backend.zig");
+const diagnostics_module = @import("diagnostics");
+const native_output = @import("native_output");
 const manager_module = @import("manager.zig");
 const events = @import("events.zig");
+const operation_api = @import("operation_context");
 const process_runner = @import("../aur/builder.zig");
+pub const build_root = @import("build_root.zig");
 
 pub const wrapper_argument = "__shellystrap";
 pub const marker_name = ".shelly-bootstrap-root";
 
 pub const Options = struct {
+    backend: ?backend_selection.Backend = null,
     root_path: []const u8,
     config_path: []const u8 = "/etc/pacman.conf",
     host_gpg_directory: []const u8 = "/etc/pacman.d/gnupg",
@@ -33,11 +39,11 @@ pub fn runInternal(
     arguments: []const []const u8,
 ) u8 {
     const options = parseArguments(arguments) catch |err| {
-        stderr.print("Could not provision the isolated build root because the bootstrap request is invalid. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) }) catch {};
+        stderr.print("Could not provision the isolated build root because the bootstrap request is invalid. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics_module.cause(err), @errorName(err) }) catch {};
         return 2;
     };
     _ = bootstrapReporting(allocator, io, environ, options, stderr) catch |err| {
-        stderr.print("Could not provision the isolated build root. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) }) catch {};
+        stderr.print("Could not provision the isolated build root. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics_module.cause(err), @errorName(err) }) catch {};
         return 1;
     };
     return 0;
@@ -45,6 +51,7 @@ pub fn runInternal(
 
 pub fn parseArguments(arguments: []const []const u8) !Options {
     var root_path: ?[]const u8 = null;
+    var backend: ?backend_selection.Backend = null;
     var config_path: []const u8 = "/etc/pacman.conf";
     var gpg_directory: []const u8 = "/etc/pacman.d/gnupg";
     var index: usize = 0;
@@ -55,6 +62,7 @@ pub fn parseArguments(arguments: []const []const u8) !Options {
             if (root_path == null or packages.len == 0) return error.InvalidBootstrapArguments;
             return .{
                 .root_path = root_path.?,
+                .backend = backend,
                 .config_path = config_path,
                 .host_gpg_directory = gpg_directory,
                 .packages = packages,
@@ -64,6 +72,11 @@ pub fn parseArguments(arguments: []const []const u8) !Options {
             index += 1;
             if (index >= arguments.len or root_path != null) return error.InvalidBootstrapArguments;
             root_path = arguments[index];
+        } else if (std.mem.eql(u8, argument, "--backend")) {
+            index += 1;
+            if (index >= arguments.len) return error.InvalidBootstrapArguments;
+            backend = try backend_selection.Backend.parse(arguments[index]);
+            try backend.?.validate();
         } else if (std.mem.eql(u8, argument, "--config")) {
             index += 1;
             if (index >= arguments.len) return error.InvalidBootstrapArguments;
@@ -90,14 +103,230 @@ pub fn bootstrap(
 
 const DiagnosticOutput = struct {
     stderr: *std.Io.Writer,
+    io: ?std.Io = null,
+    last_progress: ?std.Io.Timestamp = null,
+    last_progress_stage: ?u64 = null,
+    allocator: std.mem.Allocator = std.heap.page_allocator,
+    mutex: std.Io.Mutex = .init,
+    observe_downloads: bool = false,
+    downloads: std.StringHashMapUnmanaged(Transfer) = .empty,
+    last_download_progress: ?std.Io.Timestamp = null,
+
+    const Transfer = struct {
+        operation_id: ?operation_api.OperationId = null,
+        bytes: u64 = 0,
+        total: ?u64 = null,
+        active: bool = true,
+        transferred: bool = false,
+        unchanged: bool = false,
+    };
+
+    fn deinit(self: *DiagnosticOutput) void {
+        self.clearDownloads();
+        self.downloads.deinit(self.allocator);
+    }
+
+    fn clearDownloads(self: *DiagnosticOutput) void {
+        var keys = self.downloads.keyIterator();
+        while (keys.next()) |key| self.allocator.free(key.*);
+        self.downloads.clearRetainingCapacity();
+        self.last_download_progress = null;
+    }
+
+    fn lock(self: *DiagnosticOutput) void {
+        if (self.io) |io| self.mutex.lockUncancelable(io);
+    }
+
+    fn unlock(self: *DiagnosticOutput) void {
+        if (self.io) |io| self.mutex.unlock(io);
+    }
+
+    fn handleDownload(data: ?*anyopaque, update: events.DownloadUpdate) void {
+        const self: *DiagnosticOutput = @ptrCast(@alignCast(data.?));
+        self.lock();
+        defer self.unlock();
+        self.writeDownload(update);
+    }
+
+    fn writeDownload(self: *DiagnosticOutput, update: events.DownloadUpdate) void {
+        if (update.state == .batch_start) {
+            self.clearDownloads();
+            return;
+        }
+        const entry = self.downloads.getOrPut(self.allocator, update.name) catch return;
+        if (!entry.found_existing) {
+            entry.key_ptr.* = self.allocator.dupe(u8, update.name) catch {
+                _ = self.downloads.remove(update.name);
+                return;
+            };
+            entry.value_ptr.* = .{ .operation_id = update.operation_id };
+        }
+        const transfer = entry.value_ptr;
+        if (update.state != .started and update.operation_id != null and update.operation_id != transfer.operation_id) return;
+        switch (update.state) {
+            .batch_start => unreachable,
+            .started => transfer.* = .{ .operation_id = update.operation_id },
+            .retry => {
+                if (!update.resuming) transfer.* = .{ .operation_id = transfer.operation_id };
+            },
+            .progress => {
+                transfer.bytes = update.bytes;
+                transfer.total = update.total;
+            },
+            .completed, .unchanged, .failed => {
+                transfer.active = false;
+                transfer.transferred = update.state != .failed;
+                transfer.bytes = update.bytes;
+                transfer.total = update.total;
+            },
+        }
+        defer self.stderr.flush() catch {};
+        if (update.state != .progress) {
+            const label: []const u8 = switch (update.state) {
+                .started => "Retrieving package",
+                .retry => "Retrying download",
+                .completed => "Package retrieval completed",
+                .unchanged => "Download skipped",
+                .failed => "Download failed",
+                .batch_start, .progress => unreachable,
+            };
+            self.stderr.print("shellystrap: {s}: {s}\n", .{ label, update.name }) catch {};
+        }
+        if (update.state == .started or update.state == .retry) return;
+        var active: usize = 0;
+        var transferred: usize = 0;
+        var bytes: u64 = 0;
+        var total: u64 = 0;
+        var known = true;
+        var values = self.downloads.valueIterator();
+        while (values.next()) |value| {
+            active += @intFromBool(value.active);
+            transferred += @intFromBool(value.transferred);
+            bytes +|= value.bytes;
+            if (value.total) |size| total +|= size else known = false;
+        }
+        if (self.io) |io| {
+            const now = std.Io.Clock.awake.now(io);
+            if (self.last_download_progress) |last| {
+                if (active != 0 and last.durationTo(now).toMilliseconds() < 250) return;
+            }
+            self.last_download_progress = now;
+        }
+        self.stderr.print("shellystrap: Downloads: {d} active, {d} transferred ({d}", .{ active, transferred, bytes }) catch {};
+        if (known) self.stderr.print("/{d}", .{total}) catch {};
+        self.stderr.writeAll(" bytes)\n") catch {};
+    }
+
+    fn handleOperation(data: ?*anyopaque, event: operation_api.Event) void {
+        const self: *DiagnosticOutput = @ptrCast(@alignCast(data.?));
+        self.lock();
+        defer self.unlock();
+        switch (event) {
+            .started => |started| {
+                if (started.envelope.backend == .download) {
+                    self.writeDownload(.{ .name = std.fs.path.basename(started.envelope.subject orelse "download"), .operation_id = started.envelope.operation_id, .state = .started });
+                } else if (started.envelope.parent_id == null) self.clearDownloads();
+            },
+            .status => |status| {
+                if (status.envelope.backend == .download) {
+                    const name = std.fs.path.basename(status.envelope.subject orelse "download");
+                    const code = status.code orelse "";
+                    if (std.mem.eql(u8, code, "download.retry") or std.mem.eql(u8, code, "download.resume")) self.writeDownload(.{ .name = name, .operation_id = status.envelope.operation_id, .state = .retry, .resuming = std.mem.eql(u8, code, "download.resume") });
+                    if (std.mem.eql(u8, code, "download.skipped")) {
+                        if (self.downloads.getPtr(name)) |transfer| transfer.unchanged = true;
+                    }
+                } else self.writeStatus(status);
+            },
+            .progress => |progress| {
+                if (progress.envelope.backend == .download) {
+                    self.writeDownload(.{ .name = std.fs.path.basename(progress.envelope.subject orelse progress.update.message orelse "download"), .operation_id = progress.envelope.operation_id, .state = .progress, .bytes = progress.update.bytes_completed orelse 0, .total = progress.update.bytes_total });
+                } else self.writeProgress(progress.update);
+            },
+            .completed => |completed| if (completed.envelope.backend == .download) {
+                const name = std.fs.path.basename(completed.envelope.subject orelse "download");
+                const transfer = self.downloads.get(name) orelse Transfer{};
+                self.writeDownload(.{ .name = name, .operation_id = completed.envelope.operation_id, .state = if (completed.status != .success) .failed else if (transfer.unchanged) .unchanged else .completed, .bytes = transfer.bytes, .total = transfer.total });
+            },
+            else => {},
+        }
+    }
+
+    fn writeStatus(self: *DiagnosticOutput, status: anytype) void {
+        if (status.level == .debug) return;
+        // Hooks and scriptlets also reach the dedicated legacy handlers.
+        if (status.code) |code| if (std.mem.eql(u8, code, "alpm.scriptlet")) return;
+        if (status.native_code == @intFromEnum(native_output.EventType.hook_run_start)) return;
+        defer self.stderr.flush() catch {};
+        if (status.package_name) |name| {
+            self.stderr.print("shellystrap: {s}: {s}\n", .{ name, status.message }) catch {};
+        } else self.stderr.print("shellystrap: {s}\n", .{status.message}) catch {};
+    }
+
+    fn writeProgress(self: *DiagnosticOutput, update: operation_api.ProgressUpdate) void {
+        const stage = @import("native_output").progressLabel(update.native_code) orelse update.stage orelse "Transaction";
+        if (std.mem.eql(u8, stage, "hook")) return;
+        const key = std.hash.Wyhash.hash(0, stage);
+        // Byte callbacks can be very frequent. Preserve stage changes
+        // and completion while limiting intermediate output to 4 Hz.
+        if (self.io) |io| {
+            const now = std.Io.Clock.awake.now(io);
+            const complete = if (update.percentage) |percent|
+                percent >= 100
+            else if (update.bytes_total) |total|
+                total != 0 and (update.bytes_completed orelse 0) >= total
+            else
+                false;
+            if (self.last_progress) |last| {
+                if (self.last_progress_stage == key and !complete and last.durationTo(now).toMilliseconds() < 250) return;
+            }
+            self.last_progress = now;
+        }
+        self.last_progress_stage = key;
+        defer self.stderr.flush() catch {};
+        self.stderr.print("shellystrap: {s}", .{stage}) catch {};
+        if (update.message) |message| self.stderr.print(": {s}", .{message}) catch {};
+        if (update.percentage) |percent| self.stderr.print(" {d:.0}%", .{percent}) catch {};
+        if (update.bytes_completed) |bytes| {
+            self.stderr.print(" ({d}", .{bytes}) catch {};
+            if (update.bytes_total) |total| self.stderr.print("/{d}", .{total}) catch {};
+            self.stderr.writeAll(" bytes)") catch {};
+        } else if (update.completed) |completed| {
+            self.stderr.print(" ({d}", .{completed}) catch {};
+            if (update.total) |total| self.stderr.print("/{d}", .{total}) catch {};
+            self.stderr.writeAll(")") catch {};
+        }
+        self.stderr.writeByte('\n') catch {};
+    }
+
+    fn handleInformational(data: ?*anyopaque, args: events.InformationalArgs) void {
+        const self: *DiagnosticOutput = @ptrCast(@alignCast(data.?));
+        self.lock();
+        defer self.unlock();
+        if (self.observe_downloads and (args.event_type == .pkg_retrieve_start or args.event_type == .pkg_retrieve_done)) return;
+        self.writeStatus(.{ .level = operation_api.StatusLevel.information, .message = args.message, .package_name = args.package_name, .code = args.code, .native_code = @as(?i64, @intFromEnum(args.event_type)) });
+    }
+
+    fn handleProgress(data: ?*anyopaque, args: events.ProgressArgs) void {
+        const self: *DiagnosticOutput = @ptrCast(@alignCast(data.?));
+        self.lock();
+        defer self.unlock();
+        if (self.observe_downloads and (args.progress_type == 100 or args.progress_type == 101)) return;
+        self.writeProgress(.{ .stage = "transaction", .message = args.pkg_name, .percentage = @floatFromInt(std.math.clamp(args.percent, 0, 100)), .completed = args.current, .total = args.howmany, .native_code = args.progress_type });
+    }
 
     fn handleError(data: ?*anyopaque, args: events.ErrorArgs) void {
         const self: *DiagnosticOutput = @ptrCast(@alignCast(data.?));
-        self.stderr.print("Could not provision the isolated build root: {0f}.\n", .{@import("diagnostics").safe(std.mem.trimEnd(u8, args.message, "\r\n"))}) catch {};
+        self.lock();
+        defer self.unlock();
+        defer self.stderr.flush() catch {};
+        self.stderr.print("Could not provision the isolated build root: {0f}.\n", .{diagnostics_module.safe(std.mem.trimEnd(u8, args.message, "\r\n"))}) catch {};
     }
 
     fn handleScriptlet(data: ?*anyopaque, args: events.ScriptletArgs) void {
         const self: *DiagnosticOutput = @ptrCast(@alignCast(data.?));
+        self.lock();
+        defer self.unlock();
+        defer self.stderr.flush() catch {};
         self.stderr.print("shellystrap: scriptlet: {s}\n", .{
             std.mem.trimEnd(u8, args.line, "\r\n"),
         }) catch {};
@@ -105,6 +334,9 @@ const DiagnosticOutput = struct {
 
     fn handleHook(data: ?*anyopaque, args: events.HookArgs) void {
         const self: *DiagnosticOutput = @ptrCast(@alignCast(data.?));
+        self.lock();
+        defer self.unlock();
+        defer self.stderr.flush() catch {};
         self.stderr.print("shellystrap: hook: {s}: {s}\n", .{
             args.name orelse "unknown",
             args.description orelse "Running package initialization",
@@ -132,6 +364,7 @@ const FinalizerOutput = struct {
         const self: *FinalizerOutput = @ptrCast(@alignCast(data.?));
         const writer = self.writer orelse return;
         writer.print("shellystrap: {s}: {s}\n", .{ self.name, line }) catch {};
+        writer.flush() catch {};
     }
 };
 
@@ -154,6 +387,7 @@ fn reportFinalizerFailure(
 ) void {
     const destination = writer orelse return;
     destination.print("shellystrap: {s}: {s}\n", .{ name, detail }) catch {};
+    destination.flush() catch {};
 }
 
 fn finalizeRoot(
@@ -183,7 +417,7 @@ fn finalizeRoot(
             null,
         ) catch |err| {
             var detail_buffer: [256]u8 = undefined;
-            const detail = std.fmt.bufPrint(&detail_buffer, "Could not start the setup command while preparing the isolated build root. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) }) catch
+            const detail = std.fmt.bufPrint(&detail_buffer, "Could not start the setup command while preparing the isolated build root. {0s}\n\nTechnical details: {1s}", .{ diagnostics_module.cause(err), @errorName(err) }) catch
                 "Could not start the setup command while preparing the isolated build root.";
             reportFinalizerFailure(diagnostic_writer, finalizer.name, detail);
             return error.BootstrapFinalizerFailed;
@@ -227,6 +461,7 @@ fn bootstrapReporting(
     try mounts.setup();
 
     const manager = try manager_module.Manager.init(allocator, environ, .{
+        .backend = options.backend,
         .config_path = options.config_path,
         .use_root = true,
         .root_directory = options.root_path,
@@ -238,12 +473,20 @@ fn bootstrapReporting(
     });
     defer manager.deinit();
 
-    // libalpm rescans the target hook directories after installation. This
+    // Both backends rescan target hook directories after installation. This
     // initializes newly installed tools (including TeX) without host hooks.
 
     var diagnostic_output: DiagnosticOutput = undefined;
+    defer if (diagnostic_writer != null) diagnostic_output.deinit();
     if (diagnostic_writer) |writer| {
-        diagnostic_output = .{ .stderr = writer };
+        diagnostic_output = .{ .stderr = writer, .io = io, .allocator = allocator, .observe_downloads = true };
+        if (manager.backend() == .rlpm) {
+            _ = try manager.dispatcher.addOperationHandler(.{ .function = DiagnosticOutput.handleOperation, .data = &diagnostic_output });
+        } else {
+            _ = try manager.dispatcher.addDownloadHandler(.{ .function = DiagnosticOutput.handleDownload, .data = &diagnostic_output });
+            _ = try manager.dispatcher.addInformationalHandler(.{ .function = DiagnosticOutput.handleInformational, .data = &diagnostic_output });
+            _ = try manager.dispatcher.addProgressHandler(.{ .function = DiagnosticOutput.handleProgress, .data = &diagnostic_output });
+        }
         _ = try manager.dispatcher.addErrorHandler(.{
             .function = DiagnosticOutput.handleError,
             .data = &diagnostic_output,
@@ -269,7 +512,7 @@ fn bootstrapReporting(
         initialized += 1;
     }
     try manager.install_packages(package_names, .{ .needed = true });
-    if (manager.package_setup_failed) return error.BootstrapPackageSetupFailed;
+    if (manager.packageSetupFailed()) return error.BootstrapPackageSetupFailed;
 
     const installed = try manager.get_installed_packages();
     defer {
@@ -284,7 +527,53 @@ fn bootstrapReporting(
     try requireFile(io, allocator, options.root_path, "etc/passwd");
     try requireDirectory(io, allocator, options.root_path, "var/tmp");
     try requireFile(io, allocator, options.root_path, "etc/ssl/certs/ca-certificates.crt");
+    if (comptime build_root.rlpm_only) {
+        var root = try std.Io.Dir.cwd().openDir(io, options.root_path, .{});
+        defer root.close(io);
+        try prepareGuestQueries(io, root);
+    }
     return .{ .installed_package_count = installed.len };
+}
+
+fn prepareGuestQueries(io: std.Io, root: std.Io.Dir) !void {
+    // Dependencies are provisioned by the coordinator. Guest metadata queries
+    // need only the local database, not host repository Include paths.
+    try root.writeFile(io, .{
+        .sub_path = "etc/pacman.conf",
+        .data = "[options]\nArchitecture = auto\nSigLevel = Required DatabaseOptional\nLocalFileSigLevel = Optional\n",
+    });
+    // Without the pacman package these paths retain the provisioning umask.
+    // The unprivileged builder needs them to query installed package metadata.
+    for ([_][]const u8{ "var/lib/pacman", "var/lib/pacman/local" }) |path|
+        try root.setFilePermissions(io, path, .fromMode(0o755), .{});
+    for ([_][]const u8{ "etc/pacman.conf", "var/lib/pacman/local/ALPM_DB_VERSION" }) |path|
+        try root.setFilePermissions(io, path, .fromMode(0o644), .{});
+}
+
+test "bootstrap guest package queries can read configuration and database under restrictive permissions" {
+    const t = std.testing;
+    var fixture = t.tmpDir(.{});
+    defer fixture.cleanup();
+    try fixture.dir.createDirPath(t.io, "etc");
+    try fixture.dir.createDirPath(t.io, "var/lib/pacman/local");
+    for ([_][]const u8{ "var/lib/pacman", "var/lib/pacman/local" }) |path|
+        try fixture.dir.setFilePermissions(t.io, path, .fromMode(0o700), .{});
+    try fixture.dir.writeFile(t.io, .{ .sub_path = "etc/pacman.conf", .data = "[host]\nInclude = /host-only/mirrorlist\n" });
+    try fixture.dir.writeFile(t.io, .{ .sub_path = "var/lib/pacman/local/ALPM_DB_VERSION", .data = "9\n" });
+    for ([_][]const u8{ "etc/pacman.conf", "var/lib/pacman/local/ALPM_DB_VERSION" }) |path|
+        try fixture.dir.setFilePermissions(t.io, path, .fromMode(0o600), .{});
+    try prepareGuestQueries(t.io, fixture.dir);
+    for ([_][]const u8{ "var/lib/pacman", "var/lib/pacman/local" }) |path|
+        try t.expectEqual(@as(u32, 0o755), (try fixture.dir.statFile(t.io, path, .{})).permissions.toMode() & 0o7777);
+    for ([_][]const u8{ "etc/pacman.conf", "var/lib/pacman/local/ALPM_DB_VERSION" }) |path|
+        try t.expectEqual(@as(u32, 0o644), (try fixture.dir.statFile(t.io, path, .{})).permissions.toMode() & 0o7777);
+    const config = try fixture.dir.readFileAlloc(t.io, "etc/pacman.conf", t.allocator, .limited(4096));
+    defer t.allocator.free(config);
+    try t.expect(std.mem.indexOf(u8, config, "Include") == null);
+    try t.expect(std.mem.indexOf(u8, config, "SigLevel = Required") != null);
+    const version = try fixture.dir.readFileAlloc(t.io, "var/lib/pacman/local/ALPM_DB_VERSION", t.allocator, .limited(32));
+    defer t.allocator.free(version);
+    try t.expectEqualStrings("9\n", version);
 }
 
 fn validateRoot(allocator: std.mem.Allocator, io: std.Io, root_path: []const u8) !void {
@@ -483,7 +772,7 @@ test "bootstrap package targets reject option injection and line breaks" {
     try std.testing.expect(!validPackageTarget("bad\nname"));
 }
 
-test "internal bootstrap diagnostics write libalpm failures only to stderr" {
+test "internal bootstrap diagnostics write native backend failures only to stderr" {
     var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer output.deinit();
     var diagnostics: DiagnosticOutput = .{ .stderr = &output.writer };
@@ -549,4 +838,142 @@ test "root finalizer output is redirected to the diagnostic writer" {
             "shellystrap: update-ca-trust: exited with status 7\n",
         output.written(),
     );
+}
+
+test "bootstrap streams short diagnostics and progress before provisioning finishes" {
+    const t = std.testing;
+    var fixture = t.tmpDir(.{});
+    defer fixture.cleanup();
+    var file = try fixture.dir.createFile(t.io, "output", .{});
+    defer file.close(t.io);
+    var buffer: [4096]u8 = undefined;
+    var writer = file.writer(t.io, &buffer);
+    var output: DiagnosticOutput = .{ .stderr = &writer.interface };
+    var context = operation_api.OperationContext.init(t.allocator, t.io);
+    defer context.deinit();
+    var operation = context.begin(.{ .backend = .alpm, .kind = .install });
+    defer operation.finish(.success);
+    var previous_size: u64 = 0;
+    for (0..6) |step| {
+        switch (step) {
+            0 => DiagnosticOutput.handleScriptlet(&output, .{ .line = "initializing package" }),
+            1 => DiagnosticOutput.handleHook(&output, .{ .name = "fixture.hook", .description = "Updating cache", .position = 1, .total = 1 }),
+            2 => DiagnosticOutput.handleError(&output, .{ .message = "fixture failure" }),
+            3 => DiagnosticOutput.handleOperation(&output, .{ .status = .{ .envelope = operation.envelope, .level = .information, .message = "Checking package databases" } }),
+            4 => DiagnosticOutput.handleOperation(&output, .{ .progress = .{ .envelope = operation.envelope, .update = .{ .stage = "download", .message = "fixture.pkg.tar", .bytes_completed = 4, .bytes_total = 8 } } }),
+            5 => {
+                var finalizer: FinalizerOutput = .{ .writer = &writer.interface, .name = "ldconfig" };
+                FinalizerOutput.handle(&finalizer, .stdout, "updated");
+            },
+            else => unreachable,
+        }
+        const size = (try file.stat(t.io)).size;
+        try t.expect(size > previous_size);
+        try t.expect(size < buffer.len);
+        previous_size = size;
+    }
+    // Operation mirrors of legacy hook/scriptlet output must not print twice.
+    DiagnosticOutput.handleOperation(&output, .{ .status = .{ .envelope = operation.envelope, .level = .information, .message = "duplicate", .code = "alpm.scriptlet" } });
+    DiagnosticOutput.handleOperation(&output, .{ .status = .{ .envelope = operation.envelope, .level = .information, .message = "duplicate", .native_code = 36 } });
+    try t.expectEqual(previous_size, (try file.stat(t.io)).size);
+    output.io = t.io;
+    // Force an active throttle window without timing-sensitive sleeps.
+    output.last_progress = std.Io.Clock.awake.now(t.io).addDuration(.fromSeconds(60));
+    DiagnosticOutput.handleOperation(&output, .{ .progress = .{ .envelope = operation.envelope, .update = .{ .stage = "download", .message = "fixture.pkg.tar", .bytes_completed = 5, .bytes_total = 8 } } });
+    try t.expectEqual(previous_size, (try file.stat(t.io)).size);
+    DiagnosticOutput.handleOperation(&output, .{ .progress = .{ .envelope = operation.envelope, .update = .{ .stage = "download", .message = "fixture.pkg.tar", .bytes_completed = 8, .bytes_total = 8 } } });
+    try t.expect((try file.stat(t.io)).size > previous_size);
+    const contents = try fixture.dir.readFileAlloc(t.io, "output", t.allocator, .limited(4096));
+    defer t.allocator.free(contents);
+    try t.expect(std.mem.indexOf(u8, contents, "fixture.pkg.tar (4/8 bytes)") != null);
+}
+
+test "bootstrap native operation and legacy callbacks use identical readable formatting" {
+    const t = std.testing;
+    var legacy: std.Io.Writer.Allocating = .init(t.allocator);
+    defer legacy.deinit();
+    var shared: std.Io.Writer.Allocating = .init(t.allocator);
+    defer shared.deinit();
+    var legacy_output: DiagnosticOutput = .{ .stderr = &legacy.writer };
+    var shared_output: DiagnosticOutput = .{ .stderr = &shared.writer };
+    var context = operation_api.OperationContext.init(t.allocator, t.io);
+    defer context.deinit();
+    _ = try context.subscribe(.{ .function = DiagnosticOutput.handleOperation, .data = &shared_output });
+    var operation = context.begin(.{ .backend = .alpm, .kind = .install });
+    defer operation.finish(.success);
+    var dispatcher = events.Dispatcher.init(t.allocator);
+    defer dispatcher.deinit();
+    dispatcher.setOperation(&operation);
+    _ = try dispatcher.addInformationalHandler(.{ .function = DiagnosticOutput.handleInformational, .data = &legacy_output });
+    _ = try dispatcher.addProgressHandler(.{ .function = DiagnosticOutput.handleProgress, .data = &legacy_output });
+    for ([_]*DiagnosticOutput{ &legacy_output, &shared_output }) |output| {
+        _ = try dispatcher.addHookHandler(.{ .function = DiagnosticOutput.handleHook, .data = output });
+        _ = try dispatcher.addScriptletHandler(.{ .function = DiagnosticOutput.handleScriptlet, .data = output });
+    }
+    dispatcher.raiseInformational(.{ .event_type = .package_operation_start, .message = "Installing package: demo-1-1" });
+    dispatcher.raiseProgress(.{ .progress_type = 0, .pkg_name = "demo", .percent = 100, .current = 1, .howmany = 2 });
+    dispatcher.raiseInformational(.{ .event_type = .package_operation_done, .message = "Package operation completed.", .package_name = "demo", .code = "alpm.package_installed" });
+    dispatcher.raiseScriptlet(.{ .line = "setup output\n" });
+    dispatcher.raiseHook(.{ .name = "demo.hook", .description = "(1/1) Updating cache", .position = 1, .total = 1 });
+    dispatcher.raiseInformational(.{ .event_type = .hook_run_start, .message = "(1/1) Updating cache" });
+    try t.expectEqualStrings(legacy.written(), shared.written());
+    try t.expectEqualStrings(
+        "shellystrap: Installing package: demo-1-1\n" ++
+            "shellystrap: Installing: demo 100% (1/2)\n" ++
+            "shellystrap: demo: Package operation completed.\n" ++
+            "shellystrap: scriptlet: setup output\n" ++
+            "shellystrap: hook: demo.hook: (1/1) Updating cache\n",
+        shared.written(),
+    );
+}
+
+test "bootstrap aggregates interleaved transfers and flushes terminal output for both callback paths" {
+    const t = std.testing;
+    var legacy: std.Io.Writer.Allocating = .init(t.allocator);
+    defer legacy.deinit();
+    var shared: std.Io.Writer.Allocating = .init(t.allocator);
+    defer shared.deinit();
+    var legacy_output: DiagnosticOutput = .{ .stderr = &legacy.writer, .io = t.io, .allocator = t.allocator };
+    defer legacy_output.deinit();
+    var shared_output: DiagnosticOutput = .{ .stderr = &shared.writer, .io = t.io, .allocator = t.allocator };
+    defer shared_output.deinit();
+    const names = [_][]const u8{ "first.pkg", "second.pkg", "third.pkg" };
+    var envelopes: [3]operation_api.Envelope = undefined;
+    for (&envelopes, names, 0..) |*envelope, name, index| {
+        envelope.* = .{ .operation_id = index + 1, .parent_id = 10, .backend = .download, .kind = .download, .subject = name };
+        DiagnosticOutput.handleDownload(&legacy_output, .{ .name = name, .state = .started });
+        DiagnosticOutput.handleOperation(&shared_output, .{ .started = .{ .envelope = envelope.* } });
+    }
+    for (envelopes, names) |envelope, name| {
+        DiagnosticOutput.handleDownload(&legacy_output, .{ .name = name, .state = .progress, .bytes = 5, .total = 10 });
+        DiagnosticOutput.handleOperation(&shared_output, .{ .progress = .{ .envelope = envelope, .update = .{ .stage = "download", .bytes_completed = 5, .bytes_total = 10 } } });
+        // Keep the subsequent callbacks inside the throttle without a sleep.
+        for ([_]*DiagnosticOutput{ &legacy_output, &shared_output }) |output| output.last_download_progress = std.Io.Clock.awake.now(t.io).addDuration(.fromSeconds(60));
+    }
+    try t.expectEqual(@as(usize, 1), std.mem.count(u8, legacy.written(), "Downloads:"));
+    try t.expect(std.mem.indexOf(u8, legacy.written(), "3 active, 0 transferred") != null);
+    // One transfer with unknown length keeps the batch byte count honest.
+    for ([_]*DiagnosticOutput{ &legacy_output, &shared_output }) |output| output.last_download_progress = null;
+    DiagnosticOutput.handleDownload(&legacy_output, .{ .name = names[2], .state = .progress, .bytes = 7 });
+    DiagnosticOutput.handleOperation(&shared_output, .{ .progress = .{ .envelope = envelopes[2], .update = .{ .stage = "download", .bytes_completed = 7 } } });
+    try t.expect(std.mem.indexOf(u8, legacy.written(), "3 active, 0 transferred (17 bytes)") != null);
+    for ([_]*DiagnosticOutput{ &legacy_output, &shared_output }) |output| output.last_download_progress = std.Io.Clock.awake.now(t.io).addDuration(.fromSeconds(60));
+    const before = legacy.written().len;
+    DiagnosticOutput.handleDownload(&legacy_output, .{ .name = names[0], .state = .completed, .bytes = 5, .total = 10 });
+    DiagnosticOutput.handleOperation(&shared_output, .{ .completed = .{ .envelope = envelopes[0], .status = .success } });
+    try t.expect(legacy.written().len > before);
+    // A new mirror attempt starts from zero; a prior completed transfer must
+    // not leave a transferred count or 100% bar for its replacement.
+    const old_attempt = envelopes[0];
+    envelopes[0].operation_id = 4;
+    DiagnosticOutput.handleDownload(&legacy_output, .{ .name = names[0], .state = .started });
+    DiagnosticOutput.handleOperation(&shared_output, .{ .started = .{ .envelope = envelopes[0] } });
+    DiagnosticOutput.handleOperation(&shared_output, .{ .progress = .{ .envelope = old_attempt, .update = .{ .stage = "download", .bytes_completed = 10, .bytes_total = 10 } } });
+    try t.expect(!shared_output.downloads.get(names[0]).?.transferred);
+    try t.expectEqual(@as(u64, 0), shared_output.downloads.get(names[0]).?.bytes);
+    DiagnosticOutput.handleDownload(&legacy_output, .{ .name = names[1], .state = .retry });
+    DiagnosticOutput.handleOperation(&shared_output, .{ .status = .{ .envelope = envelopes[1], .level = .information, .message = "Retrying download: second.pkg", .code = "download.retry" } });
+    try t.expectEqualStrings(legacy.written(), shared.written());
+    try t.expectEqual(@as(usize, 1), std.mem.count(u8, shared.written(), "Package retrieval completed: first.pkg"));
+    try t.expect(std.mem.indexOf(u8, shared.written(), "Retrying download: second.pkg") != null);
 }

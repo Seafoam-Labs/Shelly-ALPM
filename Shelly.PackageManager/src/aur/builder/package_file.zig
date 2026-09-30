@@ -2,6 +2,7 @@
 //! install-script and changelog placement, archive creation, and signing.
 
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const archive = @import("archive");
 const process_runner = @import("../builder.zig");
 const install_script = @import("../../pkgbuild/install_script.zig");
@@ -12,8 +13,8 @@ const metadata = @import("metadata.zig");
 const virtual_ownership = @import("virtual_ownership.zig");
 const package_permissions = @import("package_permissions.zig");
 const steps = @import("steps.zig");
-const alpm_bindings = @import("../../alpm/bindings.zig").libalpm;
-const raw_alpm = alpm_bindings.alpm;
+const PackageManager = @import("../../alpm/manager.zig").Manager;
+const package_types = @import("../../alpm/types.zig");
 const PackageBuilder = @import("builder.zig").PackageBuilder;
 const BuildArtifact = @import("builder.zig").BuildArtifact;
 const PackageBuild = @import("../../pkgbuild/pkgbuild_parser.zig").Pkgbuild;
@@ -58,7 +59,7 @@ fn openPackageParent(self: *PackageBuilder) !std.Io.Dir {
 
 fn reportPackageAccessError(self: *PackageBuilder, phase: []const u8, path: []const u8, err: anyerror) void {
     const message = std.fmt.allocPrint(self.allocator, "Error {s} at {f}: {s}", .{
-        phase, @import("diagnostics").safe(path), @errorName(err),
+        phase, diagnostics.safe(path), @errorName(err),
     }) catch return;
     defer self.allocator.free(message);
     if (self.active_log) |log| log.writeRecord("error", message) catch {};
@@ -139,7 +140,7 @@ fn tidyPackage(self: *PackageBuilder, package_build: *const PackageBuild, pkgdir
             const warning = try std.fmt.allocPrint(
                 self.allocator,
                 "Could not strip {0f}; keeping the original file. Review the strip output in the build details.\n\nTechnical details: {1d}; {2f}",
-                .{ @import("diagnostics").safe(entry.path), result.exit_code, @import("diagnostics").safe(std.mem.trimEnd(u8, result.stderr, "\r\n")) },
+                .{ diagnostics.safe(entry.path), result.exit_code, diagnostics.safe(std.mem.trimEnd(u8, result.stderr, "\r\n")) },
             );
             defer self.allocator.free(warning);
             if (self.active_operation) |operation| {
@@ -235,7 +236,7 @@ pub fn assemblePackage(self: *PackageBuilder, package_build: *const PackageBuild
     if (self.virtual_ownership_tracker) |*tracker| {
         if (try tracker.retainedDevicePath(self.io, pkgdir)) |path| {
             defer self.allocator.free(path);
-            const message = try std.fmt.allocPrint(self.allocator, "Cannot package {f}: a temporary mknod placeholder remains. Device nodes in finished packages are unsupported; remove the temporary node in package().", .{@import("diagnostics").safe(path)});
+            const message = try std.fmt.allocPrint(self.allocator, "Cannot package {f}: a temporary mknod placeholder remains. Device nodes in finished packages are unsupported; remove the temporary node in package().", .{diagnostics.safe(path)});
             defer self.allocator.free(message);
             if (self.active_log) |log| try log.writeRecord("error", message);
             if (self.active_operation) |operation|
@@ -545,7 +546,7 @@ fn writeBuildInfo(
     if (self.options.installed_packages) |installed| {
         for (installed) |value| try writeKeyValue(writer, "installed", value);
     } else {
-        const installed = try collectInstalledPackages(self.allocator);
+        const installed = try collectInstalledPackages(self.allocator, self.environ);
         defer metadata.freeOwnedStrings(self.allocator, installed);
         for (installed) |value| try writeKeyValue(writer, "installed", value);
     }
@@ -574,24 +575,20 @@ fn stripKind(io: std.Io, path: []const u8) !?StripKind {
     };
 }
 
-fn collectInstalledPackages(allocator: std.mem.Allocator) ![][]u8 {
-    var alpm_error: raw_alpm.alpm_errno_t = 0;
-    const handle = raw_alpm.alpm_initialize("/", "/var/lib/pacman", &alpm_error) orelse
-        return error.LocalDatabaseOpenFailed;
-    defer _ = raw_alpm.alpm_release(handle);
-    const database = raw_alpm.alpm_get_localdb(handle) orelse
-        return error.LocalDatabaseOpenFailed;
-    var packages = raw_alpm.alpm_db_get_pkgcache(database);
+fn collectInstalledPackages(allocator: std.mem.Allocator, environ: std.process.Environ) ![][]u8 {
+    const manager = try PackageManager.init(allocator, environ, .{});
+    defer manager.deinit();
+    const packages = try manager.get_installed_packages();
+    defer package_types.OwnedPackage.deinitSlice(allocator, packages);
     var installed: std.ArrayList([]u8) = .empty;
     errdefer {
         for (installed.items) |value| allocator.free(value);
         installed.deinit(allocator);
     }
-    while (packages != null) : (packages = packages.?.*.next) {
-        const package = packages.?.*.data orelse continue;
-        const name = alpm_bindings.str(raw_alpm.alpm_pkg_get_name(@ptrCast(package))) orelse continue;
-        const version = alpm_bindings.str(raw_alpm.alpm_pkg_get_version(@ptrCast(package))) orelse continue;
-        const architecture = alpm_bindings.str(raw_alpm.alpm_pkg_get_arch(@ptrCast(package))) orelse continue;
+    for (packages) |package| {
+        const name = package.name_value;
+        const version = package.version_value;
+        const architecture = package.architecture_value orelse continue;
         try installed.append(
             allocator,
             try std.fmt.allocPrint(allocator, "{s}-{s}-{s}", .{ name, version, architecture }),

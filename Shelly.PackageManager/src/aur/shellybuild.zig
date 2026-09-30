@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const toml = @import("toml");
 const process_runner = @import("builder.zig");
 
@@ -410,7 +411,7 @@ pub fn environmentErrorReason(err: anyerror) []const u8 {
 }
 
 fn writeEnvironmentDiagnostic(writer: ?*std.Io.Writer, name: []const u8, reason: []const u8) !void {
-    if (writer) |output| try output.print("Invalid build.env variable '{f}': {s}.", .{ @import("diagnostics").safe(name), reason });
+    if (writer) |output| try output.print("Invalid build.env variable '{f}': {s}.", .{ diagnostics.safe(name), reason });
 }
 
 fn containsString(values: []const []const u8, expected: []const u8) bool {

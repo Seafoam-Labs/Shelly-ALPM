@@ -1,0 +1,232 @@
+# Maintainer: Devario maintainers
+# RLPM-only upstream build for Devario; no libalpm or pacman dependency.
+# Uses upstream runtime paths (/etc/pacman.conf and /var/lib/pacman).
+
+pkgname=shelly
+pkgver=3.1.6
+pkgrel=2
+_commit=bcbba6aaaf003aefdbe30b75023142c75e96e604
+pkgdesc="Shelly for Devario with the native RLPM backend"
+arch=('x86_64')
+url="https://github.com/Seafoam-Labs/Shelly-ALPM"
+license=('GPL-3.0-only')
+depends=(
+  'gtk4'
+  'glib2'
+  'sudo'
+  'tar'
+  'bash'
+  'git'
+  'hicolor-icon-theme'
+  'dbus'
+  'glibc'
+  'libarchive'
+  'curl'
+  'sqlite'
+  'dconf'
+  'gnupg'
+  'zstd'
+  'json-glib'
+  'polkit'
+)
+makedepends=(
+  'binutils'
+  'clang'
+  'gettext'
+  'go-md2man'
+  'pkgconf'
+  'ripgrep'
+  'zig>=0.16'
+)
+optdepends=(
+  'fish: Fish shell completions'
+  'zsh: Zsh shell completions'
+  'libstarfish: dependency viewer for Arch packages'
+  'shelly-flatpak-backend: Flatpak package-management support'
+  'fuse2: run AppImages that require FUSE 2'
+  'util-linux: isolate fresh-root provisioning for isolated builds'
+  'systemd: run isolated build containers with systemd-nspawn'
+)
+provides=("shelly=${pkgver}")
+conflicts=('shelly-git' 'shelly-bin' 'shelly-cli')
+backup=('etc/shellybuild.conf')
+
+# Pin the published RLPM implementation; the v3.1.6 release lacks this variant.
+# Git verifies the pinned object ID; SKIP is the standard VCS checksum marker.
+source=("shelly::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#commit=${_commit}")
+sha256sums=('SKIP')
+_source_dir=shelly
+
+build() {
+  cd "$srcdir/${_source_dir}"
+
+  (cd Shelly.Ui.Gtk && zig build --verbose \
+    --prefix "$srcdir/${_source_dir}/out" \
+    --cache-dir "$srcdir/zig-cache" \
+    --global-cache-dir "$srcdir/zig-global-cache" \
+    -Dflatpak-backend-package=shelly-flatpak-backend \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSafe)
+
+  (cd Shelly.Cli.Zig && zig build -Dlibalpm=false --verbose \
+    --prefix "$srcdir/${_source_dir}/out-cli" \
+    --cache-dir "$srcdir/zig-cache" \
+    --global-cache-dir "$srcdir/zig-global-cache" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSmall)
+
+  (cd Shelly.Key && zig build --verbose \
+    --prefix "$srcdir/${_source_dir}/out-key" \
+    --cache-dir "$srcdir/zig-cache" \
+    --global-cache-dir "$srcdir/zig-global-cache" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSmall)
+
+  (cd Shelly.Notifications.Zig && zig build --verbose \
+    --prefix "$srcdir/${_source_dir}/out-notifications" \
+    --cache-dir "$srcdir/zig-cache" \
+    --global-cache-dir "$srcdir/zig-global-cache" \
+    -Dcpu=baseline \
+    -Doptimize=ReleaseSmall)
+
+  # Generate documentation with fresh settings, independent of the builder's backend selection.
+  (
+    export XDG_CONFIG_HOME="$srcdir/shelly-build-config"
+    export XDG_CACHE_HOME="$srcdir/shelly-build-cache"
+    export XDG_DATA_HOME="$srcdir/shelly-build-data"
+    export XDG_STATE_HOME="$srcdir/shelly-build-state"
+    ./out-cli/bin/shelly utility --completions bash > shelly.bash
+    ./out-cli/bin/shelly utility --completions fish > shelly.fish
+    ./out-cli/bin/shelly utility --completions zsh > _shelly
+    ./out-cli/bin/shelly utility --docs | go-md2man > shelly.1
+  )
+  sed -i "s|^\\.TH .*|.TH \"SHELLY\" \"1\" \"\" \"Shelly ${pkgver}\" \"Shelly CLI Manual\"|" shelly.1
+  printf '\n.SH AUTHORS\nSeafoam Labs.\n' >> shelly.1
+
+  local po_file language
+  for po_file in Shelly.Ui.Gtk/po/*.po; do
+    [[ -f $po_file ]] || continue
+    language="$(basename "$po_file" .po)"
+    msgfmt "$po_file" -o "shelly-ui-${language}.mo"
+  done
+  for po_file in Shelly.Notifications.Zig/po/*.po; do
+    [[ -f $po_file ]] || continue
+    language="$(basename "$po_file" .po)"
+    msgfmt "$po_file" -o "shelly-notifications-${language}.mo"
+  done
+}
+
+check() {
+  cd "$srcdir/${_source_dir}"
+
+  # Keep checks on the same compiled variant as the shipped CLI.
+  (cd Shelly.Cli.Zig && zig build test -Dlibalpm=false \
+    --cache-dir "$srcdir/zig-cache" \
+    --global-cache-dir "$srcdir/zig-global-cache")
+  (cd Shelly.PackageManager && zig build native-backend-test rlpm-adapter-test bootstrap-test -Dlibalpm=false \
+    --cache-dir "$srcdir/zig-cache" \
+    --global-cache-dir "$srcdir/zig-global-cache")
+  (cd Shelly.Rlpm && zig build test \
+    --cache-dir "$srcdir/zig-cache" \
+    --global-cache-dir "$srcdir/zig-global-cache")
+  (cd Shelly.Key && zig build test \
+    --cache-dir "$srcdir/zig-cache" \
+    --global-cache-dir "$srcdir/zig-global-cache")
+}
+
+package() {
+  cd "$srcdir/${_source_dir}"
+
+  install -Dm755 \
+    out-notifications/bin/shelly-notifications \
+    "$pkgdir/usr/bin/shelly-notifications"
+  install -Dm755 \
+    out/bin/Shelly_Ui_Gtk \
+    "$pkgdir/usr/bin/shelly-ui"
+  install -Dm755 \
+    out-cli/bin/shelly \
+    "$pkgdir/usr/bin/shelly"
+  install -Dm755 \
+    out-key/bin/shelly-key \
+    "$pkgdir/usr/bin/shelly-key"
+  # Inspect the actual packaged binaries, including their transitive libraries.
+  local executable dynamic linked
+  for executable in shelly shelly-ui shelly-key shelly-notifications; do
+    dynamic=$(LC_ALL=C readelf -d "$pkgdir/usr/bin/$executable") || return 1
+    [[ $dynamic == *'(NEEDED)'* ]] || continue
+    linked=$(LC_ALL=C ldd "$pkgdir/usr/bin/$executable") || return 1
+    if [[ $linked == *libalpm.so* || $linked == *'not found'* ]]; then
+      printf 'Invalid runtime dependencies for RLPM-only %s:\n%s\n' "$executable" "$linked" >&2
+      return 1
+    fi
+  done
+
+  install -Dm644 shellybuild.conf \
+    "$pkgdir/etc/shellybuild.conf"
+
+  install -Dm644 shelly.bash \
+    "$pkgdir/usr/share/bash-completion/completions/shelly"
+  install -Dm644 shelly.fish \
+    "$pkgdir/usr/share/fish/vendor_completions.d/shelly.fish"
+  install -Dm644 _shelly \
+    "$pkgdir/usr/share/zsh/site-functions/_shelly"
+  install -Dm644 shelly.1 \
+    "$pkgdir/usr/share/man/man1/shelly.1"
+
+  install -Dm644 assets/shellylogo.png \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly.png"
+  install -Dm644 assets/shelly-updates-symbolic.svg \
+    "$pkgdir/usr/share/icons/hicolor/symbolic/apps/shelly-updates-symbolic.svg"
+  install -Dm644 assets/shelly-shell-symbolic.svg \
+    "$pkgdir/usr/share/icons/hicolor/symbolic/apps/shelly-shell-symbolic.svg"
+  install -Dm644 assets/shellylogo-tray.png \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-tray.png"
+  install -Dm644 assets/shellylogo-update.png \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-update.png"
+
+  local mo_file language
+  for mo_file in shelly-ui-*.mo; do
+    [[ -f $mo_file ]] || continue
+    language="${mo_file#shelly-ui-}"
+    language="${language%.mo}"
+    install -Dm644 "$mo_file" \
+      "$pkgdir/usr/share/locale/$language/LC_MESSAGES/shelly-ui.mo"
+  done
+  for mo_file in shelly-notifications-*.mo; do
+    [[ -f $mo_file ]] || continue
+    language="${mo_file#shelly-notifications-}"
+    language="${language%.mo}"
+    install -Dm644 "$mo_file" \
+      "$pkgdir/usr/share/locale/$language/LC_MESSAGES/shelly-notifications.mo"
+  done
+
+  install -Dm644 com.shellyorg.shelly.desktop \
+    "$pkgdir/usr/share/applications/com.shellyorg.shelly.desktop"
+  install -Dm644 com.shellyorg.shelly-notifications.desktop \
+    "$pkgdir/usr/share/applications/com.shellyorg.shelly-notifications.desktop"
+
+  cat <<'EOF' | install -Dm644 /dev/stdin \
+    "$pkgdir/usr/share/polkit-1/actions/com.shellyorg.shelly.policy"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <vendor>Shelly</vendor>
+  <vendor_url>https://github.com/Seafoam-Labs/Shelly-ALPM</vendor_url>
+  <action id="com.shellyorg.shelly.pkexec.cli">
+    <description>Run Shelly CLI as administrator</description>
+    <message>Run Shelly CLI with administrator privileges.</message>
+    <icon_name>shelly</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/shelly</annotate>
+  </action>
+</policyconfig>
+EOF
+
+  install -Dm755 shelly-flatpak-integrate \
+    "$pkgdir/usr/bin/shelly-flatpak-integrate"
+}

@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const protocol = @import("Shelly_Flatpak_Protocol");
 const wire = protocol.wire;
 const operation_api = @import("operation_context");
@@ -999,7 +1000,7 @@ fn errorMessage(err: anyerror) []const u8 {
         error.UnsupportedSchema => "Shelly and its Flatpak backend do not agree on the requested operation or protocol. Upgrade shelly and shelly-flatpak-backend together, then retry.",
         error.InvalidMessageSize => "Could not send the Flatpak request because it exceeds the protocol size limit. Try a smaller selection; if the problem persists, report the technical details.",
         error.OutOfMemory => "Could not complete the Flatpak operation because its backend ran out of memory. Close other applications and try again.",
-        else => @import("diagnostics").cause(err),
+        else => diagnostics.cause(err),
     };
 }
 

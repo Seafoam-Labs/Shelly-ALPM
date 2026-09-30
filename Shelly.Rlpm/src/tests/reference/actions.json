@@ -1,0 +1,151 @@
+{
+  "library_sha256": "da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888",
+  "cases": [
+    {
+      "name": "quoted-arguments",
+      "hook": "[Trigger]\nOperation=Install\nOperation=Upgrade\nType=Package\nTarget=*\n[Action]\nWhen=PreTransaction\nExec=/usr/bin/bash -c 'printf \"<%s>\\n\" \"$@\" >> /trace' argv0 'two words' \"\" x\\ y a\"b\"c \"$literal\"\n",
+      "success": true,
+      "error": null,
+      "trace": "<two words>\n<>\n<x\\>\n<y>\n<abc>\n<$literal>\n"
+    },
+    {
+      "name": "hash-in-quotes",
+      "hook": "[Trigger]\nOperation=Install\nOperation=Upgrade\nType=Package\nTarget=*\n[Action]\nWhen=PreTransaction\nExec=/usr/bin/bash -c 'printf x#y >> /trace'\n",
+      "success": true,
+      "error": null,
+      "trace": "x#y"
+    },
+    {
+      "name": "exec-overridden",
+      "hook": "[Trigger]\nOperation=Install\nOperation=Upgrade\nType=Package\nTarget=*\n[Action]\nWhen=PreTransaction\nExec=/missing\n[Action]\nExec=/usr/bin/bash -c 'printf good >> /trace'\n",
+      "success": true,
+      "error": null,
+      "trace": "good"
+    },
+    {
+      "name": "needs-targets",
+      "hook": "[Trigger]\nOperation=Install\nOperation=Upgrade\nType=Package\nTarget=*\n[Action]\nWhen=PreTransaction\nExec=/usr/bin/bash -c 'while IFS= read -r target; do printf \"%s\\n\" \"$target\" >> /trace; done'\nNeedsTargets=false\n",
+      "success": true,
+      "error": null,
+      "trace": "demo\n"
+    },
+    {
+      "name": "network-allowed",
+      "hook": "[Trigger]\nOperation=Install\nOperation=Upgrade\nType=Package\nTarget=*\n[Action]\nWhen=PreTransaction\nExec=/usr/bin/bash -c 'printf allowed >> /trace'\nNetworkAccess=allowed\n",
+      "success": true,
+      "error": null,
+      "trace": "allowed"
+    },
+    {
+      "name": "network-invalid",
+      "hook": "[Trigger]\nOperation=Install\nOperation=Upgrade\nType=Package\nTarget=*\n[Action]\nWhen=PreTransaction\nExec=/missing\nNetworkAccess=denied\n",
+      "success": false,
+      "error": "failed to run transaction hooks",
+      "trace": ""
+    },
+    {
+      "name": "abort-nonzero",
+      "hook": "[Trigger]\nOperation=Install\nOperation=Upgrade\nType=Package\nTarget=*\n[Action]\nWhen=PreTransaction\nExec=/usr/bin/bash -c \"exit 3\"\nAbortOnFail\n",
+      "success": false,
+      "error": "failed to run transaction hooks",
+      "trace": ""
+    },
+    {
+      "name": "nonfatal-nonzero",
+      "hook": "[Trigger]\nOperation=Install\nOperation=Upgrade\nType=Package\nTarget=*\n[Action]\nWhen=PreTransaction\nExec=/usr/bin/bash -c \"exit 3\"\n",
+      "success": true,
+      "error": null,
+      "trace": ""
+    },
+    {
+      "name": "post-nonzero",
+      "hook": "[Trigger]\nOperation=Install\nOperation=Upgrade\nType=Package\nTarget=*\n[Action]\nWhen=PostTransaction\nExec=/usr/bin/bash -c \"exit 3\"\nAbortOnFail\n",
+      "success": true,
+      "error": null,
+      "trace": ""
+    },
+    {
+      "name": "missing-dependency",
+      "hook": "[Trigger]\nOperation=Install\nOperation=Upgrade\nType=Package\nTarget=*\n[Action]\nWhen=PreTransaction\nExec=/missing\nDepends=absent>=2\nAbortOnFail\n",
+      "success": false,
+      "error": "failed to run transaction hooks",
+      "trace": ""
+    },
+    {
+      "name": "empty-mask",
+      "hook": "",
+      "success": true,
+      "error": null,
+      "trace": ""
+    },
+    {
+      "name": "install-scriptlets",
+      "hook": "",
+      "script": "printf 'source:%s\\n' \"$#\" >> /trace\npre_install() { printf 'pre_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npost_install() { printf 'post_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npre_upgrade() { printf 'pre_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\npost_upgrade() { printf 'post_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\n",
+      "success": true,
+      "error": null,
+      "trace": "source:0\npre_install:1:2-1\nsource:0\npost_install:1:2-1\n"
+    },
+    {
+      "name": "upgrade-scriptlets",
+      "hook": "",
+      "script": "printf 'source:%s\\n' \"$#\" >> /trace\npre_install() { printf 'pre_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npost_install() { printf 'post_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npre_upgrade() { printf 'pre_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\npost_upgrade() { printf 'post_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\n",
+      "old_version": "1-1",
+      "success": true,
+      "error": null,
+      "trace": "source:0\npre_upgrade:2:2-1:1-1\nsource:0\npost_upgrade:2:2-1:1-1\n"
+    },
+    {
+      "name": "reinstall-scriptlets",
+      "hook": "",
+      "script": "printf 'source:%s\\n' \"$#\" >> /trace\npre_install() { printf 'pre_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npost_install() { printf 'post_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npre_upgrade() { printf 'pre_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\npost_upgrade() { printf 'post_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\n",
+      "old_version": "2-1",
+      "success": true,
+      "error": null,
+      "trace": "source:0\npre_upgrade:2:2-1:2-1\nsource:0\npost_upgrade:2:2-1:2-1\n"
+    },
+    {
+      "name": "downgrade-scriptlets",
+      "hook": "",
+      "script": "printf 'source:%s\\n' \"$#\" >> /trace\npre_install() { printf 'pre_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npost_install() { printf 'post_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npre_upgrade() { printf 'pre_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\npost_upgrade() { printf 'post_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\n",
+      "old_version": "3-1",
+      "success": true,
+      "error": null,
+      "trace": "source:0\npre_upgrade:2:2-1:3-1\nsource:0\npost_upgrade:2:2-1:3-1\n"
+    },
+    {
+      "name": "dbonly-scriptlets",
+      "hook": "",
+      "script": "printf 'source:%s\\n' \"$#\" >> /trace\npre_install() { printf 'pre_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npost_install() { printf 'post_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npre_upgrade() { printf 'pre_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\npost_upgrade() { printf 'post_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\n",
+      "flags": 64,
+      "success": true,
+      "error": null,
+      "trace": "source:0\npre_install:1:2-1\nsource:0\npost_install:1:2-1\n"
+    },
+    {
+      "name": "noscriptlet",
+      "hook": "",
+      "script": "printf 'source:%s\\n' \"$#\" >> /trace\npre_install() { printf 'pre_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npost_install() { printf 'post_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npre_upgrade() { printf 'pre_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\npost_upgrade() { printf 'post_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\n",
+      "flags": 1024,
+      "success": true,
+      "error": null,
+      "trace": ""
+    },
+    {
+      "name": "nohooks-malformed",
+      "hook": "[Invalid]\n",
+      "script": "printf 'source:%s\\n' \"$#\" >> /trace\npre_install() { printf 'pre_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npost_install() { printf 'post_install:%s:%s\\n' \"$#\" \"$1\" >> /trace; }\npre_upgrade() { printf 'pre_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\npost_upgrade() { printf 'post_upgrade:%s:%s:%s\\n' \"$#\" \"$1\" \"$2\" >> /trace; }\n",
+      "flags": 128,
+      "success": true,
+      "error": null,
+      "trace": "source:0\npre_install:1:2-1\nsource:0\npost_install:1:2-1\n"
+    },
+    {
+      "name": "escaped-double-quotes",
+      "hook": "[Trigger]\nOperation=Install\nOperation=Upgrade\nType=Package\nTarget=*\n[Action]\nWhen=PreTransaction\nExec=/usr/bin/bash -c 'printf \"<%s>\\n\" \"$@\" >> /trace' argv0 \"a\\zb\" \"a\\\"b\"\n",
+      "success": true,
+      "error": null,
+      "trace": "<a\\zb>\n<a\"b>\n"
+    }
+  ]
+}

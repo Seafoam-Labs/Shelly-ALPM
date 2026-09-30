@@ -13,7 +13,7 @@ pub const variants = [_]types.Variant{
         .name = "add",
         .type_code = 'a',
         .description = "Add package archives to a pacman repository database (repo-add).",
-        .implementation = "Zigalpm.repo.Database.addPackages",
+        .implementation = "PackageManager.repo.Database.addPackages",
         .arguments = &.{
             requiredArgument("database", database_argument),
             repeatedArgument("packages", 1, "Package archive paths to add"),
@@ -34,7 +34,7 @@ pub const variants = [_]types.Variant{
         .name = "remove",
         .type_code = 'r',
         .description = "Remove package entries from a pacman repository database (repo-remove).",
-        .implementation = "Zigalpm.repo.Database.removePackages",
+        .implementation = "PackageManager.repo.Database.removePackages",
         .arguments = &.{
             requiredArgument("database", database_argument),
             repeatedArgument("names", 1, "Exact package names to remove"),
@@ -52,7 +52,7 @@ pub const variants = [_]types.Variant{
         .name = "list",
         .type_code = 'l',
         .description = "List the entries of a repository database.",
-        .implementation = "Zigalpm.repo.Database.listEntries",
+        .implementation = "PackageManager.repo.Database.listEntries",
         .arguments = &.{requiredArgument("database", database_argument)},
     },
     .{
@@ -60,7 +60,7 @@ pub const variants = [_]types.Variant{
         .name = "verify",
         .type_code = 'v',
         .description = "Verify the detached gpg signatures of a repository database. Verification is trust-based: a good signature from an untrusted key is reported as invalid.",
-        .implementation = "Zigalpm.repo.Database.verifySignatures",
+        .implementation = "PackageManager.repo.Database.verifySignatures",
         .arguments = &.{requiredArgument("database", database_argument)},
     },
 };

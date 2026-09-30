@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const Zigalpm = @import("Zigalpm");
-const user_account = Zigalpm.user_account;
+const PackageManager = @import("PackageManager");
+const user_account = PackageManager.user_account;
 const context_module = @import("context.zig");
 const signals = @import("signals.zig");
 
@@ -320,7 +320,7 @@ pub const CapturedRun = struct {
 pub fn runAsInvokingUserCapture(
     context: *context_module.RuntimeContext,
     arguments: []const []const u8,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
 ) !?CapturedRun {
     const identity = (try invokingUser(context)) orelse return null;
     defer identity.deinit(context.allocator);
@@ -493,7 +493,7 @@ fn buildInvokingUserArguments(
         result[15] = "--setenv";
         result[16] = bus_environment;
         result[17] = "--setenv";
-        result[18] = "PATH=" ++ Zigalpm.process_runner.build_path.baseline;
+        result[18] = "PATH=" ++ PackageManager.process_runner.build_path.baseline;
         result[19] = executable;
         @memcpy(result[20..], arguments);
         return result;
@@ -512,7 +512,7 @@ fn buildInvokingUserArguments(
     result[9] = bin_environment;
     result[10] = runtime_environment;
     result[11] = bus_environment;
-    result[12] = "PATH=" ++ Zigalpm.process_runner.build_path.baseline;
+    result[12] = "PATH=" ++ PackageManager.process_runner.build_path.baseline;
     result[13] = executable;
     @memcpy(result[14..], arguments);
     return result;
@@ -775,7 +775,7 @@ test "calling-user arguments use a clean invoking-user environment" {
         "XDG_BIN_HOME=/home/tester/.local/bin",
         "XDG_RUNTIME_DIR=/run/user/1000",
         "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
-        "PATH=" ++ Zigalpm.process_runner.build_path.baseline,
+        "PATH=" ++ PackageManager.process_runner.build_path.baseline,
         "/usr/bin/shelly",
         "upgrade",
         "flatpak",
@@ -822,7 +822,7 @@ test "run0 invoking-user arguments use native options" {
         "--setenv",
         "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
         "--setenv",
-        "PATH=" ++ Zigalpm.process_runner.build_path.baseline,
+        "PATH=" ++ PackageManager.process_runner.build_path.baseline,
         "/usr/bin/shelly",
         "upgrade",
         "flatpak",

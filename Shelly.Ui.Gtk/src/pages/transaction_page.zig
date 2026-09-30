@@ -368,7 +368,12 @@ pub const TransactionPage = extern struct {
                 appendAlpmProgress(self, pr);
 
                 if (is_transaction_phase(pr.progress_type)) {
-                    setLabel(self.priv().status_label, phase_label(pr.progress_type));
+                    var phase_buffer: [1024]u8 = undefined;
+                    const label = if (nonEmpty(pr.message)) |message|
+                        std.fmt.bufPrint(&phase_buffer, "{s}: {s}", .{ message, pr.package_name }) catch message
+                    else
+                        phase_label(pr.progress_type);
+                    setLabel(self.priv().status_label, label);
                     return;
                 }
 

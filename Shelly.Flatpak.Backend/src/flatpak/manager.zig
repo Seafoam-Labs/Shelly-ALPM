@@ -1,5 +1,6 @@
 const bindings = @import("bindings.zig");
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const remotes = @import("remote_manager.zig");
 const events = @import("events.zig");
 const operation_api = @import("operation_context");
@@ -1039,19 +1040,19 @@ pub const Manager = struct {
         }
 
         const found_pid = pid orelse {
-            std.log.err("Could not find a running instance of Flatpak {0f}. Check the running-application list before trying to stop it.", .{@import("diagnostics").safe(flatpak_id)});
+            std.log.err("Could not find a running instance of Flatpak {0f}. Check the running-application list before trying to stop it.", .{diagnostics.safe(flatpak_id)});
             self.emitStatus(.err, "Could not find a running instance of the selected Flatpak. Check the running-application list before trying to stop it.");
             return error.InvalidPid;
         };
 
         if (found_pid <= 0) {
-            std.log.err("Could not stop Flatpak {0f} because its instance has an invalid process ID. Refresh the running-application list and retry.", .{@import("diagnostics").safe(flatpak_id)});
+            std.log.err("Could not stop Flatpak {0f} because its instance has an invalid process ID. Refresh the running-application list and retry.", .{diagnostics.safe(flatpak_id)});
             self.emitStatus(.err, "Could not stop the selected Flatpak because its instance has an invalid process ID. Refresh the running-application list and retry.");
             return error.InvalidPid;
         }
 
         std.posix.kill(found_pid, std.posix.SIG.KILL) catch |err| {
-            std.log.err("Could not stop Flatpak {0f}, process {1d}. {2s}\n\nTechnical details: {3s}", .{ @import("diagnostics").safe(flatpak_id), found_pid, @import("diagnostics").cause(err), @errorName(err) });
+            std.log.err("Could not stop Flatpak {0f}, process {1d}. {2s}\n\nTechnical details: {3s}", .{ diagnostics.safe(flatpak_id), found_pid, diagnostics.cause(err), @errorName(err) });
             self.emitStatus(.err, "Could not stop the selected Flatpak.");
             return err;
         };
@@ -1073,14 +1074,14 @@ pub const Manager = struct {
 
         const update_refs_ptr = rawflatpak.flatpak_installation_list_installed_refs_for_update(installation, cancellable, &g_error);
         if (update_refs_ptr == null) {
-            if (g_error) |e| std.debug.print("Could not list Flatpak updates. {0f}\n", .{@import("diagnostics").safe(e.*.message)});
+            if (g_error) |e| std.debug.print("Could not list Flatpak updates. {0f}\n", .{diagnostics.safe(e.*.message)});
             return list.toOwnedSlice(self.allocator);
         }
         defer rawflatpak.g_ptr_array_unref(update_refs_ptr);
 
         const trans_ptr = rawflatpak.flatpak_transaction_new_for_installation(installation, cancellable, &g_error);
         if (trans_ptr == null) {
-            if (g_error) |e| std.debug.print("Could not prepare a Flatpak transaction. {0f}\n", .{@import("diagnostics").safe(e.*.message)});
+            if (g_error) |e| std.debug.print("Could not prepare a Flatpak transaction. {0f}\n", .{diagnostics.safe(e.*.message)});
             return list.toOwnedSlice(self.allocator);
         }
         defer rawflatpak.g_object_unref(trans_ptr);
@@ -1189,7 +1190,7 @@ pub const Manager = struct {
 
         const loaded = rawflatpak.g_key_file_load_from_data(key_file_ptr, @ptrCast(data_ptr), size, 0, &g_error);
         if (loaded == 0) {
-            if (g_error) |e| std.debug.print("Could not read permission metadata for the selected Flatpak. {0f}\n", .{@import("diagnostics").safe(e.*.message)});
+            if (g_error) |e| std.debug.print("Could not read permission metadata for the selected Flatpak. {0f}\n", .{diagnostics.safe(e.*.message)});
             return permissions.toOwnedSlice(self.allocator);
         }
 
@@ -1315,13 +1316,13 @@ pub const Manager = struct {
 
         const updated = rawflatpak.flatpak_installation_update_remote_sync(installation, remote, cancellable, &g_error);
         if (updated == 0) {
-            if (g_error) |e| std.debug.print("Could not refresh the metadata cache for the selected Flatpak remote. {0f}\n", .{@import("diagnostics").safe(e.*.message)});
+            if (g_error) |e| std.debug.print("Could not refresh the metadata cache for the selected Flatpak remote. {0f}\n", .{diagnostics.safe(e.*.message)});
             return error.RemoteUpdateFailed;
         }
 
         const refs_ptr = rawflatpak.flatpak_installation_list_remote_refs_sync_full(installation, remote, 1, cancellable, &g_error);
         if (refs_ptr == null) {
-            if (g_error) |e| std.debug.print("Could not list references from the selected Flatpak remote. {0f}\n", .{@import("diagnostics").safe(e.*.message)});
+            if (g_error) |e| std.debug.print("Could not list references from the selected Flatpak remote. {0f}\n", .{diagnostics.safe(e.*.message)});
             return error.ListRemoteRefsFailed;
         }
 
@@ -1357,7 +1358,7 @@ pub const Manager = struct {
             if (remote.get_scope() == scope and remote.disabled() != true) {
                 const refs_ptr = rawflatpak.flatpak_installation_list_remote_refs_sync_full(installation, cStr(remote.name()), 1, cancellable, &g_error);
                 if (refs_ptr == null) {
-                    if (g_error) |e| std.debug.print("Could not list references from the selected Flatpak remote. {0f}\n", .{@import("diagnostics").safe(e.*.message)});
+                    if (g_error) |e| std.debug.print("Could not list references from the selected Flatpak remote. {0f}\n", .{diagnostics.safe(e.*.message)});
                     return error.ListRemoteRefsFailed;
                 }
 
@@ -1948,10 +1949,10 @@ pub const Manager = struct {
         });
     }
 
-    fn emitGError(self: Manager, g_error: ?*rawflatpak.GError, fallback: []const u8, context: @import("diagnostics").Context) void {
-        const native = if (g_error) |value| std.mem.span(value.message) else @import("diagnostics").unknown_cause;
-        const message = std.fmt.allocPrint(self.allocator, "{s} {f}{s}{f}{s}{f}", .{ fallback, @import("diagnostics").safe(native), if (context.scope != null) "\nInstallation: " else "", @import("diagnostics").safe(context.scope orelse ""), if (context.subject != null) "\nPackage: " else "", @import("diagnostics").safe(context.subject orelse "") }) catch {
-            self.emitStatus(.err, @import("diagnostics").allocation_failure);
+    fn emitGError(self: Manager, g_error: ?*rawflatpak.GError, fallback: []const u8, context: diagnostics.Context) void {
+        const native = if (g_error) |value| std.mem.span(value.message) else diagnostics.unknown_cause;
+        const message = std.fmt.allocPrint(self.allocator, "{s} {f}{s}{f}{s}{f}", .{ fallback, diagnostics.safe(native), if (context.scope != null) "\nInstallation: " else "", diagnostics.safe(context.scope orelse ""), if (context.subject != null) "\nPackage: " else "", diagnostics.safe(context.subject orelse "") }) catch {
+            self.emitStatus(.err, diagnostics.allocation_failure);
             return;
         };
         defer self.allocator.free(message);

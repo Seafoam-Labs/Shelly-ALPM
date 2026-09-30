@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gio = bindings.gio;
@@ -342,7 +343,7 @@ pub const FlatpakRemoveView = extern struct {
 
         const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
         const parsed = cli.getInstalledFlatpaks() catch |err| {
-            std.debug.print("Could not load installed Flatpaks. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+            std.debug.print("Could not load installed Flatpaks. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
             postResult(page, &.{}, arena_ptr, generation);
             return;
         };

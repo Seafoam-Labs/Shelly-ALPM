@@ -12,7 +12,7 @@ pub const variants = [_]types.Variant{
         .name = "standard",
         .type_code = 's',
         .description = "Search available ALPM repository packages by default. Use --installed or --local to select installed packages, or --detail for exact package metadata.",
-        .implementation = "Zigalpm.AlpmManager.get_installed_packages / get_available_packages; Zigalpm.LocalManager.getInstalledBinaryPackages for --local",
+        .implementation = "PackageManager.Manager.get_installed_packages / get_available_packages; PackageManager.LocalManager.getInstalledBinaryPackages for --local",
         .arguments = &.{optionalArgument(
             "package",
             "Package name or search term; omit to list packages, or use --detail for one exact name",
@@ -36,7 +36,7 @@ pub const variants = [_]types.Variant{
         .name = "aur",
         .type_code = 'a',
         .description = "Search the AUR RPC, fetch exact package PKGBUILDs, append high-confidence standard repository matches, or show complete metadata for one AUR package.",
-        .implementation = "Zigalpm.AurManager.searchPackages / fetchPkgbuild; Zigalpm.AlpmManager.get_available_packages when --standard is passed",
+        .implementation = "PackageManager.AurManager.searchPackages / fetchPkgbuild; PackageManager.Manager.get_available_packages when --standard is passed",
         .arguments = &.{repeatedArgument(
             "query",
             1,
@@ -53,7 +53,7 @@ pub const variants = [_]types.Variant{
         .name = "flatpak",
         .type_code = 'f',
         .description = "Search cached AppStream catalogs from every configured system and user Flatpak remote, with local pagination and remote-reference sizes and permissions.",
-        .implementation = "Zigalpm.flatpak.AppstreamManager.getAllRemoteCatalogs; Zigalpm.FlatpakManager.get_remote_ref_info_flatpak",
+        .implementation = "PackageManager.flatpak.AppstreamManager.getAllRemoteCatalogs; PackageManager.FlatpakManager.get_remote_ref_info_flatpak",
         .arguments = &.{requiredArgument(
             "query",
             "Application name or ID matched against the configured remotes' local AppStream catalogs",

@@ -1,5 +1,6 @@
 const std = @import("std");
-const user_account = @import("Zigalpm").user_account;
+const diagnostics = @import("diagnostics");
+const user_account = @import("PackageManager").user_account;
 const test_support = @import("test_support.zig");
 const completions = @import("../cli/completions.zig");
 const documentation = @import("../cli/documentation.zig");
@@ -55,7 +56,7 @@ pub fn dispatch(
         (operation == .pacfiles and pacfiles.requiresElevation(invocation));
     if (needs_elevation and !elevation.isRoot()) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-            try context.stderr.print("Could not obtain administrator privileges for utility operation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+            try context.stderr.print("Could not obtain administrator privileges for utility operation. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -170,7 +171,7 @@ fn fixPermissions(
         found = true;
         const exit_code = runner.run(context, user, path) catch |err| {
             failed = true;
-            const message = try std.fmt.allocPrint(context.allocator, "Could not restore ownership of {0f} to the invoking user. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(path), @import("diagnostics").cause(err), @errorName(err) });
+            const message = try std.fmt.allocPrint(context.allocator, "Could not restore ownership of {0f} to the invoking user. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(path), diagnostics.cause(err), @errorName(err) });
             try writeResponseMessage(context, invocation, false, message);
             continue;
         };
@@ -182,7 +183,7 @@ fn fixPermissions(
             const message = try std.fmt.allocPrint(
                 context.allocator,
                 "Could not restore ownership of {0f} to the invoking user.\n\nTechnical details: {1d}",
-                .{ @import("diagnostics").safe(path), exit_code },
+                .{ diagnostics.safe(path), exit_code },
             );
             try writeResponseMessage(context, invocation, false, message);
         }
@@ -205,7 +206,7 @@ fn repairDb(
         return 0;
     };
     std.Io.Dir.deleteFileAbsolute(context.io, db_lock) catch |err| {
-        const message = try std.fmt.allocPrint(context.allocator, "Could not remove the package database lock at {0f}. {1s} Only remove a leftover lock after confirming that no package manager is running.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(db_lock), @import("diagnostics").cause(err), @errorName(err) });
+        const message = try std.fmt.allocPrint(context.allocator, "Could not remove the package database lock at {0f}. {1s} Only remove a leftover lock after confirming that no package manager is running.\n\nTechnical details: {2s}", .{ diagnostics.safe(db_lock), diagnostics.cause(err), @errorName(err) });
         try writeResponseMessage(context, invocation, false, message);
         return 1;
     };

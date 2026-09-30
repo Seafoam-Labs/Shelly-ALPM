@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const Io = std.Io;
 const flate = std.compress.flate;
 const runtime = @import("runtime.zig");
@@ -105,7 +106,7 @@ pub const IconDownloadService = struct {
             .response_writer = &aw.writer,
         });
         if (result.status != .ok) {
-            std.debug.print("Could not download application icons from {0f}: the server returned HTTP {1d}.\n", .{ @import("diagnostics").safe(url), @intFromEnum(result.status) });
+            std.debug.print("Could not download application icons from {0f}: the server returned HTTP {1d}.\n", .{ diagnostics.safe(url), @intFromEnum(result.status) });
             return error.HttpError;
         }
         return aw.toOwnedSlice();
@@ -121,7 +122,7 @@ fn unpack(io: Io, dir: Io.Dir, tar_gz: []const u8) !void {
 
 pub fn downloadIconsInBackground(allocator: std.mem.Allocator, io: Io) void {
     const thread = std.Thread.spawn(.{}, worker, .{ allocator, io }) catch |e| {
-        std.debug.print("Could not start downloading application icons. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(e), @errorName(e) });
+        std.debug.print("Could not start downloading application icons. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(e), @errorName(e) });
         return;
     };
     thread.detach();
@@ -130,6 +131,6 @@ pub fn downloadIconsInBackground(allocator: std.mem.Allocator, io: Io) void {
 fn worker(allocator: std.mem.Allocator, io: Io) void {
     var svc = IconDownloadService.init(allocator, io);
     _ = svc.download_unpack_icons() catch |e| {
-        std.debug.print("Could not download application icons. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(e), @errorName(e) });
+        std.debug.print("Could not download application icons. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(e), @errorName(e) });
     };
 }

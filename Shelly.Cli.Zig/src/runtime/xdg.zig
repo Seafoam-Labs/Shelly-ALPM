@@ -1,5 +1,5 @@
 const std = @import("std");
-const user_account = @import("Zigalpm").user_account;
+const user_account = @import("PackageManager").user_account;
 const runtime = @import("context.zig");
 
 pub fn configHome(context: *const runtime.RuntimeContext) ![]const u8 {

@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig flatpak base-devel gtk4 clang glibc git gettext libarchive curl vala meson ninja json-glib ripgrep
+          pacman -S --needed --noconfirm zig flatpak base-devel gtk4 clang glibc git gettext libarchive curl sqlite vala meson ninja json-glib ripgrep
 
       # Checkout only after git is installed in the container.
       - uses: actions/checkout@v6
@@ -56,6 +56,7 @@ jobs:
 
       - name: Publish Shelly.Cli
         run: |
+          rm -rf publish/shelly-cli publish/build-cli
           mkdir -p publish/shelly-cli
           (cd Shelly.Cli.Zig && zig build --prefix ../publish/build-cli -Dcpu=baseline -Doptimize=ReleaseSmall)
           (cd Shelly.Cli.Zig && zig build test)
@@ -79,6 +80,7 @@ jobs:
 
       - name: Publish Shelly.Gtk
         run: |
+          rm -rf publish/shelly-ui
           mkdir -p publish/shelly-ui
           (cd Shelly.Ui.Gtk && zig build --prefix ../publish/build-ui -Dflatpak-backend-package=shelly-flatpak-backend-bin -Dcpu=baseline -Doptimize=ReleaseSafe)
           install -Dm755 publish/build-ui/bin/Shelly_Ui_Gtk publish/shelly-ui/shelly-ui

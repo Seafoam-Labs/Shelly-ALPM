@@ -1,5 +1,6 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const diagnostics = @import("diagnostics");
+const PackageManager = @import("PackageManager");
 const test_support = @import("test_support.zig");
 const config_manager = @import("../config/manager.zig");
 const config_model = @import("../config/model.zig");
@@ -227,7 +228,7 @@ fn executeAllWithRunner(
             checkOptions(invocation),
         ) catch |err| {
             if (backend == .flatpak) {
-                if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+                if (PackageManager.flatpak.errors.unavailableMessage(err)) |message| {
                     try writeBackendSkipped(context, invocation, message);
                     continue;
                 }
@@ -268,7 +269,7 @@ fn writeQueryFailure(
     err: anyerror,
 ) !void {
     if (backend == .flatpak) {
-        if (Zigalpm.flatpak.errors.unavailableMessage(err)) |message| {
+        if (PackageManager.flatpak.errors.unavailableMessage(err)) |message| {
             if (invocation.globals.ui_mode)
                 try output.writeErrorFrame(context, message)
             else
@@ -279,7 +280,7 @@ fn writeQueryFailure(
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Could not check for {0f} updates. {1s}\n\nTechnical details: {2s}",
-        .{ @import("diagnostics").safe(@tagName(backend)), @import("diagnostics").cause(err), @errorName(err) },
+        .{ diagnostics.safe(@tagName(backend)), diagnostics.cause(err), @errorName(err) },
     );
     defer context.allocator.free(message);
     if (invocation.globals.ui_mode) {
@@ -680,7 +681,7 @@ fn runStandard(context: *runtime.RuntimeContext) !Result {
     defer context.allocator.free(database_path);
     try std.Io.Dir.cwd().createDirPath(context.io, database_path);
 
-    var manager = try Zigalpm.AlpmManager.init(
+    var manager = try PackageManager.Manager.init(
         context.allocator,
         context.environ,
         .{
@@ -691,7 +692,7 @@ fn runStandard(context: *runtime.RuntimeContext) !Result {
     defer manager.deinit();
     try manager.sync_for_update_check(force_standard_database_refresh);
     const native_updates = try manager.get_updates_available();
-    defer Zigalpm.alpm.bindings.libalpm.OwnedPackageWithUpdate.deinitSlice(
+    defer PackageManager.Manager.types.OwnedPackageWithUpdate.deinitSlice(
         context.allocator,
         native_updates,
     );
@@ -734,7 +735,7 @@ fn runAur(context: *runtime.RuntimeContext, options: CheckOptions) !Result {
     try std.Io.Dir.cwd().createDirPath(context.io, database_path);
 
     const aur_base = try aur_url.resolve(context, options.aur_url);
-    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+    const manager = try PackageManager.AurManager.init(context.allocator, context.environ, .{
         .aur_git_base_url = aur_base,
         .use_temp_path = true,
         .temp_path = database_path,
@@ -742,7 +743,7 @@ fn runAur(context: *runtime.RuntimeContext, options: CheckOptions) !Result {
     });
     defer manager.deinit();
     const native_updates = try manager.getPackagesNeedingUpdate(!options.no_devel);
-    defer Zigalpm.aur.models.Update.deinitSlice(context.allocator, native_updates);
+    defer PackageManager.aur.models.Update.deinitSlice(context.allocator, native_updates);
 
     const arena = try context.allocator.create(std.heap.ArenaAllocator);
     arena.* = std.heap.ArenaAllocator.init(context.allocator);
@@ -778,7 +779,7 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
     );
     defer context.allocator.free(local_db_path);
 
-    var manager = Zigalpm.appimage.UpdateManager{
+    var manager = PackageManager.appimage.UpdateManager{
         .allocator = context.allocator,
         .io = context.io,
         .environ = context.environ,
@@ -809,13 +810,13 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
 }
 
 fn runFlatpak(context: *runtime.RuntimeContext) !Result {
-    var manager = Zigalpm.FlatpakManager{
+    var manager = PackageManager.FlatpakManager{
         .allocator = context.allocator,
         .io = context.io,
     };
     defer manager.deinit();
     const native_updates = try manager.get_updates_flatpak();
-    defer Zigalpm.flatpak.InstalledRef.deinitSlice(
+    defer PackageManager.flatpak.InstalledRef.deinitSlice(
         context.allocator,
         native_updates,
     );
@@ -859,7 +860,7 @@ fn runFlatpak(context: *runtime.RuntimeContext) !Result {
 }
 
 fn applyAvailableVersions(
-    manager: Zigalpm.FlatpakManager,
+    manager: PackageManager.FlatpakManager,
     allocator: std.mem.Allocator,
     updates: []FlatpakUpdate,
 ) void {
@@ -885,7 +886,7 @@ fn applyAvailableVersions(
 }
 
 fn catalogVersion(
-    apps: []const Zigalpm.flatpak.AppstreamApp,
+    apps: []const PackageManager.flatpak.AppstreamApp,
     id: []const u8,
 ) ?[]const u8 {
     for (apps) |app| {
@@ -1704,11 +1705,11 @@ test "Flatpak list-updates renders EOL annotations in JSON output" {
 }
 
 test "Flatpak available version resolves from AppStream releases" {
-    const releases = [_]Zigalpm.flatpak.AppstreamRelease{
+    const releases = [_]PackageManager.flatpak.AppstreamRelease{
         .{ .version = "1.4.0", .type = "stable", .timestamp = null, .description = "" },
         .{ .version = "1.2.0", .type = "stable", .timestamp = null, .description = "" },
     };
-    const base = Zigalpm.flatpak.AppstreamApp{
+    const base = PackageManager.flatpak.AppstreamApp{
         .type = "desktop-application",
         .id = "",
         .name = "Example",
@@ -1727,7 +1728,7 @@ test "Flatpak available version resolves from AppStream releases" {
         .verification_method = null,
         .addons = &.{},
     };
-    var apps = [_]Zigalpm.flatpak.AppstreamApp{ base, base, base };
+    var apps = [_]PackageManager.flatpak.AppstreamApp{ base, base, base };
     apps[0].id = "org.example.App";
     apps[1].id = "org.example.Suffixed.desktop";
     apps[2].id = "org.freedesktop.Platform";

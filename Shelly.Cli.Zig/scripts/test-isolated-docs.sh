@@ -22,7 +22,7 @@ fi
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 project_dir=$(cd -- "$script_dir/.." && pwd)
 if [[ -z ${SHELLY_BIN:-} ]]; then
-  (cd -- "$project_dir" && zig build)
+  (cd -- "$project_dir" && zig build -Dlibalpm="${SHELLY_LIBALPM:-true}")
   shelly_bin="$project_dir/zig-out/bin/shelly"
 else
   shelly_bin=$(realpath -- "$SHELLY_BIN")

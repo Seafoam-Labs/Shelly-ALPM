@@ -1,0 +1,11 @@
+.{
+    .name = .shelly_download,
+    .fingerprint = 0xa1b313fa120592f5,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .shelly_http = .{ .path = "../Shelly.Http" },
+        .shelly_diagnostics = .{ .path = "../Shelly.Diagnostics" },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src", "COPYING" },
+}

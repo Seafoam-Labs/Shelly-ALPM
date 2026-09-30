@@ -4,6 +4,7 @@ const package_manifest = @import("build.zig.zon");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const enable_libalpm = b.option(bool, "libalpm", "Include the libalpm backend alongside RLPM") orelse true;
     const diagnostics = b.dependency("shelly_diagnostics", .{ .target = target, .optimize = optimize }).module("diagnostics");
     const flatpak_backend_path = b.option(
         []const u8,
@@ -11,12 +12,13 @@ pub fn build(b: *std.Build) void {
         "Absolute path to the Shelly Flatpak backend shared library",
     ) orelse "/usr/lib/shelly/libshelly-flatpak-backend.so.1";
 
-    const zigalpm_dependency = b.dependency("zigalpm", .{
+    const package_manager_dependency = b.dependency("package_manager", .{
+        .libalpm = enable_libalpm,
         .target = target,
         .optimize = optimize,
         .@"flatpak-backend-path" = flatpak_backend_path,
     });
-    const zigalpm = zigalpm_dependency.module("Zigalpm");
+    const package_manager = package_manager_dependency.module("PackageManager");
 
     const build_options = b.addOptions();
     build_options.addOption([]const u8, "version", package_manifest.version);
@@ -27,7 +29,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     cli.addImport("diagnostics", diagnostics);
-    cli.addImport("Zigalpm", zigalpm);
+    cli.addImport("PackageManager", package_manager);
     cli.addOptions("build_options", build_options);
 
     const executable_module = b.createModule(.{
@@ -37,7 +39,7 @@ pub fn build(b: *std.Build) void {
     });
     executable_module.addImport("diagnostics", diagnostics);
     executable_module.addImport("Shelly_Cli_Zig", cli);
-    executable_module.addImport("Zigalpm", zigalpm);
+    executable_module.addImport("PackageManager", package_manager);
 
     const executable = b.addExecutable(.{
         .name = "shelly",
@@ -97,7 +99,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     builder_test_module.addImport("diagnostics", diagnostics);
-    builder_test_module.addImport("Zigalpm", zigalpm);
+    builder_test_module.addImport("PackageManager", package_manager);
     builder_test_module.addOptions("build_options", build_options);
     const builder_tests = b.addTest(.{
         .name = "builder-command-test",
@@ -131,11 +133,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     isolated_test_module.addImport("diagnostics", diagnostics);
-    isolated_test_module.addImport("Zigalpm", zigalpm);
+    isolated_test_module.addImport("PackageManager", package_manager);
     const isolated_tests = b.addTest(.{
         .name = "isolated-build-test",
         .root_module = isolated_test_module,
         .filters = &.{
+            "shellystrap",
             "isolated pkgver",
             "reviewed input paths cannot escape the staged source root",
             "isolated command failures preserve the stage and native exit code",

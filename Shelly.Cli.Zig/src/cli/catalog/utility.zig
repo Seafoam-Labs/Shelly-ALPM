@@ -9,7 +9,7 @@ pub const variants = [_]types.Variant{
         .name = "utility",
         .default_for_action = true,
         .description = "Run Shelly maintenance, pacnew/pacsave management, and command-catalog generators.",
-        .implementation = "Native Zig ownership repair; Zigalpm.PacfileManager pacdiff workflow; Markdown documentation and Bash/Fish/Zsh completion generators",
+        .implementation = "Native Zig ownership repair; PackageManager.PacfileManager pacdiff workflow; Markdown documentation and Bash/Fish/Zsh completion generators",
         .options = &.{
             flag("--fix-permissions", &.{"-f"}, "Restore the invoking user's ownership of Shelly's configuration, cache, and data directories"),
             flag("--repair-db", &.{"-r"}, "Remove a stale database lock"),

@@ -1,0 +1,15 @@
+diff --git a/meson.build b/meson.build
+index e4818c2f..3ecfd5a9 100644
+--- a/meson.build
++++ b/meson.build
+@@ -96,9 +96,7 @@ else
+   bsdtar_no_read_sparse = ''
+ endif
+ 
+-libsqlite = dependency('sqlite3',
+-                        version : '>=3.42.0',
+-                        static : get_option('buildstatic'))
++libsqlite = cc.find_library('sqlite3', dirs : [join_paths(meson.source_root(), 'tmp_sqlite', 'lib')], required : true, static : true)
+ conf.set('HAVE_LIBSQLITE', libsqlite.found())
+ 
+ libcurl = dependency('libcurl',

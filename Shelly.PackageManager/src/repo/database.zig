@@ -2,6 +2,7 @@
 //! publication, and rotation of `<name>.db.tar.*` with `<name>.files.tar.*`.
 
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const archive = @import("archive");
 const pkginfo = @import("pkginfo.zig");
 const alpm_manager = @import("../alpm/manager.zig");
@@ -739,7 +740,7 @@ pub const Database = struct {
         signer.signDetached(tmp_path, staged_signature, key) catch |err| {
             std.log.warn(
                 "Could not sign repository database {0f}. {1s} Review the signing key and signer output.\n\nTechnical details: {2s}",
-                .{ @import("diagnostics").safe(filename), @import("diagnostics").cause(err), @errorName(err) },
+                .{ diagnostics.safe(filename), diagnostics.cause(err), @errorName(err) },
             );
             // A signer that died mid-write can leave a partial file behind.
             deleteFileIgnoringMissing(self.io, staged_signature) catch {};

@@ -1,5 +1,6 @@
 //! Owned, structured preparation errors shared by review, CLI JSON and logs.
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const word = @import("word.zig");
 const functions = @import("function_body.zig");
 
@@ -51,14 +52,14 @@ pub const Diagnostic = struct {
         const owned_expression = try allocator.dupe(u8, expression);
         const owned_filename = if (filename) |name| try allocator.dupe(u8, name) else null;
         const location = if (line) |number|
-            try std.fmt.allocPrint(allocator, "{f}:{d}", .{ @import("diagnostics").safe(path), number })
+            try std.fmt.allocPrint(allocator, "{f}:{d}", .{ diagnostics.safe(path), number })
         else
-            try @import("diagnostics").sanitizeAlloc(allocator, path);
+            try diagnostics.sanitizeAlloc(allocator, path);
         const message = try std.fmt.allocPrint(allocator, "Could not prepare {f}. {s} Check {f} in {s}.\n\nTechnical details: {s}\nExpression: {f}\nSelected file: {f}", .{
-            @import("diagnostics").safe(package),                          @import("diagnostics").cause(err),
-            @import("diagnostics").safe(field),                            location,
-            @errorName(err),                                               @import("diagnostics").safe(expression),
-            @import("diagnostics").safe(filename orelse "(not resolved)"),
+            diagnostics.safe(package),                          diagnostics.cause(err),
+            diagnostics.safe(field),                            location,
+            @errorName(err),                                    diagnostics.safe(expression),
+            diagnostics.safe(filename orelse "(not resolved)"),
         });
         return .{ .arena = arena, .code = @errorName(err), .package_name = owned_package, .pkgbuild_path = owned_path, .field = owned_field, .expression = owned_expression, .resolved_filename = owned_filename, .line = line, .message = message };
     }

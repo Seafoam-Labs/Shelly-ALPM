@@ -1,0 +1,1203 @@
+{
+  "schema": 1,
+  "library_sha256": "da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888",
+  "cases": [
+    {
+      "name": "full",
+      "present": true,
+      "status": "[GNUPG:] NEWSIG signature-reference@example.invalid\n[GNUPG:] KEY_CONSIDERED 23C9501A4DFC807F6E6687464B6F84F4E9720F70 0\n[GNUPG:] SIG_ID i32IUnER5m8uybKGz5ehr8AvSsw 2026-09-28 1790621977\n[GNUPG:] GOODSIG 4B6F84F4E9720F70 Signature Reference <signature-reference@example.invalid>\n[GNUPG:] VALIDSIG 23C9501A4DFC807F6E6687464B6F84F4E9720F70 2026-09-28 1790621977 0 4 0 22 10 00 23C9501A4DFC807F6E6687464B6F84F4E9720F70\n[GNUPG:] TRUST_ULTIMATE 0 pgp signature-reference@example.invalid\n",
+      "exit": 0,
+      "keys": "tru::1:1790621977:0:3:1:5\npub:u:255:22:4B6F84F4E9720F70:1790621977:::u:::scSC:::::ed25519:::0:\nfpr:::::::::23C9501A4DFC807F6E6687464B6F84F4E9720F70:\nuid:u::::1790621977::3CF750CA777384316A05565E8EB5B1108BE86405::Signature Reference <signature-reference@example.invalid>::::::::::0:\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        }
+      ]
+    },
+    {
+      "name": "untrusted",
+      "present": true,
+      "status": "[GNUPG:] NEWSIG signature-reference@example.invalid\n[GNUPG:] KEY_CONSIDERED 23C9501A4DFC807F6E6687464B6F84F4E9720F70 0\n[GNUPG:] SIG_ID i32IUnER5m8uybKGz5ehr8AvSsw 2026-09-28 1790621977\n[GNUPG:] GOODSIG 4B6F84F4E9720F70 Signature Reference <signature-reference@example.invalid>\n[GNUPG:] VALIDSIG 23C9501A4DFC807F6E6687464B6F84F4E9720F70 2026-09-28 1790621977 0 4 0 22 10 00 23C9501A4DFC807F6E6687464B6F84F4E9720F70\n[GNUPG:] TRUST_UNDEFINED 0 pgp signature-reference@example.invalid\n",
+      "exit": 0,
+      "keys": "tru::1:1790621977:0:3:1:5\npub:-:255:22:4B6F84F4E9720F70:1790621977:::-:::scSC:::::ed25519:::0:\nfpr:::::::::23C9501A4DFC807F6E6687464B6F84F4E9720F70:\nuid:-::::1790621977::3CF750CA777384316A05565E8EB5B1108BE86405::Signature Reference <signature-reference@example.invalid>::::::::::0:\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        }
+      ]
+    },
+    {
+      "name": "unknown_key",
+      "present": true,
+      "status": "[GNUPG:] NEWSIG signature-reference@example.invalid\n[GNUPG:] ERRSIG 4B6F84F4E9720F70 22 10 00 1790621977 9 23C9501A4DFC807F6E6687464B6F84F4E9720F70\n[GNUPG:] NO_PUBKEY 4B6F84F4E9720F70\n[GNUPG:] FAILURE gpg-exit 33554433\n",
+      "exit": 2,
+      "keys": "tru::1:1790621977:0:3:1:5\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 4
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        }
+      ]
+    },
+    {
+      "name": "tampered",
+      "present": true,
+      "status": "[GNUPG:] NEWSIG signature-reference@example.invalid\n[GNUPG:] KEY_CONSIDERED 23C9501A4DFC807F6E6687464B6F84F4E9720F70 0\n[GNUPG:] BADSIG 4B6F84F4E9720F70 Signature Reference <signature-reference@example.invalid>\n[GNUPG:] FAILURE gpg-exit 33554433\n",
+      "exit": 1,
+      "keys": "tru::1:1790621977:0:3:1:5\npub:u:255:22:4B6F84F4E9720F70:1790621977:::u:::scSC:::::ed25519:::0:\nfpr:::::::::23C9501A4DFC807F6E6687464B6F84F4E9720F70:\nuid:u::::1790621977::3CF750CA777384316A05565E8EB5B1108BE86405::Signature Reference <signature-reference@example.invalid>::::::::::0:\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        }
+      ]
+    },
+    {
+      "name": "missing",
+      "present": false,
+      "status": "[GNUPG:] FAILURE verify 33587281\n",
+      "exit": 2,
+      "keys": "tru::1:1790621977:0:3:1:5\npub:u:255:22:4B6F84F4E9720F70:1790621977:::u:::scSC:::::ed25519:::0:\nfpr:::::::::23C9501A4DFC807F6E6687464B6F84F4E9720F70:\nuid:u::::1790621977::3CF750CA777384316A05565E8EB5B1108BE86405::Signature Reference <signature-reference@example.invalid>::::::::::0:\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 38
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 38
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 38
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 38
+        }
+      ]
+    },
+    {
+      "name": "malformed",
+      "present": true,
+      "status": "[GNUPG:] NODATA 1\n[GNUPG:] NODATA 2\n[GNUPG:] FAILURE gpg-exit 33554433\n",
+      "exit": 2,
+      "keys": "tru::1:1790621977:0:3:1:5\npub:u:255:22:4B6F84F4E9720F70:1790621977:::u:::scSC:::::ed25519:::0:\nfpr:::::::::23C9501A4DFC807F6E6687464B6F84F4E9720F70:\nuid:u::::1790621977::3CF750CA777384316A05565E8EB5B1108BE86405::Signature Reference <signature-reference@example.invalid>::::::::::0:\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        }
+      ]
+    },
+    {
+      "name": "multiple_full",
+      "present": true,
+      "status": "[GNUPG:] NEWSIG signature-reference@example.invalid\n[GNUPG:] KEY_CONSIDERED 23C9501A4DFC807F6E6687464B6F84F4E9720F70 0\n[GNUPG:] SIG_ID OwDHIZ9TIMP2LaVyJlDYO0SEcow 2026-09-28 1790621978\n[GNUPG:] GOODSIG 4B6F84F4E9720F70 Signature Reference <signature-reference@example.invalid>\n[GNUPG:] VALIDSIG 23C9501A4DFC807F6E6687464B6F84F4E9720F70 2026-09-28 1790621978 0 4 0 22 10 00 23C9501A4DFC807F6E6687464B6F84F4E9720F70\n[GNUPG:] TRUST_ULTIMATE 0 pgp signature-reference@example.invalid\n[GNUPG:] NEWSIG signature-second@example.invalid\n[GNUPG:] KEY_CONSIDERED 1A4502D97742CDCEBC70299B4CFD0E7520945D44 0\n[GNUPG:] SIG_ID y2sLlqomG3FGI37Npd/RRQgn5u0 2026-09-28 1790621978\n[GNUPG:] GOODSIG 4CFD0E7520945D44 Signature Second <signature-second@example.invalid>\n[GNUPG:] VALIDSIG 1A4502D97742CDCEBC70299B4CFD0E7520945D44 2026-09-28 1790621978 0 4 0 22 10 00 1A4502D97742CDCEBC70299B4CFD0E7520945D44\n[GNUPG:] TRUST_ULTIMATE 0 pgp signature-second@example.invalid\n",
+      "exit": 0,
+      "keys": "tru::1:1790621978:0:3:1:5\npub:u:255:22:4B6F84F4E9720F70:1790621977:::u:::scSC:::::ed25519:::0:\nfpr:::::::::23C9501A4DFC807F6E6687464B6F84F4E9720F70:\nuid:u::::1790621977::3CF750CA777384316A05565E8EB5B1108BE86405::Signature Reference <signature-reference@example.invalid>::::::::::0:\npub:u:255:22:4CFD0E7520945D44:1790621978:::u:::scSC:::::ed25519:::0:\nfpr:::::::::1A4502D97742CDCEBC70299B4CFD0E7520945D44:\nuid:u::::1790621978::202106B3CBDBEF89F33EFA96D7528CB8F467B58D::Signature Second <signature-second@example.invalid>::::::::::0:\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 8
+        }
+      ]
+    },
+    {
+      "name": "multiple_unknown",
+      "present": true,
+      "status": "[GNUPG:] NEWSIG signature-reference@example.invalid\n[GNUPG:] KEY_CONSIDERED 23C9501A4DFC807F6E6687464B6F84F4E9720F70 0\n[GNUPG:] SIG_ID OwDHIZ9TIMP2LaVyJlDYO0SEcow 2026-09-28 1790621978\n[GNUPG:] GOODSIG 4B6F84F4E9720F70 Signature Reference <signature-reference@example.invalid>\n[GNUPG:] VALIDSIG 23C9501A4DFC807F6E6687464B6F84F4E9720F70 2026-09-28 1790621978 0 4 0 22 10 00 23C9501A4DFC807F6E6687464B6F84F4E9720F70\n[GNUPG:] TRUST_UNDEFINED 0 pgp signature-reference@example.invalid\n[GNUPG:] NEWSIG signature-second@example.invalid\n[GNUPG:] ERRSIG 4CFD0E7520945D44 22 10 00 1790621978 9 1A4502D97742CDCEBC70299B4CFD0E7520945D44\n[GNUPG:] NO_PUBKEY 4CFD0E7520945D44\n[GNUPG:] FAILURE gpg-exit 33554433\n",
+      "exit": 2,
+      "keys": "tru::1:1790621977:0:3:1:5\npub:-:255:22:4B6F84F4E9720F70:1790621977:::-:::scSC:::::ed25519:::0:\nfpr:::::::::23C9501A4DFC807F6E6687464B6F84F4E9720F70:\nuid:-::::1790621977::3CF750CA777384316A05565E8EB5B1108BE86405::Signature Reference <signature-reference@example.invalid>::::::::::0:\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 4
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        }
+      ]
+    },
+    {
+      "name": "expired_key",
+      "present": true,
+      "status": "[GNUPG:] NEWSIG signature-expired@example.invalid\n[GNUPG:] KEY_CONSIDERED 1DC02E3BBACF687D4049DA168D0842F21A879BBD 0\n[GNUPG:] KEYEXPIRED 1735776000\n[GNUPG:] SIG_ID nBY5pyllXaL7ih9PTF5UJJIAmDw 2025-01-01 1735689600\n[GNUPG:] EXPKEYSIG 8D0842F21A879BBD Signature Expired <signature-expired@example.invalid>\n[GNUPG:] VALIDSIG 1DC02E3BBACF687D4049DA168D0842F21A879BBD 2025-01-01 1735689600 0 4 0 22 10 00 1DC02E3BBACF687D4049DA168D0842F21A879BBD\n",
+      "exit": 0,
+      "keys": "tru::1:1790621978:0:3:1:5\npub:u:255:22:4B6F84F4E9720F70:1790621977:::u:::scSC:::::ed25519:::0:\nfpr:::::::::23C9501A4DFC807F6E6687464B6F84F4E9720F70:\nuid:u::::1790621977::3CF750CA777384316A05565E8EB5B1108BE86405::Signature Reference <signature-reference@example.invalid>::::::::::0:\npub:u:255:22:4CFD0E7520945D44:1790621978:::u:::scSC:::::ed25519:::0:\nfpr:::::::::1A4502D97742CDCEBC70299B4CFD0E7520945D44:\nuid:u::::1790621978::202106B3CBDBEF89F33EFA96D7528CB8F467B58D::Signature Second <signature-second@example.invalid>::::::::::0:\npub:e:255:22:8D0842F21A879BBD:1735689600:1735776000::u:::sc:::::ed25519:::0:\nfpr:::::::::1DC02E3BBACF687D4049DA168D0842F21A879BBD:\nuid:e::::1735689600::B120ACAAD3C557CCEEA603B3F92799B3C5C1A785::Signature Expired <signature-expired@example.invalid>::::::::::0:\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 4
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 0
+        }
+      ]
+    },
+    {
+      "name": "expired_signature",
+      "present": true,
+      "status": "[GNUPG:] NEWSIG signature-old@example.invalid\n[GNUPG:] KEY_CONSIDERED 47ADD800870E7844006875EA154D02AB4DBD3E83 0\n[GNUPG:] SIG_ID trwffLFF1DkxQ19SFpj4/2ZOzXs 2025-01-01 1735689600\n[GNUPG:] EXPSIG 154D02AB4DBD3E83 Signature Old <signature-old@example.invalid>\n[GNUPG:] VALIDSIG 47ADD800870E7844006875EA154D02AB4DBD3E83 2025-01-01 1735689600 1735776000 4 0 22 10 00 47ADD800870E7844006875EA154D02AB4DBD3E83\n[GNUPG:] TRUST_ULTIMATE 0 pgp signature-old@example.invalid\n[GNUPG:] FAILURE gpg-exit 33554433\n",
+      "exit": 1,
+      "keys": "tru::1:1790621978:0:3:1:5\npub:u:255:22:4B6F84F4E9720F70:1790621977:::u:::scSC:::::ed25519:::0:\nfpr:::::::::23C9501A4DFC807F6E6687464B6F84F4E9720F70:\nuid:u::::1790621977::3CF750CA777384316A05565E8EB5B1108BE86405::Signature Reference <signature-reference@example.invalid>::::::::::0:\npub:u:255:22:4CFD0E7520945D44:1790621978:::u:::scSC:::::ed25519:::0:\nfpr:::::::::1A4502D97742CDCEBC70299B4CFD0E7520945D44:\nuid:u::::1790621978::202106B3CBDBEF89F33EFA96D7528CB8F467B58D::Signature Second <signature-second@example.invalid>::::::::::0:\npub:e:255:22:8D0842F21A879BBD:1735689600:1735776000::u:::sc:::::ed25519:::0:\nfpr:::::::::1DC02E3BBACF687D4049DA168D0842F21A879BBD:\nuid:e::::1735689600::B120ACAAD3C557CCEEA603B3F92799B3C5C1A785::Signature Expired <signature-expired@example.invalid>::::::::::0:\npub:u:255:22:154D02AB4DBD3E83:1735689600:::u:::scSC:::::ed25519:::0:\nfpr:::::::::47ADD800870E7844006875EA154D02AB4DBD3E83:\nuid:u::::1735689600::6D5C89B8107BD9A8025C04E9FC267393BAEA4CD0::Signature Old <signature-old@example.invalid>::::::::::0:\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        }
+      ]
+    },
+    {
+      "name": "disabled_key",
+      "present": true,
+      "status": "[GNUPG:] NEWSIG signature-reference@example.invalid\n[GNUPG:] KEY_CONSIDERED 23C9501A4DFC807F6E6687464B6F84F4E9720F70 0\n[GNUPG:] SIG_ID OwDHIZ9TIMP2LaVyJlDYO0SEcow 2026-09-28 1790621978\n[GNUPG:] GOODSIG 4B6F84F4E9720F70 Signature Reference <signature-reference@example.invalid>\n[GNUPG:] VALIDSIG 23C9501A4DFC807F6E6687464B6F84F4E9720F70 2026-09-28 1790621978 0 4 0 22 10 00 23C9501A4DFC807F6E6687464B6F84F4E9720F70\n[GNUPG:] TRUST_ULTIMATE 0 pgp signature-reference@example.invalid\n",
+      "exit": 0,
+      "keys": "tru:o:1:1790621978:1:3:1:5\npub:u:255:22:4B6F84F4E9720F70:1790621977:::u:::scSCD:::::ed25519:::0:\nfpr:::::::::23C9501A4DFC807F6E6687464B6F84F4E9720F70:\nuid:u::::1790621977::3CF750CA777384316A05565E8EB5B1108BE86405::Signature Reference <signature-reference@example.invalid>::::::::::0:\npub:u:255:22:4CFD0E7520945D44:1790621978:::u:::scSC:::::ed25519:::0:\nfpr:::::::::1A4502D97742CDCEBC70299B4CFD0E7520945D44:\nuid:u::::1790621978::202106B3CBDBEF89F33EFA96D7528CB8F467B58D::Signature Second <signature-second@example.invalid>::::::::::0:\npub:e:255:22:8D0842F21A879BBD:1735689600:1735776000::u:::sc:::::ed25519:::0:\nfpr:::::::::1DC02E3BBACF687D4049DA168D0842F21A879BBD:\nuid:e::::1735689600::B120ACAAD3C557CCEEA603B3F92799B3C5C1A785::Signature Expired <signature-expired@example.invalid>::::::::::0:\npub:u:255:22:154D02AB4DBD3E83:1735689600:::u:::scSC:::::ed25519:::0:\nfpr:::::::::47ADD800870E7844006875EA154D02AB4DBD3E83:\nuid:u::::1735689600::6D5C89B8107BD9A8025C04E9FC267393BAEA4CD0::Signature Old <signature-old@example.invalid>::::::::::0:\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        }
+      ]
+    },
+    {
+      "name": "revoked_key",
+      "present": true,
+      "status": "[GNUPG:] NEWSIG signature-reference@example.invalid\n[GNUPG:] KEY_CONSIDERED 23C9501A4DFC807F6E6687464B6F84F4E9720F70 0\n[GNUPG:] SIG_ID OwDHIZ9TIMP2LaVyJlDYO0SEcow 2026-09-28 1790621978\n[GNUPG:] REVKEYSIG 4B6F84F4E9720F70 Signature Reference <signature-reference@example.invalid>\n[GNUPG:] VALIDSIG 23C9501A4DFC807F6E6687464B6F84F4E9720F70 2026-09-28 1790621978 0 4 0 22 10 00 23C9501A4DFC807F6E6687464B6F84F4E9720F70\n[GNUPG:] KEYREVOKED\n[GNUPG:] KEY_CONSIDERED 23C9501A4DFC807F6E6687464B6F84F4E9720F70 0\n[GNUPG:] TRUST_ULTIMATE 0 pgp signature-reference@example.invalid\n",
+      "exit": 0,
+      "keys": "tru::1:1790621978:0:3:1:5\npub:r:255:22:4B6F84F4E9720F70:1790621977:::-:::sc:::::ed25519:::0:\nfpr:::::::::23C9501A4DFC807F6E6687464B6F84F4E9720F70:\nuid:r::::1790621977::3CF750CA777384316A05565E8EB5B1108BE86405::Signature Reference <signature-reference@example.invalid>::::::::::0:\npub:u:255:22:4CFD0E7520945D44:1790621978:::u:::scSC:::::ed25519:::0:\nfpr:::::::::1A4502D97742CDCEBC70299B4CFD0E7520945D44:\nuid:u::::1790621978::202106B3CBDBEF89F33EFA96D7528CB8F467B58D::Signature Second <signature-second@example.invalid>::::::::::0:\npub:e:255:22:8D0842F21A879BBD:1735689600:1735776000::u:::sc:::::ed25519:::0:\nfpr:::::::::1DC02E3BBACF687D4049DA168D0842F21A879BBD:\nuid:e::::1735689600::B120ACAAD3C557CCEEA603B3F92799B3C5C1A785::Signature Expired <signature-expired@example.invalid>::::::::::0:\npub:u:255:22:154D02AB4DBD3E83:1735689600:::u:::scSC:::::ed25519:::0:\nfpr:::::::::47ADD800870E7844006875EA154D02AB4DBD3E83:\nuid:u::::1735689600::6D5C89B8107BD9A8025C04E9FC267393BAEA4CD0::Signature Old <signature-old@example.invalid>::::::::::0:\n",
+      "policies": [
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "disabled",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": true,
+          "errno": 0,
+          "validation": 1
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "optional",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": false,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": false,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        },
+        {
+          "requirement": "required",
+          "allow_marginal": true,
+          "allow_unknown": true,
+          "success": false,
+          "errno": 37
+        }
+      ]
+    }
+  ],
+  "checksums": {
+    "md5": "5484e3b6512bfdfa83eea62a281bac44",
+    "sha256": "3570ea5daec0a40cde0c95323a19026a4658bac0e2b28930dea603b39c5cc7af",
+    "data_base64": "LlBLR0lORk8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAwMDA2NDQAMDAwMDAwMAAwMDAwMDAwADAwMDAwMDAwMDQ3ADAwMDAwMDAwMDAwADAwNzA0NAAgMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB1c3RhcgAwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwa2duYW1lID0gZGVtbwpwa2d2ZXIgPSAxLTEKYXJjaCA9IGFueQoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+  },
+  "issuer": {
+    "fingerprint": "23C9501A4DFC807F6E6687464B6F84F4E9720F70",
+    "signature_base64": "iJoEABYKAEIWIQQjyVAaTfyAf25mh0ZLb4T06XIPcAUCarq5GSQcc2lnbmF0dXJlLXJlZmVyZW5jZUBleGFtcGxlLmludmFsaWQACgkQS2+E9OlyD3CYxwEAi5hfiOaQqsnU5Wqp/ZIKqeepsa7utelD0Y+YyHo3g2IBAOUQKNm0wCjzsZGZmBWi9/uAUK3hadtUAWepxO2/VVUD"
+  }
+}

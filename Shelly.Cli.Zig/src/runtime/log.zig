@@ -1,5 +1,5 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const PackageManager = @import("PackageManager");
 
 const log_path = "/var/log/shelly.log";
 const rotated_log_path = "/var/log/shelly.log.1";
@@ -23,7 +23,7 @@ pub const SessionLog = struct {
         // Elevated processes must not follow a caller-controlled state path.
         // Their fallback uses the effective account's NSS home; the original
         // unprivileged CLI keeps its own session log across elevation.
-        const account = (Zigalpm.user_account.byUid(allocator, uid) catch null) orelse return null;
+        const account = (PackageManager.user_account.byUid(allocator, uid) catch null) orelse return null;
         defer account.deinit(allocator);
         const configured = if (uid != 0) environ.getPosix("XDG_STATE_HOME") else null;
         const state = if (configured) |path| blk: {
@@ -147,7 +147,7 @@ pub const TransactionLog = struct {
 
     pub fn attach(
         self: *TransactionLog,
-        operation_context: *Zigalpm.OperationContext,
+        operation_context: *PackageManager.OperationContext,
     ) !u64 {
         return operation_context.subscribe(.{
             .function = handleEvent,
@@ -181,12 +181,12 @@ pub const TransactionLog = struct {
         self.session.append(buffer.writer.buffered());
     }
 
-    fn handleEvent(data: ?*anyopaque, event: Zigalpm.OperationEvent) void {
+    fn handleEvent(data: ?*anyopaque, event: PackageManager.OperationEvent) void {
         const self: *TransactionLog = @ptrCast(@alignCast(data.?));
         self.writeEvent(event);
     }
 
-    fn writeEvent(self: *TransactionLog, event: Zigalpm.OperationEvent) void {
+    fn writeEvent(self: *TransactionLog, event: PackageManager.OperationEvent) void {
         const envelope = switch (event) {
             inline else => |payload| payload.envelope,
         };
@@ -262,7 +262,7 @@ fn writeUtcTime(
     );
 }
 
-fn sourceForBackend(backend: Zigalpm.operation.Backend) Source {
+fn sourceForBackend(backend: PackageManager.operation.Backend) Source {
     return switch (backend) {
         .alpm => .standard,
         .aur => .aur,
@@ -273,7 +273,7 @@ fn sourceForBackend(backend: Zigalpm.operation.Backend) Source {
     };
 }
 
-fn logsTransactionKind(kind: Zigalpm.operation.OperationKind) bool {
+fn logsTransactionKind(kind: PackageManager.operation.OperationKind) bool {
     return switch (kind) {
         .install, .remove, .update, .sync, .build, .cleanup, .configure => true,
         .search, .download, .inspect, .launch => false,
@@ -448,7 +448,7 @@ test "transaction log records operation lifecycle without progress noise" {
     var session = SessionLog.tryOpenAt(std.testing.io, path, rotated_path) orelse
         return error.CouldNotOpenTestLog;
     var transaction = TransactionLog.init(&session, allocator);
-    var operation_context = Zigalpm.OperationContext.init(allocator, std.testing.io);
+    var operation_context = PackageManager.OperationContext.init(allocator, std.testing.io);
     defer operation_context.deinit();
     _ = try transaction.attach(&operation_context);
 
@@ -456,6 +456,13 @@ test "transaction log records operation lifecycle without progress noise" {
     operation.status(.information, "installed example (1.0-1)", "alpm.information", null);
     operation.progress(.{ .percentage = 50, .message = "ignored progress" });
     operation.finish(.success);
+    var rejected = operation_context.begin(.{ .backend = .alpm, .kind = .install });
+    var transfer = rejected.child(.{ .backend = .download, .kind = .download, .subject = "bad.pkg" });
+    transfer.status(.information, "Package retrieval completed: bad.pkg", "download.complete", null);
+    transfer.finish(.success);
+    rejected.status(.information, "Verifying downloads: bad.pkg", "acquisition.processing", null);
+    rejected.reportError(error.ChecksumMismatch, "Rejected bad.pkg", "rlpm", null, false);
+    rejected.finish(.failed);
     session.close();
 
     const contents = try temporary.dir.readFileAlloc(
@@ -467,7 +474,10 @@ test "transaction log records operation lifecycle without progress noise" {
     defer allocator.free(contents);
     try std.testing.expect(std.mem.indexOf(u8, contents, "Transaction started") != null);
     try std.testing.expect(std.mem.indexOf(u8, contents, "installed example (1.0-1)") != null);
-    try std.testing.expect(std.mem.indexOf(u8, contents, "Transaction completed") != null);
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, contents, "Transaction completed"));
+    try std.testing.expect(std.mem.indexOf(u8, contents, "Verifying downloads: bad.pkg") != null);
+    try std.testing.expect(std.mem.indexOf(u8, contents, "Rejected bad.pkg") != null);
+    try std.testing.expect(std.mem.indexOf(u8, contents, "Could not complete the requested operation.") != null);
     try std.testing.expect(std.mem.indexOf(u8, contents, "installed example (1.0-1)") != null);
     try std.testing.expect(std.mem.indexOf(u8, contents, "ignored progress") == null);
 }

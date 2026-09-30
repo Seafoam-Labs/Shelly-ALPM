@@ -21,6 +21,7 @@ jobs:
       devario: ${{ steps.filter.outputs.devario }}
       tui: ${{ steps.filter.outputs.tui }}
       key: ${{ steps.filter.outputs.key }}
+      rlpm: ${{ steps.filter.outputs.rlpm }}
       notifications: ${{ steps.filter.outputs.notifications }}
       pkgbuild: ${{ steps.filter.outputs.pkgbuild }}
     steps:
@@ -35,15 +36,22 @@ jobs:
             http:
               - 'Shelly.Http/**'
             packagemanager:
+              - 'Shelly.Download/**'
+              - 'Shelly.Http/**'
               - 'Shelly.PackageManager/**'
+              - 'Shelly.Rlpm/**'
+              - 'Shelly.Key/**'
               - 'Shelly.Diagnostics/**'
             cli:
+              - 'Shelly.Download/**'
+              - 'Shelly.Http/**'
               - 'Shelly.Cli.Zig/**'
               - 'Shelly.Diagnostics/**'
               - 'Shelly.PackageManager/**'
               - 'Shelly.Flatpak.Backend/**'
               - 'scripts/**'
             gtk:
+              - 'Shelly.Http/**'
               - 'Shelly.Ui.Gtk/**'
               - 'Shelly.Diagnostics/**'
             devario:
@@ -54,6 +62,17 @@ jobs:
             key:
               - 'Shelly.Key/**'
               - 'Shelly.Diagnostics/**'
+            rlpm:
+              - 'Shelly.Download/**'
+              - 'Shelly.Http/**'
+              - 'Shelly.Rlpm/**'
+              - 'Shelly.PackageManager/src/rlpm/**'
+              - 'Shelly.PackageManager/src/shared/operation_context.zig'
+              - 'Shelly.PackageManager/build.zig'
+              - 'Shelly.PackageManager/build.zig.zon'
+              - 'Shelly.Key/**'
+              - 'Shelly.Diagnostics/**'
+              - '.github/workflows/build-and-publish.yml'
             notifications:
               - 'Shelly.Notifications.Zig/**'
               - 'Shelly.Diagnostics/**'
@@ -113,13 +132,14 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig flatpak base-devel glibc git libarchive
+          pacman -S --needed --noconfirm zig flatpak base-devel glibc git libarchive curl sqlite
       - uses: actions/checkout@v6
       - name: Build and test PackageManager
         run: |
           cd Shelly.PackageManager
           zig build
           zig build test
+          zig build downloader-test
           zig build flatpak-test
 
   cli:
@@ -133,7 +153,7 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig flatpak base-devel glibc git libarchive ripgrep
+          pacman -S --needed --noconfirm zig flatpak base-devel glibc git libarchive curl sqlite ripgrep
       - uses: actions/checkout@v6
       - name: Test shared diagnostics
         run: cd Shelly.Diagnostics && zig build test
@@ -234,6 +254,79 @@ jobs:
           zig build
           zig build test
 
+  native-backends:
+    needs: changes
+    if: ${{ needs.changes.outputs.packagemanager == 'true' || needs.changes.outputs.cli == 'true' || needs.changes.outputs.rlpm == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    container:
+      image: archlinux:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        libalpm: ['true', 'false']
+        optimize: [Debug, ReleaseSafe]
+    steps:
+      - run: |
+          pacman -Syu --noconfirm
+          pacman -S --needed --noconfirm zig base-devel glibc git libarchive sqlite gnupg curl ripgrep
+      - uses: actions/checkout@v6
+      - name: Remove libalpm development and runtime files in this disposable container
+        if: ${{ matrix.libalpm == 'false' }}
+        shell: bash
+        run: |
+          mkdir -p /tmp/disabled-libalpm
+          shopt -s nullglob
+          for file in /usr/include/alpm.h /usr/include/alpm_list.h /usr/lib/libalpm.so* /usr/lib/pkgconfig/libalpm.pc; do
+            mv "$file" /tmp/disabled-libalpm/
+          done
+          ! pkg-config --exists libalpm
+          ! test -e /usr/include/alpm.h
+          ! test -e /usr/lib/libalpm.so
+      - name: Test loopback downloads and temporary-keyring signing
+        working-directory: Shelly.PackageManager
+        run: zig build native-environment-test -Dlibalpm=${{ matrix.libalpm }} -Doptimize=${{ matrix.optimize }} --summary all
+      - name: Test selection, private-root transactions, copied Shelly worker modes and ELF dependencies
+        run: scripts/test-native-backends.sh '${{ matrix.libalpm }}' '${{ matrix.optimize }}'
+
+  rlpm:
+    needs: changes
+    if: ${{ needs.changes.outputs.rlpm == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    container:
+      image: archlinux:latest
+      # Action and executor integration tests use nested namespaces, disposable chroots and private tmpfs mounts.
+      options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined --cap-add SYS_ADMIN
+    strategy:
+      matrix:
+        optimize: [Debug, ReleaseSafe]
+    steps:
+      - run: |
+          pacman -Syu --noconfirm
+          pacman -S --needed --noconfirm zig base-devel glibc git libarchive sqlite gnupg curl util-linux
+      - uses: actions/checkout@v6
+      - name: Build and run RLPM unit and disposable-root action tests
+        working-directory: Shelly.Rlpm
+        run: |
+          zig version
+          zig build -Doptimize=${{ matrix.optimize }}
+          zig build test test-actions test-executor-integration test-download check-download-sandbox -Doptimize=${{ matrix.optimize }} --summary all
+      - name: Verify shared transfer and queue regressions
+        working-directory: Shelly.Download
+        run: zig build test check-sandbox -Doptimize=${{ matrix.optimize }} --summary all
+      - name: Verify GPG trust, key imports and signed archives
+        if: ${{ matrix.optimize == 'Debug' }}
+        working-directory: Shelly.Rlpm
+        run: zig build test-signature --summary all
+      - name: Test RLPM deferred questions and cancellation adapter
+        working-directory: Shelly.PackageManager
+        run: zig build rlpm-adapter-test -Drlpm-adapter-only=true -Doptimize=${{ matrix.optimize }} --summary all
+
   notifications:
     needs: changes
     if: ${{ needs.changes.outputs.notifications == 'true' }}
@@ -286,6 +379,8 @@ jobs:
       - key
       - notifications
       - pkgbuild
+      - native-backends
+      - rlpm
     runs-on: ubuntu-latest
     steps:
       - name: Verify no job failed

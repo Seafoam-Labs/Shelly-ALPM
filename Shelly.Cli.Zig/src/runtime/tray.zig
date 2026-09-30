@@ -104,7 +104,7 @@ test "tray refresh targets the NSS invoking user after elevation and skips direc
     try environment.put("DBUS_SESSION_BUS_ADDRESS", "unix:path=/run/user/0/bus");
     try std.testing.expect(try resolveTarget(&tc.context, 0) == null);
 
-    const account = (try @import("Zigalpm").user_account.byName(tc.context.allocator, "nobody")) orelse
+    const account = (try @import("PackageManager").user_account.byName(tc.context.allocator, "nobody")) orelse
         return error.SkipZigTest;
     const uid = try std.fmt.allocPrint(tc.context.allocator, "{d}", .{account.uid});
     const bus = try std.fmt.allocPrint(tc.context.allocator, "unix:path=/run/user/{d}/bus", .{account.uid});

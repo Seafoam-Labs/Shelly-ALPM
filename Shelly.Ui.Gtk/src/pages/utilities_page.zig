@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gobject = bindings.gobject;
@@ -101,7 +102,7 @@ pub const ShellyUtilitiesPage = extern struct {
         var failure_detail: ?[]u8 = null;
         const cli = ShellyCli{ .allocator = arena.allocator(), .io = threaded.io(), .failure_detail = &failure_detail };
         const parsed = cli.repair_db() catch |err| {
-            std.log.err("Could not remove the package database lock. {0s}\n\nTechnical details: {1s}", .{ @import("diagnostics").cause(err), @errorName(err) });
+            std.log.err("Could not remove the package database lock. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
             const message = arena.allocator().dupeZ(u8, failure_detail orelse "Could not remove the package database lock. Shelly returned no error details. Review the command output before retrying.") catch return;
             self.priv().toast.show(.@"error", message);
             return;

@@ -2,6 +2,8 @@
 //! (review check, sources, lifecycle steps, package assembly) through the
 //! focused sibling modules and keeps the public builder API.
 const std = @import("std");
+const diagnostics = @import("diagnostics");
+const user_errors = @import("../../shared/user_errors.zig");
 const builtin = @import("builtin");
 pub const ShellyBuildConfiguration = @import("../shellybuild.zig").ShellyBuildConfiguration;
 const pkgbuild_parser = @import("../../pkgbuild/pkgbuild_parser.zig");
@@ -225,7 +227,7 @@ pub const PackageBuilder = struct {
         var bad_path: ?[]const u8 = null;
         const path = build_path.resolve(self.allocator, self.io, self.shellybuild_config.build.extra_path, &bad_path) catch |err| {
             if (bad_path) |invalid| {
-                const message = try std.fmt.allocPrint(self.allocator, "Cannot use build.extra_path directory '{0f}': {1s} Configure an absolute directory searchable by the build user.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(invalid), @import("diagnostics").cause(err), @errorName(err) });
+                const message = try std.fmt.allocPrint(self.allocator, "Cannot use build.extra_path directory '{0f}': {1s} Configure an absolute directory searchable by the build user.\n\nTechnical details: {2s}", .{ diagnostics.safe(invalid), diagnostics.cause(err), @errorName(err) });
                 defer self.allocator.free(message);
                 operation.reportError(err, message, "build configuration", null, false);
             }
@@ -238,7 +240,7 @@ pub const PackageBuilder = struct {
             const config = @import("../shellybuild.zig");
             config.validateEnvironmentAssignment(assignment) catch |err| {
                 const message = try std.fmt.allocPrint(self.allocator, "Invalid build.env variable '{f}': {s}.", .{
-                    @import("diagnostics").safe(assignment.name), config.environmentErrorReason(err),
+                    diagnostics.safe(assignment.name), config.environmentErrorReason(err),
                 });
                 defer self.allocator.free(message);
                 operation.reportError(err, message, "build configuration", null, false);
@@ -290,7 +292,7 @@ pub const PackageBuilder = struct {
                 return err;
             }
             if (err != error.StepFailed) {
-                const message = try @import("../../shared/user_errors.zig").format(self.allocator, err, .{
+                const message = try user_errors.format(self.allocator, err, .{
                     .operation = "the package build",
                     .subject = if (self.requested_names.len > 0) self.requested_names[0] else null,
                 });

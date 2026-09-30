@@ -1,5 +1,6 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const diagnostics = @import("diagnostics");
+const PackageManager = @import("PackageManager");
 const test_support = @import("test_support.zig");
 const output = @import("../output/config.zig");
 const standard_single_pane = @import("../output/standard_single_pane.zig");
@@ -23,7 +24,7 @@ const Real = struct {
     pub fn run(
         _: Real,
         context: *runtime.RuntimeContext,
-        operation_context: *Zigalpm.OperationContext,
+        operation_context: *PackageManager.OperationContext,
         invocation: *const parser.Invocation,
     ) !void {
         if (std.mem.eql(u8, invocation.command.path, standard_command_path))
@@ -69,7 +70,7 @@ pub fn dispatch(
             context.allocator.free(elevated_arguments);
 
         const elevated_exit = elevation.relaunchIfNeeded(context, elevated_arguments) catch |err| {
-            try context.stderr.print("Could not obtain administrator privileges for package updates. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+            try context.stderr.print("Could not obtain administrator privileges for package updates. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -131,7 +132,7 @@ fn confirmStandardUpdateUi(
         "Updating individual standard packages is an unsupported partial upgrade and can break your system. Use `shelly upgrade standard` for a full update.",
     );
 
-    var operation_context = Zigalpm.OperationContext.init(context.allocator, context.io);
+    var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
     defer operation_context.deinit();
     var question_responder: ui_operation.QuestionResponder = .{
         .context = context,
@@ -221,10 +222,10 @@ fn executeUi(
 
 fn runStandard(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
-    const manager = try Zigalpm.AlpmManager.init(context.allocator, context.environ, .{ .use_root = true, .operation_context = operation_context });
+    const manager = try PackageManager.Manager.init(context.allocator, context.environ, .{ .use_root = true, .operation_context = operation_context });
     defer manager.deinit();
     manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null);
@@ -236,14 +237,14 @@ fn runStandard(
 
 fn runAur(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
     const executable = try std.process.executablePathAlloc(context.io, context.allocator);
     defer context.allocator.free(executable);
     const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
     const aur_base = try aur_url.resolveFor(context, invocation);
-    const manager = try Zigalpm.AurManager.init(context.allocator, context.environ, .{
+    const manager = try PackageManager.AurManager.init(context.allocator, context.environ, .{
         .aur_git_base_url = aur_base,
         .root = true,
         .check = checkOverride(invocation),
@@ -271,7 +272,7 @@ fn signOverride(invocation: *const parser.Invocation) ?bool {
 
 fn updateFlatpakTarget(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     manager: anytype,
     target: []const u8,
 ) !void {
@@ -298,25 +299,25 @@ fn updateFlatpakTarget(
             rebase.scope,
             &.{application.id},
         )) return UpdateError.BackendFailed;
-        const message = try Zigalpm.flatpak.eol.rebasedMessage(
+        const message = try PackageManager.flatpak.eol.rebasedMessage(
             context.allocator,
             application.id,
             rebase.new_id,
         );
         defer context.allocator.free(message);
-        Zigalpm.flatpak.eol.emitStatus(operation_context, .update, .success, application.id, message);
+        PackageManager.flatpak.eol.emitStatus(operation_context, .update, .success, application.id, message);
         return;
     }
 
     if (detection.reason) |reason| {
-        const warning = try Zigalpm.flatpak.eol.eolOnlyWarning(
+        const warning = try PackageManager.flatpak.eol.eolOnlyWarning(
             context.allocator,
             application.id,
             application.branch,
             reason,
         );
         defer context.allocator.free(warning);
-        Zigalpm.flatpak.eol.emitStatus(operation_context, .update, .warning, application.id, warning);
+        PackageManager.flatpak.eol.emitStatus(operation_context, .update, .warning, application.id, warning);
     }
     if (!try manager.update_installed_flatpak(target, null))
         return UpdateError.BackendFailed;
@@ -324,10 +325,10 @@ fn updateFlatpakTarget(
 
 fn runFlatpak(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
-    var manager = Zigalpm.FlatpakManager{ .allocator = context.allocator, .io = context.io };
+    var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     try manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null) catch {};
@@ -479,7 +480,7 @@ test "routes every update backend through shared output lifecycles" {
         pub fn run(
             self: *@This(),
             context: *runtime.RuntimeContext,
-            _: *Zigalpm.OperationContext,
+            _: *PackageManager.OperationContext,
             invocation: *const parser.Invocation,
         ) !void {
             try std.testing.expect(!context.tray_refresh_requested);
@@ -594,7 +595,7 @@ test "update backend failures return a nonzero status" {
         pub fn run(
             _: @This(),
             _: *runtime.RuntimeContext,
-            _: *Zigalpm.OperationContext,
+            _: *PackageManager.OperationContext,
             _: *const parser.Invocation,
         ) !void {
             return error.TestBackendFailure;
@@ -618,8 +619,8 @@ test "confirmed elevated standard updates append no-confirm exactly once" {
 
 const EolUpdateTestManager = struct {
     allocator: std.mem.Allocator,
-    application: ?Zigalpm.flatpak.types.InstalledApplication = null,
-    detection: ?Zigalpm.flatpak.EolDetection = null,
+    application: ?PackageManager.flatpak.types.InstalledApplication = null,
+    detection: ?PackageManager.flatpak.EolDetection = null,
     find_error: bool = false,
     update_result: bool = true,
     rebase_result: bool = true,
@@ -633,11 +634,11 @@ const EolUpdateTestManager = struct {
     pub fn find_installed_flatpak(
         self: @This(),
         _: []const u8,
-    ) !?Zigalpm.flatpak.types.InstalledApplication {
+    ) !?PackageManager.flatpak.types.InstalledApplication {
         if (self.find_error) return error.TestFindFailure;
         if (self.application == null) return null;
         const source = self.application.?;
-        return try Zigalpm.flatpak.types.InstalledApplication.fromWire(self.allocator, .{
+        return try PackageManager.flatpak.types.InstalledApplication.fromWire(self.allocator, .{
             .id = source.id,
             .name = source.name,
             .arch = source.arch,
@@ -648,7 +649,7 @@ const EolUpdateTestManager = struct {
             .origin = source.origin,
             .kind = @enumFromInt(@intFromEnum(source.kind)),
             .installed_size = source.installed_size,
-            .scope = Zigalpm.flatpak.types.Scope.toWire(source.scope),
+            .scope = PackageManager.flatpak.types.Scope.toWire(source.scope),
             .eol = source.eol,
             .eol_rebase = source.eol_rebase,
         });
@@ -656,12 +657,12 @@ const EolUpdateTestManager = struct {
 
     pub fn detect_eol_flatpak(
         self: @This(),
-        _: *const Zigalpm.flatpak.types.InstalledApplication,
-    ) !?Zigalpm.flatpak.EolDetection {
+        _: *const PackageManager.flatpak.types.InstalledApplication,
+    ) !?PackageManager.flatpak.EolDetection {
         const source = self.detection orelse return null;
         var reason: ?[]u8 = null;
         if (source.reason) |value| reason = try self.allocator.dupe(u8, value);
-        var rebase: ?Zigalpm.flatpak.EolRebase = null;
+        var rebase: ?PackageManager.flatpak.EolRebase = null;
         if (source.rebase) |value| {
             rebase = try cloneEolRebase(self.allocator, value);
         }
@@ -682,7 +683,7 @@ const EolUpdateTestManager = struct {
         old_ref: []const u8,
         new_ref: []const u8,
         remote: []const u8,
-        _: Zigalpm.flatpak.Scope,
+        _: PackageManager.flatpak.Scope,
         previous_ids: []const []const u8,
     ) !bool {
         self.rebase_called = true;
@@ -700,8 +701,8 @@ const EolUpdateTestManager = struct {
 
 fn cloneEolRebase(
     allocator: std.mem.Allocator,
-    source: Zigalpm.flatpak.EolRebase,
-) !Zigalpm.flatpak.EolRebase {
+    source: PackageManager.flatpak.EolRebase,
+) !PackageManager.flatpak.EolRebase {
     return .{
         .old_ref = try allocator.dupe(u8, source.old_ref),
         .new_ref = try allocator.dupe(u8, source.new_ref),
@@ -712,7 +713,7 @@ fn cloneEolRebase(
     };
 }
 
-fn makeInstalledApplication(id: []const u8, branch: []const u8) Zigalpm.flatpak.types.InstalledApplication {
+fn makeInstalledApplication(id: []const u8, branch: []const u8) PackageManager.flatpak.types.InstalledApplication {
     return .{
         .id = @constCast(id),
         .name = @constCast(id),
@@ -730,7 +731,7 @@ fn makeInstalledApplication(id: []const u8, branch: []const u8) Zigalpm.flatpak.
     };
 }
 
-fn makeEolRebaseDetection(new_id: []const u8, new_branch: []const u8) Zigalpm.flatpak.EolDetection {
+fn makeEolRebaseDetection(new_id: []const u8, new_branch: []const u8) PackageManager.flatpak.EolDetection {
     return .{
         .reason = null,
         .rebase = .{
@@ -755,7 +756,7 @@ test "Flatpak update EOL rebase dispatches to the replacement" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operations = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
 
     var manager: EolUpdateTestManager = .{
@@ -785,7 +786,7 @@ test "Flatpak update EOL-only warns and proceeds with the normal update" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operations = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
 
     var manager: EolUpdateTestManager = .{
@@ -810,7 +811,7 @@ test "Flatpak update without EOL runs the normal update path" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operations = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
 
     var manager: EolUpdateTestManager = .{
@@ -835,7 +836,7 @@ test "Flatpak update returns FlatpakNotFound when the ref is not installed" {
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
-    var operations = Zigalpm.OperationContext.init(arena.allocator(), std.testing.io);
+    var operations = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
     defer operations.deinit();
 
     var manager: EolUpdateTestManager = .{

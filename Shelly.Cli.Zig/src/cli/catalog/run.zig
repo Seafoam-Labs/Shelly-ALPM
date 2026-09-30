@@ -10,7 +10,7 @@ pub const variants = [_]types.Variant{
         .name = "flatpak",
         .type_code = 'f',
         .description = "Launch an installed Flatpak application, stop it with --kill, or list running instances with `run flatpak list`.",
-        .implementation = "Zigalpm.FlatpakManager.launch_flatpak / kill_flatpak / get_running_instances_flatpak",
+        .implementation = "PackageManager.FlatpakManager.launch_flatpak / kill_flatpak / get_running_instances_flatpak",
         .arguments = &.{optionalArgument(
             "package",
             "Flatpak application ID or friendly name; use `list` to show running applications",

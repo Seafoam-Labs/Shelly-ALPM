@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const manager = @import("manager.zig");
+// This suite exercises native handles and callbacks directly.
+const manager = @import("libalpm_manager.zig");
 const bindings = @import("bindings.zig");
 const events = @import("events.zig");
 const operations = @import("operation_context");
@@ -2022,6 +2023,22 @@ test "Manager.sync keeps included repository mirrors separate during fallback (i
 }
 
 test "ALPM package and database downloads honor limits across mirror retries" {
+    const Observer = struct {
+        started: std.atomic.Value(usize) = .init(0),
+        finished: std.atomic.Value(usize) = .init(0),
+        retries: std.atomic.Value(usize) = .init(0),
+        fn receive(data: ?*anyopaque, update: @import("events.zig").DownloadUpdate) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (update.state == .batch_start) return;
+            testing.expect(update.name.len != 0 and std.mem.indexOfScalar(u8, update.name, '/') == null) catch unreachable;
+            switch (update.state) {
+                .started => _ = self.started.fetchAdd(1, .monotonic),
+                .completed, .unchanged, .failed => _ = self.finished.fetchAdd(1, .monotonic),
+                .retry => _ = self.retries.fetchAdd(1, .monotonic),
+                else => {},
+            }
+        }
+    };
     const allocator = testing.allocator;
     const io = testing.io;
     const previous = Manager.defaultParallelDownloadCount();
@@ -2053,12 +2070,19 @@ test "ALPM package and database downloads honor limits across mirror retries" {
             Manager.setDefaultParallelDownloadCount(limit);
             const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
             defer mgr.deinit();
+            var observer: Observer = .{};
+            _ = try mgr.dispatcher.addDownloadHandler(.{ .function = Observer.receive, .data = &observer });
+            try testing.expectEqual(null, mgr.operation_context);
+            try testing.expectEqual(null, mgr.dispatcher.operation);
             if (packages) {
                 var names = [_][:0]const u8{ "remote-provider", "alpha-provider", "literal-target", "version-provider", "versioned-target" };
                 try testing.expectError(error.UpdateFetchFailed, mgr.install_packages(&names, .{}));
             } else {
                 try testing.expectError(error.UpdateFetchFailed, mgr.sync_for_update_check(true));
             }
+            try testing.expectEqual(@as(usize, 5), observer.started.load(.acquire));
+            try testing.expectEqual(@as(usize, 5), observer.finished.load(.acquire));
+            try testing.expectEqual(@as(usize, 5), observer.retries.load(.acquire));
             try testing.expectEqual(@as(usize, 10), server.requests.load(.acquire));
             try testing.expectEqual(@as(usize, 0), server.active.load(.acquire));
             try testing.expect(!server.failed.load(.acquire));
@@ -3288,14 +3312,11 @@ test "get_allowed_architecture returns the resolved host architecture and any" {
         allocator.free(architectures);
     }
 
-    const expected_host = switch (builtin.cpu.arch) {
-        .x86_64 => "x86_64",
-        .aarch64 => "aarch64",
-        else => "x86_64",
-    };
-    try testing.expectEqual(@as(usize, 2), architectures.len);
-    try testing.expectEqualStrings(expected_host, architectures[0]);
-    try testing.expectEqualStrings("any", architectures[1]);
+    var physical = try @import("Shelly_Rlpm").PhysicalArchitectures.init(allocator);
+    defer physical.deinit();
+    try testing.expectEqual(physical.names.len + 1, architectures.len);
+    for (physical.names, architectures[0..physical.names.len]) |expected, actual| try testing.expectEqualStrings(expected, actual);
+    try testing.expectEqualStrings("any", architectures[physical.names.len]);
 }
 
 // ---------------------------------------------------------------------------
@@ -3453,7 +3474,7 @@ test "Manager.init registers and deduplicates repository microarchitectures" {
     const config = try std.fmt.allocPrint(
         allocator,
         "[options]\n" ++
-            "Architecture = auto\n" ++
+            "Architecture = x86_64\n" ++
             "SigLevel = Never\n" ++
             "DBPath = {s}\n" ++
             "\n" ++
@@ -3479,11 +3500,7 @@ test "Manager.init registers and deduplicates repository microarchitectures" {
         allocator.free(architectures);
     }
 
-    const host = switch (builtin.cpu.arch) {
-        .x86_64 => "x86_64",
-        .aarch64 => "aarch64",
-        else => "x86_64",
-    };
+    const host = "x86_64";
     const expected = [_][]const u8{
         host,
         "any",
@@ -3593,7 +3610,7 @@ test "Manager.init ignores malformed and sub-v2 microarchitecture suffixes" {
     const config = try std.fmt.allocPrint(
         allocator,
         "[options]\n" ++
-            "Architecture = auto\n" ++
+            "Architecture = x86_64\n" ++
             "SigLevel = Never\n" ++
             "DBPath = {s}\n" ++
             "\n" ++

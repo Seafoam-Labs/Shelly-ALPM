@@ -1,69 +1,10 @@
 //! By convention, root.zig is the root source file when making a package.
 const std = @import("std");
+pub const internal_workers = @import("Shelly_Rlpm").Workers;
 const Io = std.Io;
 const flatpak_backend_loader = @import("flatpak/backend_loader.zig");
 
-pub const alpm = struct {
-    pub const manager = @import("alpm/manager.zig");
-    pub const bootstrap = @import("alpm/bootstrap.zig");
-    pub const bindings = @import("alpm/bindings.zig");
-    pub const events = @import("alpm/events.zig");
-    pub const configuration = @import("alpm/configuration.zig");
-    pub const cache_manager = @import("alpm/cache_manager.zig");
-    pub const archive_manager = @import("alpm/archive_manager.zig");
-    pub const pacfile_manager = @import("alpm/pacfile_manager.zig");
-
-    pub const InitOptions = manager.InitOptions;
-    pub const Manager = manager.Manager;
-    pub const BootstrapOptions = bootstrap.Options;
-    pub const BootstrapResult = bootstrap.Result;
-    pub const TransFlag = bindings.libalpm.TransFlag;
-    pub const SigLevel = bindings.libalpm.SigLevel;
-    pub const OwnedPackage = bindings.libalpm.OwnedPackage;
-    pub const OwnedPackageWithUpdate = bindings.libalpm.OwnedPackageWithUpdate;
-    pub const ReverseDependencyOptions = manager.ReverseDependencyOptions;
-    pub const DependencySatisfier = manager.DependencySatisfier;
-    pub const RestartReport = manager.RestartReport;
-    pub const AffectedProcess = manager.AffectedProcess;
-    pub const ServiceRestartFailure = manager.ServiceRestartFailure;
-    pub const ServiceRestartFailureKind = manager.ServiceRestartFailureKind;
-    pub const Repository = configuration.Configuration.Repository;
-    pub const compare_package_versions = manager.Manager.compare_package_versions;
-    pub const version_compare = manager.Manager.version_compare;
-    pub const ArchiveManager = archive_manager.ArchiveManager;
-    pub const ArchiveManagerOptions = archive_manager.Options;
-    pub const ArchiveError = archive_manager.Error;
-    pub const ArchiveDiscoveryError = archive_manager.DiscoveryError;
-    pub const ArchiveInstallError = archive_manager.InstallError;
-    pub const ArchiveSource = archive_manager.Source;
-    pub const ArchiveEndpoint = archive_manager.ArchiveEndpoint;
-    pub const DowngradeCandidate = archive_manager.DowngradeCandidate;
-    pub const PreparedDowngradePackage = archive_manager.PreparedPackage;
-    pub const parse_archive_listing = archive_manager.parseArchiveListing;
-    pub const CacheManager = cache_manager.CacheManager;
-    pub const CacheManagerOptions = cache_manager.Options;
-    pub const CacheCleanOptions = cache_manager.CleanOptions;
-    pub const CacheInstalledFilter = cache_manager.InstalledFilter;
-    pub const CacheEntry = cache_manager.Entry;
-    pub const CacheRemovalItem = cache_manager.RemovalItem;
-    pub const CacheRemovalPlan = cache_manager.RemovalPlan;
-    pub const CacheExecutionResult = cache_manager.ExecutionResult;
-    pub const CacheError = cache_manager.Error;
-    pub const parse_cache_package_filename = cache_manager.parsePackageFilename;
-    pub const PacfileManager = pacfile_manager.PacfileManager;
-    pub const PacfileManagerOptions = pacfile_manager.Options;
-    pub const PacfileError = pacfile_manager.Error;
-    pub const PacfileSearchMode = pacfile_manager.SearchMode;
-    pub const PacfileKind = pacfile_manager.Kind;
-    pub const PacfileState = pacfile_manager.State;
-    pub const PacfileDiffMode = pacfile_manager.DiffMode;
-    pub const ParsedPacfilePath = pacfile_manager.ParsedPath;
-    pub const Pacfile = pacfile_manager.Pacfile;
-    pub const PacfileToolResult = pacfile_manager.ToolResult;
-    pub const PacfileViewResult = pacfile_manager.ViewResult;
-    pub const PreparedPacfileMerge = pacfile_manager.PreparedMerge;
-    pub const parse_pacfile_path = pacfile_manager.parsePacfilePath;
-};
+pub const Manager = @import("alpm/manager.zig").Manager;
 
 pub const user_errors = @import("shared/user_errors.zig");
 pub const user_account = @import("user_account");
@@ -190,6 +131,7 @@ pub const repo = struct {
 
 /// Backend-neutral lifecycle, event, question, and cancellation API.
 pub const operation = @import("operation_context");
+pub const RlpmOperationAdapter = @import("rlpm_operation_adapter");
 
 /// Zig 0.16 HTTP client with a compact, VPN-compatible TLS ClientHello.
 pub const HttpClient = @import("ShellyHttp");
@@ -207,11 +149,10 @@ pub const shared = struct {
     pub const Operation = operation.Operation;
 };
 
-pub const AlpmManagerInitOptions = alpm.InitOptions;
-pub const AlpmManager = alpm.Manager;
-pub const CacheManager = alpm.CacheManager;
-pub const PacfileManager = alpm.PacfileManager;
-pub const AlpmArchiveManager = alpm.ArchiveManager;
+pub const ManagerInitOptions = Manager.InitOptions;
+pub const CacheManager = Manager.CacheManager;
+pub const PacfileManager = Manager.PacfileManager;
+pub const ArchiveManager = Manager.ArchiveManager;
 pub const AurManager = aur.Manager;
 pub const FlatpakManager = flatpak.Manager;
 pub const AppImageManager = appimage.Manager;
@@ -264,56 +205,56 @@ test "public AUR module exposes the package manager" {
 }
 
 test "public library surface exposes package manager APIs" {
-    _ = AlpmManager;
+    _ = Manager;
     _ = CacheManager;
     _ = PacfileManager;
-    _ = AlpmArchiveManager;
+    _ = ArchiveManager;
     _ = AurManager;
     _ = FlatpakManager;
     _ = AppImageManager;
     _ = LocalManager;
-    _ = alpm.TransFlag;
-    _ = alpm.SigLevel;
-    _ = alpm.DependencySatisfier;
-    _ = alpm.RestartReport;
-    _ = alpm.AffectedProcess;
-    _ = alpm.ServiceRestartFailure;
-    _ = alpm.ServiceRestartFailureKind;
-    _ = alpm.Repository;
-    _ = alpm.compare_package_versions;
-    _ = alpm.version_compare;
-    _ = alpm.ArchiveManagerOptions;
-    _ = alpm.ArchiveError;
-    _ = alpm.ArchiveDiscoveryError;
-    _ = alpm.ArchiveInstallError;
-    _ = alpm.ArchiveSource;
-    _ = alpm.ArchiveEndpoint;
-    _ = alpm.DowngradeCandidate;
-    _ = alpm.PreparedDowngradePackage;
-    _ = alpm.parse_archive_listing;
-    _ = alpm.events.Dispatcher;
-    _ = alpm.configuration.Configuration;
-    _ = alpm.CacheCleanOptions;
-    _ = alpm.CacheManagerOptions;
-    _ = alpm.CacheInstalledFilter;
-    _ = alpm.CacheEntry;
-    _ = alpm.CacheRemovalItem;
-    _ = alpm.CacheRemovalPlan;
-    _ = alpm.CacheExecutionResult;
-    _ = alpm.CacheError;
-    _ = alpm.parse_cache_package_filename;
-    _ = alpm.PacfileManagerOptions;
-    _ = alpm.PacfileError;
-    _ = alpm.PacfileSearchMode;
-    _ = alpm.PacfileKind;
-    _ = alpm.PacfileState;
-    _ = alpm.PacfileDiffMode;
-    _ = alpm.ParsedPacfilePath;
-    _ = alpm.Pacfile;
-    _ = alpm.PacfileToolResult;
-    _ = alpm.PacfileViewResult;
-    _ = alpm.PreparedPacfileMerge;
-    _ = alpm.parse_pacfile_path;
+    _ = Manager.TransFlag;
+    _ = Manager.SigLevel;
+    _ = Manager.DependencySatisfier;
+    _ = Manager.RestartReport;
+    _ = Manager.AffectedProcess;
+    _ = Manager.ServiceRestartFailure;
+    _ = Manager.ServiceRestartFailureKind;
+    _ = Manager.Repository;
+    _ = Manager.compare_package_versions;
+    _ = Manager.version_compare;
+    _ = Manager.ArchiveManagerOptions;
+    _ = Manager.ArchiveError;
+    _ = Manager.ArchiveDiscoveryError;
+    _ = Manager.ArchiveInstallError;
+    _ = Manager.ArchiveSource;
+    _ = Manager.ArchiveEndpoint;
+    _ = Manager.DowngradeCandidate;
+    _ = Manager.PreparedDowngradePackage;
+    _ = Manager.parse_archive_listing;
+    _ = Manager.events.Dispatcher;
+    _ = Manager.configuration.Configuration;
+    _ = Manager.CacheCleanOptions;
+    _ = Manager.CacheManagerOptions;
+    _ = Manager.CacheInstalledFilter;
+    _ = Manager.CacheEntry;
+    _ = Manager.CacheRemovalItem;
+    _ = Manager.CacheRemovalPlan;
+    _ = Manager.CacheExecutionResult;
+    _ = Manager.CacheError;
+    _ = Manager.parse_cache_package_filename;
+    _ = Manager.PacfileManagerOptions;
+    _ = Manager.PacfileError;
+    _ = Manager.PacfileSearchMode;
+    _ = Manager.PacfileKind;
+    _ = Manager.PacfileState;
+    _ = Manager.PacfileDiffMode;
+    _ = Manager.ParsedPacfilePath;
+    _ = Manager.Pacfile;
+    _ = Manager.PacfileToolResult;
+    _ = Manager.PacfileViewResult;
+    _ = Manager.PreparedPacfileMerge;
+    _ = Manager.parse_pacfile_path;
     _ = flatpak.RemoteManager;
     _ = flatpak.AppstreamManager;
     _ = flatpak.InstalledApplication;
@@ -394,7 +335,7 @@ test "backend dispatchers share one operation event stream" {
     _ = try context.subscribe(.{ .function = Capture.receive, .data = &capture });
 
     var alpm_operation = context.begin(.{ .backend = .alpm, .kind = .install });
-    var alpm_dispatcher = alpm.events.Dispatcher.init(std.testing.allocator);
+    var alpm_dispatcher = Manager.events.Dispatcher.init(std.testing.allocator);
     defer alpm_dispatcher.deinit();
     alpm_dispatcher.setOperation(&alpm_operation);
     alpm_dispatcher.raiseError(.{ .message = "alpm failure" });
@@ -468,12 +409,12 @@ test "ALPM and AUR questions use the shared response hook" {
     context.setQuestionHandler(.{ .function = Responder.answer, .data = &responder });
 
     var alpm_operation = context.begin(.{ .backend = .alpm, .kind = .install });
-    var alpm_dispatcher = alpm.events.Dispatcher.init(std.testing.allocator);
+    var alpm_dispatcher = Manager.events.Dispatcher.init(std.testing.allocator);
     defer alpm_dispatcher.deinit();
     alpm_dispatcher.setOperation(&alpm_operation);
     const alpm_response = alpm_dispatcher.raiseQuestion(threaded.io(), .{
         .question = "Select an ALPM provider",
-        .question_type = @intFromEnum(alpm.bindings.libalpm.QuestionType.select_provider),
+        .question_type = @intFromEnum(Manager.types.QuestionType.select_provider),
         .options = &.{ "provider-a", "provider-b" },
         .provider_options = &.{
             .{ .name = "provider-a", .description = "first", .is_installed = false },
@@ -505,10 +446,11 @@ test "ALPM and AUR questions use the shared response hook" {
 }
 
 test {
-    _ = @import("alpm/bindings.zig");
+    _ = @import("alpm/backend.zig");
+    if (Manager.libalpm_enabled) _ = @import("alpm/bindings.zig");
     _ = @import("alpm/bootstrap.zig");
     _ = @import("alpm/manager.zig");
-    _ = @import("alpm/manager_test.zig");
+    if (Manager.libalpm_enabled) _ = @import("alpm/manager_test.zig");
     _ = @import("alpm/events.zig");
     _ = @import("alpm/configuration.zig");
     _ = @import("alpm/cache_manager.zig");

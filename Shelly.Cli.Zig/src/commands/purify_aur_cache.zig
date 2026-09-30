@@ -1,7 +1,7 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const PackageManager = @import("PackageManager");
 const runtime = @import("../runtime/context.zig");
-const RemovalPlan = Zigalpm.alpm.CacheRemovalPlan;
+const RemovalPlan = PackageManager.Manager.CacheRemovalPlan;
 
 pub fn deinitPlans(allocator: std.mem.Allocator, plans: []RemovalPlan) void {
     for (plans) |*removal| removal.deinit(allocator);
@@ -12,7 +12,7 @@ pub fn deinitPlans(allocator: std.mem.Allocator, plans: []RemovalPlan) void {
 /// caches are not package archives and must remain available after purify.
 pub fn plan(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     root: []const u8,
     dry_run: bool,
 ) ![]RemovalPlan {
@@ -40,7 +40,7 @@ pub fn plan(
         if (pkgbuild.kind != .file) continue;
         const path = try std.fs.path.join(context.allocator, &.{ root, entry.name });
         defer context.allocator.free(path);
-        var cleaner = Zigalpm.CacheManager.init(context.allocator, context.io, .{ .cache_directory = path });
+        var cleaner = PackageManager.CacheManager.init(context.allocator, context.io, .{ .cache_directory = path });
         cleaner.setOperationContext(operation_context);
         var removal = try cleaner.plan_cache_cleanup(.{ .keep = 0, .dry_run = dry_run });
         errdefer removal.deinit(context.allocator);
@@ -60,7 +60,7 @@ pub fn plan(
 
 pub fn execute(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     plans: []const RemovalPlan,
 ) !void {
     for (plans) |*removal| {
@@ -74,7 +74,7 @@ pub fn execute(
         var directory = try root.openDir(context.io, std.fs.path.basename(removal.cache_directory), .{ .follow_symlinks = false });
         defer directory.close(context.io);
         var operation = operation_context.begin(.{ .backend = .aur, .kind = .cleanup });
-        var completion: Zigalpm.OperationCompletionStatus = .failed;
+        var completion: PackageManager.OperationCompletionStatus = .failed;
         defer operation.finish(completion);
         for (removal.items, 0..) |item, index| {
             if (operation.isCancelled()) return error.Cancelled;
@@ -129,7 +129,7 @@ test "AUR cleanup removes all planned archives and signatures but preserves chec
     var tc: test_support.TestContext = .{};
     tc.init();
     defer tc.deinit();
-    var operation_context = Zigalpm.OperationContext.init(tc.context.allocator, tc.context.io);
+    var operation_context = PackageManager.OperationContext.init(tc.context.allocator, tc.context.io);
     defer operation_context.deinit();
     const dry_plans = try plan(&tc.context, &operation_context, root, true);
     defer deinitPlans(tc.context.allocator, dry_plans);
@@ -160,7 +160,7 @@ test "missing AUR cache is empty and cancellation stops planning" {
     var tc: test_support.TestContext = .{};
     tc.init();
     defer tc.deinit();
-    var operation_context = Zigalpm.OperationContext.init(tc.context.allocator, tc.context.io);
+    var operation_context = PackageManager.OperationContext.init(tc.context.allocator, tc.context.io);
     defer operation_context.deinit();
     const missing = try std.fs.path.join(tc.context.allocator, &.{ absolute_buffer[0..absolute_length], "missing" });
     const plans = try plan(&tc.context, &operation_context, missing, false);
@@ -186,7 +186,7 @@ test "AUR cleanup refuses a checkout replaced by a symlink after preview" {
     var tc: test_support.TestContext = .{};
     tc.init();
     defer tc.deinit();
-    var operation_context = Zigalpm.OperationContext.init(tc.context.allocator, tc.context.io);
+    var operation_context = PackageManager.OperationContext.init(tc.context.allocator, tc.context.io);
     defer operation_context.deinit();
     const root = try std.fs.path.join(tc.context.allocator, &.{ absolute_buffer[0..absolute_length], "cache" });
     const plans = try plan(&tc.context, &operation_context, root, false);

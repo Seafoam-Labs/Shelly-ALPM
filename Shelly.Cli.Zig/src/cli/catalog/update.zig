@@ -10,7 +10,7 @@ pub const variants = [_]types.Variant{
         .name = "standard",
         .type_code = 's',
         .description = "Update only the named installed ALPM packages after an explicit partial-upgrade warning and confirmation.",
-        .implementation = "Zigalpm.AlpmManager.update_packages",
+        .implementation = "PackageManager.Manager.update_packages",
         .arguments = &.{repeatedArgument(
             "packages",
             0,
@@ -22,7 +22,7 @@ pub const variants = [_]types.Variant{
         .name = "aur",
         .type_code = 'a',
         .description = "Fetch, review, rebuild, and reinstall only the named AUR packages.",
-        .implementation = "Zigalpm.AurManager.updatePackages",
+        .implementation = "PackageManager.AurManager.updatePackages",
         .arguments = &.{repeatedArgument(
             "packages",
             0,
@@ -40,7 +40,7 @@ pub const variants = [_]types.Variant{
         .name = "flatpak",
         .type_code = 'f',
         .description = "Update one installed Flatpak application or runtime in its existing user or system installation.",
-        .implementation = "Zigalpm.FlatpakManager.update_installed_flatpak",
+        .implementation = "PackageManager.FlatpakManager.update_installed_flatpak",
         .arguments = &.{requiredArgument(
             "package",
             "Installed Flatpak application/runtime ID or unambiguous friendly name",

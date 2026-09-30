@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const bindings = @import("Shelly_Ui_Gtk");
 const gio = bindings.gio;
 const gobject = bindings.gobject;
@@ -42,7 +43,7 @@ pub const DBus = struct {
         var err: ?*glib.Error = null;
         const conn = gio.busGetSync(bus, null, &err);
         if (err) |e| {
-            std.log.warn("Could not connect to the selected D-Bus session. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
+            std.log.warn("Could not connect to the selected D-Bus session. {0f}", .{diagnostics.safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
             return null;
         }
@@ -71,7 +72,7 @@ pub const DBus = struct {
             &err,
         );
         if (err) |e| {
-            std.log.warn("Could not send the tray settings signal over D-Bus. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
+            std.log.warn("Could not send the tray settings signal over D-Bus. {0f}", .{diagnostics.safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
         }
     }
@@ -114,7 +115,7 @@ pub const DBus = struct {
             &call_err,
         );
         if (call_err) |e| {
-            std.log.info("Could not check whether the authorization service is running. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
+            std.log.info("Could not check whether the authorization service is running. {0f}", .{diagnostics.safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
             return .unknown;
         }
@@ -191,7 +192,7 @@ pub const DBus = struct {
             &err,
         );
         if (err) |e| {
-            std.log.warn("Could not unregister the temporary authorization-agent probe. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
+            std.log.warn("Could not unregister the temporary authorization-agent probe. {0f}", .{diagnostics.safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
         }
         if (r) |res| res.unref();
@@ -242,7 +243,7 @@ pub const DBus = struct {
             &err,
         );
         if (err) |e| {
-            std.log.info("Could not identify the login session through logind. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
+            std.log.info("Could not identify the login session through logind. {0f}", .{diagnostics.safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
             return null;
         }
@@ -289,7 +290,7 @@ pub const DBus = struct {
             &err,
         );
         if (err) |e| {
-            std.log.warn("Could not identify the login session through logind. {0f}", .{@import("diagnostics").safe(e.f_message orelse "unknown")});
+            std.log.warn("Could not identify the login session through logind. {0f}", .{diagnostics.safe(e.f_message orelse "unknown")});
             glib.Error.free(e);
             return null;
         }

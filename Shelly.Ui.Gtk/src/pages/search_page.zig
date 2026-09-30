@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gio = bindings.gio;
@@ -611,7 +612,7 @@ pub const ShellySearchPage = extern struct {
     ) void {
         const svc = runtime.config orelse return;
         svc.updateField(field, value) catch |err| {
-            std.log.err("Could not update setting {0f}. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(@tagName(field)), @import("diagnostics").cause(err), @errorName(err) });
+            std.log.err("Could not update setting {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(@tagName(field)), diagnostics.cause(err), @errorName(err) });
         };
     }
 
@@ -720,7 +721,7 @@ pub const ShellySearchPage = extern struct {
         switch (source) {
             .standard => {
                 const parsed = cli.search_standard(query) catch |err| {
-                    std.debug.print("Could not search standard repositories. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+                    std.debug.print("Could not search standard repositories. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                     return;
                 };
                 var seen = std.StringHashMap(void).init(alloc);
@@ -740,7 +741,7 @@ pub const ShellySearchPage = extern struct {
             },
             .aur => {
                 const parsed = cli.search_aur(query) catch |err| {
-                    std.debug.print("Could not search the AUR. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+                    std.debug.print("Could not search the AUR. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                     return;
                 };
                 for (parsed.value) |pkg| {
@@ -758,7 +759,7 @@ pub const ShellySearchPage = extern struct {
             },
             .flatpak => {
                 const parsed = cli.search_flatpak(query) catch |err| {
-                    std.debug.print("Could not search Flatpak remotes. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+                    std.debug.print("Could not search Flatpak remotes. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                     return;
                 };
                 for (parsed.value.hits) |hit| {

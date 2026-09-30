@@ -1,0 +1,866 @@
+{
+  "library_sha256": "da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888",
+  "cases": [
+    {
+      "name": "empty",
+      "actions": [
+        "prepare",
+        "commit",
+        "release",
+        "init",
+        "init",
+        "interrupt",
+        "prepare",
+        "commit",
+        "release",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "prepare",
+          "error": "ALPM_ERR_TRANS_NULL",
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "commit",
+          "error": "ALPM_ERR_TRANS_NULL",
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "release",
+          "error": "ALPM_ERR_TRANS_NULL",
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "init",
+          "error": "ALPM_ERR_TRANS_NOT_NULL",
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "interrupt",
+          "error": "ALPM_ERR_TRANS_TYPE",
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "commit",
+          "error": "ALPM_ERR_TRANS_NOT_PREPARED",
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "release",
+          "error": "ALPM_ERR_TRANS_NULL",
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "remove",
+      "actions": [
+        "init",
+        "remove",
+        "remove",
+        "prepare",
+        "prepare",
+        "interrupt",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "remove",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "remove",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [
+            "ALPM_EVENT_CHECKDEPS_START",
+            "ALPM_EVENT_CHECKDEPS_DONE"
+          ],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": "ALPM_ERR_TRANS_NOT_INITIALIZED",
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "interrupt",
+          "error": "ALPM_ERR_TRANS_TYPE",
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "remove-nodeps",
+      "flags": 1,
+      "actions": [
+        "init",
+        "remove",
+        "prepare",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "remove",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "remove-nolock",
+      "flags": 131072,
+      "actions": [
+        "init",
+        "remove",
+        "prepare",
+        "commit",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "remove",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [
+            "ALPM_EVENT_CHECKDEPS_START",
+            "ALPM_EVENT_CHECKDEPS_DONE"
+          ],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "commit",
+          "error": "ALPM_ERR_TRANS_NOT_LOCKED",
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "unneeded-empty",
+      "flags": 32768,
+      "dependent": true,
+      "actions": [
+        "init",
+        "remove",
+        "prepare",
+        "commit",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "remove",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [
+            "ALPM_EVENT_CHECKDEPS_START",
+            "ALPM_EVENT_CHECKDEPS_DONE"
+          ],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "commit",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "unneeded-empty-nolock",
+      "flags": 163840,
+      "dependent": true,
+      "actions": [
+        "init",
+        "remove",
+        "prepare",
+        "commit",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "remove",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [
+            "ALPM_EVENT_CHECKDEPS_START",
+            "ALPM_EVENT_CHECKDEPS_DONE"
+          ],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "commit",
+          "error": "ALPM_ERR_TRANS_NOT_LOCKED",
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "remove-unsatisfied",
+      "dependent": true,
+      "actions": [
+        "init",
+        "remove",
+        "prepare",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "remove",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": "ALPM_ERR_UNSATISFIED_DEPS",
+          "events": [
+            "ALPM_EVENT_CHECKDEPS_START"
+          ],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "archive-needed-empty",
+      "flags": 8192,
+      "same": true,
+      "actions": [
+        "init",
+        "archive",
+        "prepare",
+        "commit",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "archive",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "commit",
+          "error": "ALPM_ERR_TRANS_NOT_PREPARED",
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "archive",
+      "actions": [
+        "init",
+        "archive",
+        "prepare",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "archive",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [
+            "ALPM_EVENT_RESOLVEDEPS_START",
+            "ALPM_EVENT_RESOLVEDEPS_DONE",
+            "ALPM_EVENT_INTERCONFLICTS_START",
+            "ALPM_EVENT_INTERCONFLICTS_DONE"
+          ],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "archive-nodeps",
+      "flags": 1,
+      "actions": [
+        "init",
+        "archive",
+        "prepare",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "archive",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [
+            "ALPM_EVENT_INTERCONFLICTS_START",
+            "ALPM_EVENT_INTERCONFLICTS_DONE"
+          ],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "archive-noconflicts",
+      "flags": 2048,
+      "actions": [
+        "init",
+        "archive",
+        "prepare",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "archive",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [
+            "ALPM_EVENT_RESOLVEDEPS_START",
+            "ALPM_EVENT_RESOLVEDEPS_DONE"
+          ],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "archive-both",
+      "flags": 2049,
+      "actions": [
+        "init",
+        "archive",
+        "prepare",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "archive",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "archive-unsatisfied",
+      "missing": true,
+      "actions": [
+        "init",
+        "archive",
+        "prepare",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "archive",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": "ALPM_ERR_UNSATISFIED_DEPS",
+          "events": [
+            "ALPM_EVENT_RESOLVEDEPS_START"
+          ],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "archive-skipped",
+      "missing": true,
+      "skip": true,
+      "actions": [
+        "init",
+        "archive",
+        "prepare",
+        "commit",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "archive",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "prepare",
+          "error": null,
+          "events": [
+            "ALPM_EVENT_RESOLVEDEPS_START",
+            "ALPM_EVENT_RESOLVEDEPS_DONE",
+            "ALPM_EVENT_INTERCONFLICTS_START",
+            "ALPM_EVENT_INTERCONFLICTS_DONE"
+          ],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "commit",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "explicit-unlock",
+      "actions": [
+        "unlock",
+        "init",
+        "unlock",
+        "release"
+      ],
+      "trace": [
+        {
+          "action": "unlock",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "unlock",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    },
+    {
+      "name": "lock-contention",
+      "actions": [
+        "init",
+        "compete",
+        "release",
+        "compete"
+      ],
+      "trace": [
+        {
+          "action": "init",
+          "error": null,
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "compete",
+          "error": "ALPM_ERR_HANDLE_LOCK",
+          "events": [],
+          "locked": true,
+          "mode": 0,
+          "size": 0
+        },
+        {
+          "action": "release",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        },
+        {
+          "action": "compete",
+          "error": null,
+          "events": [],
+          "locked": false,
+          "mode": null,
+          "size": null
+        }
+      ]
+    }
+  ]
+}

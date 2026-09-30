@@ -10,7 +10,7 @@ pub const variants = [_]types.Variant{
         .name = "repository",
         .type_code = 'r',
         .description = "Add, remove, or list pacman.conf ALPM repositories; optionally locally sign a key and refresh databases.",
-        .implementation = "Zigalpm.AlpmManager.add_repository / remove_repository / get_repository_names; shelly-key --lsign-key; Zigalpm.AlpmManager.sync",
+        .implementation = "PackageManager.Manager.add_repository / remove_repository / get_repository_names; shelly-key --lsign-key; PackageManager.Manager.sync",
         .arguments = &.{
             optionalArgument("name", "Repository (database) name, e.g. my-repo"),
             optionalArgument("url", "Server URL; required for --add, e.g. 'https://my-repo.ee/$arch/$repo', ignored for --remove/--list"),

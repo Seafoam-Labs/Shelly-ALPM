@@ -1,6 +1,8 @@
 const std = @import("std");
 const Io = std.Io;
-const Bindings = @import("bindings.zig");
+const Bindings = struct {
+    pub const libalpm = @import("types.zig");
+};
 const Allocator = std.mem.Allocator;
 
 const equalIgnoreCase = std.ascii.eqlIgnoreCase;
@@ -39,12 +41,23 @@ pub const Configuration = struct {
     pub const Repository = struct {
         name: []const u8,
         servers: std.ArrayList([]const u8) = .empty,
+        cache_servers: std.ArrayList([]const u8) = .empty,
         sig_level: u32 = sig(.{ .use_default = true }),
         usage: u32 = 0,
     };
 
     pub const Config = struct {
         arena: *std.heap.ArenaAllocator,
+        cache_directories: std.ArrayList([:0]const u8) = .empty,
+        architectures: std.ArrayList([:0]const u8) = .empty,
+        assume_installed: std.ArrayList([:0]const u8) = .empty,
+        parallel_downloads: ?u8 = null,
+        sandbox_user: ?[:0]const u8 = null,
+        disable_sandbox: bool = false,
+        disable_sandbox_filesystem: bool = false,
+        disable_sandbox_syscalls: bool = false,
+        disable_sandbox_network: bool = false,
+        disable_download_timeout: bool = false,
 
         root_directory: [:0]const u8,
         database_path: [:0]const u8,
@@ -869,7 +882,8 @@ pub const Configuration = struct {
             } else if (equalIgnoreCase(key, "dbpath")) {
                 c.database_path = try self.dupe(value);
             } else if (equalIgnoreCase(key, "cachedir")) {
-                c.cache_directory = try self.dupe(value);
+                try self.add_split(&c.cache_directories, value);
+                if (c.cache_directories.items.len != 0) c.cache_directory = c.cache_directories.items[0];
             } else if (equalIgnoreCase(key, "logfile")) {
                 c.log_file = try self.dupe(value);
             } else if (equalIgnoreCase(key, "gpgdir")) {
@@ -901,6 +915,23 @@ pub const Configuration = struct {
                 } else |_| {}
             } else if (equalIgnoreCase(key, "architecture")) {
                 c.architecture = try self.dupe(value);
+                try self.add_split(&c.architectures, value);
+            } else if (equalIgnoreCase(key, "assumeinstalled")) {
+                try self.add_split(&c.assume_installed, value);
+            } else if (equalIgnoreCase(key, "paralleldownloads")) {
+                c.parallel_downloads = std.fmt.parseInt(u8, value, 10) catch 0;
+            } else if (equalIgnoreCase(key, "downloaduser")) {
+                c.sandbox_user = try self.dupe(value);
+            } else if (equalIgnoreCase(key, "disabledownloadtimeout")) {
+                c.disable_download_timeout = true;
+            } else if (equalIgnoreCase(key, "disablesandbox")) {
+                c.disable_sandbox = true;
+            } else if (equalIgnoreCase(key, "disablesandboxfilesystem")) {
+                c.disable_sandbox_filesystem = true;
+            } else if (equalIgnoreCase(key, "disablesandboxsyscalls")) {
+                c.disable_sandbox_syscalls = true;
+            } else if (equalIgnoreCase(key, "disablesandboxnetwork")) {
+                c.disable_sandbox_network = true;
             } else if (equalIgnoreCase(key, "ignorepkg")) {
                 try self.add_split(&c.ignore_package, value);
             } else if (equalIgnoreCase(key, "ignoregroup")) {
@@ -926,6 +957,8 @@ pub const Configuration = struct {
             const repo = &self.current_repository.?;
             if (equalIgnoreCase(key, "server")) {
                 try repo.servers.append(self.arena_allocater, try self.dupe(value));
+            } else if (equalIgnoreCase(key, "cacheserver")) {
+                try repo.cache_servers.append(self.arena_allocater, try self.dupe(value));
             } else if (equalIgnoreCase(key, "siglevel")) {
                 repo.sig_level = parse_signature_level(value);
             } else if (equalIgnoreCase(key, "usage")) {

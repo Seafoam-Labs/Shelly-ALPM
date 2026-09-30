@@ -1,0 +1,911 @@
+--- upstream/lib/libalpm/add.c
++++ downstream/lib/libalpm/add.c
+@@ -69,6 +69,13 @@
+ 	pkgver = pkg->version;
+ 
+ 	_alpm_log(handle, ALPM_LOG_DEBUG, "adding package '%s'\n", pkgname);
++	const char* pkg_db_name = alpm_db_get_name(alpm_pkg_get_db(pkg));
++	if(pkg_db_name != NULL) {
++		if(pkg->installed_db != NULL) {
++			free(pkg->installed_db);
++		}
++		pkg->installed_db = strdup(pkg_db_name);
++	}
+ 
+ 	if((dup = alpm_pkg_find(trans->add, pkgname))) {
+ 		if(dup == pkg) {
+--- upstream/lib/libalpm/alpm.h
++++ downstream/lib/libalpm/alpm.h
+@@ -2126,6 +2126,13 @@
+  * @{
+  */
+ 
++
++/** Returns the allowed physical architectures.
++ * @param handle the context handle
++ * @return the list of physical architectures (caller is responsible for alpm_list_free)
++ */
++alpm_list_t *alpm_option_get_physical_architectures(alpm_handle_t *handle);
++
+ /** Returns the allowed package architecture.
+  * @param handle the context handle
+  * @return the configured package architectures
+@@ -2345,6 +2352,22 @@
+  * @return 0 on success, -1 on error (pm_errno is set accordingly)
+  */
+ int alpm_option_set_disable_sandbox_syscalls(alpm_handle_t *handle, unsigned short disable_sandbox_syscalls);
++
++/** Get the state of the network part of the sandbox
++ * @param handle the context handle
++ * @return 0 for enabled, 1 for disabled
++ */
++int alpm_option_get_disable_sandbox_network(alpm_handle_t *handle);
++
++/** Enables/disables the network part of the sandbox.
++ * When enabled, scriptlets and hooks are run inside a fresh network
++ * namespace with only a loopback interface, and are aborted if the
++ * namespace cannot be created.
++ * @param handle the context handle
++ * @param disable_sandbox_network 0 for enabled, 1 for disabled
++ * @return 0 on success, -1 on error (pm_errno is set accordingly)
++ */
++int alpm_option_set_disable_sandbox_network(alpm_handle_t *handle, unsigned short disable_sandbox_network);
+ 
+ /* End of disable_sandbox accessors */
+ /** @} */
+@@ -2530,6 +2553,11 @@
+  * @return an alpm_pkgfrom_t constant, -1 on error
+  */
+ alpm_pkgfrom_t alpm_pkg_get_origin(alpm_pkg_t *pkg);
++
++/** Returns the installed db of the package.
++ * @return an alpm_pkgfrom_t constant, -1 on error
++ */
++const char* alpm_pkg_get_installed_db(alpm_pkg_t *pkg);
+ 
+ /** Returns the package description.
+  * @param pkg a pointer to package
+--- upstream/lib/libalpm/be_local.c
++++ downstream/lib/libalpm/be_local.c
+@@ -201,6 +201,12 @@
+ 	return pkg->xdata;
+ }
+ 
++static const char *_cache_get_installed_db(alpm_pkg_t *pkg)
++{
++	LAZY_LOAD(INFRQ_DESC);
++	return pkg->installed_db;
++}
++
+ /**
+  * Open a package changelog for reading. Similar to fopen in functionality,
+  * except that the returned 'file stream' is from the database.
+@@ -342,6 +348,7 @@
+ 	.get_isize = _cache_get_isize,
+ 	.get_reason = _cache_get_reason,
+ 	.get_validation = _cache_get_validation,
++	.get_installed_db = _cache_get_installed_db,
+ 	.has_scriptlet = _cache_has_scriptlet,
+ 	.get_licenses = _cache_get_licenses,
+ 	.get_groups = _cache_get_groups,
+@@ -777,6 +784,8 @@
+ 				READ_AND_STORE_ALL(info->licenses);
+ 			} else if(strcmp(line, "%ARCH%") == 0) {
+ 				READ_AND_STORE(info->arch);
++			} else if(strcmp(line, "%INSTALLED_DB%") == 0) {
++				READ_AND_STORE(info->installed_db);
+ 			} else if(strcmp(line, "%BUILDDATE%") == 0) {
+ 				READ_NEXT();
+ 				info->builddate = _alpm_parsedate(line);
+@@ -1018,6 +1027,10 @@
+ 			fprintf(fp, "%%ARCH%%\n"
+ 							"%s\n\n", info->arch);
+ 		}
++		if(info->installed_db) {
++			fprintf(fp, "%%INSTALLED_DB%%\n"
++							"%s\n\n", info->installed_db);
++		}
+ 		if(info->builddate) {
+ 			fprintf(fp, "%%BUILDDATE%%\n"
+ 							"%jd\n\n", (intmax_t)info->builddate);
+--- upstream/lib/libalpm/be_sync.c
++++ downstream/lib/libalpm/be_sync.c
+@@ -29,6 +29,11 @@
+ #include <archive.h>
+ #include <archive_entry.h>
+ 
++#ifdef HAVE_LIBSQLITE
++/* sqlite */
++#include <sqlite3.h>
++#endif
++
+ /* libalpm */
+ #include "util.h"
+ #include "log.h"
+@@ -277,6 +282,11 @@
+ /* Forward decl so I don't reorganize the whole file right now */
+ static int sync_db_read(alpm_db_t *db, struct archive *archive,
+ 		struct archive_entry *entry, alpm_pkg_t **likely_pkg);
++
++#ifdef HAVE_LIBSQLITE
++static int sync_db_read_nf(alpm_db_t *db, struct archive *archive,
++		struct archive_entry *entry);
++#endif
+ 
+ static int _sync_get_validation(alpm_pkg_t *pkg)
+ {
+@@ -464,6 +474,18 @@
+ 	while((archive_ret = archive_read_next_header(archive, &entry)) == ARCHIVE_OK) {
+ 		mode_t mode = archive_entry_mode(entry);
+ 		if(!S_ISDIR(mode)) {
++#ifdef HAVE_LIBSQLITE
++			/* new db format */
++			if(strcmp(archive_entry_pathname(entry), "pacman.db") == 0) {
++				if(sync_db_read_nf(db, archive, entry) != 0) {
++					_alpm_log(db->handle, ALPM_LOG_ERROR,
++							_("could not parse pacman.db file '%s' from db '%s'\n"),
++							archive_entry_pathname(entry), db->treename);
++					ret = -1;
++				}
++				continue;
++			}
++#endif
+ 			/* we have desc or depends - parse it */
+ 			if(sync_db_read(db, archive, entry, &pkg) != 0) {
+ 				_alpm_log(db->handle, ALPM_LOG_ERROR,
+@@ -730,6 +752,217 @@
+ 	return -1;
+ }
+ 
++
++#ifdef HAVE_LIBSQLITE
++
++#define READ_SQL_TEXT_AND_STORE(f) do { \
++	char* text_val = (char*)sqlite3_column_text(sqlite_res, col_num); \
++	if (text_val != NULL) { \
++		STRDUP(f, text_val, ret = -1; GOTO_ERR(db->handle, ALPM_ERR_MEMORY, cleanup)); \
++	} \
++} while(0)
++
++#define READ_SQL_DATE_AND_STORE(f) do { \
++	const char* text_val = (char*)sqlite3_column_text(sqlite_res, col_num); \
++	if (text_val != NULL) { f = _alpm_parsedate(text_val); } \
++} while(0)
++
++#define READ_SQL_SIZE_AND_STORE(f) do { \
++	const char* text_val = (char*)sqlite3_column_text(sqlite_res, col_num); \
++	if (text_val != NULL) { f = _alpm_strtoofft(text_val); } \
++} while(0)
++
++#define READ_SQL_AND_STORE_ALL(f) do { \
++	char *i, *save = NULL; \
++	char* text_val = (char*)sqlite3_column_text(sqlite_res, col_num); \
++	if(text_val != NULL) { for(i = strtok_r(text_val, ",", &save); i; i = strtok_r(NULL, ",", &save)) { \
++		f = alpm_list_add(f, strdup(i)); \
++	} } \
++} while(0)
++
++#define READ_SQL_AND_SPLITDEP(f) do { \
++	char *i, *save = NULL; \
++	char* text_val = (char*)sqlite3_column_text(sqlite_res, col_num); \
++	if(text_val != NULL) { for(i = strtok_r(text_val, ",", &save); i; i = strtok_r(NULL, ",", &save)) { \
++		f = alpm_list_add(f, alpm_dep_from_string(i)); \
++	} } \
++} while(0)
++
++#define READ_SQL_AND_SPLIT_FILE(f) do { \
++	char *i, *save = NULL; \
++	size_t files_count = 0, files_size = 0; \
++	alpm_file_t *files = NULL; \
++	char* text_val = (char*)sqlite3_column_text(sqlite_res, col_num); \
++	if(text_val != NULL) { for(i = strtok_r(text_val, ",", &save); i; i = strtok_r(NULL, ",", &save)) { \
++		if(!_alpm_greedy_grow((void **)&files, &files_size, \
++			(files_count ? (files_count + 1) * sizeof(alpm_file_t) : 8 * sizeof(alpm_file_t)))) { \
++			ret = -1; \
++			GOTO_ERR(db->handle, ALPM_ERR_MEMORY, cleanup); \
++		} \
++		STRDUP(files[files_count].name, i, ret = -1; GOTO_ERR(db->handle, ALPM_ERR_MEMORY, cleanup)); \
++		files_count++; \
++	} \
++	/* attempt to hand back any memory we don't need */ \
++	if(files_count > 0) { \
++		REALLOC(files, sizeof(alpm_file_t) * files_count, (void)0); \
++	} else { \
++		FREE(files); \
++	} \
++	f.count = files_count; \
++	f.files = files; \
++	_alpm_filelist_sort(&f); } \
++} while(0)
++
++
++static int sync_db_read_nf(alpm_db_t *db, struct archive *archive,
++		struct archive_entry *entry)
++{
++	const char* entryname;
++	int ret = 0;
++	alpm_pkg_t *pkg;
++
++	entryname = archive_entry_pathname(entry);
++	if(entryname == NULL) {
++		_alpm_log(db->handle, ALPM_LOG_DEBUG,
++				"invalid archive entry provided to _alpm_sync_db_read, skipping\n");
++		return -1;
++	}
++
++	_alpm_log(db->handle, ALPM_LOG_FUNCTION, "loading package data from sqlite db\n");
++
++	const int archive_flags = ARCHIVE_EXTRACT_OWNER |
++						ARCHIVE_EXTRACT_PERM |
++						ARCHIVE_EXTRACT_TIME |
++						ARCHIVE_EXTRACT_SECURE_SYMLINKS;
++
++	char template_directory_name[] = "/tmp/pacman-db-temp.XXXXXX";
++	char* temp_dir = mkdtemp(template_directory_name);
++	if(temp_dir == NULL) {
++		_alpm_log(db->handle, ALPM_LOG_DEBUG,
++				"failed to create temp directory\n");
++		return -1;
++	}
++	char* filepath = NULL;
++	const size_t bufsize = sizeof(template_directory_name) + strlen(entryname) + 1;
++
++	MALLOC(filepath, bufsize, RET_ERR(db->handle, ALPM_ERR_MEMORY, -1));
++	snprintf(filepath, bufsize, "%s/%s", temp_dir, entryname);
++
++	archive_entry_set_pathname(entry, filepath);
++	archive_read_extract(archive, entry, archive_flags);
++
++	sqlite3 *sqlite_db = NULL;
++	sqlite3_stmt *sqlite_res = NULL;
++	int rc = sqlite3_open_v2(filepath, &sqlite_db, SQLITE_OPEN_READONLY, NULL);
++	if (rc != SQLITE_OK) {
++		ret = -1;
++		_alpm_log(db->handle, ALPM_LOG_DEBUG,
++				"could not open db: '%s'\n", sqlite3_errmsg(sqlite_db));
++		GOTO_ERR(db->handle, ALPM_ERR_MEMORY, cleanup);
++	}
++
++	const char select_query[] = "SELECT * FROM packages";
++	rc = sqlite3_prepare_v2(sqlite_db, select_query, -1, &sqlite_res, 0);
++	if (rc != SQLITE_OK) {
++		ret = -1;
++		_alpm_log(db->handle, ALPM_LOG_DEBUG,
++				"could not open db: '%s'\n", sqlite3_errmsg(sqlite_db));
++		GOTO_ERR(db->handle, ALPM_ERR_MEMORY, cleanup);
++	}
++	int column_count = sqlite3_column_count(sqlite_res);
++	while (sqlite3_step(sqlite_res) == SQLITE_ROW) {
++		pkg = _alpm_pkg_new();
++		if(pkg == NULL) {
++			ret = -1;
++			GOTO_ERR(db->handle, ALPM_ERR_MEMORY, cleanup);
++		}
++
++		for (int col_num = 0; col_num < column_count; ++col_num) {
++			const char *col_name = sqlite3_column_name(sqlite_res, col_num);
++			if(strcmp(col_name, "name") == 0) {
++				READ_SQL_TEXT_AND_STORE(pkg->name);
++				pkg->name_hash = _alpm_hash_sdbm(pkg->name);
++			} else if(strcmp(col_name, "version") == 0) {
++				READ_SQL_TEXT_AND_STORE(pkg->version);
++			} else if(strcmp(col_name, "filename") == 0) {
++				READ_SQL_TEXT_AND_STORE(pkg->filename);
++				if(_alpm_validate_filename(db, pkg->name, pkg->filename) < 0) {
++					ret = -1;
++					GOTO_ERR(db->handle, ALPM_ERR_MEMORY, cleanup);
++				}
++			} else if(strcmp(col_name, "base") == 0) {
++				READ_SQL_TEXT_AND_STORE(pkg->base);
++			} else if(strcmp(col_name, "desc") == 0) {
++				READ_SQL_TEXT_AND_STORE(pkg->desc);
++			} else if(strcmp(col_name, "groups") == 0) {
++				READ_SQL_AND_STORE_ALL(pkg->groups);
++			} else if(strcmp(col_name, "url") == 0) {
++				READ_SQL_TEXT_AND_STORE(pkg->url);
++			} else if(strcmp(col_name, "license") == 0) {
++				READ_SQL_AND_STORE_ALL(pkg->licenses);
++			} else if(strcmp(col_name, "arch") == 0) {
++				READ_SQL_TEXT_AND_STORE(pkg->arch);
++			} else if(strcmp(col_name, "builddate") == 0) {
++				READ_SQL_DATE_AND_STORE(pkg->builddate);
++			} else if(strcmp(col_name, "packager") == 0) {
++				READ_SQL_TEXT_AND_STORE(pkg->packager);
++			} else if(strcmp(col_name, "csize") == 0) {
++				READ_SQL_SIZE_AND_STORE(pkg->size);
++			} else if(strcmp(col_name, "isize") == 0) {
++				READ_SQL_SIZE_AND_STORE(pkg->isize);
++			} else if(strcmp(col_name, "sha256sum") == 0) {
++				READ_SQL_TEXT_AND_STORE(pkg->sha256sum);
++			} else if(strcmp(col_name, "pgpsig") == 0) {
++				READ_SQL_TEXT_AND_STORE(pkg->base64_sig);
++			} else if(strcmp(col_name, "replaces") == 0) {
++				READ_SQL_AND_SPLITDEP(pkg->replaces);
++			} else if(strcmp(col_name, "depends") == 0) {
++				READ_SQL_AND_SPLITDEP(pkg->depends);
++			} else if(strcmp(col_name, "optdepends") == 0) {
++				READ_SQL_AND_SPLITDEP(pkg->optdepends);
++			} else if(strcmp(col_name, "makedepends") == 0) {
++				READ_SQL_AND_SPLITDEP(pkg->makedepends);
++			} else if(strcmp(col_name, "checkdepends") == 0) {
++				READ_SQL_AND_SPLITDEP(pkg->checkdepends);
++			} else if(strcmp(col_name, "conflicts") == 0) {
++				READ_SQL_AND_SPLITDEP(pkg->conflicts);
++			} else if(strcmp(col_name, "provides") == 0) {
++				READ_SQL_AND_SPLITDEP(pkg->provides);
++			} else if(strcmp(col_name, "files") == 0) {
++				READ_SQL_AND_SPLIT_FILE(pkg->files);
++			}
++		}
++
++		pkg->origin = ALPM_PKG_FROM_SYNCDB;
++		pkg->origin_data.db = db;
++		pkg->ops = get_sync_pkg_ops();
++		pkg->handle = db->handle;
++
++		/* add to the collection */
++		_alpm_log(db->handle, ALPM_LOG_FUNCTION, "adding '%s' to package cache for db '%s'\n",
++				pkg->name, db->treename);
++		if(_alpm_pkghash_add(&db->pkgcache, pkg) == NULL) {
++			_alpm_pkg_free(pkg);
++			ret = -1;
++			GOTO_ERR(db->handle, ALPM_ERR_MEMORY, cleanup);
++		}
++	}
++
++cleanup:
++	if (sqlite_res != NULL) {
++		sqlite3_finalize(sqlite_res);
++	}
++	sqlite3_close(sqlite_db);
++
++	if(unlink(filepath) != 0 || rmdir(temp_dir) != 0) {
++		ret = -1;
++	}
++	free(filepath);
++
++	return ret;
++}
++#endif
++
+ struct db_operations sync_db_ops = {
+ 	.validate         = sync_db_validate,
+ 	.populate         = sync_db_populate,
+--- upstream/lib/libalpm/cpu_capabilities.c
++++ downstream/lib/libalpm/cpu_capabilities.c
+@@ -0,0 +1,189 @@
++/*
++ *  cpu_capabilities.c
++ *
++ *  Copyright (c) 2022-2023 by Vladislav Nepogodin <vnepogodin@cachyos.org>
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation; either version 2 of the License, or
++ *  (at your option) any later version.
++ *
++ *  This program is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include <stdlib.h>
++#include <string.h>
++#include <stdbool.h>
++#include <sys/types.h>
++#include <sys/utsname.h> /* uname */
++
++/* libalpm */
++#include "alpm_list.h"
++#include "log.h"
++#include "util.h"
++
++#if !defined(__aarch64__)
++
++static uint64_t xgetbv(void) {
++#if defined(_MSC_VER)
++  return _xgetbv(0);
++#else
++  uint32_t eax = 0, edx = 0;
++  __asm__ __volatile__("xgetbv\n" : "=a"(eax), "=d"(edx) : "c"(0));
++  return ((uint64_t)edx << 32) | eax;
++#endif
++}
++
++static void cpuid(uint32_t out[4], uint32_t id) {
++#if defined(_MSC_VER)
++  __cpuid((int *)out, id);
++#elif defined(__i386__) || defined(_M_IX86)
++  __asm__ __volatile__("movl %%ebx, %1\n"
++                       "cpuid\n"
++                       "xchgl %1, %%ebx\n"
++                       : "=a"(out[0]), "=r"(out[1]), "=c"(out[2]), "=d"(out[3])
++                       : "a"(id));
++#else
++  __asm__ __volatile__("cpuid\n"
++                       : "=a"(out[0]), "=b"(out[1]), "=c"(out[2]), "=d"(out[3])
++                       : "a"(id));
++#endif
++}
++
++static void cpuidex(uint32_t out[4], uint32_t id, uint32_t sid) {
++#if defined(_MSC_VER)
++  __cpuidex((int *)out, id, sid);
++#elif defined(__i386__) || defined(_M_IX86)
++  __asm__ __volatile__("movl %%ebx, %1\n"
++                       "cpuid\n"
++                       "xchgl %1, %%ebx\n"
++                       : "=a"(out[0]), "=r"(out[1]), "=c"(out[2]), "=d"(out[3])
++                       : "a"(id), "c"(sid));
++#else
++  __asm__ __volatile__("cpuid\n"
++                       : "=a"(out[0]), "=b"(out[1]), "=c"(out[2]), "=d"(out[3])
++                       : "a"(id), "c"(sid));
++#endif
++}
++
++enum cpu_feature {
++  SSE2 = 1 << 0,
++  SSSE3 = 1 << 1,
++  SSE41 = 1 << 2,
++  SSE42 = 1 << 3,
++  AVX = 1 << 4,
++  AVX2 = 1 << 5,
++  AVX512F = 1 << 6,
++  AVX512BW = 1 << 7,
++  AVX512CD = 1 << 8,
++  AVX512DQ = 1 << 9,
++  AVX512VL = 1 << 10,
++  /* ... */
++  UNDEFINED = 1 << 30
++};
++
++static enum cpu_feature g_cpu_features = UNDEFINED;
++
++static enum cpu_feature get_cpu_features(void) {
++  if (g_cpu_features != UNDEFINED) {
++    return g_cpu_features;
++  }
++#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
++  uint32_t regs[4] = {0};
++  uint32_t *eax = &regs[0], *ebx = &regs[1], *ecx = &regs[2], *edx = &regs[3];
++  (void)edx;
++  enum cpu_feature features = 0;
++  cpuid(regs, 0);
++  const int max_id = *eax;
++  cpuid(regs, 1);
++#if defined(__amd64__) || defined(_M_X64)
++  features |= SSE2;
++#else
++  if (*edx & (1UL << 26))
++    features |= SSE2;
++#endif
++  if (*ecx & (1UL << 0))
++    features |= SSSE3;
++  if (*ecx & (1UL << 19))
++    features |= SSE41;
++  if (*ecx & (1UL << 20))
++    features |= SSE42;
++
++  if (*ecx & (1UL << 27)) { // OSXSAVE
++    const uint64_t mask = xgetbv();
++    if ((mask & 6) == 6) { // SSE and AVX states
++      if (*ecx & (1UL << 28))
++        features |= AVX;
++      if (max_id >= 7) {
++        cpuidex(regs, 7, 0);
++        if (*ebx & (1UL << 5))
++          features |= AVX2;
++        if ((mask & 224) == 224) { // Opmask, ZMM_Hi256, Hi16_Zmm
++          if (*ebx & (1UL << 31))
++            features |= AVX512VL;
++          if (*ebx & (1UL << 16))
++            features |= AVX512F;
++          if (*ebx & (1UL << 30))
++            features |= AVX512BW;
++          if (*ebx & (1UL << 28))
++            features |= AVX512CD;
++          if (*ebx & (1UL << 17))
++            features |= AVX512DQ;
++        }
++      }
++    }
++  }
++  g_cpu_features = features;
++  return features;
++#else
++  /* How to detect NEON? */
++  return 0;
++#endif
++}
++
++#endif
++
++alpm_list_t SYMEXPORT *alpm_option_get_physical_architectures(alpm_handle_t *handle)
++{
++    alpm_list_t *supported_architectures = NULL;
++
++    {
++        struct utsname un;
++        uname(&un);
++
++        supported_architectures = alpm_list_add(supported_architectures, strdup(un.machine));
++    }
++
++#if !defined(__aarch64__)
++    const enum cpu_feature features = get_cpu_features();
++
++    /* Check for x86_64_v2 */
++    const bool supports_v2 = (features & SSSE3) && (features & SSE41) && (features & SSE42);
++    if (supports_v2) {
++        _alpm_log(handle, ALPM_LOG_DEBUG, "cpu supports x86_64_v2\n");
++        supported_architectures = alpm_list_add(supported_architectures, strdup("x86_64_v2"));
++    }
++
++    /* Check for x86_64_v3 */
++    const bool supports_v3 = (supports_v2) && (features & AVX) && (features & AVX2);
++    if (supports_v3) {
++        _alpm_log(handle, ALPM_LOG_DEBUG, "cpu supports x86_64_v3\n");
++        supported_architectures = alpm_list_add(supported_architectures, strdup("x86_64_v3"));
++    }
++
++    /* Check for x86_64_v4 */
++    const bool supports_v4 = (supports_v3) && (features & AVX512F) && (features & AVX512VL) && (features & AVX512BW) && (features & AVX512CD) && (features & AVX512DQ);
++    if (supports_v4) {
++        _alpm_log(handle, ALPM_LOG_DEBUG, "cpu supports x86_64_v4\n");
++        supported_architectures = alpm_list_add(supported_architectures, strdup("x86_64_v4"));
++    }
++#endif
++
++    return supported_architectures;
++}
+--- upstream/lib/libalpm/handle.c
++++ downstream/lib/libalpm/handle.c
+@@ -985,6 +985,7 @@
+ 	CHECK_HANDLE(handle, return -1);
+ 	handle->disable_sandbox_filesystem = disable_sandbox;
+ 	handle->disable_sandbox_syscalls = disable_sandbox;
++	handle->disable_sandbox_network = disable_sandbox;
+ 	return 0;
+ }
+ 
+@@ -1015,3 +1016,17 @@
+ 	handle->disable_sandbox_syscalls = disable_sandbox_syscalls;
+ 	return 0;
+ }
++
++int SYMEXPORT alpm_option_get_disable_sandbox_network(alpm_handle_t *handle)
++{
++	CHECK_HANDLE(handle, return -1);
++	return handle->disable_sandbox_network;
++}
++
++int SYMEXPORT alpm_option_set_disable_sandbox_network(alpm_handle_t *handle,
++		unsigned short disable_sandbox_network)
++{
++	CHECK_HANDLE(handle, return -1);
++	handle->disable_sandbox_network = disable_sandbox_network;
++	return 0;
++}
+--- upstream/lib/libalpm/handle.h
++++ downstream/lib/libalpm/handle.h
+@@ -69,6 +69,7 @@
+ 	unsigned short disable_dl_timeout;
+ 	unsigned short disable_sandbox_filesystem;
+ 	unsigned short disable_sandbox_syscalls;
++	unsigned short disable_sandbox_network;
+ 	unsigned int parallel_downloads; /* number of download streams */
+ 
+ #ifdef HAVE_LIBGPGME
+--- upstream/lib/libalpm/hook.c
++++ downstream/lib/libalpm/hook.c
+@@ -54,7 +54,7 @@
+ 	char **cmd;
+ 	alpm_list_t *matches;
+ 	alpm_hook_when_t when;
+-	int abort_on_fail, needs_targets;
++	int abort_on_fail, needs_targets, allow_net;
+ };
+ 
+ struct _alpm_hook_cb_ctx {
+@@ -229,6 +229,12 @@
+ 			hook->depends = alpm_list_add(hook->depends, val);
+ 		} else if(strcmp(key, "AbortOnFail") == 0) {
+ 			hook->abort_on_fail = 1;
++		} else if(strcmp(key, "NetworkAccess") == 0) {
++			if(strcmp(value, "allowed") == 0) {
++				hook->allow_net = 1;
++			} else {
++				error(_("hook %s line %d: invalid value %s\n"), file, line, value);
++			}
+ 		} else if(strcmp(key, "NeedsTargets") == 0) {
+ 			hook->needs_targets = 1;
+ 		} else if(strcmp(key, "Exec") == 0) {
+@@ -523,9 +529,11 @@
+ 		/* hooks with multiple triggers could have duplicate matches */
+ 		ctx = hook->matches = _alpm_strlist_dedup(hook->matches);
+ 		return _alpm_run_chroot(handle, hook->cmd[0], hook->cmd,
+-				(_alpm_cb_io) _alpm_hook_feed_targets, &ctx);
++				(_alpm_cb_io) _alpm_hook_feed_targets, &ctx,
++				hook->allow_net ? CHROOT_NET_ALLOW : CHROOT_NET_ISOLATE_REQUIRED);
+ 	} else {
+-		return _alpm_run_chroot(handle, hook->cmd[0], hook->cmd, NULL, NULL);
++		return _alpm_run_chroot(handle, hook->cmd[0], hook->cmd, NULL, NULL,
++				hook->allow_net ? CHROOT_NET_ALLOW : CHROOT_NET_ISOLATE_REQUIRED);
+ 	}
+ }
+ 
+--- upstream/lib/libalpm/meson.build
++++ downstream/lib/libalpm/meson.build
+@@ -8,6 +8,7 @@
+   be_package.c
+   be_sync.c
+   conflict.h conflict.c
++  cpu_capabilities.c
+   db.h db.c
+   deps.h deps.c
+   diskspace.h diskspace.c
+--- upstream/lib/libalpm/package.c
++++ downstream/lib/libalpm/package.c
+@@ -87,6 +87,7 @@
+ static alpm_pkgreason_t _pkg_get_reason(alpm_pkg_t *pkg) { return pkg->reason; }
+ static int _pkg_get_validation(alpm_pkg_t *pkg) { return pkg->validation; }
+ static int _pkg_has_scriptlet(alpm_pkg_t *pkg)           { return pkg->scriptlet; }
++static const char *_pkg_get_installed_db(alpm_pkg_t *pkg) { return pkg->installed_db; }
+ 
+ static alpm_list_t *_pkg_get_licenses(alpm_pkg_t *pkg)   { return pkg->licenses; }
+ static alpm_list_t *_pkg_get_groups(alpm_pkg_t *pkg)     { return pkg->groups; }
+@@ -152,6 +153,7 @@
+ 	.get_reason      = _pkg_get_reason,
+ 	.get_validation  = _pkg_get_validation,
+ 	.has_scriptlet   = _pkg_has_scriptlet,
++	.get_installed_db = _pkg_get_installed_db,
+ 
+ 	.get_licenses    = _pkg_get_licenses,
+ 	.get_groups      = _pkg_get_groups,
+@@ -219,6 +221,13 @@
+ 	ASSERT(pkg != NULL, return -1);
+ 	pkg->handle->pm_errno = ALPM_ERR_OK;
+ 	return pkg->origin;
++}
++
++const char SYMEXPORT *alpm_pkg_get_installed_db(alpm_pkg_t *pkg)
++{
++	ASSERT(pkg != NULL, return NULL);
++	pkg->handle->pm_errno = ALPM_ERR_OK;
++	return pkg->ops->get_installed_db(pkg);
+ }
+ 
+ const char SYMEXPORT *alpm_pkg_get_desc(alpm_pkg_t *pkg)
+@@ -625,6 +634,7 @@
+ 	STRDUP(newpkg->name, pkg->name, goto cleanup);
+ 	STRDUP(newpkg->version, pkg->version, goto cleanup);
+ 	STRDUP(newpkg->desc, pkg->desc, goto cleanup);
++	STRDUP(newpkg->installed_db, pkg->installed_db, goto cleanup);
+ 	STRDUP(newpkg->url, pkg->url, goto cleanup);
+ 	newpkg->builddate = pkg->builddate;
+ 	newpkg->installdate = pkg->installdate;
+@@ -722,6 +732,7 @@
+ 	FREE(pkg->name);
+ 	FREE(pkg->version);
+ 	FREE(pkg->desc);
++	FREE(pkg->installed_db);
+ 	FREE(pkg->url);
+ 	FREE(pkg->packager);
+ 	FREE(pkg->md5sum);
+--- upstream/lib/libalpm/package.h
++++ downstream/lib/libalpm/package.h
+@@ -54,6 +54,7 @@
+ 	alpm_pkgreason_t (*get_reason) (alpm_pkg_t *);
+ 	int (*get_validation) (alpm_pkg_t *);
+ 	int (*has_scriptlet) (alpm_pkg_t *);
++	const char *(*get_installed_db) (alpm_pkg_t *);
+ 
+ 	alpm_list_t *(*get_licenses) (alpm_pkg_t *);
+ 	alpm_list_t *(*get_groups) (alpm_pkg_t *);
+@@ -100,6 +101,7 @@
+ 	char *sha256sum;
+ 	char *base64_sig;
+ 	char *arch;
++	char *installed_db;
+ 
+ 	alpm_time_t builddate;
+ 	alpm_time_t installdate;
+--- upstream/lib/libalpm/sandbox.c
++++ downstream/lib/libalpm/sandbox.c
+@@ -22,6 +22,7 @@
+ #include <errno.h>
+ #include <grp.h>
+ #include <pwd.h>
++#include <string.h>
+ #ifdef HAVE_SYS_PRCTL_H
+ #include <sys/prctl.h>
+ #endif /* HAVE_SYS_PRCTL_H */
+@@ -29,6 +30,14 @@
+ #include <unistd.h>
+ #include <limits.h>
+ 
++#ifdef __linux__
++#include <fcntl.h>
++#include <net/if.h>
++#include <sched.h>
++#include <sys/ioctl.h>
++#include <sys/socket.h>
++#endif /* __linux__ */
++
+ #include "alpm.h"
+ #include "log.h"
+ #include "sandbox.h"
+@@ -38,14 +47,46 @@
+ 
+ bool _alpm_use_sandbox(alpm_handle_t *handle)
+ {
+-	if(handle->user == 0 && 
+-	   handle->sandboxuser != NULL && 
+-	   (handle->disable_sandbox_filesystem == 0 || handle->disable_sandbox_syscalls == 0))
++	if(handle->user == 0 &&
++	   handle->sandboxuser != NULL &&
++	   (handle->disable_sandbox_filesystem == 0 || handle->disable_sandbox_syscalls == 0
++		|| handle->disable_sandbox_network == 0))
+ 	{
+ 		return true;
+ 	}
+ 
+ 	return false;
++}
++
++int _alpm_sandbox_isolate_network(void)
++{
++#if defined(__linux__) && defined(CLONE_NEWNET)
++	struct ifreq ifr;
++	int sockfd;
++
++	if(unshare(CLONE_NEWNET) != 0) {
++		return -1;
++	}
++
++	/* the new namespace only contains a downed loopback interface; */
++	sockfd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
++	if(sockfd < 0) {
++		return 0;
++	}
++
++	memset(&ifr, 0, sizeof(ifr));
++	strcpy(ifr.ifr_name, "lo");
++	if(ioctl(sockfd, SIOCGIFFLAGS, &ifr) == 0 && !(ifr.ifr_flags & IFF_UP)) {
++		ifr.ifr_flags |= IFF_UP;
++		ioctl(sockfd, SIOCSIFFLAGS, &ifr);
++	}
++	close(sockfd);
++
++	return 0;
++#else
++	errno = ENOSYS;
++	return -1;
++#endif /* __linux__ && CLONE_NEWNET */
+ }
+ 
+ int SYMEXPORT alpm_sandbox_setup_child(alpm_handle_t *handle, const char* sandboxuser, const char* sandbox_path, bool restrict_syscalls)
+--- upstream/lib/libalpm/sandbox.h
++++ downstream/lib/libalpm/sandbox.h
+@@ -25,6 +25,10 @@
+ /* utility function to test if sandboxing should be used */
+ bool _alpm_use_sandbox(alpm_handle_t *handle);
+ 
++/* detach the calling process from the network by moving it into a new
++ * network namespace; localhost keeps working */
++int _alpm_sandbox_isolate_network();
++
+ /* The type of callbacks that can happen during a sandboxed operation */
+ typedef enum {
+ 	ALPM_SANDBOX_CB_LOG,
+--- upstream/lib/libalpm/sync.c
++++ downstream/lib/libalpm/sync.c
+@@ -240,6 +240,12 @@
+ 				alpm_pkg_t *spkg = _alpm_db_get_pkgfromcache(sdb, lpkg->name);
+ 				if(spkg) {
+ 					if(check_literal(handle, lpkg, spkg, enable_downgrade)) {
++						const char* sdb_name = alpm_db_get_name(sdb);
++						if (spkg->installed_db != NULL) {
++							free(spkg->installed_db);
++						}
++
++						spkg->installed_db = (sdb_name) ? strdup(sdb_name) : NULL;
+ 						trans->add = alpm_list_add(trans->add, spkg);
+ 					}
+ 					/* jump to next local package */
+@@ -1199,6 +1205,7 @@
+ 			_alpm_log(handle, ALPM_LOG_DEBUG, "failed to load pkgfile internal\n");
+ 			error = 1;
+ 		} else {
++			pkgfile->installed_db = (spkg->installed_db) ? strdup(spkg->installed_db) : NULL;
+ 			error |= check_pkg_matches_db(spkg, pkgfile);
+ 		}
+ 		if(error != 0) {
+--- upstream/lib/libalpm/trans.c
++++ downstream/lib/libalpm/trans.c
+@@ -407,7 +407,8 @@
+ 
+ 	_alpm_log(handle, ALPM_LOG_DEBUG, "executing \"%s\"\n", cmdline);
+ 
+-	retval = _alpm_run_chroot(handle, SCRIPTLET_SHELL, argv, NULL, NULL);
++	retval = _alpm_run_chroot(handle, SCRIPTLET_SHELL, argv, NULL, NULL,
++			CHROOT_NET_ISOLATE_REQUIRED);
+ 
+ cleanup:
+ 	if(scriptfn && unlink(scriptfn)) {
+--- upstream/lib/libalpm/util.c
++++ downstream/lib/libalpm/util.c
+@@ -605,10 +605,11 @@
+  * @param argv arguments to pass to cmd
+  * @param stdin_cb callback to provide input to the chroot on stdin
+  * @param stdin_ctx context to be passed to @a stdin_cb
++ * @param net network policy to apply to the command
+  * @return 0 on success, 1 on error
+  */
+ int _alpm_run_chroot(alpm_handle_t *handle, const char *cmd, char *const argv[],
+-		_alpm_cb_io stdin_cb, void *stdin_ctx)
++		_alpm_cb_io stdin_cb, void *stdin_ctx, enum _alpm_chroot_net_t net)
+ {
+ 	pid_t pid;
+ 	int child2parent_pipefd[2], parent2child_pipefd[2];
+@@ -674,6 +675,19 @@
+ 		}
+ 
+ 		/* use fprintf instead of _alpm_log to send output through the parent */
++
++		/* cut the command off from the network unless explicitly allowed;
++		 * this must happen before chroot() while we still hold the
++		 * capabilities required by unshare() */
++		if(net != CHROOT_NET_ALLOW && !handle->disable_sandbox_network && _alpm_sandbox_isolate_network() != 0) {
++			if(net == CHROOT_NET_ISOLATE_REQUIRED) {
++				fprintf(stderr, _("could not isolate the network (%s)\n"), strerror(errno));
++				fprintf(stderr, _("refusing to run \"%s\" with network access; set DisableSandboxNetwork in pacman.conf to override\n"), cmd);
++				exit(1);
++			}
++			fprintf(stderr, _("warning: could not isolate the network for \"%s\" (%s)\n"), cmd, strerror(errno));
++		}
++
+ 		/* don't chroot() to "/": this allows running with less caps when the
+ 		 * caller puts us in the right root */
+ 		if(strcmp(handle->root, "/") != 0 && chroot(handle->root) != 0) {
+@@ -830,7 +844,10 @@
+ 			char arg0[32];
+ 			char *argv[] = { arg0, NULL };
+ 			strcpy(arg0, "ldconfig");
+-			return _alpm_run_chroot(handle, LDCONFIG, argv, NULL, NULL);
++			/* try to isolate network so that environments without the
++			 * required capabilities can still run plain transactions */
++			return _alpm_run_chroot(handle, LDCONFIG, argv, NULL, NULL,
++					CHROOT_NET_ISOLATE_TRY);
+ 		}
+ 	}
+ 
+--- upstream/lib/libalpm/util.h
++++ downstream/lib/libalpm/util.h
+@@ -131,8 +131,20 @@
+ typedef ssize_t (*_alpm_cb_io)(void *buf, ssize_t len, void *ctx);
+ 
+ void _alpm_reset_signals(void);
++
++/* network policy for processes spawned via _alpm_run_chroot() */
++enum _alpm_chroot_net_t {
++	/* must run without network access; abort the command if the network
++	 * cannot be isolated */
++	CHROOT_NET_ISOLATE_REQUIRED = 0,
++	/* isolate the network if possible, run anyway if isolation fails */
++	CHROOT_NET_ISOLATE_TRY,
++	/* command is allowed to access the network */
++	CHROOT_NET_ALLOW,
++};
++
+ int _alpm_run_chroot(alpm_handle_t *handle, const char *cmd, char *const argv[],
+-		_alpm_cb_io in_cb, void *in_ctx);
++		_alpm_cb_io in_cb, void *in_ctx, enum _alpm_chroot_net_t net);
+ int _alpm_ldconfig(alpm_handle_t *handle);
+ int _alpm_str_cmp(const void *s1, const void *s2);
+ char *_alpm_filecache_find(alpm_handle_t *handle, const char *filename);

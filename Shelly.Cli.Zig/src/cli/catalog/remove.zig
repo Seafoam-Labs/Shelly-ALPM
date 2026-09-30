@@ -12,7 +12,7 @@ pub const variants = [_]types.Variant{
         .type_code = 's',
         .alias_type_codes = &.{'S'},
         .description = "Remove installed ALPM packages or Shelly-managed local binaries, with optional dependency and configuration cleanup.",
-        .implementation = "Zigalpm.AlpmManager.remove_packages / LocalManager.removeBinaryPackages",
+        .implementation = "PackageManager.Manager.remove_packages / LocalManager.removeBinaryPackages",
         .arguments = &.{repeatedArgument(
             "packages",
             0,
@@ -34,7 +34,7 @@ pub const variants = [_]types.Variant{
         .type_code = 'i',
         .alias_type_codes = &.{'I'},
         .description = "Remove an installed AppImage and optionally delete its associated configuration.",
-        .implementation = "Zigalpm.AppImageManager.removeAppImage",
+        .implementation = "PackageManager.AppImageManager.removeAppImage",
         .arguments = &.{requiredArgument(
             "appimage",
             "Installed AppImage to remove",
@@ -51,7 +51,7 @@ pub const variants = [_]types.Variant{
         .type_code = 'a',
         .alias_type_codes = &.{'A'},
         .description = "Remove installed AUR packages and optionally remove dependent or optional packages through ALPM.",
-        .implementation = "Zigalpm.AurManager.removePackages",
+        .implementation = "PackageManager.AurManager.removePackages",
         .arguments = &.{repeatedArgument(
             "packages",
             0,
@@ -69,7 +69,7 @@ pub const variants = [_]types.Variant{
         .type_code = 'f',
         .alias_type_codes = &.{'F'},
         .description = "Remove an installed Flatpak application or runtime, with optional unused dependency and configuration cleanup.",
-        .implementation = "Zigalpm.FlatpakManager.find_installed_flatpak / uninstall_flatpak",
+        .implementation = "PackageManager.FlatpakManager.find_installed_flatpak / uninstall_flatpak",
         .arguments = &.{requiredArgument(
             "package",
             "Installed Flatpak application or runtime ID",

@@ -1,5 +1,6 @@
 const std = @import("std");
-const Zigalpm = @import("Zigalpm");
+const diagnostics = @import("diagnostics");
+const PackageManager = @import("PackageManager");
 const test_support = @import("test_support.zig");
 const output = @import("../output/config.zig");
 const ui_operation = @import("../output/ui_operation.zig");
@@ -24,7 +25,7 @@ const Real = struct {
     fn list(
         _: Real,
         context: *runtime.RuntimeContext,
-        operation_context: *Zigalpm.OperationContext,
+        operation_context: *PackageManager.OperationContext,
     ) !std.ArrayList([]const u8) {
         return listReal(context, operation_context);
     }
@@ -32,7 +33,7 @@ const Real = struct {
     fn mutate(
         _: Real,
         context: *runtime.RuntimeContext,
-        operation_context: *Zigalpm.OperationContext,
+        operation_context: *PackageManager.OperationContext,
         action: Action,
         name: []const u8,
         url: ?[]const u8,
@@ -43,7 +44,7 @@ const Real = struct {
     fn sync(
         _: Real,
         context: *runtime.RuntimeContext,
-        operation_context: *Zigalpm.OperationContext,
+        operation_context: *PackageManager.OperationContext,
     ) !void {
         return syncReal(context, operation_context);
     }
@@ -62,7 +63,7 @@ pub fn dispatch(
     const mutates = action != .list;
     if (mutates and !invocation.globals.ui_mode and !elevation.isRoot()) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
-            try context.stderr.print("Could not obtain administrator privileges for repository operation. {0s}\n\nTechnical details: {1s}\n", .{ @import("diagnostics").cause(err), @errorName(err) });
+            try context.stderr.print("Could not obtain administrator privileges for repository operation. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
             return 1;
         };
         if (elevated_exit) |exit_code| return exit_code;
@@ -101,7 +102,7 @@ fn executeList(
     invocation: *const parser.Invocation,
     runner: anytype,
 ) anyerror!u8 {
-    var operation_context = Zigalpm.OperationContext.init(context.allocator, context.io);
+    var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
     context.attachTransactionLog(&operation_context);
     defer operation_context.deinit();
 
@@ -109,7 +110,7 @@ fn executeList(
         const message = try std.fmt.allocPrint(
             context.allocator,
             "Could not list repositories: {0s}\n\nTechnical details: {1s}",
-            .{ @import("diagnostics").cause(err), @errorName(err) },
+            .{ diagnostics.cause(err), @errorName(err) },
         );
         defer context.allocator.free(message);
         return reportFailure(context, invocation, message);
@@ -150,7 +151,7 @@ fn executeMutation(
     const url: ?[]const u8 = if (invocation.positionals.len > 1) invocation.positionals[1] else null;
     const lsign_key = optionValue(invocation, "--lsign-key");
 
-    var operation_context = Zigalpm.OperationContext.init(context.allocator, context.io);
+    var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
     context.attachTransactionLog(&operation_context);
     defer operation_context.deinit();
 
@@ -168,7 +169,7 @@ fn executeMutation(
                 const message = try std.fmt.allocPrint(
                     context.allocator,
                     "Could not locally sign repository key {0f}. {1s} Review the keyring command output before trying again.\n\nTechnical details: {2s}",
-                    .{ @import("diagnostics").safe(key), @import("diagnostics").cause(err), @errorName(err) },
+                    .{ diagnostics.safe(key), diagnostics.cause(err), @errorName(err) },
                 );
                 defer context.allocator.free(message);
                 return reportFailure(context, invocation, message);
@@ -177,7 +178,7 @@ fn executeMutation(
                 const message = try std.fmt.allocPrint(
                     context.allocator,
                     "Could not locally sign repository key {0f}. Review the keyring command output before trying again.\n\nTechnical details: {1d}",
-                    .{ @import("diagnostics").safe(key), lsign_code },
+                    .{ diagnostics.safe(key), lsign_code },
                 );
                 defer context.allocator.free(message);
                 return reportFailure(context, invocation, message);
@@ -204,7 +205,7 @@ fn executeMutation(
             const message = try std.fmt.allocPrint(
                 context.allocator,
                 "{0f}, but the repository package lists could not be refreshed. {1s}\n\nTechnical details: {2s}",
-                .{ @import("diagnostics").safe(successVerbPast(action)), @import("diagnostics").cause(err), @errorName(err) },
+                .{ diagnostics.safe(successVerbPast(action)), diagnostics.cause(err), @errorName(err) },
             );
             defer context.allocator.free(message);
             if (invocation.globals.ui_mode) {
@@ -359,9 +360,9 @@ fn reportFailure(
 
 fn listReal(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
 ) !std.ArrayList([]const u8) {
-    const manager = try Zigalpm.AlpmManager.init(
+    const manager = try PackageManager.Manager.init(
         context.allocator,
         context.environ,
         .{ .use_root = false, .operation_context = operation_context },
@@ -374,13 +375,13 @@ fn listReal(
 
 fn mutateReal(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
     action: Action,
     name: []const u8,
     url: ?[]const u8,
 ) !void {
     {
-        const manager = try Zigalpm.AlpmManager.init(
+        const manager = try PackageManager.Manager.init(
             context.allocator,
             context.environ,
             .{ .use_root = true, .operation_context = operation_context },
@@ -409,11 +410,11 @@ fn mutateReal(
 
 fn syncReal(
     context: *runtime.RuntimeContext,
-    operation_context: *Zigalpm.OperationContext,
+    operation_context: *PackageManager.OperationContext,
 ) !void {
     // A fresh manager is intentionally built here so that libalpm registers the
     // updated repository list before the databases are refreshed.
-    const manager = try Zigalpm.AlpmManager.init(
+    const manager = try PackageManager.Manager.init(
         context.allocator,
         context.environ,
         .{ .use_root = true, .operation_context = operation_context },
@@ -626,11 +627,11 @@ const TestRunner = struct {
     fn lsign(_: TestRunner, _: *runtime.RuntimeContext, _: []const u8) !u8 {
         return 0;
     }
-    fn list(_: TestRunner, _: *runtime.RuntimeContext, _: *Zigalpm.OperationContext) !std.ArrayList([]const u8) {
+    fn list(_: TestRunner, _: *runtime.RuntimeContext, _: *PackageManager.OperationContext) !std.ArrayList([]const u8) {
         return .empty;
     }
-    fn mutate(_: TestRunner, _: *runtime.RuntimeContext, _: *Zigalpm.OperationContext, _: Action, _: []const u8, _: ?[]const u8) !void {}
-    fn sync(_: TestRunner, _: *runtime.RuntimeContext, _: *Zigalpm.OperationContext) !void {}
+    fn mutate(_: TestRunner, _: *runtime.RuntimeContext, _: *PackageManager.OperationContext, _: Action, _: []const u8, _: ?[]const u8) !void {}
+    fn sync(_: TestRunner, _: *runtime.RuntimeContext, _: *PackageManager.OperationContext) !void {}
 };
 
 const TestCapture = struct {
@@ -652,7 +653,7 @@ const TestCapture = struct {
         return self.lsign_code;
     }
 
-    fn list(self: *TestCapture, context: *runtime.RuntimeContext, _: *Zigalpm.OperationContext) !std.ArrayList([]const u8) {
+    fn list(self: *TestCapture, context: *runtime.RuntimeContext, _: *PackageManager.OperationContext) !std.ArrayList([]const u8) {
         var result: std.ArrayList([]const u8) = .empty;
         // Use the runtime allocator (an arena in tests) so deinit(context.allocator)
         // in executeList frees the backing store with the matching allocator.
@@ -663,7 +664,7 @@ const TestCapture = struct {
     fn mutate(
         self: *TestCapture,
         _: *runtime.RuntimeContext,
-        _: *Zigalpm.OperationContext,
+        _: *PackageManager.OperationContext,
         action: Action,
         name: []const u8,
         url: ?[]const u8,
@@ -675,7 +676,7 @@ const TestCapture = struct {
         self.mutate_url = url;
     }
 
-    fn sync(self: *TestCapture, _: *runtime.RuntimeContext, _: *Zigalpm.OperationContext) !void {
+    fn sync(self: *TestCapture, _: *runtime.RuntimeContext, _: *PackageManager.OperationContext) !void {
         self.manager_inits += 1;
         self.sync_called = true;
     }

@@ -1,7 +1,10 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 
 const alpm_module = @import("../alpm/manager.zig");
-const alpm_bindings = @import("../alpm/bindings.zig");
+const alpm_bindings = struct {
+    pub const libalpm = @import("../alpm/types.zig");
+};
 const alpm_events = @import("../alpm/events.zig");
 const pkgbuild_parser = @import("../pkgbuild/pkgbuild_parser.zig");
 const pkgbuild_validation = @import("builder/pkgbuild_validation.zig");
@@ -558,7 +561,8 @@ pub const Manager = struct {
             const name_z = try self.allocator.dupeZ(u8, package.name);
             defer self.allocator.free(name_z);
             if (!self.alpm.is_package_installed(name_z)) continue;
-            const local_package = try self.alpm.get_single_installed_package(name_z) orelse continue;
+            var local_package = try self.alpm.get_single_installed_package(name_z) orelse continue;
+            defer local_package.deinit(self.allocator);
             if (reverse_dependencies.required_by)
                 package.required_by = try local_package.owned_required_by(self.allocator);
             if (reverse_dependencies.optional_for)
@@ -1235,7 +1239,8 @@ pub const Manager = struct {
         defer self.allocator.free(candidate);
         const terminated_name = try self.allocator.dupeZ(u8, name);
         defer self.allocator.free(terminated_name);
-        const installed = try self.alpm.get_single_installed_package(terminated_name) orelse return false;
+        var installed = try self.alpm.get_single_installed_package(terminated_name) orelse return false;
+        defer installed.deinit(self.allocator);
         const installed_version = installed.version() orelse return false;
         if (AlpmManager.compare_package_versions(installed_version, candidate) != 0) return false;
         const message = try std.fmt.allocPrint(self.allocator, "Skipped {s}: {s} is already installed (--needed).", .{ name, candidate });
@@ -1509,14 +1514,17 @@ pub const Manager = struct {
         };
     }
 
-    fn dependencyIsInstalled(context: ?*anyopaque, dependency: [:0]const u8) bool {
+    fn dependencyIsInstalled(context: ?*anyopaque, dependency: [:0]const u8) anyerror!bool {
         const self: *Self = @ptrCast(@alignCast(context));
-        return self.alpm.is_dependency_satisfied_by_installed_packages(dependency) catch false;
+        return self.alpm.is_dependency_satisfied_by_installed_packages(dependency);
     }
 
-    fn dependencyRepoSatisfier(context: ?*anyopaque, dependency: [:0]const u8) ?[]const u8 {
+    fn dependencyRepoSatisfier(context: ?*anyopaque, dependency: [:0]const u8) anyerror!?[]const u8 {
         const self: *Self = @ptrCast(@alignCast(context));
-        return self.alpm.find_remote_satisfier_for_dependency(dependency) catch null;
+        return self.alpm.find_remote_satisfier_for_dependency(dependency) catch |err| switch (err) {
+            error.PkgNotFound => return null,
+            else => return err,
+        };
     }
 
     fn collectDependencyInfoRecursive(
@@ -1600,7 +1608,7 @@ pub const Manager = struct {
         const artifacts = self.buildPreparedPackage(dependency, &.{dependency.package_name}, false) catch |err| {
             try self.checkCancelled();
             if (err == error.PkgbuildReviewDeclined and self.upgrade_reviews != null) return err;
-            const failure_message = std.fmt.allocPrint(self.allocator, "Could not build AUR dependency {0f} required by the requested package. {1s} See the dependency build details.\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(dependency.package_name), @import("diagnostics").cause(err), @errorName(err) }) catch null;
+            const failure_message = std.fmt.allocPrint(self.allocator, "Could not build AUR dependency {0f} required by the requested package. {1s} See the dependency build details.\n\nTechnical details: {2s}", .{ diagnostics.safe(dependency.package_name), diagnostics.cause(err), @errorName(err) }) catch null;
             defer if (failure_message) |message| self.allocator.free(message);
             self.raisePackageProgress(.aur_package_failed, dependency.package_name, 1, 1, failure_message orelse "Could not build a required AUR dependency. See the dependency build details.");
             return err;
@@ -1760,7 +1768,7 @@ pub const Manager = struct {
             const providers = self.aur_client.findProviders(name) catch continue;
             defer rpc.deinitStrings(self.allocator, providers);
             const chosen = self.chooseProvider(name, providers) orelse {
-                const message = try std.fmt.allocPrint(self.allocator, "Optional dependency '{0f}' has no selected AUR provider. Select a provider or deselect this optional dependency.", .{@import("diagnostics").safe(name)});
+                const message = try std.fmt.allocPrint(self.allocator, "Optional dependency '{0f}' has no selected AUR provider. Select a provider or deselect this optional dependency.", .{diagnostics.safe(name)});
                 defer self.allocator.free(message);
                 self.dispatcher.raiseError(.{ .message = message });
                 continue;
@@ -2365,10 +2373,10 @@ pub const Manager = struct {
                 self.allocator,
                 "Could not generate .SRCINFO for {f} (exit code {d}).\n{s}{f}",
                 .{
-                    @import("diagnostics").safe(package_name),
+                    diagnostics.safe(package_name),
                     result.exit_code,
                     if (result.stderr.len > 16 * 1024) "[earlier output omitted]\n" else "",
-                    @import("diagnostics").safe(result.stderr[result.stderr.len - @min(result.stderr.len, 16 * 1024) ..]),
+                    diagnostics.safe(result.stderr[result.stderr.len - @min(result.stderr.len, 16 * 1024) ..]),
                 },
             );
             defer self.allocator.free(message);
@@ -2697,7 +2705,7 @@ pub const Manager = struct {
             defer self.allocator.free(path);
             _ = std.Io.Dir.cwd().statFile(self.io(), path, .{}) catch continue;
             if (self.removeCacheDirectory(path) catch false) continue;
-            const message = std.fmt.allocPrint(self.allocator, "Could not remove build artifacts from {0f}. The remaining files can be reviewed after the build.", .{@import("diagnostics").safe(path)}) catch continue;
+            const message = std.fmt.allocPrint(self.allocator, "Could not remove build artifacts from {0f}. The remaining files can be reviewed after the build.", .{diagnostics.safe(path)}) catch continue;
             defer self.allocator.free(message);
             self.raiseInfo(.debug_output, null, message, null, null);
         }
@@ -2968,7 +2976,7 @@ pub const Manager = struct {
     }
 
     fn raiseBestEffortFailure(self: *Self, package_name: []const u8, context: []const u8, err: anyerror) void {
-        const message = std.fmt.allocPrint(self.allocator, "Could not complete optional AUR step {0f} for the requested package. {1s}\n\nTechnical details: {2s}", .{ @import("diagnostics").safe(context), @import("diagnostics").cause(err), @errorName(err) }) catch {
+        const message = std.fmt.allocPrint(self.allocator, "Could not complete optional AUR step {0f} for the requested package. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(context), diagnostics.cause(err), @errorName(err) }) catch {
             self.raiseBuildLine(package_name, "Could not complete an optional AUR step.", true);
             return;
         };
@@ -5291,8 +5299,9 @@ test "AUR needed skips equal versions before builds and preserves other installa
         if (case.exact or case.dependencies_only) {
             // These installation modes sync repositories. Register an inert local
             // entry so this fixture never needs a network repository.
-            const raw = alpm_bindings.libalpm.alpm;
-            const database = raw.alpm_register_syncdb(manager.alpm.handle, "needed-fixture", 0) orelse return error.InitFailed;
+            if (!@import("../alpm/backend.zig").libalpm_enabled) return error.SkipZigTest;
+            const raw = @import("../alpm/bindings.zig").libalpm.alpm;
+            const database = raw.alpm_register_syncdb(manager.alpm.engine.?.libalpm.handle, "needed-fixture", 0) orelse return error.InitFailed;
             try std.testing.expectEqual(@as(c_int, 0), raw.alpm_db_set_usage(database, 0));
         }
         var service = rpc.TestService{ .packages = &.{ .{ .Name = case.name, .PackageBase = case.name }, .{ .Name = "needed-dep", .PackageBase = "needed-dep" } } };
@@ -5525,7 +5534,8 @@ test "AUR metadata failures name the package and continue independent metapackag
         try std.testing.expectEqual(@as(usize, 1), capture.built);
         try std.testing.expectEqual(@as(usize, 1), capture.completed);
         try std.testing.expectEqual(operation_api.CompletionStatus.failed, capture.completion.?);
-        try std.testing.expect((try manager.alpm.get_single_installed_package("good-meta")) != null);
+        var installed_snapshot = (try manager.alpm.get_single_installed_package("good-meta")) orelse return error.TestUnexpectedResult;
+        installed_snapshot.deinit(allocator);
         try std.testing.expect((try manager.alpm.get_single_installed_package("broken-meta")) == null);
     }
 }

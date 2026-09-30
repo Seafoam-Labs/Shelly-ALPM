@@ -1,0 +1,6 @@
+{"cached": true, "commit": 0, "download_size": 7, "installed_unchanged": true, "name": "downloadonly", "refresh": 0, "unchanged": 1}
+{"cached": true, "commit": -1, "download_size": 7, "installed_unchanged": true, "name": "digest-mismatch", "refresh": 0, "unchanged": 1}
+{"cached": true, "commit": -1, "download_size": 7, "installed_unchanged": true, "name": "required-signature", "refresh": 0, "unchanged": 1}
+{"cached": true, "commit": 0, "download_size": 7, "installed_unchanged": true, "name": "optional-signature", "refresh": 0, "unchanged": 1}
+{"db_exists": false, "name": "refresh-disabled", "refresh": 0}
+{"db_exists": false, "name": "refresh-lock", "refresh": -1}

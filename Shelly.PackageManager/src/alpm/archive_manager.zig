@@ -1,6 +1,8 @@
 const std = @import("std");
 const HttpClient = @import("ShellyHttp");
-const bindings = @import("bindings.zig");
+const bindings = struct {
+    pub const libalpm = @import("types.zig");
+};
 const cache_manager = @import("cache_manager.zig");
 const alpm_manager = @import("manager.zig");
 const shared_downloader = @import("../shared/downloader.zig");
@@ -857,7 +859,7 @@ test "prepare_candidate retains local cache files" {
     _ = try std.Io.Dir.cwd().statFile(testing.io, candidates[0].location, .{});
 
     var transaction_manager: alpm_manager.Manager = undefined;
-    transaction_manager.handle = null;
+    transaction_manager.engine = null;
     try testing.expectError(
         error.NoHandle,
         manager.install_candidate(&transaction_manager, &candidates[0], .{}),
@@ -868,7 +870,7 @@ test "archive installation API delegates through the ALPM manager" {
     var archive = ArchiveManager.init(testing.allocator, testing.io, .{});
     defer archive.deinit();
     var manager: alpm_manager.Manager = undefined;
-    manager.handle = null;
+    manager.engine = null;
     manager.allocator = testing.allocator;
     try testing.expectError(error.NoHandle, archive.find_candidates(&manager, "demo", null));
     _ = ArchiveManager.download_candidate;

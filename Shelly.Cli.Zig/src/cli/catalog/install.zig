@@ -11,7 +11,7 @@ pub const variants = [_]types.Variant{
         .name = "standard",
         .type_code = 's',
         .description = "Install ALPM repository packages, local Arch or Shelly binary archives, and package archives downloaded from HTTP(S) URLs.",
-        .implementation = "Zigalpm.AlpmManager.install_packages / install_local_packages / install_dependencies_only; Zigalpm.LocalManager.installBinariesPackage; Zigalpm.shared.Downloader.downloadToFile for URLs",
+        .implementation = "PackageManager.Manager.install_packages / install_local_packages / install_dependencies_only; PackageManager.LocalManager.installBinariesPackage; PackageManager.shared.Downloader.downloadToFile for URLs",
         .arguments = &.{repeatedArgument(
             "packages",
             0,
@@ -30,7 +30,7 @@ pub const variants = [_]types.Variant{
         .name = "appimage",
         .type_code = 'i',
         .description = "Install a local AppImage into the configured AppImage directory and update Shelly's AppImage metadata database.",
-        .implementation = "Zigalpm.AppImageManager.installAppImage",
+        .implementation = "PackageManager.AppImageManager.installAppImage",
         .arguments = &.{requiredArgument(
             "location",
             "Path to an existing file whose extension is .AppImage",
@@ -47,7 +47,7 @@ pub const variants = [_]types.Variant{
         .name = "aur",
         .type_code = 'a',
         .description = "Fetch, review, build, and install one or more AUR packages, install one package's build dependencies, or install one package at an exact Git commit.",
-        .implementation = "Zigalpm.AurManager.installPackages / installDependenciesOnly / installPackageVersion",
+        .implementation = "PackageManager.AurManager.installPackages / installDependenciesOnly / installPackageVersion",
         .arguments = &.{repeatedArgument(
             "packages",
             0,
@@ -70,7 +70,7 @@ pub const variants = [_]types.Variant{
         .name = "flatpak",
         .type_code = 'f',
         .description = "Install a Flatpak application, runtime, .flatpakref file, or bundle, or repair an installed Flatpak while preserving its configuration.",
-        .implementation = "Zigalpm.flatpak.AppstreamManager.getAllRemoteCatalogs; Zigalpm.FlatpakManager.install_flatpak / install_from_ref_flatpak / install_from_bundle_flatpak / repair_installed_flatpak",
+        .implementation = "PackageManager.flatpak.AppstreamManager.getAllRemoteCatalogs; PackageManager.FlatpakManager.install_flatpak / install_from_ref_flatpak / install_from_bundle_flatpak / repair_installed_flatpak",
         .arguments = &.{requiredArgument(
             "package",
             "Application/runtime ID, friendly AppStream name, installed target with --repair, .flatpakref path with --ref-file, or bundle path with --bundle",

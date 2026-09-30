@@ -15,7 +15,7 @@ Shelly is organized into several interconnected projects:
 | **Shelly.CLI.Zig**                  | Command-line interface for terminal-based package management                                          |
 | **Shelly-Notifications**            | Application to handle tray services and notifications.                                                |
 | **Shelly.Http**                     | Standalone HTTP client and compatibility TLS implementation                                           |
-| **Shelly.PackageManager**           | Core libalpm/AUR/AppImage library and backend-neutral Flatpak facade                                  |
+| **Shelly.PackageManager**           | Core libalpm/RLPM/AUR/AppImage library and backend-neutral Flatpak facade                                  |
 | **Shelly.Flatpak.Backend**          | Optional ABI-versioned shared library containing generated libflatpak bindings and native operations  |
 | **Shelly.Utilities**                | Shared utility classes and extensions used across projects                                            |
 
@@ -66,7 +66,7 @@ Shelly is organized into several interconnected projects:
 3. **Shelly-Notifications** uses the d-bus to communicate with the UI process, tray icon, and notifications.
 
 4. **PackageManager → System**:
-    - Directly interfaces with `libalpm` for native package operations
+    - Dispatches native package operations through the selected libalpm or RLPM facade
     - Calls AUR API for package searches and metadata
     - Lazily loads `/usr/lib/shelly/libshelly-flatpak-backend.so.1` for
       Flatpak operations; PackageManager itself does not link libflatpak
@@ -171,3 +171,13 @@ Once these steps are validated, please submit a pull request.
 ## Getting Help
 
 If you have questions or need help, please open an issue on the GitHub repository or join or community https://fluxer.gg/hAxUFvJP
+
+### Native backend changes
+
+Keep production native-package consumers behind `AlpmManager` and its owned query
+records. Raw C types belong to the conditional libalpm implementation. RLPM keeps
+its Owner/Database/Package/Transaction ownership pattern. Build both engines by
+default; forward `-Dlibalpm=false` through dependent builds. Package the matching
+action/download workers beside the executable. Run the four combinations in the
+[native backend guide](docs/native-package-backends.md), which also records the
+release acceptance boundary and remaining environment-dependent checks.

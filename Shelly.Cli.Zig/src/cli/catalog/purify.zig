@@ -9,7 +9,7 @@ pub const variants = [_]types.Variant{
         .name = "standard",
         .type_code = 's',
         .description = "Plan corrupted archives, optional orphan cleanup, and optional cache retention cleanup; show the targets, then confirm before changing ALPM or cache state.",
-        .implementation = "Zigalpm.AlpmManager.purify / Zigalpm.alpm.CacheManager",
+        .implementation = "PackageManager.Manager.purify / PackageManager.Manager.CacheManager",
         .options = &.{
             flag("--dry-run", &.{"-d"}, "Show the cleanup plan without changing packages"),
             flag("--orphans", &.{"-o"}, "Include orphaned packages"),
@@ -34,6 +34,6 @@ pub const variants = [_]types.Variant{
         .name = "flatpak",
         .type_code = 'f',
         .description = "Plan unused dependency cleanup across system and user Flatpak installations, then show and confirm the targets.",
-        .implementation = "Zigalpm.FlatpakManager.remove_unused_dependencies",
+        .implementation = "PackageManager.FlatpakManager.remove_unused_dependencies",
     },
 };

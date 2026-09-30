@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const Io = std.Io;
 
 const Shelly_Key = @import("Shelly_Key");
@@ -43,7 +44,7 @@ fn run(init: std.process.Init) !void {
             opts.key_ids,
         ) catch |err| switch (err) {
             error.GpgFailed => {
-                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), @import("diagnostics").safe(opts.gpgdir) });
+                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), diagnostics.safe(opts.gpgdir) });
                 std.process.exit(1);
             },
             else => return err,
@@ -54,7 +55,7 @@ fn run(init: std.process.Init) !void {
             opts.key_ids,
         ) catch |err| switch (err) {
             error.GpgFailed => {
-                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), @import("diagnostics").safe(opts.gpgdir) });
+                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), diagnostics.safe(opts.gpgdir) });
                 std.process.exit(1);
             },
             else => return err,
@@ -65,7 +66,7 @@ fn run(init: std.process.Init) !void {
             opts.key_ids,
         ) catch |err| switch (err) {
             error.GpgFailed => {
-                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), @import("diagnostics").safe(opts.gpgdir) });
+                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), diagnostics.safe(opts.gpgdir) });
                 std.process.exit(1);
             },
             else => return err,
@@ -77,7 +78,7 @@ fn run(init: std.process.Init) !void {
             opts.key_ids,
         ) catch |err| switch (err) {
             error.GpgFailed => {
-                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), @import("diagnostics").safe(opts.gpgdir) });
+                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), diagnostics.safe(opts.gpgdir) });
                 std.process.exit(1);
             },
             else => return err,
@@ -96,12 +97,12 @@ fn run(init: std.process.Init) !void {
                 std.process.exit(1);
             },
             error.NoSecretKey => {
-                stderrPrint(init.io, "Could not sign keys because keyring {f} has no secret signing key.", .{@import("diagnostics").safe(opts.gpgdir)});
-                stderrPrint(init.io, "Initialize the intended keyring before signing keys: shelly-key --init {f}{s}", .{ @import("diagnostics").shellQuote(opts.gpgdir), if (opts.user) " --user" else "" });
+                stderrPrint(init.io, "Could not sign keys because keyring {f} has no secret signing key.", .{diagnostics.safe(opts.gpgdir)});
+                stderrPrint(init.io, "Initialize the intended keyring before signing keys: shelly-key --init {f}{s}", .{ diagnostics.shellQuote(opts.gpgdir), if (opts.user) " --user" else "" });
                 std.process.exit(1);
             },
             error.GpgFailed => {
-                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), @import("diagnostics").safe(opts.gpgdir) });
+                stderrPrint(init.io, "Could not complete keyring operation {s} in {f}. GPG reported a failure. Review the GPG output for the selected keys.\n\nTechnical details: GpgFailed", .{ @tagName(opts.command), diagnostics.safe(opts.gpgdir) });
                 std.process.exit(1);
             },
             else => return err,
@@ -139,7 +140,7 @@ fn run(init: std.process.Init) !void {
             stdout,
         ) catch |err| switch (err) {
             error.KeyNotFoundLocally => {
-                stderrPrint(init.io, "Could not refresh the selected keys because they are not in keyring {f}. Check the key IDs or receive the keys first.", .{@import("diagnostics").safe(opts.gpgdir)});
+                stderrPrint(init.io, "Could not refresh the selected keys because they are not in keyring {f}. Check the key IDs or receive the keys first.", .{diagnostics.safe(opts.gpgdir)});
                 std.process.exit(1);
             },
             error.GpgFailed => {
@@ -162,29 +163,29 @@ fn run(init: std.process.Init) !void {
                 stderrPrint(
                     init.io,
                     "The package-signing keyring at {0f} is not initialized. Initialize this keyring before populating it.",
-                    .{@import("diagnostics").safe(opts.gpgdir)},
+                    .{diagnostics.safe(opts.gpgdir)},
                 );
                 stderrPrint(
                     init.io,
                     "Initialize the keyring at {0f} first.",
-                    .{@import("diagnostics").safe(opts.gpgdir)},
+                    .{diagnostics.safe(opts.gpgdir)},
                 );
                 std.process.exit(1);
             },
             error.NoSecretKey => {
-                stderrPrint(init.io, "Could not sign keys because keyring {f} has no secret signing key.", .{@import("diagnostics").safe(opts.gpgdir)});
-                stderrPrint(init.io, "Initialize the intended keyring before signing keys: shelly-key --init {f}{s}", .{ @import("diagnostics").shellQuote(opts.gpgdir), if (opts.user) " --user" else "" });
+                stderrPrint(init.io, "Could not sign keys because keyring {f} has no secret signing key.", .{diagnostics.safe(opts.gpgdir)});
+                stderrPrint(init.io, "Initialize the intended keyring before signing keys: shelly-key --init {f}{s}", .{ diagnostics.shellQuote(opts.gpgdir), if (opts.user) " --user" else "" });
                 std.process.exit(1);
             },
             error.NoKeyringsFound => {
-                stderrPrint(init.io, "No keyring files were found in {0f}. Check --populate-from or install the package that supplies the requested keyring files.", .{@import("diagnostics").safe(opts.populate_from)});
+                stderrPrint(init.io, "No keyring files were found in {0f}. Check --populate-from or install the package that supplies the requested keyring files.", .{diagnostics.safe(opts.populate_from)});
                 std.process.exit(1);
             },
             error.PopulateFromMissing => {
                 stderrPrint(
                     init.io,
                     "The keyring source directory {0f} does not exist. Check --populate-from or install the package that supplies the keyring files.",
-                    .{@import("diagnostics").safe(opts.populate_from)},
+                    .{diagnostics.safe(opts.populate_from)},
                 );
                 stderrPrint(
                     init.io,
@@ -206,7 +207,7 @@ fn run(init: std.process.Init) !void {
                         stderrPrint(
                             init.io,
                             "Keyring file {0f}/{1f}.gpg does not exist. Check the requested keyring name and source directory.",
-                            .{ @import("diagnostics").safe(opts.populate_from), @import("diagnostics").safe(id) },
+                            .{ diagnostics.safe(opts.populate_from), diagnostics.safe(id) },
                         );
                     }
                 }
@@ -247,7 +248,7 @@ pub fn main(init: std.process.Init) !void {
         },
         else => {
             stderrPrint(init.io, "Could not complete the keyring operation. {s}\n\nTechnical details: {s}", .{
-                @import("diagnostics").cause(err), @errorName(err),
+                diagnostics.cause(err), @errorName(err),
             });
             std.process.exit(1);
         },

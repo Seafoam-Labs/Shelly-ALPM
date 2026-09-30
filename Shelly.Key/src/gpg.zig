@@ -21,6 +21,20 @@ pub const Gpg = struct {
     io: Io,
     homedir: ?[]const u8,
 
+    /// Bounded, concurrently drained machine-readable output. Unlike runCapture,
+    /// a nonzero exit retains both streams and the process termination status.
+    /// The caller owns stdout/stderr, including on an unsuccessful GPG exit.
+    pub fn runCaptureResult(self: Gpg, allocator: std.mem.Allocator, extra: []const []const u8) !process.RunResult {
+        if (extra.len > argv_capacity - 5) return error.TooManyArguments;
+        var argv: [argv_capacity][]const u8 = undefined;
+        const n = buildArgv(&argv, extra, self.homedir, null);
+        return process.run(allocator, self.io, .{
+            .argv = argv[0..n],
+            .stdout_limit = .limited(4 * 1024 * 1024),
+            .stderr_limit = .limited(1024 * 1024),
+        });
+    }
+
     /// Run `gpg --homedir <dir> --no-permission-warning --update-trustdb`
     pub fn updateTrustdb(self: Gpg) !void {
         try self.run(&.{"--update-trustdb"}, null, null, null);

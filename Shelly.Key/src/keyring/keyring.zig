@@ -1,4 +1,5 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const Io = std.Io;
 
 const elevate = @import("../helpers/elevate.zig");
@@ -164,7 +165,7 @@ pub fn lsignKey(
         try stdout.print("Locally signing key {s}...\n", .{key_id});
         try stdout.flush();
         gpg_cli.locallySignKey(key_id) catch {
-            try stdout.print("Could not locally sign key {0f}.\n", .{@import("diagnostics").safe(key_id)});
+            try stdout.print("Could not locally sign key {0f}.\n", .{diagnostics.safe(key_id)});
             try stdout.flush();
             had_failure = true;
             continue;
@@ -249,7 +250,7 @@ pub fn refreshKeys(
 
         if (try refreshSingleKey(allocator, gpg_cli, keyserver, id)) continue;
 
-        try stdout.print("Could not refresh key {0f} from the configured keyserver.\n", .{@import("diagnostics").safe(id)});
+        try stdout.print("Could not refresh key {0f} from the configured keyserver.\n", .{diagnostics.safe(id)});
         try stdout.flush();
         had_failure = true;
     }

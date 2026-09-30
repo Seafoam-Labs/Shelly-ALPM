@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "library_sha256": "da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888",
+  "capture": "record_owner.py; isolated temporary root and database",
+  "defaults": {
+    "parallel_downloads": 1,
+    "checkspace": 0,
+    "usesyslog": 0,
+    "disable_dl_timeout": 0,
+    "default_siglevel": 0,
+    "local_file_siglevel": 0,
+    "remote_file_siglevel": 0,
+    "root": "$ROOT/",
+    "dbpath": "$DB/",
+    "lockfile": "$DB/db.lck",
+    "dbext": ".db",
+    "gpgdir": null,
+    "logfile": null,
+    "sandboxuser": null,
+    "cachedirs": [],
+    "hookdirs": [
+      "$ROOT/usr/share/libalpm/hooks/"
+    ],
+    "architectures": [],
+    "ignorepkgs": [],
+    "ignoregroups": [],
+    "noupgrades": [],
+    "noextracts": [],
+    "overwrite_files": []
+  },
+  "repository_order": [
+    "core",
+    "cachyos"
+  ],
+  "rejected_registration_names": [
+    "core",
+    "local",
+    "",
+    "path/repo"
+  ],
+  "servers_after_add": [
+    "https://first.invalid/core",
+    "https://second.invalid/core/"
+  ],
+  "sandbox_note": "The deprecated aggregate get/set functions are declared in the header but not exported by this binary. Global semantics are source-derived; the independent controls below were executed.",
+  "sandbox": [
+    {
+      "set": "all",
+      "value": true,
+      "disable_sandbox_filesystem": true,
+      "disable_sandbox_syscalls": true,
+      "disable_sandbox_network": true
+    },
+    {
+      "set": "network",
+      "value": false,
+      "disable_sandbox_filesystem": true,
+      "disable_sandbox_syscalls": true,
+      "disable_sandbox_network": false
+    },
+    {
+      "set": "all",
+      "value": false,
+      "disable_sandbox_filesystem": false,
+      "disable_sandbox_syscalls": false,
+      "disable_sandbox_network": false
+    }
+  ],
+  "initialization_creates_local_version_file": true
+}
