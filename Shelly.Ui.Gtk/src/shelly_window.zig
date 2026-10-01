@@ -5,14 +5,26 @@ const gtk = bindings.gtk;
 const glib = bindings.glib;
 const gio = bindings.gio;
 const gobject = bindings.gobject;
-const FlatpakPage = @import("pages/flatpak/flatpak_page.zig").FlatpakPage;
-const AppImagePage = @import("pages/appimage_page.zig").AppImagePage;
-const PackagePage = @import("pages/package_page.zig").PackagePage;
-const AurPage = @import("pages/aur_page.zig").AurPage;
-const AtollAurPage = @import("pages/atoll_aur_page.zig").AtollAurPage;
-const ShellySearchPage = @import("pages/search_page.zig").ShellySearchPage;
+const build_options = @import("options");
+
+const exclude_flatpak = build_options.exclude_flatpak;
+const exclude_aur = build_options.exclude_aur;
+const exclude_recommend = build_options.exclude_recommend;
+const exclude_appimage = build_options.exclude_appimage;
+const exclude_shelly_search = build_options.exclude_shelly_search;
+
+const FlatpakPage = if (exclude_flatpak) void else @import("pages/flatpak/flatpak_page.zig").FlatpakPage;
+const FlatpakSlot = if (exclude_flatpak) void else *FlatpakPage;
+const AppImagePage = if (exclude_appimage) void else @import("pages/appimage_page.zig").AppImagePage;
+const PackagePage = if (build_options.devario)
+    @import("devario/package_page.zig").PackagePage
+else
+    @import("pages/package_page.zig").PackagePage;
+const AurPage = if (exclude_aur) void else @import("pages/aur_page.zig").AurPage;
+const AtollAurPage = if (exclude_aur) void else @import("pages/atoll_aur_page.zig").AtollAurPage;
+const ShellySearchPage = if (exclude_shelly_search) void else @import("pages/search_page.zig").ShellySearchPage;
 const UpdatePage = @import("pages/update_page.zig").UpdatePage;
-const RecommendPage = @import("pages/recommend_page.zig").RecommendPage;
+const RecommendPage = if (exclude_recommend) void else @import("pages/recommend_page.zig").RecommendPage;
 const WelcomePage = @import("pages/welcome.zig").WelcomePage;
 const SupportPage = @import("pages/support.zig");
 const SettingsPage = @import("pages/settings_page.zig").SettingsPage;
@@ -60,7 +72,7 @@ pub const ShellyWindow = extern struct {
         collapsed: bool,
         nav_mode: NavMode,
         pending_nav: NavMode,
-        flatpak_page: *FlatpakPage,
+        flatpak_page: FlatpakSlot,
         aur_slot_atoll: bool,
         var offset: c_int = 0;
     };
@@ -109,9 +121,11 @@ pub const ShellyWindow = extern struct {
         const svc = runtime.config orelse return;
         const cfg = svc.get() catch return;
 
-        if (cfg.AtollAurEnabled != self.private().aur_slot_atoll) {
-            swapAurSlot(self, cfg.AtollAurEnabled);
-            syncAurUrl(cfg.AtollAurEnabled);
+        if (!exclude_aur) {
+            if (cfg.AtollAurEnabled != self.private().aur_slot_atoll) {
+                swapAurSlot(self, cfg.AtollAurEnabled);
+                syncAurUrl(cfg.AtollAurEnabled);
+            }
         }
 
         setNavEnabled(self, "recommend", cfg.RecommendedEnabled);
@@ -304,12 +318,12 @@ pub const ShellyWindow = extern struct {
         gtk.Widget.setMarginBottom(items.as(gtk.Widget), 4);
         gtk.Box.append(rail, items.as(gtk.Widget));
 
-        add_nav_button(self, items, stack, true, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
+        if (!exclude_recommend) add_nav_button(self, items, stack, true, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
         add_nav_button(self, items, stack, true, "package", PackagePage.icon_name, translations._(PackagePage.title));
-        add_nav_button(self, items, stack, true, "aur", AurPage.icon_name, translations._(AurPage.title));
-        add_nav_button(self, items, stack, true, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
-        add_nav_button(self, items, stack, true, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
-        add_nav_button(self, items, stack, true, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
+        if (!exclude_aur) add_nav_button(self, items, stack, true, "aur", AurPage.icon_name, translations._(AurPage.title));
+        if (!exclude_flatpak) add_nav_button(self, items, stack, true, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
+        if (!exclude_appimage) add_nav_button(self, items, stack, true, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
+        if (!exclude_shelly_search) add_nav_button(self, items, stack, true, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
         add_nav_button(self, items, stack, true, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
 
         const sep = gtk.Box.new(.horizontal, 0);
@@ -353,12 +367,12 @@ pub const ShellyWindow = extern struct {
         const items = gtk.Box.new(.horizontal, 0);
         gtk.Box.append(bar, items.as(gtk.Widget));
 
-        add_nav_button(self, items, stack, false, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
+        if (!exclude_recommend) add_nav_button(self, items, stack, false, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
         add_nav_button(self, items, stack, false, "package", PackagePage.icon_name, translations._(PackagePage.title));
-        add_nav_button(self, items, stack, false, "aur", AurPage.icon_name, translations._(AurPage.title));
-        add_nav_button(self, items, stack, false, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
-        add_nav_button(self, items, stack, false, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
-        add_nav_button(self, items, stack, false, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
+        if (!exclude_aur) add_nav_button(self, items, stack, false, "aur", AurPage.icon_name, translations._(AurPage.title));
+        if (!exclude_flatpak) add_nav_button(self, items, stack, false, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
+        if (!exclude_appimage) add_nav_button(self, items, stack, false, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
+        if (!exclude_shelly_search) add_nav_button(self, items, stack, false, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
         add_nav_button(self, items, stack, false, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
 
         const right_spacer = gtk.Box.new(.horizontal, 0);
@@ -529,29 +543,39 @@ pub const ShellyWindow = extern struct {
     fn populate_stack(self: *ShellyWindow) void {
         const stack = self.private().content_stack;
 
-        const rp = RecommendPage.new();
-        const rp_page = gtk.Stack.addTitled(stack, rp.as(gtk.Widget), "recommend", RecommendPage.title);
-        gtk.StackPage.setIconName(rp_page, RecommendPage.icon_name);
+        if (!exclude_recommend) {
+            const rp = RecommendPage.new();
+            const rp_page = gtk.Stack.addTitled(stack, rp.as(gtk.Widget), "recommend", RecommendPage.title);
+            gtk.StackPage.setIconName(rp_page, RecommendPage.icon_name);
+        }
 
         const pp = PackagePage.new();
         const pp_page = gtk.Stack.addTitled(stack, pp.as(gtk.Widget), "package", translations._("Package"));
         gtk.StackPage.setIconName(pp_page, PackagePage.icon_name);
 
-        const fp = FlatpakPage.new();
-        self.private().flatpak_page = fp;
-        const fp_page = gtk.Stack.addTitled(stack, fp.as(gtk.Widget), "flatpak", translations._("Flatpak"));
-        gtk.StackPage.setIconName(fp_page, FlatpakPage.icon_name);
+        if (!exclude_flatpak) {
+            const fp = FlatpakPage.new();
+            self.private().flatpak_page = fp;
+            const fp_page = gtk.Stack.addTitled(stack, fp.as(gtk.Widget), "flatpak", translations._("Flatpak"));
+            gtk.StackPage.setIconName(fp_page, FlatpakPage.icon_name);
+        }
 
-        const ai = AppImagePage.new();
-        const ai_page = gtk.Stack.addTitled(stack, ai.as(gtk.Widget), "appimage", translations._("AppImage"));
-        gtk.StackPage.setIconName(ai_page, AppImagePage.icon_name);
+        if (!exclude_appimage) {
+            const ai = AppImagePage.new();
+            const ai_page = gtk.Stack.addTitled(stack, ai.as(gtk.Widget), "appimage", translations._("AppImage"));
+            gtk.StackPage.setIconName(ai_page, AppImagePage.icon_name);
+        }
 
-        const au_page = gtk.Stack.addTitled(stack, aurSlotWidget(self), "aur", translations._("AUR"));
-        gtk.StackPage.setIconName(au_page, AurPage.icon_name);
+        if (!exclude_aur) {
+            const au_page = gtk.Stack.addTitled(stack, aurSlotWidget(self), "aur", translations._("AUR"));
+            gtk.StackPage.setIconName(au_page, AurPage.icon_name);
+        }
 
-        const ss = ShellySearchPage.new();
-        const ss_page = gtk.Stack.addTitled(stack, ss.as(gtk.Widget), "search", translations._(ShellySearchPage.title));
-        gtk.StackPage.setIconName(ss_page, ShellySearchPage.icon_name);
+        if (!exclude_shelly_search) {
+            const ss = ShellySearchPage.new();
+            const ss_page = gtk.Stack.addTitled(stack, ss.as(gtk.Widget), "search", translations._(ShellySearchPage.title));
+            gtk.StackPage.setIconName(ss_page, ShellySearchPage.icon_name);
+        }
 
         const up = UpdatePage.new();
         const up_page = gtk.Stack.addTitled(stack, up.as(gtk.Widget), "update", translations._("Update"));
@@ -659,28 +683,34 @@ pub const ShellyWindow = extern struct {
     }
 
     pub fn openFlatpakApp(self: *ShellyWindow, app_id: [:0]const u8) bool {
-        const p = self.private();
+        if (!exclude_flatpak) {
+            const p = self.private();
 
-        if (gtk.Widget.getVisible(p.lockout_overlay.as(gtk.Widget)) != 0)
-            return false;
+            if (gtk.Widget.getVisible(p.lockout_overlay.as(gtk.Widget)) != 0)
+                return false;
 
-        if (!self.canShowTopLevelPage("flatpak"))
-            return false;
-        p.flatpak_page.openApp(app_id);
-        return self.showTopLevelPage("flatpak");
+            if (!self.canShowTopLevelPage("flatpak"))
+                return false;
+            p.flatpak_page.openApp(app_id);
+            return self.showTopLevelPage("flatpak");
+        }
+        return false;
     }
 
     pub fn openFlatpakLocalFile(self: *ShellyWindow, path: [:0]const u8) bool {
-        const p = self.private();
+        if (!exclude_flatpak) {
+            const p = self.private();
 
-        if (gtk.Widget.getVisible(p.lockout_overlay.as(gtk.Widget)) != 0)
-            return false;
+            if (gtk.Widget.getVisible(p.lockout_overlay.as(gtk.Widget)) != 0)
+                return false;
 
-        if (!self.canShowTopLevelPage("flatpak"))
-            return false;
+            if (!self.canShowTopLevelPage("flatpak"))
+                return false;
 
-        p.flatpak_page.openLocalFile(path);
-        return self.showTopLevelPage("flatpak");
+            p.flatpak_page.openLocalFile(path);
+            return self.showTopLevelPage("flatpak");
+        }
+        return false;
     }
 
     pub fn navigateTo(self: *ShellyWindow, target: deep_link.PageTarget) bool {
@@ -688,19 +718,25 @@ pub const ShellyWindow = extern struct {
             .updates => self.showTopLevelPage("update"),
 
             .flatpak_install => blk: {
-                if (!self.canShowTopLevelPage("flatpak"))
-                    break :blk false;
+                if (!exclude_flatpak) {
+                    if (!self.canShowTopLevelPage("flatpak"))
+                        break :blk false;
 
-                self.private().flatpak_page.navigateTo(.install);
-                break :blk self.showTopLevelPage("flatpak");
+                    self.private().flatpak_page.navigateTo(.install);
+                    break :blk self.showTopLevelPage("flatpak");
+                }
+                break :blk false;
             },
 
             .flatpak_remove => blk: {
-                if (!self.canShowTopLevelPage("flatpak"))
-                    break :blk false;
+                if (!exclude_flatpak) {
+                    if (!self.canShowTopLevelPage("flatpak"))
+                        break :blk false;
 
-                self.private().flatpak_page.navigateTo(.remove);
-                break :blk self.showTopLevelPage("flatpak");
+                    self.private().flatpak_page.navigateTo(.remove);
+                    break :blk self.showTopLevelPage("flatpak");
+                }
+                break :blk false;
             },
         };
     }
