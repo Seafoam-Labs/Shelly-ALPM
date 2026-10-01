@@ -61,6 +61,7 @@ pub const ShellyWindow = extern struct {
         nav_mode: NavMode,
         pending_nav: NavMode,
         flatpak_page: *FlatpakPage,
+        appimage_page: *AppImagePage,        
         aur_slot_atoll: bool,
         var offset: c_int = 0;
     };
@@ -543,6 +544,7 @@ pub const ShellyWindow = extern struct {
         gtk.StackPage.setIconName(fp_page, FlatpakPage.icon_name);
 
         const ai = AppImagePage.new();
+        self.private().appimage_page = ai;
         const ai_page = gtk.Stack.addTitled(stack, ai.as(gtk.Widget), "appimage", translations._("AppImage"));
         gtk.StackPage.setIconName(ai_page, AppImagePage.icon_name);
 
@@ -682,6 +684,20 @@ pub const ShellyWindow = extern struct {
         p.flatpak_page.openLocalFile(path);
         return self.showTopLevelPage("flatpak");
     }
+
+    pub fn openAppImageLocalFile(self: *ShellyWindow, path: [:0]const u8) bool {
+        const p = self.private();
+
+        if (gtk.Widget.getVisible(p.lockout_overlay.as(gtk.Widget)) != 0)
+            return false;
+
+        if (!self.canShowTopLevelPage("appimage"))
+            return false;
+
+        p.appimage_page.openLocalFile(path);
+        return self.showTopLevelPage("appimage");
+    }
+
 
     pub fn navigateTo(self: *ShellyWindow, target: deep_link.PageTarget) bool {
         return switch (target) {
