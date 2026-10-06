@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<interface domain="shelly-ui">
+    <requires lib="gtk" version="4.0"/>
+    <template class="ShellyDevarioPackagePage" parent="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+        <child>
+            <object class="GtkLabel" id="message_label">
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
+                <property name="halign">center</property>
+                <property name="valign">center</property>
+                <property name="label" translatable="yes">Devario package page</property>
+                <property name="wrap">true</property>
+                <style>
+                    <class name="title-1"/>
+                </style>
+            </object>
+        </child>
+    </template>
+</interface>

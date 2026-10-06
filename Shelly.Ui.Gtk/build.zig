@@ -43,6 +43,62 @@ pub fn build(b: *std.Build) void {
             "Package containing the Flatpak backend for this Shelly build",
         ) orelse "shelly-flatpak-backend",
     );
+    // Optionally Allows for a Devario Based build
+    // This will contain long term items to support further enrichment to pkg's
+    options.addOption(
+        bool,
+        "devario",
+        b.option(
+            bool,
+            "devario",
+            "Build the Devario variant",
+        ) orelse false,
+    );
+    options.addOption(
+        bool,
+        "exclude_flatpak",
+        b.option(
+            bool,
+            "exclude-flatpak",
+            "Compile out the Flatpak page and its settings row",
+        ) orelse false,
+    );
+    options.addOption(
+        bool,
+        "exclude_aur",
+        b.option(
+            bool,
+            "exclude-aur",
+            "Compile out the AUR pages (including Atoll) and their settings rows",
+        ) orelse false,
+    );
+    options.addOption(
+        bool,
+        "exclude_recommend",
+        b.option(
+            bool,
+            "exclude-recommend",
+            "Compile out the Recommended page and its settings row",
+        ) orelse false,
+    );
+    options.addOption(
+        bool,
+        "exclude_appimage",
+        b.option(
+            bool,
+            "exclude-appimage",
+            "Compile out the AppImage page and its settings rows",
+        ) orelse false,
+    );
+    options.addOption(
+        bool,
+        "exclude_shelly_search",
+        b.option(
+            bool,
+            "exclude-shelly-search",
+            "Compile out the Shelly Search page and its settings row",
+        ) orelse false,
+    );
     options.addOption(
         bool,
         "skip_background_services",
@@ -121,6 +177,7 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/dialog/ui/polkit_warning.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/aur_warning.ui"));
     gresource.addFileInput(b.path("src/ui/welcome.ui"));
+    gresource.addFileInput(b.path("src/devario/package_page.ui"));
     // Link the generated resource C into the exe.
     exe.root_module.addCSourceFile(.{ .file = resources_c });
     exe.root_module.link_libc = true;
