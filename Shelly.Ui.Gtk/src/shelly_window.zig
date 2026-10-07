@@ -163,7 +163,8 @@ pub const ShellyWindow = extern struct {
         if (status == .no_agent or status == .no_daemon) {
             const dialog = PolkitDialog.new(&on_polkit_close, self);
             self.showLockoutNamed(dialog.as(gtk.Widget), translations._("polkit is required"));
-            dialog.focusClose();
+            // Not focusClose(): mounting the lockout already focuses the dialog's
+            // only control, and a second focus move fires a second announcement.
         }
     }
 
@@ -484,20 +485,23 @@ pub const ShellyWindow = extern struct {
     }
 
     fn sync_active_nav(self: *ShellyWindow) void {
+        if (self.activeNavButton()) |nb| set_active_nav(self, nb);
+    }
+
+    /// The button for the page the content stack is showing, falling back to the
+    /// first one. Also the place to put the keyboard when a lockout goes away:
+    /// it is focusable in both nav modes and needs no page to be constructed.
+    fn activeNavButton(self: *ShellyWindow) ?*NavButton {
         const p = self.private();
         const current_name: []const u8 = blk: {
             const cn_opt = gtk.Stack.getVisibleChildName(p.content_stack);
             break :blk if (cn_opt) |cn| std.mem.span(cn) else "";
         };
         for (p.nav_buttons.items) |nb| {
-            if (std.mem.eql(u8, nb.name, current_name)) {
-                set_active_nav(self, nb);
-                return;
-            }
+            if (std.mem.eql(u8, nb.name, current_name)) return nb;
         }
-        if (p.nav_buttons.items.len > 0) {
-            set_active_nav(self, p.nav_buttons.items[0]);
-        }
+        if (p.nav_buttons.items.len > 0) return p.nav_buttons.items[0];
+        return null;
     }
 
     fn tabStackName(tab: ShellyTabs) ?[:0]const u8 {
@@ -688,6 +692,14 @@ pub const ShellyWindow = extern struct {
 
         while (gtk.Widget.getFirstChild(p.lockout_content.as(gtk.Widget))) |c| {
             gtk.Box.remove(p.lockout_content, c);
+        }
+
+        // Focus may well be on a widget that has just been removed from the tree,
+        // which leaves the keyboard nowhere. Set it last: an insensitive widget
+        // rejects focus, and moving into content that is about to be discarded
+        // would fire a focus event for a page the user has already left.
+        if (self.activeNavButton()) |nb| {
+            _ = gtk.Widget.grabFocus(nb.button.as(gtk.Widget));
         }
     }
 
