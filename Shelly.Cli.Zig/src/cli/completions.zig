@@ -1108,7 +1108,7 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
             // Standalone modifier extensions are conditioned on the bare token.
             try std.testing.expect(std.mem.indexOf(u8, script, "__shelly_shortcode_token -N' -a '-Na'") != null);
             // Bare shortcodes exclude their typed siblings from their option condition.
-            try std.testing.expect(std.mem.indexOf(u8, script, "__shelly_shortcut -Ux -U; and not __shelly_shortcut -Us -Ui -Ua -Uf") != null);
+            try std.testing.expect(std.mem.indexOf(u8, script, "__shelly_shortcut -Ux -U; and not __shelly_shortcut -Us -Ui -Um -Ua -Uf") != null);
             // Standalone shortcodes whose action also has typed variants are still offered.
             try std.testing.expect(std.mem.indexOf(u8, script, "-a '-C'") != null);
         }

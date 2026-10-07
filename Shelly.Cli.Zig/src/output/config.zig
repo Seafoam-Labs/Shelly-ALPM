@@ -155,6 +155,13 @@ pub fn writeOperationProgressFrame(
             progress.update.message orelse progress.envelope.subject orelse progress.update.stage,
             progressPercentage(progress.update),
         ),
+        .mise => try writeSimpleProgressFrame(
+            context,
+            "mise.progress",
+            "Mise",
+            progress.update.message orelse progress.envelope.subject orelse progress.update.stage,
+            progressPercentage(progress.update),
+        ),
         .alpm, .aur, .local_package, .download => try writeAlpmProgressFrame(context, progress),
     }
 }

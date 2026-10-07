@@ -11,6 +11,7 @@ const table = @import("../output/table.zig");
 const parser = @import("../cli/parser.zig");
 const shortcodes = @import("../cli/shortcodes.zig");
 const runtime = @import("../runtime/context.zig");
+const elevation = @import("../runtime/elevation.zig");
 const xdg = @import("../runtime/xdg.zig");
 const spec = @import("../cli/spec.zig");
 const aur_url = @import("../config/aur_url.zig");
@@ -20,6 +21,7 @@ const standard_command_path = "shelly list-updates standard";
 const appimage_command_path = "shelly list-updates appimage";
 const aur_command_path = "shelly list-updates aur";
 const flatpak_command_path = "shelly list-updates flatpak";
+const mise_command_path = "shelly list-updates mise";
 
 // Update listings must not trust a cache file's local mtime as an HTTP
 // validator. Some repositories publish databases with an older Last-Modified
@@ -31,6 +33,7 @@ pub const Backend = enum {
     appimage,
     aur,
     flatpak,
+    mise,
 };
 
 pub const StandardUpdate = struct {
@@ -89,6 +92,15 @@ pub const FlatpakUpdate = struct {
     eol_rebase: []const u8 = "",
 };
 
+pub const MiseUpdate = struct {
+    name: []const u8,
+    current_version: []const u8 = "",
+    new_version: []const u8,
+    requested_version: ?[]const u8 = null,
+    source_path: ?[]const u8 = null,
+    release_url: ?[]const u8 = null,
+};
+
 fn ResultSet(comptime T: type) type {
     return struct {
         items: []const T,
@@ -108,6 +120,7 @@ pub const Result = union(Backend) {
     appimage: ResultSet(AppImageUpdate),
     aur: ResultSet(AurUpdate),
     flatpak: ResultSet(FlatpakUpdate),
+    mise: ResultSet(MiseUpdate),
 
     pub fn deinit(self: *Result, allocator: std.mem.Allocator) void {
         switch (self.*) {
@@ -115,6 +128,7 @@ pub const Result = union(Backend) {
             .appimage => |*result| result.deinit(allocator),
             .aur => |*result| result.deinit(allocator),
             .flatpak => |*result| result.deinit(allocator),
+            .mise => |*result| result.deinit(allocator),
         }
     }
 };
@@ -260,7 +274,7 @@ fn executeAllWithRunner(
     return if (failed) 1 else 0;
 }
 
-const all_backends = [_]Backend{ .standard, .appimage, .aur, .flatpak };
+const all_backends = [_]Backend{ .standard, .appimage, .aur, .flatpak, .mise };
 
 fn writeQueryFailure(
     context: *runtime.RuntimeContext,
@@ -334,6 +348,7 @@ fn backendForPath(path: []const u8) ?Backend {
     if (std.mem.eql(u8, path, appimage_command_path)) return .appimage;
     if (std.mem.eql(u8, path, aur_command_path)) return .aur;
     if (std.mem.eql(u8, path, flatpak_command_path)) return .flatpak;
+    if (std.mem.eql(u8, path, mise_command_path)) return .mise;
     return null;
 }
 
@@ -406,6 +421,15 @@ fn writeAllJson(
     }
     try json.endArray();
 
+    try json.objectField("Mise");
+    try json.beginArray();
+    for (results) |*result| {
+        if (result.* == .mise) {
+            for (result.mise.items) |update| try writeMiseJson(&json, update);
+        }
+    }
+    try json.endArray();
+
     try json.endObject();
 }
 
@@ -431,6 +455,7 @@ fn writeJsonItems(
             defer allocator.free(sorted);
             for (sorted) |update| try writeFlatpakJson(json, update);
         },
+        .mise => |items| for (items.items) |update| try writeMiseJson(json, update),
     }
 }
 
@@ -502,6 +527,17 @@ fn writeFlatpakJson(json: *std.json.Stringify, update: FlatpakUpdate) !void {
     try json.endObject();
 }
 
+fn writeMiseJson(json: *std.json.Stringify, update: MiseUpdate) !void {
+    try json.beginObject();
+    try field(json, "Name", update.name);
+    try field(json, "CurrentVersion", update.current_version);
+    try field(json, "NewVersion", update.new_version);
+    try field(json, "RequestedVersion", update.requested_version);
+    try field(json, "SourcePath", update.source_path);
+    try field(json, "ReleaseUrl", update.release_url);
+    try json.endObject();
+}
+
 fn field(json: *std.json.Stringify, name: []const u8, value: anytype) !void {
     try json.objectField(name);
     try json.write(value);
@@ -513,6 +549,7 @@ fn writePlain(context: *runtime.RuntimeContext, result: *const Result) !void {
         .aur => |items| try writeAurPlain(context, items.items),
         .appimage => |items| try writeAppImagePlain(context, items.items),
         .flatpak => |items| try writeFlatpakPlain(context, items.items),
+        .mise => |items| try writeMisePlain(context, items.items),
     }
 }
 
@@ -613,6 +650,30 @@ fn writeFlatpakPlain(context: *runtime.RuntimeContext, updates: []const FlatpakU
     try writeColoredLine(context, .warning, message);
 }
 
+fn writeMisePlain(context: *runtime.RuntimeContext, updates: []const MiseUpdate) !void {
+    if (updates.len == 0) return writeColoredLine(context, .success, "All mise tools are up to date.");
+
+    var storage = std.heap.ArenaAllocator.init(context.allocator);
+    defer storage.deinit();
+    const allocator = storage.allocator();
+    const rows = try allocator.alloc([]const []const u8, updates.len);
+    for (updates, rows) |update, *row| {
+        const cells = try allocator.alloc([]const u8, 4);
+        cells[0] = update.name;
+        cells[1] = update.current_version;
+        cells[2] = update.new_version;
+        cells[3] = update.requested_version orelse "";
+        row.* = cells;
+    }
+    try table.write(
+        context,
+        &.{ "Name", "Installed", "Available", "Requested" },
+        rows,
+    );
+    const message = try std.fmt.allocPrint(allocator, "mise Total: {d} tools can be upgraded", .{updates.len});
+    try writeColoredLine(context, .warning, message);
+}
+
 fn writeColoredLine(
     context: *runtime.RuntimeContext,
     color: colors.Color,
@@ -673,6 +734,7 @@ fn runReal(
         .aur => runAur(context, options),
         .appimage => runAppImage(context),
         .flatpak => runFlatpak(context),
+        .mise => runMise(context),
     };
 }
 
@@ -809,6 +871,39 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
         };
     }
     return .{ .appimage = .{ .items = updates, .arena = arena } };
+}
+
+fn runMise(context: *runtime.RuntimeContext) !Result {
+    // mise state belongs to a regular user. A root process reports nothing
+    // here; upgrades re-launch as the invoking user before querying mise.
+    if (elevation.isRoot()) return .{ .mise = .{ .items = &.{} } };
+    var manager = PackageManager.MiseManager{
+        .allocator = context.allocator,
+        .io = context.io,
+        .environ = context.environ,
+    };
+    var native_updates = try manager.listOutdated();
+    defer native_updates.deinit();
+
+    const arena = try context.allocator.create(std.heap.ArenaAllocator);
+    arena.* = std.heap.ArenaAllocator.init(context.allocator);
+    errdefer {
+        arena.deinit();
+        context.allocator.destroy(arena);
+    }
+    const allocator = arena.allocator();
+    const updates = try allocator.alloc(MiseUpdate, native_updates.items.len);
+    for (native_updates.items, updates) |native, *update| {
+        update.* = .{
+            .name = try allocator.dupe(u8, native.name),
+            .current_version = try allocator.dupe(u8, native.current orelse ""),
+            .new_version = try allocator.dupe(u8, native.latest),
+            .requested_version = if (native.requested) |value| try allocator.dupe(u8, value) else null,
+            .source_path = if (native.source_path) |value| try allocator.dupe(u8, value) else null,
+            .release_url = if (native.release_url) |value| try allocator.dupe(u8, value) else null,
+        };
+    }
+    return .{ .mise = .{ .items = updates, .arena = arena } };
 }
 
 fn runFlatpak(context: *runtime.RuntimeContext) !Result {
@@ -954,6 +1049,7 @@ fn emptyTestResult(backend: Backend) Result {
         .appimage => .{ .appimage = .{ .items = &.{} } },
         .aur => .{ .aur = .{ .items = &.{} } },
         .flatpak => .{ .flatpak = .{ .items = &.{} } },
+        .mise => .{ .mise = .{ .items = &.{} } },
     };
 }
 
@@ -978,6 +1074,8 @@ test "list-updates routes long and short forms to each backend" {
         .{ .arguments = &.{"-Pa"}, .backend = .aur },
         .{ .arguments = &.{ "list-updates", "flatpak" }, .backend = .flatpak },
         .{ .arguments = &.{"-Pf"}, .backend = .flatpak },
+        .{ .arguments = &.{ "list-updates", "mise" }, .backend = .mise },
+        .{ .arguments = &.{"-Pm"}, .backend = .mise },
     };
 
     for (cases) |case| {
@@ -1008,6 +1106,7 @@ test "list-updates routes long and short forms to each backend" {
                     .appimage => .{ .appimage = .{ .items = &.{} } },
                     .aur => .{ .aur = .{ .items = &.{} } },
                     .flatpak => .{ .flatpak = .{ .items = &.{} } },
+                    .mise => .{ .mise = .{ .items = &.{} } },
                 };
             }
         };
@@ -1033,8 +1132,8 @@ test "bare list-updates shortcode queries every backend in order and emits group
     );
     try std.testing.expect(outcome == .dispatch);
     const Capture = struct {
-        backends: [4]Backend = undefined,
-        show_hidden: [4]bool = undefined,
+        backends: [5]Backend = undefined,
+        show_hidden: [5]bool = undefined,
         count: usize = 0,
 
         fn collect(
@@ -1063,17 +1162,17 @@ test "bare list-updates shortcode queries every backend in order and emits group
         @as(?u8, 0),
         try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture),
     );
-    try std.testing.expectEqual(@as(usize, 4), capture.count);
+    try std.testing.expectEqual(@as(usize, 5), capture.count);
     try std.testing.expectEqualSlices(
         Backend,
-        &.{ .standard, .appimage, .aur, .flatpak },
+        &.{ .standard, .appimage, .aur, .flatpak, .mise },
         capture.backends[0..capture.count],
     );
     for (capture.show_hidden[0..capture.count]) |show_hidden| {
         try std.testing.expect(show_hidden);
     }
     try std.testing.expectEqualStrings(
-        "{\"Packages\":[],\"Aur\":[],\"AppImage\":[{\"Name\":\"Widget\",\"Version\":\"2.0\",\"DownloadUrl\":\"https://example.test/widget\",\"IsUpdateAvailable\":true}],\"Flatpak\":[]}\n",
+        "{\"Packages\":[],\"Aur\":[],\"AppImage\":[{\"Name\":\"Widget\",\"Version\":\"2.0\",\"DownloadUrl\":\"https://example.test/widget\",\"IsUpdateAvailable\":true}],\"Flatpak\":[],\"Mise\":[]}\n",
         tc.stdout.writer.buffered(),
     );
     try std.testing.expectEqualStrings("", tc.stderr.writer.buffered());
@@ -1115,9 +1214,11 @@ test "bare list-updates shortcode renders empty plain and UI output" {
     const appimage_index = std.mem.indexOf(u8, rendered_plain, "No appimage updates available").?;
     const aur_index = std.mem.indexOf(u8, rendered_plain, "All AUR packages are up to date.").?;
     const flatpak_index = std.mem.indexOf(u8, rendered_plain, "Flatpak Total: 0 packages").?;
+    const mise_index = std.mem.indexOf(u8, rendered_plain, "All mise tools are up to date.").?;
     try std.testing.expect(standard_index < appimage_index);
     try std.testing.expect(appimage_index < aur_index);
     try std.testing.expect(aur_index < flatpak_index);
+    try std.testing.expect(flatpak_index < mise_index);
 
     const ui_outcome = try parseTestArguments(
         arena.allocator(),
@@ -1142,7 +1243,7 @@ test "bare list-updates shortcode renders empty plain and UI output" {
     const decoded = try decodeFirstTestFrame(std.testing.allocator, ui_stdout.writer.buffered());
     defer std.testing.allocator.free(decoded);
     try std.testing.expectEqualStrings(
-        "{\"Packages\":[],\"Aur\":[],\"AppImage\":[],\"Flatpak\":[]}",
+        "{\"Packages\":[],\"Aur\":[],\"AppImage\":[],\"Flatpak\":[],\"Mise\":[]}",
         decoded,
     );
     try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, ui_stdout.writer.buffered(), "[JSON]"));
@@ -1179,9 +1280,9 @@ test "bare list-updates shortcode continues after a backend failure" {
         @as(?u8, 1),
         try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture),
     );
-    try std.testing.expectEqual(@as(usize, 4), capture.calls);
+    try std.testing.expectEqual(@as(usize, 5), capture.calls);
     try std.testing.expectEqualStrings(
-        "{\"Packages\":[],\"Aur\":[],\"AppImage\":[],\"Flatpak\":[]}\n",
+        "{\"Packages\":[],\"Aur\":[],\"AppImage\":[],\"Flatpak\":[],\"Mise\":[]}\n",
         tc.stdout.writer.buffered(),
     );
     try std.testing.expect(std.mem.indexOf(u8, tc.stderr.writer.buffered(), "Could not check for appimage updates") != null);
@@ -1216,7 +1317,7 @@ test "aggregate list-updates skips an unavailable Flatpak backend without failin
         try dispatchWithRunner(&tc.context, &outcome.dispatch, Unavailable{}),
     );
     try std.testing.expectEqualStrings(
-        "{\"Packages\":[],\"Aur\":[],\"AppImage\":[],\"Flatpak\":[]}\n",
+        "{\"Packages\":[],\"Aur\":[],\"AppImage\":[],\"Flatpak\":[],\"Mise\":[]}\n",
         tc.stdout.writer.buffered(),
     );
     try std.testing.expect(std.mem.indexOf(
@@ -1490,6 +1591,46 @@ test "list-updates reports runner failures by output mode" {
         try dispatchWithRunner(&tc.context, &outcome.dispatch, Failure{}),
     );
     try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, tc.stdout.writer.buffered(), "[JSON]"));
+}
+
+test "mise list-updates emits update JSON and a plain table" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const MiseFixture = struct {
+        fn collect(
+            _: @This(),
+            _: *runtime.RuntimeContext,
+            backend: Backend,
+            _: CheckOptions,
+        ) !Result {
+            try std.testing.expectEqual(Backend.mise, backend);
+            return .{ .mise = .{ .items = &.{.{
+                .name = "node",
+                .current_version = "26.8.1",
+                .new_version = "26.10.0",
+                .requested_version = "26",
+                .source_path = "/home/u/.config/mise/config.toml",
+            }} } };
+        }
+    };
+
+    var outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "list-updates", "mise", "--json" });
+    try std.testing.expect(outcome == .dispatch);
+    try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &outcome.dispatch, MiseFixture{}));
+    try std.testing.expectEqualStrings(
+        "[{\"Name\":\"node\",\"CurrentVersion\":\"26.8.1\",\"NewVersion\":\"26.10.0\",\"RequestedVersion\":\"26\",\"SourcePath\":\"/home/u/.config/mise/config.toml\",\"ReleaseUrl\":null}]\n",
+        tc.stdout.writer.buffered(),
+    );
+
+    tc.stdout.writer.end = 0;
+    outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "list-updates", "mise" });
+    try std.testing.expect(outcome == .dispatch);
+    try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &outcome.dispatch, MiseFixture{}));
+    const plain = tc.stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, plain, "26.10.0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, plain, "mise Total: 1 tools can be upgraded") != null);
 }
 
 test "AppImage list-updates preserves order and renders legacy output" {

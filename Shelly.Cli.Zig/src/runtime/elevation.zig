@@ -405,6 +405,15 @@ pub fn runAsInvokingUserCapture(
     return .{ .exit_code = code, .stdout = try buffered.toOwnedSlice() };
 }
 
+/// Home directory of the user who invoked sudo/doas/pkexec/run0, matching the
+/// HOME that `runAsInvokingUser` gives the re-launched process. Returns null
+/// when the process was not elevated by a supported caller-preserving tool.
+pub fn invokingUserHomeDirectory(context: *const context_module.RuntimeContext) !?[]u8 {
+    const identity = (try invokingUser(context)) orelse return null;
+    defer identity.deinit(context.allocator);
+    return try invokingUserHome(context, identity.username);
+}
+
 pub const UserIds = struct {
     uid: std.Io.File.Uid,
     gid: std.Io.File.Gid,

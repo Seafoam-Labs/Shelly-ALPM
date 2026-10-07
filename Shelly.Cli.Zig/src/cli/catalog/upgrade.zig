@@ -1,6 +1,7 @@
 const types = @import("types.zig");
 
 const flag = types.flag;
+const repeatedArgument = types.repeatedArgument;
 
 pub const variants = [_]types.Variant{
     .{
@@ -12,7 +13,7 @@ pub const variants = [_]types.Variant{
         .options = &.{flag(
             "--all",
             &.{"-a"},
-            "Upgrade standard, AUR, Flatpak, and AppImage backends",
+            "Upgrade standard, AUR, Flatpak, AppImage, and mise backends",
         )},
     },
     .{
@@ -21,8 +22,8 @@ pub const variants = [_]types.Variant{
         .type_code = 'x',
         .bare_action_code = true,
         .description = "Build and confirm an invoking-user upgrade plan, then upgrade every enabled package backend in one coordinated action, continuing through independent backend failures and returning failure if any selected backend fails.",
-        .implementation = "Combined Zig coordinator over PackageManager.Manager, AurManager, FlatpakManager, and appimage.UpdateManager",
-        .options = &.{ flag("--no-repo", &.{}, "Skip the standard ALPM backend"), flag("--no-aur", &.{}, "Skip the AUR backend"), flag("--no-flatpak", &.{}, "Skip the Flatpak backend"), flag("--no-appimage", &.{}, "Skip the AppImage backend"), flag("--no-devel", &.{}, "Skip -git aur") },
+        .implementation = "Combined Zig coordinator over PackageManager.Manager, AurManager, FlatpakManager, appimage.UpdateManager, and MiseManager",
+        .options = &.{ flag("--no-repo", &.{}, "Skip the standard ALPM backend"), flag("--no-aur", &.{}, "Skip the AUR backend"), flag("--no-flatpak", &.{}, "Skip the Flatpak backend"), flag("--no-appimage", &.{}, "Skip the AppImage backend"), flag("--no-mise", &.{}, "Skip the mise backend"), flag("--no-devel", &.{}, "Skip -git aur") },
     },
     .{
         .action = .upgrade,
@@ -30,6 +31,18 @@ pub const variants = [_]types.Variant{
         .type_code = 'i',
         .description = "Check every configured AppImage update source and replace each AppImage for which a newer version is available.",
         .implementation = "PackageManager.appimage.UpdateManager.get_updates / update",
+    },
+    .{
+        .action = .upgrade,
+        .name = "mise",
+        .type_code = 'm',
+        .description = "Upgrade the named mise tools, or every outdated mise tool, within the versions their configuration requests. Runs as the invoking user.",
+        .implementation = "PackageManager.MiseManager.listOutdated / upgrade",
+        .arguments = &.{repeatedArgument(
+            "tools",
+            0,
+            "mise tools to upgrade; omit to upgrade every outdated tool",
+        )},
     },
     .{
         .action = .upgrade,

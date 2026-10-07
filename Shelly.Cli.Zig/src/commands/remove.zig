@@ -17,6 +17,7 @@ const standard_command_path = "shelly remove standard";
 const appimage_command_path = "shelly remove appimage";
 const aur_command_path = "shelly remove aur";
 const flatpak_command_path = "shelly remove flatpak";
+const mise_command_path = "shelly remove mise";
 
 const RemoveError = error{
     AmbiguousAppImage,
@@ -41,6 +42,8 @@ const Real = struct {
             return runAppImage(context, operation_context, invocation);
         if (std.mem.eql(u8, invocation.command.path, flatpak_command_path))
             return runFlatpak(context, operation_context, invocation);
+        if (std.mem.eql(u8, invocation.command.path, mise_command_path))
+            return runMise(context, operation_context, invocation);
         return RemoveError.BackendNotImplemented;
     }
 };
@@ -257,6 +260,34 @@ fn runAppImage(
 
     if (!try manager.removeAppImageByName(target.name, target.path, optionEnabled(invocation, "--remove-config")))
         return RemoveError.BackendFailed;
+}
+
+fn runMise(
+    context: *runtime.RuntimeContext,
+    operation_context: *PackageManager.OperationContext,
+    invocation: *const parser.Invocation,
+) !void {
+    if (elevation.isRoot()) {
+        // mise configuration belongs to the invoking user and must never be
+        // edited by root. Re-launch as that user, as AppImage removal does.
+        const args = try miseRemoveArgs(context.allocator, invocation);
+        defer context.allocator.free(args);
+        if (try elevation.runAsInvokingUser(context, args)) |exit_code| {
+            if (exit_code != 0) return RemoveError.BackendFailed;
+            return;
+        }
+        return error.MiseRequiresUser;
+    }
+
+    var manager = PackageManager.MiseManager{
+        .allocator = context.allocator,
+        .io = context.io,
+        .environ = context.environ,
+    };
+    if (!manager.isInstalled()) return PackageManager.mise.Error.MiseNotInstalled;
+    manager.setOperationContext(operation_context);
+    defer manager.setOperationContext(null);
+    for (invocation.positionals) |tool| try manager.remove(tool);
 }
 
 fn runFlatpak(
@@ -526,6 +557,8 @@ fn openingMessage(allocator: std.mem.Allocator, invocation: *const parser.Invoca
         return std.fmt.allocPrint(allocator, "Removing AUR packages: {s}", .{names});
     if (std.mem.eql(u8, invocation.command.path, appimage_command_path))
         return std.fmt.allocPrint(allocator, "Removing AppImage: {s}", .{names});
+    if (std.mem.eql(u8, invocation.command.path, mise_command_path))
+        return std.fmt.allocPrint(allocator, "Removing mise tools: {s}", .{names});
     return std.fmt.allocPrint(allocator, "Removing Flatpak: {s}", .{names});
 }
 
@@ -534,12 +567,15 @@ fn successMessage(invocation: *const parser.Invocation) []const u8 {
         return "AppImage removed successfully.";
     if (std.mem.eql(u8, invocation.command.path, flatpak_command_path))
         return "Flatpak removed successfully.";
+    if (std.mem.eql(u8, invocation.command.path, mise_command_path))
+        return "mise tools removed successfully.";
     return "Packages removed successfully.";
 }
 
 fn failureMessage(invocation: *const parser.Invocation) []const u8 {
     if (std.mem.eql(u8, invocation.command.path, appimage_command_path)) return "Could not remove the selected AppImage.";
     if (std.mem.eql(u8, invocation.command.path, flatpak_command_path)) return "Could not remove the selected Flatpak from the selected installation.";
+    if (std.mem.eql(u8, invocation.command.path, mise_command_path)) return "Could not remove the selected mise tools.";
     return "Could not remove the selected packages.";
 }
 
@@ -590,6 +626,24 @@ fn appimageRemoveArgs(
     return args.toOwnedSlice(allocator);
 }
 
+fn miseRemoveArgs(
+    allocator: std.mem.Allocator,
+    invocation: *const parser.Invocation,
+) ![]const []const u8 {
+    var args: std.ArrayList([]const u8) = .empty;
+    errdefer args.deinit(allocator);
+    try args.appendSlice(allocator, &.{ "remove", "mise" });
+    if (invocation.globals.no_confirm)
+        try args.append(allocator, "--no-confirm");
+    if (invocation.globals.json)
+        try args.append(allocator, "--json");
+    if (invocation.globals.ui_mode)
+        try args.append(allocator, "--ui-mode");
+    try args.append(allocator, "--");
+    for (invocation.positionals) |positional| try args.append(allocator, positional);
+    return args.toOwnedSlice(allocator);
+}
+
 fn needsElevation(invocation: *const parser.Invocation) bool {
     return std.mem.eql(u8, invocation.command.path, standard_command_path) or
         std.mem.eql(u8, invocation.command.path, aur_command_path);
@@ -606,6 +660,7 @@ fn stringValue(config: *const config_model.Config, key: []const u8) ?[]const u8 
 fn isRemovePath(path: []const u8) bool {
     return std.mem.eql(u8, path, standard_command_path) or
         std.mem.eql(u8, path, appimage_command_path) or
+        std.mem.eql(u8, path, mise_command_path) or
         std.mem.eql(u8, path, aur_command_path) or
         std.mem.eql(u8, path, flatpak_command_path);
 }
@@ -615,6 +670,7 @@ test "recognizes every remove command path" {
     try std.testing.expect(isRemovePath(appimage_command_path));
     try std.testing.expect(isRemovePath(aur_command_path));
     try std.testing.expect(isRemovePath(flatpak_command_path));
+    try std.testing.expect(isRemovePath(mise_command_path));
     try std.testing.expect(!isRemovePath("shelly install standard"));
 }
 
@@ -743,6 +799,10 @@ test "routes every removal backend through shared output lifecycles" {
                 try std.testing.expect(optionEnabled(invocation, "--remove-config"));
                 return;
             }
+            if (std.mem.eql(u8, invocation.command.path, mise_command_path)) {
+                try std.testing.expectEqualSlices([]const u8, &.{ "node", "npm:playwright" }, invocation.positionals);
+                return;
+            }
             try std.testing.expectEqualStrings(flatpak_command_path, invocation.command.path);
             try std.testing.expect(optionEnabled(invocation, "--remove-unused"));
             try std.testing.expect(optionEnabled(invocation, "--remove-config"));
@@ -777,7 +837,33 @@ test "routes every removal backend through shared output lifecycles" {
     });
     try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &outcome.dispatch, &capture));
     try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, tc.stdout.writer.buffered(), "[JSON]"));
-    try std.testing.expectEqual(@as(usize, 4), capture.calls);
+
+    tc.stdout.writer.end = 0;
+    outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "remove", "mise", "--ui-mode", "node", "npm:playwright",
+    });
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &outcome.dispatch, &capture));
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, tc.stdout.writer.buffered(), "[JSON]"));
+    try std.testing.expect(!needsElevation(&outcome.dispatch));
+    try std.testing.expectEqual(@as(usize, 5), capture.calls);
+}
+
+test "mise remove relaunch forwards output modifiers and every tool" {
+    const spec = @import("../cli/spec.zig");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+    const outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "remove", "mise", "--ui-mode", "node", "npm:@scope/tool",
+    });
+    try std.testing.expect(outcome == .dispatch);
+    const args = try miseRemoveArgs(std.testing.allocator, &outcome.dispatch);
+    defer std.testing.allocator.free(args);
+    try std.testing.expectEqualSlices(
+        []const u8,
+        &.{ "remove", "mise", "--ui-mode", "--", "node", "npm:@scope/tool" },
+        args,
+    );
 }
 
 test "remove confirmation accepts Enter but cancels on EOF and input failure" {

@@ -9,7 +9,7 @@ pub const variants = [_]types.Variant{
         .type_code = 'x',
         .bare_action_code = true,
         .description = "Query available updates from every supported package backend, continuing through independent backend failures.",
-        .implementation = "Combined Zig coordinator over PackageManager.Manager, appimage.UpdateManager, AurManager, and FlatpakManager",
+        .implementation = "Combined Zig coordinator over PackageManager.Manager, appimage.UpdateManager, AurManager, FlatpakManager, and MiseManager",
         .options = &.{ flag("--show-hidden", &.{}, "Include hidden packages"), flag("--no-devel", &.{}, "Does not check for -git builds") },
     },
     .{
@@ -25,6 +25,13 @@ pub const variants = [_]types.Variant{
         .type_code = 'i',
         .description = "List installed AppImages with available updates.",
         .implementation = "PackageManager.appimage.UpdateManager.get_updates",
+    },
+    .{
+        .action = .list_updates,
+        .name = "mise",
+        .type_code = 'm',
+        .description = "List mise tools with newer versions allowed by their configured requests.",
+        .implementation = "PackageManager.MiseManager.listOutdated",
     },
     .{
         .action = .list_updates,

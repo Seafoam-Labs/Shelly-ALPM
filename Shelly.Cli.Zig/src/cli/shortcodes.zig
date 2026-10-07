@@ -705,11 +705,11 @@ test "translates uppercase remove aliases and preserves lowercase compatibility"
 
     const unrelated_uppercase = try translate(allocator, &manifest, &.{ "-RC", "value" });
     try std.testing.expectEqualStrings(
-        "Unknown shortcode type 'C' for action code 'R'. Valid types: s, i, a, f",
+        "Unknown shortcode type 'C' for action code 'R'. Valid types: s, i, m, a, f",
         unrelated_uppercase.failure,
     );
 
-    for ([_][]const u8{ "standard", "appimage", "aur", "flatpak" }) |command_type| {
+    for ([_][]const u8{ "standard", "appimage", "mise", "aur", "flatpak" }) |command_type| {
         const parsed = try @import("parser.zig").parse(
             allocator,
             &manifest,

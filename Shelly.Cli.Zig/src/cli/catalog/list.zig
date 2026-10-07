@@ -29,6 +29,13 @@ pub const variants = [_]types.Variant{
     },
     .{
         .action = .list,
+        .name = "mise",
+        .type_code = 'm',
+        .description = "List the developer tools active in the invoking user's global mise configuration.",
+        .implementation = "PackageManager.MiseManager.listInstalled",
+    },
+    .{
+        .action = .list,
         .name = "aur",
         .type_code = 'a',
         .alias_type_codes = &.{'A'},

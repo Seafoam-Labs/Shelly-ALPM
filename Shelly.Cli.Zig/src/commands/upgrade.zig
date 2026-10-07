@@ -23,10 +23,12 @@ const all_command_path = "shelly upgrade all";
 const appimage_command_path = "shelly upgrade appimage";
 const aur_command_path = "shelly upgrade aur";
 const flatpak_command_path = "shelly upgrade flatpak";
+const mise_command_path = "shelly upgrade mise";
 const auto_confirm_cache_clean_option = "--auto-confirm-cache-clean";
 const disable_cache_clean_option = "--disable-cache-clean";
 const disable_appimage_update_check_option = "--disable-appimage-update-check";
 const disable_flatpak_update_check_option = "--disable-flatpak-update-check";
+const disable_mise_update_check_option = "--disable-mise-update-check";
 
 const UpgradeError = error{
     BackendFailed,
@@ -38,6 +40,7 @@ const Backend = enum {
     aur,
     flatpak,
     appimage,
+    mise,
 
     fn operationBackend(self: Backend) PackageManager.OperationBackend {
         return switch (self) {
@@ -45,6 +48,7 @@ const Backend = enum {
             .aur => .aur,
             .flatpak => .flatpak,
             .appimage => .appimage,
+            .mise => .mise,
         };
     }
 
@@ -54,6 +58,7 @@ const Backend = enum {
             .aur => "AUR",
             .flatpak => "Flatpak",
             .appimage => "AppImage",
+            .mise => "mise",
         };
     }
 };
@@ -71,6 +76,7 @@ const Real = struct {
             .aur => runAur(context, operation_context, invocation),
             .flatpak => runFlatpakStep(context, operation_context, invocation),
             .appimage => runAppImage(context, operation_context, invocation),
+            .mise => runMise(context, operation_context, invocation),
         };
     }
 };
@@ -226,10 +232,12 @@ fn buildAllUpgradePlan(
     try context.stdout.flush();
     const skip_appimage = disableAppImageUpdateCheck(context, invocation);
     const skip_flatpak = disableFlatpakUpdateCheck(context, invocation);
+    const skip_mise = disableMiseUpdateCheck(context, invocation);
     for (all_backends) |backend| {
         if (!backendEnabled(invocation, backend)) continue;
         if (backend == .appimage and skip_appimage) continue;
         if (backend == .flatpak and skip_flatpak) continue;
+        if (backend == .mise and (skip_mise or !miseInstalled(context))) continue;
         // Flatpak is optional. When the backend is not installed there is
         // nothing to plan, so the step stays unmentioned instead of printing
         // a collecting line that can never produce a result.
@@ -308,6 +316,19 @@ fn renderAllUpgradePlan(context: *runtime.RuntimeContext, plan: *const UpgradePl
             try context.stdout.writeByte('\n');
         }
     }
+    if (plan.find(.mise)) |result| {
+        const updates = result.mise.items;
+        if (updates.len != 0) {
+            try context.stdout.print("mise ({d}):\n", .{updates.len});
+            for (updates) |update|
+                try context.stdout.print("  {s}: {s} -> {s}\n", .{
+                    update.name,
+                    update.current_version,
+                    update.new_version,
+                });
+            try context.stdout.writeByte('\n');
+        }
+    }
     try context.stdout.flush();
 }
 
@@ -355,6 +376,7 @@ fn listUpdatesBackend(backend: Backend) list_updates.Backend {
         .aur => .aur,
         .flatpak => .flatpak,
         .appimage => .appimage,
+        .mise => .mise,
     };
 }
 
@@ -364,6 +386,7 @@ fn collectingMessage(backend: Backend) []const u8 {
         .aur => "Collecting AUR Packages",
         .flatpak => "Collecting Flatpak Apps",
         .appimage => "Collecting AppImages",
+        .mise => "Collecting mise tools",
     };
 }
 
@@ -373,6 +396,7 @@ fn noUpdatesMessage(backend: Backend) []const u8 {
         .aur => "No AUR packages to upgrade.",
         .flatpak => "No Flatpak apps to upgrade.",
         .appimage => "No AppImages to upgrade.",
+        .mise => "No mise tools to upgrade.",
     };
 }
 
@@ -555,10 +579,12 @@ fn runSelected(
     var failed = false;
     const skip_appimage = disableAppImageUpdateCheck(context, invocation);
     const skip_flatpak = disableFlatpakUpdateCheck(context, invocation);
+    const skip_mise = disableMiseUpdateCheck(context, invocation);
     for (all_backends) |backend| {
         if (!backendEnabled(invocation, backend)) continue;
         if (backend == .appimage and skip_appimage) continue;
         if (backend == .flatpak and skip_flatpak) continue;
+        if (backend == .mise and skip_mise) continue;
         runner.run(context, operation_context, backend, invocation) catch |err| {
             if (isUnavailableFlatpak(backend, err)) continue;
             if (backend == .flatpak) {
@@ -574,7 +600,7 @@ fn runSelected(
     if (failed) return UpgradeError.OneOrMoreBackendsFailed;
 }
 
-const all_backends = [_]Backend{ .standard, .aur, .flatpak, .appimage };
+const all_backends = [_]Backend{ .standard, .aur, .flatpak, .appimage, .mise };
 
 fn isUnavailableFlatpak(backend: Backend, err: anyerror) bool {
     return backend == .flatpak and
@@ -964,6 +990,119 @@ fn appimageUpgradeArgs(
     return args.toOwnedSlice(allocator);
 }
 
+fn runMise(
+    context: *runtime.RuntimeContext,
+    operation_context: *PackageManager.OperationContext,
+    invocation: *const parser.Invocation,
+) !void {
+    const aggregate = upgradesAll(invocation);
+    const tools: []const []const u8 = if (aggregate) &.{} else invocation.positionals;
+    if (elevation.isRoot()) {
+        // mise state belongs to the invoking user and must never be changed
+        // by root. Re-launch as that user, as AppImage upgrades do.
+        const home = (try elevation.invokingUserHomeDirectory(context)) orelse {
+            if (aggregate) return;
+            return error.MiseRequiresUser;
+        };
+        defer context.allocator.free(home);
+        if (aggregate and !try miseInstalledForHome(context, home)) return;
+        const args = try miseUpgradeArgs(context.allocator, invocation.globals, tools);
+        defer context.allocator.free(args);
+        if (try elevation.runAsInvokingUser(context, args)) |exit_code| {
+            if (exit_code != 0) return UpgradeError.BackendFailed;
+            return;
+        }
+        return error.MiseRequiresUser;
+    }
+
+    var manager = PackageManager.MiseManager{
+        .allocator = context.allocator,
+        .io = context.io,
+        .environ = context.environ,
+    };
+    if (!manager.isInstalled()) {
+        // Users without mise see nothing during an aggregate upgrade.
+        if (aggregate) return;
+        return PackageManager.mise.Error.MiseNotInstalled;
+    }
+    manager.setOperationContext(operation_context);
+    defer manager.setOperationContext(null);
+
+    if (tools.len != 0) return manager.upgrade(tools);
+
+    var outdated = try manager.listOutdated();
+    defer outdated.deinit();
+    if (outdated.items.len == 0) {
+        emitStatus(operation_context, .mise, .success, "All mise tools are up to date.");
+        return;
+    }
+    const names = try context.allocator.alloc([]const u8, outdated.items.len);
+    defer context.allocator.free(names);
+    for (outdated.items, names) |update, *name| {
+        try emitFormattedStatus(
+            context,
+            operation_context,
+            .mise,
+            .information,
+            "Upgrading {s} {s} -> {s}",
+            .{ update.name, update.current orelse "", update.latest },
+        );
+        name.* = update.name;
+    }
+    try manager.upgrade(names);
+}
+
+/// Mirrors the environment `elevation.runAsInvokingUser` gives the re-launched
+/// process, so root can tell whether that user has mise before handing off.
+fn miseInstalledForHome(context: *runtime.RuntimeContext, home: []const u8) !bool {
+    var environment = std.process.Environ.Map.init(context.allocator);
+    defer environment.deinit();
+    const data_home = try std.fs.path.join(context.allocator, &.{ home, ".local", "share" });
+    defer context.allocator.free(data_home);
+    try environment.put("HOME", home);
+    try environment.put("XDG_DATA_HOME", data_home);
+    try environment.put("PATH", PackageManager.process_runner.build_path.baseline);
+    var block = try environment.createPosixBlock(context.allocator, .{});
+    defer block.deinit(context.allocator);
+    const manager = PackageManager.MiseManager{
+        .allocator = context.allocator,
+        .io = context.io,
+        .environ = .{ .block = block },
+    };
+    return manager.isInstalled();
+}
+
+fn miseInstalled(context: *runtime.RuntimeContext) bool {
+    if (elevation.isRoot()) return false;
+    const manager = PackageManager.MiseManager{
+        .allocator = context.allocator,
+        .io = context.io,
+        .environ = context.environ,
+    };
+    return manager.isInstalled();
+}
+
+fn miseUpgradeArgs(
+    allocator: std.mem.Allocator,
+    globals: parser.GlobalOptions,
+    tools: []const []const u8,
+) ![]const []const u8 {
+    var args: std.ArrayList([]const u8) = .empty;
+    errdefer args.deinit(allocator);
+    try args.appendSlice(allocator, &.{ "upgrade", "mise" });
+    if (globals.no_confirm)
+        try args.append(allocator, "--no-confirm");
+    if (globals.json)
+        try args.append(allocator, "--json");
+    if (globals.ui_mode)
+        try args.append(allocator, "--ui-mode");
+    if (tools.len != 0) {
+        try args.append(allocator, "--");
+        try args.appendSlice(allocator, tools);
+    }
+    return args.toOwnedSlice(allocator);
+}
+
 fn reportBackendFailure(
     context: *runtime.RuntimeContext,
     operation_context: *PackageManager.OperationContext,
@@ -1061,6 +1200,7 @@ fn backendEnabled(invocation: *const parser.Invocation, backend: Backend) bool {
         .aur => !optionEnabled(invocation, "--no-aur"),
         .flatpak => !optionEnabled(invocation, "--no-flatpak"),
         .appimage => !optionEnabled(invocation, "--no-appimage"),
+        .mise => !optionEnabled(invocation, "--no-mise"),
     };
 }
 
@@ -1069,6 +1209,7 @@ fn backendForPath(path: []const u8) ?Backend {
     if (std.mem.eql(u8, path, aur_command_path)) return .aur;
     if (std.mem.eql(u8, path, flatpak_command_path)) return .flatpak;
     if (std.mem.eql(u8, path, appimage_command_path)) return .appimage;
+    if (std.mem.eql(u8, path, mise_command_path)) return .mise;
     return null;
 }
 
@@ -1080,6 +1221,7 @@ fn openingMessage(invocation: *const parser.Invocation) []const u8 {
         .aur => "Upgrading out-of-date AUR packages...",
         .flatpak => "Updating all Flatpak apps and runtimes...",
         .appimage => "Checking for AppImage upgrades...",
+        .mise => "Upgrading mise tools...",
     };
 }
 
@@ -1090,6 +1232,7 @@ fn successMessage(invocation: *const parser.Invocation) []const u8 {
         .aur => "AUR upgrade complete.",
         .flatpak => "Flatpak upgrade complete.",
         .appimage => "AppImage upgrades complete.",
+        .mise => "mise upgrade complete.",
     };
 }
 
@@ -1101,6 +1244,7 @@ fn failureMessage(invocation: *const parser.Invocation) []const u8 {
         .aur => "Could not complete the AUR upgrade.",
         .flatpak => "Could not complete the Flatpak upgrade.",
         .appimage => "Could not complete the AppImage upgrade.",
+        .mise => "Could not complete the mise upgrade.",
     };
 }
 
@@ -1165,6 +1309,16 @@ fn disableFlatpakUpdateCheck(
     return boolValue(&configuration, "DisableFlatpakUpdateCheck") orelse false;
 }
 
+fn disableMiseUpdateCheck(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+) bool {
+    if (!upgradesAll(invocation)) return false;
+    if (optionEnabled(invocation, disable_mise_update_check_option)) return true;
+    const configuration = config_manager.Manager.init(context).read() catch return false;
+    return boolValue(&configuration, "DisableMiseUpdateCheck") orelse false;
+}
+
 fn elevatedUpgradeArguments(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
@@ -1189,13 +1343,26 @@ fn elevatedUpgradeArguments(
     const carry_flatpak = disableFlatpakUpdateCheck(context, invocation) and
         !optionEnabled(invocation, disable_flatpak_update_check_option) and
         !optionEnabled(invocation, "--no-flatpak");
-    const extra_count = @as(usize, @intFromBool(carry_appimage)) + @as(usize, @intFromBool(carry_flatpak));
+    const carry_mise = disableMiseUpdateCheck(context, invocation) and
+        !optionEnabled(invocation, disable_mise_update_check_option) and
+        !optionEnabled(invocation, "--no-mise");
+    const extra_count = @as(usize, @intFromBool(carry_appimage)) +
+        @as(usize, @intFromBool(carry_flatpak)) +
+        @as(usize, @intFromBool(carry_mise));
     if (extra_count > 0) {
         defer context.allocator.free(arguments);
         const result = try context.allocator.alloc([]const u8, arguments.len + extra_count);
         @memcpy(result[0..arguments.len], arguments);
-        if (carry_appimage) result[arguments.len] = disable_appimage_update_check_option;
-        if (carry_flatpak) result[result.len - 1] = disable_flatpak_update_check_option;
+        var next = arguments.len;
+        if (carry_appimage) {
+            result[next] = disable_appimage_update_check_option;
+            next += 1;
+        }
+        if (carry_flatpak) {
+            result[next] = disable_flatpak_update_check_option;
+            next += 1;
+        }
+        if (carry_mise) result[next] = disable_mise_update_check_option;
         return result;
     }
     return arguments;
@@ -1246,6 +1413,7 @@ fn isUpgradePath(path: []const u8) bool {
     return std.mem.eql(u8, path, standard_command_path) or
         std.mem.eql(u8, path, all_command_path) or
         std.mem.eql(u8, path, appimage_command_path) or
+        std.mem.eql(u8, path, mise_command_path) or
         std.mem.eql(u8, path, aur_command_path) or
         std.mem.eql(u8, path, flatpak_command_path);
 }
@@ -1364,6 +1532,7 @@ test "optional backend update check preferences skip combined planning and execu
                 .aur => .{ .aur = .{ .items = &.{} } },
                 .flatpak => .{ .flatpak = .{ .items = &.{} } },
                 .appimage => .{ .appimage = .{ .items = &.{} } },
+                .mise => .{ .mise = .{ .items = &.{} } },
             };
         }
 
@@ -1386,7 +1555,7 @@ test "optional backend update check preferences skip combined planning and execu
         const outcome = try parser.parse(tc.arena.allocator(), &manifest, translated.arguments().?);
         try std.testing.expect(outcome == .dispatch);
         for ([_]struct { appimage: bool, flatpak: bool, expected: []const Backend }{
-            .{ .appimage = false, .flatpak = false, .expected = &all_backends },
+            .{ .appimage = false, .flatpak = false, .expected = &.{ .standard, .aur, .flatpak, .appimage } },
             .{ .appimage = true, .flatpak = false, .expected = &.{ .standard, .aur, .flatpak } },
             .{ .appimage = false, .flatpak = true, .expected = &.{ .standard, .aur, .appimage } },
             .{ .appimage = true, .flatpak = true, .expected = &.{ .standard, .aur } },
@@ -1399,7 +1568,7 @@ test "optional backend update check preferences skip combined planning and execu
             defer plan.deinit(tc.context.allocator);
             try runSelected(&capture, &tc.context, &operations, &outcome.dispatch);
             try std.testing.expectEqualSlices(Backend, disabled.expected, capture.collected.items);
-            try std.testing.expectEqualSlices(Backend, disabled.expected, capture.ran.items);
+            try expectRanWithMise(disabled.expected, capture.ran.items);
             try std.testing.expectEqual(!disabled.appimage, plan.find(.appimage) != null);
             try std.testing.expectEqual(!disabled.flatpak, plan.find(.flatpak) != null);
             try std.testing.expectEqual(@as(usize, if (disabled.flatpak) 0 else 1), capture.probe_calls);
@@ -1415,7 +1584,7 @@ test "optional backend update check preferences skip combined planning and execu
             try manager.reset();
             capture = .{};
             try runSelected(&capture, &tc.context, &operations, &elevated.dispatch);
-            try std.testing.expectEqualSlices(Backend, disabled.expected, capture.ran.items);
+            try expectRanWithMise(disabled.expected, capture.ran.items);
             const repeated = try elevatedUpgradeArguments(&tc.context, &elevated.dispatch);
             defer tc.context.allocator.free(repeated);
             try std.testing.expectEqual(elevated_arguments.len, repeated.len);
@@ -1444,8 +1613,81 @@ test "optional backend update check preferences skip combined planning and execu
         defer plan.deinit(tc.context.allocator);
         try runSelected(&capture, &tc.context, &operations, &explicit_skip.dispatch);
         try std.testing.expectEqualSlices(Backend, case.expected, capture.collected.items);
-        try std.testing.expectEqualSlices(Backend, case.expected, capture.ran.items);
+        try expectRanWithMise(case.expected, capture.ran.items);
     }
+}
+
+/// Planning skips mise when it is not installed, which is always the case in
+/// the empty test environment; execution still reaches the mise runner, which
+/// performs the same check itself.
+fn expectRanWithMise(expected: []const Backend, ran: []const Backend) !void {
+    try std.testing.expectEqual(expected.len + 1, ran.len);
+    try std.testing.expectEqualSlices(Backend, expected, ran[0..expected.len]);
+    try std.testing.expectEqual(Backend.mise, ran[expected.len]);
+}
+
+test "mise update check preference and exclusion skip aggregate upgrades and survive elevation" {
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const path_length = try temporary.dir.realPath(std.testing.io, &path_buffer);
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    var environment = std.process.Environ.Map.init(tc.arena.allocator());
+    try environment.put("XDG_CONFIG_HOME", path_buffer[0..path_length]);
+    tc.context.environment = &environment;
+    const manager = config_manager.Manager.init(&tc.context);
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    var operations = PackageManager.OperationContext.init(tc.arena.allocator(), std.testing.io);
+    defer operations.deinit();
+    const Capture = struct {
+        ran: std.ArrayList(Backend) = .empty,
+
+        fn run(self: *@This(), context: *runtime.RuntimeContext, _: *PackageManager.OperationContext, backend: Backend, _: *const parser.Invocation) !void {
+            try self.ran.append(context.allocator, backend);
+        }
+    };
+    const without_mise = [_]Backend{ .standard, .aur, .flatpak, .appimage };
+
+    const explicit_skip = try parser.parse(tc.arena.allocator(), &manifest, &.{ "upgrade", "all", "--no-mise" });
+    try std.testing.expect(explicit_skip == .dispatch);
+    var skipped: Capture = .{};
+    try runSelected(&skipped, &tc.context, &operations, &explicit_skip.dispatch);
+    try std.testing.expectEqualSlices(Backend, &without_mise, skipped.ran.items);
+
+    try std.testing.expect(try manager.update("DisableMiseUpdateCheck", "true"));
+    const aggregate = try parser.parse(tc.arena.allocator(), &manifest, &.{ "upgrade", "all" });
+    try std.testing.expect(aggregate == .dispatch);
+    var disabled: Capture = .{};
+    try runSelected(&disabled, &tc.context, &operations, &aggregate.dispatch);
+    try std.testing.expectEqualSlices(Backend, &without_mise, disabled.ran.items);
+
+    const elevated_arguments = try elevatedUpgradeArguments(&tc.context, &aggregate.dispatch);
+    defer tc.context.allocator.free(elevated_arguments);
+    const elevated = try parser.parse(tc.arena.allocator(), &manifest, elevated_arguments);
+    try std.testing.expect(elevated == .dispatch);
+    try std.testing.expect(optionEnabled(&elevated.dispatch, disable_mise_update_check_option));
+    try manager.reset();
+    var carried: Capture = .{};
+    try runSelected(&carried, &tc.context, &operations, &elevated.dispatch);
+    try std.testing.expectEqualSlices(Backend, &without_mise, carried.ran.items);
+
+    const standalone = try parser.parse(tc.arena.allocator(), &manifest, &.{ "upgrade", "mise", "node" });
+    try std.testing.expect(standalone == .dispatch);
+    var direct: Capture = .{};
+    try runSelected(&direct, &tc.context, &operations, &standalone.dispatch);
+    try std.testing.expectEqualSlices(Backend, &.{.mise}, direct.ran.items);
+    try std.testing.expect(!requiresElevation(&standalone.dispatch));
+}
+
+test "mise relaunch forwards output modifiers and selected tools to the nested invocation" {
+    const all_tools = try miseUpgradeArgs(std.testing.allocator, .{ .no_confirm = true, .ui_mode = true }, &.{});
+    defer std.testing.allocator.free(all_tools);
+    try std.testing.expectEqualSlices([]const u8, &.{ "upgrade", "mise", "--no-confirm", "--ui-mode" }, all_tools);
+    const selected = try miseUpgradeArgs(std.testing.allocator, .{}, &.{ "node", "npm:@scope/tool" });
+    defer std.testing.allocator.free(selected);
+    try std.testing.expectEqualSlices([]const u8, &.{ "upgrade", "mise", "--", "node", "npm:@scope/tool" }, selected);
 }
 
 test "disabled cache cleaning is limited to aggregate upgrades and survives elevation" {
@@ -1973,6 +2215,7 @@ test "upgrade routes every action-first type through the combined handler" {
         .{ .arguments = &.{ "upgrade", "aur", "--check", "--singlepane", "--no-confirm" }, .backend = .aur },
         .{ .arguments = &.{ "upgrade", "flatpak", "--no-confirm" }, .backend = .flatpak },
         .{ .arguments = &.{ "upgrade", "appimage", "--no-confirm" }, .backend = .appimage },
+        .{ .arguments = &.{ "upgrade", "mise", "--no-confirm" }, .backend = .mise },
     };
     for (paths) |expected| {
         const outcome = try parser.parse(arena.allocator(), &manifest, expected.arguments);
@@ -2074,6 +2317,7 @@ test "upgrade all honors every exclusion" {
         "--no-repo",
         "--no-flatpak",
         "--no-appimage",
+        "--no-mise",
         "--no-confirm",
     });
     try std.testing.expect(outcome == .dispatch);

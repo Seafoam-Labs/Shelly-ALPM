@@ -47,6 +47,18 @@ pub const variants = [_]types.Variant{
     },
     .{
         .action = .remove,
+        .name = "mise",
+        .type_code = 'm',
+        .description = "Remove mise tools from the configuration file that declares them and prune their unused installs. Runs as the invoking user.",
+        .implementation = "PackageManager.MiseManager.remove",
+        .arguments = &.{repeatedArgument(
+            "tools",
+            1,
+            "mise tools to remove",
+        )},
+    },
+    .{
+        .action = .remove,
         .name = "aur",
         .type_code = 'a',
         .alias_type_codes = &.{'A'},

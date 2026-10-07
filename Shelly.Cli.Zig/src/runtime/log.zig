@@ -130,6 +130,7 @@ pub const Source = enum {
     aur,
     flatpak,
     appimage,
+    mise,
     local,
     download,
 };
@@ -169,6 +170,7 @@ pub const TransactionLog = struct {
             .aur => "AUR",
             .flatpak => "FLATPAK",
             .appimage => "APPIMAGE",
+            .mise => "MISE",
             .local => "LOCAL",
             .download => "DOWNLOAD",
         };
@@ -268,6 +270,7 @@ fn sourceForBackend(backend: PackageManager.operation.Backend) Source {
         .aur => .aur,
         .flatpak => .flatpak,
         .appimage => .appimage,
+        .mise => .mise,
         .local_package => .local,
         .download => .download,
     };

@@ -12,6 +12,7 @@ pub const json =
     \\  "AppImageInstallPath": null,
     \\  "DisableAppImageUpdateCheck": false,
     \\  "DisableFlatpakUpdateCheck": false,
+    \\  "DisableMiseUpdateCheck": false,
     \\  "AutoConfirmCacheClean": false,
     \\  "DisableCacheClean": false,
     \\  "CollapsePkgbuildDiff": true,
@@ -33,5 +34,6 @@ test "native defaults remain valid JSON" {
     try std.testing.expect(!parsed.value.object.get("DisableCacheClean").?.bool);
     try std.testing.expect(!parsed.value.object.get("DisableAppImageUpdateCheck").?.bool);
     try std.testing.expect(!parsed.value.object.get("DisableFlatpakUpdateCheck").?.bool);
+    try std.testing.expect(!parsed.value.object.get("DisableMiseUpdateCheck").?.bool);
     try std.testing.expect(parsed.value.object.get("CollapsePkgbuildDiff").?.bool);
 }

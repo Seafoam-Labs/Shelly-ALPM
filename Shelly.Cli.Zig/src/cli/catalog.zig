@@ -69,6 +69,10 @@ pub const root_options = [_]Option{
         "--disable-flatpak-update-check",
         "Preserve disabled upgrade-all Flatpak checks across elevation",
     ),
+    hiddenGlobalFlag(
+        "--disable-mise-update-check",
+        "Preserve disabled upgrade-all mise checks across elevation",
+    ),
 };
 
 pub const root_arguments = [_]Argument{.{
@@ -89,6 +93,7 @@ pub const types = [_]Type{
     .{ .name = "aur", .code = 'a', .description = "Arch User Repository packages" },
     .{ .name = "flatpak", .code = 'f', .description = "Flatpak applications and runtimes" },
     .{ .name = "appimage", .code = 'i', .description = "AppImage applications" },
+    .{ .name = "mise", .code = 'm', .description = "Developer tools managed by mise" },
     .{ .name = "utility", .code = 'u', .description = "System and Shelly utility operations" },
     .{ .name = "keyring", .code = 'k', .description = "Package and source-signing keyring operations" },
     .{ .name = "all", .code = 'x', .description = "All supported package backends" },

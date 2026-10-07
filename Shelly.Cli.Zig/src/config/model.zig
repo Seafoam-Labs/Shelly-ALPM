@@ -317,7 +317,7 @@ test "defaults preserve reflection order and display conventions" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const config = try Config.defaults(arena.allocator());
-    try std.testing.expectEqual(@as(usize, 14), config.values.count());
+    try std.testing.expectEqual(@as(usize, 15), config.values.count());
     try std.testing.expectEqualStrings("NativePackageBackend", config.values.keys()[0]);
     try std.testing.expectEqualStrings(
         "False",
@@ -384,7 +384,7 @@ test "older configs keep optional backend update checks enabled and validate sav
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    for ([_][]const u8{ "DisableAppImageUpdateCheck", "DisableFlatpakUpdateCheck" }) |key| {
+    for ([_][]const u8{ "DisableAppImageUpdateCheck", "DisableFlatpakUpdateCheck", "DisableMiseUpdateCheck" }) |key| {
         var config = try Config.defaults(allocator);
         var saved: std.json.ObjectMap = .empty;
         try saved.put(allocator, "CollapsePkgbuildDiff", .{ .bool = false });

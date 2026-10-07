@@ -11,16 +11,18 @@ const table = @import("../output/table.zig");
 const parser = @import("../cli/parser.zig");
 const shortcodes = @import("../cli/shortcodes.zig");
 const runtime = @import("../runtime/context.zig");
+const elevation = @import("../runtime/elevation.zig");
 const spec = @import("../cli/spec.zig");
 const xdg = @import("../runtime/xdg.zig");
 const aur_url = @import("../config/aur_url.zig");
 
 const standard_command_path = "shelly list standard";
 const appimage_command_path = "shelly list appimage";
+const mise_command_path = "shelly list mise";
 const aur_command_path = "shelly list aur";
 const flatpak_command_path = "shelly list flatpak";
 
-pub const Backend = enum { standard, appimage, aur, flatpak };
+pub const Backend = enum { standard, appimage, mise, aur, flatpak };
 
 const ListOptions = struct {
     show_hidden: bool = false,
@@ -68,6 +70,17 @@ pub const AppImageItem = struct {
     environment_variables: []const PackageManager.appimage.environment.Variable = &.{},
     command_line_args: ?[]const u8 = null,
     path: ?[]const u8 = null,
+};
+
+pub const MiseItem = struct {
+    name: []const u8,
+    version: []const u8 = "",
+    requested_version: ?[]const u8 = null,
+    install_path: ?[]const u8 = null,
+    installed: bool = false,
+    active: bool = false,
+    source_type: ?[]const u8 = null,
+    source_path: ?[]const u8 = null,
 };
 
 pub const AurItem = struct {
@@ -135,6 +148,7 @@ fn ResultSet(comptime T: type) type {
 pub const Result = union(Backend) {
     standard: ResultSet(StandardItem),
     appimage: ResultSet(AppImageItem),
+    mise: ResultSet(MiseItem),
     aur: ResultSet(AurItem),
     flatpak: ResultSet(FlatpakItem),
 
@@ -142,6 +156,7 @@ pub const Result = union(Backend) {
         switch (self.*) {
             .standard => |*result| result.deinit(allocator),
             .appimage => |*result| result.deinit(allocator),
+            .mise => |*result| result.deinit(allocator),
             .aur => |*result| result.deinit(allocator),
             .flatpak => |*result| result.deinit(allocator),
         }
@@ -537,6 +552,7 @@ fn writeAppstreamAppJson(
 fn backendForPath(path: []const u8) ?Backend {
     if (std.mem.eql(u8, path, standard_command_path)) return .standard;
     if (std.mem.eql(u8, path, appimage_command_path)) return .appimage;
+    if (std.mem.eql(u8, path, mise_command_path)) return .mise;
     if (std.mem.eql(u8, path, aur_command_path)) return .aur;
     if (std.mem.eql(u8, path, flatpak_command_path)) return .flatpak;
     return null;
@@ -596,6 +612,7 @@ fn writeJson(
             for (selected) |item| try writeStandardJson(&json, item);
         },
         .appimage => |set| for (set.items) |item| try writeAppImageJson(&json, item),
+        .mise => |set| for (set.items) |item| try writeMiseJson(&json, item),
         .aur => |set| {
             const selected = try selectedAur(allocator, invocation, set.items);
             defer allocator.free(selected);
@@ -672,6 +689,19 @@ fn writeAppImageJson(json: *std.json.Stringify, item: AppImageItem) !void {
     try json.endObject();
 }
 
+fn writeMiseJson(json: *std.json.Stringify, item: MiseItem) !void {
+    try json.beginObject();
+    try field(json, "Name", item.name);
+    try field(json, "Version", item.version);
+    try field(json, "RequestedVersion", item.requested_version);
+    try field(json, "InstallPath", item.install_path);
+    try field(json, "Installed", item.installed);
+    try field(json, "Active", item.active);
+    try field(json, "SourceType", item.source_type);
+    try field(json, "SourcePath", item.source_path);
+    try json.endObject();
+}
+
 fn writeAurJson(json: *std.json.Stringify, item: AurItem) !void {
     try json.beginObject();
     try field(json, "Id", item.id);
@@ -743,6 +773,7 @@ fn writePlain(
     switch (result.*) {
         .standard => |set| try writeStandardPlain(context, invocation, set.items),
         .appimage => |set| try writeAppImagePlain(context, set.items),
+        .mise => |set| try writeMisePlain(context, set.items),
         .aur => |set| try writeAurPlain(context, invocation, set.items),
         .flatpak => |set| try writeFlatpakPlain(context, set.items),
     }
@@ -813,6 +844,27 @@ fn writeAppImagePlain(context: *runtime.RuntimeContext, items: []const AppImageI
         &.{ "Name", "Version", "Size", "Update Info" },
         rows,
     );
+}
+
+fn writeMisePlain(context: *runtime.RuntimeContext, items: []const MiseItem) !void {
+    var storage = std.heap.ArenaAllocator.init(context.allocator);
+    defer storage.deinit();
+    const allocator = storage.allocator();
+    const rows = try allocator.alloc([]const []const u8, items.len);
+    for (items, rows) |item, *cells| {
+        cells.* = try row(allocator, &.{
+            item.name,
+            if (item.installed) item.version else try std.fmt.allocPrint(allocator, "{s} (missing)", .{item.version}),
+            item.requested_version orelse "",
+            item.source_path orelse item.source_type orelse "",
+        });
+    }
+    try table.write(
+        context,
+        &.{ "Name", "Version", "Requested", "Source" },
+        rows,
+    );
+    try coloredTotal(context, try std.fmt.allocPrint(allocator, "Total: {d} mise tools", .{items.len}));
 }
 
 fn writeAurPlain(
@@ -968,6 +1020,7 @@ fn runReal(
     return switch (backend) {
         .standard => runStandard(context, options),
         .appimage => runAppImage(context),
+        .mise => runMise(context),
         .aur => runAur(context, options),
         .flatpak => runFlatpak(context),
     };
@@ -1065,6 +1118,35 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
         .path = try allocator.dupe(u8, native.path),
     };
     return .{ .appimage = .{ .items = items, .arena = arena } };
+}
+
+fn runMise(context: *runtime.RuntimeContext) !Result {
+    // mise state belongs to a regular user; root lists nothing rather than
+    // reading or creating root's own mise directories.
+    if (elevation.isRoot()) return .{ .mise = .{ .items = &.{} } };
+    var manager = PackageManager.MiseManager{
+        .allocator = context.allocator,
+        .io = context.io,
+        .environ = context.environ,
+    };
+    var native_items = try manager.listInstalled();
+    defer native_items.deinit();
+
+    const arena = try createArena(context.allocator);
+    errdefer destroyArena(context.allocator, arena);
+    const allocator = arena.allocator();
+    const items = try allocator.alloc(MiseItem, native_items.items.len);
+    for (native_items.items, items) |native, *item| item.* = .{
+        .name = try allocator.dupe(u8, native.name),
+        .version = try allocator.dupe(u8, native.version),
+        .requested_version = try copyOptionalString(allocator, native.requested_version),
+        .install_path = try copyOptionalString(allocator, native.install_path),
+        .installed = native.installed,
+        .active = native.active,
+        .source_type = try copyOptionalString(allocator, native.source_type),
+        .source_path = try copyOptionalString(allocator, native.source_path),
+    };
+    return .{ .mise = .{ .items = items, .arena = arena } };
 }
 
 fn runAur(context: *runtime.RuntimeContext, options: ListOptions) !Result {
@@ -1232,6 +1314,8 @@ test "list routes long and requested uppercase short forms to package backends o
         .{ .arguments = &.{"-Ls"}, .backend = .standard },
         .{ .arguments = &.{ "list", "appimage" }, .backend = .appimage },
         .{ .arguments = &.{"-LI"}, .backend = .appimage },
+        .{ .arguments = &.{ "list", "mise" }, .backend = .mise },
+        .{ .arguments = &.{"-Lm"}, .backend = .mise },
         .{ .arguments = &.{ "list", "aur" }, .backend = .aur },
         .{ .arguments = &.{"-LA"}, .backend = .aur },
         .{ .arguments = &.{ "list", "flatpak" }, .backend = .flatpak },
@@ -1258,6 +1342,7 @@ test "list routes long and requested uppercase short forms to package backends o
                 return switch (backend) {
                     .standard => .{ .standard = .{ .items = &.{} } },
                     .appimage => .{ .appimage = .{ .items = &.{} } },
+                    .mise => .{ .mise = .{ .items = &.{} } },
                     .aur => .{ .aur = .{ .items = &.{} } },
                     .flatpak => .{ .flatpak = .{ .items = &.{} } },
                 };
@@ -1318,6 +1403,7 @@ test "list reverse dependency modifiers are selective and backend scoped" {
                 return switch (backend) {
                     .standard => .{ .standard = .{ .items = &.{} } },
                     .appimage => .{ .appimage = .{ .items = &.{} } },
+                    .mise => .{ .mise = .{ .items = &.{} } },
                     .aur => .{ .aur = .{ .items = &.{} } },
                     .flatpak => .{ .flatpak = .{ .items = &.{} } },
                 };
@@ -1587,6 +1673,42 @@ test "AppImage and Flatpak lists emit compatibility JSON and stable ordering" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "a.app").? < std.mem.indexOf(u8, rendered, "z.app").?);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\"Permissions\":[]") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\"InstallLevel\":0") != null);
+}
+
+test "mise list emits PascalCase JSON and a plain table" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const tools = [_]MiseItem{
+        .{
+            .name = "node",
+            .version = "26.8.1",
+            .requested_version = "26",
+            .install_path = "/home/u/.local/share/mise/installs/node/26.8.1",
+            .installed = true,
+            .active = true,
+            .source_type = "mise.toml",
+            .source_path = "/home/u/.config/mise/config.toml",
+        },
+        .{ .name = "npm:playwright", .version = "1.63.0" },
+    };
+    const result: Result = .{ .mise = .{ .items = &tools } };
+    var invocation: parser.Invocation = undefined;
+    invocation.options = &.{};
+    var output_buffer = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer output_buffer.deinit();
+    try writeJson(std.testing.allocator, &output_buffer.writer, &invocation, &result);
+    try std.testing.expectEqualStrings(
+        "[{\"Name\":\"node\",\"Version\":\"26.8.1\",\"RequestedVersion\":\"26\",\"InstallPath\":\"/home/u/.local/share/mise/installs/node/26.8.1\",\"Installed\":true,\"Active\":true,\"SourceType\":\"mise.toml\",\"SourcePath\":\"/home/u/.config/mise/config.toml\"}," ++
+            "{\"Name\":\"npm:playwright\",\"Version\":\"1.63.0\",\"RequestedVersion\":null,\"InstallPath\":null,\"Installed\":false,\"Active\":false,\"SourceType\":null,\"SourcePath\":null}]",
+        output_buffer.writer.buffered(),
+    );
+
+    try writePlain(&tc.context, &invocation, &result);
+    const plain = tc.stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, plain, "/home/u/.config/mise/config.toml") != null);
+    try std.testing.expect(std.mem.indexOf(u8, plain, "1.63.0 (missing)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, plain, "Total: 2 mise tools") != null);
 }
 
 test "Flatpak list renders EOL fields in JSON output" {
