@@ -25,6 +25,7 @@ const AtollApiService = @import("services/atoll_api.zig").AtollApiService;
 const NavMode = @import("models/shelly_config.zig").NavMode;
 const ShellyTabs = @import("models/shelly_config.zig").ShellyTabs;
 const translations = @import("helpers/translations.zig");
+const a11y = @import("helpers/a11y.zig");
 const deep_link = @import("helpers/deep_link.zig");
 const ConfirmDialog = @import("dialog/page/yn_dialog.zig").ConfirmDialog;
 const PolkitDialog = @import("dialog/page/polkit_warning.zig").PolkitDialog;
@@ -151,7 +152,7 @@ pub const ShellyWindow = extern struct {
         const cfg = svc.get() catch return;
         if (!cfg.NewInstall) return;
         const wp = WelcomePage.new();
-        self.showLockout(wp.as(gtk.Widget));
+        self.showLockoutNamed(wp.as(gtk.Widget), translations._("Welcome to Shelly v3"));
     }
 
     fn checkPolkitLockout(self: *ShellyWindow) void {
@@ -161,7 +162,7 @@ pub const ShellyWindow = extern struct {
         const status = dbus.checkPolkitStatus();
         if (status == .no_agent or status == .no_daemon) {
             const dialog = PolkitDialog.new(&on_polkit_close, self);
-            self.showLockout(dialog.as(gtk.Widget));
+            self.showLockoutNamed(dialog.as(gtk.Widget), translations._("polkit is required"));
             dialog.focusClose();
         }
     }
@@ -295,6 +296,7 @@ pub const ShellyWindow = extern struct {
         gtk.Widget.setSizeRequest(chevron_img.as(gtk.Widget), ICON_SLOT, -1);
         gtk.Widget.setHalign(chevron_img.as(gtk.Widget), .center);
         gtk.Button.setChild(chevron, chevron_img.as(gtk.Widget));
+        setChevronName(chevron, p.collapsed);
         p.chevron_img = chevron_img;
         _ = gtk.Button.signals.clicked.connect(chevron, *ShellyWindow, &on_chevron, self, .{});
         gtk.Box.append(rail, chevron.as(gtk.Widget));
@@ -319,6 +321,9 @@ pub const ShellyWindow = extern struct {
         const menu_button = gtk.MenuButton.new();
         gtk.Widget.addCssClass(menu_button.as(gtk.Widget), "flat");
         gtk.MenuButton.setIconName(menu_button, "open-menu-symbolic");
+        const menu_label = translations._("Main menu");
+        a11y.setName(menu_button.as(gtk.Widget), menu_label);
+        gtk.Widget.setTooltipText(menu_button.as(gtk.Widget), menu_label);
         const popover = gtk.Popover.new();
         const menu_box = gtk.Box.new(.vertical, 4);
         const utils_btn = gtk.Button.newWithLabel(translations._("Utilities"));
@@ -368,6 +373,9 @@ pub const ShellyWindow = extern struct {
         const menu_button = gtk.MenuButton.new();
         gtk.Widget.addCssClass(menu_button.as(gtk.Widget), "flat");
         gtk.MenuButton.setIconName(menu_button, "view-more-symbolic");
+        const menu_label = translations._("Main menu");
+        a11y.setName(menu_button.as(gtk.Widget), menu_label);
+        gtk.Widget.setTooltipText(menu_button.as(gtk.Widget), menu_label);
         const popover = gtk.Popover.new();
         const menu_box = gtk.Box.new(.vertical, 4);
         const utils_btn = gtk.Button.newWithLabel(translations._("Utilities"));
@@ -385,18 +393,31 @@ pub const ShellyWindow = extern struct {
         return bar;
     }
 
-    fn on_chevron(_: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
+    fn on_chevron(chevron: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
         const p = self.private();
         p.collapsed = !p.collapsed;
 
         if (p.chevron_img) |img| {
             gtk.Image.setFromIconName(img, if (p.collapsed) "go-next-symbolic" else "go-previous-symbolic");
         }
+        setChevronName(chevron, p.collapsed);
 
         for (p.nav_buttons.items) |nb| {
             if (!nb.is_rail) continue;
             gtk.Revealer.setRevealChild(nb.revealer, @intFromBool(!p.collapsed));
         }
+    }
+
+    /// The chevron's icon is its only content and its meaning flips with the rail's
+    /// state, so the name is rewritten wherever `collapsed` changes. Roles cannot
+    /// follow: a role is fixed when the widget is constructed.
+    fn setChevronName(chevron: *gtk.Button, collapsed: bool) void {
+        const label = if (collapsed)
+            translations._("Expand sidebar")
+        else
+            translations._("Collapse sidebar");
+        a11y.setName(chevron.as(gtk.Widget), label);
+        gtk.Widget.setTooltipText(chevron.as(gtk.Widget), label);
     }
 
     fn add_nav_button(self: *ShellyWindow, parent_box: *gtk.Box, stack: *gtk.Stack, is_rail: bool, name: [:0]const u8, icon: [:0]const u8, text: [:0]const u8) void {
@@ -427,6 +448,9 @@ pub const ShellyWindow = extern struct {
         gtk.Button.setChild(btn, box.as(gtk.Widget));
         gtk.Widget.addCssClass(btn.as(gtk.Widget), "flat");
         gtk.Widget.addCssClass(btn.as(gtk.Widget), "nav-btn");
+        // In the collapsed rail the label sits inside a hidden revealer, so it is
+        // absent from the accessible tree and the button reads as a bare "button".
+        a11y.setName(btn.as(gtk.Widget), text);
 
         const nb = std.heap.c_allocator.create(NavButton) catch unreachable;
         nb.* = .{
@@ -620,11 +644,24 @@ pub const ShellyWindow = extern struct {
     }
 
     pub fn showLockout(self: *ShellyWindow, content: *gtk.Widget) void {
+        self.mountLockout(content, "");
+    }
+
+    /// `name` becomes the accessible name of the overlay, which is a modal dialog,
+    /// so an AT can say which lockout is up instead of only that something is.
+    pub fn showLockoutNamed(self: *ShellyWindow, content: *gtk.Widget, name: []const u8) void {
+        self.mountLockout(content, name);
+    }
+
+    fn mountLockout(self: *ShellyWindow, content: *gtk.Widget, name: []const u8) void {
         const p = self.private();
         while (gtk.Widget.getFirstChild(p.lockout_content.as(gtk.Widget))) |c| {
             gtk.Box.remove(p.lockout_content, c);
         }
         gtk.Box.append(p.lockout_content, content);
+        // The overlay is reused by every lockout, so a name left over from the
+        // previous one would be a lie: clear it when the caller has none.
+        a11y.setName(p.lockout_overlay.as(gtk.Widget), name);
 
         gtk.Widget.setSensitive(p.content_stack.as(gtk.Widget), 0);
         if (p.rail) |r| gtk.Widget.setSensitive(r.as(gtk.Widget), 0);

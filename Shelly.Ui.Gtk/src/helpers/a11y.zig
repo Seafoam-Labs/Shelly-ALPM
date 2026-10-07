@@ -6,26 +6,55 @@
 //! over the bus, which needs a display and a session bus.
 const std = @import("std");
 const bindings = @import("Shelly_Ui_Gtk");
-const c_string = @import("c_string.zig");
 const gtk_test = @import("gtk_test.zig");
 
 const gtk = bindings.gtk;
 const glib = bindings.glib;
+const gobject = bindings.gobject;
 
-/// Bounds the copy into a sentinel-terminated stack buffer; longer text is
-/// truncated. Every caller passes visible UI text, not arbitrary data.
-const max_len = 512;
+/// Frees the buffer a widget owns for its accessible text.
+fn freeOwned(ptr: ?*anyopaque) callconv(.c) void {
+    glib.free(ptr);
+}
 
 fn updateProperty(widget: *gtk.Widget, property: gtk.AccessibleProperty, text: []const u8) void {
-    var buf: [max_len]u8 = undefined;
-    const value = glib.Variant.newString(c_string.cstr(&buf, text).ptr);
-    gtk.Accessible.updateProperty(widget.as(gtk.Accessible), property, value, @as(c_int, -1));
+    // GTK borrows the string inside the GValue rather than keeping its own copy:
+    // unsetting the value after the update leaves the name empty, and a buffer
+    // that dies later makes the AT-SPI bridge marshal dangling bytes and abort
+    // the application. So the bytes are handed to the widget, which frees them
+    // when it is finalized.
+    const owned = glib.malloc(text.len + 1) orelse return;
+    const bytes: [*]u8 = @ptrCast(owned);
+    @memcpy(bytes[0..text.len], text);
+    bytes[text.len] = 0;
+
+    var properties = [_]gtk.AccessibleProperty{property};
+    var gvalue = std.mem.zeroes(gobject.Value);
+    property.initValue(&gvalue);
+    gvalue.setStaticString(@ptrCast(bytes));
+    gtk.Accessible.updatePropertyValue(
+        widget.as(gtk.Accessible),
+        1,
+        @ptrCast(&properties),
+        @ptrCast(&gvalue),
+    );
+    // The string is static, so this releases only the GValue, not the buffer.
+    gvalue.unset();
+
+    // Installed before the previous buffer is freed, so no reader can point at
+    // memory that is already gone.
+    const key = if (property == .label) "shelly-a11y-name" else "shelly-a11y-description";
+    gobject.Object.setDataFull(widget.as(gobject.Object), key, owned, freeOwned);
 }
 
 /// Names a control whose visible text is absent from the accessible tree:
 /// icon-only buttons, labels inside a collapsed revealer, placeholder-only
 /// entries. A `tooltip-text` also surfaces as a name on some widgets, but the
 /// tree cannot tell the two apart, so names are always set explicitly.
+///
+/// For a row in a `SignalListItemFactory` list this must be called at bind, not
+/// setup: the cell widget is reused across rows, so a name written once would
+/// describe a different package.
 pub fn setName(widget: *gtk.Widget, name: []const u8) void {
     updateProperty(widget, .label, name);
 }

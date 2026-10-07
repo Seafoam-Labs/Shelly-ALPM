@@ -29,6 +29,7 @@ const Flatpak = @import("../../models/flatpak.zig").Flatpak;
 const FlatpakRemoveDialog = @import("../../dialog/page/flatpak_remove_dialog.zig").FlatpakRemoveDialog;
 const StringHelper = @import("../../helpers/string_helpers.zig").StringHelper;
 const translations = @import("../../helpers/translations.zig");
+const a11y = @import("../../helpers/a11y.zig");
 const deep_link = @import("../../helpers/deep_link.zig");
 
 extern fn g_get_user_data_dir() [*:0]const u8;
@@ -274,6 +275,7 @@ pub const FlatpakInstallView = extern struct {
                 gtk.Widget.setHexpand(status_icon.as(gtk.Widget), 0);
                 gtk.Widget.setVexpand(status_icon.as(gtk.Widget), 0);
                 gtk.Widget.setTooltipText(status_icon.as(gtk.Widget), translations._("Verified"));
+                a11y.setName(status_icon.as(gtk.Widget), translations._("Verified"));
                 gtk.Grid.attach(title_grid, status_icon.as(gtk.Widget), 1, 0, 1, 1);
                 gtk.Box.append(right_box, title_grid.as(gtk.Widget));
 
@@ -322,10 +324,12 @@ pub const FlatpakInstallView = extern struct {
                 if (object.isInstalled()) {
                     gtk.Image.setFromIconName(status_icon, "object-select-symbolic");
                     gtk.Widget.setTooltipText(status_icon.as(gtk.Widget), translations._("Installed"));
+                    a11y.setName(status_icon.as(gtk.Widget), translations._("Installed"));
                     gtk.Widget.setVisible(status_icon.as(gtk.Widget), 1);
                 } else {
                     gtk.Image.setFromIconName(status_icon, "security-high-symbolic");
                     gtk.Widget.setTooltipText(status_icon.as(gtk.Widget), translations._("Verified"));
+                    a11y.setName(status_icon.as(gtk.Widget), translations._("Verified"));
                     gtk.Widget.setVisible(status_icon.as(gtk.Widget), @intFromBool(object.isVerified()));
                 }
                 setAppIcon(icon, object);
