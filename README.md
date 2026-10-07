@@ -76,6 +76,8 @@ paru -Rns shelly
 - **Optional Flatpak Support**: Install `shelly-flatpak-backend` to manage
   Flatpak applications alongside native packages without making Flatpak a
   runtime dependency of the base Shelly package.
+- **mise Support**: List, update, and remove developer tools managed by
+  [mise](https://mise.jdx.dev) when it is installed.
 
 ## AUR package availability
 
@@ -150,6 +152,36 @@ This also applies to combined-upgrade aliases, including bare `shelly` and
 `shelly upgrade flatpak` and `shelly list-updates` checks remain available.
 The one-time `shelly upgrade all --no-flatpak` flag also skips Flatpak.
 This preference can be used together with `DisableAppImageUpdateCheck`.
+
+## mise support
+
+Shelly manages the developer tools in your global
+[mise](https://mise.jdx.dev) configuration through the `mise` CLI:
+
+```bash
+shelly list mise                 # active tools, versions, and declaring files
+shelly list-updates mise         # newer versions allowed by each request
+shelly upgrade mise [tool ...]   # every outdated tool, or only the named ones
+shelly remove mise <tool ...>    # remove the request and prune unused installs
+```
+
+Updates respect the configured request, so `node = "26"` only moves to newer
+26.x releases. Removal edits the configuration file that declares the tool
+(`mise unuse --path`), falling back to the global configuration. mise always
+runs as you, from your home directory: an elevated `shelly upgrade all`
+re-launches its mise step as the invoking user, and nothing is listed or
+changed for root. Without mise on `PATH` (or in `~/.local/bin`), listings are
+empty and combined upgrades skip mise silently.
+
+`shelly upgrade all` and `shelly list-updates all` include mise tools. Skip them
+for one run with `--no-mise`, or permanently with:
+
+```bash
+shelly config set DisableMiseUpdateCheck true
+```
+
+The GUI shows a mise page and a mise source on the Update page; hide the page
+with the "Enable mise" setting.
 
 ## Upgrade cache cleaning
 

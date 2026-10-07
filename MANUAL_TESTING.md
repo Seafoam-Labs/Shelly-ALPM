@@ -30,6 +30,22 @@ tests.
 - [ ] Verify `shelly upgrade appimage` and `shelly list-updates appimage` still check AppImages explicitly.
 - [ ] Restore `false` and verify combined upgrades include AppImages again; `--no-appimage` still skips them for one run.
 
+## mise tools
+
+Use an isolated mise environment for upgrade and removal checks: export
+`MISE_DATA_DIR`, `MISE_CONFIG_DIR`, `MISE_CACHE_DIR`, `MISE_STATE_DIR`, and
+`MISE_GLOBAL_CONFIG_FILE` into a temporary directory and confirm `mise ls` is
+empty before installing anything.
+
+- [ ] Request `jq = "1.8"`, install `jq@1.8.0`, and verify `shelly list mise` and `shelly list-updates mise` show the tool, its request, and the newer 1.8.x release.
+- [ ] Run `shelly upgrade mise`; the newer version installs and `shelly list-updates mise` is empty afterwards.
+- [ ] Run `shelly remove mise jq`; the request disappears from the configuration file and `shelly list mise` is empty.
+- [ ] Remove `mise` from `PATH`: listings are empty, `shelly upgrade all` shows no mise step, and `shelly upgrade mise` reports that mise was not found.
+- [ ] Run an elevated `shelly upgrade all`; the mise step re-launches as the invoking user and never creates root-owned files under `~/.local/share/mise`.
+- [ ] Set `DisableMiseUpdateCheck` to `true`, or pass `--no-mise`, and verify combined upgrades skip mise.
+- [ ] In the GUI, open the mise page, upgrade one tool, upgrade all tools, and remove a tool; none of these prompt for administrator rights.
+- [ ] On the Update page, select only the mise source and upgrade; no administrator prompt appears.
+
 ## Flatpak checks during combined upgrades
 
 - [ ] Verify `shelly config get DisableFlatpakUpdateCheck` returns `False` for a configuration without the new key.
