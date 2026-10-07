@@ -23,6 +23,7 @@ pub const Backend = enum {
     aur,
     flatpak,
     appimage,
+    mise,
     local_package,
     download,
 };

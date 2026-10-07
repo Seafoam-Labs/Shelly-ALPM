@@ -1034,6 +1034,15 @@ pub fn build(b: *std.Build) void {
     const appimage_test_step = b.step("appimage-test", "Run safe AppImage parity tests");
     appimage_test_step.dependOn(&run_appimage_tests.step);
 
+    const mise_tests = b.addTest(.{
+        .name = "mise-test",
+        .root_module = mod,
+        .filters = &.{"mise "},
+    });
+    const run_mise_tests = b.addRunArtifact(mise_tests);
+    const mise_test_step = b.step("mise-test", "Run mise developer tool tests");
+    mise_test_step.dependOn(&run_mise_tests.step);
+
     const repo_db_tests = b.addTest(.{
         .name = "repo-db-test",
         .root_module = mod,

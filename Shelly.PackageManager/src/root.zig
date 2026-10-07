@@ -84,6 +84,19 @@ pub const appimage = struct {
     pub const DownloadProgressHandler = events.DownloadProgressHandler;
 };
 
+/// Developer tools managed by the user's mise installation.
+pub const mise = struct {
+    pub const manager = @import("mise/manager.zig");
+
+    pub const Manager = manager.Manager;
+    pub const Tool = manager.Tool;
+    pub const OutdatedTool = manager.OutdatedTool;
+    pub const ToolList = manager.ToolList;
+    pub const OutdatedList = manager.OutdatedList;
+    pub const Runner = manager.Runner;
+    pub const Error = manager.Error;
+};
+
 pub const pkgbuild = struct {
     pub const parser = @import("pkgbuild/pkgbuild_parser.zig");
     pub const validation = @import("pkgbuild/shared_validtor.zig");
@@ -157,6 +170,7 @@ pub const ArchiveManager = Manager.ArchiveManager;
 pub const AurManager = aur.Manager;
 pub const FlatpakManager = flatpak.Manager;
 pub const AppImageManager = appimage.Manager;
+pub const MiseManager = mise.Manager;
 pub const LocalManager = local.Manager;
 pub const OperationContext = operation.OperationContext;
 pub const Operation = operation.Operation;
@@ -213,6 +227,7 @@ test "public library surface exposes package manager APIs" {
     _ = AurManager;
     _ = FlatpakManager;
     _ = AppImageManager;
+    _ = MiseManager;
     _ = LocalManager;
     _ = Manager.TransFlag;
     _ = Manager.SigLevel;
@@ -280,6 +295,9 @@ test "public library surface exposes package manager APIs" {
     _ = appimage.EventDispatcher;
     _ = appimage.StatusHandler;
     _ = appimage.DownloadProgressHandler;
+    _ = mise.Tool;
+    _ = mise.OutdatedTool;
+    _ = mise.Runner;
     _ = pkgbuild.Parser;
     _ = pkgbuild.HomographValidator;
     _ = pkgbuild.PostInstallValidator;
@@ -476,6 +494,7 @@ test {
     _ = @import("shared/source_pgp_keyring.zig");
     _ = @import("shared/package_signer.zig");
     _ = @import("appimage/update_manager.zig");
+    _ = @import("mise/manager.zig");
     _ = @import("pkgbuild/pkgbuild_parser.zig");
     _ = @import("pkgbuild/post_install_validator.zig");
     _ = @import("pkgbuild/install_script.zig");
