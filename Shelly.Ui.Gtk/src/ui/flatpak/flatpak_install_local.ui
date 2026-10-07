@@ -19,6 +19,10 @@
             <property name="label" translatable="yes">Install a local Flatpak</property>
             <property name="halign">start</property>
             <property name="margin-bottom">4</property>
+            <property name="accessible-role">heading</property>
+            <accessibility>
+              <property name="level">2</property>
+            </accessibility>
             <style>
               <class name="title-2"/>
             </style>
@@ -68,6 +72,7 @@
                             <property name="spacing">8</property>
                             <child>
                               <object class="GtkImage">
+                                <property name="accessible-role">presentation</property>
                                 <property name="icon-name">document-open-symbolic</property>
                                 <property name="pixel-size">16</property>
                               </object>

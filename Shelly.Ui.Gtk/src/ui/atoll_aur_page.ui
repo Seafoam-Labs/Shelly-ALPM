@@ -32,6 +32,9 @@
                     </child>
                 </object>
             </child>
+            <accessibility>
+              <property name="label" translatable="yes">Search the AUR by name or keyword</property>
+            </accessibility>
           </object>
         </child>
         <child>
@@ -110,6 +113,7 @@
           <object class="GtkOverlay" id="grid_overlay">
             <property name="hexpand">true</property>
             <property name="vexpand">true</property>
+            <property name="accessible-role">group</property>
             <property name="child">
               <object class="GtkScrolledWindow">
                 <property name="hexpand">true</property>
@@ -123,7 +127,7 @@
                     <property name="show-row-separators">false</property>
                     <child>
                       <object class="GtkColumnViewColumn" id="check_column">
-                        <property name="title"></property>
+                        <property name="title" translatable="yes">Select</property>
                       </object>
                     </child>
                     <child>
@@ -178,6 +182,7 @@
                 <property name="margin-end">40</property>
                 <child>
                   <object class="GtkImage" id="placeholder_icon">
+                    <property name="accessible-role">presentation</property>
                     <property name="icon-name">system-search-symbolic</property>
                     <property name="pixel-size">48</property>
                     <style><class name="dim-label"/></style>

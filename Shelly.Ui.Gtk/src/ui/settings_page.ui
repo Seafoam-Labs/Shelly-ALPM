@@ -24,6 +24,7 @@
             <child>
               <object class="GtkStack" id="settings_stack">
                 <property name="transition-type">slide-left-right</property>
+                <property name="accessible-role">group</property>
                 <!-- General page -->
                 <child>
                   <object class="GtkStackPage">
@@ -59,6 +60,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="aur_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Enable AUR</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -95,6 +99,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="flatpak_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Enable Flatpak</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -113,6 +120,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="recommended_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Enable Recommended</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -131,6 +141,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="appimage_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Enable AppImage</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -149,6 +162,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="tray_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Enable Tray Icon</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -167,6 +183,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="tray_auto_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Add Tray To Auto Start</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -185,6 +204,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="daily_schedule">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Use weekly schedule</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -203,6 +225,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="tray_cron_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Run Tray as cron</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -221,6 +246,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="use_ui">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Tray update with ui</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -393,6 +421,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="shelly_icons_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Icons Enabled</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -412,6 +443,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="symbolic_tray_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Use Symbolic Tray Icon</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -545,6 +579,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="remove_cache_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Remove Cache on Uninstall</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -563,6 +600,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="no_confirm_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">No Confirm</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -581,6 +621,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="shelly_search_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Enable Shelly Search</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -599,6 +642,9 @@
                                 <child>
                                   <object class="GtkSwitch" id="atoll_aur_switch">
                                     <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Enable Atoll Powered AUR</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>

@@ -93,6 +93,10 @@
                 <child>
                   <object class="GtkLabel">
                     <property name="label" translatable="yes">Add New Flatpak Remote</property>
+                    <property name="accessible-role">heading</property>
+                    <accessibility>
+                      <property name="level">2</property>
+                    </accessibility>
                     <style>
                       <class name="title-2"/>
                     </style>
