@@ -21,6 +21,10 @@
               <object class="GtkLabel">
                 <property name="label" translatable="yes">Recommended Packages</property>
                 <property name="hexpand">true</property>
+                <property name="accessible-role">heading</property>
+                <accessibility>
+                  <property name="level">2</property>
+                </accessibility>
                 <style>
                   <class name="title-2"/>
                 </style>
@@ -104,6 +108,7 @@
             <property name="valign">center</property>
             <child>
               <object class="GtkImage">
+                <property name="accessible-role">presentation</property>
                 <property name="icon-name">search-none-symbolic</property>
                 <property name="pixel-size">64</property>
               </object>

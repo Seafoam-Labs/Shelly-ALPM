@@ -3,6 +3,8 @@ const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gobject = bindings.gobject;
 const gio = bindings.gio;
+const a11y = @import("../a11y.zig");
+const translations = @import("../translations.zig");
 
 pub const Carousel = extern struct {
     parent_instance: Parent,
@@ -56,10 +58,16 @@ pub const Carousel = extern struct {
 
         p.previous_button = gtk.Button.newFromIconName("go-previous-symbolic");
         gtk.Widget.setValign(p.previous_button.as(gtk.Widget), .center);
+        const previous_label = translations._("Previous");
+        a11y.setName(p.previous_button.as(gtk.Widget), previous_label);
+        gtk.Widget.setTooltipText(p.previous_button.as(gtk.Widget), previous_label);
         _ = gtk.Button.signals.clicked.connect(p.previous_button, *Self, &onPreviousClicked, self, .{});
 
         p.next_button = gtk.Button.newFromIconName("go-next-symbolic");
         gtk.Widget.setValign(p.next_button.as(gtk.Widget), .center);
+        const next_label = translations._("Next");
+        a11y.setName(p.next_button.as(gtk.Widget), next_label);
+        gtk.Widget.setTooltipText(p.next_button.as(gtk.Widget), next_label);
         _ = gtk.Button.signals.clicked.connect(p.next_button, *Self, &onNextClicked, self, .{});
 
         gtk.Box.append(self.as(gtk.Box), p.previous_button.as(gtk.Widget));

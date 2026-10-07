@@ -43,6 +43,9 @@
                                               </child>
                                           </object>
                                       </child>
+                                      <accessibility>
+                                          <property name="label" translatable="yes">Search packages...</property>
+                                      </accessibility>
                                   </object>
                                 </child>
                                 <child>
@@ -159,7 +162,7 @@
                                                         <property name="vexpand">true</property>
                                                         <child>
                                                             <object class="GtkColumnViewColumn" id="check_column">
-                                                                <property name="title"/>
+                                                                <property name="title" translatable="yes">Select</property>
 
                                                                    <property name="resizable">false</property>
                                                             </object>
@@ -253,6 +256,7 @@
                         <property name="spacing">12</property>
                         <child>
                           <object class="GtkImage">
+                            <property name="accessible-role">presentation</property>
                             <property name="icon-name">edit-find-symbolic</property>
                             <property name="pixel-size">48</property>
                             <style>

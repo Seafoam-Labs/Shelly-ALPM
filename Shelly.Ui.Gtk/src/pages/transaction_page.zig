@@ -5,6 +5,7 @@ const gdk = bindings.gdk;
 const glib = bindings.glib;
 const gobject = bindings.gobject;
 const support = @import("support.zig");
+const a11y = @import("../helpers/a11y.zig");
 const ShellyOperation = @import("../services/shelly_operation.zig").ShellyOperation;
 const Event = @import("../services/shelly_operation.zig").Event;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
@@ -313,6 +314,7 @@ pub const TransactionPage = extern struct {
 
         const progress = gtk.ProgressBar.new();
         gtk.Widget.setHexpand(progress.as(gtk.Widget), 1);
+        a11y.setName(progress.as(gtk.Widget), name);
         gtk.Box.append(card, progress.as(gtk.Widget));
 
         row.* = .{
@@ -349,7 +351,7 @@ pub const TransactionPage = extern struct {
                         return;
                     }
                     if (find_row(self, name)) |row| {
-                        if (!row.result.terminal()) setLabel(row.status_label, i.event_type);
+                        if (!row.result.terminal()) setRowStatus(row, i.event_type);
                     }
                 }
             },
@@ -413,7 +415,7 @@ pub const TransactionPage = extern struct {
                         return;
                     }
                     if (isAurBuildStart(pr.progress_type, pr.stage)) {
-                        setLabel(row.status_label, translations._("Building"));
+                        setRowStatus(row, translations._("Building"));
                         startRowPulse(row);
                         return;
                     }
@@ -426,7 +428,7 @@ pub const TransactionPage = extern struct {
                         pr.current_download,
                         pr.total_download,
                     ));
-                    setLabel(row.status_label, nonEmpty(pr.message) orelse phase_label(pr.progress_type));
+                    setRowStatus(row, nonEmpty(pr.message) orelse phase_label(pr.progress_type));
                 }
             },
             .flatpak_progress => |pr| {
@@ -584,7 +586,7 @@ pub const TransactionPage = extern struct {
     fn setRowResult(row: *PackageRow, result: PackageResult) void {
         stopRowPulse(row);
         row.result = result;
-        gtk.Label.setLabel(row.status_label, result.label());
+        setRowStatus(row, result.label());
         const widget = row.status_label.as(gtk.Widget);
         gtk.Widget.removeCssClass(widget, "status-done");
         gtk.Widget.removeCssClass(widget, "status-failed");
@@ -736,7 +738,7 @@ pub const TransactionPage = extern struct {
         if (ensure_row_named(self, backend, backend)) |row| {
             if (row.result.terminal()) return;
             row.result = .running;
-            setLabel(row.status_label, message);
+            setRowStatus(row, message);
             gtk.ProgressBar.setFraction(row.progress, fractionFromPercent(percentage));
         }
     }
@@ -752,6 +754,14 @@ pub const TransactionPage = extern struct {
             "[{s}] {s} ({d}%)",
             .{ backend, nonEmpty(status) orelse translations._("Working"), percentage },
         );
+    }
+
+    /// A row's status changes while focus is elsewhere, and non-focusable static
+    /// text is never announced. Writing the same text as the progress bar's
+    /// accessible description fires a property change an AT will speak.
+    fn setRowStatus(row: *PackageRow, text: []const u8) void {
+        setLabel(row.status_label, text);
+        a11y.setDescription(row.progress.as(gtk.Widget), text);
     }
 
     fn setLabel(label: *gtk.Label, text: []const u8) void {

@@ -3,6 +3,7 @@ const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gobject = bindings.gobject;
 const c_string = @import("../../helpers/c_string.zig");
+const a11y = @import("../../helpers/a11y.zig");
 const support = @import("../../pages/support.zig");
 const ShellyOperation = @import("../../services/shelly_operation.zig").ShellyOperation;
 const Option = @import("../../services/shelly_operation.zig").Option;
@@ -82,6 +83,7 @@ pub const MultiSelectDialog = extern struct {
             const check = gtk.CheckButton.new();
             gtk.CheckButton.setActive(check, @intFromBool(opt.is_selected or opt.is_installed));
             gtk.Widget.setValign(check.as(gtk.Widget), .center);
+            a11y.setName(check.as(gtk.Widget), opt.name);
             gtk.Box.append(row, check.as(gtk.Widget));
 
             // name + description stacked

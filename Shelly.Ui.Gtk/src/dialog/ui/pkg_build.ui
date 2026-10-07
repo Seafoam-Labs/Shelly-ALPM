@@ -122,6 +122,7 @@
             <property name="margin-bottom">8</property>
             <child>
               <object class="GtkImage" id="scan_icon">
+                <property name="accessible-role">presentation</property>
                 <property name="icon-name">security-high-symbolic</property>
                 <property name="pixel-size">16</property>
               </object>

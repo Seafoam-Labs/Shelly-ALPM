@@ -52,6 +52,9 @@
                                     </child>
                                 </object>
                             </child>
+                            <accessibility>
+                              <property name="label" translatable="yes">Search...</property>
+                            </accessibility>
                           </object>
                         </child>
                         <child>
@@ -69,6 +72,7 @@
                                 <property name="spacing">6</property>
                                 <child>
                                   <object class="GtkImage">
+                                    <property name="accessible-role">presentation</property>
                                     <property name="icon-name">update-symbolic</property>
                                   </object>
                                 </child>
@@ -91,6 +95,7 @@
                                 <property name="spacing">6</property>
                                 <child>
                                   <object class="GtkImage">
+                                    <property name="accessible-role">presentation</property>
                                     <property name="icon-name">software-update-available-symbolic</property>
                                   </object>
                                 </child>
@@ -116,6 +121,7 @@
                                 <property name="spacing">6</property>
                                 <child>
                                   <object class="GtkImage">
+                                    <property name="accessible-role">presentation</property>
                                     <property name="icon-name">list-add-symbolic</property>
                                   </object>
                                 </child>
@@ -164,6 +170,7 @@
                                 </style>
                                 <child>
                                   <object class="GtkImage">
+                                    <property name="accessible-role">presentation</property>
                                     <property name="icon-name">document-send-symbolic</property>
                                     <property name="pixel-size">48</property>
                                     <style>
@@ -226,6 +233,7 @@
                             </child>
                             <child>
                               <object class="GtkImage" id="DetailIcon">
+                                <property name="accessible-role">presentation</property>
                                 <property name="pixel-size">64</property>
                                 <property name="valign">center</property>
                               </object>
@@ -361,6 +369,9 @@
                                             <property name="has-frame">false</property>
                                             <property name="tooltip-text" translatable="yes">Get more information about Update URL / Repository Info</property>
                                             <property name="uri">https://www.seafoam-labs.org/shelly-alpm/docs/appimage/</property>
+                                            <accessibility>
+                                              <property name="label" translatable="yes">Get more information about Update URL / Repository Info</property>
+                                            </accessibility>
                                             <child>
                                               <object class="GtkImage">
                                                 <property name="icon-name">dialog-information-symbolic</property>
@@ -514,6 +525,7 @@
                                     <property name="valign">center</property>
                                     <child>
                                       <object class="GtkImage">
+                                        <property name="accessible-role">presentation</property>
                                         <property name="icon-name">document-save-symbolic</property>
                                       </object>
                                     </child>
@@ -542,6 +554,7 @@
                                     <property name="spacing">6</property>
                                     <child>
                                       <object class="GtkImage">
+                                        <property name="accessible-role">presentation</property>
                                         <property name="icon-name">emblem-synchronizing-symbolic</property>
                                       </object>
                                     </child>
@@ -567,6 +580,7 @@
                                     <property name="valign">center</property>
                                     <child>
                                       <object class="GtkImage">
+                                        <property name="accessible-role">presentation</property>
                                         <property name="icon-name">user-trash-symbolic</property>
                                       </object>
                                     </child>

@@ -4,6 +4,7 @@ pub const max_app_id_len = 255;
 pub const max_file_path_len = std.fs.max_path_bytes;
 
 const appstream_prefix = "appstream://";
+const appimage_suffix = ".appimage";
 const flatpak_https_prefix = "flatpak+https://";
 const flatpak_ref_suffix = ".flatpakref";
 
@@ -16,16 +17,28 @@ pub const PageTarget = enum {
     updates,
 };
 
+
+pub fn extractLocalAppImageFile(arg: []const u8, path_buffer: *[max_file_path_len + 1]u8) ?[:0]const u8 {
+    const path = resolveLocalPath(arg, path_buffer) orelse return null;
+    if (!hasAppImageFileSuffix(path)) return null;
+    return path;
+}
+
+
 pub fn extractLocalFlatpakFile(arg: []const u8, path_buffer: *[max_file_path_len + 1]u8) ?[:0]const u8 {
+    const path = resolveLocalPath(arg, path_buffer) orelse return null;
+    if (!hasFlatpakFileSuffix(path)) return null;
+    return path;
+}
+
+fn resolveLocalPath(arg: []const u8, path_buffer: *[max_file_path_len + 1]u8) ?[:0]const u8 {
     if (std.mem.startsWith(u8, arg, file_uri_prefix)) {
-        const path = fileUriToPath(arg, path_buffer) orelse return null;
-        if (!hasFlatpakFileSuffix(path)) return null;
-        return path_buffer[0..path.len :0];
+        const decoded = fileUriToPath(arg, path_buffer) orelse return null;
+        return path_buffer[0..decoded.len :0];
     }
 
     if (std.mem.indexOf(u8, arg, "://") != null) return null;
     if (arg.len == 0 or arg.len > max_file_path_len) return null;
-    if (!hasFlatpakFileSuffix(arg)) return null;
 
     @memcpy(path_buffer[0..arg.len], arg);
     path_buffer[arg.len] = 0;
@@ -35,6 +48,10 @@ pub fn extractLocalFlatpakFile(arg: []const u8, path_buffer: *[max_file_path_len
 fn hasFlatpakFileSuffix(path: []const u8) bool {
     return std.ascii.endsWithIgnoreCase(path, flatpak_ref_suffix) or
         std.ascii.endsWithIgnoreCase(path, flatpak_bundle_suffix);
+}
+
+fn hasAppImageFileSuffix(path: []const u8) bool {
+    return std.ascii.endsWithIgnoreCase(path, appimage_suffix);
 }
 
 fn fileUriToPath(
@@ -345,4 +362,47 @@ test "reject unsupported local file arguments" {
     try std.testing.expect(extractLocalFlatpakFile("appstream://org.example.App", &buffer) == null);
     try std.testing.expect(extractLocalFlatpakFile("file://", &buffer) == null);
     try std.testing.expect(extractLocalFlatpakFile("file://server/share/org.example.App.flatpakref", &buffer) == null);
+}
+
+test "extract local AppImage file path" {
+    var buffer: [max_file_path_len + 1]u8 = undefined;
+
+    const upper = extractLocalAppImageFile(
+        "/home/user/Downloads/NiceApp-1.2.3-x86_64.AppImage",
+        &buffer,
+    );
+    try std.testing.expect(upper != null);
+    try std.testing.expectEqualStrings(
+        "/home/user/Downloads/NiceApp-1.2.3-x86_64.AppImage",
+        upper.?,
+    );
+
+    const lower = extractLocalAppImageFile("/tmp/niceapp.appimage", &buffer);
+    try std.testing.expect(lower != null);
+    try std.testing.expectEqualStrings("/tmp/niceapp.appimage", lower.?);
+}
+
+test "extract local AppImage from percent-encoded file URI" {
+    var buffer: [max_file_path_len + 1]u8 = undefined;
+    const result = extractLocalAppImageFile(
+        "file:///home/user/My%20Apps/Nice%23App.AppImage",
+        &buffer,
+    );
+    try std.testing.expect(result != null);
+    try std.testing.expectEqualStrings(
+        "/home/user/My Apps/Nice#App.AppImage",
+        result.?,
+    );
+}
+
+test "local flatpak and AppImage extractors do not overlap" {
+    var buffer: [max_file_path_len + 1]u8 = undefined;
+
+    try std.testing.expect(extractLocalAppImageFile("/tmp/org.example.App.flatpakref", &buffer) == null);
+    try std.testing.expect(extractLocalAppImageFile("/tmp/org.example.App.flatpak", &buffer) == null);
+    try std.testing.expect(extractLocalFlatpakFile("/tmp/NiceApp.AppImage", &buffer) == null);
+    try std.testing.expect(extractLocalAppImageFile("/home/user/notes.txt", &buffer) == null);
+    try std.testing.expect(extractLocalAppImageFile("https://example.com/NiceApp.AppImage", &buffer) == null);
+    try std.testing.expect(extractLocalAppImageFile("file://server/share/NiceApp.AppImage", &buffer) == null);
+    try std.testing.expect(extractLocalAppImageFile("file://", &buffer) == null);
 }

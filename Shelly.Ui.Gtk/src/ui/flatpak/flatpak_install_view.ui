@@ -44,6 +44,7 @@
                     <property name="spacing">12</property>
                     <child>
                       <object class="GtkImage">
+                        <property name="accessible-role">presentation</property>
                         <property name="icon-name">edit-find-symbolic</property>
                         <property name="pixel-size">48</property>
                         <style>
@@ -225,6 +226,7 @@
                         <property name="valign">start</property>
                         <child>
                           <object class="GtkImage" id="overlay_icon">
+                            <property name="accessible-role">presentation</property>
                             <property name="pixel-size">80</property>
                             <property name="valign">start</property>
                           </object>
