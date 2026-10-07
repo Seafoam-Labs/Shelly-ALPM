@@ -646,6 +646,18 @@ pub const PackagePage = extern struct {
         const loaded = gio.ListModel.getNItems(p.list_store.as(gio.ListModel));
         const visible = loaded > 0 and gio.ListModel.getNItems(selection.as(gio.ListModel)) == 0;
         gtk.Widget.setVisible(p.no_results_overlay.as(gtk.Widget), @intFromBool(visible));
+
+        // The overlay is static text that never takes focus, so an AT cannot tell
+        // an empty result from a hung app. Publish the same text as the search
+        // entry's description: that is the widget the user is typing into, and
+        // writing it fires a property change.
+        // `gtk.Label.getLabel()` is owned by the widget, and the helper copies the
+        // text, so nothing here may free it.
+        if (visible) {
+            a11y.setDescription(p.search_entry.as(gtk.Widget), std.mem.span(gtk.Label.getLabel(p.no_results_label)));
+        } else {
+            a11y.setDescription(p.search_entry.as(gtk.Widget), "");
+        }
     }
 
     fn contains_ignore_case(haystack: []const u8, needle: []const u8) bool {

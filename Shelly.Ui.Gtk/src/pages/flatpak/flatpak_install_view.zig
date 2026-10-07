@@ -95,6 +95,7 @@ pub const FlatpakInstallView = extern struct {
         search_text: [256]u8,
         category: Category,
         search_len: usize,
+        search_entry: ?*gtk.SearchEntry = null,
         var offset: c_int = 0;
     };
 
@@ -1174,12 +1175,28 @@ pub const FlatpakInstallView = extern struct {
         self.updateNoResults();
     }
 
+    /// The page's search entry holds focus while the user types, and this view's
+    /// empty-result overlay never takes focus, so the view needs a target for the
+    /// announcement.
+    pub fn setSearchEntry(self: *Self, entry: *gtk.SearchEntry) void {
+        self.priv().search_entry = entry;
+    }
+
     fn updateNoResults(self: *Self) void {
         const p = self.priv();
         const selection = p.selection orelse return;
         const loaded = if (p.model) |m| gio.ListModel.getNItems(m.as(gio.ListModel)) else 0;
         const visible = loaded > 0 and gio.ListModel.getNItems(selection.as(gio.ListModel)) == 0;
         gtk.Widget.setVisible(p.no_results_overlay.as(gtk.Widget), @intFromBool(visible));
+
+        if (p.search_entry) |entry| {
+            // `gtk.Label.getLabel()` is owned by the widget; the helper copies it.
+            if (visible) {
+                a11y.setDescription(entry.as(gtk.Widget), std.mem.span(gtk.Label.getLabel(p.no_results_label)));
+            } else {
+                a11y.setDescription(entry.as(gtk.Widget), "");
+            }
+        }
     }
 
     pub fn applyCategory(self: *Self, category: Category) void {

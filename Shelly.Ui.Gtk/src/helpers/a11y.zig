@@ -18,11 +18,20 @@ fn freeOwned(ptr: ?*anyopaque) callconv(.c) void {
 }
 
 fn updateProperty(widget: *gtk.Widget, property: gtk.AccessibleProperty, text: []const u8) void {
-    // GTK borrows the string inside the GValue rather than keeping its own copy:
-    // unsetting the value after the update leaves the name empty, and a buffer
-    // that dies later makes the AT-SPI bridge marshal dangling bytes and abort
-    // the application. So the bytes are handed to the widget, which frees them
-    // when it is finalized.
+    const key: [*:0]const u8 = if (property == .label)
+        "shelly-a11y-name"
+    else
+        "shelly-a11y-description";
+
+    // An unchanged value is not written: the property change would make an AT
+    // speak text the user has already heard.
+    if (gobject.Object.getData(widget.as(gobject.Object), key)) |previous| {
+        if (std.mem.eql(u8, std.mem.span(@as([*:0]const u8, @ptrCast(previous))), text)) return;
+    }
+
+    // GTK keeps the pointer it is handed rather than a copy of the text, so the
+    // bytes must outlive the widget's use of them: they belong to the widget and
+    // are freed when it is finalized, or once a newer value has been installed.
     const owned = glib.malloc(text.len + 1) orelse return;
     const bytes: [*]u8 = @ptrCast(owned);
     @memcpy(bytes[0..text.len], text);
@@ -38,12 +47,9 @@ fn updateProperty(widget: *gtk.Widget, property: gtk.AccessibleProperty, text: [
         @ptrCast(&properties),
         @ptrCast(&gvalue),
     );
-    // The string is static, so this releases only the GValue, not the buffer.
+    // The contents are static, so this releases only the GValue's own state.
     gvalue.unset();
 
-    // Installed before the previous buffer is freed, so no reader can point at
-    // memory that is already gone.
-    const key = if (property == .label) "shelly-a11y-name" else "shelly-a11y-description";
     gobject.Object.setDataFull(widget.as(gobject.Object), key, owned, freeOwned);
 }
 
