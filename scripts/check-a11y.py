@@ -280,14 +280,23 @@ def find_app(Atspi):
 
 def wait_for_app(Atspi, timeout=60.0):
     deadline = time.time() + timeout
-    while time.time() < deadline:
+    app = None
+    while time.time() < deadline and app is None:
         app = find_app(Atspi)
-        if app is not None:
-            # The package list is loaded asynchronously; let the first page build.
-            time.sleep(6.0)
+        if app is None:
+            time.sleep(0.5)
+    if app is None:
+        return None
+
+    # The package list arrives asynchronously over the CLI, and the row checks scan
+    # those rows, so wait for at least one rather than for a fixed pause: a list
+    # that never loaded silently makes every row assertion vacuous.
+    row_deadline = time.time() + 30.0
+    while time.time() < row_deadline:
+        if any(node.role == "table cell" and node.showing for node in collect(app)):
             return app
-        time.sleep(0.5)
-    return None
+        time.sleep(1.0)
+    return app
 
 
 def start_app(home, wizard):
@@ -311,7 +320,11 @@ def start_app(home, wizard):
     env["XDG_STATE_HOME"] = os.path.join(home, "state")
     env["GTK_A11Y"] = "atspi"
     log = open(os.path.join(home, "app.log"), "w")
-    return subprocess.Popen([os.path.abspath(BINARY)], env=env, stdout=log, stderr=log)
+    # The UI locates the CLI at ../Shelly.Cli.Zig/zig-out/bin/shelly relative to its
+    # working directory, so it has to run from Shelly.Ui.Gtk: anywhere else starts it
+    # with no package list, and the tree this phase reads has no rows in it.
+    return subprocess.Popen([os.path.abspath(BINARY)], env=env, stdout=log, stderr=log,
+                            cwd=os.path.dirname(UI_ROOT))
 
 
 def kill_app(proc):
@@ -369,6 +382,12 @@ def check_main_window(rep, nodes):
                 and not n.name.strip() and not n.desc.strip()]
     rep.expect("no visible control lacks a name and a description", not controls,
                "%d blank: %s" % (len(controls), sorted({n.role for n in controls})))
+
+    # The check above only means something if list rows were on the bus to scan.
+    rows = [n for n in nodes if n.role == "table cell" and n.showing]
+    rep.expect("the package list rendered rows", bool(rows),
+               "%d rows; an empty list means the CLI is unreachable from this working directory"
+               % len(rows))
 
     headings = [n for n in nodes if n.role == "heading" and n.showing]
     rep.expect("every heading carries a level", all(n.attrs.get("level") for n in headings),
