@@ -253,6 +253,7 @@ test {
     _ = @import("services/ui_config_resolver.zig");
     _ = @import("services/shelly_cli.zig");
     _ = @import("services/tray_service.zig");
+    _ = @import("helpers/a11y.zig");
     _ = @import("g_objects/appstream_app_object.zig");
     _ = @import("helpers/custom_ui_comps/carousel.zig");
     _ = @import("helpers/custom_ui_comps/carousel_indicator_dots.zig");
