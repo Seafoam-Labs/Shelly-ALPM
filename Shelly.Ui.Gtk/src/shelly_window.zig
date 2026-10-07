@@ -672,7 +672,9 @@ pub const ShellyWindow = extern struct {
         if (gobject.ext.cast(ConfirmDialog, content)) |dlg| {
             dlg.focusConfirm();
         } else {
-            _ = gtk.Widget.grabFocus(content);
+            // grabFocus on the container does not delegate to its children, so
+            // nothing inside the lockout would take focus at all.
+            _ = a11y.focusFirst(content);
         }
     }
 

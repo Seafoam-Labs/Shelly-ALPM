@@ -152,3 +152,29 @@ test "focusFirst reports failure when a subtree has nothing focusable" {
     gtk.Box.append(box, gtk.Label.new("No controls").as(gtk.Widget));
     try std.testing.expectEqual(false, focusFirst(box.as(gtk.Widget)));
 }
+
+test "focusFirst reaches a control on a stack page that just became visible" {
+    try gtk_test.requireDisplay();
+
+    // Mirrors a wizard page swap: the page has only just been shown, so this
+    // proves the new page is already reachable without waiting for a draw.
+    const stack = gtk.Stack.new();
+    const first_page = gtk.Box.new(.vertical, 0);
+    const first_button = gtk.Button.new();
+    gtk.Button.setLabel(first_button, "Welcome");
+    gtk.Box.append(first_page, first_button.as(gtk.Widget));
+    const second_page = gtk.Box.new(.vertical, 0);
+    const second_button = gtk.Button.new();
+    gtk.Button.setLabel(second_button, "AUR");
+    gtk.Box.append(second_page, second_button.as(gtk.Widget));
+    _ = gtk.Stack.addNamed(stack, first_page.as(gtk.Widget), "first");
+    _ = gtk.Stack.addNamed(stack, second_page.as(gtk.Widget), "second");
+
+    const window = shownWindow(stack.as(gtk.Widget));
+    gtk.Stack.setVisibleChild(stack, second_page.as(gtk.Widget));
+
+    try std.testing.expect(focusFirst(second_page.as(gtk.Widget)));
+    const focus = gtk.Window.getFocus(window);
+    try std.testing.expectEqual(@as(?*gtk.Widget, second_button.as(gtk.Widget)), focus);
+    gtk.Window.destroy(window);
+}

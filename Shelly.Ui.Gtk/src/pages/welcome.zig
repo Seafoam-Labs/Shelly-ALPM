@@ -7,6 +7,7 @@ const gio = bindings.gio;
 const gobject = bindings.gobject;
 const support = @import("support.zig");
 const translations = @import("../helpers/translations.zig");
+const a11y = @import("../helpers/a11y.zig");
 const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
 const AurWarningDialog = @import("../dialog/page/aur_warning.zig").AurWarningDialog;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
@@ -445,6 +446,11 @@ pub const WelcomePage = extern struct {
             p.page_appearance.as(gtk.Widget),
         };
         gtk.Stack.setVisibleChild(p.welcome_stack, pages[step]);
+        // Nothing else moves focus, so an AT hears the page change as silence.
+        // Focusing a control in the new page both announces it and gives the user
+        // a position to act from; the page's own group name is what makes the move
+        // legible rather than merely audible.
+        _ = a11y.focusFirst(pages[step]);
 
         gtk.Widget.setSensitive(p.btn_back.as(gtk.Widget), @intFromBool(step > 0));
 
