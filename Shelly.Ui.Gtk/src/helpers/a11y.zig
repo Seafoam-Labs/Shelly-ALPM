@@ -178,3 +178,21 @@ test "focusFirst reaches a control on a stack page that just became visible" {
     try std.testing.expectEqual(@as(?*gtk.Widget, second_button.as(gtk.Widget)), focus);
     gtk.Window.destroy(window);
 }
+
+test "a focus move before the window is mapped still sets the window focus" {
+    try gtk_test.requireDisplay();
+
+    // A lockout mounted from ShellyWindow.init grabs focus while the toplevel is
+    // still unmapped, and that choice is kept. On the bus, STATE_FOCUSED only
+    // appears once the compositor hands the window the keyboard.
+    const window = gtk.Window.new();
+    const box = gtk.Box.new(.vertical, 0);
+    const button = gtk.Button.new();
+    gtk.Button.setLabel(button, "Next");
+    gtk.Box.append(box, button.as(gtk.Widget));
+    gtk.Window.setChild(window, box.as(gtk.Widget));
+
+    try std.testing.expect(focusFirst(box.as(gtk.Widget)));
+    try std.testing.expectEqual(@as(?*gtk.Widget, button.as(gtk.Widget)), gtk.Window.getFocus(window));
+    gtk.Window.destroy(window);
+}

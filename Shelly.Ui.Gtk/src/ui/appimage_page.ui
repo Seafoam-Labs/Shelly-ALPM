@@ -9,7 +9,6 @@
       <object class="GtkOverlay" id="AppImageOverlay">
         <property name="hexpand">true</property>
         <property name="vexpand">true</property>
-        <property name="accessible-role">group</property>
         <child>
           <object class="GtkBox">
             <property name="orientation">vertical</property>

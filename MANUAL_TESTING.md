@@ -207,9 +207,12 @@ literal word). This takes over the session for the duration.
       `Look and Feel`. Silence here is the original bug report.
 - [ ] **Modal lockout.** A blocking screen is announced as a dialog, and closing it puts focus
       on the navigation button for the page in view rather than on a widget that has left the tree.
+      Check it in both nav modes: only the rail or the top bar is visible at a time, and focus
+      cannot land in the hidden one.
 - [ ] **Sidebar.** Every entry names its page (`Package`, `AUR`, `Update`), including while the
       rail is collapsed, and the chevron says `Expand sidebar` or `Collapse sidebar` to match
-      where it will take you.
+      where it will take you. Repeat with navigation set to the top bar, where the same seven
+      entries carry the same names and the chevron is absent.
 - [ ] **Settings.** Tab reaches each switch with its row's text, and its state with the
       `INS`/`DEL` prefix (`INS S switch on`). Nine switches are on the General page, two under
       Look and Feel, four under Advanced, and one more in the wizard.

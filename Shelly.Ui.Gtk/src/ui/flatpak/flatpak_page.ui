@@ -217,7 +217,6 @@
               <object class="GtkStack" id="main_content_stack">
                 <property name="vexpand">true</property>
                 <property name="hexpand">true</property>
-                <property name="accessible-role">group</property>
                 <property name="margin-start">5</property>
                 <property name="margin-end">5</property>
                 <property name="margin-top">5</property>

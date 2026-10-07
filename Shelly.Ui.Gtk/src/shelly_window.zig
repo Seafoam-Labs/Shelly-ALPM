@@ -488,20 +488,25 @@ pub const ShellyWindow = extern struct {
         if (self.activeNavButton()) |nb| set_active_nav(self, nb);
     }
 
-    /// The button for the page the content stack is showing, falling back to the
-    /// first one. Also the place to put the keyboard when a lockout goes away:
-    /// it is focusable in both nav modes and needs no page to be constructed.
+    /// The button for the page the content stack is showing, in the layout the user
+    /// can see: only the rail or the top bar is visible at a time, and focus cannot
+    /// land on a control inside the hidden one, so `hideLockout` must not hand the
+    /// keyboard to it. Falls back to the first button of that layout when the visible
+    /// child is not a nav page (a transaction, for instance).
     fn activeNavButton(self: *ShellyWindow) ?*NavButton {
         const p = self.private();
         const current_name: []const u8 = blk: {
             const cn_opt = gtk.Stack.getVisibleChildName(p.content_stack);
             break :blk if (cn_opt) |cn| std.mem.span(cn) else "";
         };
+        const want_rail = p.nav_mode == .sidebar;
+        var fallback: ?*NavButton = null;
         for (p.nav_buttons.items) |nb| {
+            if (nb.is_rail != want_rail) continue;
+            if (fallback == null) fallback = nb;
             if (std.mem.eql(u8, nb.name, current_name)) return nb;
         }
-        if (p.nav_buttons.items.len > 0) return p.nav_buttons.items[0];
-        return null;
+        return fallback;
     }
 
     fn tabStackName(tab: ShellyTabs) ?[:0]const u8 {
@@ -558,7 +563,7 @@ pub const ShellyWindow = extern struct {
         const stack = self.private().content_stack;
 
         const rp = RecommendPage.new();
-        const rp_page = gtk.Stack.addTitled(stack, rp.as(gtk.Widget), "recommend", RecommendPage.title);
+        const rp_page = gtk.Stack.addTitled(stack, rp.as(gtk.Widget), "recommend", translations._(RecommendPage.title));
         gtk.StackPage.setIconName(rp_page, RecommendPage.icon_name);
 
         const pp = PackagePage.new();

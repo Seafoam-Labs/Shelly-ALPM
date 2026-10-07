@@ -95,7 +95,6 @@
           <object class="GtkOverlay" id="grid_overlay">
             <property name="hexpand">true</property>
             <property name="vexpand">true</property>
-            <property name="accessible-role">group</property>
             <property name="child">
               <object class="GtkScrolledWindow">
                 <property name="hexpand">true</property>

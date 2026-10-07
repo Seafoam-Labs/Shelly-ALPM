@@ -143,6 +143,15 @@ def check_markup(rep):
                            "add <property name=\"accessible-role\">presentation</property>, "
                            "or a name if the icon carries meaning no text repeats")
 
+            if declares_role(obj, "group") and not labelled(obj):
+                # A group with no name is structure no reader can use: the role is
+                # only worth declaring when it carries a label. Containers that get
+                # their name at runtime declare no role here, they are the exception
+                # that has to stay visible in the markup.
+                rep.expect("%s %s/%s group has an accessible label" % (path, kind, ident), False,
+                           "add <accessibility><property name=\"label\">, or drop the "
+                           "accessible-role: a group with no name is noise in the tree")
+
             for bad in obj.iter("property"):
                 if bad.get("name") == "role" and is_inside_accessibility(obj, bad):
                     rep.expect("%s %s/%s does not use <accessibility><property name=\"role\">" % (
@@ -174,6 +183,12 @@ def labelled(obj):
     """The <accessibility><property name="label"> text, if the object declares one."""
     return [p for p in accessible_properties(obj) if p.get("name") == "label"
             and (p.text or "").strip()]
+
+
+def declares_role(obj, role):
+    """True when markup sets this object's accessible role to the given value."""
+    return any(p.get("name") == "accessible-role" and (p.text or "").strip() == role
+               for p in obj if p.tag == "property")
 
 
 def accessible_properties(obj):
@@ -281,9 +296,12 @@ def start_app(home, wizard):
     point at the sandbox or the real config is read and NewInstall is whatever the
     user left it at."""
     if not wizard:
+        # The UI keeps its settings in shelly/settings.json, not the CLI's
+        # config.json: seed the wrong file and the first-run wizard is mounted
+        # over the window this phase is supposed to be reading.
         cfg = os.path.join(home, "config", "shelly")
         os.makedirs(cfg, exist_ok=True)
-        with open(os.path.join(cfg, "config.json"), "w") as handle:
+        with open(os.path.join(cfg, "settings.json"), "w") as handle:
             json.dump({"NewInstall": False}, handle)
 
     env = dict(os.environ)
@@ -356,7 +374,15 @@ def check_main_window(rep, nodes):
     rep.expect("every heading carries a level", all(n.attrs.get("level") for n in headings),
                "%d headings without attrs level" % sum(1 for n in headings if not n.attrs.get("level")))
 
-    rep.expect("the page body is a group", any(n.role == "grouping" for n in nodes if n.showing))
+    # A page with no title widget of its own is still named: GTK gives a stack's
+    # child the accessible name of its StackPage title, which is what tells a
+    # reader which page focus landed in.
+    page_names = NAV_PAGES + ("Settings", "Utilities")
+    named_pages = [n for n in nodes if n.role in ("panel", "grouping") and n.showing
+                   and n.name.strip() in page_names]
+    rep.expect("the visible page names itself", bool(named_pages),
+               "%d of %d containers carry a page name" % (len(named_pages),
+                                                          len([n for n in nodes if n.role in ("panel", "grouping") and n.showing])))
 
 
 def check_wizard(rep, Atspi, app):

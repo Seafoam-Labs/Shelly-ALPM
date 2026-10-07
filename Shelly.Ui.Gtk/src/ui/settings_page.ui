@@ -24,7 +24,6 @@
             <child>
               <object class="GtkStack" id="settings_stack">
                 <property name="transition-type">slide-left-right</property>
-                <property name="accessible-role">group</property>
                 <!-- General page -->
                 <child>
                   <object class="GtkStackPage">
