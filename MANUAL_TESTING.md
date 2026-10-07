@@ -180,6 +180,51 @@ shelly config appimage YARC --clear-env
 - [ ] Invalid input is rejected with clear feedback
 - [ ] Application doesn't crash on unexpected errors
 
+### Screen reader navigation (#2001)
+
+Structure can be checked without a reader running: `python3 scripts/check-a11y.py` reads the
+AT-SPI tree of a UI instance started in a throwaway `HOME`. It cannot run in CI, where
+`GTK_A11Y=none` switches the bridge off. What only a reader can tell you is whether the
+structure is presented usefully, so run these with Orca on top of that.
+
+Start Orca logging its own output, and reproduce first-run state the same way the script
+does — `XDG_CONFIG_HOME` wins over `HOME`, so all three must point at the sandbox or the
+real configuration is read and the wizard never appears:
+
+```sh
+rm -rf /tmp/a11yhome && mkdir -p /tmp/a11yhome
+orca --replace --debug --debug-file /tmp/orca.log &
+env HOME=/tmp/a11yhome XDG_CONFIG_HOME=/tmp/a11yhome/config XDG_DATA_HOME=/tmp/a11yhome/data \
+  setsid Shelly.Ui.Gtk/zig-out/bin/Shelly_Ui_Gtk &
+grep 'SPEECH OUTPUT:' /tmp/orca.log
+```
+
+Keys go to whatever window has focus, so use `wtype -k Tab` (a bare `wtype Tab` types the
+literal word). This takes over the session for the duration.
+
+- [ ] **First-run wizard.** Focus lands on a control of the new page and each page change is
+      spoken with its title: `Welcome to Shelly v3` group, then `Select Your Sources`, then
+      `Look and Feel`. Silence here is the original bug report.
+- [ ] **Modal lockout.** A blocking screen is announced as a dialog, and closing it puts focus
+      on the navigation button for the page in view rather than on a widget that has left the tree.
+- [ ] **Sidebar.** Every entry names its page (`Package`, `AUR`, `Update`), including while the
+      rail is collapsed, and the chevron says `Expand sidebar` or `Collapse sidebar` to match
+      where it will take you.
+- [ ] **Settings.** Tab reaches each switch with its row's text, and its state with the
+      `INS`/`DEL` prefix (`INS S switch on`). Nine switches are on the General page, two under
+      Look and Feel, four under Advanced, and one more in the wizard.
+- [ ] **Selection cells.** Tab into the package table and confirm the check box for a row says
+      that row's package name, not `check box` — cells are reused, so a stale name is a regression.
+- [ ] **Column headers.** Reaching the selection column's header speaks `Select`, not silence.
+- [ ] **Searching.** Type a filter that matches nothing: `No matching packages found` is spoken
+      while focus stays in the entry. The flatpak list behaves the same way.
+- [ ] **A transaction.** Row progress and status changes arrive as speech even though nothing
+      takes focus, and a bar's value reads as a percentage rather than a raw number.
+- [ ] **Decorative icons** add nothing to the tree, while flagged rows (`Flagged out of date`,
+      `Installed`, `Verified`) name the meaning the colour carries.
+- [ ] Nothing repeats: entering a page should not announce the same text twice in a row.
+- [ ] Keyboard traversal is undamaged; browse mode follows focus.
+
 ## CLI Testing (Shelly-CLI)
 
 ### Basic Commands
