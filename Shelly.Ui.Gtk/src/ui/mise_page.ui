@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellyMisePage" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <child>
+      <object class="GtkOverlay" id="MiseOverlay">
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
+            <property name="margin-bottom">10</property>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">horizontal</property>
+                <property name="halign">fill</property>
+                <property name="margin-bottom">10</property>
+                <property name="margin-top">10</property>
+                <property name="margin-start">10</property>
+                <property name="margin-end">10</property>
+                <property name="spacing">5</property>
+                <child>
+                  <object class="GtkSearchEntry" id="MiseSearchEntry">
+                    <property name="placeholder-text" translatable="yes">Search...</property>
+                    <property name="width-request">200</property>
+                    <property name="valign">center</property>
+                    <signal name="search-changed" handler="search_changed" swapped="true"/>
+                    <style>
+                      <class name="spaced-search"/>
+                    </style>
+                    <accessibility>
+                      <property name="label" translatable="yes">Search...</property>
+                    </accessibility>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox">
+                    <property name="hexpand">true</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="MiseRefreshButton">
+                    <property name="valign">center</property>
+                    <property name="tooltip-text" translatable="yes">Reload mise tools and check for updates</property>
+                    <signal name="clicked" handler="refresh_tools" swapped="true"/>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">6</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="accessible-role">presentation</property>
+                            <property name="icon-name">view-refresh-symbolic</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Refresh</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="MiseUpgradeAllButton">
+                    <property name="valign">center</property>
+                    <property name="tooltip-text" translatable="yes">Upgrade every outdated mise tool within its configured version</property>
+                    <signal name="clicked" handler="upgrade_all" swapped="true"/>
+                    <style>
+                      <class name="suggested-action"/>
+                    </style>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">6</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="accessible-role">presentation</property>
+                            <property name="icon-name">software-update-available-symbolic</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Upgrade All</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStack" id="MiseStack">
+                <property name="vexpand">true</property>
+                <property name="hexpand">true</property>
+                <child>
+                  <object class="GtkBox" id="MiseLoadingPage">
+                    <property name="orientation">vertical</property>
+                    <property name="valign">center</property>
+                    <property name="halign">center</property>
+                    <child>
+                      <object class="GtkSpinner" id="MiseSpinner">
+                        <property name="width-request">32</property>
+                        <property name="height-request">32</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkScrolledWindow" id="MiseListPage">
+                    <property name="vexpand">true</property>
+                    <property name="hscrollbar-policy">never</property>
+                    <child>
+                      <object class="GtkListBox" id="MiseListBox">
+                        <property name="margin-bottom">1</property>
+                        <property name="margin-end">1</property>
+                        <property name="margin-start">1</property>
+                        <property name="margin-top">1</property>
+                        <property name="selection-mode">none</property>
+                        <style>
+                          <class name="rich-list"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="MiseEmptyPage">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">12</property>
+                    <property name="valign">center</property>
+                    <property name="halign">center</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="accessible-role">presentation</property>
+                        <property name="icon-name">applications-engineering-symbolic</property>
+                        <property name="pixel-size">48</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">No mise tools found</property>
+                        <property name="justify">center</property>
+                        <style>
+                          <class name="title-3"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Install mise and add tools with mise use --global to manage them here.</property>
+                        <property name="justify">center</property>
+                        <property name="wrap">true</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="MiseErrorPage">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">12</property>
+                    <property name="valign">center</property>
+                    <property name="halign">center</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="accessible-role">presentation</property>
+                        <property name="icon-name">dialog-warning-symbolic</property>
+                        <property name="pixel-size">48</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Could not load mise tools.</property>
+                        <property name="justify">center</property>
+                        <style>
+                          <class name="title-3"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

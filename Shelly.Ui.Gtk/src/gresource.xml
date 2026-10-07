@@ -33,6 +33,7 @@
     <file>dialog/ui/polkit_warning.ui</file>
     <file>dialog/ui/aur_warning.ui</file>
     <file>ui/appimage_page.ui</file>
+    <file>ui/mise_page.ui</file>
     <file>ui/welcome.ui</file>
     <file>ui/transaction_page.ui</file>
     <file>ui/package_page.ui</file>

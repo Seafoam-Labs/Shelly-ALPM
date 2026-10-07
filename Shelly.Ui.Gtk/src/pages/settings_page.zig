@@ -55,6 +55,7 @@ pub const ShellySettingsPage = extern struct {
         flatpak_switch: *gtk.Switch,
         recommended_switch: *gtk.Switch,
         appimage_switch: *gtk.Switch,
+        mise_switch: *gtk.Switch,
         tray_switch: *gtk.Switch,
         tray_auto_switch: *gtk.Switch,
         tray_auto_switch_box: *gtk.Box,
@@ -225,6 +226,7 @@ pub const ShellySettingsPage = extern struct {
             p.tray_cron_switch,
             p.no_confirm_switch,
             p.shelly_search_switch,
+            p.mise_switch,
             p.atoll_aur_switch,
             p.remove_cache_switch,
         };
@@ -388,6 +390,7 @@ pub const ShellySettingsPage = extern struct {
             updated.AurEnabled != cfg.AurEnabled or
             updated.FlatPackEnabled != cfg.FlatPackEnabled or
             updated.AppImageEnabled != cfg.AppImageEnabled or
+            updated.MiseEnabled != cfg.MiseEnabled or
             updated.ShellySearchEnabled != cfg.ShellySearchEnabled or
             !std.mem.eql(u8, updated.Culture, cfg.Culture);
 
@@ -1074,6 +1077,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "flatpak_switch", @offsetOf(Private, "flatpak_switch") },
         .{ "recommended_switch", @offsetOf(Private, "recommended_switch") },
         .{ "appimage_switch", @offsetOf(Private, "appimage_switch") },
+        .{ "mise_switch", @offsetOf(Private, "mise_switch") },
         .{ "tray_switch", @offsetOf(Private, "tray_switch") },
         .{ "tray_auto_switch", @offsetOf(Private, "tray_auto_switch") },
         .{ "tray_auto_switch_box", @offsetOf(Private, "tray_auto_switch_box") },
@@ -1154,6 +1158,7 @@ const PageFilter = struct {
     aur: bool = false,
     flatpak: bool = false,
     app_image: bool = false,
+    mise: bool = false,
     shelly_search: bool = false,
 
     fn fromConfig(cfg: *const ShellyConfig) PageFilter {
@@ -1162,6 +1167,7 @@ const PageFilter = struct {
             .aur = cfg.AurEnabled,
             .flatpak = cfg.FlatPackEnabled,
             .app_image = cfg.AppImageEnabled,
+            .mise = cfg.MiseEnabled,
             .shelly_search = cfg.ShellySearchEnabled,
         };
     }
@@ -1173,6 +1179,7 @@ const default_page_entries = [_]DefaultPageEntry{
     .{ .label = "AUR", .value = .aur },
     .{ .label = "Flatpak", .value = .flatpak },
     .{ .label = "AppImage", .value = .app_image },
+    .{ .label = "mise", .value = .mise },
     .{ .label = "Shelly Search", .value = .shelly_search },
     .{ .label = "Update", .value = .update },
 };
@@ -1247,6 +1254,7 @@ fn isPageEntryEnabled(entry: DefaultPageEntry, filter: PageFilter) bool {
         .aur => filter.aur,
         .flatpak => filter.flatpak,
         .app_image => filter.app_image,
+        .mise => filter.mise,
         .shelly_search => filter.shelly_search,
         .update => true,
     };
@@ -1259,6 +1267,7 @@ fn pageEntryLabel(entry: DefaultPageEntry) [:0]const u8 {
         .aur => translations._("AUR"),
         .flatpak => translations._("Flatpak"),
         .app_image => translations._("AppImage"),
+        .mise => translations._("mise"),
         .shelly_search => translations._("Shelly Search"),
         .update => translations._("Update"),
     };
@@ -1318,6 +1327,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.flatpak_switch, cfg.FlatPackEnabled);
     setSwitch(p.recommended_switch, cfg.RecommendedEnabled);
     setSwitch(p.appimage_switch, cfg.AppImageEnabled);
+    setSwitch(p.mise_switch, cfg.MiseEnabled);
     setSwitch(p.tray_switch, cfg.TrayEnabled);
     setSwitch(p.tray_auto_switch, cfg.TrayAutoStart);
     setSwitch(p.daily_schedule, cfg.UseWeeklySchedule);
@@ -1397,6 +1407,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.FlatPackEnabled = getSwitch(p.flatpak_switch);
     cfg.RecommendedEnabled = getSwitch(p.recommended_switch);
     cfg.AppImageEnabled = getSwitch(p.appimage_switch);
+    cfg.MiseEnabled = getSwitch(p.mise_switch);
     cfg.TrayEnabled = getSwitch(p.tray_switch);
     cfg.TrayAutoStart = getSwitch(p.tray_auto_switch);
     cfg.UseWeeklySchedule = getSwitch(p.daily_schedule);

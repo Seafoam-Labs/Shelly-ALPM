@@ -6,12 +6,14 @@ pub const UpdateSource = enum {
     package,
     aur,
     flatpak,
+    mise,
 
     pub fn label(self: UpdateSource) [:0]const u8 {
         return switch (self) {
             .package => "System",
             .aur => "AUR",
             .flatpak => "Flatpak",
+            .mise => "mise",
         };
     }
 
@@ -20,6 +22,7 @@ pub const UpdateSource = enum {
             .package => "package-x-generic-symbolic",
             .aur => "system-software-install-symbolic",
             .flatpak => "application-x-executable-symbolic",
+            .mise => "applications-engineering-symbolic",
         };
     }
 };

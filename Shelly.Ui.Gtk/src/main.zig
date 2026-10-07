@@ -268,4 +268,8 @@ test {
     _ = @import("models/search_result.zig");
     _ = @import("g_objects/search_result_object.zig");
     _ = @import("pages/transaction_page.zig");
+    _ = @import("models/mise.zig");
+    _ = @import("pages/mise_page.zig");
+    _ = @import("pages/update_page.zig");
+    _ = @import("services/shelly_operation.zig");
 }

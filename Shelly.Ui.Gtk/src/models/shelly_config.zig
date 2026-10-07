@@ -16,6 +16,7 @@ pub const ShellyTabs = enum(u8) {
     shelly_search = 4,
     recommend = 5,
     update = 6,
+    mise = 7,
 };
 
 pub const DayOfWeek = enum(u8) {
@@ -43,6 +44,7 @@ pub const ShellyConfig = struct {
     RecommendedEnabled: bool = true,
     ShellyIconsEnabled: bool = true,
     ShellySearchEnabled: bool = false,
+    MiseEnabled: bool = true,
 
     // Window & View
     DefaultPageDropDown: ShellyTabs = .packages,

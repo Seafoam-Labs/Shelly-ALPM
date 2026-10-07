@@ -1,12 +1,14 @@
 const std = @import("std");
+const MiseUpdate = @import("mise.zig").MiseUpdate;
 
 pub const CheckUpdates = struct {
     Packages: []CheckUpdatesPackage = &.{},
     Aur: []CheckUpdatesAur = &.{},
     Flatpak: []CheckUpdatesFlatpak = &.{},
+    Mise: []MiseUpdate = &.{},
 
     pub fn count(self: *const CheckUpdates) usize {
-        return self.Packages.len + self.Aur.len + self.Flatpak.len;
+        return self.Packages.len + self.Aur.len + self.Flatpak.len + self.Mise.len;
     }
 };
 

@@ -110,6 +110,12 @@
             <property name="active">true</property>
           </object>
         </child>
+        <child>
+          <object class="GtkToggleButton" id="mise_toggle">
+            <property name="label" translatable="yes">mise</property>
+            <property name="active">true</property>
+          </object>
+        </child>
       </object>
     </child>
     <child>

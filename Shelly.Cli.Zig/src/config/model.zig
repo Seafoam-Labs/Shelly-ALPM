@@ -295,6 +295,7 @@ fn enumChoices(key: []const u8) ?[]const []const u8 {
         "AppImage",
         "ShellySearch",
         "Recommend",
+        "Mise",
     };
     if (std.mem.eql(u8, key, "PackageInstallView") or
         std.mem.eql(u8, key, "PackageUpdateView") or

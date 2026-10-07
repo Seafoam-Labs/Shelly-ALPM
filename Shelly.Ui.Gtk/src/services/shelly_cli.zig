@@ -9,6 +9,8 @@ const FlatpakSearchResponse = @import("../models/flatpak.zig").FlatpakSearchResp
 const CheckUpdates = @import("../models/sync.zig").CheckUpdates;
 const AppImage = @import("../models/appimage.zig").AppImage;
 const AppImageUpdate = @import("../models/appimage.zig").AppImageUpdate;
+const MiseTool = @import("../models/mise.zig").MiseTool;
+const MiseUpdate = @import("../models/mise.zig").MiseUpdate;
 const JsonPackFrame = @import("../helpers/ui_decode.zig").JsonPackFrame;
 const RunResult = std.process.RunResult;
 const AurPackage = @import("../models/aur_package.zig").AurPackage;
@@ -287,6 +289,22 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stderr);
 
         return JsonPackFrame.decode([]AppImageUpdate, self.allocator, result.stdout);
+    }
+
+    pub fn get_mise_tools(self: ShellyCli) !std.json.Parsed([]MiseTool) {
+        const result = try self.run(&.{ "list", "mise" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return JsonPackFrame.decode([]MiseTool, self.allocator, result.stdout);
+    }
+
+    pub fn get_mise_updates(self: ShellyCli) !std.json.Parsed([]MiseUpdate) {
+        const result = try self.run(&.{ "list-updates", "mise" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return JsonPackFrame.decode([]MiseUpdate, self.allocator, result.stdout);
     }
 
     pub fn sync_remote_appstream_flatpak(self: ShellyCli) !void {

@@ -7,6 +7,7 @@ const gio = bindings.gio;
 const gobject = bindings.gobject;
 const FlatpakPage = @import("pages/flatpak/flatpak_page.zig").FlatpakPage;
 const AppImagePage = @import("pages/appimage_page.zig").AppImagePage;
+const MisePage = @import("pages/mise_page.zig").MisePage;
 const PackagePage = @import("pages/package_page.zig").PackagePage;
 const AurPage = @import("pages/aur_page.zig").AurPage;
 const AtollAurPage = @import("pages/atoll_aur_page.zig").AtollAurPage;
@@ -119,6 +120,7 @@ pub const ShellyWindow = extern struct {
         setNavEnabled(self, "aur", cfg.AurEnabled);
         setNavEnabled(self, "flatpak", cfg.FlatPackEnabled);
         setNavEnabled(self, "appimage", cfg.AppImageEnabled);
+        setNavEnabled(self, "mise", cfg.MiseEnabled);
         setNavEnabled(self, "search", cfg.ShellySearchEnabled);
 
         self.changeNav(cfg.NavMode);
@@ -312,6 +314,7 @@ pub const ShellyWindow = extern struct {
         add_nav_button(self, items, stack, true, "aur", AurPage.icon_name, translations._(AurPage.title));
         add_nav_button(self, items, stack, true, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
         add_nav_button(self, items, stack, true, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
+        add_nav_button(self, items, stack, true, "mise", MisePage.icon_name, translations._(MisePage.title));
         add_nav_button(self, items, stack, true, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
         add_nav_button(self, items, stack, true, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
 
@@ -364,6 +367,7 @@ pub const ShellyWindow = extern struct {
         add_nav_button(self, items, stack, false, "aur", AurPage.icon_name, translations._(AurPage.title));
         add_nav_button(self, items, stack, false, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
         add_nav_button(self, items, stack, false, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
+        add_nav_button(self, items, stack, false, "mise", MisePage.icon_name, translations._(MisePage.title));
         add_nav_button(self, items, stack, false, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
         add_nav_button(self, items, stack, false, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
 
@@ -515,6 +519,7 @@ pub const ShellyWindow = extern struct {
             .aur => "aur",
             .flatpak => "flatpak",
             .app_image => "appimage",
+            .mise => "mise",
             .recommend => "recommend",
             .update => "update",
             .shelly_search => "search",
@@ -578,6 +583,10 @@ pub const ShellyWindow = extern struct {
         const ai = AppImagePage.new();
         const ai_page = gtk.Stack.addTitled(stack, ai.as(gtk.Widget), "appimage", translations._("AppImage"));
         gtk.StackPage.setIconName(ai_page, AppImagePage.icon_name);
+
+        const mp = MisePage.new();
+        const mp_page = gtk.Stack.addTitled(stack, mp.as(gtk.Widget), "mise", translations._(MisePage.title));
+        gtk.StackPage.setIconName(mp_page, MisePage.icon_name);
 
         const au_page = gtk.Stack.addTitled(stack, aurSlotWidget(self), "aur", translations._("AUR"));
         gtk.StackPage.setIconName(au_page, AurPage.icon_name);

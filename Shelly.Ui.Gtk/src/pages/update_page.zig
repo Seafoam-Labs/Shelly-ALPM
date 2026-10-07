@@ -34,6 +34,7 @@ pub const UpdatePage = extern struct {
         native_toggle: *gtk.ToggleButton,
         aur_toggle: *gtk.ToggleButton,
         flatpak_toggle: *gtk.ToggleButton,
+        mise_toggle: *gtk.ToggleButton,
         updates_stack: *gtk.Stack,
         loading_page: *gtk.Box,
         list_page: *gtk.ScrolledWindow,
@@ -112,6 +113,7 @@ pub const UpdatePage = extern struct {
         _ = gtk.ToggleButton.signals.toggled.connect(p.native_toggle, *Self, &on_source_toggled, self, .{});
         _ = gtk.ToggleButton.signals.toggled.connect(p.aur_toggle, *Self, &on_source_toggled, self, .{});
         _ = gtk.ToggleButton.signals.toggled.connect(p.flatpak_toggle, *Self, &on_source_toggled, self, .{});
+        _ = gtk.ToggleButton.signals.toggled.connect(p.mise_toggle, *Self, &on_source_toggled, self, .{});
         applyConfig(self);
         support.connectLifecycle(Self, self);
     }
@@ -120,6 +122,7 @@ pub const UpdatePage = extern struct {
         const p = self.priv();
         const aur_enabled = sourceConfigEnabled(.aur);
         const flatpak_enabled = sourceConfigEnabled(.flatpak);
+        const mise_enabled = sourceConfigEnabled(.mise);
 
         if (!aur_enabled) {
             gtk.ToggleButton.setActive(p.aur_toggle, 0);
@@ -131,6 +134,11 @@ pub const UpdatePage = extern struct {
             gtk.Widget.setVisible(p.flatpak_toggle.as(gtk.Widget), 0);
             gtk.Widget.setSensitive(p.flatpak_toggle.as(gtk.Widget), 0);
         }
+        if (!mise_enabled) {
+            gtk.ToggleButton.setActive(p.mise_toggle, 0);
+            gtk.Widget.setVisible(p.mise_toggle.as(gtk.Widget), 0);
+            gtk.Widget.setSensitive(p.mise_toggle.as(gtk.Widget), 0);
+        }
     }
 
     fn sourceConfigEnabled(source: UpdateSource) bool {
@@ -140,14 +148,16 @@ pub const UpdatePage = extern struct {
             .package => true,
             .aur => cfg.AurEnabled,
             .flatpak => cfg.FlatPackEnabled,
+            .mise => cfg.MiseEnabled,
         };
     }
 
-    fn source_is_active(source: UpdateSource, native: bool, aur: bool, flatpak: bool) bool {
+    fn source_is_active(source: UpdateSource, native: bool, aur: bool, flatpak: bool, mise: bool) bool {
         return switch (source) {
             .package => native,
             .aur => aur,
             .flatpak => flatpak,
+            .mise => mise,
         };
     }
 
@@ -159,6 +169,7 @@ pub const UpdatePage = extern struct {
             gtk.ToggleButton.getActive(p.native_toggle) != 0,
             gtk.ToggleButton.getActive(p.aur_toggle) != 0,
             gtk.ToggleButton.getActive(p.flatpak_toggle) != 0,
+            gtk.ToggleButton.getActive(p.mise_toggle) != 0,
         );
     }
 
@@ -228,10 +239,12 @@ pub const UpdatePage = extern struct {
     fn flatten_updates(allocator: std.mem.Allocator, response: CheckUpdates) ![]UpdateItem {
         const aur_enabled = sourceConfigEnabled(.aur);
         const flatpak_enabled = sourceConfigEnabled(.flatpak);
+        const mise_enabled = sourceConfigEnabled(.mise);
 
         var total: usize = response.Packages.len;
         if (aur_enabled) total += response.Aur.len;
         if (flatpak_enabled) total += response.Flatpak.len;
+        if (mise_enabled) total += response.Mise.len;
         const updates = try allocator.alloc(UpdateItem, total);
         var index: usize = 0;
 
@@ -249,6 +262,12 @@ pub const UpdatePage = extern struct {
             for (response.Flatpak) |package| {
                 const new_version = if (package.NewVersion.len > 0) package.NewVersion else translations._("Unknown");
                 updates[index] = .{ .source = .flatpak, .name = package.Name, .description = package.Id, .old_version = package.Version, .new_version = new_version, .size = package.DownloadSize };
+                index += 1;
+            }
+        }
+        if (mise_enabled) {
+            for (response.Mise) |tool| {
+                updates[index] = .{ .source = .mise, .name = tool.Name, .description = translations._("mise tool update"), .old_version = tool.CurrentVersion, .new_version = tool.NewVersion, .size = 0 };
                 index += 1;
             }
         }
@@ -294,7 +313,9 @@ pub const UpdatePage = extern struct {
         const allocator = result.arena.allocator();
         var buf: [32]u8 = undefined;
         for (result.updates[result.index..end]) |update| {
-            const object = UpdateObject.new(allocator, update.source, update.name, update.description, update.old_version, update.new_version, size_helper.convert_null_term(&buf, update.size));
+            // mise does not report download sizes.
+            const size: [:0]const u8 = if (update.source == .mise) "" else size_helper.convert_null_term(&buf, update.size);
+            const object = UpdateObject.new(allocator, update.source, update.name, update.description, update.old_version, update.new_version, size);
             gio.ListStore.append(p.list_store, object.as(gobject.Object));
             object.as(gobject.Object).unref();
         }
@@ -318,6 +339,7 @@ pub const UpdatePage = extern struct {
                 gtk.Stack.setVisibleChild(p.updates_stack, p.loading_page.as(gtk.Widget));
                 gtk.Widget.setSensitive(p.aur_toggle.as(gtk.Widget), 0);
                 gtk.Widget.setSensitive(p.flatpak_toggle.as(gtk.Widget), 0);
+                gtk.Widget.setSensitive(p.mise_toggle.as(gtk.Widget), 0);
                 gtk.Widget.setSensitive(p.native_toggle.as(gtk.Widget), 0);
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 0);
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
@@ -328,6 +350,7 @@ pub const UpdatePage = extern struct {
                 gtk.Stack.setVisibleChild(p.updates_stack, p.list_page.as(gtk.Widget));
                 gtk.Widget.setSensitive(p.aur_toggle.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.flatpak_toggle.as(gtk.Widget), 1);
+                gtk.Widget.setSensitive(p.mise_toggle.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.native_toggle.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 1);
@@ -357,6 +380,7 @@ pub const UpdatePage = extern struct {
         var system_count: usize = 0;
         var aur_count: usize = 0;
         var flatpak_count: usize = 0;
+        var mise_count: usize = 0;
         const model = p.list_store.as(gio.ListModel);
         const count = gio.ListModel.getNItems(model);
         for (0..count) |index| {
@@ -369,15 +393,18 @@ pub const UpdatePage = extern struct {
                 .package => system_count += 1,
                 .aur => aur_count += 1,
                 .flatpak => flatpak_count += 1,
+                .mise => mise_count += 1,
             }
             item.unref();
         }
         var system_buffer: [64]u8 = undefined;
         var aur_buffer: [64]u8 = undefined;
         var flatpak_buffer: [64]u8 = undefined;
+        var mise_buffer: [64]u8 = undefined;
         gtk.Button.setLabel(p.native_toggle.as(gtk.Button), std.fmt.bufPrintZ(&system_buffer, "{s} · {d}", .{ translations._("System"), system_count }) catch translations._("System"));
         gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), std.fmt.bufPrintZ(&aur_buffer, "{s} · {d}", .{ translations._("AUR"), aur_count }) catch translations._("AUR"));
         gtk.Button.setLabel(p.flatpak_toggle.as(gtk.Button), std.fmt.bufPrintZ(&flatpak_buffer, "{s} · {d}", .{ translations._("Flatpak"), flatpak_count }) catch translations._("Flatpak"));
+        gtk.Button.setLabel(p.mise_toggle.as(gtk.Button), std.fmt.bufPrintZ(&mise_buffer, "{s} · {d}", .{ translations._("mise"), mise_count }) catch translations._("mise"));
     }
 
     fn on_row_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, self: *Self) callconv(.c) void {
@@ -469,7 +496,7 @@ pub const UpdatePage = extern struct {
         gtk.Label.setLabel(size, update.getSize());
 
         const src = update.getSource();
-        gtk.Widget.setVisible(update_btn.as(gtk.Widget), @intFromBool(src == .aur or src == .flatpak));
+        gtk.Widget.setVisible(update_btn.as(gtk.Widget), @intFromBool(src == .aur or src == .flatpak or src == .mise));
     }
 
     fn on_source_toggled(_: *gtk.ToggleButton, self: *Self) callconv(.c) void {
@@ -489,20 +516,8 @@ pub const UpdatePage = extern struct {
         const self: *Self = @ptrCast(@alignCast(page_ptr));
 
         const source = update.getSource();
-
-        const target: []const u8 = switch (source) {
-            .aur => update.getName(),
-            .flatpak => update.getName(),
-            .package => return,
-        };
-
-        const source_token: []const u8 = switch (source) {
-            .aur => "aur",
-            .flatpak => "flatpak",
-            .package => return,
-        };
-
-        var argv = [_][]const u8{ "update", source_token, target };
+        const target: []const u8 = update.getName();
+        var argv = rowUpdateArgv(source, target) orelse return;
         var pkgs = [_][]const u8{target};
 
         if (support.getWindow(ShellyWindow, self)) |win| {
@@ -511,10 +526,20 @@ pub const UpdatePage = extern struct {
                 .argv = &argv,
                 .packages = &pkgs,
                 .on_complete = &on_transaction_complete,
-                .privileged = true,
+                // mise tools belong to the user and are never upgraded as root.
+                .privileged = source != .mise,
                 .ctx = self,
             });
         }
+    }
+
+    fn rowUpdateArgv(source: UpdateSource, target: []const u8) ?[3][]const u8 {
+        return switch (source) {
+            .aur => .{ "update", "aur", target },
+            .flatpak => .{ "update", "flatpak", target },
+            .mise => .{ "upgrade", "mise", target },
+            .package => null,
+        };
     }
 
     fn forEachActiveUpdate(self: *Self, ctx: anytype, comptime f: fn (@TypeOf(ctx), *UpdateObject) void) void {
@@ -557,8 +582,9 @@ pub const UpdatePage = extern struct {
         const flatpak = gtk.ToggleButton.getActive(p.flatpak_toggle) != 0;
         const aur = gtk.ToggleButton.getActive(p.aur_toggle) != 0;
         const standard = gtk.ToggleButton.getActive(p.native_toggle) != 0;
+        const mise = gtk.ToggleButton.getActive(p.mise_toggle) != 0;
 
-        const argv = ShellyCommands.upgrade(std.heap.c_allocator, flatpak, aur, standard) catch return;
+        const argv = ShellyCommands.upgrade(std.heap.c_allocator, flatpak, aur, standard, mise) catch return;
         defer std.mem.Allocator.free(std.heap.c_allocator, argv);
 
         var names: std.ArrayListUnmanaged([]const u8) = .empty;
@@ -577,7 +603,9 @@ pub const UpdatePage = extern struct {
                 .argv = argv,
                 .packages = names.items,
                 .on_complete = &on_transaction_complete,
-                .privileged = true,
+                // A mise-only upgrade needs no administrator rights; when
+                // elevated, the CLI hands mise back to the invoking user.
+                .privileged = standard or aur or flatpak,
                 .ctx = self,
             });
         }
@@ -603,7 +631,7 @@ pub const UpdatePage = extern struct {
         thread.detach();
     }
 
-    const template_children = .{ .{ "content_list", @offsetOf(Private, "content_list") }, .{ "selected_label", @offsetOf(Private, "selected_label") }, .{ "refresh_button", @offsetOf(Private, "refresh_button") }, .{ "native_toggle", @offsetOf(Private, "native_toggle") }, .{ "aur_toggle", @offsetOf(Private, "aur_toggle") }, .{ "flatpak_toggle", @offsetOf(Private, "flatpak_toggle") }, .{ "updates_stack", @offsetOf(Private, "updates_stack") }, .{ "loading_page", @offsetOf(Private, "loading_page") }, .{ "list_page", @offsetOf(Private, "list_page") }, .{ "empty_page", @offsetOf(Private, "empty_page") }, .{ "error_page", @offsetOf(Private, "error_page") }, .{ "loading_spinner", @offsetOf(Private, "loading_spinner") }, .{ "error_label", @offsetOf(Private, "error_label") }, .{ "upgrade_button", @offsetOf(Private, "upgrade_button") } };
+    const template_children = .{ .{ "content_list", @offsetOf(Private, "content_list") }, .{ "selected_label", @offsetOf(Private, "selected_label") }, .{ "refresh_button", @offsetOf(Private, "refresh_button") }, .{ "native_toggle", @offsetOf(Private, "native_toggle") }, .{ "aur_toggle", @offsetOf(Private, "aur_toggle") }, .{ "flatpak_toggle", @offsetOf(Private, "flatpak_toggle") }, .{ "mise_toggle", @offsetOf(Private, "mise_toggle") }, .{ "updates_stack", @offsetOf(Private, "updates_stack") }, .{ "loading_page", @offsetOf(Private, "loading_page") }, .{ "list_page", @offsetOf(Private, "list_page") }, .{ "empty_page", @offsetOf(Private, "empty_page") }, .{ "error_page", @offsetOf(Private, "error_page") }, .{ "loading_spinner", @offsetOf(Private, "loading_spinner") }, .{ "error_label", @offsetOf(Private, "error_label") }, .{ "upgrade_button", @offsetOf(Private, "upgrade_button") } };
 
     pub const Class = extern struct {
         parent_class: Parent.Class,
@@ -621,3 +649,17 @@ pub const UpdatePage = extern struct {
         }
     };
 };
+
+test "update rows map each source to its CLI command" {
+    try std.testing.expect(UpdatePage.rowUpdateArgv(.package, "linux") == null);
+    const mise = UpdatePage.rowUpdateArgv(.mise, "node").?;
+    try std.testing.expectEqualSlices([]const u8, &.{ "upgrade", "mise", "node" }, &mise);
+    const aur = UpdatePage.rowUpdateArgv(.aur, "paru").?;
+    try std.testing.expectEqualSlices([]const u8, &.{ "update", "aur", "paru" }, &aur);
+}
+
+test "mise updates count toward the available update total" {
+    var mise = [_]@import("../models/mise.zig").MiseUpdate{.{ .Name = "node", .NewVersion = "26.10.0" }};
+    const response: CheckUpdates = .{ .Mise = &mise };
+    try std.testing.expectEqual(@as(usize, 1), response.count());
+}

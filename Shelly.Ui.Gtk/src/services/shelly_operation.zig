@@ -274,7 +274,7 @@ pub const ShellyCommands = struct {
         return argv.toOwnedSlice(alloc);
     }
 
-    pub fn upgrade(alloc: std.mem.Allocator, flatpak: bool, aur: bool, standard: bool) ![]const []const u8 {
+    pub fn upgrade(alloc: std.mem.Allocator, flatpak: bool, aur: bool, standard: bool, mise: bool) ![]const []const u8 {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
 
         try argv.append(alloc, "upgrade");
@@ -282,6 +282,7 @@ pub const ShellyCommands = struct {
         if (!flatpak) try argv.append(alloc, "--no-flatpak");
         if (!aur) try argv.append(alloc, "--no-aur");
         if (!standard) try argv.append(alloc, "--no-repo");
+        if (!mise) try argv.append(alloc, "--no-mise");
         return argv.toOwnedSlice(alloc);
     }
 
@@ -422,6 +423,24 @@ pub const ShellyCommands = struct {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
         try argv.append(alloc, "upgrade");
         try argv.append(alloc, "appimage");
+        return argv.toOwnedSlice(alloc);
+    }
+
+    /// Upgrades the named mise tools, or every outdated tool when `names` is
+    /// empty. Runs unprivileged: mise state belongs to the user.
+    pub fn upgrade_mise(alloc: std.mem.Allocator, names: []const []const u8) ![]const []const u8 {
+        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        try argv.append(alloc, "upgrade");
+        try argv.append(alloc, "mise");
+        for (names) |name| try argv.append(alloc, name);
+        return argv.toOwnedSlice(alloc);
+    }
+
+    pub fn remove_mise(alloc: std.mem.Allocator, names: []const []const u8) ![]const []const u8 {
+        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        try argv.append(alloc, "remove");
+        try argv.append(alloc, "mise");
+        for (names) |name| try argv.append(alloc, name);
         return argv.toOwnedSlice(alloc);
     }
 
@@ -964,6 +983,34 @@ test "progress percentages are clamped to the GTK protocol range" {
     try std.testing.expectEqual(@as(i64, 37), clampPercent(37));
     try std.testing.expectEqual(@as(i64, 100), clampPercent(100));
     try std.testing.expectEqual(@as(i64, 100), clampPercent(101));
+}
+
+test "mise argv runs unprivileged commands for named or all tools" {
+    const all = try ShellyCommands.upgrade_mise(std.testing.allocator, &.{});
+    defer std.testing.allocator.free(all);
+    try std.testing.expectEqualSlices([]const u8, &.{ "upgrade", "mise" }, all);
+
+    const one = try ShellyCommands.upgrade_mise(std.testing.allocator, &.{"npm:@scope/tool"});
+    defer std.testing.allocator.free(one);
+    try std.testing.expectEqualSlices([]const u8, &.{ "upgrade", "mise", "npm:@scope/tool" }, one);
+
+    const removal = try ShellyCommands.remove_mise(std.testing.allocator, &.{"node"});
+    defer std.testing.allocator.free(removal);
+    try std.testing.expectEqualSlices([]const u8, &.{ "remove", "mise", "node" }, removal);
+}
+
+test "combined upgrade argv skips each deselected source" {
+    const everything = try ShellyCommands.upgrade(std.testing.allocator, true, true, true, true);
+    defer std.testing.allocator.free(everything);
+    try std.testing.expectEqualSlices([]const u8, &.{ "upgrade", "all" }, everything);
+
+    const mise_only = try ShellyCommands.upgrade(std.testing.allocator, false, false, false, true);
+    defer std.testing.allocator.free(mise_only);
+    try std.testing.expectEqualSlices([]const u8, &.{ "upgrade", "all", "--no-flatpak", "--no-aur", "--no-repo" }, mise_only);
+
+    const without_mise = try ShellyCommands.upgrade(std.testing.allocator, true, true, true, false);
+    defer std.testing.allocator.free(without_mise);
+    try std.testing.expectEqualSlices([]const u8, &.{ "upgrade", "all", "--no-mise" }, without_mise);
 }
 
 test "flatpak install argv adds --user only for user scope" {
