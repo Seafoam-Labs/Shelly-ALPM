@@ -1198,11 +1198,18 @@ pub const Manager = struct {
     }
 
     fn get_permissions_from_key_file(self: Manager, key_file_ptr: ?*rawflatpak.GKeyFile, permissions: *std.ArrayList([:0]u8)) ![]const [:0]u8 {
-        const groups = [_][:0]const u8{ "Context", "ExtensionBus", "Shared", "Sockets", "Filesystems", "SessionBus", "SystemBus" };
+        // Only [Context] holds semicolon-separated lists. Reading a bus policy or
+        // environment value as a list would split it on every ';' it contains.
+        const groups = [_]struct { name: [:0]const u8, list: bool }{
+            .{ .name = "Context", .list = true },
+            .{ .name = "Session Bus Policy", .list = false },
+            .{ .name = "System Bus Policy", .list = false },
+            .{ .name = "Environment", .list = false },
+        };
 
         for (groups) |group| {
             var num_keys: usize = 0;
-            const keys_ptr = rawflatpak.g_key_file_get_keys(key_file_ptr, group.ptr, &num_keys, null);
+            const keys_ptr = rawflatpak.g_key_file_get_keys(key_file_ptr, group.name.ptr, &num_keys, null);
             if (keys_ptr == null) continue;
             defer rawflatpak.g_strfreev(keys_ptr);
 
@@ -1210,40 +1217,46 @@ pub const Manager = struct {
             while (keys_ptr[i] != null) : (i += 1) {
                 const key = keys_ptr[i];
                 if (key == null or std.mem.len(key) == 0) continue;
+                const key_span = std.mem.span(key);
 
-                var list_len: usize = 0;
-                const list_ptr = rawflatpak.g_key_file_get_string_list(key_file_ptr, group.ptr, key, &list_len, null);
-                if (list_ptr != null) {
-                    defer rawflatpak.g_strfreev(list_ptr);
-                    var j: usize = 0;
-                    while (list_ptr[j] != null) : (j += 1) {
-                        const val = list_ptr[j];
-                        if (val == null or std.mem.len(val) == 0) continue;
-                        const entry = try std.fmt.allocPrintSentinel(
-                            self.allocator,
-                            "{s}={s}:{s}",
-                            .{ group, std.mem.span(key), std.mem.span(val) },
-                            0,
-                        );
-                        try permissions.append(self.allocator, entry);
+                if (group.list) {
+                    const list_ptr = rawflatpak.g_key_file_get_string_list(key_file_ptr, group.name.ptr, key, null, null);
+                    if (list_ptr != null) {
+                        defer rawflatpak.g_strfreev(list_ptr);
+                        var j: usize = 0;
+                        while (list_ptr[j] != null) : (j += 1) {
+                            const val = list_ptr[j];
+                            if (val == null or std.mem.len(val) == 0) continue;
+                            try appendPermission(self.allocator, permissions, group.name, key_span, std.mem.span(val));
+                        }
+                        continue;
                     }
-                } else {
-                    const val_ptr = rawflatpak.g_key_file_get_string(key_file_ptr, group.ptr, key, null);
-                    if (val_ptr == null) continue;
-                    defer rawflatpak.g_free(val_ptr);
-                    if (std.mem.len(val_ptr) == 0) continue;
-                    const entry = try std.fmt.allocPrintSentinel(
-                        self.allocator,
-                        "{s}={s}:{s}",
-                        .{ group, std.mem.span(key), std.mem.span(val_ptr) },
-                        0,
-                    );
-                    try permissions.append(self.allocator, entry);
                 }
+
+                const val_ptr = rawflatpak.g_key_file_get_string(key_file_ptr, group.name.ptr, key, null);
+                if (val_ptr == null) continue;
+                defer rawflatpak.g_free(val_ptr);
+                if (std.mem.len(val_ptr) == 0) continue;
+                try appendPermission(self.allocator, permissions, group.name, key_span, std.mem.span(val_ptr));
             }
         }
 
         return permissions.toOwnedSlice(self.allocator);
+    }
+
+    /// Emits one flattened permission entry as `{group}={key}:{value}`. The value
+    /// runs to the end of the string, so a mode suffix, an absolute path or a
+    /// conditional keeps its own colons intact.
+    fn appendPermission(
+        allocator: std.mem.Allocator,
+        permissions: *std.ArrayList([:0]u8),
+        group: []const u8,
+        key: []const u8,
+        value: []const u8,
+    ) !void {
+        const entry = try std.fmt.allocPrintSentinel(allocator, "{s}={s}:{s}", .{ group, key, value }, 0);
+        errdefer allocator.free(entry);
+        try permissions.append(allocator, entry);
     }
 
     fn resolve_remote_branch(
@@ -2240,7 +2253,8 @@ test "shared cancellation propagates to GLib cancellables" {
 
 /// A metadata key file shaped like a real Flathub app, covering every permission
 /// group flatpak documents plus the structural forms inside a value: access
-/// modes, a conditional grant, a denial, and a wildcard D-Bus name.
+/// modes, a conditional grant, a denial, a wildcard D-Bus name, and environment
+/// values holding a colon or a semicolon.
 const permissions_metadata_fixture =
     \\[Application]
     \\name=org.example.Permissions
@@ -2268,6 +2282,8 @@ const permissions_metadata_fixture =
     \\
     \\[Environment]
     \\TMPDIR=/var/tmp
+    \\PATH=/app/bin:/usr/bin
+    \\GST_PLUGIN_PATH=/app/lib/gstreamer-1.0;/app/lib/gst
 ;
 
 /// The documented permission vocabulary as `<key>:<value>` pairs, grouped by key
@@ -2386,6 +2402,12 @@ test "permission metadata flattens to group=key:value strings" {
         "Context=features:devel",
         "Context=features:!bluetooth",
         "Context=unset-environment:LD_PRELOAD",
+        "Session Bus Policy=org.gtk.vfs.*:talk",
+        "Session Bus Policy=org.freedesktop.secrets:talk",
+        "System Bus Policy=org.freedesktop.NetworkManager:see",
+        "Environment=TMPDIR:/var/tmp",
+        "Environment=PATH:/app/bin:/usr/bin",
+        "Environment=GST_PLUGIN_PATH:/app/lib/gstreamer-1.0;/app/lib/gst",
     }, permissions);
 }
 
@@ -2418,7 +2440,7 @@ test "permission metadata flattening survives the documented vocabulary" {
     try expectFlattenedPermissions(expected.items, permissions);
 }
 
-test "permission metadata drops the D-Bus policy and environment groups" {
+test "permission metadata reads the D-Bus policy and environment groups" {
     const permissions = try flattenPermissionsFixture(
         \\[Context]
         \\shared=network;
@@ -2435,10 +2457,16 @@ test "permission metadata drops the D-Bus policy and environment groups" {
     );
     defer freeFlattenedPermissions(permissions);
 
-    // Pins the current backend group list: the real section names are
-    // [Session Bus Policy], [System Bus Policy] and [Environment], none of
-    // which is read, so these grants never reach a consumer.
-    try expectFlattenedPermissions(&.{"Context=shared:network"}, permissions);
+    // These groups key on a name, not a fixed vocabulary, so what follows the
+    // colon is an access level or a value rather than a permission token. The
+    // value runs to the end of the string, keeping wildcards and paths intact.
+    try expectFlattenedPermissions(&.{
+        "Context=shared:network",
+        "Session Bus Policy=org.gtk.vfs.*:talk",
+        "Session Bus Policy=org.freedesktop.secrets:talk",
+        "System Bus Policy=org.freedesktop.NetworkManager:see",
+        "Environment=TMPDIR:/var/tmp",
+    }, permissions);
 }
 
 //disabled until uninstall is added.
