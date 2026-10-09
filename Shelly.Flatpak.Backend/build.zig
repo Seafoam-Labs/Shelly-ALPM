@@ -164,6 +164,9 @@ pub fn build(b: *std.Build) void {
             "Flatpak dispatcher forwards typed status and progress",
             "native Flatpak remote manager exposes backend parity operations",
             "native Flatpak AppStream manager exposes backend parity operations",
+            "permission metadata flattens to group=key:value strings",
+            "permission metadata flattening survives the documented vocabulary",
+            "permission metadata drops the D-Bus policy and environment groups",
         },
     });
     const run_parity_tests = b.addRunArtifact(parity_tests);

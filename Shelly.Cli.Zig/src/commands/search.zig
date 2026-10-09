@@ -1481,7 +1481,7 @@ test "AUR standard merge and Flatpak paging are serialized without subprocesses"
                     .remote = "flathub",
                     .download_size = 1048576,
                     .installed_size = 2097152,
-                    .permissions = &.{ "shared=network", "sockets=wayland" },
+                    .permissions = &.{ "Context=shared:network", "Context=sockets:wayland" },
                 }},
                 .page = 2,
                 .limit = 1,
@@ -1495,15 +1495,15 @@ test "AUR standard merge and Flatpak paging are serialized without subprocesses"
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "org.example.Editor") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "\"download_size\":1048576") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "\"installed_size\":2097152") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "\"permissions\":[\"shared=network\",\"sockets=wayland\"]") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "\"permissions\":[\"Context=shared:network\",\"Context=sockets:wayland\"]") != null);
 
     tc.stdout.writer.end = 0;
     const flatpak_plain = try parser.parse(tc.arena.allocator(), &manifest, &.{ "search", "flatpak", "editor" });
     try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &flatpak_plain.dispatch, FlatpakFixture{}));
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Download Size") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Installed Size") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "shared=network") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "sockets=wayland") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Context=shared:network") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Context=sockets:wayland") != null);
 }
 
 test "interactive AUR search table stays within terminal width" {
