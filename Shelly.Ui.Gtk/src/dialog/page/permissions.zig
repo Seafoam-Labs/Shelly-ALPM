@@ -49,7 +49,8 @@ pub const PermissionsDialog = extern struct {
 
     /// Borrows `permissions`; strings are copied into labels before returning,
     /// The only current caller of this holds its strings in an arena, so they wont be free'd until that arena has been free'd
-    pub fn new(title: [:0]const u8, subtitle: [:0]const u8, permissions: []const [:0]const u8, on_close_fn: CloseFn, ctx: ?*anyopaque) *Self {
+    /// A null `permissions` means they could not be read.
+    pub fn new(title: [:0]const u8, subtitle: [:0]const u8, permissions: ?[]const [:0]const u8, on_close_fn: CloseFn, ctx: ?*anyopaque) *Self {
         const self = gobject.ext.newInstance(Self, .{});
         const p = self.priv();
         gtk.Label.setLabel(p.title_label, title);
@@ -58,14 +59,25 @@ pub const PermissionsDialog = extern struct {
         p.ctx = ctx;
 
         var shown: usize = 0;
-        for (permissions) |perm| {
-            const parsed = parse_permission(perm) orelse continue;
-            gtk.ListBox.append(p.permissions_list, make_row(parsed));
-            shown += 1;
+        if (permissions) |granted| {
+            for (granted) |perm| {
+                const parsed = parse_permission(perm) orelse continue;
+                gtk.ListBox.append(p.permissions_list, make_row(parsed));
+                shown += 1;
+            }
         }
 
-        gtk.Stack.setVisibleChildName(p.permissions_stack, if (shown == 0) "empty" else "list");
+        gtk.Stack.setVisibleChildName(p.permissions_stack, page_for(permissions, shown));
         return self;
+    }
+
+    /// A list that is missing, or that yielded no renderable row, means the
+    /// permissions could not be read. Only a list that was read and holds
+    /// nothing may claim the app requests no permissions.
+    fn page_for(permissions: ?[]const [:0]const u8, shown: usize) [:0]const u8 {
+        const granted = permissions orelse return "unavailable";
+        if (shown > 0) return "list";
+        return if (granted.len == 0) "empty" else "unavailable";
     }
 
     pub fn setButtons(self: *Self, close: [:0]const u8) void {
@@ -172,3 +184,12 @@ pub const PermissionsDialog = extern struct {
         }
     };
 };
+
+test "permissions dialog separates unreadable from unrequested" {
+    const one = [_][:0]const u8{"Context=shared:network"};
+    const none = [_][:0]const u8{};
+    try std.testing.expectEqualStrings("list", PermissionsDialog.page_for(&one, 1));
+    try std.testing.expectEqualStrings("empty", PermissionsDialog.page_for(&none, 0));
+    try std.testing.expectEqualStrings("unavailable", PermissionsDialog.page_for(null, 0));
+    try std.testing.expectEqualStrings("unavailable", PermissionsDialog.page_for(&one, 0));
+}

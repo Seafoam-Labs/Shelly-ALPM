@@ -100,7 +100,9 @@ const FlatpakPackage = struct {
     verification_method: ?[]const u8 = null,
     download_size: u64 = 0,
     installed_size: u64 = 0,
-    permissions: []const []const u8 = &.{},
+    /// Null when the remote reference could not be read, which is not the same
+    /// as an app that declares no permissions.
+    permissions: ?[]const []const u8 = null,
     scope: PackageManager.flatpak.Scope = .unknown,
 };
 
@@ -824,7 +826,7 @@ fn renderFlatpak(
         package.remote,
         try formatSize(context.allocator, size_display, package.download_size),
         try formatSize(context.allocator, size_display, package.installed_size),
-        try joined(context.allocator, package.permissions),
+        if (package.permissions) |permissions| try joined(context.allocator, permissions) else "Unknown",
     }));
     try table.write(
         context,
@@ -1504,6 +1506,40 @@ test "AUR standard merge and Flatpak paging are serialized without subprocesses"
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Installed Size") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Context=shared:network") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Context=sockets:wayland") != null);
+}
+
+test "flatpak search reports unreadable permissions distinctly from no permissions" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+
+    const Fixture = struct {
+        fn search(_: @This(), _: *runtime.RuntimeContext, _: *const parser.Invocation) !Result {
+            return .{ .flatpak = .{
+                .query = "editor",
+                .packages = &.{
+                    .{ .name = "Editor", .id = "org.example.Editor", .summary = "Edit", .remote = "flathub", .permissions = null },
+                    .{ .name = "Notes", .id = "org.example.Notes", .summary = "Write", .remote = "flathub", .permissions = &.{} },
+                },
+                .page = 1,
+                .limit = 10,
+                .total_pages = 1,
+                .total_hits = 2,
+            } };
+        }
+    };
+
+    const as_json = try parser.parse(tc.arena.allocator(), &manifest, &.{ "search", "flatpak", "editor", "--json" });
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &as_json.dispatch, Fixture{}));
+    const rendered = tc.stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"permissions\":null") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"permissions\":[]") != null);
+
+    tc.stdout.writer.end = 0;
+    const as_table = try parser.parse(tc.arena.allocator(), &manifest, &.{ "search", "flatpak", "editor" });
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &as_table.dispatch, Fixture{}));
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Unknown") != null);
 }
 
 test "interactive AUR search table stays within terminal width" {

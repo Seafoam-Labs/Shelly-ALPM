@@ -83,7 +83,9 @@ pub const Hit = struct {
     remote: []const u8 = "",
     download_size: i64 = 0,
     installed_size: i64 = 0,
-    permissions: []const []const u8 = &.{},
+    /// Null when the CLI could not read the remote reference, which is not the
+    /// same as an app that declares no permissions.
+    permissions: ?[]const []const u8 = null,
 
     pub fn clone(allocator: std.mem.Allocator, source: Hit) !Hit {
         return .{
@@ -102,7 +104,7 @@ pub const Hit = struct {
             .remote = try allocator.dupe(u8, source.remote),
             .download_size = source.download_size,
             .installed_size = source.installed_size,
-            .permissions = try cloneStrings(allocator, source.permissions),
+            .permissions = if (source.permissions) |permissions| try cloneStrings(allocator, permissions) else null,
         };
     }
 
