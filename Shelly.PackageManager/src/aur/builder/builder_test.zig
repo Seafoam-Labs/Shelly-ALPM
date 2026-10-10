@@ -1956,7 +1956,7 @@ test "PackageBuilder simulates root ownership without host chown" {
 test "PackageBuilder issue 2025 ownership journal is independent of package locale" {
     const allocator = testing.allocator;
     const io = testing.io;
-    for ([_][]const u8{ "C.UTF-8", "de_DE.UTF-8" }) |locale| {
+    for ([_][]const u8{ "C.UTF-8", "comma" }) |locale| {
         const content = try std.fmt.allocPrint(allocator,
             \\pkgname=locale-ownership
             \\pkgver=1
@@ -1986,12 +1986,37 @@ test "PackageBuilder issue 2025 ownership journal is independent of package loca
         var fixture = try Fixture.create(allocator, content, null, null);
         defer fixture.destroy();
 
-        // Compile a real decimal-comma locale privately; no system locale setup
-        // or inherited LOCPATH is required (the build environment strips it).
-        try fixture.temporary.dir.createDir(io, "locales", .default_dir);
-        const locale_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "locales/de_DE.UTF-8" });
-        defer allocator.free(locale_path);
-        try runTestCommand(allocator, io, &.{ "localedef", "--no-archive", "-i", "de_DE", "-f", "UTF-8", locale_path }, null);
+        if (std.mem.eql(u8, locale, "comma")) {
+            // Minimal CI images omit /usr/share/i18n. Supply both inputs instead
+            // of depending on installed locale sources or character maps.
+            try fixture.temporary.dir.createDir(io, "locales", .default_dir);
+            try fixture.temporary.dir.writeFile(io, .{ .sub_path = "locale-charmap", .data =
+                \\<code_set_name> "ASCII"
+                \\<mb_cur_min> 1
+                \\<mb_cur_max> 1
+                \\CHARMAP
+                \\<U0000>..<U007F> \x00
+                \\END CHARMAP
+                \\
+            });
+            try fixture.temporary.dir.writeFile(io, .{ .sub_path = "locale-numeric", .data =
+                \\LC_NUMERIC
+                \\decimal_point ","
+                \\thousands_sep "."
+                \\grouping 3
+                \\END LC_NUMERIC
+                \\
+            });
+            var result = try process_runner.run(allocator, io, &.{
+                "localedef", "--no-archive", "--quiet", "-c", "-i", "./locale-numeric", "-f", "./locale-charmap", "./locales/comma",
+            }, fixture.build_dir, null);
+            defer result.deinit(allocator);
+            // -c emits default categories for those we omit; localedef returns
+            // 1 for those warnings even with --quiet. Real errors still print
+            // diagnostics. package() also verifies the loaded decimal point.
+            try testing.expect(result.exit_code == 0 or result.exit_code == 1);
+            try testing.expectEqualStrings("", result.stderr);
+        }
 
         const artifacts = try fixture.builder.BuildPackage();
         defer builder_mod.deinitArtifacts(allocator, artifacts);
