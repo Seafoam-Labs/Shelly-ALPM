@@ -215,20 +215,6 @@ fn runRealAppImageSync(
         return;
     }
 
-    std.Io.Dir.cwd().access(context.io, install_directory, .{}) catch |err| switch (err) {
-        error.FileNotFound => {
-            const message = try std.fmt.allocPrint(
-                context.allocator,
-                "{s} directory does not exist. No AppImages to sync.",
-                .{install_directory},
-            );
-            defer context.allocator.free(message);
-            emitAppImageInfo(operation_context, message);
-            return;
-        },
-        else => return err,
-    };
-
     var manager = PackageManager.AppImageManager{
         .allocator = context.allocator,
         .io = context.io,
@@ -242,6 +228,24 @@ fn runRealAppImageSync(
 
     const app_images = try manager.getAppImagesFromLocalDb();
     defer manager.freeAppImages(app_images);
+
+    // A newly configured directory may not exist yet. Recorded AppImages
+    // still need to reach the backend so it can relocate them from their old paths.
+    if (app_images.len == 0) {
+        std.Io.Dir.cwd().access(context.io, install_directory, .{}) catch |err| switch (err) {
+            error.FileNotFound => {
+                const message = try std.fmt.allocPrint(
+                    context.allocator,
+                    "{s} directory does not exist. No AppImages to sync.",
+                    .{install_directory},
+                );
+                defer context.allocator.free(message);
+                emitAppImageInfo(operation_context, message);
+                return;
+            },
+            else => return err,
+        };
+    }
 
     const names = if (invocation.positionals.len == 0)
         try allAppImageNames(context.allocator, app_images)
@@ -943,7 +947,7 @@ test "real AppImage runner rejects invalid Forgejo paths without reporting succe
     );
 }
 
-test "real AppImage runner reports a missing install directory without failing" {
+test "real AppImage runner relocates into a missing install directory and handles an empty database" {
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
     var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -957,6 +961,9 @@ test "real AppImage runner reports a missing install directory without failing" 
     var environment = std.process.Environ.Map.init(allocator);
     try environment.put("HOME", home);
     try environment.put("XDG_CONFIG_HOME", root);
+    try environment.put("XDG_DATA_HOME", try std.fs.path.join(allocator, &.{ root, "data" }));
+    try environment.put("XDG_CACHE_HOME", try std.fs.path.join(allocator, &.{ root, "cache" }));
+    const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
 
     const manifest = try spec.Manifest.load(allocator);
     const outcome = try parser.parse(allocator, &manifest, &.{ "sync", "appimage" });
@@ -970,6 +977,7 @@ test "real AppImage runner reports a missing install directory without failing" 
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
         .environment = &environment,
+        .environ = environ,
     };
 
     try std.testing.expectEqual(
@@ -977,6 +985,40 @@ test "real AppImage runner reports a missing install directory without failing" 
         try executeWithRunner(&context, &outcome.dispatch, AppImage{}),
     );
     try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "directory does not exist. No AppImages to sync") != null);
+
+    const source = try std.fs.path.join(allocator, &.{ root, "Editor.AppImage" });
+    try temporary.dir.writeFile(std.testing.io, .{
+        .sub_path = "Editor.AppImage",
+        .data =
+        \\#!/bin/sh
+        \\if [ "$1" = "--appimage-extract" ]; then
+        \\  mkdir -p squashfs-root
+        \\  printf '%s\n' '[Desktop Entry]' 'Name=Editor' 'Exec=editor' > squashfs-root/editor.desktop
+        \\fi
+        ,
+    });
+    const old_dir = try std.fs.path.join(allocator, &.{ root, "old" });
+    const old_path = try std.fs.path.join(allocator, &.{ old_dir, "Editor.AppImage" });
+    const new_path = try std.fs.path.join(allocator, &.{ home, ".local", "bin", "Editor.AppImage" });
+    var manager = PackageManager.AppImageManager{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .environ = environ,
+        .install_directory = old_dir,
+        .local_db_path = try std.fs.path.join(allocator, &.{ root, "shelly", "appimage-metadata-v2.db" }),
+    };
+    defer manager.deinit();
+    try std.testing.expect(try manager.installAppImage(source));
+    // The configured default directory is still missing, but the database now
+    // records an installed AppImage that must be moved there.
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&context, &outcome.dispatch, AppImage{}));
+    const installed = try std.Io.Dir.cwd().statFile(std.testing.io, new_path, .{});
+    try std.testing.expect(installed.permissions.toMode() & 0o111 != 0);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(std.testing.io, old_path, .{}));
+    const apps = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqualStrings(new_path, apps[0].path);
 }
 
 test "AppImage sync name matching is case insensitive and selects the first match" {
