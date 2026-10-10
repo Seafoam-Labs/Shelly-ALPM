@@ -888,6 +888,11 @@ pub const FlatpakInstallView = extern struct {
         std.heap.c_allocator.free(load.app_id);
         if (load.permissions) |rows| {
             for (rows) |row| {
+                // The display copy made in `setPermissions` owns its own strings,
+                // so every c_allocator dupe `cloneRows` took is released here.
+                std.heap.c_allocator.free(row.concern);
+                std.heap.c_allocator.free(row.tier);
+                std.heap.c_allocator.free(row.state);
                 for (row.items) |item| std.heap.c_allocator.free(item);
                 std.heap.c_allocator.free(row.items);
             }

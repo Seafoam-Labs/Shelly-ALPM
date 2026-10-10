@@ -615,7 +615,7 @@ fn conditionPhrase(allocator: std.mem.Allocator, condition: []const u8) ![]const
         if (!std.mem.eql(u8, entry.name, name)) continue;
         return if (negated) entry.absent else entry.holds;
     }
-    // An condition flatpak added since this table was written still has to say
+    // A condition flatpak added since this table was written still has to say
     // which way round it applies.
     return std.fmt.allocPrint(allocator, "only when {s} {s}", .{
         name,

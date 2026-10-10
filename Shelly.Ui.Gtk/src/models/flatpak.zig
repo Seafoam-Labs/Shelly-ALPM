@@ -109,8 +109,10 @@ pub const PermissionDisplay = struct {
     }
 };
 
-/// Joins each row's items into its detail line. `allocator` is expected to be an
-/// arena that outlives every widget reading the result.
+/// Copies the rows into `allocator`, joining each one's items into its detail
+/// line, so the result owns every string and the caller may free the rows as
+/// soon as this returns. `allocator` is expected to be an arena that outlives
+/// every widget reading the result.
 pub fn displayRows(
     allocator: std.mem.Allocator,
     rows: []const PermissionRow,
@@ -118,8 +120,8 @@ pub fn displayRows(
     const result = try allocator.alloc(PermissionDisplay, rows.len);
     for (rows, result) |row, *target| {
         target.* = .{
-            .concern = row.concern,
-            .tier = row.tier,
+            .concern = try allocator.dupe(u8, row.concern),
+            .tier = try allocator.dupe(u8, row.tier),
             .absent = row.absent(),
             .detail = try joinZ(allocator, row.items, ", "),
         };
