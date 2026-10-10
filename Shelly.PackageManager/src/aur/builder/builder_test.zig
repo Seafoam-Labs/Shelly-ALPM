@@ -1953,6 +1953,153 @@ test "PackageBuilder simulates root ownership without host chown" {
     try testing.expect(saw_installed);
 }
 
+test "PackageBuilder issue 2025 ownership journal is independent of package locale" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    for ([_][]const u8{ "C.UTF-8", "comma" }) |locale| {
+        const content = try std.fmt.allocPrint(allocator,
+            \\pkgname=locale-ownership
+            \\pkgver=1
+            \\arch=('any')
+            \\package() {{
+            \\  export LOCPATH="$startdir/locales"
+            \\  export LC_ALL={s}
+            \\  before=$(/usr/bin/locale decimal_point)
+            \\  [[ "$before" = '{s}' ]]
+            \\  mkdir -p "$pkgdir/usr/share/demo/tree"
+            \\  cd "$pkgdir/usr/share/demo"
+            \\  touch root tree/data group helper external
+            \\  chown -R root:root "$pkgdir"
+            \\  chown root:root root
+            \\  chown -R 1000:1000 tree
+            \\  chgrp 50 group
+            \\  install --owner=42 --group=84 -m644 /dev/null installed
+            \\  ln -s tree/data link
+            \\  chown -h 43:85 link
+            \\  __shelly_record_ownership C 44:86 "$PWD/helper"
+            \\  /bin/sh -ec 'chown 45:87 "$1"; chgrp 88 "$1"' sh "$PWD/external"
+            \\  [[ "$LC_ALL" = '{s}' ]]
+            \\  [[ "$(/usr/bin/locale decimal_point)" = "$before" ]]
+            \\}}
+        , .{ locale, if (std.mem.eql(u8, locale, "C.UTF-8")) "." else ",", locale });
+        defer allocator.free(content);
+        var fixture = try Fixture.create(allocator, content, null, null);
+        defer fixture.destroy();
+
+        if (std.mem.eql(u8, locale, "comma")) {
+            // Minimal CI images omit /usr/share/i18n. Supply both inputs instead
+            // of depending on installed locale sources or character maps.
+            try fixture.temporary.dir.createDir(io, "locales", .default_dir);
+            try fixture.temporary.dir.writeFile(io, .{ .sub_path = "locale-charmap", .data =
+                \\<code_set_name> "ASCII"
+                \\<mb_cur_min> 1
+                \\<mb_cur_max> 1
+                \\CHARMAP
+                \\<U0000>..<U007F> \x00
+                \\END CHARMAP
+                \\
+            });
+            try fixture.temporary.dir.writeFile(io, .{ .sub_path = "locale-numeric", .data =
+                \\LC_NUMERIC
+                \\decimal_point ","
+                \\thousands_sep "."
+                \\grouping 3
+                \\END LC_NUMERIC
+                \\
+            });
+            var result = try process_runner.run(allocator, io, &.{
+                "localedef", "--no-archive", "--quiet", "-c", "-i", "./locale-numeric", "-f", "./locale-charmap", "./locales/comma",
+            }, fixture.build_dir, null);
+            defer result.deinit(allocator);
+            // -c emits default categories for those we omit; localedef returns
+            // 1 for those warnings even with --quiet. Real errors still print
+            // diagnostics. package() also verifies the loaded decimal point.
+            try testing.expect(result.exit_code == 0 or result.exit_code == 1);
+            try testing.expectEqualStrings("", result.stderr);
+        }
+
+        const artifacts = try fixture.builder.BuildPackage();
+        defer builder_mod.deinitArtifacts(allocator, artifacts);
+        const expected = [_]struct { path: []const u8, uid: i64, gid: i64 }{
+            .{ .path = "usr/share/demo/root", .uid = 0, .gid = 0 },
+            .{ .path = "usr/share/demo/tree/data", .uid = 1000, .gid = 1000 },
+            .{ .path = "usr/share/demo/group", .uid = 0, .gid = 50 },
+            .{ .path = "usr/share/demo/installed", .uid = 42, .gid = 84 },
+            .{ .path = "usr/share/demo/link", .uid = 43, .gid = 85 },
+            .{ .path = "usr/share/demo/helper", .uid = 44, .gid = 86 },
+            .{ .path = "usr/share/demo/external", .uid = 45, .gid = 88 },
+        };
+        var reader = try archive.Reader.init(allocator, artifacts[0].path);
+        defer reader.deinit();
+        var seen = [_]bool{false} ** expected.len;
+        while (try reader.next()) |entry| {
+            for (expected, 0..) |item, index| {
+                if (!std.mem.eql(u8, entry.path, item.path)) continue;
+                try testing.expectEqual(item.uid, entry.uid);
+                try testing.expectEqual(item.gid, entry.gid);
+                seen[index] = true;
+            }
+        }
+        const host_owner = try std.fmt.allocPrint(allocator, "{d}:{d}", .{ std.os.linux.geteuid(), std.os.linux.getegid() });
+        defer allocator.free(host_owner);
+        for (expected, seen) |item, found| {
+            try testing.expect(found);
+            const staged_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "pkg/locale-ownership", item.path });
+            defer allocator.free(staged_path);
+            var stat = try process_runner.run(allocator, io, &.{ "stat", "-c", "%u:%g", staged_path }, null, null);
+            defer stat.deinit(allocator);
+            try testing.expectEqual(@as(u8, 0), stat.exit_code);
+            try testing.expectEqualStrings(host_owner, std.mem.trim(u8, stat.stdout, " \t\r\n"));
+        }
+    }
+}
+
+test "PackageBuilder issue 2025 journal failures explain the reason in events and logs" {
+    const allocator = testing.allocator;
+    const cases = [_]struct { command: []const u8, reason: []const u8 }{
+        .{ .command = "printf 'broken\\0' >> \"$__shelly_virtual_ownership_log\"", .reason = "InvalidVirtualOwnershipJournal" },
+        .{ .command = "chown shelly-owner-that-does-not-exist \"$pkgdir/data\"", .reason = "UnknownVirtualOwner" },
+    };
+    for (cases) |case| {
+        const Capture = struct {
+            reason: []const u8,
+            seen: bool = false,
+
+            fn handle(data: ?*anyopaque, event: op_context.Event) void {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                switch (event) {
+                    .failure => |failure| {
+                        if (std.mem.indexOf(u8, failure.message, "Cannot read package ownership journal") != null and
+                            std.mem.indexOf(u8, failure.message, self.reason) != null)
+                            self.seen = true;
+                    },
+                    else => {},
+                }
+            }
+        };
+        var capture: Capture = .{ .reason = case.reason };
+        const content = try std.fmt.allocPrint(allocator,
+            \\pkgname=journal-failure
+            \\pkgver=1
+            \\arch=('any')
+            \\package() {{
+            \\  export LC_ALL=C
+            \\  touch "$pkgdir/data"
+            \\  {s}
+            \\}}
+        , .{case.command});
+        defer allocator.free(content);
+        var fixture = try Fixture.create(allocator, content, .{ .function = Capture.handle, .data = &capture }, null);
+        defer fixture.destroy();
+        try testing.expectError(error.PrivilegedPackageOperationUnsupported, fixture.builder.BuildPackage());
+        try testing.expect(capture.seen);
+        const log = try readOnlyBuildLog(allocator, testing.io, fixture.build_dir);
+        defer allocator.free(log);
+        try testing.expect(std.mem.indexOf(u8, log, "[error] Cannot read package ownership journal") != null);
+        try testing.expect(std.mem.indexOf(u8, log, case.reason) != null);
+    }
+}
+
 test "PackageBuilder preserves non-root virtual ownership and special modes" {
     const allocator = testing.allocator;
     const io = testing.io;
