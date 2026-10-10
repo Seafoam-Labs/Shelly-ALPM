@@ -64,6 +64,14 @@ pub fn build(b: *std.Build) void {
     const configuration_step = b.step("configuration-test", "Test native configuration selection and subprocess forwarding");
     configuration_step.dependOn(&b.addRunArtifact(configuration_tests).step);
 
+    const appimage_tests = b.addTest(.{
+        .name = "appimage-test",
+        .root_module = cli,
+        .filters = &.{ "AppImage", "appimage" },
+    });
+    b.step("appimage-test", "Test AppImage command routing and metadata synchronization")
+        .dependOn(&b.addRunArtifact(appimage_tests).step);
+
     const module_tests = b.addTest(.{
         .root_module = cli,
     });
